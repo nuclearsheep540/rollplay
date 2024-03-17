@@ -14,3 +14,18 @@ services:
             - 8081:8081
         volumes:
             - ./app:/app
+    rollplay:
+        stdin_open: true
+        tty: true
+        env_file:
+            - .env
+        container_name: "rollplay-dev"
+        build:
+            context: ./rollplay
+            dockerfile: ../docker/dev/rollplay/Dockerfile
+        ports:
+        - "3000:3000"
+        volumes:
+            - ./rollplay:/rollplay
+            - ./rollplay/node_modules
+            - ./rollplay/.next
