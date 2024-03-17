@@ -8,9 +8,9 @@ services:
             - .env
         container_name: "api-dev"
         build:
-            context: ./api
+            context: ./app
             dockerfile: ../docker/dev/api/Dockerfile
         ports: 
             - 8081:8081
         volumes:
-            - ./api:/api
+            - ./app:/app
