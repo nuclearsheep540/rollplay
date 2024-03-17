@@ -27,4 +27,4 @@ services:
         - "3000:3000"
         volumes:
             - ./rollplay:/rollplay
-            - ./rollplay/node_modules
+            - /rollplay/node_modules

@@ -11,6 +11,19 @@ logging_email_to=""
 logging_email_subject=test
 
 ```
+###
+Create new Next.js
+https://nextjs.org/learn-pages-router/basics/create-nextjs-app/setup
+`npx create-next-app@13 app --use-npm`
+
+###
+Dockerising Next.js
+https://medium.com/@2018.itsuki/dockerize-a-next-js-app-4b03021e084d
 
 `docker-compose -f docker-compose.dev.yml build`
 `docker-compose -f docker-compose.dev.yml up`
+
+
+###
+ERROR `mount path must be absolute`
+* remove the `.` absolute path, up the containers, down the containers, add the absolute path back in, up the containers.
