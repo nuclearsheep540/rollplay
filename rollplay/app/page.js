@@ -42,6 +42,7 @@ export default function Home() {
 
   return (
     <div className="flex min-h-screen flex-col isolate overflow-hidden bg-gray-900 py-16 sm:py-24 lg:py-32">
+      <div id="imgBg"></div>
       <div className="mx-auto max-w-7x1 px-6 lg:px-8">
         <div className="mx-auto grid max-w-2x2 grid-cols-1 gap-x-8 gap-y-16 lg:max-w-none lg:grid-cols-2">
           <div className="max-w-xl lg:max-w-1g">
