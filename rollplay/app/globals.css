@@ -25,3 +25,24 @@ body {
     )
     rgb(var(--background-start-rgb));
 }
+
+div#imgBg {
+  position: absolute;
+  display: block;
+  bottom: 0px;
+  right: 0px;
+  min-width: 300px;
+  min-height: 300px;
+  max-width: 600px;
+  max-height: 600px;
+  width: 80vh;
+  height: 80vh;
+  background: url(../app/src/public/dice.png) no-repeat center;
+  background-repeat: no-repeat;
+  background-size: cover;
+  filter: invert();
+  mix-blend-mode: difference;
+  opacity: 50%;
+  z-index: -5;
+  margin: 28px;
+}
