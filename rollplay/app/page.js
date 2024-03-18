@@ -32,7 +32,7 @@ export default function Home() {
     }
     // Request the API that the room ID is valid
     else if (existingRoom) {
-      console.log("room id: ", roomId)
+      console.log(`fetching room id ${roomId}`)
       const res = await fetch(`http://localhost:8081/game/${roomId}`)
       const jsonData = await res.json()
       console.log(jsonData)
