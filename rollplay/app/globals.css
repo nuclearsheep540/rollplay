@@ -41,8 +41,15 @@ div#imgBg {
   background-repeat: no-repeat;
   background-size: cover;
   filter: invert();
-  mix-blend-mode: difference;
-  opacity: 50%;
+  mix-blend-mode: screen;
+  opacity: 20%;
   z-index: -5;
   margin: 28px;
+}
+
+footer {
+  position: absolute;
+  bottom: 0;
+  opacity: 50%;
+  width: 100%;
 }
