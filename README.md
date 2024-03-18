@@ -32,6 +32,8 @@ https://www.mongodb.com/compatibility/docker
 `db.active_sessions.find()`
 
 ### troubleshooting
+forms
+https://nextjs.org/docs/pages/building-your-application/data-fetching/forms-and-mutations
 
 for debugging
 `docker-compose -f docker-compose.dev.yml up -d && docker attach api-dev`

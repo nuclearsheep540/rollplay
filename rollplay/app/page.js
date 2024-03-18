@@ -6,6 +6,10 @@ import { useState } from 'react'
 export default function Home() {
   const [roomId, setRoomId] = useState("")
 
+  const [newRoom, setNewRoom] = useState(false)
+  const [existingRoom, setExistingRoom] = useState(false)
+  const [modalOpen, setModalOpen] = useState(false)
+
   async function getData(e) {
     e.preventDefault()
     console.log("room id: ", roomId)
@@ -23,45 +27,71 @@ export default function Home() {
             <p className="mt-6 text-lg leading-8 text-gray-300">
               Simple game lobby with dice rolling and chat for your role playing adventures!
             </p>
-            {/* player input for lobby */}
-            <form className="mt-2 flex gap-x-6" onSubmit={getData}>
-              <label htmlFor="playerName" className="sr-only">
-                Player Name
-              </label>
-              <input
-                className="min-w-0 flex-auto rounded-md border-0 bg-white/5 px-3.5 py-2 text-white shadow-sm ring-1 ring-inset ring-white/10 focus:ring-2 focus:ring-inset focus:ring-indigo-500 sm:text-sm sm:leading-6"
-                id="playerName"
-                name="playerName"
-                type="text"
-                required
-                placeholder="player name"
-              />
-              <input
-                className="min-w-0 flex-auto rounded-md border-0 bg-white/5 px-3.5 py-2 text-white shadow-sm ring-1 ring-inset ring-white/10 focus:ring-2 focus:ring-inset focus:ring-indigo-500 sm:text-sm sm:leading-6"
-                id="roomId"
-                name="roomId"
-                type="text"
-                value={roomId}
-                placeholder="room id"
-                onChange={(e) => setRoomId(e.target.value)}
-              />
-              {/* CTA either new or existing lobby */}
+            {/* CTA: NEW or EXISTING lobby */}
               <div className="mt-2 flex gap-x-6">
                 <button
                     className="flex-none rounded-md bg-indigo-500 px-3.5 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-indigo-400 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-500"
-                    type="submit"
+                    onClick={()=>{setNewRoom(true),setExistingRoom(false),setModalOpen(true)}}
                   >
                     Create a new lobby
                   </button>
                   <button
                     className="flex-none rounded-md bg-indigo-500 px-3.5 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-indigo-400 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-500"
-                    type="submit"
+                    onClick={()=>{setNewRoom(false),setExistingRoom(true),setModalOpen(true)}}
                   >
                     Join an existing lobby
                   </button>
 
               </div>
-            </form>
+            {/* Player INPUT */}
+              {
+                (modalOpen) &&
+              <form className="mt-2 flex gap-x-6" onSubmit={getData}>
+                <div>
+                  <label htmlFor="playerName" className="sr-only">
+                  Player Name
+                  </label>
+                  <input
+                  className="min-w-0 flex-auto rounded-md border-0 bg-white/5 px-3.5 py-2 text-white shadow-sm ring-1 ring-inset ring-white/10 focus:ring-2 focus:ring-inset focus:ring-indigo-500 sm:text-sm sm:leading-6"
+                  id="playerName"
+                  name="playerName"
+                  type="text"
+                  required
+                  placeholder="player name"
+                  />
+                </div>
+                {
+                (newRoom) &&
+                  <input
+                    className="min-w-0 flex-auto rounded-md border-0 bg-white/5 px-3.5 py-2 text-white shadow-sm ring-1 ring-inset ring-white/10 focus:ring-2 focus:ring-inset focus:ring-indigo-500 sm:text-sm sm:leading-6"
+                    id="maxPlayers"
+                    name="maxPlayers"
+                    type="number"
+                    required
+                    placeholder="number of players"
+                  />
+                }
+                {
+                (existingRoom) &&
+                <input
+                  className="min-w-0 flex-auto rounded-md border-0 bg-white/5 px-3.5 py-2 text-white shadow-sm ring-1 ring-inset ring-white/10 focus:ring-2 focus:ring-inset focus:ring-indigo-500 sm:text-sm sm:leading-6"
+                  id="roomId"
+                  name="roomId"
+                  type="text"
+                  value={roomId}
+                  placeholder="room id"
+                  onChange={(e) => setRoomId(e.target.value)}
+                />
+
+                }
+                <button
+                  className="flex-none rounded-md bg-indigo-500 px-3.5 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-indigo-400 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-500" 
+                  type="submit"
+                  onClick={()=>{getData}}
+                >Go</button>
+              </form>
+              }
+              
 
 
           </div>

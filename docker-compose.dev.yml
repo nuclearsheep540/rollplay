@@ -44,3 +44,7 @@ services:
         - "27017:27017"
         volumes:
             - /data:/data/db
+
+networks:
+  default:
+    driver: bridge
