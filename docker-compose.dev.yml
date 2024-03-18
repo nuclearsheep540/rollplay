@@ -28,3 +28,18 @@ services:
         volumes:
             - ./rollplay:/rollplay
             - /rollplay/node_modules
+    db:
+        stdin_open: true
+        tty: true
+        restart: always
+        env_file:
+            - .env
+        container_name: "db-dev"
+        hostname: mongo
+        build:
+            context: ./docker
+            dockerfile: dev/db/Dockerfile
+        ports:
+        - "27017:27017"
+        volumes:
+            - /data:/data/db
