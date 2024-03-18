@@ -2,6 +2,7 @@ version: "3"
 
 services:
     api:
+        hostname: api
         stdin_open: true
         tty: true
         env_file:
