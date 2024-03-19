@@ -1,9 +1,13 @@
 'use client'
  
 import { useState } from 'react'
+import { useRouter } from "next/navigation";
 
 export default function Home() {
+  const router = useRouter()
+
   const [roomId, setRoomId] = useState("")
+  const [room404, setRoom404] = useState(false)
   const [maxPlayers, setMaxPlayers] = useState(1)
   const [playerName, setPlayerName] = useState("")
 
@@ -14,6 +18,8 @@ export default function Home() {
 
   async function handleSubmit(e) {
     e.preventDefault()
+    setRoom404(false)
+
     if (newRoom) {
       console.log(`requesting a new room for ${maxPlayers} players...`)
       var payload = {"max_players": maxPlayers, "player_name": playerName}
@@ -27,16 +33,25 @@ export default function Home() {
         body: JSON.stringify(payload),
       })
       const res = await req.json()
-      console.log(res)
-      // todo: once the ID is returned, re-direct to the room
+      router.push(`/game?roomId=${res["id"]}`)
     }
-    // Request the API that the room ID is valid
+
+    // Request the backend that the room ID is valid
     else if (existingRoom) {
       console.log(`fetching room id ${roomId}`)
       const res = await fetch(`http://localhost:8081/game/${roomId}`)
-      const jsonData = await res.json()
-      console.log(jsonData)
-      // todo: if the ID comes back in the response, re-direct to the room
+
+      if (res.status === 404) {
+        console.log("room id not found")
+        setRoom404(true)
+        return
+      } else {
+        const jsonData = await res.json()
+        if (jsonData["_id"] == roomId) {
+          console.log(jsonData)
+          router.push(`/game?roomId=${roomId}`)
+        }
+      }
     }
   }
 
@@ -54,13 +69,13 @@ export default function Home() {
               <div className="mt-2 flex gap-x-6">
                 <button
                     className={"flex-none rounded-md " + (newRoom == true ? 'bg-indigo-300' : 'bg-indigo-600') + " px-3.5 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-indigo-400 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-500"}
-                    onClick={()=>{setNewRoom(true),setExistingRoom(false),setModalOpen(true)}}
+                    onClick={()=>{setNewRoom(true),setExistingRoom(false),setModalOpen(true),setRoom404(false)}}
                   >
                     Create a new lobby
                   </button>
                   <button
                     className={"flex-none rounded-md " + (existingRoom == true ? 'bg-indigo-300' : 'bg-indigo-600') + " px-3.5 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-indigo-400 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-500"}
-                    onClick={()=>{setNewRoom(false),setExistingRoom(true),setModalOpen(true)}}
+                    onClick={()=>{setNewRoom(false),setExistingRoom(true),setModalOpen(true),setRoom404(false)}}
                   >
                     Join an existing lobby
                   </button>
@@ -102,8 +117,9 @@ export default function Home() {
                 }
                 {
                 (existingRoom) &&
+
                 <input
-                  className="min-w-0 flex-auto rounded-md border-0 bg-white/5 px-3.5 py-2 text-white shadow-sm ring-1 ring-inset ring-white/10 focus:ring-2 focus:ring-inset focus:ring-indigo-500 sm:text-sm sm:leading-6"
+                  className={"min-w-0 flex-auto rounded-md border-0 bg-white/5 px-3.5 py-2 text-white shadow-sm ring-1 ring-inset " + (room404 == false ? "ring-white/10" : "ring-red-400")  + " focus:ring-2 focus:ring-inset focus:ring-indigo-500 sm:text-sm sm:leading-6"}
                   id="roomId"
                   name="roomId"
                   type="text"
@@ -113,13 +129,16 @@ export default function Home() {
                 />
 
                 }
+                <>
                 <button
                   className="flex-none rounded-md bg-indigo-500 px-3.5 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-indigo-400 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-500" 
                   type="submit"
                   onClick={()=>{handleSubmit}}
                 >Go</button>
+                </>
               </form>
               }
+              <p className={"" + (room404 == false ? 'hidden' : ' text-red-600 sm:text-m sm:leading-6') + ""}>Error: room not found</p>
               
 
 

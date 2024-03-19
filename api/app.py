@@ -38,7 +38,7 @@ def gameservice_get(room_id):
     if check_room:
         return check_room
     else:
-        return Response(status_code=404, content=f"id {room_id} not found")
+        return Response(status_code=404, content='{f"id {room_id} not found")}')
 
 @app.post("/game/")
 def gameservice_create(settings: GameSettings):
