@@ -29,7 +29,7 @@ body {
 div#imgBg {
   position: absolute;
   display: block;
-  bottom: 0px;
+  top: 0px;
   right: 0px;
   min-width: 300px;
   min-height: 300px;
@@ -43,13 +43,12 @@ div#imgBg {
   filter: invert();
   mix-blend-mode: screen;
   opacity: 20%;
-  z-index: -5;
+  z-index: 0;
   margin: 28px;
+  overflow: hidden;
 }
 
 footer {
-  position: absolute;
-  bottom: 0;
-  opacity: 50%;
+  opacity: 90%;
   width: 100%;
 }
