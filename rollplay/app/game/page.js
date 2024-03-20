@@ -10,12 +10,16 @@ export default function Game() {
 
   const searchParams = useSearchParams()
   const roomId = searchParams.get('roomId')
-
+  const thisPlayer = searchParams.get('playerName')
   const [room404, setRoom404] = useState(false)
-  const [maxPlayers, setMaxPlayers] = useState(1)
-  const [playerName, setPlayerName] = useState("")  
+
+  // state for each seat
+
+  // who generated the room
   const [host, setHost] = useState("")
-  const [players, setPlayers] = useState(["",])
+
+  // max number of available spots in a lobby
+  const [seats, setSeats] = useState(["",]) 
 
   async function onLoad() {
     const req = await fetch(`http://localhost:8081/game/${roomId}`)
@@ -25,15 +29,13 @@ export default function Game() {
       return
     } else {
       await req.json().then((res)=>{
-        setMaxPlayers(res["max_players"]),
-        setPlayerName(res["player_name"])
         setHost(res["player_name"])
 
-        var plyrs = [res["player_name"],]
+        var plyrs = ["empty",]
         for (let i=1; i < res["max_players"]; i++) {
           plyrs = [...plyrs, "empty"]
         }
-        setPlayers([...plyrs])
+        setSeats([...plyrs])
       })
     }
 
@@ -45,7 +47,7 @@ export default function Game() {
   )
 
   
-  console.log("players: ",players, "max players: ", maxPlayers)
+  console.log("seats: ", seats)
   
   return (
 
@@ -58,10 +60,18 @@ export default function Game() {
         (!room404) && 
         <>
         <h1>{`Welcome to room ${roomId}`}</h1>
+        <h1>{`Room created by: ${host}`}</h1>
+
           <div className="container mx-auto mx-auto max-w-7x1 p-24 lg:px-8">
 
             { 
-              players.map((player) => <PlayerCard player={player} />)
+              seats.map((_, index) => <PlayerCard 
+                seatId={index}
+                seats={seats}
+                thisPlayer={thisPlayer}
+                setSeats={setSeats}
+                isSitting={seats[index] === thisPlayer}
+                />)
 
             }
             

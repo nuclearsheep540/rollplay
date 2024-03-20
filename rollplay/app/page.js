@@ -33,7 +33,7 @@ export default function Home() {
         body: JSON.stringify(payload),
       })
       const res = await req.json()
-      router.push(`/game?roomId=${res["id"]}`)
+      router.push(`/game?roomId=${res["id"]}&playerName=${playerName}`)
     }
 
     // Request the backend that the room ID is valid
@@ -49,7 +49,7 @@ export default function Home() {
         const jsonData = await res.json()
         if (jsonData["_id"] == roomId) {
           console.log(jsonData)
-          router.push(`/game?roomId=${roomId}`)
+          router.push(`/game?roomId=${roomId}&playerName=${playerName}`)
         }
       }
     }
@@ -71,13 +71,13 @@ export default function Home() {
                     className={"flex-none rounded-md " + (newRoom == true ? 'bg-indigo-300' : 'bg-indigo-600') + " px-3.5 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-indigo-400 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-500"}
                     onClick={()=>{setNewRoom(true),setExistingRoom(false),setModalOpen(true),setRoom404(false)}}
                   >
-                    Create a new lobby
+                    New Game
                   </button>
                   <button
                     className={"flex-none rounded-md " + (existingRoom == true ? 'bg-indigo-300' : 'bg-indigo-600') + " px-3.5 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-indigo-400 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-500"}
                     onClick={()=>{setNewRoom(false),setExistingRoom(true),setModalOpen(true),setRoom404(false)}}
                   >
-                    Join an existing lobby
+                    Join Game
                   </button>
 
               </div>
