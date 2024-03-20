@@ -69,7 +69,9 @@ export default function Game() {
                 seatId={index}
                 seats={seats}
                 thisPlayer={thisPlayer}
-                setSeats={setSeats} />)
+                setSeats={setSeats}
+                isSitting={seats[index] === thisPlayer}
+                />)
 
             }
             
