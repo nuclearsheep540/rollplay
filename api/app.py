@@ -1,8 +1,11 @@
-from fastapi import FastAPI, Response, status
+from fastapi import FastAPI, Response, WebSocket
 import pydantic
 from fastapi.exceptions import ResponseValidationError
 from pydantic import Field
 from gameservice import GameService, GameSettings
+import logging
+
+logger = logging.getLogger()
 
 from config.settings import Settings
 
@@ -10,7 +13,8 @@ from fastapi.middleware.cors import CORSMiddleware
 
 app = FastAPI()
 origins = [
-    "http://localhost:3000"
+    "http://localhost:3000",
+    "ws://localhost:3000"
 ]
 app.add_middleware(
     CORSMiddleware,
@@ -39,6 +43,15 @@ def gameservice_get(room_id):
         return check_room
     else:
         return Response(status_code=404, content='{f"id {room_id} not found")}')
+
+
+@app.websocket("/ws/{room_id}")
+async def websocker_endpoint(websocket: WebSocket):
+    await websocket.accept()
+    while True:
+        data = await websocket.receive_text()
+        await websocket.send_text(f"{data}")
+
 
 @app.post("/game/")
 def gameservice_create(settings: GameSettings):

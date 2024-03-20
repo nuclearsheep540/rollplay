@@ -45,6 +45,25 @@ export default function Game() {
     onLoad()
   }, []
   )
+  
+  const [chatLog, setChatLog] = useState(["welcome",])
+  const [chatMsg, setChatMsg] = useState("")
+  
+  let ws = new WebSocket(`ws://localhost:8081/ws/${roomId}`)
+  ws.onmessage = (event)=>{
+    console.log("from websocket :", event["data"])
+    setChatLog([...chatLog, event["data"]])
+    console.log("chatlog: ", chatLog)
+  }
+
+
+  function sendMessage(e) {
+    e.preventDefault()
+    console.log("sending to websocket: ", chatMsg)
+    ws.send(chatMsg)
+    setChatMsg("")
+}
+
 
   
   console.log("seats: ", seats)
@@ -63,6 +82,23 @@ export default function Game() {
         <h1>{`Room created by: ${host}`}</h1>
 
           <div className="container mx-auto mx-auto max-w-7x1 p-24 lg:px-8">
+
+            <div>
+              <h1>Chat</h1>
+              <form action='' onSubmit={sendMessage}>
+                <input
+                  type="text"
+                  id="messageText"
+                  value={chatMsg}
+                  onChange={(e) => setChatMsg(e.target.value)}
+                  />
+                <button>Send</button>
+              </form>
+              {
+                chatLog.map((msg, index) => <ul id={index}>{msg}</ul>)
+              }
+
+            </div>
 
             { 
               seats.map((_, index) => <PlayerCard 
