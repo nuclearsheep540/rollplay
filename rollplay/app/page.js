@@ -33,7 +33,7 @@ export default function Home() {
         body: JSON.stringify(payload),
       })
       const res = await req.json()
-      router.push(`/game?roomId=${res["id"]}`)
+      router.push(`/game?roomId=${res["id"]}&playerName=${playerName}`)
     }
 
     // Request the backend that the room ID is valid
@@ -49,7 +49,7 @@ export default function Home() {
         const jsonData = await res.json()
         if (jsonData["_id"] == roomId) {
           console.log(jsonData)
-          router.push(`/game?roomId=${roomId}`)
+          router.push(`/game?roomId=${roomId}&playerName=${playerName}`)
         }
       }
     }

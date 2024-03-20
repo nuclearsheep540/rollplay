@@ -43,7 +43,7 @@ div#imgBg {
   filter: invert();
   mix-blend-mode: screen;
   opacity: 20%;
-  z-index: 0;
+  z-index: -5;
   margin: 28px;
   overflow: hidden;
 }
