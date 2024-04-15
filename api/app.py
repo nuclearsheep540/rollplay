@@ -44,13 +44,27 @@ def gameservice_get(room_id):
     else:
         return Response(status_code=404, content='{f"id {room_id} not found")}')
 
+class ConnectionManager:
+    def __init__(self):
+        self.connections: list[WebSocket] = []
 
-@app.websocket("/ws/{room_id}")
-async def websocker_endpoint(websocket: WebSocket):
-    await websocket.accept()
+    async def connect(self, websocket: WebSocket):
+        await websocket.accept()
+        self.connections.append(websocket)
+
+    async def broadcast(self, data: str):
+        for connection in self.connections:
+            await connection.send_text(data)
+
+manager = ConnectionManager()
+
+
+@app.websocket("/ws/{client_id}")
+async def websocket_endpoint(websocket: WebSocket, client_id: str, player_name: str):
+    await manager.connect(websocket)
     while True:
         data = await websocket.receive_text()
-        await websocket.send_text(f"{data}")
+        await manager.broadcast(f"{player_name}: {data}")
 
 
 @app.post("/game/")

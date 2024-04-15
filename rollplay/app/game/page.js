@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect } from 'react'
-import { useState } from 'react'
+import { useState, useRef } from 'react'
 import { useSearchParams } from 'next/navigation'
 
 import PlayerCard from "../components/PlayerCard";
@@ -12,7 +12,7 @@ export default function Game() {
   const roomId = searchParams.get('roomId')
   const thisPlayer = searchParams.get('playerName')
   const [room404, setRoom404] = useState(false)
-
+  
   // state for each seat
 
   // who generated the room
@@ -43,27 +43,28 @@ export default function Game() {
   
   useEffect(() => {
     onLoad()
+    setWebSocket(new WebSocket(`ws://localhost:8081/ws/${roomId}?player_name=${thisPlayer}`))
   }, []
   )
   
   const [chatLog, setChatLog] = useState(["welcome",])
   const [chatMsg, setChatMsg] = useState("")
+  const [webSocket, setWebSocket] = useState()
   
-  let ws = new WebSocket(`ws://localhost:8081/ws/${roomId}`)
-  ws.onmessage = (event)=>{
-    console.log("from websocket :", event["data"])
-    setChatLog([...chatLog, event["data"]])
-    console.log("chatlog: ", chatLog)
+  if (webSocket) {
+    webSocket.onmessage = (event)=>{
+      console.log("from websocket :", event["data"])
+      setChatLog([...chatLog, event["data"]])
+      console.log("chatlog: ", chatLog)
+    }
   }
-
 
   function sendMessage(e) {
     e.preventDefault()
     console.log("sending to websocket: ", chatMsg)
-    ws.send(chatMsg)
+    webSocket.send(chatMsg)
     setChatMsg("")
 }
-
 
   
   console.log("seats: ", seats)
@@ -97,7 +98,6 @@ export default function Game() {
               {
                 chatLog.map((msg, index) => <ul id={index}>{msg}</ul>)
               }
-
             </div>
 
             { 
