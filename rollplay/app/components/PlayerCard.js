@@ -29,7 +29,7 @@ export default function PlayerCard({seatId, seats, thisPlayer, setSeats, isSitti
 
     return (
         <div>
-            <div id={seatId} className="m-4 p-6 bg-slate-400 grid grid-rows-2 grid-flow-col gap-4">
+            <div key={seatId} className="m-4 p-6 bg-slate-400 grid grid-rows-2 grid-flow-col gap-4">
             <button
                     className={"flex-none rounded-md " + 'bg-indigo-600' + " px-3.5 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-indigo-400 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-500"}
                     onClick={()=>{
