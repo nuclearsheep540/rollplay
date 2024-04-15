@@ -31,6 +31,9 @@ export default function Game() {
       await req.json().then((res)=>{
         setHost(res["player_name"])
 
+        // TODO: get current seats
+        // TODO: limit seat changes?
+
         var plyrs = ["empty",]
         for (let i=1; i < res["max_players"]; i++) {
           plyrs = [...plyrs, "empty"]
@@ -53,21 +56,36 @@ export default function Game() {
   
   if (webSocket) {
     webSocket.onmessage = (event)=>{
-      console.log("from websocket :", event["data"])
-      setChatLog([...chatLog, event["data"]])
-      console.log("chatlog: ", chatLog)
+
+      const json_data = JSON.parse(event.data)
+      console.log("EVENT TYPEOF", typeof(json_data))
+      console.log("EVENT TYPE", json_data)
+      
+      if (json_data["event_type"] == "seat_change") {
+        console.log("updating seats.........")
+        setSeats(json_data["data"])
+      }
+      console.log("webhook event :", json_data["data"])
+      setChatLog([...chatLog, json_data["data"]])
     }
   }
 
   function sendMessage(e) {
     e.preventDefault()
-    console.log("sending to websocket: ", chatMsg)
-    webSocket.send(chatMsg)
+    webSocket.send(JSON.stringify(
+      {"event_type": "chat_message", "data": chatMsg})
+    )
     setChatMsg("")
 }
 
-  
-  console.log("seats: ", seats)
+  function sendSeatChange(seat) {
+    console.log("changing seats")
+    console.log("b4 send ", seat)
+    webSocket.send(JSON.stringify(
+      {"event_type": "seat_change", "data": seat})
+    )
+
+  }
   
   return (
 
@@ -96,17 +114,19 @@ export default function Game() {
                 <button>Send</button>
               </form>
               {
-                chatLog.map((msg, index) => <ul id={index}>{msg}</ul>)
+                chatLog.map((msg, index) => <ul key={index}>{msg}</ul>)
               }
             </div>
 
             { 
-              seats.map((_, index) => <PlayerCard 
+              seats.map((_, index) => <PlayerCard
+                key={index} 
                 seatId={index}
                 seats={seats}
                 thisPlayer={thisPlayer}
                 setSeats={setSeats}
                 isSitting={seats[index] === thisPlayer}
+                sendSeatChange={sendSeatChange}
                 />)
 
             }

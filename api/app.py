@@ -4,6 +4,7 @@ from fastapi.exceptions import ResponseValidationError
 from pydantic import Field
 from gameservice import GameService, GameSettings
 import logging
+import json
 
 logger = logging.getLogger()
 
@@ -43,6 +44,12 @@ def gameservice_get(room_id):
         return check_room
     else:
         return Response(status_code=404, content='{f"id {room_id} not found")}')
+    
+@app.post("/game/")
+def gameservice_create(settings: GameSettings):
+    new_room = GameService.create_room(settings=settings)
+    return {"id": new_room}
+
 
 class ConnectionManager:
     def __init__(self):
@@ -52,22 +59,36 @@ class ConnectionManager:
         await websocket.accept()
         self.connections.append(websocket)
 
-    async def broadcast(self, data: str):
+    async def update_data(self, data):
         for connection in self.connections:
-            await connection.send_text(data)
+            try:
+                await connection.send_json(data=data)
+            except RuntimeError as err:
+                import pdb; pdb.set_trace()
 
 manager = ConnectionManager()
 
 
 @app.websocket("/ws/{client_id}")
-async def websocket_endpoint(websocket: WebSocket, client_id: str, player_name: str):
+async def websocket_endpoint(
+    websocket: WebSocket,
+    client_id: str,
+    player_name: str
+):
     await manager.connect(websocket)
     while True:
-        data = await websocket.receive_text()
-        await manager.broadcast(f"{player_name}: {data}")
+        data = await websocket.receive_json()
+
+        if data.get("event_type") == "seat_change":
+            # TODO: write the seat change to DB
+
+            # use for seat changes
+            await manager.update_data(data)
+        else:
+            # use for chat messages
+            await manager.update_data({**data, "player_name": player_name})
 
 
-@app.post("/game/")
-def gameservice_create(settings: GameSettings):
-    new_room = GameService.create_room(settings=settings)
-    return {"id": new_room}
+
+
+
