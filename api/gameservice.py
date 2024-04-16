@@ -11,6 +11,7 @@ CONFIG = get_settings()
 class GameSettings(BaseModel):
     "Basic settings for a game lobby"
 
+    #TODO: seats: list, for updating over WS on seat changes ??
     max_players: int
     player_name: str
 
