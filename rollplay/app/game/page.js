@@ -66,26 +66,26 @@ export default function Game() {
 
   if (webSocket) {
     webSocket.onmessage = (event)=>{
-
       const json_data = JSON.parse(event.data)
-      console.log("EVENT TYPEOF", typeof(json_data))
-      console.log("EVENT TYPE", json_data)
+      const event_type = json_data["event_type"]
+      console.log("NEW EVENT", json_data)
       
-      if (json_data["event_type"] == "seat_change") {
-        console.log("updating seats.........")
+      if (event_type == "seat_change") {
         setSeats(json_data["data"])
         return
       }
 
-      console.log("webhook event :", json_data["data"])
-      setChatLog(
-        [...chatLog,
-          {
-            "player_name": json_data["player_name"],
-            "chat_message": json_data["data"],
-            "timestamp": json_data["utc_timestamp"]
-          }
-        ])
+      if (event_type == "chat_message") {
+        setChatLog(
+          [...chatLog,
+            {
+              "player_name": json_data["player_name"],
+              "chat_message": json_data["data"],
+              "timestamp": json_data["utc_timestamp"]
+            }
+          ])
+        return
+      }
     }
   }
 
@@ -98,7 +98,7 @@ export default function Game() {
 }
 
   function sendSeatChange(seat) {
-    console.log("seat change: ", seat)
+    console.log("Sending seat layout to WS: ", seat)
     webSocket.send(JSON.stringify(
       {"event_type": "seat_change", "data": seat})
     )
@@ -164,7 +164,6 @@ export default function Game() {
             seatId={index}
             seats={seats}
             thisPlayer={thisPlayer}
-            setSeats={setSeats}
             isSitting={seats[index] === thisPlayer}
             sendSeatChange={sendSeatChange}
             />)

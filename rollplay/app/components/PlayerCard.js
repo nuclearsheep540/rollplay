@@ -1,7 +1,7 @@
 import React from 'react';
 import { useState, useEffect } from 'react'
 
-export default function PlayerCard({seatId, seats, thisPlayer, setSeats, isSitting, sendSeatChange}) {
+export default function PlayerCard({seatId, seats, thisPlayer, isSitting, sendSeatChange}) {
     function sitSeat() {
         //  check the seat is free
         //  if free place player name against this index
@@ -11,8 +11,7 @@ export default function PlayerCard({seatId, seats, thisPlayer, setSeats, isSitti
             var oldIndex = seats.indexOf(thisPlayer)
             localSeat[oldIndex] = "empty"
             localSeat[seatId] = thisPlayer
-    
-            console.log('localSeat '+localSeat)
+
             sendSeatChange(localSeat)
         }
         return
