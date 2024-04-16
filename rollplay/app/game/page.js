@@ -7,11 +7,14 @@ import { useSearchParams } from 'next/navigation'
 import PlayerCard from "../components/PlayerCard";
 import ChatMessages from '../components/ChatMessages';
 
-export default function Game() {
-
+function SearchQueryParams(expr) {
   const searchParams = useSearchParams()
-  const roomId = searchParams.get('roomId')
-  const thisPlayer = searchParams.get('playerName')
+  return searchParams.get(expr)
+}
+
+export default function Game() {
+  const roomId = SearchQueryParams('roomId')
+  const thisPlayer = SearchQueryParams('playerName')
 
   const [room404, setRoom404] = useState(false)
   const [webSocket, setWebSocket] = useState()
