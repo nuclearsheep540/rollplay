@@ -98,6 +98,7 @@ export default function Game() {
 }
 
   function sendSeatChange(seat) {
+    console.log("seat change: ", seat)
     webSocket.send(JSON.stringify(
       {"event_type": "seat_change", "data": seat})
     )
@@ -105,7 +106,7 @@ export default function Game() {
   
   return (
 
-    <main>
+    <main className=''>
       {
         (room404) &&
         <h3 className='text-red-500'>{`room id not found: ${roomId}`}</h3>
