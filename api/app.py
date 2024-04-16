@@ -5,6 +5,7 @@ from pydantic import Field
 from gameservice import GameService, GameSettings
 import logging
 import json
+from datetime import datetime
 
 logger = logging.getLogger()
 
@@ -86,7 +87,8 @@ async def websocket_endpoint(
             await manager.update_data(data)
         else:
             # use for chat messages
-            await manager.update_data({**data, "player_name": player_name})
+            timestamp = datetime.now().strftime("%H:%M")
+            await manager.update_data({**data, "player_name": player_name, "utc_timestamp": timestamp})
 
 
 
