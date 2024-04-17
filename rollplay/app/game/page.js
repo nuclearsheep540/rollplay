@@ -7,10 +7,13 @@ import { useSearchParams } from "next/navigation";
 import PlayerCard from "../components/PlayerCard";
 import ChatMessages from '../components/ChatMessages';
 
+function Params() {
+  return useSearchParams()
+}
 
 export default function Game() {
 
-  const params = useSearchParams(); 
+  const params = Params(); 
 
   const [room404, setRoom404] = useState(false)
   const [webSocket, setWebSocket] = useState()
