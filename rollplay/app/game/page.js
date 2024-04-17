@@ -2,19 +2,23 @@
 
 import { useEffect } from 'react'
 import { useState, useRef } from 'react'
-import { useSearchParams } from 'next/navigation'
+import { useSearchParams } from "next/navigation";
 
 import PlayerCard from "../components/PlayerCard";
 import ChatMessages from '../components/ChatMessages';
 
+function Params() {
+  return useSearchParams()
+}
+
 export default function Game() {
 
-  const searchParams = useSearchParams()
-  const roomId = searchParams.get('roomId')
-  const thisPlayer = searchParams.get('playerName')
+  const params = Params(); 
 
   const [room404, setRoom404] = useState(false)
   const [webSocket, setWebSocket] = useState()
+  const [thisPlayer, setThisPlayer] = useState()
+  const [roomId, setRoomId] = useState()
 
   // chat history
   const [chatLog, setChatLog] = useState([{},])
@@ -28,7 +32,7 @@ export default function Game() {
   // max number of available spots in a lobby
   const [seats, setSeats] = useState(["",]) 
 
-  async function onLoad() {
+  async function onLoad(roomId) {
     const req = await fetch(`http://localhost:8081/game/${roomId}`)
     if (req.status === 404) {
       console.log("room id not found")
@@ -52,15 +56,24 @@ export default function Game() {
   
   // initialise the game lobby
   useEffect(() => {
+
+    // cant use SearchParams in a use effect
+    // or revert and ignore https://nextjs.org/docs/messages/missing-suspense-with-csr-bailout
+
+    const roomId = params.get('roomId')
+    const thisPlayer = params.get('playerName')
+    setRoomId(roomId)
+    setThisPlayer(thisPlayer)
+
     // fetches the room ID, and loads data
-    onLoad()
+    onLoad(roomId)
 
     // establishes websocket for this lobby
     const url = `ws://localhost:8081/ws/${roomId}?player_name=${thisPlayer}`
     setWebSocket(
       new WebSocket(url)
       )
-    }, []
+    },[]
   )
   
 

@@ -1,0 +1,54 @@
+version: "3"
+
+services:
+    nginx:
+        build:
+            context: ./docker/prod/nginx
+            dockerfile: Dockerfile
+        container_name: nginx
+        ports:
+          - "80:80"
+          - "443:443"
+        restart: unless-stopped
+    api:
+        hostname: api
+        stdin_open: true
+        tty: true
+        env_file:
+            - .env
+        container_name: "rollplay_api"
+        build:
+            context: ./api
+            dockerfile: ../docker/prod/api/Dockerfile
+        ports: 
+            - 8081:8081
+        volumes:
+            - ./api:/api
+    rollplay:
+        stdin_open: true
+        tty: true
+        env_file:
+            - .env
+        container_name: "rollplay"
+        build:
+            context: ./rollplay
+            dockerfile: ../docker/prod/rollplay/Dockerfile
+        ports:
+        - "3000:3000"
+    db:
+        stdin_open: true
+        tty: true
+        restart: always
+        env_file:
+            - .env
+        container_name: "rollplay_db"
+        hostname: mongo
+        build:
+            context: ./docker
+            dockerfile: prod/db/Dockerfile
+        ports:
+        - "27017:27017"
+
+networks:
+  default:
+    driver: bridge
