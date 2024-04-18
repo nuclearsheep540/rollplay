@@ -25,7 +25,7 @@ export default function Home() {
       var payload = {"max_players": maxPlayers, "player_name": playerName}
 
       // Make the request to API for a new room id
-      const req = await fetch('http://18.200.239.2:8081/game', {
+      const req = await fetch('https://18.200.239.2:8081/game', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -39,7 +39,7 @@ export default function Home() {
     // Request the backend that the room ID is valid
     else if (existingRoom) {
       console.log(`fetching room id ${roomId}`)
-      const res = await fetch(`http://18.200.239.2:8081/game/${roomId}`)
+      const res = await fetch(`https://18.200.239.2:8081/game/${roomId}`)
 
       if (res.status === 404) {
         console.log("room id not found")
