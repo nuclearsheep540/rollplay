@@ -79,3 +79,9 @@ Host github.com
         Hostname github.com
         PreferredAuthentications publickey
         IdentityFile /home/ubuntu/.ssh/id_git.pub
+
+git clone git@github.com:nuclearsheep540/rollplay.git
+sudo snap install docker
+sudo groupadd docker
+sudo usermod -aG docker $USER
+### REBOOT
