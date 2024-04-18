@@ -26,11 +26,13 @@ origins = [
     "https://18.200.239.2",
     "https://18.200.239.2:3000",
     "http://18.200.239.2:3000",
-    "http://18.200.239.2:8081"
+    "http://18.200.239.2:8081",
+    "http://api:8081/",
+    "http://api:8081/game"
 ]
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
