@@ -1,4 +1,4 @@
-from fastapi import FastAPI, Response, WebSocket
+from fastapi import FastAPI, Response, WebSocket, Request
 import pydantic
 from fastapi.exceptions import ResponseValidationError
 from pydantic import Field
@@ -16,6 +16,9 @@ from fastapi.middleware.cors import CORSMiddleware
 app = FastAPI()
 origins = [
     "http://localhost:3000",
+    "https://localhost:3000",
+    "http://localhost",
+    "https://localhost",
     "ws://localhost:3000"
 ]
 app.add_middleware(
