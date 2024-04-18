@@ -20,7 +20,7 @@ export default function Home() {
     e.preventDefault()
     setRoom404(false)
 
-    const api_url = "http://18.200.239.2:8081"
+    const api_url = "http://api:8081"
     // const api_url = "http://localhost:8081"
 
     if (newRoom) {
