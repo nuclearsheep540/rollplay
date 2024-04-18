@@ -22,7 +22,9 @@ origins = [
     "ws://localhost:3000",
     "18.200.239.2",
     "http://18.200.239.2",
-    "https://18.200.239.2"
+    "https://18.200.239.2",
+    "https://18.200.239.2:3000",
+    "http://18.200.239.2:3000"
 ]
 app.add_middleware(
     CORSMiddleware,
