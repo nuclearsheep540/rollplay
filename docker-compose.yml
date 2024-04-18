@@ -17,7 +17,7 @@ services:
         tty: true
         env_file:
             - .env
-        container_name: "rollplay_api"
+        container_name: "api"
         image: ghcr.io/nuclearsheep540/rollplay/api:0.0.1
         build:
             context: ./api
@@ -42,7 +42,7 @@ services:
         restart: always
         env_file:
             - .env
-        container_name: "rollplay_db"
+        container_name: "db"
         hostname: mongo
         image: ghcr.io/nuclearsheep540/rollplay/db:0.0.1
         build:
