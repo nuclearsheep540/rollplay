@@ -20,8 +20,8 @@ export default function Home() {
     e.preventDefault()
     setRoom404(false)
 
-    const api_url = "http://api:8081"
-    // const api_url = "http://localhost:8081"
+    // const api_url = "https://api:8081"
+    const api_url = "http://localhost:8081"
 
     if (newRoom) {
       console.log(`requesting a new room for ${maxPlayers} players...`)
