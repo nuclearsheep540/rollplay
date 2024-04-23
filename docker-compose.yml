@@ -1,18 +1,18 @@
 version: "3"
 
 services:
-    # nginx:
-    #     image: ghcr.io/nuclearsheep540/rollplay/nginx:0.0.2
-    #     build:
-    #         context: ./docker/prod/nginx
-    #         dockerfile: Dockerfile
-    #     container_name: nginx
-    #     ports:
-    #     - "80:80"
-    #     - "443:443"
-    #     restart: unless-stopped
-    #     networks:
-    #     - default
+    nginx:
+        image: ghcr.io/nuclearsheep540/rollplay/nginx:0.0.2
+        build:
+            context: ./docker/prod/nginx
+            dockerfile: Dockerfile
+        container_name: nginx
+        ports:
+        - "80:80"
+        - "443:443"
+        restart: unless-stopped
+        networks:
+        - default
     api:
         hostname: api
         stdin_open: true
