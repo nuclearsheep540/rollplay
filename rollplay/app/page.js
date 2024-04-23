@@ -28,7 +28,7 @@ export default function Home() {
       const req = await fetch('http://localhost:8081/game', {
         method: 'POST',
         headers: {
-          'Content-Type': 'application/json',
+          'Content-Type': 'application/x-www-form-urlencoded',
         },
         body: JSON.stringify(payload),
       })
