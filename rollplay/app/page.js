@@ -29,7 +29,9 @@ export default function Home() {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
+
         },
+        mode: "no-cors",
         body: JSON.stringify(payload),
       })
       const res = await req.json()
