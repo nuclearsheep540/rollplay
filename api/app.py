@@ -56,14 +56,6 @@ def gameservice_create(settings: GameSettings):
     new_room = GameService.create_room(settings=settings)
     return {"id": new_room}
 
-@app.options("/game")
-async def preflight():
-    return Response(
-        status_code=200,
-        content='success',
-        headers=["Access-Control-Allow-Methods", "PUT, POST, PATCH, DELETE, GET"]
-    )
-
 class ConnectionManager:
     def __init__(self):
         self.connections: list[WebSocket] = []
