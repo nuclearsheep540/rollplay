@@ -49,7 +49,11 @@ def gameservice_get(room_id):
         return check_room
     else:
         return Response(status_code=404, content='{f"id {room_id} not found")}')
-    
+
+@app.options("/game")
+def preflight():
+    return {"msg": "ok"}
+
 @app.post("/game/")
 def gameservice_create(settings: GameSettings):
     new_room = GameService.create_room(settings=settings)
