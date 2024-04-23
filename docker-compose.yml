@@ -1,29 +1,33 @@
 version: "3"
 
 services:
-    nginx:
-        image: ghcr.io/nuclearsheep540/rollplay/nginx:0.0.2
-        build:
-            context: ./docker/prod/nginx
-            dockerfile: Dockerfile
-        container_name: nginx
-        ports:
-          - "80:80"
-          - "443:443"
-        restart: unless-stopped
+    # nginx:
+    #     image: ghcr.io/nuclearsheep540/rollplay/nginx:0.0.2
+    #     build:
+    #         context: ./docker/prod/nginx
+    #         dockerfile: Dockerfile
+    #     container_name: nginx
+    #     ports:
+    #     - "80:80"
+    #     - "443:443"
+    #     restart: unless-stopped
+    #     networks:
+    #     - default
     api:
         hostname: api
         stdin_open: true
         tty: true
         env_file:
-            - .env
+        - .env
         container_name: "api"
         image: ghcr.io/nuclearsheep540/rollplay/api:0.0.1
         build:
             context: ./api
             dockerfile: ../docker/prod/api/Dockerfile
         ports: 
-            - 8081:8081
+        - 8081:8081
+        networks:
+        - default
     rollplay:
         stdin_open: true
         tty: true
@@ -36,6 +40,8 @@ services:
             dockerfile: ../docker/prod/rollplay/Dockerfile
         ports:
         - "3000:3000"
+        networks:
+        - default
     db:
         stdin_open: true
         tty: true
@@ -50,6 +56,8 @@ services:
             dockerfile: prod/db/Dockerfile
         ports:
         - "27017:27017"
+        networks:
+        - default
 
 networks:
   default:

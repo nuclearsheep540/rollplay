@@ -12,8 +12,11 @@ logger = logging.getLogger()
 from config.settings import Settings
 
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.middleware.httpsredirect import HTTPSRedirectMiddleware
 
 app = FastAPI()
+app.add_middleware(HTTPSRedirectMiddleware)
+
 origins = [
     "http://localhost:3000",
     "https://localhost:3000",
@@ -28,7 +31,9 @@ origins = [
     "http://18.200.239.2:3000",
     "http://18.200.239.2:8081",
     "http://api:8081/",
-    "http://api:8081/game"
+    "http://api:8081/game",
+    "https://api:8081/",
+    "https://api:8081/game"
 ]
 app.add_middleware(
     CORSMiddleware,
