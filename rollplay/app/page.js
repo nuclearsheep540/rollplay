@@ -117,7 +117,7 @@ export default function Home() {
                     id="maxPlayers"
                     name="maxPlayers"
                     type="number"
-                    min="0"
+                    min="2"
                     max="10"
                     value={maxPlayers}
                     required
