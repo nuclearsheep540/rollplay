@@ -47,6 +47,11 @@ for debugging
 # GitHub
 echo <GH_PAT> | docker login ghcr.io -u nuclearsheep540 --password-stdin
 
+# Build Images
+first log in as above
+* docker compose build
+* docker compose push
+
 # AWS
 matt+tabletoptavern@jackalmedia.co.uk
 
@@ -63,6 +68,8 @@ Example:
 
  ssh -i "ec2-key.pem" ubuntu@ec2-18-200-239-2.eu-west-1.compute.amazonaws.com
 
+ ubuntu@ec2-34.243.218.196.eu-west-1.compute.amazonaws.com
+
  ### Once in
 
 mkdir app
@@ -70,23 +77,36 @@ cd app
 git init
 sudo apt update
 sudo apt install gh
-gh auth login
-    > ssh
-    > gnerate ssh - yes
-    > passphrase
-    > paste auth token
 
-ssh-keygen -t rsa -C "matt@jackalmedia.co.uk"
-/home/ubuntu/.ssh/id_git.pub
+### creating the auth key
+
+ssh-keygen -t ed25519 -C "matt@jackalmedia.co.uk"
+	> SHA256:35IdiMC/5fjFakQtgh7jNQZo6Ovh3H5KSWHOVXeP/jY matt@jackalmedia.co.uk
+
+ssh-add ~/.ssh/id_ed25519
+chmod 600 ~/.ssh/id_ed25519
+
+cat ~/.ssh/id_ed25519.pub
+	> ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIEKDh3lRouLNKxDjwEG4h5w1rojp/3GbFyGuZvq9z3Jb matt@jackalmedia.co.uk
+
+https://github.com/settings/keys
+
 vim ~/.ssh/config
 Host github.com
         User git
         Hostname github.com
         PreferredAuthentications publickey
-        IdentityFile /home/ubuntu/.ssh/id_git.pub
+        IdentityFile /home/ubuntu/.ssh/id_ed25519.pub
+
+
+### logging in and cloning
+
+sudo snap install docker
+
+echo "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" | docker login ghcr.io -u nuclearsheep540 --password-stdin
 
 git clone git@github.com:nuclearsheep540/rollplay.git
-sudo snap install docker
+
 sudo groupadd docker
 sudo usermod -aG docker $USER
 ### REBOOT
