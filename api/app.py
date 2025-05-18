@@ -59,13 +59,6 @@ class ConnectionManager:
 manager = ConnectionManager()
 
 
-seats_layout = {
-    "0": None,
-    "1": None,
-    "2": None,
-    "3": None,
-}
-
 @app.websocket("/ws/{client_id}")
 async def websocket_endpoint(
     websocket: WebSocket,
