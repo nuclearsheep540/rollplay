@@ -53,11 +53,18 @@ class ConnectionManager:
         for connection in self.connections:
             try:
                 await connection.send_json(data=data)
-            except RuntimeError as err:
-                import pdb; pdb.set_trace()
+            except:
+                pass
 
 manager = ConnectionManager()
 
+
+seats_layout = {
+    "0": None,
+    "1": None,
+    "2": None,
+    "3": None,
+}
 
 @app.websocket("/ws/{client_id}")
 async def websocket_endpoint(
@@ -68,12 +75,27 @@ async def websocket_endpoint(
     await manager.connect(websocket)
     while True:
         data = await websocket.receive_json()
+        event_type = data.get("event_type")
 
-        if data.get("event_type") == "seat_change":
-            # TODO: write the seat change to DB
+        if event_type == "seat_change":
+            # Expect that the client sends a complete seat layout.
+            # For example: { "event_type": "seat_change", "data": ["Alice", "", "Bob", ""] }
+            seat_layout = data.get("data")
+            # Optionally validate that seat_layout is a list
+            if not isinstance(seat_layout, list):
+                error_message = {
+                    "event_type": "error",
+                    "data": "Seat layout must be an array."
+                }
+                await websocket.send_json(error_message)
+                continue
 
-            # use for seat changes
-            await manager.update_data(data)
+            # Broadcast the seat layout to all connected clients.
+            broadcast_message = {
+                "event_type": "seat_change",
+                "data": seat_layout
+            }
+            await manager.update_data(broadcast_message)
         else:
             # use for chat messages
             timestamp = datetime.now().strftime("%H:%M")
