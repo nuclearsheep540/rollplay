@@ -10,6 +10,8 @@ logging_email_from=""
 logging_email_to=""
 logging_email_subject=test
 
+NEXT_PUBLIC_API_URL=https://localhost
+
 MONGO_INITDB_ROOT_USERNAME=mdavey
 MONGO_INITDB_ROOT_PASSWORD=pass
 MONGO_INITDB_DATABASE=rollplay
