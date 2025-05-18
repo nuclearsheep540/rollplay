@@ -1,64 +1,92 @@
-version: "3"
+version: "3.8"
 
 services:
-    nginx:
-        image: ghcr.io/nuclearsheep540/rollplay/nginx:0.0.2
-        build:
-            context: ./docker/prod/nginx
-            dockerfile: Dockerfile
-        container_name: nginx
-        ports:
-        - "80:80"
-        - "443:443"
-        restart: unless-stopped
-        networks:
-        - default
-    api:
-        hostname: api
-        stdin_open: true
-        tty: true
-        env_file:
-        - .env
-        container_name: "api"
-        image: ghcr.io/nuclearsheep540/rollplay/api:0.0.1
-        build:
-            context: ./api
-            dockerfile: ../docker/prod/api/Dockerfile
-        ports: 
-        - 8081:8081
-        networks:
-        - default
-    app:
-        stdin_open: true
-        tty: true
-        env_file:
-            - .env
-        container_name: "rollplay"
-        image: ghcr.io/nuclearsheep540/rollplay/rollplay:0.0.1
-        build:
-            context: ./rollplay
-            dockerfile: ../docker/prod/rollplay/Dockerfile
-        ports:
-        - "3000:3000"
-        networks:
-        - default
-    db:
-        stdin_open: true
-        tty: true
-        restart: always
-        env_file:
-            - .env
-        container_name: "db"
-        hostname: mongo
-        image: ghcr.io/nuclearsheep540/rollplay/db:0.0.1
-        build:
-            context: ./docker
-            dockerfile: prod/db/Dockerfile
-        ports:
-        - "27017:27017"
-        networks:
-        - default
+  nginx:
+    image: ghcr.io/nuclearsheep540/rollplay/nginx:0.1.0
+    build:
+      context: ./docker/prod/nginx
+      dockerfile: Dockerfile
+    container_name: nginx
+    ports:
+      - "80:80"
+      - "443:443"
+      - "81:81"
+    restart: unless-stopped
+    depends_on:
+      - api
+      - app
+    networks:
+      - default
+    volumes:
+      - certbot_data:/etc/letsencrypt
+      - certbot_www:/var/www/certbot
+
+  api:
+    hostname: api
+    env_file:
+      - .env
+    container_name: "api"
+    image: ghcr.io/nuclearsheep540/rollplay/api:0.1.0
+    build:
+      context: ./api
+      dockerfile: ../docker/prod/api/Dockerfile
+    ports:
+      - "8081:8081"
+    restart: unless-stopped
+    networks:
+      - default
+      
+  app:
+    env_file:
+      - .env
+    container_name: "rollplay"
+    image: ghcr.io/nuclearsheep540/rollplay/rollplay:0.1.0
+    build:
+      context: ./rollplay
+      dockerfile: ../docker/prod/rollplay/Dockerfile
+    ports:
+      - "3000:3000"
+    restart: unless-stopped
+    networks:
+      - default
+
+  db:
+    restart: always
+    env_file:
+      - .env
+    container_name: "db"
+    hostname: mongo
+    image: ghcr.io/nuclearsheep540/rollplay/db:0.1.0
+    build:
+      context: ./docker
+      dockerfile: prod/db/Dockerfile
+    ports:
+      - "27017:27017"
+    volumes:
+      - db_data:/data/db
+    networks:
+      - default
+
+  certbot-renewer:
+    image: ghcr.io/nuclearsheep540/rollplay/certbot:0.1.0
+    build:
+      context: ./docker/prod/certbot-renewer
+      dockerfile: Dockerfile
+    container_name: certbot-renewer
+    volumes:
+      - certbot_data:/etc/letsencrypt
+      - certbot_www:/var/www/certbot
+    depends_on:
+      - nginx
+    restart: always
+    networks:
+      - default
 
 networks:
   default:
     driver: bridge
+
+volumes:
+  db_data:
+  certbot_data:
+  certbot_www:
