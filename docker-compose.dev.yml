@@ -1,6 +1,19 @@
 version: "3"
 
 services:
+    nginx:
+        build:
+            context: ./docker/dev/nginx    # Adjusted context path
+            dockerfile: Dockerfile         # Dockerfile is in the same folder
+        container_name: "nginx-dev"
+        ports:
+        - "80:80"
+        - "443:443"
+        depends_on:
+        - api
+        - app
+        networks:
+        - default
     api:
         hostname: api
         stdin_open: true
@@ -15,7 +28,7 @@ services:
             - 8081:8081
         volumes:
             - ./api:/api
-    rollplay:
+    app:
         stdin_open: true
         tty: true
         env_file:

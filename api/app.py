@@ -1,43 +1,20 @@
-from fastapi import FastAPI, Response, WebSocket, Request
-import pydantic
-from fastapi.exceptions import ResponseValidationError
-from pydantic import Field
-from gameservice import GameService, GameSettings
-import logging
-import json
+from fastapi import FastAPI, Response, WebSocket
 from datetime import datetime
-
-logger = logging.getLogger()
-
-from config.settings import Settings
+import pydantic
+import logging
 
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.httpsredirect import HTTPSRedirectMiddleware
 
-app = FastAPI()
-app.add_middleware(HTTPSRedirectMiddleware)
+from gameservice import GameService, GameSettings
 
-origins = [
-    "http://localhost:3000",
-    "https://localhost:3000",
-    "http://localhost",
-    "https://localhost",
-    "ws://localhost:3000",
-    "ws://18.200.239.2:3000"
-    "18.200.239.2",
-    "http://18.200.239.2",
-    "https://18.200.239.2",
-    "https://18.200.239.2:3000",
-    "http://18.200.239.2:3000",
-    "http://18.200.239.2:8081",
-    "http://api:8081/",
-    "http://api:8081/game",
-    "https://api:8081/",
-    "https://api:8081/game"
-]
+
+logger = logging.getLogger()
+app = FastAPI()
+# app.add_middleware(HTTPSRedirectMiddleware)
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=origins,
+    allow_origins=["http://localhost:3000"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -50,11 +27,6 @@ class Message(pydantic.BaseModel):
 #    pydantic validation OOTB, this ensures validation on this Type.
     msg: str
 
-
-@app.get("/", tags=["Application"])
-def root():
-    return {"message": "OK"}
-
 @app.get("/game/{room_id}")
 def gameservice_get(room_id):
     check_room = GameService.get_room(id=room_id)
@@ -62,10 +34,6 @@ def gameservice_get(room_id):
         return check_room
     else:
         return Response(status_code=404, content='{f"id {room_id} not found")}')
-
-@app.options("/game/")
-def dont_know_why_this_gets_hit():
-    return {"msg": "ok"}
 
 @app.post("/game/")
 def gameservice_create(settings: GameSettings):

@@ -33,7 +33,7 @@ export default function Game() {
   const [seats, setSeats] = useState(["",]) 
 
   async function onLoad(roomId) {
-    const req = await fetch(`http://localhost:8081/game/${roomId}`)
+    const req = await fetch(`api/game/${roomId}`)
     if (req.status === 404) {
       console.log("room id not found")
       setRoom404(true)
@@ -69,7 +69,7 @@ export default function Game() {
     onLoad(roomId)
 
     // establishes websocket for this lobby
-    const url = `ws://localhost:8081/ws/${roomId}?player_name=${thisPlayer}`
+    const url = `ws://localhost/ws/${roomId}?player_name=${thisPlayer}`
     setWebSocket(
       new WebSocket(url)
       )
