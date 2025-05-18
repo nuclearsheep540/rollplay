@@ -103,7 +103,7 @@ Host github.com
 
 sudo snap install docker
 
-echo "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" | docker login ghcr.io -u nuclearsheep540 --password-stdin
+echo "PAT_SECRET" | docker login ghcr.io -u nuclearsheep540 --password-stdin
 
 git clone git@github.com:nuclearsheep540/rollplay.git
 
