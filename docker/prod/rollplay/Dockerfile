@@ -1,11 +1,26 @@
-FROM node:18
+# --- Builder Stage ---
+FROM node:18-alpine AS builder
+WORKDIR /app
 
-WORKDIR /rollplay
-COPY . .
+# Copy package files first for better caching
 COPY package*.json ./
+RUN npm install
+
+# Now copy the rest of the code and build the Next.js app
+COPY . .
+RUN npm run build
+
+# --- Runner Stage ---
+FROM node:18-alpine AS runner
+WORKDIR /app
+
+# Set production environment variables
+ENV NODE_ENV=production
+
+# Copy built application and only the production dependencies from the builder stage
+COPY --from=builder /app ./
 
 EXPOSE 3000
 
-RUN npm install next
-RUN npm run build
-CMD npm run start
+# Run your production Next.js server
+CMD ["npm", "run", "start"]

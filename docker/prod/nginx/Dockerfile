@@ -1,13 +1,20 @@
-FROM nginx:1.23.3-alpine
+FROM nginx:1.28.0
 
-COPY nginx.conf /etc/nginx/nginx.conf
-ADD cert.key  /etc/nginx/ssl/cert.key
-ADD key.pem  /etc/nginx/ssl/key.pem
+# Install required packages: Python3, pip, flask, and openssl to enable self-signed certificate generation.
+RUN apt-get update && apt-get install -y python3 python3-pip openssl && \
+    pip3 install --break-system-packages flask
 
-RUN mkdir -p /etc/keys/
-RUN echo "rollplay" > /etc/keys/global.pass
+# Copy your production NGINX configuration.
+COPY nginx.conf /etc/nginx/conf.d/default.conf
 
-EXPOSE 80
-EXPOSE 443
+# Copy the reload server script into the container.
+COPY reload_server.py /reload_server.py
 
-CMD ["nginx", "-g", "daemon off;"]
+# Copy the entrypoint script and ensure it's executable.
+COPY entrypoint.sh /entrypoint.sh
+RUN chmod +x /entrypoint.sh
+
+# Expose HTTP, HTTPS, and reload endpoint ports.
+EXPOSE 80 443 81
+
+CMD ["/entrypoint.sh"]

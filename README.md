@@ -47,6 +47,9 @@ for debugging
 # GitHub
 echo <GH_PAT> | docker login ghcr.io -u nuclearsheep540 --password-stdin
 
+# AWS
+matt+tabletoptavern@jackalmedia.co.uk
+
 # EC2 Fresh Instance
 Locate your private key file. The key used to launch this instance is ec2-key.pem
 
