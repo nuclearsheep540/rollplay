@@ -19,16 +19,14 @@ export default function Home() {
   async function handleSubmit(e) {
     e.preventDefault();
     setRoom404(false);
-  
-    // Use the environment variable for the API URL
-    const api_url = process.env.NEXT_PUBLIC_API_URL || "https://localhost";
+
   
     if (newRoom) {
       console.log(`requesting a new room for ${maxPlayers} players...`);
       var payload = { "max_players": maxPlayers, "player_name": playerName };
   
       try {
-        const url = `${api_url}/api/game/`
+        const url = "/api/game/"
         const req = await fetch(url, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -47,7 +45,7 @@ export default function Home() {
       }
     } else if (existingRoom) {
       console.log(`fetching room id ${roomId}`);
-      const res = await fetch(`${api_url}/api/game/${roomId}`);
+      const res = await fetch(`/api/game/${roomId}`);
   
       if (res.status === 404) {
         console.log("room id not found");
