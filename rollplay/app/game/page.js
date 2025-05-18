@@ -75,6 +75,8 @@ export default function Game() {
       )
     },[]
   )
+
+
   
 
   if (webSocket) {
@@ -84,7 +86,8 @@ export default function Game() {
       console.log("NEW EVENT", json_data)
       
       if (event_type == "seat_change") {
-        setSeats(json_data["data"])
+        console.log("recieved a new message with seat change: ", json_data["data"])
+        setSeats([...json_data["data"]]);
         return
       }
 
@@ -177,7 +180,7 @@ export default function Game() {
             seatId={index}
             seats={seats}
             thisPlayer={thisPlayer}
-            isSitting={seats[index] === thisPlayer}
+            isSitting={seats[index] !== "empty"}
             sendSeatChange={sendSeatChange}
             />)
             

@@ -2,6 +2,11 @@ import React from 'react';
 import { useState, useEffect } from 'react'
 
 export default function PlayerCard({seatId, seats, thisPlayer, isSitting, sendSeatChange}) {
+
+    useEffect(() => {
+        console.log(`Seat ${seatId} updated:`, seats[seatId]);
+    }, [seats[seatId]]);
+
     function sitSeat() {
         //  check the seat is free
         //  if free place player name against this index
@@ -21,6 +26,11 @@ export default function PlayerCard({seatId, seats, thisPlayer, isSitting, sendSe
         var localSeat = [...seats]
         var oldIndex = seats.indexOf(thisPlayer)
         localSeat[oldIndex] = "empty"
+
+        var someoneElsesSeat = (seats[seatId] != "empty" && seats[seatId] != thisPlayer )? true : false
+        if (someoneElsesSeat) {
+            return
+        }
 
         sendSeatChange(localSeat)
         return
