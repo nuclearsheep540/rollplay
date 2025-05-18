@@ -17,42 +17,52 @@ export default function Home() {
   const [modalOpen, setModalOpen] = useState(false)
 
   async function handleSubmit(e) {
-    e.preventDefault()
-    setRoom404(false)
-
+    e.preventDefault();
+    setRoom404(false);
+  
+    // Use the environment variable for the API URL
+    const api_url = process.env.NEXT_PUBLIC_API_URL || "https://localhost";
+  
     if (newRoom) {
-      console.log(`requesting a new room for ${maxPlayers} players...`)
-      var payload = {"max_players": maxPlayers, "player_name": playerName}
-
-      // Make the request to API for a new room id
-      const req = await fetch('http://localhost:8081/game', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(payload),
-      })
-      const res = await req.json()
-      router.push(`/game?roomId=${res["id"]}&playerName=${playerName}`)
-    }
-
-    // Request the backend that the room ID is valid
-    else if (existingRoom) {
-      console.log(`fetching room id ${roomId}`)
-      const res = await fetch(`http://localhost:8081/game/${roomId}`)
-
+      console.log(`requesting a new room for ${maxPlayers} players...`);
+      var payload = { "max_players": maxPlayers, "player_name": playerName };
+  
+      try {
+        const url = `${api_url}/api/game/`
+        const req = await fetch(url, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
+        });
+        console.log(`url = ${url}`)
+        console.log("POST succeeded with status:", req.status);
+      
+        // Attempt to parse JSON (you might want to re-run the request if needed)
+        const res = await req.json()
+        console.log("response", res)
+        console.log("attempting re-direct: " + `/game?roomId=${res["id"]}&playerName=${playerName}`);
+        router.push(`/game?roomId=${res["id"]}&playerName=${playerName}`);
+      } catch (error) {
+        console.error("Error in fetch or JSON parsing:", error);
+      }
+    } else if (existingRoom) {
+      console.log(`fetching room id ${roomId}`);
+      const res = await fetch(`${api_url}/api/game/${roomId}`);
+  
       if (res.status === 404) {
-        console.log("room id not found")
-        setRoom404(true)
-        return
+        console.log("room id not found");
+        setRoom404(true);
+        return;
       } else {
-        const jsonData = await res.json()
+        const jsonData = await res.json();
         if (jsonData["_id"] == roomId) {
-          console.log(jsonData)
-          router.push(`/game?roomId=${roomId}&playerName=${playerName}`)
+          console.log(jsonData);
+          router.push(`/game?roomId=${roomId}&playerName=${playerName}`);
         }
       }
     }
+
+    
   }
 
   return (
@@ -107,7 +117,7 @@ export default function Home() {
                     id="maxPlayers"
                     name="maxPlayers"
                     type="number"
-                    min="0"
+                    min="2"
                     max="10"
                     value={maxPlayers}
                     required
