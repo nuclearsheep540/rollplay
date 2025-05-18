@@ -69,7 +69,12 @@ export default function Game() {
     onLoad(roomId)
 
     // establishes websocket for this lobby
-    const url = `ws://localhost/ws/${roomId}?player_name=${thisPlayer}`
+    // Determine the appropriate protocol based on the current page
+    const socketProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+    // Build the URL dynamically using the window host
+    const socketUrl = `${socketProtocol}//${window.location.host}/ws/`;
+
+    const url = `${socketUrl}${roomId}?player_name=${thisPlayer}`
     setWebSocket(
       new WebSocket(url)
       )
