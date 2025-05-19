@@ -1,0 +1,17 @@
+# Force the image to run as AMD64
+FROM --platform=linux/amd64 node:18
+
+WORKDIR /rollplay
+
+# Copy only the package files first
+COPY package*.json ./
+
+# Install all dependencies
+RUN npm install
+
+# Now copy the rest of your application code
+COPY . .
+
+EXPOSE 3000
+
+CMD ["npm", "run", "dev"]

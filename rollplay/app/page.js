@@ -64,41 +64,45 @@ export default function Home() {
   }
 
   return (
-    <div className="flex min-h-[600px] flex-col isolate overflow-hidden bg-gray-900 py-16 sm:py-24 lg:py-32">
-      <div id="imgBg"></div>
-      <div className="mx-auto max-w-7x1 px-6 lg:px-8">
-        <div className="mx-auto grid max-w-2x2 grid-cols-1 gap-x-8 gap-y-16 lg:max-w-none lg:grid-cols-2">
-          <div className="max-w-xl lg:max-w-1g">
-            <h2 className="text-3xl font-bold tracking-tight text-white sm:text-4xl">Let's get ready to roll!</h2>
-            <p className="mt-6 text-lg leading-8 text-gray-300">
-              Simple game lobby with dice rolling and chat for your role playing adventures!
-            </p>
-            {/* CTA: NEW or EXISTING lobby */}
-              <div className="mt-2 flex gap-x-6">
+      <body>
+        <div class="hero-container">
+          <div class="hero-image"></div>
+          
+          <nav class="nav-bar">
+            <div class="logo">TABLETOP<span>TAVERN</span></div>
+          </nav>
+          
+          <div class="hero-content">
+            <h1>Your Virtual D&D Table Awaits</h1>
+            <p>Create or join virtual D&D game rooms in seconds. Connect with friends, manage campaigns, and embark on epic adventures together — no downloads required.</p>
+            
+            <div class="cta-buttons">
+                {/* CTA: NEW or EXISTING lobby */}
+                <div className="mt-2 flex gap-x-6">
                 <button
-                    className={"flex-none rounded-md " + (newRoom == true ? 'bg-indigo-300' : 'bg-indigo-600') + " px-3.5 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-indigo-400 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-500"}
+                    className={"flex-none rounded-md " + (newRoom == true ? 'bg-orange-300' : 'bg-orange-600') + " px-3.5 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-orange-400 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-orange-500"}
                     onClick={()=>{setNewRoom(true),setExistingRoom(false),setModalOpen(true),setRoom404(false)}}
                   >
-                    New Game
+                    Create Game Lobby
                   </button>
                   <button
-                    className={"flex-none rounded-md " + (existingRoom == true ? 'bg-indigo-300' : 'bg-indigo-600') + " px-3.5 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-indigo-400 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-500"}
+                    className={"flex-none rounded-md " + (existingRoom == true ? 'bg-orange-300' : 'bg-orange-600') + " px-3.5 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-orange-400 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-orange-500"}
                     onClick={()=>{setNewRoom(false),setExistingRoom(true),setModalOpen(true),setRoom404(false)}}
                   >
-                    Join Game
+                    Join Existing Lobby
                   </button>
-
               </div>
-            {/* Player INPUT */}
-              {
-                (modalOpen) &&
-              <form className="mt-4 flex gap-x-6" onSubmit={handleSubmit}>
+            </div>
+
+            {modalOpen &&
+              <section>
+                <form className="mt-4 flex gap-x-6" onSubmit={handleSubmit}>
                 <div>
                   <label htmlFor="playerName" className="sr-only">
                   Player Name
                   </label>
                   <input
-                  className="min-w-0 flex-auto rounded-md border-0 bg-white/5 px-3.5 py-2 text-white shadow-sm ring-1 ring-inset ring-white/10 focus:ring-2 focus:ring-inset focus:ring-indigo-500 sm:text-sm sm:leading-6"
+                  className="min-w-0 flex-auto rounded-md border-0 bg-white/5 px-3.5 py-2 text-white shadow-sm ring-1 ring-inset ring-white/10 focus:ring-2 focus:ring-inset focus:ring-orange-500 sm:text-sm sm:leading-6"
                   id="playerName"
                   name="playerName"
                   type="text"
@@ -109,9 +113,9 @@ export default function Home() {
                   />
                 </div>
                 {
-                (newRoom) &&
+                newRoom &&
                   <input
-                    className="min-w-0 flex-auto rounded-md border-0 bg-white/5 px-3.5 py-2 text-white shadow-sm ring-1 ring-inset ring-white/10 focus:ring-2 focus:ring-inset focus:ring-indigo-500 sm:text-sm sm:leading-6"
+                    className="min-w-0 flex-auto rounded-md border-0 bg-white/5 px-3.5 py-2 text-white shadow-sm ring-1 ring-inset ring-white/10 focus:ring-2 focus:ring-inset focus:ring-orange-500 sm:text-sm sm:leading-6"
                     id="maxPlayers"
                     name="maxPlayers"
                     type="number"
@@ -124,10 +128,10 @@ export default function Home() {
                   />
                 }
                 {
-                (existingRoom) &&
+                existingRoom &&
 
                 <input
-                  className={"min-w-0 flex-auto rounded-md border-0 bg-white/5 px-3.5 py-2 text-white shadow-sm ring-1 ring-inset " + (room404 == false ? "ring-white/10" : "ring-red-400")  + " focus:ring-2 focus:ring-inset focus:ring-indigo-500 sm:text-sm sm:leading-6"}
+                  className={"min-w-0 flex-auto rounded-md border-0 bg-white/5 px-3.5 py-2 text-white shadow-sm ring-1 ring-inset " + (room404 == false ? "ring-white/10" : "ring-red-400")  + " focus:ring-2 focus:ring-inset focus:ring-orange-500 sm:text-sm sm:leading-6"}
                   id="roomId"
                   name="roomId"
                   type="text"
@@ -139,20 +143,54 @@ export default function Home() {
                 }
                 <>
                 <button
-                  className="flex-none rounded-md bg-indigo-500 px-3.5 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-indigo-400 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-500" 
+                  className="flex-none rounded-md bg-orange-500 px-3.5 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-orange-400 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-orange-500" 
                   type="submit"
                   onClick={()=>{handleSubmit}}
                 >Go</button>
                 </>
               </form>
+              </section>
               }
-              <p className={"" + (room404 == false ? 'hidden' : ' text-red-600 sm:text-m sm:leading-6') + ""}>Error: room not found</p>
-              
-
 
           </div>
         </div>
-      </div>
-    </div>
+        
+        <section class="how-it-works">
+          <h2>How It Works</h2>
+          
+          <div class="steps">
+            <div class="step">
+              <div class="step-icon">1</div>
+              <h3>Create a Lobby</h3>
+              <p>Set up your game room with customizable settings for your campaign and adventure style.</p>
+            </div>
+            
+            <div class="step">
+              <div class="step-icon">2</div>
+              <h3>Invite Your Party</h3>
+              <p>Share a simple link with friends so they can join your virtual table instantly.</p>
+            </div>
+            
+            <div class="step">
+              <div class="step-icon">3</div>
+              <h3>Start Your Adventure</h3>
+              <p>Use our tools to manage characters, roll dice, and track your epic journey together.</p>
+            </div>
+          </div>
+        </section>
+        
+        <footer>
+          <div class="footer-links">
+            <a href="#">Terms of Service</a>
+            <a href="#">Privacy Policy</a>
+            <a href="#">Help Center</a>
+          </div>
+          <div className="px-6 py-6 auto space-y-6 overflow-hidden sm:px-6 lg:px-6">
+              <div class="copyright">
+                © 2025 Tabletop Tavern. <br />All rights reserved. made with &#x2764; for me and my friends.
+              </div>
+          </div>
+        </footer>
+      </body>
   )
 }

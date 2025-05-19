@@ -29,6 +29,7 @@ services:
         volumes:
             - ./api:/api
     app:
+        platform: linux/amd64
         stdin_open: true
         tty: true
         env_file:
@@ -36,12 +37,12 @@ services:
         container_name: "rollplay-dev"
         build:
             context: ./rollplay
-            dockerfile: ../docker/dev/rollplay/Dockerfile
+            dockerfile: ../docker/dev/rollplay/Dockerfile.mac
         ports:
         - "3000:3000"
         volumes:
-            - ./rollplay:/rollplay
-            - /rollplay/node_modules
+        - ./rollplay:/rollplay
+
     db:
         stdin_open: true
         tty: true
@@ -56,8 +57,11 @@ services:
         ports:
         - "27017:27017"
         volumes:
-            - /data:/data/db
+            - ./data:/data/db
 
 networks:
   default:
     driver: bridge
+
+volumes:
+  node_modules:

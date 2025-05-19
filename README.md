@@ -47,6 +47,13 @@ for debugging
 # GitHub
 echo <GH_PAT> | docker login ghcr.io -u nuclearsheep540 --password-stdin
 
+# Self Cert Dev
+```
+openssl req -x509 -nodes -days 365 -newkey rsa:2048 \
+  -keyout selfsigned.key \
+  -out selfsigned.crt
+
+```
 # Build Images
 first log in as above
 * docker compose build
