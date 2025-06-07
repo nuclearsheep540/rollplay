@@ -16,16 +16,7 @@
   }
 }
 
-body {
-  color: rgb(var(--foreground-rgb));
-  background: linear-gradient(
-      to bottom,
-      transparent,
-      rgb(var(--background-end-rgb))
-    )
-    rgb(var(--background-start-rgb));
-}
-
+/* Landing Page Styles */
 div#imgBg {
   position: absolute;
   display: block;
@@ -51,19 +42,6 @@ div#imgBg {
 footer {
   opacity: 90%;
   width: 100%;
-}
-
-
-* {
-  margin: 0;
-  padding: 0;
-  box-sizing: border-box;
-  font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-}
-
-body {
-  background-color: #f0f0f0;
-  color: #333;
 }
 
 .hero-container {
@@ -108,7 +86,6 @@ body {
 .logo span {
   color: #ff6b35;
 }
-
 
 .hero-content {
   max-width: 800px;
@@ -252,7 +229,7 @@ footer {
   color: #aaa;
 }
 
-      @media (max-width: 768px) {
+@media (max-width: 768px) {
   .hero-content h1 {
     font-size: 2.5rem;
   }
@@ -267,817 +244,808 @@ footer {
   }
 }
 
-/* START GAME PAGE STYLING */
 /* ==========================================================================
-   Tabletop Tavern - Global Styles
+   GAME PAGE STYLES - Tabletop Tavern
    ========================================================================== */
 
-/* Base Reset & Typography
+/* Base Reset & Typography for Game Page
    ========================================================================== */
-   * {
-    margin: 0;
-    padding: 0;
-    box-sizing: border-box;
-  }
-  
-  body {
-    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-    background: linear-gradient(135deg, #0a0a0a 0%, #1a1a2e 50%, #16213e 100%);
-    color: #e0e0e0;
-    height: 100vh;
-    overflow: hidden;
-  }
-  
-  /* Game Interface Layout
-     ========================================================================== */
-  .game-interface {
-    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-    background: linear-gradient(135deg, #0a0a0a 0%, #1a1a2e 50%, #16213e 100%);
-    color: #e0e0e0;
-    height: 100vh;
-    overflow: hidden;
-    display: flex;
-    flex-direction: column;
-  }
-  
-  /* Top Command Bar
-     ========================================================================== */
-  .command-bar {
-    height: 50px;
-    background: linear-gradient(90deg, rgba(0,0,0,0.8) 0%, rgba(26,26,46,0.6) 100%);
-    border-bottom: 1px solid rgba(74, 222, 128, 0.3);
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    padding: 0 24px;
-    position: relative;
-    z-index: 100;
-  }
-  
-  .campaign-info {
-    display: flex;
-    align-items: center;
-    gap: 20px;
-  }
-  
-  .campaign-title {
-    font-size: 18px;
-    font-weight: 600;
-    color: #4ade80;
-  }
-  
-  .location-breadcrumb {
-    color: #9ca3af;
-    font-size: 14px;
-  }
-  
-  .room-code {
-    background: rgba(74, 222, 128, 0.15);
-    border: 1px solid rgba(74, 222, 128, 0.3);
-    padding: 4px 12px;
-    border-radius: 4px;
-    font-family: monospace;
-    font-size: 12px;
-    color: #4ade80;
-  }
-  
-  .dm-controls-bar {
-    display: flex;
-    align-items: center;
-    gap: 16px;
-  }
-  
-  .control-btn {
-    background: transparent;
-    border: 1px solid rgba(255, 255, 255, 0.2);
-    color: #e0e0e0;
-    padding: 6px 12px;
-    border-radius: 4px;
-    cursor: pointer;
-    font-size: 12px;
-    transition: all 0.2s ease;
-  }
-  
-  .control-btn:hover {
-    border-color: #4ade80;
-    color: #4ade80;
-  }
-  
-  /* Main Game Area Grid
-     ========================================================================== */
-    .main-game-area {
-      flex: 1;
-      display: grid;
-      grid-template-columns: 280px 1fr 300px;
-      grid-template-rows: 1fr 280px;
-      grid-template-areas: 
-        "party-sidebar map-canvas initiative-tracker"
-        "dice-portal roll-log dm-control-center";
-    }
-  
-  /* Party Sidebar (Left Panel)
-     ========================================================================== */
-  .party-sidebar {
-    grid-area: party-sidebar;
-    background: linear-gradient(180deg, rgba(0,0,0,0.4) 0%, rgba(26,26,46,0.2) 100%);
-    border-right: 1px solid rgba(255, 255, 255, 0.1);
-    padding: 20px 16px;
-    overflow-y: auto;
-  }
-  
-  .party-header {
-    color: #4ade80;
-    font-size: 14px;
-    font-weight: 600;
-    margin-bottom: 16px;
-    text-transform: uppercase;
-    letter-spacing: 0.5px;
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-  }
-  
-  .seat-indicator {
-    font-size: 12px;
-    color: #9ca3af;
-  }
-  
-  /* Party Member Cards
-     ========================================================================== */
-  .party-member {
-    margin-bottom: 12px;
-    padding: 12px;
-    border-radius: 6px;
-    background: rgba(255, 255, 255, 0.05);
-    border: 1px solid rgba(255, 255, 255, 0.1);
-    transition: all 0.3s ease;
-  }
-  
-  .party-member.current-turn {
-    background: rgba(74, 222, 128, 0.1);
-    border-color: rgba(74, 222, 128, 0.3);
-    box-shadow: 0 0 15px rgba(74, 222, 128, 0.2);
-    animation: turn-pulse 2s infinite;
-  }
-  
-  .party-member.my-seat {
-    background: rgba(96, 165, 250, 0.1);
-    border-color: rgba(96, 165, 250, 0.3);
-  }
-  
-  .member-header {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    margin-bottom: 4px;
-  }
-  
-  .member-name {
-    font-weight: 600;
-    color: #60a5fa;
-    font-size: 14px;
-  }
-  
-  .turn-indicator {
-    background: rgba(74, 222, 128, 0.2);
-    color: #4ade80;
-    padding: 2px 6px;
-    border-radius: 10px;
-    font-size: 9px;
-    font-weight: 600;
-    text-transform: uppercase;
-  }
-  
-  .member-class {
-    font-size: 11px;
-    color: #9ca3af;
-    margin-bottom: 8px;
-  }
-  
-  /* HP Display
-     ========================================================================== */
-  .hp-display {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    font-size: 11px;
-    margin-bottom: 10px;
-  }
-  
-  .hp-bar {
-    flex: 1;
-    height: 4px;
-    background: rgba(255, 255, 255, 0.1);
-    border-radius: 2px;
-    overflow: hidden;
-  }
-  
-  .hp-fill {
-    height: 100%;
-    background: linear-gradient(90deg, #22c55e 0%, #fbbf24 70%, #ef4444 100%);
-    transition: width 0.3s ease;
-  }
-  
-  .hp-text {
-    color: #9ca3af;
-    min-width: 40px;
-    text-align: right;
-  }
-  
-  /* Empty Seats
-     ========================================================================== */
-  .empty-seat {
-    margin-bottom: 12px;
-    padding: 12px;
-    border-radius: 6px;
-    background: rgba(74, 222, 128, 0.05);
-    border: 1px dashed rgba(74, 222, 128, 0.3);
-    text-align: center;
-    cursor: pointer;
-    transition: all 0.3s ease;
-  }
-  
-  .empty-seat:hover {
-    background: rgba(74, 222, 128, 0.1);
-    border-color: rgba(74, 222, 128, 0.5);
-  }
-  
-  .empty-seat-text {
-    color: #4ade80;
-    font-size: 12px;
-    font-weight: 500;
-  }
-  
-  /* Seat Action Buttons
-     ========================================================================== */
-  .seat-actions {
-    display: flex;
-    gap: 6px;
-    flex-wrap: wrap;
-  }
-  
-  .seat-btn {
-    background: transparent;
-    border: 1px solid rgba(139, 92, 246, 0.3);
-    color: #a78bfa;
-    padding: 4px 8px;
-    border-radius: 4px;
-    cursor: pointer;
-    font-size: 10px;
-    transition: all 0.2s ease;
-    flex: 1;
-    min-width: 70px;
-  }
-  
-  .seat-btn:hover:not(.disabled) {
-    background: rgba(139, 92, 246, 0.1);
-    border-color: #8b5cf6;
-  }
-  
-  .leave-btn {
-    border-color: rgba(239, 68, 68, 0.4);
-    color: #f87171;
-  }
-  
-  .leave-btn:hover {
-    background: rgba(239, 68, 68, 0.1);
-    border-color: #ef4444;
-  }
-  
-  .dice-btn {
-    border-color: rgba(245, 158, 11, 0.4);
-    color: #fbbf24;
-  }
-  
-  .dice-btn:hover:not(.disabled) {
-    background: rgba(245, 158, 11, 0.1);
-    border-color: #f59e0b;
-  }
-  
-  .dice-btn.disabled {
-    opacity: 0.4;
-    cursor: not-allowed;
-    border-color: rgba(107, 114, 128, 0.4);
-    color: #6b7280;
-  }
-  
-  /* Central Map Canvas
-     ========================================================================== */
-  .map-canvas {
-    grid-area: map-canvas;
-    background: radial-gradient(circle at center, rgba(0,0,0,0.3) 0%, rgba(0,0,0,0.7) 100%);
-    position: relative;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    border: 1px solid rgba(255, 255, 255, 0.05);
-  }
-  
-  .map-placeholder {
-    text-align: center;
-    color: rgba(255, 255, 255, 0.3);
-  }
-  
-  .map-placeholder-icon {
-    font-size: 48px;
-    margin-bottom: 12px;
-  }
-  
-/* DM Control Center - Now positioned in bottom right
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+body {
+  font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+  color: #333;
+}
+
+/* Game Interface Layout
    ========================================================================== */
-   .dm-control-center {
-    grid-area: dm-control-center;
-    background: linear-gradient(180deg, rgba(220, 38, 38, 0.05) 0%, rgba(26,26,46,0.2) 100%);
-    border-left: 1px solid rgba(220, 38, 38, 0.2);
-    border-radius: 8px;
-    margin: 8px;
-    padding: 16px;
-    display: flex;
-    flex-direction: column;
-    overflow-y: auto;
-  }
-  
-  /* Initiative Section
-     ========================================================================== */
-  
-  .initiative-header {
-    color: #f59e0b;
-    font-size: 12px;
-    font-weight: 600;
-    margin-bottom: 12px;
-    text-transform: uppercase;
-    letter-spacing: 0.5px;
-  }
-  
-  .turn-order {
-    display: flex;
-    flex-direction: column;
-  }
-  
-  .turn-item {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    padding: 8px 12px;
-    margin-bottom: 4px;
-    border-radius: 4px;
-    font-size: 11px;
-    transition: all 0.2s ease;
-    cursor: pointer;
-    background: rgba(255, 255, 255, 0.05);
-    border: 1px solid rgba(255, 255, 255, 0.1);
-  }
-  
-  .turn-item.active {
-    background: rgba(74, 222, 128, 0.2);
-    border: 1px solid rgba(74, 222, 128, 0.4);
-    color: #4ade80;
-    font-weight: 600;
-  }
-  
-  .turn-item.upcoming {
-    background: rgba(255, 255, 255, 0.05);
-    color: #9ca3af;
-  }
-  
-  .turn-item:hover {
-    background: rgba(255, 255, 255, 0.08);
-  }
+.game-interface {
+  font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+  background: linear-gradient(135deg, #0a0a0a 0%, #1a1a2e 50%, #16213e 100%);
+  color: #e0e0e0;
+  height: 100vh;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
 
-    /* Initiative Tracker - Standalone Version (outside DM panel)
-    ========================================================================== */
-  .initiative-tracker {
-    grid-area: initiative-tracker;
-    background: linear-gradient(180deg, rgba(0,0,0,0.4) 0%, rgba(26,26,46,0.2) 100%);
-    border-left: 1px solid rgba(255, 255, 255, 0.1);
-    padding: 20px 16px;
-    display: flex;
-    flex-direction: column;
-  }
-  
-  .initiative-tracker .initiative-header {
-    color: #f59e0b;
-    font-size: 16px;
-    font-weight: 600;
-    margin-bottom: 20px;
-    text-transform: uppercase;
-    letter-spacing: 0.5px;
-  }
-  
-  .initiative-tracker .turn-order {
-    display: flex;
-    flex-direction: column;
-  }
-  
-  .initiative-tracker .turn-item {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    padding: 12px 16px;
-    margin-bottom: 8px;
-    border-radius: 8px;
-    font-size: 14px;
-    transition: all 0.2s ease;
-    cursor: pointer;
-    background: rgba(255, 255, 255, 0.05);
-    border: 1px solid rgba(255, 255, 255, 0.1);
-  }
-  
-  .initiative-tracker .turn-item.active {
-    background: rgba(74, 222, 128, 0.2);
-    border: 1px solid rgba(74, 222, 128, 0.4);
-    color: #4ade80;
-    font-weight: 600;
-  }
-  
-  .initiative-tracker .turn-item.upcoming {
-    background: rgba(255, 255, 255, 0.05);
-    color: #9ca3af;
-  }
-  
-  .initiative-tracker .turn-item:hover {
-    background: rgba(255, 255, 255, 0.08);
-  }
+/* Top Command Bar
+   ========================================================================== */
+.command-bar {
+  height: 50px;
+  background: linear-gradient(90deg, rgba(0,0,0,0.8) 0%, rgba(26,26,46,0.6) 100%);
+  border-bottom: 1px solid rgba(74, 222, 128, 0.3);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 24px;
+  position: relative;
+  z-index: 100;
+}
 
-  /* DM Control Sections
-     ========================================================================== */
-  .control-section {
-    margin-bottom: 20px;
+.campaign-info {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+}
+
+.campaign-title {
+  font-size: 18px;
+  font-weight: 600;
+  color: #4ade80;
+}
+
+.location-breadcrumb {
+  color: #9ca3af;
+  font-size: 14px;
+}
+
+.room-code {
+  background: rgba(74, 222, 128, 0.15);
+  border: 1px solid rgba(74, 222, 128, 0.3);
+  padding: 4px 12px;
+  border-radius: 4px;
+  font-family: monospace;
+  font-size: 12px;
+  color: #4ade80;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  user-select: none;
+}
+
+.room-code:hover {
+  background: rgba(74, 222, 128, 0.25);
+  border-color: rgba(74, 222, 128, 0.5);
+  transform: translateY(-1px);
+  box-shadow: 0 2px 8px rgba(74, 222, 128, 0.2);
+}
+
+.room-code:active {
+  transform: translateY(0px);
+  box-shadow: 0 1px 4px rgba(74, 222, 128, 0.3);
+}
+
+.room-code::after {
+  content: " 📋";
+  opacity: 0.6;
+  font-size: 10px;
+  margin-left: 4px;
+}
+
+.room-code:hover::after {
+  opacity: 1;
+}
+
+.dm-controls-bar {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.control-btn {
+  background: transparent;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  color: #e0e0e0;
+  padding: 6px 12px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 12px;
+  transition: all 0.2s ease;
+}
+
+.control-btn:hover {
+  border-color: #4ade80;
+  color: #4ade80;
+}
+
+/* Main Game Area Grid
+   ========================================================================== */
+  .main-game-area {
+  flex: 1;
+  display: grid;
+  grid-template-columns: 280px 1fr 300px;
+  grid-template-rows: 1fr 280px;
+  grid-template-areas: 
+    "party-sidebar map-canvas initiative-tracker"
+    "dice-portal roll-log dm-control-center";
+}
+
+/* Party Sidebar (Left Panel)
+   ========================================================================== */
+.party-sidebar {
+  grid-area: party-sidebar;
+  background: linear-gradient(180deg, rgba(0,0,0,0.4) 0%, rgba(26,26,46,0.2) 100%);
+  border-right: 1px solid rgba(255, 255, 255, 0.1);
+  padding: 20px 16px;
+  overflow-y: auto;
+}
+
+.party-header {
+  color: #4ade80;
+  font-size: 14px;
+  font-weight: 600;
+  margin-bottom: 16px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.seat-indicator {
+  font-size: 12px;
+  color: #9ca3af;
+}
+
+/* Party Member Cards
+   ========================================================================== */
+.party-member {
+  margin-bottom: 12px;
+  padding: 12px;
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  transition: all 0.3s ease;
+}
+
+.party-member.current-turn {
+  background: rgba(74, 222, 128, 0.1);
+  border-color: rgba(74, 222, 128, 0.3);
+  box-shadow: 0 0 15px rgba(74, 222, 128, 0.2);
+  animation: turn-pulse 2s infinite;
+}
+
+.party-member.my-seat {
+  background: rgba(96, 165, 250, 0.1);
+  border-color: rgba(96, 165, 250, 0.3);
+}
+
+.member-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 4px;
+}
+
+.member-name {
+  font-weight: 600;
+  color: #60a5fa;
+  font-size: 14px;
+}
+
+.turn-indicator {
+  background: rgba(74, 222, 128, 0.2);
+  color: #4ade80;
+  padding: 2px 6px;
+  border-radius: 10px;
+  font-size: 9px;
+  font-weight: 600;
+  text-transform: uppercase;
+}
+
+.member-class {
+  font-size: 11px;
+  color: #9ca3af;
+  margin-bottom: 8px;
+}
+
+/* HP Display
+   ========================================================================== */
+.hp-display {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 11px;
+  margin-bottom: 10px;
+}
+
+.hp-bar {
+  flex: 1;
+  height: 4px;
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 2px;
+  overflow: hidden;
+}
+
+.hp-fill {
+  height: 100%;
+  background: linear-gradient(90deg, #22c55e 0%, #fbbf24 70%, #ef4444 100%);
+  transition: width 0.3s ease;
+}
+
+.hp-text {
+  color: #9ca3af;
+  min-width: 40px;
+  text-align: right;
+}
+
+/* Empty Seats
+   ========================================================================== */
+.empty-seat {
+  margin-bottom: 12px;
+  padding: 12px;
+  border-radius: 6px;
+  background: rgba(74, 222, 128, 0.05);
+  border: 1px dashed rgba(74, 222, 128, 0.3);
+  text-align: center;
+  cursor: pointer;
+  transition: all 0.3s ease;
+}
+
+.empty-seat:hover {
+  background: rgba(74, 222, 128, 0.1);
+  border-color: rgba(74, 222, 128, 0.5);
+}
+
+.empty-seat.disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  border-color: rgba(107, 114, 128, 0.3);
+}
+
+.empty-seat.disabled:hover {
+  background: rgba(74, 222, 128, 0.05);
+  border-color: rgba(107, 114, 128, 0.3);
+}
+
+.empty-seat-text {
+  color: #4ade80;
+  font-size: 12px;
+  font-weight: 500;
+}
+
+/* Seat Action Buttons
+   ========================================================================== */
+.seat-actions {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.seat-btn {
+  background: transparent;
+  border: 1px solid rgba(139, 92, 246, 0.3);
+  color: #a78bfa;
+  padding: 4px 8px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 10px;
+  transition: all 0.2s ease;
+  flex: 1;
+  min-width: 70px;
+}
+
+.seat-btn:hover:not(.disabled) {
+  background: rgba(139, 92, 246, 0.1);
+  border-color: #8b5cf6;
+}
+
+.leave-btn {
+  border-color: rgba(239, 68, 68, 0.4);
+  color: #f87171;
+}
+
+.leave-btn:hover {
+  background: rgba(239, 68, 68, 0.1);
+  border-color: #ef4444;
+}
+
+.dice-btn {
+  border-color: rgba(245, 158, 11, 0.4);
+  color: #fbbf24;
+}
+
+.dice-btn:hover:not(.disabled) {
+  background: rgba(245, 158, 11, 0.1);
+  border-color: #f59e0b;
+}
+
+.dice-btn.disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+  border-color: rgba(107, 114, 128, 0.4);
+  color: #6b7280;
+}
+
+/* Central Map Canvas
+   ========================================================================== */
+.map-canvas {
+  grid-area: map-canvas;
+  background: radial-gradient(circle at center, rgba(0,0,0,0.3) 0%, rgba(0,0,0,0.7) 100%);
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.map-placeholder {
+  text-align: center;
+  color: rgba(255, 255, 255, 0.3);
+}
+
+.map-placeholder-icon {
+  font-size: 48px;
+  margin-bottom: 12px;
+}
+
+/* Initiative Tracker - Standalone (Right Column, Top Row)
+   ========================================================================== */
+.initiative-tracker {
+  grid-area: initiative-tracker;
+  background: linear-gradient(180deg, rgba(0,0,0,0.4) 0%, rgba(26,26,46,0.2) 100%);
+  border-left: 1px solid rgba(255, 255, 255, 0.1);
+  padding: 20px 16px;
+  display: flex;
+  flex-direction: column;
+  /* IMPORTANT: Remove any height properties that might cause spanning */
+}
+
+.initiative-tracker .initiative-header {
+  color: #f59e0b;
+  font-size: 16px;
+  font-weight: 600;
+  margin-bottom: 20px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.initiative-tracker .turn-order {
+  display: flex;
+  flex-direction: column;
+}
+
+.initiative-tracker .turn-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 16px;
+  margin-bottom: 8px;
+  border-radius: 8px;
+  font-size: 14px;
+  transition: all 0.2s ease;
+  cursor: pointer;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.initiative-tracker .turn-item.active {
+  background: rgba(74, 222, 128, 0.2);
+  border: 1px solid rgba(74, 222, 128, 0.4);
+  color: #4ade80;
+  font-weight: 600;
+}
+
+.initiative-tracker .turn-item.upcoming {
+  background: rgba(255, 255, 255, 0.05);
+  color: #9ca3af;
+}
+
+.initiative-tracker .turn-item:hover {
+  background: rgba(255, 255, 255, 0.08);
+}
+
+/* DM Control Center (Right Column, Bottom Row)
+   ========================================================================== */
+.dm-control-center {
+  grid-area: dm-control-center;
+  background: linear-gradient(180deg, rgba(220, 38, 38, 0.05) 0%, rgba(26,26,46,0.2) 100%);
+  border-left: 1px solid rgba(220, 38, 38, 0.2);
+  border-top: 1px solid rgba(220, 38, 38, 0.2); /* Add top border to separate from initiative */
+  border-radius: 8px;
+  margin: 8px;
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  overflow-y: auto;
+  /* IMPORTANT: Ensure it only takes bottom right grid area */
+  max-height: 100%;
+}
+
+.dm-header {
+  color: #dc2626;
+  font-size: 16px;
+  font-weight: 700;
+  margin-bottom: 20px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+/* DM Control Sections
+   ========================================================================== */
+.control-section {
+  margin-bottom: 20px;
+}
+
+.section-title {
+  color: #8b5cf6;
+  font-size: 12px;
+  font-weight: 600;
+  margin-bottom: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.dm-btn {
+  width: 100%;
+  background: transparent;
+  border: 1px solid rgba(139, 92, 246, 0.3);
+  color: #a78bfa;
+  padding: 8px 12px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 11px;
+  margin-bottom: 6px;
+  transition: all 0.2s ease;
+  text-align: left;
+}
+
+.dm-btn:hover {
+  background: rgba(139, 92, 246, 0.1);
+  border-color: #8b5cf6;
+}
+
+.dm-btn.active {
+  background: rgba(139, 92, 246, 0.2);
+  border-color: #8b5cf6;
+  color: #8b5cf6;
+}
+
+.roll-prompt-btn {
+  background: rgba(245, 158, 11, 0.1);
+  border: 1px solid rgba(245, 158, 11, 0.4);
+  color: #fbbf24;
+}
+
+.roll-prompt-btn:hover {
+  background: rgba(245, 158, 11, 0.2);
+}
+
+.map-control-btn {
+  background: rgba(74, 222, 128, 0.1);
+  border: 1px solid rgba(74, 222, 128, 0.3);
+  color: #4ade80;
+}
+
+.map-control-btn:hover {
+  background: rgba(74, 222, 128, 0.2);
+}
+
+/* Audio Player Styles
+   ========================================================================== */
+.audio-player {
+  margin-bottom: 12px;
+}
+
+.track-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 12px;
+  margin-bottom: 6px;
+  border-radius: 4px;
+  background: rgba(139, 92, 246, 0.05);
+  border: 1px solid rgba(139, 92, 246, 0.2);
+  transition: all 0.2s ease;
+}
+
+.track-item.active {
+  background: rgba(139, 92, 246, 0.15);
+  border-color: rgba(139, 92, 246, 0.4);
+}
+
+.track-item:hover {
+  background: rgba(139, 92, 246, 0.1);
+}
+
+.track-info {
+  flex: 1;
+}
+
+.track-name {
+  color: #a78bfa;
+  font-size: 10px;
+  font-weight: 500;
+  margin-bottom: 2px;
+}
+
+.track-duration {
+  color: #6b7280;
+  font-size: 9px;
+  font-family: monospace;
+}
+
+.track-controls {
+  margin-left: 8px;
+}
+
+.audio-btn {
+  background: transparent;
+  border: 1px solid rgba(139, 92, 246, 0.3);
+  color: #8b5cf6;
+  padding: 4px 6px;
+  border-radius: 3px;
+  cursor: pointer;
+  font-size: 8px;
+  transition: all 0.2s ease;
+}
+
+.audio-btn:hover {
+  background: rgba(139, 92, 246, 0.2);
+}
+
+.audio-btn.pause {
+  color: #f59e0b;
+  border-color: rgba(245, 158, 11, 0.4);
+}
+
+/* Dice Portal (Bottom Left)
+   ========================================================================== */
+.dice-portal {
+  grid-area: dice-portal;
+  margin: 8px;
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.dice-container {
+  background: linear-gradient(135deg, rgba(245, 158, 11, 0.2) 0%, rgba(217, 119, 6, 0.1) 100%);
+  border: 2px solid rgba(245, 158, 11, 0.4);
+  border-radius: 12px;
+  padding: 24px;
+  text-align: center;
+  transition: all 0.5s ease;
+  box-shadow: 0 8px 32px rgba(245, 158, 11, 0.1);
+}
+
+.dice-container.active {
+  transform: scale(1);
+  opacity: 1;
+  animation: diceEntrance 0.8s ease;
+}
+
+.dice-inactive {
+  background: rgba(75, 85, 99, 0.3);
+  border: 1px solid rgba(107, 114, 128, 0.4);
+  border-radius: 8px;
+  padding: 20px;
+  text-align: center;
+  color: #6b7280;
+  font-size: 14px;
+}
+
+.dice-header {
+  color: #f59e0b;
+  font-size: 18px;
+  font-weight: 700;
+  margin-bottom: 12px;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+}
+
+.dice-prompt {
+  color: #fbbf24;
+  font-size: 12px;
+  margin-bottom: 16px;
+}
+
+.dice-cta {
+  background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);
+  border: none;
+  color: white;
+  padding: 12px 24px;
+  border-radius: 8px;
+  cursor: pointer;
+  font-weight: bold;
+  font-size: 14px;
+  transition: all 0.3s ease;
+  box-shadow: 0 4px 12px rgba(245, 158, 11, 0.3);
+}
+
+.dice-cta:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 20px rgba(245, 158, 11, 0.5);
+}
+
+/* Roll Log (Bottom Center)
+   ========================================================================== */
+.roll-log {
+  grid-area: roll-log;
+  background: linear-gradient(180deg, rgba(0,0,0,0.4) 0%, rgba(26,26,46,0.2) 100%);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 8px;
+  margin: 8px;
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+}
+
+.log-header {
+  color: #60a5fa;
+  font-size: 14px;
+  font-weight: 600;
+  margin-bottom: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.log-entries {
+  flex: 1;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.log-entry {
+  padding: 10px 14px;
+  border-radius: 6px;
+  font-size: 13px;
+  border-left: 3px solid transparent;
+  position: relative;
+  min-height: 42px;
+  display: flex;
+  align-items: flex-start;
+}
+
+.log-entry-content {
+  flex: 1;
+  line-height: 1.5;
+}
+
+.log-entry-timestamp {
+  position: absolute;
+  top: 6px;
+  right: 8px;
+  color: rgba(255, 255, 255, 0.4);
+  font-size: 9px;
+}
+
+.log-entry.player-roll {
+  background: rgba(96, 165, 250, 0.15);
+  border-left-color: #60a5fa;
+  color: #bfdbfe;
+}
+
+.log-entry.dm-roll {
+  background: rgba(239, 68, 68, 0.15);
+  border-left-color: #ef4444;
+  color: #fecaca;
+}
+
+.log-entry.system {
+  background: rgba(156, 163, 175, 0.15);
+  border-left-color: #9ca3af;
+  color: #d1d5db;
+}
+
+/* Animations
+   ========================================================================== */
+@keyframes diceEntrance {
+  0% {
+    transform: scale(0.5) rotate(-10deg);
+    opacity: 0;
   }
-  
-  .section-title {
-    color: #8b5cf6;
-    font-size: 12px;
-    font-weight: 600;
-    margin-bottom: 12px;
-    text-transform: uppercase;
-    letter-spacing: 0.5px;
+  50% {
+    transform: scale(1.1) rotate(5deg);
   }
-  
-  .dm-btn {
-    width: 100%;
-    background: transparent;
-    border: 1px solid rgba(139, 92, 246, 0.3);
-    color: #a78bfa;
-    padding: 8px 12px;
-    border-radius: 4px;
-    cursor: pointer;
-    font-size: 11px;
-    margin-bottom: 6px;
-    transition: all 0.2s ease;
-    text-align: left;
-  }
-  
-  .dm-btn:hover {
-    background: rgba(139, 92, 246, 0.1);
-    border-color: #8b5cf6;
-  }
-  
-  .dm-btn.active {
-    background: rgba(139, 92, 246, 0.2);
-    border-color: #8b5cf6;
-    color: #8b5cf6;
-  }
-  
-  .roll-prompt-btn {
-    background: rgba(245, 158, 11, 0.1);
-    border: 1px solid rgba(245, 158, 11, 0.4);
-    color: #fbbf24;
-  }
-  
-  .roll-prompt-btn:hover {
-    background: rgba(245, 158, 11, 0.2);
-  }
-  
-  .map-control-btn {
-    background: rgba(74, 222, 128, 0.1);
-    border: 1px solid rgba(74, 222, 128, 0.3);
-    color: #4ade80;
-  }
-  
-  .map-control-btn:hover {
-    background: rgba(74, 222, 128, 0.2);
-  }
-  
-  /* Audio Player Styles
-     ========================================================================== */
-  .audio-player {
-    margin-bottom: 12px;
-  }
-  
-  .track-item {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    padding: 8px 12px;
-    margin-bottom: 6px;
-    border-radius: 4px;
-    background: rgba(139, 92, 246, 0.05);
-    border: 1px solid rgba(139, 92, 246, 0.2);
-    transition: all 0.2s ease;
-  }
-  
-  .track-item.active {
-    background: rgba(139, 92, 246, 0.15);
-    border-color: rgba(139, 92, 246, 0.4);
-  }
-  
-  .track-item:hover {
-    background: rgba(139, 92, 246, 0.1);
-  }
-  
-  .track-info {
-    flex: 1;
-  }
-  
-  .track-name {
-    color: #a78bfa;
-    font-size: 10px;
-    font-weight: 500;
-    margin-bottom: 2px;
-  }
-  
-  .track-duration {
-    color: #6b7280;
-    font-size: 9px;
-    font-family: monospace;
-  }
-  
-  .track-controls {
-    margin-left: 8px;
-  }
-  
-  .audio-btn {
-    background: transparent;
-    border: 1px solid rgba(139, 92, 246, 0.3);
-    color: #8b5cf6;
-    padding: 4px 6px;
-    border-radius: 3px;
-    cursor: pointer;
-    font-size: 8px;
-    transition: all 0.2s ease;
-  }
-  
-  .audio-btn:hover {
-    background: rgba(139, 92, 246, 0.2);
-  }
-  
-  .audio-btn.pause {
-    color: #f59e0b;
-    border-color: rgba(245, 158, 11, 0.4);
-  }
-  
-  /* Dice Portal (Bottom Left)
-     ========================================================================== */
-  .dice-portal {
-    grid-area: dice-portal;
-    margin: 8px;
-    position: relative;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-  }
-  
-  .dice-container {
-    background: linear-gradient(135deg, rgba(245, 158, 11, 0.2) 0%, rgba(217, 119, 6, 0.1) 100%);
-    border: 2px solid rgba(245, 158, 11, 0.4);
-    border-radius: 12px;
-    padding: 24px;
-    text-align: center;
-    transition: all 0.5s ease;
-    box-shadow: 0 8px 32px rgba(245, 158, 11, 0.1);
-  }
-  
-  .dice-container.active {
-    transform: scale(1);
+  100% {
+    transform: scale(1) rotate(0deg);
     opacity: 1;
-    animation: diceEntrance 0.8s ease;
+  }
+}
+
+@keyframes rollPrompt {
+  0%, 100% { 
+    box-shadow: 0 0 20px rgba(245, 158, 11, 0.3);
+  }
+  50% { 
+    box-shadow: 0 0 40px rgba(245, 158, 11, 0.6);
+  }
+}
+
+@keyframes turn-pulse {
+  0%, 100% { 
+    box-shadow: 0 0 15px rgba(74, 222, 128, 0.2);
+  }
+  50% { 
+    box-shadow: 0 0 25px rgba(74, 222, 128, 0.4);
+  }
+}
+
+.dice-container.prompt {
+  animation: rollPrompt 2s infinite;
+}
+
+/* Responsive Design
+   ========================================================================== */
+@media (max-width: 1200px) {
+  .main-game-area {
+    grid-template-columns: 1fr;
+    grid-template-rows: auto auto 1fr auto auto;
+    grid-template-areas: 
+      "party-sidebar"
+      "initiative-tracker"
+      "map-canvas"
+      "dice-portal"
+      "roll-log"
+      "dm-control-center";
   }
   
-  .dice-inactive {
-    background: rgba(75, 85, 99, 0.3);
-    border: 1px solid rgba(107, 114, 128, 0.4);
-    border-radius: 8px;
-    padding: 20px;
-    text-align: center;
-    color: #6b7280;
-    font-size: 14px;
+  .party-sidebar {
+    max-height: 200px;
   }
   
-  .dice-header {
-    color: #f59e0b;
-    font-size: 18px;
-    font-weight: 700;
-    margin-bottom: 12px;
-    text-transform: uppercase;
-    letter-spacing: 1px;
+  .dm-control-center {
+    max-height: 300px;
   }
-  
-  .dice-prompt {
-    color: #fbbf24;
-    font-size: 12px;
-    margin-bottom: 16px;
-  }
-  
-  .dice-cta {
-    background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);
-    border: none;
-    color: white;
-    padding: 12px 24px;
-    border-radius: 8px;
-    cursor: pointer;
-    font-weight: bold;
-    font-size: 14px;
-    transition: all 0.3s ease;
-    box-shadow: 0 4px 12px rgba(245, 158, 11, 0.3);
-  }
-  
-  .dice-cta:hover {
-    transform: translateY(-2px);
-    box-shadow: 0 6px 20px rgba(245, 158, 11, 0.5);
-  }
-  
-  /* Roll Log (Bottom Center)
-     ========================================================================== */
-  .roll-log {
-    grid-area: roll-log;
-    background: linear-gradient(180deg, rgba(0,0,0,0.4) 0%, rgba(26,26,46,0.2) 100%);
-    border: 1px solid rgba(255, 255, 255, 0.1);
-    border-radius: 8px;
-    margin: 8px;
-    padding: 16px;
-    display: flex;
-    flex-direction: column;
-  }
-  
-  .log-header {
-    color: #60a5fa;
-    font-size: 14px;
-    font-weight: 600;
-    margin-bottom: 12px;
-    text-transform: uppercase;
-    letter-spacing: 0.5px;
-    display: flex;
-    align-items: center;
-    gap: 8px;
-  }
-  
-  .log-entries {
-    flex: 1;
-    overflow-y: auto;
-    display: flex;
-    flex-direction: column;
-    gap: 6px;
+}
+
+/* Utility Classes
+   ========================================================================== */
+.hidden {
+  display: none !important;
+}
+
+.current-turn {
+  animation: turn-pulse 2s infinite;
+}
+
+/* Focus States for Accessibility
+   ========================================================================== */
+.control-btn:focus,
+.dm-btn:focus,
+.seat-btn:focus,
+.dice-cta:focus,
+.audio-btn:focus {
+  outline: 2px solid #4ade80;
+  outline-offset: 2px;
+}
+
+/* High Contrast Mode Support
+   ========================================================================== */
+@media (prefers-contrast: high) {
+  .party-member,
+  .empty-seat,
+  .dm-control-center,
+  .roll-log,
+  .dice-container {
+    border-width: 2px;
   }
   
   .log-entry {
-    padding: 10px 14px;
-    border-radius: 6px;
-    font-size: 13px;
-    border-left: 3px solid transparent;
-    position: relative;
-    min-height: 42px;
-    display: flex;
-    align-items: flex-start;
+    border-left-width: 4px;
   }
-  
-  .log-entry-content {
-    flex: 1;
-    line-height: 1.5;
-  }
-  
-  .log-entry-timestamp {
-    position: absolute;
-    top: 6px;
-    right: 8px;
-    color: rgba(255, 255, 255, 0.4);
-    font-size: 9px;
-  }
-  
-  .log-entry.player-roll {
-    background: rgba(96, 165, 250, 0.15);
-    border-left-color: #60a5fa;
-    color: #bfdbfe;
-  }
-  
-  .log-entry.dm-roll {
-    background: rgba(239, 68, 68, 0.15);
-    border-left-color: #ef4444;
-    color: #fecaca;
-  }
-  
-  .log-entry.system {
-    background: rgba(156, 163, 175, 0.15);
-    border-left-color: #9ca3af;
-    color: #d1d5db;
-  }
-  
-  /* Animations
-     ========================================================================== */
-  @keyframes diceEntrance {
-    0% {
-      transform: scale(0.5) rotate(-10deg);
-      opacity: 0;
-    }
-    50% {
-      transform: scale(1.1) rotate(5deg);
-    }
-    100% {
-      transform: scale(1) rotate(0deg);
-      opacity: 1;
-    }
-  }
-  
-  @keyframes rollPrompt {
-    0%, 100% { 
-      box-shadow: 0 0 20px rgba(245, 158, 11, 0.3);
-    }
-    50% { 
-      box-shadow: 0 0 40px rgba(245, 158, 11, 0.6);
-    }
-  }
-  
-  @keyframes turn-pulse {
-    0%, 100% { 
-      box-shadow: 0 0 15px rgba(74, 222, 128, 0.2);
-    }
-    50% { 
-      box-shadow: 0 0 25px rgba(74, 222, 128, 0.4);
-    }
-  }
-  
-  .dice-container.prompt {
-    animation: rollPrompt 2s infinite;
-  }
-  
-  /* Responsive Design
-     ========================================================================== */
-  @media (max-width: 1200px) {
-    .main-game-area {
-      flex: 1;
-      display: grid;
-      grid-template-columns: 280px 1fr 300px;
-      grid-template-rows: 1fr 280px;
-      grid-template-areas: 
-        "party-sidebar map-canvas initiative-tracker"
-        "dice-portal roll-log dm-control-center";
-    }
-    
-    
-    .party-sidebar {
-      max-height: 200px;
-    }
-    
-    .dm-control-center {
-      max-height: 300px;
-    }
-  }
-  
-  /* Utility Classes
-     ========================================================================== */
-  .hidden {
-    display: none !important;
-  }
-  
-  .current-turn {
-    animation: turn-pulse 2s infinite;
-  }
-  
-  /* Focus States for Accessibility
-     ========================================================================== */
-  .control-btn:focus,
-  .dm-btn:focus,
-  .seat-btn:focus,
-  .dice-cta:focus,
-  .audio-btn:focus {
-    outline: 2px solid #4ade80;
-    outline-offset: 2px;
-  }
-  
-  /* High Contrast Mode Support
-     ========================================================================== */
-  @media (prefers-contrast: high) {
-    .party-member,
-    .empty-seat,
-    .dm-control-center,
-    .roll-log,
-    .dice-container {
-      border-width: 2px;
-    }
-    
-    .log-entry {
-      border-left-width: 4px;
-    }
-  }
-
-  /* EMPTY SEATS */
-  .empty-seat.disabled {
-    opacity: 0.5;
-    cursor: not-allowed;
-    border-color: rgba(107, 114, 128, 0.3);
-  }
-  
-  .empty-seat.disabled:hover {
-    background: rgba(74, 222, 128, 0.05);
-    border-color: rgba(107, 114, 128, 0.3);
-  }
+}

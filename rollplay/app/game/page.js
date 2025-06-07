@@ -5,7 +5,7 @@ import { useSearchParams } from "next/navigation";
 
 import PlayerCard from "../components/PlayerCard";
 import ChatMessages from '../components/ChatMessages';
-import DMControlCenter from '../components/DMControlCenter'; // Import the new component
+import DMControlCenter from '../components/DMControlCenter';
 
 function Params() {
   return useSearchParams()
@@ -73,6 +73,67 @@ export default function Game() {
       hp: 10,
       maxHp: 10
     };
+  };
+
+  // Copy room code to clipboard
+  const copyRoomCode = async () => {
+    try {
+      await navigator.clipboard.writeText(roomId);
+      
+      // Optional: Show a temporary visual feedback
+      const roomCodeElement = document.querySelector('.room-code');
+      const originalText = roomCodeElement.textContent;
+      
+      // Change text to show it was copied
+      roomCodeElement.textContent = 'Copied!';
+      roomCodeElement.style.background = 'rgba(34, 197, 94, 0.3)';
+      roomCodeElement.style.borderColor = 'rgba(34, 197, 94, 0.5)';
+      
+      // Reset after 2 seconds
+      setTimeout(() => {
+        roomCodeElement.textContent = originalText;
+        roomCodeElement.style.background = 'rgba(74, 222, 128, 0.15)';
+        roomCodeElement.style.borderColor = 'rgba(74, 222, 128, 0.3)';
+      }, 2000);
+      
+    } catch (err) {
+      console.error('Failed to copy room code:', err);
+      // Fallback for older browsers
+      fallbackCopyTextToClipboard(roomId);
+    }
+  };
+
+  // Fallback copy function for browsers that don't support navigator.clipboard
+  const fallbackCopyTextToClipboard = (text) => {
+    const textArea = document.createElement("textarea");
+    textArea.value = text;
+    
+    // Avoid scrolling to bottom
+    textArea.style.top = "0";
+    textArea.style.left = "0";
+    textArea.style.position = "fixed";
+    
+    document.body.appendChild(textArea);
+    textArea.focus();
+    textArea.select();
+    
+    try {
+      const successful = document.execCommand('copy');
+      if (successful) {
+        // Show feedback
+        const roomCodeElement = document.querySelector('.room-code');
+        const originalText = roomCodeElement.textContent;
+        roomCodeElement.textContent = 'Copied!';
+        
+        setTimeout(() => {
+          roomCodeElement.textContent = originalText;
+        }, 2000);
+      }
+    } catch (err) {
+      console.error('Fallback: Unable to copy', err);
+    }
+    
+    document.body.removeChild(textArea);
   };
 
   // UPDATED onLoad function to use unified structure
@@ -308,7 +369,13 @@ export default function Game() {
         <div className="campaign-info">
           <div className="campaign-title">The Curse of Strahd</div>
           <div className="location-breadcrumb">› Barovia Village › The Blood on the Vine Tavern</div>
-          <div className="room-code">Room: {roomId}</div>
+          <div 
+            className="room-code" 
+            onClick={copyRoomCode}
+            title="Click to copy room code"
+          >
+            Room: {roomId}
+          </div>
         </div>
         
         <div className="dm-controls-bar">
@@ -318,9 +385,9 @@ export default function Game() {
         </div>
       </div>
 
-      {/* Main Game Area - FIXED GRID STRUCTURE */}
+      {/* Main Game Area - CORRECTED ORDER */}
       <div className="main-game-area">
-        {/* Left Sidebar - Party Overview */}
+        {/* GRID POSITION 1: Left Column, Top Row - party-sidebar */}
         <div className="party-sidebar">
           <div className="party-header">
             <span>Party</span>
@@ -329,7 +396,6 @@ export default function Game() {
             </span>
           </div>
           
-          {/* Render all seats using unified structure */}
           {gameSeats.map((seat) => {
             const isSitting = seat.playerName === thisPlayer;
             
@@ -349,7 +415,7 @@ export default function Game() {
           })}
         </div>
 
-        {/* Central Map Canvas */}
+        {/* GRID POSITION 2: Center Column, Top Row - map-canvas */}
         <div className="map-canvas">
           <div className="map-placeholder">
             <div className="map-placeholder-icon">🗺️</div>
@@ -360,7 +426,7 @@ export default function Game() {
           </div>
         </div>
 
-        {/* Right Sidebar - Initiative Tracker */}
+        {/* GRID POSITION 3: Right Column, Top Row - initiative-tracker */}
         <div className="initiative-tracker">
           <div className="initiative-header">⚡ Initiative Order</div>
           <div className="turn-order">
@@ -377,7 +443,7 @@ export default function Game() {
           </div>
         </div>
 
-        {/* Dice Portal - Bottom Left */}
+        {/* GRID POSITION 4: Left Column, Bottom Row - dice-portal */}
         <div className="dice-portal">
           {dicePortalActive ? (
             <div className="dice-container active prompt">
@@ -394,7 +460,7 @@ export default function Game() {
           )}
         </div>
 
-        {/* Roll Log - Bottom Center */}
+        {/* GRID POSITION 5: Center Column, Bottom Row - roll-log */}
         <div className="roll-log">
           <div className="log-header">
             📜 Adventure Log
@@ -413,7 +479,7 @@ export default function Game() {
           </div>
         </div>
 
-        {/* DM Control Center - Bottom Right - NOW A SEPARATE COMPONENT */}
+        {/* GRID POSITION 6: Right Column, Bottom Row - dm-control-center */}
         <DMControlCenter
           isDM={isDM}
           promptPlayerRoll={promptPlayerRoll}
