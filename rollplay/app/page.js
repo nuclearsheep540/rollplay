@@ -64,19 +64,19 @@ export default function Home() {
   }
 
   return (
-      <body>
-        <div class="hero-container">
-          <div class="hero-image"></div>
+      <div>
+        <div className="hero-container">
+          <div className="hero-image"></div>
           
-          <nav class="nav-bar">
-            <div class="logo">TABLETOP<span>TAVERN</span></div>
+          <nav className="nav-bar">
+            <div className="logo">TABLETOP<span>TAVERN</span></div>
           </nav>
           
-          <div class="hero-content">
+          <div className="hero-content">
             <h1>Your Virtual D&D Table Awaits</h1>
             <p>Create or join virtual D&D game rooms in seconds. Connect with friends, manage campaigns, and embark on epic adventures together — no downloads required.</p>
             
-            <div class="cta-buttons">
+            <div className="cta-buttons">
                 {/* CTA: NEW or EXISTING lobby */}
                 <div className="mt-2 flex gap-x-6">
                 <button
@@ -155,24 +155,24 @@ export default function Home() {
           </div>
         </div>
         
-        <section class="how-it-works">
+        <section className="how-it-works">
           <h2>How It Works</h2>
           
-          <div class="steps">
-            <div class="step">
-              <div class="step-icon">1</div>
+          <div className="steps">
+            <div className="step">
+              <div className="step-icon">1</div>
               <h3>Create a Lobby</h3>
               <p>Set up your game room with customizable settings for your campaign and adventure style.</p>
             </div>
             
-            <div class="step">
-              <div class="step-icon">2</div>
+            <div className="step">
+              <div className="step-icon">2</div>
               <h3>Invite Your Party</h3>
               <p>Share a simple link with friends so they can join your virtual table instantly.</p>
             </div>
             
-            <div class="step">
-              <div class="step-icon">3</div>
+            <div className="step">
+              <div className="step-icon">3</div>
               <h3>Start Your Adventure</h3>
               <p>Use our tools to manage characters, roll dice, and track your epic journey together.</p>
             </div>
@@ -180,17 +180,17 @@ export default function Home() {
         </section>
         
         <footer>
-          <div class="footer-links">
+          <div className="footer-links">
             <a href="#">Terms of Service</a>
             <a href="#">Privacy Policy</a>
             <a href="#">Help Center</a>
           </div>
           <div className="px-6 py-6 auto space-y-6 overflow-hidden sm:px-6 lg:px-6">
-              <div class="copyright">
+              <div className="copyright">
                 © 2025 Tabletop Tavern. <br />All rights reserved. made with &#x2764; for me and my friends.
               </div>
           </div>
         </footer>
-      </body>
+      </div>
   )
 }

@@ -58,10 +58,26 @@ services:
         - "27017:27017"
         volumes:
             - ./data:/data/db
+    certbot-renewer:
+        image: ghcr.io/nuclearsheep540/rollplay/certbot:0.1.0
+        build:
+            context: ./docker/prod/certbot-renewer
+            dockerfile: Dockerfile
+        container_name: certbot-renewer
+        volumes:
+            - certbot_data:/etc/letsencrypt
+            - certbot_www:/var/www/certbot
+        depends_on:
+            - nginx
+        restart: always
+        networks:
+            - default
 
 networks:
   default:
     driver: bridge
 
 volumes:
-  node_modules:
+  db_data:
+  certbot_data:
+  certbot_www:
