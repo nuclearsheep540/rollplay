@@ -21,7 +21,7 @@ export default function PlayerCard({
     const isMyTurn = currentTurn === occupantName;
     const isThisPlayerSeat = currentSeat.playerName === thisPlayer;
     
-    // NEW: Check if player is already sitting somewhere
+    // Check if player is already sitting somewhere
     const playerAlreadySeated = seats.some(seat => seat.playerName === thisPlayer);
   
     function sitSeat() {
@@ -55,7 +55,6 @@ export default function PlayerCard({
       }
     }
   
- 
     function getCharacterData(playerName) {
       const characterDatabase = {
         'Thorin': { class: 'Dwarf Fighter', level: 3, hp: 34, maxHp: 40 },
@@ -72,14 +71,33 @@ export default function PlayerCard({
       };
     }
   
-    // Render empty seat - WITH IMPROVED LOGIC
+    // Calculate HP percentage for styling
+    const hpPercentage = playerData ? (playerData.hp / playerData.maxHp) * 100 : 0;
+    
+    // Render empty seat
     if (!isOccupied) {
       return (
         <div 
-          className={`empty-seat ${playerAlreadySeated ? 'disabled' : ''}`} 
+          className={`
+            rounded-lg border border-dashed text-center cursor-pointer transition-all duration-300
+            ${playerAlreadySeated 
+              ? 'bg-emerald-500/5 border-gray-500/30 opacity-50 cursor-not-allowed' 
+              : 'bg-emerald-500/5 border-emerald-500/30 hover:bg-emerald-500/10 hover:border-emerald-500/50'
+            }
+          `}
+          style={{
+            marginBottom: `calc(12px * var(--ui-scale))`,
+            padding: `calc(12px * var(--ui-scale))`,
+            borderRadius: `calc(6px * var(--ui-scale))`,
+          }}
           onClick={playerAlreadySeated ? null : sitSeat}
         >
-          <div className="empty-seat-text">
+          <div 
+            className="text-emerald-400 font-medium"
+            style={{
+              fontSize: `calc(12px * var(--ui-scale))`,
+            }}
+          >
             {playerAlreadySeated 
               ? `🪑 Seat ${seatId + 1} - Leave current seat first`
               : `🪑 Seat ${seatId + 1} - Click to Join`
@@ -89,38 +107,146 @@ export default function PlayerCard({
       );
     }
   
-    // Rest of component stays the same...
+    // Render occupied seat
     return (
-      <div className={`party-member ${isMyTurn ? 'current-turn' : ''} ${isThisPlayerSeat ? 'my-seat' : ''}`}>
-        <div className="member-header">
-          <div className="member-name">{occupantName}</div>
-          {isMyTurn && <div className="turn-indicator">🎯 Active</div>}
+      <div 
+        className={`
+          rounded-lg border transition-all duration-300 relative
+          ${isMyTurn 
+            ? 'bg-emerald-500/10 border-emerald-500/30 shadow-lg shadow-emerald-500/20' 
+            : isThisPlayerSeat 
+              ? 'bg-blue-500/10 border-blue-500/30' 
+              : 'bg-white/5 border-white/10'
+          }
+        `}
+        style={{
+          marginBottom: `calc(12px * var(--ui-scale))`,
+          padding: `calc(12px * var(--ui-scale))`,
+          borderRadius: `calc(6px * var(--ui-scale))`,
+        }}
+      >
+        {/* Turn Pulse Animation */}
+        {isMyTurn && (
+          <div className="absolute inset-0 rounded-lg border-2 border-emerald-400/50 animate-pulse pointer-events-none"
+               style={{ borderRadius: `calc(6px * var(--ui-scale))` }}></div>
+        )}
+        
+        {/* Member Header */}
+        <div 
+          className="flex items-center justify-between"
+          style={{ marginBottom: `calc(4px * var(--ui-scale))` }}
+        >
+          <div 
+            className="font-semibold text-blue-400"
+            style={{ fontSize: `calc(14px * var(--ui-scale))` }}
+          >
+            {occupantName}
+          </div>
+          {isMyTurn && (
+            <div 
+              className="bg-emerald-500/20 text-emerald-400 px-2 py-1 rounded-full font-semibold uppercase tracking-wider"
+              style={{
+                fontSize: `calc(9px * var(--ui-scale))`,
+                padding: `calc(2px * var(--ui-scale)) calc(6px * var(--ui-scale))`,
+                borderRadius: `calc(10px * var(--ui-scale))`,
+              }}
+            >
+              🎯 Active
+            </div>
+          )}
         </div>
         
         {playerData ? (
           <>
-            <div className="member-class">{playerData.class} • Level {playerData.level}</div>
-            <div className="hp-display">
-              <div className="hp-bar">
+            {/* Character Class & Level */}
+            <div 
+              className="text-gray-400"
+              style={{
+                fontSize: `calc(11px * var(--ui-scale))`,
+                marginBottom: `calc(10px * var(--ui-scale))`,
+              }}
+            >
+              {playerData.class} • Level {playerData.level}
+            </div>
+            
+            {/* HP Display */}
+            <div 
+              className="flex items-center"
+              style={{
+                gap: `calc(10px * var(--ui-scale))`,
+                marginBottom: `calc(12px * var(--ui-scale))`,
+              }}
+            >
+              {/* HP Bar Container */}
+              <div 
+                className="flex-1 bg-white/10 rounded-full overflow-hidden relative"
+                style={{
+                  height: `calc(6px * var(--ui-scale))`,
+                  borderRadius: `calc(3px * var(--ui-scale))`,
+                  background: 'linear-gradient(90deg, #ef4444 0%, #ef4444 30%, #eab308 30%, #eab308 60%, #22c55e 60%, #22c55e 100%)',
+                }}
+              >
+                {/* HP Fill Overlay */}
                 <div 
-                  className="hp-fill" 
-                  style={{ width: `${(playerData.hp / playerData.maxHp) * 100}%` }}
+                  className="absolute inset-0 bg-gray-800/80 transition-all duration-300"
+                  style={{ 
+                    left: `${hpPercentage}%`,
+                  }}
                 ></div>
               </div>
-              <div className="hp-text">{playerData.hp}/{playerData.maxHp}</div>
+              
+              {/* HP Text */}
+              <div 
+                className="text-gray-300 font-mono flex items-baseline"
+                style={{
+                  fontSize: `calc(12px * var(--ui-scale))`,
+                  minWidth: `calc(45px * var(--ui-scale))`,
+                }}
+              >
+                <span 
+                  className="text-white"
+                  style={{ fontSize: `calc(11px * var(--ui-scale))` }}
+                >
+                  {playerData.hp}
+                </span>
+                <span className="mx-1">/</span>
+                <span 
+                  className="font-semibold"
+                  style={{ fontSize: `calc(13px * var(--ui-scale))` }}
+                >
+                  {playerData.maxHp}
+                </span>
+              </div>
             </div>
           </>
         ) : (
-          <div className="member-class">Player • Seat {seatId + 1}</div>
+          <div 
+            className="text-gray-400"
+            style={{
+              fontSize: `calc(11px * var(--ui-scale))`,
+              marginBottom: `calc(10px * var(--ui-scale))`,
+            }}
+          >
+            Player • Seat {seatId + 1}
+          </div>
         )}
-  
-        <div className="seat-actions">
+
+        {/* Seat Actions */}
+        <div className="flex gap-2 flex-wrap">
           {isThisPlayerSeat && (
-            <button className="seat-btn leave-btn" onClick={leaveSeat}>
+            <button 
+              className="flex-1 bg-transparent border border-red-500/40 text-red-400 rounded transition-all duration-200 hover:bg-red-500/10 hover:border-red-500"
+              style={{
+                padding: `calc(4px * var(--ui-scale)) calc(8px * var(--ui-scale))`,
+                borderRadius: `calc(4px * var(--ui-scale))`,
+                fontSize: `calc(10px * var(--ui-scale))`,
+                minWidth: `calc(70px * var(--ui-scale))`,
+              }}
+              onClick={leaveSeat}
+            >
               🚪 Leave Seat
             </button>
           )}
-          
         </div>
       </div>
     );

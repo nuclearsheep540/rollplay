@@ -37,6 +37,7 @@ export default function Game() {
   const [currentTurn, setCurrentTurn] = useState('Thorin');
   const [isDM, setIsDM] = useState(true); // Toggle for DM panel visibility
   const [dicePortalActive, setDicePortalActive] = useState(true);
+  const [uiScale, setUIScale] = useState('medium'); // UI Scale state
   const [rollLog, setRollLog] = useState([
     { id: 1, message: 'Combat initiated', type: 'system', timestamp: '2:34 PM' },
     { id: 2, message: '<strong>Thorin:</strong> Initiative d20: 19', type: 'player-roll', timestamp: '2:34 PM' },
@@ -71,7 +72,7 @@ export default function Game() {
     return characterDatabase[playerName] || {
       class: 'Adventurer',
       level: 1,
-      hp: 10,
+      hp: 8,
       maxHp: 10
     };
   };
@@ -364,12 +365,15 @@ export default function Game() {
 
   // MAIN RENDER - FIXED STRUCTURE
   return (
-    <div className="game-interface">
+    <div className="game-interface" data-ui-scale={uiScale}>
       {/* Top Command Bar */}
       <div className="command-bar">
         <div className="campaign-info">
           <div className="campaign-title">The Curse of Strahd</div>
           <div className="location-breadcrumb">› Barovia Village › The Blood on the Vine Tavern</div>
+        </div>
+        
+        <div className="dm-controls-bar">
           <div 
             className="room-code" 
             onClick={copyRoomCode}
@@ -377,18 +381,41 @@ export default function Game() {
           >
             Room: {roomId}
           </div>
-        </div>
-        
-        <div className="dm-controls-bar">
+          <button className="control-btn">🔧 Room Settings</button>
+          
+          {/* UI Scale Toggle */}
+          <div className="ui-scale-nav">
+            <button 
+              className={`scale-btn ${uiScale === 'small' ? 'active' : ''}`}
+              onClick={() => setUIScale('small')}
+              title="Small UI"
+            >
+              S
+            </button>
+            <button 
+              className={`scale-btn ${uiScale === 'medium' ? 'active' : ''}`}
+              onClick={() => setUIScale('medium')}
+              title="Medium UI"
+            >
+              M
+            </button>
+            <button 
+              className={`scale-btn ${uiScale === 'large' ? 'active' : ''}`}
+              onClick={() => setUIScale('large')}
+              title="Large UI"
+            >
+              L
+            </button>
+          </div>
+          
           <button className="control-btn">📝 Notes</button>
           <button className="control-btn" onClick={toggleCampaignSettings}>⚙️ Campaign Settings</button>
-          <button className="control-btn">🔧 Room Settings</button>
         </div>
       </div>
 
       {/* Main Game Area - CORRECTED ORDER */}
       <div className="main-game-area">
-        {/* GRID POSITION 1: Left Column, Top Row - party-sidebar */}
+        {/* GRID POSITION 1: Left Column - party-sidebar with adventure log */}
         <div className="party-sidebar">
           <div className="party-header">
             <span>Party</span>
@@ -414,9 +441,28 @@ export default function Game() {
               />
             );
           })}
+
+          {/* Adventure Log - Now in left panel */}
+          <div className="adventure-log-section mt-6">
+            <div className="log-header">
+              📜 Adventure Log
+              <span style={{ fontSize: '10px', color: '#6b7280' }}>(Live)</span>
+            </div>
+            <div className="log-entries" ref={logRef}>
+              {rollLog.map((entry) => (
+                <div key={entry.id} className={`log-entry ${entry.type}`}>
+                  <div 
+                    className="log-entry-content"
+                    dangerouslySetInnerHTML={{ __html: entry.message }}
+                  />
+                  <div className="log-entry-timestamp">{entry.timestamp}</div>
+                </div>
+              ))}
+            </div>
+          </div>
         </div>
 
-        {/* GRID POSITION 2: Center Column, Top Row - map-canvas with horizontal initiative */}
+        {/* GRID POSITION 2: Center Column - map-canvas with horizontal initiative */}
         <HorizontalInitiativeTracker 
           initiativeOrder={initiativeOrder}
           handleInitiativeClick={handleInitiativeClick}
@@ -432,42 +478,6 @@ export default function Game() {
             isPlaying={isPlaying}
             handleTrackClick={handleTrackClick}
           />
-        </div>
-
-        {/* GRID POSITION 4: Left Column, Bottom Row - dice-portal */}
-        <div className="dice-portal">
-          {dicePortalActive ? (
-            <div className="dice-container active prompt">
-              <div className="dice-header">🎲 {currentTurn}'s Turn!</div>
-              <div className="dice-prompt">Roll for your action</div>
-              <button className="dice-cta" onClick={rollDice}>
-                Choose Dice & Roll
-              </button>
-            </div>
-          ) : (
-            <div className="dice-inactive">
-              Waiting for turn...
-            </div>
-          )}
-        </div>
-
-        {/* GRID POSITION 5: Center Column, Bottom Row - roll-log */}
-        <div className="roll-log">
-          <div className="log-header">
-            📜 Adventure Log
-            <span style={{ fontSize: '10px', color: '#6b7280' }}>(Live)</span>
-          </div>
-          <div className="log-entries" ref={logRef}>
-            {rollLog.map((entry) => (
-              <div key={entry.id} className={`log-entry ${entry.type}`}>
-                <div 
-                  className="log-entry-content"
-                  dangerouslySetInnerHTML={{ __html: entry.message }}
-                />
-                <div className="log-entry-timestamp">{entry.timestamp}</div>
-              </div>
-            ))}
-          </div>
         </div>
 
       </div>

@@ -261,6 +261,28 @@ body {
   color: #333;
 }
 
+/* UI Scale System - UPDATED: Fixed left panel width scaling
+   ========================================================================== */
+:root {
+  --ui-scale: 1.15; /* Default scale (medium) */
+  --panel-width-addition: 20px; /* Default width addition for medium */
+}
+
+[data-ui-scale="small"] {
+  --ui-scale: 1; /* Original becomes small baseline */
+  --panel-width-addition: 0px; /* No additional width - baseline */
+}
+
+[data-ui-scale="medium"] {
+  --ui-scale: 1.15; /* 15% larger than original */
+  --panel-width-addition: 40px; /* +20px width */
+}
+
+[data-ui-scale="large"] {
+  --ui-scale: 1.3; /* 30% larger than original */
+  --panel-width-addition: 120px; /* +80px width */
+}
+
 /* Game Interface Layout
    ========================================================================== */
 .game-interface {
@@ -276,13 +298,13 @@ body {
 /* Top Command Bar
    ========================================================================== */
 .command-bar {
-  height: 50px;
+  height: calc(50px * var(--ui-scale));
   background: linear-gradient(90deg, rgba(0,0,0,0.8) 0%, rgba(26,26,46,0.6) 100%);
   border-bottom: 1px solid rgba(74, 222, 128, 0.3);
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 0 24px;
+  padding: 0 calc(24px * var(--ui-scale));
   position: relative;
   z-index: 100;
 }
@@ -290,27 +312,27 @@ body {
 .campaign-info {
   display: flex;
   align-items: center;
-  gap: 20px;
+  gap: calc(20px * var(--ui-scale));
 }
 
 .campaign-title {
-  font-size: 18px;
+  font-size: calc(18px * var(--ui-scale));
   font-weight: 600;
   color: #4ade80;
 }
 
 .location-breadcrumb {
   color: #9ca3af;
-  font-size: 14px;
+  font-size: calc(14px * var(--ui-scale));
 }
 
 .room-code {
   background: rgba(74, 222, 128, 0.15);
   border: 1px solid rgba(74, 222, 128, 0.3);
-  padding: 4px 12px;
-  border-radius: 4px;
+  padding: calc(4px * var(--ui-scale)) calc(12px * var(--ui-scale));
+  border-radius: calc(4px * var(--ui-scale));
   font-family: monospace;
-  font-size: 12px;
+  font-size: calc(12px * var(--ui-scale));
   color: #4ade80;
   cursor: pointer;
   transition: all 0.3s ease;
@@ -332,8 +354,8 @@ body {
 .room-code::after {
   content: " 📋";
   opacity: 0.6;
-  font-size: 10px;
-  margin-left: 4px;
+  font-size: calc(10px * var(--ui-scale));
+  margin-left: calc(4px * var(--ui-scale));
 }
 
 .room-code:hover::after {
@@ -343,17 +365,17 @@ body {
 .dm-controls-bar {
   display: flex;
   align-items: center;
-  gap: 16px;
+  gap: calc(16px * var(--ui-scale));
 }
 
 .control-btn {
   background: transparent;
   border: 1px solid rgba(255, 255, 255, 0.2);
   color: #e0e0e0;
-  padding: 6px 12px;
-  border-radius: 4px;
+  padding: calc(6px * var(--ui-scale)) calc(12px * var(--ui-scale));
+  border-radius: calc(4px * var(--ui-scale));
   cursor: pointer;
-  font-size: 12px;
+  font-size: calc(12px * var(--ui-scale));
   transition: all 0.2s ease;
 }
 
@@ -362,33 +384,70 @@ body {
   color: #4ade80;
 }
 
-/* Main Game Area Grid - UPDATED for right panel structure
+/* UI Scale Navigation Toggle - NEW: In-nav scaling controls
+   ========================================================================== */
+.ui-scale-nav {
+  display: flex;
+  gap: calc(2px * var(--ui-scale));
+  background: rgba(0, 0, 0, 0.3);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: calc(4px * var(--ui-scale));
+  padding: calc(2px * var(--ui-scale));
+}
+
+.ui-scale-nav .scale-btn {
+  background: transparent;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  color: #e0e0e0;
+  padding: calc(4px * var(--ui-scale)) calc(8px * var(--ui-scale));
+  border-radius: calc(3px * var(--ui-scale));
+  cursor: pointer;
+  font-size: calc(10px * var(--ui-scale));
+  transition: all 0.2s ease;
+  min-width: calc(24px * var(--ui-scale));
+}
+
+.ui-scale-nav .scale-btn:hover {
+  border-color: #4ade80;
+  color: #4ade80;
+}
+
+.ui-scale-nav .scale-btn.active {
+  background: #4ade80;
+  border-color: #4ade80;
+  color: #000;
+}
+
+/* Main Game Area Grid - UPDATED: Fixed left panel width scaling
    ========================================================================== */
 .main-game-area {
   flex: 1;
   display: grid;
-  grid-template-columns: 280px 1fr 300px;
-  grid-template-rows: 1fr 280px;
+  grid-template-columns: calc(360px + var(--panel-width-addition)) 1fr calc(300px * var(--ui-scale));
+  grid-template-rows: 1fr;
   grid-template-areas: 
-    "party-sidebar map-canvas right-panel"
-    "dice-portal roll-log right-panel";
+    "party-sidebar map-canvas right-panel";
+  min-height: 0;
+  overflow: hidden;
 }
 
-/* Party Sidebar (Left Panel)
+/* Party Sidebar - UPDATED: With scaling
    ========================================================================== */
 .party-sidebar {
   grid-area: party-sidebar;
   background: linear-gradient(180deg, rgba(0,0,0,0.4) 0%, rgba(26,26,46,0.2) 100%);
   border-right: 1px solid rgba(255, 255, 255, 0.1);
-  padding: 20px 16px;
+  padding: calc(20px * var(--ui-scale)) calc(16px * var(--ui-scale));
   overflow-y: auto;
+  display: flex;
+  flex-direction: column;
 }
 
 .party-header {
   color: #4ade80;
-  font-size: 14px;
+  font-size: calc(14px * var(--ui-scale));
   font-weight: 600;
-  margin-bottom: 16px;
+  margin-bottom: calc(16px * var(--ui-scale));
   text-transform: uppercase;
   letter-spacing: 0.5px;
   display: flex;
@@ -397,203 +456,93 @@ body {
 }
 
 .seat-indicator {
-  font-size: 12px;
+  font-size: calc(12px * var(--ui-scale));
   color: #9ca3af;
 }
 
-/* Party Member Cards
+/* Adventure Log Section - UPDATED: With scaling
    ========================================================================== */
-.party-member {
-  margin-bottom: 12px;
-  padding: 12px;
-  border-radius: 6px;
-  background: rgba(255, 255, 255, 0.05);
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  transition: all 0.3s ease;
-}
-
-.party-member.current-turn {
-  background: rgba(74, 222, 128, 0.1);
-  border-color: rgba(74, 222, 128, 0.3);
-  box-shadow: 0 0 15px rgba(74, 222, 128, 0.2);
-  animation: turn-pulse 2s infinite;
-}
-
-.party-member.my-seat {
-  background: rgba(96, 165, 250, 0.1);
-  border-color: rgba(96, 165, 250, 0.3);
-}
-
-.member-header {
+.adventure-log-section {
+  flex: 1;
+  min-height: 0;
   display: flex;
-  align-items: center;
-  justify-content: space-between;
-  margin-bottom: 4px;
+  flex-direction: column;
+  border-top: 1px solid rgba(255, 255, 255, 0.1);
+  padding-top: calc(16px * var(--ui-scale));
 }
 
-.member-name {
-  font-weight: 600;
+.adventure-log-section .log-header {
   color: #60a5fa;
-  font-size: 14px;
-}
-
-.turn-indicator {
-  background: rgba(74, 222, 128, 0.2);
-  color: #4ade80;
-  padding: 2px 6px;
-  border-radius: 10px;
-  font-size: 9px;
+  font-size: calc(14px * var(--ui-scale));
   font-weight: 600;
+  margin-bottom: calc(12px * var(--ui-scale));
   text-transform: uppercase;
-}
-
-.member-class {
-  font-size: 11px;
-  color: #9ca3af;
-  margin-bottom: 8px;
-}
-
-/* HP Display
-   ========================================================================== */
-.hp-display {
+  letter-spacing: 0.5px;
   display: flex;
   align-items: center;
-  gap: 8px;
-  font-size: 11px;
-  margin-bottom: 10px;
+  gap: calc(8px * var(--ui-scale));
+  flex-shrink: 0;
 }
 
-.hp-bar {
+.adventure-log-section .log-entries {
   flex: 1;
-  height: 4px;
-  background: rgba(255, 255, 255, 0.1);
-  border-radius: 2px;
-  overflow: hidden;
-}
-
-.hp-fill {
-  height: 100%;
-  background: linear-gradient(90deg, #22c55e 0%, #fbbf24 70%, #ef4444 100%);
-  transition: width 0.3s ease;
-}
-
-.hp-text {
-  color: #9ca3af;
-  min-width: 40px;
-  text-align: right;
-}
-
-/* Empty Seats
-   ========================================================================== */
-.empty-seat {
-  margin-bottom: 12px;
-  padding: 12px;
-  border-radius: 6px;
-  background: rgba(74, 222, 128, 0.05);
-  border: 1px dashed rgba(74, 222, 128, 0.3);
-  text-align: center;
-  cursor: pointer;
-  transition: all 0.3s ease;
-}
-
-.empty-seat:hover {
-  background: rgba(74, 222, 128, 0.1);
-  border-color: rgba(74, 222, 128, 0.5);
-}
-
-.empty-seat.disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-  border-color: rgba(107, 114, 128, 0.3);
-}
-
-.empty-seat.disabled:hover {
-  background: rgba(74, 222, 128, 0.05);
-  border-color: rgba(107, 114, 128, 0.3);
-}
-
-.empty-seat-text {
-  color: #4ade80;
-  font-size: 12px;
-  font-weight: 500;
-}
-
-/* Seat Action Buttons
-   ========================================================================== */
-.seat-actions {
+  overflow-y: auto;
   display: flex;
-  gap: 6px;
-  flex-wrap: wrap;
+  flex-direction: column;
+  gap: calc(8px * var(--ui-scale));
+  padding-right: calc(8px * var(--ui-scale));
 }
 
-.seat-btn {
-  background: transparent;
-  border: 1px solid rgba(139, 92, 246, 0.3);
-  color: #a78bfa;
-  padding: 4px 8px;
-  border-radius: 4px;
-  cursor: pointer;
-  font-size: 10px;
-  transition: all 0.2s ease;
-  flex: 1;
-  min-width: 70px;
-}
-
-.seat-btn:hover:not(.disabled) {
-  background: rgba(139, 92, 246, 0.1);
-  border-color: #8b5cf6;
-}
-
-.leave-btn {
-  border-color: rgba(239, 68, 68, 0.4);
-  color: #f87171;
-}
-
-.leave-btn:hover {
-  background: rgba(239, 68, 68, 0.1);
-  border-color: #ef4444;
-}
-
-.dice-btn {
-  border-color: rgba(245, 158, 11, 0.4);
-  color: #fbbf24;
-}
-
-.dice-btn:hover:not(.disabled) {
-  background: rgba(245, 158, 11, 0.1);
-  border-color: #f59e0b;
-}
-
-.dice-btn.disabled {
-  opacity: 0.4;
-  cursor: not-allowed;
-  border-color: rgba(107, 114, 128, 0.4);
-  color: #6b7280;
-}
-
-/* Central Map Canvas
-   ========================================================================== */
-.map-canvas {
-  grid-area: map-canvas;
-  background: radial-gradient(circle at center, rgba(0,0,0,0.3) 0%, rgba(0,0,0,0.7) 100%);
+.adventure-log-section .log-entry {
+  padding: calc(12px * var(--ui-scale)) calc(16px * var(--ui-scale));
+  border-radius: calc(6px * var(--ui-scale));
+  font-size: calc(13px * var(--ui-scale));
+  border-left: calc(3px * var(--ui-scale)) solid transparent;
   position: relative;
+  min-height: calc(44px * var(--ui-scale));
   display: flex;
-  align-items: center;
-  justify-content: center;
-  border: 1px solid rgba(255, 255, 255, 0.05);
+  align-items: flex-start;
 }
 
-.map-placeholder {
-  text-align: center;
-  color: rgba(255, 255, 255, 0.3);
+.adventure-log-section .log-entry-content {
+  flex: 1;
+  line-height: 1.5;
 }
 
-.map-placeholder-icon {
-  font-size: 48px;
-  margin-bottom: 12px;
+.adventure-log-section .log-entry-timestamp {
+  position: absolute;
+  top: calc(6px * var(--ui-scale));
+  right: calc(8px * var(--ui-scale));
+  color: rgba(255, 255, 255, 0.4);
+  font-size: calc(9px * var(--ui-scale));
 }
 
-/* Right Panel Container - NEW: Single container for both initiative and DM controls
+.adventure-log-section .log-entry.player-roll {
+  background: rgba(96, 165, 250, 0.15);
+  border-left-color: #60a5fa;
+  color: #bfdbfe;
+}
+
+.adventure-log-section .log-entry.dm-roll {
+  background: rgba(239, 68, 68, 0.15);
+  border-left-color: #ef4444;
+  color: #fecaca;
+}
+
+.adventure-log-section .log-entry.system {
+  background: rgba(156, 163, 175, 0.15);
+  border-left-color: #9ca3af;
+  color: #d1d5db;
+}
+
+/* Map Canvas Area
+   ========================================================================== */
+.grid-area-map-canvas {
+  grid-area: map-canvas;
+  position: relative;
+}
+
+/* Right Panel Container - UPDATED: With scaling
    ========================================================================== */
 .right-panel {
   grid-area: right-panel;
@@ -601,359 +550,63 @@ body {
   border-left: 1px solid rgba(255, 255, 255, 0.1);
   display: flex;
   flex-direction: column;
+  min-height: 0;
+  max-height: 100vh;
   overflow: hidden;
 }
 
-/* Initiative Tracker - UPDATED: Now just a flex item, not grid area
+/* Custom Scrollbar for DM Control Center
    ========================================================================== */
-.initiative-tracker {
-  background: transparent;
-  border: none;
-  padding: 20px 16px 10px 16px;
-  flex-shrink: 0;
+.scrollbar-thin {
+  scrollbar-width: thin;
 }
 
-.initiative-tracker .initiative-header {
-  color: #f59e0b;
-  font-size: 16px;
-  font-weight: 600;
-  margin-bottom: 16px;
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
+.scrollbar-track-white\/5::-webkit-scrollbar {
+  width: calc(6px * var(--ui-scale));
 }
 
-.initiative-tracker .turn-order {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
-
-.initiative-tracker .turn-item {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 10px 16px;
-  border-radius: 8px;
-  font-size: 14px;
-  transition: all 0.2s ease;
-  cursor: pointer;
+.scrollbar-track-white\/5::-webkit-scrollbar-track {
   background: rgba(255, 255, 255, 0.05);
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: calc(3px * var(--ui-scale));
 }
 
-.initiative-tracker .turn-item.active {
-  background: rgba(74, 222, 128, 0.2);
-  border: 1px solid rgba(74, 222, 128, 0.4);
-  color: #4ade80;
-  font-weight: 600;
+.scrollbar-thumb-purple-500\/30::-webkit-scrollbar-thumb {
+  background: rgba(139, 92, 246, 0.3);
+  border-radius: calc(3px * var(--ui-scale));
 }
 
-.initiative-tracker .turn-item.upcoming {
-  background: rgba(255, 255, 255, 0.05);
-  color: #9ca3af;
+.scrollbar-thumb-purple-500\/30:hover::-webkit-scrollbar-thumb,
+.hover\:scrollbar-thumb-purple-500\/50:hover::-webkit-scrollbar-thumb {
+  background: rgba(139, 92, 246, 0.5);
 }
 
-.initiative-tracker .turn-item:hover {
-  background: rgba(255, 255, 255, 0.08);
-}
-
-/* DM Control Center - UPDATED: Now expands to fill remaining space
+/* Custom animation for section expansion
    ========================================================================== */
-.dm-control-center {
-  background: linear-gradient(360deg, rgba(220, 38, 38, 0.15) 0%, rgba(26,26,46,0.2) 100%);
-  border-top: 1px solid rgba(255, 255, 255, 0.1);
-  padding: 16px;
-  flex: 1;
-  overflow-y: auto;
-  display: flex;
-  flex-direction: column;
+@keyframes expandSection {
+  from {
+    opacity: 0;
+    max-height: 0;
+    overflow: hidden;
+    transform: translateY(calc(-4px * var(--ui-scale)));
+  }
+  to {
+    opacity: 1;
+    max-height: calc(500px * var(--ui-scale));
+    overflow: visible;
+    transform: translateY(0);
+  }
 }
 
-.dm-header {
-  color: #dc2626;
-  font-size: 16px;
-  font-weight: 700;
-  margin-bottom: 16px;
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  flex-shrink: 0;
+.animate-expand-section {
+  animation: expandSection 0.2s ease-out forwards;
 }
 
-/* DM Control Sections
+/* Remove old styles that are no longer needed
    ========================================================================== */
-.control-section {
-  margin-bottom: 16px;
-  flex-shrink: 0;
-}
-
-.section-title {
-  color: #8b5cf6;
-  font-size: 12px;
-  font-weight: 600;
-  margin-bottom: 10px;
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
-}
-
-.dm-btn {
-  width: 100%;
-  background: transparent;
-  border: 1px solid rgba(139, 92, 246, 0.3);
-  color: #a78bfa;
-  padding: 6px 12px;
-  border-radius: 4px;
-  cursor: pointer;
-  font-size: 11px;
-  margin-bottom: 4px;
-  transition: all 0.2s ease;
-  text-align: left;
-}
-
-.dm-btn:hover {
-  background: rgba(139, 92, 246, 0.1);
-  border-color: #8b5cf6;
-}
-
-.dm-btn.active {
-  background: rgba(139, 92, 246, 0.2);
-  border-color: #8b5cf6;
-  color: #8b5cf6;
-}
-
-.roll-prompt-btn {
-  background: rgba(245, 158, 11, 0.1);
-  border: 1px solid rgba(245, 158, 11, 0.4);
-  color: #fbbf24;
-}
-
-.roll-prompt-btn:hover {
-  background: rgba(245, 158, 11, 0.2);
-}
-
-.map-control-btn {
-  background: rgba(74, 222, 128, 0.1);
-  border: 1px solid rgba(74, 222, 128, 0.3);
-  color: #4ade80;
-}
-
-.map-control-btn:hover {
-  background: rgba(74, 222, 128, 0.2);
-}
-
-/* Audio Player Styles
-   ========================================================================== */
-.audio-player {
-  margin-bottom: 10px;
-}
-
-.track-item {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 6px 12px;
-  margin-bottom: 4px;
-  border-radius: 4px;
-  background: rgba(139, 92, 246, 0.05);
-  border: 1px solid rgba(139, 92, 246, 0.2);
-  transition: all 0.2s ease;
-}
-
-.track-item.active {
-  background: rgba(139, 92, 246, 0.15);
-  border-color: rgba(139, 92, 246, 0.4);
-}
-
-.track-item:hover {
-  background: rgba(139, 92, 246, 0.1);
-}
-
-.track-info {
-  flex: 1;
-}
-
-.track-name {
-  color: #a78bfa;
-  font-size: 10px;
-  font-weight: 500;
-  margin-bottom: 2px;
-}
-
-.track-duration {
-  color: #6b7280;
-  font-size: 9px;
-  font-family: monospace;
-}
-
-.track-controls {
-  margin-left: 8px;
-}
-
-.audio-btn {
-  background: transparent;
-  border: 1px solid rgba(139, 92, 246, 0.3);
-  color: #8b5cf6;
-  padding: 4px 6px;
-  border-radius: 3px;
-  cursor: pointer;
-  font-size: 8px;
-  transition: all 0.2s ease;
-}
-
-.audio-btn:hover {
-  background: rgba(139, 92, 246, 0.2);
-}
-
-.audio-btn.pause {
-  color: #f59e0b;
-  border-color: rgba(245, 158, 11, 0.4);
-}
-
-/* Dice Portal (Bottom Left)
-   ========================================================================== */
-.dice-portal {
-  grid-area: dice-portal;
-  margin: 8px;
-  position: relative;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.dice-container {
-  background: linear-gradient(135deg, rgba(245, 158, 11, 0.2) 0%, rgba(217, 119, 6, 0.1) 100%);
-  border: 2px solid rgba(245, 158, 11, 0.4);
-  border-radius: 12px;
-  padding: 24px;
-  text-align: center;
-  transition: all 0.5s ease;
-  box-shadow: 0 8px 32px rgba(245, 158, 11, 0.1);
-}
-
-.dice-container.active {
-  transform: scale(1);
-  opacity: 1;
-  animation: diceEntrance 0.8s ease;
-}
-
-.dice-inactive {
-  background: rgba(75, 85, 99, 0.3);
-  border: 1px solid rgba(107, 114, 128, 0.4);
-  border-radius: 8px;
-  padding: 20px;
-  text-align: center;
-  color: #6b7280;
-  font-size: 14px;
-}
-
-.dice-header {
-  color: #f59e0b;
-  font-size: 18px;
-  font-weight: 700;
-  margin-bottom: 12px;
-  text-transform: uppercase;
-  letter-spacing: 1px;
-}
-
-.dice-prompt {
-  color: #fbbf24;
-  font-size: 12px;
-  margin-bottom: 16px;
-}
-
-.dice-cta {
-  background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);
-  border: none;
-  color: white;
-  padding: 12px 24px;
-  border-radius: 8px;
-  cursor: pointer;
-  font-weight: bold;
-  font-size: 14px;
-  transition: all 0.3s ease;
-  box-shadow: 0 4px 12px rgba(245, 158, 11, 0.3);
-}
-
-.dice-cta:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 6px 20px rgba(245, 158, 11, 0.5);
-}
-
-/* Roll Log (Bottom Center)
-   ========================================================================== */
-.roll-log {
-  grid-area: roll-log;
-  background: linear-gradient(180deg, rgba(0,0,0,0.4) 0%, rgba(26,26,46,0.2) 100%);
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  border-radius: 8px;
-  margin: 8px;
-  padding: 16px;
-  display: flex;
-  flex-direction: column;
-}
-
-.log-header {
-  color: #60a5fa;
-  font-size: 14px;
-  font-weight: 600;
-  margin-bottom: 12px;
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.log-entries {
-  flex: 1;
-  overflow-y: auto;
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
-
-.log-entry {
-  padding: 10px 14px;
-  border-radius: 6px;
-  font-size: 13px;
-  border-left: 3px solid transparent;
-  position: relative;
-  min-height: 42px;
-  display: flex;
-  align-items: flex-start;
-}
-
-.log-entry-content {
-  flex: 1;
-  line-height: 1.5;
-}
-
-.log-entry-timestamp {
-  position: absolute;
-  top: 6px;
-  right: 8px;
-  color: rgba(255, 255, 255, 0.4);
-  font-size: 9px;
-}
-
-.log-entry.player-roll {
-  background: rgba(96, 165, 250, 0.15);
-  border-left-color: #60a5fa;
-  color: #bfdbfe;
-}
-
-.log-entry.dm-roll {
-  background: rgba(239, 68, 68, 0.15);
-  border-left-color: #ef4444;
-  color: #fecaca;
-}
-
-.log-entry.system {
-  background: rgba(156, 163, 175, 0.15);
-  border-left-color: #9ca3af;
-  color: #d1d5db;
+.dice-portal,
+.roll-log,
+.ui-scale-toggle {
+  display: none;
 }
 
 /* Animations
@@ -974,24 +627,20 @@ body {
 
 @keyframes rollPrompt {
   0%, 100% { 
-    box-shadow: 0 0 20px rgba(245, 158, 11, 0.3);
+    box-shadow: 0 0 calc(20px * var(--ui-scale)) rgba(245, 158, 11, 0.3);
   }
   50% { 
-    box-shadow: 0 0 40px rgba(245, 158, 11, 0.6);
+    box-shadow: 0 0 calc(40px * var(--ui-scale)) rgba(245, 158, 11, 0.6);
   }
 }
 
 @keyframes turn-pulse {
   0%, 100% { 
-    box-shadow: 0 0 15px rgba(74, 222, 128, 0.2);
+    box-shadow: 0 0 calc(15px * var(--ui-scale)) rgba(74, 222, 128, 0.2);
   }
   50% { 
-    box-shadow: 0 0 25px rgba(74, 222, 128, 0.4);
+    box-shadow: 0 0 calc(25px * var(--ui-scale)) rgba(74, 222, 128, 0.4);
   }
-}
-
-.dice-container.prompt {
-  animation: rollPrompt 2s infinite;
 }
 
 /* Responsive Design
@@ -999,21 +648,19 @@ body {
 @media (max-width: 1200px) {
   .main-game-area {
     grid-template-columns: 1fr;
-    grid-template-rows: auto auto 1fr auto auto;
+    grid-template-rows: auto 1fr auto;
     grid-template-areas: 
       "party-sidebar"
-      "right-panel"
       "map-canvas"
-      "dice-portal"
-      "roll-log";
+      "right-panel";
   }
   
   .party-sidebar {
-    max-height: 200px;
+    max-height: calc(300px * var(--ui-scale));
   }
   
   .right-panel {
-    max-height: 400px;
+    max-height: calc(400px * var(--ui-scale));
   }
 }
 
@@ -1030,10 +677,7 @@ body {
 /* Focus States for Accessibility
    ========================================================================== */
 .control-btn:focus,
-.dm-btn:focus,
-.seat-btn:focus,
-.dice-cta:focus,
-.audio-btn:focus {
+.ui-scale-nav .scale-btn:focus {
   outline: 2px solid #4ade80;
   outline-offset: 2px;
 }
@@ -1041,77 +685,7 @@ body {
 /* High Contrast Mode Support
    ========================================================================== */
 @media (prefers-contrast: high) {
-  .party-member,
-  .empty-seat,
-  .dm-control-center,
-  .roll-log,
-  .dice-container {
-    border-width: 2px;
-  }
-  
-  .log-entry {
-    border-left-width: 4px;
+  .adventure-log-section .log-entry {
+    border-left-width: calc(4px * var(--ui-scale));
   }
 }
-
-
-/* Main Game Area Grid - UPDATED for horizontal initiative in map area
-   ========================================================================== */
-   .main-game-area {
-    flex: 1;
-    display: grid;
-    grid-template-columns: 280px 1fr 300px;
-    grid-template-rows: 1fr 280px;
-    grid-template-areas: 
-      "party-sidebar map-canvas right-panel"
-      "dice-portal roll-log right-panel";
-    min-height: 0;
-    overflow: hidden;
-  }
-  
-  /* Right Panel Container - UPDATED: Now full height for DM controls only
-     ========================================================================== */
-  .right-panel {
-    grid-area: right-panel;
-    background: linear-gradient(180deg, rgba(0,0,0,0.4) 0%, rgba(26,26,46,0.2) 100%);
-    border-left: 1px solid rgba(255, 255, 255, 0.1);
-    display: flex;
-    flex-direction: column;
-    min-height: 0;
-    max-height: 100vh;
-    overflow: hidden;
-  }
-  
-  /* Map Canvas Area - UPDATED: Now contains horizontal initiative tracker
-     ========================================================================== */
-  .grid-area-map-canvas {
-    grid-area: map-canvas;
-  }
-  
-  /* Remove old initiative tracker styles since it's now horizontal in map area */
-  .initiative-tracker {
-    display: none; /* This will be removed entirely */
-  }
-  
-  /* Responsive Design Updates
-     ========================================================================== */
-  @media (max-width: 1200px) {
-    .main-game-area {
-      grid-template-columns: 1fr;
-      grid-template-rows: auto auto 1fr auto auto;
-      grid-template-areas: 
-        "party-sidebar"
-        "right-panel"
-        "map-canvas"
-        "dice-portal"
-        "roll-log";
-    }
-    
-    .party-sidebar {
-      max-height: 200px;
-    }
-    
-    .right-panel {
-      max-height: 300px;
-    }
-  }
