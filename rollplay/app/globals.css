@@ -423,7 +423,7 @@ body {
 .main-game-area {
   flex: 1;
   display: grid;
-  grid-template-columns: calc(360px + var(--panel-width-addition)) 1fr calc(300px * var(--ui-scale));
+  grid-template-columns: calc(380px + var(--panel-width-addition)) 1fr calc(300px * var(--ui-scale));
   grid-template-rows: 1fr;
   grid-template-areas: 
     "party-sidebar map-canvas right-panel";
@@ -656,7 +656,7 @@ body {
   }
   
   .party-sidebar {
-    max-height: calc(300px * var(--ui-scale));
+    max-height: calc(380px * var(--ui-scale));
   }
   
   .right-panel {
@@ -688,4 +688,50 @@ body {
   .adventure-log-section .log-entry {
     border-left-width: calc(4px * var(--ui-scale));
   }
+}
+
+/* 1. UPDATE: Increase baseline width for party sidebar by 20px */
+.main-game-area {
+  flex: 1;
+  display: grid;
+  grid-template-columns: calc(380px + var(--panel-width-addition)) 1fr calc(300px * var(--ui-scale)); /* Changed from 360px to 380px */
+  grid-template-rows: 1fr;
+  grid-template-areas: 
+    "party-sidebar map-canvas right-panel";
+  min-height: 0;
+  overflow: hidden;
+}
+
+
+.adventure-log-section .log-entries::-webkit-scrollbar-track {
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: calc(3px * var(--ui-scale));
+}
+
+.adventure-log-section .log-entries::-webkit-scrollbar-thumb {
+  background: rgba(139, 92, 246, 0.3);
+  border-radius: calc(3px * var(--ui-scale));
+}
+
+.adventure-log-section .log-entries::-webkit-scrollbar-thumb:hover {
+  background: rgba(139, 92, 246, 0.5);
+}
+
+/* Adventure Log - Hidden Scrollbar Styles */
+.adventure-log-section .log-entries {
+  flex: 1;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: calc(8px * var(--ui-scale));
+  padding-right: calc(8px * var(--ui-scale));
+  
+  /* Hide scrollbar completely */
+  scrollbar-width: none; /* Firefox */
+  -ms-overflow-style: none; /* IE and Edge */
+}
+
+/* Hide scrollbar for WebKit browsers (Chrome, Safari) */
+.adventure-log-section .log-entries::-webkit-scrollbar {
+  display: none;
 }

@@ -189,7 +189,7 @@ export default function Game() {
   // Auto-scroll log to bottom when new entries are added
   useEffect(() => {
     if (logRef.current) {
-      logRef.current.scrollTop = logRef.current.scrollHeight;
+      logRef.current.scrollTop = 0; // Scroll to top for newest messages
     }
   }, [rollLog]);
 
@@ -481,7 +481,7 @@ export default function Game() {
               <span style={{ fontSize: '10px', color: '#6b7280' }}>(Live)</span>
             </div>
             <div className="log-entries" ref={logRef}>
-              {rollLog.map((entry) => (
+              {rollLog.slice().reverse().map((entry) => ( // Add .slice().reverse() here
                 <div key={entry.id} className={`log-entry ${entry.type}`}>
                   <div 
                     className="log-entry-content"
