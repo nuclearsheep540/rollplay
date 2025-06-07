@@ -1,11 +1,12 @@
 'use client'
 
-import { useEffect } from 'react'
-import { useState, useRef } from 'react'
+import { React, useEffect, useState, useRef } from 'react'
 import { useSearchParams } from "next/navigation";
 
 import PlayerCard from "../components/PlayerCard";
 import ChatMessages from '../components/ChatMessages';
+import DMControlCenter from '../components/DMControlCenter';
+import HorizontalInitiativeTracker from '../components/HorizontalInitiativeTracker';
 
 function Params() {
   return useSearchParams()
@@ -29,9 +30,116 @@ export default function Game() {
   // who generated the room
   const [host, setHost] = useState("")
 
-  // max number of available spots in a lobby
-  const [seats, setSeats] = useState(["",]) 
+  // UNIFIED STRUCTURE - Replaces both seats and partyMembers
+  const [gameSeats, setGameSeats] = useState([]);
 
+  // State management for TabletopInterface
+  const [currentTurn, setCurrentTurn] = useState('Thorin');
+  const [isDM, setIsDM] = useState(true); // Toggle for DM panel visibility
+  const [dicePortalActive, setDicePortalActive] = useState(true);
+  const [uiScale, setUIScale] = useState('medium'); // UI Scale state
+  const [combatActive, setCombatActive] = useState(true); // Combat state
+  const [rollLog, setRollLog] = useState([
+    { id: 1, message: 'Combat initiated', type: 'system', timestamp: '2:34 PM' },
+    { id: 2, message: '<strong>Thorin:</strong> Initiative d20: 19', type: 'player-roll', timestamp: '2:34 PM' },
+    { id: 3, message: '<strong>DM:</strong> Bandit Initiative d20: 15', type: 'dm-roll', timestamp: '2:34 PM' },
+    { id: 4, message: '<strong>Elara:</strong> Initiative d20: 14', type: 'player-roll', timestamp: '2:35 PM' },
+    { id: 5, message: 'Turn order established', type: 'system', timestamp: '2:35 PM' },
+    { id: 6, message: '<strong>DM:</strong> Thorin, please roll an Attack Roll', type: 'system', timestamp: '2:36 PM' }
+  ]);
+  
+  const [initiativeOrder, setInitiativeOrder] = useState([
+    { name: 'Thorin', initiative: 19, active: true },
+    { name: 'Bandit #1', initiative: 15, active: false },
+    { name: 'Elara', initiative: 14, active: false },
+    { name: 'Finn', initiative: 12, active: false },
+    { name: 'Sister Meredith', initiative: 8, active: false }
+  ]);
+
+  const [currentTrack, setCurrentTrack] = useState('🏰 Tavern Ambience');
+  const [isPlaying, setIsPlaying] = useState(true);
+
+  const logRef = useRef(null);
+
+  // Helper function to get character data
+  const getCharacterData = (playerName) => {
+    const characterDatabase = {
+      'Thorin': { class: 'Dwarf Fighter', level: 3, hp: 34, maxHp: 40 },
+      'Elara': { class: 'Elf Wizard', level: 3, hp: 18, maxHp: 30 },
+      'Finn': { class: 'Halfling Rogue', level: 2, hp: 23, maxHp: 24 },
+      'Sister Meredith': { class: 'Human Cleric', level: 3, hp: 12, maxHp: 30 }
+    };
+    
+    return characterDatabase[playerName] || {
+      class: 'Adventurer',
+      level: 1,
+      hp: 10,
+      maxHp: 10
+    };
+  };
+
+  // Copy room code to clipboard
+  const copyRoomCode = async () => {
+    try {
+      await navigator.clipboard.writeText(roomId);
+      
+      // Optional: Show a temporary visual feedback
+      const roomCodeElement = document.querySelector('.room-code');
+      const originalText = roomCodeElement.textContent;
+      
+      // Change text to show it was copied
+      roomCodeElement.textContent = 'Copied!';
+      roomCodeElement.style.background = 'rgba(34, 197, 94, 0.3)';
+      roomCodeElement.style.borderColor = 'rgba(34, 197, 94, 0.5)';
+      
+      // Reset after 2 seconds
+      setTimeout(() => {
+        roomCodeElement.textContent = originalText;
+        roomCodeElement.style.background = 'rgba(74, 222, 128, 0.15)';
+        roomCodeElement.style.borderColor = 'rgba(74, 222, 128, 0.3)';
+      }, 2000);
+      
+    } catch (err) {
+      console.error('Failed to copy room code:', err);
+      // Fallback for older browsers
+      fallbackCopyTextToClipboard(roomId);
+    }
+  };
+
+  // Fallback copy function for browsers that don't support navigator.clipboard
+  const fallbackCopyTextToClipboard = (text) => {
+    const textArea = document.createElement("textarea");
+    textArea.value = text;
+    
+    // Avoid scrolling to bottom
+    textArea.style.top = "0";
+    textArea.style.left = "0";
+    textArea.style.position = "fixed";
+    
+    document.body.appendChild(textArea);
+    textArea.focus();
+    textArea.select();
+    
+    try {
+      const successful = document.execCommand('copy');
+      if (successful) {
+        // Show feedback
+        const roomCodeElement = document.querySelector('.room-code');
+        const originalText = roomCodeElement.textContent;
+        roomCodeElement.textContent = 'Copied!';
+        
+        setTimeout(() => {
+          roomCodeElement.textContent = originalText;
+        }, 2000);
+      }
+    } catch (err) {
+      console.error('Fallback: Unable to copy', err);
+    }
+    
+    document.body.removeChild(textArea);
+  };
+
+  // UPDATED onLoad function to use unified structure
   async function onLoad(roomId) {
     const req = await fetch(`api/game/${roomId}`)
     if (req.status === 404) {
@@ -40,26 +148,26 @@ export default function Game() {
       return
     }
 
-    await req.json().then((res)=>{
+    await req.json().then((res) => {
       setHost(res["player_name"])
-
-      // TODO: get current seats
-      // TODO: limit seat changes?
-
-      var plyrs = ["empty",]
-      for (let i=1; i < res["max_players"]; i++) {
-        plyrs = [...plyrs, "empty"]
+      
+      // Create unified seat structure
+      const initialSeats = [];
+      for (let i = 0; i < res["max_players"]; i++) {
+        initialSeats.push({
+          seatId: i,
+          playerName: "empty",
+          characterData: null,
+          isActive: false
+        });
       }
-      setSeats([...plyrs])
+      
+      setGameSeats(initialSeats);
     })
   }
   
   // initialise the game lobby
   useEffect(() => {
-
-    // cant use SearchParams in a use effect
-    // or revert and ignore https://nextjs.org/docs/messages/missing-suspense-with-csr-bailout
-
     const roomId = params.get('roomId')
     const thisPlayer = params.get('playerName')
     setRoomId(roomId)
@@ -69,45 +177,87 @@ export default function Game() {
     onLoad(roomId)
 
     // establishes websocket for this lobby
-    // Determine the appropriate protocol based on the current page
     const socketProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-    // Build the URL dynamically using the window host
     const socketUrl = `${socketProtocol}//${window.location.host}/ws/`;
 
     const url = `${socketUrl}${roomId}?player_name=${thisPlayer}`
     setWebSocket(
       new WebSocket(url)
-      )
-    },[]
-  )
+    )
+  }, [])
 
+  // Auto-scroll log to bottom when new entries are added
+  useEffect(() => {
+    if (logRef.current) {
+      logRef.current.scrollTop = 0; // Scroll to top for newest messages
+    }
+  }, [rollLog]);
 
-  
-
+  // UPDATED websocket handler for unified structure
   if (webSocket) {
-    webSocket.onmessage = (event)=>{
+    webSocket.onmessage = (event) => {
       const json_data = JSON.parse(event.data)
       const event_type = json_data["event_type"]
       console.log("NEW EVENT", json_data)
       
       if (event_type == "seat_change") {
-        console.log("recieved a new message with seat change: ", json_data["data"])
-        setSeats([...json_data["data"]]);
+        console.log("received a new message with seat change: ", json_data["data"])
+        
+        // Convert websocket data back to unified structure
+        const updatedSeats = json_data["data"].map((playerName, index) => ({
+          seatId: index,
+          playerName: playerName,
+          characterData: playerName !== "empty" ? getCharacterData(playerName) : null,
+          isActive: false // Reset turn state, will be managed by initiative
+        }));
+        
+        setGameSeats(updatedSeats);
         return
       }
 
       if (event_type == "chat_message") {
-        setChatLog(
-          [...chatLog,
-            {
-              "player_name": json_data["player_name"],
-              "chat_message": json_data["data"],
-              "timestamp": json_data["utc_timestamp"]
-            }
-          ])
-        return
+        setChatLog([
+          ...chatLog,
+          {
+            "player_name": json_data["player_name"],
+            "chat_message": json_data["data"],
+            "timestamp": json_data["utc_timestamp"]
+          }
+        ])
       }
+
+      // Handle combat state changes
+      if (event_type == "combat_state") {
+        console.log("received combat state change: ", json_data["data"])
+        const { combatActive: newCombatState } = json_data["data"];
+        
+        setCombatActive(newCombatState);
+        
+        // Add to adventure log
+        const action = newCombatState ? "initiated" : "ended";
+        const message = `Combat ${action}`;
+        addToLog(message, 'system');
+      }
+      
+
+      // end of WS events
+      return
     }
+  }
+
+  // NEW: Function to send combat state changes via websocket
+  function sendCombatStateChange(newCombatState) {
+    console.log("Sending combat state change to WS: ", newCombatState)
+    
+    webSocket.send(JSON.stringify({
+      "event_type": "combat_state", 
+      "data": {
+        "combatActive": newCombatState
+      }
+    }));
+    
+    // Update local state
+    setCombatActive(newCombatState);
   }
 
   function sendMessage(e) {
@@ -116,90 +266,256 @@ export default function Game() {
       {"event_type": "chat_message", "data": chatMsg})
     )
     setChatMsg("")
-}
-
-  function sendSeatChange(seat) {
-    console.log("Sending seat layout to WS: ", seat)
-    webSocket.send(JSON.stringify(
-      {"event_type": "seat_change", "data": seat})
-    )
   }
-  
-  return (
 
-    <main className=''>
-      {
-        (room404) &&
-        <h3 className='text-red-500'>{`room id not found: ${roomId}`}</h3>
-      }
-      {
-        (!room404) && 
+  // UPDATED sendSeatChange function
+  function sendSeatChange(newSeats) {
+    console.log("Sending seat layout to WS: ", newSeats)
+    
+    // Convert to your current websocket format (array of player names)
+    const seatArray = newSeats.map(seat => seat.playerName);
+    
+    webSocket.send(JSON.stringify({
+      "event_type": "seat_change", 
+      "data": seatArray
+    }));
+    
+    // Update local state
+    setGameSeats(newSeats);
+  }
 
-        <div className="w-full flex-col py-3 lg:px-8">
-        
-        <div className='text-sm'>
-        <p>{`Welcome to room: ${roomId}`} {`Room created by ${host}`}</p>
-        </div>
+  // Add entry to roll log
+  const addToLog = (message, type) => {
+    const now = new Date();
+    const timestamp = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    
+    const newEntry = {
+      id: Date.now(),
+      message,
+      type,
+      timestamp
+    };
+    
+    setRollLog(prev => [...prev, newEntry]);
+  };
 
-    {/* start of chat */}
-        <div className='m-4 bg-slate-400'>
-          <div className="m-2 p-2 bg-slate-400 py-2 px-2 flex-1 min-h-48 max-h-48 flex flex-col-reverse overflow-auto">
-            <div>
-            {
-              chatLog.map(
-                (msg, index) => <ChatMessages 
-                  key={index}
-                  message={msg.chat_message}
-                  player={msg.player_name}
-                  ts={msg.timestamp}
-                  />
-                )
-            }
-            </div>
-          </div>
+  // Show dice portal for player rolls
+  const showDicePortal = (playerName, promptType = null) => {
+    setCurrentTurn(playerName);
+    setDicePortalActive(true);
+  };
 
-          <div className='m-2'>
-            <div className='mx-2 w-100% border-t border-slate-800 py-2'>
-              <form onSubmit={sendMessage}>
-                <input
-                  className='w-full rounded bg-slate-100text-gray-700 mr-3 py-1 px-2 focus:outline-none'
-                  type="text"
-                  id="messageText"
-                  value={chatMsg}
-                  placeholder='message'
-                  onChange={(e) => setChatMsg(e.target.value)}
-                  />
-              </form>
-            </div>
-          
-          </div>
-        </div>
-    {/* end of chat */}
+  // Hide dice portal
+  const hideDicePortal = () => {
+    setDicePortalActive(false);
+  };
 
+  // DM prompts player to roll
+  const promptPlayerRoll = (rollType) => {
+    addToLog(`<strong>DM:</strong> ${currentTurn}, please roll a ${rollType}`, 'system');
+    showDicePortal(currentTurn, rollType);
+  };
 
-      <div className='flex flex-row'>
-        <div className='w-2/5'>
-          { 
-            seats.map((_, index) => <PlayerCard
-            key={index} 
-            seatId={index}
-            seats={seats}
-            thisPlayer={thisPlayer}
-            isSitting={seats[index] !== "empty"}
-            sendSeatChange={sendSeatChange}
-            />)
-            
+  // Handle dice roll
+  const rollDice = () => {
+    const result = Math.floor(Math.random() * 20) + 1;
+    addToLog(`<strong>${currentTurn}:</strong> d20: ${result}`, 'player-roll');
+    
+    setTimeout(() => {
+      hideDicePortal();
+    }, 1000);
+  };
+
+  // Handle initiative order clicks
+  const handleInitiativeClick = (clickedName) => {
+    setInitiativeOrder(prev => 
+      prev.map(item => ({
+        ...item,
+        active: item.name === clickedName
+      }))
+    );
+    
+    setCurrentTurn(clickedName);
+    
+    // Show dice portal for player turns (not NPCs)
+    if (clickedName !== 'Bandit #1') {
+      showDicePortal(clickedName);
+    } else {
+      hideDicePortal();
+    }
+  };
+
+  // Handle audio track changes
+  const handleTrackClick = (trackName, btnElement) => {
+    const wasPlaying = trackName === currentTrack && isPlaying;
+    
+    if (!wasPlaying) {
+      setCurrentTrack(trackName);
+      setIsPlaying(true);
+    } else {
+      setIsPlaying(false);
+    }
+  };
+
+  // Toggle campaign settings
+  const toggleCampaignSettings = () => {
+    console.log('Opening campaign settings...');
+  };
+
+  // Show loading or 404 states
+  if (room404) {
+    return <div>Room not found</div>;
+  }
+
+  if (!roomId) {
+    return <div>Loading...</div>;
+  }
+
+  // Handle dice rolls from PlayerCard components
+  const handlePlayerDiceRoll = (playerName, seatId) => {
+    // This replaces your dice portal logic
+    if (playerName === currentTurn) {
+      // Trigger dice roll
+      const result = Math.floor(Math.random() * 20) + 1;
+      addToLog(`<strong>${playerName}:</strong> d20: ${result}`, 'player-roll');
+      
+      // Send to websocket
+      if (webSocket) {
+        webSocket.send(JSON.stringify({
+          "event_type": "dice_roll",
+          "data": {
+            "player": playerName,
+            "dice": "d20",
+            "result": result
           }
+        }));
+      }
+    } else {
+      console.log(`It's not ${playerName}'s turn!`);
+    }
+  };
+
+  // MAIN RENDER - FIXED STRUCTURE
+  return (
+    <div className="game-interface" data-ui-scale={uiScale}>
+      {/* Top Command Bar */}
+      <div className="command-bar">
+        <div className="campaign-info">
+          <div className="campaign-title">The Curse of Strahd</div>
+          <div className="location-breadcrumb">› Barovia Village › The Blood on the Vine Tavern</div>
         </div>
-        <div className='w-3/5 h-min m-4 bg-slate-400'>
-          <h1> Map </h1>
+        
+        <div className="dm-controls-bar">
+          <div 
+            className="room-code" 
+            onClick={copyRoomCode}
+            title="Click to copy room code"
+          >
+            Room: {roomId}
+          </div>
+          <button className="control-btn">🔧 Room Settings</button>
           
+          {/* UI Scale Toggle */}
+          <div className="ui-scale-nav">
+            <button 
+              className={`scale-btn ${uiScale === 'small' ? 'active' : ''}`}
+              onClick={() => setUIScale('small')}
+              title="Small UI"
+            >
+              S
+            </button>
+            <button 
+              className={`scale-btn ${uiScale === 'medium' ? 'active' : ''}`}
+              onClick={() => setUIScale('medium')}
+              title="Medium UI"
+            >
+              M
+            </button>
+            <button 
+              className={`scale-btn ${uiScale === 'large' ? 'active' : ''}`}
+              onClick={() => setUIScale('large')}
+              title="Large UI"
+            >
+              L
+            </button>
+          </div>
+          
+          <button className="control-btn">📝 Notes</button>
+          <button className="control-btn" onClick={toggleCampaignSettings}>⚙️ Campaign Settings</button>
         </div>
       </div>
 
+      {/* Main Game Area - CORRECTED ORDER */}
+      <div className="main-game-area">
+        {/* GRID POSITION 1: Left Column - party-sidebar with adventure log */}
+        <div className="party-sidebar">
+          <div className="party-header">
+            <span>Party</span>
+            <span className="seat-indicator">
+              {gameSeats.filter(seat => seat.playerName !== "empty").length}/{gameSeats.length} Seats
+            </span>
+          </div>
+          
+          {gameSeats.map((seat) => {
+            const isSitting = seat.playerName === thisPlayer;
+            
+            return (
+              <PlayerCard
+                key={seat.seatId}
+                seatId={seat.seatId}
+                seats={gameSeats}
+                thisPlayer={thisPlayer}
+                isSitting={isSitting}
+                sendSeatChange={sendSeatChange}
+                currentTurn={currentTurn}
+                onDiceRoll={handlePlayerDiceRoll}
+                playerData={seat.characterData}
+              />
+            );
+          })}
 
+          {/* Adventure Log - Now in left panel */}
+          <div className="adventure-log-section mt-6">
+            <div className="log-header">
+              📜 Adventure Log
+              <span style={{ fontSize: '10px', color: '#6b7280' }}>(Live)</span>
+            </div>
+            <div className="log-entries" ref={logRef}>
+              {rollLog.slice().reverse().map((entry) => ( // Add .slice().reverse() here
+                <div key={entry.id} className={`log-entry ${entry.type}`}>
+                  <div 
+                    className="log-entry-content"
+                    dangerouslySetInnerHTML={{ __html: entry.message }}
+                  />
+                  <div className="log-entry-timestamp">{entry.timestamp}</div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+
+        {/* GRID POSITION 2: Center Column - map-canvas with horizontal initiative */}
+        <HorizontalInitiativeTracker 
+          initiativeOrder={initiativeOrder}
+          handleInitiativeClick={handleInitiativeClick}
+          currentTurn={currentTurn}
+          combatActive={combatActive}
+        />
+
+        {/* GRID POSITION 3: Right Panel - DM Controls (Full Height) */}
+        <div className="right-panel">
+        <DMControlCenter
+          isDM={isDM}
+          promptPlayerRoll={promptPlayerRoll}
+          currentTrack={currentTrack}
+          isPlaying={isPlaying}
+          handleTrackClick={handleTrackClick}
+          combatActive={combatActive}
+          setCombatActive={sendCombatStateChange} // Use websocket function instead of local setter
+        />
+        </div>
+
+      </div>
     </div>
-      }
-    </main>
-  )
+  );
 }

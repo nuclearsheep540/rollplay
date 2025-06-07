@@ -89,9 +89,9 @@ sudo apt install gh
 
 ssh-keygen -t ed25519 -C "matt@jackalmedia.co.uk"
 
+eval "$(ssh-agent -s)"
 ssh-add ~/.ssh/id_ed25519
 chmod 600 ~/.ssh/id_ed25519
-
 cat ~/.ssh/id_ed25519.pub
 
 
