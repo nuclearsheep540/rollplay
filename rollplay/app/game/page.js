@@ -6,6 +6,7 @@ import { useSearchParams } from "next/navigation";
 import PlayerCard from "../components/PlayerCard";
 import ChatMessages from '../components/ChatMessages';
 import DMControlCenter from '../components/DMControlCenter';
+import HorizontalInitiativeTracker from '../components/HorizontalInitiativeTracker';
 
 function Params() {
   return useSearchParams()
@@ -415,32 +416,22 @@ export default function Game() {
           })}
         </div>
 
-        {/* GRID POSITION 2: Center Column, Top Row - map-canvas */}
-        <div className="map-canvas">
-          <div className="map-placeholder">
-            <div className="map-placeholder-icon">🗺️</div>
-            <div>The Blood on the Vine Tavern</div>
-            <div style={{ fontSize: '12px', marginTop: '4px', opacity: '0.7' }}>
-              Upload a battle map to begin
-            </div>
-          </div>
-        </div>
+        {/* GRID POSITION 2: Center Column, Top Row - map-canvas with horizontal initiative */}
+        <HorizontalInitiativeTracker 
+          initiativeOrder={initiativeOrder}
+          handleInitiativeClick={handleInitiativeClick}
+          currentTurn={currentTurn}
+        />
 
-        {/* GRID POSITION 3: Right Column, Top Row - initiative-tracker */}
-        <div className="initiative-tracker">
-          <div className="initiative-header">⚡ Initiative Order</div>
-          <div className="turn-order">
-            {initiativeOrder.map((item, index) => (
-              <div 
-                key={index}
-                className={`turn-item ${item.active ? 'active' : 'upcoming'}`}
-                onClick={() => handleInitiativeClick(item.name)}
-              >
-                <span>{item.name}</span>
-                <span>{item.initiative}</span>
-              </div>
-            ))}
-          </div>
+        {/* GRID POSITION 3: Right Panel - DM Controls (Full Height) */}
+        <div className="right-panel">
+          <DMControlCenter
+            isDM={isDM}
+            promptPlayerRoll={promptPlayerRoll}
+            currentTrack={currentTrack}
+            isPlaying={isPlaying}
+            handleTrackClick={handleTrackClick}
+          />
         </div>
 
         {/* GRID POSITION 4: Left Column, Bottom Row - dice-portal */}
@@ -479,14 +470,6 @@ export default function Game() {
           </div>
         </div>
 
-        {/* GRID POSITION 6: Right Column, Bottom Row - dm-control-center */}
-        <DMControlCenter
-          isDM={isDM}
-          promptPlayerRoll={promptPlayerRoll}
-          currentTrack={currentTrack}
-          isPlaying={isPlaying}
-          handleTrackClick={handleTrackClick}
-        />
       </div>
     </div>
   );

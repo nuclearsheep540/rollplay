@@ -1,0 +1,46 @@
+/* DM Control Center - Custom Styles (Tailwind Supplement)
+   ========================================================================== */
+
+/* Custom Scrollbar - Not easily achievable with Tailwind utilities */
+.scrollbar-thin {
+    scrollbar-width: thin;
+  }
+  
+  .scrollbar-track-white\/5::-webkit-scrollbar {
+    width: 6px;
+  }
+  
+  .scrollbar-track-white\/5::-webkit-scrollbar-track {
+    background: rgba(255, 255, 255, 0.05);
+    border-radius: 3px;
+  }
+  
+  .scrollbar-thumb-purple-500\/30::-webkit-scrollbar-thumb {
+    background: rgba(139, 92, 246, 0.3);
+    border-radius: 3px;
+  }
+  
+  .scrollbar-thumb-purple-500\/30:hover::-webkit-scrollbar-thumb,
+  .hover\:scrollbar-thumb-purple-500\/50:hover::-webkit-scrollbar-thumb {
+    background: rgba(139, 92, 246, 0.5);
+  }
+  
+  /* Custom animation for section expansion - More complex than Tailwind's animate-in */
+  @keyframes expandSection {
+    from {
+      opacity: 0;
+      max-height: 0;
+      overflow: hidden;
+      transform: translateY(-4px);
+    }
+    to {
+      opacity: 1;
+      max-height: 500px;
+      overflow: visible;
+      transform: translateY(0);
+    }
+  }
+  
+  .animate-expand-section {
+    animation: expandSection 0.2s ease-out forwards;
+  }
