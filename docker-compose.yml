@@ -26,7 +26,7 @@ services:
     env_file:
       - .env
     container_name: "api"
-    image: ghcr.io/nuclearsheep540/rollplay/api:0.1.0
+    image: ghcr.io/nuclearsheep540/rollplay/api:0.1.1
     build:
       context: ./api
       dockerfile: ../docker/prod/api/Dockerfile
@@ -40,7 +40,7 @@ services:
     env_file:
       - .env
     container_name: "rollplay"
-    image: ghcr.io/nuclearsheep540/rollplay/rollplay:0.1.3
+    image: ghcr.io/nuclearsheep540/rollplay/rollplay:0.2.0
     build:
       context: ./rollplay
       dockerfile: ../docker/prod/rollplay/Dockerfile
