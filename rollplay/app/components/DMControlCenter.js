@@ -7,7 +7,11 @@ export default function DMControlCenter({
   isPlaying,
   handleTrackClick,
   combatActive = true,
-  setCombatActive
+  setCombatActive,
+  gameSeats,           
+  setSeatCount,        
+  roomId,              
+  handleKickPlayer     // NEW: Function to handle player kicks
 }) {
   
   // State for collapsible sections
@@ -17,6 +21,10 @@ export default function DMControlCenter({
     audio: false,
     party: false
   });
+
+  // State for seat and kick management
+  const [isSeatManagement, setIsSeatManagement] = useState(false);
+  const [isKickModalOpen, setIsKickModalOpen] = useState(false);
 
   const toggleSection = (section) => {
     setExpandedSections(prev => ({
@@ -29,6 +37,58 @@ export default function DMControlCenter({
     setCombatActive(!combatActive);
   };
 
+  // Function to handle seat count changes
+  const handleSeatCountChange = async (newSeatCount) => {
+    try {
+      if (newSeatCount < 1 || newSeatCount > 8) {
+        console.log('Seat count must be between 1 and 8');
+        return;
+      }
+
+      const currentSeatCount = gameSeats.length;
+      
+      if (newSeatCount < currentSeatCount) {
+        const seatsToRemove = gameSeats.slice(newSeatCount);
+        const playersToEject = seatsToRemove.filter(seat => seat.playerName !== "empty");
+        
+        if (playersToEject.length > 0) {
+          const playerNames = playersToEject.map(seat => seat.playerName).join(', ');
+          const confirmEject = window.confirm(
+            `This will remove ${playersToEject.length} seat(s) and eject: ${playerNames}. Continue?`
+          );
+          
+          if (!confirmEject) {
+            return;
+          }
+        }
+      }
+
+      setSeatCount(newSeatCount);
+      
+    } catch (error) {
+      console.error('Error updating seat count:', error);
+    }
+  };
+
+  // Function to handle player kick selection
+  const selectPlayerToKick = (playerName) => {
+    if (!playerName || playerName === "empty") {
+      return;
+    }
+
+    const confirmKick = window.confirm(
+      `Are you sure you want to kick ${playerName} from the game?`
+    );
+    
+    if (confirmKick && handleKickPlayer) {
+      handleKickPlayer(playerName);
+      setIsKickModalOpen(false);
+    }
+  };
+
+  // Get list of players currently in seats (excluding empty seats)
+  const activePlayers = gameSeats?.filter(seat => seat.playerName !== "empty") || [];
+
   if (!isDM) {
     return null;
   }
@@ -38,7 +98,7 @@ export default function DMControlCenter({
       padding: 'calc(16px * var(--ui-scale))',
     }}>
       {/* Sticky Header */}
-      <div className="text-red-500 font-bold mb-4 uppercase tracking-wider flex items-center gap-2 flex-shrink-0" style={{
+      <div className="text-red-500 font-bold mb-4 uppercase tracking-wider flex items-center gap-2 flex-shrink-0 sticky top-0 z-10 pb-2" style={{
         fontSize: 'calc(16px * var(--ui-scale))',
         marginBottom: 'calc(16px * var(--ui-scale))',
         gap: 'calc(8px * var(--ui-scale))',
@@ -138,7 +198,6 @@ export default function DMControlCenter({
                 ⚔️ Initiate Combat
               </span>
               
-              {/* Toggle Switch */}
               <div 
                 className={`relative inline-flex cursor-pointer rounded-full border-2 transition-all duration-300 ${
                   combatActive 
@@ -189,28 +248,6 @@ export default function DMControlCenter({
               onClick={() => promptPlayerRoll('Dice Throw')}
             >
               🎲 Prompt Dice Throw
-            </button>
-            <button 
-              className="w-full bg-amber-500/10 border border-amber-500/40 text-amber-300 rounded text-left mb-1 transition-all duration-200 hover:bg-amber-500/20"
-              style={{
-                padding: 'calc(8px * var(--ui-scale))',
-                borderRadius: 'calc(4px * var(--ui-scale))',
-                fontSize: 'calc(12px * var(--ui-scale))',
-                marginBottom: 'calc(4px * var(--ui-scale))',
-              }}
-            >
-              ✨ Status Effects
-            </button>
-            <button 
-              className="w-full bg-amber-500/10 border border-amber-500/40 text-amber-300 rounded text-left mb-1 transition-all duration-200 hover:bg-amber-500/20"
-              style={{
-                padding: 'calc(8px * var(--ui-scale))',
-                borderRadius: 'calc(4px * var(--ui-scale))',
-                fontSize: 'calc(12px * var(--ui-scale))',
-                marginBottom: 'calc(4px * var(--ui-scale))',
-              }}
-            >
-              💊 Adjust HP
             </button>
           </div>
         )}
@@ -287,22 +324,6 @@ export default function DMControlCenter({
                 </div>
               ))}
             </div>
-            <button className="w-full bg-purple-500/10 border border-purple-500/30 text-purple-300 rounded text-left mb-1 transition-all duration-200 hover:bg-purple-500/20" style={{
-              padding: 'calc(8px * var(--ui-scale))',
-              borderRadius: 'calc(4px * var(--ui-scale))',
-              fontSize: 'calc(12px * var(--ui-scale))',
-              marginBottom: 'calc(4px * var(--ui-scale))',
-            }}>
-              📁 Upload Audio
-            </button>
-            <button className="w-full bg-purple-500/10 border border-purple-500/30 text-purple-300 rounded text-left mb-1 transition-all duration-200 hover:bg-purple-500/20" style={{
-              padding: 'calc(8px * var(--ui-scale))',
-              borderRadius: 'calc(4px * var(--ui-scale))',
-              fontSize: 'calc(12px * var(--ui-scale))',
-              marginBottom: 'calc(4px * var(--ui-scale))',
-            }}>
-              💾 Load Audio
-            </button>
           </div>
         )}
       </div>
@@ -330,25 +351,211 @@ export default function DMControlCenter({
         </div>
         {expandedSections.party && (
           <div className="mt-2 animate-in slide-in-from-top-2 duration-200" style={{ marginTop: 'calc(8px * var(--ui-scale))' }}>
-            <button className="w-full bg-purple-500/10 border border-purple-500/30 text-purple-300 rounded text-left mb-1 transition-all duration-200 hover:bg-purple-500/20" style={{
-              padding: 'calc(8px * var(--ui-scale))',
-              borderRadius: 'calc(4px * var(--ui-scale))',
-              fontSize: 'calc(12px * var(--ui-scale))',
-              marginBottom: 'calc(4px * var(--ui-scale))',
-            }}>
-              🪑 Manage Seats
-            </button>
-            <button className="w-full bg-purple-500/10 border border-purple-500/30 text-purple-300 rounded text-left mb-1 transition-all duration-200 hover:bg-purple-500/20" style={{
-              padding: 'calc(8px * var(--ui-scale))',
-              borderRadius: 'calc(4px * var(--ui-scale))',
-              fontSize: 'calc(12px * var(--ui-scale))',
-              marginBottom: 'calc(4px * var(--ui-scale))',
-            }}>
+            
+            {/* Manage Seats with expandable interface */}
+            <div 
+              className={`w-full rounded text-left mb-1 transition-all duration-200 ${
+                isSeatManagement 
+                  ? 'bg-amber-500/15 border-2 border-amber-500/40' 
+                  : 'bg-purple-500/10 border border-purple-500/30 hover:bg-purple-500/20'
+              }`}
+              style={{
+                borderRadius: 'calc(4px * var(--ui-scale))',
+                marginBottom: 'calc(4px * var(--ui-scale))',
+              }}
+            >
+              <button 
+                className="w-full text-left flex items-center justify-between transition-all duration-200"
+                style={{
+                  padding: 'calc(8px * var(--ui-scale))',
+                  fontSize: 'calc(12px * var(--ui-scale))',
+                }}
+                onClick={() => setIsSeatManagement(!isSeatManagement)}
+              >
+                <span className={isSeatManagement ? 'text-amber-300' : 'text-purple-300'}>
+                  🪑 Manage Seats
+                </span>
+                <span className={`transition-transform duration-200 ${isSeatManagement ? 'rotate-180 text-amber-500' : 'text-purple-500'}`}>
+                  ▼
+                </span>
+              </button>
+
+              {isSeatManagement && (
+                <div 
+                  className="border-t border-amber-500/30 bg-amber-500/5"
+                  style={{
+                    padding: 'calc(12px * var(--ui-scale))',
+                    borderRadius: '0 0 calc(4px * var(--ui-scale)) calc(4px * var(--ui-scale))',
+                  }}
+                >
+                  <div className="flex items-center justify-between mb-3">
+                    <span className="text-amber-300 font-medium" style={{
+                      fontSize: 'calc(11px * var(--ui-scale))',
+                    }}>
+                      Current Seats: {gameSeats?.length || 0}
+                    </span>
+                    <span className="text-amber-500/70 text-xs">
+                      Occupied: {gameSeats?.filter(seat => seat.playerName !== "empty").length || 0}
+                    </span>
+                  </div>
+
+                  <div className="flex items-center justify-center gap-4">
+                    <button
+                      className={`flex items-center justify-center rounded transition-all duration-200 ${
+                        !gameSeats || gameSeats.length <= 1 
+                          ? 'bg-gray-600/20 border border-gray-500/30 text-gray-500 cursor-not-allowed' 
+                          : 'bg-red-500/20 border border-red-500/40 text-red-300 hover:bg-red-500/30'
+                      }`}
+                      style={{
+                        width: 'calc(32px * var(--ui-scale))',
+                        height: 'calc(32px * var(--ui-scale))',
+                        borderRadius: 'calc(6px * var(--ui-scale))',
+                        fontSize: 'calc(14px * var(--ui-scale))',
+                      }}
+                      onClick={() => handleSeatCountChange((gameSeats?.length || 0) - 1)}
+                      disabled={!gameSeats || gameSeats.length <= 1}
+                    >
+                      −
+                    </button>
+
+                    <div className="text-amber-300 font-bold text-center min-w-[40px]" style={{
+                      fontSize: 'calc(16px * var(--ui-scale))',
+                    }}>
+                      {gameSeats?.length || 0}
+                    </div>
+
+                    <button
+                      className={`flex items-center justify-center rounded transition-all duration-200 ${
+                        !gameSeats || gameSeats.length >= 8 
+                          ? 'bg-gray-600/20 border border-gray-500/30 text-gray-500 cursor-not-allowed' 
+                          : 'bg-emerald-500/20 border border-emerald-500/40 text-emerald-300 hover:bg-emerald-500/30'
+                      }`}
+                      style={{
+                        width: 'calc(32px * var(--ui-scale))',
+                        height: 'calc(32px * var(--ui-scale))',
+                        borderRadius: 'calc(6px * var(--ui-scale))',
+                        fontSize: 'calc(14px * var(--ui-scale))',
+                      }}
+                      onClick={() => handleSeatCountChange((gameSeats?.length || 0) + 1)}
+                      disabled={!gameSeats || gameSeats.length >= 8}
+                    >
+                      +
+                    </button>
+                  </div>
+
+                  <div className="text-center mt-2 text-amber-500/60" style={{
+                    fontSize: 'calc(9px * var(--ui-scale))',
+                  }}>
+                    Min: 1 seat • Max: 8 seats
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Kick Player Button */}
+            <button 
+              className="w-full bg-purple-500/10 border border-purple-500/30 text-purple-300 rounded text-left mb-1 transition-all duration-200 hover:bg-purple-500/20" 
+              style={{
+                padding: 'calc(8px * var(--ui-scale))',
+                borderRadius: 'calc(4px * var(--ui-scale))',
+                fontSize: 'calc(12px * var(--ui-scale))',
+                marginBottom: 'calc(4px * var(--ui-scale))',
+              }}
+              onClick={() => setIsKickModalOpen(true)}
+            >
               🚪 Kick Player
             </button>
           </div>
         )}
       </div>
+
+      {/* Kick Player Modal */}
+      {isKickModalOpen && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50">
+          <div 
+            className="bg-slate-800 border border-purple-500/30 rounded-lg shadow-2xl max-w-md w-full mx-4"
+            style={{
+              padding: 'calc(24px * var(--ui-scale))',
+              borderRadius: 'calc(12px * var(--ui-scale))',
+            }}
+          >
+            <div className="flex items-center justify-between mb-6">
+              <h3 className="text-purple-300 font-bold" style={{
+                fontSize: 'calc(18px * var(--ui-scale))',
+              }}>
+                🚪 Kick Player
+              </h3>
+              <button 
+                className="text-gray-400 hover:text-white transition-colors"
+                onClick={() => setIsKickModalOpen(false)}
+                style={{
+                  fontSize: 'calc(20px * var(--ui-scale))',
+                }}
+              >
+                ✕
+              </button>
+            </div>
+
+            <div className="mb-6">
+              <p className="text-gray-300 mb-4" style={{
+                fontSize: 'calc(14px * var(--ui-scale))',
+              }}>
+                Select a player to remove from the game:
+              </p>
+              
+              {activePlayers.length > 0 ? (
+                <div className="space-y-2">
+                  {activePlayers.map((player) => (
+                    <button
+                      key={player.seatId}
+                      className="w-full text-left p-3 bg-red-500/10 border border-red-500/30 text-red-300 rounded transition-all duration-200 hover:bg-red-500/20 hover:border-red-500/50"
+                      style={{
+                        padding: 'calc(12px * var(--ui-scale))',
+                        borderRadius: 'calc(8px * var(--ui-scale))',
+                        fontSize: 'calc(14px * var(--ui-scale))',
+                      }}
+                      onClick={() => selectPlayerToKick(player.playerName)}
+                    >
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <div className="font-medium">{player.playerName}</div>
+                          {player.characterData && (
+                            <div className="text-red-400/70 text-sm">
+                              {player.characterData.class} • Level {player.characterData.level}
+                            </div>
+                          )}
+                        </div>
+                        <div className="text-red-400">🚪</div>
+                      </div>
+                    </button>
+                  ))}
+                </div>
+              ) : (
+                <div className="text-center py-8 text-gray-500">
+                  <div style={{ fontSize: 'calc(24px * var(--ui-scale))' }}>🪑</div>
+                  <p style={{ fontSize: 'calc(14px * var(--ui-scale))' }}>
+                    No players to kick
+                  </p>
+                </div>
+              )}
+            </div>
+
+            <div className="flex justify-end gap-3">
+              <button 
+                className="px-4 py-2 bg-gray-600 border border-gray-500 text-gray-300 rounded transition-all duration-200 hover:bg-gray-500"
+                style={{
+                  padding: 'calc(8px * var(--ui-scale)) calc(16px * var(--ui-scale))',
+                  borderRadius: 'calc(6px * var(--ui-scale))',
+                  fontSize: 'calc(14px * var(--ui-scale))',
+                }}
+                onClick={() => setIsKickModalOpen(false)}
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

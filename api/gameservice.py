@@ -65,6 +65,29 @@ class GameService:
         result = collection.insert_one(json.loads(settings.model_dump_json()))
         id = str(result.inserted_id)
         return id
+    
+    @staticmethod
+    def update_seat_count(room_id, new_max):
+        try: 
+            conn = MongoClient('mongodb://%s:%s@db' % ('mdavey', 'pass'))
+            db = conn.rollplay
+            collection = db.active_sessions
+            logger.info("Connected successfully to mongo DB") 
+        except Exception:   
+            logger.error("Could not connect to MongoDB") 
+
+    
+        result = collection.update_one(
+            {"_id": room_id},
+            {
+                "$set": {
+                    "max_players": new_max,
+                }
+            }
+        )
+        res = str(result)
+        # import pdb; pdb.set_trace()
+        return res
 
 
 

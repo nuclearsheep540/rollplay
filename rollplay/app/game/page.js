@@ -179,21 +179,145 @@ export default function Game() {
     // establishes websocket for this lobby
     const socketProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
     const socketUrl = `${socketProtocol}//${window.location.host}/ws/`;
-
     const url = `${socketUrl}${roomId}?player_name=${thisPlayer}`
-    setWebSocket(
-      new WebSocket(url)
-    )
+  
+    const ws = new WebSocket(url);
+    setWebSocket(ws);
+  
+    // Cleanup function to close websocket on unmount
+    return () => {
+      console.log("Cleaning up websocket"); // DEBUG
+      ws.close();
+    };
   }, [])
 
-  // Auto-scroll log to bottom when new entries are added
+  // Auto-scroll log to TOP when new entries are added (newest first)
   useEffect(() => {
     if (logRef.current) {
       logRef.current.scrollTop = 0; // Scroll to top for newest messages
     }
   }, [rollLog]);
 
-  // UPDATED websocket handler for unified structure
+  // NEW FUNCTION: Seat count management
+  const setSeatCount = async (newSeatCount) => {
+    try {
+      console.log(`Updating seat count to: ${newSeatCount}`);
+      
+      // Create new seat array
+      const newSeats = [];
+      
+      // Copy existing seats up to the new count
+      for (let i = 0; i < newSeatCount; i++) {
+        if (i < gameSeats.length) {
+          // Keep existing seat
+          newSeats.push(gameSeats[i]);
+        } else {
+          // Add new empty seat
+          newSeats.push({
+            seatId: i,
+            playerName: "empty",
+            characterData: null,
+            isActive: false
+          });
+        }
+      }
+
+      // Update MongoDB via API
+      const response = await fetch(`/api/game/${roomId}/seats`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          max_players: newSeatCount,
+          updated_by: thisPlayer
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to update seat count in database');
+      }
+
+      // Send websocket update
+      webSocket.send(JSON.stringify({
+        "event_type": "seat_count_change",
+        "data": {
+          "max_players": newSeatCount,
+          "new_seats": newSeats.map(seat => seat.playerName), // Current format for compatibility
+          "updated_by": thisPlayer
+        }
+      }));
+
+      // Update local state
+      setGameSeats(newSeats);
+
+      // Add to adventure log
+      const action = newSeatCount > gameSeats.length ? "increased" : "decreased";
+      addToLog(`<strong>${thisPlayer}:</strong> ${action} party seats to ${newSeatCount}`, 'system');
+
+    } catch (error) {
+      console.error('Error updating seat count:', error);
+      alert('Failed to update seat count. Please try again.');
+    }
+  };
+
+  // NEW FUNCTION: Handle player kick
+  const handleKickPlayer = async (playerToKick, disconnected) => {
+    try {
+      
+      // Find the seat with this player and empty it
+      const updatedSeats = gameSeats.map(seat => 
+        seat.playerName === playerToKick 
+          ? { ...seat, playerName: "empty", characterData: null, isActive: false }
+          : seat
+      );
+  
+      // Send kick event via websocket (simplified format for your backend)
+      webSocket.send(JSON.stringify({
+        "event_type": "player_kicked",
+        "data": {
+          "kicked_player": playerToKick
+        }
+      }));
+  
+      // Send updated seat layout
+      webSocket.send(JSON.stringify({
+        "event_type": "seat_change",
+        "data": updatedSeats.map(seat => seat.playerName)
+      }));
+  
+      // Update local state
+      setGameSeats(updatedSeats);
+
+      if (disconnected) {
+        return
+      }
+  
+      // Add to adventure log
+      addToLog(`Player ${playerToKick} was removed from the game`, 'system');
+  
+    } catch (error) {
+      console.error('Error kicking player:', error);
+      alert('Failed to kick player. Please try again.');
+    }
+  };
+
+  // Function to send combat state changes via websocket
+  function sendCombatStateChange(newCombatState) {
+    console.log("Sending combat state change to WS: ", newCombatState)
+    
+    webSocket.send(JSON.stringify({
+      "event_type": "combat_state", 
+      "data": {
+        "combatActive": newCombatState
+      }
+    }));
+    
+    // Update local state
+    setCombatActive(newCombatState);
+  }
+
+  // UPDATED websocket handler with seat management
   if (webSocket) {
     webSocket.onmessage = (event) => {
       const json_data = JSON.parse(event.data)
@@ -215,6 +339,31 @@ export default function Game() {
         return
       }
 
+      // NEW: Handle seat count changes
+      if (event_type == "seat_count_change") {
+        console.log("received seat count change: ", json_data["data"]);
+        const { max_players, new_seats, updated_by } = json_data["data"];
+        
+        // Convert to unified structure
+        const updatedSeats = new_seats.map((playerName, index) => ({
+          seatId: index,
+          playerName: playerName,
+          characterData: playerName !== "empty" ? getCharacterData(playerName) : null,
+          isActive: false
+        }));
+        
+        setGameSeats(updatedSeats);
+        
+        // Add to adventure log if not the person who made the change
+        if (updated_by !== thisPlayer) {
+          const currentCount = gameSeats.length;
+          const action = max_players > currentCount ? "increased" : "decreased";
+          addToLog(`<strong>${updated_by}:</strong> ${action} party seats to ${max_players}`, 'system');
+        }
+        
+        return;
+      }
+
       if (event_type == "chat_message") {
         setChatLog([
           ...chatLog,
@@ -224,6 +373,24 @@ export default function Game() {
             "timestamp": json_data["utc_timestamp"]
           }
         ])
+        return
+      }
+
+      // NEW: Handle player kick
+      if (event_type == "player_kicked") {
+        console.log("received player kick: ", json_data["data"]);
+        const { kicked_player } = json_data["data"];
+        addToLog(`${kicked_player} has been kicked from the party.`);
+
+        // If this player was kicked, go back in browser history
+        if (kicked_player === thisPlayer) {
+          // Replace current page in browser history with home page
+          window.history.replaceState(null, '', '/');
+          // Then go back, which will now go to the page before they entered the game
+          window.history.back();
+          return;
+        }
+      return;
       }
 
       // Handle combat state changes
@@ -237,36 +404,22 @@ export default function Game() {
         const action = newCombatState ? "initiated" : "ended";
         const message = `Combat ${action}`;
         addToLog(message, 'system');
+        return
       }
-      
 
-      // end of WS events
-      return
+      // Handle disconnects
+      if (event_type == "player_disconnected") {
+        console.log("received combat state change: ", json_data["data"])
+        const disconnected_player = json_data["data"]["disconnected_player"];
+      
+        if (disconnected_player !== thisPlayer) {
+          addToLog(`${disconnected_player} disconnected`, 'system');
+        }
+        return
+      }
     }
   }
 
-  // NEW: Function to send combat state changes via websocket
-  function sendCombatStateChange(newCombatState) {
-    console.log("Sending combat state change to WS: ", newCombatState)
-    
-    webSocket.send(JSON.stringify({
-      "event_type": "combat_state", 
-      "data": {
-        "combatActive": newCombatState
-      }
-    }));
-    
-    // Update local state
-    setCombatActive(newCombatState);
-  }
-
-  function sendMessage(e) {
-    e.preventDefault()
-    webSocket.send(JSON.stringify(
-      {"event_type": "chat_message", "data": chatMsg})
-    )
-    setChatMsg("")
-  }
 
   // UPDATED sendSeatChange function
   function sendSeatChange(newSeats) {
@@ -395,7 +548,7 @@ export default function Game() {
     }
   };
 
-  // MAIN RENDER - FIXED STRUCTURE
+  // MAIN RENDER
   return (
     <div className="game-interface" data-ui-scale={uiScale}>
       {/* Top Command Bar */}
@@ -445,7 +598,7 @@ export default function Game() {
         </div>
       </div>
 
-      {/* Main Game Area - CORRECTED ORDER */}
+      {/* Main Game Area */}
       <div className="main-game-area">
         {/* GRID POSITION 1: Left Column - party-sidebar with adventure log */}
         <div className="party-sidebar">
@@ -474,14 +627,14 @@ export default function Game() {
             );
           })}
 
-          {/* Adventure Log - Now in left panel */}
+          {/* Adventure Log - Now in left panel with hidden scrollbar and newest first */}
           <div className="adventure-log-section mt-6">
             <div className="log-header">
               📜 Adventure Log
               <span style={{ fontSize: '10px', color: '#6b7280' }}>(Live)</span>
             </div>
             <div className="log-entries" ref={logRef}>
-              {rollLog.slice().reverse().map((entry) => ( // Add .slice().reverse() here
+              {rollLog.slice().reverse().map((entry) => (
                 <div key={entry.id} className={`log-entry ${entry.type}`}>
                   <div 
                     className="log-entry-content"
@@ -505,14 +658,18 @@ export default function Game() {
         {/* GRID POSITION 3: Right Panel - DM Controls (Full Height) */}
         <div className="right-panel">
         <DMControlCenter
-          isDM={isDM}
-          promptPlayerRoll={promptPlayerRoll}
-          currentTrack={currentTrack}
-          isPlaying={isPlaying}
-          handleTrackClick={handleTrackClick}
-          combatActive={combatActive}
-          setCombatActive={sendCombatStateChange} // Use websocket function instead of local setter
-        />
+        isDM={isDM}
+        promptPlayerRoll={promptPlayerRoll}
+        currentTrack={currentTrack}
+        isPlaying={isPlaying}
+        handleTrackClick={handleTrackClick}
+        combatActive={combatActive}
+        setCombatActive={sendCombatStateChange}
+        gameSeats={gameSeats}
+        setSeatCount={setSeatCount}
+        roomId={roomId}
+        handleKickPlayer={handleKickPlayer}
+          />
         </div>
 
       </div>
