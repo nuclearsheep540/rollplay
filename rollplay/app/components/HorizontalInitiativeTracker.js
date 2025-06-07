@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 
 export default function HorizontalInitiativeTracker({ 
   initiativeOrder, 
@@ -6,7 +6,33 @@ export default function HorizontalInitiativeTracker({
   currentTurn,
   combatActive = true // Add combat state prop
 }) {
-  
+  // Animation state management
+  const [isVisible, setIsVisible] = useState(false);
+  const [shouldRender, setShouldRender] = useState(false);
+
+  // Handle combat state changes with proper animation timing
+  useEffect(() => {
+    if (combatActive) {
+      // Show: first add to DOM, then animate in
+      setShouldRender(true);
+      
+      // Use requestAnimationFrame to ensure DOM is rendered before animation
+      requestAnimationFrame(() => {
+        requestAnimationFrame(() => {
+          setIsVisible(true);
+        });
+      });
+    } else {
+      // Hide: first animate out, then remove from DOM
+      setIsVisible(false);
+      // Wait for animation to complete before removing from DOM
+      const hideTimer = setTimeout(() => {
+        setShouldRender(false);
+      }, 300); // Match this with CSS transition duration
+      return () => clearTimeout(hideTimer);
+    }
+  }, [combatActive]);
+
   // Determine if character is an enemy/NPC
   const isEnemy = (name) => {
     return name.includes('#') || name.toLowerCase().includes('bandit') || name.toLowerCase().includes('goblin');
@@ -35,12 +61,15 @@ export default function HorizontalInitiativeTracker({
         <div className="absolute inset-0 bg-black/30"></div>
       </div>
 
-      {/* Initiative Order - Only visible during combat */}
-      {combatActive && (
+      {/* Initiative Order - Animated show/hide based on combat state */}
+      {shouldRender && (
         <div 
-          className="absolute top-6 left-1/2 transform -translate-x-1/2 z-10 animate-in slide-in-from-top-4 fade-in duration-500"
+          className="absolute left-1/2 z-10"
           style={{
             top: `calc(24px * var(--ui-scale))`,
+            transform: `translateX(-50%) translateY(${isVisible ? '0' : '-100%'})`,
+            opacity: isVisible ? 1 : 0,
+            transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
           }}
         >
           {/* Backdrop */}
@@ -63,6 +92,7 @@ export default function HorizontalInitiativeTracker({
                       : 'scale-100'
                     }
                   `}
+                  onClick={() => handleInitiativeClick(character.name)}
                 >
                   {/* Character Frame - Subtle container with party/enemy colors */}
                   <div className={`
@@ -137,81 +167,86 @@ export default function HorizontalInitiativeTracker({
         </div>
       )}
 
-      {/* Combat Status Indicators (Bottom Right) */}
-      <div className="absolute z-10" style={{
-        bottom: `calc(24px * var(--ui-scale))`,
-        right: `calc(24px * var(--ui-scale))`,
-      }}>
-        <div className="bg-black/60 backdrop-blur-md border border-white/10 rounded-lg shadow-xl" style={{
-          padding: `calc(16px * var(--ui-scale)) calc(16px * var(--ui-scale))`,
-          borderRadius: `calc(8px * var(--ui-scale))`,
-        }}>
-          <div className="text-emerald-400 font-semibold" style={{
-            fontSize: `calc(14px * var(--ui-scale))`,
-            marginBottom: `calc(8px * var(--ui-scale))`,
-          }}>Combat Active</div>
-          <div className="flex items-center text-white/70" style={{
-            gap: `calc(12px * var(--ui-scale))`,
-            fontSize: `calc(12px * var(--ui-scale))`,
+      {/* Combat Status Indicators (Bottom Right) - Only show during combat */}
+      {shouldRender && (
+        <div 
+          className="absolute z-10"
+          style={{
+            bottom: `calc(24px * var(--ui-scale))`,
+            right: `calc(24px * var(--ui-scale))`,
+            transform: `translateX(${isVisible ? '0' : '100%'})`,
+            opacity: isVisible ? 1 : 0,
+            transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1) 0.1s', // Slight delay for staggered effect
+          }}
+        >
+          <div className="bg-black/60 backdrop-blur-md border border-white/10 rounded-lg shadow-xl" style={{
+            padding: `calc(16px * var(--ui-scale)) calc(16px * var(--ui-scale))`,
+            borderRadius: `calc(8px * var(--ui-scale))`,
           }}>
-            <div className="flex items-center" style={{ gap: `calc(4px * var(--ui-scale))` }}>
-              <div className="bg-emerald-400 rounded-full animate-pulse" style={{
-                width: `calc(8px * var(--ui-scale))`,
-                height: `calc(8px * var(--ui-scale))`,
-              }}></div>
-              <span>Round 1</span>
-            </div>
-            <div className="bg-white/20" style={{
-              width: '1px',
-              height: `calc(16px * var(--ui-scale))`,
-            }}></div>
-            <div className="flex items-center" style={{ gap: `calc(4px * var(--ui-scale))` }}>
-              <div className="bg-blue-400 rounded-full" style={{
-                width: `calc(8px * var(--ui-scale))`,
-                height: `calc(8px * var(--ui-scale))`,
-              }}></div>
-              <span>Turn 3</span>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* Dice Portal - Bottom Left of Map Canvas */}
-      <div className="absolute z-10" style={{
-        bottom: `calc(24px * var(--ui-scale))`,
-        left: `calc(24px * var(--ui-scale))`,
-      }}>
-        <div className="bg-amber-500/90 backdrop-blur-md border border-amber-500/60 rounded-xl shadow-2xl" style={{
-          padding: `calc(20px * var(--ui-scale)) calc(20px * var(--ui-scale))`,
-          borderRadius: `calc(12px * var(--ui-scale))`,
-          minWidth: `calc(192px * var(--ui-scale))`,
-        }}>
-          <div className="text-amber-900 font-bold text-center" style={{
-            fontSize: `calc(14px * var(--ui-scale))`,
-            marginBottom: `calc(8px * var(--ui-scale))`,
-          }}>🎲 {currentTurn}'s Turn!</div>
-          <div className="text-amber-800 text-center" style={{
-            fontSize: `calc(12px * var(--ui-scale))`,
-            marginBottom: `calc(12px * var(--ui-scale))`,
-          }}>Roll for your action</div>
-          <div className="flex flex-col" style={{ gap: `calc(8px * var(--ui-scale))` }}>
-            <button className="bg-amber-600 hover:bg-amber-700 text-white rounded-lg font-semibold transition-all duration-200 hover:transform hover:-translate-y-0.5 shadow-lg" style={{
-              padding: `calc(8px * var(--ui-scale)) calc(16px * var(--ui-scale))`,
-              borderRadius: `calc(8px * var(--ui-scale))`,
+            <div className="text-emerald-400 font-semibold" style={{
               fontSize: `calc(14px * var(--ui-scale))`,
-            }}>
-              🎲 Roll Dice
-            </button>
-            <button className="bg-red-500 hover:bg-red-600 text-white rounded-lg font-medium transition-all duration-200 hover:transform hover:-translate-y-0.5 shadow-md" style={{
-              padding: `calc(6px * var(--ui-scale)) calc(16px * var(--ui-scale))`,
-              borderRadius: `calc(8px * var(--ui-scale))`,
+              marginBottom: `calc(8px * var(--ui-scale))`,
+            }}>Combat Active</div>
+            <div className="flex items-center text-white/70" style={{
+              gap: `calc(12px * var(--ui-scale))`,
               fontSize: `calc(12px * var(--ui-scale))`,
             }}>
-              ⏭️ End Turn
-            </button>
+              <div className="flex items-center" style={{ gap: `calc(4px * var(--ui-scale))` }}>
+                <div className="bg-emerald-400 rounded-full animate-pulse" style={{
+                  width: `calc(8px * var(--ui-scale))`,
+                  height: `calc(8px * var(--ui-scale))`,
+                }}></div>
+                <span>Turn 1</span>
+              </div>
+            </div>
           </div>
         </div>
-      </div>
+      )}
+
+      {/* Dice Portal - Bottom Left of Map Canvas */}
+      {shouldRender && (
+        <div 
+          className="absolute z-10" 
+          style={{
+            bottom: `calc(24px * var(--ui-scale))`,
+            left: `calc(24px * var(--ui-scale))`,
+            transform: `translateX(${isVisible ? '0' : '-100%'})`,
+            opacity: isVisible ? 1 : 0,
+            transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1) 0.05s', // Slight delay for staggered effect
+          }}
+        >
+          <div className="bg-amber-500/90 backdrop-blur-md border border-amber-500/60 rounded-xl shadow-2xl" style={{
+            padding: `calc(20px * var(--ui-scale)) calc(20px * var(--ui-scale))`,
+            borderRadius: `calc(12px * var(--ui-scale))`,
+            minWidth: `calc(192px * var(--ui-scale))`,
+          }}>
+            <div className="text-amber-900 font-bold text-center" style={{
+              fontSize: `calc(14px * var(--ui-scale))`,
+              marginBottom: `calc(8px * var(--ui-scale))`,
+            }}>🎲 {currentTurn}'s Turn!</div>
+            <div className="text-amber-800 text-center" style={{
+              fontSize: `calc(12px * var(--ui-scale))`,
+              marginBottom: `calc(12px * var(--ui-scale))`,
+            }}>Roll for your action</div>
+            <div className="flex flex-col" style={{ gap: `calc(8px * var(--ui-scale))` }}>
+              <button className="bg-amber-600 hover:bg-amber-700 text-white rounded-lg font-semibold transition-all duration-200 hover:transform hover:-translate-y-0.5 shadow-lg" style={{
+                padding: `calc(8px * var(--ui-scale)) calc(16px * var(--ui-scale))`,
+                borderRadius: `calc(8px * var(--ui-scale))`,
+                fontSize: `calc(14px * var(--ui-scale))`,
+              }}>
+                🎲 Roll Dice
+              </button>
+              <button className="bg-red-500 hover:bg-red-600 text-white rounded-lg font-medium transition-all duration-200 hover:transform hover:-translate-y-0.5 shadow-md" style={{
+                padding: `calc(6px * var(--ui-scale)) calc(16px * var(--ui-scale))`,
+                borderRadius: `calc(8px * var(--ui-scale))`,
+                fontSize: `calc(12px * var(--ui-scale))`,
+              }}>
+                ⏭️ End Turn
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
     </div>
   );

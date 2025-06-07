@@ -5,13 +5,15 @@ export default function DMControlCenter({
   promptPlayerRoll,
   currentTrack,
   isPlaying,
-  handleTrackClick
+  handleTrackClick,
+  combatActive = true,
+  setCombatActive
 }) {
   
   // State for collapsible sections
   const [expandedSections, setExpandedSections] = useState({
     map: true,
-    rolls: true,
+    combat: true,
     audio: false,
     party: false
   });
@@ -21,6 +23,10 @@ export default function DMControlCenter({
       ...prev,
       [section]: !prev[section]
     }));
+  };
+
+  const toggleCombat = () => {
+    setCombatActive(!combatActive);
   };
 
   if (!isDM) {
@@ -92,7 +98,7 @@ export default function DMControlCenter({
         )}
       </div>
 
-      {/* Roll Management Section */}
+      {/* Combat Management Section */}
       <div className="mb-3 flex-shrink-0" style={{ marginBottom: 'calc(12px * var(--ui-scale))' }}>
         <div 
           className="flex items-center justify-between cursor-pointer bg-purple-500/10 border border-purple-500/20 rounded transition-all duration-200 hover:bg-purple-500/15 hover:border-purple-500/30 mb-0"
@@ -100,69 +106,65 @@ export default function DMControlCenter({
             padding: 'calc(12px * var(--ui-scale))',
             borderRadius: 'calc(4px * var(--ui-scale))',
           }}
-          onClick={() => toggleSection('rolls')}
+          onClick={() => toggleSection('combat')}
         >
           <span className="text-purple-300 font-semibold uppercase tracking-wide" style={{
             fontSize: 'calc(12px * var(--ui-scale))',
           }}>
-            🎲 Roll Management
+            ⚔️ Combat Management
           </span>
-          <span className={`text-purple-500 transition-transform duration-200 ${expandedSections.rolls ? 'rotate-180' : ''}`} style={{
+          <span className={`text-purple-500 transition-transform duration-200 ${expandedSections.combat ? 'rotate-180' : ''}`} style={{
             fontSize: 'calc(12px * var(--ui-scale))',
           }}>
             ▼
           </span>
         </div>
-        {expandedSections.rolls && (
+        {expandedSections.combat && (
           <div className="mt-2 animate-in slide-in-from-top-2 duration-200" style={{ marginTop: 'calc(8px * var(--ui-scale))' }}>
-            <button 
-              className="w-full bg-amber-500/10 border border-amber-500/40 text-amber-300 rounded text-left mb-1 transition-all duration-200 hover:bg-amber-500/20"
+            
+            {/* Initiate Combat Toggle */}
+            <div 
+              className="w-full flex items-center justify-between p-2 rounded mb-1 bg-amber-500/10 border border-amber-500/40"
               style={{
                 padding: 'calc(8px * var(--ui-scale))',
                 borderRadius: 'calc(4px * var(--ui-scale))',
-                fontSize: 'calc(12px * var(--ui-scale))',
                 marginBottom: 'calc(4px * var(--ui-scale))',
               }}
-              onClick={() => promptPlayerRoll('Ability Check')}
             >
-              🎯 Prompt Ability Check
-            </button>
-            <button 
-              className="w-full bg-amber-500/10 border border-amber-500/40 text-amber-300 rounded text-left mb-1 transition-all duration-200 hover:bg-amber-500/20"
-              style={{
-                padding: 'calc(8px * var(--ui-scale))',
-                borderRadius: 'calc(4px * var(--ui-scale))',
+              <span className="text-amber-300 font-medium" style={{
                 fontSize: 'calc(12px * var(--ui-scale))',
-                marginBottom: 'calc(4px * var(--ui-scale))',
-              }}
-              onClick={() => promptPlayerRoll('Saving Throw')}
-            >
-              🛡️ Prompt Saving Throw
-            </button>
-            <button 
-              className="w-full bg-amber-500/10 border border-amber-500/40 text-amber-300 rounded text-left mb-1 transition-all duration-200 hover:bg-amber-500/20"
-              style={{
-                padding: 'calc(8px * var(--ui-scale))',
-                borderRadius: 'calc(4px * var(--ui-scale))',
-                fontSize: 'calc(12px * var(--ui-scale))',
-                marginBottom: 'calc(4px * var(--ui-scale))',
-              }}
-              onClick={() => promptPlayerRoll('Attack Roll')}
-            >
-              ⚔️ Prompt Attack Roll
-            </button>
-            <button 
-              className="w-full bg-amber-500/10 border border-amber-500/40 text-amber-300 rounded text-left mb-1 transition-all duration-200 hover:bg-amber-500/20"
-              style={{
-                padding: 'calc(8px * var(--ui-scale))',
-                borderRadius: 'calc(4px * var(--ui-scale))',
-                fontSize: 'calc(12px * var(--ui-scale))',
-                marginBottom: 'calc(4px * var(--ui-scale))',
-              }}
-              onClick={() => promptPlayerRoll('Damage Roll')}
-            >
-              💥 Prompt Damage Roll
-            </button>
+              }}>
+                ⚔️ Initiate Combat
+              </span>
+              
+              {/* Toggle Switch */}
+              <div 
+                className={`relative inline-flex cursor-pointer rounded-full border-2 transition-all duration-300 ${
+                  combatActive 
+                    ? 'bg-emerald-500 border-emerald-400' 
+                    : 'bg-gray-600 border-gray-500'
+                }`}
+                style={{
+                  width: 'calc(44px * var(--ui-scale))',
+                  height: 'calc(24px * var(--ui-scale))',
+                  borderRadius: 'calc(12px * var(--ui-scale))',
+                }}
+                onClick={toggleCombat}
+              >
+                <div 
+                  className={`inline-block rounded-full bg-white shadow-lg transform transition-transform duration-300 ${
+                    combatActive ? 'translate-x-full' : 'translate-x-0'
+                  }`}
+                  style={{
+                    width: 'calc(18px * var(--ui-scale))',
+                    height: 'calc(18px * var(--ui-scale))',
+                    borderRadius: 'calc(9px * var(--ui-scale))',
+                    margin: 'calc(2px * var(--ui-scale))',
+                  }}
+                ></div>
+              </div>
+            </div>
+
             <button 
               className="w-full bg-amber-500/10 border border-amber-500/40 text-amber-300 rounded text-left mb-1 transition-all duration-200 hover:bg-amber-500/20"
               style={{
@@ -183,9 +185,9 @@ export default function DMControlCenter({
                 fontSize: 'calc(12px * var(--ui-scale))',
                 marginBottom: 'calc(4px * var(--ui-scale))',
               }}
-              onClick={() => promptPlayerRoll('Skill Check')}
+              onClick={() => promptPlayerRoll('Dice Throw')}
             >
-              📊 Prompt Skill Check
+              🎲 Prompt Dice Throw
             </button>
             <button 
               className="w-full bg-amber-500/10 border border-amber-500/40 text-amber-300 rounded text-left mb-1 transition-all duration-200 hover:bg-amber-500/20"
@@ -195,9 +197,8 @@ export default function DMControlCenter({
                 fontSize: 'calc(12px * var(--ui-scale))',
                 marginBottom: 'calc(4px * var(--ui-scale))',
               }}
-              onClick={() => promptPlayerRoll('Hit Dice')}
             >
-              ❤️ Prompt Hit Dice
+              ✨ Status Effects
             </button>
             <button 
               className="w-full bg-amber-500/10 border border-amber-500/40 text-amber-300 rounded text-left mb-1 transition-all duration-200 hover:bg-amber-500/20"
@@ -207,9 +208,8 @@ export default function DMControlCenter({
                 fontSize: 'calc(12px * var(--ui-scale))',
                 marginBottom: 'calc(4px * var(--ui-scale))',
               }}
-              onClick={() => promptPlayerRoll('Death Save')}
             >
-              💀 Prompt Death Save
+              💊 Adjust HP
             </button>
           </div>
         )}
@@ -344,14 +344,6 @@ export default function DMControlCenter({
               marginBottom: 'calc(4px * var(--ui-scale))',
             }}>
               🚪 Kick Player
-            </button>
-            <button className="w-full bg-purple-500/10 border border-purple-500/30 text-purple-300 rounded text-left mb-1 transition-all duration-200 hover:bg-purple-500/20" style={{
-              padding: 'calc(8px * var(--ui-scale))',
-              borderRadius: 'calc(4px * var(--ui-scale))',
-              fontSize: 'calc(12px * var(--ui-scale))',
-              marginBottom: 'calc(4px * var(--ui-scale))',
-            }}>
-              💊 Adjust HP
             </button>
           </div>
         )}

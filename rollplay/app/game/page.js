@@ -38,6 +38,7 @@ export default function Game() {
   const [isDM, setIsDM] = useState(true); // Toggle for DM panel visibility
   const [dicePortalActive, setDicePortalActive] = useState(true);
   const [uiScale, setUIScale] = useState('medium'); // UI Scale state
+  const [combatActive, setCombatActive] = useState(true); // Combat state
   const [rollLog, setRollLog] = useState([
     { id: 1, message: 'Combat initiated', type: 'system', timestamp: '2:34 PM' },
     { id: 2, message: '<strong>Thorin:</strong> Initiative d20: 19', type: 'player-roll', timestamp: '2:34 PM' },
@@ -72,7 +73,7 @@ export default function Game() {
     return characterDatabase[playerName] || {
       class: 'Adventurer',
       level: 1,
-      hp: 8,
+      hp: 10,
       maxHp: 10
     };
   };
@@ -223,9 +224,40 @@ export default function Game() {
             "timestamp": json_data["utc_timestamp"]
           }
         ])
-        return
       }
+
+      // Handle combat state changes
+      if (event_type == "combat_state") {
+        console.log("received combat state change: ", json_data["data"])
+        const { combatActive: newCombatState } = json_data["data"];
+        
+        setCombatActive(newCombatState);
+        
+        // Add to adventure log
+        const action = newCombatState ? "initiated" : "ended";
+        const message = `Combat ${action}`;
+        addToLog(message, 'system');
+      }
+      
+
+      // end of WS events
+      return
     }
+  }
+
+  // NEW: Function to send combat state changes via websocket
+  function sendCombatStateChange(newCombatState) {
+    console.log("Sending combat state change to WS: ", newCombatState)
+    
+    webSocket.send(JSON.stringify({
+      "event_type": "combat_state", 
+      "data": {
+        "combatActive": newCombatState
+      }
+    }));
+    
+    // Update local state
+    setCombatActive(newCombatState);
   }
 
   function sendMessage(e) {
@@ -467,17 +499,20 @@ export default function Game() {
           initiativeOrder={initiativeOrder}
           handleInitiativeClick={handleInitiativeClick}
           currentTurn={currentTurn}
+          combatActive={combatActive}
         />
 
         {/* GRID POSITION 3: Right Panel - DM Controls (Full Height) */}
         <div className="right-panel">
-          <DMControlCenter
-            isDM={isDM}
-            promptPlayerRoll={promptPlayerRoll}
-            currentTrack={currentTrack}
-            isPlaying={isPlaying}
-            handleTrackClick={handleTrackClick}
-          />
+        <DMControlCenter
+          isDM={isDM}
+          promptPlayerRoll={promptPlayerRoll}
+          currentTrack={currentTrack}
+          isPlaying={isPlaying}
+          handleTrackClick={handleTrackClick}
+          combatActive={combatActive}
+          setCombatActive={sendCombatStateChange} // Use websocket function instead of local setter
+        />
         </div>
 
       </div>

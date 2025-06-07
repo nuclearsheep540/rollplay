@@ -89,6 +89,14 @@ async def websocket_endpoint(
                 "data": seat_layout
             }
             await manager.update_data(broadcast_message)
+        elif event_type == "combat_state":
+            event_data = data.get("data")
+
+            broadcast_message = {
+                "event_type": "combat_state",
+                "data": event_data
+            }
+            await manager.update_data(broadcast_message)
         else:
             # use for chat messages
             timestamp = datetime.now().strftime("%H:%M")
