@@ -38,13 +38,14 @@ export default function DMControlCenter({
       padding: 'calc(16px * var(--ui-scale))',
     }}>
       {/* Sticky Header */}
-      <div className="text-red-500 font-bold mb-4 uppercase tracking-wider flex items-center gap-2 flex-shrink-0 sticky top-0 bg-gradient-to-b from-red-900/15 to-slate-800/20 z-10 pb-2" style={{
+      <div className="text-red-500 font-bold mb-4 uppercase tracking-wider flex items-center gap-2 flex-shrink-0" style={{
         fontSize: 'calc(16px * var(--ui-scale))',
         marginBottom: 'calc(16px * var(--ui-scale))',
         gap: 'calc(8px * var(--ui-scale))',
         paddingBottom: 'calc(8px * var(--ui-scale))',
+        justifyContent: 'center'
       }}>
-        🎭 DM Command Center
+        DM Command Center
       </div>
 
       {/* Map Controls Section */}
