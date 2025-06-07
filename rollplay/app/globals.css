@@ -365,15 +365,15 @@ footer {
   
   /* Main Game Area Grid
      ========================================================================== */
-  .main-game-area {
-    flex: 1;
-    display: grid;
-    grid-template-columns: 280px 1fr 300px;
-    grid-template-rows: 1fr 280px;
-    grid-template-areas: 
-      "party-sidebar map-canvas dm-control-center"
-      "dice-portal roll-log dm-control-center";
-  }
+    .main-game-area {
+      flex: 1;
+      display: grid;
+      grid-template-columns: 280px 1fr 300px;
+      grid-template-rows: 1fr 280px;
+      grid-template-areas: 
+        "party-sidebar map-canvas initiative-tracker"
+        "dice-portal roll-log dm-control-center";
+    }
   
   /* Party Sidebar (Left Panel)
      ========================================================================== */
@@ -583,41 +583,22 @@ footer {
     margin-bottom: 12px;
   }
   
-  /* DM Control Center (Right Panel)
-     ========================================================================== */
-  .dm-control-center {
+/* DM Control Center - Now positioned in bottom right
+   ========================================================================== */
+   .dm-control-center {
     grid-area: dm-control-center;
     background: linear-gradient(180deg, rgba(220, 38, 38, 0.05) 0%, rgba(26,26,46,0.2) 100%);
     border-left: 1px solid rgba(220, 38, 38, 0.2);
-    padding: 20px 16px;
+    border-radius: 8px;
+    margin: 8px;
+    padding: 16px;
     display: flex;
     flex-direction: column;
     overflow-y: auto;
   }
   
-  .dm-control-center.hidden {
-    display: none;
-  }
-  
-  .dm-header {
-    color: #dc2626;
-    font-size: 16px;
-    font-weight: 700;
-    margin-bottom: 20px;
-    text-transform: uppercase;
-    letter-spacing: 0.5px;
-    display: flex;
-    align-items: center;
-    gap: 8px;
-  }
-  
   /* Initiative Section
      ========================================================================== */
-  .initiative-section {
-    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
-    padding-bottom: 16px;
-    margin-bottom: 20px;
-  }
   
   .initiative-header {
     color: #f59e0b;
@@ -662,7 +643,62 @@ footer {
   .turn-item:hover {
     background: rgba(255, 255, 255, 0.08);
   }
+
+    /* Initiative Tracker - Standalone Version (outside DM panel)
+    ========================================================================== */
+  .initiative-tracker {
+    grid-area: initiative-tracker;
+    background: linear-gradient(180deg, rgba(0,0,0,0.4) 0%, rgba(26,26,46,0.2) 100%);
+    border-left: 1px solid rgba(255, 255, 255, 0.1);
+    padding: 20px 16px;
+    display: flex;
+    flex-direction: column;
+  }
   
+  .initiative-tracker .initiative-header {
+    color: #f59e0b;
+    font-size: 16px;
+    font-weight: 600;
+    margin-bottom: 20px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+  }
+  
+  .initiative-tracker .turn-order {
+    display: flex;
+    flex-direction: column;
+  }
+  
+  .initiative-tracker .turn-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 12px 16px;
+    margin-bottom: 8px;
+    border-radius: 8px;
+    font-size: 14px;
+    transition: all 0.2s ease;
+    cursor: pointer;
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+  }
+  
+  .initiative-tracker .turn-item.active {
+    background: rgba(74, 222, 128, 0.2);
+    border: 1px solid rgba(74, 222, 128, 0.4);
+    color: #4ade80;
+    font-weight: 600;
+  }
+  
+  .initiative-tracker .turn-item.upcoming {
+    background: rgba(255, 255, 255, 0.05);
+    color: #9ca3af;
+  }
+  
+  .initiative-tracker .turn-item:hover {
+    background: rgba(255, 255, 255, 0.08);
+  }
+
   /* DM Control Sections
      ========================================================================== */
   .control-section {
@@ -978,15 +1014,15 @@ footer {
      ========================================================================== */
   @media (max-width: 1200px) {
     .main-game-area {
-      grid-template-columns: 1fr;
-      grid-template-rows: auto auto 1fr auto auto;
+      flex: 1;
+      display: grid;
+      grid-template-columns: 280px 1fr 300px;
+      grid-template-rows: 1fr 280px;
       grid-template-areas: 
-        "party-sidebar"
-        "dm-control-center"
-        "map-canvas"
-        "dice-portal"
-        "roll-log";
+        "party-sidebar map-canvas initiative-tracker"
+        "dice-portal roll-log dm-control-center";
     }
+    
     
     .party-sidebar {
       max-height: 200px;
@@ -1032,4 +1068,16 @@ footer {
     .log-entry {
       border-left-width: 4px;
     }
+  }
+
+  /* EMPTY SEATS */
+  .empty-seat.disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+    border-color: rgba(107, 114, 128, 0.3);
+  }
+  
+  .empty-seat.disabled:hover {
+    background: rgba(74, 222, 128, 0.05);
+    border-color: rgba(107, 114, 128, 0.3);
   }

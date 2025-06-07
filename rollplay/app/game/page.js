@@ -5,6 +5,7 @@ import { useSearchParams } from "next/navigation";
 
 import PlayerCard from "../components/PlayerCard";
 import ChatMessages from '../components/ChatMessages';
+import DMControlCenter from '../components/DMControlCenter'; // Import the new component
 
 function Params() {
   return useSearchParams()
@@ -28,8 +29,8 @@ export default function Game() {
   // who generated the room
   const [host, setHost] = useState("")
 
-  // max number of available spots in a lobby
-  const [seats, setSeats] = useState(["",]) 
+  // UNIFIED STRUCTURE - Replaces both seats and partyMembers
+  const [gameSeats, setGameSeats] = useState([]);
 
   // State management for TabletopInterface
   const [currentTurn, setCurrentTurn] = useState('Thorin');
@@ -52,18 +53,29 @@ export default function Game() {
     { name: 'Sister Meredith', initiative: 8, active: false }
   ]);
 
-  const [partyMembers] = useState([
-    { name: 'Thorin Ironbeard', class: 'Dwarf Fighter', level: 3, hp: 34, maxHp: 40 },
-    { name: 'Elara Moonwhisper', class: 'Elf Wizard', level: 3, hp: 18, maxHp: 30 },
-    { name: 'Finn Lightfoot', class: 'Halfling Rogue', level: 2, hp: 23, maxHp: 24 },
-    { name: 'Sister Meredith', class: 'Human Cleric', level: 3, hp: 12, maxHp: 30 }
-  ]);
-
   const [currentTrack, setCurrentTrack] = useState('🏰 Tavern Ambience');
   const [isPlaying, setIsPlaying] = useState(true);
 
   const logRef = useRef(null);
 
+  // Helper function to get character data
+  const getCharacterData = (playerName) => {
+    const characterDatabase = {
+      'Thorin': { class: 'Dwarf Fighter', level: 3, hp: 34, maxHp: 40 },
+      'Elara': { class: 'Elf Wizard', level: 3, hp: 18, maxHp: 30 },
+      'Finn': { class: 'Halfling Rogue', level: 2, hp: 23, maxHp: 24 },
+      'Sister Meredith': { class: 'Human Cleric', level: 3, hp: 12, maxHp: 30 }
+    };
+    
+    return characterDatabase[playerName] || {
+      class: 'Adventurer',
+      level: 1,
+      hp: 10,
+      maxHp: 10
+    };
+  };
+
+  // UPDATED onLoad function to use unified structure
   async function onLoad(roomId) {
     const req = await fetch(`api/game/${roomId}`)
     if (req.status === 404) {
@@ -72,26 +84,26 @@ export default function Game() {
       return
     }
 
-    await req.json().then((res)=>{
+    await req.json().then((res) => {
       setHost(res["player_name"])
-
-      // TODO: get current seats
-      // TODO: limit seat changes?
-
-      var plyrs = ["empty",]
-      for (let i=1; i < res["max_players"]; i++) {
-        plyrs = [...plyrs, "empty"]
+      
+      // Create unified seat structure
+      const initialSeats = [];
+      for (let i = 0; i < res["max_players"]; i++) {
+        initialSeats.push({
+          seatId: i,
+          playerName: "empty",
+          characterData: null,
+          isActive: false
+        });
       }
-      setSeats([...plyrs])
+      
+      setGameSeats(initialSeats);
     })
   }
   
   // initialise the game lobby
   useEffect(() => {
-
-    // cant use SearchParams in a use effect
-    // or revert and ignore https://nextjs.org/docs/messages/missing-suspense-with-csr-bailout
-
     const roomId = params.get('roomId')
     const thisPlayer = params.get('playerName')
     setRoomId(roomId)
@@ -101,17 +113,14 @@ export default function Game() {
     onLoad(roomId)
 
     // establishes websocket for this lobby
-    // Determine the appropriate protocol based on the current page
     const socketProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-    // Build the URL dynamically using the window host
     const socketUrl = `${socketProtocol}//${window.location.host}/ws/`;
 
     const url = `${socketUrl}${roomId}?player_name=${thisPlayer}`
     setWebSocket(
       new WebSocket(url)
-      )
-    },[]
-  )
+    )
+  }, [])
 
   // Auto-scroll log to bottom when new entries are added
   useEffect(() => {
@@ -120,27 +129,37 @@ export default function Game() {
     }
   }, [rollLog]);
 
+  // UPDATED websocket handler for unified structure
   if (webSocket) {
-    webSocket.onmessage = (event)=>{
+    webSocket.onmessage = (event) => {
       const json_data = JSON.parse(event.data)
       const event_type = json_data["event_type"]
       console.log("NEW EVENT", json_data)
       
       if (event_type == "seat_change") {
-        console.log("recieved a new message with seat change: ", json_data["data"])
-        setSeats([...json_data["data"]]);
+        console.log("received a new message with seat change: ", json_data["data"])
+        
+        // Convert websocket data back to unified structure
+        const updatedSeats = json_data["data"].map((playerName, index) => ({
+          seatId: index,
+          playerName: playerName,
+          characterData: playerName !== "empty" ? getCharacterData(playerName) : null,
+          isActive: false // Reset turn state, will be managed by initiative
+        }));
+        
+        setGameSeats(updatedSeats);
         return
       }
 
       if (event_type == "chat_message") {
-        setChatLog(
-          [...chatLog,
-            {
-              "player_name": json_data["player_name"],
-              "chat_message": json_data["data"],
-              "timestamp": json_data["utc_timestamp"]
-            }
-          ])
+        setChatLog([
+          ...chatLog,
+          {
+            "player_name": json_data["player_name"],
+            "chat_message": json_data["data"],
+            "timestamp": json_data["utc_timestamp"]
+          }
+        ])
         return
       }
     }
@@ -154,11 +173,20 @@ export default function Game() {
     setChatMsg("")
   }
 
-  function sendSeatChange(seat) {
-    console.log("Sending seat layout to WS: ", seat)
-    webSocket.send(JSON.stringify(
-      {"event_type": "seat_change", "data": seat})
-    )
+  // UPDATED sendSeatChange function
+  function sendSeatChange(newSeats) {
+    console.log("Sending seat layout to WS: ", newSeats)
+    
+    // Convert to your current websocket format (array of player names)
+    const seatArray = newSeats.map(seat => seat.playerName);
+    
+    webSocket.send(JSON.stringify({
+      "event_type": "seat_change", 
+      "data": seatArray
+    }));
+    
+    // Update local state
+    setGameSeats(newSeats);
   }
 
   // Add entry to roll log
@@ -248,21 +276,6 @@ export default function Game() {
     return <div>Loading...</div>;
   }
 
-  // Helper logic for PlayerCard
-  // Get player character data (replace with your actual data source)
-  const getPlayerData = (playerName) => {
-    // This is where you'd fetch from your backend or state
-    // For now, return some default data or null
-    const playerCharacters = {
-      'Thorin': { class: 'Dwarf Fighter', level: 3, hp: 34, maxHp: 40 },
-      'Elara': { class: 'Elf Wizard', level: 3, hp: 18, maxHp: 30 },
-      'Finn': { class: 'Halfling Rogue', level: 2, hp: 23, maxHp: 24 },
-      'Sister Meredith': { class: 'Human Cleric', level: 3, hp: 12, maxHp: 30 }
-    };
-    
-    return playerCharacters[playerName] || null;
-  };
-
   // Handle dice rolls from PlayerCard components
   const handlePlayerDiceRoll = (playerName, seatId) => {
     // This replaces your dice portal logic
@@ -287,8 +300,7 @@ export default function Game() {
     }
   };
 
-
-  // MAIN RENDER - Fixed structure
+  // MAIN RENDER - FIXED STRUCTURE
   return (
     <div className="game-interface">
       {/* Top Command Bar */}
@@ -306,36 +318,32 @@ export default function Game() {
         </div>
       </div>
 
-      {/* Main Game Area */}
+      {/* Main Game Area - FIXED GRID STRUCTURE */}
       <div className="main-game-area">
         {/* Left Sidebar - Party Overview */}
         <div className="party-sidebar">
           <div className="party-header">
             <span>Party</span>
             <span className="seat-indicator">
-              {seats.filter(seat => seat !== "empty").length}/{seats.length} Seats
+              {gameSeats.filter(seat => seat.playerName !== "empty").length}/{gameSeats.length} Seats
             </span>
           </div>
           
-          {/* Render all seats using your PlayerCard component */}
-          {partyMembers.map((seat, index) => {
-            // Check if this player is sitting in this seat
-            const isSitting = seat === thisPlayer;
-            
-            // Get character data if available (you might want to fetch this from your backend)
-            const playerData = seat !== "empty" ? getPlayerData(seat) : null;
+          {/* Render all seats using unified structure */}
+          {gameSeats.map((seat) => {
+            const isSitting = seat.playerName === thisPlayer;
             
             return (
               <PlayerCard
-                key={index}
-                seatId={index}
-                seats={seats}
+                key={seat.seatId}
+                seatId={seat.seatId}
+                seats={gameSeats}
                 thisPlayer={thisPlayer}
                 isSitting={isSitting}
                 sendSeatChange={sendSeatChange}
                 currentTurn={currentTurn}
                 onDiceRoll={handlePlayerDiceRoll}
-                playerData={playerData}
+                playerData={seat.characterData}
               />
             );
           })}
@@ -352,100 +360,20 @@ export default function Game() {
           </div>
         </div>
 
-        {/* Right Sidebar - DM Control Center */}
-        <div className={`dm-control-center ${!isDM ? 'hidden' : ''}`}>
-          <div className="dm-header">
-            🎭 DM Command Center
-          </div>
-
-          {/* Initiative Order - At the top */}
-          <div className="initiative-section">
-            <div className="initiative-header">⚡ Initiative Order</div>
-            <div className="turn-order">
-              {initiativeOrder.map((item, index) => (
-                <div 
-                  key={index}
-                  className={`turn-item ${item.active ? 'active' : 'upcoming'}`}
-                  onClick={() => handleInitiativeClick(item.name)}
-                >
-                  <span>{item.name}</span>
-                  <span>{item.initiative}</span>
-                </div>
-              ))}
-            </div>
-          </div>
-
-          <div className="control-section">
-            <div className="section-title">🗺️ Map Controls</div>
-            <button className="dm-btn map-control-btn">📁 Upload Map</button>
-            <button className="dm-btn map-control-btn">💾 Load Map</button>
-            <button className="dm-btn map-control-btn">📏 Grid Settings</button>
-          </div>
-
-          <div className="control-section">
-            <div className="section-title">🎲 Roll Management</div>
-            <button className="dm-btn roll-prompt-btn" onClick={() => promptPlayerRoll('Ability Check')}>
-              🎯 Prompt Ability Check
-            </button>
-            <button className="dm-btn roll-prompt-btn" onClick={() => promptPlayerRoll('Saving Throw')}>
-              🛡️ Prompt Saving Throw
-            </button>
-            <button className="dm-btn roll-prompt-btn" onClick={() => promptPlayerRoll('Attack Roll')}>
-              ⚔️ Prompt Attack Roll
-            </button>
-            <button className="dm-btn roll-prompt-btn" onClick={() => promptPlayerRoll('Damage Roll')}>
-              💥 Prompt Damage Roll
-            </button>
-            <button className="dm-btn roll-prompt-btn" onClick={() => promptPlayerRoll('Initiative')}>
-              ⚡ Prompt Initiative
-            </button>
-            <button className="dm-btn roll-prompt-btn" onClick={() => promptPlayerRoll('Skill Check')}>
-              📊 Prompt Skill Check
-            </button>
-            <button className="dm-btn roll-prompt-btn" onClick={() => promptPlayerRoll('Hit Dice')}>
-              ❤️ Prompt Hit Dice
-            </button>
-            <button className="dm-btn roll-prompt-btn" onClick={() => promptPlayerRoll('Death Save')}>
-              💀 Prompt Death Save
-            </button>
-          </div>
-
-          <div className="control-section">
-            <div className="section-title">🎵 Audio Tracks</div>
-            <div className="audio-player">
-              {[
-                { name: '🏰 Tavern Ambience', duration: '3:42 / 8:15' },
-                { name: '⚔️ Combat Music', duration: '0:00 / 4:32' },
-                { name: '🌲 Forest Sounds', duration: '0:00 / 12:08' }
-              ].map((track, index) => (
-                <div 
-                  key={index}
-                  className={`track-item ${currentTrack === track.name && isPlaying ? 'active' : ''}`}
-                >
-                  <div className="track-info">
-                    <div className="track-name">{track.name}</div>
-                    <div className="track-duration">{track.duration}</div>
-                  </div>
-                  <div className="track-controls">
-                    <button 
-                      className={`audio-btn ${currentTrack === track.name && isPlaying ? 'pause' : 'play'}`}
-                      onClick={() => handleTrackClick(track.name)}
-                    >
-                      {currentTrack === track.name && isPlaying ? '⏸️' : '▶️'}
-                    </button>
-                  </div>
-                </div>
-              ))}
-            </div>
-            <button className="dm-btn">📁 Upload Audio</button>
-            <button className="dm-btn">💾 Load Audio</button>
-          </div>
-
-          <div className="control-section">
-            <div className="section-title">👥 Party Management</div>
-            <button className="dm-btn">🪑 Manage Seats</button>
-            <button className="dm-btn">🚪 Kick Player</button>
-            <button className="dm-btn">💊 Adjust HP</button>
+        {/* Right Sidebar - Initiative Tracker */}
+        <div className="initiative-tracker">
+          <div className="initiative-header">⚡ Initiative Order</div>
+          <div className="turn-order">
+            {initiativeOrder.map((item, index) => (
+              <div 
+                key={index}
+                className={`turn-item ${item.active ? 'active' : 'upcoming'}`}
+                onClick={() => handleInitiativeClick(item.name)}
+              >
+                <span>{item.name}</span>
+                <span>{item.initiative}</span>
+              </div>
+            ))}
           </div>
         </div>
 
@@ -484,6 +412,15 @@ export default function Game() {
             ))}
           </div>
         </div>
+
+        {/* DM Control Center - Bottom Right - NOW A SEPARATE COMPONENT */}
+        <DMControlCenter
+          isDM={isDM}
+          promptPlayerRoll={promptPlayerRoll}
+          currentTrack={currentTrack}
+          isPlaying={isPlaying}
+          handleTrackClick={handleTrackClick}
+        />
       </div>
     </div>
   );
