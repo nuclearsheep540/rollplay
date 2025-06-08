@@ -1,12 +1,14 @@
 'use client'
 
-import { React, useEffect, useState, useRef } from 'react'
+import { React, useEffect, useState } from 'react'
 import { useSearchParams } from "next/navigation";
 
 import PlayerCard from "../components/PlayerCard";
 import ChatMessages from '../components/ChatMessages';
 import DMControlCenter from '../components/DMControlCenter';
 import HorizontalInitiativeTracker from '../components/HorizontalInitiativeTracker';
+import AdventureLog from '../components/AdventureLog';
+import { useWebSocket } from '../hooks/useWebSocket';
 
 function Params() {
   return useSearchParams()
@@ -17,7 +19,6 @@ export default function Game() {
   const params = Params(); 
 
   const [room404, setRoom404] = useState(false)
-  const [webSocket, setWebSocket] = useState()
   const [thisPlayer, setThisPlayer] = useState()
   const [roomId, setRoomId] = useState()
 
@@ -48,8 +49,6 @@ export default function Game() {
   const [currentTrack, setCurrentTrack] = useState('🏰 Tavern Ambience');
   const [isPlaying, setIsPlaying] = useState(true);
 
-  const logRef = useRef(null);
-
   // Helper function to get character data
   const getCharacterData = (playerName) => {
     const characterDatabase = {
@@ -63,6 +62,130 @@ export default function Game() {
       maxHp: 10
     };
   };
+
+  // WebSocket callbacks
+  const webSocketCallbacks = {
+    onSeatChange: (data) => {
+      console.log("received a new message with seat change:", data);
+      
+      // Convert websocket data back to unified structure
+      const updatedSeats = data.map((playerName, index) => ({
+        seatId: index,
+        playerName: playerName,
+        characterData: playerName !== "empty" ? getCharacterData(playerName) : null,
+        isActive: false // Reset turn state, will be managed by initiative
+      }));
+      
+      setGameSeats(updatedSeats);
+    },
+
+    onSeatCountChange: (data) => {
+      console.log("received seat count change:", data);
+      const { max_players, new_seats, updated_by } = data;
+      
+      // Convert to unified structure
+      const updatedSeats = new_seats.map((playerName, index) => ({
+        seatId: index,
+        playerName: playerName,
+        characterData: playerName !== "empty" ? getCharacterData(playerName) : null,
+        isActive: false
+      }));
+      
+      setGameSeats(updatedSeats);
+      
+      // Add to adventure log if not the person who made the change
+      if (updated_by !== thisPlayer) {
+        const currentCount = gameSeats.length;
+        const action = max_players > currentCount ? "increased" : "decreased";
+        addToLog(`${updated_by} ${action} party seats to ${max_players}`, 'system');
+      }
+    },
+
+    onChatMessage: (data) => {
+      setChatLog([
+        ...chatLog,
+        {
+          "player_name": data["player_name"],
+          "chat_message": data["data"],
+          "timestamp": data["utc_timestamp"]
+        }
+      ]);
+    },
+
+    onPlayerConnected: (data) => {
+      console.log("received player connection:", data);
+      const { connected_player } = data;
+      
+      // Only log if not the current player (avoid logging your own connection)
+      if (connected_player !== thisPlayer) {
+        addToLog(`${connected_player} connected`, 'system');
+      }
+    },
+
+    onPlayerKicked: (data) => {
+      console.log("received player kick:", data);
+      const { kicked_player } = data;
+      addToLog(`${kicked_player} has been kicked from the party.`, 'system');
+
+      // If this player was kicked, go back in browser history
+      if (kicked_player === thisPlayer) {
+        window.history.replaceState(null, '', '/');
+        window.history.back();
+        return;
+      }
+    },
+
+    onCombatStateChange: (data) => {
+      console.log("received combat state change:", data);
+      const { combatActive: newCombatState } = data;
+      
+      setCombatActive(newCombatState);
+      
+      // Add to adventure log
+      const action = newCombatState ? "initiated" : "ended";
+      const message = `Combat ${action}`;
+      addToLog(message, 'system');
+    },
+
+    onPlayerDisconnected: (data) => {
+      console.log("received player disconnect:", data);
+      const disconnected_player = data["disconnected_player"];
+    
+      // Find and empty the seat of the disconnected player
+      const updatedSeats = gameSeats.map(seat => 
+        seat.playerName === disconnected_player 
+          ? { ...seat, playerName: "empty", characterData: null, isActive: false }
+          : seat
+      );
+
+      // Send updated seat layout to all players
+      sendSeatChange(updatedSeats);
+
+      // Update local state
+      setGameSeats(updatedSeats);
+
+      if (disconnected_player !== thisPlayer) {
+        addToLog(`${disconnected_player} disconnected`, 'system');
+      }
+    },
+
+    onDiceRoll: (data) => {
+      console.log("received dice roll:", data);
+      const { player, dice, result } = data;
+      addToLog(`${dice}: ${result}`, 'dice', player);
+    }
+  };
+
+  // Initialize WebSocket hook
+  const {
+    webSocket,
+    isConnected,
+    sendSeatChange,
+    sendSeatCountChange,
+    sendCombatStateChange,
+    sendPlayerKick,
+    sendDiceRoll
+  } = useWebSocket(roomId, thisPlayer, webSocketCallbacks);
 
   // Copy room code to clipboard
   const copyRoomCode = async () => {
@@ -170,30 +293,9 @@ export default function Game() {
 
     // fetches the room ID, and loads data
     onLoad(roomId)
-
-    // establishes websocket for this lobby
-    const socketProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-    const socketUrl = `${socketProtocol}//${window.location.host}/ws/`;
-    const url = `${socketUrl}${roomId}?player_name=${thisPlayer}`
-  
-    const ws = new WebSocket(url);
-    setWebSocket(ws);
-  
-    // Cleanup function to close websocket on unmount
-    return () => {
-      console.log("Cleaning up websocket"); // DEBUG
-      ws.close();
-    };
   }, [])
 
-  // Auto-scroll log to TOP when new entries are added (newest first)
-  useEffect(() => {
-    if (logRef.current) {
-      logRef.current.scrollTop = 0; // Scroll to top for newest messages
-    }
-  }, [rollLog]);
-
-  // NEW FUNCTION: Seat count management
+  // UPDATED: Seat count management
   const setSeatCount = async (newSeatCount) => {
     try {
       console.log(`Updating seat count to: ${newSeatCount}`);
@@ -233,22 +335,15 @@ export default function Game() {
         throw new Error('Failed to update seat count in database');
       }
 
-      // Send websocket update
-      webSocket.send(JSON.stringify({
-        "event_type": "seat_count_change",
-        "data": {
-          "max_players": newSeatCount,
-          "new_seats": newSeats.map(seat => seat.playerName), // Current format for compatibility
-          "updated_by": thisPlayer
-        }
-      }));
+      // Send websocket update using hook method
+      sendSeatCountChange(newSeatCount, newSeats);
 
       // Update local state
       setGameSeats(newSeats);
 
       // Add to adventure log
       const action = newSeatCount > gameSeats.length ? "increased" : "decreased";
-      addToLog(`<strong>${thisPlayer}:</strong> ${action} party seats to ${newSeatCount}`, 'system');
+      addToLog(`${thisPlayer} ${action} party seats to ${newSeatCount}`, 'system');
 
     } catch (error) {
       console.error('Error updating seat count:', error);
@@ -301,7 +396,7 @@ export default function Game() {
     return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
   };
 
-  // NEW FUNCTION: Handle player kick
+  // UPDATED: Handle player kick
   const handleKickPlayer = async (playerToKick, disconnected) => {
     try {
       
@@ -312,19 +407,11 @@ export default function Game() {
           : seat
       );
   
-      // Send kick event via websocket (simplified format for your backend)
-      webSocket.send(JSON.stringify({
-        "event_type": "player_kicked",
-        "data": {
-          "kicked_player": playerToKick
-        }
-      }));
+      // Send kick event via websocket using hook method
+      sendPlayerKick(playerToKick);
   
-      // Send updated seat layout
-      webSocket.send(JSON.stringify({
-        "event_type": "seat_change",
-        "data": updatedSeats.map(seat => seat.playerName)
-      }));
+      // Send updated seat layout using hook method
+      sendSeatChange(updatedSeats);
   
       // Update local state
       setGameSeats(updatedSeats);
@@ -342,157 +429,6 @@ export default function Game() {
     }
   };
 
-  // Function to send combat state changes via websocket
-  function sendCombatStateChange(newCombatState) {
-    console.log("Sending combat state change to WS: ", newCombatState)
-    
-    webSocket.send(JSON.stringify({
-      "event_type": "combat_state", 
-      "data": {
-        "combatActive": newCombatState
-      }
-    }));
-    
-    // Update local state
-    setCombatActive(newCombatState);
-  }
-
-  // UPDATED websocket handler with seat management
-  if (webSocket) {
-    webSocket.onmessage = (event) => {
-      const json_data = JSON.parse(event.data)
-      const event_type = json_data["event_type"]
-      console.log("NEW EVENT", json_data)
-      
-      if (event_type == "seat_change") {
-        console.log("received a new message with seat change: ", json_data["data"])
-        
-        // Convert websocket data back to unified structure
-        const updatedSeats = json_data["data"].map((playerName, index) => ({
-          seatId: index,
-          playerName: playerName,
-          characterData: playerName !== "empty" ? getCharacterData(playerName) : null,
-          isActive: false // Reset turn state, will be managed by initiative
-        }));
-        
-        setGameSeats(updatedSeats);
-        return
-      }
-
-      // NEW: Handle seat count changes
-      if (event_type == "seat_count_change") {
-        console.log("received seat count change: ", json_data["data"]);
-        const { max_players, new_seats, updated_by } = json_data["data"];
-        
-        // Convert to unified structure
-        const updatedSeats = new_seats.map((playerName, index) => ({
-          seatId: index,
-          playerName: playerName,
-          characterData: playerName !== "empty" ? getCharacterData(playerName) : null,
-          isActive: false
-        }));
-        
-        setGameSeats(updatedSeats);
-        
-        // Add to adventure log if not the person who made the change
-        if (updated_by !== thisPlayer) {
-          const currentCount = gameSeats.length;
-          const action = max_players > currentCount ? "increased" : "decreased";
-          addToLog(`<strong>${updated_by}:</strong> ${action} party seats to ${max_players}`, 'system');
-        }
-        
-        return;
-      }
-
-      if (event_type == "chat_message") {
-        setChatLog([
-          ...chatLog,
-          {
-            "player_name": json_data["player_name"],
-            "chat_message": json_data["data"],
-            "timestamp": json_data["utc_timestamp"]
-          }
-        ])
-        return
-      }
-
-      // NEW: Handle player kick
-      if (event_type == "player_kicked") {
-        console.log("received player kick: ", json_data["data"]);
-        const { kicked_player } = json_data["data"];
-        addToLog(`${kicked_player} has been kicked from the party.`);
-
-        // If this player was kicked, go back in browser history
-        if (kicked_player === thisPlayer) {
-          // Replace current page in browser history with home page
-          window.history.replaceState(null, '', '/');
-          // Then go back, which will now go to the page before they entered the game
-          window.history.back();
-          return;
-        }
-      return;
-      }
-
-      // Handle combat state changes
-      if (event_type == "combat_state") {
-        console.log("received combat state change: ", json_data["data"])
-        const { combatActive: newCombatState } = json_data["data"];
-        
-        setCombatActive(newCombatState);
-        
-        // Add to adventure log
-        const action = newCombatState ? "initiated" : "ended";
-        const message = `Combat ${action}`;
-        addToLog(message, 'system');
-        return
-      }
-
-      // Handle disconnects
-      if (event_type == "player_disconnected") {
-        console.log("received combat state change: ", json_data["data"])
-        const disconnected_player = json_data["data"]["disconnected_player"];
-      
-        // Find and empty the seat of the disconnected player
-  const updatedSeats = gameSeats.map(seat => 
-    seat.playerName === disconnected_player 
-      ? { ...seat, playerName: "empty", characterData: null, isActive: false }
-      : seat
-  );
-
-        // Send updated seat layout to all players
-        webSocket.send(JSON.stringify({
-          "event_type": "seat_change",
-          "data": updatedSeats.map(seat => seat.playerName)
-        }));
-
-        // Update local state
-        setGameSeats(updatedSeats)
-
-        if (disconnected_player !== thisPlayer) {
-          addToLog(`${disconnected_player} disconnected`, 'system');
-        }
-        return
-      }
-    }
-  }
-
-
-  // UPDATED sendSeatChange function
-  function sendSeatChange(newSeats) {
-    console.log("Sending seat layout to WS: ", newSeats)
-    
-    // Convert to your current websocket format (array of player names)
-    const seatArray = newSeats.map(seat => seat.playerName);
-    
-    webSocket.send(JSON.stringify({
-      "event_type": "seat_change", 
-      "data": seatArray
-    }));
-    
-    // Update local state
-    setGameSeats(newSeats);
-  }
-
   const addToLog = (message, type, playerName = null) => {
     const now = new Date();
     const timestamp = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
@@ -506,9 +442,6 @@ export default function Game() {
     };
     
     setRollLog(prev => [...prev, newEntry]);
-    
-    // Note: The backend will also log this via websocket, so we might get duplicates
-    // You might want to add deduplication logic here
   };
 
   // Show dice portal for player rolls
@@ -524,14 +457,14 @@ export default function Game() {
 
   // DM prompts player to roll
   const promptPlayerRoll = (rollType) => {
-    addToLog(`<strong>DM:</strong> ${currentTurn}, please roll a ${rollType}`, 'system');
+    addToLog(`DM: ${currentTurn}, please roll a ${rollType}`, 'system');
     showDicePortal(currentTurn, rollType);
   };
 
   // Handle dice roll
   const rollDice = () => {
     const result = Math.floor(Math.random() * 20) + 1;
-    addToLog(`<strong>${currentTurn}:</strong> d20: ${result}`, 'player-roll');
+    addToLog(`d20: ${result}`, 'dice', currentTurn);
     
     setTimeout(() => {
       hideDicePortal();
@@ -583,25 +516,15 @@ export default function Game() {
     return <div>Loading...</div>;
   }
 
-  // Handle dice rolls from PlayerCard components
+  // UPDATED: Handle dice rolls from PlayerCard components
   const handlePlayerDiceRoll = (playerName, seatId) => {
-    // This replaces your dice portal logic
     if (playerName === currentTurn) {
       // Trigger dice roll
       const result = Math.floor(Math.random() * 20) + 1;
-      addToLog(`<strong>${playerName}:</strong> d20: ${result}`, 'player-roll');
+      addToLog(`d20: ${result}`, 'dice', playerName);
       
-      // Send to websocket
-      if (webSocket) {
-        webSocket.send(JSON.stringify({
-          "event_type": "dice_roll",
-          "data": {
-            "player": playerName,
-            "dice": "d20",
-            "result": result
-          }
-        }));
-      }
+      // Send to websocket using hook method
+      sendDiceRoll(playerName, "d20", result);
     } else {
       console.log(`It's not ${playerName}'s turn!`);
     }
@@ -686,24 +609,11 @@ export default function Game() {
             );
           })}
 
-          {/* Adventure Log - Now in left panel with hidden scrollbar and newest first */}
-          <div className="adventure-log-section mt-6">
-            <div className="log-header">
-              📜 Adventure Log
-              <span style={{ fontSize: '10px', color: '#6b7280' }}>(Live)</span>
-            </div>
-            <div className="log-entries" ref={logRef}>
-              {rollLog.slice().reverse().map((entry) => (
-                <div key={entry.id} className={`log-entry ${entry.type}`}>
-                  <div 
-                    className="log-entry-content"
-                    dangerouslySetInnerHTML={{ __html: entry.message }}
-                  />
-                  <div className="log-entry-timestamp">{entry.timestamp}</div>
-                </div>
-              ))}
-            </div>
-          </div>
+          {/* NEW: Clean AdventureLog component */}
+          <AdventureLog 
+            rollLog={rollLog}
+            gameSeats={gameSeats}
+          />
         </div>
 
         {/* GRID POSITION 2: Center Column - map-canvas with horizontal initiative */}

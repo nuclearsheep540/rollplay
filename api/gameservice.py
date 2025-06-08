@@ -14,8 +14,9 @@ class GameSettings(BaseModel):
 
     #TODO: seats: list, for updating over WS on seat changes ??
     max_players: int
-    player_name: str
+    seat_layout: list
     created_at: datetime
+    player_name: str
 
 
 class GameService:
@@ -69,39 +70,86 @@ class GameService:
         return id
 
     @staticmethod
-    def update_seat_count(room_id, new_max):
-        collection = GameService._get_active_session()
-
-        result = collection.update_one(
-            {"_id": room_id},
-            {
-                "$set": {
-                    "max_players": new_max,
-                }
-            }
-        )
-        return str(result)
-
-    @staticmethod
     def update_seat_layout(room_id: str, seat_layout: list):
         """Update the seat layout for a room"""
         collection = GameService._get_active_session()
-
+        
+        # Handle ObjectId conversion like get_room does
+        try:
+            oid = ObjectId(oid=room_id)
+            filter_criteria = {"_id": oid}
+        except Exception:
+            # Fall back to string ID (for test rooms or non-ObjectId rooms)
+            filter_criteria = {"_id": room_id}
+        
+        print(f"🔄 Updating seat layout with filter: {filter_criteria}")
+        print(f"📝 New seat layout: {seat_layout}")
+        
         result = collection.update_one(
-            {"_id": room_id},
+            filter_criteria,
             {
                 "$set": {
                     "seat_layout": seat_layout,
                 }
             }
         )
+        
+        print(f"📊 Update result: matched={result.matched_count}, modified={result.modified_count}")
+        
+        if result.matched_count == 0:
+            print(f"❌ No document found with _id: {room_id}")
+            raise Exception(f"Room {room_id} not found")
+        
+        if result.modified_count == 0:
+            print(f"⚠️ Document found but not modified (seat layout might be the same)")
+        
+        return str(result)
+
+    @staticmethod
+    def update_seat_count(room_id, new_max):
+        """Update the maximum number of seats for a room"""
+        collection = GameService._get_active_session()
+        
+        # Handle ObjectId conversion like get_room does
+        try:
+            oid = ObjectId(oid=room_id)
+            filter_criteria = {"_id": oid}
+        except Exception:
+            # Fall back to string ID (for test rooms or non-ObjectId rooms)
+            filter_criteria = {"_id": room_id}
+        
+        print(f"🔄 Updating seat count with filter: {filter_criteria}")
+        print(f"📝 New max players: {new_max}")
+        
+        result = collection.update_one(
+            filter_criteria,
+            {
+                "$set": {
+                    "max_players": new_max,
+                }
+            }
+        )
+        
+        print(f"📊 Update result: matched={result.matched_count}, modified={result.modified_count}")
+        
+        if result.matched_count == 0:
+            print(f"❌ No document found with _id: {room_id}")
+            raise Exception(f"Room {room_id} not found")
+        
         return str(result)
 
     @staticmethod
     def get_seat_layout(room_id: str) -> list:
         """Get the current seat layout for a room"""
         collection = GameService._get_active_session()
-        room = collection.find_one({"_id": room_id})
+        
+        # Handle ObjectId conversion like get_room does
+        try:
+            oid = ObjectId(oid=room_id)
+            room = collection.find_one({"_id": oid})
+        except Exception:
+            room = collection.find_one({"_id": room_id})
+        
         if room and "seat_layout" in room:
             return room["seat_layout"]
         else:

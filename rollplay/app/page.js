@@ -23,7 +23,12 @@ export default function Home() {
   
     if (newRoom) {
       console.log(`requesting a new room for ${maxPlayers} players...`);
-      var payload = { "max_players": maxPlayers, "player_name": playerName };
+      var payload = { 
+        "max_players": maxPlayers,
+        "player_name": playerName,
+        "seat_layout": [""],
+        "created_at": new Date().toISOString() 
+      };
   
       try {
         const url = "/api/game/"
@@ -101,6 +106,7 @@ export default function Home() {
                   <label htmlFor="playerName" className="sr-only">
                   Player Name
                   </label>
+                </div>
                   <input
                   className="min-w-0 flex-auto rounded-md border-0 bg-white/5 px-3.5 py-2 text-white shadow-sm ring-1 ring-inset ring-white/10 focus:ring-2 focus:ring-inset focus:ring-orange-500 sm:text-sm sm:leading-6"
                   id="playerName"
@@ -111,25 +117,8 @@ export default function Home() {
                   placeholder="player name"
                   onChange={(e) => setPlayerName(e.target.value)}
                   />
-                </div>
-                {
-                newRoom &&
-                  <input
-                    className="min-w-0 flex-auto rounded-md border-0 bg-white/5 px-3.5 py-2 text-white shadow-sm ring-1 ring-inset ring-white/10 focus:ring-2 focus:ring-inset focus:ring-orange-500 sm:text-sm sm:leading-6"
-                    id="maxPlayers"
-                    name="maxPlayers"
-                    type="number"
-                    min="2"
-                    max="10"
-                    value={maxPlayers}
-                    required
-                    placeholder="number of players"
-                    onChange={(e) => setMaxPlayers(e.target.value)}
-                  />
-                }
                 {
                 existingRoom &&
-
                 <input
                   className={"min-w-0 flex-auto rounded-md border-0 bg-white/5 px-3.5 py-2 text-white shadow-sm ring-1 ring-inset " + (room404 == false ? "ring-white/10" : "ring-red-400")  + " focus:ring-2 focus:ring-inset focus:ring-orange-500 sm:text-sm sm:leading-6"}
                   id="roomId"
@@ -151,7 +140,6 @@ export default function Home() {
               </form>
               </section>
               }
-
           </div>
         </div>
         

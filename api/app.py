@@ -68,7 +68,6 @@ async def get_room_log_stats(room_id: str):
         return stats
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
-
 @app.put("/game/{room_id}/seats")
 async def update_seat_count(room_id: str, request: dict):
     """Update the maximum number of seats for a game room"""
@@ -81,8 +80,9 @@ async def update_seat_count(room_id: str, request: dict):
         if not isinstance(max_players, int) or max_players < 1 or max_players > 8:
             raise HTTPException(status_code=400, detail="Seat count must be between 1 and 8")
         
-        # Update MongoDB record
-        GameService.update_seat_count(room_id=check_room, new_max=max_players)
+        # FIXED: Pass room_id string, not check_room object
+        GameService.update_seat_count(room_id, max_players)  # Changed from room_id=check_room
+        
         return {
             "success": True,
             "room_id": room_id,
@@ -111,6 +111,71 @@ def gameservice_create(settings: GameSettings):
     new_room = GameService.create_room(settings=settings)
     return {"id": new_room}
 
+@app.put("/game/{room_id}/seat-layout")
+async def update_seat_layout(room_id: str, request: dict):
+    """Update the seat layout for a game room"""
+    try:
+        print(f"🔄 Received seat layout update request for room {room_id}")
+        print(f"📝 Request data: {request}")
+        
+        check_room = GameService.get_room(id=room_id)
+        if not check_room:
+            print(f"❌ Room {room_id} not found")
+            raise HTTPException(status_code=404, detail=f"Room {room_id} not found")
+            
+        seat_layout = request.get("seat_layout")
+        updated_by = request.get("updated_by")
+        
+        print(f"👤 Updated by: {updated_by}")
+        print(f"🪑 New seat layout: {seat_layout}")
+        
+        # Validate seat layout
+        if not isinstance(seat_layout, list):
+            print(f"❌ Invalid seat layout type: {type(seat_layout)}")
+            raise HTTPException(status_code=400, detail="Seat layout must be an array")
+        
+        # Get current max_players to validate layout length
+        current_max = check_room.get("max_players", 4)
+        if len(seat_layout) > current_max:
+            print(f"❌ Seat layout too long: {len(seat_layout)} > {current_max}")
+            raise HTTPException(
+                status_code=400, 
+                detail=f"Seat layout cannot exceed {current_max} seats"
+            )
+        
+        # Update MongoDB record
+        print(f"💾 Calling GameService.update_seat_layout({room_id}, {seat_layout})")
+        GameService.update_seat_layout(room_id, seat_layout)
+        print(f"✅ Successfully saved seat layout to database")
+        
+        # Log the change (only if there are actual players)
+        non_empty_seats = [seat for seat in seat_layout if seat != "empty"]
+        if non_empty_seats:  # Only log if there are actual players
+            player_list = ", ".join(non_empty_seats)
+            print(f"📜 Adding adventure log: Party updated: {player_list}")
+            add_adventure_log(
+                room_id=room_id,
+                message=f"Party updated: {player_list}",
+                log_type="system",
+                player_name=updated_by
+            )
+        
+        response_data = {
+            "success": True,
+            "room_id": room_id,
+            "seat_layout": seat_layout,
+            "updated_by": updated_by
+        }
+        print(f"✅ Returning response: {response_data}")
+        return response_data
+        
+    except HTTPException:
+        raise  # Re-raise HTTP exceptions
+    except Exception as e:
+        error_msg = f"❌ Unexpected error in update_seat_layout: {str(e)}"
+        print(error_msg)
+        logger.error(error_msg)
+        raise HTTPException(status_code=500, detail=str(e))
 
 class ConnectionManager:
     def __init__(self):
@@ -150,8 +215,27 @@ async def websocket_endpoint(
     player_name: str
 ):
     await manager.connect(websocket)
+
+    # NEW: Log player connection to database
+    add_adventure_log(
+        room_id=client_id,
+        message=f"{player_name} connected",
+        log_type="system",
+        player_name=player_name
+    )
     
+    # NEW: Broadcast connection event to all clients
+    connect_message = {
+        "event_type": "player_connected", 
+        "data": {
+            "connected_player": player_name
+        }
+    }
+    await manager.update_data(connect_message)
+  
     try:
+        # the switch statement should define the broadcase_message
+        # outside the switch we broadcast whatever got defined
         while True:
             data = await websocket.receive_json()
             event_type = data.get("event_type")
@@ -159,6 +243,8 @@ async def websocket_endpoint(
 
             if event_type == "seat_change":
                 seat_layout = data.get("data")
+                player_name_from_event = data.get("player_name", player_name)
+                
                 if not isinstance(seat_layout, list):
                     error_message = {
                         "event_type": "error",
@@ -167,17 +253,16 @@ async def websocket_endpoint(
                     await websocket.send_json(error_message)
                     continue
 
-                # Save to database
-                try:
-                    GameService.update_seat_layout(client_id, seat_layout)
-                except Exception as e:
-                    print(f"Failed to save seat layout: {e}")
-
+                # DON'T save to database here - it's already saved via HTTP PUT
+                # Just broadcast the change to all connected clients
+                print(f"📡 Broadcasting seat layout change for room {client_id}: {seat_layout}")
+                
                 broadcast_message = {
                     "event_type": "seat_change",
-                    "data": seat_layout
+                    "data": seat_layout,
+                    "player_name": player_name_from_event
                 }
-
+                            
             elif event_type == "combat_state":
                 # Log combat state changes
                 combat_active = event_data.get("combatActive", False)
