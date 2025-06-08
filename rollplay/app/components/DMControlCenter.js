@@ -32,54 +32,48 @@ export default function DMControlCenter({
   const [isRollPromptModalOpen, setIsRollPromptModalOpen] = useState(false);
   const [selectedPlayerForRoll, setSelectedPlayerForRoll] = useState(null);
   const [isDicePromptExpanded, setIsDicePromptExpanded] = useState(false);
+  const [customRollText, setCustomRollText] = useState('');
 
-  // D&D Roll Types
+  // D&D Roll Types - Simplified and Color Coded (Reordered)
   const rollTypes = {
-    'Saving Throws': [
-      { name: 'Strength Save', description: 'Resist being moved, grappled, or crushed' },
-      { name: 'Dexterity Save', description: 'Avoid traps, dodge area effects' },
-      { name: 'Constitution Save', description: 'Resist poison, disease, exhaustion' },
-      { name: 'Intelligence Save', description: 'Resist mental effects, illusions' },
-      { name: 'Wisdom Save', description: 'Resist charm, fear, perception tricks' },
-      { name: 'Charisma Save', description: 'Resist banishment, possession' }
-    ],
-    'Ability Checks': [
-      { name: 'Strength Check', description: 'Lifting, pushing, breaking things' },
-      { name: 'Dexterity Check', description: 'Acrobatics, stealth, sleight of hand' },
-      { name: 'Constitution Check', description: 'Endurance, holding breath' },
-      { name: 'Intelligence Check', description: 'Recall lore, solve puzzles' },
-      { name: 'Wisdom Check', description: 'Perception, insight, survival' },
-      { name: 'Charisma Check', description: 'Persuasion, deception, performance' }
-    ],
-    'Attack Rolls': [
-      { name: 'Melee Attack', description: 'Sword, club, fist attacks' },
-      { name: 'Ranged Attack', description: 'Bow, crossbow, thrown weapon' },
-      { name: 'Spell Attack', description: 'Magic missile, fire bolt, etc.' }
-    ],
-    'Skill Checks': [
-      { name: 'Acrobatics', description: 'Balance, tumbling, aerial maneuvers' },
-      { name: 'Athletics', description: 'Climbing, jumping, swimming' },
-      { name: 'Deception', description: 'Lying convincingly' },
-      { name: 'History', description: 'Recalling historical facts' },
-      { name: 'Insight', description: 'Reading people\'s intentions' },
-      { name: 'Intimidation', description: 'Influencing through threats' },
-      { name: 'Investigation', description: 'Finding clues, solving mysteries' },
-      { name: 'Medicine', description: 'Treating wounds, diagnosing illness' },
-      { name: 'Nature', description: 'Knowledge of animals, plants, weather' },
-      { name: 'Perception', description: 'Spotting hidden things' },
-      { name: 'Performance', description: 'Entertaining an audience' },
-      { name: 'Persuasion', description: 'Influencing through charm' },
-      { name: 'Religion', description: 'Knowledge of gods and rituals' },
-      { name: 'Sleight of Hand', description: 'Picking pockets, hiding objects' },
-      { name: 'Stealth', description: 'Moving unseen' },
-      { name: 'Survival', description: 'Tracking, navigation, foraging' }
-    ],
-    'Special Rolls': [
-      { name: 'Initiative', description: 'Determine turn order in combat' },
-      { name: 'Death Saving Throw', description: 'Stabilize when dying' },
-      { name: 'Concentration Check', description: 'Maintain spell concentration' },
-      { name: 'Inspiration Roll', description: 'Use inspiration die' }
-    ]
+    'Attack Rolls': {
+      color: 'green',
+      bgColor: 'rgba(34, 197, 94, 0.1)',
+      borderColor: 'rgba(34, 197, 94, 0.3)',
+      textColor: '#4ade80',
+      rolls: [
+        { name: 'Attack Roll', description: 'Roll to hit target (d20 + modifiers)' },
+        { name: 'Damage Roll', description: 'Roll for damage if attack hits' }
+      ]
+    },
+    'Ability Checks': {
+      color: 'blue',
+      bgColor: 'rgba(59, 130, 246, 0.1)',
+      borderColor: 'rgba(59, 130, 246, 0.3)',
+      textColor: '#60a5fa',
+      rolls: [
+        { name: 'Strength Check', description: 'Lifting, pushing, breaking' },
+        { name: 'Dexterity Check', description: 'Acrobatics, stealth' },
+        { name: 'Constitution Check', description: 'Endurance, holding breath' },
+        { name: 'Intelligence Check', description: 'Recall lore, solve puzzles' },
+        { name: 'Wisdom Check', description: 'Perception, insight' },
+        { name: 'Charisma Check', description: 'Persuasion, deception' }
+      ]
+    },
+    'Saving Throws': {
+      color: 'red',
+      bgColor: 'rgba(239, 68, 68, 0.1)',
+      borderColor: 'rgba(239, 68, 68, 0.3)',
+      textColor: '#f87171',
+      rolls: [
+        { name: 'Strength Save', description: 'Resist being moved or grappled' },
+        { name: 'Dexterity Save', description: 'Avoid traps and area effects' },
+        { name: 'Constitution Save', description: 'Resist poison and disease' },
+        { name: 'Intelligence Save', description: 'Resist mental effects' },
+        { name: 'Wisdom Save', description: 'Resist charm and fear' },
+        { name: 'Charisma Save', description: 'Resist banishment' }
+      ]
+    }
   };
 
   const toggleSection = (section) => {
@@ -105,6 +99,17 @@ export default function DMControlCenter({
       promptPlayerRoll(rollType, selectedPlayerForRoll);
       setIsRollPromptModalOpen(false);
       setSelectedPlayerForRoll(null);
+      setCustomRollText(''); // Clear custom text
+    }
+  };
+
+  // Function to send custom roll prompt
+  const sendCustomRollPrompt = () => {
+    if (selectedPlayerForRoll && promptPlayerRoll && customRollText.trim()) {
+      promptPlayerRoll(customRollText.trim(), selectedPlayerForRoll);
+      setIsRollPromptModalOpen(false);
+      setSelectedPlayerForRoll(null);
+      setCustomRollText(''); // Clear custom text
     }
   };
 
@@ -648,11 +653,11 @@ export default function DMControlCenter({
         )}
       </div>
 
-      {/* Roll Prompt Modal */}
+      {/* Roll Prompt Modal - Simplified and Color Coded */}
       {isRollPromptModalOpen && selectedPlayerForRoll && (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50">
           <div 
-            className="bg-slate-800 border border-amber-500/30 rounded-lg shadow-2xl max-w-4xl w-full mx-4 max-h-[80vh] overflow-y-auto"
+            className="bg-slate-800 border border-amber-500/30 rounded-lg shadow-2xl max-w-2xl w-full mx-4"
             style={{
               padding: 'calc(24px * var(--ui-scale))',
               borderRadius: 'calc(12px * var(--ui-scale))',
@@ -669,6 +674,7 @@ export default function DMControlCenter({
                 onClick={() => {
                   setIsRollPromptModalOpen(false);
                   setSelectedPlayerForRoll(null);
+                  setCustomRollText(''); // Clear custom text
                 }}
                 style={{
                   fontSize: 'calc(20px * var(--ui-scale))',
@@ -678,34 +684,48 @@ export default function DMControlCenter({
               </button>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              {Object.entries(rollTypes).map(([category, rolls]) => (
+            <div className="grid grid-cols-1 gap-6">
+              {Object.entries(rollTypes).map(([category, categoryData]) => (
                 <div key={category} className="space-y-3">
                   <h4 
-                    className="text-amber-400 font-semibold border-b border-amber-500/30 pb-2"
+                    className="font-semibold border-b pb-2"
                     style={{
                       fontSize: 'calc(16px * var(--ui-scale))',
+                      color: categoryData.textColor,
+                      borderBottomColor: categoryData.borderColor
                     }}
                   >
                     {category}
                   </h4>
-                  <div className="space-y-2">
-                    {rolls.map((roll) => (
+                  <div 
+                    className="grid grid-cols-2 gap-3"
+                    style={{
+                      display: 'grid',
+                      gridTemplateColumns: 'repeat(2, 1fr)',
+                      gap: `calc(12px * var(--ui-scale))`
+                    }}
+                  >
+                    {categoryData.rolls.map((roll) => (
                       <button
                         key={roll.name}
-                        className="w-full text-left p-3 bg-amber-500/10 border border-amber-500/30 text-amber-100 rounded transition-all duration-200 hover:bg-amber-500/20 hover:border-amber-500/50"
+                        className="w-full text-left p-3 rounded transition-all duration-200"
                         style={{
                           padding: 'calc(12px * var(--ui-scale))',
                           borderRadius: 'calc(8px * var(--ui-scale))',
                           fontSize: 'calc(14px * var(--ui-scale))',
+                          backgroundColor: categoryData.bgColor,
+                          border: `1px solid ${categoryData.borderColor}`,
+                          color: categoryData.textColor,
+                          cursor: 'pointer'
                         }}
                         onClick={() => sendRollPromptToPlayer(roll.name)}
                       >
-                        <div className="font-medium mb-1">{roll.name}</div>
+                        <div className="font-medium mb-1" style={{ userSelect: 'none' }}>{roll.name}</div>
                         <div 
-                          className="text-amber-300/70 text-sm"
+                          className="text-sm opacity-75"
                           style={{
                             fontSize: 'calc(12px * var(--ui-scale))',
+                            userSelect: 'none'
                           }}
                         >
                           {roll.description}
@@ -715,6 +735,74 @@ export default function DMControlCenter({
                   </div>
                 </div>
               ))}
+            </div>
+
+            {/* Custom Roll Section */}
+            <div className="space-y-3 mt-8 pt-6 border-t border-gray-600">
+              <h4 
+                className="font-semibold pb-2"
+                style={{
+                  fontSize: 'calc(16px * var(--ui-scale))',
+                  color: '#a78bfa', // Purple color for custom
+                }}
+              >
+                📝 Custom Roll
+              </h4>
+              
+              <div className="space-y-3">
+                <div>
+                  <label 
+                    className="block text-sm font-medium mb-2"
+                    style={{
+                      fontSize: 'calc(12px * var(--ui-scale))',
+                      color: '#cbd5e1'
+                    }}
+                  >
+                    What should {selectedPlayerForRoll} roll for?
+                  </label>
+                  <input
+                    type="text"
+                    value={customRollText}
+                    onChange={(e) => setCustomRollText(e.target.value)}
+                    placeholder="e.g., Arcana check to identify the rune, History to recall ancient lore..."
+                    className="w-full px-3 py-2 bg-slate-700 border border-slate-600 rounded text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                    style={{
+                      padding: 'calc(8px * var(--ui-scale)) calc(12px * var(--ui-scale))',
+                      borderRadius: 'calc(6px * var(--ui-scale))',
+                      fontSize: 'calc(14px * var(--ui-scale))',
+                      backgroundColor: '#334155',
+                      border: '1px solid #475569',
+                      color: 'white'
+                    }}
+                    onKeyPress={(e) => {
+                      if (e.key === 'Enter' && customRollText.trim()) {
+                        sendCustomRollPrompt();
+                      }
+                    }}
+                  />
+                </div>
+                
+                <button
+                  onClick={sendCustomRollPrompt}
+                  disabled={!customRollText.trim()}
+                  className={`w-full p-3 rounded transition-all duration-200 ${
+                    customRollText.trim() 
+                      ? 'bg-purple-500/20 border-purple-500/40 text-purple-300 hover:bg-purple-500/30' 
+                      : 'bg-gray-600/20 border-gray-500/30 text-gray-500 cursor-not-allowed'
+                  }`}
+                  style={{
+                    padding: 'calc(12px * var(--ui-scale))',
+                    borderRadius: 'calc(8px * var(--ui-scale))',
+                    fontSize: 'calc(14px * var(--ui-scale))',
+                    backgroundColor: customRollText.trim() ? 'rgba(168, 85, 247, 0.2)' : 'rgba(107, 114, 128, 0.2)',
+                    border: customRollText.trim() ? '1px solid rgba(168, 85, 247, 0.4)' : '1px solid rgba(107, 114, 128, 0.3)',
+                    color: customRollText.trim() ? '#c4b5fd' : '#9ca3af',
+                    cursor: customRollText.trim() ? 'pointer' : 'not-allowed'
+                  }}
+                >
+                  📤 Send Custom Roll Request
+                </button>
+              </div>
             </div>
 
             <div className="flex justify-end gap-3 mt-6">
@@ -728,6 +816,7 @@ export default function DMControlCenter({
                 onClick={() => {
                   setIsRollPromptModalOpen(false);
                   setSelectedPlayerForRoll(null);
+                  setCustomRollText(''); // Clear custom text
                 }}
               >
                 Cancel
