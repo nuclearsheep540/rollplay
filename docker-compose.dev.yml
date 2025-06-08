@@ -57,7 +57,7 @@ services:
         ports:
         - "27017:27017"
         volumes:
-            - ./data:/data/db
+            - /data:/data/db
     certbot-renewer:
         image: ghcr.io/nuclearsheep540/rollplay/certbot:0.1.0
         build:

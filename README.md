@@ -33,9 +33,12 @@ https://medium.com/@2018.itsuki/dockerize-a-next-js-app-4b03021e084d
 database
 https://www.mongodb.com/compatibility/docker
 
-`mongosh -u mdavey`
+`mongosh -u admin`
 `use rollplay`
 `db.active_sessions.find()`
+`db.adventure_logs.find()`
+
+
 
 ### troubleshooting
 forms
