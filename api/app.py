@@ -244,6 +244,8 @@ class ConnectionManager:
 manager = ConnectionManager()
 
 
+# Add these new event handlers to your app.py websocket_endpoint function
+
 @app.websocket("/ws/{client_id}")
 async def websocket_endpoint(
     websocket: WebSocket,
@@ -252,7 +254,7 @@ async def websocket_endpoint(
 ):
     await manager.connect(websocket)
 
-    # NEW: Log player connection to database
+    # Log player connection to database
     add_adventure_log(
         room_id=client_id,
         message=f"{player_name} connected",
@@ -260,7 +262,7 @@ async def websocket_endpoint(
         player_name=player_name
     )
     
-    # NEW: Broadcast connection event to all clients
+    # Broadcast connection event to all clients
     connect_message = {
         "event_type": "player_connected", 
         "data": {
@@ -270,14 +272,13 @@ async def websocket_endpoint(
     await manager.update_data(connect_message)
   
     try:
-        # the switch statement should define the broadcase_message
-        # outside the switch we broadcast whatever got defined
         while True:
             data = await websocket.receive_json()
             event_type = data.get("event_type")
             event_data = data.get("data")
 
             if event_type == "seat_change":
+                # Existing seat change logic...
                 seat_layout = data.get("data")
                 player_name_from_event = data.get("player_name", player_name)
                 
@@ -289,8 +290,6 @@ async def websocket_endpoint(
                     await websocket.send_json(error_message)
                     continue
 
-                # DON'T save to database here - it's already saved via HTTP PUT
-                # Just broadcast the change to all connected clients
                 print(f"📡 Broadcasting seat layout change for room {client_id}: {seat_layout}")
                 
                 broadcast_message = {
@@ -298,9 +297,47 @@ async def websocket_endpoint(
                     "data": seat_layout,
                     "player_name": player_name_from_event
                 }
-                            
+
+            # NEW: Handle dice prompts
+            elif event_type == "dice_prompt":
+                prompted_player = event_data.get("prompted_player")
+                roll_type = event_data.get("roll_type")
+                prompted_by = event_data.get("prompted_by", player_name)
+                
+                # Log the prompt to adventure log
+                add_adventure_log(
+                    room_id=client_id,
+                    message=f"DM: {prompted_player}, please roll a {roll_type}",
+                    log_type="system",
+                    player_name=prompted_by
+                )
+                
+                print(f"🎲 {prompted_by} prompted {prompted_player} to roll {roll_type}")
+                
+                broadcast_message = {
+                    "event_type": "dice_prompt",
+                    "data": {
+                        "prompted_player": prompted_player,
+                        "roll_type": roll_type,
+                        "prompted_by": prompted_by
+                    }
+                }
+
+            # NEW: Handle clearing dice prompts
+            elif event_type == "dice_prompt_clear":
+                cleared_by = event_data.get("cleared_by", player_name)
+                
+                print(f"🎲 {cleared_by} cleared dice prompt")
+                
+                broadcast_message = {
+                    "event_type": "dice_prompt_clear",
+                    "data": {
+                        "cleared_by": cleared_by
+                    }
+                }
+
             elif event_type == "combat_state":
-                # Log combat state changes
+                # Existing combat state logic...
                 combat_active = event_data.get("combatActive", False)
                 action = "initiated" if combat_active else "ended"
                 
@@ -317,7 +354,7 @@ async def websocket_endpoint(
                 }
 
             elif event_type == "seat_count_change":
-                # Log seat count changes
+                # Existing seat count logic...
                 max_players = event_data.get("max_players")
                 updated_by = event_data.get("updated_by")
                 
@@ -335,7 +372,7 @@ async def websocket_endpoint(
                 }
 
             elif event_type == "player_kicked":
-                # Log player kicks
+                # Existing player kick logic...
                 kicked_player = event_data.get("kicked_player")
                 
                 add_adventure_log(
@@ -352,33 +389,54 @@ async def websocket_endpoint(
                 }
 
             elif event_type == "dice_roll":
-                # Log dice rolls
+                # UPDATED: Enhanced dice roll logging with prompt context
                 roll_data = event_data
                 player = roll_data.get("player")
                 dice = roll_data.get("dice")
                 result = roll_data.get("result")
+                roll_for = roll_data.get("roll_for", "General Roll")
+                
+                # Enhanced logging with context
+                if roll_for and roll_for != "General Roll":
+                    log_message = f"{player} [{roll_for}]: {dice}: {result}"
+                else:
+                    log_message = f"{player}: {dice}: {result}"
                 
                 add_adventure_log(
                     room_id=client_id,
-                    message=f"{player}: {dice}: {result}",
+                    message=log_message,
                     log_type="player-roll",
                     player_name=player
                 )
                 
+                print(f"🎲 {player} rolled {dice} for {roll_for}: {result}")
+                
                 broadcast_message = {
                     "event_type": "dice_roll",
-                    "data": event_data
+                    "data": {
+                        **event_data,
+                        "roll_for": roll_for
+                    }
                 }
+                
+                # Auto-clear prompt if this was a prompted roll
+                # Send a follow-up clear prompt message
+                clear_prompt_message = {
+                    "event_type": "dice_prompt_clear",
+                    "data": {
+                        "cleared_by": "system",
+                        "auto_cleared": True
+                    }
+                }
+                # We'll send this after the dice roll broadcast
             
             elif event_type == "clear_system_messages":
-                # Handle clearing system messages
+                # Existing clear system messages logic...
                 cleared_by = event_data.get("cleared_by", player_name)
                 
                 try:
-                    # Clear system messages from database
                     deleted_count = adventure_log_service.clear_system_messages(client_id)
                     
-                    # Add log entry about the action
                     add_adventure_log(
                         room_id=client_id,
                         message=f"System messages cleared by {cleared_by}",
@@ -408,10 +466,9 @@ async def websocket_endpoint(
                     continue
 
             else:
-                # Chat messages
+                # Chat messages and other events...
                 timestamp = datetime.now().strftime("%H:%M")
                 
-                # Log chat messages
                 add_adventure_log(
                     room_id=client_id,
                     message=data.get("data", ""),
@@ -426,10 +483,18 @@ async def websocket_endpoint(
                 })
                 continue
             
+            # Broadcast the main message
             await manager.update_data(broadcast_message)
             
+            # Handle special case: auto-clear prompt after dice roll
+            if event_type == "dice_roll":
+                # Add a small delay and then clear the prompt
+                import asyncio
+                await asyncio.sleep(0.1)  # Small delay to ensure dice roll is processed first
+                await manager.update_data(clear_prompt_message)
+            
     except WebSocketDisconnect:
-        # Log player disconnections
+        # Existing disconnect logic...
         add_adventure_log(
             room_id=client_id,
             message=f"{player_name} disconnected",

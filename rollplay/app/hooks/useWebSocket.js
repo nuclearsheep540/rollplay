@@ -74,8 +74,17 @@ export function useWebSocket(roomId, playerName, callbacks) {
           break;
 
         case "system_messages_cleared":
-        callbacks.onSystemMessagesCleared?.(json_data["data"]);
-        break;
+          callbacks.onSystemMessagesCleared?.(json_data["data"]);
+          break;
+
+        // NEW: Dice prompt events
+        case "dice_prompt":
+          callbacks.onDicePrompt?.(json_data["data"]);
+          break;
+
+        case "dice_prompt_clear":
+          callbacks.onDicePromptClear?.(json_data["data"]);
+          break;
 
         default:
           console.log("Unhandled WebSocket event:", event_type, json_data);
@@ -91,6 +100,41 @@ export function useWebSocket(roomId, playerName, callbacks) {
     };
   }, [roomId, playerName]);
 
+  // NEW: Send dice prompt
+  const sendDicePrompt = useCallback((promptedPlayer, rollType) => {
+    if (!webSocket || !isConnected) {
+      console.log("❌ Cannot send dice prompt - WebSocket not connected");
+      return;
+    }
+    
+    console.log(`🎲 Sending dice prompt: ${promptedPlayer} to roll ${rollType}`);
+    
+    webSocket.send(JSON.stringify({
+      "event_type": "dice_prompt",
+      "data": {
+        "prompted_player": promptedPlayer,
+        "roll_type": rollType,
+        "prompted_by": playerName
+      }
+    }));
+  }, [webSocket, isConnected, playerName]);
+
+  // NEW: Clear dice prompt
+  const sendDicePromptClear = useCallback(() => {
+    if (!webSocket || !isConnected) {
+      console.log("❌ Cannot clear dice prompt - WebSocket not connected");
+      return;
+    }
+    
+    console.log("🎲 Clearing dice prompt");
+    
+    webSocket.send(JSON.stringify({
+      "event_type": "dice_prompt_clear",
+      "data": {
+        "cleared_by": playerName
+      }
+    }));
+  }, [webSocket, isConnected, playerName]);
 
   const sendClearSystemMessages = useCallback(async () => {
     if (!webSocket || !isConnected) return;
@@ -219,15 +263,19 @@ export function useWebSocket(roomId, playerName, callbacks) {
     }));
   }, [webSocket, isConnected]);
 
-  const sendDiceRoll = useCallback((player, dice, result) => {
+  // UPDATED: Enhanced dice roll with context
+  const sendDiceRoll = useCallback((player, dice, result, rollFor = null) => {
     if (!webSocket || !isConnected) return;
+
+    console.log(`🎲 Sending dice roll: ${player} rolled ${dice} = ${result} for ${rollFor || 'General Roll'}`);
 
     webSocket.send(JSON.stringify({
       "event_type": "dice_roll",
       "data": {
         "player": player,
         "dice": dice,
-        "result": result
+        "result": result,
+        "roll_for": rollFor
       }
     }));
   }, [webSocket, isConnected]);
@@ -251,6 +299,9 @@ export function useWebSocket(roomId, playerName, callbacks) {
     sendPlayerKick,
     sendDiceRoll,
     sendChatMessage,
-    sendClearSystemMessages 
+    sendClearSystemMessages,
+    // NEW: Prompt methods
+    sendDicePrompt,
+    sendDicePromptClear
   };
 }

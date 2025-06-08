@@ -8,29 +8,20 @@ export default function DiceActionPanel({
   combatActive,
   onRollDice,
   onEndTurn,
-  rollPrompt = null, // What the DM asked them to roll for
-  uiScale = 'medium'
+  uiScale = 'medium',
+  // NEW PROPS for prompts
+  promptedPlayer = null,     // Who is prompted to roll
+  rollPrompt = null,         // What they're rolling for
+  isDicePromptActive = false // Is a prompt currently active
 }) {
   const [isDiceModalOpen, setIsDiceModalOpen] = useState(false);
   const [selectedDice, setSelectedDice] = useState('D20');
   const [rollBonus, setRollBonus] = useState('');
   
-  // Check if player should be able to roll dice
-  // Two scenarios: 1) Combat active and it's their turn, 2) DM has prompted them specifically
-  const isMyTurn = currentTurn === thisPlayer;
-  const hasBeenPrompted = rollPrompt !== null;
-  const canRollDice = (combatActive && isMyTurn) || hasBeenPrompted;
-  
-  // Determine panel state and appearance
-  const isActivePanel = canRollDice;
-  const showTurnIndicator = combatActive; // Always show in combat
-  
-  // Determine what text to show for turn indicator
-  const getTurnText = () => {
-    if (!combatActive) return null;
-    if (isMyTurn) return "Your Turn!";
-    return `${currentTurn}'s Turn`; // This should use the actual currentTurn from props
-  };
+  // UPDATED: Check if player should see dice interface
+  const isMyTurn = currentTurn === thisPlayer && combatActive;
+  const isPromptedToRoll = promptedPlayer === thisPlayer && isDicePromptActive;
+  const shouldShowDicePanel = isMyTurn || isPromptedToRoll;
   
   // Handle dice roll click
   const handleRollDiceClick = () => {
@@ -46,7 +37,7 @@ export default function DiceActionPanel({
     };
     
     if (onRollDice) {
-      onRollDice(rollData);
+      onRollDice(thisPlayer, rollData); // Pass player name
     }
     setIsDiceModalOpen(false);
     setSelectedDice('D20'); // Reset to default
@@ -60,11 +51,16 @@ export default function DiceActionPanel({
     }
   };
 
+  // Don't render if player shouldn't see dice panel
+  if (!shouldShowDicePanel) {
+    return null;
+  }
+
   return (
     <>
       <div 
         className={`dice-action-panel transition-all duration-300 ${
-          isActivePanel 
+          shouldShowDicePanel 
             ? 'active-turn' 
             : 'inactive-turn'
         }`}
@@ -72,44 +68,92 @@ export default function DiceActionPanel({
           position: 'fixed',
           bottom: `calc(20px * var(--ui-scale))`,
           left: '50%',
-          transform: `translateX(-50%) ${isActivePanel ? 'scale(1)' : 'scale(0.85)'}`,
+          transform: `translateX(-50%) ${shouldShowDicePanel ? 'scale(1)' : 'scale(0.85)'}`,
           zIndex: 100,
           transition: 'all 0.3s ease'
-          // Always show the panel, just style it differently when inactive
         }}
       >
         <div 
-          className={`panel-container ${isActivePanel ? 'my-turn' : 'not-my-turn'}`}
+          className={`panel-container ${shouldShowDicePanel ? 'my-turn' : 'not-my-turn'}`}
           style={{
-            backgroundColor: isActivePanel 
-              ? 'rgba(16, 185, 129, 0.15)' // Green background when active
-              : 'rgba(100, 116, 139, 0.15)', // Gray background when inactive
-            border: `2px solid ${isActivePanel 
-              ? 'rgba(16, 185, 129, 0.4)' // Green border when active
+            backgroundColor: shouldShowDicePanel 
+              ? (isPromptedToRoll 
+                  ? 'rgba(249, 115, 22, 0.15)' // Orange for prompts
+                  : 'rgba(16, 185, 129, 0.15)') // Green for turns
+              : 'rgba(100, 116, 139, 0.15)', // Gray when inactive
+            border: `2px solid ${shouldShowDicePanel 
+              ? (isPromptedToRoll 
+                  ? 'rgba(249, 115, 22, 0.4)' // Orange border for prompts
+                  : 'rgba(16, 185, 129, 0.4)') // Green border for turns
               : 'rgba(100, 116, 139, 0.3)'}`, // Gray border when inactive
             borderRadius: `calc(12px * var(--ui-scale))`,
             padding: `calc(16px * var(--ui-scale)) calc(24px * var(--ui-scale))`,
             backdropFilter: 'blur(8px)',
-            boxShadow: isActivePanel 
-              ? '0 8px 32px rgba(16, 185, 129, 0.2)' 
+            boxShadow: shouldShowDicePanel 
+              ? (isPromptedToRoll 
+                  ? '0 8px 32px rgba(249, 115, 22, 0.2)' // Orange glow for prompts
+                  : '0 8px 32px rgba(16, 185, 129, 0.2)') // Green glow for turns
               : '0 4px 16px rgba(0, 0, 0, 0.2)',
             minWidth: `calc(280px * var(--ui-scale))`,
             textAlign: 'center'
           }}
         >
-          {/* Turn Indicator - Show during combat for everyone */}
-          {showTurnIndicator && (
+          {/* Status Indicator */}
+          <div 
+            className="turn-indicator"
+            style={{
+              color: shouldShowDicePanel 
+                ? (isPromptedToRoll ? '#fb923c' : '#10b981') 
+                : '#64748b',
+              fontSize: `calc(14px * var(--ui-scale))`,
+              fontWeight: 'bold',
+              marginBottom: `calc(12px * var(--ui-scale))`,
+              textShadow: '0 1px 2px rgba(0, 0, 0, 0.5)'
+            }}
+          >
+            {isPromptedToRoll 
+              ? "🎯 DM Prompt!" 
+              : isMyTurn 
+                ? "Your Turn!" 
+                : `${currentTurn}'s Turn`
+            }
+          </div>
+
+          {/* Show roll prompt if DM has requested a specific roll */}
+          {isPromptedToRoll && rollPrompt && (
             <div 
-              className="turn-indicator"
+              className="roll-prompt-indicator"
               style={{
-                color: isMyTurn ? '#10b981' : '#64748b',
-                fontSize: `calc(14px * var(--ui-scale))`,
-                fontWeight: 'bold',
+                backgroundColor: 'rgba(249, 115, 22, 0.15)',
+                border: '1px solid rgba(249, 115, 22, 0.3)',
+                borderRadius: `calc(8px * var(--ui-scale))`,
+                padding: `calc(8px * var(--ui-scale))`,
                 marginBottom: `calc(12px * var(--ui-scale))`,
-                textShadow: '0 1px 2px rgba(0, 0, 0, 0.5)'
+                color: '#fb923c',
+                fontSize: `calc(12px * var(--ui-scale))`,
+                fontWeight: 'bold'
               }}
             >
-              {getTurnText()}
+              📋 Roll for: {rollPrompt}
+            </div>
+          )}
+
+          {/* Show turn prompt if it's combat turn */}
+          {isMyTurn && combatActive && !isPromptedToRoll && (
+            <div 
+              className="combat-turn-indicator"
+              style={{
+                backgroundColor: 'rgba(16, 185, 129, 0.15)',
+                border: '1px solid rgba(16, 185, 129, 0.3)',
+                borderRadius: `calc(8px * var(--ui-scale))`,
+                padding: `calc(8px * var(--ui-scale))`,
+                marginBottom: `calc(12px * var(--ui-scale))`,
+                color: '#10b981',
+                fontSize: `calc(12px * var(--ui-scale))`,
+                fontWeight: 'bold'
+              }}
+            >
+              ⚔️ Combat Turn
             </div>
           )}
 
@@ -124,34 +168,42 @@ export default function DiceActionPanel({
           >
             {/* Roll Dice Button */}
             <button
-              className={`roll-dice-btn ${isActivePanel ? 'active' : 'inactive'}`}
+              className={`roll-dice-btn ${shouldShowDicePanel ? 'active' : 'inactive'}`}
               onClick={handleRollDiceClick}
-              disabled={!canRollDice}
               style={{
-                backgroundColor: isActivePanel 
-                  ? 'rgba(16, 185, 129, 0.2)' 
+                backgroundColor: shouldShowDicePanel 
+                  ? (isPromptedToRoll 
+                      ? 'rgba(249, 115, 22, 0.2)' 
+                      : 'rgba(16, 185, 129, 0.2)') 
                   : 'rgba(100, 116, 139, 0.1)',
-                border: `2px solid ${isActivePanel 
-                  ? 'rgba(16, 185, 129, 0.5)' 
+                border: `2px solid ${shouldShowDicePanel 
+                  ? (isPromptedToRoll 
+                      ? 'rgba(249, 115, 22, 0.5)' 
+                      : 'rgba(16, 185, 129, 0.5)') 
                   : 'rgba(100, 116, 139, 0.3)'}`,
-                color: isActivePanel ? '#10b981' : '#64748b',
+                color: shouldShowDicePanel 
+                  ? (isPromptedToRoll ? '#fb923c' : '#10b981') 
+                  : '#64748b',
                 borderRadius: `calc(8px * var(--ui-scale))`,
                 padding: `calc(10px * var(--ui-scale)) calc(20px * var(--ui-scale))`,
                 fontSize: `calc(14px * var(--ui-scale))`,
                 fontWeight: 'bold',
-                cursor: isActivePanel ? 'pointer' : 'not-allowed',
-                transition: 'all 0.2s ease',
-                opacity: isActivePanel ? 1 : 0.6
+                cursor: 'pointer',
+                transition: 'all 0.2s ease'
               }}
               onMouseEnter={(e) => {
-                if (isActivePanel) {
-                  e.target.style.backgroundColor = 'rgba(16, 185, 129, 0.3)';
+                if (shouldShowDicePanel) {
+                  e.target.style.backgroundColor = isPromptedToRoll 
+                    ? 'rgba(249, 115, 22, 0.3)' 
+                    : 'rgba(16, 185, 129, 0.3)';
                   e.target.style.transform = 'translateY(-2px)';
                 }
               }}
               onMouseLeave={(e) => {
-                if (isActivePanel) {
-                  e.target.style.backgroundColor = 'rgba(16, 185, 129, 0.2)';
+                if (shouldShowDicePanel) {
+                  e.target.style.backgroundColor = isPromptedToRoll 
+                    ? 'rgba(249, 115, 22, 0.2)' 
+                    : 'rgba(16, 185, 129, 0.2)';
                   e.target.style.transform = 'translateY(0)';
                 }
               }}
@@ -159,39 +211,29 @@ export default function DiceActionPanel({
               🎲 Roll Dice
             </button>
 
-            {/* End Turn Button - Only show during combat and when it's actually the player's turn */}
-            {combatActive && isMyTurn && (
+            {/* End Turn Button - Only show during combat turns (not prompts) */}
+            {isMyTurn && combatActive && !isPromptedToRoll && (
               <button
-                className={`end-turn-btn ${isActivePanel ? 'active' : 'inactive'}`}
+                className="end-turn-btn active"
                 onClick={handleEndTurn}
-                disabled={!isMyTurn}
                 style={{
-                  backgroundColor: isActivePanel 
-                    ? 'rgba(239, 68, 68, 0.2)' 
-                    : 'rgba(100, 116, 139, 0.1)',
-                  border: `2px solid ${isActivePanel 
-                    ? 'rgba(239, 68, 68, 0.5)' 
-                    : 'rgba(100, 116, 139, 0.3)'}`,
-                  color: isActivePanel ? '#ef4444' : '#64748b',
+                  backgroundColor: 'rgba(239, 68, 68, 0.2)',
+                  border: '2px solid rgba(239, 68, 68, 0.5)',
+                  color: '#ef4444',
                   borderRadius: `calc(8px * var(--ui-scale))`,
                   padding: `calc(10px * var(--ui-scale)) calc(20px * var(--ui-scale))`,
                   fontSize: `calc(14px * var(--ui-scale))`,
                   fontWeight: 'bold',
-                  cursor: isActivePanel ? 'pointer' : 'not-allowed',
-                  transition: 'all 0.2s ease',
-                  opacity: isActivePanel ? 1 : 0.6
+                  cursor: 'pointer',
+                  transition: 'all 0.2s ease'
                 }}
                 onMouseEnter={(e) => {
-                  if (isActivePanel) {
-                    e.target.style.backgroundColor = 'rgba(239, 68, 68, 0.3)';
-                    e.target.style.transform = 'translateY(-2px)';
-                  }
+                  e.target.style.backgroundColor = 'rgba(239, 68, 68, 0.3)';
+                  e.target.style.transform = 'translateY(-2px)';
                 }}
                 onMouseLeave={(e) => {
-                  if (isActivePanel) {
-                    e.target.style.backgroundColor = 'rgba(239, 68, 68, 0.2)';
-                    e.target.style.transform = 'translateY(0)';
-                  }
+                  e.target.style.backgroundColor = 'rgba(239, 68, 68, 0.2)';
+                  e.target.style.transform = 'translateY(0)';
                 }}
               >
                 ⏭️ End Turn
@@ -201,7 +243,7 @@ export default function DiceActionPanel({
         </div>
       </div>
 
-      {/* Dice Roll Modal */}
+      {/* Dice Roll Modal - Enhanced for prompts */}
       {isDiceModalOpen && (
         <div 
           className="dice-modal-overlay"
@@ -211,7 +253,7 @@ export default function DiceActionPanel({
             left: 0,
             right: 0,
             bottom: 0,
-            backgroundColor: 'rgba(0, 0, 0, 0.2)', // 20% opacity
+            backgroundColor: 'rgba(0, 0, 0, 0.2)',
             backdropFilter: 'blur(4px)',
             display: 'flex',
             alignItems: 'center',
@@ -224,7 +266,9 @@ export default function DiceActionPanel({
             className="dice-modal"
             style={{
               backgroundColor: '#1e293b',
-              border: '2px solid rgba(16, 185, 129, 0.4)',
+              border: `2px solid ${isPromptedToRoll 
+                ? 'rgba(249, 115, 22, 0.4)' 
+                : 'rgba(16, 185, 129, 0.4)'}`,
               borderRadius: `calc(16px * var(--ui-scale))`,
               padding: `calc(24px * var(--ui-scale))`,
               maxWidth: `calc(500px * var(--ui-scale))`,
@@ -236,7 +280,7 @@ export default function DiceActionPanel({
             <div className="flex items-center justify-between mb-6">
               <h3 
                 style={{
-                  color: '#10b981',
+                  color: isPromptedToRoll ? '#fb923c' : '#10b981',
                   fontSize: `calc(20px * var(--ui-scale))`,
                   fontWeight: 'bold',
                   margin: 0
@@ -261,20 +305,23 @@ export default function DiceActionPanel({
             {/* What you're rolling for */}
             {rollPrompt && (
               <div 
-                className="bg-emerald-500/10 border border-emerald-500/30 rounded-lg mb-6"
                 style={{
                   padding: `calc(12px * var(--ui-scale))`,
                   borderRadius: `calc(8px * var(--ui-scale))`,
                   marginBottom: `calc(24px * var(--ui-scale))`,
-                  backgroundColor: 'rgba(16, 185, 129, 0.1)',
-                  border: '1px solid rgba(16, 185, 129, 0.3)'
+                  backgroundColor: isPromptedToRoll 
+                    ? 'rgba(249, 115, 22, 0.1)' 
+                    : 'rgba(16, 185, 129, 0.1)',
+                  border: `1px solid ${isPromptedToRoll 
+                    ? 'rgba(249, 115, 22, 0.3)' 
+                    : 'rgba(16, 185, 129, 0.3)'}`
                 }}
               >
                 <div 
-                  className="text-emerald-300 font-medium text-center"
                   style={{
                     fontSize: `calc(14px * var(--ui-scale))`,
-                    color: '#6ee7b7'
+                    color: isPromptedToRoll ? '#fb923c' : '#6ee7b7',
+                    textAlign: 'center'
                   }}
                 >
                   📋 Rolling for: <span className="font-bold">{rollPrompt}</span>
@@ -282,9 +329,11 @@ export default function DiceActionPanel({
               </div>
             )}
 
+            {/* Rest of the modal content - dice selection, bonus input, and roll button */}
+            {/* This is the same as before, just keeping existing implementation */}
+            
             {/* Dice Selection */}
             <div 
-              className="bg-slate-700/50 border border-slate-600 rounded-lg mb-6"
               style={{
                 padding: `calc(16px * var(--ui-scale))`,
                 borderRadius: `calc(8px * var(--ui-scale))`,
@@ -294,7 +343,6 @@ export default function DiceActionPanel({
               }}
             >
               <h4 
-                className="text-white font-semibold mb-3"
                 style={{
                   fontSize: `calc(16px * var(--ui-scale))`,
                   margin: `0 0 calc(12px * var(--ui-scale)) 0`,
@@ -304,7 +352,6 @@ export default function DiceActionPanel({
                 🎲 Choose Your Dice
               </h4>
               <div 
-                className="grid grid-cols-4 gap-2"
                 style={{
                   display: 'grid',
                   gridTemplateColumns: 'repeat(4, 1fr)',
@@ -321,11 +368,6 @@ export default function DiceActionPanel({
                 ].map((dice) => (
                   <button
                     key={dice.name}
-                    className={`rounded transition-all duration-200 hover:scale-105 flex flex-col items-center ${
-                      selectedDice === dice.name 
-                        ? 'bg-emerald-500/30 border-2 border-emerald-400 text-emerald-200' 
-                        : 'bg-slate-600/30 border border-slate-500 text-slate-300 hover:bg-slate-500/40'
-                    }`}
                     style={{
                       padding: `calc(12px * var(--ui-scale))`,
                       borderRadius: `calc(6px * var(--ui-scale))`,
@@ -356,11 +398,6 @@ export default function DiceActionPanel({
 
                 {/* D100 - Spans 2 columns */}
                 <button
-                  className={`rounded transition-all duration-200 hover:scale-105 flex flex-col items-center col-span-2 ${
-                    selectedDice === 'D100' 
-                      ? 'bg-emerald-500/30 border-2 border-emerald-400 text-emerald-200' 
-                      : 'bg-slate-600/30 border border-slate-500 text-slate-300 hover:bg-slate-500/40'
-                  }`}
                   style={{
                     padding: `calc(12px * var(--ui-scale))`,
                     borderRadius: `calc(6px * var(--ui-scale))`,
@@ -393,7 +430,6 @@ export default function DiceActionPanel({
 
             {/* Bonus Input */}
             <div 
-              className="bg-slate-700/50 border border-slate-600 rounded-lg mb-6"
               style={{
                 padding: `calc(16px * var(--ui-scale))`,
                 borderRadius: `calc(8px * var(--ui-scale))`,
@@ -403,7 +439,6 @@ export default function DiceActionPanel({
               }}
             >
               <h4 
-                className="text-white font-semibold mb-3"
                 style={{
                   fontSize: `calc(16px * var(--ui-scale))`,
                   margin: `0 0 calc(12px * var(--ui-scale)) 0`,
@@ -417,7 +452,6 @@ export default function DiceActionPanel({
                 placeholder="e.g., +3, -1, +5"
                 value={rollBonus}
                 onChange={(e) => setRollBonus(e.target.value)}
-                className="w-full bg-slate-800 border border-slate-600 text-white rounded px-3 py-2"
                 style={{
                   padding: `calc(8px * var(--ui-scale)) calc(12px * var(--ui-scale))`,
                   borderRadius: `calc(6px * var(--ui-scale))`,
@@ -441,9 +475,13 @@ export default function DiceActionPanel({
               <button
                 onClick={handleDiceRoll}
                 style={{
-                  backgroundColor: 'rgba(16, 185, 129, 0.2)',
-                  border: '2px solid rgba(16, 185, 129, 0.5)',
-                  color: '#10b981',
+                  backgroundColor: isPromptedToRoll 
+                    ? 'rgba(249, 115, 22, 0.2)' 
+                    : 'rgba(16, 185, 129, 0.2)',
+                  border: `2px solid ${isPromptedToRoll 
+                    ? 'rgba(249, 115, 22, 0.5)' 
+                    : 'rgba(16, 185, 129, 0.5)'}`,
+                  color: isPromptedToRoll ? '#fb923c' : '#10b981',
                   borderRadius: `calc(12px * var(--ui-scale))`,
                   padding: `calc(16px * var(--ui-scale)) calc(32px * var(--ui-scale))`,
                   fontSize: `calc(18px * var(--ui-scale))`,
@@ -452,11 +490,15 @@ export default function DiceActionPanel({
                   transition: 'all 0.2s ease'
                 }}
                 onMouseEnter={(e) => {
-                  e.target.style.backgroundColor = 'rgba(16, 185, 129, 0.3)';
+                  e.target.style.backgroundColor = isPromptedToRoll 
+                    ? 'rgba(249, 115, 22, 0.3)' 
+                    : 'rgba(16, 185, 129, 0.3)';
                   e.target.style.transform = 'scale(1.05)';
                 }}
                 onMouseLeave={(e) => {
-                  e.target.style.backgroundColor = 'rgba(16, 185, 129, 0.2)';
+                  e.target.style.backgroundColor = isPromptedToRoll 
+                    ? 'rgba(249, 115, 22, 0.2)' 
+                    : 'rgba(16, 185, 129, 0.2)';
                   e.target.style.transform = 'scale(1)';
                 }}
               >
