@@ -73,6 +73,10 @@ export function useWebSocket(roomId, playerName, callbacks) {
           callbacks.onDiceRoll?.(json_data["data"]);
           break;
 
+        case "system_messages_cleared":
+        callbacks.onSystemMessagesCleared?.(json_data["data"]);
+        break;
+
         default:
           console.log("Unhandled WebSocket event:", event_type, json_data);
       }
@@ -86,6 +90,44 @@ export function useWebSocket(roomId, playerName, callbacks) {
       ws.close();
     };
   }, [roomId, playerName]);
+
+
+  const sendClearSystemMessages = useCallback(async () => {
+    if (!webSocket || !isConnected) return;
+  
+    try {
+      // First call the API to clear from database
+      const response = await fetch(`/api/game/${roomId}/logs/system`, {
+        method: 'DELETE',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          cleared_by: playerName
+        }),
+      });
+  
+      if (!response.ok) {
+        throw new Error('Failed to clear system messages from database');
+      }
+  
+      const result = await response.json();
+      console.log(`✅ Cleared ${result.deleted_count} system messages`);
+  
+      // Then broadcast the change via websocket
+      webSocket.send(JSON.stringify({
+        "event_type": "clear_system_messages",
+        "data": {
+          "cleared_by": playerName,
+          "deleted_count": result.deleted_count
+        }
+      }));
+  
+    } catch (error) {
+      console.error('❌ Error clearing system messages:', error);
+      throw error;
+    }
+  }, [webSocket, isConnected, roomId, playerName]);
 
   // WebSocket sending methods
   const sendSeatChange = useCallback(async (newSeats) => {
@@ -208,6 +250,7 @@ export function useWebSocket(roomId, playerName, callbacks) {
     sendCombatStateChange,
     sendPlayerKick,
     sendDiceRoll,
-    sendChatMessage
+    sendChatMessage,
+    sendClearSystemMessages 
   };
 }

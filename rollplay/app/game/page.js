@@ -173,6 +173,19 @@ export default function Game() {
       console.log("received dice roll:", data);
       const { player, dice, result } = data;
       addToLog(`${dice}: ${result}`, 'dice', player);
+    },
+
+    onSystemMessagesCleared: (data) => {
+      console.log("received system messages cleared:", data);
+      const { deleted_count, cleared_by } = data;
+      
+      // Remove all system messages from the current rollLog
+      setRollLog(prev => prev.filter(entry => entry.type !== 'system'));
+      
+      // Add a new system message about the clearing action
+      if (cleared_by !== thisPlayer) {
+        addToLog(`${cleared_by} cleared ${deleted_count} system messages`, 'system');
+      }
     }
   };
 
@@ -184,7 +197,8 @@ export default function Game() {
     sendSeatCountChange,
     sendCombatStateChange,
     sendPlayerKick,
-    sendDiceRoll
+    sendDiceRoll,
+    sendClearSystemMessages
   } = useWebSocket(roomId, thisPlayer, webSocketCallbacks);
 
   // Copy room code to clipboard
@@ -507,6 +521,23 @@ export default function Game() {
     console.log('Opening campaign settings...');
   };
 
+  // Handle clearing system messages
+  const handleClearSystemMessages = async () => {
+    try {
+      await sendClearSystemMessages();
+      
+      // Remove system messages from local state immediately
+      setRollLog(prev => prev.filter(entry => entry.type !== 'system'));
+      
+      // Add confirmation message
+      addToLog('System messages cleared', 'system');
+      
+    } catch (error) {
+      console.error('Error clearing system messages:', error);
+      alert('Failed to clear system messages. Please try again.');
+    }
+  };
+
   // Show loading or 404 states
   if (room404) {
     return <div>Room not found</div>;
@@ -638,6 +669,7 @@ export default function Game() {
         setSeatCount={setSeatCount}
         roomId={roomId}
         handleKickPlayer={handleKickPlayer}
+        handleClearSystemMessages={handleClearSystemMessages}
           />
         </div>
 

@@ -176,6 +176,42 @@ async def update_seat_layout(room_id: str, request: dict):
         print(error_msg)
         logger.error(error_msg)
         raise HTTPException(status_code=500, detail=str(e))
+    
+@app.delete("/game/{room_id}/logs/system")
+async def clear_system_messages(room_id: str, request: dict):
+    """Clear all system messages from the adventure log"""
+    try:
+        check_room = GameService.get_room(id=room_id)
+        if not check_room:
+            raise HTTPException(status_code=404, detail=f"Room {room_id} not found")
+        
+        cleared_by = request.get("cleared_by", "Unknown")
+        
+        print(f"🧹 Clearing system messages for room {room_id} by {cleared_by}")
+        
+        # Clear system messages from the database
+        deleted_count = adventure_log_service.clear_system_messages(room_id)
+        
+        print(f"✅ Cleared {deleted_count} system messages")
+        
+        # Add a log entry about the clearing action
+        add_adventure_log(
+            room_id=room_id,
+            message=f"System messages cleared by {cleared_by}",
+            log_type="system",
+            player_name=cleared_by
+        )
+        
+        return {
+            "success": True,
+            "room_id": room_id,
+            "deleted_count": deleted_count,
+            "cleared_by": cleared_by
+        }
+        
+    except Exception as e:
+        print(f"❌ Error clearing system messages: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
 
 class ConnectionManager:
     def __init__(self):
@@ -333,6 +369,43 @@ async def websocket_endpoint(
                     "event_type": "dice_roll",
                     "data": event_data
                 }
+            
+            elif event_type == "clear_system_messages":
+                # Handle clearing system messages
+                cleared_by = event_data.get("cleared_by", player_name)
+                
+                try:
+                    # Clear system messages from database
+                    deleted_count = adventure_log_service.clear_system_messages(client_id)
+                    
+                    # Add log entry about the action
+                    add_adventure_log(
+                        room_id=client_id,
+                        message=f"System messages cleared by {cleared_by}",
+                        log_type="system",
+                        player_name=cleared_by
+                    )
+                    
+                    print(f"🧹 {cleared_by} cleared {deleted_count} system messages from room {client_id}")
+                    
+                    broadcast_message = {
+                        "event_type": "system_messages_cleared",
+                        "data": {
+                            "deleted_count": deleted_count,
+                            "cleared_by": cleared_by
+                        }
+                    }
+                    
+                except Exception as e:
+                    error_msg = f"Failed to clear system messages: {str(e)}"
+                    print(f"❌ {error_msg}")
+                    
+                    error_message = {
+                        "event_type": "error",
+                        "data": error_msg
+                    }
+                    await websocket.send_json(error_message)
+                    continue
 
             else:
                 # Chat messages

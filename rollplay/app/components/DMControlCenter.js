@@ -11,7 +11,8 @@ export default function DMControlCenter({
   gameSeats,           
   setSeatCount,        
   roomId,              
-  handleKickPlayer     // NEW: Function to handle player kicks
+  handleKickPlayer,    // Function to handle player kicks
+  handleClearSystemMessages // NEW: Function to clear system messages
 }) {
   
   // State for collapsible sections
@@ -25,6 +26,7 @@ export default function DMControlCenter({
   // State for seat and kick management
   const [isSeatManagement, setIsSeatManagement] = useState(false);
   const [isKickModalOpen, setIsKickModalOpen] = useState(false);
+  const [isClearingLogs, setIsClearingLogs] = useState(false); // NEW: Loading state for clearing logs
 
   const toggleSection = (section) => {
     setExpandedSections(prev => ({
@@ -83,6 +85,24 @@ export default function DMControlCenter({
     if (confirmKick && handleKickPlayer) {
       handleKickPlayer(playerName);
       setIsKickModalOpen(false);
+    }
+  };
+
+  // NEW: Function to handle clearing system messages
+  const handleClearSystemClick = async () => {
+    const confirmClear = window.confirm(
+      'Are you sure you want to clear all system messages from the adventure log? This action cannot be undone.'
+    );
+    
+    if (confirmClear && handleClearSystemMessages) {
+      setIsClearingLogs(true);
+      try {
+        await handleClearSystemMessages();
+      } catch (error) {
+        console.error('Error clearing system messages:', error);
+      } finally {
+        setIsClearingLogs(false);
+      }
     }
   };
 
@@ -464,6 +484,25 @@ export default function DMControlCenter({
               onClick={() => setIsKickModalOpen(true)}
             >
               🚪 Kick Player
+            </button>
+
+            {/* NEW: Clear System Messages Button */}
+            <button 
+              className={`w-full rounded text-left transition-all duration-200 ${
+                isClearingLogs 
+                  ? 'bg-gray-500/20 border border-gray-500/30 text-gray-400 cursor-not-allowed' 
+                  : 'bg-orange-500/10 border border-orange-500/30 text-orange-300 hover:bg-orange-500/20'
+              }`}
+              style={{
+                padding: 'calc(8px * var(--ui-scale))',
+                borderRadius: 'calc(4px * var(--ui-scale))',
+                fontSize: 'calc(12px * var(--ui-scale))',
+                marginBottom: 'calc(4px * var(--ui-scale))',
+              }}
+              onClick={handleClearSystemClick}
+              disabled={isClearingLogs}
+            >
+              {isClearingLogs ? '🧹 Clearing...' : '🧹 Clear System Messages'}
             </button>
           </div>
         )}

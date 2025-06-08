@@ -20,6 +20,7 @@ class AdventureLogService:
         # Create indexes for optimal performance
         self._ensure_indexes()
 
+
     def _get_adventure_logs(self):
         "returns the adventure logs collection"
         try: 
@@ -46,6 +47,27 @@ class AdventureLogService:
             print("Adventure logs indexes created successfully")
         except Exception as e:
             print(f"Warning: Could not create indexes: {e}")
+
+    # ADD this method to your adventure_log_service.py class:
+
+    def clear_system_messages(self, room_id: str) -> int:
+        """
+        Clear all system messages for a room
+        Returns the number of deleted messages
+        """
+        try:           
+            # Delete all system-type messages for this room
+            result = self.adventure_logs.delete_many({
+                "room_id": room_id,
+                "type": "system"
+            })
+            
+            print(f"🗑️ Deleted {result.deleted_count} system messages for room {room_id}")
+            return result.deleted_count
+            
+        except Exception as e:
+            print(f"❌ Error clearing system messages: {e}")
+            raise e
     
     def add_log_entry(
         self, 
