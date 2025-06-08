@@ -33,16 +33,19 @@ db.createCollection("active_sessions");
 db.createCollection("adventure_logs");
 
 // Insert test data
-db.active_sessions.insertOne({   
-    room_id: "test_room_0", 
+var test_room = db.active_sessions.insertOne({
+    _id: "test_room",   
     max_players: 8, 
     seat_layout: ["Matt", "empty", "empty", "empty", "empty", "empty", "empty", "empty"],
-    created_at: ISODate("2025-06-08T12:00:00Z") 
+    created_at: ISODate("2025-06-08T12:00:00Z"),
+    player_name: "Matt"
 });
+var testRoomId = test_room.insertedId;
+
 
 db.adventure_logs.insertMany([
     {   
-        room_id: "test_room_0", 
+        room_id: testRoomId.toString(), 
         message: "this is a test message from the system",
         type: "system",
         timestamp: ISODate("2025-01-09T10:30:00Z"),
@@ -50,7 +53,7 @@ db.adventure_logs.insertMany([
         log_id: 1
     },
     {   
-        room_id: "test_room_0", 
+        room_id: testRoomId.toString(), 
         message: "this is a pre-loaded message",
         type: "user",
         timestamp: ISODate("2025-01-09T10:32:00Z"),
@@ -58,7 +61,7 @@ db.adventure_logs.insertMany([
         log_id: 2
     },
     {   
-        room_id: "test_room_0", 
+        room_id: testRoomId.toString(), 
         message: "D20 + 1: 6",
         type: "dice",
         timestamp: ISODate("2025-01-09T10:33:00Z"),
