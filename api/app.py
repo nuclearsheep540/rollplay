@@ -308,7 +308,7 @@ async def websocket_endpoint(
                 add_adventure_log(
                     room_id=client_id,
                     message=f"DM: {prompted_player}, please roll a {roll_type}",
-                    log_type="system",
+                    log_type="dice",
                     player_name=prompted_by
                 )
                 

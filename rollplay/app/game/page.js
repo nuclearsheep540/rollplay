@@ -206,7 +206,7 @@ export default function Game() {
       
       // Add to adventure log if not the person who made the prompt
       if (prompted_by !== thisPlayer) {
-        addToLog(`DM: ${prompted_player}, please roll a ${roll_type}`, 'system');
+        addToLog(`DM: ${prompted_player}, please roll a ${roll_type}`, 'dice');
       }
     },
 
@@ -516,7 +516,7 @@ export default function Game() {
     setIsDicePromptActive(true);
     
     // Add to adventure log
-    addToLog(`DM: ${playerName}, please roll a ${rollType}`, 'system');
+    addToLog(`DM: ${playerName}, please roll a ${rollType}`, 'dice');
   };
 
   // NEW: Clear dice prompt
