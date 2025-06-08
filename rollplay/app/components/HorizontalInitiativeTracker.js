@@ -203,51 +203,6 @@ export default function HorizontalInitiativeTracker({
         </div>
       )}
 
-      {/* Dice Portal - Bottom Left of Map Canvas */}
-      {shouldRender && (
-        <div 
-          className="absolute z-10" 
-          style={{
-            bottom: `calc(24px * var(--ui-scale))`,
-            left: `calc(24px * var(--ui-scale))`,
-            transform: `translateX(${isVisible ? '0' : '-100%'})`,
-            opacity: isVisible ? 1 : 0,
-            transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1) 0.05s', // Slight delay for staggered effect
-          }}
-        >
-          <div className="bg-amber-500/90 backdrop-blur-md border border-amber-500/60 rounded-xl shadow-2xl" style={{
-            padding: `calc(20px * var(--ui-scale)) calc(20px * var(--ui-scale))`,
-            borderRadius: `calc(12px * var(--ui-scale))`,
-            minWidth: `calc(192px * var(--ui-scale))`,
-          }}>
-            <div className="text-amber-900 font-bold text-center" style={{
-              fontSize: `calc(14px * var(--ui-scale))`,
-              marginBottom: `calc(8px * var(--ui-scale))`,
-            }}>🎲 {currentTurn}'s Turn!</div>
-            <div className="text-amber-800 text-center" style={{
-              fontSize: `calc(12px * var(--ui-scale))`,
-              marginBottom: `calc(12px * var(--ui-scale))`,
-            }}>Roll for your action</div>
-            <div className="flex flex-col" style={{ gap: `calc(8px * var(--ui-scale))` }}>
-              <button className="bg-amber-600 hover:bg-amber-700 text-white rounded-lg font-semibold transition-all duration-200 hover:transform hover:-translate-y-0.5 shadow-lg" style={{
-                padding: `calc(8px * var(--ui-scale)) calc(16px * var(--ui-scale))`,
-                borderRadius: `calc(8px * var(--ui-scale))`,
-                fontSize: `calc(14px * var(--ui-scale))`,
-              }}>
-                🎲 Roll Dice
-              </button>
-              <button className="bg-red-500 hover:bg-red-600 text-white rounded-lg font-medium transition-all duration-200 hover:transform hover:-translate-y-0.5 shadow-md" style={{
-                padding: `calc(6px * var(--ui-scale)) calc(16px * var(--ui-scale))`,
-                borderRadius: `calc(8px * var(--ui-scale))`,
-                fontSize: `calc(12px * var(--ui-scale))`,
-              }}>
-                ⏭️ End Turn
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
     </div>
   );
 }

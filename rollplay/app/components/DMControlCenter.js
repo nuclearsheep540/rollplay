@@ -12,7 +12,7 @@ export default function DMControlCenter({
   setSeatCount,        
   roomId,              
   handleKickPlayer,    // Function to handle player kicks
-  handleClearSystemMessages // NEW: Function to clear system messages
+  handleClearSystemMessages // Function to clear system messages
 }) {
   
   // State for collapsible sections
@@ -26,7 +26,61 @@ export default function DMControlCenter({
   // State for seat and kick management
   const [isSeatManagement, setIsSeatManagement] = useState(false);
   const [isKickModalOpen, setIsKickModalOpen] = useState(false);
-  const [isClearingLogs, setIsClearingLogs] = useState(false); // NEW: Loading state for clearing logs
+  const [isClearingLogs, setIsClearingLogs] = useState(false);
+  
+  // State for roll prompting
+  const [isRollPromptModalOpen, setIsRollPromptModalOpen] = useState(false);
+  const [selectedPlayerForRoll, setSelectedPlayerForRoll] = useState(null);
+  const [isDicePromptExpanded, setIsDicePromptExpanded] = useState(false);
+
+  // D&D Roll Types
+  const rollTypes = {
+    'Saving Throws': [
+      { name: 'Strength Save', description: 'Resist being moved, grappled, or crushed' },
+      { name: 'Dexterity Save', description: 'Avoid traps, dodge area effects' },
+      { name: 'Constitution Save', description: 'Resist poison, disease, exhaustion' },
+      { name: 'Intelligence Save', description: 'Resist mental effects, illusions' },
+      { name: 'Wisdom Save', description: 'Resist charm, fear, perception tricks' },
+      { name: 'Charisma Save', description: 'Resist banishment, possession' }
+    ],
+    'Ability Checks': [
+      { name: 'Strength Check', description: 'Lifting, pushing, breaking things' },
+      { name: 'Dexterity Check', description: 'Acrobatics, stealth, sleight of hand' },
+      { name: 'Constitution Check', description: 'Endurance, holding breath' },
+      { name: 'Intelligence Check', description: 'Recall lore, solve puzzles' },
+      { name: 'Wisdom Check', description: 'Perception, insight, survival' },
+      { name: 'Charisma Check', description: 'Persuasion, deception, performance' }
+    ],
+    'Attack Rolls': [
+      { name: 'Melee Attack', description: 'Sword, club, fist attacks' },
+      { name: 'Ranged Attack', description: 'Bow, crossbow, thrown weapon' },
+      { name: 'Spell Attack', description: 'Magic missile, fire bolt, etc.' }
+    ],
+    'Skill Checks': [
+      { name: 'Acrobatics', description: 'Balance, tumbling, aerial maneuvers' },
+      { name: 'Athletics', description: 'Climbing, jumping, swimming' },
+      { name: 'Deception', description: 'Lying convincingly' },
+      { name: 'History', description: 'Recalling historical facts' },
+      { name: 'Insight', description: 'Reading people\'s intentions' },
+      { name: 'Intimidation', description: 'Influencing through threats' },
+      { name: 'Investigation', description: 'Finding clues, solving mysteries' },
+      { name: 'Medicine', description: 'Treating wounds, diagnosing illness' },
+      { name: 'Nature', description: 'Knowledge of animals, plants, weather' },
+      { name: 'Perception', description: 'Spotting hidden things' },
+      { name: 'Performance', description: 'Entertaining an audience' },
+      { name: 'Persuasion', description: 'Influencing through charm' },
+      { name: 'Religion', description: 'Knowledge of gods and rituals' },
+      { name: 'Sleight of Hand', description: 'Picking pockets, hiding objects' },
+      { name: 'Stealth', description: 'Moving unseen' },
+      { name: 'Survival', description: 'Tracking, navigation, foraging' }
+    ],
+    'Special Rolls': [
+      { name: 'Initiative', description: 'Determine turn order in combat' },
+      { name: 'Death Saving Throw', description: 'Stabilize when dying' },
+      { name: 'Concentration Check', description: 'Maintain spell concentration' },
+      { name: 'Inspiration Roll', description: 'Use inspiration die' }
+    ]
+  };
 
   const toggleSection = (section) => {
     setExpandedSections(prev => ({
@@ -37,6 +91,21 @@ export default function DMControlCenter({
 
   const toggleCombat = () => {
     setCombatActive(!combatActive);
+  };
+
+  // Function to handle player selection for roll prompt
+  const selectPlayerForRollPrompt = (playerName) => {
+    setSelectedPlayerForRoll(playerName);
+    setIsRollPromptModalOpen(true);
+  };
+
+  // Function to send roll prompt to player
+  const sendRollPromptToPlayer = (rollType) => {
+    if (selectedPlayerForRoll && promptPlayerRoll) {
+      promptPlayerRoll(rollType, selectedPlayerForRoll);
+      setIsRollPromptModalOpen(false);
+      setSelectedPlayerForRoll(null);
+    }
   };
 
   // Function to handle seat count changes
@@ -88,7 +157,7 @@ export default function DMControlCenter({
     }
   };
 
-  // NEW: Function to handle clearing system messages
+  // Function to handle clearing system messages
   const handleClearSystemClick = async () => {
     const confirmClear = window.confirm(
       'Are you sure you want to clear all system messages from the adventure log? This action cannot be undone.'
@@ -257,18 +326,89 @@ export default function DMControlCenter({
             >
               ⚡ Prompt Initiative
             </button>
-            <button 
-              className="w-full bg-amber-500/10 border border-amber-500/40 text-amber-300 rounded text-left mb-1 transition-all duration-200 hover:bg-amber-500/20"
+            
+            {/* Dice Roll Prompts - Expandable */}
+            <div 
+              className={`w-full rounded text-left mb-1 transition-all duration-200 ${
+                isDicePromptExpanded 
+                  ? 'bg-amber-500/15 border-2 border-amber-500/40' 
+                  : 'bg-amber-500/10 border border-amber-500/40 hover:bg-amber-500/20'
+              }`}
               style={{
-                padding: 'calc(8px * var(--ui-scale))',
                 borderRadius: 'calc(4px * var(--ui-scale))',
-                fontSize: 'calc(12px * var(--ui-scale))',
                 marginBottom: 'calc(4px * var(--ui-scale))',
               }}
-              onClick={() => promptPlayerRoll('Dice Throw')}
             >
-              🎲 Prompt Dice Throw
-            </button>
+              <button 
+                className="w-full text-left flex items-center justify-between transition-all duration-200"
+                style={{
+                  padding: 'calc(8px * var(--ui-scale))',
+                  fontSize: 'calc(12px * var(--ui-scale))',
+                }}
+                onClick={() => setIsDicePromptExpanded(!isDicePromptExpanded)}
+              >
+                <span className={isDicePromptExpanded ? 'text-amber-300' : 'text-amber-300'}>
+                  🎲 Prompt Dice Roll
+                </span>
+                <span className={`transition-transform duration-200 ${isDicePromptExpanded ? 'rotate-180 text-amber-500' : 'text-amber-500'}`}>
+                  ▼
+                </span>
+              </button>
+
+              {isDicePromptExpanded && (
+                <div 
+                  className="border-t border-amber-500/30 bg-amber-500/5"
+                  style={{
+                    padding: 'calc(12px * var(--ui-scale))',
+                    borderRadius: '0 0 calc(4px * var(--ui-scale)) calc(4px * var(--ui-scale))',
+                  }}
+                >
+                  <div className="mb-3">
+                    <span className="text-amber-300 font-medium" style={{
+                      fontSize: 'calc(11px * var(--ui-scale))',
+                    }}>
+                      Select a player to prompt:
+                    </span>
+                  </div>
+
+                  {activePlayers.length > 0 ? (
+                    <div className="grid grid-cols-1 gap-2">
+                      {activePlayers.map((player) => (
+                        <button
+                          key={player.seatId}
+                          className="w-full text-left p-2 bg-amber-500/20 border border-amber-500/40 text-amber-200 rounded transition-all duration-200 hover:bg-amber-500/30 hover:border-amber-500/60"
+                          style={{
+                            padding: 'calc(8px * var(--ui-scale))',
+                            borderRadius: 'calc(6px * var(--ui-scale))',
+                            fontSize: 'calc(12px * var(--ui-scale))',
+                          }}
+                          onClick={() => selectPlayerForRollPrompt(player.playerName)}
+                        >
+                          <div className="flex items-center justify-between">
+                            <div>
+                              <div className="font-medium">{player.playerName}</div>
+                              {player.characterData && (
+                                <div className="text-amber-300/70 text-xs">
+                                  {player.characterData.class} • Level {player.characterData.level}
+                                </div>
+                              )}
+                            </div>
+                            <div className="text-amber-400">🎯</div>
+                          </div>
+                        </button>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="text-center py-4 text-amber-500/60">
+                      <div style={{ fontSize: 'calc(20px * var(--ui-scale))' }}>🪑</div>
+                      <p style={{ fontSize: 'calc(12px * var(--ui-scale))' }}>
+                        No active players to prompt
+                      </p>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
           </div>
         )}
       </div>
@@ -486,7 +626,7 @@ export default function DMControlCenter({
               🚪 Kick Player
             </button>
 
-            {/* NEW: Clear System Messages Button */}
+            {/* Clear System Messages Button */}
             <button 
               className={`w-full rounded text-left transition-all duration-200 ${
                 isClearingLogs 
@@ -507,6 +647,95 @@ export default function DMControlCenter({
           </div>
         )}
       </div>
+
+      {/* Roll Prompt Modal */}
+      {isRollPromptModalOpen && selectedPlayerForRoll && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50">
+          <div 
+            className="bg-slate-800 border border-amber-500/30 rounded-lg shadow-2xl max-w-4xl w-full mx-4 max-h-[80vh] overflow-y-auto"
+            style={{
+              padding: 'calc(24px * var(--ui-scale))',
+              borderRadius: 'calc(12px * var(--ui-scale))',
+            }}
+          >
+            <div className="flex items-center justify-between mb-6">
+              <h3 className="text-amber-300 font-bold" style={{
+                fontSize: 'calc(18px * var(--ui-scale))',
+              }}>
+                🎲 Prompt {selectedPlayerForRoll} to Roll
+              </h3>
+              <button 
+                className="text-gray-400 hover:text-white transition-colors"
+                onClick={() => {
+                  setIsRollPromptModalOpen(false);
+                  setSelectedPlayerForRoll(null);
+                }}
+                style={{
+                  fontSize: 'calc(20px * var(--ui-scale))',
+                }}
+              >
+                ✕
+              </button>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              {Object.entries(rollTypes).map(([category, rolls]) => (
+                <div key={category} className="space-y-3">
+                  <h4 
+                    className="text-amber-400 font-semibold border-b border-amber-500/30 pb-2"
+                    style={{
+                      fontSize: 'calc(16px * var(--ui-scale))',
+                    }}
+                  >
+                    {category}
+                  </h4>
+                  <div className="space-y-2">
+                    {rolls.map((roll) => (
+                      <button
+                        key={roll.name}
+                        className="w-full text-left p-3 bg-amber-500/10 border border-amber-500/30 text-amber-100 rounded transition-all duration-200 hover:bg-amber-500/20 hover:border-amber-500/50"
+                        style={{
+                          padding: 'calc(12px * var(--ui-scale))',
+                          borderRadius: 'calc(8px * var(--ui-scale))',
+                          fontSize: 'calc(14px * var(--ui-scale))',
+                        }}
+                        onClick={() => sendRollPromptToPlayer(roll.name)}
+                      >
+                        <div className="font-medium mb-1">{roll.name}</div>
+                        <div 
+                          className="text-amber-300/70 text-sm"
+                          style={{
+                            fontSize: 'calc(12px * var(--ui-scale))',
+                          }}
+                        >
+                          {roll.description}
+                        </div>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            <div className="flex justify-end gap-3 mt-6">
+              <button 
+                className="px-4 py-2 bg-gray-600 border border-gray-500 text-gray-300 rounded transition-all duration-200 hover:bg-gray-500"
+                style={{
+                  padding: 'calc(8px * var(--ui-scale)) calc(16px * var(--ui-scale))',
+                  borderRadius: 'calc(6px * var(--ui-scale))',
+                  fontSize: 'calc(14px * var(--ui-scale))',
+                }}
+                onClick={() => {
+                  setIsRollPromptModalOpen(false);
+                  setSelectedPlayerForRoll(null);
+                }}
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Kick Player Modal */}
       {isKickModalOpen && (

@@ -9,6 +9,7 @@ import DMControlCenter from '../components/DMControlCenter';
 import HorizontalInitiativeTracker from '../components/HorizontalInitiativeTracker';
 import AdventureLog from '../components/AdventureLog';
 import { useWebSocket } from '../hooks/useWebSocket';
+import DiceActionPanel from '../components/DiceActionPanel';
 
 function Params() {
   return useSearchParams()
@@ -48,6 +49,10 @@ export default function Game() {
 
   const [currentTrack, setCurrentTrack] = useState('🏰 Tavern Ambience');
   const [isPlaying, setIsPlaying] = useState(true);
+
+  const [rollPrompts, setRollPrompts] = useState({}); // Store roll prompts by player name
+  const [globalRollPrompt, setGlobalRollPrompt] = useState(null); // Current roll prompt for active player
+
 
   // Helper function to get character data
   const getCharacterData = (playerName) => {
@@ -470,9 +475,27 @@ export default function Game() {
   };
 
   // DM prompts player to roll
-  const promptPlayerRoll = (rollType) => {
-    addToLog(`DM: ${currentTurn}, please roll a ${rollType}`, 'system');
-    showDicePortal(currentTurn, rollType);
+  const promptPlayerRoll = (rollType, targetPlayer = null) => {
+    const playerToPrompt = targetPlayer || currentTurn;
+    
+    // Set the roll prompt for the specific player
+    setRollPrompts(prev => ({
+      ...prev,
+      [playerToPrompt]: rollType
+    }));
+    
+    // If it's for the current turn player, also set global prompt
+    if (playerToPrompt === currentTurn) {
+      setGlobalRollPrompt(rollType);
+    }
+    
+    // Add to adventure log
+    addToLog(`DM: ${playerToPrompt}, please roll a ${rollType}`, 'system');
+    
+    // Show dice portal for the target player if it's their turn
+    if (playerToPrompt === currentTurn) {
+      showDicePortal(playerToPrompt, rollType);
+    }
   };
 
   // Handle dice roll
@@ -483,6 +506,50 @@ export default function Game() {
     setTimeout(() => {
       hideDicePortal();
     }, 1000);
+  };
+
+  const handleDiceRoll = (rollData) => {
+    const result = Math.floor(Math.random() * parseInt(rollData.dice.substring(1))) + 1;
+    const bonus = rollData.bonus ? ` ${rollData.bonus}` : '';
+    const rollFor = rollData.rollFor || 'General Roll';
+    
+    // Add to log with roll details
+    addToLog(`${rollData.dice}${bonus}: ${result} (${rollFor})`, 'dice', currentTurn);
+    
+    // Send to websocket
+    sendDiceRoll(currentTurn, `${rollData.dice}${bonus}`, result);
+    
+    // Clear the roll prompt for this player
+    setRollPrompts(prev => {
+      const updated = { ...prev };
+      delete updated[currentTurn];
+      return updated;
+    });
+    
+    // Clear global prompt if it was for current turn
+    if (rollPrompts[currentTurn]) {
+      setGlobalRollPrompt(null);
+    }
+    
+    setTimeout(() => {
+      hideDicePortal();
+    }, 1000);
+  };
+
+  const handleEndTurn = () => {
+    // Clear any roll prompts for the current player
+    setRollPrompts(prev => {
+      const updated = { ...prev };
+      delete updated[currentTurn];
+      return updated;
+    });
+    setGlobalRollPrompt(null);
+    
+    // Add logic to advance to next player in initiative order
+    addToLog(`${currentTurn} ended their turn`, 'system');
+    
+    // Here you would advance to the next player in initiative
+    // This depends on your initiative system implementation
   };
 
   // Handle initiative order clicks
@@ -672,7 +739,16 @@ export default function Game() {
         handleClearSystemMessages={handleClearSystemMessages}
           />
         </div>
-
+        {/* Dice Action Panel - Fixed positioning for current turn player */}
+          <DiceActionPanel
+            currentTurn={currentTurn}
+            thisPlayer={thisPlayer}
+            combatActive={combatActive}
+            onRollDice={handleDiceRoll}
+            onEndTurn={handleEndTurn}
+            rollPrompt={rollPrompts[thisPlayer] || globalRollPrompt}
+            uiScale={uiScale}
+          />
       </div>
     </div>
   );
