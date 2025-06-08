@@ -9,7 +9,7 @@ from fastapi.middleware.httpsredirect import HTTPSRedirectMiddleware
 from starlette.websockets import WebSocketDisconnect
 
 from gameservice import GameService, GameSettings
-
+from adventure_log_service import create_adventure_log_service
 
 logger = logging.getLogger()
 app = FastAPI()
@@ -22,6 +22,22 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+adventure_log_service = create_adventure_log_service()
+
+# Helper function to add log entries
+def add_adventure_log(room_id: str, message: str, log_type: str, player_name: str = None):
+    """Helper function to add log entries with your default settings"""
+    try:
+        return adventure_log_service.add_log_entry(
+            room_id=room_id,
+            message=message,
+            log_type=log_type,
+            player_name=player_name,
+            max_logs=200
+        )
+    except Exception as e:
+        print(f"Failed to add adventure log: {e}")
+        return None
 
 class Message(pydantic.BaseModel):
     "A standard string message response"
@@ -29,6 +45,29 @@ class Message(pydantic.BaseModel):
 #    pydantic validation OOTB, this ensures validation on this Type.
     msg: str
 
+@app.get("/game/{room_id}/logs")
+async def get_room_logs(room_id: str, limit: int = 100, skip: int = 0):
+    """Get adventure logs for a room"""
+    try:
+        logs = adventure_log_service.get_room_logs(room_id, limit, skip)
+        count = adventure_log_service.get_room_log_count(room_id)
+        
+        return {
+            "logs": logs,
+            "total_count": count,
+            "returned_count": len(logs)
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/game/{room_id}/logs/stats")
+async def get_room_log_stats(room_id: str):
+    """Get log statistics for a room"""
+    try:
+        stats = adventure_log_service.get_room_stats(room_id)
+        return stats
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
 @app.put("/game/{room_id}/seats")
 async def update_seat_count(room_id: str, request: dict):
@@ -58,9 +97,14 @@ async def update_seat_count(room_id: str, request: dict):
 def gameservice_get(room_id):
     check_room = GameService.get_room(id=room_id)
     if check_room:
-        return check_room
+        # Add current seat layout to response
+        seat_layout = GameService.get_seat_layout(room_id)
+        return {
+            **check_room,
+            "current_seat_layout": seat_layout
+        }
     else:
-        return Response(status_code=404, content='{f"id {room_id} not found")}')
+        return Response(status_code=404, content=f'{{"error": "Room {room_id} not found"}}')
 
 @app.post("/game/")
 def gameservice_create(settings: GameSettings):
@@ -102,7 +146,7 @@ manager = ConnectionManager()
 @app.websocket("/ws/{client_id}")
 async def websocket_endpoint(
     websocket: WebSocket,
-    client_id: str,
+    client_id: str,  # This should be your room_id
     player_name: str
 ):
     await manager.connect(websocket)
@@ -123,18 +167,46 @@ async def websocket_endpoint(
                     await websocket.send_json(error_message)
                     continue
 
+                # Save to database
+                try:
+                    GameService.update_seat_layout(client_id, seat_layout)
+                except Exception as e:
+                    print(f"Failed to save seat layout: {e}")
+
                 broadcast_message = {
                     "event_type": "seat_change",
                     "data": seat_layout
                 }
 
             elif event_type == "combat_state":
+                # Log combat state changes
+                combat_active = event_data.get("combatActive", False)
+                action = "initiated" if combat_active else "ended"
+                
+                add_adventure_log(
+                    room_id=client_id,
+                    message=f"Combat {action}",
+                    log_type="system",
+                    player_name=player_name
+                )
+                
                 broadcast_message = {
                     "event_type": "combat_state",
                     "data": event_data
                 }
 
             elif event_type == "seat_count_change":
+                # Log seat count changes
+                max_players = event_data.get("max_players")
+                updated_by = event_data.get("updated_by")
+                
+                add_adventure_log(
+                    room_id=client_id,
+                    message=f"{updated_by} changed party size to {max_players} seats",
+                    log_type="system",
+                    player_name=updated_by
+                )
+                
                 broadcast_message = {
                     "event_type": "seat_count_change",
                     "data": event_data,
@@ -142,25 +214,73 @@ async def websocket_endpoint(
                 }
 
             elif event_type == "player_kicked":
+                # Log player kicks
+                kicked_player = event_data.get("kicked_player")
+                
+                add_adventure_log(
+                    room_id=client_id,
+                    message=f"{kicked_player} was removed from the game",
+                    log_type="system",
+                    player_name=player_name
+                )
+                
                 broadcast_message = {
                     "event_type": "player_kicked",
                     "data": event_data,
                     "player_name": player_name
                 }
 
+            elif event_type == "dice_roll":
+                # Log dice rolls
+                roll_data = event_data
+                player = roll_data.get("player")
+                dice = roll_data.get("dice")
+                result = roll_data.get("result")
+                
+                add_adventure_log(
+                    room_id=client_id,
+                    message=f"{player}: {dice}: {result}",
+                    log_type="player-roll",
+                    player_name=player
+                )
+                
+                broadcast_message = {
+                    "event_type": "dice_roll",
+                    "data": event_data
+                }
+
             else:
-                # use for chat messages
+                # Chat messages
                 timestamp = datetime.now().strftime("%H:%M")
-                await manager.update_data({**data, "player_name": player_name, "utc_timestamp": timestamp})
+                
+                # Log chat messages
+                add_adventure_log(
+                    room_id=client_id,
+                    message=data.get("data", ""),
+                    log_type="chat",
+                    player_name=player_name
+                )
+                
+                await manager.update_data({
+                    **data, 
+                    "player_name": player_name, 
+                    "utc_timestamp": timestamp
+                })
                 continue
             
             await manager.update_data(broadcast_message)
             
     except WebSocketDisconnect:
-        # IMPORTANT: Remove the disconnected websocket FIRST
+        # Log player disconnections
+        add_adventure_log(
+            room_id=client_id,
+            message=f"{player_name} disconnected",
+            log_type="system",
+            player_name=player_name
+        )
+        
         manager.remove_connection(websocket)
         
-        # Create disconnect message
         disconnect_message = {
             "event_type": "player_disconnected", 
             "data": {
@@ -168,7 +288,6 @@ async def websocket_endpoint(
             }
         }
         
-        # Now broadcast to remaining players (disconnected one is gone from list)
         await manager.update_data(disconnect_message)
 
 

@@ -40,21 +40,10 @@ export default function Game() {
   const [uiScale, setUIScale] = useState('medium'); // UI Scale state
   const [combatActive, setCombatActive] = useState(true); // Combat state
   const [rollLog, setRollLog] = useState([
-    { id: 1, message: 'Combat initiated', type: 'system', timestamp: '2:34 PM' },
-    { id: 2, message: '<strong>Thorin:</strong> Initiative d20: 19', type: 'player-roll', timestamp: '2:34 PM' },
-    { id: 3, message: '<strong>DM:</strong> Bandit Initiative d20: 15', type: 'dm-roll', timestamp: '2:34 PM' },
-    { id: 4, message: '<strong>Elara:</strong> Initiative d20: 14', type: 'player-roll', timestamp: '2:35 PM' },
-    { id: 5, message: 'Turn order established', type: 'system', timestamp: '2:35 PM' },
-    { id: 6, message: '<strong>DM:</strong> Thorin, please roll an Attack Roll', type: 'system', timestamp: '2:36 PM' }
+    { id: 1, message: 'Welcome to Tabletop Tavern', type: 'system'}
   ]);
   
-  const [initiativeOrder, setInitiativeOrder] = useState([
-    { name: 'Thorin', initiative: 19, active: true },
-    { name: 'Bandit #1', initiative: 15, active: false },
-    { name: 'Elara', initiative: 14, active: false },
-    { name: 'Finn', initiative: 12, active: false },
-    { name: 'Sister Meredith', initiative: 8, active: false }
-  ]);
+  const [initiativeOrder, setInitiativeOrder] = useState([]);
 
   const [currentTrack, setCurrentTrack] = useState('🏰 Tavern Ambience');
   const [isPlaying, setIsPlaying] = useState(true);
@@ -64,10 +53,7 @@ export default function Game() {
   // Helper function to get character data
   const getCharacterData = (playerName) => {
     const characterDatabase = {
-      'Thorin': { class: 'Dwarf Fighter', level: 3, hp: 34, maxHp: 40 },
-      'Elara': { class: 'Elf Wizard', level: 3, hp: 18, maxHp: 30 },
-      'Finn': { class: 'Halfling Rogue', level: 2, hp: 23, maxHp: 24 },
-      'Sister Meredith': { class: 'Human Cleric', level: 3, hp: 12, maxHp: 30 }
+      'Thorin': { class: 'Dwarf Fighter', level: 3, hp: 34, maxHp: 40 }
     };
     
     return characterDatabase[playerName] || {
@@ -147,23 +133,32 @@ export default function Game() {
       setRoom404(true)
       return
     }
-
+  
     await req.json().then((res) => {
       setHost(res["player_name"])
       
-      // Create unified seat structure
+      // Use actual seat layout from database if available
+      const seatLayout = res["current_seat_layout"] || [];
+      const maxPlayers = res["max_players"];
+      
+      // Create unified seat structure from database data
       const initialSeats = [];
-      for (let i = 0; i < res["max_players"]; i++) {
+      for (let i = 0; i < maxPlayers; i++) {
+        const playerName = seatLayout[i] || "empty";
         initialSeats.push({
           seatId: i,
-          playerName: "empty",
-          characterData: null,
+          playerName: playerName,
+          characterData: playerName !== "empty" ? getCharacterData(playerName) : null,
           isActive: false
         });
       }
       
+      console.log("Loaded seat layout from database:", initialSeats);
       setGameSeats(initialSeats);
     })
+    
+    // Load adventure logs for this room
+    await loadAdventureLogs(roomId);
   }
   
   // initialise the game lobby
@@ -259,6 +254,51 @@ export default function Game() {
       console.error('Error updating seat count:', error);
       alert('Failed to update seat count. Please try again.');
     }
+  };
+
+  const loadAdventureLogs = async (roomId) => {
+    try {
+      console.log("Loading adventure logs from database...");
+      
+      const response = await fetch(`/api/game/${roomId}/logs?limit=100`);
+      
+      if (response.ok) {
+        const data = await response.json();
+        const dbLogs = data.logs;
+        
+        console.log(`Loaded ${dbLogs.length} logs from database`);
+        
+        // Convert database logs to your frontend format
+        const formattedLogs = dbLogs.map(log => ({
+          id: log.log_id,
+          message: log.message,
+          type: log.type,
+          timestamp: formatTimestamp(log.timestamp),
+          player_name: log.player_name
+        }));
+        
+        // Replace your initial hardcoded logs with database logs
+        setRollLog(formattedLogs.reverse()); // Reverse to show oldest first in state
+        
+      } else {
+        console.log("No existing logs found, starting with empty log");
+        // Keep your existing default logs or start empty
+        setRollLog([]);
+      }
+      
+    } catch (error) {
+      console.error("Error loading adventure logs:", error);
+      // Fallback to default logs
+      setRollLog([
+        { id: 1, message: 'Welcome to the adventure!', type: 'system', timestamp: formatTimestamp(new Date()) }
+      ]);
+    }
+  };
+  
+  // Helper function to format timestamps
+  const formatTimestamp = (timestamp) => {
+    const date = new Date(timestamp);
+    return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
   };
 
   // NEW FUNCTION: Handle player kick
@@ -412,6 +452,22 @@ export default function Game() {
         console.log("received combat state change: ", json_data["data"])
         const disconnected_player = json_data["data"]["disconnected_player"];
       
+        // Find and empty the seat of the disconnected player
+  const updatedSeats = gameSeats.map(seat => 
+    seat.playerName === disconnected_player 
+      ? { ...seat, playerName: "empty", characterData: null, isActive: false }
+      : seat
+  );
+
+        // Send updated seat layout to all players
+        webSocket.send(JSON.stringify({
+          "event_type": "seat_change",
+          "data": updatedSeats.map(seat => seat.playerName)
+        }));
+
+        // Update local state
+        setGameSeats(updatedSeats)
+
         if (disconnected_player !== thisPlayer) {
           addToLog(`${disconnected_player} disconnected`, 'system');
         }
@@ -437,8 +493,7 @@ export default function Game() {
     setGameSeats(newSeats);
   }
 
-  // Add entry to roll log
-  const addToLog = (message, type) => {
+  const addToLog = (message, type, playerName = null) => {
     const now = new Date();
     const timestamp = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
     
@@ -446,10 +501,14 @@ export default function Game() {
       id: Date.now(),
       message,
       type,
-      timestamp
+      timestamp,
+      player_name: playerName
     };
     
     setRollLog(prev => [...prev, newEntry]);
+    
+    // Note: The backend will also log this via websocket, so we might get duplicates
+    // You might want to add deduplication logic here
   };
 
   // Show dice portal for player rolls
