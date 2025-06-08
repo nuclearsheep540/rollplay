@@ -8,8 +8,8 @@ import ChatMessages from '../components/ChatMessages';
 import DMControlCenter from '../components/DMControlCenter';
 import HorizontalInitiativeTracker from '../components/HorizontalInitiativeTracker';
 import AdventureLog from '../components/AdventureLog';
-import { useWebSocket } from '../hooks/useWebSocket';
 import DiceActionPanel from '../components/DiceActionPanel';
+import { useWebSocket } from '../hooks/useWebSocket';
 
 function Params() {
   return useSearchParams()
@@ -50,9 +50,8 @@ export default function Game() {
   const [currentTrack, setCurrentTrack] = useState('🏰 Tavern Ambience');
   const [isPlaying, setIsPlaying] = useState(true);
 
+  // FIXED: Add roll prompts state for DM targeting
   const [rollPrompts, setRollPrompts] = useState({}); // Store roll prompts by player name
-  const [globalRollPrompt, setGlobalRollPrompt] = useState(null); // Current roll prompt for active player
-
 
   // Helper function to get character data
   const getCharacterData = (playerName) => {
@@ -474,7 +473,7 @@ export default function Game() {
     setDicePortalActive(false);
   };
 
-  // DM prompts player to roll
+  // FIXED: Update promptPlayerRoll to handle specific players and store prompts properly
   const promptPlayerRoll = (rollType, targetPlayer = null) => {
     const playerToPrompt = targetPlayer || currentTurn;
     
@@ -484,69 +483,43 @@ export default function Game() {
       [playerToPrompt]: rollType
     }));
     
-    // If it's for the current turn player, also set global prompt
-    if (playerToPrompt === currentTurn) {
-      setGlobalRollPrompt(rollType);
-    }
-    
     // Add to adventure log
     addToLog(`DM: ${playerToPrompt}, please roll a ${rollType}`, 'system');
-    
-    // Show dice portal for the target player if it's their turn
-    if (playerToPrompt === currentTurn) {
-      showDicePortal(playerToPrompt, rollType);
-    }
   };
 
-  // Handle dice roll
-  const rollDice = () => {
-    const result = Math.floor(Math.random() * 20) + 1;
-    addToLog(`d20: ${result}`, 'dice', currentTurn);
-    
-    setTimeout(() => {
-      hideDicePortal();
-    }, 1000);
-  };
-
+  // FIXED: Handle dice roll with correct player name and prompt clearing
   const handleDiceRoll = (rollData) => {
-    const result = Math.floor(Math.random() * parseInt(rollData.dice.substring(1))) + 1;
+    // Calculate result based on dice type
+    const diceNumber = parseInt(rollData.dice.substring(1));
+    const result = Math.floor(Math.random() * diceNumber) + 1;
     const bonus = rollData.bonus ? ` ${rollData.bonus}` : '';
     const rollFor = rollData.rollFor || 'General Roll';
     
-    // Add to log with roll details
-    addToLog(`${rollData.dice}${bonus}: ${result} (${rollFor})`, 'dice', currentTurn);
+    // FIXED: Add to log with roll details using thisPlayer (not hard-coded)
+    addToLog(`${rollData.dice}${bonus}: ${result} (${rollFor})`, 'dice', thisPlayer);
     
-    // Send to websocket
-    sendDiceRoll(currentTurn, `${rollData.dice}${bonus}`, result);
+    // FIXED: Send to websocket using thisPlayer and actual dice info
+    sendDiceRoll(thisPlayer, `${rollData.dice}${bonus}`, result);
     
-    // Clear the roll prompt for this player
+    // FIXED: Clear the roll prompt for this player
     setRollPrompts(prev => {
       const updated = { ...prev };
-      delete updated[currentTurn];
+      delete updated[thisPlayer];
       return updated;
     });
-    
-    // Clear global prompt if it was for current turn
-    if (rollPrompts[currentTurn]) {
-      setGlobalRollPrompt(null);
-    }
-    
-    setTimeout(() => {
-      hideDicePortal();
-    }, 1000);
   };
 
+  // FIXED: Handle end turn and clear prompts
   const handleEndTurn = () => {
     // Clear any roll prompts for the current player
     setRollPrompts(prev => {
       const updated = { ...prev };
-      delete updated[currentTurn];
+      delete updated[thisPlayer];
       return updated;
     });
-    setGlobalRollPrompt(null);
     
     // Add logic to advance to next player in initiative order
-    addToLog(`${currentTurn} ended their turn`, 'system');
+    addToLog(`${thisPlayer} ended their turn`, 'system');
     
     // Here you would advance to the next player in initiative
     // This depends on your initiative system implementation
@@ -614,19 +587,8 @@ export default function Game() {
     return <div>Loading...</div>;
   }
 
-  // UPDATED: Handle dice rolls from PlayerCard components
-  const handlePlayerDiceRoll = (playerName, seatId) => {
-    if (playerName === currentTurn) {
-      // Trigger dice roll
-      const result = Math.floor(Math.random() * 20) + 1;
-      addToLog(`d20: ${result}`, 'dice', playerName);
-      
-      // Send to websocket using hook method
-      sendDiceRoll(playerName, "d20", result);
-    } else {
-      console.log(`It's not ${playerName}'s turn!`);
-    }
-  };
+  // REMOVED: Old handlePlayerDiceRoll function that was causing hard-coded values
+  // This was conflicting with the new DiceActionPanel system
 
   // MAIN RENDER
   return (
@@ -701,13 +663,12 @@ export default function Game() {
                 isSitting={isSitting}
                 sendSeatChange={sendSeatChange}
                 currentTurn={currentTurn}
-                onDiceRoll={handlePlayerDiceRoll}
                 playerData={seat.characterData}
               />
             );
           })}
 
-          {/* NEW: Clean AdventureLog component */}
+          {/* Clean AdventureLog component */}
           <AdventureLog 
             rollLog={rollLog}
             gameSeats={gameSeats}
@@ -724,31 +685,32 @@ export default function Game() {
 
         {/* GRID POSITION 3: Right Panel - DM Controls (Full Height) */}
         <div className="right-panel">
-        <DMControlCenter
-        isDM={isDM}
-        promptPlayerRoll={promptPlayerRoll}
-        currentTrack={currentTrack}
-        isPlaying={isPlaying}
-        handleTrackClick={handleTrackClick}
-        combatActive={combatActive}
-        setCombatActive={sendCombatStateChange}
-        gameSeats={gameSeats}
-        setSeatCount={setSeatCount}
-        roomId={roomId}
-        handleKickPlayer={handleKickPlayer}
-        handleClearSystemMessages={handleClearSystemMessages}
+          <DMControlCenter
+            isDM={isDM}
+            promptPlayerRoll={promptPlayerRoll}
+            currentTrack={currentTrack}
+            isPlaying={isPlaying}
+            handleTrackClick={handleTrackClick}
+            combatActive={combatActive}
+            setCombatActive={sendCombatStateChange}
+            gameSeats={gameSeats}
+            setSeatCount={setSeatCount}
+            roomId={roomId}
+            handleKickPlayer={handleKickPlayer}
+            handleClearSystemMessages={handleClearSystemMessages}
           />
         </div>
-        {/* Dice Action Panel - Fixed positioning for current turn player */}
-          <DiceActionPanel
-            currentTurn={currentTurn}
-            thisPlayer={thisPlayer}
-            combatActive={combatActive}
-            onRollDice={handleDiceRoll}
-            onEndTurn={handleEndTurn}
-            rollPrompt={rollPrompts[thisPlayer] || globalRollPrompt}
-            uiScale={uiScale}
-          />
+
+        {/* FIXED: Dice Action Panel - Shows when combat active + player's turn OR when DM prompts player */}
+        <DiceActionPanel
+          currentTurn={currentTurn}
+          thisPlayer={thisPlayer}
+          combatActive={combatActive}
+          onRollDice={handleDiceRoll}
+          onEndTurn={handleEndTurn}
+          rollPrompt={rollPrompts[thisPlayer]} // Pass the specific prompt for this player
+          uiScale={uiScale}
+        />
       </div>
     </div>
   );

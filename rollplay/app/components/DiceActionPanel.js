@@ -23,8 +23,14 @@ export default function DiceActionPanel({
   
   // Determine panel state and appearance
   const isActivePanel = canRollDice;
-  const showTurnIndicator = combatActive && isMyTurn;
-  const showPromptIndicator = hasBeenPrompted;
+  const showTurnIndicator = combatActive; // Always show in combat
+  
+  // Determine what text to show for turn indicator
+  const getTurnText = () => {
+    if (!combatActive) return null;
+    if (isMyTurn) return "Your Turn!";
+    return `${currentTurn}'s Turn`; // This should use the actual currentTurn from props
+  };
   
   // Handle dice roll click
   const handleRollDiceClick = () => {
@@ -68,9 +74,8 @@ export default function DiceActionPanel({
           left: '50%',
           transform: `translateX(-50%) ${isActivePanel ? 'scale(1)' : 'scale(0.85)'}`,
           zIndex: 100,
-          transition: 'all 0.3s ease',
-          // Only show the panel if player can roll dice or if it's their turn
-          display: canRollDice ? 'block' : 'none'
+          transition: 'all 0.3s ease'
+          // Always show the panel, just style it differently when inactive
         }}
       >
         <div 
@@ -92,38 +97,19 @@ export default function DiceActionPanel({
             textAlign: 'center'
           }}
         >
-          {/* Turn Indicator - Show during combat when it's player's turn */}
+          {/* Turn Indicator - Show during combat for everyone */}
           {showTurnIndicator && (
             <div 
               className="turn-indicator"
               style={{
-                color: '#10b981',
+                color: isMyTurn ? '#10b981' : '#64748b',
                 fontSize: `calc(14px * var(--ui-scale))`,
                 fontWeight: 'bold',
                 marginBottom: `calc(12px * var(--ui-scale))`,
                 textShadow: '0 1px 2px rgba(0, 0, 0, 0.5)'
               }}
             >
-              Your Turn!
-            </div>
-          )}
-
-          {/* Show roll prompt if DM has requested a specific roll */}
-          {showPromptIndicator && (
-            <div 
-              className="roll-prompt-indicator"
-              style={{
-                backgroundColor: 'rgba(249, 115, 22, 0.15)',
-                border: '1px solid rgba(249, 115, 22, 0.3)',
-                borderRadius: `calc(8px * var(--ui-scale))`,
-                padding: `calc(8px * var(--ui-scale))`,
-                marginBottom: `calc(12px * var(--ui-scale))`,
-                color: '#fb923c',
-                fontSize: `calc(12px * var(--ui-scale))`,
-                fontWeight: 'bold'
-              }}
-            >
-              🎯 DM Requests: {rollPrompt}
+              {getTurnText()}
             </div>
           )}
 
@@ -173,8 +159,8 @@ export default function DiceActionPanel({
               🎲 Roll Dice
             </button>
 
-            {/* End Turn Button - Only show during combat and when it's player's turn */}
-            {showTurnIndicator && (
+            {/* End Turn Button - Only show during combat and when it's actually the player's turn */}
+            {combatActive && isMyTurn && (
               <button
                 className={`end-turn-btn ${isActivePanel ? 'active' : 'inactive'}`}
                 onClick={handleEndTurn}
