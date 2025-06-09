@@ -9,10 +9,9 @@ export default function DiceActionPanel({
   onRollDice,
   onEndTurn,
   uiScale = 'medium',
-  // NEW PROPS for prompts
-  promptedPlayer = null,     // Who is prompted to roll
-  rollPrompt = null,         // What they're rolling for
-  isDicePromptActive = false // Is a prompt currently active
+  // UPDATED PROPS for multiple prompts
+  activePrompts = [],        // Array of active prompts
+  isDicePromptActive = false // Is any prompt currently active
 }) {
   const [isDiceModalOpen, setIsDiceModalOpen] = useState(false);
   const [selectedDice, setSelectedDice] = useState('D20');
@@ -20,7 +19,8 @@ export default function DiceActionPanel({
   
   // UPDATED: Check if player should see dice interface
   const isMyTurn = currentTurn === thisPlayer && combatActive;
-  const isPromptedToRoll = promptedPlayer === thisPlayer && isDicePromptActive;
+  const myPrompts = activePrompts.filter(prompt => prompt.player === thisPlayer);
+  const isPromptedToRoll = myPrompts.length > 0;
   const shouldShowDicePanel = isMyTurn || isPromptedToRoll;
   
   // UPDATED: Always show panel, but determine if it's active
@@ -31,12 +31,18 @@ export default function DiceActionPanel({
     setIsDiceModalOpen(true);
   };
   
-  // Handle actual dice roll with type, bonus, and what they're rolling for
-  const handleDiceRoll = () => {
+  // UPDATED: Handle actual dice roll with prompt context
+  const handleDiceRoll = (rollFor = null) => {
+    // If rollFor is not specified and player has prompts, use the first prompt
+    let rollType = rollFor;
+    if (!rollType && myPrompts.length > 0) {
+      rollType = myPrompts[0].rollType;
+    }
+    
     const rollData = {
       dice: selectedDice,
       bonus: rollBonus,
-      rollFor: rollPrompt || 'General Roll'
+      rollFor: rollType || 'General Roll'
     };
     
     if (onRollDice) {
@@ -63,7 +69,7 @@ export default function DiceActionPanel({
   return (
     <>
       <div 
-        className={`dice-action-panel transition-all duration-300 fixed bottom-5 left-1/2 z-[100] ${
+        className={`dice-action-panel transition-all duration-300 fixed bottom-[calc(24px*var(--ui-scale))] left-1/2 z-[100] ${
           isPanelActive 
             ? 'active-turn transform -translate-x-1/2 scale-100' 
             : 'inactive-turn transform -translate-x-1/2 scale-85'
@@ -83,7 +89,9 @@ export default function DiceActionPanel({
             }`}
           >
             {isPromptedToRoll 
-              ? `Rolling for: ${rollPrompt}` 
+              ? myPrompts.length === 1 
+                ? `Rolling for: ${myPrompts[0].rollType}` 
+                : `${myPrompts.length} rolls requested`
               : isMyTurn 
                 ? "Your Turn!" 
                 : isPanelActive 
@@ -91,6 +99,20 @@ export default function DiceActionPanel({
                   : "Waiting..."
             }
           </div>
+
+          {/* UPDATED: Show list of prompts if multiple */}
+          {isPromptedToRoll && myPrompts.length > 1 && (
+            <div className="prompts-list mb-3 space-y-1">
+              {myPrompts.map((prompt) => (
+                <div 
+                  key={prompt.id}
+                  className="bg-amber-500/20 border border-amber-500/40 rounded-lg p-2 text-amber-200 text-xs"
+                >
+                  🎯 {prompt.rollType}
+                </div>
+              ))}
+            </div>
+          )}
 
           {/* REMOVED: Redundant prompt indicator - info now in button */}
 
@@ -156,11 +178,25 @@ export default function DiceActionPanel({
               </button>
             </div>
 
-            {/* What you're rolling for */}
-            {rollPrompt && (
+            {/* UPDATED: What you're rolling for - show prompts if any */}
+            {myPrompts.length > 0 && (
               <div className="p-[calc(12px*var(--ui-scale))] rounded-lg mb-[calc(24px*var(--ui-scale))] bg-emerald-500/10 border border-emerald-500/30">
-                <div className="text-[calc(14px*var(--ui-scale))] text-emerald-200 text-center">
-                  📋 Rolling for: <span className="font-bold">{rollPrompt}</span>
+                <div className="text-[calc(14px*var(--ui-scale))] text-emerald-200 text-center mb-3">
+                  📋 What are you rolling for?
+                </div>
+                <div className="space-y-2">
+                  {myPrompts.map((prompt) => (
+                    <button
+                      key={prompt.id}
+                      className="w-full p-2 bg-amber-500/20 border border-amber-500/40 text-amber-200 rounded-lg hover:bg-amber-500/30 transition-all duration-200 text-sm"
+                      onClick={() => handleDiceRoll(prompt.rollType)}
+                    >
+                      🎯 {prompt.rollType}
+                    </button>
+                  ))}
+                </div>
+                <div className="text-center mt-3 text-slate-400 text-xs">
+                  Or roll general dice below
                 </div>
               </div>
             )}

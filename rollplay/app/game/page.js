@@ -50,10 +50,9 @@ export default function Game() {
   const [currentTrack, setCurrentTrack] = useState('🏰 Tavern Ambience');
   const [isPlaying, setIsPlaying] = useState(true);
 
-  // NEW: Separate state for dice roll prompts
-  const [promptedPlayer, setPromptedPlayer] = useState(null); // Who the DM wants to roll
-  const [rollPrompt, setRollPrompt] = useState(null); // What they're rolling for
-  const [isDicePromptActive, setIsDicePromptActive] = useState(false); // Is a prompt active?
+  // UPDATED: Multiple dice roll prompts support
+  const [activePrompts, setActivePrompts] = useState([]); // Array of {id, player, rollType, promptedBy}
+  const [isDicePromptActive, setIsDicePromptActive] = useState(false); // Is any prompt active?
 
   // Helper function to get character data
   const getCharacterData = (playerName) => {
@@ -194,14 +193,33 @@ export default function Game() {
       }
     },
 
-    // NEW: Handle dice prompts
+    // UPDATED: Handle multiple dice prompts
     onDicePrompt: (data) => {
       console.log("received dice prompt:", data);
-      const { prompted_player, roll_type, prompted_by } = data;
+      const { prompted_player, roll_type, prompted_by, prompt_id } = data;
       
-      // Update prompt state for all clients
-      setPromptedPlayer(prompted_player);
-      setRollPrompt(roll_type);
+      // Add to active prompts array
+      const newPrompt = {
+        id: prompt_id || Date.now(), // Use provided ID or generate one
+        player: prompted_player,
+        rollType: roll_type,
+        promptedBy: prompted_by
+      };
+      
+      setActivePrompts(prev => {
+        // Check if this player already has an active prompt for this roll type
+        const existingIndex = prev.findIndex(p => p.player === prompted_player && p.rollType === roll_type);
+        if (existingIndex >= 0) {
+          // Replace existing prompt
+          const updated = [...prev];
+          updated[existingIndex] = newPrompt;
+          return updated;
+        } else {
+          // Add new prompt
+          return [...prev, newPrompt];
+        }
+      });
+      
       setIsDicePromptActive(true);
       
       // Add to adventure log if not the person who made the prompt
@@ -212,9 +230,27 @@ export default function Game() {
 
     onDicePromptClear: (data) => {
       console.log("received dice prompt clear:", data);
-      setPromptedPlayer(null);
-      setRollPrompt(null);
-      setIsDicePromptActive(false);
+      const { prompt_id, clear_all, cleared_player } = data;
+      
+      if (clear_all) {
+        // Clear all prompts
+        setActivePrompts([]);
+        setIsDicePromptActive(false);
+      } else if (prompt_id) {
+        // Clear specific prompt by ID
+        setActivePrompts(prev => {
+          const filtered = prev.filter(prompt => prompt.id !== prompt_id);
+          setIsDicePromptActive(filtered.length > 0);
+          return filtered;
+        });
+      } else if (cleared_player) {
+        // Clear all prompts for specific player
+        setActivePrompts(prev => {
+          const filtered = prev.filter(prompt => prompt.player !== cleared_player);
+          setIsDicePromptActive(filtered.length > 0);
+          return filtered;
+        });
+      }
     }
   };
 
@@ -507,24 +543,67 @@ export default function Game() {
       return;
     }
     
-    // Use the new WebSocket method
-    sendDicePrompt(playerName, rollType);
+    // Generate unique prompt ID
+    const promptId = `${playerName}_${rollType}_${Date.now()}`;
+    
+    // Use the updated WebSocket method
+    sendDicePrompt(playerName, rollType, promptId);
     
     // Update local state
-    setPromptedPlayer(playerName);
-    setRollPrompt(rollType);
+    const newPrompt = {
+      id: promptId,
+      player: playerName,
+      rollType: rollType,
+      promptedBy: thisPlayer
+    };
+    
+    setActivePrompts(prev => {
+      // Check if this player already has an active prompt for this roll type
+      const existingIndex = prev.findIndex(p => p.player === playerName && p.rollType === rollType);
+      if (existingIndex >= 0) {
+        // Replace existing prompt
+        const updated = [...prev];
+        updated[existingIndex] = newPrompt;
+        return updated;
+      } else {
+        // Add new prompt
+        return [...prev, newPrompt];
+      }
+    });
+    
     setIsDicePromptActive(true);
     
     // Add to adventure log
     addToLog(`DM: ${playerName}, please roll a ${rollType}`, 'dice');
   };
 
-  // NEW: Clear dice prompt
-  const clearDicePrompt = () => {
-    sendDicePromptClear();
-    setPromptedPlayer(null);
-    setRollPrompt(null);
-    setIsDicePromptActive(false);
+  // UPDATED: Clear dice prompt (can clear specific prompt or all prompts)
+  const clearDicePrompt = (promptId = null, clearAll = false) => {
+    sendDicePromptClear(promptId, clearAll);
+    
+    if (clearAll) {
+      setActivePrompts([]);
+      setIsDicePromptActive(false);
+    } else if (promptId) {
+      setActivePrompts(prev => {
+        const filtered = prev.filter(prompt => prompt.id !== promptId);
+        setIsDicePromptActive(filtered.length > 0);
+        return filtered;
+      });
+    }
+  };
+
+  // NEW: Prompt all players for initiative
+  const promptAllPlayersInitiative = () => {
+    const activePlayers = gameSeats.filter(seat => seat.playerName !== "empty");
+    if (activePlayers.length === 0) {
+      alert("No players in the game to prompt for initiative!");
+      return;
+    }
+    
+    activePlayers.forEach(player => {
+      promptPlayerRoll(player.playerName, "Initiative");
+    });
   };
 
   // Handle dice roll
@@ -619,10 +698,15 @@ export default function Game() {
     // Send to websocket with context
     sendDiceRoll(playerName, `${dice}${bonusText}`, totalResult, rollFor);
     
-    // Clear prompt if this player was prompted
-    if (playerName === promptedPlayer) {
-      clearDicePrompt();
-    }
+    // Clear prompts for this player if they match the roll type
+    const playerPrompts = activePrompts.filter(prompt => 
+      prompt.player === playerName && 
+      (rollFor === prompt.rollType || rollFor === null) // Match specific roll type or clear if general roll
+    );
+    
+    playerPrompts.forEach(prompt => {
+      clearDicePrompt(prompt.id, false);
+    });
   };
 
   // NEW: Handle end turn (implement as needed)
@@ -730,7 +814,8 @@ export default function Game() {
         <div className="right-panel">
           <DMControlCenter
             isDM={isDM}
-            promptPlayerRoll={promptPlayerRoll}  // Updated function signature
+            promptPlayerRoll={promptPlayerRoll}
+            promptAllPlayersInitiative={promptAllPlayersInitiative}  // NEW
             currentTrack={currentTrack}
             isPlaying={isPlaying}
             handleTrackClick={handleTrackClick}
@@ -741,15 +826,14 @@ export default function Game() {
             roomId={roomId}
             handleKickPlayer={handleKickPlayer}
             handleClearSystemMessages={handleClearSystemMessages}
-            promptedPlayer={promptedPlayer}      // NEW
-            rollPrompt={rollPrompt}              // NEW
-            clearDicePrompt={clearDicePrompt}    // NEW
+            activePrompts={activePrompts}        // UPDATED: Pass array instead of single prompt
+            clearDicePrompt={clearDicePrompt}    // UPDATED: Now accepts prompt ID
           />
         </div>
 
       </div>
 
-      {/* NEW: Add DiceActionPanel component */}
+      {/* UPDATED: DiceActionPanel with multiple prompts support */}
       <DiceActionPanel
         currentTurn={currentTurn}
         thisPlayer={thisPlayer}
@@ -757,8 +841,7 @@ export default function Game() {
         onRollDice={handlePlayerDiceRoll}
         onEndTurn={handleEndTurn}
         uiScale={uiScale}
-        promptedPlayer={promptedPlayer}
-        rollPrompt={rollPrompt}
+        activePrompts={activePrompts}            // UPDATED: Pass active prompts array
         isDicePromptActive={isDicePromptActive}
       />
     </div>

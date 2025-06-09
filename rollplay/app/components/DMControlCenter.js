@@ -2,7 +2,8 @@ import React, { useState } from 'react';
 
 export default function DMControlCenter({
   isDM,
-  promptPlayerRoll, // NOW UPDATED to take (playerName, rollType) instead of just rollType
+  promptPlayerRoll,
+  promptAllPlayersInitiative,  // NEW: Function to prompt all players for initiative
   currentTrack,
   isPlaying,
   handleTrackClick,
@@ -13,9 +14,8 @@ export default function DMControlCenter({
   roomId,              
   handleKickPlayer,
   handleClearSystemMessages,
-  promptedPlayer = null,     // NEW: Who is currently prompted
-  rollPrompt = null,         // NEW: What they're rolling for  
-  clearDicePrompt           // NEW: Function to clear prompt
+  activePrompts = [],        // UPDATED: Array of active prompts
+  clearDicePrompt           // UPDATED: Function to clear prompt(s)
 }) {
   
   // State for collapsible sections
@@ -284,24 +284,46 @@ export default function DMControlCenter({
       )}
     </div>
 
-      {/* NEW: Active Dice Prompt Status (only show if there's an active prompt) */}
-      {promptedPlayer && (
-        <div className="mb-4 p-3 bg-amber-500/20 border border-amber-500/40 rounded-lg">
-          <div className="flex items-center justify-between">
-            <div>
-              <div className="text-amber-300 font-semibold text-sm mb-1">
-                🎯 Active Prompt
-              </div>
-              <div className="text-amber-200 text-xs">
-                {promptedPlayer} • {rollPrompt}
-              </div>
+      {/* UPDATED: Active Dice Prompts Status (show list of active prompts) */}
+      {activePrompts.length > 0 && (
+        <div className="mb-4">
+          <div className="flex items-center justify-between mb-2">
+            <div className="text-amber-300 font-semibold text-sm">
+              🎯 Active Prompts ({activePrompts.length})
             </div>
-            <button
-              className="bg-red-500/20 border border-red-500/40 text-red-300 rounded px-2 py-1 text-xs hover:bg-red-500/30 transition-all duration-200"
-              onClick={clearDicePrompt}
-            >
-              Cancel
-            </button>
+            {activePrompts.length > 1 && (
+              <button
+                className="bg-red-500/20 border border-red-500/40 text-red-300 rounded px-2 py-1 text-xs hover:bg-red-500/30 transition-all duration-200"
+                onClick={() => clearDicePrompt(null, true)}
+              >
+                Clear All
+              </button>
+            )}
+          </div>
+          
+          <div className="space-y-2">
+            {activePrompts.map((prompt) => (
+              <div key={prompt.id} className="p-3 bg-amber-500/20 border border-amber-500/40 rounded-lg">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <div className="text-amber-200 text-xs">
+                      {prompt.player} • {prompt.rollType}
+                    </div>
+                    {prompt.promptedBy && (
+                      <div className="text-amber-400/70 text-xs mt-1">
+                        Prompted by {prompt.promptedBy}
+                      </div>
+                    )}
+                  </div>
+                  <button
+                    className="bg-red-500/20 border border-red-500/40 text-red-300 rounded px-2 py-1 text-xs hover:bg-red-500/30 transition-all duration-200"
+                    onClick={() => clearDicePrompt(prompt.id, false)}
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </div>
+            ))}
           </div>
         </div>
       )}
@@ -401,19 +423,10 @@ export default function DMControlCenter({
                 marginBottom: 'calc(4px * var(--ui-scale))',
               }}
               onClick={() => {
-                // For initiative, we'll use "Initiative" as the roll type for all players
-                const allActivePlayers = gameSeats.filter(seat => seat.playerName !== "empty");
-                if (allActivePlayers.length === 0) {
-                  alert("No players in the game to prompt for initiative!");
-                  return;
-                }
-                // You can prompt all players or just prompt one by one
-                // For now, let's just toggle the player selection for initiative
-                setIsPlayerSelectExpanded(!isPlayerSelectExpanded);
-                setSelectedPlayerForPrompt('initiative');
+                promptAllPlayersInitiative();
               }}
             >
-              ⚡ Prompt Initiative
+              ⚡ Prompt All Players - Initiative
             </button>
 
             {/* UPDATED: Prompt Dice Throw - now shows player selection */}

@@ -100,38 +100,47 @@ export function useWebSocket(roomId, playerName, callbacks) {
     };
   }, [roomId, playerName]);
 
-  // NEW: Send dice prompt
-  const sendDicePrompt = useCallback((promptedPlayer, rollType) => {
+  // UPDATED: Send dice prompt with ID
+  const sendDicePrompt = useCallback((promptedPlayer, rollType, promptId) => {
     if (!webSocket || !isConnected) {
       console.log("❌ Cannot send dice prompt - WebSocket not connected");
       return;
     }
     
-    console.log(`🎲 Sending dice prompt: ${promptedPlayer} to roll ${rollType}`);
+    console.log(`🎲 Sending dice prompt: ${promptedPlayer} to roll ${rollType} (ID: ${promptId})`);
     
     webSocket.send(JSON.stringify({
       "event_type": "dice_prompt",
       "data": {
         "prompted_player": promptedPlayer,
         "roll_type": rollType,
-        "prompted_by": playerName
+        "prompted_by": playerName,
+        "prompt_id": promptId
       }
     }));
   }, [webSocket, isConnected, playerName]);
 
-  // NEW: Clear dice prompt
-  const sendDicePromptClear = useCallback(() => {
+  // UPDATED: Clear dice prompt with options
+  const sendDicePromptClear = useCallback((promptId = null, clearAll = false) => {
     if (!webSocket || !isConnected) {
       console.log("❌ Cannot clear dice prompt - WebSocket not connected");
       return;
     }
     
-    console.log("🎲 Clearing dice prompt");
+    if (clearAll) {
+      console.log("🎲 Clearing all dice prompts");
+    } else if (promptId) {
+      console.log(`🎲 Clearing specific dice prompt: ${promptId}`);
+    } else {
+      console.log("🎲 Clearing dice prompts");
+    }
     
     webSocket.send(JSON.stringify({
       "event_type": "dice_prompt_clear",
       "data": {
-        "cleared_by": playerName
+        "cleared_by": playerName,
+        "prompt_id": promptId,
+        "clear_all": clearAll
       }
     }));
   }, [webSocket, isConnected, playerName]);

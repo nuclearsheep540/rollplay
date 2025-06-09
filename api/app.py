@@ -303,6 +303,7 @@ async def websocket_endpoint(
                 prompted_player = event_data.get("prompted_player")
                 roll_type = event_data.get("roll_type")
                 prompted_by = event_data.get("prompted_by", player_name)
+                prompt_id = event_data.get("prompt_id")  # New: Get prompt ID
                 
                 # Log the prompt to adventure log
                 add_adventure_log(
@@ -312,27 +313,37 @@ async def websocket_endpoint(
                     player_name=prompted_by
                 )
                 
-                print(f"🎲 {prompted_by} prompted {prompted_player} to roll {roll_type}")
+                print(f"🎲 {prompted_by} prompted {prompted_player} to roll {roll_type} (prompt_id: {prompt_id})")
                 
                 broadcast_message = {
                     "event_type": "dice_prompt",
                     "data": {
                         "prompted_player": prompted_player,
                         "roll_type": roll_type,
-                        "prompted_by": prompted_by
+                        "prompted_by": prompted_by,
+                        "prompt_id": prompt_id  # New: Include prompt ID in broadcast
                     }
                 }
 
             # NEW: Handle clearing dice prompts
             elif event_type == "dice_prompt_clear":
                 cleared_by = event_data.get("cleared_by", player_name)
+                clear_all = event_data.get("clear_all", False)  # New: Support clearing all prompts
+                prompt_id = event_data.get("prompt_id")  # New: Support clearing specific prompt by ID
                 
-                print(f"🎲 {cleared_by} cleared dice prompt")
+                if clear_all:
+                    print(f"🎲 {cleared_by} cleared all dice prompts")
+                elif prompt_id:
+                    print(f"🎲 {cleared_by} cleared dice prompt {prompt_id}")
+                else:
+                    print(f"🎲 {cleared_by} cleared dice prompt")
                 
                 broadcast_message = {
                     "event_type": "dice_prompt_clear",
                     "data": {
-                        "cleared_by": cleared_by
+                        "cleared_by": cleared_by,
+                        "clear_all": clear_all,  # New: Include clear_all flag
+                        "prompt_id": prompt_id   # New: Include specific prompt ID if provided
                     }
                 }
 
@@ -395,6 +406,7 @@ async def websocket_endpoint(
                 dice = roll_data.get("dice")
                 result = roll_data.get("result")
                 roll_for = roll_data.get("roll_for", "General Roll")
+                prompt_id = roll_data.get("prompt_id")  # New: Get prompt ID if this was a prompted roll
                 
                 # Enhanced logging with context
                 if roll_for and roll_for != "General Roll":
@@ -409,25 +421,31 @@ async def websocket_endpoint(
                     player_name=player
                 )
                 
-                print(f"🎲 {player} rolled {dice} for {roll_for}: {result}")
+                if prompt_id:
+                    print(f"🎲 {player} rolled {dice} for {roll_for}: {result} (completing prompt {prompt_id})")
+                else:
+                    print(f"🎲 {player} rolled {dice} for {roll_for}: {result}")
                 
                 broadcast_message = {
                     "event_type": "dice_roll",
                     "data": {
                         **event_data,
-                        "roll_for": roll_for
+                        "roll_for": roll_for,
+                        "prompt_id": prompt_id  # New: Include prompt ID in broadcast
                     }
                 }
                 
-                # Auto-clear prompt if this was a prompted roll
-                # Send a follow-up clear prompt message
-                clear_prompt_message = {
-                    "event_type": "dice_prompt_clear",
-                    "data": {
-                        "cleared_by": "system",
-                        "auto_cleared": True
+                # Auto-clear prompt if this was a prompted roll (has prompt_id)
+                clear_prompt_message = None
+                if prompt_id:
+                    clear_prompt_message = {
+                        "event_type": "dice_prompt_clear",
+                        "data": {
+                            "cleared_by": "system",
+                            "auto_cleared": True,
+                            "prompt_id": prompt_id  # New: Clear specific prompt by ID
+                        }
                     }
-                }
                 # We'll send this after the dice roll broadcast
             
             elif event_type == "clear_system_messages":
@@ -487,7 +505,7 @@ async def websocket_endpoint(
             await manager.update_data(broadcast_message)
             
             # Handle special case: auto-clear prompt after dice roll
-            if event_type == "dice_roll":
+            if event_type == "dice_roll" and clear_prompt_message:
                 # Add a small delay and then clear the prompt
                 import asyncio
                 await asyncio.sleep(0.1)  # Small delay to ensure dice roll is processed first
