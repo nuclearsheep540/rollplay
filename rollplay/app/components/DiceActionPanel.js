@@ -187,13 +187,13 @@ export default function DiceActionPanel({
                 <div className="text-[calc(14px*var(--ui-scale))] text-emerald-200 text-center mb-3">
                   📋 You are rolling for:
                 </div>
-                <div className="space-y-2">
+                <div className="space-y-3">
                   {myPrompts.map((prompt) => (
                     <div
                       key={prompt.id}
-                      className="w-full p-2 bg-amber-500/20 border border-amber-500/40 text-amber-200 rounded-lg text-sm text-center"
+                      className="w-full p-4 text-white rounded-lg text-lg font-bold text-center"
                     >
-                      🎯 {prompt.rollType}
+                      {prompt.rollType}
                     </div>
                   ))}
                 </div>
