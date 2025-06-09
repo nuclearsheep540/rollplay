@@ -181,24 +181,24 @@ export default function DiceActionPanel({
               </button>
             </div>
 
-            {/* UPDATED: Show prompts for context only */}
+            {/* UPDATED: Compact prompts section */}
             {myPrompts.length > 0 && (
-              <div className="p-[calc(12px*var(--ui-scale))] rounded-lg mb-[calc(24px*var(--ui-scale))] bg-emerald-500/10 border border-emerald-500/30">
-                <div className="text-[calc(14px*var(--ui-scale))] text-emerald-200 text-center mb-3">
-                  📋 You are rolling for:
+              <div className="p-[calc(9px*var(--ui-scale))] rounded-lg mb-[calc(18px*var(--ui-scale))] bg-emerald-500/10 border border-emerald-500/30">
+                <div className="text-[calc(12px*var(--ui-scale))] text-emerald-200 text-center mb-2">
+                  Roll For:
                 </div>
-                <div className="space-y-3">
+                <div className="space-y-2">
                   {myPrompts.map((prompt) => (
                     <div
                       key={prompt.id}
-                      className="w-full p-4 text-white rounded-lg text-lg font-bold text-center"
+                      className="w-full p-3 text-white rounded-lg text-2xl font-bold text-center"
                     >
                       {prompt.rollType}
                     </div>
                   ))}
                 </div>
                 {myPrompts.length > 1 && (
-                  <div className="text-center mt-3 text-amber-400/70 text-xs">
+                  <div className="text-center mt-2 text-amber-400/70 text-xs">
                     Rolling will fulfill all prompts above
                   </div>
                 )}
@@ -224,7 +224,7 @@ export default function DiceActionPanel({
                 ].map((dice) => (
                   <button
                     key={dice.name}
-                    className={`p-[calc(12px*var(--ui-scale))] rounded-md text-[calc(11px*var(--ui-scale))] cursor-pointer flex flex-col items-center transition-all ${
+                    className={`p-[calc(12px*var(--ui-scale))] rounded-md text-[calc(13px*var(--ui-scale))] cursor-pointer flex flex-col items-center transition-all ${
                       selectedDice === dice.name 
                         ? 'bg-emerald-500/30 border-2 border-emerald-500/60 text-emerald-200' 
                         : 'bg-slate-600/30 border border-slate-500 text-slate-300'
@@ -241,7 +241,7 @@ export default function DiceActionPanel({
 
                 {/* D100 - Spans 2 columns */}
                 <button
-                  className={`p-[calc(12px*var(--ui-scale))] rounded-md text-[calc(11px*var(--ui-scale))] cursor-pointer flex flex-col items-center col-span-2 transition-all ${
+                  className={`p-[calc(12px*var(--ui-scale))] rounded-md text-[calc(13px*var(--ui-scale))] cursor-pointer flex flex-col items-center col-span-2 transition-all ${
                     selectedDice === 'D100' 
                       ? 'bg-emerald-500/30 border-2 border-emerald-500/60 text-emerald-200' 
                       : 'bg-slate-600/30 border border-slate-500 text-slate-300'
