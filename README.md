@@ -88,7 +88,7 @@ git init
 sudo apt update
 sudo apt install gh
 
-### creating the auth key
+### creating the auth key 
 
 ssh-keygen -t ed25519 -C "matt@jackalmedia.co.uk"
 
@@ -97,8 +97,9 @@ ssh-add ~/.ssh/id_ed25519
 chmod 600 ~/.ssh/id_ed25519
 cat ~/.ssh/id_ed25519.pub
 
-
+Then take the cat output and add it as a key in:
 https://github.com/settings/keys
+
 
 vim ~/.ssh/config
 Host github.com
@@ -108,7 +109,7 @@ Host github.com
         IdentityFile /home/ubuntu/.ssh/id_ed25519.pub
 
 
-### logging in and cloning
+### logging in to github and cloning
 
 sudo snap install docker
 

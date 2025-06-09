@@ -130,40 +130,21 @@ export default function DMControlCenter({
   }
 
   return (
-    <div className="bg-gradient-to-b from-red-900/15 to-slate-800/20 border-t border-white/10 p-4 flex-1 min-h-0 overflow-y-auto overflow-x-hidden flex flex-col scrollbar-thin scrollbar-track-white/5 scrollbar-thumb-purple-500/30 hover:scrollbar-thumb-purple-500/50" style={{
-      padding: 'calc(16px * var(--ui-scale))',
-    }}>
+    <div className="bg-gradient-to-b from-red-900/15 to-slate-800/20 border-t border-white/10 p-4 flex-1 min-h-0 overflow-y-auto overflow-x-hidden flex flex-col scrollbar-thin scrollbar-track-white/5 scrollbar-thumb-purple-500/30 hover:scrollbar-thumb-purple-500/50">
       {/* Sticky Header */}
-      <div className="text-red-500 font-bold mb-4 uppercase tracking-wider flex items-center gap-2 flex-shrink-0 sticky top-0 z-10 pb-2" style={{
-        fontSize: 'calc(16px * var(--ui-scale))',
-        marginBottom: 'calc(16px * var(--ui-scale))',
-        gap: 'calc(8px * var(--ui-scale))',
-        paddingBottom: 'calc(8px * var(--ui-scale))',
-        justifyContent: 'center'
-      }}>
+      <div className="text-red-500 font-bold text-base mb-4 uppercase tracking-wider flex items-center gap-2 flex-shrink-0 sticky top-0 z-10 pb-2 justify-center">
         DM Command Center
         {/* Roll Prompt Modal */}
       {rollPromptModalOpen && (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50">
-          <div 
-            className="bg-slate-800 border border-amber-500/30 rounded-lg shadow-2xl max-w-2xl w-full mx-4 max-h-[90vh] overflow-y-auto"
-            style={{
-              padding: 'calc(24px * var(--ui-scale))',
-              borderRadius: 'calc(12px * var(--ui-scale))',
-            }}
-          >
+          <div className="bg-slate-800 border border-amber-500/30 rounded-xl shadow-2xl max-w-2xl w-full mx-4 max-h-[90vh] overflow-y-auto p-6">
             <div className="flex items-center justify-between mb-6">
-              <h3 className="text-amber-300 font-bold" style={{
-                fontSize: 'calc(18px * var(--ui-scale))',
-              }}>
+              <h3 className="text-amber-300 font-bold text-lg">
                 🎲 Prompt {selectedPlayerForModal} to Roll
               </h3>
               <button 
-                className="text-gray-400 hover:text-white transition-colors"
+                className="text-gray-400 hover:text-white transition-colors text-xl"
                 onClick={() => setRollPromptModalOpen(false)}
-                style={{
-                  fontSize: 'calc(20px * var(--ui-scale))',
-                }}
               >
                 ✕
               </button>
@@ -171,19 +152,12 @@ export default function DMControlCenter({
 
             {/* Attack Rolls Section */}
             <div className="mb-6">
-              <h4 className="text-emerald-400 font-semibold mb-3" style={{
-                fontSize: 'calc(16px * var(--ui-scale))',
-              }}>
+              <h4 className="text-emerald-400 font-semibold mb-3 text-base">
                 Attack Rolls
               </h4>
               <div className="grid grid-cols-2 gap-3">
                 <button
-                  className="text-left p-3 bg-emerald-500/10 border border-emerald-500/30 text-emerald-300 rounded transition-all duration-200 hover:bg-emerald-500/20"
-                  style={{
-                    padding: 'calc(12px * var(--ui-scale))',
-                    borderRadius: 'calc(8px * var(--ui-scale))',
-                    fontSize: 'calc(14px * var(--ui-scale))',
-                  }}
+                  className="text-left p-3 bg-emerald-500/10 border border-emerald-500/30 text-emerald-300 rounded-lg transition-all duration-200 hover:bg-emerald-500/20 text-sm"
                   onClick={() => {
                     handlePromptPlayerForRoll(selectedPlayerForModal, "Attack Roll");
                     setRollPromptModalOpen(false);
@@ -193,12 +167,7 @@ export default function DMControlCenter({
                   <div className="text-emerald-400/70 text-sm">Roll to hit target (d20 + modifiers)</div>
                 </button>
                 <button
-                  className="text-left p-3 bg-emerald-500/10 border border-emerald-500/30 text-emerald-300 rounded transition-all duration-200 hover:bg-emerald-500/20"
-                  style={{
-                    padding: 'calc(12px * var(--ui-scale))',
-                    borderRadius: 'calc(8px * var(--ui-scale))',
-                    fontSize: 'calc(14px * var(--ui-scale))',
-                  }}
+                  className="text-left p-3 bg-emerald-500/10 border border-emerald-500/30 text-emerald-300 rounded-lg transition-all duration-200 hover:bg-emerald-500/20 text-sm"
                   onClick={() => {
                     handlePromptPlayerForRoll(selectedPlayerForModal, "Damage Roll");
                     setRollPromptModalOpen(false);
@@ -212,9 +181,7 @@ export default function DMControlCenter({
 
             {/* Ability Checks Section */}
             <div className="mb-6">
-              <h4 className="text-blue-400 font-semibold mb-3" style={{
-                fontSize: 'calc(16px * var(--ui-scale))',
-              }}>
+              <h4 className="text-blue-400 font-semibold mb-3 text-base">
                 Ability Checks
               </h4>
               <div className="grid grid-cols-2 gap-3">
@@ -228,12 +195,7 @@ export default function DMControlCenter({
                 ].map((check, index) => (
                   <button
                     key={index}
-                    className="text-left p-3 bg-blue-500/10 border border-blue-500/30 text-blue-300 rounded transition-all duration-200 hover:bg-blue-500/20"
-                    style={{
-                      padding: 'calc(12px * var(--ui-scale))',
-                      borderRadius: 'calc(8px * var(--ui-scale))',
-                      fontSize: 'calc(14px * var(--ui-scale))',
-                    }}
+                    className="text-left p-3 bg-blue-500/10 border border-blue-500/30 text-blue-300 rounded-lg transition-all duration-200 hover:bg-blue-500/20 text-sm"
                     onClick={() => {
                       handlePromptPlayerForRoll(selectedPlayerForModal, check.name);
                       setRollPromptModalOpen(false);
@@ -248,9 +210,7 @@ export default function DMControlCenter({
 
             {/* Saving Throws Section */}
             <div className="mb-6">
-              <h4 className="text-red-400 font-semibold mb-3" style={{
-                fontSize: 'calc(16px * var(--ui-scale))',
-              }}>
+              <h4 className="text-red-400 font-semibold mb-3 text-base">
                 Saving Throws
               </h4>
               <div className="grid grid-cols-2 gap-3">
@@ -264,12 +224,7 @@ export default function DMControlCenter({
                 ].map((save, index) => (
                   <button
                     key={index}
-                    className="text-left p-3 bg-red-500/10 border border-red-500/30 text-red-300 rounded transition-all duration-200 hover:bg-red-500/20"
-                    style={{
-                      padding: 'calc(12px * var(--ui-scale))',
-                      borderRadius: 'calc(8px * var(--ui-scale))',
-                      fontSize: 'calc(14px * var(--ui-scale))',
-                    }}
+                    className="text-left p-3 bg-red-500/10 border border-red-500/30 text-red-300 rounded-lg transition-all duration-200 hover:bg-red-500/20 text-sm"
                     onClick={() => {
                       handlePromptPlayerForRoll(selectedPlayerForModal, save.name);
                       setRollPromptModalOpen(false);
@@ -284,37 +239,23 @@ export default function DMControlCenter({
 
             {/* Custom Roll Section */}
             <div className="mb-6">
-              <h4 className="text-purple-400 font-semibold mb-3" style={{
-                fontSize: 'calc(16px * var(--ui-scale))',
-              }}>
+              <h4 className="text-purple-400 font-semibold mb-3 text-base">
                 📝 Custom Roll
               </h4>
               <div className="space-y-3">
                 <div>
-                  <label className="block text-gray-300 mb-2" style={{
-                    fontSize: 'calc(14px * var(--ui-scale))',
-                  }}>
+                  <label className="block text-gray-300 mb-2 text-sm">
                     What should {selectedPlayerForModal} roll for?
                   </label>
                   <input
                     type="text"
                     placeholder="e.g., Arcana check to identify the rune, History to recall ancient lore..."
-                    className="w-full bg-slate-700 border border-slate-600 text-white rounded px-3 py-2"
-                    style={{
-                      padding: 'calc(8px * var(--ui-scale)) calc(12px * var(--ui-scale))',
-                      borderRadius: 'calc(6px * var(--ui-scale))',
-                      fontSize: 'calc(14px * var(--ui-scale))',
-                    }}
+                    className="w-full bg-slate-700 border border-slate-600 text-white rounded-md px-3 py-2 text-sm"
                     id="customRollInput"
                   />
                 </div>
                 <button
-                  className="w-full bg-purple-500/20 border border-purple-500/40 text-purple-300 rounded py-2 transition-all duration-200 hover:bg-purple-500/30"
-                  style={{
-                    padding: 'calc(12px * var(--ui-scale))',
-                    borderRadius: 'calc(8px * var(--ui-scale))',
-                    fontSize: 'calc(14px * var(--ui-scale))',
-                  }}
+                  className="w-full bg-purple-500/20 border border-purple-500/40 text-purple-300 rounded-lg py-3 transition-all duration-200 hover:bg-purple-500/30 text-sm"
                   onClick={() => {
                     const customRoll = document.getElementById('customRollInput').value.trim();
                     if (customRoll) {
@@ -332,12 +273,7 @@ export default function DMControlCenter({
 
             <div className="flex justify-end">
               <button 
-                className="px-4 py-2 bg-gray-600 border border-gray-500 text-gray-300 rounded transition-all duration-200 hover:bg-gray-500"
-                style={{
-                  padding: 'calc(8px * var(--ui-scale)) calc(16px * var(--ui-scale))',
-                  borderRadius: 'calc(6px * var(--ui-scale))',
-                  fontSize: 'calc(14px * var(--ui-scale))',
-                }}
+                className="px-4 py-2 bg-gray-600 border border-gray-500 text-gray-300 rounded-md transition-all duration-200 hover:bg-gray-500 text-sm"
                 onClick={() => setRollPromptModalOpen(false)}
               >
                 Cancel
@@ -350,32 +286,18 @@ export default function DMControlCenter({
 
       {/* NEW: Active Dice Prompt Status (only show if there's an active prompt) */}
       {promptedPlayer && (
-        <div className="mb-4 p-3 bg-amber-500/20 border border-amber-500/40 rounded-lg" style={{
-          marginBottom: 'calc(16px * var(--ui-scale))',
-          padding: 'calc(12px * var(--ui-scale))',
-          borderRadius: 'calc(8px * var(--ui-scale))',
-        }}>
+        <div className="mb-4 p-3 bg-amber-500/20 border border-amber-500/40 rounded-lg">
           <div className="flex items-center justify-between">
             <div>
-              <div className="text-amber-300 font-semibold" style={{
-                fontSize: 'calc(14px * var(--ui-scale))',
-                marginBottom: 'calc(4px * var(--ui-scale))',
-              }}>
+              <div className="text-amber-300 font-semibold text-sm mb-1">
                 🎯 Active Prompt
               </div>
-              <div className="text-amber-200" style={{
-                fontSize: 'calc(12px * var(--ui-scale))',
-              }}>
+              <div className="text-amber-200 text-xs">
                 {promptedPlayer} • {rollPrompt}
               </div>
             </div>
             <button
               className="bg-red-500/20 border border-red-500/40 text-red-300 rounded px-2 py-1 text-xs hover:bg-red-500/30 transition-all duration-200"
-              style={{
-                padding: 'calc(4px * var(--ui-scale)) calc(8px * var(--ui-scale))',
-                borderRadius: 'calc(4px * var(--ui-scale))',
-                fontSize: 'calc(10px * var(--ui-scale))',
-              }}
               onClick={clearDicePrompt}
             >
               Cancel
@@ -385,50 +307,27 @@ export default function DMControlCenter({
       )}
 
       {/* Map Controls Section */}
-      <div className="mb-3 flex-shrink-0" style={{ marginBottom: 'calc(12px * var(--ui-scale))' }}>
+      <div className="mb-3 flex-shrink-0">
         <div 
-          className="flex items-center justify-between cursor-pointer bg-purple-500/10 border border-purple-500/20 rounded transition-all duration-200 hover:bg-purple-500/15 hover:border-purple-500/30 mb-0"
-          style={{
-            padding: 'calc(12px * var(--ui-scale))',
-            borderRadius: 'calc(4px * var(--ui-scale))',
-          }}
+          className="flex items-center justify-between cursor-pointer bg-purple-500/10 border border-purple-500/20 rounded transition-all duration-200 hover:bg-purple-500/15 hover:border-purple-500/30 mb-0 p-3"
           onClick={() => toggleSection('map')}
         >
-          <span className="text-purple-300 font-semibold uppercase tracking-wide" style={{
-            fontSize: 'calc(12px * var(--ui-scale))',
-          }}>
+          <span className="text-purple-300 font-semibold uppercase tracking-wide text-xs">
             🗺️ Map Controls
           </span>
-          <span className={`text-purple-500 transition-transform duration-200 ${expandedSections.map ? 'rotate-180' : ''}`} style={{
-            fontSize: 'calc(12px * var(--ui-scale))',
-          }}>
+          <span className={`text-purple-500 transition-transform duration-200 text-xs ${expandedSections.map ? 'rotate-180' : ''}`}>
             ▼
           </span>
         </div>
         {expandedSections.map && (
-          <div className="mt-2 animate-in slide-in-from-top-2 duration-200" style={{ marginTop: 'calc(8px * var(--ui-scale))' }}>
-            <button className="w-full bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 rounded text-left mb-1 transition-all duration-200 hover:bg-emerald-500/20" style={{
-              padding: 'calc(8px * var(--ui-scale))',
-              borderRadius: 'calc(4px * var(--ui-scale))',
-              fontSize: 'calc(12px * var(--ui-scale))',
-              marginBottom: 'calc(4px * var(--ui-scale))',
-            }}>
+          <div className="mt-2 animate-in slide-in-from-top-2 duration-200">
+            <button className="w-full bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 rounded text-left mb-1 transition-all duration-200 hover:bg-emerald-500/20 p-2 text-xs">
               📁 Upload Map
             </button>
-            <button className="w-full bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 rounded text-left mb-1 transition-all duration-200 hover:bg-emerald-500/20" style={{
-              padding: 'calc(8px * var(--ui-scale))',
-              borderRadius: 'calc(4px * var(--ui-scale))',
-              fontSize: 'calc(12px * var(--ui-scale))',
-              marginBottom: 'calc(4px * var(--ui-scale))',
-            }}>
+            <button className="w-full bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 rounded text-left mb-1 transition-all duration-200 hover:bg-emerald-500/20 p-2 text-xs">
               💾 Load Map
             </button>
-            <button className="w-full bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 rounded text-left mb-1 transition-all duration-200 hover:bg-emerald-500/20" style={{
-              padding: 'calc(8px * var(--ui-scale))',
-              borderRadius: 'calc(4px * var(--ui-scale))',
-              fontSize: 'calc(12px * var(--ui-scale))',
-              marginBottom: 'calc(4px * var(--ui-scale))',
-            }}>
+            <button className="w-full bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 rounded text-left mb-1 transition-all duration-200 hover:bg-emerald-500/20 p-2 text-xs">
               📏 Grid Settings
             </button>
           </div>
@@ -436,23 +335,15 @@ export default function DMControlCenter({
       </div>
 
       {/* Combat Management Section */}
-      <div className="mb-3 flex-shrink-0" style={{ marginBottom: 'calc(12px * var(--ui-scale))' }}>
+      <div className="mb-3 flex-shrink-0">
         <div 
-          className="flex items-center justify-between cursor-pointer bg-purple-500/10 border border-purple-500/20 rounded transition-all duration-200 hover:bg-purple-500/15 hover:border-purple-500/30 mb-0"
-          style={{
-            padding: 'calc(12px * var(--ui-scale))',
-            borderRadius: 'calc(4px * var(--ui-scale))',
-          }}
+          className="flex items-center justify-between cursor-pointer bg-purple-500/10 border border-purple-500/20 rounded transition-all duration-200 hover:bg-purple-500/15 hover:border-purple-500/30 mb-0 p-3"
           onClick={() => toggleSection('combat')}
         >
-          <span className="text-purple-300 font-semibold uppercase tracking-wide" style={{
-            fontSize: 'calc(12px * var(--ui-scale))',
-          }}>
+          <span className="text-purple-300 font-semibold uppercase tracking-wide text-xs">
             ⚔️ Combat Management
           </span>
-          <span className={`text-purple-500 transition-transform duration-200 ${expandedSections.combat ? 'rotate-180' : ''}`} style={{
-            fontSize: 'calc(12px * var(--ui-scale))',
-          }}>
+          <span className={`text-purple-500 transition-transform duration-200 text-xs ${expandedSections.combat ? 'rotate-180' : ''}`}>
             ▼
           </span>
         </div>

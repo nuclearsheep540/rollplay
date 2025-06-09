@@ -64,24 +64,16 @@ export default function HorizontalInitiativeTracker({
       {/* Initiative Order - Animated show/hide based on combat state */}
       {shouldRender && (
         <div 
-          className="absolute left-1/2 z-10"
-          style={{
-            top: `calc(24px * var(--ui-scale))`,
-            transform: `translateX(-50%) translateY(${isVisible ? '0' : '-100%'})`,
-            opacity: isVisible ? 1 : 0,
-            transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
-          }}
+          className={`absolute left-1/2 top-6 z-10 transition-all duration-300 ease-out ${
+            isVisible 
+              ? 'transform -translate-x-1/2 translate-y-0 opacity-100' 
+              : 'transform -translate-x-1/2 -translate-y-full opacity-0'
+          }`}
         >
           {/* Backdrop */}
-          <div 
-            className="bg-slate-600/40 backdrop-blur-sm rounded-lg"
-            style={{
-              padding: `calc(8px * var(--ui-scale))`,
-              borderRadius: `calc(8px * var(--ui-scale))`,
-            }}
-          >
+          <div className="bg-slate-600/40 backdrop-blur-sm rounded-lg p-2">
             {/* Character Portraits - BG3 Style */}
-            <div className="flex items-center" style={{ gap: `calc(10px * var(--ui-scale))` }}>
+            <div className="flex items-center gap-2.5">
               {initiativeOrder.map((character, index) => (
                 <div
                   key={index}
@@ -96,32 +88,22 @@ export default function HorizontalInitiativeTracker({
                 >
                   {/* Character Frame - Subtle container with party/enemy colors */}
                   <div className={`
-                    rounded transition-all duration-300 p-1
+                    rounded transition-all duration-300 p-0.5
                     ${character.active 
                       ? 'bg-emerald-500/20 border-2 border-emerald-400/80' 
                       : isEnemy(character.name)
                         ? 'bg-black/20 border-2 border-red-400/60'
                         : 'bg-black/20 border-2 border-blue-400/60'
                     }
-                  `} style={{
-                    borderRadius: `calc(7px * var(--ui-scale))`,
-                    padding: `calc(2.4px * var(--ui-scale))`,
-                  }}>
+                  `}>
                     
                     {/* Character Portrait - 2:3 Rectangle (20% bigger) */}
                     <div className={`
-                      rounded transition-all duration-300 flex items-center justify-center text-white font-bold shadow-md overflow-hidden
+                      rounded transition-all duration-300 flex items-center justify-center text-white font-bold shadow-md overflow-hidden w-[38px] h-[58px] text-sm
                       ${getBackgroundColor(character.name)}
-                    `} style={{
-                      width: `calc(38px * var(--ui-scale))`,
-                      height: `calc(58px * var(--ui-scale))`,
-                      borderRadius: `calc(5px * var(--ui-scale))`,
-                      fontSize: `calc(14px * var(--ui-scale))`,
-                    }}>
+                    `}>
                       {/* Placeholder for future avatar image */}
-                      <div className="w-full h-full bg-black/20 flex items-center justify-center text-white/50" style={{
-                        fontSize: `calc(10px * var(--ui-scale))`,
-                      }}>
+                      <div className="w-full h-full bg-black/20 flex items-center justify-center text-white/50 text-xs">
                         IMG
                       </div>
                     </div>
@@ -130,35 +112,17 @@ export default function HorizontalInitiativeTracker({
                   {/* Active Turn Glow Effect - Reduced spread */}
                   {character.active && (
                     <div 
-                      className="absolute inset-0 rounded pointer-events-none animate-pulse"
-                      style={{
-                        borderRadius: `calc(7px * var(--ui-scale))`,
-                        boxShadow: '0 0 8px rgba(74, 222, 128, 0.8), 0 0 16px rgba(74, 222, 128, 0.4)',
-                      }}
+                      className="absolute inset-0 rounded pointer-events-none animate-pulse shadow-[0_0_8px_rgba(74,222,128,0.8),0_0_16px_rgba(74,222,128,0.4)]"
                     ></div>
                   )}
 
                   {/* Name Tooltip - Appears on hover */}
                   <div className="absolute -bottom-12 left-1/2 transform -translate-x-1/2 opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none z-30">
-                    <div 
-                      className="bg-black/90 text-white px-2 py-1 rounded whitespace-nowrap backdrop-blur-sm"
-                      style={{
-                        fontSize: `calc(13px * var(--ui-scale))`,
-                        padding: `calc(5px * var(--ui-scale)) calc(10px * var(--ui-scale))`,
-                        borderRadius: `calc(5px * var(--ui-scale))`,
-                      }}
-                    >
+                    <div className="bg-black/90 text-white py-1.5 px-2.5 rounded whitespace-nowrap backdrop-blur-sm text-sm">
                       {character.name}
                     </div>
                     {/* Tooltip Arrow */}
-                    <div 
-                      className="absolute top-0 left-1/2 transform -translate-x-1/2 -translate-y-1 w-0 h-0 border-l-4 border-r-4 border-b-4 border-transparent border-b-black/90"
-                      style={{
-                        borderLeftWidth: `calc(5px * var(--ui-scale))`,
-                        borderRightWidth: `calc(5px * var(--ui-scale))`,
-                        borderBottomWidth: `calc(5px * var(--ui-scale))`,
-                      }}
-                    ></div>
+                    <div className="absolute top-0 left-1/2 transform -translate-x-1/2 -translate-y-1 w-0 h-0 border-l border-r border-b border-transparent border-b-black/90"></div>
                   </div>
                 </div>
               ))}
@@ -170,32 +134,17 @@ export default function HorizontalInitiativeTracker({
       {/* Combat Status Indicators (Bottom Right) - Only show during combat */}
       {shouldRender && (
         <div 
-          className="absolute z-10"
-          style={{
-            bottom: `calc(24px * var(--ui-scale))`,
-            right: `calc(24px * var(--ui-scale))`,
-            transform: `translateX(${isVisible ? '0' : '100%'})`,
-            opacity: isVisible ? 1 : 0,
-            transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1) 0.1s', // Slight delay for staggered effect
-          }}
+          className={`absolute bottom-6 right-6 z-10 transition-all duration-300 ease-out delay-100 ${
+            isVisible 
+              ? 'transform translate-x-0 opacity-100' 
+              : 'transform translate-x-full opacity-0'
+          }`}
         >
-          <div className="bg-black/60 backdrop-blur-md border border-white/10 rounded-lg shadow-xl" style={{
-            padding: `calc(16px * var(--ui-scale)) calc(16px * var(--ui-scale))`,
-            borderRadius: `calc(8px * var(--ui-scale))`,
-          }}>
-            <div className="text-emerald-400 font-semibold" style={{
-              fontSize: `calc(14px * var(--ui-scale))`,
-              marginBottom: `calc(8px * var(--ui-scale))`,
-            }}>Combat Active</div>
-            <div className="flex items-center text-white/70" style={{
-              gap: `calc(12px * var(--ui-scale))`,
-              fontSize: `calc(12px * var(--ui-scale))`,
-            }}>
-              <div className="flex items-center" style={{ gap: `calc(4px * var(--ui-scale))` }}>
-                <div className="bg-emerald-400 rounded-full animate-pulse" style={{
-                  width: `calc(8px * var(--ui-scale))`,
-                  height: `calc(8px * var(--ui-scale))`,
-                }}></div>
+          <div className="bg-black/60 backdrop-blur-md border border-white/10 rounded-lg shadow-xl p-4">
+            <div className="text-emerald-400 font-semibold text-sm mb-2">Combat Active</div>
+            <div className="flex items-center text-white/70 gap-3 text-xs">
+              <div className="flex items-center gap-1">
+                <div className="bg-emerald-400 rounded-full animate-pulse w-2 h-2"></div>
                 <span>Turn 1</span>
               </div>
             </div>

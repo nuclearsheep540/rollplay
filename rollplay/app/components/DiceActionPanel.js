@@ -63,57 +63,24 @@ export default function DiceActionPanel({
   return (
     <>
       <div 
-        className={`dice-action-panel transition-all duration-300 ${
+        className={`dice-action-panel transition-all duration-300 fixed bottom-5 left-1/2 z-[100] ${
           isPanelActive 
-            ? 'active-turn' 
-            : 'inactive-turn'
+            ? 'active-turn transform -translate-x-1/2 scale-100' 
+            : 'inactive-turn transform -translate-x-1/2 scale-85'
         }`}
-        style={{
-          position: 'fixed',
-          bottom: `calc(20px * var(--ui-scale))`,
-          left: '50%',
-          transform: `translateX(-50%) ${isPanelActive ? 'scale(1)' : 'scale(0.85)'}`,
-          zIndex: 100,
-          transition: 'all 0.3s ease'
-        }}
       >
         <div 
-          className={`panel-container ${isPanelActive ? 'my-turn' : 'not-my-turn'}`}
-          style={{
-            backgroundColor: isPanelActive 
-              ? (isPromptedToRoll 
-                  ? 'rgba(16, 185, 129, 0.15)' // GREEN for prompts
-                  : 'rgba(16, 185, 129, 0.15)') // GREEN for turns
-              : 'rgba(100, 116, 139, 0.15)', // Gray when inactive
-            border: `2px solid ${isPanelActive 
-              ? (isPromptedToRoll 
-                  ? 'rgba(16, 185, 129, 0.4)' // GREEN border for prompts
-                  : 'rgba(16, 185, 129, 0.4)') // GREEN border for turns
-              : 'rgba(100, 116, 139, 0.3)'}`, // Gray border when inactive
-            borderRadius: `calc(12px * var(--ui-scale))`,
-            padding: `calc(24px * var(--ui-scale)) calc(32px * var(--ui-scale))`, // Bigger padding for bigger button
-            backdropFilter: 'blur(8px)',
-            boxShadow: isPanelActive 
-              ? (isPromptedToRoll 
-                  ? '0 8px 32px rgba(16, 185, 129, 0.2)' // GREEN glow for prompts
-                  : '0 8px 32px rgba(16, 185, 129, 0.2)') // GREEN glow for turns
-              : '0 4px 16px rgba(0, 0, 0, 0.2)',
-            minWidth: `calc(400px * var(--ui-scale))`, // Bigger container for bigger button
-            textAlign: 'center'
-          }}
+          className={`panel-container rounded-xl p-6 px-8 backdrop-blur-lg text-center min-w-[400px] border-2 ${
+            isPanelActive 
+              ? 'bg-emerald-500/15 border-emerald-500/40 shadow-[0_8px_32px_rgba(16,185,129,0.2)]'
+              : 'bg-slate-500/15 border-slate-500/30 shadow-[0_4px_16px_rgba(0,0,0,0.2)]'
+          } ${isPanelActive ? 'my-turn' : 'not-my-turn'}`}
         >
           {/* Status Indicator */}
           <div 
-            className="turn-indicator"
-            style={{
-              color: isPanelActive 
-                ? (isPromptedToRoll ? '#10b981' : '#10b981') // GREEN for both
-                : '#64748b',
-              fontSize: `calc(14px * var(--ui-scale))`, // Back to original
-              fontWeight: 'bold',
-              marginBottom: `calc(12px * var(--ui-scale))`, // Back to original
-              textShadow: '0 1px 2px rgba(0, 0, 0, 0.5)'
-            }}
+            className={`turn-indicator text-sm font-bold mb-3 drop-shadow-sm ${
+              isPanelActive ? 'text-emerald-500' : 'text-slate-500'
+            }`}
           >
             {isPromptedToRoll 
               ? `Rolling for: ${rollPrompt}` 
@@ -130,17 +97,7 @@ export default function DiceActionPanel({
           {/* Show turn prompt if it's combat turn and not prompted */}
           {isMyTurn && combatActive && !isPromptedToRoll && (
             <div 
-              className="combat-turn-indicator"
-              style={{
-                backgroundColor: 'rgba(16, 185, 129, 0.15)',
-                border: '1px solid rgba(16, 185, 129, 0.3)',
-                borderRadius: `calc(8px * var(--ui-scale))`,
-                padding: `calc(8px * var(--ui-scale))`, // Back to original
-                marginBottom: `calc(12px * var(--ui-scale))`, // Back to original
-                color: '#10b981',
-                fontSize: `calc(12px * var(--ui-scale))`, // Back to original
-                fontWeight: 'bold'
-              }}
+              className="combat-turn-indicator bg-emerald-500/15 border border-emerald-500/30 rounded-lg p-2 mb-3 text-emerald-500 text-xs font-bold"
             >
               ⚔️ Combat Turn
             </div>
@@ -148,54 +105,18 @@ export default function DiceActionPanel({
 
           {/* Action Buttons */}
           <div 
-            className="action-buttons"
-            style={{
-              display: 'flex',
-              gap: `calc(12px * var(--ui-scale))`, // Back to original
-              justifyContent: 'center'
-            }}
+            className="action-buttons flex gap-3 justify-center"
           >
             {/* Roll Dice Button */}
             <button
-              className={`roll-dice-btn ${shouldShowDicePanel ? 'active' : 'inactive'}`}
+              className={`roll-dice-btn rounded-lg px-5 py-2.5 text-sm font-bold cursor-pointer transition-all duration-200 border-2 ${
+                shouldShowDicePanel 
+                  ? (isPromptedToRoll 
+                      ? 'bg-orange-500/20 border-orange-500/50 text-orange-400 hover:bg-orange-500/30 hover:-translate-y-0.5' 
+                      : 'bg-emerald-500/20 border-emerald-500/50 text-emerald-500 hover:bg-emerald-500/30 hover:-translate-y-0.5') 
+                  : 'bg-slate-500/10 border-slate-500/30 text-slate-500'
+              } ${shouldShowDicePanel ? 'active' : 'inactive'}`}
               onClick={handleRollDiceClick}
-              style={{
-                backgroundColor: shouldShowDicePanel 
-                  ? (isPromptedToRoll 
-                      ? 'rgba(249, 115, 22, 0.2)' 
-                      : 'rgba(16, 185, 129, 0.2)') 
-                  : 'rgba(100, 116, 139, 0.1)',
-                border: `2px solid ${shouldShowDicePanel 
-                  ? (isPromptedToRoll 
-                      ? 'rgba(249, 115, 22, 0.5)' 
-                      : 'rgba(16, 185, 129, 0.5)') 
-                  : 'rgba(100, 116, 139, 0.3)'}`,
-                color: shouldShowDicePanel 
-                  ? (isPromptedToRoll ? '#fb923c' : '#10b981') 
-                  : '#64748b',
-                borderRadius: `calc(8px * var(--ui-scale))`,
-                padding: `calc(10px * var(--ui-scale)) calc(20px * var(--ui-scale))`,
-                fontSize: `calc(14px * var(--ui-scale))`,
-                fontWeight: 'bold',
-                cursor: 'pointer',
-                transition: 'all 0.2s ease'
-              }}
-              onMouseEnter={(e) => {
-                if (shouldShowDicePanel) {
-                  e.target.style.backgroundColor = isPromptedToRoll 
-                    ? 'rgba(249, 115, 22, 0.3)' 
-                    : 'rgba(16, 185, 129, 0.3)';
-                  e.target.style.transform = 'translateY(-2px)';
-                }
-              }}
-              onMouseLeave={(e) => {
-                if (shouldShowDicePanel) {
-                  e.target.style.backgroundColor = isPromptedToRoll 
-                    ? 'rgba(249, 115, 22, 0.2)' 
-                    : 'rgba(16, 185, 129, 0.2)';
-                  e.target.style.transform = 'translateY(0)';
-                }
-              }}
             >
               🎲 Roll Dice
             </button>
@@ -203,27 +124,8 @@ export default function DiceActionPanel({
             {/* End Turn Button - Only show during combat turns (not prompts) */}
             {isMyTurn && combatActive && !isPromptedToRoll && (
               <button
-                className="end-turn-btn active"
+                className="end-turn-btn active bg-red-500/20 border-2 border-red-500/50 text-red-500 rounded-xl px-8 py-4 text-lg font-bold cursor-pointer transition-all duration-200 hover:bg-red-500/30 hover:-translate-y-0.5"
                 onClick={handleEndTurn}
-                style={{
-                  backgroundColor: 'rgba(239, 68, 68, 0.2)',
-                  border: '2px solid rgba(239, 68, 68, 0.5)',
-                  color: '#ef4444',
-                  borderRadius: `calc(12px * var(--ui-scale))`,
-                  padding: `calc(16px * var(--ui-scale)) calc(32px * var(--ui-scale))`, // Bigger to match
-                  fontSize: `calc(18px * var(--ui-scale))`, // Bigger font
-                  fontWeight: 'bold',
-                  cursor: 'pointer',
-                  transition: 'all 0.2s ease'
-                }}
-                onMouseEnter={(e) => {
-                  e.target.style.backgroundColor = 'rgba(239, 68, 68, 0.3)';
-                  e.target.style.transform = 'translateY(-2px)';
-                }}
-                onMouseLeave={(e) => {
-                  e.target.style.backgroundColor = 'rgba(239, 68, 68, 0.2)';
-                  e.target.style.transform = 'translateY(0)';
-                }}
               >
                 ⏭️ End Turn
               </button>
@@ -235,55 +137,20 @@ export default function DiceActionPanel({
       {/* Dice Roll Modal - Enhanced for prompts */}
       {isDiceModalOpen && (
         <div 
-          className="dice-modal-overlay"
-          style={{
-            position: 'fixed',
-            top: 0,
-            left: 0,
-            right: 0,
-            bottom: 0,
-            backgroundColor: 'rgba(0, 0, 0, 0.2)',
-            backdropFilter: 'blur(4px)',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            zIndex: 1000
-          }}
+          className="dice-modal-overlay fixed inset-0 bg-black/20 backdrop-blur-sm flex items-center justify-center z-[1000]"
           onClick={() => setIsDiceModalOpen(false)}
         >
           <div 
-            className="dice-modal"
-            style={{
-              backgroundColor: '#1e293b',
-              border: `2px solid rgba(16, 185, 129, 0.4)`, // GREEN border always
-              borderRadius: `calc(16px * var(--ui-scale))`,
-              padding: `calc(24px * var(--ui-scale))`,
-              maxWidth: `calc(500px * var(--ui-scale))`,
-              width: '90%',
-              boxShadow: '0 20px 60px rgba(0, 0, 0, 0.4)'
-            }}
+            className="dice-modal bg-slate-800 border-2 border-emerald-500/40 rounded-2xl p-6 max-w-[500px] w-[90%] shadow-[0_20px_60px_rgba(0,0,0,0.4)]"
             onClick={(e) => e.stopPropagation()}
           >
             <div className="flex items-center justify-between mb-6">
-              <h3 
-                style={{
-                  color: '#10b981', // GREEN always
-                  fontSize: `calc(20px * var(--ui-scale))`, // Back to original
-                  fontWeight: 'bold',
-                  margin: 0
-                }}
-              >
+              <h3 className="text-emerald-500 text-xl font-bold m-0">
                 🎲 Roll Dice
               </h3>
               <button 
-                className="text-gray-400 hover:text-white transition-colors"
+                className="text-gray-400 hover:text-white transition-colors text-xl bg-transparent border-none cursor-pointer"
                 onClick={() => setIsDiceModalOpen(false)}
-                style={{
-                  fontSize: `calc(20px * var(--ui-scale))`, // Back to original
-                  background: 'none',
-                  border: 'none',
-                  cursor: 'pointer'
-                }}
               >
                 ✕
               </button>
@@ -291,22 +158,8 @@ export default function DiceActionPanel({
 
             {/* What you're rolling for */}
             {rollPrompt && (
-              <div 
-                style={{
-                  padding: `calc(12px * var(--ui-scale))`,
-                  borderRadius: `calc(8px * var(--ui-scale))`,
-                  marginBottom: `calc(24px * var(--ui-scale))`, // Back to original
-                  backgroundColor: 'rgba(16, 185, 129, 0.1)', // GREEN background
-                  border: '1px solid rgba(16, 185, 129, 0.3)' // GREEN border
-                }}
-              >
-                <div 
-                  style={{
-                    fontSize: `calc(14px * var(--ui-scale))`, // Back to original
-                    color: '#6ee7b7', // GREEN text
-                    textAlign: 'center'
-                  }}
-                >
+              <div className="p-3 rounded-lg mb-6 bg-emerald-500/10 border border-emerald-500/30">
+                <div className="text-sm text-emerald-200 text-center">
                   📋 Rolling for: <span className="font-bold">{rollPrompt}</span>
                 </div>
               </div>
@@ -316,31 +169,11 @@ export default function DiceActionPanel({
             {/* This is the same as before, just keeping existing implementation */}
             
             {/* Dice Selection */}
-            <div 
-              style={{
-                padding: `calc(16px * var(--ui-scale))`,
-                borderRadius: `calc(8px * var(--ui-scale))`,
-                marginBottom: `calc(24px * var(--ui-scale))`, // Back to original
-                backgroundColor: 'rgba(51, 65, 85, 0.5)',
-                border: '1px solid #475569'
-              }}
-            >
-              <h4 
-                style={{
-                  fontSize: `calc(16px * var(--ui-scale))`, // Back to original
-                  margin: `0 0 calc(12px * var(--ui-scale)) 0`, // Back to original
-                  color: 'white'
-                }}
-              >
+            <div className="p-4 rounded-lg mb-6 bg-slate-600/50 border border-slate-500">
+              <h4 className="text-base mb-3 text-white">
                 🎲 Choose Your Dice
               </h4>
-              <div 
-                style={{
-                  display: 'grid',
-                  gridTemplateColumns: 'repeat(4, 1fr)',
-                  gap: `calc(8px * var(--ui-scale))` // Back to original
-                }}
-              >
+              <div className="grid grid-cols-4 gap-2">
                 {[
                   { name: 'D20', emoji: '🎲', range: '1-20' },
                   { name: 'D12', emoji: '🔷', range: '1-12' },
@@ -351,27 +184,14 @@ export default function DiceActionPanel({
                 ].map((dice) => (
                   <button
                     key={dice.name}
-                    style={{
-                      padding: `calc(12px * var(--ui-scale))`, // Back to original
-                      borderRadius: `calc(6px * var(--ui-scale))`,
-                      fontSize: `calc(11px * var(--ui-scale))`, // Back to original
-                      cursor: 'pointer',
-                      display: 'flex',
-                      flexDirection: 'column',
-                      alignItems: 'center',
-                      backgroundColor: selectedDice === dice.name 
-                        ? 'rgba(16, 185, 129, 0.3)' 
-                        : 'rgba(71, 85, 105, 0.3)',
-                      border: selectedDice === dice.name 
-                        ? '2px solid rgba(16, 185, 129, 0.6)' 
-                        : '1px solid #64748b',
-                      color: selectedDice === dice.name 
-                        ? '#a7f3d0' 
-                        : '#cbd5e1'
-                    }}
+                    className={`p-3 rounded-md text-xs cursor-pointer flex flex-col items-center transition-all ${
+                      selectedDice === dice.name 
+                        ? 'bg-emerald-500/30 border-2 border-emerald-500/60 text-emerald-200' 
+                        : 'bg-slate-600/30 border border-slate-500 text-slate-300'
+                    }`}
                     onClick={() => setSelectedDice(dice.name)}
                   >
-                    <div style={{ fontSize: `calc(16px * var(--ui-scale))`, marginBottom: `calc(4px * var(--ui-scale))` }}> // Back to original
+                    <div className="text-base mb-1">
                       {dice.emoji}
                     </div>
                     <div className="font-bold">{dice.name}</div>
@@ -381,28 +201,14 @@ export default function DiceActionPanel({
 
                 {/* D100 - Spans 2 columns */}
                 <button
-                  style={{
-                    padding: `calc(12px * var(--ui-scale))`, // Back to original
-                    borderRadius: `calc(6px * var(--ui-scale))`,
-                    fontSize: `calc(11px * var(--ui-scale))`, // Back to original
-                    cursor: 'pointer',
-                    display: 'flex',
-                    flexDirection: 'column',
-                    alignItems: 'center',
-                    gridColumn: 'span 2',
-                    backgroundColor: selectedDice === 'D100' 
-                      ? 'rgba(16, 185, 129, 0.3)' 
-                      : 'rgba(71, 85, 105, 0.3)',
-                    border: selectedDice === 'D100' 
-                      ? '2px solid rgba(16, 185, 129, 0.6)' 
-                      : '1px solid #64748b',
-                    color: selectedDice === 'D100' 
-                      ? '#a7f3d0' 
-                      : '#cbd5e1'
-                  }}
+                  className={`p-3 rounded-md text-xs cursor-pointer flex flex-col items-center col-span-2 transition-all ${
+                    selectedDice === 'D100' 
+                      ? 'bg-emerald-500/30 border-2 border-emerald-500/60 text-emerald-200' 
+                      : 'bg-slate-600/30 border border-slate-500 text-slate-300'
+                  }`}
                   onClick={() => setSelectedDice('D100')}
                 >
-                  <div style={{ fontSize: `calc(16px * var(--ui-scale))`, marginBottom: `calc(4px * var(--ui-scale))` }}> // Back to original
+                  <div className="text-base mb-1">
                     🎯
                   </div>
                   <div className="font-bold">D100</div>
@@ -412,22 +218,8 @@ export default function DiceActionPanel({
             </div>
 
             {/* Bonus Input */}
-            <div 
-              style={{
-                padding: `calc(16px * var(--ui-scale))`, // Back to original
-                borderRadius: `calc(8px * var(--ui-scale))`,
-                marginBottom: `calc(24px * var(--ui-scale))`, // Back to original
-                backgroundColor: 'rgba(51, 65, 85, 0.5)',
-                border: '1px solid #475569'
-              }}
-            >
-              <h4 
-                style={{
-                  fontSize: `calc(16px * var(--ui-scale))`, // Back to original
-                  margin: `0 0 calc(12px * var(--ui-scale)) 0`,
-                  color: 'white'
-                }}
-              >
+            <div className="p-4 rounded-lg mb-6 bg-slate-600/50 border border-slate-500">
+              <h4 className="text-base mb-3 text-white">
                 ➕ Add Bonus (Optional)
               </h4>
               <input
@@ -435,70 +227,22 @@ export default function DiceActionPanel({
                 placeholder="e.g., +3, -1, +5"
                 value={rollBonus}
                 onChange={(e) => setRollBonus(e.target.value)}
-                style={{
-                  padding: `calc(8px * var(--ui-scale)) calc(12px * var(--ui-scale))`, // Back to original
-                  borderRadius: `calc(6px * var(--ui-scale))`,
-                  fontSize: `calc(14px * var(--ui-scale))`, // Back to original
-                  backgroundColor: '#1e293b',
-                  border: '1px solid #475569',
-                  color: 'white',
-                  width: '100%'
-                }}
+                className="py-2 px-3 rounded-md text-sm bg-slate-800 border border-slate-500 text-white w-full"
               />
             </div>
 
             {/* Roll Button */}
-            <div 
-              style={{
-                display: 'flex',
-                gap: `calc(16px * var(--ui-scale))`, // Back to original
-                justifyContent: 'center'
-              }}
-            >
+            <div className="flex gap-4 justify-center">
               <button
                 onClick={handleDiceRoll}
-                style={{
-                  backgroundColor: 'rgba(16, 185, 129, 0.2)', // GREEN always
-                  border: '2px solid rgba(16, 185, 129, 0.5)', // GREEN border always
-                  color: '#10b981', // GREEN text always
-                  borderRadius: `calc(12px * var(--ui-scale))`,
-                  padding: `calc(16px * var(--ui-scale)) calc(32px * var(--ui-scale))`, // Back to original
-                  fontSize: `calc(18px * var(--ui-scale))`, // Back to original
-                  fontWeight: 'bold',
-                  cursor: 'pointer',
-                  transition: 'all 0.2s ease'
-                }}
-                onMouseEnter={(e) => {
-                  e.target.style.backgroundColor = 'rgba(16, 185, 129, 0.3)';
-                  e.target.style.transform = 'scale(1.05)';
-                }}
-                onMouseLeave={(e) => {
-                  e.target.style.backgroundColor = 'rgba(16, 185, 129, 0.2)';
-                  e.target.style.transform = 'scale(1)';
-                }}
+                className="bg-emerald-500/20 border-2 border-emerald-500/50 text-emerald-500 rounded-xl px-8 py-4 text-lg font-bold cursor-pointer transition-all duration-200 hover:bg-emerald-500/30 hover:scale-105"
               >
                 🎲 Roll {selectedDice}{rollBonus && ` ${rollBonus}`}
               </button>
 
               <button
                 onClick={() => setIsDiceModalOpen(false)}
-                style={{
-                  backgroundColor: 'rgba(100, 116, 139, 0.2)',
-                  border: '2px solid rgba(100, 116, 139, 0.5)',
-                  color: '#64748b',
-                  borderRadius: `calc(12px * var(--ui-scale))`,
-                  padding: `calc(16px * var(--ui-scale)) calc(32px * var(--ui-scale))`, // Back to original
-                  fontSize: `calc(18px * var(--ui-scale))`, // Back to original
-                  fontWeight: 'bold',
-                  cursor: 'pointer',
-                  transition: 'all 0.2s ease'
-                }}
-                onMouseEnter={(e) => {
-                  e.target.style.backgroundColor = 'rgba(100, 116, 139, 0.3)';
-                }}
-                onMouseLeave={(e) => {
-                  e.target.style.backgroundColor = 'rgba(100, 116, 139, 0.2)';
-                }}
+                className="bg-slate-500/20 border-2 border-slate-500/50 text-slate-500 rounded-xl px-8 py-4 text-lg font-bold cursor-pointer transition-all duration-200 hover:bg-slate-500/30"
               >
                 Cancel
               </button>

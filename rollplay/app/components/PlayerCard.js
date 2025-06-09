@@ -81,23 +81,16 @@ export default function PlayerCard({
         <div 
           className={`
             rounded-lg border border-dashed text-center cursor-pointer transition-all duration-300
+            p-[calc(12px*var(--ui-scale))] mb-[calc(12px*var(--ui-scale))]
             ${playerAlreadySeated 
               ? 'bg-emerald-500/5 border-gray-500/30 opacity-50 cursor-not-allowed' 
               : 'bg-emerald-500/5 border-emerald-500/30 hover:bg-emerald-500/10 hover:border-emerald-500/50'
             }
           `}
-          style={{
-            marginBottom: `calc(12px * var(--ui-scale))`,
-            padding: `calc(12px * var(--ui-scale))`,
-            borderRadius: `calc(6px * var(--ui-scale))`,
-          }}
           onClick={playerAlreadySeated ? null : sitSeat}
         >
           <div 
-            className="text-emerald-400 font-medium"
-            style={{
-              fontSize: `calc(12px * var(--ui-scale))`,
-            }}
+            className="text-emerald-400 font-medium text-[calc(12px*var(--ui-scale))]"
           >
             {playerAlreadySeated 
               ? `🪑 Seat ${seatId + 1} - Leave current seat first`
@@ -112,7 +105,7 @@ export default function PlayerCard({
     return (
       <div 
         className={`
-          rounded-lg border transition-all duration-300 relative
+          rounded-lg border transition-all duration-300 relative p-[calc(12px*var(--ui-scale))] mb-[calc(12px*var(--ui-scale))]
           ${isMyTurn 
             ? 'bg-emerald-500/10 border-emerald-500/30 shadow-lg shadow-emerald-500/20' 
             : isThisPlayerSeat 
@@ -120,38 +113,25 @@ export default function PlayerCard({
               : 'bg-white/5 border-white/10'
           }
         `}
-        style={{
-          marginBottom: `calc(12px * var(--ui-scale))`,
-          padding: `calc(12px * var(--ui-scale))`,
-          borderRadius: `calc(6px * var(--ui-scale))`,
-        }}
       >
         {/* Turn Pulse Animation */}
         {isMyTurn && (
-          <div className="absolute inset-0 rounded-lg border-2 border-emerald-400/50 animate-pulse pointer-events-none"
-               style={{ borderRadius: `calc(6px * var(--ui-scale))` }}></div>
+          <div className="absolute inset-0 rounded-lg border-2 border-emerald-400/50 animate-pulse pointer-events-none"></div>
         )}
         
         {/* Member Header */}
         <div 
-          className="flex items-center justify-between"
-          style={{ marginBottom: `calc(4px * var(--ui-scale))` }}
+          className="flex items-center justify-between mb-[calc(4px*var(--ui-scale))]"
         >
           <div 
-            className="font-semibold text-blue-400"
-            style={{ fontSize: `calc(16px * var(--ui-scale))` }}
+            className="font-semibold text-blue-400 text-[calc(16px*var(--ui-scale))]"
           >
             {occupantName}
           </div>
-          <div className="flex items-center" style={{ gap: `calc(8px * var(--ui-scale))` }}>
+          <div className="flex items-center gap-[calc(8px*var(--ui-scale))]">
             {isMyTurn && (
               <div 
-                className="bg-emerald-500/20 text-emerald-400 px-2 py-1 rounded-full font-semibold uppercase tracking-wider"
-                style={{
-                  fontSize: `calc(9px * var(--ui-scale))`,
-                  padding: `calc(2px * var(--ui-scale)) calc(6px * var(--ui-scale))`,
-                  borderRadius: `calc(10px * var(--ui-scale))`,
-                }}
+                className="bg-emerald-500/20 text-emerald-400 px-[calc(6px*var(--ui-scale))] py-[calc(2px*var(--ui-scale))] rounded-full font-semibold uppercase tracking-wider text-[calc(9px*var(--ui-scale))]"
               >
                 🎯 Active
               </div>
@@ -159,14 +139,7 @@ export default function PlayerCard({
             {/* Exit Button - Repositioned to header */}
             {isThisPlayerSeat && (
               <button 
-                className="bg-transparent border border-red-500/40 text-red-400 rounded transition-all duration-200 hover:bg-red-500/10 hover:border-red-500 flex items-center justify-center"
-                style={{
-                  padding: `calc(4px * var(--ui-scale))`,
-                  borderRadius: `calc(4px * var(--ui-scale))`,
-                  fontSize: `calc(10px * var(--ui-scale))`,
-                  width: `calc(24px * var(--ui-scale))`,
-                  height: `calc(24px * var(--ui-scale))`,
-                }}
+                className="bg-transparent border border-red-500/40 text-red-400 rounded transition-all duration-200 hover:bg-red-500/10 hover:border-red-500 flex items-center justify-center p-[calc(4px*var(--ui-scale))] w-[calc(24px*var(--ui-scale))] h-[calc(24px*var(--ui-scale))] text-[calc(10px*var(--ui-scale))]"
                 onClick={leaveSeat}
                 title="Leave Seat"
               >
@@ -180,29 +153,19 @@ export default function PlayerCard({
           <>
             {/* Character Class & Level */}
             <div 
-              className="text-gray-400"
-              style={{
-                fontSize: `calc(13px * var(--ui-scale))`,
-                marginBottom: `calc(10px * var(--ui-scale))`,
-              }}
+              className="text-gray-400 text-[calc(13px*var(--ui-scale))] mb-[calc(10px*var(--ui-scale))]"
             >
               {playerData.class} • Level {playerData.level}
             </div>
             
             {/* HP Display */}
             <div 
-              className="flex items-center"
-              style={{
-                gap: `calc(10px * var(--ui-scale))`,
-                marginBottom: `calc(6px * var(--ui-scale))`,
-              }}
+              className="flex items-center gap-[calc(10px*var(--ui-scale))] mb-[calc(6px*var(--ui-scale))]"
             >
               {/* HP Bar Container */}
               <div 
-                className="flex-1 bg-white/10 rounded-full overflow-hidden relative"
+                className="flex-1 bg-white/10 rounded-full overflow-hidden relative h-[calc(6px*var(--ui-scale))]"
                 style={{
-                  height: `calc(6px * var(--ui-scale))`,
-                  borderRadius: `calc(3px * var(--ui-scale))`,
                   background: 'linear-gradient(90deg, #ef4444 0%, #ef4444 30%, #eab308 30%, #eab308 60%, #22c55e 60%, #22c55e 100%)',
                 }}
               >
@@ -217,22 +180,16 @@ export default function PlayerCard({
               
               {/* HP Text */}
               <div 
-                className="text-gray-300 font-mono flex items-baseline"
-                style={{
-                  fontSize: `calc(14px * var(--ui-scale))`,
-                  minWidth: `calc(50px * var(--ui-scale))`,
-                }}
+                className="text-gray-300 font-mono flex items-baseline text-[calc(14px*var(--ui-scale))] min-w-[calc(50px*var(--ui-scale))]"
               >
                 <span 
-                  className="text-white"
-                  style={{ fontSize: `calc(13px * var(--ui-scale))` }}
+                  className="text-white text-[calc(13px*var(--ui-scale))]"
                 >
                   {playerData.hp}
                 </span>
                 <span className="mx-1">/</span>
                 <span 
-                  className="font-semibold"
-                  style={{ fontSize: `calc(15px * var(--ui-scale))` }}
+                  className="font-semibold text-[calc(15px*var(--ui-scale))]"
                 >
                   {playerData.maxHp}
                 </span>
@@ -241,34 +198,20 @@ export default function PlayerCard({
 
             {/* Status Effects - Closer to HP */}
             <div 
-              className="flex flex-wrap items-center"
-              style={{
-                gap: `calc(4px * var(--ui-scale))`,
-                marginBottom: `calc(8px * var(--ui-scale))`,
-              }}
+              className="flex flex-wrap items-center gap-[calc(4px*var(--ui-scale))] mb-[calc(8px*var(--ui-scale))]"
             >
               {playerData.statusEffects && playerData.statusEffects.length > 0 ? (
                 playerData.statusEffects.slice(0, 3).map((status, index) => (
                   <div
                     key={index}
-                    className="bg-purple-500/20 border border-purple-400/60 text-purple-300 rounded-full px-2 py-1 font-medium"
-                    style={{
-                      fontSize: `calc(9px * var(--ui-scale))`,
-                      padding: `calc(2px * var(--ui-scale)) calc(6px * var(--ui-scale))`,
-                      borderRadius: `calc(10px * var(--ui-scale))`,
-                    }}
+                    className="bg-purple-500/20 border border-purple-400/60 text-purple-300 rounded-full px-[calc(6px*var(--ui-scale))] py-[calc(2px*var(--ui-scale))] font-medium text-[calc(9px*var(--ui-scale))]"
                   >
                     {status}
                   </div>
                 ))
               ) : (
                 <div
-                  className="bg-gray-600/20 border border-gray-500/40 text-gray-400 rounded-full px-2 py-1 font-medium"
-                  style={{
-                    fontSize: `calc(9px * var(--ui-scale))`,
-                    padding: `calc(2px * var(--ui-scale)) calc(6px * var(--ui-scale))`,
-                    borderRadius: `calc(10px * var(--ui-scale))`,
-                  }}
+                  className="bg-gray-600/20 border border-gray-500/40 text-gray-400 rounded-full px-[calc(6px*var(--ui-scale))] py-[calc(2px*var(--ui-scale))] font-medium text-[calc(9px*var(--ui-scale))]"
                 >
                   No Status Effects
                 </div>
@@ -277,11 +220,7 @@ export default function PlayerCard({
           </>
         ) : (
           <div 
-            className="text-gray-400"
-            style={{
-              fontSize: `calc(13px * var(--ui-scale))`,
-              marginBottom: `calc(10px * var(--ui-scale))`,
-            }}
+            className="text-gray-400 text-[calc(13px*var(--ui-scale))] mb-[calc(10px*var(--ui-scale))]"
           >
             Player • Seat {seatId + 1}
           </div>
