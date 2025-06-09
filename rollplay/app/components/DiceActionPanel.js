@@ -109,10 +109,10 @@ export default function DiceActionPanel({
           >
             {/* Roll Dice Button */}
             <button
-              className={`roll-dice-btn rounded-lg px-5 py-2.5 text-sm font-bold cursor-pointer transition-all duration-200 border-2 ${
+              className={`roll-dice-btn rounded-lg px-8 py-2.5 text-lg font-bold cursor-pointer transition-all duration-200 border-2 ${
                 shouldShowDicePanel 
                   ? (isPromptedToRoll 
-                      ? 'bg-orange-500/20 border-orange-500/50 text-orange-400 hover:bg-orange-500/30 hover:-translate-y-0.5' 
+                      ? 'bg-emerald-500/20 border-emerald-500/50 text-emerald-400 hover:bg-emerald-500/30 hover:-translate-y-0.5' 
                       : 'bg-emerald-500/20 border-emerald-500/50 text-emerald-500 hover:bg-emerald-500/30 hover:-translate-y-0.5') 
                   : 'bg-slate-500/10 border-slate-500/30 text-slate-500'
               } ${shouldShowDicePanel ? 'active' : 'inactive'}`}

@@ -456,7 +456,7 @@ export default function DMControlCenter({
                           setRollPromptModalOpen(true);
                         }}
                       >
-                        🎯 {player.playerName}
+                        {player.playerName}
                         {player.characterData && (
                           <span className="text-amber-400/70 ml-2">({player.characterData.class})</span>
                         )}
