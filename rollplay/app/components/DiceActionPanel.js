@@ -181,26 +181,27 @@ export default function DiceActionPanel({
               </button>
             </div>
 
-            {/* UPDATED: What you're rolling for - show prompts if any */}
+            {/* UPDATED: Show prompts for context only */}
             {myPrompts.length > 0 && (
               <div className="p-[calc(12px*var(--ui-scale))] rounded-lg mb-[calc(24px*var(--ui-scale))] bg-emerald-500/10 border border-emerald-500/30">
                 <div className="text-[calc(14px*var(--ui-scale))] text-emerald-200 text-center mb-3">
-                  📋 What are you rolling for?
+                  📋 You are rolling for:
                 </div>
                 <div className="space-y-2">
                   {myPrompts.map((prompt) => (
-                    <button
+                    <div
                       key={prompt.id}
-                      className="w-full p-2 bg-amber-500/20 border border-amber-500/40 text-amber-200 rounded-lg hover:bg-amber-500/30 transition-all duration-200 text-sm"
-                      onClick={() => handleDiceRoll(prompt.rollType)}
+                      className="w-full p-2 bg-amber-500/20 border border-amber-500/40 text-amber-200 rounded-lg text-sm text-center"
                     >
                       🎯 {prompt.rollType}
-                    </button>
+                    </div>
                   ))}
                 </div>
-                <div className="text-center mt-3 text-slate-400 text-xs">
-                  Or roll general dice below
-                </div>
+                {myPrompts.length > 1 && (
+                  <div className="text-center mt-3 text-amber-400/70 text-xs">
+                    Rolling will fulfill all prompts above
+                  </div>
+                )}
               </div>
             )}
 
@@ -277,6 +278,14 @@ export default function DiceActionPanel({
                 className="bg-emerald-500/20 border-2 border-emerald-500/50 text-emerald-500 rounded-xl px-8 py-4 text-lg font-bold cursor-pointer transition-all duration-200 hover:bg-emerald-500/30 hover:scale-105"
               >
                 🎲 Roll {selectedDice}{rollBonus && ` ${rollBonus}`}
+                {myPrompts.length > 0 && (
+                  <div className="text-xs text-emerald-400 mt-1">
+                    {myPrompts.length === 1 
+                      ? `for ${myPrompts[0].rollType}` 
+                      : `for ${myPrompts.length} prompts`
+                    }
+                  </div>
+                )}
               </button>
 
               <button
