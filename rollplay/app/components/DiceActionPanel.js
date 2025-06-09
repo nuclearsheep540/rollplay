@@ -224,10 +224,10 @@ export default function DiceActionPanel({
                 ].map((dice) => (
                   <button
                     key={dice.name}
-                    className={`p-[calc(12px*var(--ui-scale))] rounded-md text-[calc(13px*var(--ui-scale))] cursor-pointer flex flex-col items-center transition-all ${
+                    className={`p-[calc(12px*var(--ui-scale))] rounded-md text-[calc(13px*var(--ui-scale))] cursor-pointer flex flex-col items-center transition-all border-2 ${
                       selectedDice === dice.name 
-                        ? 'bg-emerald-500/30 border-2 border-emerald-500/60 text-emerald-200' 
-                        : 'bg-slate-600/30 border border-slate-500 text-slate-300'
+                        ? 'bg-emerald-500/30 border-emerald-500/60 text-emerald-200' 
+                        : 'bg-slate-600/30 border-slate-500 text-slate-300'
                     }`}
                     onClick={() => setSelectedDice(dice.name)}
                   >
@@ -241,10 +241,10 @@ export default function DiceActionPanel({
 
                 {/* D100 - Spans 2 columns */}
                 <button
-                  className={`p-[calc(12px*var(--ui-scale))] rounded-md text-[calc(13px*var(--ui-scale))] cursor-pointer flex flex-col items-center col-span-2 transition-all ${
+                  className={`p-[calc(12px*var(--ui-scale))] rounded-md text-[calc(13px*var(--ui-scale))] cursor-pointer flex flex-col items-center col-span-2 transition-all border-2 ${
                     selectedDice === 'D100' 
-                      ? 'bg-emerald-500/30 border-2 border-emerald-500/60 text-emerald-200' 
-                      : 'bg-slate-600/30 border border-slate-500 text-slate-300'
+                      ? 'bg-emerald-500/30 border-emerald-500/60 text-emerald-200' 
+                      : 'bg-slate-600/30 border-slate-500 text-slate-300'
                   }`}
                   onClick={() => setSelectedDice('D100')}
                 >
