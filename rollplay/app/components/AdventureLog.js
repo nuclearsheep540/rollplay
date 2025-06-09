@@ -135,14 +135,14 @@ export default function AdventureLog({ rollLog, gameSeats }) {
             return (
               <div
                 key={`group-${groupIndex}`}
-                className="player-message-group bg-slate-900/60 rounded-lg p-4 mb-3 shadow-lg backdrop-blur-sm border border-slate-400/10"
+                className="player-message-group bg-slate-900/60 rounded-lg p-[calc(16px*var(--ui-scale))] mb-[calc(12px*var(--ui-scale))] shadow-lg backdrop-blur-sm border border-slate-400/10"
                 style={{
                   borderLeft: `4px solid ${group.color}`
                 }}
               >
                 {/* Player name header */}
                 <div 
-                  className="player-name-header text-sm font-bold mb-2 drop-shadow-sm"
+                  className="player-name-header text-[calc(14px*var(--ui-scale))] font-bold mb-[calc(8px*var(--ui-scale))] drop-shadow-sm"
                   style={{
                     color: group.color
                   }}
@@ -154,19 +154,19 @@ export default function AdventureLog({ rollLog, gameSeats }) {
                 {group.messages.map((entry, messageIndex) => (
                   <div
                     key={entry.id}
-                    className={`grouped-message flex items-start gap-2 ${
-                      messageIndex < group.messages.length - 1 ? 'mb-2' : ''
+                    className={`grouped-message flex items-start gap-[calc(8px*var(--ui-scale))] ${
+                      messageIndex < group.messages.length - 1 ? 'mb-[calc(8px*var(--ui-scale))]' : ''
                     }`}
                   >
-                    <span className="text-sm opacity-80">
+                    <span className="text-[calc(14px*var(--ui-scale))] opacity-80">
                       {getMessageIcon(entry)}
                     </span>
                     <div className="flex-1">
-                      <div className="text-slate-200 text-sm leading-normal break-words">
+                      <div className="text-slate-200 text-[calc(14px*var(--ui-scale))] leading-normal break-words">
                         {formatMessageContent(entry)}
                       </div>
                     </div>
-                    <div className="text-white/40 text-xs font-mono flex-shrink-0">
+                    <div className="text-white/40 text-[calc(10px*var(--ui-scale))] font-mono flex-shrink-0">
                       {entry.timestamp}
                     </div>
                   </div>
@@ -179,10 +179,10 @@ export default function AdventureLog({ rollLog, gameSeats }) {
             return (
               <div
                 key={entry.id}
-                className="system-message py-1.5 px-3 mb-1 text-xs text-slate-400 bg-slate-400/5 rounded border border-slate-400/10 flex justify-between items-center italic"
+                className="system-message py-[calc(6px*var(--ui-scale))] px-[calc(12px*var(--ui-scale))] mb-[calc(4px*var(--ui-scale))] text-[calc(11px*var(--ui-scale))] text-slate-400 bg-slate-400/5 rounded border border-slate-400/10 flex justify-between items-center italic"
               >
                 <span>{formatMessageContent(entry)}</span>
-                <span className="text-[9px] opacity-60 font-mono">
+                <span className="text-[calc(9px*var(--ui-scale))] opacity-60 font-mono">
                   {entry.timestamp}
                 </span>
               </div>
@@ -193,7 +193,7 @@ export default function AdventureLog({ rollLog, gameSeats }) {
             return (
               <div
                 key={entry.id}
-                className="py-3 px-4 rounded-md text-sm mb-2 bg-slate-900/30 text-slate-300 border border-slate-400/10"
+                className="py-[calc(12px*var(--ui-scale))] px-[calc(16px*var(--ui-scale))] rounded-md text-[calc(13px*var(--ui-scale))] mb-[calc(8px*var(--ui-scale))] bg-slate-900/30 text-slate-300 border border-slate-400/10"
               >
                 {formatMessageContent(entry)}
               </div>

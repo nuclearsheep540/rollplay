@@ -64,16 +64,16 @@ export default function HorizontalInitiativeTracker({
       {/* Initiative Order - Animated show/hide based on combat state */}
       {shouldRender && (
         <div 
-          className={`absolute left-1/2 top-6 z-10 transition-all duration-300 ease-out ${
+          className={`absolute left-1/2 top-[calc(24px*var(--ui-scale))] z-10 transition-all duration-300 ease-out ${
             isVisible 
               ? 'transform -translate-x-1/2 translate-y-0 opacity-100' 
               : 'transform -translate-x-1/2 -translate-y-full opacity-0'
           }`}
         >
           {/* Backdrop */}
-          <div className="bg-slate-600/40 backdrop-blur-sm rounded-lg p-2">
+          <div className="bg-slate-600/40 backdrop-blur-sm rounded-lg p-[calc(8px*var(--ui-scale))]">
             {/* Character Portraits - BG3 Style */}
-            <div className="flex items-center gap-2.5">
+            <div className="flex items-center gap-[calc(10px*var(--ui-scale))]">
               {initiativeOrder.map((character, index) => (
                 <div
                   key={index}
@@ -88,7 +88,7 @@ export default function HorizontalInitiativeTracker({
                 >
                   {/* Character Frame - Subtle container with party/enemy colors */}
                   <div className={`
-                    rounded transition-all duration-300 p-0.5
+                    rounded transition-all duration-300 p-[calc(2.4px*var(--ui-scale))]
                     ${character.active 
                       ? 'bg-emerald-500/20 border-2 border-emerald-400/80' 
                       : isEnemy(character.name)
@@ -99,11 +99,11 @@ export default function HorizontalInitiativeTracker({
                     
                     {/* Character Portrait - 2:3 Rectangle (20% bigger) */}
                     <div className={`
-                      rounded transition-all duration-300 flex items-center justify-center text-white font-bold shadow-md overflow-hidden w-[38px] h-[58px] text-sm
+                      rounded transition-all duration-300 flex items-center justify-center text-white font-bold shadow-md overflow-hidden w-[calc(38px*var(--ui-scale))] h-[calc(58px*var(--ui-scale))] text-[calc(14px*var(--ui-scale))]
                       ${getBackgroundColor(character.name)}
                     `}>
                       {/* Placeholder for future avatar image */}
-                      <div className="w-full h-full bg-black/20 flex items-center justify-center text-white/50 text-xs">
+                      <div className="w-full h-full bg-black/20 flex items-center justify-center text-white/50 text-[calc(10px*var(--ui-scale))]">
                         IMG
                       </div>
                     </div>
@@ -118,11 +118,11 @@ export default function HorizontalInitiativeTracker({
 
                   {/* Name Tooltip - Appears on hover */}
                   <div className="absolute -bottom-12 left-1/2 transform -translate-x-1/2 opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none z-30">
-                    <div className="bg-black/90 text-white py-1.5 px-2.5 rounded whitespace-nowrap backdrop-blur-sm text-sm">
+                    <div className="bg-black/90 text-white py-[calc(5px*var(--ui-scale))] px-[calc(10px*var(--ui-scale))] rounded whitespace-nowrap backdrop-blur-sm text-[calc(13px*var(--ui-scale))]">
                       {character.name}
                     </div>
                     {/* Tooltip Arrow */}
-                    <div className="absolute top-0 left-1/2 transform -translate-x-1/2 -translate-y-1 w-0 h-0 border-l border-r border-b border-transparent border-b-black/90"></div>
+                    <div className="absolute top-0 left-1/2 transform -translate-x-1/2 -translate-y-1 w-0 h-0 border-l-[calc(5px*var(--ui-scale))] border-r-[calc(5px*var(--ui-scale))] border-b-[calc(5px*var(--ui-scale))] border-transparent border-b-black/90"></div>
                   </div>
                 </div>
               ))}
@@ -134,17 +134,17 @@ export default function HorizontalInitiativeTracker({
       {/* Combat Status Indicators (Bottom Right) - Only show during combat */}
       {shouldRender && (
         <div 
-          className={`absolute bottom-6 right-6 z-10 transition-all duration-300 ease-out delay-100 ${
+          className={`absolute bottom-[calc(24px*var(--ui-scale))] right-[calc(24px*var(--ui-scale))] z-10 transition-all duration-300 ease-out delay-100 ${
             isVisible 
               ? 'transform translate-x-0 opacity-100' 
               : 'transform translate-x-full opacity-0'
           }`}
         >
-          <div className="bg-black/60 backdrop-blur-md border border-white/10 rounded-lg shadow-xl p-4">
-            <div className="text-emerald-400 font-semibold text-sm mb-2">Combat Active</div>
-            <div className="flex items-center text-white/70 gap-3 text-xs">
-              <div className="flex items-center gap-1">
-                <div className="bg-emerald-400 rounded-full animate-pulse w-2 h-2"></div>
+          <div className="bg-black/60 backdrop-blur-md border border-white/10 rounded-lg shadow-xl p-[calc(16px*var(--ui-scale))]">
+            <div className="text-emerald-400 font-semibold text-[calc(14px*var(--ui-scale))] mb-[calc(8px*var(--ui-scale))]">Combat Active</div>
+            <div className="flex items-center text-white/70 gap-[calc(12px*var(--ui-scale))] text-[calc(12px*var(--ui-scale))]">
+              <div className="flex items-center gap-[calc(4px*var(--ui-scale))]">
+                <div className="bg-emerald-400 rounded-full animate-pulse w-[calc(8px*var(--ui-scale))] h-[calc(8px*var(--ui-scale))]"></div>
                 <span>Turn 1</span>
               </div>
             </div>

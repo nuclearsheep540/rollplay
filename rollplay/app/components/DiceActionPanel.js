@@ -141,15 +141,15 @@ export default function DiceActionPanel({
           onClick={() => setIsDiceModalOpen(false)}
         >
           <div 
-            className="dice-modal bg-slate-800 border-2 border-emerald-500/40 rounded-2xl p-6 max-w-[500px] w-[90%] shadow-[0_20px_60px_rgba(0,0,0,0.4)]"
+            className="dice-modal bg-slate-800 border-2 border-emerald-500/40 rounded-2xl p-[calc(24px*var(--ui-scale))] max-w-[calc(500px*var(--ui-scale))] w-[90%] shadow-[0_20px_60px_rgba(0,0,0,0.4)]"
             onClick={(e) => e.stopPropagation()}
           >
             <div className="flex items-center justify-between mb-6">
-              <h3 className="text-emerald-500 text-xl font-bold m-0">
+              <h3 className="text-emerald-500 text-[calc(20px*var(--ui-scale))] font-bold m-0">
                 🎲 Roll Dice
               </h3>
               <button 
-                className="text-gray-400 hover:text-white transition-colors text-xl bg-transparent border-none cursor-pointer"
+                className="text-gray-400 hover:text-white transition-colors text-[calc(20px*var(--ui-scale))] bg-transparent border-none cursor-pointer"
                 onClick={() => setIsDiceModalOpen(false)}
               >
                 ✕
@@ -158,8 +158,8 @@ export default function DiceActionPanel({
 
             {/* What you're rolling for */}
             {rollPrompt && (
-              <div className="p-3 rounded-lg mb-6 bg-emerald-500/10 border border-emerald-500/30">
-                <div className="text-sm text-emerald-200 text-center">
+              <div className="p-[calc(12px*var(--ui-scale))] rounded-lg mb-[calc(24px*var(--ui-scale))] bg-emerald-500/10 border border-emerald-500/30">
+                <div className="text-[calc(14px*var(--ui-scale))] text-emerald-200 text-center">
                   📋 Rolling for: <span className="font-bold">{rollPrompt}</span>
                 </div>
               </div>
@@ -169,11 +169,11 @@ export default function DiceActionPanel({
             {/* This is the same as before, just keeping existing implementation */}
             
             {/* Dice Selection */}
-            <div className="p-4 rounded-lg mb-6 bg-slate-600/50 border border-slate-500">
-              <h4 className="text-base mb-3 text-white">
+            <div className="p-[calc(16px*var(--ui-scale))] rounded-lg mb-[calc(24px*var(--ui-scale))] bg-slate-600/50 border border-slate-500">
+              <h4 className="text-[calc(16px*var(--ui-scale))] mb-[calc(12px*var(--ui-scale))] text-white">
                 🎲 Choose Your Dice
               </h4>
-              <div className="grid grid-cols-4 gap-2">
+              <div className="grid grid-cols-4 gap-[calc(8px*var(--ui-scale))]">
                 {[
                   { name: 'D20', emoji: '🎲', range: '1-20' },
                   { name: 'D12', emoji: '🔷', range: '1-12' },
@@ -184,14 +184,14 @@ export default function DiceActionPanel({
                 ].map((dice) => (
                   <button
                     key={dice.name}
-                    className={`p-3 rounded-md text-xs cursor-pointer flex flex-col items-center transition-all ${
+                    className={`p-[calc(12px*var(--ui-scale))] rounded-md text-[calc(11px*var(--ui-scale))] cursor-pointer flex flex-col items-center transition-all ${
                       selectedDice === dice.name 
                         ? 'bg-emerald-500/30 border-2 border-emerald-500/60 text-emerald-200' 
                         : 'bg-slate-600/30 border border-slate-500 text-slate-300'
                     }`}
                     onClick={() => setSelectedDice(dice.name)}
                   >
-                    <div className="text-base mb-1">
+                    <div className="text-[calc(16px*var(--ui-scale))] mb-[calc(4px*var(--ui-scale))]">
                       {dice.emoji}
                     </div>
                     <div className="font-bold">{dice.name}</div>
@@ -201,14 +201,14 @@ export default function DiceActionPanel({
 
                 {/* D100 - Spans 2 columns */}
                 <button
-                  className={`p-3 rounded-md text-xs cursor-pointer flex flex-col items-center col-span-2 transition-all ${
+                  className={`p-[calc(12px*var(--ui-scale))] rounded-md text-[calc(11px*var(--ui-scale))] cursor-pointer flex flex-col items-center col-span-2 transition-all ${
                     selectedDice === 'D100' 
                       ? 'bg-emerald-500/30 border-2 border-emerald-500/60 text-emerald-200' 
                       : 'bg-slate-600/30 border border-slate-500 text-slate-300'
                   }`}
                   onClick={() => setSelectedDice('D100')}
                 >
-                  <div className="text-base mb-1">
+                  <div className="text-[calc(16px*var(--ui-scale))] mb-[calc(4px*var(--ui-scale))]">
                     🎯
                   </div>
                   <div className="font-bold">D100</div>
