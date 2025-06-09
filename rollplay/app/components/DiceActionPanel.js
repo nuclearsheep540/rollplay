@@ -33,9 +33,12 @@ export default function DiceActionPanel({
   
   // UPDATED: Handle actual dice roll with prompt context
   const handleDiceRoll = (rollFor = null) => {
-    // If rollFor is not specified and player has prompts, use the first prompt
-    let rollType = rollFor;
-    if (!rollType && myPrompts.length > 0) {
+    // Ensure rollFor is a string, not an event object
+    let rollType = null;
+    if (rollFor && typeof rollFor === 'string') {
+      rollType = rollFor;
+    } else if (!rollFor && myPrompts.length > 0) {
+      // If rollFor is not specified and player has prompts, use the first prompt
       rollType = myPrompts[0].rollType;
     }
     
@@ -270,7 +273,7 @@ export default function DiceActionPanel({
             {/* Roll Button */}
             <div className="flex gap-4 justify-center">
               <button
-                onClick={handleDiceRoll}
+                onClick={() => handleDiceRoll()}
                 className="bg-emerald-500/20 border-2 border-emerald-500/50 text-emerald-500 rounded-xl px-8 py-4 text-lg font-bold cursor-pointer transition-all duration-200 hover:bg-emerald-500/30 hover:scale-105"
               >
                 🎲 Roll {selectedDice}{rollBonus && ` ${rollBonus}`}
