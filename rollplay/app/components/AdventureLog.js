@@ -1,8 +1,7 @@
 'use client'
 
 import { useEffect, useRef } from 'react'
-
-export default function AdventureLog({ rollLog, gameSeats }) {
+export default function AdventureLog({ rollLog, playerSeatMap }) {
   const logRef = useRef(null);
 
   // Auto-scroll log to TOP when new entries are added (newest first)
@@ -12,12 +11,6 @@ export default function AdventureLog({ rollLog, gameSeats }) {
     }
   }, [rollLog]);
 
-  // Helper function to get seat color for a player
-  const getPlayerSeatColor = (playerName) => {
-    const seatIndex = gameSeats.findIndex(seat => seat.playerName === playerName);
-    const colors = ["#3b82f6", "#ef4444", "#10b981", "#f59e0b", "#8b5cf6", "#06b6d4"];
-    return colors[seatIndex % colors.length] || "#3b82f6";
-  };
 
   // Helper function to format player name in title case
   const toTitleCase = (name) => {
@@ -32,24 +25,30 @@ export default function AdventureLog({ rollLog, gameSeats }) {
     let currentGroup = null;
 
     reversedMessages.forEach((entry, index) => {
-      const isPlayerMessage = (entry.type === "user" || entry.type === "dice" || entry.type === "player-roll") && entry.player_name;
+      const hasPlayerName = entry.player_name && entry.player_name !== "";
+      const isPlayerMessage = (entry.type === "user" || entry.type === "dice" || entry.type === "player-roll") && hasPlayerName;
       const isSystemMessage = entry.type === "system";
 
       if (isPlayerMessage) {
-        // Check if this continues the current player group
+        const playerData = playerSeatMap[entry.player_name];
+        const playerIsInParty = !!playerData;
+        const messageType = playerIsInParty ? "party-member" : "npc";
+        
+        // Check if this continues the current group
         if (currentGroup && 
-            currentGroup.type === "player" && 
+            currentGroup.type === messageType && 
             currentGroup.playerName === entry.player_name) {
           // Add to existing group
           currentGroup.messages.push(entry);
         } else {
-          // Start new player group
+          // Start new group
           if (currentGroup) groups.push(currentGroup);
           currentGroup = {
-            type: "player",
+            type: messageType,
             playerName: entry.player_name,
             messages: [entry],
-            color: getPlayerSeatColor(entry.player_name)
+            seatColor: playerData?.seatColor || null,
+            isPartyMember: playerIsInParty
           };
         }
       } else if (isSystemMessage) {
@@ -130,23 +129,18 @@ export default function AdventureLog({ rollLog, gameSeats }) {
       </div>
       <div className="log-entries" ref={logRef}>
         {messageGroups.map((group, groupIndex) => {
-          if (group.type === "player") {
-            // Player message group with visual wrapper
+          if (group.type === "party-member") {
+            // Party member message group with seat color
             return (
               <div
                 key={`group-${groupIndex}`}
-                className="player-message-group bg-slate-900/60 rounded-lg p-[calc(16px*var(--ui-scale))] mb-[calc(12px*var(--ui-scale))] shadow-lg backdrop-blur-sm border border-slate-400/10"
-                style={{
-                  borderLeft: `4px solid ${group.color}`
-                }}
+                className={`party-message-group bg-slate-900/60 rounded-lg p-[calc(16px*var(--ui-scale))] mb-[calc(12px*var(--ui-scale))] shadow-lg backdrop-blur-sm border border-slate-400/10 border-l-4 border-l-${group.seatColor}-500`}
               >
-                {/* Player name header */}
+                {/* Party member name header */}
                 <div 
-                  className="player-name-header text-[calc(14px*var(--ui-scale))] font-bold mb-[calc(8px*var(--ui-scale))] drop-shadow-sm"
-                  style={{
-                    color: group.color
-                  }}
+                  className={`player-name-header text-[calc(14px*var(--ui-scale))] font-bold mb-[calc(8px*var(--ui-scale))] drop-shadow-sm flex items-center gap-2 text-${group.seatColor}-400`}
                 >
+                  <span>👥</span>
                   {toTitleCase(group.playerName)}
                 </div>
                 
@@ -167,6 +161,47 @@ export default function AdventureLog({ rollLog, gameSeats }) {
                       </div>
                     </div>
                     <div className="text-white/40 text-[calc(10px*var(--ui-scale))] font-mono flex-shrink-0">
+                      {entry.timestamp}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            );
+          } else if (group.type === "npc") {
+            // NPC message group with different styling
+            return (
+              <div
+                key={`group-${groupIndex}`}
+                className="npc-message-group bg-amber-900/20 rounded-lg p-[calc(16px*var(--ui-scale))] mb-[calc(12px*var(--ui-scale))] shadow-md backdrop-blur-sm border border-amber-500/20"
+                style={{
+                  borderLeft: `4px solid #f59e0b`
+                }}
+              >
+                {/* NPC name header */}
+                <div 
+                  className="npc-name-header text-[calc(14px*var(--ui-scale))] font-bold mb-[calc(8px*var(--ui-scale))] drop-shadow-sm flex items-center gap-2 text-amber-400"
+                >
+                  <span>🗨️</span>
+                  {toTitleCase(group.playerName)}
+                </div>
+                
+                {/* Messages in this group */}
+                {group.messages.map((entry, messageIndex) => (
+                  <div
+                    key={entry.id}
+                    className={`grouped-message flex items-start gap-[calc(8px*var(--ui-scale))] ${
+                      messageIndex < group.messages.length - 1 ? 'mb-[calc(8px*var(--ui-scale))]' : ''
+                    }`}
+                  >
+                    <span className="text-[calc(14px*var(--ui-scale))] opacity-80">
+                      {getMessageIcon(entry)}
+                    </span>
+                    <div className="flex-1">
+                      <div className="text-amber-100 text-[calc(14px*var(--ui-scale))] leading-normal break-words">
+                        {formatMessageContent(entry)}
+                      </div>
+                    </div>
+                    <div className="text-amber-200/40 text-[calc(10px*var(--ui-scale))] font-mono flex-shrink-0">
                       {entry.timestamp}
                     </div>
                   </div>

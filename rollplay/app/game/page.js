@@ -1,7 +1,8 @@
 'use client'
 
-import { React, useEffect, useState } from 'react'
+import { React, useEffect, useState, useMemo } from 'react'
 import { useSearchParams } from "next/navigation";
+import { getSeatColor } from '../utils/seatColors';
 
 import PlayerCard from "../components/PlayerCard";
 import ChatMessages from '../components/ChatMessages';
@@ -34,6 +35,20 @@ export default function Game() {
 
   // UNIFIED STRUCTURE - Replaces both seats and partyMembers
   const [gameSeats, setGameSeats] = useState([]);
+
+  // Pre-computed player-to-seat mapping for O(1) lookups
+  const playerSeatMap = useMemo(() => {
+    const map = {};
+    gameSeats.forEach((seat, index) => {
+      if (seat.playerName !== "empty") {
+        map[seat.playerName] = {
+          seatIndex: index,
+          seatColor: getSeatColor(index)
+        };
+      }
+    });
+    return map;
+  }, [gameSeats]);
 
   // UPDATED: State management for TabletopInterface - REMOVED HARDCODED DEFAULTS
   const [currentTurn, setCurrentTurn] = useState(null); // ❌ Removed 'Thorin' default
@@ -333,10 +348,12 @@ export default function Game() {
       const initialSeats = [];
       for (let i = 0; i < maxPlayers; i++) {
         const playerName = seatLayout[i] || "empty";
+        // Normalize player names when loading from database
+        const normalizedPlayerName = playerName !== "empty" ? playerName.toLowerCase() : "empty";
         initialSeats.push({
           seatId: i,
-          playerName: playerName,
-          characterData: playerName !== "empty" ? getCharacterData(playerName) : null,
+          playerName: normalizedPlayerName,
+          characterData: normalizedPlayerName !== "empty" ? getCharacterData(normalizedPlayerName) : null,
           isActive: false
         });
       }
@@ -352,7 +369,7 @@ export default function Game() {
   // initialise the game lobby
   useEffect(() => {
     const roomId = params.get('roomId')
-    const thisPlayer = params.get('playerName')
+    const thisPlayer = params.get('playerName')?.toLowerCase() // Normalize once at entry point
     setRoomId(roomId)
     setThisPlayer(thisPlayer)
 
@@ -778,7 +795,7 @@ export default function Game() {
           {/* Adventure Log component */}
           <AdventureLog 
             rollLog={rollLog}
-            gameSeats={gameSeats}
+            playerSeatMap={playerSeatMap}
           />
         </div>
 
