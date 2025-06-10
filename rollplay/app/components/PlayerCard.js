@@ -19,10 +19,10 @@ export default function PlayerCard({
     const isOccupied = currentSeat.playerName !== "empty";
     const occupantName = currentSeat.playerName;
     const isMyTurn = currentTurn === occupantName;
-    const isThisPlayerSeat = currentSeat.playerName === thisPlayer;
+    const isThisPlayerSeat = currentSeat.playerName?.toLowerCase() === thisPlayer?.toLowerCase();
     
     // Check if player is already sitting somewhere
-    const playerAlreadySeated = seats.some(seat => seat.playerName === thisPlayer);
+    const playerAlreadySeated = seats.some(seat => seat.playerName?.toLowerCase() === thisPlayer?.toLowerCase());
   
     function sitSeat() {
       // Only allow sitting if seat is empty AND player isn't already seated

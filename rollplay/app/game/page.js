@@ -98,12 +98,10 @@ export default function Game() {
       
       setGameSeats(updatedSeats);
       
-      // Add to adventure log if not the person who made the change
-      if (updated_by !== thisPlayer) {
-        const currentCount = gameSeats.length;
-        const action = max_players > currentCount ? "increased" : "decreased";
-        addToLog(`${updated_by} ${action} party seats to ${max_players}`, 'system');
-      }
+      // Server-only logging: all players see all seat changes
+      const currentCount = gameSeats.length;
+      const action = max_players > currentCount ? "increased" : "decreased";
+      addToLog(`${updated_by} ${action} party seats to ${max_players}`, 'system');
     },
 
     onChatMessage: (data) => {
@@ -121,10 +119,8 @@ export default function Game() {
       console.log("received player connection:", data);
       const { connected_player } = data;
       
-      // Only log if not the current player (avoid logging your own connection)
-      if (connected_player !== thisPlayer) {
-        addToLog(`${connected_player} connected`, 'system');
-      }
+      // Server-only logging: all players see all connections
+      addToLog(`${connected_player} connected`, 'system');
     },
 
     onPlayerKicked: (data) => {
@@ -146,28 +142,16 @@ export default function Game() {
       
       setCombatActive(newCombatState);
       
-      // Add to adventure log
-      const action = newCombatState ? "initiated" : "ended";
-      const message = `Combat ${action}`;
-      addToLog(message, 'system');
+      // Note: Combat state changes are logged on the server side only
+      // to prevent duplication for the player who initiated the change
     },
 
     onPlayerDisconnected: (data) => {
       console.log("received player disconnect:", data);
       const disconnected_player = data["disconnected_player"];
     
-      // Find and empty the seat of the disconnected player
-      const updatedSeats = gameSeats.map(seat => 
-        seat.playerName === disconnected_player 
-          ? { ...seat, playerName: "empty", characterData: null, isActive: false }
-          : seat
-      );
-
-      // Send updated seat layout to all players
-      sendSeatChange(updatedSeats);
-
-      // Update local state
-      setGameSeats(updatedSeats);
+      // Server will handle seat cleanup and broadcast updated layout
+      // No client-side seat modification needed - server-only disconnect management
 
       if (disconnected_player !== thisPlayer) {
         addToLog(`${disconnected_player} disconnected`, 'system');
@@ -177,6 +161,8 @@ export default function Game() {
     onDiceRoll: (data) => {
       console.log("received dice roll:", data);
       const { player, dice, result } = data;
+      
+      // Server-only logging: all players see all dice rolls
       addToLog(`${dice}: ${result}`, 'dice', player);
     },
 
@@ -222,10 +208,8 @@ export default function Game() {
       
       setIsDicePromptActive(true);
       
-      // Add to adventure log if not the person who made the prompt
-      if (prompted_by !== thisPlayer) {
-        addToLog(`DM: ${prompted_player}, please roll a ${roll_type}`, 'dice');
-      }
+      // Server-only logging: all players see all dice prompts
+      addToLog(`DM: ${prompted_player}, please roll a ${roll_type}`, 'dice');
     },
 
     onDicePromptClear: (data) => {
@@ -422,9 +406,8 @@ export default function Game() {
       // Update local state
       setGameSeats(newSeats);
 
-      // Add to adventure log
+      // Adventure log will be handled by server broadcast
       const action = newSeatCount > gameSeats.length ? "increased" : "decreased";
-      addToLog(`${thisPlayer} ${action} party seats to ${newSeatCount}`, 'system');
 
     } catch (error) {
       console.error('Error updating seat count:', error);
@@ -501,8 +484,7 @@ export default function Game() {
         return
       }
   
-      // Add to adventure log
-      addToLog(`Player ${playerToKick} was removed from the game`, 'system');
+      // Adventure log will be handled by server broadcast
   
     } catch (error) {
       console.error('Error kicking player:', error);
@@ -573,8 +555,8 @@ export default function Game() {
     
     setIsDicePromptActive(true);
     
-    // Add to adventure log
-    addToLog(`DM: ${playerName}, please roll a ${rollType}`, 'dice');
+    // Note: Adventure log entry will be added via the WebSocket broadcast
+    // to prevent duplication for the DM who initiated the prompt
   };
 
   // UPDATED: Clear dice prompt (can clear specific prompt or all prompts)
@@ -609,7 +591,7 @@ export default function Game() {
   // Handle dice roll
   const rollDice = () => {
     const result = Math.floor(Math.random() * 20) + 1;
-    addToLog(`d20: ${result}`, 'dice', currentTurn);
+    // Note: This function appears to be unused in current UI
     
     setTimeout(() => {
       hideDicePortal();
@@ -660,8 +642,7 @@ export default function Game() {
       // Remove system messages from local state immediately
       setRollLog(prev => prev.filter(entry => entry.type !== 'system'));
       
-      // Add confirmation message
-      addToLog('System messages cleared', 'system');
+      // Adventure log will be handled by server broadcast
       
     } catch (error) {
       console.error('Error clearing system messages:', error);
@@ -692,8 +673,7 @@ export default function Game() {
     const bonusText = bonusValue !== 0 ? ` ${bonus}` : '';
     const resultMessage = `${dice}${bonusText}: ${totalResult}`;
     
-    // Add to adventure log
-    addToLog(resultMessage, 'dice', playerName);
+    // Adventure log will be handled by server broadcast
     
     // Send to websocket with context
     sendDiceRoll(playerName, `${dice}${bonusText}`, totalResult, rollFor);

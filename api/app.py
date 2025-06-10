@@ -252,6 +252,8 @@ async def websocket_endpoint(
     client_id: str,  # This should be your room_id
     player_name: str
 ):
+    # Normalize player name to lowercase for consistent identification
+    player_name = player_name.lower()
     await manager.connect(websocket)
 
     # Log player connection to database
@@ -512,7 +514,7 @@ async def websocket_endpoint(
                 await manager.update_data(clear_prompt_message)
             
     except WebSocketDisconnect:
-        # Existing disconnect logic...
+        # Server-side disconnect handling with seat cleanup
         add_adventure_log(
             room_id=client_id,
             message=f"{player_name} disconnected",
@@ -522,14 +524,36 @@ async def websocket_endpoint(
         
         manager.remove_connection(websocket)
         
+        # Clean up disconnected player's seat
+        from gameservice import GameService
+        current_seats = GameService.get_seat_layout(client_id)
+        
+        # Remove disconnected player from their seat (case-insensitive)
+        updated_seats = []
+        for seat in current_seats:
+            if seat.lower() == player_name.lower():
+                updated_seats.append("empty")
+            else:
+                updated_seats.append(seat)
+        
+        # Update seat layout in database
+        GameService.update_seat_layout(client_id, updated_seats)
+        
+        # Broadcast player disconnection event
         disconnect_message = {
             "event_type": "player_disconnected", 
             "data": {
                 "disconnected_player": player_name
             }
         }
-        
         await manager.update_data(disconnect_message)
+        
+        # Broadcast updated seat layout to all remaining clients
+        seat_change_message = {
+            "event_type": "seat_change",
+            "data": updated_seats
+        }
+        await manager.update_data(seat_change_message)
 
 
 
