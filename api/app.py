@@ -252,6 +252,8 @@ async def websocket_endpoint(
     client_id: str,  # This should be your room_id
     player_name: str
 ):
+    # Normalize player name to lowercase for consistent identification
+    player_name = player_name.lower()
     await manager.connect(websocket)
 
     # Log player connection to database
