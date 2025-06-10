@@ -551,10 +551,7 @@ async def websocket_endpoint(
         # Broadcast updated seat layout to all remaining clients
         seat_change_message = {
             "event_type": "seat_change",
-            "data": {
-                "max_players": len(updated_seats),
-                "updated_by": "system"
-            }
+            "data": updated_seats
         }
         await manager.update_data(seat_change_message)
 
