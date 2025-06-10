@@ -1,6 +1,6 @@
 'use client'
 
-import { React, useEffect, useState } from 'react'
+import { React, useEffect, useState, Suspense } from 'react'
 import { useSearchParams } from "next/navigation";
 
 import PlayerCard from "../components/PlayerCard";
@@ -11,13 +11,8 @@ import AdventureLog from '../components/AdventureLog';
 import DiceActionPanel from '../components/DiceActionPanel'; // NEW IMPORT
 import { useWebSocket } from '../hooks/useWebSocket';
 
-function Params() {
-  return useSearchParams()
-}
-
-export default function Game() {
-
-  const params = Params(); 
+function GameContent() {
+  const params = useSearchParams(); 
 
   const [room404, setRoom404] = useState(false)
   const [thisPlayer, setThisPlayer] = useState()
@@ -825,5 +820,13 @@ export default function Game() {
         isDicePromptActive={isDicePromptActive}
       />
     </div>
+  );
+}
+
+export default function Game() {
+  return (
+    <Suspense fallback={<div>Loading...</div>}>
+      <GameContent />
+    </Suspense>
   );
 }
