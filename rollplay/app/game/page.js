@@ -150,18 +150,8 @@ export default function Game() {
       console.log("received player disconnect:", data);
       const disconnected_player = data["disconnected_player"];
     
-      // Find and empty the seat of the disconnected player
-      const updatedSeats = gameSeats.map(seat => 
-        seat.playerName?.toLowerCase() === disconnected_player?.toLowerCase() 
-          ? { ...seat, playerName: "empty", characterData: null, isActive: false }
-          : seat
-      );
-
-      // Send updated seat layout to all players
-      sendSeatChange(updatedSeats);
-
-      // Update local state
-      setGameSeats(updatedSeats);
+      // Server will handle seat cleanup and broadcast updated layout
+      // No client-side seat modification needed - server-only disconnect management
 
       if (disconnected_player !== thisPlayer) {
         addToLog(`${disconnected_player} disconnected`, 'system');
