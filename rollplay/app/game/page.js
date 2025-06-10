@@ -152,7 +152,7 @@ export default function Game() {
     
       // Find and empty the seat of the disconnected player
       const updatedSeats = gameSeats.map(seat => 
-        seat.playerName === disconnected_player 
+        seat.playerName?.toLowerCase() === disconnected_player?.toLowerCase() 
           ? { ...seat, playerName: "empty", characterData: null, isActive: false }
           : seat
       );
