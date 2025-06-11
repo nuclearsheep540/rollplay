@@ -167,30 +167,28 @@ export const handleInitiativePromptAll = (data, { setActivePrompts, addToLog, se
     addToLog(log_message, 'dungeon-master');
   }
   
-  // Check if this player is in the list of players to prompt
+  // For DMs and all players, track ALL prompts created by this initiative call
+  // This ensures the DM sees the correct total count
+  const allPrompts = players_to_prompt.map(player => ({
+    id: `${player}_${roll_type}_${Date.now()}`,
+    player: player,
+    rollType: roll_type,
+    promptedBy: prompted_by,
+    isInitiativePrompt: true // Flag to identify initiative prompts
+  }));
+  
+  setActivePrompts(prev => {
+    // Remove any existing initiative prompts for these players
+    const filteredPrev = prev.filter(p => 
+      !players_to_prompt.includes(p.player) || p.rollType !== roll_type
+    );
+    
+    // Add all new initiative prompts
+    return [...filteredPrev, ...allPrompts];
+  });
+  
+  // Only set dice prompt active if this player is actually prompted
   if (players_to_prompt.includes(thisPlayer)) {
-    // Create individual prompt for this player
-    const newPrompt = {
-      id: `${thisPlayer}_${roll_type}_${Date.now()}`,
-      player: thisPlayer,
-      rollType: roll_type,
-      promptedBy: prompted_by
-    };
-    
-    setActivePrompts(prev => {
-      // Check if this player already has an active prompt for this roll type
-      const existingIndex = prev.findIndex(p => p.player === thisPlayer && p.rollType === roll_type);
-      if (existingIndex >= 0) {
-        // Replace existing prompt
-        const updated = [...prev];
-        updated[existingIndex] = newPrompt;
-        return updated;
-      } else {
-        // Add new prompt
-        return [...prev, newPrompt];
-      }
-    });
-    
     setIsDicePromptActive(true);
   }
 };

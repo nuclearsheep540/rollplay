@@ -560,7 +560,7 @@ async def websocket_endpoint(
                     }
                 }
                 
-                # Auto-clear prompt if this was a prompted roll (has prompt_id)
+                # Auto-clear prompt if this was a prompted roll (has prompt_id or player)
                 clear_prompt_message = None
                 if prompt_id:
                     clear_prompt_message = {
@@ -568,7 +568,17 @@ async def websocket_endpoint(
                         "data": {
                             "cleared_by": "system",
                             "auto_cleared": True,
-                            "prompt_id": prompt_id  # New: Clear specific prompt by ID
+                            "prompt_id": prompt_id  # Clear specific prompt by ID
+                        }
+                    }
+                elif player:
+                    # For initiative prompts, clear by player name since we might not have exact prompt_id
+                    clear_prompt_message = {
+                        "event_type": "dice_prompt_clear",
+                        "data": {
+                            "cleared_by": "system", 
+                            "auto_cleared": True,
+                            "cleared_player": player  # Clear prompts for this player
                         }
                     }
                 # We'll send this after the dice roll broadcast
