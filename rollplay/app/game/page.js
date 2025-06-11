@@ -5,7 +5,6 @@ import { useSearchParams } from "next/navigation";
 import { getSeatColor } from '../utils/seatColors';
 
 import PlayerCard from "../components/PlayerCard";
-import ChatMessages from '../components/ChatMessages';
 import DMControlCenter from '../components/DMControlCenter';
 import HorizontalInitiativeTracker from '../components/HorizontalInitiativeTracker';
 import AdventureLog from '../components/AdventureLog';
@@ -26,9 +25,6 @@ export default function Game() {
 
   // chat history
   const [chatLog, setChatLog] = useState([{},])
-
-  // current msg in chat box form
-  const [chatMsg, setChatMsg] = useState("")
 
   // who generated the room
   const [host, setHost] = useState("")
@@ -175,10 +171,10 @@ export default function Game() {
 
     onDiceRoll: (data) => {
       console.log("received dice roll:", data);
-      const { player, dice, result } = data;
+      const { player, message } = data;
       
-      // Server-only logging: all players see all dice rolls
-      addToLog(`${dice}: ${result}`, 'dice', player);
+      // Server-only logging: all players see all dice rolls with pre-formatted message
+      addToLog(message, 'dice', player);
     },
 
     onSystemMessagesCleared: (data) => {
@@ -747,19 +743,25 @@ export default function Game() {
     const bonusValue = bonus ? parseInt(bonus.replace(/[^-\d]/g, '')) || 0 : 0;
     const totalResult = baseRoll + bonusValue;
     
-    // Format result message
+    // Format complete message on frontend
     const bonusText = bonusValue !== 0 ? ` ${bonus}` : '';
-    const resultMessage = `${dice}${bonusText}: ${totalResult}`;
+    const diceNotation = `${dice}${bonusText}`;
     
-    // Adventure log will be handled by server broadcast
+    // Create pre-formatted message 
+    let formattedMessage;
+    if (rollFor && rollFor !== "Standard Roll") {
+      formattedMessage = ` [${rollFor}]: ${diceNotation}: ${totalResult}`;
+    } else {
+      formattedMessage = `: ${diceNotation}: ${totalResult}`;
+    }
     
-    // Send to websocket with context
-    sendDiceRoll(playerName, `${dice}${bonusText}`, totalResult, rollFor);
+    // Send pre-formatted message to backend
+    sendDiceRoll(playerName, formattedMessage, rollFor);
     
     // Clear prompts for this player if they match the roll type
     const playerPrompts = activePrompts.filter(prompt => 
       prompt.player === playerName && 
-      (rollFor === prompt.rollType || rollFor === null) // Match specific roll type or clear if general roll
+      (rollFor === prompt.rollType || rollFor === null) // Match specific roll type or clear if Standard Roll
     );
     
     playerPrompts.forEach(prompt => {

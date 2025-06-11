@@ -11,6 +11,7 @@ from starlette.websockets import WebSocketDisconnect
 
 from gameservice import GameService, GameSettings
 from adventure_log_service import create_adventure_log_service
+from simple_formatter import format_system_message, SYSTEM_TEMPLATES
 
 logger = logging.getLogger()
 app = FastAPI()
@@ -153,10 +154,13 @@ async def update_seat_layout(room_id: str, request: dict):
         non_empty_seats = [seat for seat in seat_layout if seat != "empty"]
         if non_empty_seats:  # Only log if there are actual players
             player_list = ", ".join(non_empty_seats)
-            print(f"📜 Adding adventure log: Party updated: {player_list}")
+            
+            log_message = format_system_message(SYSTEM_TEMPLATES["party_updated"], players=", ".join(non_empty_seats))
+            
+            print(f"📜 Adding adventure log: {log_message}")
             add_adventure_log(
                 room_id=room_id,
-                message=f"Party updated: {player_list}",
+                message=log_message,
                 log_type="system",
                 player_name=updated_by
             )
@@ -196,9 +200,11 @@ async def clear_system_messages(room_id: str, request: dict):
         print(f"✅ Cleared {deleted_count} system messages")
         
         # Add a log entry about the clearing action
+        log_message = format_system_message(SYSTEM_TEMPLATES["messages_cleared"], player=cleared_by, count=deleted_count)
+        
         add_adventure_log(
             room_id=room_id,
-            message=f"System messages cleared by {cleared_by}",
+            message=log_message,
             log_type="system",
             player_name=cleared_by
         )
@@ -232,9 +238,11 @@ async def clear_all_messages(room_id: str, request: dict):
         print(f"✅ Cleared {deleted_count} total messages")
         
         # Add a log entry about the clearing action
+        log_message = format_system_message(SYSTEM_TEMPLATES["messages_cleared"], player=cleared_by, count=deleted_count)
+        
         add_adventure_log(
             room_id=room_id,
-            message=f"All adventure log messages cleared by {cleared_by}",
+            message=log_message,
             log_type="system",
             player_name=cleared_by
         )
@@ -294,9 +302,11 @@ async def websocket_endpoint(
     await manager.connect(websocket)
 
     # Log player connection to database
+    log_message = format_system_message(SYSTEM_TEMPLATES["player_connected"], player=player_name)
+    
     add_adventure_log(
         room_id=client_id,
-        message=f"{player_name} connected",
+        message=log_message,
         log_type="system",
         player_name=player_name
     )
@@ -345,9 +355,11 @@ async def websocket_endpoint(
                 prompt_id = event_data.get("prompt_id")  # New: Get prompt ID
                 
                 # Log the prompt to adventure log
+                log_message = format_system_message(SYSTEM_TEMPLATES["dice_prompt"], target=prompted_player, roll_type=roll_type)
+                
                 add_adventure_log(
                     room_id=client_id,
-                    message=f"DM: {prompted_player}, please roll a {roll_type}",
+                    message=log_message,
                     log_type="dice",
                     player_name=prompted_by
                 )
@@ -374,15 +386,16 @@ async def websocket_endpoint(
                     continue
                 
                 # Log ONE adventure log entry for the collective action
-                player_names = ", ".join(players_to_prompt)
+                log_message = format_system_message(SYSTEM_TEMPLATES["initiative_prompt"], players=", ".join(players_to_prompt))
+                
                 add_adventure_log(
                     room_id=client_id,
-                    message=f"DM prompted all players for Initiative: {player_names}",
+                    message=log_message,
                     log_type="system",
                     player_name=prompted_by
                 )
                 
-                print(f"⚡ {prompted_by} prompted all players for initiative: {player_names}")
+                print(f"⚡ {prompted_by} prompted all players for initiative: {', '.join(players_to_prompt)}")
                 
                 # Single broadcast with player list - clients check if they're in the list
                 broadcast_message = {
@@ -420,11 +433,14 @@ async def websocket_endpoint(
             elif event_type == "combat_state":
                 # Existing combat state logic...
                 combat_active = event_data.get("combatActive", False)
-                action = "initiated" if combat_active else "ended"
+                action = "started" if combat_active else "ended"
+                
+                template_key = "combat_started" if action == "started" else "combat_ended"
+                log_message = format_system_message(SYSTEM_TEMPLATES[template_key], player=player_name)
                 
                 add_adventure_log(
                     room_id=client_id,
-                    message=f"Combat {action}",
+                    message=log_message,
                     log_type="system",
                     player_name=player_name
                 )
@@ -439,9 +455,11 @@ async def websocket_endpoint(
                 max_players = event_data.get("max_players")
                 updated_by = event_data.get("updated_by")
                 
+                log_message = format_system_message(SYSTEM_TEMPLATES["party_size_changed"], player=updated_by, size=max_players)
+                
                 add_adventure_log(
                     room_id=client_id,
-                    message=f"{updated_by} changed party size to {max_players} seats",
+                    message=log_message,
                     log_type="system",
                     player_name=updated_by
                 )
@@ -456,9 +474,11 @@ async def websocket_endpoint(
                 # Existing player kick logic...
                 kicked_player = event_data.get("kicked_player")
                 
+                log_message = format_system_message(SYSTEM_TEMPLATES["player_kicked"], player=kicked_player)
+                
                 add_adventure_log(
                     room_id=client_id,
-                    message=f"{kicked_player} was removed from the game",
+                    message=log_message,
                     log_type="system",
                     player_name=player_name
                 )
@@ -470,38 +490,28 @@ async def websocket_endpoint(
                 }
 
             elif event_type == "dice_roll":
-                # UPDATED: Enhanced dice roll logging with prompt context
+                # Frontend sends pre-formatted message
                 roll_data = event_data
                 player = roll_data.get("player")
-                dice = roll_data.get("dice")
-                result = roll_data.get("result")
-                roll_for = roll_data.get("roll_for", "General Roll")
-                prompt_id = roll_data.get("prompt_id")  # New: Get prompt ID if this was a prompted roll
-                
-                # Enhanced logging with context
-                if roll_for and roll_for != "General Roll":
-                    log_message = f"{player} [{roll_for}]: {dice}: {result}"
-                else:
-                    log_message = f"{player}: {dice}: {result}"
+                formatted_message = roll_data.get("message")  # Pre-formatted by frontend
+                prompt_id = roll_data.get("prompt_id")
                 
                 add_adventure_log(
                     room_id=client_id,
-                    message=log_message,
-                    log_type="player-roll",
+                    message=formatted_message,
+                    log_type="player-roll", 
                     player_name=player
                 )
                 
                 if prompt_id:
-                    print(f"🎲 {player} rolled {dice} for {roll_for}: {result} (completing prompt {prompt_id})")
+                    print(f"🎲 {formatted_message} (completing prompt {prompt_id})")
                 else:
-                    print(f"🎲 {player} rolled {dice} for {roll_for}: {result}")
+                    print(f"🎲 {formatted_message}")
                 
                 broadcast_message = {
                     "event_type": "dice_roll",
                     "data": {
-                        **event_data,
-                        "roll_for": roll_for,
-                        "prompt_id": prompt_id  # New: Include prompt ID in broadcast
+                        **event_data  # Frontend sends everything we need
                     }
                 }
                 
@@ -525,9 +535,11 @@ async def websocket_endpoint(
                 try:
                     deleted_count = adventure_log_service.clear_system_messages(client_id)
                     
+                    log_message = format_system_message(SYSTEM_TEMPLATES["messages_cleared"], player=cleared_by, count=deleted_count)
+                    
                     add_adventure_log(
                         room_id=client_id,
-                        message=f"System messages cleared by {cleared_by}",
+                        message=log_message,
                         log_type="system",
                         player_name=cleared_by
                     )
@@ -560,9 +572,11 @@ async def websocket_endpoint(
                 try:
                     deleted_count = adventure_log_service.clear_all_messages(client_id)
                     
+                    log_message = format_system_message(SYSTEM_TEMPLATES["messages_cleared"], player=cleared_by, count=deleted_count)
+                    
                     add_adventure_log(
                         room_id=client_id,
-                        message=f"All adventure log messages cleared by {cleared_by}",
+                        message=log_message,
                         log_type="system",
                         player_name=cleared_by
                     )
@@ -589,13 +603,13 @@ async def websocket_endpoint(
                     continue
 
             else:
-                # Chat messages and other events...
+                # Chat messages - frontend sends pre-formatted
                 timestamp = datetime.now().strftime("%H:%M")
                 
                 add_adventure_log(
                     room_id=client_id,
                     message=data.get("data", ""),
-                    log_type="chat",
+                    log_type="chat", 
                     player_name=player_name
                 )
                 
@@ -618,9 +632,11 @@ async def websocket_endpoint(
             
     except WebSocketDisconnect:
         # Server-side disconnect handling with seat cleanup
+        log_message = format_system_message(SYSTEM_TEMPLATES["player_disconnected"], player=player_name)
+        
         add_adventure_log(
             room_id=client_id,
-            message=f"{player_name} disconnected",
+            message=log_message,
             log_type="system",
             player_name=player_name
         )

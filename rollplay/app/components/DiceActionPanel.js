@@ -45,7 +45,7 @@ export default function DiceActionPanel({
     const rollData = {
       dice: selectedDice,
       bonus: rollBonus,
-      rollFor: rollType || 'General Roll'
+      rollFor: rollType || 'Standard Roll'
     };
     
     if (onRollDice) {
