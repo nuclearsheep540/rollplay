@@ -99,11 +99,13 @@ async def update_seat_count(room_id: str, request: dict):
 def gameservice_get(room_id):
     check_room = GameService.get_room(id=room_id)
     if check_room:
-        # Add current seat layout to response
+        # Add current seat layout and seat colors to response
         seat_layout = GameService.get_seat_layout(room_id)
+        seat_colors = GameService.get_seat_colors(room_id)
         return {
             **check_room,
-            "current_seat_layout": seat_layout
+            "current_seat_layout": seat_layout,
+            "seat_colors": seat_colors
         }
     else:
         return Response(status_code=404, content=f'{{"error": "Room {room_id} not found"}}')
@@ -218,6 +220,44 @@ async def clear_system_messages(room_id: str, request: dict):
         
     except Exception as e:
         print(f"❌ Error clearing system messages: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.put("/game/{room_id}/colors")
+async def update_seat_colors(room_id: str, request: dict):
+    """Update seat colors for a game room"""
+    try:
+        check_room = GameService.get_room(id=room_id)
+        if not check_room:
+            raise HTTPException(status_code=404, detail=f"Room {room_id} not found")
+        
+        seat_colors = request.get("seat_colors")
+        updated_by = request.get("updated_by")
+        
+        # Validate seat colors
+        if not isinstance(seat_colors, dict):
+            raise HTTPException(status_code=400, detail="Seat colors must be a dictionary")
+        
+        # Validate color format (basic hex color validation)
+        for seat_index, color in seat_colors.items():
+            if not isinstance(color, str) or not color.startswith('#') or len(color) != 7:
+                raise HTTPException(
+                    status_code=400, 
+                    detail=f"Invalid color format for seat {seat_index}: {color}"
+                )
+        
+        # Update MongoDB record
+        GameService.update_seat_colors(room_id, seat_colors)
+        
+        return {
+            "success": True,
+            "room_id": room_id,
+            "seat_colors": seat_colors,
+            "updated_by": updated_by
+        }
+        
+    except HTTPException:
+        raise  # Re-raise HTTP exceptions
+    except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.delete("/game/{room_id}/logs")
@@ -593,6 +633,54 @@ async def websocket_endpoint(
                     
                 except Exception as e:
                     error_msg = f"Failed to clear all messages: {str(e)}"
+                    print(f"❌ {error_msg}")
+                    
+                    error_message = {
+                        "event_type": "error",
+                        "data": error_msg
+                    }
+                    await websocket.send_json(error_message)
+                    continue
+
+            elif event_type == "color_change":
+                # Handle player color changes
+                player_changing = event_data.get("player")
+                seat_index = event_data.get("seat_index")
+                new_color = event_data.get("new_color")
+                changed_by = event_data.get("changed_by", player_name)
+                
+                if not all([player_changing, seat_index is not None, new_color]):
+                    error_message = {
+                        "event_type": "error",
+                        "data": "Color change requires player, seat_index, and new_color"
+                    }
+                    await websocket.send_json(error_message)
+                    continue
+                
+                try:
+                    # Get current seat colors
+                    current_colors = GameService.get_seat_colors(client_id)
+                    
+                    # Update the specific seat color
+                    current_colors[str(seat_index)] = new_color
+                    
+                    # Persist to database
+                    GameService.update_seat_colors(client_id, current_colors)
+                    
+                    print(f"🎨 {changed_by} changed {player_changing}'s color (seat {seat_index}) to {new_color}")
+                    
+                    broadcast_message = {
+                        "event_type": "color_change",
+                        "data": {
+                            "player": player_changing,
+                            "seat_index": seat_index,
+                            "new_color": new_color,
+                            "changed_by": changed_by
+                        }
+                    }
+                    
+                except Exception as e:
+                    error_msg = f"Failed to update seat color: {str(e)}"
                     print(f"❌ {error_msg}")
                     
                     error_message = {

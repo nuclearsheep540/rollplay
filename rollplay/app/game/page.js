@@ -32,6 +32,9 @@ export default function Game() {
   // UNIFIED STRUCTURE - Replaces both seats and partyMembers
   const [gameSeats, setGameSeats] = useState([]);
 
+  // State for seat colors (loaded from backend)
+  const [seatColors, setSeatColors] = useState({});
+
   // Pre-computed player-to-seat mapping for O(1) lookups
   const playerSeatMap = useMemo(() => {
     const map = {};
@@ -39,12 +42,12 @@ export default function Game() {
       if (seat.playerName !== "empty") {
         map[seat.playerName] = {
           seatIndex: index,
-          seatColor: getSeatColor(index)
+          seatColor: seatColors[index] || getSeatColor(index) // Use backend color or default
         };
       }
     });
     return map;
-  }, [gameSeats]);
+  }, [gameSeats, seatColors]);
 
   // UPDATED: State management for TabletopInterface - REMOVED HARDCODED DEFAULTS
   const [currentTurn, setCurrentTurn] = useState(null); // ❌ Removed 'Thorin' default
@@ -156,6 +159,18 @@ export default function Game() {
       // Use actual seat layout from database if available
       const seatLayout = res["current_seat_layout"] || [];
       const maxPlayers = res["max_players"];
+      const backendSeatColors = res["seat_colors"] || {};
+      
+      // Set seat colors from backend
+      setSeatColors(backendSeatColors);
+      
+      // Initialize CSS variables for seat colors
+      Object.keys(backendSeatColors).forEach(seatIndex => {
+        document.documentElement.style.setProperty(
+          `--seat-color-${seatIndex}`, 
+          backendSeatColors[seatIndex]
+        );
+      });
       
       // Create unified seat structure from database data
       const initialSeats = [];
@@ -172,6 +187,7 @@ export default function Game() {
       }
       
       console.log("Loaded seat layout from database:", initialSeats);
+      console.log("Loaded seat colors from database:", backendSeatColors);
       setGameSeats(initialSeats);
     })
     
@@ -337,6 +353,24 @@ export default function Game() {
     setRollLog(prev => [...prev, newEntry]);
   };
 
+  // Create a setter function for playerSeatMap updates
+  const setPlayerSeatMap = (updaterFunction) => {
+    // This is a derived state update - we need to update seatColors instead
+    // The updaterFunction expects the current playerSeatMap and returns the new one
+    const currentMap = playerSeatMap;
+    const newMap = updaterFunction(currentMap);
+    
+    // Extract seat colors from the updated map
+    const newSeatColors = {};
+    Object.values(newMap).forEach(playerData => {
+      if (playerData.seatIndex !== undefined && playerData.seatColor) {
+        newSeatColors[playerData.seatIndex] = playerData.seatColor;
+      }
+    });
+    
+    setSeatColors(newSeatColors);
+  };
+
   // Create game context object for WebSocket handlers (after addToLog is defined)
   const gameContext = {
     // State setters
@@ -346,6 +380,7 @@ export default function Game() {
     setRollLog,
     setActivePrompts,
     setIsDicePromptActive,
+    setPlayerSeatMap,
     
     // Current state values
     chatLog,

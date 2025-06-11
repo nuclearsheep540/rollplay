@@ -214,6 +214,30 @@ export const handleDicePromptClear = (data, { setActivePrompts, setIsDicePromptA
   }
 };
 
+export const handleColorChange = (data, { gameContext }) => {
+  console.log("received color change:", data);
+  const { player, seat_index, new_color } = data;
+  
+  // Update CSS variable immediately for visual feedback
+  document.documentElement.style.setProperty(
+    `--seat-color-${seat_index}`, 
+    new_color
+  );
+  
+  // Update playerSeatMap state if the setter is available
+  if (gameContext.setPlayerSeatMap) {
+    gameContext.setPlayerSeatMap(prev => ({
+      ...prev,
+      [player]: { 
+        ...prev[player], 
+        seatColor: new_color 
+      }
+    }));
+  }
+  
+  console.log(`🎨 Updated ${player}'s color (seat ${seat_index}) to ${new_color}`);
+};
+
 // WebSocket sending functions (outbound messages)
 export const createSendFunctions = (webSocket, isConnected, roomId, playerName) => {
   const sendDicePrompt = (promptedPlayer, rollType, promptId) => {
@@ -449,6 +473,25 @@ export const createSendFunctions = (webSocket, isConnected, roomId, playerName) 
     }));
   };
 
+  const sendColorChange = (player, seatIndex, newColor) => {
+    if (!webSocket || !isConnected) {
+      console.log("❌ Cannot send color change - WebSocket not connected");
+      return;
+    }
+    
+    console.log(`🎨 Sending color change: ${player} (seat ${seatIndex}) to ${newColor}`);
+    
+    webSocket.send(JSON.stringify({
+      "event_type": "color_change",
+      "data": {
+        "player": player,
+        "seat_index": seatIndex,
+        "new_color": newColor,
+        "changed_by": playerName
+      }
+    }));
+  };
+
   return {
     sendSeatChange,
     sendSeatCountChange,
@@ -460,6 +503,7 @@ export const createSendFunctions = (webSocket, isConnected, roomId, playerName) 
     sendClearAllMessages,
     sendDicePrompt,
     sendDicePromptClear,
-    sendInitiativePromptAll
+    sendInitiativePromptAll,
+    sendColorChange
   };
 };

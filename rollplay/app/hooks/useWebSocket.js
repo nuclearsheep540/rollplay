@@ -15,6 +15,7 @@ import {
   handleDicePrompt,
   handleInitiativePromptAll,
   handleDicePromptClear,
+  handleColorChange,
   createSendFunctions
 } from './webSocketEvent'
 
@@ -107,6 +108,10 @@ export function useWebSocket(roomId, playerName, gameContext) {
 
         case "dice_prompt_clear":
           handleDicePromptClear(json_data["data"], gameContext);
+          break;
+
+        case "color_change":
+          handleColorChange(json_data["data"], { gameContext });
           break;
 
         default:

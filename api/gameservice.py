@@ -156,3 +156,65 @@ class GameService:
             # Return empty seats based on max_players if no layout exists
             max_players = room.get("max_players", 8) if room else 1
             return ["empty"] * max_players
+
+    @staticmethod
+    def update_seat_colors(room_id: str, seat_colors: dict):
+        """Update seat colors for a room"""
+        collection = GameService._get_active_session()
+        
+        # Handle ObjectId conversion like get_room does
+        try:
+            oid = ObjectId(oid=room_id)
+            filter_criteria = {"_id": oid}
+        except Exception:
+            # Fall back to string ID (for test rooms or non-ObjectId rooms)
+            filter_criteria = {"_id": room_id}
+        
+        print(f"🎨 Updating seat colors with filter: {filter_criteria}")
+        print(f"🌈 New seat colors: {seat_colors}")
+        
+        result = collection.update_one(
+            filter_criteria,
+            {
+                "$set": {
+                    "seat_colors": seat_colors,
+                }
+            }
+        )
+        
+        print(f"📊 Update result: matched={result.matched_count}, modified={result.modified_count}")
+        
+        if result.matched_count == 0:
+            print(f"❌ No document found with _id: {room_id}")
+            raise Exception(f"Room {room_id} not found")
+        
+        return str(result)
+
+    @staticmethod
+    def get_seat_colors(room_id: str) -> dict:
+        """Get the current seat colors for a room"""
+        collection = GameService._get_active_session()
+        
+        # Handle ObjectId conversion like get_room does
+        try:
+            oid = ObjectId(oid=room_id)
+            room = collection.find_one({"_id": oid})
+        except Exception:
+            room = collection.find_one({"_id": room_id})
+        
+        if room and "seat_colors" in room:
+            return room["seat_colors"]
+        else:
+            # Return default colors based on seat indices (0-7)
+            default_colors = {
+                "0": "#3b82f6",  # blue
+                "1": "#ef4444",  # red
+                "2": "#22c55e",  # green
+                "3": "#f97316",  # orange
+                "4": "#a855f7",  # purple
+                "5": "#06b6d4",  # cyan
+                "6": "#ec4899",  # pink
+                "7": "#65a30d",  # lime
+            }
+            max_players = room.get("max_players", 8) if room else 8
+            return {str(i): default_colors.get(str(i), "#3b82f6") for i in range(max_players)}
