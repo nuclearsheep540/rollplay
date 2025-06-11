@@ -405,7 +405,8 @@ export default function Game() {
     sendClearAllMessages,
     sendDicePrompt,
     sendDicePromptClear,
-    sendInitiativePromptAll
+    sendInitiativePromptAll,
+    sendColorChange
   } = useWebSocket(roomId, thisPlayer, gameContext);
 
   // Show dice portal for player rolls
@@ -618,6 +619,17 @@ export default function Game() {
     // This is where you'd implement turn progression
   };
 
+  // Handle color changes from PlayerCard
+  const handlePlayerColorChange = (playerName, seatIndex, newColor) => {
+    if (!sendColorChange) {
+      console.error('sendColorChange function not available');
+      return;
+    }
+    
+    console.log(`🎨 ${playerName} changing color (seat ${seatIndex}) to ${newColor}`);
+    sendColorChange(playerName, seatIndex, newColor);
+  };
+
   // MAIN RENDER
   return (
     <div className="game-interface" data-ui-scale={uiScale}>
@@ -681,6 +693,7 @@ export default function Game() {
           
           {gameSeats.map((seat) => {
             const isSitting = seat.playerName === thisPlayer;
+            const currentColor = seatColors[seat.seatId] || getSeatColor(seat.seatId);
             
             return (
               <PlayerCard
@@ -693,6 +706,8 @@ export default function Game() {
                 currentTurn={currentTurn}
                 onDiceRoll={handlePlayerDiceRoll}
                 playerData={seat.characterData}
+                onColorChange={handlePlayerColorChange}
+                currentColor={currentColor}
               />
             );
           })}

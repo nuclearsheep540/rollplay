@@ -732,7 +732,6 @@ async def websocket_endpoint(
         manager.remove_connection(websocket)
         
         # Clean up disconnected player's seat
-        from gameservice import GameService
         current_seats = GameService.get_seat_layout(client_id)
         
         # Remove disconnected player from their seat (case-insensitive)

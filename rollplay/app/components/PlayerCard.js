@@ -1,5 +1,6 @@
 import { React, useEffect, useState, useRef } from 'react'
 import { getSeatColor } from '../utils/seatColors'
+import ColorPicker from './ColorPicker'
 
 export default function PlayerCard({
     seatId, 
@@ -9,7 +10,9 @@ export default function PlayerCard({
     sendSeatChange,
     currentTurn = null,
     onDiceRoll = null,
-    playerData = null
+    playerData = null,
+    onColorChange = null,
+    currentColor = null
   }) {
   
     useEffect(() => {
@@ -147,6 +150,19 @@ export default function PlayerCard({
                 🎯 Active
               </div>
             )}
+            
+            {/* Color Picker - Only show for the player's own seat */}
+            {isThisPlayerSeat && onColorChange && currentColor && (
+              <div className="relative">
+                <ColorPicker
+                  currentColor={currentColor}
+                  onColorChange={onColorChange}
+                  playerName={occupantName}
+                  seatIndex={seatId}
+                />
+              </div>
+            )}
+            
             {/* Exit Button - Repositioned to header */}
             {isThisPlayerSeat && (
               <button 
