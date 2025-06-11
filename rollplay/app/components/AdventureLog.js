@@ -48,6 +48,7 @@ export default function AdventureLog({ rollLog, playerSeatMap }) {
             playerName: entry.player_name,
             messages: [entry],
             seatColor: playerData?.seatColor || null,
+            seatIndex: playerData?.seatIndex || 0,
             isPartyMember: playerIsInParty
           };
         }
@@ -134,11 +135,17 @@ export default function AdventureLog({ rollLog, playerSeatMap }) {
             return (
               <div
                 key={`group-${groupIndex}`}
-                className={`party-message-group bg-slate-900/60 rounded-lg p-[calc(16px*var(--ui-scale))] mb-[calc(12px*var(--ui-scale))] shadow-lg backdrop-blur-sm border border-slate-400/10 border-l-4 border-l-${group.seatColor}-500`}
+                className="party-message-group bg-slate-900/60 rounded-lg p-[calc(16px*var(--ui-scale))] mb-[calc(12px*var(--ui-scale))] shadow-lg backdrop-blur-sm border border-slate-400/10 border-l-4"
+                style={{
+                  borderLeftColor: group.seatColor || `var(--seat-color-${group.seatIndex || 0})`
+                }}
               >
                 {/* Party member name header */}
                 <div 
-                  className={`player-name-header text-[calc(14px*var(--ui-scale))] font-bold mb-[calc(8px*var(--ui-scale))] drop-shadow-sm flex items-center gap-2 text-${group.seatColor}-400`}
+                  className="player-name-header text-[calc(14px*var(--ui-scale))] font-bold mb-[calc(8px*var(--ui-scale))] drop-shadow-sm flex items-center gap-2"
+                  style={{
+                    color: group.seatColor || `var(--seat-color-${group.seatIndex || 0})`
+                  }}
                 >
                   <span>👥</span>
                   {toTitleCase(group.playerName)}

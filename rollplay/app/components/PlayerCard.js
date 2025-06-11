@@ -112,14 +112,11 @@ export default function PlayerCard({
       );
     }
   
-    // Get the seat color for this specific seat (using shared utility)
-    const seatColor = getSeatColor(seatId);
-
     // Render occupied seat
     return (
       <div 
         className={`
-          rounded-lg border transition-all duration-300 relative p-[calc(12px*var(--ui-scale))] mb-[calc(12px*var(--ui-scale))] border-l-4 border-l-${seatColor}-500
+          rounded-lg border transition-all duration-300 relative p-[calc(12px*var(--ui-scale))] mb-[calc(12px*var(--ui-scale))] border-l-4
           ${isMyTurn 
             ? 'bg-emerald-500/10 border-emerald-500/30 shadow-lg shadow-emerald-500/20' 
             : isThisPlayerSeat 
@@ -127,6 +124,9 @@ export default function PlayerCard({
               : 'bg-white/5 border-white/10'
           }
         `}
+        style={{
+          borderLeftColor: `var(--seat-color-${seatId})`
+        }}
       >
         {/* Turn Pulse Animation */}
         {isMyTurn && (
