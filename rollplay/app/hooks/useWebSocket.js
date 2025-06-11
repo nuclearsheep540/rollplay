@@ -77,6 +77,10 @@ export function useWebSocket(roomId, playerName, callbacks) {
           callbacks.onSystemMessagesCleared?.(json_data["data"]);
           break;
 
+        case "all_messages_cleared":
+          callbacks.onAllMessagesCleared?.(json_data["data"]);
+          break;
+
         // NEW: Dice prompt events
         case "dice_prompt":
           callbacks.onDicePrompt?.(json_data["data"]);
@@ -178,6 +182,43 @@ export function useWebSocket(roomId, playerName, callbacks) {
   
     } catch (error) {
       console.error('❌ Error clearing system messages:', error);
+      throw error;
+    }
+  }, [webSocket, isConnected, roomId, playerName]);
+
+  const sendClearAllMessages = useCallback(async () => {
+    if (!webSocket || !isConnected) return;
+  
+    try {
+      // First call the API to clear all messages from database
+      const response = await fetch(`/api/game/${roomId}/logs`, {
+        method: 'DELETE',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          cleared_by: playerName
+        }),
+      });
+  
+      if (!response.ok) {
+        throw new Error('Failed to clear all messages from database');
+      }
+  
+      const result = await response.json();
+      console.log(`✅ Cleared ${result.deleted_count} total messages`);
+  
+      // Then broadcast the change via websocket
+      webSocket.send(JSON.stringify({
+        "event_type": "clear_all_messages",
+        "data": {
+          "cleared_by": playerName,
+          "deleted_count": result.deleted_count
+        }
+      }));
+  
+    } catch (error) {
+      console.error('❌ Error clearing all messages:', error);
       throw error;
     }
   }, [webSocket, isConnected, roomId, playerName]);
@@ -309,6 +350,7 @@ export function useWebSocket(roomId, playerName, callbacks) {
     sendDiceRoll,
     sendChatMessage,
     sendClearSystemMessages,
+    sendClearAllMessages,
     // NEW: Prompt methods
     sendDicePrompt,
     sendDicePromptClear

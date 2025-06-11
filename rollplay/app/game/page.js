@@ -194,6 +194,17 @@ export default function Game() {
       }
     },
 
+    onAllMessagesCleared: (data) => {
+      console.log("received all messages cleared:", data);
+      const { deleted_count, cleared_by } = data;
+      
+      // Clear all messages from the current rollLog
+      setRollLog([]);
+      
+      // Add a new system message about the clearing action
+      addToLog(`${cleared_by} cleared all ${deleted_count} adventure log messages`, 'system');
+    },
+
     // UPDATED: Handle multiple dice prompts
     onDicePrompt: (data) => {
       console.log("received dice prompt:", data);
@@ -223,8 +234,7 @@ export default function Game() {
       
       setIsDicePromptActive(true);
       
-      // Server-only logging: all players see all dice prompts
-      addToLog(`DM: ${prompted_player}, please roll a ${roll_type}`, 'dice');
+      // Server handles logging - no client-side duplication needed
     },
 
     onDicePromptClear: (data) => {
@@ -263,6 +273,7 @@ export default function Game() {
     sendPlayerKick,
     sendDiceRoll,
     sendClearSystemMessages,
+    sendClearAllMessages,  // NEW
     sendDicePrompt,        // NEW
     sendDicePromptClear    // NEW
   } = useWebSocket(roomId, thisPlayer, webSocketCallbacks);
@@ -667,6 +678,22 @@ export default function Game() {
     }
   };
 
+  // Handle clearing all adventure log messages
+  const handleClearAllMessages = async () => {
+    try {
+      await sendClearAllMessages();
+      
+      // Clear all messages from local state immediately
+      setRollLog([]);
+      
+      // Adventure log will be handled by server broadcast
+      
+    } catch (error) {
+      console.error('Error clearing all messages:', error);
+      alert('Failed to clear all messages. Please try again.');
+    }
+  };
+
   // Show loading or 404 states
   if (room404) {
     return <div>Room not found</div>;
@@ -823,6 +850,7 @@ export default function Game() {
             roomId={roomId}
             handleKickPlayer={handleKickPlayer}
             handleClearSystemMessages={handleClearSystemMessages}
+            handleClearAllMessages={handleClearAllMessages}  // NEW
             activePrompts={activePrompts}        // UPDATED: Pass array instead of single prompt
             clearDicePrompt={clearDicePrompt}    // UPDATED: Now accepts prompt ID
           />

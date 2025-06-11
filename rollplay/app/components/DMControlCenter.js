@@ -14,6 +14,7 @@ export default function DMControlCenter({
   roomId,              
   handleKickPlayer,
   handleClearSystemMessages,
+  handleClearAllMessages,   // NEW: Function to clear all messages
   activePrompts = [],        // UPDATED: Array of active prompts
   clearDicePrompt           // UPDATED: Function to clear prompt(s)
 }) {
@@ -30,6 +31,7 @@ export default function DMControlCenter({
   const [isSeatManagement, setIsSeatManagement] = useState(false);
   const [isKickModalOpen, setIsKickModalOpen] = useState(false);
   const [isClearingLogs, setIsClearingLogs] = useState(false);
+  const [isClearingAllLogs, setIsClearingAllLogs] = useState(false);
 
   // NEW: State for dice roll prompts (minimal addition)
   const [selectedPlayerForPrompt, setSelectedPlayerForPrompt] = useState('');
@@ -111,6 +113,23 @@ export default function DMControlCenter({
         console.error('Error clearing system messages:', error);
       } finally {
         setIsClearingLogs(false);
+      }
+    }
+  };
+
+  const handleClearAllClick = async () => {
+    const confirmClear = window.confirm(
+      'Are you sure you want to clear ALL adventure log messages? This will delete everything and cannot be undone.'
+    );
+    
+    if (confirmClear && handleClearAllMessages) {
+      setIsClearingAllLogs(true);
+      try {
+        await handleClearAllMessages();
+      } catch (error) {
+        console.error('Error clearing all messages:', error);
+      } finally {
+        setIsClearingAllLogs(false);
       }
     }
   };
@@ -720,6 +739,25 @@ export default function DMControlCenter({
               disabled={isClearingLogs}
             >
               {isClearingLogs ? '🧹 Clearing...' : '🧹 Clear System Messages'}
+            </button>
+
+            {/* Clear All Messages Button */}
+            <button 
+              className={`w-full rounded text-left transition-all duration-200 ${
+                isClearingAllLogs 
+                  ? 'bg-gray-500/20 border border-gray-500/30 text-gray-400 cursor-not-allowed' 
+                  : 'bg-red-500/10 border border-red-500/30 text-red-300 hover:bg-red-500/20'
+              }`}
+              style={{
+                padding: 'calc(8px * var(--ui-scale))',
+                borderRadius: 'calc(4px * var(--ui-scale))',
+                fontSize: 'calc(12px * var(--ui-scale))',
+                marginBottom: 'calc(4px * var(--ui-scale))',
+              }}
+              onClick={handleClearAllClick}
+              disabled={isClearingAllLogs}
+            >
+              {isClearingAllLogs ? '🗑️ Clearing...' : '🗑️ Clear All Messages'}
             </button>
           </div>
         )}

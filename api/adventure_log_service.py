@@ -69,6 +69,24 @@ class AdventureLogService:
             print(f"❌ Error clearing system messages: {e}")
             raise e
     
+    def clear_all_messages(self, room_id: str) -> int:
+        """
+        Clear all adventure log messages for a room
+        Returns the number of deleted messages
+        """
+        try:           
+            # Delete all messages for this room
+            result = self.adventure_logs.delete_many({
+                "room_id": room_id
+            })
+            
+            print(f"🗑️ Deleted {result.deleted_count} total messages for room {room_id}")
+            return result.deleted_count
+            
+        except Exception as e:
+            print(f"❌ Error clearing all messages: {e}")
+            raise e
+    
     def add_log_entry(
         self, 
         room_id: str, 

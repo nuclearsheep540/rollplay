@@ -1,0 +1,7 @@
+the horizontal initiative doesnt display when combat is initiated - is this because it required inititive rolled?
+need to continue fixing the CSS display order of adventure log messages
+
+move party management into it's own "moderator controls" section
+
+need to make sure there's a log broadcast for rolling for initiative
+    is there a better system to ensure any roll command issues this? individual rolls work so all init should to

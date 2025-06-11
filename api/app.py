@@ -213,6 +213,42 @@ async def clear_system_messages(room_id: str, request: dict):
         print(f"❌ Error clearing system messages: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
 
+@app.delete("/game/{room_id}/logs")
+async def clear_all_messages(room_id: str, request: dict):
+    """Clear all adventure log messages"""
+    try:
+        check_room = GameService.get_room(id=room_id)
+        if not check_room:
+            raise HTTPException(status_code=404, detail=f"Room {room_id} not found")
+        
+        cleared_by = request.get("cleared_by", "Unknown")
+        
+        print(f"🧹 Clearing all messages for room {room_id} by {cleared_by}")
+        
+        # Clear all messages from the database
+        deleted_count = adventure_log_service.clear_all_messages(room_id)
+        
+        print(f"✅ Cleared {deleted_count} total messages")
+        
+        # Add a log entry about the clearing action
+        add_adventure_log(
+            room_id=room_id,
+            message=f"All adventure log messages cleared by {cleared_by}",
+            log_type="system",
+            player_name=cleared_by
+        )
+        
+        return {
+            "success": True,
+            "room_id": room_id,
+            "deleted_count": deleted_count,
+            "cleared_by": cleared_by
+        }
+        
+    except Exception as e:
+        print(f"❌ Error clearing all messages: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
 class ConnectionManager:
     def __init__(self):
         self.connections: list[WebSocket] = []
@@ -476,6 +512,41 @@ async def websocket_endpoint(
                     
                 except Exception as e:
                     error_msg = f"Failed to clear system messages: {str(e)}"
+                    print(f"❌ {error_msg}")
+                    
+                    error_message = {
+                        "event_type": "error",
+                        "data": error_msg
+                    }
+                    await websocket.send_json(error_message)
+                    continue
+            
+            elif event_type == "clear_all_messages":
+                # Clear all adventure log messages
+                cleared_by = event_data.get("cleared_by", player_name)
+                
+                try:
+                    deleted_count = adventure_log_service.clear_all_messages(client_id)
+                    
+                    add_adventure_log(
+                        room_id=client_id,
+                        message=f"All adventure log messages cleared by {cleared_by}",
+                        log_type="system",
+                        player_name=cleared_by
+                    )
+                    
+                    print(f"🧹 {cleared_by} cleared {deleted_count} total messages from room {client_id}")
+                    
+                    broadcast_message = {
+                        "event_type": "all_messages_cleared",
+                        "data": {
+                            "deleted_count": deleted_count,
+                            "cleared_by": cleared_by
+                        }
+                    }
+                    
+                except Exception as e:
+                    error_msg = f"Failed to clear all messages: {str(e)}"
                     print(f"❌ {error_msg}")
                     
                     error_message = {

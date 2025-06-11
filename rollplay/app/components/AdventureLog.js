@@ -4,10 +4,10 @@ import { useEffect, useRef } from 'react'
 export default function AdventureLog({ rollLog, playerSeatMap }) {
   const logRef = useRef(null);
 
-  // Auto-scroll log to TOP when new entries are added (newest first)
+  // Auto-scroll to top to show newest messages (with flex-col-reverse)
   useEffect(() => {
     if (logRef.current) {
-      logRef.current.scrollTop = 0; // Scroll to top for newest messages
+      logRef.current.scrollTop = 0; // Scroll to top to show newest messages
     }
   }, [rollLog]);
 
@@ -20,11 +20,10 @@ export default function AdventureLog({ rollLog, playerSeatMap }) {
 
   // Helper function to group consecutive player messages
   const groupMessages = (messages) => {
-    const reversedMessages = [...messages].reverse(); // Work with newest first
     const groups = [];
     let currentGroup = null;
 
-    reversedMessages.forEach((entry, index) => {
+    messages.forEach((entry, index) => {
       const hasPlayerName = entry.player_name && entry.player_name !== "";
       const isPlayerMessage = (entry.type === "user" || entry.type === "dice" || entry.type === "player-roll") && hasPlayerName;
       const isSystemMessage = entry.type === "system";
@@ -127,7 +126,7 @@ export default function AdventureLog({ rollLog, playerSeatMap }) {
         📜 Adventure Log
         <span style={{ fontSize: '10px', color: '#6b7280' }}>(Live)</span>
       </div>
-      <div className="log-entries" ref={logRef}>
+      <div className="log-entries flex flex-col-reverse" ref={logRef}>
         {messageGroups.map((group, groupIndex) => {
           if (group.type === "party-member") {
             // Party member message group with seat color
