@@ -28,6 +28,7 @@ export default function AdventureLog({ rollLog, playerSeatMap }) {
       const hasPlayerName = entry.player_name && entry.player_name !== "";
       const isPlayerMessage = (entry.type === "user" || entry.type === "dice" || entry.type === "player-roll") && hasPlayerName;
       const isSystemMessage = entry.type === "system";
+      const isDungeonMasterMessage = entry.type === "dungeon-master";
 
       if (isPlayerMessage) {
         const playerData = playerSeatMap[entry.player_name];
@@ -52,6 +53,16 @@ export default function AdventureLog({ rollLog, playerSeatMap }) {
             isPartyMember: playerIsInParty
           };
         }
+      } else if (isDungeonMasterMessage) {
+        // Dungeon Master messages are always individual and special
+        if (currentGroup) {
+          groups.push(currentGroup);
+          currentGroup = null;
+        }
+        groups.push({
+          type: "dungeon-master",
+          messages: [entry]
+        });
       } else if (isSystemMessage) {
         // System messages are always individual
         if (currentGroup) {
@@ -99,6 +110,9 @@ export default function AdventureLog({ rollLog, playerSeatMap }) {
       case "system":
         return message;
         
+      case "dungeon-master":
+        return message;
+        
       default:
         return message;
     }
@@ -115,6 +129,8 @@ export default function AdventureLog({ rollLog, playerSeatMap }) {
         return "💬";
       case "system":
         return "";
+      case "dungeon-master":
+        return "🔮";
       default:
         return "";
     }
@@ -213,6 +229,32 @@ export default function AdventureLog({ rollLog, playerSeatMap }) {
                     </div>
                   </div>
                 ))}
+              </div>
+            );
+          } else if (group.type === "dungeon-master") {
+            // Special Dungeon Master message - should stand out!
+            const entry = group.messages[0];
+            return (
+              <div
+                key={entry.id}
+                className="dm-message bg-gradient-to-r from-purple-900/40 to-indigo-900/40 rounded-lg p-[calc(16px*var(--ui-scale))] mb-[calc(12px*var(--ui-scale))] border-2 border-purple-500/50 shadow-lg shadow-purple-500/20 backdrop-blur-sm"
+              >
+                {/* DM Header with special styling */}
+                <div className="dm-header flex items-center gap-[calc(8px*var(--ui-scale))] mb-[calc(8px*var(--ui-scale))]">
+                  <span className="text-[calc(18px*var(--ui-scale))] drop-shadow-lg">🔮</span>
+                  <span className="text-purple-300 font-bold text-[calc(14px*var(--ui-scale))] drop-shadow-sm uppercase tracking-wider">
+                    Dungeon Master
+                  </span>
+                  <div className="flex-1 h-px bg-gradient-to-r from-purple-500/50 to-transparent"></div>
+                  <span className="text-purple-200/60 text-[calc(10px*var(--ui-scale))] font-mono">
+                    {entry.timestamp}
+                  </span>
+                </div>
+                
+                {/* DM Message Content */}
+                <div className="dm-content text-purple-100 text-[calc(14px*var(--ui-scale))] leading-relaxed font-medium">
+                  {formatMessageContent(entry)}
+                </div>
               </div>
             );
           } else if (group.type === "system") {

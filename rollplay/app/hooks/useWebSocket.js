@@ -47,6 +47,8 @@ export function useWebSocket(roomId, playerName, gameContext) {
 
     ws.onerror = (error) => {
       console.error("WebSocket error:", error);
+      console.error("WebSocket URL was:", url);
+      console.error("WebSocket readyState:", ws.readyState);
       setIsConnected(false);
     };
 

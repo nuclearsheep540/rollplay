@@ -12,6 +12,7 @@ from starlette.websockets import WebSocketDisconnect
 from gameservice import GameService, GameSettings
 from adventure_log_service import create_adventure_log_service
 from simple_formatter import format_system_message, SYSTEM_TEMPLATES
+from models.log_type import LogType
 
 logger = logging.getLogger()
 app = FastAPI()
@@ -27,13 +28,16 @@ app.add_middleware(
 adventure_log_service = create_adventure_log_service()
 
 # Helper function to add log entries
-def add_adventure_log(room_id: str, message: str, log_type: str, player_name: str = None):
+def add_adventure_log(room_id: str, message: str, log_type: LogType, player_name: str = None):
     """Helper function to add log entries with your default settings"""
     try:
+        # Convert LogType enum to string value for the service
+        log_type_value = log_type.value if isinstance(log_type, LogType) else log_type
+        
         return adventure_log_service.add_log_entry(
             room_id=room_id,
             message=message,
-            log_type=log_type,
+            log_type=log_type_value,
             player_name=player_name,
             max_logs=200
         )
@@ -163,7 +167,7 @@ async def update_seat_layout(room_id: str, request: dict):
             add_adventure_log(
                 room_id=room_id,
                 message=log_message,
-                log_type="system",
+                log_type=LogType.SYSTEM,
                 player_name=updated_by
             )
         
@@ -207,7 +211,7 @@ async def clear_system_messages(room_id: str, request: dict):
         add_adventure_log(
             room_id=room_id,
             message=log_message,
-            log_type="system",
+            log_type=LogType.SYSTEM,
             player_name=cleared_by
         )
         
@@ -283,7 +287,7 @@ async def clear_all_messages(room_id: str, request: dict):
         add_adventure_log(
             room_id=room_id,
             message=log_message,
-            log_type="system",
+            log_type=LogType.SYSTEM,
             player_name=cleared_by
         )
         
@@ -347,7 +351,7 @@ async def websocket_endpoint(
     add_adventure_log(
         room_id=client_id,
         message=log_message,
-        log_type="system",
+        log_type=LogType.SYSTEM,
         player_name=player_name
     )
     
@@ -400,7 +404,7 @@ async def websocket_endpoint(
                 add_adventure_log(
                     room_id=client_id,
                     message=log_message,
-                    log_type="dice",
+                    log_type=LogType.PLAYER_ROLL,
                     player_name=prompted_by
                 )
                 
@@ -431,7 +435,7 @@ async def websocket_endpoint(
                 add_adventure_log(
                     room_id=client_id,
                     message=log_message,
-                    log_type="system",
+                    log_type=LogType.DUNGEON_MASTER,
                     player_name=prompted_by
                 )
                 
@@ -444,7 +448,8 @@ async def websocket_endpoint(
                         "players_to_prompt": players_to_prompt,
                         "roll_type": "Initiative",
                         "prompted_by": prompted_by,
-                        "prompt_id": f"initiative_all_{int(time.time() * 1000)}"
+                        "prompt_id": f"initiative_all_{int(time.time() * 1000)}",
+                        "log_message": log_message  # Include the formatted log message
                     }
                 }
 
@@ -481,7 +486,7 @@ async def websocket_endpoint(
                 add_adventure_log(
                     room_id=client_id,
                     message=log_message,
-                    log_type="system",
+                    log_type=LogType.SYSTEM,
                     player_name=player_name
                 )
                 
@@ -500,7 +505,7 @@ async def websocket_endpoint(
                 add_adventure_log(
                     room_id=client_id,
                     message=log_message,
-                    log_type="system",
+                    log_type=LogType.SYSTEM,
                     player_name=updated_by
                 )
                 
@@ -519,7 +524,7 @@ async def websocket_endpoint(
                 add_adventure_log(
                     room_id=client_id,
                     message=log_message,
-                    log_type="system",
+                    log_type=LogType.SYSTEM,
                     player_name=player_name
                 )
                 
@@ -539,7 +544,7 @@ async def websocket_endpoint(
                 add_adventure_log(
                     room_id=client_id,
                     message=formatted_message,
-                    log_type="player-roll", 
+                    log_type=LogType.PLAYER_ROLL, 
                     player_name=player
                 )
                 
@@ -580,7 +585,7 @@ async def websocket_endpoint(
                     add_adventure_log(
                         room_id=client_id,
                         message=log_message,
-                        log_type="system",
+                        log_type=LogType.SYSTEM,
                         player_name=cleared_by
                     )
                     
@@ -617,7 +622,7 @@ async def websocket_endpoint(
                     add_adventure_log(
                         room_id=client_id,
                         message=log_message,
-                        log_type="system",
+                        log_type=LogType.SYSTEM,
                         player_name=cleared_by
                     )
                     
@@ -697,7 +702,7 @@ async def websocket_endpoint(
                 add_adventure_log(
                     room_id=client_id,
                     message=data.get("data", ""),
-                    log_type="chat", 
+                    log_type=LogType.CHAT, 
                     player_name=player_name
                 )
                 
@@ -725,7 +730,7 @@ async def websocket_endpoint(
         add_adventure_log(
             room_id=client_id,
             message=log_message,
-            log_type="system",
+            log_type=LogType.SYSTEM,
             player_name=player_name
         )
         

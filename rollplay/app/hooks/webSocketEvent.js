@@ -158,7 +158,14 @@ export const handleDicePrompt = (data, { setActivePrompts, setIsDicePromptActive
 
 export const handleInitiativePromptAll = (data, { setActivePrompts, addToLog, setIsDicePromptActive, thisPlayer }) => {
   console.log("received initiative prompt all:", data);
-  const { players_to_prompt, roll_type, prompted_by, prompt_id } = data;
+  const { players_to_prompt, roll_type, prompted_by, prompt_id, log_message } = data;
+  
+  console.log("🎲 Initiative prompt log_message:", log_message);
+  
+  // Add the log message to Adventure Log (only once, regardless of which player this client is)
+  if (log_message) {
+    addToLog(log_message, 'dungeon-master');
+  }
   
   // Check if this player is in the list of players to prompt
   if (players_to_prompt.includes(thisPlayer)) {
@@ -184,7 +191,6 @@ export const handleInitiativePromptAll = (data, { setActivePrompts, addToLog, se
       }
     });
     
-    addToLog('Everyone roll for initiative!', 'dice');
     setIsDicePromptActive(true);
   }
 };
