@@ -404,7 +404,7 @@ async def websocket_endpoint(
                 add_adventure_log(
                     room_id=client_id,
                     message=log_message,
-                    log_type=LogType.PLAYER_ROLL,
+                    log_type=LogType.DUNGEON_MASTER,
                     player_name=prompted_by
                 )
                 
@@ -416,7 +416,8 @@ async def websocket_endpoint(
                         "prompted_player": prompted_player,
                         "roll_type": roll_type,
                         "prompted_by": prompted_by,
-                        "prompt_id": prompt_id  # New: Include prompt ID in broadcast
+                        "prompt_id": prompt_id,  # Include prompt ID in broadcast
+                        "log_message": log_message  # Include the formatted log message
                     }
                 }
 

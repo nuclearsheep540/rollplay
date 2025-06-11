@@ -125,9 +125,14 @@ export const handleAllMessagesCleared = (data, { setRollLog, addToLog }) => {
   addToLog(`${cleared_by} cleared all ${deleted_count} adventure log messages`, 'system');
 };
 
-export const handleDicePrompt = (data, { setActivePrompts, setIsDicePromptActive }) => {
+export const handleDicePrompt = (data, { setActivePrompts, setIsDicePromptActive, addToLog }) => {
   console.log("received dice prompt:", data);
-  const { prompted_player, roll_type, prompted_by, prompt_id } = data;
+  const { prompted_player, roll_type, prompted_by, prompt_id, log_message } = data;
+  
+  // Add the log message to Adventure Log (only once, regardless of which player this client is)
+  if (log_message) {
+    addToLog(log_message, 'dungeon-master');
+  }
   
   // Add to active prompts array
   const newPrompt = {
@@ -152,8 +157,6 @@ export const handleDicePrompt = (data, { setActivePrompts, setIsDicePromptActive
   });
   
   setIsDicePromptActive(true);
-  
-  // Server handles logging - no client-side duplication needed
 };
 
 export const handleInitiativePromptAll = (data, { setActivePrompts, addToLog, setIsDicePromptActive, thisPlayer }) => {
