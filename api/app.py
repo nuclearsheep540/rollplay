@@ -1,5 +1,6 @@
 from fastapi import FastAPI, Response, WebSocket
 from datetime import datetime
+import time
 import pydantic
 import logging
 from fastapi import HTTPException
@@ -360,6 +361,37 @@ async def websocket_endpoint(
                         "roll_type": roll_type,
                         "prompted_by": prompted_by,
                         "prompt_id": prompt_id  # New: Include prompt ID in broadcast
+                    }
+                }
+
+            # NEW: Handle collective initiative prompting
+            elif event_type == "initiative_prompt_all":
+                players_to_prompt = event_data.get("players", [])
+                prompted_by = event_data.get("prompted_by", player_name)
+                
+                if not players_to_prompt:
+                    print("⚡ No players provided for initiative prompt")
+                    continue
+                
+                # Log ONE adventure log entry for the collective action
+                player_names = ", ".join(players_to_prompt)
+                add_adventure_log(
+                    room_id=client_id,
+                    message=f"DM prompted all players for Initiative: {player_names}",
+                    log_type="system",
+                    player_name=prompted_by
+                )
+                
+                print(f"⚡ {prompted_by} prompted all players for initiative: {player_names}")
+                
+                # Single broadcast with player list - clients check if they're in the list
+                broadcast_message = {
+                    "event_type": "initiative_prompt_all",
+                    "data": {
+                        "players_to_prompt": players_to_prompt,
+                        "roll_type": "Initiative",
+                        "prompted_by": prompted_by,
+                        "prompt_id": f"initiative_all_{int(time.time() * 1000)}"
                     }
                 }
 

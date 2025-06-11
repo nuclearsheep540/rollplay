@@ -90,6 +90,10 @@ export function useWebSocket(roomId, playerName, callbacks) {
           callbacks.onDicePromptClear?.(json_data["data"]);
           break;
 
+        case "initiative_prompt_all":
+          callbacks.onInitiativePromptAll?.(json_data["data"]);
+          break;
+
         default:
           console.log("Unhandled WebSocket event:", event_type, json_data);
       }
@@ -120,6 +124,24 @@ export function useWebSocket(roomId, playerName, callbacks) {
         "roll_type": rollType,
         "prompted_by": playerName,
         "prompt_id": promptId
+      }
+    }));
+  }, [webSocket, isConnected, playerName]);
+
+  // NEW: Send collective initiative prompt
+  const sendInitiativePromptAll = useCallback((playersToPrompt) => {
+    if (!webSocket || !isConnected) {
+      console.log("❌ Cannot send initiative prompt - WebSocket not connected");
+      return;
+    }
+    
+    console.log(`⚡ Sending initiative prompt to all players: ${playersToPrompt.join(', ')}`);
+    
+    webSocket.send(JSON.stringify({
+      "event_type": "initiative_prompt_all",
+      "data": {
+        "players": playersToPrompt,
+        "prompted_by": playerName
       }
     }));
   }, [webSocket, isConnected, playerName]);
@@ -353,6 +375,7 @@ export function useWebSocket(roomId, playerName, callbacks) {
     sendClearAllMessages,
     // NEW: Prompt methods
     sendDicePrompt,
-    sendDicePromptClear
+    sendDicePromptClear,
+    sendInitiativePromptAll
   };
 }

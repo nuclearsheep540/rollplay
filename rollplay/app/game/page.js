@@ -237,6 +237,40 @@ export default function Game() {
       // Server handles logging - no client-side duplication needed
     },
 
+    // NEW: Handle collective initiative prompts
+    onInitiativePromptAll: (data) => {
+      console.log("received initiative prompt all:", data);
+      const { players_to_prompt, roll_type, prompted_by, prompt_id } = data;
+      
+      // Check if this player is in the list of players to prompt
+      if (players_to_prompt.includes(thisPlayer)) {
+        // Create individual prompt for this player
+        const newPrompt = {
+          id: `${thisPlayer}_${roll_type}_${Date.now()}`,
+          player: thisPlayer,
+          rollType: roll_type,
+          promptedBy: prompted_by
+        };
+        
+        setActivePrompts(prev => {
+          // Check if this player already has an active prompt for this roll type
+          const existingIndex = prev.findIndex(p => p.player === thisPlayer && p.rollType === roll_type);
+          if (existingIndex >= 0) {
+            // Replace existing prompt
+            const updated = [...prev];
+            updated[existingIndex] = newPrompt;
+            return updated;
+          } else {
+            // Add new prompt
+            return [...prev, newPrompt];
+          }
+        });
+        
+        addToLog('Everyone roll for initiative!', 'dice');
+        setIsDicePromptActive(true);
+      }
+    },
+
     onDicePromptClear: (data) => {
       console.log("received dice prompt clear:", data);
       const { prompt_id, clear_all, cleared_player } = data;
@@ -275,7 +309,8 @@ export default function Game() {
     sendClearSystemMessages,
     sendClearAllMessages,  // NEW
     sendDicePrompt,        // NEW
-    sendDicePromptClear    // NEW
+    sendDicePromptClear,   // NEW
+    sendInitiativePromptAll // NEW
   } = useWebSocket(roomId, thisPlayer, webSocketCallbacks);
 
   // Copy room code to clipboard
@@ -603,7 +638,7 @@ export default function Game() {
     }
   };
 
-  // NEW: Prompt all players for initiative
+  // NEW: Prompt all players for initiative (collective approach)
   const promptAllPlayersInitiative = () => {
     const activePlayers = gameSeats.filter(seat => seat.playerName !== "empty");
     if (activePlayers.length === 0) {
@@ -611,9 +646,8 @@ export default function Game() {
       return;
     }
     
-    activePlayers.forEach(player => {
-      promptPlayerRoll(player.playerName, "Initiative");
-    });
+    const playerNames = activePlayers.map(player => player.playerName);
+    sendInitiativePromptAll(playerNames);
   };
 
   // Handle dice roll
