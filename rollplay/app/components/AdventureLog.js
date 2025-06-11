@@ -21,9 +21,10 @@ export default function AdventureLog({ rollLog, playerSeatMap }) {
   // Helper function to group consecutive player messages
   const groupMessages = (messages) => {
     const groups = [];
+    const reversedMessages = [...messages].reverse(); // Work with newest first
     let currentGroup = null;
 
-    messages.forEach((entry, index) => {
+    reversedMessages.forEach((entry, index) => {
       const hasPlayerName = entry.player_name && entry.player_name !== "";
       const isPlayerMessage = (entry.type === "user" || entry.type === "dice" || entry.type === "player-roll") && hasPlayerName;
       const isSystemMessage = entry.type === "system";
