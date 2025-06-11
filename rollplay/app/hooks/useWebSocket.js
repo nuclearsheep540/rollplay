@@ -18,7 +18,7 @@ import {
   createSendFunctions
 } from './webSocketEvent'
 
-export function useWebSocket(roomId, playerName, callbacks) {
+export function useWebSocket(roomId, playerName, gameContext) {
   const [webSocket, setWebSocket] = useState(null);
   const [isConnected, setIsConnected] = useState(false);
 
@@ -58,55 +58,55 @@ export function useWebSocket(roomId, playerName, callbacks) {
       // Route messages to appropriate event handlers
       switch (event_type) {
         case "seat_change":
-          handleSeatChange(json_data["data"], callbacks);
+          handleSeatChange(json_data["data"], gameContext);
           break;
 
         case "seat_count_change":
-          handleSeatCountChange(json_data["data"], callbacks);
+          handleSeatCountChange(json_data["data"], gameContext);
           break;
 
         case "chat_message":
-          handleChatMessage(json_data, callbacks);
+          handleChatMessage(json_data, gameContext);
           break;
 
         case "player_connected":
-          handlePlayerConnected(json_data["data"], callbacks);
+          handlePlayerConnected(json_data["data"], gameContext);
           break;
 
         case "player_kicked":
-          handlePlayerKicked(json_data["data"], callbacks);
+          handlePlayerKicked(json_data["data"], gameContext);
           break;
 
         case "combat_state":
-          handleCombatState(json_data["data"], callbacks);
+          handleCombatState(json_data["data"], gameContext);
           break;
 
         case "player_disconnected":
-          handlePlayerDisconnected(json_data["data"], callbacks);
+          handlePlayerDisconnected(json_data["data"], gameContext);
           break;
 
         case "dice_roll":
-          handleDiceRoll(json_data["data"], callbacks);
+          handleDiceRoll(json_data["data"], gameContext);
           break;
 
         case "system_messages_cleared":
-          handleSystemMessagesCleared(json_data["data"], callbacks);
+          handleSystemMessagesCleared(json_data["data"], gameContext);
           break;
 
         case "all_messages_cleared":
-          handleAllMessagesCleared(json_data["data"], callbacks);
+          handleAllMessagesCleared(json_data["data"], gameContext);
           break;
 
         case "dice_prompt":
-          handleDicePrompt(json_data["data"], callbacks);
+          handleDicePrompt(json_data["data"], gameContext);
           break;
 
         case "initiative_prompt_all":
-          handleInitiativePromptAll(json_data["data"], callbacks);
+          handleInitiativePromptAll(json_data["data"], gameContext);
           break;
 
         case "dice_prompt_clear":
-          handleDicePromptClear(json_data["data"], callbacks);
+          handleDicePromptClear(json_data["data"], gameContext);
           break;
 
         default:

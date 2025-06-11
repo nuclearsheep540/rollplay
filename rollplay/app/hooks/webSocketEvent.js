@@ -1,72 +1,217 @@
 /**
  * WebSocket Event Handlers
- * Contains all the event handling logic for incoming WebSocket messages
- * These are pure functions that take data and callbacks to process events
+ * Contains all the business logic for handling incoming WebSocket messages
+ * These functions take data and state setters directly to process events
  */
 
-export const handleSeatChange = (data, callbacks) => {
+export const handleSeatChange = (data, { setGameSeats, getCharacterData }) => {
   console.log("received a new message with seat change:", data);
-  callbacks.onSeatChange?.(data);
+  
+  // Convert websocket data back to unified structure
+  const updatedSeats = data.map((playerName, index) => ({
+    seatId: index,
+    playerName: playerName,
+    characterData: playerName !== "empty" ? getCharacterData(playerName) : null,
+    isActive: false // Reset turn state, will be managed by initiative
+  }));
+  
+  setGameSeats(updatedSeats);
 };
 
-export const handleSeatCountChange = (data, callbacks) => {
+export const handleSeatCountChange = (data, { setGameSeats, getCharacterData, gameSeats, addToLog }) => {
   console.log("received seat count change:", data);
-  callbacks.onSeatCountChange?.(data);
+  const { max_players, new_seats, updated_by } = data;
+  
+  // Convert to unified structure
+  const updatedSeats = new_seats.map((playerName, index) => ({
+    seatId: index,
+    playerName: playerName,
+    characterData: playerName !== "empty" ? getCharacterData(playerName) : null,
+    isActive: false
+  }));
+  
+  setGameSeats(updatedSeats);
+  
+  // Server-only logging: all players see all seat changes
+  const currentCount = gameSeats.length;
+  const action = max_players > currentCount ? "increased" : "decreased";
+  addToLog(`${updated_by} ${action} party seats to ${max_players}`, 'system');
 };
 
-export const handleChatMessage = (data, callbacks) => {
+export const handleChatMessage = (data, { setChatLog, chatLog }) => {
   console.log("received chat message:", data);
-  callbacks.onChatMessage?.(data);
+  setChatLog([
+    ...chatLog,
+    {
+      "player_name": data["player_name"],
+      "chat_message": data["data"],
+      "timestamp": data["utc_timestamp"]
+    }
+  ]);
 };
 
-export const handlePlayerConnected = (data, callbacks) => {
+export const handlePlayerConnected = (data, { addToLog }) => {
   console.log("received player connection:", data);
-  callbacks.onPlayerConnected?.(data);
+  const { connected_player } = data;
+  
+  // Server-only logging: all players see all connections
+  addToLog(`${connected_player} connected`, 'system');
 };
 
-export const handlePlayerKicked = (data, callbacks) => {
+export const handlePlayerKicked = (data, { addToLog, thisPlayer }) => {
   console.log("received player kick:", data);
-  callbacks.onPlayerKicked?.(data);
+  const { kicked_player } = data;
+  addToLog(`${kicked_player} has been kicked from the party.`, 'system');
+
+  // If this player was kicked, go back in browser history
+  if (kicked_player === thisPlayer) {
+    window.history.replaceState(null, '', '/');
+    window.history.back();
+    return;
+  }
 };
 
-export const handleCombatState = (data, callbacks) => {
+export const handleCombatState = (data, { setCombatActive }) => {
   console.log("received combat state change:", data);
-  callbacks.onCombatStateChange?.(data);
+  const { combatActive: newCombatState } = data;
+  
+  setCombatActive(newCombatState);
+  
+  // Note: Combat state changes are logged on the server side only
+  // to prevent duplication for the player who initiated the change
 };
 
-export const handlePlayerDisconnected = (data, callbacks) => {
+export const handlePlayerDisconnected = (data, { addToLog, thisPlayer }) => {
   console.log("received player disconnect:", data);
-  callbacks.onPlayerDisconnected?.(data);
+  const disconnected_player = data["disconnected_player"];
+
+  // Server will handle seat cleanup and broadcast updated layout
+  // No client-side seat modification needed - server-only disconnect management
+
+  if (disconnected_player !== thisPlayer) {
+    addToLog(`${disconnected_player} disconnected`, 'system');
+  }
 };
 
-export const handleDiceRoll = (data, callbacks) => {
+export const handleDiceRoll = (data, { addToLog }) => {
   console.log("received dice roll:", data);
-  callbacks.onDiceRoll?.(data);
+  const { player, message } = data;
+  
+  // Server-only logging: all players see all dice rolls with pre-formatted message
+  addToLog(message, 'dice', player);
 };
 
-export const handleSystemMessagesCleared = (data, callbacks) => {
+export const handleSystemMessagesCleared = (data, { setRollLog, addToLog, thisPlayer }) => {
   console.log("received system messages cleared:", data);
-  callbacks.onSystemMessagesCleared?.(data);
+  const { deleted_count, cleared_by } = data;
+  
+  // Remove all system messages from the current rollLog
+  setRollLog(prev => prev.filter(entry => entry.type !== 'system'));
+  
+  // Add a new system message about the clearing action
+  if (cleared_by !== thisPlayer) {
+    addToLog(`${cleared_by} cleared ${deleted_count} system messages`, 'system');
+  }
 };
 
-export const handleAllMessagesCleared = (data, callbacks) => {
+export const handleAllMessagesCleared = (data, { setRollLog, addToLog }) => {
   console.log("received all messages cleared:", data);
-  callbacks.onAllMessagesCleared?.(data);
+  const { deleted_count, cleared_by } = data;
+  
+  // Clear all messages from the current rollLog
+  setRollLog([]);
+  
+  // Add a new system message about the clearing action
+  addToLog(`${cleared_by} cleared all ${deleted_count} adventure log messages`, 'system');
 };
 
-export const handleDicePrompt = (data, callbacks) => {
+export const handleDicePrompt = (data, { setActivePrompts, setIsDicePromptActive }) => {
   console.log("received dice prompt:", data);
-  callbacks.onDicePrompt?.(data);
+  const { prompted_player, roll_type, prompted_by, prompt_id } = data;
+  
+  // Add to active prompts array
+  const newPrompt = {
+    id: prompt_id || Date.now(), // Use provided ID or generate one
+    player: prompted_player,
+    rollType: roll_type,
+    promptedBy: prompted_by
+  };
+  
+  setActivePrompts(prev => {
+    // Check if this player already has an active prompt for this roll type
+    const existingIndex = prev.findIndex(p => p.player === prompted_player && p.rollType === roll_type);
+    if (existingIndex >= 0) {
+      // Replace existing prompt
+      const updated = [...prev];
+      updated[existingIndex] = newPrompt;
+      return updated;
+    } else {
+      // Add new prompt
+      return [...prev, newPrompt];
+    }
+  });
+  
+  setIsDicePromptActive(true);
+  
+  // Server handles logging - no client-side duplication needed
 };
 
-export const handleInitiativePromptAll = (data, callbacks) => {
+export const handleInitiativePromptAll = (data, { setActivePrompts, addToLog, setIsDicePromptActive, thisPlayer }) => {
   console.log("received initiative prompt all:", data);
-  callbacks.onInitiativePromptAll?.(data);
+  const { players_to_prompt, roll_type, prompted_by, prompt_id } = data;
+  
+  // Check if this player is in the list of players to prompt
+  if (players_to_prompt.includes(thisPlayer)) {
+    // Create individual prompt for this player
+    const newPrompt = {
+      id: `${thisPlayer}_${roll_type}_${Date.now()}`,
+      player: thisPlayer,
+      rollType: roll_type,
+      promptedBy: prompted_by
+    };
+    
+    setActivePrompts(prev => {
+      // Check if this player already has an active prompt for this roll type
+      const existingIndex = prev.findIndex(p => p.player === thisPlayer && p.rollType === roll_type);
+      if (existingIndex >= 0) {
+        // Replace existing prompt
+        const updated = [...prev];
+        updated[existingIndex] = newPrompt;
+        return updated;
+      } else {
+        // Add new prompt
+        return [...prev, newPrompt];
+      }
+    });
+    
+    addToLog('Everyone roll for initiative!', 'dice');
+    setIsDicePromptActive(true);
+  }
 };
 
-export const handleDicePromptClear = (data, callbacks) => {
+export const handleDicePromptClear = (data, { setActivePrompts, setIsDicePromptActive }) => {
   console.log("received dice prompt clear:", data);
-  callbacks.onDicePromptClear?.(data);
+  const { prompt_id, clear_all, cleared_player } = data;
+  
+  if (clear_all) {
+    // Clear all prompts
+    setActivePrompts([]);
+    setIsDicePromptActive(false);
+  } else if (prompt_id) {
+    // Clear specific prompt by ID
+    setActivePrompts(prev => {
+      const filtered = prev.filter(prompt => prompt.id !== prompt_id);
+      setIsDicePromptActive(filtered.length > 0);
+      return filtered;
+    });
+  } else if (cleared_player) {
+    // Clear all prompts for specific player
+    setActivePrompts(prev => {
+      const filtered = prev.filter(prompt => prompt.player !== cleared_player);
+      setIsDicePromptActive(filtered.length > 0);
+      return filtered;
+    });
+  }
 };
 
 // WebSocket sending functions (outbound messages)

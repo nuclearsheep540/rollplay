@@ -79,235 +79,6 @@ export default function Game() {
     };
   };
 
-  // UPDATED: WebSocket callbacks with new prompt handlers
-  const webSocketCallbacks = {
-    onSeatChange: (data) => {
-      console.log("received a new message with seat change:", data);
-      
-      // Convert websocket data back to unified structure
-      const updatedSeats = data.map((playerName, index) => ({
-        seatId: index,
-        playerName: playerName,
-        characterData: playerName !== "empty" ? getCharacterData(playerName) : null,
-        isActive: false // Reset turn state, will be managed by initiative
-      }));
-      
-      setGameSeats(updatedSeats);
-    },
-
-    onSeatCountChange: (data) => {
-      console.log("received seat count change:", data);
-      const { max_players, new_seats, updated_by } = data;
-      
-      // Convert to unified structure
-      const updatedSeats = new_seats.map((playerName, index) => ({
-        seatId: index,
-        playerName: playerName,
-        characterData: playerName !== "empty" ? getCharacterData(playerName) : null,
-        isActive: false
-      }));
-      
-      setGameSeats(updatedSeats);
-      
-      // Server-only logging: all players see all seat changes
-      const currentCount = gameSeats.length;
-      const action = max_players > currentCount ? "increased" : "decreased";
-      addToLog(`${updated_by} ${action} party seats to ${max_players}`, 'system');
-    },
-
-    onChatMessage: (data) => {
-      setChatLog([
-        ...chatLog,
-        {
-          "player_name": data["player_name"],
-          "chat_message": data["data"],
-          "timestamp": data["utc_timestamp"]
-        }
-      ]);
-    },
-
-    onPlayerConnected: (data) => {
-      console.log("received player connection:", data);
-      const { connected_player } = data;
-      
-      // Server-only logging: all players see all connections
-      addToLog(`${connected_player} connected`, 'system');
-    },
-
-    onPlayerKicked: (data) => {
-      console.log("received player kick:", data);
-      const { kicked_player } = data;
-      addToLog(`${kicked_player} has been kicked from the party.`, 'system');
-
-      // If this player was kicked, go back in browser history
-      if (kicked_player === thisPlayer) {
-        window.history.replaceState(null, '', '/');
-        window.history.back();
-        return;
-      }
-    },
-
-    onCombatStateChange: (data) => {
-      console.log("received combat state change:", data);
-      const { combatActive: newCombatState } = data;
-      
-      setCombatActive(newCombatState);
-      
-      // Note: Combat state changes are logged on the server side only
-      // to prevent duplication for the player who initiated the change
-    },
-
-    onPlayerDisconnected: (data) => {
-      console.log("received player disconnect:", data);
-      const disconnected_player = data["disconnected_player"];
-    
-      // Server will handle seat cleanup and broadcast updated layout
-      // No client-side seat modification needed - server-only disconnect management
-
-      if (disconnected_player !== thisPlayer) {
-        addToLog(`${disconnected_player} disconnected`, 'system');
-      }
-    },
-
-    onDiceRoll: (data) => {
-      console.log("received dice roll:", data);
-      const { player, message } = data;
-      
-      // Server-only logging: all players see all dice rolls with pre-formatted message
-      addToLog(message, 'dice', player);
-    },
-
-    onSystemMessagesCleared: (data) => {
-      console.log("received system messages cleared:", data);
-      const { deleted_count, cleared_by } = data;
-      
-      // Remove all system messages from the current rollLog
-      setRollLog(prev => prev.filter(entry => entry.type !== 'system'));
-      
-      // Add a new system message about the clearing action
-      if (cleared_by !== thisPlayer) {
-        addToLog(`${cleared_by} cleared ${deleted_count} system messages`, 'system');
-      }
-    },
-
-    onAllMessagesCleared: (data) => {
-      console.log("received all messages cleared:", data);
-      const { deleted_count, cleared_by } = data;
-      
-      // Clear all messages from the current rollLog
-      setRollLog([]);
-      
-      // Add a new system message about the clearing action
-      addToLog(`${cleared_by} cleared all ${deleted_count} adventure log messages`, 'system');
-    },
-
-    // UPDATED: Handle multiple dice prompts
-    onDicePrompt: (data) => {
-      console.log("received dice prompt:", data);
-      const { prompted_player, roll_type, prompted_by, prompt_id } = data;
-      
-      // Add to active prompts array
-      const newPrompt = {
-        id: prompt_id || Date.now(), // Use provided ID or generate one
-        player: prompted_player,
-        rollType: roll_type,
-        promptedBy: prompted_by
-      };
-      
-      setActivePrompts(prev => {
-        // Check if this player already has an active prompt for this roll type
-        const existingIndex = prev.findIndex(p => p.player === prompted_player && p.rollType === roll_type);
-        if (existingIndex >= 0) {
-          // Replace existing prompt
-          const updated = [...prev];
-          updated[existingIndex] = newPrompt;
-          return updated;
-        } else {
-          // Add new prompt
-          return [...prev, newPrompt];
-        }
-      });
-      
-      setIsDicePromptActive(true);
-      
-      // Server handles logging - no client-side duplication needed
-    },
-
-    // NEW: Handle collective initiative prompts
-    onInitiativePromptAll: (data) => {
-      console.log("received initiative prompt all:", data);
-      const { players_to_prompt, roll_type, prompted_by, prompt_id } = data;
-      
-      // Check if this player is in the list of players to prompt
-      if (players_to_prompt.includes(thisPlayer)) {
-        // Create individual prompt for this player
-        const newPrompt = {
-          id: `${thisPlayer}_${roll_type}_${Date.now()}`,
-          player: thisPlayer,
-          rollType: roll_type,
-          promptedBy: prompted_by
-        };
-        
-        setActivePrompts(prev => {
-          // Check if this player already has an active prompt for this roll type
-          const existingIndex = prev.findIndex(p => p.player === thisPlayer && p.rollType === roll_type);
-          if (existingIndex >= 0) {
-            // Replace existing prompt
-            const updated = [...prev];
-            updated[existingIndex] = newPrompt;
-            return updated;
-          } else {
-            // Add new prompt
-            return [...prev, newPrompt];
-          }
-        });
-        
-        addToLog('Everyone roll for initiative!', 'dice');
-        setIsDicePromptActive(true);
-      }
-    },
-
-    onDicePromptClear: (data) => {
-      console.log("received dice prompt clear:", data);
-      const { prompt_id, clear_all, cleared_player } = data;
-      
-      if (clear_all) {
-        // Clear all prompts
-        setActivePrompts([]);
-        setIsDicePromptActive(false);
-      } else if (prompt_id) {
-        // Clear specific prompt by ID
-        setActivePrompts(prev => {
-          const filtered = prev.filter(prompt => prompt.id !== prompt_id);
-          setIsDicePromptActive(filtered.length > 0);
-          return filtered;
-        });
-      } else if (cleared_player) {
-        // Clear all prompts for specific player
-        setActivePrompts(prev => {
-          const filtered = prev.filter(prompt => prompt.player !== cleared_player);
-          setIsDicePromptActive(filtered.length > 0);
-          return filtered;
-        });
-      }
-    }
-  };
-
-  // UPDATED: Initialize WebSocket hook with new methods
-  const {
-    webSocket,
-    isConnected,
-    sendSeatChange,
-    sendSeatCountChange,
-    sendCombatStateChange,
-    sendPlayerKick,
-    sendDiceRoll,
-    sendClearSystemMessages,
-    sendClearAllMessages,  // NEW
-    sendDicePrompt,        // NEW
-    sendDicePromptClear,   // NEW
-    sendInitiativePromptAll // NEW
-  } = useWebSocket(roomId, thisPlayer, webSocketCallbacks);
 
   // Copy room code to clipboard
   const copyRoomCode = async () => {
@@ -565,6 +336,42 @@ export default function Game() {
     
     setRollLog(prev => [...prev, newEntry]);
   };
+
+  // Create game context object for WebSocket handlers (after addToLog is defined)
+  const gameContext = {
+    // State setters
+    setGameSeats,
+    setChatLog,
+    setCombatActive,
+    setRollLog,
+    setActivePrompts,
+    setIsDicePromptActive,
+    
+    // Current state values
+    chatLog,
+    gameSeats,
+    thisPlayer,
+    
+    // Helper functions
+    addToLog,
+    getCharacterData
+  };
+
+  // Initialize WebSocket hook with game context
+  const {
+    webSocket,
+    isConnected,
+    sendSeatChange,
+    sendSeatCountChange,
+    sendCombatStateChange,
+    sendPlayerKick,
+    sendDiceRoll,
+    sendClearSystemMessages,
+    sendClearAllMessages,
+    sendDicePrompt,
+    sendDicePromptClear,
+    sendInitiativePromptAll
+  } = useWebSocket(roomId, thisPlayer, gameContext);
 
   // Show dice portal for player rolls
   const showDicePortal = (playerName, promptType = null) => {
