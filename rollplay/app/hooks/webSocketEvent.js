@@ -18,7 +18,7 @@ export const handleSeatChange = (data, { setGameSeats, getCharacterData }) => {
   setGameSeats(updatedSeats);
 };
 
-export const handleSeatCountChange = (data, { setGameSeats, getCharacterData, gameSeats, addToLog }) => {
+export const handleSeatCountChange = (data, { setGameSeats, getCharacterData }) => {
   console.log("received seat count change:", data);
   const { max_players, new_seats, updated_by } = data;
   
@@ -32,10 +32,7 @@ export const handleSeatCountChange = (data, { setGameSeats, getCharacterData, ga
   
   setGameSeats(updatedSeats);
   
-  // Server-only logging: all players see all seat changes
-  const currentCount = gameSeats.length;
-  const action = max_players > currentCount ? "increased" : "decreased";
-  addToLog(`${updated_by} ${action} party seats to ${max_players}`, 'system');
+  // No logging - seat count changes are not interesting for adventure log
 };
 
 export const handleChatMessage = (data, { setChatLog, chatLog }) => {

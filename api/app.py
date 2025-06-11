@@ -11,7 +11,7 @@ from starlette.websockets import WebSocketDisconnect
 
 from gameservice import GameService, GameSettings
 from adventure_log_service import create_adventure_log_service
-from simple_formatter import format_system_message, SYSTEM_TEMPLATES
+from message_templates import format_message, MESSAGE_TEMPLATES
 from models.log_type import LogType
 
 logger = logging.getLogger()
@@ -161,7 +161,7 @@ async def update_seat_layout(room_id: str, request: dict):
         if non_empty_seats:  # Only log if there are actual players
             player_list = ", ".join(non_empty_seats)
             
-            log_message = format_system_message(SYSTEM_TEMPLATES["party_updated"], players=", ".join(non_empty_seats))
+            log_message = format_message(MESSAGE_TEMPLATES["party_updated"], players=", ".join(non_empty_seats))
             
             print(f"📜 Adding adventure log: {log_message}")
             add_adventure_log(
@@ -206,7 +206,7 @@ async def clear_system_messages(room_id: str, request: dict):
         print(f"✅ Cleared {deleted_count} system messages")
         
         # Add a log entry about the clearing action
-        log_message = format_system_message(SYSTEM_TEMPLATES["messages_cleared"], player=cleared_by, count=deleted_count)
+        log_message = format_message(MESSAGE_TEMPLATES["messages_cleared"], player=cleared_by, count=deleted_count)
         
         add_adventure_log(
             room_id=room_id,
@@ -282,7 +282,7 @@ async def clear_all_messages(room_id: str, request: dict):
         print(f"✅ Cleared {deleted_count} total messages")
         
         # Add a log entry about the clearing action
-        log_message = format_system_message(SYSTEM_TEMPLATES["messages_cleared"], player=cleared_by, count=deleted_count)
+        log_message = format_message(MESSAGE_TEMPLATES["messages_cleared"], player=cleared_by, count=deleted_count)
         
         add_adventure_log(
             room_id=room_id,
@@ -346,7 +346,7 @@ async def websocket_endpoint(
     await manager.connect(websocket)
 
     # Log player connection to database
-    log_message = format_system_message(SYSTEM_TEMPLATES["player_connected"], player=player_name)
+    log_message = format_message(MESSAGE_TEMPLATES["player_connected"], player=player_name)
     
     add_adventure_log(
         room_id=client_id,
@@ -399,7 +399,7 @@ async def websocket_endpoint(
                 prompt_id = event_data.get("prompt_id")  # New: Get prompt ID
                 
                 # Log the prompt to adventure log
-                log_message = format_system_message(SYSTEM_TEMPLATES["dice_prompt"], target=prompted_player, roll_type=roll_type)
+                log_message = format_message(MESSAGE_TEMPLATES["dice_prompt"], target=prompted_player, roll_type=roll_type)
                 
                 add_adventure_log(
                     room_id=client_id,
@@ -431,7 +431,7 @@ async def websocket_endpoint(
                     continue
                 
                 # Log ONE adventure log entry for the collective action
-                log_message = format_system_message(SYSTEM_TEMPLATES["initiative_prompt"], players=", ".join(players_to_prompt))
+                log_message = format_message(MESSAGE_TEMPLATES["initiative_prompt"], players=", ".join(players_to_prompt))
                 
                 add_adventure_log(
                     room_id=client_id,
@@ -482,7 +482,7 @@ async def websocket_endpoint(
                 action = "started" if combat_active else "ended"
                 
                 template_key = "combat_started" if action == "started" else "combat_ended"
-                log_message = format_system_message(SYSTEM_TEMPLATES[template_key], player=player_name)
+                log_message = format_message(MESSAGE_TEMPLATES[template_key], player=player_name)
                 
                 add_adventure_log(
                     room_id=client_id,
@@ -497,19 +497,7 @@ async def websocket_endpoint(
                 }
 
             elif event_type == "seat_count_change":
-                # Existing seat count logic...
-                max_players = event_data.get("max_players")
-                updated_by = event_data.get("updated_by")
-                
-                log_message = format_system_message(SYSTEM_TEMPLATES["party_size_changed"], player=updated_by, size=max_players)
-                
-                add_adventure_log(
-                    room_id=client_id,
-                    message=log_message,
-                    log_type=LogType.SYSTEM,
-                    player_name=updated_by
-                )
-                
+                # Handle seat count changes (no logging - not interesting for adventure log)
                 broadcast_message = {
                     "event_type": "seat_count_change",
                     "data": event_data,
@@ -520,7 +508,7 @@ async def websocket_endpoint(
                 # Existing player kick logic...
                 kicked_player = event_data.get("kicked_player")
                 
-                log_message = format_system_message(SYSTEM_TEMPLATES["player_kicked"], player=kicked_player)
+                log_message = format_message(MESSAGE_TEMPLATES["player_kicked"], player=kicked_player)
                 
                 add_adventure_log(
                     room_id=client_id,
@@ -591,7 +579,7 @@ async def websocket_endpoint(
                 try:
                     deleted_count = adventure_log_service.clear_system_messages(client_id)
                     
-                    log_message = format_system_message(SYSTEM_TEMPLATES["messages_cleared"], player=cleared_by, count=deleted_count)
+                    log_message = format_message(MESSAGE_TEMPLATES["messages_cleared"], player=cleared_by, count=deleted_count)
                     
                     add_adventure_log(
                         room_id=client_id,
@@ -628,7 +616,7 @@ async def websocket_endpoint(
                 try:
                     deleted_count = adventure_log_service.clear_all_messages(client_id)
                     
-                    log_message = format_system_message(SYSTEM_TEMPLATES["messages_cleared"], player=cleared_by, count=deleted_count)
+                    log_message = format_message(MESSAGE_TEMPLATES["messages_cleared"], player=cleared_by, count=deleted_count)
                     
                     add_adventure_log(
                         room_id=client_id,
@@ -736,7 +724,7 @@ async def websocket_endpoint(
             
     except WebSocketDisconnect:
         # Server-side disconnect handling with seat cleanup
-        log_message = format_system_message(SYSTEM_TEMPLATES["player_disconnected"], player=player_name)
+        log_message = format_message(MESSAGE_TEMPLATES["player_disconnected"], player=player_name)
         
         add_adventure_log(
             room_id=client_id,
