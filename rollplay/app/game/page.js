@@ -1,10 +1,10 @@
 'use client'
 
-import { React, useEffect, useState } from 'react'
+import { React, useEffect, useState, useMemo } from 'react'
 import { useSearchParams } from "next/navigation";
+import { getSeatColor } from '../utils/seatColors';
 
 import PlayerCard from "../components/PlayerCard";
-import ChatMessages from '../components/ChatMessages';
 import DMControlCenter from '../components/DMControlCenter';
 import HorizontalInitiativeTracker from '../components/HorizontalInitiativeTracker';
 import AdventureLog from '../components/AdventureLog';
@@ -26,14 +26,28 @@ export default function Game() {
   // chat history
   const [chatLog, setChatLog] = useState([{},])
 
-  // current msg in chat box form
-  const [chatMsg, setChatMsg] = useState("")
-
   // who generated the room
   const [host, setHost] = useState("")
 
   // UNIFIED STRUCTURE - Replaces both seats and partyMembers
   const [gameSeats, setGameSeats] = useState([]);
+
+  // State for seat colors (loaded from backend)
+  const [seatColors, setSeatColors] = useState({});
+
+  // Pre-computed player-to-seat mapping for O(1) lookups
+  const playerSeatMap = useMemo(() => {
+    const map = {};
+    gameSeats.forEach((seat, index) => {
+      if (seat.playerName !== "empty") {
+        map[seat.playerName] = {
+          seatIndex: index,
+          seatColor: seatColors[index] || getSeatColor(index) // Use backend color or default
+        };
+      }
+    });
+    return map;
+  }, [gameSeats, seatColors]);
 
   // UPDATED: State management for TabletopInterface - REMOVED HARDCODED DEFAULTS
   const [currentTurn, setCurrentTurn] = useState(null); // ❌ Removed 'Thorin' default
@@ -68,189 +82,6 @@ export default function Game() {
     };
   };
 
-  // UPDATED: WebSocket callbacks with new prompt handlers
-  const webSocketCallbacks = {
-    onSeatChange: (data) => {
-      console.log("received a new message with seat change:", data);
-      
-      // Convert websocket data back to unified structure
-      const updatedSeats = data.map((playerName, index) => ({
-        seatId: index,
-        playerName: playerName,
-        characterData: playerName !== "empty" ? getCharacterData(playerName) : null,
-        isActive: false // Reset turn state, will be managed by initiative
-      }));
-      
-      setGameSeats(updatedSeats);
-    },
-
-    onSeatCountChange: (data) => {
-      console.log("received seat count change:", data);
-      const { max_players, new_seats, updated_by } = data;
-      
-      // Convert to unified structure
-      const updatedSeats = new_seats.map((playerName, index) => ({
-        seatId: index,
-        playerName: playerName,
-        characterData: playerName !== "empty" ? getCharacterData(playerName) : null,
-        isActive: false
-      }));
-      
-      setGameSeats(updatedSeats);
-      
-      // Server-only logging: all players see all seat changes
-      const currentCount = gameSeats.length;
-      const action = max_players > currentCount ? "increased" : "decreased";
-      addToLog(`${updated_by} ${action} party seats to ${max_players}`, 'system');
-    },
-
-    onChatMessage: (data) => {
-      setChatLog([
-        ...chatLog,
-        {
-          "player_name": data["player_name"],
-          "chat_message": data["data"],
-          "timestamp": data["utc_timestamp"]
-        }
-      ]);
-    },
-
-    onPlayerConnected: (data) => {
-      console.log("received player connection:", data);
-      const { connected_player } = data;
-      
-      // Server-only logging: all players see all connections
-      addToLog(`${connected_player} connected`, 'system');
-    },
-
-    onPlayerKicked: (data) => {
-      console.log("received player kick:", data);
-      const { kicked_player } = data;
-      addToLog(`${kicked_player} has been kicked from the party.`, 'system');
-
-      // If this player was kicked, go back in browser history
-      if (kicked_player === thisPlayer) {
-        window.history.replaceState(null, '', '/');
-        window.history.back();
-        return;
-      }
-    },
-
-    onCombatStateChange: (data) => {
-      console.log("received combat state change:", data);
-      const { combatActive: newCombatState } = data;
-      
-      setCombatActive(newCombatState);
-      
-      // Note: Combat state changes are logged on the server side only
-      // to prevent duplication for the player who initiated the change
-    },
-
-    onPlayerDisconnected: (data) => {
-      console.log("received player disconnect:", data);
-      const disconnected_player = data["disconnected_player"];
-    
-      // Server will handle seat cleanup and broadcast updated layout
-      // No client-side seat modification needed - server-only disconnect management
-
-      if (disconnected_player !== thisPlayer) {
-        addToLog(`${disconnected_player} disconnected`, 'system');
-      }
-    },
-
-    onDiceRoll: (data) => {
-      console.log("received dice roll:", data);
-      const { player, dice, result } = data;
-      
-      // Server-only logging: all players see all dice rolls
-      addToLog(`${dice}: ${result}`, 'dice', player);
-    },
-
-    onSystemMessagesCleared: (data) => {
-      console.log("received system messages cleared:", data);
-      const { deleted_count, cleared_by } = data;
-      
-      // Remove all system messages from the current rollLog
-      setRollLog(prev => prev.filter(entry => entry.type !== 'system'));
-      
-      // Add a new system message about the clearing action
-      if (cleared_by !== thisPlayer) {
-        addToLog(`${cleared_by} cleared ${deleted_count} system messages`, 'system');
-      }
-    },
-
-    // UPDATED: Handle multiple dice prompts
-    onDicePrompt: (data) => {
-      console.log("received dice prompt:", data);
-      const { prompted_player, roll_type, prompted_by, prompt_id } = data;
-      
-      // Add to active prompts array
-      const newPrompt = {
-        id: prompt_id || Date.now(), // Use provided ID or generate one
-        player: prompted_player,
-        rollType: roll_type,
-        promptedBy: prompted_by
-      };
-      
-      setActivePrompts(prev => {
-        // Check if this player already has an active prompt for this roll type
-        const existingIndex = prev.findIndex(p => p.player === prompted_player && p.rollType === roll_type);
-        if (existingIndex >= 0) {
-          // Replace existing prompt
-          const updated = [...prev];
-          updated[existingIndex] = newPrompt;
-          return updated;
-        } else {
-          // Add new prompt
-          return [...prev, newPrompt];
-        }
-      });
-      
-      setIsDicePromptActive(true);
-      
-      // Server-only logging: all players see all dice prompts
-      addToLog(`DM: ${prompted_player}, please roll a ${roll_type}`, 'dice');
-    },
-
-    onDicePromptClear: (data) => {
-      console.log("received dice prompt clear:", data);
-      const { prompt_id, clear_all, cleared_player } = data;
-      
-      if (clear_all) {
-        // Clear all prompts
-        setActivePrompts([]);
-        setIsDicePromptActive(false);
-      } else if (prompt_id) {
-        // Clear specific prompt by ID
-        setActivePrompts(prev => {
-          const filtered = prev.filter(prompt => prompt.id !== prompt_id);
-          setIsDicePromptActive(filtered.length > 0);
-          return filtered;
-        });
-      } else if (cleared_player) {
-        // Clear all prompts for specific player
-        setActivePrompts(prev => {
-          const filtered = prev.filter(prompt => prompt.player !== cleared_player);
-          setIsDicePromptActive(filtered.length > 0);
-          return filtered;
-        });
-      }
-    }
-  };
-
-  // UPDATED: Initialize WebSocket hook with new methods
-  const {
-    webSocket,
-    isConnected,
-    sendSeatChange,
-    sendSeatCountChange,
-    sendCombatStateChange,
-    sendPlayerKick,
-    sendDiceRoll,
-    sendClearSystemMessages,
-    sendDicePrompt,        // NEW
-    sendDicePromptClear    // NEW
-  } = useWebSocket(roomId, thisPlayer, webSocketCallbacks);
 
   // Copy room code to clipboard
   const copyRoomCode = async () => {
@@ -328,20 +159,35 @@ export default function Game() {
       // Use actual seat layout from database if available
       const seatLayout = res["current_seat_layout"] || [];
       const maxPlayers = res["max_players"];
+      const backendSeatColors = res["seat_colors"] || {};
+      
+      // Set seat colors from backend
+      setSeatColors(backendSeatColors);
+      
+      // Initialize CSS variables for seat colors
+      Object.keys(backendSeatColors).forEach(seatIndex => {
+        document.documentElement.style.setProperty(
+          `--seat-color-${seatIndex}`, 
+          backendSeatColors[seatIndex]
+        );
+      });
       
       // Create unified seat structure from database data
       const initialSeats = [];
       for (let i = 0; i < maxPlayers; i++) {
         const playerName = seatLayout[i] || "empty";
+        // Normalize player names when loading from database
+        const normalizedPlayerName = playerName !== "empty" ? playerName.toLowerCase() : "empty";
         initialSeats.push({
           seatId: i,
-          playerName: playerName,
-          characterData: playerName !== "empty" ? getCharacterData(playerName) : null,
+          playerName: normalizedPlayerName,
+          characterData: normalizedPlayerName !== "empty" ? getCharacterData(normalizedPlayerName) : null,
           isActive: false
         });
       }
       
       console.log("Loaded seat layout from database:", initialSeats);
+      console.log("Loaded seat colors from database:", backendSeatColors);
       setGameSeats(initialSeats);
     })
     
@@ -352,7 +198,7 @@ export default function Game() {
   // initialise the game lobby
   useEffect(() => {
     const roomId = params.get('roomId')
-    const thisPlayer = params.get('playerName')
+    const thisPlayer = params.get('playerName')?.toLowerCase() // Normalize once at entry point
     setRoomId(roomId)
     setThisPlayer(thisPlayer)
 
@@ -507,6 +353,62 @@ export default function Game() {
     setRollLog(prev => [...prev, newEntry]);
   };
 
+  // Create a setter function for playerSeatMap updates
+  const setPlayerSeatMap = (updaterFunction) => {
+    // This is a derived state update - we need to update seatColors instead
+    // The updaterFunction expects the current playerSeatMap and returns the new one
+    const currentMap = playerSeatMap;
+    const newMap = updaterFunction(currentMap);
+    
+    // Extract seat colors from the updated map
+    const newSeatColors = {};
+    Object.values(newMap).forEach(playerData => {
+      if (playerData.seatIndex !== undefined && playerData.seatColor) {
+        newSeatColors[playerData.seatIndex] = playerData.seatColor;
+      }
+    });
+    
+    setSeatColors(newSeatColors);
+  };
+
+  // Create game context object for WebSocket handlers (after addToLog is defined)
+  const gameContext = {
+    // State setters
+    setGameSeats,
+    setChatLog,
+    setCombatActive,
+    setRollLog,
+    setActivePrompts,
+    setIsDicePromptActive,
+    setPlayerSeatMap,
+    
+    // Current state values
+    chatLog,
+    gameSeats,
+    thisPlayer,
+    
+    // Helper functions
+    addToLog,
+    getCharacterData
+  };
+
+  // Initialize WebSocket hook with game context
+  const {
+    webSocket,
+    isConnected,
+    sendSeatChange,
+    sendSeatCountChange,
+    sendCombatStateChange,
+    sendPlayerKick,
+    sendDiceRoll,
+    sendClearSystemMessages,
+    sendClearAllMessages,
+    sendDicePrompt,
+    sendDicePromptClear,
+    sendInitiativePromptAll,
+    sendColorChange
+  } = useWebSocket(roomId, thisPlayer, gameContext);
+
   // Show dice portal for player rolls
   const showDicePortal = (playerName, promptType = null) => {
     setCurrentTurn(playerName);
@@ -575,7 +477,7 @@ export default function Game() {
     }
   };
 
-  // NEW: Prompt all players for initiative
+  // NEW: Prompt all players for initiative (collective approach)
   const promptAllPlayersInitiative = () => {
     const activePlayers = gameSeats.filter(seat => seat.playerName !== "empty");
     if (activePlayers.length === 0) {
@@ -583,9 +485,8 @@ export default function Game() {
       return;
     }
     
-    activePlayers.forEach(player => {
-      promptPlayerRoll(player.playerName, "Initiative");
-    });
+    const playerNames = activePlayers.map(player => player.playerName);
+    sendInitiativePromptAll(playerNames);
   };
 
   // Handle dice roll
@@ -650,6 +551,22 @@ export default function Game() {
     }
   };
 
+  // Handle clearing all adventure log messages
+  const handleClearAllMessages = async () => {
+    try {
+      await sendClearAllMessages();
+      
+      // Clear all messages from local state immediately
+      setRollLog([]);
+      
+      // Adventure log will be handled by server broadcast
+      
+    } catch (error) {
+      console.error('Error clearing all messages:', error);
+      alert('Failed to clear all messages. Please try again.');
+    }
+  };
+
   // Show loading or 404 states
   if (room404) {
     return <div>Room not found</div>;
@@ -669,19 +586,25 @@ export default function Game() {
     const bonusValue = bonus ? parseInt(bonus.replace(/[^-\d]/g, '')) || 0 : 0;
     const totalResult = baseRoll + bonusValue;
     
-    // Format result message
+    // Format complete message on frontend
     const bonusText = bonusValue !== 0 ? ` ${bonus}` : '';
-    const resultMessage = `${dice}${bonusText}: ${totalResult}`;
+    const diceNotation = `${dice}${bonusText}`;
     
-    // Adventure log will be handled by server broadcast
+    // Create pre-formatted message 
+    let formattedMessage;
+    if (rollFor && rollFor !== "Standard Roll") {
+      formattedMessage = ` [${rollFor}]: ${diceNotation}: ${totalResult}`;
+    } else {
+      formattedMessage = `: ${diceNotation}: ${totalResult}`;
+    }
     
-    // Send to websocket with context
-    sendDiceRoll(playerName, `${dice}${bonusText}`, totalResult, rollFor);
+    // Send pre-formatted message to backend
+    sendDiceRoll(playerName, formattedMessage, rollFor);
     
     // Clear prompts for this player if they match the roll type
     const playerPrompts = activePrompts.filter(prompt => 
       prompt.player === playerName && 
-      (rollFor === prompt.rollType || rollFor === null) // Match specific roll type or clear if general roll
+      (rollFor === prompt.rollType || rollFor === null) // Match specific roll type or clear if Standard Roll
     );
     
     playerPrompts.forEach(prompt => {
@@ -694,6 +617,17 @@ export default function Game() {
     console.log(`${currentTurn} ended their turn`);
     // Add logic to move to next player in initiative order
     // This is where you'd implement turn progression
+  };
+
+  // Handle color changes from PlayerCard
+  const handlePlayerColorChange = (playerName, seatIndex, newColor) => {
+    if (!sendColorChange) {
+      console.error('sendColorChange function not available');
+      return;
+    }
+    
+    console.log(`🎨 ${playerName} changing color (seat ${seatIndex}) to ${newColor}`);
+    sendColorChange(playerName, seatIndex, newColor);
   };
 
   // MAIN RENDER
@@ -759,6 +693,7 @@ export default function Game() {
           
           {gameSeats.map((seat) => {
             const isSitting = seat.playerName === thisPlayer;
+            const currentColor = seatColors[seat.seatId] || getSeatColor(seat.seatId);
             
             return (
               <PlayerCard
@@ -771,6 +706,8 @@ export default function Game() {
                 currentTurn={currentTurn}
                 onDiceRoll={handlePlayerDiceRoll}
                 playerData={seat.characterData}
+                onColorChange={handlePlayerColorChange}
+                currentColor={currentColor}
               />
             );
           })}
@@ -778,7 +715,7 @@ export default function Game() {
           {/* Adventure Log component */}
           <AdventureLog 
             rollLog={rollLog}
-            gameSeats={gameSeats}
+            playerSeatMap={playerSeatMap}
           />
         </div>
 
@@ -806,6 +743,7 @@ export default function Game() {
             roomId={roomId}
             handleKickPlayer={handleKickPlayer}
             handleClearSystemMessages={handleClearSystemMessages}
+            handleClearAllMessages={handleClearAllMessages}  // NEW
             activePrompts={activePrompts}        // UPDATED: Pass array instead of single prompt
             clearDicePrompt={clearDicePrompt}    // UPDATED: Now accepts prompt ID
           />

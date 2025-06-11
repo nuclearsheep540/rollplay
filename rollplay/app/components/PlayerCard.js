@@ -1,4 +1,6 @@
 import { React, useEffect, useState, useRef } from 'react'
+import { getSeatColor } from '../utils/seatColors'
+import ColorPicker from './ColorPicker'
 
 export default function PlayerCard({
     seatId, 
@@ -8,7 +10,9 @@ export default function PlayerCard({
     sendSeatChange,
     currentTurn = null,
     onDiceRoll = null,
-    playerData = null
+    playerData = null,
+    onColorChange = null,
+    currentColor = null
   }) {
   
     useEffect(() => {
@@ -19,11 +23,18 @@ export default function PlayerCard({
     const isOccupied = currentSeat.playerName !== "empty";
     const occupantName = currentSeat.playerName;
     const isMyTurn = currentTurn === occupantName;
-    const isThisPlayerSeat = currentSeat.playerName?.toLowerCase() === thisPlayer?.toLowerCase();
+    const isThisPlayerSeat = currentSeat.playerName === thisPlayer;
     
     // Check if player is already sitting somewhere
-    const playerAlreadySeated = seats.some(seat => seat.playerName?.toLowerCase() === thisPlayer?.toLowerCase());
+    const playerAlreadySeated = seats.some(seat => seat.playerName === thisPlayer);
   
+    // Helper function to display player names in title case
+    const toTitleCase = (name) => {
+      if (!name || name === "empty") return name;
+      return name.charAt(0).toUpperCase() + name.slice(1).toLowerCase();
+    };
+
+
     function sitSeat() {
       // Only allow sitting if seat is empty AND player isn't already seated
       if (!isOccupied && !playerAlreadySeated) {
@@ -105,7 +116,7 @@ export default function PlayerCard({
     return (
       <div 
         className={`
-          rounded-lg border transition-all duration-300 relative p-[calc(12px*var(--ui-scale))] mb-[calc(12px*var(--ui-scale))]
+          rounded-lg border transition-all duration-300 relative p-[calc(12px*var(--ui-scale))] mb-[calc(12px*var(--ui-scale))] border-l-4
           ${isMyTurn 
             ? 'bg-emerald-500/10 border-emerald-500/30 shadow-lg shadow-emerald-500/20' 
             : isThisPlayerSeat 
@@ -113,6 +124,9 @@ export default function PlayerCard({
               : 'bg-white/5 border-white/10'
           }
         `}
+        style={{
+          borderLeftColor: `var(--seat-color-${seatId})`
+        }}
       >
         {/* Turn Pulse Animation */}
         {isMyTurn && (
@@ -126,7 +140,7 @@ export default function PlayerCard({
           <div 
             className="font-semibold text-blue-400 text-[calc(16px*var(--ui-scale))]"
           >
-            {occupantName}
+            {toTitleCase(occupantName)}
           </div>
           <div className="flex items-center gap-[calc(8px*var(--ui-scale))]">
             {isMyTurn && (
@@ -136,6 +150,19 @@ export default function PlayerCard({
                 🎯 Active
               </div>
             )}
+            
+            {/* Color Picker - Only show for the player's own seat */}
+            {isThisPlayerSeat && onColorChange && currentColor && (
+              <div className="relative">
+                <ColorPicker
+                  currentColor={currentColor}
+                  onColorChange={onColorChange}
+                  playerName={occupantName}
+                  seatIndex={seatId}
+                />
+              </div>
+            )}
+            
             {/* Exit Button - Repositioned to header */}
             {isThisPlayerSeat && (
               <button 

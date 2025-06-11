@@ -86,6 +86,8 @@ MONGO_INITDB_DATABASE=rollplay
 - **Frontend Hook**: `useWebSocket.js` manages connection lifecycle and event handling
 
 ## Key Development Patterns
+### Styling
+- Always use tailwind css styles where possible
 
 ### Adding New Game Features
 1. Define WebSocket event type in `api/app.py` ConnectionManager

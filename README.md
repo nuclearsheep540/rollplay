@@ -75,8 +75,9 @@ Connect to your instance using its Public DNS:
  ec2-18-200-239-2.eu-west-1.compute.amazonaws.com
 
 Example:
+cd into .ssh
 
- ssh -i "ec2-key.pem" ubuntu@ec2-18-200-239-2.eu-west-1.compute.amazonaws.com
+ssh -i "new-ec2-key.pem" ubuntu@ec2-108-129-134-117.eu-west-1.compute.amazonaws.com 
 
  ubuntu@ec2-34.243.218.196.eu-west-1.compute.amazonaws.com
 
@@ -119,4 +120,3 @@ git clone git@github.com:nuclearsheep540/rollplay.git
 
 sudo groupadd docker
 sudo usermod -aG docker $USER
-### REBOOT

@@ -1,23 +1,16 @@
 'use client'
 
 import { useEffect, useRef } from 'react'
-
-export default function AdventureLog({ rollLog, gameSeats }) {
+export default function AdventureLog({ rollLog, playerSeatMap }) {
   const logRef = useRef(null);
 
-  // Auto-scroll log to TOP when new entries are added (newest first)
+  // Auto-scroll to top to show newest messages (with flex-col-reverse)
   useEffect(() => {
     if (logRef.current) {
-      logRef.current.scrollTop = 0; // Scroll to top for newest messages
+      logRef.current.scrollTop = 0; // Scroll to top to show newest messages
     }
   }, [rollLog]);
 
-  // Helper function to get seat color for a player
-  const getPlayerSeatColor = (playerName) => {
-    const seatIndex = gameSeats.findIndex(seat => seat.playerName === playerName);
-    const colors = ["#3b82f6", "#ef4444", "#10b981", "#f59e0b", "#8b5cf6", "#06b6d4"];
-    return colors[seatIndex % colors.length] || "#3b82f6";
-  };
 
   // Helper function to format player name in title case
   const toTitleCase = (name) => {
@@ -27,31 +20,49 @@ export default function AdventureLog({ rollLog, gameSeats }) {
 
   // Helper function to group consecutive player messages
   const groupMessages = (messages) => {
-    const reversedMessages = [...messages].reverse(); // Work with newest first
     const groups = [];
+    const reversedMessages = [...messages].reverse(); // Work with newest first
     let currentGroup = null;
 
     reversedMessages.forEach((entry, index) => {
-      const isPlayerMessage = (entry.type === "user" || entry.type === "dice" || entry.type === "player-roll") && entry.player_name;
+      const hasPlayerName = entry.player_name && entry.player_name !== "";
+      const isPlayerMessage = (entry.type === "user" || entry.type === "dice" || entry.type === "player-roll") && hasPlayerName;
       const isSystemMessage = entry.type === "system";
+      const isDungeonMasterMessage = entry.type === "dungeon-master";
 
       if (isPlayerMessage) {
-        // Check if this continues the current player group
+        const playerData = playerSeatMap[entry.player_name];
+        const playerIsInParty = !!playerData;
+        const messageType = playerIsInParty ? "party-member" : "npc";
+        
+        // Check if this continues the current group
         if (currentGroup && 
-            currentGroup.type === "player" && 
+            currentGroup.type === messageType && 
             currentGroup.playerName === entry.player_name) {
           // Add to existing group
           currentGroup.messages.push(entry);
         } else {
-          // Start new player group
+          // Start new group
           if (currentGroup) groups.push(currentGroup);
           currentGroup = {
-            type: "player",
+            type: messageType,
             playerName: entry.player_name,
             messages: [entry],
-            color: getPlayerSeatColor(entry.player_name)
+            seatColor: playerData?.seatColor || null,
+            seatIndex: playerData?.seatIndex || 0,
+            isPartyMember: playerIsInParty
           };
         }
+      } else if (isDungeonMasterMessage) {
+        // Dungeon Master messages are always individual and special
+        if (currentGroup) {
+          groups.push(currentGroup);
+          currentGroup = null;
+        }
+        groups.push({
+          type: "dungeon-master",
+          messages: [entry]
+        });
       } else if (isSystemMessage) {
         // System messages are always individual
         if (currentGroup) {
@@ -99,6 +110,9 @@ export default function AdventureLog({ rollLog, gameSeats }) {
       case "system":
         return message;
         
+      case "dungeon-master":
+        return message;
+        
       default:
         return message;
     }
@@ -115,6 +129,8 @@ export default function AdventureLog({ rollLog, gameSeats }) {
         return "💬";
       case "system":
         return "";
+      case "dungeon-master":
+        return "🔮";
       default:
         return "";
     }
@@ -128,25 +144,26 @@ export default function AdventureLog({ rollLog, gameSeats }) {
         📜 Adventure Log
         <span style={{ fontSize: '10px', color: '#6b7280' }}>(Live)</span>
       </div>
-      <div className="log-entries" ref={logRef}>
+      <div className="log-entries flex flex-col-reverse" ref={logRef}>
         {messageGroups.map((group, groupIndex) => {
-          if (group.type === "player") {
-            // Player message group with visual wrapper
+          if (group.type === "party-member") {
+            // Party member message group with seat color
             return (
               <div
                 key={`group-${groupIndex}`}
-                className="player-message-group bg-slate-900/60 rounded-lg p-[calc(16px*var(--ui-scale))] mb-[calc(12px*var(--ui-scale))] shadow-lg backdrop-blur-sm border border-slate-400/10"
+                className="party-message-group bg-slate-900/60 rounded-lg p-[calc(16px*var(--ui-scale))] mb-[calc(12px*var(--ui-scale))] shadow-lg backdrop-blur-sm border border-slate-400/10 border-l-4"
                 style={{
-                  borderLeft: `4px solid ${group.color}`
+                  borderLeftColor: `var(--seat-color-${group.seatIndex || 0})`
                 }}
               >
-                {/* Player name header */}
+                {/* Party member name header */}
                 <div 
-                  className="player-name-header text-[calc(14px*var(--ui-scale))] font-bold mb-[calc(8px*var(--ui-scale))] drop-shadow-sm"
+                  className="player-name-header text-[calc(14px*var(--ui-scale))] font-bold mb-[calc(8px*var(--ui-scale))] drop-shadow-sm flex items-center gap-2"
                   style={{
-                    color: group.color
+                    color: `var(--seat-color-${group.seatIndex || 0})`
                   }}
                 >
+                  <span>👥</span>
                   {toTitleCase(group.playerName)}
                 </div>
                 
@@ -171,6 +188,73 @@ export default function AdventureLog({ rollLog, gameSeats }) {
                     </div>
                   </div>
                 ))}
+              </div>
+            );
+          } else if (group.type === "npc") {
+            // NPC message group with different styling
+            return (
+              <div
+                key={`group-${groupIndex}`}
+                className="npc-message-group bg-amber-900/20 rounded-lg p-[calc(16px*var(--ui-scale))] mb-[calc(12px*var(--ui-scale))] shadow-md backdrop-blur-sm border border-amber-500/20"
+                style={{
+                  borderLeft: `4px solid #f59e0b`
+                }}
+              >
+                {/* NPC name header */}
+                <div 
+                  className="npc-name-header text-[calc(14px*var(--ui-scale))] font-bold mb-[calc(8px*var(--ui-scale))] drop-shadow-sm flex items-center gap-2 text-amber-400"
+                >
+                  <span>🗨️</span>
+                  {toTitleCase(group.playerName)}
+                </div>
+                
+                {/* Messages in this group */}
+                {group.messages.map((entry, messageIndex) => (
+                  <div
+                    key={entry.id}
+                    className={`grouped-message flex items-start gap-[calc(8px*var(--ui-scale))] ${
+                      messageIndex < group.messages.length - 1 ? 'mb-[calc(8px*var(--ui-scale))]' : ''
+                    }`}
+                  >
+                    <span className="text-[calc(14px*var(--ui-scale))] opacity-80">
+                      {getMessageIcon(entry)}
+                    </span>
+                    <div className="flex-1">
+                      <div className="text-amber-100 text-[calc(14px*var(--ui-scale))] leading-normal break-words">
+                        {formatMessageContent(entry)}
+                      </div>
+                    </div>
+                    <div className="text-amber-200/40 text-[calc(10px*var(--ui-scale))] font-mono flex-shrink-0">
+                      {entry.timestamp}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            );
+          } else if (group.type === "dungeon-master") {
+            // Special Dungeon Master message - should stand out!
+            const entry = group.messages[0];
+            return (
+              <div
+                key={entry.id}
+                className="dm-message bg-gradient-to-r from-purple-900/40 to-indigo-900/40 rounded-lg p-[calc(16px*var(--ui-scale))] mb-[calc(12px*var(--ui-scale))] border-2 border-purple-500/50 shadow-lg shadow-purple-500/20 backdrop-blur-sm"
+              >
+                {/* DM Header with special styling */}
+                <div className="dm-header flex items-center gap-[calc(8px*var(--ui-scale))] mb-[calc(8px*var(--ui-scale))]">
+                  <span className="text-[calc(18px*var(--ui-scale))] drop-shadow-lg">🔮</span>
+                  <span className="text-purple-300 font-bold text-[calc(14px*var(--ui-scale))] drop-shadow-sm uppercase tracking-wider">
+                    Dungeon Master
+                  </span>
+                  <div className="flex-1 h-px bg-gradient-to-r from-purple-500/50 to-transparent"></div>
+                  <span className="text-purple-200/60 text-[calc(10px*var(--ui-scale))] font-mono">
+                    {entry.timestamp}
+                  </span>
+                </div>
+                
+                {/* DM Message Content */}
+                <div className="dm-content text-purple-100 text-[calc(14px*var(--ui-scale))] leading-relaxed font-medium">
+                  {formatMessageContent(entry)}
+                </div>
               </div>
             );
           } else if (group.type === "system") {

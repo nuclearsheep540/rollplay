@@ -488,7 +488,7 @@ body {
   flex: 1;
   overflow-y: auto;
   display: flex;
-  flex-direction: column;
+  flex-direction: column-reverse;
   gap: calc(8px * var(--ui-scale));
   padding-right: calc(8px * var(--ui-scale));
 }
