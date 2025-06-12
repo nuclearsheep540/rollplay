@@ -570,6 +570,9 @@ async def websocket_endpoint(
                     print("⚡ No players provided for initiative prompt")
                     continue
                 
+                # Generate unique initiative prompt ID for potential removal
+                initiative_prompt_id = f"initiative_all_{int(time.time() * 1000)}"
+                
                 # Log ONE adventure log entry for the collective action
                 log_message = format_message(MESSAGE_TEMPLATES["initiative_prompt"], players=", ".join(players_to_prompt))
                 
@@ -577,7 +580,8 @@ async def websocket_endpoint(
                     room_id=client_id,
                     message=log_message,
                     log_type=LogType.DUNGEON_MASTER,
-                    player_name=prompted_by
+                    player_name=prompted_by,
+                    prompt_id=initiative_prompt_id
                 )
                 
                 print(f"⚡ {prompted_by} prompted all players for initiative: {', '.join(players_to_prompt)}")
@@ -589,7 +593,8 @@ async def websocket_endpoint(
                         "players_to_prompt": players_to_prompt,
                         "roll_type": "Initiative",
                         "prompted_by": prompted_by,
-                        "prompt_id": f"initiative_all_{int(time.time() * 1000)}",
+                        "prompt_id": initiative_prompt_id,  # Use the same ID for tracking
+                        "initiative_prompt_id": initiative_prompt_id,  # Add specific field for frontend tracking
                         "log_message": log_message  # Include the formatted log message
                     }
                 }
@@ -599,6 +604,7 @@ async def websocket_endpoint(
                 cleared_by = event_data.get("cleared_by", player_name)
                 clear_all = event_data.get("clear_all", False)  # New: Support clearing all prompts
                 prompt_id = event_data.get("prompt_id")  # New: Support clearing specific prompt by ID
+                initiative_prompt_id = event_data.get("initiative_prompt_id")  # New: Initiative prompt ID for clear all
                 
                 # Remove adventure log entries for cancelled prompts
                 log_removal_message = None
@@ -619,6 +625,23 @@ async def websocket_endpoint(
                             }
                     except Exception as e:
                         print(f"❌ Failed to remove adventure log for cancelled prompt {prompt_id}: {e}")
+                elif clear_all and initiative_prompt_id:
+                    # Remove initiative prompt log entry when clearing all
+                    try:
+                        deleted_count = adventure_log_service.remove_log_by_prompt_id(client_id, initiative_prompt_id)
+                        if deleted_count > 0:
+                            print(f"🗑️ Removed initiative prompt log entry {initiative_prompt_id}")
+                            
+                            # Prepare log removal message
+                            log_removal_message = {
+                                "event_type": "adventure_log_removed",
+                                "data": {
+                                    "prompt_id": initiative_prompt_id,
+                                    "removed_by": cleared_by
+                                }
+                            }
+                    except Exception as e:
+                        print(f"❌ Failed to remove initiative prompt log {initiative_prompt_id}: {e}")
                 
                 if clear_all:
                     print(f"🎲 {cleared_by} cleared all dice prompts")

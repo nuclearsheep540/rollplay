@@ -190,15 +190,18 @@ export const handleDicePrompt = (data, { setActivePrompts, setIsDicePromptActive
   setIsDicePromptActive(true);
 };
 
-export const handleInitiativePromptAll = (data, { setActivePrompts, addToLog, setIsDicePromptActive, thisPlayer }) => {
+export const handleInitiativePromptAll = (data, { setActivePrompts, addToLog, setIsDicePromptActive, setCurrentInitiativePromptId, thisPlayer }) => {
   console.log("received initiative prompt all:", data);
-  const { players_to_prompt, roll_type, prompted_by, prompt_id, log_message } = data;
+  const { players_to_prompt, roll_type, prompted_by, prompt_id, initiative_prompt_id, log_message } = data;
   
   console.log("🎲 Initiative prompt log_message:", log_message);
   
-  // Add the log message to Adventure Log (only once, regardless of which player this client is)
+  // Store the initiative prompt ID for potential removal on "clear all"
+  setCurrentInitiativePromptId(initiative_prompt_id);
+  
+  // Add the log message to Adventure Log with initiative_prompt_id for potential removal
   if (log_message) {
-    addToLog(log_message, 'dungeon-master');
+    addToLog(log_message, 'dungeon-master', prompted_by, initiative_prompt_id);
   }
   
   // For DMs and all players, track ALL prompts created by this initiative call
@@ -324,27 +327,34 @@ export const createSendFunctions = (webSocket, isConnected, roomId, playerName) 
     }));
   };
 
-  const sendDicePromptClear = (promptId = null, clearAll = false) => {
+  const sendDicePromptClear = (promptId = null, clearAll = false, initiativePromptId = null) => {
     if (!webSocket || !isConnected) {
       console.log("❌ Cannot clear dice prompt - WebSocket not connected");
       return;
     }
     
     if (clearAll) {
-      console.log("🎲 Clearing all dice prompts");
+      console.log("🎲 Clearing all dice prompts", initiativePromptId ? `(including initiative prompt: ${initiativePromptId})` : '');
     } else if (promptId) {
       console.log(`🎲 Clearing specific dice prompt: ${promptId}`);
     } else {
       console.log("🎲 Clearing dice prompts");
     }
     
+    const clearData = {
+      "cleared_by": playerName,
+      "prompt_id": promptId,
+      "clear_all": clearAll
+    };
+    
+    // Include initiative prompt ID when clearing all
+    if (clearAll && initiativePromptId) {
+      clearData.initiative_prompt_id = initiativePromptId;
+    }
+    
     webSocket.send(JSON.stringify({
       "event_type": "dice_prompt_clear",
-      "data": {
-        "cleared_by": playerName,
-        "prompt_id": promptId,
-        "clear_all": clearAll
-      }
+      "data": clearData
     }));
   };
 

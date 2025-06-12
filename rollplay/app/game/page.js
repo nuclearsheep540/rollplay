@@ -69,6 +69,7 @@ function GameContent() {
   // UPDATED: Multiple dice roll prompts support
   const [activePrompts, setActivePrompts] = useState([]); // Array of {id, player, rollType, promptedBy}
   const [isDicePromptActive, setIsDicePromptActive] = useState(false); // Is any prompt active?
+  const [currentInitiativePromptId, setCurrentInitiativePromptId] = useState(null); // Track initiative prompt ID for removal
 
   // Helper function to get character data
   const getCharacterData = (playerName) => {
@@ -391,6 +392,7 @@ function GameContent() {
     setPlayerSeatMap,
     setLobbyUsers,
     setDisconnectTimeouts,
+    setCurrentInitiativePromptId,
     
     // Current state values
     chatLog,
@@ -398,6 +400,7 @@ function GameContent() {
     thisPlayer,
     lobbyUsers,
     disconnectTimeouts,
+    currentInitiativePromptId,
     
     // Helper functions
     addToLog,
@@ -475,11 +478,12 @@ function GameContent() {
 
   // UPDATED: Clear dice prompt (can clear specific prompt or all prompts)
   const clearDicePrompt = (promptId = null, clearAll = false) => {
-    sendDicePromptClear(promptId, clearAll);
+    sendDicePromptClear(promptId, clearAll, currentInitiativePromptId);
     
     if (clearAll) {
       setActivePrompts([]);
       setIsDicePromptActive(false);
+      setCurrentInitiativePromptId(null); // Clear the tracked initiative prompt ID
     } else if (promptId) {
       setActivePrompts(prev => {
         const filtered = prev.filter(prompt => prompt.id !== promptId);
