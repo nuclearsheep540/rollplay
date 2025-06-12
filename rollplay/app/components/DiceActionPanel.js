@@ -18,8 +18,11 @@ export default function DiceActionPanel({
   const [rollBonus, setRollBonus] = useState('');
   
   // New advanced dice system state
-  const [dicePool, setDicePool] = useState([{ type: 'D20', count: 1, advantage: 'normal' }]);
+  const [dicePool, setDicePool] = useState([{ type: 'D20', count: 1 }]);
   const [useAdvancedMode, setUseAdvancedMode] = useState(false);
+  
+  // Advantage/Disadvantage state (separate from dice pool)
+  const [advantageMode, setAdvantageMode] = useState('normal'); // 'normal', 'advantage', 'disadvantage'
   
   // UPDATED: Check if player should see dice interface
   const isMyTurn = currentTurn === thisPlayer && combatActive;
@@ -37,7 +40,7 @@ export default function DiceActionPanel({
   
   // Helper functions for dice pool management
   const addDiceToPool = (diceType) => {
-    setDicePool(prev => [...prev, { type: diceType, count: 1, advantage: 'normal' }]);
+    setDicePool(prev => [...prev, { type: diceType, count: 1 }]);
   };
   
   const removeDiceFromPool = (index) => {
@@ -65,11 +68,13 @@ export default function DiceActionPanel({
       dicePool: dicePool,
       bonus: rollBonus,
       rollFor: rollType || 'Standard Roll',
+      advantageMode: advantageMode,
       isAdvanced: true
     } : {
       dice: selectedDice,
       bonus: rollBonus,
       rollFor: rollType || 'Standard Roll',
+      advantageMode: advantageMode,
       isAdvanced: false
     };
     
@@ -80,8 +85,9 @@ export default function DiceActionPanel({
     // Reset states
     setSelectedDice('D20');
     setRollBonus('');
-    setDicePool([{ type: 'D20', count: 1, advantage: 'normal' }]);
+    setDicePool([{ type: 'D20', count: 1 }]);
     setUseAdvancedMode(false);
+    setAdvantageMode('normal');
   };
   
   // Handle end turn
@@ -267,7 +273,7 @@ export default function DiceActionPanel({
                   <div className="flex justify-between items-center mb-3">
                     <h4 className="text-white text-base">🎲 Dice Pool</h4>
                     <button
-                      onClick={() => setDicePool([{ type: 'D20', count: 1, advantage: 'normal' }])}
+                      onClick={() => setDicePool([{ type: 'D20', count: 1 }])}
                       className="text-xs text-slate-400 hover:text-slate-300"
                     >
                       Reset
@@ -302,18 +308,6 @@ export default function DiceActionPanel({
                           <option value="D100">D100</option>
                         </select>
                         
-                        {/* Advantage/Disadvantage for D20s */}
-                        {die.type === 'D20' && (
-                          <select
-                            value={die.advantage}
-                            onChange={(e) => updateDiceInPool(index, 'advantage', e.target.value)}
-                            className="bg-slate-800 border border-slate-600 rounded px-2 py-1 text-white text-sm"
-                          >
-                            <option value="normal">Normal</option>
-                            <option value="advantage">Advantage</option>
-                            <option value="disadvantage">Disadvantage</option>
-                          </select>
-                        )}
                         
                         {/* Remove Button */}
                         {dicePool.length > 1 && (
@@ -393,6 +387,35 @@ export default function DiceActionPanel({
               </div>
             )}
 
+            {/* Advantage/Disadvantage Buttons - Universal for D20 rolls */}
+            <div className="p-4 rounded-lg mb-6 bg-slate-600/50 border border-slate-500">
+              <h4 className="text-base mb-3 text-white text-center">
+                ⚖️ D20 Roll Modifier
+              </h4>
+              <div className="flex gap-4 justify-center">
+                <button
+                  className={`px-6 py-3 rounded-lg text-base font-medium transition-all border-2 flex-1 max-w-[200px] ${
+                    advantageMode === 'advantage'
+                      ? 'bg-green-500/30 border-green-500/60 text-green-300 shadow-lg shadow-green-500/20'
+                      : 'bg-slate-700/50 border-slate-600 text-slate-300 hover:bg-slate-600/50 hover:border-slate-500'
+                  }`}
+                  onClick={() => setAdvantageMode(advantageMode === 'advantage' ? 'normal' : 'advantage')}
+                >
+                  📈 Advantage
+                </button>
+                <button
+                  className={`px-6 py-3 rounded-lg text-base font-medium transition-all border-2 flex-1 max-w-[200px] ${
+                    advantageMode === 'disadvantage'
+                      ? 'bg-red-500/30 border-red-500/60 text-red-300 shadow-lg shadow-red-500/20'
+                      : 'bg-slate-700/50 border-slate-600 text-slate-300 hover:bg-slate-600/50 hover:border-slate-500'
+                  }`}
+                  onClick={() => setAdvantageMode(advantageMode === 'disadvantage' ? 'normal' : 'disadvantage')}
+                >
+                  📉 Disadvantage
+                </button>
+              </div>
+            </div>
+
             {/* Bonus Input */}
             <div className="p-4 rounded-lg mb-6 bg-slate-600/50 border border-slate-500">
               <h4 className="text-base mb-3 text-white">
@@ -408,17 +431,18 @@ export default function DiceActionPanel({
             </div>
 
             {/* Roll Preview */}
-            {useAdvancedMode && (
-              <div className="mb-4 p-3 bg-slate-700/30 rounded-lg border border-slate-600">
-                <div className="text-sm text-slate-300 text-center">
-                  <strong>Roll Preview:</strong> {dicePool.map((die, index) => {
+            <div className="mb-4 p-3 bg-slate-700/30 rounded-lg border border-slate-600">
+              <div className="text-sm text-slate-300 text-center">
+                <strong>Roll Preview:</strong> {useAdvancedMode ? (
+                  dicePool.map((die, index) => {
                     const count = die.count > 1 ? `${die.count}` : '';
-                    const advantage = die.advantage !== 'normal' ? ` (${die.advantage})` : '';
-                    return `${count}${die.type}${advantage}`;
-                  }).join(' + ')}{rollBonus ? ` ${rollBonus}` : ''}
-                </div>
+                    return `${count}${die.type}`;
+                  }).join(' + ')
+                ) : (
+                  selectedDice
+                )}{advantageMode !== 'normal' ? ` (${advantageMode})` : ''}{rollBonus ? ` ${rollBonus}` : ''}
               </div>
-            )}
+            </div>
 
             {/* Roll Button */}
             <div className="flex gap-4 justify-center">

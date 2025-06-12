@@ -587,34 +587,40 @@ function GameContent() {
     // Extract rollFor at the top level so it's available throughout the function
     const rollFor = rollData.rollFor;
     
+    const { advantageMode, bonus } = rollData;
+    const bonusValue = bonus ? parseInt(bonus.replace(/[^-\d]/g, '')) || 0 : 0;
+    
     if (rollData.isAdvanced) {
       // Advanced mode with dice pool
-      const { dicePool, bonus } = rollData;
-      const bonusValue = bonus ? parseInt(bonus.replace(/[^-\d]/g, '')) || 0 : 0;
+      const { dicePool } = rollData;
       
       let totalResult = 0;
       let allRolls = [];
       let notation = [];
+      
+      // Check if we have D20s that need advantage/disadvantage
+      const hasD20 = dicePool.some(die => die.type === 'D20');
+      const useAdvantage = hasD20 && advantageMode !== 'normal';
       
       // Process each die in the pool
       dicePool.forEach(die => {
         const diceValue = parseInt(die.type.substring(1)); // Extract number from "D20"
         
         for (let i = 0; i < die.count; i++) {
-          if (die.type === 'D20' && die.advantage !== 'normal') {
+          if (die.type === 'D20' && useAdvantage) {
             // Advantage/Disadvantage: roll 2d20, apply modifier to each, take higher/lower
             const roll1 = Math.floor(Math.random() * diceValue) + 1;
             const roll2 = Math.floor(Math.random() * diceValue) + 1;
             const result1 = roll1 + bonusValue;
             const result2 = roll2 + bonusValue;
             
-            const finalResult = die.advantage === 'advantage' 
+            const finalResult = advantageMode === 'advantage' 
               ? Math.max(result1, result2)
               : Math.min(result1, result2);
             
             totalResult = finalResult; // For advantage/disadvantage, this is the final total
             allRolls.push(`[${roll1}, ${roll2}] = ${finalResult}`);
-            notation.push(`${die.type} (${die.advantage})`);
+            notation.push(`${die.type} (${advantageMode})`);
           } else {
             // Normal die roll
             const roll = Math.floor(Math.random() * diceValue) + 1;
@@ -626,15 +632,14 @@ function GameContent() {
       });
       
       // For non-advantage rolls, add bonus once to total
-      const hasAdvantage = dicePool.some(die => die.type === 'D20' && die.advantage !== 'normal');
-      if (!hasAdvantage) {
+      if (!useAdvantage) {
         totalResult += bonusValue;
       }
       
       // Format message
       const bonusText = bonusValue !== 0 ? ` ${bonus}` : '';
       const diceNotation = notation.join(' + ') + bonusText;
-      const rollDetails = hasAdvantage ? allRolls.join(', ') : `[${allRolls.join(', ')}]`;
+      const rollDetails = useAdvantage ? allRolls.join(', ') : `[${allRolls.join(', ')}]`;
       
       let formattedMessage;
       if (rollFor && rollFor !== "Standard Roll") {
@@ -645,25 +650,48 @@ function GameContent() {
       
       sendDiceRoll(playerName, formattedMessage, rollFor);
     } else {
-      // Simple mode (original logic)
-      const { dice, bonus } = rollData;
-      
-      // Calculate result (this should be done server-side in production)
+      // Simple mode
+      const { dice } = rollData;
       const diceValue = parseInt(dice.substring(1)); // Extract number from "D20"
-      const baseRoll = Math.floor(Math.random() * diceValue) + 1;
-      const bonusValue = bonus ? parseInt(bonus.replace(/[^-\d]/g, '')) || 0 : 0;
-      const totalResult = baseRoll + bonusValue;
       
-      // Format complete message on frontend
-      const bonusText = bonusValue !== 0 ? ` ${bonus}` : '';
-      const diceNotation = `${dice}${bonusText}`;
+      // Check if this is a D20 roll with advantage/disadvantage
+      const isD20 = dice === 'D20';
+      const useAdvantage = isD20 && advantageMode !== 'normal';
+      
+      let totalResult;
+      let rollDetails;
+      let diceNotation;
+      
+      if (useAdvantage) {
+        // Advantage/Disadvantage for simple mode
+        const roll1 = Math.floor(Math.random() * diceValue) + 1;
+        const roll2 = Math.floor(Math.random() * diceValue) + 1;
+        const result1 = roll1 + bonusValue;
+        const result2 = roll2 + bonusValue;
+        
+        totalResult = advantageMode === 'advantage' 
+          ? Math.max(result1, result2)
+          : Math.min(result1, result2);
+        
+        rollDetails = `[${roll1}, ${roll2}] = ${totalResult}`;
+        const bonusText = bonusValue !== 0 ? ` ${bonus}` : '';
+        diceNotation = `${dice} (${advantageMode})${bonusText}`;
+      } else {
+        // Normal roll
+        const baseRoll = Math.floor(Math.random() * diceValue) + 1;
+        totalResult = baseRoll + bonusValue;
+        rollDetails = totalResult.toString();
+        
+        const bonusText = bonusValue !== 0 ? ` ${bonus}` : '';
+        diceNotation = `${dice}${bonusText}`;
+      }
       
       // Create pre-formatted message 
       let formattedMessage;
       if (rollFor && rollFor !== "Standard Roll") {
-        formattedMessage = ` [${rollFor}]: ${diceNotation}: ${totalResult}`;
+        formattedMessage = ` [${rollFor}]: ${diceNotation}: ${rollDetails}`;
       } else {
-        formattedMessage = `: ${diceNotation}: ${totalResult}`;
+        formattedMessage = `: ${diceNotation}: ${rollDetails}`;
       }
       
       // Send pre-formatted message to backend
