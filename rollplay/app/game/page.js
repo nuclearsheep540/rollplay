@@ -582,6 +582,21 @@ function GameContent() {
     return <div>Loading...</div>;
   }
 
+  // Helper to format dice notation properly
+  const formatDiceNotation = (primaryDice, secondDice) => {
+    if (!secondDice) {
+      return primaryDice;
+    }
+    
+    // If both dice are the same type, use multiplier notation (e.g., "2d20")
+    if (primaryDice === secondDice) {
+      return `2${primaryDice.toLowerCase()}`;
+    }
+    
+    // If different dice types, use addition notation (e.g., "d20 + d6")
+    return `${primaryDice.toLowerCase()} + ${secondDice.toLowerCase()}`;
+  };
+
   // UPDATED: Handle dice rolls from PlayerCard components or DiceActionPanel
   const handlePlayerDiceRoll = (playerName, rollData) => {
     // Extract rollFor at the top level so it's available throughout the function
@@ -646,14 +661,28 @@ function GameContent() {
     
     // Format message
     const bonusText = bonusValue !== 0 ? ` ${bonus}` : '';
-    const diceNotation = notation.join(' + ') + bonusText;
-    const rollDetails = useAdvantage ? allRolls.join(', ') : `[${allRolls.join(', ')}]${bonusText ? ` ${bonusText}` : ''} = ${totalResult}`;
+    
+    // Use proper dice notation formatting
+    let diceNotation;
+    if (useAdvantage) {
+      // For advantage/disadvantage, show as "d20 (advantage)" + any second dice
+      diceNotation = `${dice.toLowerCase()} (${advantageMode})`;
+      if (secondDice) {
+        diceNotation += ` + ${secondDice.toLowerCase()}`;
+      }
+      diceNotation += bonusText;
+    } else {
+      // For normal rolls, use the formatDiceNotation helper
+      diceNotation = formatDiceNotation(dice, secondDice) + bonusText;
+    }
+    // Format roll details - just show the final result
+    const rollDetails = useAdvantage ? allRolls.join(', ') : `${totalResult}`;
     
     let formattedMessage;
     if (rollFor && rollFor !== "Standard Roll") {
-      formattedMessage = ` [${rollFor}]: ${diceNotation}: ${rollDetails}`;
+      formattedMessage = ` [${rollFor}]: ${diceNotation}:  ${rollDetails}`;
     } else {
-      formattedMessage = `: ${diceNotation}: ${rollDetails}`;
+      formattedMessage = `: ${diceNotation}:  ${rollDetails}`;
     }
     
     // Send pre-formatted message to backend

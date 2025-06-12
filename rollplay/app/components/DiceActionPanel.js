@@ -17,6 +17,28 @@ export default function DiceActionPanel({
   const [selectedDice, setSelectedDice] = useState('D20'); // Keep for backwards compatibility
   const [rollBonus, setRollBonus] = useState('');
   
+  // Helper to format bonus input
+  const formatBonusInput = (value) => {
+    if (!value || value === '') return '';
+    
+    // Remove any spaces
+    const trimmed = value.trim();
+    if (trimmed === '') return '';
+    
+    // If it's just a number (positive), add the + sign
+    if (/^\d+$/.test(trimmed)) {
+      return `+${trimmed}`;
+    }
+    
+    // If it already starts with + or -, return as is
+    if (/^[+-]\d+$/.test(trimmed)) {
+      return trimmed;
+    }
+    
+    // For any other format, return as entered
+    return trimmed;
+  };
+  
   // Simplified dice system - just primary and optional secondary die
   const [secondDice, setSecondDice] = useState(''); // Empty string means no second die
   const [showSecondDice, setShowSecondDice] = useState(false); // Collapsible second dice section
@@ -391,9 +413,10 @@ export default function DiceActionPanel({
                 </h4>
                 <input
                   type="text"
-                  placeholder="e.g., +3, -1, +5"
+                  placeholder="e.g., 3, -1, +5"
                   value={rollBonus}
                   onChange={(e) => setRollBonus(e.target.value)}
+                  onBlur={(e) => setRollBonus(formatBonusInput(e.target.value))}
                   className="py-2 px-3 rounded-md text-sm bg-slate-800 border border-slate-500 text-white flex-1"
                 />
               </div>
@@ -402,7 +425,7 @@ export default function DiceActionPanel({
             {/* Roll Preview */}
             <div className="mb-3 p-2 bg-slate-700/30 rounded-lg border border-slate-600">
               <div className="text-sm text-slate-300 text-center">
-                <strong>Roll Preview:</strong> {selectedDice}{secondDice ? ` + ${secondDice}` : ''}{advantageMode !== 'normal' ? ` (${advantageMode})` : ''}{rollBonus ? ` ${rollBonus}` : ''}
+                <strong>Roll Preview:</strong> {formatDiceNotation(selectedDice, secondDice)}{advantageMode !== 'normal' ? ` (${advantageMode})` : ''}{rollBonus ? ` ${rollBonus}` : ''}
               </div>
             </div>
 
@@ -412,7 +435,7 @@ export default function DiceActionPanel({
                 onClick={() => handleDiceRoll()}
                 className="bg-emerald-500/20 border-2 border-emerald-500/50 text-emerald-500 rounded-xl px-6 py-3 text-base font-bold cursor-pointer transition-all duration-200 hover:bg-emerald-500/30 hover:scale-105"
               >
-                🎲 Roll {selectedDice}{secondDice ? ` + ${secondDice}` : ''}{rollBonus ? ` ${rollBonus}` : ''}
+                🎲 Roll {formatDiceNotation(selectedDice, secondDice)}{rollBonus ? ` ${rollBonus}` : ''}
                 {myPrompts.length > 0 && (
                   <div className="text-xs text-emerald-400 mt-1">
                     {myPrompts.length === 1 
