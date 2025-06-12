@@ -281,23 +281,7 @@ export const handleAdventureLogRemoved = (data, { setRollLog }) => {
   const { prompt_id } = data;
   
   // Remove log entries that have the matching prompt_id
-  setRollLog(prev => {
-    console.log("🔍 Current rollLog before filter:", prev);
-    console.log("🔍 Looking for prompt_id to remove:", prompt_id);
-    
-    const filtered = prev.filter(entry => {
-      const shouldKeep = entry.prompt_id !== prompt_id;
-      if (!shouldKeep) {
-        console.log("🗑️ Found matching entry to remove:", entry);
-      }
-      return shouldKeep;
-    });
-    
-    console.log("🔍 RollLog after filter:", filtered);
-    console.log("🔍 Removed", prev.length - filtered.length, "entries");
-    
-    return filtered;
-  });
+  setRollLog(prev => prev.filter(entry => entry.prompt_id !== prompt_id));
   
   console.log(`🗑️ Removed adventure log entry with prompt_id: ${prompt_id}`);
 };

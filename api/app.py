@@ -600,6 +600,26 @@ async def websocket_endpoint(
                 clear_all = event_data.get("clear_all", False)  # New: Support clearing all prompts
                 prompt_id = event_data.get("prompt_id")  # New: Support clearing specific prompt by ID
                 
+                # Remove adventure log entries for cancelled prompts
+                log_removal_message = None
+                if prompt_id:
+                    # Remove specific prompt log entry
+                    try:
+                        deleted_count = adventure_log_service.remove_log_by_prompt_id(client_id, prompt_id)
+                        if deleted_count > 0:
+                            print(f"🗑️ Removed adventure log entry for cancelled prompt {prompt_id}")
+                            
+                            # Prepare log removal message
+                            log_removal_message = {
+                                "event_type": "adventure_log_removed",
+                                "data": {
+                                    "prompt_id": prompt_id,
+                                    "removed_by": cleared_by
+                                }
+                            }
+                    except Exception as e:
+                        print(f"❌ Failed to remove adventure log for cancelled prompt {prompt_id}: {e}")
+                
                 if clear_all:
                     print(f"🎲 {cleared_by} cleared all dice prompts")
                 elif prompt_id:
@@ -873,7 +893,7 @@ async def websocket_endpoint(
             # Broadcast the main message
             await manager.update_data(broadcast_message)
             
-            # Handle special case: auto-clear prompt after dice roll
+            # Handle special cases for adventure log removal
             if event_type == "dice_roll":
                 import asyncio
                 await asyncio.sleep(1)  # Small delay to ensure dice roll is processed first
@@ -885,6 +905,11 @@ async def websocket_endpoint(
                 # Then send prompt clear message
                 if clear_prompt_message:
                     await manager.update_data(clear_prompt_message)
+            
+            elif event_type == "dice_prompt_clear":
+                # Send log removal message for cancelled prompts (no delay needed)
+                if log_removal_message:
+                    await manager.update_data_for_room(client_id, log_removal_message)
             
     except WebSocketDisconnect:
         # Server-side disconnect handling with seat cleanup
