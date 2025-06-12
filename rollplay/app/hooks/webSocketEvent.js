@@ -160,9 +160,9 @@ export const handleDicePrompt = (data, { setActivePrompts, setIsDicePromptActive
   console.log("received dice prompt:", data);
   const { prompted_player, roll_type, prompted_by, prompt_id, log_message } = data;
   
-  // Add the log message to Adventure Log (only once, regardless of which player this client is)
+  // Add the log message to Adventure Log with prompt_id for later removal
   if (log_message) {
-    addToLog(log_message, 'dungeon-master');
+    addToLog(log_message, 'dungeon-master', prompted_by, prompt_id);
   }
   
   // Add to active prompts array
@@ -190,15 +190,18 @@ export const handleDicePrompt = (data, { setActivePrompts, setIsDicePromptActive
   setIsDicePromptActive(true);
 };
 
-export const handleInitiativePromptAll = (data, { setActivePrompts, addToLog, setIsDicePromptActive, thisPlayer }) => {
+export const handleInitiativePromptAll = (data, { setActivePrompts, addToLog, setIsDicePromptActive, setCurrentInitiativePromptId, thisPlayer }) => {
   console.log("received initiative prompt all:", data);
-  const { players_to_prompt, roll_type, prompted_by, prompt_id, log_message } = data;
+  const { players_to_prompt, roll_type, prompted_by, prompt_id, initiative_prompt_id, log_message } = data;
   
   console.log("🎲 Initiative prompt log_message:", log_message);
   
-  // Add the log message to Adventure Log (only once, regardless of which player this client is)
+  // Store the initiative prompt ID for potential removal on "clear all"
+  setCurrentInitiativePromptId(initiative_prompt_id);
+  
+  // Add the log message to Adventure Log with initiative_prompt_id for potential removal
   if (log_message) {
-    addToLog(log_message, 'dungeon-master');
+    addToLog(log_message, 'dungeon-master', prompted_by, initiative_prompt_id);
   }
   
   // For DMs and all players, track ALL prompts created by this initiative call
@@ -276,6 +279,16 @@ export const handleColorChange = (data, { gameContext }) => {
   console.log(`🎨 Updated ${player}'s color (seat ${seat_index}) to ${new_color}`);
 };
 
+export const handleAdventureLogRemoved = (data, { setRollLog }) => {
+  console.log("received adventure log removal:", data);
+  const { prompt_id } = data;
+  
+  // Remove log entries that have the matching prompt_id
+  setRollLog(prev => prev.filter(entry => entry.prompt_id !== prompt_id));
+  
+  console.log(`🗑️ Removed adventure log entry with prompt_id: ${prompt_id}`);
+};
+
 // WebSocket sending functions (outbound messages)
 export const createSendFunctions = (webSocket, isConnected, roomId, playerName) => {
   const sendDicePrompt = (promptedPlayer, rollType, promptId) => {
@@ -314,27 +327,34 @@ export const createSendFunctions = (webSocket, isConnected, roomId, playerName) 
     }));
   };
 
-  const sendDicePromptClear = (promptId = null, clearAll = false) => {
+  const sendDicePromptClear = (promptId = null, clearAll = false, initiativePromptId = null) => {
     if (!webSocket || !isConnected) {
       console.log("❌ Cannot clear dice prompt - WebSocket not connected");
       return;
     }
     
     if (clearAll) {
-      console.log("🎲 Clearing all dice prompts");
+      console.log("🎲 Clearing all dice prompts", initiativePromptId ? `(including initiative prompt: ${initiativePromptId})` : '');
     } else if (promptId) {
       console.log(`🎲 Clearing specific dice prompt: ${promptId}`);
     } else {
       console.log("🎲 Clearing dice prompts");
     }
     
+    const clearData = {
+      "cleared_by": playerName,
+      "prompt_id": promptId,
+      "clear_all": clearAll
+    };
+    
+    // Include initiative prompt ID when clearing all
+    if (clearAll && initiativePromptId) {
+      clearData.initiative_prompt_id = initiativePromptId;
+    }
+    
     webSocket.send(JSON.stringify({
       "event_type": "dice_prompt_clear",
-      "data": {
-        "cleared_by": playerName,
-        "prompt_id": promptId,
-        "clear_all": clearAll
-      }
+      "data": clearData
     }));
   };
 
@@ -487,18 +507,25 @@ export const createSendFunctions = (webSocket, isConnected, roomId, playerName) 
     }));
   };
 
-  const sendDiceRoll = (player, formattedMessage, rollFor = null) => {
+  const sendDiceRoll = (player, formattedMessage, rollFor = null, promptId = null) => {
     if (!webSocket || !isConnected) return;
 
-    console.log(`🎲 Sending dice roll: ${formattedMessage}`);
+    console.log(`🎲 Sending dice roll: ${formattedMessage}${promptId ? ` (prompt_id: ${promptId})` : ''}`);
+
+    const rollData = {
+      "player": player,
+      "message": formattedMessage,
+      "roll_for": rollFor
+    };
+    
+    // Include prompt_id if provided for adventure log cleanup
+    if (promptId) {
+      rollData.prompt_id = promptId;
+    }
 
     webSocket.send(JSON.stringify({
       "event_type": "dice_roll",
-      "data": {
-        "player": player,
-        "message": formattedMessage,
-        "roll_for": rollFor
-      }
+      "data": rollData
     }));
   };
 

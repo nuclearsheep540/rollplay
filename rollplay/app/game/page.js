@@ -69,6 +69,7 @@ function GameContent() {
   // UPDATED: Multiple dice roll prompts support
   const [activePrompts, setActivePrompts] = useState([]); // Array of {id, player, rollType, promptedBy}
   const [isDicePromptActive, setIsDicePromptActive] = useState(false); // Is any prompt active?
+  const [currentInitiativePromptId, setCurrentInitiativePromptId] = useState(null); // Track initiative prompt ID for removal
 
   // Helper function to get character data
   const getCharacterData = (playerName) => {
@@ -281,7 +282,8 @@ function GameContent() {
           message: log.message,
           type: log.type,
           timestamp: formatTimestamp(log.timestamp),
-          player_name: log.player_name
+          player_name: log.player_name,
+          prompt_id: log.prompt_id // Include prompt_id for removal matching
         }));
         
         // Replace your initial hardcoded logs with database logs
@@ -340,7 +342,7 @@ function GameContent() {
     }
   };
 
-  const addToLog = (message, type, playerName = null) => {
+  const addToLog = (message, type, playerName = null, promptId = null) => {
     const now = new Date();
     const timestamp = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
     
@@ -351,6 +353,11 @@ function GameContent() {
       timestamp,
       player_name: playerName
     };
+    
+    // Add prompt_id if provided
+    if (promptId) {
+      newEntry.prompt_id = promptId;
+    }
     
     setRollLog(prev => [...prev, newEntry]);
   };
@@ -385,6 +392,7 @@ function GameContent() {
     setPlayerSeatMap,
     setLobbyUsers,
     setDisconnectTimeouts,
+    setCurrentInitiativePromptId,
     
     // Current state values
     chatLog,
@@ -392,6 +400,7 @@ function GameContent() {
     thisPlayer,
     lobbyUsers,
     disconnectTimeouts,
+    currentInitiativePromptId,
     
     // Helper functions
     addToLog,
@@ -469,11 +478,12 @@ function GameContent() {
 
   // UPDATED: Clear dice prompt (can clear specific prompt or all prompts)
   const clearDicePrompt = (promptId = null, clearAll = false) => {
-    sendDicePromptClear(promptId, clearAll);
+    sendDicePromptClear(promptId, clearAll, currentInitiativePromptId);
     
     if (clearAll) {
       setActivePrompts([]);
       setIsDicePromptActive(false);
+      setCurrentInitiativePromptId(null); // Clear the tracked initiative prompt ID
     } else if (promptId) {
       setActivePrompts(prev => {
         const filtered = prev.filter(prompt => prompt.id !== promptId);
@@ -582,36 +592,124 @@ function GameContent() {
     return <div>Loading...</div>;
   }
 
-  // UPDATED: Handle dice rolls from PlayerCard components or DiceActionPanel
-  const handlePlayerDiceRoll = (playerName, rollData) => {
-    const { dice, bonus, rollFor } = rollData;
-    
-    // Calculate result (this should be done server-side in production)
-    const diceValue = parseInt(dice.substring(1)); // Extract number from "D20"
-    const baseRoll = Math.floor(Math.random() * diceValue) + 1;
-    const bonusValue = bonus ? parseInt(bonus.replace(/[^-\d]/g, '')) || 0 : 0;
-    const totalResult = baseRoll + bonusValue;
-    
-    // Format complete message on frontend
-    const bonusText = bonusValue !== 0 ? ` ${bonus}` : '';
-    const diceNotation = `${dice}${bonusText}`;
-    
-    // Create pre-formatted message 
-    let formattedMessage;
-    if (rollFor && rollFor !== "Standard Roll") {
-      formattedMessage = ` [${rollFor}]: ${diceNotation}: ${totalResult}`;
-    } else {
-      formattedMessage = `: ${diceNotation}: ${totalResult}`;
+  // Helper to format dice notation properly
+  const formatDiceNotation = (primaryDice, secondDice) => {
+    if (!secondDice) {
+      return primaryDice;
     }
     
-    // Send pre-formatted message to backend
-    sendDiceRoll(playerName, formattedMessage, rollFor);
+    // If both dice are the same type, use multiplier notation (e.g., "2d20")
+    if (primaryDice === secondDice) {
+      return `2${primaryDice.toLowerCase()}`;
+    }
+    
+    // If different dice types, use addition notation (e.g., "d20 + d6")
+    return `${primaryDice.toLowerCase()} + ${secondDice.toLowerCase()}`;
+  };
+
+  // UPDATED: Handle dice rolls from PlayerCard components or DiceActionPanel
+  const handlePlayerDiceRoll = (playerName, rollData) => {
+    // Extract rollFor at the top level so it's available throughout the function
+    const rollFor = rollData.rollFor;
+    
+    const { dice, secondDice, advantageMode, bonus } = rollData;
+    const bonusValue = bonus ? parseInt(bonus.replace(/[^-\d]/g, '')) || 0 : 0;
+    
+    // Check if this involves D20s with advantage/disadvantage
+    const primaryIsD20 = dice === 'D20';
+    const useAdvantage = primaryIsD20 && advantageMode !== 'normal';
+    
+    let totalResult = 0;
+    let allRolls = [];
+    let notation = [];
+    
+    if (useAdvantage) {
+      // Advantage/Disadvantage: roll 2d20, apply modifier to each, take higher/lower
+      const diceValue = 20;
+      const roll1 = Math.floor(Math.random() * diceValue) + 1;
+      const roll2 = Math.floor(Math.random() * diceValue) + 1;
+      const result1 = roll1 + bonusValue;
+      const result2 = roll2 + bonusValue;
+      
+      totalResult = advantageMode === 'advantage' 
+        ? Math.max(result1, result2)
+        : Math.min(result1, result2);
+      
+      allRolls.push(`[${roll1}, ${roll2}] = ${totalResult}`);
+      notation.push(`${dice} (${advantageMode})`);
+      
+      // If there's a second die, roll it normally and add to total
+      if (secondDice) {
+        const secondDiceValue = parseInt(secondDice.substring(1));
+        const secondRoll = Math.floor(Math.random() * secondDiceValue) + 1;
+        totalResult += secondRoll;
+        allRolls.push(secondRoll);
+        notation.push(secondDice);
+      }
+    } else {
+      // Normal rolls for both dice
+      
+      // Roll primary die
+      const primaryDiceValue = parseInt(dice.substring(1));
+      const primaryRoll = Math.floor(Math.random() * primaryDiceValue) + 1;
+      totalResult += primaryRoll;
+      allRolls.push(primaryRoll);
+      notation.push(dice);
+      
+      // Roll second die if present
+      if (secondDice) {
+        const secondDiceValue = parseInt(secondDice.substring(1));
+        const secondRoll = Math.floor(Math.random() * secondDiceValue) + 1;
+        totalResult += secondRoll;
+        allRolls.push(secondRoll);
+        notation.push(secondDice);
+      }
+      
+      // Add bonus once to total for normal rolls
+      totalResult += bonusValue;
+    }
+    
+    // Format message
+    const bonusText = bonusValue !== 0 ? ` ${bonus}` : '';
+    
+    // Use proper dice notation formatting
+    let diceNotation;
+    if (useAdvantage) {
+      // For advantage/disadvantage, show as "d20 (advantage)" + any second dice
+      diceNotation = `${dice.toLowerCase()} (${advantageMode})`;
+      if (secondDice) {
+        diceNotation += ` + ${secondDice.toLowerCase()}`;
+      }
+      diceNotation += bonusText;
+    } else {
+      // For normal rolls, use the formatDiceNotation helper
+      diceNotation = formatDiceNotation(dice, secondDice) + bonusText;
+    }
+    // Format roll details - just show the final result
+    const rollDetails = useAdvantage ? allRolls.join(', ') : `${totalResult}`;
+    
+    let formattedMessage;
+    if (rollFor && rollFor !== "Standard Roll") {
+      formattedMessage = ` [${rollFor}]: ${diceNotation}:  ${rollDetails}`;
+    } else {
+      formattedMessage = `: ${diceNotation}:  ${rollDetails}`;
+    }
     
     // Clear prompts for this player if they match the roll type
     const playerPrompts = activePrompts.filter(prompt => 
       prompt.player === playerName && 
       (rollFor === prompt.rollType || rollFor === null) // Match specific roll type or clear if Standard Roll
     );
+    
+    // Get the prompt_id for adventure log cleanup (use first matching prompt)
+    const promptIdForCleanup = playerPrompts.length > 0 ? playerPrompts[0].id : null;
+    
+    // Send pre-formatted message to backend
+    if (sendDiceRoll) {
+      sendDiceRoll(playerName, formattedMessage, rollFor, promptIdForCleanup);
+    } else {
+      console.error("sendDiceRoll function not available - WebSocket may not be connected");
+    }
     
     playerPrompts.forEach(prompt => {
       clearDicePrompt(prompt.id, false);
