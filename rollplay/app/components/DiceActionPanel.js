@@ -17,11 +17,10 @@ export default function DiceActionPanel({
   const [selectedDice, setSelectedDice] = useState('D20'); // Keep for backwards compatibility
   const [rollBonus, setRollBonus] = useState('');
   
-  // New advanced dice system state
-  const [dicePool, setDicePool] = useState([{ type: 'D20', count: 1 }]);
-  const [useAdvancedMode, setUseAdvancedMode] = useState(false);
+  // Simplified dice system - just primary and optional secondary die
+  const [secondDice, setSecondDice] = useState(''); // Empty string means no second die
   
-  // Advantage/Disadvantage state (separate from dice pool)
+  // Advantage/Disadvantage state (separate from dice)
   const [advantageMode, setAdvantageMode] = useState('normal'); // 'normal', 'advantage', 'disadvantage'
   
   // UPDATED: Check if player should see dice interface
@@ -38,19 +37,13 @@ export default function DiceActionPanel({
     setIsDiceModalOpen(true);
   };
   
-  // Helper functions for dice pool management
-  const addDiceToPool = (diceType) => {
-    setDicePool(prev => [...prev, { type: diceType, count: 1 }]);
-  };
-  
-  const removeDiceFromPool = (index) => {
-    setDicePool(prev => prev.filter((_, i) => i !== index));
-  };
-  
-  const updateDiceInPool = (index, field, value) => {
-    setDicePool(prev => prev.map((die, i) => 
-      i === index ? { ...die, [field]: value } : die
-    ));
+  // Helper function to add/remove second die
+  const toggleSecondDie = (diceType) => {
+    if (secondDice === diceType) {
+      setSecondDice(''); // Remove if same type selected
+    } else {
+      setSecondDice(diceType); // Set new second die
+    }
   };
 
   // UPDATED: Handle actual dice roll with prompt context
@@ -64,18 +57,12 @@ export default function DiceActionPanel({
       rollType = myPrompts[0].rollType;
     }
     
-    const rollData = useAdvancedMode ? {
-      dicePool: dicePool,
-      bonus: rollBonus,
-      rollFor: rollType || 'Standard Roll',
-      advantageMode: advantageMode,
-      isAdvanced: true
-    } : {
+    const rollData = {
       dice: selectedDice,
+      secondDice: secondDice,
       bonus: rollBonus,
       rollFor: rollType || 'Standard Roll',
-      advantageMode: advantageMode,
-      isAdvanced: false
+      advantageMode: advantageMode
     };
     
     if (onRollDice) {
@@ -84,9 +71,8 @@ export default function DiceActionPanel({
     setIsDiceModalOpen(false);
     // Reset states
     setSelectedDice('D20');
+    setSecondDice('');
     setRollBonus('');
-    setDicePool([{ type: 'D20', count: 1 }]);
-    setUseAdvancedMode(false);
     setAdvantageMode('normal');
   };
   
@@ -239,153 +225,114 @@ export default function DiceActionPanel({
               </div>
             )}
 
-            {/* Mode Toggle */}
-            <div className="flex justify-center mb-6">
-              <div className="bg-slate-700/50 rounded-lg p-1 flex">
+            {/* Primary Dice Selection */}
+            <div className="p-[calc(16px*var(--ui-scale))] rounded-lg mb-[calc(24px*var(--ui-scale))] bg-slate-600/50 border border-slate-500">
+              <h4 className="text-[calc(16px*var(--ui-scale))] mb-[calc(12px*var(--ui-scale))] text-white">
+                🎲 Choose Your Dice
+              </h4>
+              <div className="grid grid-cols-4 gap-[calc(8px*var(--ui-scale))]">
+                {[
+                  { name: 'D20', emoji: '🎲', range: '1-20' },
+                  { name: 'D12', emoji: '🔷', range: '1-12' },
+                  { name: 'D10', emoji: '🔟', range: '1-10' },
+                  { name: 'D8', emoji: '🔸', range: '1-8' },
+                  { name: 'D6', emoji: '⚀', range: '1-6' },
+                  { name: 'D4', emoji: '🔺', range: '1-4' },
+                ].map((dice) => (
+                  <button
+                    key={dice.name}
+                    className={`p-[calc(12px*var(--ui-scale))] rounded-md text-[calc(13px*var(--ui-scale))] cursor-pointer flex flex-col items-center transition-all border-2 ${
+                      selectedDice === dice.name 
+                        ? 'bg-emerald-500/30 border-emerald-500/60 text-emerald-200' 
+                        : 'bg-slate-600/30 border-slate-500 text-slate-300'
+                    }`}
+                    onClick={() => setSelectedDice(dice.name)}
+                  >
+                    <div className="text-[calc(16px*var(--ui-scale))] mb-[calc(4px*var(--ui-scale))]">
+                      {dice.emoji}
+                    </div>
+                    <div className="font-bold">{dice.name}</div>
+                    <div className="text-xs opacity-75">{dice.range}</div>
+                  </button>
+                ))}
+
+                {/* D100 - Spans 2 columns */}
                 <button
-                  className={`px-4 py-2 rounded-md transition-all ${
-                    !useAdvancedMode 
-                      ? 'bg-emerald-500/30 text-emerald-400' 
-                      : 'text-slate-400 hover:text-slate-300'
+                  className={`p-[calc(12px*var(--ui-scale))] rounded-md text-[calc(13px*var(--ui-scale))] cursor-pointer flex flex-col items-center col-span-2 transition-all border-2 ${
+                    selectedDice === 'D100' 
+                      ? 'bg-emerald-500/30 border-emerald-500/60 text-emerald-200' 
+                      : 'bg-slate-600/30 border-slate-500 text-slate-300'
                   }`}
-                  onClick={() => setUseAdvancedMode(false)}
+                  onClick={() => setSelectedDice('D100')}
                 >
-                  Simple
-                </button>
-                <button
-                  className={`px-4 py-2 rounded-md transition-all ${
-                    useAdvancedMode 
-                      ? 'bg-emerald-500/30 text-emerald-400' 
-                      : 'text-slate-400 hover:text-slate-300'
-                  }`}
-                  onClick={() => setUseAdvancedMode(true)}
-                >
-                  Advanced
+                  <div className="text-[calc(16px*var(--ui-scale))] mb-[calc(4px*var(--ui-scale))]">
+                    🎯
+                  </div>
+                  <div className="font-bold">D100</div>
+                  <div className="text-xs opacity-75">1-100 (Percentile)</div>
                 </button>
               </div>
             </div>
 
-            {useAdvancedMode ? (
-              /* Advanced Mode - Dice Pool Builder */
-              <div className="space-y-4 mb-6">
-                {/* Current Dice Pool */}
-                <div className="p-4 rounded-lg bg-slate-600/50 border border-slate-500">
-                  <div className="flex justify-between items-center mb-3">
-                    <h4 className="text-white text-base">🎲 Dice Pool</h4>
-                    <button
-                      onClick={() => setDicePool([{ type: 'D20', count: 1 }])}
-                      className="text-xs text-slate-400 hover:text-slate-300"
-                    >
-                      Reset
-                    </button>
-                  </div>
-                  
-                  <div className="space-y-2">
-                    {dicePool.map((die, index) => (
-                      <div key={index} className="flex items-center gap-2 bg-slate-700/50 p-2 rounded">
-                        {/* Count */}
-                        <input
-                          type="number"
-                          min="1"
-                          max="10"
-                          value={die.count}
-                          onChange={(e) => updateDiceInPool(index, 'count', parseInt(e.target.value) || 1)}
-                          className="w-12 px-1 py-1 text-center bg-slate-800 border border-slate-600 rounded text-white text-sm"
-                        />
-                        
-                        {/* Die Type */}
-                        <select
-                          value={die.type}
-                          onChange={(e) => updateDiceInPool(index, 'type', e.target.value)}
-                          className="bg-slate-800 border border-slate-600 rounded px-2 py-1 text-white text-sm"
-                        >
-                          <option value="D20">D20</option>
-                          <option value="D12">D12</option>
-                          <option value="D10">D10</option>
-                          <option value="D8">D8</option>
-                          <option value="D6">D6</option>
-                          <option value="D4">D4</option>
-                          <option value="D100">D100</option>
-                        </select>
-                        
-                        
-                        {/* Remove Button */}
-                        {dicePool.length > 1 && (
-                          <button
-                            onClick={() => removeDiceFromPool(index)}
-                            className="text-red-400 hover:text-red-300 px-2"
-                          >
-                            ✕
-                          </button>
-                        )}
-                      </div>
-                    ))}
-                  </div>
-                  
-                  {/* Add Dice Buttons */}
-                  <div className="mt-3 flex flex-wrap gap-1">
-                    {['D20', 'D12', 'D10', 'D8', 'D6', 'D4', 'D100'].map((diceType) => (
-                      <button
-                        key={diceType}
-                        onClick={() => addDiceToPool(diceType)}
-                        className="px-2 py-1 text-xs bg-slate-700 hover:bg-slate-600 text-slate-300 rounded border border-slate-600"
-                      >
-                        +{diceType}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              </div>
-            ) : (
-              /* Simple Mode - Original Dice Selection */
-              <div className="p-[calc(16px*var(--ui-scale))] rounded-lg mb-[calc(24px*var(--ui-scale))] bg-slate-600/50 border border-slate-500">
-                <h4 className="text-[calc(16px*var(--ui-scale))] mb-[calc(12px*var(--ui-scale))] text-white">
-                  🎲 Choose Your Dice
-                </h4>
-                <div className="grid grid-cols-4 gap-[calc(8px*var(--ui-scale))]">
-                  {[
-                    { name: 'D20', emoji: '🎲', range: '1-20' },
-                    { name: 'D12', emoji: '🔷', range: '1-12' },
-                    { name: 'D10', emoji: '🔟', range: '1-10' },
-                    { name: 'D8', emoji: '🔸', range: '1-8' },
-                    { name: 'D6', emoji: '⚀', range: '1-6' },
-                    { name: 'D4', emoji: '🔺', range: '1-4' },
-                  ].map((dice) => (
-                    <button
-                      key={dice.name}
-                      className={`p-[calc(12px*var(--ui-scale))] rounded-md text-[calc(13px*var(--ui-scale))] cursor-pointer flex flex-col items-center transition-all border-2 ${
-                        selectedDice === dice.name 
-                          ? 'bg-emerald-500/30 border-emerald-500/60 text-emerald-200' 
-                          : 'bg-slate-600/30 border-slate-500 text-slate-300'
-                      }`}
-                      onClick={() => setSelectedDice(dice.name)}
-                    >
-                      <div className="text-[calc(16px*var(--ui-scale))] mb-[calc(4px*var(--ui-scale))]">
-                        {dice.emoji}
-                      </div>
-                      <div className="font-bold">{dice.name}</div>
-                      <div className="text-xs opacity-75">{dice.range}</div>
-                    </button>
-                  ))}
-
-                  {/* D100 - Spans 2 columns */}
+            {/* Optional Second Dice */}
+            <div className="p-[calc(16px*var(--ui-scale))] rounded-lg mb-[calc(24px*var(--ui-scale))] bg-slate-600/50 border border-slate-500">
+              <h4 className="text-[calc(16px*var(--ui-scale))] mb-[calc(12px*var(--ui-scale))] text-white">
+                ➕ Add Second Die (Optional)
+              </h4>
+              <div className="grid grid-cols-4 gap-[calc(8px*var(--ui-scale))]">
+                {[
+                  { name: 'D20', emoji: '🎲', range: '1-20' },
+                  { name: 'D12', emoji: '🔷', range: '1-12' },
+                  { name: 'D10', emoji: '🔟', range: '1-10' },
+                  { name: 'D8', emoji: '🔸', range: '1-8' },
+                  { name: 'D6', emoji: '⚀', range: '1-6' },
+                  { name: 'D4', emoji: '🔺', range: '1-4' },
+                ].map((dice) => (
                   <button
-                    className={`p-[calc(12px*var(--ui-scale))] rounded-md text-[calc(13px*var(--ui-scale))] cursor-pointer flex flex-col items-center col-span-2 transition-all border-2 ${
-                      selectedDice === 'D100' 
-                        ? 'bg-emerald-500/30 border-emerald-500/60 text-emerald-200' 
-                        : 'bg-slate-600/30 border-slate-500 text-slate-300'
+                    key={dice.name}
+                    className={`p-[calc(12px*var(--ui-scale))] rounded-md text-[calc(13px*var(--ui-scale))] cursor-pointer flex flex-col items-center transition-all border-2 ${
+                      secondDice === dice.name 
+                        ? 'bg-blue-500/30 border-blue-500/60 text-blue-200' 
+                        : 'bg-slate-600/30 border-slate-500 text-slate-300 hover:bg-slate-500/30'
                     }`}
-                    onClick={() => setSelectedDice('D100')}
+                    onClick={() => toggleSecondDie(dice.name)}
                   >
                     <div className="text-[calc(16px*var(--ui-scale))] mb-[calc(4px*var(--ui-scale))]">
-                      🎯
+                      {dice.emoji}
                     </div>
-                    <div className="font-bold">D100</div>
-                    <div className="text-xs opacity-75">1-100 (Percentile)</div>
+                    <div className="font-bold">{dice.name}</div>
+                    <div className="text-xs opacity-75">{dice.range}</div>
+                  </button>
+                ))}
+
+                {/* D100 - Spans 2 columns */}
+                <button
+                  className={`p-[calc(12px*var(--ui-scale))] rounded-md text-[calc(13px*var(--ui-scale))] cursor-pointer flex flex-col items-center col-span-2 transition-all border-2 ${
+                    secondDice === 'D100' 
+                      ? 'bg-blue-500/30 border-blue-500/60 text-blue-200' 
+                      : 'bg-slate-600/30 border-slate-500 text-slate-300 hover:bg-slate-500/30'
+                  }`}
+                  onClick={() => toggleSecondDie('D100')}
+                >
+                  <div className="text-[calc(16px*var(--ui-scale))] mb-[calc(4px*var(--ui-scale))]">
+                    🎯
+                  </div>
+                  <div className="font-bold">D100</div>
+                  <div className="text-xs opacity-75">1-100 (Percentile)</div>
+                </button>
+              </div>
+              
+              {secondDice && (
+                <div className="mt-3 text-center">
+                  <button
+                    onClick={() => setSecondDice('')}
+                    className="text-sm text-slate-400 hover:text-slate-300"
+                  >
+                    ✕ Remove Second Die
                   </button>
                 </div>
-              </div>
-            )}
+              )}
+            </div>
 
             {/* Advantage/Disadvantage Buttons - Universal for D20 rolls */}
             <div className="p-4 rounded-lg mb-6 bg-slate-600/50 border border-slate-500">
@@ -433,14 +380,7 @@ export default function DiceActionPanel({
             {/* Roll Preview */}
             <div className="mb-4 p-3 bg-slate-700/30 rounded-lg border border-slate-600">
               <div className="text-sm text-slate-300 text-center">
-                <strong>Roll Preview:</strong> {useAdvancedMode ? (
-                  dicePool.map((die, index) => {
-                    const count = die.count > 1 ? `${die.count}` : '';
-                    return `${count}${die.type}`;
-                  }).join(' + ')
-                ) : (
-                  selectedDice
-                )}{advantageMode !== 'normal' ? ` (${advantageMode})` : ''}{rollBonus ? ` ${rollBonus}` : ''}
+                <strong>Roll Preview:</strong> {selectedDice}{secondDice ? ` + ${secondDice}` : ''}{advantageMode !== 'normal' ? ` (${advantageMode})` : ''}{rollBonus ? ` ${rollBonus}` : ''}
               </div>
             </div>
 
@@ -450,7 +390,7 @@ export default function DiceActionPanel({
                 onClick={() => handleDiceRoll()}
                 className="bg-emerald-500/20 border-2 border-emerald-500/50 text-emerald-500 rounded-xl px-8 py-4 text-lg font-bold cursor-pointer transition-all duration-200 hover:bg-emerald-500/30 hover:scale-105"
               >
-                🎲 Roll {useAdvancedMode ? 'Dice Pool' : `${selectedDice}${rollBonus ? ` ${rollBonus}` : ''}`}
+                🎲 Roll {selectedDice}{secondDice ? ` + ${secondDice}` : ''}{rollBonus ? ` ${rollBonus}` : ''}
                 {myPrompts.length > 0 && (
                   <div className="text-xs text-emerald-400 mt-1">
                     {myPrompts.length === 1 
