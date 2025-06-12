@@ -55,6 +55,21 @@ export default function DiceActionPanel({
     }
   };
 
+  // Helper to format dice notation properly
+  const formatDiceNotation = (primaryDice, secondDice) => {
+    if (!secondDice) {
+      return primaryDice;
+    }
+    
+    // If both dice are the same type, use multiplier notation (e.g., "2d20")
+    if (primaryDice === secondDice) {
+      return `2${primaryDice.toLowerCase()}`;
+    }
+    
+    // If different dice types, use addition notation (e.g., "d20 + d6")
+    return `${primaryDice.toLowerCase()} + ${secondDice.toLowerCase()}`;
+  };
+
   // UPDATED: Handle actual dice roll with prompt context
   const handleDiceRoll = (rollFor = null) => {
     // Ensure rollFor is a string, not an event object
@@ -338,17 +353,6 @@ export default function DiceActionPanel({
                       <div className="font-bold text-xs">D100</div>
                     </button>
                   </div>
-                  
-                  {secondDice && (
-                    <div className="mt-3 text-center">
-                      <button
-                        onClick={() => setSecondDice('')}
-                        className="text-sm text-slate-400 hover:text-slate-300"
-                      >
-                        ✕ Remove Second Die
-                      </button>
-                    </div>
-                  )}
                 </div>
               )}
             </div>
@@ -364,7 +368,7 @@ export default function DiceActionPanel({
                   }`}
                   onClick={() => setAdvantageMode(advantageMode === 'advantage' ? 'normal' : 'advantage')}
                 >
-                  📈 Advantage
+                  Advantage
                 </button>
                 <button
                   className={`px-6 py-2 rounded-lg text-base font-medium transition-all border-2 flex-1 max-w-[200px] ${
@@ -374,7 +378,7 @@ export default function DiceActionPanel({
                   }`}
                   onClick={() => setAdvantageMode(advantageMode === 'disadvantage' ? 'normal' : 'disadvantage')}
                 >
-                  📉 Disadvantage
+                  Disadvantage
                 </button>
               </div>
             </div>
