@@ -120,3 +120,21 @@ git clone git@github.com:nuclearsheep540/rollplay.git
 
 sudo groupadd docker
 sudo usermod -aG docker $USER
+
+
+### force certbot to renew
+# On your production server - remove the existing directory and let certbot create a fresh one
+docker exec certbot-renewer rm -rf /etc/letsencrypt/live/tabletop-tavern.uk
+docker exec certbot-renewer rm -rf /etc/letsencrypt/archive/tabletop-tavern.uk
+docker exec certbot-renewer rm -f /etc/letsencrypt/renewal/tabletop-tavern.uk.conf
+
+# Now run certbot again - it should successfully save the certificate
+docker exec certbot-renewer certbot certonly --webroot \
+  -w /var/www/certbot \
+  -d tabletop-tavern.uk \
+  -d www.tabletop-tavern.uk \
+  --email matt@jackalmedia.co.uk \
+  --agree-tos --non-interactive
+
+# Reload nginx to use the new certificate
+docker exec nginx nginx -s reload
