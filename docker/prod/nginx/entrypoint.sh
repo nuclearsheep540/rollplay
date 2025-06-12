@@ -14,6 +14,9 @@ if [ ! -f "$FULLCHAIN" ] || [ ! -f "$PRIVKEY" ]; then
         -subj "/CN=tabletop-tavern.uk"
 fi
 
+# Create webroot directory for certbot challenges
+mkdir -p /var/www/certbot
+
 # Start the reload server in the background.
 python3 /reload_server.py &
 
