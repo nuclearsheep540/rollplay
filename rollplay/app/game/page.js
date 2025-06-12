@@ -584,28 +584,91 @@ function GameContent() {
 
   // UPDATED: Handle dice rolls from PlayerCard components or DiceActionPanel
   const handlePlayerDiceRoll = (playerName, rollData) => {
-    const { dice, bonus, rollFor } = rollData;
+    // Extract rollFor at the top level so it's available throughout the function
+    const rollFor = rollData.rollFor;
     
-    // Calculate result (this should be done server-side in production)
-    const diceValue = parseInt(dice.substring(1)); // Extract number from "D20"
-    const baseRoll = Math.floor(Math.random() * diceValue) + 1;
-    const bonusValue = bonus ? parseInt(bonus.replace(/[^-\d]/g, '')) || 0 : 0;
-    const totalResult = baseRoll + bonusValue;
-    
-    // Format complete message on frontend
-    const bonusText = bonusValue !== 0 ? ` ${bonus}` : '';
-    const diceNotation = `${dice}${bonusText}`;
-    
-    // Create pre-formatted message 
-    let formattedMessage;
-    if (rollFor && rollFor !== "Standard Roll") {
-      formattedMessage = ` [${rollFor}]: ${diceNotation}: ${totalResult}`;
+    if (rollData.isAdvanced) {
+      // Advanced mode with dice pool
+      const { dicePool, bonus } = rollData;
+      const bonusValue = bonus ? parseInt(bonus.replace(/[^-\d]/g, '')) || 0 : 0;
+      
+      let totalResult = 0;
+      let allRolls = [];
+      let notation = [];
+      
+      // Process each die in the pool
+      dicePool.forEach(die => {
+        const diceValue = parseInt(die.type.substring(1)); // Extract number from "D20"
+        
+        for (let i = 0; i < die.count; i++) {
+          if (die.type === 'D20' && die.advantage !== 'normal') {
+            // Advantage/Disadvantage: roll 2d20, apply modifier to each, take higher/lower
+            const roll1 = Math.floor(Math.random() * diceValue) + 1;
+            const roll2 = Math.floor(Math.random() * diceValue) + 1;
+            const result1 = roll1 + bonusValue;
+            const result2 = roll2 + bonusValue;
+            
+            const finalResult = die.advantage === 'advantage' 
+              ? Math.max(result1, result2)
+              : Math.min(result1, result2);
+            
+            totalResult = finalResult; // For advantage/disadvantage, this is the final total
+            allRolls.push(`[${roll1}, ${roll2}] = ${finalResult}`);
+            notation.push(`${die.type} (${die.advantage})`);
+          } else {
+            // Normal die roll
+            const roll = Math.floor(Math.random() * diceValue) + 1;
+            totalResult += roll;
+            allRolls.push(roll);
+            notation.push(die.count > 1 ? `${die.count}${die.type}` : die.type);
+          }
+        }
+      });
+      
+      // For non-advantage rolls, add bonus once to total
+      const hasAdvantage = dicePool.some(die => die.type === 'D20' && die.advantage !== 'normal');
+      if (!hasAdvantage) {
+        totalResult += bonusValue;
+      }
+      
+      // Format message
+      const bonusText = bonusValue !== 0 ? ` ${bonus}` : '';
+      const diceNotation = notation.join(' + ') + bonusText;
+      const rollDetails = hasAdvantage ? allRolls.join(', ') : `[${allRolls.join(', ')}]`;
+      
+      let formattedMessage;
+      if (rollFor && rollFor !== "Standard Roll") {
+        formattedMessage = ` [${rollFor}]: ${diceNotation}: ${rollDetails} = ${totalResult}`;
+      } else {
+        formattedMessage = `: ${diceNotation}: ${rollDetails} = ${totalResult}`;
+      }
+      
+      sendDiceRoll(playerName, formattedMessage, rollFor);
     } else {
-      formattedMessage = `: ${diceNotation}: ${totalResult}`;
+      // Simple mode (original logic)
+      const { dice, bonus } = rollData;
+      
+      // Calculate result (this should be done server-side in production)
+      const diceValue = parseInt(dice.substring(1)); // Extract number from "D20"
+      const baseRoll = Math.floor(Math.random() * diceValue) + 1;
+      const bonusValue = bonus ? parseInt(bonus.replace(/[^-\d]/g, '')) || 0 : 0;
+      const totalResult = baseRoll + bonusValue;
+      
+      // Format complete message on frontend
+      const bonusText = bonusValue !== 0 ? ` ${bonus}` : '';
+      const diceNotation = `${dice}${bonusText}`;
+      
+      // Create pre-formatted message 
+      let formattedMessage;
+      if (rollFor && rollFor !== "Standard Roll") {
+        formattedMessage = ` [${rollFor}]: ${diceNotation}: ${totalResult}`;
+      } else {
+        formattedMessage = `: ${diceNotation}: ${totalResult}`;
+      }
+      
+      // Send pre-formatted message to backend
+      sendDiceRoll(playerName, formattedMessage, rollFor);
     }
-    
-    // Send pre-formatted message to backend
-    sendDiceRoll(playerName, formattedMessage, rollFor);
     
     // Clear prompts for this player if they match the roll type
     const playerPrompts = activePrompts.filter(prompt => 
