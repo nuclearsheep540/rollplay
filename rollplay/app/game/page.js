@@ -8,6 +8,7 @@ import PlayerCard from "../components/PlayerCard";
 import DMControlCenter from '../components/DMControlCenter';
 import HorizontalInitiativeTracker from '../components/HorizontalInitiativeTracker';
 import AdventureLog from '../components/AdventureLog';
+import LobbyPanel from '../components/LobbyPanel';
 import DiceActionPanel from '../components/DiceActionPanel'; // NEW IMPORT
 import { useWebSocket } from '../hooks/useWebSocket';
 
@@ -29,6 +30,9 @@ function GameContent() {
 
   // State for seat colors (loaded from backend)
   const [seatColors, setSeatColors] = useState({});
+
+  // Lobby state for connected users not in party
+  const [lobbyUsers, setLobbyUsers] = useState([]);
 
   // Pre-computed player-to-seat mapping for O(1) lookups
   const playerSeatMap = useMemo(() => {
@@ -376,11 +380,13 @@ function GameContent() {
     setActivePrompts,
     setIsDicePromptActive,
     setPlayerSeatMap,
+    setLobbyUsers,
     
     // Current state values
     chatLog,
     gameSeats,
     thisPlayer,
+    lobbyUsers,
     
     // Helper functions
     addToLog,
@@ -706,6 +712,11 @@ function GameContent() {
               />
             );
           })}
+
+          {/* Lobby Panel - shows connected users not in party */}
+          <LobbyPanel 
+            lobbyUsers={lobbyUsers}
+          />
 
           {/* Adventure Log component */}
           <AdventureLog 

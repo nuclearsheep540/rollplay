@@ -6,6 +6,7 @@ import {
   handleSeatCountChange,
   handleChatMessage,
   handlePlayerConnected,
+  handleLobbyUpdate,
   handlePlayerKicked,
   handleCombatState,
   handlePlayerDisconnected,
@@ -74,6 +75,10 @@ export function useWebSocket(roomId, playerName, gameContext) {
 
         case "player_connected":
           handlePlayerConnected(json_data["data"], gameContext);
+          break;
+
+        case "lobby_update":
+          handleLobbyUpdate(json_data["data"], gameContext);
           break;
 
         case "player_kicked":

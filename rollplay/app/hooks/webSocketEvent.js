@@ -55,6 +55,14 @@ export const handlePlayerConnected = (data, { addToLog }) => {
   addToLog(`${connected_player} connected`, 'system');
 };
 
+export const handleLobbyUpdate = (data, { setLobbyUsers }) => {
+  console.log("received lobby update:", data);
+  const { lobby_users } = data;
+  
+  // Update lobby users list
+  setLobbyUsers(lobby_users || []);
+};
+
 export const handlePlayerKicked = (data, { addToLog, thisPlayer }) => {
   console.log("received player kick:", data);
   const { kicked_player } = data;

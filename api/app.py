@@ -305,15 +305,68 @@ async def clear_all_messages(room_id: str, request: dict):
 class ConnectionManager:
     def __init__(self):
         self.connections: list[WebSocket] = []
+        # Track connected users: room_id -> {user_name: {websocket, is_in_party}}
+        self.room_users: dict[str, dict[str, dict]] = {}
 
-    async def connect(self, websocket: WebSocket):
+    async def connect(self, websocket: WebSocket, room_id: str, player_name: str):
         await websocket.accept()
         self.connections.append(websocket)
+        
+        # Initialize room tracking if not exists
+        if room_id not in self.room_users:
+            self.room_users[room_id] = {}
+        
+        # Add user to room tracking
+        self.room_users[room_id][player_name] = {
+            "websocket": websocket,
+            "is_in_party": False  # Will be updated when they join a seat
+        }
+        
+        # Send lobby update to all clients in this room
+        await self.broadcast_lobby_update(room_id)
 
-    def remove_connection(self, websocket: WebSocket):
+    def remove_connection(self, websocket: WebSocket, room_id: str = None, player_name: str = None):
         """Remove a disconnected websocket from the connections list"""
         if websocket in self.connections:
             self.connections.remove(websocket)
+        
+        # Remove from room tracking if provided
+        if room_id and player_name and room_id in self.room_users:
+            if player_name in self.room_users[room_id]:
+                del self.room_users[room_id][player_name]
+                
+                # Clean up empty rooms
+                if not self.room_users[room_id]:
+                    del self.room_users[room_id]
+
+    def update_party_status(self, room_id: str, player_name: str, is_in_party: bool):
+        """Update whether a player is in the party or lobby"""
+        if room_id in self.room_users and player_name in self.room_users[room_id]:
+            self.room_users[room_id][player_name]["is_in_party"] = is_in_party
+
+    async def broadcast_lobby_update(self, room_id: str):
+        """Send lobby update to all clients in a room"""
+        if room_id not in self.room_users:
+            return
+        
+        # Get users who are connected but not in party
+        lobby_users = []
+        for user_name, user_data in self.room_users[room_id].items():
+            if not user_data["is_in_party"]:
+                lobby_users.append({
+                    "name": user_name,
+                    "id": user_name  # Use name as ID for simplicity
+                })
+        
+        lobby_message = {
+            "event_type": "lobby_update",
+            "data": {
+                "lobby_users": lobby_users
+            }
+        }
+        
+        # Send to all connections in this room
+        await self.update_data_for_room(room_id, lobby_message)
 
     async def update_data(self, data):
         """Send data to all connected clients, removing any dead connections"""
@@ -330,6 +383,25 @@ class ConnectionManager:
         for dead_connection in dead_connections:
             self.remove_connection(dead_connection)
 
+    async def update_data_for_room(self, room_id: str, data):
+        """Send data only to clients in a specific room"""
+        if room_id not in self.room_users:
+            return
+        
+        dead_connections = []
+        
+        for user_name, user_data in self.room_users[room_id].items():
+            websocket = user_data["websocket"]
+            try:
+                await websocket.send_json(data=data)
+            except Exception:
+                # Mark this connection as dead
+                dead_connections.append((room_id, user_name, websocket))
+        
+        # Remove all dead connections
+        for room, user, ws in dead_connections:
+            self.remove_connection(ws, room, user)
+
 manager = ConnectionManager()
 
 
@@ -343,7 +415,7 @@ async def websocket_endpoint(
 ):
     # Normalize player name to lowercase for consistent identification
     player_name = player_name.lower()
-    await manager.connect(websocket)
+    await manager.connect(websocket, client_id, player_name)
 
     # Log player connection to database
     log_message = format_message(MESSAGE_TEMPLATES["player_connected"], player=player_name)
@@ -385,11 +457,19 @@ async def websocket_endpoint(
 
                 print(f"📡 Broadcasting seat layout change for room {client_id}: {seat_layout}")
                 
+                # Update party status for all users based on seat layout
+                for user_name in manager.room_users.get(client_id, {}):
+                    is_in_party = user_name in seat_layout
+                    manager.update_party_status(client_id, user_name, is_in_party)
+                
                 broadcast_message = {
                     "event_type": "seat_change",
                     "data": seat_layout,
                     "player_name": player_name_from_event
                 }
+                
+                # After seat change, update lobby
+                await manager.broadcast_lobby_update(client_id)
 
             # NEW: Handle dice prompts
             elif event_type == "dice_prompt":
@@ -733,7 +813,7 @@ async def websocket_endpoint(
             player_name=player_name
         )
         
-        manager.remove_connection(websocket)
+        manager.remove_connection(websocket, client_id, player_name)
         
         # Clean up disconnected player's seat
         current_seats = GameService.get_seat_layout(client_id)
@@ -748,6 +828,9 @@ async def websocket_endpoint(
         
         # Update seat layout in database
         GameService.update_seat_layout(client_id, updated_seats)
+        
+        # Update party status and send lobby update
+        await manager.broadcast_lobby_update(client_id)
         
         # Broadcast player disconnection event
         disconnect_message = {
