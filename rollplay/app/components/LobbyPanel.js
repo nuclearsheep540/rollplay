@@ -10,6 +10,10 @@ export default function LobbyPanel({ lobbyUsers = [] }) {
     return name.charAt(0).toUpperCase() + name.slice(1).toLowerCase();
   };
 
+  // Calculate connected vs disconnecting counts
+  const connectedCount = lobbyUsers.filter(user => user.status !== 'disconnecting').length;
+  const disconnectingCount = lobbyUsers.filter(user => user.status === 'disconnecting').length;
+
   // Don't render if no lobby users
   if (!lobbyUsers || lobbyUsers.length === 0) {
     return null;
@@ -22,40 +26,35 @@ export default function LobbyPanel({ lobbyUsers = [] }) {
         <span>👥</span>
         <span>Lobby</span>
         <span className="text-[calc(10px*var(--ui-scale))] text-gray-500 font-normal">
-          ({lobbyUsers.length} connected)
+          ({connectedCount} connected{disconnectingCount > 0 ? ` : ${disconnectingCount} disconnecting` : ''})
         </span>
       </div>
 
-      {/* Lobby Users List */}
-      <div className="lobby-users space-y-[calc(4px*var(--ui-scale))]">
+      {/* Lobby Users Grid - 3 rows max, then columns */}
+      <div className="lobby-users grid gap-[calc(2px*var(--ui-scale))]" style={{
+        gridTemplateRows: `repeat(${Math.min(3, lobbyUsers.length)}, minmax(0, 1fr))`,
+        gridAutoFlow: 'column',
+        gridAutoColumns: 'minmax(0, 1fr)'
+      }}>
         {lobbyUsers.map((user) => (
           <div
             key={user.id || user.name}
-            className="lobby-user-item bg-slate-800/40 rounded-md px-[calc(10px*var(--ui-scale))] py-[calc(6px*var(--ui-scale))] border border-slate-600/30 flex items-center gap-[calc(8px*var(--ui-scale))] transition-all duration-200 hover:bg-slate-700/40"
+            className="lobby-user-item flex items-center gap-[calc(6px*var(--ui-scale))] px-[calc(4px*var(--ui-scale))] py-[calc(2px*var(--ui-scale))]"
           >
             {/* Connection Status Indicator */}
             <div className="connection-indicator">
               {user.status === 'disconnecting' ? (
-                <div className="w-[calc(8px*var(--ui-scale))] h-[calc(8px*var(--ui-scale))] bg-red-500 rounded-full shadow-sm shadow-red-500/50"></div>
+                <div className="w-[calc(6px*var(--ui-scale))] h-[calc(6px*var(--ui-scale))] bg-red-500 rounded-full"></div>
               ) : (
-                <div className="w-[calc(8px*var(--ui-scale))] h-[calc(8px*var(--ui-scale))] bg-green-500 rounded-full shadow-sm shadow-green-500/50"></div>
+                <div className="w-[calc(6px*var(--ui-scale))] h-[calc(6px*var(--ui-scale))] bg-green-500 rounded-full"></div>
               )}
             </div>
 
             {/* User Name */}
-            <div className={`user-name text-[calc(12px*var(--ui-scale))] font-medium flex-1 ${
+            <div className={`user-name text-[calc(11px*var(--ui-scale))] font-medium ${
               user.status === 'disconnecting' ? 'text-slate-400 opacity-60' : 'text-slate-300'
             }`}>
               {toTitleCase(user.name)}
-            </div>
-
-            {/* Status Badge */}
-            <div className={`status-badge text-[calc(9px*var(--ui-scale))] px-[calc(4px*var(--ui-scale))] py-[calc(2px*var(--ui-scale))] rounded-full ${
-              user.status === 'disconnecting' 
-                ? 'text-red-400 bg-red-900/30' 
-                : 'text-slate-500 bg-slate-700/50'
-            }`}>
-              {user.status === 'disconnecting' ? 'Disconnecting...' : 'Waiting'}
             </div>
           </div>
         ))}
