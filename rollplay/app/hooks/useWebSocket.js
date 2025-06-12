@@ -17,6 +17,7 @@ import {
   handleInitiativePromptAll,
   handleDicePromptClear,
   handleColorChange,
+  handleAdventureLogRemoved,
   createSendFunctions
 } from './webSocketEvent'
 
@@ -119,6 +120,10 @@ export function useWebSocket(roomId, playerName, gameContext) {
 
         case "color_change":
           handleColorChange(json_data["data"], { gameContext });
+          break;
+
+        case "adventure_log_removed":
+          handleAdventureLogRemoved(json_data["data"], gameContext);
           break;
 
         default:

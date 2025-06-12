@@ -281,7 +281,8 @@ function GameContent() {
           message: log.message,
           type: log.type,
           timestamp: formatTimestamp(log.timestamp),
-          player_name: log.player_name
+          player_name: log.player_name,
+          prompt_id: log.prompt_id // Include prompt_id for removal matching
         }));
         
         // Replace your initial hardcoded logs with database logs
@@ -340,7 +341,7 @@ function GameContent() {
     }
   };
 
-  const addToLog = (message, type, playerName = null) => {
+  const addToLog = (message, type, playerName = null, promptId = null) => {
     const now = new Date();
     const timestamp = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
     
@@ -351,6 +352,11 @@ function GameContent() {
       timestamp,
       player_name: playerName
     };
+    
+    // Add prompt_id if provided
+    if (promptId) {
+      newEntry.prompt_id = promptId;
+    }
     
     setRollLog(prev => [...prev, newEntry]);
   };
@@ -685,14 +691,21 @@ function GameContent() {
       formattedMessage = `: ${diceNotation}:  ${rollDetails}`;
     }
     
-    // Send pre-formatted message to backend
-    sendDiceRoll(playerName, formattedMessage, rollFor);
-    
     // Clear prompts for this player if they match the roll type
     const playerPrompts = activePrompts.filter(prompt => 
       prompt.player === playerName && 
       (rollFor === prompt.rollType || rollFor === null) // Match specific roll type or clear if Standard Roll
     );
+    
+    // Get the prompt_id for adventure log cleanup (use first matching prompt)
+    const promptIdForCleanup = playerPrompts.length > 0 ? playerPrompts[0].id : null;
+    
+    // Send pre-formatted message to backend
+    if (sendDiceRoll) {
+      sendDiceRoll(playerName, formattedMessage, rollFor, promptIdForCleanup);
+    } else {
+      console.error("sendDiceRoll function not available - WebSocket may not be connected");
+    }
     
     playerPrompts.forEach(prompt => {
       clearDicePrompt(prompt.id, false);

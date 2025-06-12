@@ -87,13 +87,38 @@ class AdventureLogService:
             print(f"❌ Error clearing all messages: {e}")
             raise e
     
+    def remove_log_by_prompt_id(self, room_id: str, prompt_id: str) -> int:
+        """
+        Remove a specific log entry by prompt_id
+        
+        Args:
+            room_id: The room/session ID
+            prompt_id: The prompt ID to remove
+            
+        Returns:
+            int: Number of deleted documents
+        """
+        try:
+            result = self.adventure_logs.delete_one({
+                "room_id": room_id,
+                "prompt_id": prompt_id
+            })
+            
+            print(f"🗑️ Removed log entry with prompt_id {prompt_id} from room {room_id}")
+            return result.deleted_count
+            
+        except Exception as e:
+            print(f"❌ Error removing log by prompt_id: {e}")
+            raise e
+    
     def add_log_entry(
         self, 
         room_id: str, 
         message: str, 
         log_type: str, 
         player_name: Optional[str] = None, 
-        max_logs: int = 100
+        max_logs: int = 100,
+        prompt_id: Optional[str] = None
     ) -> Dict:
         """
         Add a log entry and maintain max_logs limit per room using aggregation pipeline
@@ -104,6 +129,7 @@ class AdventureLogService:
             log_type: Type of log (system, player-roll, dm-roll, etc.)
             player_name: Name of the player (optional)
             max_logs: Maximum number of logs to keep per room (default: 100)
+            prompt_id: Unique prompt ID for linking (optional)
             
         Returns:
             Dict: The inserted log document
@@ -121,6 +147,10 @@ class AdventureLogService:
             "player_name": player_name,
             "log_id": log_id
         }
+        
+        # Add prompt_id if provided
+        if prompt_id:
+            new_log["prompt_id"] = prompt_id
         
         try:
             # Insert the new log entry

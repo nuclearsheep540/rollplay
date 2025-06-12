@@ -28,7 +28,7 @@ app.add_middleware(
 adventure_log_service = create_adventure_log_service()
 
 # Helper function to add log entries
-def add_adventure_log(room_id: str, message: str, log_type: LogType, player_name: str = None):
+def add_adventure_log(room_id: str, message: str, log_type: LogType, player_name: str = None, prompt_id: str = None):
     """Helper function to add log entries with your default settings"""
     try:
         # Convert LogType enum to string value for the service
@@ -39,7 +39,8 @@ def add_adventure_log(room_id: str, message: str, log_type: LogType, player_name
             message=message,
             log_type=log_type_value,
             player_name=player_name,
-            max_logs=200
+            max_logs=200,
+            prompt_id=prompt_id
         )
     except Exception as e:
         print(f"Failed to add adventure log: {e}")
@@ -536,14 +537,15 @@ async def websocket_endpoint(
                 prompted_by = event_data.get("prompted_by", player_name)
                 prompt_id = event_data.get("prompt_id")  # New: Get prompt ID
                 
-                # Log the prompt to adventure log
+                # Log the prompt to adventure log with prompt_id for later removal
                 log_message = format_message(MESSAGE_TEMPLATES["dice_prompt"], target=prompted_player, roll_type=roll_type)
                 
                 add_adventure_log(
                     room_id=client_id,
                     message=log_message,
                     log_type=LogType.DUNGEON_MASTER,
-                    player_name=prompted_by
+                    player_name=prompted_by,
+                    prompt_id=prompt_id
                 )
                 
                 print(f"🎲 {prompted_by} prompted {prompted_player} to roll {roll_type} (prompt_id: {prompt_id})")
@@ -689,7 +691,25 @@ async def websocket_endpoint(
                 
                 # Auto-clear prompt if this was a prompted roll (has prompt_id or player)
                 clear_prompt_message = None
+                log_removal_message = None
                 if prompt_id:
+                    # Remove the adventure log entry for this prompt
+                    try:
+                        deleted_count = adventure_log_service.remove_log_by_prompt_id(client_id, prompt_id)
+                        if deleted_count > 0:
+                            print(f"🗑️ Removed adventure log entry for completed prompt {prompt_id}")
+                            
+                            # Prepare log removal message to send after dice roll
+                            log_removal_message = {
+                                "event_type": "adventure_log_removed",
+                                "data": {
+                                    "prompt_id": prompt_id,
+                                    "removed_by": "system"
+                                }
+                            }
+                    except Exception as e:
+                        print(f"❌ Failed to remove adventure log for prompt {prompt_id}: {e}")
+                    
                     clear_prompt_message = {
                         "event_type": "dice_prompt_clear",
                         "data": {
@@ -854,11 +874,17 @@ async def websocket_endpoint(
             await manager.update_data(broadcast_message)
             
             # Handle special case: auto-clear prompt after dice roll
-            if event_type == "dice_roll" and clear_prompt_message:
-                # Add a small delay and then clear the prompt
+            if event_type == "dice_roll":
                 import asyncio
-                await asyncio.sleep(0.1)  # Small delay to ensure dice roll is processed first
-                await manager.update_data(clear_prompt_message)
+                await asyncio.sleep(1)  # Small delay to ensure dice roll is processed first
+                
+                # Send log removal message first
+                if log_removal_message:
+                    await manager.update_data_for_room(client_id, log_removal_message)
+                
+                # Then send prompt clear message
+                if clear_prompt_message:
+                    await manager.update_data(clear_prompt_message)
             
     except WebSocketDisconnect:
         # Server-side disconnect handling with seat cleanup
