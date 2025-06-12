@@ -2,7 +2,7 @@ version: "3.8"
 
 services:
   nginx:
-    image: ghcr.io/nuclearsheep540/rollplay/nginx:0.1.1
+    image: ghcr.io/nuclearsheep540/rollplay/nginx:0.1.2
     build:
       context: ./docker/prod/nginx
       dockerfile: Dockerfile
