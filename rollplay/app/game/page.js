@@ -1,6 +1,6 @@
 'use client'
 
-import { React, useEffect, useState, useMemo } from 'react'
+import { React, useEffect, useState, useMemo, Suspense } from 'react'
 import { useSearchParams } from "next/navigation";
 import { getSeatColor } from '../utils/seatColors';
 
@@ -11,13 +11,8 @@ import AdventureLog from '../components/AdventureLog';
 import DiceActionPanel from '../components/DiceActionPanel'; // NEW IMPORT
 import { useWebSocket } from '../hooks/useWebSocket';
 
-function Params() {
-  return useSearchParams()
-}
-
-export default function Game() {
-
-  const params = Params(); 
+function GameContent() {
+  const params = useSearchParams(); 
 
   const [room404, setRoom404] = useState(false)
   const [thisPlayer, setThisPlayer] = useState()
@@ -763,5 +758,25 @@ export default function Game() {
         isDicePromptActive={isDicePromptActive}
       />
     </div>
+  );
+}
+
+export default function Game() {
+  return (
+    <Suspense fallback={
+      <div className="game-loading" style={{
+        display: 'flex',
+        justifyContent: 'center',
+        alignItems: 'center',
+        height: '100vh',
+        background: 'linear-gradient(135deg, #1e1b4b 0%, #312e81 50%, #1e3a8a 100%)',
+        color: 'white',
+        fontSize: '18px'
+      }}>
+        <div>🎲 Loading Tabletop Tavern...</div>
+      </div>
+    }>
+      <GameContent />
+    </Suspense>
   );
 }
