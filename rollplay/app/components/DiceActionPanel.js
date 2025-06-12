@@ -19,6 +19,7 @@ export default function DiceActionPanel({
   
   // Simplified dice system - just primary and optional secondary die
   const [secondDice, setSecondDice] = useState(''); // Empty string means no second die
+  const [showSecondDice, setShowSecondDice] = useState(false); // Collapsible second dice section
   
   // Advantage/Disadvantage state (separate from dice)
   const [advantageMode, setAdvantageMode] = useState('normal'); // 'normal', 'advantage', 'disadvantage'
@@ -43,6 +44,14 @@ export default function DiceActionPanel({
       setSecondDice(''); // Remove if same type selected
     } else {
       setSecondDice(diceType); // Set new second die
+    }
+  };
+
+  // Helper to toggle second dice section
+  const toggleSecondDiceSection = () => {
+    setShowSecondDice(!showSecondDice);
+    if (showSecondDice) {
+      setSecondDice(''); // Clear second die when collapsing
     }
   };
 
@@ -72,6 +81,7 @@ export default function DiceActionPanel({
     // Reset states
     setSelectedDice('D20');
     setSecondDice('');
+    setShowSecondDice(false);
     setRollBonus('');
     setAdvantageMode('normal');
   };
@@ -203,15 +213,15 @@ export default function DiceActionPanel({
 
             {/* UPDATED: Compact prompts section */}
             {myPrompts.length > 0 && (
-              <div className="p-[calc(9px*var(--ui-scale))] rounded-lg mb-[calc(18px*var(--ui-scale))] bg-emerald-500/10 border border-emerald-500/30">
-                <div className="text-[calc(12px*var(--ui-scale))] text-emerald-200 text-center mb-2">
+              <div className="p-3 rounded-lg mb-4 bg-emerald-500/10 border border-emerald-500/30">
+                <div className="text-xs text-emerald-200 text-center mb-2">
                   Roll For:
                 </div>
-                <div className="space-y-2">
+                <div className="space-y-1">
                   {myPrompts.map((prompt) => (
                     <div
                       key={prompt.id}
-                      className="w-full p-3 text-white rounded-lg text-2xl font-bold text-center"
+                      className="w-full p-2 text-white rounded-lg text-lg font-bold text-center"
                     >
                       {prompt.rollType}
                     </div>
@@ -226,122 +236,128 @@ export default function DiceActionPanel({
             )}
 
             {/* Primary Dice Selection */}
-            <div className="p-[calc(16px*var(--ui-scale))] rounded-lg mb-[calc(24px*var(--ui-scale))] bg-slate-600/50 border border-slate-500">
-              <h4 className="text-[calc(16px*var(--ui-scale))] mb-[calc(12px*var(--ui-scale))] text-white">
+            <div className="p-3 rounded-lg mb-3 bg-slate-600/50 border border-slate-500">
+              <h4 className="text-sm mb-2 text-white">
                 🎲 Choose Your Dice
               </h4>
-              <div className="grid grid-cols-4 gap-[calc(8px*var(--ui-scale))]">
+              <div className="grid grid-cols-4 gap-2">
                 {[
-                  { name: 'D20', emoji: '🎲', range: '1-20' },
-                  { name: 'D12', emoji: '🔷', range: '1-12' },
-                  { name: 'D10', emoji: '🔟', range: '1-10' },
-                  { name: 'D8', emoji: '🔸', range: '1-8' },
-                  { name: 'D6', emoji: '⚀', range: '1-6' },
-                  { name: 'D4', emoji: '🔺', range: '1-4' },
+                  { name: 'D20', emoji: '🎲' },
+                  { name: 'D12', emoji: '🔷' },
+                  { name: 'D10', emoji: '🔟' },
+                  { name: 'D8', emoji: '🔸' },
+                  { name: 'D6', emoji: '⚀' },
+                  { name: 'D4', emoji: '🔺' },
                 ].map((dice) => (
                   <button
                     key={dice.name}
-                    className={`p-[calc(12px*var(--ui-scale))] rounded-md text-[calc(13px*var(--ui-scale))] cursor-pointer flex flex-col items-center transition-all border-2 ${
+                    className={`p-3 rounded-md text-sm cursor-pointer flex flex-col items-center transition-all border-2 ${
                       selectedDice === dice.name 
                         ? 'bg-emerald-500/30 border-emerald-500/60 text-emerald-200' 
-                        : 'bg-slate-600/30 border-slate-500 text-slate-300'
+                        : 'bg-slate-600/30 border-slate-500 text-slate-300 hover:bg-slate-500/30'
                     }`}
                     onClick={() => setSelectedDice(dice.name)}
                   >
-                    <div className="text-[calc(16px*var(--ui-scale))] mb-[calc(4px*var(--ui-scale))]">
+                    <div className="text-lg mb-1">
                       {dice.emoji}
                     </div>
-                    <div className="font-bold">{dice.name}</div>
-                    <div className="text-xs opacity-75">{dice.range}</div>
+                    <div className="font-bold text-xs">{dice.name}</div>
                   </button>
                 ))}
 
                 {/* D100 - Spans 2 columns */}
                 <button
-                  className={`p-[calc(12px*var(--ui-scale))] rounded-md text-[calc(13px*var(--ui-scale))] cursor-pointer flex flex-col items-center col-span-2 transition-all border-2 ${
+                  className={`p-3 rounded-md text-sm cursor-pointer flex flex-col items-center col-span-2 transition-all border-2 ${
                     selectedDice === 'D100' 
                       ? 'bg-emerald-500/30 border-emerald-500/60 text-emerald-200' 
-                      : 'bg-slate-600/30 border-slate-500 text-slate-300'
+                      : 'bg-slate-600/30 border-slate-500 text-slate-300 hover:bg-slate-500/30'
                   }`}
                   onClick={() => setSelectedDice('D100')}
                 >
-                  <div className="text-[calc(16px*var(--ui-scale))] mb-[calc(4px*var(--ui-scale))]">
+                  <div className="text-lg mb-1">
                     🎯
                   </div>
-                  <div className="font-bold">D100</div>
-                  <div className="text-xs opacity-75">1-100 (Percentile)</div>
+                  <div className="font-bold text-xs">D100</div>
                 </button>
               </div>
             </div>
 
-            {/* Optional Second Dice */}
-            <div className="p-[calc(16px*var(--ui-scale))] rounded-lg mb-[calc(24px*var(--ui-scale))] bg-slate-600/50 border border-slate-500">
-              <h4 className="text-[calc(16px*var(--ui-scale))] mb-[calc(12px*var(--ui-scale))] text-white">
-                ➕ Add Second Die (Optional)
-              </h4>
-              <div className="grid grid-cols-4 gap-[calc(8px*var(--ui-scale))]">
-                {[
-                  { name: 'D20', emoji: '🎲', range: '1-20' },
-                  { name: 'D12', emoji: '🔷', range: '1-12' },
-                  { name: 'D10', emoji: '🔟', range: '1-10' },
-                  { name: 'D8', emoji: '🔸', range: '1-8' },
-                  { name: 'D6', emoji: '⚀', range: '1-6' },
-                  { name: 'D4', emoji: '🔺', range: '1-4' },
-                ].map((dice) => (
-                  <button
-                    key={dice.name}
-                    className={`p-[calc(12px*var(--ui-scale))] rounded-md text-[calc(13px*var(--ui-scale))] cursor-pointer flex flex-col items-center transition-all border-2 ${
-                      secondDice === dice.name 
-                        ? 'bg-blue-500/30 border-blue-500/60 text-blue-200' 
-                        : 'bg-slate-600/30 border-slate-500 text-slate-300 hover:bg-slate-500/30'
-                    }`}
-                    onClick={() => toggleSecondDie(dice.name)}
-                  >
-                    <div className="text-[calc(16px*var(--ui-scale))] mb-[calc(4px*var(--ui-scale))]">
-                      {dice.emoji}
-                    </div>
-                    <div className="font-bold">{dice.name}</div>
-                    <div className="text-xs opacity-75">{dice.range}</div>
-                  </button>
-                ))}
-
-                {/* D100 - Spans 2 columns */}
-                <button
-                  className={`p-[calc(12px*var(--ui-scale))] rounded-md text-[calc(13px*var(--ui-scale))] cursor-pointer flex flex-col items-center col-span-2 transition-all border-2 ${
-                    secondDice === 'D100' 
-                      ? 'bg-blue-500/30 border-blue-500/60 text-blue-200' 
-                      : 'bg-slate-600/30 border-slate-500 text-slate-300 hover:bg-slate-500/30'
-                  }`}
-                  onClick={() => toggleSecondDie('D100')}
-                >
-                  <div className="text-[calc(16px*var(--ui-scale))] mb-[calc(4px*var(--ui-scale))]">
-                    🎯
-                  </div>
-                  <div className="font-bold">D100</div>
-                  <div className="text-xs opacity-75">1-100 (Percentile)</div>
-                </button>
-              </div>
+            {/* Collapsible Second Dice Section */}
+            <div className="mb-3">
+              <button
+                onClick={toggleSecondDiceSection}
+                className="w-full p-3 rounded-lg bg-slate-700/50 border border-slate-600 text-slate-300 hover:bg-slate-600/50 transition-all flex items-center justify-between"
+              >
+                <span className="text-sm font-medium">
+                  {showSecondDice ? '➖ Hide Second Die' : '➕ Add Second Die'}
+                </span>
+                <span className="text-slate-400">
+                  {secondDice ? `(${secondDice} selected)` : '(Optional)'}
+                </span>
+              </button>
               
-              {secondDice && (
-                <div className="mt-3 text-center">
-                  <button
-                    onClick={() => setSecondDice('')}
-                    className="text-sm text-slate-400 hover:text-slate-300"
-                  >
-                    ✕ Remove Second Die
-                  </button>
+              {showSecondDice && (
+                <div className="mt-3 p-3 rounded-lg bg-slate-600/50 border border-slate-500">
+                  <div className="grid grid-cols-4 gap-2">
+                    {[
+                      { name: 'D20', emoji: '🎲' },
+                      { name: 'D12', emoji: '🔷' },
+                      { name: 'D10', emoji: '🔟' },
+                      { name: 'D8', emoji: '🔸' },
+                      { name: 'D6', emoji: '⚀' },
+                      { name: 'D4', emoji: '🔺' },
+                    ].map((dice) => (
+                      <button
+                        key={dice.name}
+                        className={`p-3 rounded-md text-sm cursor-pointer flex flex-col items-center transition-all border-2 ${
+                          secondDice === dice.name 
+                            ? 'bg-blue-500/30 border-blue-500/60 text-blue-200' 
+                            : 'bg-slate-600/30 border-slate-500 text-slate-300 hover:bg-slate-500/30'
+                        }`}
+                        onClick={() => toggleSecondDie(dice.name)}
+                      >
+                        <div className="text-lg mb-1">
+                          {dice.emoji}
+                        </div>
+                        <div className="font-bold text-xs">{dice.name}</div>
+                      </button>
+                    ))}
+
+                    {/* D100 - Spans 2 columns */}
+                    <button
+                      className={`p-3 rounded-md text-sm cursor-pointer flex flex-col items-center col-span-2 transition-all border-2 ${
+                        secondDice === 'D100' 
+                          ? 'bg-blue-500/30 border-blue-500/60 text-blue-200' 
+                          : 'bg-slate-600/30 border-slate-500 text-slate-300 hover:bg-slate-500/30'
+                      }`}
+                      onClick={() => toggleSecondDie('D100')}
+                    >
+                      <div className="text-lg mb-1">
+                        🎯
+                      </div>
+                      <div className="font-bold text-xs">D100</div>
+                    </button>
+                  </div>
+                  
+                  {secondDice && (
+                    <div className="mt-3 text-center">
+                      <button
+                        onClick={() => setSecondDice('')}
+                        className="text-sm text-slate-400 hover:text-slate-300"
+                      >
+                        ✕ Remove Second Die
+                      </button>
+                    </div>
+                  )}
                 </div>
               )}
             </div>
 
             {/* Advantage/Disadvantage Buttons - Universal for D20 rolls */}
-            <div className="p-4 rounded-lg mb-6 bg-slate-600/50 border border-slate-500">
-              <h4 className="text-base mb-3 text-white text-center">
-                ⚖️ D20 Roll Modifier
-              </h4>
+            <div className="p-3 rounded-lg mb-4 bg-slate-600/50 border border-slate-500">
               <div className="flex gap-4 justify-center">
                 <button
-                  className={`px-6 py-3 rounded-lg text-base font-medium transition-all border-2 flex-1 max-w-[200px] ${
+                  className={`px-6 py-2 rounded-lg text-base font-medium transition-all border-2 flex-1 max-w-[200px] ${
                     advantageMode === 'advantage'
                       ? 'bg-green-500/30 border-green-500/60 text-green-300 shadow-lg shadow-green-500/20'
                       : 'bg-slate-700/50 border-slate-600 text-slate-300 hover:bg-slate-600/50 hover:border-slate-500'
@@ -351,7 +367,7 @@ export default function DiceActionPanel({
                   📈 Advantage
                 </button>
                 <button
-                  className={`px-6 py-3 rounded-lg text-base font-medium transition-all border-2 flex-1 max-w-[200px] ${
+                  className={`px-6 py-2 rounded-lg text-base font-medium transition-all border-2 flex-1 max-w-[200px] ${
                     advantageMode === 'disadvantage'
                       ? 'bg-red-500/30 border-red-500/60 text-red-300 shadow-lg shadow-red-500/20'
                       : 'bg-slate-700/50 border-slate-600 text-slate-300 hover:bg-slate-600/50 hover:border-slate-500'
@@ -364,21 +380,23 @@ export default function DiceActionPanel({
             </div>
 
             {/* Bonus Input */}
-            <div className="p-4 rounded-lg mb-6 bg-slate-600/50 border border-slate-500">
-              <h4 className="text-base mb-3 text-white">
-                ➕ Add Bonus (Optional)
-              </h4>
-              <input
-                type="text"
-                placeholder="e.g., +3, -1, +5"
-                value={rollBonus}
-                onChange={(e) => setRollBonus(e.target.value)}
-                className="py-2 px-3 rounded-md text-sm bg-slate-800 border border-slate-500 text-white w-full"
-              />
+            <div className="p-3 rounded-lg mb-4 bg-slate-600/50 border border-slate-500">
+              <div className="flex items-center gap-4">
+                <h4 className="text-sm text-white whitespace-nowrap">
+                  ➕ Add Bonus
+                </h4>
+                <input
+                  type="text"
+                  placeholder="e.g., +3, -1, +5"
+                  value={rollBonus}
+                  onChange={(e) => setRollBonus(e.target.value)}
+                  className="py-2 px-3 rounded-md text-sm bg-slate-800 border border-slate-500 text-white flex-1"
+                />
+              </div>
             </div>
 
             {/* Roll Preview */}
-            <div className="mb-4 p-3 bg-slate-700/30 rounded-lg border border-slate-600">
+            <div className="mb-3 p-2 bg-slate-700/30 rounded-lg border border-slate-600">
               <div className="text-sm text-slate-300 text-center">
                 <strong>Roll Preview:</strong> {selectedDice}{secondDice ? ` + ${secondDice}` : ''}{advantageMode !== 'normal' ? ` (${advantageMode})` : ''}{rollBonus ? ` ${rollBonus}` : ''}
               </div>
@@ -388,7 +406,7 @@ export default function DiceActionPanel({
             <div className="flex gap-4 justify-center">
               <button
                 onClick={() => handleDiceRoll()}
-                className="bg-emerald-500/20 border-2 border-emerald-500/50 text-emerald-500 rounded-xl px-8 py-4 text-lg font-bold cursor-pointer transition-all duration-200 hover:bg-emerald-500/30 hover:scale-105"
+                className="bg-emerald-500/20 border-2 border-emerald-500/50 text-emerald-500 rounded-xl px-6 py-3 text-base font-bold cursor-pointer transition-all duration-200 hover:bg-emerald-500/30 hover:scale-105"
               >
                 🎲 Roll {selectedDice}{secondDice ? ` + ${secondDice}` : ''}{rollBonus ? ` ${rollBonus}` : ''}
                 {myPrompts.length > 0 && (
@@ -403,7 +421,7 @@ export default function DiceActionPanel({
 
               <button
                 onClick={() => setIsDiceModalOpen(false)}
-                className="bg-slate-500/20 border-2 border-slate-500/50 text-slate-500 rounded-xl px-8 py-4 text-lg font-bold cursor-pointer transition-all duration-200 hover:bg-slate-500/30"
+                className="bg-slate-500/20 border-2 border-slate-500/50 text-slate-500 rounded-xl px-6 py-3 text-base font-bold cursor-pointer transition-all duration-200 hover:bg-slate-500/30"
               >
                 Cancel
               </button>
