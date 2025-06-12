@@ -59,8 +59,31 @@ export const handleLobbyUpdate = (data, { setLobbyUsers }) => {
   console.log("received lobby update:", data);
   const { lobby_users } = data;
   
+  // Add default status to each user if not present
+  const usersWithStatus = (lobby_users || []).map(user => ({
+    ...user,
+    status: user.status || 'connected'
+  }));
+  
   // Update lobby users list
-  setLobbyUsers(lobby_users || []);
+  setLobbyUsers(usersWithStatus);
+};
+
+export const handlePlayerDisconnectedLobby = (data, { setLobbyUsers, setDisconnectTimeouts, disconnectTimeouts }) => {
+  console.log("received player disconnected for lobby:", data);
+  const { disconnected_player } = data;
+  
+  // Mark user as disconnecting in lobby (but don't set timeout - let backend handle removal)
+  setLobbyUsers(prev => 
+    prev.map(user => 
+      user.name === disconnected_player 
+        ? { ...user, status: 'disconnecting' }
+        : user
+    )
+  );
+  
+  // Don't set frontend timeout - let backend handle the 30-second removal
+  // The backend will send a lobby_update when user is actually removed
 };
 
 export const handlePlayerKicked = (data, { addToLog, thisPlayer }) => {
@@ -86,7 +109,7 @@ export const handleCombatState = (data, { setCombatActive }) => {
   // to prevent duplication for the player who initiated the change
 };
 
-export const handlePlayerDisconnected = (data, { addToLog, thisPlayer }) => {
+export const handlePlayerDisconnected = (data, { addToLog, thisPlayer, setLobbyUsers, setDisconnectTimeouts, disconnectTimeouts }) => {
   console.log("received player disconnect:", data);
   const disconnected_player = data["disconnected_player"];
 
@@ -96,6 +119,9 @@ export const handlePlayerDisconnected = (data, { addToLog, thisPlayer }) => {
   if (disconnected_player !== thisPlayer) {
     addToLog(`${disconnected_player} disconnected`, 'system');
   }
+  
+  // Handle lobby disconnect visualization (just mark as disconnecting)
+  handlePlayerDisconnectedLobby(data, { setLobbyUsers, setDisconnectTimeouts, disconnectTimeouts });
 };
 
 export const handleDiceRoll = (data, { addToLog }) => {

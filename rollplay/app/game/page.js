@@ -33,6 +33,9 @@ function GameContent() {
 
   // Lobby state for connected users not in party
   const [lobbyUsers, setLobbyUsers] = useState([]);
+  
+  // Track disconnect timeouts for lobby users
+  const [disconnectTimeouts, setDisconnectTimeouts] = useState({});
 
   // Pre-computed player-to-seat mapping for O(1) lookups
   const playerSeatMap = useMemo(() => {
@@ -381,12 +384,14 @@ function GameContent() {
     setIsDicePromptActive,
     setPlayerSeatMap,
     setLobbyUsers,
+    setDisconnectTimeouts,
     
     // Current state values
     chatLog,
     gameSeats,
     thisPlayer,
     lobbyUsers,
+    disconnectTimeouts,
     
     // Helper functions
     addToLog,

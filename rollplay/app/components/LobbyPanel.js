@@ -35,17 +35,27 @@ export default function LobbyPanel({ lobbyUsers = [] }) {
           >
             {/* Connection Status Indicator */}
             <div className="connection-indicator">
-              <div className="w-[calc(8px*var(--ui-scale))] h-[calc(8px*var(--ui-scale))] bg-green-500 rounded-full shadow-sm shadow-green-500/50 animate-pulse"></div>
+              {user.status === 'disconnecting' ? (
+                <div className="w-[calc(8px*var(--ui-scale))] h-[calc(8px*var(--ui-scale))] bg-red-500 rounded-full shadow-sm shadow-red-500/50"></div>
+              ) : (
+                <div className="w-[calc(8px*var(--ui-scale))] h-[calc(8px*var(--ui-scale))] bg-green-500 rounded-full shadow-sm shadow-green-500/50"></div>
+              )}
             </div>
 
             {/* User Name */}
-            <div className="user-name text-[calc(12px*var(--ui-scale))] text-slate-300 font-medium flex-1">
+            <div className={`user-name text-[calc(12px*var(--ui-scale))] font-medium flex-1 ${
+              user.status === 'disconnecting' ? 'text-slate-400 opacity-60' : 'text-slate-300'
+            }`}>
               {toTitleCase(user.name)}
             </div>
 
-            {/* Optional Status Badge */}
-            <div className="status-badge text-[calc(9px*var(--ui-scale))] text-slate-500 bg-slate-700/50 px-[calc(4px*var(--ui-scale))] py-[calc(2px*var(--ui-scale))] rounded-full">
-              Waiting
+            {/* Status Badge */}
+            <div className={`status-badge text-[calc(9px*var(--ui-scale))] px-[calc(4px*var(--ui-scale))] py-[calc(2px*var(--ui-scale))] rounded-full ${
+              user.status === 'disconnecting' 
+                ? 'text-red-400 bg-red-900/30' 
+                : 'text-slate-500 bg-slate-700/50'
+            }`}>
+              {user.status === 'disconnecting' ? 'Disconnecting...' : 'Waiting'}
             </div>
           </div>
         ))}
