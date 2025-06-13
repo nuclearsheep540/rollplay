@@ -5,6 +5,7 @@ from config.settings import get_settings
 import logging
 import json
 from datetime import datetime
+import os
 
 logger = logging.getLogger()
 CONFIG = get_settings()
@@ -12,15 +13,18 @@ CONFIG = get_settings()
 class GameSettings(BaseModel):
     "Basic settings for a game lobby"
 
-    #TODO: seats: list, for updating over WS on seat changes ??
     max_players: int
     seat_layout: list
     created_at: datetime
     player_name: str
-
+    seat_colors: dict
 
 class GameService:
     "Creating and joining active game lobbies"
+
+    username = os.environ['MONGO_INITDB_ROOT_USERNAME']
+    password = os.environ['MONGO_INITDB_ROOT_PASSWORD']
+    conn = MongoClient(f'mongodb://{username}:{password}@db')
 
     def _get_active_session():
         "returns the active sessions collection"
