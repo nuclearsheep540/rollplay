@@ -40,7 +40,7 @@ class AdventureLogService:
             # Compound index for room-based queries (most important)
             self.adventure_logs.create_index([("room_id", 1), ("log_id", -1)])
             
-            # Index for timestamp-based queries
+            # Index for stamp-based queries
             self.adventure_logs.create_index([("room_id", 1), ("timestamp", -1)])
             
             # Index for cleanup operations
@@ -290,7 +290,7 @@ class AdventureLogService:
             print(f"Error deleting logs for room {room_id}: {e}")
             return 0
     
-    def bulk_cleanup_all_rooms(self, max_logs: int = 100):
+    def bulk_cleanup_all_rooms(self, max_logs: int = 200):
         """
         Perform cleanup for all rooms (useful for maintenance)
         Uses aggregation to efficiently process all rooms
@@ -355,12 +355,3 @@ class AdventureLogService:
         except Exception as e:
             print(f"Error getting stats for room {room_id}: {e}")
             return {}
-
-
-# Factory function to create service instance
-def create_adventure_log_service() -> AdventureLogService:
-    """
-    Factory function to create AdventureLogService instance
-    """
-
-    return AdventureLogService()
