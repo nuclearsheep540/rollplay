@@ -32,6 +32,11 @@ Rollplay is a virtual D&D/tabletop gaming platform called "Tabletop Tavern" that
   - `adventure_logs` - All game events (chat, rolls, system messages)
 - **Features**: Automated log cleanup, performance indexing
 
+### Schema Reference Patterns
+- **Current structures**: Check GameService class methods and AdventureLogService for field expectations
+- **Test data**: Examine mongo-init.js files for example documents (keep in sync with schema changes)
+- **Search hints**: Use Task tool to find schema patterns, search for 'insertOne' or 'update_one' operations
+
 ## Development Commands
 
 ### Local Development Setup
@@ -67,6 +72,19 @@ docker-compose build            # Build all services
 docker-compose up -d           # Deploy with SSL/Nginx
 ```
 
+### Development Troubleshooting
+```bash
+# Verify environment variables
+docker-compose config
+
+# Container inspection
+docker exec -it db-dev mongosh -u admin
+docker logs api-dev
+
+# Rebuild specific services
+docker-compose -f docker-compose.dev.yml build api
+```
+
 ## Environment Configuration
 
 Required `.env` file in project root:
@@ -78,6 +96,11 @@ MONGO_INITDB_ROOT_PASSWORD=pass
 MONGO_INITDB_DATABASE=rollplay
 ```
 
+### Environment Variable Validation
+- Use `docker-compose config` to verify .env variable substitution
+- Check that mongo-init templates use `${MONGO_INITDB_ROOT_USERNAME}` and `${MONGO_INITDB_ROOT_PASSWORD}`
+- Ensure GameService reads from `os.environ` for database credentials
+
 ## WebSocket Architecture
 
 - **Connection Management**: Centralized ConnectionManager in `api/app.py`
@@ -88,6 +111,11 @@ MONGO_INITDB_DATABASE=rollplay
 ## Key Development Patterns
 ### Styling
 - Always use tailwind css styles where possible
+
+### License Headers
+- All new source files must include GPL-3.0 license headers
+- JavaScript files: `/* Copyright (C) 2025 Matthew Davey */` and `/* SPDX-License-Identifier: GPL-3.0-or-later */`
+- Python files: `# Copyright (C) 2025 Matthew Davey` and `# SPDX-License-Identifier: GPL-3.0-or-later`
 
 ### Adding New Game Features
 1. Define WebSocket event type in `api/app.py` ConnectionManager
