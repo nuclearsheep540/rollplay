@@ -1,140 +1,72 @@
 # rollplay
-Online Dice Rolling
+Table-Top management app for virtual D&D sessions.
+
+![GitHub release (latest by date)](https://img.shields.io/github/v/release/nuclearsheep540/rollplay)
+![GitHub](https://img.shields.io/github/license/nuclearsheep540/rollplay)
+
+Rollplay is not intended to replace actual gameplay mechanics nor automate gameplay for players. The tools here are to help manage the manual intervention players conduct in order to play Dungeons & Dragons in a online format.
+
+Features intended from the app:
+- Map management
+- Sound/Music
+- Roll management
+- Tracking combat turns
+- Player map position tracking
+
+Alongside these features I've tried my best to implement the game lobby style application, allowing users to manage their own characters as well as users in the lobby and party, enabling as much agency over their experience as reasonably possible.
+
+## License
+This project is licensed under the GNU General Public License v3.0 - see the [LICENSE](LICENSE) file for
+details.
+
+---
+
+# Setup
+
+Dependencies
+- Node v18.20.6
+- Python 3.8
+
 
 Create .env at project root
 ```
 environment=dev
-app_version=0.0.1
+
+# NEXT.JS
+NEXT_PUBLIC_API_URL=http://localhost
+
+# VERSION CONTROL
+app_version=0.0.3
+nginx_version=0.1.4
+mongo_db_version=0.0.1
+certbot_version=0.1.2
+api_version=0.2.4
+
+# DATABASE
+MONGO_INITDB_ROOT_USERNAME=<your creds>
+MONGO_INITDB_ROOT_PASSWORD=<your creds>
+MONGO_INITDB_DATABASE=rollplay
+
+# LOGGING
 logging_log_level=DEBUG
 logging_email_from=""
 logging_email_to=""
 logging_email_subject=test
-
-NEXT_PUBLIC_API_URL=https://localhost
-
-MONGO_INITDB_ROOT_USERNAME=mdavey
-MONGO_INITDB_ROOT_PASSWORD=pass
-MONGO_INITDB_DATABASE=rollplay
-
 ```
-###
-Create new Next.js
-https://nextjs.org/learn-pages-router/basics/create-nextjs-app/setup
-`npx create-next-app@13 app --use-npm`
 
 ###
-Dockerising Next.js
-https://medium.com/@2018.itsuki/dockerize-a-next-js-app-4b03021e084d
+Build and run your development server via Docker.
 
 `docker-compose -f docker-compose.dev.yml build`
 `docker-compose -f docker-compose.dev.yml up`
 
-###
-database
-https://www.mongodb.com/compatibility/docker
 
-`mongosh -u admin`
+###
+Mongo access
+
+`docker exec -it dev-db bash`
+`mongosh -u <MONGO_INITDB_ROOT_USERNAME>`
 `use rollplay`
 `db.active_sessions.find()`
 `db.adventure_logs.find()`
 
-
-
-### troubleshooting
-forms
-https://nextjs.org/docs/pages/building-your-application/data-fetching/forms-and-mutations
-
-for debugging
-`docker-compose -f docker-compose.dev.yml up -d && docker attach api-dev`
-
-# GitHub
-echo <GH_PAT> | docker login ghcr.io -u nuclearsheep540 --password-stdin
-
-# Self Cert Dev
-```
-openssl req -x509 -nodes -days 365 -newkey rsa:2048 \
-  -keyout selfsigned.key \
-  -out selfsigned.crt
-
-```
-# Build Images
-first log in as above
-* docker compose build
-* docker compose push
-
-# AWS
-matt+tabletoptavern@jackalmedia.co.uk
-
-# EC2 Fresh Instance
-Locate your private key file. The key used to launch this instance is ec2-key.pem
-
-Run this command, if necessary, to ensure your key is not publicly viewable.
- chmod 400 "ec2-key.pem"
-
-Connect to your instance using its Public DNS:
- ec2-18-200-239-2.eu-west-1.compute.amazonaws.com
-
-Example:
-cd into .ssh
-
-ssh -i "new-ec2-key.pem" ubuntu@ec2-108-129-134-117.eu-west-1.compute.amazonaws.com 
-
- ubuntu@ec2-34.243.218.196.eu-west-1.compute.amazonaws.com
-
- ### Once in
-
-mkdir app
-cd app
-git init
-sudo apt update
-sudo apt install gh
-
-### creating the auth key 
-
-ssh-keygen -t ed25519 -C "matt@jackalmedia.co.uk"
-
-eval "$(ssh-agent -s)"
-ssh-add ~/.ssh/id_ed25519
-chmod 600 ~/.ssh/id_ed25519
-cat ~/.ssh/id_ed25519.pub
-
-Then take the cat output and add it as a key in:
-https://github.com/settings/keys
-
-
-vim ~/.ssh/config
-Host github.com
-        User git
-        Hostname github.com
-        PreferredAuthentications publickey
-        IdentityFile /home/ubuntu/.ssh/id_ed25519.pub
-
-
-### logging in to github and cloning
-
-sudo snap install docker
-
-echo $PAT_SECRET | docker login ghcr.io -u nuclearsheep540 --password-stdin
-
-git clone git@github.com:nuclearsheep540/rollplay.git
-
-sudo groupadd docker
-sudo usermod -aG docker $USER
-
-
-### force certbot to renew
-# On your production server - remove the existing directory and let certbot create a fresh one
-docker exec certbot-renewer rm -rf /etc/letsencrypt/live/tabletop-tavern.uk
-docker exec certbot-renewer rm -rf /etc/letsencrypt/archive/tabletop-tavern.uk
-docker exec certbot-renewer rm -f /etc/letsencrypt/renewal/tabletop-tavern.uk.conf
-
-# Now run certbot again - it should successfully save the certificate
-docker exec certbot-renewer certbot certonly --webroot \
-  -w /var/www/certbot \
-  -d tabletop-tavern.uk \
-  -d www.tabletop-tavern.uk \
-  --email matt@jackalmedia.co.uk \
-  --agree-tos --non-interactive
-
-# Reload nginx to use the new certificate
-docker exec nginx nginx -s reload

@@ -1,3 +1,5 @@
+# Copyright (C) 2025 Matthew Davey
+# SPDX-License-Identifier: GPL-3.0-or-later
 from fastapi import FastAPI, Response, WebSocket
 from datetime import datetime
 import time

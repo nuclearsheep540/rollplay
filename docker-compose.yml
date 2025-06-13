@@ -2,7 +2,7 @@ version: "3.8"
 
 services:
   nginx:
-    image: ghcr.io/nuclearsheep540/rollplay/nginx:0.1.4
+    image: ghcr.io/nuclearsheep540/rollplay/nginx:${nginx_version}
     build:
       context: ./docker/prod/nginx
       dockerfile: Dockerfile
@@ -26,7 +26,7 @@ services:
     env_file:
       - .env
     container_name: "api"
-    image: ghcr.io/nuclearsheep540/rollplay/api:0.2.4
+    image: ghcr.io/nuclearsheep540/rollplay/api:${api_version}
     build:
       context: ./api
       dockerfile: ../docker/prod/api/Dockerfile
@@ -40,7 +40,7 @@ services:
     env_file:
       - .env
     container_name: "rollplay"
-    image: ghcr.io/nuclearsheep540/rollplay/rollplay:0.4.2
+    image: ghcr.io/nuclearsheep540/rollplay/rollplay:${app_version}
     build:
       context: ./rollplay
       dockerfile: ../docker/prod/rollplay/Dockerfile
@@ -56,7 +56,7 @@ services:
       - .env
     container_name: "db"
     hostname: mongo
-    image: ghcr.io/nuclearsheep540/rollplay/db:0.2.1
+    image: ghcr.io/nuclearsheep540/rollplay/db:${mongo_db_version}
     build:
       context: ./docker
       dockerfile: prod/db/Dockerfile
@@ -68,7 +68,7 @@ services:
       - default
 
   certbot-renewer:
-    image: ghcr.io/nuclearsheep540/rollplay/certbot:0.1.2
+    image: ghcr.io/nuclearsheep540/rollplay/certbot:${certbot_version}
     build:
       context: ./docker/prod/certbot-renewer
       dockerfile: Dockerfile
