@@ -57,9 +57,8 @@ class WebsocketEvent():
 
     @staticmethod
     async def player_connection(websocket, data, event_data, player_name, client_id, manager):
-        # Normalize player name to lowercase for consistent identification
-        player_name = player_name.lower()
-        await manager.connect(websocket, client_id, player_name)
+        # Note: manager.connect() is already called in app_websocket.py
+        # This event just handles the logging and broadcast
 
         # Log player connection to database
         log_message = format_message(MESSAGE_TEMPLATES["player_connected"], player=player_name)

@@ -47,8 +47,11 @@ export function useWebSocket(roomId, playerName, gameContext) {
       setIsConnected(true);
     };
 
-    ws.onclose = () => {
+    ws.onclose = (event) => {
       console.log("WebSocket disconnected");
+      console.log("Close code:", event.code);
+      console.log("Close reason:", event.reason);
+      console.log("Was clean:", event.wasClean);
       setIsConnected(false);
     };
 
