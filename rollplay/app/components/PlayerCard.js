@@ -15,6 +15,7 @@ export default function PlayerCard({
     currentColor = null
   }) {
   
+  
     useEffect(() => {
       console.log(`Seat ${seatId} updated:`, seats[seatId]);
     }, [seats[seatId]]);

@@ -25,8 +25,10 @@ class AdventureLogService:
 
     def _get_adventure_logs(self):
         "returns the adventure logs collection"
+        username = CONFIG.get('MONGO_USER',"")
+        password = CONFIG.get('MONGO_PASS',"")
         try: 
-            conn = MongoClient('mongodb://%s:%s@db' % ('mdavey', 'pass'))
+            conn = MongoClient('mongodb://%s:%s@db' % (username, password))
             db = conn.rollplay
             collection = db.adventure_logs
             logger.info("Connected successfully to mongo DB") 
@@ -40,7 +42,7 @@ class AdventureLogService:
             # Compound index for room-based queries (most important)
             self.adventure_logs.create_index([("room_id", 1), ("log_id", -1)])
             
-            # Index for timestamp-based queries
+            # Index for stamp-based queries
             self.adventure_logs.create_index([("room_id", 1), ("timestamp", -1)])
             
             # Index for cleanup operations
@@ -117,9 +119,9 @@ class AdventureLogService:
         self, 
         room_id: str, 
         message: str, 
-        log_type: str, 
+        log_type, 
         player_name: Optional[str] = None, 
-        max_logs: int = 100,
+        max_logs: int = 200,
         prompt_id: Optional[str] = None
     ) -> Dict:
         """
@@ -128,14 +130,17 @@ class AdventureLogService:
         Args:
             room_id: The room/session ID
             message: The log message content
-            log_type: Type of log (system, player-roll, dm-roll, etc.)
+            log_type: Type of log (LogType enum or string)
             player_name: Name of the player (optional)
-            max_logs: Maximum number of logs to keep per room (default: 100)
+            max_logs: Maximum number of logs to keep per room (default: 200)
             prompt_id: Unique prompt ID for linking (optional)
             
         Returns:
             Dict: The inserted log document
         """
+        
+        # Handle LogType enum conversion internally
+        log_type_value = log_type.value if hasattr(log_type, 'value') else log_type
         
         # Generate sequential log ID for ordering
         log_id = int(time.time() * 1000000)  # Microsecond precision for better ordering
@@ -144,7 +149,7 @@ class AdventureLogService:
         new_log = {
             "room_id": room_id,
             "message": message,
-            "type": log_type,
+            "type": log_type_value,
             "timestamp": datetime.utcnow(),
             "player_name": player_name,
             "log_id": log_id
@@ -290,7 +295,7 @@ class AdventureLogService:
             print(f"Error deleting logs for room {room_id}: {e}")
             return 0
     
-    def bulk_cleanup_all_rooms(self, max_logs: int = 100):
+    def bulk_cleanup_all_rooms(self, max_logs: int = 200):
         """
         Perform cleanup for all rooms (useful for maintenance)
         Uses aggregation to efficiently process all rooms
@@ -355,12 +360,3 @@ class AdventureLogService:
         except Exception as e:
             print(f"Error getting stats for room {room_id}: {e}")
             return {}
-
-
-# Factory function to create service instance
-def create_adventure_log_service() -> AdventureLogService:
-    """
-    Factory function to create AdventureLogService instance
-    """
-
-    return AdventureLogService()

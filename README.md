@@ -26,6 +26,7 @@ details.
 Dependencies
 - Node v18.20.6
 - Python 3.8
+- Docker
 
 
 Create .env at project root

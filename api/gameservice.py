@@ -7,7 +7,6 @@ from config.settings import get_settings
 import logging
 import json
 from datetime import datetime
-import os
 
 logger = logging.getLogger()
 CONFIG = get_settings()
@@ -24,8 +23,8 @@ class GameSettings(BaseModel):
 class GameService:
     "Creating and joining active game lobbies"
 
-    username = os.environ['MONGO_INITDB_ROOT_USERNAME']
-    password = os.environ['MONGO_INITDB_ROOT_PASSWORD']
+    username = CONFIG.get('MONGO_USER')
+    password = CONFIG.get('MONGO_PASS')
     conn = MongoClient(f'mongodb://{username}:{password}@db')
 
     def _get_active_session():
