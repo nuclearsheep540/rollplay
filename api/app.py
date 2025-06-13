@@ -1,12 +1,10 @@
 # Copyright (C) 2025 Matthew Davey
 # SPDX-License-Identifier: GPL-3.0-or-later
 from fastapi import FastAPI, Response
-import pydantic
 import logging
-from fastapi import HTTPException
 
+from fastapi import HTTPException
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.middleware.httpsredirect import HTTPSRedirectMiddleware
 
 from gameservice import GameService, GameSettings
 from adventure_log_service import AdventureLogService
@@ -15,7 +13,7 @@ from models.log_type import LogType
 
 logger = logging.getLogger()
 app = FastAPI()
-# app.add_middleware(HTTPSRedirectMiddleware)
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["http://localhost:3000"],
@@ -299,11 +297,6 @@ async def clear_all_messages(room_id: str, request: dict):
         raise HTTPException(status_code=500, detail=str(e))
 
 
-
-
-
-
-# Register WebSocket routes
+# Register WebSocket routes - avoid circular dependencies
 from websocket_handlers.app_websocket import register_websocket_routes
 register_websocket_routes(app)
-
