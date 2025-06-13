@@ -2,7 +2,7 @@ version: "3.8"
 
 services:
   nginx:
-    image: ghcr.io/nuclearsheep540/rollplay/nginx:0.1.2
+    image: ghcr.io/nuclearsheep540/rollplay/nginx:0.1.4
     build:
       context: ./docker/prod/nginx
       dockerfile: Dockerfile
@@ -68,7 +68,7 @@ services:
       - default
 
   certbot-renewer:
-    image: ghcr.io/nuclearsheep540/rollplay/certbot:0.1.0
+    image: ghcr.io/nuclearsheep540/rollplay/certbot:0.1.2
     build:
       context: ./docker/prod/certbot-renewer
       dockerfile: Dockerfile
