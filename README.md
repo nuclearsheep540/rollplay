@@ -12,6 +12,11 @@ Features intended from the app:
 
 Alongside these features I've tried my best to implement the game lobby style application, allowing users to manage their own characters as well as users in the lobby and party, enabling as much agency over their experience as reasonably possible.
 
+## License
+This project is licensed under the GNU General Public License v3.0 - see the [LICENSE](LICENSE) file for
+details.
+
+---
 
 # Setup
 
@@ -44,19 +49,19 @@ logging_log_level=DEBUG
 logging_email_from=""
 logging_email_to=""
 logging_email_subject=test
-
-
 ```
 
 ###
-Build and run Docker images
+Build and run your development server via Docker.
 
 `docker-compose -f docker-compose.dev.yml build`
 `docker-compose -f docker-compose.dev.yml up`
 
-###
-Mongo
 
+###
+Mongo access
+
+`docker exec -it dev-db bash`
 `mongosh -u <MONGO_INITDB_ROOT_USERNAME>`
 `use rollplay`
 `db.active_sessions.find()`
