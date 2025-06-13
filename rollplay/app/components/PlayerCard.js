@@ -15,13 +15,6 @@ export default function PlayerCard({
     currentColor = null
   }) {
   
-    // DEBUG: Check sendSeatChange function
-    useEffect(() => {
-      console.log('🔍 PlayerCard Debug:');
-      console.log('  sendSeatChange:', sendSeatChange);
-      console.log('  typeof sendSeatChange:', typeof sendSeatChange);
-      console.log('  sendSeatChange is function:', typeof sendSeatChange === 'function');
-    }, [sendSeatChange]);
   
     useEffect(() => {
       console.log(`Seat ${seatId} updated:`, seats[seatId]);
@@ -56,12 +49,7 @@ export default function PlayerCard({
           isActive: false
         };
         
-        console.log('🚀 About to call sendSeatChange:', typeof sendSeatChange);
-        if (typeof sendSeatChange === 'function') {
-          sendSeatChange(newSeats);
-        } else {
-          console.error('❌ sendSeatChange is not a function!', sendSeatChange);
-        }
+        sendSeatChange(newSeats);
       }
     }
   
@@ -75,12 +63,7 @@ export default function PlayerCard({
           isActive: false
         };
         
-        console.log('🚀 About to call sendSeatChange:', typeof sendSeatChange);
-        if (typeof sendSeatChange === 'function') {
-          sendSeatChange(newSeats);
-        } else {
-          console.error('❌ sendSeatChange is not a function!', sendSeatChange);
-        }
+        sendSeatChange(newSeats);
       }
     }
   

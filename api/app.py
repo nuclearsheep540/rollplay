@@ -307,22 +307,3 @@ async def clear_all_messages(room_id: str, request: dict):
 from websocket_handlers.app_websocket import register_websocket_routes
 register_websocket_routes(app)
 
-# Debug: Print all registered routes
-print("Registered routes:")
-for route in app.routes:
-    print(f"  {route.path} ({route.__class__.__name__})")
-
-@app.get("/debug/routes")
-async def debug_routes():
-    """Debug endpoint to check registered routes"""
-    return {
-        "routes": [
-            {
-                "path": route.path,
-                "methods": getattr(route, 'methods', ['WebSocket']) if hasattr(route, 'methods') else ['WebSocket'],
-                "type": route.__class__.__name__
-            }
-            for route in app.routes
-        ]
-    }
-
