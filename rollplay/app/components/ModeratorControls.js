@@ -14,7 +14,11 @@ export default function ModeratorControls({
   roomId,
   thisPlayer,
   onRoleChange, // Callback when roles are changed
-  sendRoleChange // WebSocket function to broadcast role changes
+  sendRoleChange, // WebSocket function to broadcast role changes
+  setSeatCount, // Function to change seat count
+  handleKickPlayer, // Function to kick players
+  handleClearSystemMessages, // Function to clear system messages
+  handleClearAllMessages // Function to clear all messages
 }) {
   
   // State for main panel collapse
@@ -23,13 +27,21 @@ export default function ModeratorControls({
   // State for collapsible sections
   const [expandedSections, setExpandedSections] = useState({
     moderators: true,
-    dm: true
+    dm: true,
+    party: true
   });
 
   // State for modals
   const [isModeratorModalOpen, setIsModeratorModalOpen] = useState(false);
   const [isDMModalOpen, setIsDMModalOpen] = useState(false);
   const [selectedAction, setSelectedAction] = useState(''); // 'add_moderator', 'remove_moderator', 'set_dm'
+  
+  // State for party management
+  const [isSeatManagement, setIsSeatManagement] = useState(false);
+  const [isKickModalOpen, setIsKickModalOpen] = useState(false);
+  const [selectedPlayerToKick, setSelectedPlayerToKick] = useState('');
+  const [isClearingLogs, setIsClearingLogs] = useState(false);
+  const [isClearingAllLogs, setIsClearingAllLogs] = useState(false);
 
   const toggleSection = (section) => {
     setExpandedSections(prev => ({
@@ -542,6 +554,211 @@ export default function ModeratorControls({
               <button 
                 className="px-4 py-2 bg-gray-600 border border-gray-500 text-gray-300 rounded transition-all duration-200 hover:bg-gray-500"
                 onClick={() => setIsDMModalOpen(false)}
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Party Management Section */}
+      <div className="mb-3 flex-shrink-0">
+        <div 
+          className="flex items-center justify-between cursor-pointer bg-blue-500/10 rounded transition-all duration-200 hover:bg-blue-500/15 mb-0"
+          style={{
+            padding: 'calc(12px * var(--ui-scale))',
+            borderRadius: 'calc(4px * var(--ui-scale))',
+          }}
+          onClick={() => toggleSection('party')}
+        >
+          <span className="text-blue-300 font-semibold uppercase tracking-wide" style={{
+            fontSize: 'calc(12px * var(--ui-scale))',
+          }}>
+            👥 Party Management
+          </span>
+          <span className={`text-blue-500 transition-transform duration-200 ${expandedSections.party ? 'rotate-180' : ''}`} style={{
+            fontSize: 'calc(12px * var(--ui-scale))',
+          }}>
+            ▼
+          </span>
+        </div>
+        {expandedSections.party && (
+          <div className="mt-2 space-y-2">
+            {/* Seat Count Management */}
+            <div className="mb-4">
+              <div className="text-blue-400 font-medium mb-2" style={{
+                fontSize: 'calc(11px * var(--ui-scale))',
+              }}>🪑 Seat Count</div>
+              <div className="flex items-center gap-2">
+                <button 
+                  className="bg-blue-500/10 border border-blue-500/30 text-blue-300 rounded transition-all duration-200 hover:bg-blue-500/20"
+                  style={{
+                    padding: 'calc(6px * var(--ui-scale)) calc(8px * var(--ui-scale))',
+                    fontSize: 'calc(10px * var(--ui-scale))',
+                  }}
+                  onClick={() => setIsSeatManagement(!isSeatManagement)}
+                >
+                  {isSeatManagement ? '📝' : '⚙️'} {isSeatManagement ? 'Set' : 'Manage'}
+                </button>
+                
+                {isSeatManagement && (
+                  <div className="flex items-center gap-2">
+                    {[2, 3, 4, 5, 6, 7, 8].map(count => (
+                      <button
+                        key={count}
+                        className={`border rounded transition-all duration-200 ${
+                          gameSeats?.length === count
+                            ? 'bg-blue-500/30 border-blue-400 text-blue-200'
+                            : 'bg-blue-500/10 border-blue-500/30 text-blue-300 hover:bg-blue-500/20'
+                        }`}
+                        style={{
+                          padding: 'calc(4px * var(--ui-scale)) calc(6px * var(--ui-scale))',
+                          fontSize: 'calc(10px * var(--ui-scale))',
+                        }}
+                        onClick={() => {
+                          setSeatCount(count);
+                          setIsSeatManagement(false);
+                        }}
+                      >
+                        {count}
+                      </button>
+                    ))}
+                  </div>
+                )}
+                
+                {!isSeatManagement && (
+                  <span className="text-blue-400/70" style={{
+                    fontSize: 'calc(10px * var(--ui-scale))',
+                  }}>
+                    Current: {gameSeats?.length || 0}
+                  </span>
+                )}
+              </div>
+            </div>
+
+            {/* Kick Player */}
+            <button 
+              className="w-full bg-red-500/10 border border-red-500/30 text-red-300 rounded text-left transition-all duration-200 hover:bg-red-500/20"
+              style={{
+                padding: 'calc(8px * var(--ui-scale))',
+                borderRadius: 'calc(4px * var(--ui-scale))',
+                fontSize: 'calc(12px * var(--ui-scale))',
+              }}
+              onClick={() => setIsKickModalOpen(true)}
+            >
+              🚫 Kick Player
+            </button>
+
+            {/* Clear Messages */}
+            <div className="space-y-1">
+              <button 
+                className={`w-full border text-left rounded transition-all duration-200 ${
+                  isClearingLogs 
+                    ? 'bg-orange-500/20 border-orange-500/40 text-orange-200 cursor-not-allowed'
+                    : 'bg-orange-500/10 border-orange-500/30 text-orange-300 hover:bg-orange-500/20'
+                }`}
+                style={{
+                  padding: 'calc(8px * var(--ui-scale))',
+                  borderRadius: 'calc(4px * var(--ui-scale))',
+                  fontSize: 'calc(12px * var(--ui-scale))',
+                }}
+                onClick={() => {
+                  if (!isClearingLogs) {
+                    setIsClearingLogs(true);
+                    handleClearSystemMessages().finally(() => setIsClearingLogs(false));
+                  }
+                }}
+                disabled={isClearingLogs}
+              >
+                {isClearingLogs ? '🔄 Clearing...' : '🧹 Clear System Messages'}
+              </button>
+              
+              <button 
+                className={`w-full border text-left rounded transition-all duration-200 ${
+                  isClearingAllLogs 
+                    ? 'bg-red-500/20 border-red-500/40 text-red-200 cursor-not-allowed'
+                    : 'bg-red-500/10 border-red-500/30 text-red-300 hover:bg-red-500/20'
+                }`}
+                style={{
+                  padding: 'calc(8px * var(--ui-scale))',
+                  borderRadius: 'calc(4px * var(--ui-scale))',
+                  fontSize: 'calc(12px * var(--ui-scale))',
+                }}
+                onClick={() => {
+                  if (!isClearingAllLogs) {
+                    setIsClearingAllLogs(true);
+                    handleClearAllMessages().finally(() => setIsClearingAllLogs(false));
+                  }
+                }}
+                disabled={isClearingAllLogs}
+              >
+                {isClearingAllLogs ? '🔄 Clearing...' : '💥 Clear All Messages'}
+              </button>
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* Kick Player Modal */}
+      {isKickModalOpen && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50">
+          <div 
+            className="bg-slate-800 border border-red-500/30 rounded-lg shadow-2xl max-w-md w-full mx-4"
+            style={{
+              padding: 'calc(24px * var(--ui-scale))',
+              borderRadius: 'calc(12px * var(--ui-scale))',
+            }}
+          >
+            <div className="flex items-center justify-between mb-6">
+              <h3 className="text-red-300 font-bold">🚫 Kick Player</h3>
+              <button 
+                className="text-gray-400 hover:text-white transition-colors"
+                onClick={() => setIsKickModalOpen(false)}
+              >
+                ✕
+              </button>
+            </div>
+
+            <div className="mb-6">
+              <p className="text-gray-300 mb-4">Select a player to remove from the game:</p>
+              
+              {activePlayers.length > 0 ? (
+                <div className="space-y-2">
+                  {activePlayers.map((player) => (
+                    <button
+                      key={player.seatId}
+                      className="w-full text-left p-3 bg-red-500/10 border border-red-500/30 text-red-300 rounded transition-all duration-200 hover:bg-red-500/20"
+                      onClick={() => {
+                        handleKickPlayer(player.playerName);
+                        setIsKickModalOpen(false);
+                      }}
+                    >
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <div className="font-medium">{player.playerName}</div>
+                          {player.characterData && (
+                            <div className="text-gray-400 text-sm">
+                              {player.characterData.class} • Level {player.characterData.level}
+                            </div>
+                          )}
+                        </div>
+                        <div className="text-red-400">🚫</div>
+                      </div>
+                    </button>
+                  ))}
+                </div>
+              ) : (
+                <div className="text-center py-8 text-gray-500">
+                  <p>No players to kick</p>
+                </div>
+              )}
+            </div>
+
+            <div className="flex justify-end gap-3">
+              <button 
+                className="px-4 py-2 bg-gray-600 border border-gray-500 text-gray-300 rounded transition-all duration-200 hover:bg-gray-500"
+                onClick={() => setIsKickModalOpen(false)}
               >
                 Cancel
               </button>

@@ -891,6 +891,10 @@ function GameContent() {
             thisPlayer={thisPlayer}
             onRoleChange={handleRoleChange}
             sendRoleChange={sendRoleChange}
+            setSeatCount={setSeatCount}
+            handleKickPlayer={handleKickPlayer}
+            handleClearSystemMessages={handleClearSystemMessages}
+            handleClearAllMessages={handleClearAllMessages}
           />
           
           <DMControlCenter
@@ -903,11 +907,7 @@ function GameContent() {
             combatActive={combatActive}
             setCombatActive={sendCombatStateChange}
             gameSeats={gameSeats}
-            setSeatCount={setSeatCount}
             roomId={roomId}
-            handleKickPlayer={handleKickPlayer}
-            handleClearSystemMessages={handleClearSystemMessages}
-            handleClearAllMessages={handleClearAllMessages}  // NEW
             activePrompts={activePrompts}        // UPDATED: Pass array instead of single prompt
             clearDicePrompt={clearDicePrompt}    // UPDATED: Now accepts prompt ID
           />
