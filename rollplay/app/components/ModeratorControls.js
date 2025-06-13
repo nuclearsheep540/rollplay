@@ -10,6 +10,7 @@ export default function ModeratorControls({
   isHost,
   isDM,
   gameSeats,
+  lobbyUsers,
   roomId,
   thisPlayer,
   onRoleChange, // Callback when roles are changed
@@ -36,6 +37,17 @@ export default function ModeratorControls({
 
   // Get active players (non-empty seats)
   const activePlayers = gameSeats?.filter(seat => seat.playerName !== "empty") || [];
+  
+  // Combine seated players and lobby users for DM/moderator selection
+  const allAvailableUsers = [
+    ...activePlayers,
+    ...(lobbyUsers || []).map(user => ({
+      playerName: user.player_name || user.name,
+      seatId: `lobby_${user.player_name || user.name}`,
+      characterData: null,
+      isInLobby: true
+    }))
+  ];
   
   // Get current room data for displaying roles
   const [roomData, setRoomData] = useState(null);
@@ -303,44 +315,105 @@ export default function ModeratorControls({
                   : 'Select a moderator to remove:'}
               </p>
               
-              {activePlayers.length > 0 ? (
+              {allAvailableUsers.length > 0 ? (
                 <div className="space-y-2">
-                  {activePlayers
-                    .filter(player => {
+                  {(() => {
+                    // Filter users based on the action
+                    const filteredUsers = allAvailableUsers.filter(user => {
                       if (selectedAction === 'add_moderator') {
-                        // Only show players who aren't already moderators and aren't the host
-                        return !roomData?.moderators?.includes(player.playerName) 
-                               && player.playerName !== roomData?.room_host;
+                        // Only show users who aren't already moderators and aren't the host
+                        return !roomData?.moderators?.includes(user.playerName) 
+                               && user.playerName !== roomData?.room_host;
                       } else {
                         // Only show current moderators (not the host)
-                        return roomData?.moderators?.includes(player.playerName);
+                        return roomData?.moderators?.includes(user.playerName);
                       }
-                    })
-                    .map((player) => (
-                      <button
-                        key={player.seatId}
-                        className={`w-full text-left p-3 rounded transition-all duration-200 ${
-                          selectedAction === 'add_moderator'
-                            ? 'bg-emerald-500/10 border border-emerald-500/30 text-emerald-300 hover:bg-emerald-500/20'
-                            : 'bg-orange-500/10 border border-orange-500/30 text-orange-300 hover:bg-orange-500/20'
-                        }`}
-                        onClick={() => handleRoleAction(selectedAction, player.playerName)}
-                      >
-                        <div className="flex items-center justify-between">
-                          <div>
-                            <div className="font-medium">{player.playerName}</div>
-                            {player.characterData && (
-                              <div className="text-gray-400 text-sm">
-                                {player.characterData.class} • Level {player.characterData.level}
-                              </div>
-                            )}
+                    });
+
+                    const seatedFiltered = filteredUsers.filter(user => !user.isInLobby);
+                    const lobbyFiltered = filteredUsers.filter(user => user.isInLobby);
+
+                    return (
+                      <>
+                        {/* Seated Players Section */}
+                        {seatedFiltered.length > 0 && (
+                          <>
+                            <div className={`text-xs mb-2 font-medium ${
+                              selectedAction === 'add_moderator' ? 'text-emerald-400/70' : 'text-orange-400/70'
+                            }`}>🪑 SEATED PLAYERS</div>
+                            {seatedFiltered.map((player) => (
+                              <button
+                                key={player.seatId}
+                                className={`w-full text-left p-3 rounded transition-all duration-200 ${
+                                  selectedAction === 'add_moderator'
+                                    ? 'bg-emerald-500/10 border border-emerald-500/30 text-emerald-300 hover:bg-emerald-500/20'
+                                    : 'bg-orange-500/10 border border-orange-500/30 text-orange-300 hover:bg-orange-500/20'
+                                }`}
+                                onClick={() => handleRoleAction(selectedAction, player.playerName)}
+                              >
+                                <div className="flex items-center justify-between">
+                                  <div>
+                                    <div className="font-medium">{player.playerName}</div>
+                                    {player.characterData && (
+                                      <div className="text-gray-400 text-sm">
+                                        {player.characterData.class} • Level {player.characterData.level}
+                                      </div>
+                                    )}
+                                  </div>
+                                  <div className={selectedAction === 'add_moderator' ? 'text-emerald-400' : 'text-orange-400'}>
+                                    {selectedAction === 'add_moderator' ? '➕' : '➖'}
+                                  </div>
+                                </div>
+                              </button>
+                            ))}
+                          </>
+                        )}
+                        
+                        {/* Lobby Users Section */}
+                        {lobbyFiltered.length > 0 && (
+                          <>
+                            {seatedFiltered.length > 0 && <div className={`my-3 border-t ${
+                              selectedAction === 'add_moderator' ? 'border-emerald-500/20' : 'border-orange-500/20'
+                            }`}></div>}
+                            <div className={`text-xs mb-2 font-medium ${
+                              selectedAction === 'add_moderator' ? 'text-emerald-400/70' : 'text-orange-400/70'
+                            }`}>🏛️ LOBBY USERS</div>
+                            {lobbyFiltered.map((user) => (
+                              <button
+                                key={user.seatId}
+                                className={`w-full text-left p-3 rounded transition-all duration-200 ${
+                                  selectedAction === 'add_moderator'
+                                    ? 'bg-emerald-500/10 border border-emerald-500/30 text-emerald-300 hover:bg-emerald-500/20'
+                                    : 'bg-orange-500/10 border border-orange-500/30 text-orange-300 hover:bg-orange-500/20'
+                                }`}
+                                onClick={() => handleRoleAction(selectedAction, user.playerName)}
+                              >
+                                <div className="flex items-center justify-between">
+                                  <div>
+                                    <div className="font-medium">{user.playerName}</div>
+                                    <div className={`text-sm ${
+                                      selectedAction === 'add_moderator' ? 'text-emerald-400/70' : 'text-orange-400/70'
+                                    }`}>
+                                      📡 Connected • In Lobby
+                                    </div>
+                                  </div>
+                                  <div className={selectedAction === 'add_moderator' ? 'text-emerald-400' : 'text-orange-400'}>
+                                    {selectedAction === 'add_moderator' ? '➕' : '➖'}
+                                  </div>
+                                </div>
+                              </button>
+                            ))}
+                          </>
+                        )}
+                        
+                        {filteredUsers.length === 0 && (
+                          <div className="text-center py-8 text-gray-500">
+                            <p>No players available for this action</p>
                           </div>
-                          <div className={selectedAction === 'add_moderator' ? 'text-emerald-400' : 'text-orange-400'}>
-                            {selectedAction === 'add_moderator' ? '➕' : '➖'}
-                          </div>
-                        </div>
-                      </button>
-                    ))}
+                        )}
+                      </>
+                    );
+                  })()}
                 </div>
               ) : (
                 <div className="text-center py-8 text-gray-500">
@@ -388,27 +461,58 @@ export default function ModeratorControls({
                 Select a player to set as Dungeon Master:
               </p>
               
-              {activePlayers.length > 0 ? (
+              {allAvailableUsers.length > 0 ? (
                 <div className="space-y-2">
-                  {activePlayers.map((player) => (
-                    <button
-                      key={player.seatId}
-                      className="w-full text-left p-3 bg-amber-500/10 border border-amber-500/30 text-amber-300 rounded transition-all duration-200 hover:bg-amber-500/20"
-                      onClick={() => handleRoleAction('set_dm', player.playerName)}
-                    >
-                      <div className="flex items-center justify-between">
-                        <div>
-                          <div className="font-medium">{player.playerName}</div>
-                          {player.characterData && (
-                            <div className="text-gray-400 text-sm">
-                              {player.characterData.class} • Level {player.characterData.level}
+                  {/* Seated Players Section */}
+                  {activePlayers.length > 0 && (
+                    <>
+                      <div className="text-amber-400/70 text-xs mb-2 font-medium">🪑 SEATED PLAYERS</div>
+                      {activePlayers.map((player) => (
+                        <button
+                          key={player.seatId}
+                          className="w-full text-left p-3 bg-amber-500/10 border border-amber-500/30 text-amber-300 rounded transition-all duration-200 hover:bg-amber-500/20"
+                          onClick={() => handleRoleAction('set_dm', player.playerName)}
+                        >
+                          <div className="flex items-center justify-between">
+                            <div>
+                              <div className="font-medium">{player.playerName}</div>
+                              {player.characterData && (
+                                <div className="text-gray-400 text-sm">
+                                  {player.characterData.class} • Level {player.characterData.level}
+                                </div>
+                              )}
                             </div>
-                          )}
-                        </div>
-                        <div className="text-amber-400">👑</div>
-                      </div>
-                    </button>
-                  ))}
+                            <div className="text-amber-400">👑</div>
+                          </div>
+                        </button>
+                      ))}
+                    </>
+                  )}
+                  
+                  {/* Lobby Users Section */}
+                  {lobbyUsers && lobbyUsers.length > 0 && (
+                    <>
+                      {activePlayers.length > 0 && <div className="my-3 border-t border-amber-500/20"></div>}
+                      <div className="text-amber-400/70 text-xs mb-2 font-medium">🏛️ LOBBY USERS</div>
+                      {lobbyUsers.map((user) => (
+                        <button
+                          key={`lobby_${user.player_name || user.name}`}
+                          className="w-full text-left p-3 bg-amber-500/10 border border-amber-500/30 text-amber-300 rounded transition-all duration-200 hover:bg-amber-500/20"
+                          onClick={() => handleRoleAction('set_dm', user.player_name || user.name)}
+                        >
+                          <div className="flex items-center justify-between">
+                            <div>
+                              <div className="font-medium">{user.player_name || user.name}</div>
+                              <div className="text-amber-400/70 text-sm">
+                                📡 Connected • In Lobby
+                              </div>
+                            </div>
+                            <div className="text-amber-400">👑</div>
+                          </div>
+                        </button>
+                      ))}
+                    </>
+                  )}
                 </div>
               ) : (
                 <div className="text-center py-8 text-gray-500">

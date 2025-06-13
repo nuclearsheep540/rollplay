@@ -886,6 +886,7 @@ function GameContent() {
             isHost={isHost}
             isDM={isDM}
             gameSeats={gameSeats}
+            lobbyUsers={lobbyUsers}
             roomId={roomId}
             thisPlayer={thisPlayer}
             onRoleChange={handleRoleChange}
