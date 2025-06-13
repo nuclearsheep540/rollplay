@@ -1,21 +1,17 @@
 # Copyright (C) 2025 Matthew Davey
 # SPDX-License-Identifier: GPL-3.0-or-later
-from fastapi import FastAPI, Response, WebSocket
-from datetime import datetime
-import time
+from fastapi import FastAPI, Response
 import pydantic
 import logging
 from fastapi import HTTPException
 
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.httpsredirect import HTTPSRedirectMiddleware
-from starlette.websockets import WebSocketDisconnect
 
 from gameservice import GameService, GameSettings
 from adventure_log_service import AdventureLogService
 from message_templates import format_message, MESSAGE_TEMPLATES
 from models.log_type import LogType
-from connection_manager import ConnectionManager
 
 logger = logging.getLogger()
 app = FastAPI()
@@ -29,8 +25,26 @@ app.add_middleware(
 )
 
 
-manager = ConnectionManager()
 adventure_log = AdventureLogService()
+
+# Helper function to add log entries
+def add_adventure_log(room_id: str, message: str, log_type: LogType, player_name: str = None, prompt_id: str = None):
+    """Helper function to add log entries with your default settings"""
+    try:
+        # Convert LogType enum to string value for the service
+        log_type_value = log_type.value if isinstance(log_type, LogType) else log_type
+        
+        return adventure_log.add_log_entry(
+            room_id=room_id,
+            message=message,
+            log_type=log_type_value,
+            player_name=player_name,
+            max_logs=200,
+            prompt_id=prompt_id
+        )
+    except Exception as e:
+        print(f"Failed to add adventure log: {e}")
+        return None
 
 
 @app.get("/game/{room_id}/logs")
@@ -289,437 +303,7 @@ async def clear_all_messages(room_id: str, request: dict):
 
 
 
-from websocket_events import WebsocketEvent
-# Add these new event handlers to your app.py websocket_endpoint function
-@app.websocket("/ws/{client_id}")
-async def websocket_endpoint(
-    websocket: WebSocket,
-    client_id: str,  # This should be your room_id
-    player_name: str
-):  
-    # Broadcast connection event to all clients
-    connect_message = WebsocketEvent.player_connection(
-        manager=manager,
-        websocket=websocket,
-        client_id=client_id
-    )
-    await manager.update_data(connect_message)
-
-    try:
-        while True:
-            data = await websocket.receive_json()
-            event_type = data.get("event_type")
-            event_data = data.get("data")
-
-            if event_type == "seat_change":
-                broadcast_message = WebsocketEvent.seat_change(
-                    data=data,
-                    player_name=player_name,
-                    client_id=client_id,
-                    manager=manager
-                )
-
-                # After seat change, update lobby
-                await manager.broadcast_lobby_update(client_id)
-
-            elif event_type == "dice_prompt":
-                    broadcast_message = WebsocketEvent.dice_prompt(
-                    data=data,
-                    player_name=player_name,
-                    client_id=client_id,
-                    manager=manager
-                )
-
-            elif event_type == "initiative_prompt_all":
-                if not event_data.get("players", []):
-                    print("⚡ No players provided for initiative prompt")
-                    continue
-
-                broadcast_message = WebsocketEvent.initiative_prompt_all(
-                    data=data,
-                    player_name=player_name,
-                    client_id=client_id,
-                    manager=manager
-                )
-
-            # NEW: Handle clearing dice prompts
-            elif event_type == "dice_prompt_clear":
-                cleared_by = event_data.get("cleared_by", player_name)
-                clear_all = event_data.get("clear_all", False)  # New: Support clearing all prompts
-                prompt_id = event_data.get("prompt_id")  # New: Support clearing specific prompt by ID
-                initiative_prompt_id = event_data.get("initiative_prompt_id")  # New: Initiative prompt ID for clear all
-                
-                # Remove adventure log entries for cancelled prompts
-                log_removal_message = None
-                if prompt_id:
-                    # Remove specific prompt log entry
-                    try:
-                        deleted_count = adventure_log.remove_log_by_prompt_id(client_id, prompt_id)
-                        if deleted_count > 0:
-                            print(f"🗑️ Removed adventure log entry for cancelled prompt {prompt_id}")
-                            
-                            # Prepare log removal message
-                            log_removal_message = {
-                                "event_type": "adventure_log_removed",
-                                "data": {
-                                    "prompt_id": prompt_id,
-                                    "removed_by": cleared_by
-                                }
-                            }
-                    except Exception as e:
-                        print(f"❌ Failed to remove adventure log for cancelled prompt {prompt_id}: {e}")
-                elif clear_all and initiative_prompt_id:
-                    # Remove initiative prompt log entry when clearing all
-                    try:
-                        deleted_count = adventure_log.remove_log_by_prompt_id(client_id, initiative_prompt_id)
-                        if deleted_count > 0:
-                            print(f"🗑️ Removed initiative prompt log entry {initiative_prompt_id}")
-                            
-                            # Prepare log removal message
-                            log_removal_message = {
-                                "event_type": "adventure_log_removed",
-                                "data": {
-                                    "prompt_id": initiative_prompt_id,
-                                    "removed_by": cleared_by
-                                }
-                            }
-                    except Exception as e:
-                        print(f"❌ Failed to remove initiative prompt log {initiative_prompt_id}: {e}")
-                
-                if clear_all:
-                    print(f"🎲 {cleared_by} cleared all dice prompts")
-                elif prompt_id:
-                    print(f"🎲 {cleared_by} cleared dice prompt {prompt_id}")
-                else:
-                    print(f"🎲 {cleared_by} cleared dice prompt")
-                
-                broadcast_message = {
-                    "event_type": "dice_prompt_clear",
-                    "data": {
-                        "cleared_by": cleared_by,
-                        "clear_all": clear_all,  # New: Include clear_all flag
-                        "prompt_id": prompt_id   # New: Include specific prompt ID if provided
-                    }
-                }
-
-            elif event_type == "combat_state":
-                # Existing combat state logic...
-                combat_active = event_data.get("combatActive", False)
-                action = "started" if combat_active else "ended"
-                
-                template_key = "combat_started" if action == "started" else "combat_ended"
-                log_message = format_message(MESSAGE_TEMPLATES[template_key], player=player_name)
-                
-                add_adventure_log(
-                    room_id=client_id,
-                    message=log_message,
-                    log_type=LogType.SYSTEM,
-                    player_name=player_name
-                )
-                
-                broadcast_message = {
-                    "event_type": "combat_state",
-                    "data": event_data
-                }
-
-            elif event_type == "seat_count_change":
-                # Handle seat count changes (no logging - not interesting for adventure log)
-                broadcast_message = {
-                    "event_type": "seat_count_change",
-                    "data": event_data,
-                    "player_name": player_name
-                }
-
-            elif event_type == "player_kicked":
-                # Existing player kick logic...
-                kicked_player = event_data.get("kicked_player")
-                
-                log_message = format_message(MESSAGE_TEMPLATES["player_kicked"], player=kicked_player)
-                
-                add_adventure_log(
-                    room_id=client_id,
-                    message=log_message,
-                    log_type=LogType.SYSTEM,
-                    player_name=player_name
-                )
-                
-                broadcast_message = {
-                    "event_type": "player_kicked",
-                    "data": event_data,
-                    "player_name": player_name
-                }
-
-            elif event_type == "dice_roll":
-                # Frontend sends pre-formatted message
-                roll_data = event_data
-                player = roll_data.get("player")
-                formatted_message = roll_data.get("message")  # Pre-formatted by frontend
-                prompt_id = roll_data.get("prompt_id")
-                
-                add_adventure_log(
-                    room_id=client_id,
-                    message=formatted_message,
-                    log_type=LogType.PLAYER_ROLL, 
-                    player_name=player
-                )
-                
-                if prompt_id:
-                    print(f"🎲 {formatted_message} (completing prompt {prompt_id})")
-                else:
-                    print(f"🎲 {formatted_message}")
-                
-                broadcast_message = {
-                    "event_type": "dice_roll",
-                    "data": {
-                        **event_data  # Frontend sends everything we need
-                    }
-                }
-                
-                # Auto-clear prompt if this was a prompted roll (has prompt_id or player)
-                clear_prompt_message = None
-                log_removal_message = None
-                if prompt_id:
-                    # Remove the adventure log entry for this prompt
-                    try:
-                        deleted_count = adventure_log.remove_log_by_prompt_id(client_id, prompt_id)
-                        if deleted_count > 0:
-                            print(f"🗑️ Removed adventure log entry for completed prompt {prompt_id}")
-                            
-                            # Prepare log removal message to send after dice roll
-                            log_removal_message = {
-                                "event_type": "adventure_log_removed",
-                                "data": {
-                                    "prompt_id": prompt_id,
-                                    "removed_by": "system"
-                                }
-                            }
-                    except Exception as e:
-                        print(f"❌ Failed to remove adventure log for prompt {prompt_id}: {e}")
-                    
-                    clear_prompt_message = {
-                        "event_type": "dice_prompt_clear",
-                        "data": {
-                            "cleared_by": "system",
-                            "auto_cleared": True,
-                            "prompt_id": prompt_id  # Clear specific prompt by ID
-                        }
-                    }
-                elif player:
-                    # For initiative prompts, clear by player name since we might not have exact prompt_id
-                    clear_prompt_message = {
-                        "event_type": "dice_prompt_clear",
-                        "data": {
-                            "cleared_by": "system", 
-                            "auto_cleared": True,
-                            "cleared_player": player  # Clear prompts for this player
-                        }
-                    }
-                # We'll send this after the dice roll broadcast
-            
-            elif event_type == "clear_system_messages":
-                # Existing clear system messages logic...
-                cleared_by = event_data.get("cleared_by", player_name)
-                
-                try:
-                    deleted_count = adventure_log.clear_system_messages(client_id)
-                    
-                    log_message = format_message(MESSAGE_TEMPLATES["messages_cleared"], player=cleared_by, count=deleted_count)
-                    
-                    add_adventure_log(
-                        room_id=client_id,
-                        message=log_message,
-                        log_type=LogType.SYSTEM,
-                        player_name=cleared_by
-                    )
-                    
-                    print(f"🧹 {cleared_by} cleared {deleted_count} system messages from room {client_id}")
-                    
-                    broadcast_message = {
-                        "event_type": "system_messages_cleared",
-                        "data": {
-                            "deleted_count": deleted_count,
-                            "cleared_by": cleared_by
-                        }
-                    }
-                    
-                except Exception as e:
-                    error_msg = f"Failed to clear system messages: {str(e)}"
-                    print(f"❌ {error_msg}")
-                    
-                    error_message = {
-                        "event_type": "error",
-                        "data": error_msg
-                    }
-                    await websocket.send_json(error_message)
-                    continue
-            
-            elif event_type == "clear_all_messages":
-                # Clear all adventure log messages
-                cleared_by = event_data.get("cleared_by", player_name)
-                
-                try:
-                    deleted_count = adventure_log.clear_all_messages(client_id)
-                    
-                    log_message = format_message(MESSAGE_TEMPLATES["messages_cleared"], player=cleared_by, count=deleted_count)
-                    
-                    add_adventure_log(
-                        room_id=client_id,
-                        message=log_message,
-                        log_type=LogType.SYSTEM,
-                        player_name=cleared_by
-                    )
-                    
-                    print(f"🧹 {cleared_by} cleared {deleted_count} total messages from room {client_id}")
-                    
-                    broadcast_message = {
-                        "event_type": "all_messages_cleared",
-                        "data": {
-                            "deleted_count": deleted_count,
-                            "cleared_by": cleared_by
-                        }
-                    }
-                    
-                except Exception as e:
-                    error_msg = f"Failed to clear all messages: {str(e)}"
-                    print(f"❌ {error_msg}")
-                    
-                    error_message = {
-                        "event_type": "error",
-                        "data": error_msg
-                    }
-                    await websocket.send_json(error_message)
-                    continue
-
-            elif event_type == "color_change":
-                # Handle player color changes
-                player_changing = event_data.get("player")
-                seat_index = event_data.get("seat_index")
-                new_color = event_data.get("new_color")
-                changed_by = event_data.get("changed_by", player_name)
-                
-                if not all([player_changing, seat_index is not None, new_color]):
-                    error_message = {
-                        "event_type": "error",
-                        "data": "Color change requires player, seat_index, and new_color"
-                    }
-                    await websocket.send_json(error_message)
-                    continue
-                
-                try:
-                    # Get current seat colors
-                    current_colors = GameService.get_seat_colors(client_id)
-                    
-                    # Update the specific seat color
-                    current_colors[str(seat_index)] = new_color
-                    
-                    # Persist to database
-                    GameService.update_seat_colors(client_id, current_colors)
-                    
-                    print(f"🎨 {changed_by} changed {player_changing}'s color (seat {seat_index}) to {new_color}")
-                    
-                    broadcast_message = {
-                        "event_type": "color_change",
-                        "data": {
-                            "player": player_changing,
-                            "seat_index": seat_index,
-                            "new_color": new_color,
-                            "changed_by": changed_by
-                        }
-                    }
-                    
-                except Exception as e:
-                    error_msg = f"Failed to update seat color: {str(e)}"
-                    print(f"❌ {error_msg}")
-                    
-                    error_message = {
-                        "event_type": "error",
-                        "data": error_msg
-                    }
-                    await websocket.send_json(error_message)
-                    continue
-
-            else:
-                # Chat messages - frontend sends pre-formatted
-                timestamp = datetime.now().strftime("%H:%M")
-                
-                add_adventure_log(
-                    room_id=client_id,
-                    message=data.get("data", ""),
-                    log_type=LogType.CHAT, 
-                    player_name=player_name
-                )
-                
-                await manager.update_data({
-                    **data, 
-                    "player_name": player_name, 
-                    "utc_timestamp": timestamp
-                })
-                continue
-            
-            # Broadcast the main message
-            await manager.update_data(broadcast_message)
-            
-            # Handle special cases for adventure log removal
-            if event_type == "dice_roll":
-                import asyncio
-                await asyncio.sleep(0.5)  # Small delay to ensure dice roll is processed first
-                
-                # Send log removal message first
-                if log_removal_message:
-                    await manager.update_data_for_room(client_id, log_removal_message)
-                
-                # Then send prompt clear message
-                if clear_prompt_message:
-                    await manager.update_data(clear_prompt_message)
-            
-            elif event_type == "dice_prompt_clear":
-                # Send log removal message for cancelled prompts (no delay needed)
-                if log_removal_message:
-                    await manager.update_data_for_room(client_id, log_removal_message)
-            
-    except WebSocketDisconnect:
-        # Server-side disconnect handling with seat cleanup
-        log_message = format_message(MESSAGE_TEMPLATES["player_disconnected"], player=player_name)
-        
-        add_adventure_log(
-            room_id=client_id,
-            message=log_message,
-            log_type=LogType.SYSTEM,
-            player_name=player_name
-        )
-        
-        manager.remove_connection(websocket, client_id, player_name)
-        
-        # Clean up disconnected player's seat
-        current_seats = GameService.get_seat_layout(client_id)
-        
-        # Remove disconnected player from their seat (case-insensitive)
-        updated_seats = []
-        for seat in current_seats:
-            if seat.lower() == player_name.lower():
-                updated_seats.append("empty")
-            else:
-                updated_seats.append(seat)
-        
-        # Update seat layout in database
-        GameService.update_seat_layout(client_id, updated_seats)
-        
-        # Send lobby update after disconnect (will show user as disconnecting)
-        await manager.broadcast_lobby_update(client_id)
-        
-        # Broadcast player disconnection event
-        disconnect_message = {
-            "event_type": "player_disconnected", 
-            "data": {
-                "disconnected_player": player_name
-            }
-        }
-        await manager.update_data(disconnect_message)
-        
-        # Broadcast updated seat layout to all remaining clients
-        seat_change_message = {
-            "event_type": "seat_change",
-            "data": updated_seats
-        }
-        await manager.update_data(seat_change_message)
+# Register WebSocket routes
+from websocket_handlers.app_websocket import register_websocket_routes
+register_websocket_routes(app)
 

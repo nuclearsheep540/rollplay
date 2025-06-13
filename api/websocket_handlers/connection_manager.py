@@ -1,3 +1,5 @@
+# Copyright (C) 2025 Matthew Davey
+# SPDX-License-Identifier: GPL-3.0-or-later
 from fastapi import WebSocket
 
 class ConnectionManager:
@@ -160,4 +162,5 @@ class ConnectionManager:
         for room, user, ws in dead_connections:
             self.remove_connection(ws, room, user)
 
+# Create manager instance to be imported by other modules
 manager = ConnectionManager()
