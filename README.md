@@ -1,6 +1,9 @@
 # rollplay
 Table-Top management app for virtual D&D sessions.
 
+![GitHub release (latest by date)](https://img.shields.io/github/v/release/nuclearsheep540/rollplay)
+![GitHub](https://img.shields.io/github/license/nuclearsheep540/rollplay)
+
 Rollplay is not intended to replace actual gameplay mechanics nor automate gameplay for players. The tools here are to help manage the manual intervention players conduct in order to play Dungeons & Dragons in a online format.
 
 Features intended from the app:
