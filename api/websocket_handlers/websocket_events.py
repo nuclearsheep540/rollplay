@@ -24,24 +24,6 @@ class WebsocketEventResult:
         self.clear_prompt_message = clear_prompt_message
 
 
-# Helper function to add log entries
-def add_adventure_log(room_id: str, message: str, log_type: LogType, player_name: str = None, prompt_id: str = None):
-    """Helper function to add log entries with your default settings"""
-    try:
-        # Convert LogType enum to string value for the service
-        log_type_value = log_type.value if isinstance(log_type, LogType) else log_type
-        
-        return adventure_log.add_log_entry(
-            room_id=room_id,
-            message=message,
-            log_type=log_type_value,
-            player_name=player_name,
-            max_logs=200,
-            prompt_id=prompt_id
-        )
-    except Exception as e:
-        print(f"Failed to add adventure log: {e}")
-        return None
 
 
 class WebsocketEvent():
@@ -63,7 +45,7 @@ class WebsocketEvent():
         # Log player connection to database
         log_message = format_message(MESSAGE_TEMPLATES["player_connected"], player=player_name)
         
-        add_adventure_log(
+        adventure_log.add_log_entry(
             room_id=client_id,
             message=log_message,
             log_type=LogType.SYSTEM,
@@ -110,7 +92,7 @@ class WebsocketEvent():
         # Log the prompt to adventure log with prompt_id for later removal
         log_message = format_message(MESSAGE_TEMPLATES["dice_prompt"], target=prompted_player, roll_type=roll_type)
         
-        add_adventure_log(
+        adventure_log.add_log_entry(
             room_id=client_id,
             message=log_message,
             log_type=LogType.DUNGEON_MASTER,
@@ -144,7 +126,7 @@ class WebsocketEvent():
         # Log ONE adventure log entry for the collective action
         log_message = format_message(MESSAGE_TEMPLATES["initiative_prompt"], players=", ".join(players_to_prompt))
         
-        add_adventure_log(
+        adventure_log.add_log_entry(
             room_id=client_id,
             message=log_message,
             log_type=LogType.DUNGEON_MASTER,
@@ -239,7 +221,7 @@ class WebsocketEvent():
         formatted_message = roll_data.get("message")  # Pre-formatted by frontend
         prompt_id = roll_data.get("prompt_id")
         
-        add_adventure_log(
+        adventure_log.add_log_entry(
             room_id=client_id,
             message=formatted_message,
             log_type=LogType.PLAYER_ROLL, 
@@ -313,7 +295,7 @@ class WebsocketEvent():
         template_key = "combat_started" if action == "started" else "combat_ended"
         log_message = format_message(MESSAGE_TEMPLATES[template_key], player=player_name)
         
-        add_adventure_log(
+        adventure_log.add_log_entry(
             room_id=client_id,
             message=log_message,
             log_type=LogType.SYSTEM,
@@ -345,7 +327,7 @@ class WebsocketEvent():
         
         log_message = format_message(MESSAGE_TEMPLATES["player_kicked"], player=kicked_player)
         
-        add_adventure_log(
+        adventure_log.add_log_entry(
             room_id=client_id,
             message=log_message,
             log_type=LogType.SYSTEM,
@@ -370,7 +352,7 @@ class WebsocketEvent():
             
             log_message = format_message(MESSAGE_TEMPLATES["messages_cleared"], player=cleared_by, count=deleted_count)
             
-            add_adventure_log(
+            adventure_log.add_log_entry(
                 room_id=client_id,
                 message=log_message,
                 log_type=LogType.SYSTEM,
@@ -409,7 +391,7 @@ class WebsocketEvent():
             
             log_message = format_message(MESSAGE_TEMPLATES["messages_cleared"], player=cleared_by, count=deleted_count)
             
-            add_adventure_log(
+            adventure_log.add_log_entry(
                 room_id=client_id,
                 message=log_message,
                 log_type=LogType.SYSTEM,
@@ -497,7 +479,7 @@ class WebsocketEvent():
         # Log player disconnection to database
         log_message = format_message(MESSAGE_TEMPLATES["player_disconnected"], player=player_name)
         
-        add_adventure_log(
+        adventure_log.add_log_entry(
             room_id=client_id,
             message=log_message,
             log_type=LogType.SYSTEM,

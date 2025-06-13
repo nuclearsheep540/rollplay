@@ -25,25 +25,6 @@ app.add_middleware(
 
 adventure_log = AdventureLogService()
 
-# Helper function to add log entries
-def add_adventure_log(room_id: str, message: str, log_type: LogType, player_name: str = None, prompt_id: str = None):
-    """Helper function to add log entries with your default settings"""
-    try:
-        # Convert LogType enum to string value for the service
-        log_type_value = log_type.value if isinstance(log_type, LogType) else log_type
-        
-        return adventure_log.add_log_entry(
-            room_id=room_id,
-            message=message,
-            log_type=log_type_value,
-            player_name=player_name,
-            max_logs=200,
-            prompt_id=prompt_id
-        )
-    except Exception as e:
-        print(f"Failed to add adventure log: {e}")
-        return None
-
 
 @app.get("/game/{room_id}/logs")
 async def get_room_logs(room_id: str, limit: int = 100, skip: int = 0):
@@ -158,7 +139,7 @@ async def update_seat_layout(room_id: str, request: dict):
             log_message = format_message(MESSAGE_TEMPLATES["party_updated"], players=", ".join(non_empty_seats))
             
             print(f"📜 Adding adventure log: {log_message}")
-            add_adventure_log(
+            adventure_log.add_log_entry(
                 room_id=room_id,
                 message=log_message,
                 log_type=LogType.SYSTEM,
@@ -202,7 +183,7 @@ async def clear_system_messages(room_id: str, request: dict):
         # Add a log entry about the clearing action
         log_message = format_message(MESSAGE_TEMPLATES["messages_cleared"], player=cleared_by, count=deleted_count)
         
-        add_adventure_log(
+        adventure_log.add_log_entry(
             room_id=room_id,
             message=log_message,
             log_type=LogType.SYSTEM,
@@ -278,7 +259,7 @@ async def clear_all_messages(room_id: str, request: dict):
         # Add a log entry about the clearing action
         log_message = format_message(MESSAGE_TEMPLATES["messages_cleared"], player=cleared_by, count=deleted_count)
         
-        add_adventure_log(
+        adventure_log.add_log_entry(
             room_id=room_id,
             message=log_message,
             log_type=LogType.SYSTEM,

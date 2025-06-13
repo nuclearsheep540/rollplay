@@ -12,25 +12,6 @@ from models.log_type import LogType
 # Initialize shared services
 adventure_log = AdventureLogService()
 
-# Helper function to add log entries for chat messages
-def add_adventure_log(room_id: str, message: str, log_type: LogType, player_name: str = None, prompt_id: str = None):
-    """Helper function to add log entries with your default settings"""
-    try:
-        # Convert LogType enum to string value for the service
-        log_type_value = log_type.value if isinstance(log_type, LogType) else log_type
-        
-        return adventure_log.add_log_entry(
-            room_id=room_id,
-            message=message,
-            log_type=log_type_value,
-            player_name=player_name,
-            max_logs=200,
-            prompt_id=prompt_id
-        )
-    except Exception as e:
-        print(f"Failed to add adventure log: {e}")
-        return None
-
 def register_websocket_routes(app: FastAPI):
     """Register WebSocket routes with the FastAPI app"""
     
@@ -228,7 +209,7 @@ def register_websocket_routes(app: FastAPI):
                     # Chat messages - frontend sends pre-formatted
                     timestamp = datetime.now().strftime("%H:%M")
                     
-                    add_adventure_log(
+                    adventure_log.add_log_entry(
                         room_id=client_id,
                         message=data.get("data", ""),
                         log_type=LogType.CHAT, 
