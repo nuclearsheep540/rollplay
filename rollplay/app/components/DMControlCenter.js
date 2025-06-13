@@ -19,6 +19,9 @@ export default function DMControlCenter({
   clearDicePrompt           // UPDATED: Function to clear prompt(s)
 }) {
   
+  // State for main panel collapse
+  const [isCollapsed, setIsCollapsed] = useState(false);
+
   // State for collapsible sections
   const [expandedSections, setExpandedSections] = useState({
     map: true,
@@ -149,10 +152,23 @@ export default function DMControlCenter({
   }
 
   return (
-    <div className="bg-gradient-to-b from-red-900/15 to-slate-800/20 border-t border-white/10 p-4 flex-1 min-h-0 overflow-y-auto overflow-x-hidden flex flex-col scrollbar-thin scrollbar-track-white/5 scrollbar-thumb-purple-500/30 hover:scrollbar-thumb-purple-500/50">
-      {/* Sticky Header */}
-      <div className="text-red-500 font-bold text-base mb-4 uppercase tracking-wider flex items-center gap-2 flex-shrink-0 sticky top-0 z-10 pb-2 justify-center">
-        DM Command Center
+    <div className="bg-gradient-to-b from-red-900/15 to-slate-800/20 border-t border-white/10 flex-1 min-h-0 flex flex-col">
+      {/* Collapsible Header */}
+      <div 
+        className="flex items-center justify-between cursor-pointer p-4 hover:bg-red-500/10 transition-all duration-200"
+        onClick={() => setIsCollapsed(!isCollapsed)}
+      >
+        <div className="text-red-500 font-bold text-base uppercase tracking-wider flex items-center gap-2">
+          🎲 DM Command Center
+        </div>
+        <div className={`text-red-500 transition-transform duration-200 ${isCollapsed ? 'rotate-180' : ''}`}>
+          ▼
+        </div>
+      </div>
+
+      {/* Collapsible Content */}
+      {!isCollapsed && (
+        <div className="p-4 pt-0 flex-1 min-h-0 overflow-y-auto overflow-x-hidden flex flex-col scrollbar-thin scrollbar-track-white/5 scrollbar-thumb-purple-500/30 hover:scrollbar-thumb-purple-500/50">
         {/* Roll Prompt Modal */}
       {rollPromptModalOpen && (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50">
@@ -301,7 +317,6 @@ export default function DMControlCenter({
           </div>
         </div>
       )}
-    </div>
 
       {/* UPDATED: Active Dice Prompts Status (show list of active prompts) */}
       {activePrompts.length > 0 && (
@@ -848,6 +863,8 @@ export default function DMControlCenter({
               </button>
             </div>
           </div>
+        </div>
+      )}
         </div>
       )}
     </div>

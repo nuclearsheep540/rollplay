@@ -17,6 +17,9 @@ export default function ModeratorControls({
   sendRoleChange // WebSocket function to broadcast role changes
 }) {
   
+  // State for main panel collapse
+  const [isCollapsed, setIsCollapsed] = useState(false);
+
   // State for collapsible sections
   const [expandedSections, setExpandedSections] = useState({
     moderators: true,
@@ -146,19 +149,33 @@ export default function ModeratorControls({
   }
 
   return (
-    <div className="mb-3" style={{
-      padding: 'calc(16px * var(--ui-scale))',
-    }}>
-      <div className="flex items-center justify-between mb-4">
-        <h3 className="text-emerald-300 font-bold uppercase tracking-wide" style={{
+    <div className="mb-3">
+      {/* Collapsible Header */}
+      <div 
+        className="flex items-center justify-between cursor-pointer hover:bg-emerald-500/10 transition-all duration-200"
+        style={{
+          padding: 'calc(16px * var(--ui-scale))',
+        }}
+        onClick={() => setIsCollapsed(!isCollapsed)}
+      >
+        <div className="text-emerald-300 font-bold uppercase tracking-wide flex items-center gap-2" style={{
           fontSize: 'calc(14px * var(--ui-scale))',
         }}>
           ⚖️ Moderator Controls
-        </h3>
-        <div className="text-emerald-500/70 text-xs">
-          {isHost ? 'Host' : 'Moderator'}
+          <div className="text-emerald-500/70 text-xs normal-case">
+            ({isHost ? 'Host' : 'Moderator'})
+          </div>
+        </div>
+        <div className={`text-emerald-500 transition-transform duration-200 ${isCollapsed ? 'rotate-180' : ''}`}>
+          ▼
         </div>
       </div>
+
+      {/* Collapsible Content */}
+      {!isCollapsed && (
+        <div style={{
+          padding: '0 calc(16px * var(--ui-scale)) calc(16px * var(--ui-scale))',
+        }}>
 
       {/* Moderator Management Section */}
       <div className="mb-3 flex-shrink-0">
@@ -530,6 +547,8 @@ export default function ModeratorControls({
               </button>
             </div>
           </div>
+        </div>
+      )}
         </div>
       )}
     </div>
