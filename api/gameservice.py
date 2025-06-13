@@ -1,3 +1,5 @@
+# Copyright (C) 2025 Matthew Davey
+# SPDX-License-Identifier: GPL-3.0-or-later
 from pydantic import BaseModel
 from pymongo import MongoClient
 from bson.objectid import ObjectId

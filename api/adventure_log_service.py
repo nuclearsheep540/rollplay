@@ -1,3 +1,5 @@
+# Copyright (C) 2025 Matthew Davey
+# SPDX-License-Identifier: GPL-3.0-or-later
 import time
 from datetime import datetime
 from typing import List, Dict, Optional
