@@ -23,6 +23,7 @@ import {
   handleDicePromptClear,
   handleColorChange,
   handleAdventureLogRemoved,
+  handleRoleChange,
   createSendFunctions
 } from './webSocketEvent'
 
@@ -97,6 +98,10 @@ export function useWebSocket(roomId, playerName, gameContext) {
 
         case "player_disconnected":
           handlePlayerDisconnected(json_data["data"], gameContext);
+          break;
+
+        case "role_change":
+          handleRoleChange(json_data["data"], gameContext);
           break;
 
         case "dice_roll":

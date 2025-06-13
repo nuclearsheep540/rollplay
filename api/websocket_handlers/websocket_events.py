@@ -520,3 +520,48 @@ class WebsocketEvent():
             broadcast_message=disconnect_message,
             clear_prompt_message=seat_change_message  # Reuse this field for the seat update
         )
+
+    @staticmethod 
+    async def role_change(websocket, data, event_data, player_name, client_id, manager):
+        """Handle role changes (moderator/DM assignments)"""
+        from gameservice import GameService
+        
+        action = event_data.get("action")  # 'add_moderator', 'remove_moderator', 'set_dm', 'unset_dm'
+        target_player = event_data.get("target_player")
+        
+        if not action or not target_player:
+            print(f"❌ Invalid role change request: action={action}, target_player={target_player}")
+            return WebsocketEventResult(broadcast_message={})
+        
+        print(f"🎭 Role change: {action} for {target_player} by {player_name}")
+        
+        # Create log message based on action
+        log_messages = {
+            "add_moderator": f"{target_player} has been promoted to moderator by {player_name}",
+            "remove_moderator": f"{target_player} has been removed as moderator by {player_name}",
+            "set_dm": f"{target_player} has been set as Dungeon Master by {player_name}",
+            "unset_dm": f"Dungeon Master role has been removed by {player_name}"
+        }
+        
+        log_message = log_messages.get(action, f"Role change: {action} for {target_player}")
+        
+        # Add to adventure log
+        adventure_log.add_log_entry(
+            room_id=client_id,
+            message=log_message,
+            log_type=LogType.SYSTEM,
+            player_name=player_name
+        )
+        
+        # Broadcast role change to all clients
+        role_change_message = {
+            "event_type": "role_change",
+            "data": {
+                "action": action,
+                "target_player": target_player,
+                "changed_by": player_name,
+                "message": log_message
+            }
+        }
+        
+        return WebsocketEventResult(broadcast_message=role_change_message)

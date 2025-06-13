@@ -17,8 +17,22 @@ class GameSettings(BaseModel):
     max_players: int
     seat_layout: list
     created_at: datetime
-    player_name: str
+    room_host: str
     seat_colors: dict
+    moderators: list = []
+    dungeon_master: str = ""
+    
+    def __init__(self, **data):
+        # Lowercase the room_host and any names in seat_layout
+        if 'room_host' in data:
+            data['room_host'] = data['room_host'].lower()
+        if 'seat_layout' in data:
+            data['seat_layout'] = [name.lower() if name != "empty" else name for name in data['seat_layout']]
+        if 'moderators' in data:
+            data['moderators'] = [name.lower() for name in data['moderators']]
+        if 'dungeon_master' in data:
+            data['dungeon_master'] = data['dungeon_master'].lower()
+        super().__init__(**data)
 
 class GameService:
     "Creating and joining active game lobbies"
@@ -79,6 +93,9 @@ class GameService:
         """Update the seat layout for a room"""
         collection = GameService._get_active_session()
         
+        # Lowercase all player names in the seat layout for consistency
+        normalized_seat_layout = [name.lower() if name != "empty" else name for name in seat_layout]
+        
         # Handle ObjectId conversion like get_room does
         try:
             oid = ObjectId(oid=room_id)
@@ -88,13 +105,13 @@ class GameService:
             filter_criteria = {"_id": room_id}
         
         print(f"🔄 Updating seat layout with filter: {filter_criteria}")
-        print(f"📝 New seat layout: {seat_layout}")
+        print(f"📝 New seat layout: {normalized_seat_layout}")
         
         result = collection.update_one(
             filter_criteria,
             {
                 "$set": {
-                    "seat_layout": seat_layout,
+                    "seat_layout": normalized_seat_layout,
                 }
             }
         )
@@ -223,3 +240,134 @@ class GameService:
             }
             max_players = room.get("max_players", 8) if room else 8
             return {str(i): default_colors.get(str(i), "#3b82f6") for i in range(max_players)}
+
+    @staticmethod
+    def is_host(room_id: str, player_name: str) -> bool:
+        """Check if player is the room host"""
+        room = GameService.get_room(room_id)
+        if not room:
+            return False
+        room_host = room.get("room_host", "")
+        return room_host.lower() == player_name.lower()
+
+    @staticmethod 
+    def is_moderator(room_id: str, player_name: str) -> bool:
+        """Check if player is a moderator (includes host)"""
+        room = GameService.get_room(room_id)
+        if not room:
+            return False
+        
+        # Host is always a moderator (case-insensitive)
+        room_host = room.get("room_host", "")
+        if room_host.lower() == player_name.lower():
+            return True
+            
+        # Check moderators list (case-insensitive)
+        moderators = room.get("moderators", [])
+        return any(mod.lower() == player_name.lower() for mod in moderators)
+
+    @staticmethod
+    def is_dm(room_id: str, player_name: str) -> bool:
+        """Check if player is the dungeon master"""
+        room = GameService.get_room(room_id)
+        if not room:
+            return False
+        dungeon_master = room.get("dungeon_master", "")
+        return dungeon_master.lower() == player_name.lower()
+
+    @staticmethod
+    def add_moderator(room_id: str, player_name: str):
+        """Add a player as moderator"""
+        collection = GameService._get_active_session()
+        
+        # Lowercase the player name for consistency
+        player_name = player_name.lower()
+        
+        # Handle ObjectId conversion
+        try:
+            oid = ObjectId(oid=room_id)
+            filter_criteria = {"_id": oid}
+        except Exception:
+            filter_criteria = {"_id": room_id}
+        
+        result = collection.update_one(
+            filter_criteria,
+            {"$addToSet": {"moderators": player_name}}
+        )
+        
+        if result.matched_count == 0:
+            raise Exception(f"Room {room_id} not found")
+        
+        return result.modified_count > 0
+
+    @staticmethod
+    def remove_moderator(room_id: str, player_name: str):
+        """Remove a player from moderators"""
+        collection = GameService._get_active_session()
+        
+        # Lowercase the player name for consistency
+        player_name = player_name.lower()
+        
+        # Handle ObjectId conversion
+        try:
+            oid = ObjectId(oid=room_id)
+            filter_criteria = {"_id": oid}
+        except Exception:
+            filter_criteria = {"_id": room_id}
+        
+        result = collection.update_one(
+            filter_criteria,
+            {"$pull": {"moderators": player_name}}
+        )
+        
+        if result.matched_count == 0:
+            raise Exception(f"Room {room_id} not found")
+        
+        return result.modified_count > 0
+
+    @staticmethod
+    def set_dm(room_id: str, player_name: str):
+        """Set a player as dungeon master"""
+        collection = GameService._get_active_session()
+        
+        # Lowercase the player name for consistency
+        player_name = player_name.lower()
+        
+        # Handle ObjectId conversion
+        try:
+            oid = ObjectId(oid=room_id)
+            filter_criteria = {"_id": oid}
+        except Exception:
+            filter_criteria = {"_id": room_id}
+        
+        result = collection.update_one(
+            filter_criteria,
+            {"$set": {"dungeon_master": player_name}}
+        )
+        
+        if result.matched_count == 0:
+            raise Exception(f"Room {room_id} not found")
+        
+        return result.modified_count > 0
+
+    @staticmethod
+    def unset_dm(room_id: str):
+        """Remove the current dungeon master"""
+        collection = GameService._get_active_session()
+        
+        # Handle ObjectId conversion
+        try:
+            oid = ObjectId(oid=room_id)
+            filter_criteria = {"_id": oid}
+        except Exception:
+            filter_criteria = {"_id": room_id}
+        
+        result = collection.update_one(
+            filter_criteria,
+            {"$set": {"dungeon_master": ""}}
+        )
+        
+        if result.matched_count == 0:
+            raise Exception(f"Room {room_id} not found")
+        
+        return result.modified_count > 0

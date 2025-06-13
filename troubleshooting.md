@@ -98,3 +98,36 @@ docker exec certbot-renewer certbot certonly --webroot \
 
 # Reload nginx to use the new certificate
 docker exec nginx nginx -s reload
+
+
+
+
+create room doesn't await the roomID
+
+roll dice can be clicked always
+
+hanging active prompts even though all players rolled (broadcast message isnt working server side, 
+only local state is updating)
+
+dice action modal needs to remove the blur
+
+attack roll will never need anything other than a D20
+	keep the modal
+	remove the other dice options including 2nd
+	keep adv/disc
+	keep bonuses
+
+
+damage roll mulit dice will only ever be the same dice
+
+add bonus, can we write sums into it instead
+
+we need a DM seat
+
+
+need an NPC system for DM to prep mobs and players to summon
+
+feature request: weighted dice?
+feature request: DM to grant favour/disfavour
+
+campagin / area / location (map / image)

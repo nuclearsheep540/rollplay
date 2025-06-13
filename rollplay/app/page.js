@@ -28,9 +28,12 @@ export default function Home() {
     if (newRoom) {
       var payload = { 
         "max_players": 1,
-        "player_name": playerName,
+        "room_host": playerName,
         "seat_layout": [""],
-        "created_at": new Date().toISOString() 
+        "created_at": new Date().toISOString(),
+        "seat_colors": {},
+        "moderators": [],
+        "dungeon_master": ""
       };
   
       try {

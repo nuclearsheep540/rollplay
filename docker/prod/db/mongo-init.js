@@ -36,7 +36,7 @@ var test_room = db.active_sessions.insertOne({
     max_players: 8, 
     seat_layout: ["Matt", "empty", "empty", "empty", "empty", "empty", "empty", "empty"],
     created_at: ISODate("2025-06-08T12:00:00Z"),
-    player_name: "Matt",
+    room_host: "Matt",  // Updated field name
     seat_colors: {
         "0": "#3b82f6",  // blue
         "1": "#ef4444",  // red
@@ -46,7 +46,9 @@ var test_room = db.active_sessions.insertOne({
         "5": "#06b6d4",  // cyan
         "6": "#ec4899",  // pink
         "7": "#65a30d"   // lime
-    }
+    },
+    moderators: [],        // New field: array of moderator names
+    dungeon_master: ""     // New field: current DM name
 });
 var testRoomId = test_room.insertedId;
 
