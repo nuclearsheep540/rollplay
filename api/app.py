@@ -298,7 +298,7 @@ async def websocket_endpoint(
     player_name: str
 ):  
     # Broadcast connection event to all clients
-    connect_message = WebsocketEvent.handle_player_connection(
+    connect_message = WebsocketEvent.player_connection(
         manager=manager,
         websocket=websocket,
         client_id=client_id
@@ -312,7 +312,7 @@ async def websocket_endpoint(
             event_data = data.get("data")
 
             if event_type == "seat_change":
-                broadcast_message = WebsocketEvent.handle_seat_change(
+                broadcast_message = WebsocketEvent.seat_change(
                     data=data,
                     player_name=player_name,
                     client_id=client_id,
@@ -323,7 +323,7 @@ async def websocket_endpoint(
                 await manager.broadcast_lobby_update(client_id)
 
             elif event_type == "dice_prompt":
-                    broadcast_message = WebsocketEvent.handle_dice_prompt(
+                    broadcast_message = WebsocketEvent.dice_prompt(
                     data=data,
                     player_name=player_name,
                     client_id=client_id,
@@ -331,41 +331,16 @@ async def websocket_endpoint(
                 )
 
             elif event_type == "initiative_prompt_all":
-                players_to_prompt = event_data.get("players", [])
-                prompted_by = event_data.get("prompted_by", player_name)
-                
-                if not players_to_prompt:
+                if not event_data.get("players", []):
                     print("⚡ No players provided for initiative prompt")
                     continue
-                
-                # Generate unique initiative prompt ID for potential removal
-                initiative_prompt_id = f"initiative_all_{int(time.time() * 1000)}"
-                
-                # Log ONE adventure log entry for the collective action
-                log_message = format_message(MESSAGE_TEMPLATES["initiative_prompt"], players=", ".join(players_to_prompt))
-                
-                add_adventure_log(
-                    room_id=client_id,
-                    message=log_message,
-                    log_type=LogType.DUNGEON_MASTER,
-                    player_name=prompted_by,
-                    prompt_id=initiative_prompt_id
+
+                broadcast_message = WebsocketEvent.initiative_prompt_all(
+                    data=data,
+                    player_name=player_name,
+                    client_id=client_id,
+                    manager=manager
                 )
-                
-                print(f"⚡ {prompted_by} prompted all players for initiative: {', '.join(players_to_prompt)}")
-                
-                # Single broadcast with player list - clients check if they're in the list
-                broadcast_message = {
-                    "event_type": "initiative_prompt_all",
-                    "data": {
-                        "players_to_prompt": players_to_prompt,
-                        "roll_type": "Initiative",
-                        "prompted_by": prompted_by,
-                        "prompt_id": initiative_prompt_id,  # Use the same ID for tracking
-                        "initiative_prompt_id": initiative_prompt_id,  # Add specific field for frontend tracking
-                        "log_message": log_message  # Include the formatted log message
-                    }
-                }
 
             # NEW: Handle clearing dice prompts
             elif event_type == "dice_prompt_clear":
