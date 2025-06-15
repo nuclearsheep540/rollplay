@@ -50,10 +50,15 @@ export default function DiceActionPanel({
   const isMyTurn = currentTurn === thisPlayer && combatActive;
   const myPrompts = activePrompts.filter(prompt => prompt.player === thisPlayer);
   const isPromptedToRoll = myPrompts.length > 0;
-  const shouldShowDicePanel = isMyTurn || isPromptedToRoll;
   
-  // UPDATED: Always show panel, but determine if it's active
-  const isPanelActive = shouldShowDicePanel;
+  // Show panel if: prompted to roll OR (in combat)
+  const shouldShowDicePanel = isPromptedToRoll || combatActive;
+  
+  // Panel is active if: it's your turn OR you're prompted to roll
+  const isPanelActive = isMyTurn || isPromptedToRoll;
+  
+  // Button is enabled if: it's your turn OR you're prompted to roll
+  const isButtonEnabled = isMyTurn || isPromptedToRoll;
   
   // Handle dice roll click
   const handleRollDiceClick = () => {
@@ -131,10 +136,9 @@ export default function DiceActionPanel({
   };
 
   // Don't render if player shouldn't see dice panel
-  // UPDATED: Always render, just change styling based on active state
-  // if (!shouldShowDicePanel) {
-  //   return null;
-  // }
+  if (!shouldShowDicePanel) {
+    return null;
+  }
 
   return (
     <>
@@ -201,14 +205,15 @@ export default function DiceActionPanel({
           >
             {/* Roll Dice Button */}
             <button
-              className={`roll-dice-btn rounded-lg px-8 py-2.5 text-lg font-bold cursor-pointer transition-all duration-200 border-2 ${
-                shouldShowDicePanel 
+              className={`roll-dice-btn rounded-lg px-8 py-2.5 text-lg font-bold transition-all duration-200 border-2 ${
+                isButtonEnabled 
                   ? (isPromptedToRoll 
-                      ? 'bg-emerald-500/20 border-emerald-500/50 text-emerald-400 hover:bg-emerald-500/30 hover:-translate-y-0.5' 
-                      : 'bg-emerald-500/20 border-emerald-500/50 text-emerald-500 hover:bg-emerald-500/30 hover:-translate-y-0.5') 
-                  : 'bg-slate-500/10 border-slate-500/30 text-slate-500'
-              } ${shouldShowDicePanel ? 'active' : 'inactive'}`}
-              onClick={handleRollDiceClick}
+                      ? 'bg-emerald-500/20 border-emerald-500/50 text-emerald-400 hover:bg-emerald-500/30 hover:-translate-y-0.5 cursor-pointer' 
+                      : 'bg-emerald-500/20 border-emerald-500/50 text-emerald-500 hover:bg-emerald-500/30 hover:-translate-y-0.5 cursor-pointer') 
+                  : 'bg-slate-500/10 border-slate-500/30 text-slate-500 cursor-not-allowed'
+              } ${isButtonEnabled ? 'active' : 'inactive'}`}
+              onClick={isButtonEnabled ? handleRollDiceClick : undefined}
+              disabled={!isButtonEnabled}
             >
               🎲 Roll Dice
             </button>
@@ -229,7 +234,7 @@ export default function DiceActionPanel({
       {/* Dice Roll Modal - Enhanced for prompts */}
       {isDiceModalOpen && (
         <div 
-          className="dice-modal-overlay fixed inset-0 bg-black/20 backdrop-blur-sm flex items-center justify-center z-[1000]"
+          className="dice-modal-overlay fixed inset-0 bg-black/20 flex items-center justify-center z-[1000]"
           onClick={() => setIsDiceModalOpen(false)}
         >
           <div 
