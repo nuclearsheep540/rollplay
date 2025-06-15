@@ -1,33 +1,48 @@
 // Switch to admin database for user creation
 db = db.getSiblingDB('admin');
 
-db.createUser({
-    user: "${MONGO_INITDB_ROOT_USERNAME}",
-    pwd: "${MONGO_INITDB_ROOT_PASSWORD}",
-    roles: [
-        {
-            role: "root",
-            db: "admin"
-        }
-    ]
-});
+// Try to create admin user, ignore if already exists
+try {
+    db.createUser({
+        user: "${MONGO_INITDB_ROOT_USERNAME}",
+        pwd: "${MONGO_INITDB_ROOT_PASSWORD}",
+        roles: [
+            {
+                role: "root",
+                db: "admin"
+            }
+        ]
+    });
+    print("Created admin user");
+} catch (error) {
+    print("Admin user already exists: " + error.message);
+}
 
 db = db.getSiblingDB('rollplay');
 
-db.createUser({
-    user: "${MONGO_INITDB_ROOT_USERNAME}",
-    pwd: "${MONGO_INITDB_ROOT_PASSWORD}",
-    roles: [
-        {
-            role: "readWrite",
-            db: "rollplay"
-        }
-    ]
-});
+// Try to create rollplay user, ignore if already exists
+try {
+    db.createUser({
+        user: "${MONGO_INITDB_ROOT_USERNAME}",
+        pwd: "${MONGO_INITDB_ROOT_PASSWORD}",
+        roles: [
+            {
+                role: "readWrite",
+                db: "rollplay"
+            }
+        ]
+    });
+    print("Created rollplay user");
+} catch (error) {
+    print("Rollplay user already exists: " + error.message);
+}
 
-// Create collections
+// Create collections (createCollection is idempotent)
 db.createCollection("active_sessions");
+print("Created active_sessions collection");
+
 db.createCollection("adventure_logs");
+print("Created adventure_logs collection");
 
 // Insert test data
 var test_room = db.active_sessions.insertOne({

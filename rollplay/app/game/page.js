@@ -209,12 +209,17 @@ function GameContent() {
   // Check player roles
   const checkPlayerRoles = async (roomId, playerName) => {
     try {
+      console.log(`🔍 Checking roles for player: ${playerName} in room: ${roomId}`);
       const response = await fetch(`/api/game/${roomId}/roles?playerName=${playerName}`);
       if (response.ok) {
         const roles = await response.json();
+        console.log('📋 Received roles:', roles);
         setIsHost(roles.is_host);
         setIsModerator(roles.is_moderator);
         setIsDM(roles.is_dm);
+        console.log(`✅ Set roles - Host: ${roles.is_host}, Moderator: ${roles.is_moderator}, DM: ${roles.is_dm}`);
+      } else {
+        console.error('❌ Failed to fetch roles:', response.status, response.statusText);
       }
     } catch (error) {
       console.error('Error checking player roles:', error);

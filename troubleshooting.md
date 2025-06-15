@@ -101,7 +101,6 @@ docker exec nginx nginx -s reload
 
 
 
-
 create room doesn't await the roomID
 
 roll dice can be clicked always
@@ -127,7 +126,7 @@ we need a DM seat
 
 need an NPC system for DM to prep mobs and players to summon
 
-feature request: weighted dice?
-feature request: DM to grant favour/disfavour
 
-campagin / area / location (map / image)
+seat colours are
+
+-campagin / area / location (map / image)

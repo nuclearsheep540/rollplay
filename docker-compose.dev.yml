@@ -54,10 +54,13 @@ services:
         build:
             context: ./docker
             dockerfile: dev/db/Dockerfile
+            args:
+                MONGO_INITDB_ROOT_USERNAME: ${MONGO_INITDB_ROOT_USERNAME}
+                MONGO_INITDB_ROOT_PASSWORD: ${MONGO_INITDB_ROOT_PASSWORD}
         ports:
         - "27017:27017"
         volumes:
-            - /data:/data/db
+        - db_data:/data/db
 
 networks:
   default:

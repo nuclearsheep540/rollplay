@@ -37,14 +37,13 @@ class GameSettings(BaseModel):
 class GameService:
     "Creating and joining active game lobbies"
 
-    username = CONFIG.get('MONGO_USER')
-    password = CONFIG.get('MONGO_PASS')
-    conn = MongoClient(f'mongodb://{username}:{password}@db')
 
     def _get_active_session():
         "returns the active sessions collection"
+        username = CONFIG.get('MONGO_USER')
+        password = CONFIG.get('MONGO_PASS')
         try: 
-            conn = MongoClient('mongodb://%s:%s@db' % ('mdavey', 'pass'))
+            conn = MongoClient(f'mongodb://{username}:{password}@db')
             db = conn.rollplay
             collection = db.active_sessions
             logger.info("Connected successfully to mongo DB") 
