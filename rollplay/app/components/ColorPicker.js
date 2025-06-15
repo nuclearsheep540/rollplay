@@ -26,9 +26,11 @@ export default function ColorPicker({
         // Dynamic import to ensure client-side only
         const { default: Coloris } = await import('@melloware/coloris');
         
-        // Configure Coloris globally
+        // Configure Coloris globally with wrap: false to prevent background styling
         Coloris.init();
         Coloris({
+          el: '.custom-color-input', // Use custom selector
+          wrap: false, // Prevents Coloris from applying background colors
           theme: 'polaroid',
           themeMode: 'dark',
           alpha: false,
@@ -128,29 +130,39 @@ export default function ColorPicker({
   };
 
   return (
-    <div className="color-picker-container">
+    <div className="color-picker-container relative">
       <input
         ref={inputRef}
         type="text"
-        data-coloris
         value={currentColor}
         readOnly
         disabled={disabled || cooldownActive}
         className={`
-          color-picker-input w-[calc(32px*var(--ui-scale))] h-[calc(24px*var(--ui-scale))] 
-          rounded border-2 cursor-pointer transition-all duration-200
+          color-picker-input custom-color-input w-[calc(24px*var(--ui-scale))] h-[calc(24px*var(--ui-scale))] 
+          rounded border cursor-pointer transition-all duration-200
+          flex items-center justify-center text-[calc(12px*var(--ui-scale))]
           ${cooldownActive 
-            ? 'opacity-50 cursor-not-allowed border-gray-500' 
-            : 'border-white/20 hover:border-white/40'
+            ? 'opacity-50 cursor-not-allowed' 
+            : 'hover:bg-white/10'
           }
         `}
-        style={{ backgroundColor: currentColor }}
+        style={{ 
+          color: 'transparent',
+          textIndent: '-9999px',
+          backgroundColor: 'transparent',
+          borderColor: cooldownActive ? '#6b7280' : currentColor
+        }}
         title={
           cooldownActive 
             ? `Color change on cooldown...` 
             : `Click to change ${playerName}'s color`
         }
       />
+      
+      {/* Emoji overlay */}
+      <div className="absolute inset-0 flex items-center justify-center pointer-events-none text-[calc(12px*var(--ui-scale))]">
+        🎨
+      </div>
       
       {cooldownActive && (
         <div className="absolute -top-8 left-0 bg-black/80 text-white text-xs px-2 py-1 rounded whitespace-nowrap">

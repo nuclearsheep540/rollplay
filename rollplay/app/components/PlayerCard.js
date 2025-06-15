@@ -153,10 +153,10 @@ export default function PlayerCard({
             )}
             
             {/* Color Picker - Only show for the player's own seat */}
-            {isThisPlayerSeat && onColorChange && currentColor && (
+            {isThisPlayerSeat && onColorChange && (
               <div className="relative">
                 <ColorPicker
-                  currentColor={currentColor}
+                  currentColor={getSeatColor(seatId)}
                   onColorChange={onColorChange}
                   playerName={occupantName}
                   seatIndex={seatId}
