@@ -1,33 +1,47 @@
 // Switch to admin database for user creation
 db = db.getSiblingDB('admin');
 
-db.createUser({
-    user: "${MONGO_INITDB_ROOT_USERNAME}",
-    pwd: "${MONGO_INITDB_ROOT_PASSWORD}",
-    roles: [
-        {
-            role: "root",
-            db: "admin"
-        }
-    ]
-});
+// Try to create admin user, ignore if already exists
+try {
+    db.createUser({
+        user: "${MONGO_INITDB_ROOT_USERNAME}",
+        pwd: "${MONGO_INITDB_ROOT_PASSWORD}",
+        roles: [
+            {
+                role: "root",
+                db: "admin"
+            }
+        ]
+    });
+    print("Created admin user");
+} catch (error) {
+    print("Admin user already exists: " + error.message);
+}
 
 db = db.getSiblingDB('rollplay');
 
-db.createUser({
-    user: "${MONGO_INITDB_ROOT_USERNAME}",
-    pwd: "${MONGO_INITDB_ROOT_PASSWORD}",
-    roles: [
-        {
-            role: "readWrite",
-            db: "rollplay"
-        }
-    ]
-});
+// Try to create rollplay user, ignore if already exists
+try {
+    db.createUser({
+        user: "${MONGO_INITDB_ROOT_USERNAME}",
+        pwd: "${MONGO_INITDB_ROOT_PASSWORD}",
+        roles: [
+            {
+                role: "readWrite",
+                db: "rollplay"
+            }
+    });
+    print("Created rollplay user");
+} catch (error) {
+    print("Rollplay user already exists: " + error.message);
+}
 
-// Create collections
+// Create collections (createCollection is idempotent)
 db.createCollection("active_sessions");
+print("Created active_sessions collection");
+
 db.createCollection("adventure_logs");
+print("Created adventure_logs collection");
 
 
 // Insert test data
@@ -36,7 +50,7 @@ var test_room = db.active_sessions.insertOne({
     max_players: 8, 
     seat_layout: ["Matt", "empty", "empty", "empty", "empty", "empty", "empty", "empty"],
     created_at: ISODate("2025-06-08T12:00:00Z"),
-    player_name: "Matt",
+    room_host: "Matt",  // Updated field name
     seat_colors: {
         "0": "#3b82f6",  // blue
         "1": "#ef4444",  // red
@@ -46,7 +60,9 @@ var test_room = db.active_sessions.insertOne({
         "5": "#06b6d4",  // cyan
         "6": "#ec4899",  // pink
         "7": "#65a30d"   // lime
-    }
+    },
+    moderators: [],        // New field: array of moderator names
+    dungeon_master: ""     // New field: current DM name
 });
 var testRoomId = test_room.insertedId;
 

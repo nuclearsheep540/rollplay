@@ -144,6 +144,17 @@ def register_websocket_routes(app: FastAPI):
                     )
                     broadcast_message = result.broadcast_message
 
+                elif event_type == "role_change":
+                    result = await WebsocketEvent.role_change(
+                        websocket=websocket,
+                        data=data,
+                        event_data=event_data,
+                        player_name=player_name,
+                        client_id=client_id,
+                        manager=manager
+                    )
+                    broadcast_message = result.broadcast_message
+
                 elif event_type == "dice_roll":
                     result = await WebsocketEvent.dice_roll(
                         websocket=websocket,

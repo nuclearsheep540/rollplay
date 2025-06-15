@@ -11,6 +11,7 @@ import { getSeatColor } from '../utils/seatColors';
 
 import PlayerCard from "../components/PlayerCard";
 import DMControlCenter from '../components/DMControlCenter';
+import ModeratorControls from '../components/ModeratorControls';
 import HorizontalInitiativeTracker from '../components/HorizontalInitiativeTracker';
 import AdventureLog from '../components/AdventureLog';
 import LobbyPanel from '../components/LobbyPanel';
@@ -58,7 +59,9 @@ function GameContent() {
 
   // UPDATED: State management for TabletopInterface - REMOVED HARDCODED DEFAULTS
   const [currentTurn, setCurrentTurn] = useState(null); // ❌ Removed 'Thorin' default
-  const [isDM, setIsDM] = useState(true); // Toggle for DM panel visibility
+  const [isDM, setIsDM] = useState(false); // Toggle for DM panel visibility
+  const [isModerator, setIsModerator] = useState(false); // Moderator status
+  const [isHost, setIsHost] = useState(false); // Host status
   const [dicePortalActive, setDicePortalActive] = useState(true);
   const [uiScale, setUIScale] = useState('medium'); // UI Scale state
   const [combatActive, setCombatActive] = useState(true); // Combat state
@@ -162,7 +165,7 @@ function GameContent() {
     }
   
     await req.json().then((res) => {
-      setHost(res["player_name"])
+      setHost(res["room_host"] || res["player_name"]) // Backward compatibility
       
       // Use actual seat layout from database if available
       const seatLayout = res["current_seat_layout"] || [];
@@ -203,6 +206,26 @@ function GameContent() {
     await loadAdventureLogs(roomId);
   }
   
+  // Check player roles
+  const checkPlayerRoles = async (roomId, playerName) => {
+    try {
+      console.log(`🔍 Checking roles for player: ${playerName} in room: ${roomId}`);
+      const response = await fetch(`/api/game/${roomId}/roles?playerName=${playerName}`);
+      if (response.ok) {
+        const roles = await response.json();
+        console.log('📋 Received roles:', roles);
+        setIsHost(roles.is_host);
+        setIsModerator(roles.is_moderator);
+        setIsDM(roles.is_dm);
+        console.log(`✅ Set roles - Host: ${roles.is_host}, Moderator: ${roles.is_moderator}, DM: ${roles.is_dm}`);
+      } else {
+        console.error('❌ Failed to fetch roles:', response.status, response.statusText);
+      }
+    } catch (error) {
+      console.error('Error checking player roles:', error);
+    }
+  };
+
   // initialise the game lobby
   useEffect(() => {
     const roomId = params.get('roomId')
@@ -212,6 +235,11 @@ function GameContent() {
 
     // fetches the room ID, and loads data
     onLoad(roomId)
+    
+    // Check player roles after loading room data
+    if (roomId && thisPlayer) {
+      checkPlayerRoles(roomId, thisPlayer);
+    }
   }, [])
 
   // UPDATED: Seat count management
@@ -367,6 +395,18 @@ function GameContent() {
     setRollLog(prev => [...prev, newEntry]);
   };
 
+  // Handle role changes from ModeratorControls and WebSocket events
+  const handleRoleChange = async (action, playerName) => {
+    console.log(`Role change: ${action} for ${playerName}`);
+    
+    // Refresh role status for current player
+    if (roomId && thisPlayer) {
+      await checkPlayerRoles(roomId, thisPlayer);
+    }
+    
+    // Role changes are now broadcasted via WebSocket to all connected users
+  };
+
   // Create a setter function for playerSeatMap updates
   const setPlayerSeatMap = (updaterFunction) => {
     // This is a derived state update - we need to update seatColors instead
@@ -385,7 +425,7 @@ function GameContent() {
     setSeatColors(newSeatColors);
   };
 
-  // Create game context object for WebSocket handlers (after addToLog is defined)
+  // Create game context object for WebSocket handlers (after functions are defined)
   const gameContext = {
     // State setters
     setGameSeats,
@@ -409,7 +449,8 @@ function GameContent() {
     
     // Helper functions
     addToLog,
-    getCharacterData
+    getCharacterData,
+    handleRoleChange
   };
 
   // Initialize WebSocket hook with game context
@@ -426,7 +467,8 @@ function GameContent() {
     sendDicePrompt,
     sendDicePromptClear,
     sendInitiativePromptAll,
-    sendColorChange
+    sendColorChange,
+    sendRoleChange
   } = useWebSocket(roomId, thisPlayer, gameContext);
 
   // Show dice portal for player rolls
@@ -843,6 +885,23 @@ function GameContent() {
 
         {/* GRID POSITION 3: Right Panel - DM Controls (Full Height) */}
         <div className="right-panel">
+          {/* Moderator Controls - shown if player is host or moderator */}
+          <ModeratorControls
+            isModerator={isModerator}
+            isHost={isHost}
+            isDM={isDM}
+            gameSeats={gameSeats}
+            lobbyUsers={lobbyUsers}
+            roomId={roomId}
+            thisPlayer={thisPlayer}
+            onRoleChange={handleRoleChange}
+            sendRoleChange={sendRoleChange}
+            setSeatCount={setSeatCount}
+            handleKickPlayer={handleKickPlayer}
+            handleClearSystemMessages={handleClearSystemMessages}
+            handleClearAllMessages={handleClearAllMessages}
+          />
+          
           <DMControlCenter
             isDM={isDM}
             promptPlayerRoll={promptPlayerRoll}
@@ -853,11 +912,7 @@ function GameContent() {
             combatActive={combatActive}
             setCombatActive={sendCombatStateChange}
             gameSeats={gameSeats}
-            setSeatCount={setSeatCount}
             roomId={roomId}
-            handleKickPlayer={handleKickPlayer}
-            handleClearSystemMessages={handleClearSystemMessages}
-            handleClearAllMessages={handleClearAllMessages}  // NEW
             activePrompts={activePrompts}        // UPDATED: Pass array instead of single prompt
             clearDicePrompt={clearDicePrompt}    // UPDATED: Now accepts prompt ID
           />

@@ -289,6 +289,20 @@ export const handleAdventureLogRemoved = (data, { setRollLog }) => {
   console.log(`🗑️ Removed adventure log entry with prompt_id: ${prompt_id}`);
 };
 
+export const handleRoleChange = (data, { addToLog, handleRoleChange }) => {
+  console.log("🎭 Role change received:", data);
+  
+  const { action, target_player, changed_by, message } = data;
+  
+  // Add role change to adventure log
+  addToLog(message, 'system', changed_by);
+  
+  // Trigger role refresh if handler is available
+  if (handleRoleChange) {
+    handleRoleChange(action, target_player);
+  }
+};
+
 // WebSocket sending functions (outbound messages)
 export const createSendFunctions = (webSocket, isConnected, roomId, playerName) => {
   const sendDicePrompt = (promptedPlayer, rollType, promptId) => {
@@ -557,6 +571,23 @@ export const createSendFunctions = (webSocket, isConnected, roomId, playerName) 
     }));
   };
 
+  const sendRoleChange = (action, targetPlayer) => {
+    if (!webSocket || !isConnected) {
+      console.log("❌ Cannot send role change - WebSocket not connected");
+      return;
+    }
+    
+    console.log(`🎭 Sending role change: ${action} for ${targetPlayer}`);
+    
+    webSocket.send(JSON.stringify({
+      "event_type": "role_change",
+      "data": {
+        "action": action,
+        "target_player": targetPlayer
+      }
+    }));
+  };
+
   return {
     sendSeatChange,
     sendSeatCountChange,
@@ -569,6 +600,7 @@ export const createSendFunctions = (webSocket, isConnected, roomId, playerName) 
     sendDicePrompt,
     sendDicePromptClear,
     sendInitiativePromptAll,
-    sendColorChange
+    sendColorChange,
+    sendRoleChange
   };
 };

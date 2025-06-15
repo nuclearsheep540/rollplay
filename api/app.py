@@ -89,6 +89,107 @@ def gameservice_get(room_id):
     else:
         return Response(status_code=404, content=f'{{"error": "Room {room_id} not found"}}')
 
+@app.get("/game/{room_id}/roles")
+def get_player_roles(room_id: str, playerName: str):
+    """Check player's roles (host, moderator, DM) in a room"""
+    try:
+        check_room = GameService.get_room(id=room_id)
+        if not check_room:
+            raise HTTPException(status_code=404, detail=f"Room {room_id} not found")
+        
+        is_host = GameService.is_host(room_id, playerName)
+        is_moderator = GameService.is_moderator(room_id, playerName)
+        is_dm = GameService.is_dm(room_id, playerName)
+        
+        return {
+            "is_host": is_host,
+            "is_moderator": is_moderator,
+            "is_dm": is_dm
+        }
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/game/{room_id}/moderators")
+def add_moderator(room_id: str, request: dict):
+    """Add a player as moderator"""
+    try:
+        check_room = GameService.get_room(id=room_id)
+        if not check_room:
+            raise HTTPException(status_code=404, detail=f"Room {room_id} not found")
+        
+        player_name = request.get("player_name")
+        if not player_name:
+            raise HTTPException(status_code=400, detail="player_name is required")
+        
+        success = GameService.add_moderator(room_id, player_name)
+        if success:
+            return {"success": True, "message": f"{player_name} added as moderator"}
+        else:
+            return {"success": False, "message": f"{player_name} is already a moderator"}
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.delete("/game/{room_id}/moderators")
+def remove_moderator(room_id: str, request: dict):
+    """Remove a player from moderators"""
+    try:
+        check_room = GameService.get_room(id=room_id)
+        if not check_room:
+            raise HTTPException(status_code=404, detail=f"Room {room_id} not found")
+        
+        player_name = request.get("player_name")
+        if not player_name:
+            raise HTTPException(status_code=400, detail="player_name is required")
+        
+        success = GameService.remove_moderator(room_id, player_name)
+        if success:
+            return {"success": True, "message": f"{player_name} removed from moderators"}
+        else:
+            return {"success": False, "message": f"{player_name} was not a moderator"}
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/game/{room_id}/dm")
+def set_dm(room_id: str, request: dict):
+    """Set a player as dungeon master"""
+    try:
+        check_room = GameService.get_room(id=room_id)
+        if not check_room:
+            raise HTTPException(status_code=404, detail=f"Room {room_id} not found")
+        
+        player_name = request.get("player_name")
+        if not player_name:
+            raise HTTPException(status_code=400, detail="player_name is required")
+        
+        success = GameService.set_dm(room_id, player_name)
+        if success:
+            return {"success": True, "message": f"{player_name} set as Dungeon Master"}
+        else:
+            return {"success": False, "message": "Failed to set Dungeon Master"}
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.delete("/game/{room_id}/dm")
+def unset_dm(room_id: str):
+    """Remove the current dungeon master"""
+    try:
+        check_room = GameService.get_room(id=room_id)
+        if not check_room:
+            raise HTTPException(status_code=404, detail=f"Room {room_id} not found")
+        
+        success = GameService.unset_dm(room_id)
+        if success:
+            return {"success": True, "message": "Dungeon Master removed"}
+        else:
+            return {"success": False, "message": "No Dungeon Master to remove"}
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
 @app.post("/game/")
 def gameservice_create(settings: GameSettings):
     new_room = GameService.create_room(settings=settings)
