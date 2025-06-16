@@ -4,6 +4,16 @@
  */
 
 import React, { useState } from 'react';
+import { 
+  MODERATOR_TITLE, 
+  MODERATOR_HEADER, 
+  MODERATOR_SUB_HEADER, 
+  MODERATOR_CHILD,
+  MODERATOR_CHILD_LAST,
+  MODERATOR_ARROW,
+  MODERATOR_SUBTITLE,
+  MODERATOR_LABEL
+} from '../styles/constants';
 
 export default function ModeratorControls({
   isModerator,
@@ -161,64 +171,40 @@ export default function ModeratorControls({
   }
 
   return (
-    <div className="mb-3">
+    <div>
       {/* Collapsible Header */}
       <div 
-        className="flex items-center justify-between cursor-pointer hover:bg-emerald-500/10 transition-all duration-200"
-        style={{
-          padding: 'calc(16px * var(--ui-scale))',
-        }}
+        className={MODERATOR_TITLE}
         onClick={() => setIsCollapsed(!isCollapsed)}
       >
-        <div className="text-emerald-300 font-bold uppercase tracking-wide flex items-center gap-2" style={{
-          fontSize: 'calc(14px * var(--ui-scale))',
-        }}>
+        <div>
           ⚖️ Moderator Controls
-          <div className="text-emerald-500/70 text-xs normal-case">
-            ({isHost ? 'Host' : 'Moderator'})
-          </div>
+          <div className={MODERATOR_SUBTITLE} />
         </div>
-        <div className={`text-emerald-500 transition-transform duration-200 ${isCollapsed ? 'rotate-180' : ''}`}>
+        <div className={`${MODERATOR_ARROW} ${isCollapsed ? 'rotate-180' : ''}`}>
           ▼
         </div>
       </div>
 
       {/* Collapsible Content */}
       {!isCollapsed && (
-        <div style={{
-          padding: '0 calc(16px * var(--ui-scale)) calc(16px * var(--ui-scale))',
-        }}>
+        <div>
 
       {/* Moderator Management Section */}
-      <div className="mb-3 flex-shrink-0">
+      <div className="flex-shrink-0">
         <div 
-          className="flex items-center justify-between cursor-pointer bg-emerald-500/10 rounded transition-all duration-200 hover:bg-emerald-500/15 mb-0"
-          style={{
-            padding: 'calc(12px * var(--ui-scale))',
-            borderRadius: 'calc(4px * var(--ui-scale))',
-          }}
+          className={MODERATOR_HEADER}
           onClick={() => toggleSection('moderators')}
         >
-          <span className="text-emerald-300 font-semibold uppercase tracking-wide" style={{
-            fontSize: 'calc(12px * var(--ui-scale))',
-          }}>
-            👥 Manage Moderators
-          </span>
-          <span className={`text-emerald-500 transition-transform duration-200 ${expandedSections.moderators ? 'rotate-180' : ''}`} style={{
-            fontSize: 'calc(12px * var(--ui-scale))',
-          }}>
+          👥 Manage Moderators
+          <span className={`${MODERATOR_ARROW} ${expandedSections.moderators ? 'rotate-180' : ''}`}>
             ▼
           </span>
         </div>
         {expandedSections.moderators && (
-          <div className="mt-2 space-y-2">
+          <div>
             <button 
-              className="w-full bg-emerald-500/10 border border-emerald-500/30 text-emerald-300 rounded text-left transition-all duration-200 hover:bg-emerald-500/20" 
-              style={{
-                padding: 'calc(8px * var(--ui-scale))',
-                borderRadius: 'calc(4px * var(--ui-scale))',
-                fontSize: 'calc(12px * var(--ui-scale))',
-              }}
+              className={MODERATOR_CHILD} 
               onClick={() => openModeratorModal('add_moderator')}
             >
               ➕ Add Moderator
@@ -226,12 +212,7 @@ export default function ModeratorControls({
             
             {(isHost || isDM) && (
               <button 
-                className="w-full bg-emerald-500/10 border border-emerald-500/30 text-emerald-300 rounded text-left transition-all duration-200 hover:bg-emerald-500/20" 
-                style={{
-                  padding: 'calc(8px * var(--ui-scale))',
-                  borderRadius: 'calc(4px * var(--ui-scale))',
-                  fontSize: 'calc(12px * var(--ui-scale))',
-                }}
+                className={MODERATOR_CHILD}
                 onClick={() => openModeratorModal('remove_moderator')}
               >
                 ➖ Remove Moderator
@@ -240,9 +221,9 @@ export default function ModeratorControls({
 
             {/* Display current moderators */}
             {roomData?.moderators?.length > 0 && (
-              <div className="mt-2 p-2 bg-emerald-500/5 border border-emerald-500/20 rounded text-xs">
-                <div className="text-emerald-400 mb-1">Current Moderators:</div>
-                <div className="text-emerald-300/70">
+              <div className={MODERATOR_CHILD_LAST}>
+                <div>Current Moderators:</div>
+                <div>
                   {roomData.moderators.join(', ')}
                 </div>
               </div>
@@ -252,32 +233,21 @@ export default function ModeratorControls({
       </div>
 
       {/* DM Management Section */}
-      <div className="mb-3 flex-shrink-0">
+      <div className="flex-shrink-0">
         <div 
-          className="flex items-center justify-between cursor-pointer bg-emerald-500/10 border border-emerald-500/20 rounded transition-all duration-200 hover:bg-emerald-500/15 hover:border-emerald-500/30 mb-0 p-3"
+          className={MODERATOR_HEADER}
           onClick={() => toggleSection('dm')}
         >
-          <span className="text-emerald-300 font-semibold uppercase tracking-wide" style={{
-            fontSize: 'calc(12px * var(--ui-scale))',
-          }}>
-            🎲 Manage DM
-          </span>
-          <span className={`text-emerald-500 transition-transform duration-200 ${expandedSections.dm ? 'rotate-180' : ''}`} style={{
-            fontSize: 'calc(12px * var(--ui-scale))',
-          }}>
+          🎲 Manage DM
+          <span className={`${MODERATOR_ARROW} ${expandedSections.dm ? 'rotate-180' : ''}`}>
             ▼
           </span>
         </div>
         {expandedSections.dm && (
-          <div className="mt-2 space-y-2">
+          <div>
             {!roomData?.dungeon_master && (
               <button 
-                className="w-full bg-emerald-500/10 border border-emerald-500/30 text-emerald-300 rounded text-left transition-all duration-200 hover:bg-emerald-500/20" 
-                style={{
-                  padding: 'calc(8px * var(--ui-scale))',
-                  borderRadius: 'calc(4px * var(--ui-scale))',
-                  fontSize: 'calc(12px * var(--ui-scale))',
-                }}
+                className={MODERATOR_CHILD}
                 onClick={() => openDMModal('set_dm')}
               >
                 👑 Set Dungeon Master
@@ -286,12 +256,7 @@ export default function ModeratorControls({
             
             {roomData?.dungeon_master && (isHost || isDM) && (
               <button 
-                className="w-full bg-emerald-500/10 border border-emerald-500/30 text-emerald-300 rounded text-left transition-all duration-200 hover:bg-emerald-500/20" 
-                style={{
-                  padding: 'calc(8px * var(--ui-scale))',
-                  borderRadius: 'calc(4px * var(--ui-scale))',
-                  fontSize: 'calc(12px * var(--ui-scale))',
-                }}
+                className={MODERATOR_CHILD}
                 onClick={() => handleRoleAction('unset_dm', roomData.dungeon_master)}
               >
                 🚫 Remove Dungeon Master
@@ -300,9 +265,9 @@ export default function ModeratorControls({
 
             {/* Display current DM */}
             {roomData?.dungeon_master && (
-              <div className="mt-2 p-2 bg-amber-500/5 border border-amber-500/20 rounded text-xs">
-                <div className="text-amber-400 mb-1">Current DM:</div>
-                <div className="text-amber-300/70">
+              <div className={MODERATOR_CHILD_LAST}>
+                <div>Current DM:</div>
+                <div>
                   {roomData.dungeon_master}
                 </div>
               </div>
@@ -559,56 +524,35 @@ export default function ModeratorControls({
       )}
 
       {/* Party Management Section */}
-      <div className="mb-3 flex-shrink-0">
+      <div className="flex-shrink-0">
         <div 
-          className="flex items-center justify-between cursor-pointer bg-emerald-500/10 border border-emerald-500/20 rounded transition-all duration-200 hover:bg-emerald-500/15 hover:border-emerald-500/30 mb-0 p-3"
+          className={MODERATOR_HEADER}
           onClick={() => toggleSection('party')}
         >
-          <span className="text-emerald-300 font-semibold uppercase tracking-wide" style={{
-            fontSize: 'calc(12px * var(--ui-scale))',
-          }}>
-            👥 Party Management
-          </span>
-          <span className={`text-emerald-500 transition-transform duration-200 ${expandedSections.party ? 'rotate-180' : ''}`} style={{
-            fontSize: 'calc(12px * var(--ui-scale))',
-          }}>
+          👥 Party Management
+          <span className={`${MODERATOR_ARROW} ${expandedSections.party ? 'rotate-180' : ''}`}>
             ▼
           </span>
         </div>
         {expandedSections.party && (
-          <div style={{ marginTop: 'calc(8px * var(--ui-scale))', display: 'flex', flexDirection: 'column', gap: 'calc(8px * var(--ui-scale))' }}>
+          <div>
             {/* Seat Count Management */}
-            <div style={{ marginBottom: 'calc(8px * var(--ui-scale))' }}>
-              <div className="text-emerald-300 font-medium mb-2" style={{
-                fontSize: 'calc(11px * var(--ui-scale))',
-              }}>🪑 Seat Count</div>
-              <div className="flex items-center gap-2">
+            <div className={MODERATOR_CHILD}>
+              <div className={MODERATOR_LABEL}>🪑 Seat Count</div>
+              <div>
                 <button 
-                  className="bg-emerald-500/10 border border-emerald-500/30 text-emerald-300 rounded transition-all duration-200 hover:bg-emerald-500/20"
-                  style={{
-                    padding: 'calc(8px * var(--ui-scale))',
-                    borderRadius: 'calc(4px * var(--ui-scale))',
-                    fontSize: 'calc(12px * var(--ui-scale))',
-                  }}
+                  className={MODERATOR_CHILD}
                   onClick={() => setIsSeatManagement(!isSeatManagement)}
                 >
                   {isSeatManagement ? '📝' : '⚙️'} {isSeatManagement ? 'Set' : 'Manage'}
                 </button>
                 
                 {isSeatManagement && (
-                  <div className="flex items-center gap-2">
+                  <div>
                     {[2, 3, 4, 5, 6, 7, 8].map(count => (
                       <button
                         key={count}
-                        className={`border rounded transition-all duration-200 ${
-                          gameSeats?.length === count
-                            ? 'bg-emerald-500/30 border-emerald-400 text-emerald-200'
-                            : 'bg-emerald-500/10 border-emerald-500/30 text-emerald-300 hover:bg-emerald-500/20'
-                        }`}
-                        style={{
-                          padding: 'calc(4px * var(--ui-scale)) calc(6px * var(--ui-scale))',
-                          fontSize: 'calc(10px * var(--ui-scale))',
-                        }}
+                        className={MODERATOR_CHILD}
                         onClick={() => {
                           setSeatCount(count);
                           setIsSeatManagement(false);
@@ -621,9 +565,7 @@ export default function ModeratorControls({
                 )}
                 
                 {!isSeatManagement && (
-                  <span className="text-emerald-400/70" style={{
-                    fontSize: 'calc(10px * var(--ui-scale))',
-                  }}>
+                  <span>
                     Current: {gameSeats?.length || 0}
                   </span>
                 )}
@@ -632,30 +574,20 @@ export default function ModeratorControls({
 
             {/* Kick Player */}
             <button 
-              className="w-full bg-emerald-500/10 border border-emerald-500/30 text-emerald-300 rounded text-left transition-all duration-200 hover:bg-emerald-500/20"
-              style={{
-                padding: 'calc(8px * var(--ui-scale))',
-                borderRadius: 'calc(4px * var(--ui-scale))',
-                fontSize: 'calc(12px * var(--ui-scale))',
-              }}
+              className={MODERATOR_CHILD}
               onClick={() => setIsKickModalOpen(true)}
             >
               🚫 Kick Player
             </button>
 
             {/* Clear Messages */}
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 'calc(8px * var(--ui-scale))' }}>
+            <div>
               <button 
-                className={`w-full border text-left rounded transition-all duration-200 ${
+                className={`${MODERATOR_CHILD} ${
                   isClearingLogs 
                     ? 'bg-emerald-500/20 border-emerald-500/40 text-emerald-200 cursor-not-allowed'
-                    : 'bg-emerald-500/10 border-emerald-500/30 text-emerald-300 hover:bg-emerald-500/20'
+                    : ''
                 }`}
-                style={{
-                  padding: 'calc(8px * var(--ui-scale))',
-                  borderRadius: 'calc(4px * var(--ui-scale))',
-                  fontSize: 'calc(12px * var(--ui-scale))',
-                }}
                 onClick={() => {
                   if (!isClearingLogs) {
                     setIsClearingLogs(true);
@@ -668,16 +600,11 @@ export default function ModeratorControls({
               </button>
               
               <button 
-                className={`w-full border text-left rounded transition-all duration-200 ${
+                className={`${MODERATOR_CHILD_LAST} ${
                   isClearingAllLogs 
                     ? 'bg-emerald-500/20 border-emerald-500/40 text-emerald-200 cursor-not-allowed'
-                    : 'bg-emerald-500/10 border-emerald-500/30 text-emerald-300 hover:bg-emerald-500/20'
+                    : ''
                 }`}
-                style={{
-                  padding: 'calc(8px * var(--ui-scale))',
-                  borderRadius: 'calc(4px * var(--ui-scale))',
-                  fontSize: 'calc(12px * var(--ui-scale))',
-                }}
                 onClick={() => {
                   if (!isClearingAllLogs) {
                     setIsClearingAllLogs(true);
