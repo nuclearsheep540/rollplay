@@ -226,7 +226,7 @@ export default function ModeratorControls({
             
             {(isHost || isDM) && (
               <button 
-                className="w-full bg-orange-500/10 border border-orange-500/30 text-orange-300 rounded text-left transition-all duration-200 hover:bg-orange-500/20" 
+                className="w-full bg-emerald-500/10 border border-emerald-500/30 text-emerald-300 rounded text-left transition-all duration-200 hover:bg-emerald-500/20" 
                 style={{
                   padding: 'calc(8px * var(--ui-scale))',
                   borderRadius: 'calc(4px * var(--ui-scale))',
@@ -254,19 +254,15 @@ export default function ModeratorControls({
       {/* DM Management Section */}
       <div className="mb-3 flex-shrink-0">
         <div 
-          className="flex items-center justify-between cursor-pointer bg-amber-500/10 rounded transition-all duration-200 hover:bg-amber-500/15 mb-0"
-          style={{
-            padding: 'calc(12px * var(--ui-scale))',
-            borderRadius: 'calc(4px * var(--ui-scale))',
-          }}
+          className="flex items-center justify-between cursor-pointer bg-emerald-500/10 border border-emerald-500/20 rounded transition-all duration-200 hover:bg-emerald-500/15 hover:border-emerald-500/30 mb-0 p-3"
           onClick={() => toggleSection('dm')}
         >
-          <span className="text-amber-300 font-semibold uppercase tracking-wide" style={{
+          <span className="text-emerald-300 font-semibold uppercase tracking-wide" style={{
             fontSize: 'calc(12px * var(--ui-scale))',
           }}>
             🎲 Manage DM
           </span>
-          <span className={`text-amber-500 transition-transform duration-200 ${expandedSections.dm ? 'rotate-180' : ''}`} style={{
+          <span className={`text-emerald-500 transition-transform duration-200 ${expandedSections.dm ? 'rotate-180' : ''}`} style={{
             fontSize: 'calc(12px * var(--ui-scale))',
           }}>
             ▼
@@ -276,7 +272,7 @@ export default function ModeratorControls({
           <div className="mt-2 space-y-2">
             {!roomData?.dungeon_master && (
               <button 
-                className="w-full bg-amber-500/10 border border-amber-500/30 text-amber-300 rounded text-left transition-all duration-200 hover:bg-amber-500/20" 
+                className="w-full bg-emerald-500/10 border border-emerald-500/30 text-emerald-300 rounded text-left transition-all duration-200 hover:bg-emerald-500/20" 
                 style={{
                   padding: 'calc(8px * var(--ui-scale))',
                   borderRadius: 'calc(4px * var(--ui-scale))',
@@ -290,7 +286,7 @@ export default function ModeratorControls({
             
             {roomData?.dungeon_master && (isHost || isDM) && (
               <button 
-                className="w-full bg-red-500/10 border border-red-500/30 text-red-300 rounded text-left transition-all duration-200 hover:bg-red-500/20" 
+                className="w-full bg-emerald-500/10 border border-emerald-500/30 text-emerald-300 rounded text-left transition-all duration-200 hover:bg-emerald-500/20" 
                 style={{
                   padding: 'calc(8px * var(--ui-scale))',
                   borderRadius: 'calc(4px * var(--ui-scale))',
@@ -565,37 +561,34 @@ export default function ModeratorControls({
       {/* Party Management Section */}
       <div className="mb-3 flex-shrink-0">
         <div 
-          className="flex items-center justify-between cursor-pointer bg-blue-500/10 rounded transition-all duration-200 hover:bg-blue-500/15 mb-0"
-          style={{
-            padding: 'calc(12px * var(--ui-scale))',
-            borderRadius: 'calc(4px * var(--ui-scale))',
-          }}
+          className="flex items-center justify-between cursor-pointer bg-emerald-500/10 border border-emerald-500/20 rounded transition-all duration-200 hover:bg-emerald-500/15 hover:border-emerald-500/30 mb-0 p-3"
           onClick={() => toggleSection('party')}
         >
-          <span className="text-blue-300 font-semibold uppercase tracking-wide" style={{
+          <span className="text-emerald-300 font-semibold uppercase tracking-wide" style={{
             fontSize: 'calc(12px * var(--ui-scale))',
           }}>
             👥 Party Management
           </span>
-          <span className={`text-blue-500 transition-transform duration-200 ${expandedSections.party ? 'rotate-180' : ''}`} style={{
+          <span className={`text-emerald-500 transition-transform duration-200 ${expandedSections.party ? 'rotate-180' : ''}`} style={{
             fontSize: 'calc(12px * var(--ui-scale))',
           }}>
             ▼
           </span>
         </div>
         {expandedSections.party && (
-          <div className="mt-2 space-y-2">
+          <div style={{ marginTop: 'calc(8px * var(--ui-scale))', display: 'flex', flexDirection: 'column', gap: 'calc(8px * var(--ui-scale))' }}>
             {/* Seat Count Management */}
-            <div className="mb-4">
-              <div className="text-blue-400 font-medium mb-2" style={{
+            <div style={{ marginBottom: 'calc(8px * var(--ui-scale))' }}>
+              <div className="text-emerald-300 font-medium mb-2" style={{
                 fontSize: 'calc(11px * var(--ui-scale))',
               }}>🪑 Seat Count</div>
               <div className="flex items-center gap-2">
                 <button 
-                  className="bg-blue-500/10 border border-blue-500/30 text-blue-300 rounded transition-all duration-200 hover:bg-blue-500/20"
+                  className="bg-emerald-500/10 border border-emerald-500/30 text-emerald-300 rounded transition-all duration-200 hover:bg-emerald-500/20"
                   style={{
-                    padding: 'calc(6px * var(--ui-scale)) calc(8px * var(--ui-scale))',
-                    fontSize: 'calc(10px * var(--ui-scale))',
+                    padding: 'calc(8px * var(--ui-scale))',
+                    borderRadius: 'calc(4px * var(--ui-scale))',
+                    fontSize: 'calc(12px * var(--ui-scale))',
                   }}
                   onClick={() => setIsSeatManagement(!isSeatManagement)}
                 >
@@ -609,8 +602,8 @@ export default function ModeratorControls({
                         key={count}
                         className={`border rounded transition-all duration-200 ${
                           gameSeats?.length === count
-                            ? 'bg-blue-500/30 border-blue-400 text-blue-200'
-                            : 'bg-blue-500/10 border-blue-500/30 text-blue-300 hover:bg-blue-500/20'
+                            ? 'bg-emerald-500/30 border-emerald-400 text-emerald-200'
+                            : 'bg-emerald-500/10 border-emerald-500/30 text-emerald-300 hover:bg-emerald-500/20'
                         }`}
                         style={{
                           padding: 'calc(4px * var(--ui-scale)) calc(6px * var(--ui-scale))',
@@ -628,7 +621,7 @@ export default function ModeratorControls({
                 )}
                 
                 {!isSeatManagement && (
-                  <span className="text-blue-400/70" style={{
+                  <span className="text-emerald-400/70" style={{
                     fontSize: 'calc(10px * var(--ui-scale))',
                   }}>
                     Current: {gameSeats?.length || 0}
@@ -639,7 +632,7 @@ export default function ModeratorControls({
 
             {/* Kick Player */}
             <button 
-              className="w-full bg-red-500/10 border border-red-500/30 text-red-300 rounded text-left transition-all duration-200 hover:bg-red-500/20"
+              className="w-full bg-emerald-500/10 border border-emerald-500/30 text-emerald-300 rounded text-left transition-all duration-200 hover:bg-emerald-500/20"
               style={{
                 padding: 'calc(8px * var(--ui-scale))',
                 borderRadius: 'calc(4px * var(--ui-scale))',
@@ -651,12 +644,12 @@ export default function ModeratorControls({
             </button>
 
             {/* Clear Messages */}
-            <div className="space-y-1">
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 'calc(8px * var(--ui-scale))' }}>
               <button 
                 className={`w-full border text-left rounded transition-all duration-200 ${
                   isClearingLogs 
-                    ? 'bg-orange-500/20 border-orange-500/40 text-orange-200 cursor-not-allowed'
-                    : 'bg-orange-500/10 border-orange-500/30 text-orange-300 hover:bg-orange-500/20'
+                    ? 'bg-emerald-500/20 border-emerald-500/40 text-emerald-200 cursor-not-allowed'
+                    : 'bg-emerald-500/10 border-emerald-500/30 text-emerald-300 hover:bg-emerald-500/20'
                 }`}
                 style={{
                   padding: 'calc(8px * var(--ui-scale))',
@@ -677,8 +670,8 @@ export default function ModeratorControls({
               <button 
                 className={`w-full border text-left rounded transition-all duration-200 ${
                   isClearingAllLogs 
-                    ? 'bg-red-500/20 border-red-500/40 text-red-200 cursor-not-allowed'
-                    : 'bg-red-500/10 border-red-500/30 text-red-300 hover:bg-red-500/20'
+                    ? 'bg-emerald-500/20 border-emerald-500/40 text-emerald-200 cursor-not-allowed'
+                    : 'bg-emerald-500/10 border-emerald-500/30 text-emerald-300 hover:bg-emerald-500/20'
                 }`}
                 style={{
                   padding: 'calc(8px * var(--ui-scale))',

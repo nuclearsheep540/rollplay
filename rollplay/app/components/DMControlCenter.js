@@ -67,16 +67,18 @@ export default function DMControlCenter({
   }
 
   return (
-    <div className="bg-gradient-to-b from-red-900/15 to-slate-800/20 border-t border-white/10 flex-1 min-h-0 flex flex-col">
+    <div className="bg-gradient-to-b from-emerald-900/15 to-slate-800/20 border-t border-white/10 flex-1 min-h-0 flex flex-col">
       {/* Collapsible Header */}
       <div 
-        className="flex items-center justify-between cursor-pointer p-4 hover:bg-red-500/10 transition-all duration-200"
+        className="flex items-center justify-between cursor-pointer p-4 hover:bg-emerald-500/10 transition-all duration-200"
         onClick={() => setIsCollapsed(!isCollapsed)}
       >
-        <div className="text-red-500 font-bold text-base uppercase tracking-wider flex items-center gap-2">
+        <div className="text-emerald-300 font-bold uppercase tracking-wide flex items-center gap-2" style={{
+          fontSize: 'calc(14px * var(--ui-scale))',
+        }}>
           🎲 DM Command Center
         </div>
-        <div className={`text-red-500 transition-transform duration-200 ${isCollapsed ? 'rotate-180' : ''}`}>
+        <div className={`text-emerald-500 transition-transform duration-200 ${isCollapsed ? 'rotate-180' : ''}`}>
           ▼
         </div>
       </div>
@@ -102,7 +104,9 @@ export default function DMControlCenter({
 
             {/* Attack Rolls Section */}
             <div className="mb-6">
-              <h4 className="text-emerald-400 font-semibold mb-3 text-base">
+              <h4 className="text-emerald-300 font-semibold uppercase tracking-wide mb-3" style={{
+                fontSize: 'calc(12px * var(--ui-scale))',
+              }}>
                 Attack Rolls
               </h4>
               <div className="grid grid-cols-2 gap-3">
@@ -131,7 +135,9 @@ export default function DMControlCenter({
 
             {/* Ability Checks Section */}
             <div className="mb-6">
-              <h4 className="text-blue-400 font-semibold mb-3 text-base">
+              <h4 className="text-emerald-300 font-semibold uppercase tracking-wide mb-3" style={{
+                fontSize: 'calc(12px * var(--ui-scale))',
+              }}>
                 Ability Checks
               </h4>
               <div className="grid grid-cols-2 gap-3">
@@ -160,7 +166,9 @@ export default function DMControlCenter({
 
             {/* Saving Throws Section */}
             <div className="mb-6">
-              <h4 className="text-red-400 font-semibold mb-3 text-base">
+              <h4 className="text-emerald-300 font-semibold uppercase tracking-wide mb-3" style={{
+                fontSize: 'calc(12px * var(--ui-scale))',
+              }}>
                 Saving Throws
               </h4>
               <div className="grid grid-cols-2 gap-3">
@@ -189,7 +197,9 @@ export default function DMControlCenter({
 
             {/* Custom Roll Section */}
             <div className="mb-6">
-              <h4 className="text-purple-400 font-semibold mb-3 text-base">
+              <h4 className="text-emerald-300 font-semibold uppercase tracking-wide mb-3" style={{
+                fontSize: 'calc(12px * var(--ui-scale))',
+              }}>
                 📝 Custom Roll
               </h4>
               <div className="space-y-3">
@@ -280,25 +290,52 @@ export default function DMControlCenter({
       {/* Map Controls Section */}
       <div className="mb-3 flex-shrink-0">
         <div 
-          className="flex items-center justify-between cursor-pointer bg-purple-500/10 border border-purple-500/20 rounded transition-all duration-200 hover:bg-purple-500/15 hover:border-purple-500/30 mb-0 p-3"
+          className="flex items-center justify-between cursor-pointer bg-emerald-500/10 border border-emerald-500/20 rounded transition-all duration-200 hover:bg-emerald-500/15 hover:border-emerald-500/30 mb-0 p-3"
           onClick={() => toggleSection('map')}
         >
-          <span className="text-purple-300 font-semibold uppercase tracking-wide text-xs">
+          <span className="text-emerald-300 font-semibold uppercase tracking-wide" style={{
+            fontSize: 'calc(12px * var(--ui-scale))',
+          }}>
             🗺️ Map Controls
           </span>
-          <span className={`text-purple-500 transition-transform duration-200 text-xs ${expandedSections.map ? 'rotate-180' : ''}`}>
+          <span className={`text-emerald-500 transition-transform duration-200 ${expandedSections.map ? 'rotate-180' : ''}`} style={{
+            fontSize: 'calc(12px * var(--ui-scale))',
+          }}>
             ▼
           </span>
         </div>
         {expandedSections.map && (
           <div className="mt-2 animate-in slide-in-from-top-2 duration-200">
-            <button className="w-full bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 rounded text-left mb-1 transition-all duration-200 hover:bg-emerald-500/20 p-2 text-xs">
+            <button 
+              className="w-full bg-emerald-500/10 border border-emerald-500/30 text-emerald-300 rounded text-left transition-all duration-200 hover:bg-emerald-500/20" 
+              style={{
+                padding: 'calc(8px * var(--ui-scale))',
+                borderRadius: 'calc(4px * var(--ui-scale))',
+                fontSize: 'calc(12px * var(--ui-scale))',
+                marginBottom: 'calc(8px * var(--ui-scale))',
+              }}
+            >
               📁 Upload Map
             </button>
-            <button className="w-full bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 rounded text-left mb-1 transition-all duration-200 hover:bg-emerald-500/20 p-2 text-xs">
+            <button 
+              className="w-full bg-emerald-500/10 border border-emerald-500/30 text-emerald-300 rounded text-left transition-all duration-200 hover:bg-emerald-500/20" 
+              style={{
+                padding: 'calc(8px * var(--ui-scale))',
+                borderRadius: 'calc(4px * var(--ui-scale))',
+                fontSize: 'calc(12px * var(--ui-scale))',
+                marginBottom: 'calc(8px * var(--ui-scale))',
+              }}
+            >
               💾 Load Map
             </button>
-            <button className="w-full bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 rounded text-left mb-1 transition-all duration-200 hover:bg-emerald-500/20 p-2 text-xs">
+            <button 
+              className="w-full bg-emerald-500/10 border border-emerald-500/30 text-emerald-300 rounded text-left transition-all duration-200 hover:bg-emerald-500/20" 
+              style={{
+                padding: 'calc(8px * var(--ui-scale))',
+                borderRadius: 'calc(4px * var(--ui-scale))',
+                fontSize: 'calc(12px * var(--ui-scale))',
+              }}
+            >
               📏 Grid Settings
             </button>
           </div>
@@ -308,13 +345,17 @@ export default function DMControlCenter({
       {/* Combat Management Section */}
       <div className="mb-3 flex-shrink-0">
         <div 
-          className="flex items-center justify-between cursor-pointer bg-purple-500/10 border border-purple-500/20 rounded transition-all duration-200 hover:bg-purple-500/15 hover:border-purple-500/30 mb-0 p-3"
+          className="flex items-center justify-between cursor-pointer bg-emerald-500/10 border border-emerald-500/20 rounded transition-all duration-200 hover:bg-emerald-500/15 hover:border-emerald-500/30 mb-0 p-3"
           onClick={() => toggleSection('combat')}
         >
-          <span className="text-purple-300 font-semibold uppercase tracking-wide text-xs">
+          <span className="text-emerald-300 font-semibold uppercase tracking-wide" style={{
+            fontSize: 'calc(12px * var(--ui-scale))',
+          }}>
             ⚔️ Combat Management
           </span>
-          <span className={`text-purple-500 transition-transform duration-200 text-xs ${expandedSections.combat ? 'rotate-180' : ''}`}>
+          <span className={`text-emerald-500 transition-transform duration-200 ${expandedSections.combat ? 'rotate-180' : ''}`} style={{
+            fontSize: 'calc(12px * var(--ui-scale))',
+          }}>
             ▼
           </span>
         </div>
@@ -323,14 +364,14 @@ export default function DMControlCenter({
             
             {/* Initiate Combat Toggle */}
             <div 
-              className="w-full flex items-center justify-between p-2 rounded mb-1 bg-amber-500/10 border border-amber-500/40"
+              className="w-full flex items-center justify-between p-2 rounded mb-1 bg-emerald-500/10 border border-emerald-500/30"
               style={{
                 padding: 'calc(8px * var(--ui-scale))',
                 borderRadius: 'calc(4px * var(--ui-scale))',
                 marginBottom: 'calc(4px * var(--ui-scale))',
               }}
             >
-              <span className="text-amber-300 font-medium" style={{
+              <span className="text-emerald-300 font-medium" style={{
                 fontSize: 'calc(12px * var(--ui-scale))',
               }}>
                 ⚔️ Initiate Combat
@@ -364,7 +405,7 @@ export default function DMControlCenter({
             </div>
 
             <button 
-              className="w-full bg-amber-500/10 border border-amber-500/40 text-amber-300 rounded text-left mb-1 transition-all duration-200 hover:bg-amber-500/20"
+              className="w-full bg-emerald-500/10 border border-emerald-500/30 text-emerald-300 rounded text-left mb-1 transition-all duration-200 hover:bg-emerald-500/20"
               style={{
                 padding: 'calc(8px * var(--ui-scale))',
                 borderRadius: 'calc(4px * var(--ui-scale))',
@@ -381,8 +422,8 @@ export default function DMControlCenter({
             {/* UPDATED: Prompt Dice Throw - now shows player selection */}
             <div>
               <button 
-                className={`w-full bg-amber-500/10 border border-amber-500/40 text-amber-300 rounded text-left mb-1 transition-all duration-200 hover:bg-amber-500/20 ${
-                  isPlayerSelectExpanded && selectedPlayerForPrompt === 'general' ? 'bg-amber-500/20' : ''
+                className={`w-full bg-emerald-500/10 border border-emerald-500/30 text-emerald-300 rounded text-left mb-1 transition-all duration-200 hover:bg-emerald-500/20 ${
+                  isPlayerSelectExpanded && selectedPlayerForPrompt === 'general' ? 'bg-emerald-500/20' : ''
                 }`}
                 style={{
                   padding: 'calc(8px * var(--ui-scale))',
@@ -442,19 +483,15 @@ export default function DMControlCenter({
       {/* Audio Tracks Section */}
       <div className="mb-3 flex-shrink-0" style={{ marginBottom: 'calc(12px * var(--ui-scale))' }}>
         <div 
-          className="flex items-center justify-between cursor-pointer bg-purple-500/10 border border-purple-500/20 rounded transition-all duration-200 hover:bg-purple-500/15 hover:border-purple-500/30 mb-0"
-          style={{
-            padding: 'calc(12px * var(--ui-scale))',
-            borderRadius: 'calc(4px * var(--ui-scale))',
-          }}
+          className="flex items-center justify-between cursor-pointer bg-emerald-500/10 border border-emerald-500/20 rounded transition-all duration-200 hover:bg-emerald-500/15 hover:border-emerald-500/30 mb-0 p-3"
           onClick={() => toggleSection('audio')}
         >
-          <span className="text-purple-300 font-semibold uppercase tracking-wide" style={{
+          <span className="text-emerald-300 font-semibold uppercase tracking-wide" style={{
             fontSize: 'calc(12px * var(--ui-scale))',
           }}>
             🎵 Audio Tracks
           </span>
-          <span className={`text-purple-500 transition-transform duration-200 ${expandedSections.audio ? 'rotate-180' : ''}`} style={{
+          <span className={`text-emerald-500 transition-transform duration-200 ${expandedSections.audio ? 'rotate-180' : ''}`} style={{
             fontSize: 'calc(12px * var(--ui-scale))',
           }}>
             ▼
@@ -470,10 +507,10 @@ export default function DMControlCenter({
               ].map((track, index) => (
                 <div 
                   key={index}
-                  className={`flex items-center justify-between rounded bg-purple-500/5 border transition-all duration-200 hover:bg-purple-500/10 ${
+                  className={`flex items-center justify-between rounded bg-emerald-500/5 border transition-all duration-200 hover:bg-emerald-500/10 ${
                     currentTrack === track.name && isPlaying 
-                      ? 'border-purple-500/40 bg-purple-500/15' 
-                      : 'border-purple-500/20'
+                      ? 'border-emerald-500/40 bg-emerald-500/15' 
+                      : 'border-emerald-500/20'
                   }`}
                   style={{
                     padding: 'calc(8px * var(--ui-scale)) calc(12px * var(--ui-scale))',
@@ -482,25 +519,25 @@ export default function DMControlCenter({
                   }}
                 >
                   <div className="flex-1">
-                    <div className="text-purple-300 font-medium" style={{
-                      fontSize: 'calc(10px * var(--ui-scale))',
+                    <div className="text-emerald-300 font-medium" style={{
+                      fontSize: 'calc(12px * var(--ui-scale))',
                       marginBottom: 'calc(2px * var(--ui-scale))',
                     }}>{track.name}</div>
                     <div className="text-gray-500 font-mono" style={{
-                      fontSize: 'calc(9px * var(--ui-scale))',
+                      fontSize: 'calc(12px * var(--ui-scale))',
                     }}>{track.duration}</div>
                   </div>
                   <div style={{ marginLeft: 'calc(8px * var(--ui-scale))' }}>
                     <button 
                       className={`bg-transparent border rounded transition-all duration-200 ${
                         currentTrack === track.name && isPlaying 
-                          ? 'text-amber-500 border-amber-500/40 hover:bg-amber-500/20' 
-                          : 'text-purple-500 border-purple-500/30 hover:bg-purple-500/20'
+                          ? 'text-emerald-400 border-emerald-400/40 hover:bg-emerald-500/20' 
+                          : 'text-emerald-300 border-emerald-500/30 hover:bg-emerald-500/20'
                       }`}
                       style={{
-                        padding: 'calc(4px * var(--ui-scale)) calc(6px * var(--ui-scale))',
-                        borderRadius: 'calc(3px * var(--ui-scale))',
-                        fontSize: 'calc(8px * var(--ui-scale))',
+                        padding: 'calc(8px * var(--ui-scale))',
+                        borderRadius: 'calc(4px * var(--ui-scale))',
+                        fontSize: 'calc(12px * var(--ui-scale))',
                       }}
                       onClick={() => handleTrackClick(track.name)}
                     >
