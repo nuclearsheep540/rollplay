@@ -659,12 +659,19 @@ function GameContent() {
     // Extract rollFor at the top level so it's available throughout the function
     const rollFor = rollData.rollFor;
     
-    const { dice, secondDice, advantageMode, bonus } = rollData;
+    const { 
+      dice, 
+      primaryMultiplier = 1, 
+      secondDice, 
+      secondMultiplier = 1, 
+      advantageMode, 
+      bonus 
+    } = rollData;
     const bonusValue = bonus ? parseInt(bonus.replace(/[^-\d]/g, '')) || 0 : 0;
     
     // Check if this involves D20s with advantage/disadvantage
     const primaryIsD20 = dice === 'D20';
-    const useAdvantage = primaryIsD20 && advantageMode !== 'normal';
+    const useAdvantage = primaryIsD20 && advantageMode !== 'normal' && primaryMultiplier === 1;
     
     let totalResult = 0;
     let allRolls = [];
@@ -685,31 +692,61 @@ function GameContent() {
       allRolls.push(`[${roll1}, ${roll2}] = ${totalResult}`);
       notation.push(`${dice} (${advantageMode})`);
       
-      // If there's a second die, roll it normally and add to total
+      // If there's a second die, roll it with multiplier and add to total
       if (secondDice) {
         const secondDiceValue = parseInt(secondDice.substring(1));
-        const secondRoll = Math.floor(Math.random() * secondDiceValue) + 1;
-        totalResult += secondRoll;
-        allRolls.push(secondRoll);
-        notation.push(secondDice);
+        let secondRolls = [];
+        for (let i = 0; i < secondMultiplier; i++) {
+          const roll = Math.floor(Math.random() * secondDiceValue) + 1;
+          secondRolls.push(roll);
+          totalResult += roll;
+        }
+        allRolls.push(...secondRolls);
+        
+        // Notation for second dice
+        if (secondMultiplier > 1) {
+          notation.push(`${secondMultiplier}${secondDice}`);
+        } else {
+          notation.push(secondDice);
+        }
       }
     } else {
       // Normal rolls for both dice
       
-      // Roll primary die
+      // Roll primary die with multiplier
       const primaryDiceValue = parseInt(dice.substring(1));
-      const primaryRoll = Math.floor(Math.random() * primaryDiceValue) + 1;
-      totalResult += primaryRoll;
-      allRolls.push(primaryRoll);
-      notation.push(dice);
+      let primaryRolls = [];
+      for (let i = 0; i < primaryMultiplier; i++) {
+        const roll = Math.floor(Math.random() * primaryDiceValue) + 1;
+        primaryRolls.push(roll);
+        totalResult += roll;
+      }
+      allRolls.push(...primaryRolls);
       
-      // Roll second die if present
+      // Notation for primary dice
+      if (primaryMultiplier > 1) {
+        notation.push(`${primaryMultiplier}${dice}`);
+      } else {
+        notation.push(dice);
+      }
+      
+      // Roll second die with multiplier if present
       if (secondDice) {
         const secondDiceValue = parseInt(secondDice.substring(1));
-        const secondRoll = Math.floor(Math.random() * secondDiceValue) + 1;
-        totalResult += secondRoll;
-        allRolls.push(secondRoll);
-        notation.push(secondDice);
+        let secondRolls = [];
+        for (let i = 0; i < secondMultiplier; i++) {
+          const roll = Math.floor(Math.random() * secondDiceValue) + 1;
+          secondRolls.push(roll);
+          totalResult += roll;
+        }
+        allRolls.push(...secondRolls);
+        
+        // Notation for second dice
+        if (secondMultiplier > 1) {
+          notation.push(`${secondMultiplier}${secondDice}`);
+        } else {
+          notation.push(secondDice);
+        }
       }
       
       // Add bonus once to total for normal rolls
@@ -719,18 +756,40 @@ function GameContent() {
     // Format message
     const bonusText = bonusValue !== 0 ? ` ${bonus}` : '';
     
-    // Use proper dice notation formatting
+    // Use proper dice notation formatting with multipliers
     let diceNotation;
     if (useAdvantage) {
-      // For advantage/disadvantage, show as "d20 (advantage)" + any second dice
+      // For advantage/disadvantage, show as "d20 (advantage)" + any second dice with multipliers
       diceNotation = `${dice.toLowerCase()} (${advantageMode})`;
       if (secondDice) {
-        diceNotation += ` + ${secondDice.toLowerCase()}`;
+        if (secondMultiplier > 1) {
+          diceNotation += ` + ${secondMultiplier}${secondDice.toLowerCase()}`;
+        } else {
+          diceNotation += ` + ${secondDice.toLowerCase()}`;
+        }
       }
       diceNotation += bonusText;
     } else {
-      // For normal rolls, use the formatDiceNotation helper
-      diceNotation = formatDiceNotation(dice, secondDice) + bonusText;
+      // For normal rolls, build notation with multipliers
+      let notationParts = [];
+      
+      // Primary dice notation
+      if (primaryMultiplier > 1) {
+        notationParts.push(`${primaryMultiplier}${dice.toLowerCase()}`);
+      } else {
+        notationParts.push(dice.toLowerCase());
+      }
+      
+      // Secondary dice notation if present
+      if (secondDice) {
+        if (secondMultiplier > 1) {
+          notationParts.push(`${secondMultiplier}${secondDice.toLowerCase()}`);
+        } else {
+          notationParts.push(secondDice.toLowerCase());
+        }
+      }
+      
+      diceNotation = notationParts.join(' + ') + bonusText;
     }
     // Format roll details - just show the final result
     const rollDetails = useAdvantage ? allRolls.join(', ') : `${totalResult}`;

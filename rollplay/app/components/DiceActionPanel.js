@@ -43,6 +43,10 @@ export default function DiceActionPanel({
   const [secondDice, setSecondDice] = useState(''); // Empty string means no second die
   const [showSecondDice, setShowSecondDice] = useState(false); // Collapsible second dice section
   
+  // Multiplier states for dice
+  const [primaryMultiplier, setPrimaryMultiplier] = useState(1);
+  const [secondMultiplier, setSecondMultiplier] = useState(1);
+  
   // Advantage/Disadvantage state (separate from dice)
   const [advantageMode, setAdvantageMode] = useState('normal'); // 'normal', 'advantage', 'disadvantage'
   
@@ -83,18 +87,26 @@ export default function DiceActionPanel({
   };
 
   // Helper to format dice notation properly
-  const formatDiceNotation = (primaryDice, secondDice) => {
-    if (!secondDice) {
-      return primaryDice;
+  const formatDiceNotation = (primaryDice, primaryMult, secondDice, secondMult) => {
+    let notation = [];
+    
+    // Format primary dice with multiplier
+    if (primaryMult > 1) {
+      notation.push(`${primaryMult}${primaryDice.toLowerCase()}`);
+    } else {
+      notation.push(primaryDice.toLowerCase());
     }
     
-    // If both dice are the same type, use multiplier notation (e.g., "2d20")
-    if (primaryDice === secondDice) {
-      return `2${primaryDice.toLowerCase()}`;
+    // Format second dice with multiplier if present
+    if (secondDice) {
+      if (secondMult > 1) {
+        notation.push(`${secondMult}${secondDice.toLowerCase()}`);
+      } else {
+        notation.push(secondDice.toLowerCase());
+      }
     }
     
-    // If different dice types, use addition notation (e.g., "d20 + d6")
-    return `${primaryDice.toLowerCase()} + ${secondDice.toLowerCase()}`;
+    return notation.join(' + ');
   };
 
   // UPDATED: Handle actual dice roll with prompt context
@@ -110,7 +122,9 @@ export default function DiceActionPanel({
     
     const rollData = {
       dice: selectedDice,
+      primaryMultiplier: primaryMultiplier,
       secondDice: secondDice,
+      secondMultiplier: secondMultiplier,
       bonus: rollBonus,
       rollFor: rollType || 'Standard Roll',
       advantageMode: advantageMode
@@ -122,7 +136,9 @@ export default function DiceActionPanel({
     setIsDiceModalOpen(false);
     // Reset states
     setSelectedDice('D20');
+    setPrimaryMultiplier(1);
     setSecondDice('');
+    setSecondMultiplier(1);
     setShowSecondDice(false);
     setRollBonus('');
     setAdvantageMode('normal');
@@ -282,6 +298,27 @@ export default function DiceActionPanel({
               <h4 className="text-sm mb-2 text-white">
                 🎲 Choose Your Dice
               </h4>
+              
+              {/* Primary Dice Multiplier */}
+              <div className="flex items-center gap-2 mb-3">
+                <span className="text-xs text-slate-400">Multiplier:</span>
+                <div className="flex gap-1">
+                  {[1, 2, 3, 4, 5, 6, 7, 8].map(num => (
+                    <button
+                      key={num}
+                      className={`px-2 py-1 rounded text-xs border transition-all ${
+                        primaryMultiplier === num
+                          ? 'bg-emerald-500/30 border-emerald-500/60 text-emerald-200'
+                          : 'bg-slate-600/30 border-slate-500 text-slate-300 hover:bg-slate-500/30'
+                      }`}
+                      onClick={() => setPrimaryMultiplier(num)}
+                    >
+                      ×{num}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              
               <div className="grid grid-cols-4 gap-2">
                 {[
                   { name: 'D20', emoji: '🎲' },
@@ -340,6 +377,26 @@ export default function DiceActionPanel({
               
               {showSecondDice && (
                 <div className="mt-3 p-3 rounded-lg bg-slate-600/50 border border-slate-500">
+                  {/* Secondary Dice Multiplier */}
+                  <div className="flex items-center gap-2 mb-3">
+                    <span className="text-xs text-slate-400">Multiplier:</span>
+                    <div className="flex gap-1">
+                      {[1, 2, 3, 4, 5, 6, 7, 8].map(num => (
+                        <button
+                          key={num}
+                          className={`px-2 py-1 rounded text-xs border transition-all ${
+                            secondMultiplier === num
+                              ? 'bg-blue-500/30 border-blue-500/60 text-blue-200'
+                              : 'bg-slate-600/30 border-slate-500 text-slate-300 hover:bg-slate-500/30'
+                          }`}
+                          onClick={() => setSecondMultiplier(num)}
+                        >
+                          ×{num}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                  
                   <div className="grid grid-cols-4 gap-2">
                     {[
                       { name: 'D20', emoji: '🎲' },
@@ -430,7 +487,7 @@ export default function DiceActionPanel({
             {/* Roll Preview */}
             <div className="mb-3 p-2 bg-slate-700/30 rounded-lg border border-slate-600">
               <div className="text-sm text-slate-300 text-center">
-                <strong>Roll Preview:</strong> {formatDiceNotation(selectedDice, secondDice)}{advantageMode !== 'normal' ? ` (${advantageMode})` : ''}{rollBonus ? ` ${rollBonus}` : ''}
+                <strong>Roll Preview:</strong> {formatDiceNotation(selectedDice, primaryMultiplier, secondDice, secondMultiplier)}{advantageMode !== 'normal' ? ` (${advantageMode})` : ''}{rollBonus ? ` ${rollBonus}` : ''}
               </div>
             </div>
 
@@ -440,7 +497,7 @@ export default function DiceActionPanel({
                 onClick={() => handleDiceRoll()}
                 className="bg-emerald-500/20 border-2 border-emerald-500/50 text-emerald-500 rounded-xl px-6 py-3 text-base font-bold cursor-pointer transition-all duration-200 hover:bg-emerald-500/30 hover:scale-105"
               >
-                🎲 Roll {formatDiceNotation(selectedDice, secondDice)}{rollBonus ? ` ${rollBonus}` : ''}
+                🎲 Roll {formatDiceNotation(selectedDice, primaryMultiplier, secondDice, secondMultiplier)}{rollBonus ? ` ${rollBonus}` : ''}
                 {myPrompts.length > 0 && (
                   <div className="text-xs text-emerald-400 mt-1">
                     {myPrompts.length === 1 
