@@ -303,7 +303,7 @@ export default function DiceActionPanel({
               <div className="flex items-center gap-2 mb-3">
                 <span className="text-xs text-slate-400">Multiplier:</span>
                 <div className="flex gap-1">
-                  {[1, 2, 3, 4, 5, 6, 7, 8].map(num => (
+                  {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map(num => (
                     <button
                       key={num}
                       className={`px-2 py-1 rounded text-xs border transition-all ${
@@ -381,7 +381,7 @@ export default function DiceActionPanel({
                   <div className="flex items-center gap-2 mb-3">
                     <span className="text-xs text-slate-400">Multiplier:</span>
                     <div className="flex gap-1">
-                      {[1, 2, 3, 4, 5, 6, 7, 8].map(num => (
+                      {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map(num => (
                         <button
                           key={num}
                           className={`px-2 py-1 rounded text-xs border transition-all ${
