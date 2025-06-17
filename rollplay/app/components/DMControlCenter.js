@@ -11,7 +11,7 @@ import {
   COMBAT_TOGGLE_INACTIVE,
   ACTIVE_BACKGROUND
 } from '../styles/constants';
-import DicePrompt from './DicePrompt';
+import DicePrompt from './DMDicePrompt';
 
 String.prototype.titleCase = function() {
   return this.replace(/\w\S*/g, (txt) =>
