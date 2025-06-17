@@ -47,7 +47,6 @@ export default function ModeratorControls({
   const [selectedAction, setSelectedAction] = useState(''); // 'add_moderator', 'remove_moderator', 'set_dm'
   
   // State for party management
-  const [isSeatManagement, setIsSeatManagement] = useState(false);
   const [isKickModalOpen, setIsKickModalOpen] = useState(false);
   const [selectedPlayerToKick, setSelectedPlayerToKick] = useState('');
   const [isClearingLogs, setIsClearingLogs] = useState(false);
@@ -538,37 +537,20 @@ export default function ModeratorControls({
           <div>
             {/* Seat Count Management */}
             <div className={MODERATOR_CHILD}>
-              <div className={MODERATOR_LABEL}>🪑 Seat Count</div>
+              <div className={MODERATOR_LABEL}>🪑 Seat Count (Current: {gameSeats?.length || 0})</div>
               <div>
-                <button 
-                  className={MODERATOR_CHILD}
-                  onClick={() => setIsSeatManagement(!isSeatManagement)}
-                >
-                  {isSeatManagement ? '📝' : '⚙️'} {isSeatManagement ? 'Set' : 'Manage'}
-                </button>
-                
-                {isSeatManagement && (
-                  <div>
-                    {[2, 3, 4, 5, 6, 7, 8].map(count => (
-                      <button
-                        key={count}
-                        className={MODERATOR_CHILD}
-                        onClick={() => {
-                          setSeatCount(count);
-                          setIsSeatManagement(false);
-                        }}
-                      >
-                        {count}
-                      </button>
-                    ))}
-                  </div>
-                )}
-                
-                {!isSeatManagement && (
-                  <span>
-                    Current: {gameSeats?.length || 0}
-                  </span>
-                )}
+                {[2, 3, 4, 5, 6, 7, 8].map(count => (
+                  <button
+                    key={count}
+                    className={count === (gameSeats?.length || 0) 
+                      ? "m-1 bg-sky-300 hover:bg-sky-800 text-white font-semibold py-2 px-3 border-b-4 border-blue-700 hover:border-blue-500 rounded" 
+                      : "m-1 bg-sky-600 hover:bg-sky-800 text-white font-semibold py-2 px-3 border-b-4 border-blue-700 hover:border-blue-500 rounded"
+                    }
+                    onClick={() => setSeatCount(count)}
+                  >
+                    {count}
+                  </button>
+                ))}
               </div>
             </div>
 

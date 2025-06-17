@@ -244,7 +244,7 @@ export default function DMControlCenter({
 
               {/* Player Selection (inline expansion like your original design) */}
               {isPlayerSelectExpanded && selectedPlayerForPrompt === 'general' && (
-                <div className="ml-4 mb-4">
+                <div className="ml-4 mb-6">
                   {activePlayers.length > 0 ? (
                     activePlayers.map((player) => (
                       <button

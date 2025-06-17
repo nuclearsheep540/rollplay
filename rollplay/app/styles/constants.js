@@ -30,7 +30,7 @@ const STANDARD_BORDER_RADIUS = "rounded";
 // =============================================================================
 
 // 1. Main collapsible titles (DM Command Center, Moderator Controls, etc.)
-export const PANEL_TITLE = `pl-2 pr-3 mt-4 flex items-center justify-between cursor-pointer transition-all duration-200 ${TITLE_PADDING} ${PRIMARY_BG} border ${PRIMARY_BORDER} ${PRIMARY_BG_HOVER} ${PRIMARY_BORDER_HOVER} ${PRIMARY_TEXT} ${TITLE_FONT} gap-2`;
+export const PANEL_TITLE = `pl-2 pr-3 flex items-center justify-between cursor-pointer transition-all duration-200 ${TITLE_PADDING} ${PRIMARY_BG} border ${PRIMARY_BORDER} ${PRIMARY_BG_HOVER} ${PRIMARY_BORDER_HOVER} ${PRIMARY_TEXT} ${TITLE_FONT} gap-2`;
 
 // 2. Section headers within panels (Map Controls, Combat Management, etc.)
 export const PANEL_HEADER = `mb-0 flex items-center justify-between cursor-pointer transition-all duration-200 ${HEADER_PADDING} ${STANDARD_BORDER_RADIUS} ${PRIMARY_BG} border ${PRIMARY_BORDER} ${PRIMARY_BG_HOVER} ${PRIMARY_BORDER_HOVER} ${PRIMARY_TEXT} ${HEADER_FONT}`;
@@ -42,7 +42,7 @@ export const PANEL_SUB_HEADER = `m-1 font-semibold uppercase tracking-wide ${PRI
 export const PANEL_CHILD = `mb-1 w-full text-left transition-all duration-200 ${CHILD_PADDING} ${STANDARD_BORDER_RADIUS} ${PRIMARY_BG} border ${PRIMARY_BORDER} ${PRIMARY_TEXT} ${PRIMARY_BG_ACTIVE} ${CHILD_FONT}`;
 
 // Variant for last elements (no bottom margin)
-export const PANEL_CHILD_LAST = `${PANEL_CHILD} mb-2`;
+export const PANEL_CHILD_LAST = `${PANEL_CHILD} mb-8`;
 
 // Arrow/chevron styling
 export const PANEL_ARROW = `${SECONDARY_TEXT} transition-transform duration-200 ${CHILD_FONT}`;
@@ -89,11 +89,11 @@ export const ACTIVE_BACKGROUND = ACTIVE_BG;
 // =============================================================================
 
 // DM aliases
-export const DM_TITLE = `${PANEL_TITLE} bg-rose-800`;
-export const DM_HEADER = `${PANEL_HEADER} bg-rose-900`;
-export const DM_SUB_HEADER = `${PANEL_SUB_HEADER} text-rose-300`;
-export const DM_CHILD = `${PANEL_CHILD} bg-rose-950 text-rose-100`;
-export const DM_CHILD_LAST = `${PANEL_CHILD_LAST} bg-rose-950 text-rose-100`;
+export const DM_TITLE = `${PANEL_TITLE} bg-rose-800/50 mt-8`;
+export const DM_HEADER = `${PANEL_HEADER} bg-rose-500/50`;
+export const DM_SUB_HEADER = `${PANEL_SUB_HEADER} text-rose-400`;
+export const DM_CHILD = `${PANEL_CHILD} bg-rose-900/50 text-rose-100`;
+export const DM_CHILD_LAST = `${PANEL_CHILD_LAST} bg-rose-900/50 text-rose-100`;
 export const DM_ARROW = `${PANEL_ARROW} text-rose-400`;
 
 // Moderator aliases
