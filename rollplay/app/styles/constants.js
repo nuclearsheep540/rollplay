@@ -90,17 +90,17 @@ export const ACTIVE_BACKGROUND = ACTIVE_BG;
 
 // DM aliases
 export const DM_TITLE = `${PANEL_TITLE} bg-none mt-6`;
-export const DM_HEADER = `${PANEL_HEADER} bg-rose-500/20 border-rose-400/50`;
-export const DM_SUB_HEADER = `${PANEL_SUB_HEADER} text-rose-400 border-rose-400/50`;
-export const DM_CHILD = `${PANEL_CHILD} bg-rose-900/50 text-rose-100 border-rose-400/50`;
+export const DM_HEADER = `${PANEL_HEADER} bg-rose-500/20 border-rose-300/50`;
+export const DM_SUB_HEADER = `${PANEL_SUB_HEADER} text-rose-400 border-rose-300/50`;
+export const DM_CHILD = `${PANEL_CHILD} bg-rose-900/50 text-rose-100 border-rose-300/50`;
 export const DM_CHILD_LAST = `${DM_CHILD} ${PANEL_CHILD_LAST}`;
 export const DM_ARROW = `${PANEL_ARROW} text-rose-600`;
 
 // Moderator aliases
 export const MODERATOR_TITLE = `${PANEL_TITLE} bg-none`;
-export const MODERATOR_HEADER = `${PANEL_HEADER} bg-blue-500/20 border-blue-400/50`;
-export const MODERATOR_SUB_HEADER = `${PANEL_SUB_HEADER} text-blue-400 border-blue-400/50`;
-export const MODERATOR_CHILD = `${PANEL_CHILD} bg-blue-950 text-blue-100 border-blue-400/50`;
+export const MODERATOR_HEADER = `${PANEL_HEADER} bg-blue-500/20 border-blue-300/50`;
+export const MODERATOR_SUB_HEADER = `${PANEL_SUB_HEADER} text-blue-400 border-blue-300/50`;
+export const MODERATOR_CHILD = `${PANEL_CHILD} bg-blue-950 text-blue-100 border-blue-300/50`;
 export const MODERATOR_CHILD_LAST = `${MODERATOR_CHILD} ${PANEL_CHILD_LAST}`;
 export const MODERATOR_ARROW = `${PANEL_ARROW} text-blue-500`;
 export const MODERATOR_SUBTITLE = PANEL_SUBTITLE;
