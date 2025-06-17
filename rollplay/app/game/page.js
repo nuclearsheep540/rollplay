@@ -943,7 +943,7 @@ function GameContent() {
         />
 
         {/* GRID POSITION 3: Right Panel - DM Controls (Full Height) */}
-        <div className="right-panel">
+        <div className="right-panel p-2">
           {/* Moderator Controls - shown if player is host or moderator */}
           <ModeratorControls
             isModerator={isModerator}
