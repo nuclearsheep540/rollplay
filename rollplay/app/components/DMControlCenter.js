@@ -74,8 +74,9 @@ export default function DMControlCenter({
   // NEW: Handle prompting specific player for specific roll type
   const handlePromptPlayerForRoll = (playerName, rollType) => {
     promptPlayerRoll(playerName, rollType);
-    setIsPlayerSelectExpanded(false); // Collapse after prompting
-    setSelectedPlayerForPrompt('');   // Reset selection
+    // Keep section expanded after prompting - only collapse when header is clicked
+    // setIsPlayerSelectExpanded(false); // Removed - don't auto-collapse
+    // setSelectedPlayerForPrompt('');   // Keep selection for better UX
   };
 
   // Get list of players currently in seats (excluding empty seats)
@@ -255,6 +256,8 @@ export default function DMControlCenter({
                           // Open the roll type selection modal
                           setSelectedPlayerForModal(player.playerName);
                           setRollPromptModalOpen(true);
+                          // Keep the "Prompt Player Roll" section expanded
+                          // Don't modify isPlayerSelectExpanded here
                         }}
                       >
                         {player.playerName.titleCase()}
