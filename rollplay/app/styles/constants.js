@@ -30,7 +30,7 @@ const STANDARD_BORDER_RADIUS = "rounded";
 // =============================================================================
 
 // 1. Main collapsible titles (DM Command Center, Moderator Controls, etc.)
-export const PANEL_TITLE = `pl-2 pr-2 flex items-center justify-between cursor-pointer transition-all duration-100 ${TITLE_PADDING} border ${PRIMARY_BORDER} ${PRIMARY_BG_HOVER} ${PRIMARY_BORDER_HOVER} ${PRIMARY_TEXT} ${TITLE_FONT} gap-2`;
+export const PANEL_TITLE = `border-none pl-2 pr-2 flex items-center justify-between cursor-pointer transition-all duration-100 ${TITLE_PADDING} border ${PRIMARY_BORDER} ${PRIMARY_BG_HOVER} ${PRIMARY_BORDER_HOVER} ${PRIMARY_TEXT} ${TITLE_FONT} gap-2`;
 
 // 2. Section headers within panels (Map Controls, Combat Management, etc.)
 export const PANEL_HEADER = `mt-1 mb-2 flex items-center justify-between cursor-pointer transition-all duration-100 ${HEADER_PADDING} ${STANDARD_BORDER_RADIUS} border ${PRIMARY_BORDER} ${PRIMARY_BG_HOVER} ${PRIMARY_BORDER_HOVER} ${PRIMARY_TEXT} ${HEADER_FONT}`;

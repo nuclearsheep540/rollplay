@@ -29,7 +29,7 @@ try {
             {
                 role: "readWrite",
                 db: "rollplay"
-            }
+            }]
     });
     print("Created rollplay user");
 } catch (error) {
@@ -48,9 +48,9 @@ print("Created adventure_logs collection");
 var test_room = db.active_sessions.insertOne({
     _id: "test_room",   
     max_players: 8, 
-    seat_layout: ["Matt", "empty", "empty", "empty", "empty", "empty", "empty", "empty"],
+    seat_layout: ["matt", "empty", "empty", "empty", "empty", "empty", "empty", "empty"],
     created_at: ISODate("2025-06-08T12:00:00Z"),
-    room_host: "Matt",  // Updated field name
+    room_host: "matt",  // Updated field name
     seat_colors: {
         "0": "#3b82f6",  // blue
         "1": "#ef4444",  // red

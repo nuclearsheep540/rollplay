@@ -28,7 +28,7 @@ export default function Home() {
     if (newRoom) {
       var payload = { 
         "max_players": 1,
-        "room_host": playerName,
+        "room_host": playerName.toLowerCase(),
         "seat_layout": [""],
         "created_at": new Date().toISOString(),
         "seat_colors": {},
@@ -49,8 +49,8 @@ export default function Home() {
         // Attempt to parse JSON (you might want to re-run the request if needed)
         const res = await req.json()
         console.log("response", res)
-        console.log("attempting re-direct: " + `/game?roomId=${res["id"]}&playerName=${playerName}`);
-        router.push(`/game?roomId=${res["id"]}&playerName=${playerName}`);
+        console.log("attempting re-direct: " + `/game?roomId=${res["id"]}&playerName=${playerName.toLowerCase()}`);
+        router.push(`/game?roomId=${res["id"]}&playerName=${playerName.toLowerCase()}`);
       } catch (error) {
         console.error("Error in fetch or JSON parsing:", error);
         setIsLoading(false);
@@ -70,7 +70,7 @@ export default function Home() {
           const jsonData = await res.json();
           if (jsonData["_id"] == roomId) {
             console.log(jsonData);
-            router.push(`/game?roomId=${roomId}&playerName=${playerName}`);
+            router.push(`/game?roomId=${roomId}&playerName=${playerName.toLowerCase()}`);
           }
         }
       } catch (error) {

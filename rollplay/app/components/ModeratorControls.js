@@ -219,11 +219,27 @@ export default function ModeratorControls({
             )}
 
             {/* Display current moderators */}
-            {roomData?.moderators?.length > 0 && (
+            {(roomData?.moderators?.length > 0 || roomData?.room_host) && (
               <div className={MODERATOR_CHILD_LAST}>
                 <div>Current Moderators:</div>
                 <div>
-                  {roomData.moderators.join(', ')}
+                  {(() => {
+                    // Always include the host, then add other moderators
+                    const allModerators = [];
+                    
+                    // Add host first (they're always a moderator)
+                    if (roomData?.room_host) {
+                      allModerators.push(`${roomData.room_host} (Host)`);
+                    }
+                    
+                    // Add other moderators (excluding host to avoid duplication)
+                    if (roomData?.moderators) {
+                      const otherModerators = roomData.moderators.filter(mod => mod !== roomData.room_host);
+                      allModerators.push(...otherModerators);
+                    }
+                    
+                    return allModerators.join(', ');
+                  })()}
                 </div>
               </div>
             )}
@@ -317,12 +333,15 @@ export default function ModeratorControls({
                       });
                     } else {
                       // For remove_moderator, create user objects directly from roomData.moderators
-                      filteredUsers = (roomData?.moderators || []).map(moderatorName => ({
-                        playerName: moderatorName,
-                        seatId: `moderator_${moderatorName}`,
-                        characterData: null,
-                        isInLobby: false // We don't know/care if they're in lobby for removal
-                      }));
+                      // Filter out the host to ensure there's always at least one moderator
+                      filteredUsers = (roomData?.moderators || [])
+                        .filter(moderatorName => moderatorName !== roomData?.room_host)
+                        .map(moderatorName => ({
+                          playerName: moderatorName,
+                          seatId: `moderator_${moderatorName}`,
+                          characterData: null,
+                          isInLobby: false // We don't know/care if they're in lobby for removal
+                        }));
                     }
 
                     if (selectedAction === 'remove_moderator') {
