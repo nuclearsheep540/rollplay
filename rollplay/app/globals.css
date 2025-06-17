@@ -551,7 +551,16 @@ body {
   flex-direction: column;
   min-height: 0;
   max-height: 100vh;
-  overflow: hidden;
+  overflow-y: auto;
+  
+  /* Hide scrollbar completely */
+  scrollbar-width: none; /* Firefox */
+  -ms-overflow-style: none; /* IE and Edge */
+}
+
+/* Hide scrollbar for WebKit browsers (Chrome, Safari) */
+.right-panel::-webkit-scrollbar {
+  display: none;
 }
 
 /* Custom Scrollbar for DM Control Center

@@ -5,6 +5,7 @@ import {
   DM_SUB_HEADER, 
   DM_CHILD,
   DM_CHILD_LAST,
+  PANEL_CHILD_LAST,
   DM_ARROW,
   COMBAT_TOGGLE_ACTIVE,
   COMBAT_TOGGLE_INACTIVE,
@@ -231,8 +232,8 @@ export default function DMControlCenter({
             {/* UPDATED: Prompt Dice Throw - now shows player selection */}
             <div>
               <button 
-                className={`${DM_CHILD} ${
-                  isPlayerSelectExpanded && selectedPlayerForPrompt === 'general' ? ACTIVE_BACKGROUND : ''
+                className={`${DM_CHILD}  ${
+                  isPlayerSelectExpanded && selectedPlayerForPrompt === 'general' ? ACTIVE_BACKGROUND : DM_CHILD_LAST
                 }`}
                 onClick={() => {
                   setIsPlayerSelectExpanded(!isPlayerSelectExpanded);
@@ -263,7 +264,7 @@ export default function DMControlCenter({
                       </button>
                     ))
                   ) : (
-                    <div className={DM_CHILD}>
+                    <div className={DM_CHILD_LAST}>
                       No players in game
                     </div>
                   )}
