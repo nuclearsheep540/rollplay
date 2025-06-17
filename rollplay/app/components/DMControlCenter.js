@@ -12,6 +12,12 @@ import {
 } from '../styles/constants';
 import DicePrompt from './DicePrompt';
 
+String.prototype.titleCase = function() {
+  return this.replace(/\w\S*/g, (txt) =>
+    txt.charAt(0).toUpperCase() + txt.substr(1).toLowerCase()
+  );
+};
+
 export default function DMControlCenter({
   isDM,
   promptPlayerRoll,
@@ -233,12 +239,12 @@ export default function DMControlCenter({
                   setSelectedPlayerForPrompt('general');
                 }}
               >
-                🎲 Prompt Player Roll {isPlayerSelectExpanded && selectedPlayerForPrompt === 'general' ? '▼' : '▶'}
+                🎲 Prompt Player Roll {isPlayerSelectExpanded && selectedPlayerForPrompt === 'general'}
               </button>
 
               {/* Player Selection (inline expansion like your original design) */}
               {isPlayerSelectExpanded && selectedPlayerForPrompt === 'general' && (
-                <div className="ml-4 mb-2">
+                <div className="ml-4 mb-4">
                   {activePlayers.length > 0 ? (
                     activePlayers.map((player) => (
                       <button
@@ -250,9 +256,9 @@ export default function DMControlCenter({
                           setRollPromptModalOpen(true);
                         }}
                       >
-                        {player.playerName}
+                        {player.playerName.titleCase()}
                         {player.characterData && (
-                          <span>({player.characterData.class})</span>
+                          <span> • {player.characterData.class}</span>
                         )}
                       </button>
                     ))

@@ -9,9 +9,9 @@
 // Base Colors - Use explicit class names for Tailwind detection
 const PRIMARY_BG = "bg-slate-800";
 const PRIMARY_BORDER = "border-slate-800";
-const PRIMARY_BG_HOVER = "hover:brightness-150"; // Automatically brighten whatever color is set
-const PRIMARY_BORDER_HOVER = "hover:brightness-150"; // Automatically brighten border
-const PRIMARY_BG_ACTIVE = "hover:brightness-150";
+const PRIMARY_BG_HOVER = "hover:brightness-125"; // Automatically brighten whatever color is set
+const PRIMARY_BORDER_HOVER = "hover:brightness-125"; // Automatically brighten border
+const PRIMARY_BG_ACTIVE = "hover:brightness-125";
 const PRIMARY_TEXT = "text-slate-200";
 const SECONDARY_TEXT = "text-slate-600";
 const ACTIVE_BG = "bg-slate-600/20";
