@@ -304,21 +304,56 @@ export default function ModeratorControls({
                   : 'Select a moderator to remove:'}
               </p>
               
-              {allAvailableUsers.length > 0 ? (
+              {(selectedAction === 'add_moderator' ? allAvailableUsers.length > 0 : roomData?.moderators?.length > 0) ? (
                 <div className="space-y-2">
                   {(() => {
-                    // Filter users based on the action
-                    const filteredUsers = allAvailableUsers.filter(user => {
-                      if (selectedAction === 'add_moderator') {
-                        // Only show users who aren't already moderators and aren't the host
+                    let filteredUsers;
+                    
+                    if (selectedAction === 'add_moderator') {
+                      // Filter users based on who isn't already a moderator
+                      filteredUsers = allAvailableUsers.filter(user => {
                         return !roomData?.moderators?.includes(user.playerName) 
                                && user.playerName !== roomData?.room_host;
-                      } else {
-                        // Only show current moderators (not the host)
-                        return roomData?.moderators?.includes(user.playerName);
-                      }
-                    });
+                      });
+                    } else {
+                      // For remove_moderator, create user objects directly from roomData.moderators
+                      filteredUsers = (roomData?.moderators || []).map(moderatorName => ({
+                        playerName: moderatorName,
+                        seatId: `moderator_${moderatorName}`,
+                        characterData: null,
+                        isInLobby: false // We don't know/care if they're in lobby for removal
+                      }));
+                    }
 
+                    if (selectedAction === 'remove_moderator') {
+                      // For remove_moderator, show all moderators in a simple list
+                      return (
+                        <>
+                          <div className="text-orange-400/70 text-xs mb-2 font-medium">👑 CURRENT MODERATORS</div>
+                          {filteredUsers.map((moderator) => (
+                            <button
+                              key={moderator.seatId}
+                              className="w-full text-left p-3 bg-orange-500/10 border border-orange-500/30 text-orange-300 rounded transition-all duration-200 hover:bg-orange-500/20"
+                              onClick={() => handleRoleAction(selectedAction, moderator.playerName)}
+                            >
+                              <div className="flex items-center justify-between">
+                                <div>
+                                  <div className="font-medium">{moderator.playerName}</div>
+                                  <div className="text-orange-400/70 text-sm">
+                                    🛡️ Moderator
+                                  </div>
+                                </div>
+                                <div className="text-orange-400">
+                                  ➖
+                                </div>
+                              </div>
+                            </button>
+                          ))}
+                        </>
+                      );
+                    }
+
+                    // For add_moderator, use the original seated/lobby filtering
                     const seatedFiltered = filteredUsers.filter(user => !user.isInLobby);
                     const lobbyFiltered = filteredUsers.filter(user => user.isInLobby);
 
@@ -327,17 +362,11 @@ export default function ModeratorControls({
                         {/* Seated Players Section */}
                         {seatedFiltered.length > 0 && (
                           <>
-                            <div className={`text-xs mb-2 font-medium ${
-                              selectedAction === 'add_moderator' ? 'text-emerald-400/70' : 'text-orange-400/70'
-                            }`}>🪑 SEATED PLAYERS</div>
+                            <div className="text-emerald-400/70 text-xs mb-2 font-medium">🪑 SEATED PLAYERS</div>
                             {seatedFiltered.map((player) => (
                               <button
                                 key={player.seatId}
-                                className={`w-full text-left p-3 rounded transition-all duration-200 ${
-                                  selectedAction === 'add_moderator'
-                                    ? 'bg-emerald-500/10 border border-emerald-500/30 text-emerald-300 hover:bg-emerald-500/20'
-                                    : 'bg-orange-500/10 border border-orange-500/30 text-orange-300 hover:bg-orange-500/20'
-                                }`}
+                                className="w-full text-left p-3 bg-emerald-500/10 border border-emerald-500/30 text-emerald-300 rounded transition-all duration-200 hover:bg-emerald-500/20"
                                 onClick={() => handleRoleAction(selectedAction, player.playerName)}
                               >
                                 <div className="flex items-center justify-between">
@@ -349,8 +378,8 @@ export default function ModeratorControls({
                                       </div>
                                     )}
                                   </div>
-                                  <div className={selectedAction === 'add_moderator' ? 'text-emerald-400' : 'text-orange-400'}>
-                                    {selectedAction === 'add_moderator' ? '➕' : '➖'}
+                                  <div className="text-emerald-400">
+                                    ➕
                                   </div>
                                 </div>
                               </button>
@@ -358,36 +387,26 @@ export default function ModeratorControls({
                           </>
                         )}
                         
-                        {/* Lobby Users Section */}
+                        {/* Lobby Users Section - only for add_moderator */}
                         {lobbyFiltered.length > 0 && (
                           <>
-                            {seatedFiltered.length > 0 && <div className={`my-3 border-t ${
-                              selectedAction === 'add_moderator' ? 'border-emerald-500/20' : 'border-orange-500/20'
-                            }`}></div>}
-                            <div className={`text-xs mb-2 font-medium ${
-                              selectedAction === 'add_moderator' ? 'text-emerald-400/70' : 'text-orange-400/70'
-                            }`}>🏛️ LOBBY USERS</div>
+                            {seatedFiltered.length > 0 && <div className="my-3 border-t border-emerald-500/20"></div>}
+                            <div className="text-emerald-400/70 text-xs mb-2 font-medium">🏛️ LOBBY USERS</div>
                             {lobbyFiltered.map((user) => (
                               <button
                                 key={user.seatId}
-                                className={`w-full text-left p-3 rounded transition-all duration-200 ${
-                                  selectedAction === 'add_moderator'
-                                    ? 'bg-emerald-500/10 border border-emerald-500/30 text-emerald-300 hover:bg-emerald-500/20'
-                                    : 'bg-orange-500/10 border border-orange-500/30 text-orange-300 hover:bg-orange-500/20'
-                                }`}
+                                className="w-full text-left p-3 bg-emerald-500/10 border border-emerald-500/30 text-emerald-300 rounded transition-all duration-200 hover:bg-emerald-500/20"
                                 onClick={() => handleRoleAction(selectedAction, user.playerName)}
                               >
                                 <div className="flex items-center justify-between">
                                   <div>
                                     <div className="font-medium">{user.playerName}</div>
-                                    <div className={`text-sm ${
-                                      selectedAction === 'add_moderator' ? 'text-emerald-400/70' : 'text-orange-400/70'
-                                    }`}>
+                                    <div className="text-emerald-400/70 text-sm">
                                       📡 Connected • In Lobby
                                     </div>
                                   </div>
-                                  <div className={selectedAction === 'add_moderator' ? 'text-emerald-400' : 'text-orange-400'}>
-                                    {selectedAction === 'add_moderator' ? '➕' : '➖'}
+                                  <div className="text-emerald-400">
+                                    ➕
                                   </div>
                                 </div>
                               </button>
