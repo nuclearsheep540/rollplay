@@ -44,16 +44,29 @@ export default function Home() {
           body: JSON.stringify(payload),
         });
         console.log(`url = ${url}`)
-        console.log("POST succeeded with status:", req.status);
+        console.log("POST request status:", req.status);
       
-        // Attempt to parse JSON (you might want to re-run the request if needed)
-        const res = await req.json()
-        console.log("response", res)
-        console.log("attempting re-direct: " + `/game?roomId=${res["id"]}&playerName=${playerName.toLowerCase()}`);
-        router.push(`/game?roomId=${res["id"]}&playerName=${playerName.toLowerCase()}`);
+        // Check if request was successful
+        if (!req.ok) {
+          throw new Error(`HTTP error! status: ${req.status}`);
+        }
+        
+        const res = await req.json();
+        console.log("response", res);
+        
+        // Validate response structure and room ID
+        if (!res || !res.id) {
+          console.error("Invalid response structure:", res);
+          throw new Error('Invalid response: missing room ID');
+        }
+        
+        console.log("attempting re-direct: " + `/game?roomId=${res.id}&playerName=${playerName.toLowerCase()}`);
+        router.push(`/game?roomId=${res.id}&playerName=${playerName.toLowerCase()}`);
       } catch (error) {
-        console.error("Error in fetch or JSON parsing:", error);
+        console.error("Error creating room:", error);
         setIsLoading(false);
+        // TODO: Show user-friendly error message to user
+        alert('Failed to create room. Please try again.');
       }
     } else if (existingRoom) {
       console.log(`fetching room id ${roomId}`);
