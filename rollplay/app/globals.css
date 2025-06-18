@@ -731,7 +731,7 @@ body {
   display: flex;
   flex-direction: column;
   gap: calc(4px * var(--ui-scale));
-  padding-right: calc(8px * var(--ui-scale));
+  padding-right: 0;
   
   /* Hide scrollbar completely */
   scrollbar-width: none; /* Firefox */
