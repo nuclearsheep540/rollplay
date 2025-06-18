@@ -146,7 +146,7 @@ export default function PlayerCard({
     return (
       <div 
         className={`
-          rounded-lg border transition-all duration-300 relative p-[calc(12px*var(--ui-scale))] mb-[calc(12px*var(--ui-scale))] border-l-4
+          rounded-lg border transition-all duration-300 relative p-[calc(8px*var(--ui-scale))] mb-[calc(8px*var(--ui-scale))] border-l-4
           ${isMyTurn 
             ? 'bg-emerald-500/10 border-emerald-500/30 shadow-lg shadow-emerald-500/20' 
             : isThisPlayerSeat 
@@ -210,7 +210,7 @@ export default function PlayerCard({
           <>
             {/* Character Class & Level */}
             <div 
-              className="text-gray-400 text-[calc(13px*var(--ui-scale))] mb-[calc(10px*var(--ui-scale))]"
+              className="text-gray-400 text-[calc(13px*var(--ui-scale))] mb-[calc(4px*var(--ui-scale))]"
             >
               {playerData.class} • Level {playerData.level}
             </div>

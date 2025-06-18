@@ -8,7 +8,6 @@
 import { useState, useEffect } from 'react'
 import {
   handleSeatChange,
-  handleSeatCountChange,
   handleChatMessage,
   handlePlayerConnected,
   handleLobbyUpdate,
@@ -24,6 +23,9 @@ import {
   handleColorChange,
   handleAdventureLogRemoved,
   handleRoleChange,
+  handleSeatCountChange,
+  handlePlayerDisplaced,
+  handleSystemMessage,
   createSendFunctions
 } from './webSocketEvent'
 
@@ -134,6 +136,14 @@ export function useWebSocket(roomId, playerName, gameContext) {
 
         case "adventure_log_removed":
           handleAdventureLogRemoved(json_data["data"], gameContext);
+          break;
+
+        case "player_displaced":
+          handlePlayerDisplaced(json_data["data"], gameContext);
+          break;
+
+        case "system_message":
+          handleSystemMessage(json_data["data"], gameContext);
           break;
 
         default:

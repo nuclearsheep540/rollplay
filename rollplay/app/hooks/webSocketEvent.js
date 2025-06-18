@@ -18,21 +18,27 @@ export const handleSeatChange = (data, { setGameSeats, getCharacterData }) => {
   setGameSeats(updatedSeats);
 };
 
-export const handleSeatCountChange = (data, { setGameSeats, getCharacterData }) => {
+export const handleSeatCountChange = (data, { setGameSeats, getCharacterData, addToLog }) => {
   console.log("received seat count change:", data);
-  const { max_players, new_seats, updated_by } = data;
+  const { max_players, new_seats, updated_by, displaced_players = [] } = data;
   
   // Convert to unified structure
-  const updatedSeats = new_seats.map((playerName, index) => ({
+  const updatedSeats = new_seats ? new_seats.map((playerName, index) => ({
     seatId: index,
     playerName: playerName,
     characterData: playerName !== "empty" ? getCharacterData(playerName) : null,
     isActive: false
-  }));
+  })) : [];
   
   setGameSeats(updatedSeats);
   
-  // No logging - seat count changes are not interesting for adventure log
+  // Log seat count changes with displacement info
+  if (displaced_players.length > 0) {
+    const displacedNames = displaced_players.map(p => p.playerName).join(", ");
+    addToLog(`Seat count changed to ${max_players}. Moved to lobby: ${displacedNames}`, 'system', updated_by);
+  } else {
+    addToLog(`Seat count changed to ${max_players}`, 'system', updated_by);
+  }
 };
 
 export const handleChatMessage = (data, { setChatLog, chatLog }) => {
@@ -603,4 +609,29 @@ export const createSendFunctions = (webSocket, isConnected, roomId, playerName) 
     sendColorChange,
     sendRoleChange
   };
+};
+
+// New event handlers for displaced players
+
+export const handlePlayerDisplaced = (data, { addToLog, thisPlayer }) => {
+  console.log("🚪 Player displaced:", data);
+  const { player_name, former_seat, message, reason } = data;
+  
+  // If this is the current player, show a notification
+  if (player_name === thisPlayer) {
+    console.log(`⚠️ You have been displaced: ${message}`);
+    // You could add a toast notification here
+    addToLog(`You were moved to the lobby from seat ${former_seat + 1}`, 'system', 'System');
+  }
+  
+  // Log the displacement for all players to see
+  addToLog(message, 'system', 'System');
+};
+
+export const handleSystemMessage = (data, { addToLog }) => {
+  console.log("📢 System message:", data);
+  const { message, type = 'system' } = data;
+  
+  // Add system message to adventure log
+  addToLog(message, type, 'System');
 };

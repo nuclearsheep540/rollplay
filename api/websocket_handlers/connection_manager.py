@@ -96,6 +96,31 @@ class ConnectionManager:
         if room_id in self.room_users and player_name in self.room_users[room_id]:
             self.room_users[room_id][player_name]["is_in_party"] = is_in_party
 
+    async def remove_player_from_party(self, room_id: str, player_name: str):
+        """Remove a player from party and move them to lobby"""
+        if room_id in self.room_users and player_name in self.room_users[room_id]:
+            self.room_users[room_id][player_name]["is_in_party"] = False
+            print(f"🚪 Moved {player_name} from party to lobby in room {room_id}")
+            # Broadcast lobby update after status change
+            await self.broadcast_lobby_update(room_id)
+
+    async def send_to_player(self, room_id: str, player_name: str, message: dict):
+        """Send a message to a specific player"""
+        if (room_id in self.room_users and 
+            player_name in self.room_users[room_id] and 
+            self.room_users[room_id][player_name]["websocket"]):
+            
+            websocket = self.room_users[room_id][player_name]["websocket"]
+            try:
+                await websocket.send_json(data=message)
+            except Exception:
+                # Connection is dead, remove it
+                self.remove_connection(websocket, room_id, player_name)
+
+    async def broadcast_to_room(self, room_id: str, message: dict):
+        """Broadcast a message to all players in a room"""
+        await self.update_data_for_room(room_id, message)
+
     async def broadcast_lobby_update(self, room_id: str):
         """Send lobby update to all clients in a room"""
         if room_id not in self.room_users:
