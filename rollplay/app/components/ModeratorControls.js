@@ -4,6 +4,16 @@
  */
 
 import React, { useState } from 'react';
+import { 
+  MODERATOR_TITLE, 
+  MODERATOR_HEADER, 
+  MODERATOR_SUB_HEADER, 
+  MODERATOR_CHILD,
+  MODERATOR_CHILD_LAST,
+  MODERATOR_ARROW,
+  MODERATOR_SUBTITLE,
+  MODERATOR_LABEL
+} from '../styles/constants';
 
 export default function ModeratorControls({
   isModerator,
@@ -37,7 +47,6 @@ export default function ModeratorControls({
   const [selectedAction, setSelectedAction] = useState(''); // 'add_moderator', 'remove_moderator', 'set_dm'
   
   // State for party management
-  const [isSeatManagement, setIsSeatManagement] = useState(false);
   const [isKickModalOpen, setIsKickModalOpen] = useState(false);
   const [selectedPlayerToKick, setSelectedPlayerToKick] = useState('');
   const [isClearingLogs, setIsClearingLogs] = useState(false);
@@ -161,64 +170,40 @@ export default function ModeratorControls({
   }
 
   return (
-    <div className="mb-3">
+    <div>
       {/* Collapsible Header */}
       <div 
-        className="flex items-center justify-between cursor-pointer hover:bg-emerald-500/10 transition-all duration-200"
-        style={{
-          padding: 'calc(16px * var(--ui-scale))',
-        }}
+        className={MODERATOR_TITLE}
         onClick={() => setIsCollapsed(!isCollapsed)}
       >
-        <div className="text-emerald-300 font-bold uppercase tracking-wide flex items-center gap-2" style={{
-          fontSize: 'calc(14px * var(--ui-scale))',
-        }}>
+        <div>
           ⚖️ Moderator Controls
-          <div className="text-emerald-500/70 text-xs normal-case">
-            ({isHost ? 'Host' : 'Moderator'})
-          </div>
+          <div className={MODERATOR_SUBTITLE} />
         </div>
-        <div className={`text-emerald-500 transition-transform duration-200 ${isCollapsed ? 'rotate-180' : ''}`}>
+        <div className={`${MODERATOR_ARROW} ${isCollapsed ? 'rotate-180' : ''}`}>
           ▼
         </div>
       </div>
 
       {/* Collapsible Content */}
       {!isCollapsed && (
-        <div style={{
-          padding: '0 calc(16px * var(--ui-scale)) calc(16px * var(--ui-scale))',
-        }}>
+        <div>
 
       {/* Moderator Management Section */}
-      <div className="mb-3 flex-shrink-0">
+      <div className="flex-shrink-0">
         <div 
-          className="flex items-center justify-between cursor-pointer bg-emerald-500/10 rounded transition-all duration-200 hover:bg-emerald-500/15 mb-0"
-          style={{
-            padding: 'calc(12px * var(--ui-scale))',
-            borderRadius: 'calc(4px * var(--ui-scale))',
-          }}
+          className={MODERATOR_HEADER}
           onClick={() => toggleSection('moderators')}
         >
-          <span className="text-emerald-300 font-semibold uppercase tracking-wide" style={{
-            fontSize: 'calc(12px * var(--ui-scale))',
-          }}>
-            👥 Manage Moderators
-          </span>
-          <span className={`text-emerald-500 transition-transform duration-200 ${expandedSections.moderators ? 'rotate-180' : ''}`} style={{
-            fontSize: 'calc(12px * var(--ui-scale))',
-          }}>
+          👥 Manage Moderators
+          <span className={`${MODERATOR_ARROW} ${expandedSections.moderators ? 'rotate-180' : ''}`}>
             ▼
           </span>
         </div>
         {expandedSections.moderators && (
-          <div className="mt-2 space-y-2">
+          <div>
             <button 
-              className="w-full bg-emerald-500/10 border border-emerald-500/30 text-emerald-300 rounded text-left transition-all duration-200 hover:bg-emerald-500/20" 
-              style={{
-                padding: 'calc(8px * var(--ui-scale))',
-                borderRadius: 'calc(4px * var(--ui-scale))',
-                fontSize: 'calc(12px * var(--ui-scale))',
-              }}
+              className={MODERATOR_CHILD} 
               onClick={() => openModeratorModal('add_moderator')}
             >
               ➕ Add Moderator
@@ -226,12 +211,7 @@ export default function ModeratorControls({
             
             {(isHost || isDM) && (
               <button 
-                className="w-full bg-orange-500/10 border border-orange-500/30 text-orange-300 rounded text-left transition-all duration-200 hover:bg-orange-500/20" 
-                style={{
-                  padding: 'calc(8px * var(--ui-scale))',
-                  borderRadius: 'calc(4px * var(--ui-scale))',
-                  fontSize: 'calc(12px * var(--ui-scale))',
-                }}
+                className={MODERATOR_CHILD}
                 onClick={() => openModeratorModal('remove_moderator')}
               >
                 ➖ Remove Moderator
@@ -239,11 +219,27 @@ export default function ModeratorControls({
             )}
 
             {/* Display current moderators */}
-            {roomData?.moderators?.length > 0 && (
-              <div className="mt-2 p-2 bg-emerald-500/5 border border-emerald-500/20 rounded text-xs">
-                <div className="text-emerald-400 mb-1">Current Moderators:</div>
-                <div className="text-emerald-300/70">
-                  {roomData.moderators.join(', ')}
+            {(roomData?.moderators?.length > 0 || roomData?.room_host) && (
+              <div className={MODERATOR_CHILD_LAST}>
+                <div>Current Moderators:</div>
+                <div>
+                  {(() => {
+                    // Always include the host, then add other moderators
+                    const allModerators = [];
+                    
+                    // Add host first (they're always a moderator)
+                    if (roomData?.room_host) {
+                      allModerators.push(`${roomData.room_host} (Host)`);
+                    }
+                    
+                    // Add other moderators (excluding host to avoid duplication)
+                    if (roomData?.moderators) {
+                      const otherModerators = roomData.moderators.filter(mod => mod !== roomData.room_host);
+                      allModerators.push(...otherModerators);
+                    }
+                    
+                    return allModerators.join(', ');
+                  })()}
                 </div>
               </div>
             )}
@@ -252,36 +248,21 @@ export default function ModeratorControls({
       </div>
 
       {/* DM Management Section */}
-      <div className="mb-3 flex-shrink-0">
+      <div className="flex-shrink-0">
         <div 
-          className="flex items-center justify-between cursor-pointer bg-amber-500/10 rounded transition-all duration-200 hover:bg-amber-500/15 mb-0"
-          style={{
-            padding: 'calc(12px * var(--ui-scale))',
-            borderRadius: 'calc(4px * var(--ui-scale))',
-          }}
+          className={MODERATOR_HEADER}
           onClick={() => toggleSection('dm')}
         >
-          <span className="text-amber-300 font-semibold uppercase tracking-wide" style={{
-            fontSize: 'calc(12px * var(--ui-scale))',
-          }}>
-            🎲 Manage DM
-          </span>
-          <span className={`text-amber-500 transition-transform duration-200 ${expandedSections.dm ? 'rotate-180' : ''}`} style={{
-            fontSize: 'calc(12px * var(--ui-scale))',
-          }}>
+          🎲 Manage DM
+          <span className={`${MODERATOR_ARROW} ${expandedSections.dm ? 'rotate-180' : ''}`}>
             ▼
           </span>
         </div>
         {expandedSections.dm && (
-          <div className="mt-2 space-y-2">
+          <div>
             {!roomData?.dungeon_master && (
               <button 
-                className="w-full bg-amber-500/10 border border-amber-500/30 text-amber-300 rounded text-left transition-all duration-200 hover:bg-amber-500/20" 
-                style={{
-                  padding: 'calc(8px * var(--ui-scale))',
-                  borderRadius: 'calc(4px * var(--ui-scale))',
-                  fontSize: 'calc(12px * var(--ui-scale))',
-                }}
+                className={MODERATOR_CHILD}
                 onClick={() => openDMModal('set_dm')}
               >
                 👑 Set Dungeon Master
@@ -290,12 +271,7 @@ export default function ModeratorControls({
             
             {roomData?.dungeon_master && (isHost || isDM) && (
               <button 
-                className="w-full bg-red-500/10 border border-red-500/30 text-red-300 rounded text-left transition-all duration-200 hover:bg-red-500/20" 
-                style={{
-                  padding: 'calc(8px * var(--ui-scale))',
-                  borderRadius: 'calc(4px * var(--ui-scale))',
-                  fontSize: 'calc(12px * var(--ui-scale))',
-                }}
+                className={MODERATOR_CHILD}
                 onClick={() => handleRoleAction('unset_dm', roomData.dungeon_master)}
               >
                 🚫 Remove Dungeon Master
@@ -304,9 +280,9 @@ export default function ModeratorControls({
 
             {/* Display current DM */}
             {roomData?.dungeon_master && (
-              <div className="mt-2 p-2 bg-amber-500/5 border border-amber-500/20 rounded text-xs">
-                <div className="text-amber-400 mb-1">Current DM:</div>
-                <div className="text-amber-300/70">
+              <div className={MODERATOR_CHILD_LAST}>
+                <div>Current DM:</div>
+                <div>
                   {roomData.dungeon_master}
                 </div>
               </div>
@@ -344,21 +320,59 @@ export default function ModeratorControls({
                   : 'Select a moderator to remove:'}
               </p>
               
-              {allAvailableUsers.length > 0 ? (
+              {(selectedAction === 'add_moderator' ? allAvailableUsers.length > 0 : roomData?.moderators?.length > 0) ? (
                 <div className="space-y-2">
                   {(() => {
-                    // Filter users based on the action
-                    const filteredUsers = allAvailableUsers.filter(user => {
-                      if (selectedAction === 'add_moderator') {
-                        // Only show users who aren't already moderators and aren't the host
+                    let filteredUsers;
+                    
+                    if (selectedAction === 'add_moderator') {
+                      // Filter users based on who isn't already a moderator
+                      filteredUsers = allAvailableUsers.filter(user => {
                         return !roomData?.moderators?.includes(user.playerName) 
                                && user.playerName !== roomData?.room_host;
-                      } else {
-                        // Only show current moderators (not the host)
-                        return roomData?.moderators?.includes(user.playerName);
-                      }
-                    });
+                      });
+                    } else {
+                      // For remove_moderator, create user objects directly from roomData.moderators
+                      // Filter out the host to ensure there's always at least one moderator
+                      filteredUsers = (roomData?.moderators || [])
+                        .filter(moderatorName => moderatorName !== roomData?.room_host)
+                        .map(moderatorName => ({
+                          playerName: moderatorName,
+                          seatId: `moderator_${moderatorName}`,
+                          characterData: null,
+                          isInLobby: false // We don't know/care if they're in lobby for removal
+                        }));
+                    }
 
+                    if (selectedAction === 'remove_moderator') {
+                      // For remove_moderator, show all moderators in a simple list
+                      return (
+                        <>
+                          <div className="text-orange-400/70 text-xs mb-2 font-medium">👑 CURRENT MODERATORS</div>
+                          {filteredUsers.map((moderator) => (
+                            <button
+                              key={moderator.seatId}
+                              className="w-full text-left p-3 bg-orange-500/10 border border-orange-500/30 text-orange-300 rounded transition-all duration-200 hover:bg-orange-500/20"
+                              onClick={() => handleRoleAction(selectedAction, moderator.playerName)}
+                            >
+                              <div className="flex items-center justify-between">
+                                <div>
+                                  <div className="font-medium">{moderator.playerName}</div>
+                                  <div className="text-orange-400/70 text-sm">
+                                    🛡️ Moderator
+                                  </div>
+                                </div>
+                                <div className="text-orange-400">
+                                  ➖
+                                </div>
+                              </div>
+                            </button>
+                          ))}
+                        </>
+                      );
+                    }
+
+                    // For add_moderator, use the original seated/lobby filtering
                     const seatedFiltered = filteredUsers.filter(user => !user.isInLobby);
                     const lobbyFiltered = filteredUsers.filter(user => user.isInLobby);
 
@@ -367,17 +381,11 @@ export default function ModeratorControls({
                         {/* Seated Players Section */}
                         {seatedFiltered.length > 0 && (
                           <>
-                            <div className={`text-xs mb-2 font-medium ${
-                              selectedAction === 'add_moderator' ? 'text-emerald-400/70' : 'text-orange-400/70'
-                            }`}>🪑 SEATED PLAYERS</div>
+                            <div className="text-emerald-400/70 text-xs mb-2 font-medium">🪑 SEATED PLAYERS</div>
                             {seatedFiltered.map((player) => (
                               <button
                                 key={player.seatId}
-                                className={`w-full text-left p-3 rounded transition-all duration-200 ${
-                                  selectedAction === 'add_moderator'
-                                    ? 'bg-emerald-500/10 border border-emerald-500/30 text-emerald-300 hover:bg-emerald-500/20'
-                                    : 'bg-orange-500/10 border border-orange-500/30 text-orange-300 hover:bg-orange-500/20'
-                                }`}
+                                className="w-full text-left p-3 bg-emerald-500/10 border border-emerald-500/30 text-emerald-300 rounded transition-all duration-200 hover:bg-emerald-500/20"
                                 onClick={() => handleRoleAction(selectedAction, player.playerName)}
                               >
                                 <div className="flex items-center justify-between">
@@ -389,8 +397,8 @@ export default function ModeratorControls({
                                       </div>
                                     )}
                                   </div>
-                                  <div className={selectedAction === 'add_moderator' ? 'text-emerald-400' : 'text-orange-400'}>
-                                    {selectedAction === 'add_moderator' ? '➕' : '➖'}
+                                  <div className="text-emerald-400">
+                                    ➕
                                   </div>
                                 </div>
                               </button>
@@ -398,36 +406,26 @@ export default function ModeratorControls({
                           </>
                         )}
                         
-                        {/* Lobby Users Section */}
+                        {/* Lobby Users Section - only for add_moderator */}
                         {lobbyFiltered.length > 0 && (
                           <>
-                            {seatedFiltered.length > 0 && <div className={`my-3 border-t ${
-                              selectedAction === 'add_moderator' ? 'border-emerald-500/20' : 'border-orange-500/20'
-                            }`}></div>}
-                            <div className={`text-xs mb-2 font-medium ${
-                              selectedAction === 'add_moderator' ? 'text-emerald-400/70' : 'text-orange-400/70'
-                            }`}>🏛️ LOBBY USERS</div>
+                            {seatedFiltered.length > 0 && <div className="my-3 border-t border-emerald-500/20"></div>}
+                            <div className="text-emerald-400/70 text-xs mb-2 font-medium">🏛️ LOBBY USERS</div>
                             {lobbyFiltered.map((user) => (
                               <button
                                 key={user.seatId}
-                                className={`w-full text-left p-3 rounded transition-all duration-200 ${
-                                  selectedAction === 'add_moderator'
-                                    ? 'bg-emerald-500/10 border border-emerald-500/30 text-emerald-300 hover:bg-emerald-500/20'
-                                    : 'bg-orange-500/10 border border-orange-500/30 text-orange-300 hover:bg-orange-500/20'
-                                }`}
+                                className="w-full text-left p-3 bg-emerald-500/10 border border-emerald-500/30 text-emerald-300 rounded transition-all duration-200 hover:bg-emerald-500/20"
                                 onClick={() => handleRoleAction(selectedAction, user.playerName)}
                               >
                                 <div className="flex items-center justify-between">
                                   <div>
                                     <div className="font-medium">{user.playerName}</div>
-                                    <div className={`text-sm ${
-                                      selectedAction === 'add_moderator' ? 'text-emerald-400/70' : 'text-orange-400/70'
-                                    }`}>
+                                    <div className="text-emerald-400/70 text-sm">
                                       📡 Connected • In Lobby
                                     </div>
                                   </div>
-                                  <div className={selectedAction === 'add_moderator' ? 'text-emerald-400' : 'text-orange-400'}>
-                                    {selectedAction === 'add_moderator' ? '➕' : '➖'}
+                                  <div className="text-emerald-400">
+                                    ➕
                                   </div>
                                 </div>
                               </button>
@@ -563,106 +561,53 @@ export default function ModeratorControls({
       )}
 
       {/* Party Management Section */}
-      <div className="mb-3 flex-shrink-0">
+      <div className="flex-shrink-0">
         <div 
-          className="flex items-center justify-between cursor-pointer bg-blue-500/10 rounded transition-all duration-200 hover:bg-blue-500/15 mb-0"
-          style={{
-            padding: 'calc(12px * var(--ui-scale))',
-            borderRadius: 'calc(4px * var(--ui-scale))',
-          }}
+          className={MODERATOR_HEADER}
           onClick={() => toggleSection('party')}
         >
-          <span className="text-blue-300 font-semibold uppercase tracking-wide" style={{
-            fontSize: 'calc(12px * var(--ui-scale))',
-          }}>
-            👥 Party Management
-          </span>
-          <span className={`text-blue-500 transition-transform duration-200 ${expandedSections.party ? 'rotate-180' : ''}`} style={{
-            fontSize: 'calc(12px * var(--ui-scale))',
-          }}>
+          👥 Party Management
+          <span className={`${MODERATOR_ARROW} ${expandedSections.party ? 'rotate-180' : ''}`}>
             ▼
           </span>
         </div>
         {expandedSections.party && (
-          <div className="mt-2 space-y-2">
+          <div>
             {/* Seat Count Management */}
-            <div className="mb-4">
-              <div className="text-blue-400 font-medium mb-2" style={{
-                fontSize: 'calc(11px * var(--ui-scale))',
-              }}>🪑 Seat Count</div>
-              <div className="flex items-center gap-2">
-                <button 
-                  className="bg-blue-500/10 border border-blue-500/30 text-blue-300 rounded transition-all duration-200 hover:bg-blue-500/20"
-                  style={{
-                    padding: 'calc(6px * var(--ui-scale)) calc(8px * var(--ui-scale))',
-                    fontSize: 'calc(10px * var(--ui-scale))',
-                  }}
-                  onClick={() => setIsSeatManagement(!isSeatManagement)}
-                >
-                  {isSeatManagement ? '📝' : '⚙️'} {isSeatManagement ? 'Set' : 'Manage'}
-                </button>
-                
-                {isSeatManagement && (
-                  <div className="flex items-center gap-2">
-                    {[2, 3, 4, 5, 6, 7, 8].map(count => (
-                      <button
-                        key={count}
-                        className={`border rounded transition-all duration-200 ${
-                          gameSeats?.length === count
-                            ? 'bg-blue-500/30 border-blue-400 text-blue-200'
-                            : 'bg-blue-500/10 border-blue-500/30 text-blue-300 hover:bg-blue-500/20'
-                        }`}
-                        style={{
-                          padding: 'calc(4px * var(--ui-scale)) calc(6px * var(--ui-scale))',
-                          fontSize: 'calc(10px * var(--ui-scale))',
-                        }}
-                        onClick={() => {
-                          setSeatCount(count);
-                          setIsSeatManagement(false);
-                        }}
-                      >
-                        {count}
-                      </button>
-                    ))}
-                  </div>
-                )}
-                
-                {!isSeatManagement && (
-                  <span className="text-blue-400/70" style={{
-                    fontSize: 'calc(10px * var(--ui-scale))',
-                  }}>
-                    Current: {gameSeats?.length || 0}
-                  </span>
-                )}
+            <div className={MODERATOR_CHILD}>
+              <div className={MODERATOR_LABEL}>🪑 Seat Count (Current: {gameSeats?.length || 0})</div>
+              <div>
+                {[2, 3, 4, 5, 6, 7, 8].map(count => (
+                  <button
+                    key={count}
+                    className={count === (gameSeats?.length || 0) 
+                      ? "m-1 bg-sky-300 hover:bg-sky-800 text-white font-semibold py-2 px-3 border-b-4 border-blue-700 hover:border-blue-500 rounded" 
+                      : "m-1 bg-sky-600 hover:bg-sky-800 text-white font-semibold py-2 px-3 border-b-4 border-blue-700 hover:border-blue-500 rounded"
+                    }
+                    onClick={() => setSeatCount(count)}
+                  >
+                    {count}
+                  </button>
+                ))}
               </div>
             </div>
 
             {/* Kick Player */}
             <button 
-              className="w-full bg-red-500/10 border border-red-500/30 text-red-300 rounded text-left transition-all duration-200 hover:bg-red-500/20"
-              style={{
-                padding: 'calc(8px * var(--ui-scale))',
-                borderRadius: 'calc(4px * var(--ui-scale))',
-                fontSize: 'calc(12px * var(--ui-scale))',
-              }}
+              className={MODERATOR_CHILD}
               onClick={() => setIsKickModalOpen(true)}
             >
               🚫 Kick Player
             </button>
 
             {/* Clear Messages */}
-            <div className="space-y-1">
+            <div>
               <button 
-                className={`w-full border text-left rounded transition-all duration-200 ${
+                className={`${MODERATOR_CHILD} ${
                   isClearingLogs 
-                    ? 'bg-orange-500/20 border-orange-500/40 text-orange-200 cursor-not-allowed'
-                    : 'bg-orange-500/10 border-orange-500/30 text-orange-300 hover:bg-orange-500/20'
+                    ? 'bg-emerald-500/20 border-emerald-500/40 text-emerald-200 cursor-not-allowed'
+                    : ''
                 }`}
-                style={{
-                  padding: 'calc(8px * var(--ui-scale))',
-                  borderRadius: 'calc(4px * var(--ui-scale))',
-                  fontSize: 'calc(12px * var(--ui-scale))',
-                }}
                 onClick={() => {
                   if (!isClearingLogs) {
                     setIsClearingLogs(true);
@@ -675,16 +620,11 @@ export default function ModeratorControls({
               </button>
               
               <button 
-                className={`w-full border text-left rounded transition-all duration-200 ${
+                className={`${MODERATOR_CHILD_LAST} ${
                   isClearingAllLogs 
-                    ? 'bg-red-500/20 border-red-500/40 text-red-200 cursor-not-allowed'
-                    : 'bg-red-500/10 border-red-500/30 text-red-300 hover:bg-red-500/20'
+                    ? 'bg-emerald-500/20 border-emerald-500/40 text-emerald-200 cursor-not-allowed'
+                    : ''
                 }`}
-                style={{
-                  padding: 'calc(8px * var(--ui-scale))',
-                  borderRadius: 'calc(4px * var(--ui-scale))',
-                  fontSize: 'calc(12px * var(--ui-scale))',
-                }}
                 onClick={() => {
                   if (!isClearingAllLogs) {
                     setIsClearingAllLogs(true);

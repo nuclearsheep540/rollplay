@@ -109,8 +109,45 @@ MONGO_INITDB_DATABASE=rollplay
 - **Frontend Hook**: `useWebSocket.js` manages connection lifecycle and event handling
 
 ## Key Development Patterns
-### Styling
-- Always use tailwind css styles where possible
+
+### UI Styling & Constants System
+- **Always use tailwind css styles where possible**
+- **CRITICAL**: Use `/rollplay/app/styles/constants.js` for all UI component styling
+- **Single Source of Truth**: All colors, spacing, fonts controlled via constants.js
+
+#### 4 Core Style Elements (MUST use these):
+1. **PANEL_TITLE** / **DM_TITLE** / **MODERATOR_TITLE**
+   - Main collapsible panel titles (e.g., "DM Command Center", "Moderator Controls")
+   - Use: `className={DM_TITLE}` or `className={MODERATOR_TITLE}`
+
+2. **PANEL_HEADER** / **DM_HEADER** / **MODERATOR_HEADER** 
+   - Section headers within panels (e.g., "Map Controls", "Combat Management")
+   - Use: `className={DM_HEADER}` or `className={MODERATOR_HEADER}`
+
+3. **PANEL_SUB_HEADER** / **DM_SUB_HEADER** / **MODERATOR_SUB_HEADER**
+   - Sub-section headers (e.g., "Attack Rolls", "Ability Checks")
+   - Use: `className={DM_SUB_HEADER}` or `className={MODERATOR_SUB_HEADER}`
+
+4. **PANEL_CHILD** / **DM_CHILD** / **MODERATOR_CHILD**
+   - Interactive child elements (buttons, inputs, etc.)
+   - Use: `className={DM_CHILD}` or `className={MODERATOR_CHILD}`
+   - Variant: `PANEL_CHILD_LAST` for elements without bottom margin
+
+#### When NOT to use core elements:
+- Special UI elements with unique design purposes (e.g., combat toggles, dice modals)
+- These can have hardcoded styles for their specific function
+- But still prefer constants over inline hardcoded values when possible
+
+#### Primary Color System:
+- Theme controlled by `PRIMARY_COLOR` variable in constants.js
+- Currently set to "sky" (blue theme)
+- All core elements automatically inherit this color scheme
+- Change `PRIMARY_COLOR` to instantly retheme entire application
+
+#### Adding New Styles:
+- Add new constants to constants.js rather than hardcoding in components
+- Follow existing naming patterns (e.g., `MODAL_CONTAINER`, `COMBAT_TOGGLE_ACTIVE`)
+- Import and use constants in components: `import { DM_TITLE } from '../styles/constants'`
 
 ### License Headers
 - All new source files must include GPL-3.0 license headers

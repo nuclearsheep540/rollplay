@@ -28,6 +28,29 @@ export default function PlayerCard({
     
     // Check if player is already sitting somewhere
     const playerAlreadySeated = seats.some(seat => seat.playerName === thisPlayer);
+
+    // Get the actual seat color from CSS custom property
+    const getActualSeatColor = (seatIndex) => {
+      if (typeof window !== 'undefined') {
+        const style = getComputedStyle(document.documentElement);
+        const cssColor = style.getPropertyValue(`--seat-color-${seatIndex}`).trim();
+        if (cssColor) {
+          return cssColor;
+        }
+      }
+      // Fallback to default color mapping if CSS variable not set
+      const colorMap = {
+        'blue': '#3b82f6',
+        'red': '#ef4444', 
+        'green': '#22c55e',
+        'orange': '#f97316',
+        'purple': '#a855f7',
+        'cyan': '#06b6d4',
+        'pink': '#ec4899',
+        'lime': '#65a30d'
+      };
+      return colorMap[getSeatColor(seatIndex)] || '#3b82f6';
+    };
   
     // Helper function to display player names in title case
     const toTitleCase = (name) => {
@@ -153,10 +176,10 @@ export default function PlayerCard({
             )}
             
             {/* Color Picker - Only show for the player's own seat */}
-            {isThisPlayerSeat && onColorChange && currentColor && (
+            {isThisPlayerSeat && onColorChange && (
               <div className="relative">
                 <ColorPicker
-                  currentColor={currentColor}
+                  currentColor={getActualSeatColor(seatId)}
                   onColorChange={onColorChange}
                   playerName={occupantName}
                   seatIndex={seatId}
