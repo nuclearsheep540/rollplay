@@ -253,10 +253,24 @@ function GameContent() {
     }
   }, [])
 
-  // UPDATED: Seat count management
+  // UPDATED: Seat count management with displaced player handling
   const setSeatCount = async (newSeatCount) => {
     try {
       console.log(`Updating seat count to: ${newSeatCount}`);
+      
+      // Identify displaced players if reducing seat count
+      const displacedPlayers = [];
+      if (newSeatCount < gameSeats.length) {
+        for (let i = newSeatCount; i < gameSeats.length; i++) {
+          if (gameSeats[i] && gameSeats[i].playerName !== "empty") {
+            displacedPlayers.push({
+              playerName: gameSeats[i].playerName,
+              seatId: i,
+              characterData: gameSeats[i].characterData
+            });
+          }
+        }
+      }
       
       // Create new seat array
       const newSeats = [];
@@ -277,7 +291,7 @@ function GameContent() {
         }
       }
 
-      // Update MongoDB via API
+      // Update MongoDB via API with displaced players info
       const response = await fetch(`/api/game/${roomId}/seats`, {
         method: 'PUT',
         headers: {
@@ -285,7 +299,8 @@ function GameContent() {
         },
         body: JSON.stringify({
           max_players: newSeatCount,
-          updated_by: thisPlayer
+          updated_by: thisPlayer,
+          displaced_players: displacedPlayers
         }),
       });
 
@@ -301,6 +316,8 @@ function GameContent() {
 
       // Adventure log will be handled by server broadcast
       const action = newSeatCount > gameSeats.length ? "increased" : "decreased";
+
+      console.log(`Seat count ${action}. Displaced players:`, displacedPlayers);
 
     } catch (error) {
       console.error('Error updating seat count:', error);

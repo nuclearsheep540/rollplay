@@ -312,10 +312,65 @@ class WebsocketEvent():
     @staticmethod
     async def seat_count_change(websocket, data, event_data, player_name, client_id, manager):
         """Handle seat count changes"""
+        
+        # Log seat count change to adventure log
+        max_players = event_data.get("max_players")
+        displaced_players = event_data.get("displaced_players", [])
+        
+        log_message = f"Seat count changed to {max_players} by {player_name}"
+        if displaced_players:
+            displaced_names = [p["playerName"] for p in displaced_players]
+            log_message += f". Moved to lobby: {', '.join(displaced_names)}"
+        
+        adventure_log.add_log_entry(
+            room_id=client_id,
+            message=log_message,
+            log_type=LogType.SYSTEM,
+            player_name=player_name
+        )
+        
         broadcast_message = {
             "event_type": "seat_count_change",
             "data": event_data,
             "player_name": player_name
+        }
+        
+        return WebsocketEventResult(broadcast_message=broadcast_message)
+
+    @staticmethod
+    async def player_displaced(websocket, data, event_data, player_name, client_id, manager):
+        """Handle player displacement events"""
+        displaced_player = event_data.get("player_name")
+        former_seat = event_data.get("former_seat")
+        reason = event_data.get("reason", "unknown")
+        
+        log_message = f"{displaced_player} was moved to lobby from seat {former_seat + 1} due to {reason}"
+        
+        adventure_log.add_log_entry(
+            room_id=client_id,
+            message=log_message,
+            log_type=LogType.SYSTEM,
+            player_name="System"
+        )
+        
+        # This event is typically sent to individual players, not broadcast
+        return WebsocketEventResult(broadcast_message=None)
+
+    @staticmethod
+    async def system_message(websocket, data, event_data, player_name, client_id, manager):
+        """Handle system messages"""
+        message = event_data.get("message")
+        
+        adventure_log.add_log_entry(
+            room_id=client_id,
+            message=message,
+            log_type=LogType.SYSTEM,
+            player_name="System"
+        )
+        
+        broadcast_message = {
+            "event_type": "system_message",
+            "data": event_data
         }
         
         return WebsocketEventResult(broadcast_message=broadcast_message)

@@ -585,7 +585,7 @@ export default function ModeratorControls({
             <div className={MODERATOR_CHILD}>
               <div className={MODERATOR_LABEL}>🪑 Seat Count (Current: {gameSeats?.length || 0})</div>
               <div>
-                {[2, 3, 4, 5, 6, 7, 8].map(count => (
+                {[1, 2, 3, 4, 5, 6, 7, 8].map(count => (
                   <button
                     key={count}
                     className={count === (gameSeats?.length || 0) 
