@@ -138,10 +138,6 @@ export function useWebSocket(roomId, playerName, gameContext) {
           handleAdventureLogRemoved(json_data["data"], gameContext);
           break;
 
-        case "seat_count_change":
-          handleSeatCountChange(json_data["data"], gameContext);
-          break;
-
         case "player_displaced":
           handlePlayerDisplaced(json_data["data"], gameContext);
           break;

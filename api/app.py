@@ -101,12 +101,29 @@ async def update_seat_count(room_id: str, request: dict):
                     print(f"❌ Error handling displaced player {player_name}: {str(e)}")
                     # Continue processing other players even if one fails
         
-        # Broadcast seat count change to all clients
+        # Get current seat layout from database after displacement
         try:
+            # Get updated room data to get actual seat layout
+            updated_room = GameService.get_room(id=room_id)
+            current_seats = updated_room.get("seat_layout", [])
+            
+            # Create new_seats array matching the new max_players count
+            new_seats = []
+            for i in range(max_players):
+                if i < len(current_seats):
+                    # Keep existing player if they weren't displaced
+                    player_in_seat = current_seats[i]
+                    # Check if this player was displaced
+                    was_displaced = any(dp.get("playerName") == player_in_seat for dp in displaced_players)
+                    new_seats.append("empty" if was_displaced else player_in_seat)
+                else:
+                    new_seats.append("empty")
+            
             seat_change_message = {
-                "event_type": "seat_count_change",
+                "event_type": "seat_count_change", 
                 "data": {
                     "max_players": max_players,
+                    "new_seats": new_seats,
                     "updated_by": updated_by,
                     "displaced_players": displaced_players
                 }

@@ -311,13 +311,10 @@ function GameContent() {
       // Send websocket update using hook method
       sendSeatCountChange(newSeatCount, newSeats);
 
-      // Update local state
-      setGameSeats(newSeats);
-
-      // Adventure log will be handled by server broadcast
-      const action = newSeatCount > gameSeats.length ? "increased" : "decreased";
-
-      console.log(`Seat count ${action}. Displaced players:`, displacedPlayers);
+      // Note: Do NOT update local state here - let WebSocket broadcast handle it
+      // This prevents double state updates that cause adventure log to jump
+      
+      console.log(`Seat count change requested. Displaced players:`, displacedPlayers);
 
     } catch (error) {
       console.error('Error updating seat count:', error);
