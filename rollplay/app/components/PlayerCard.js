@@ -12,7 +12,8 @@ export default function PlayerCard({
     onDiceRoll = null,
     playerData = null,
     onColorChange = null,
-    currentColor = null
+    currentColor = null,
+    isDM = false // New prop to check if current player is DM
   }) {
   
   
@@ -28,6 +29,9 @@ export default function PlayerCard({
     
     // Check if player is already sitting somewhere
     const playerAlreadySeated = seats.some(seat => seat.playerName === thisPlayer);
+    
+    // Check if player can sit (not already seated AND not DM)
+    const canSitDown = !playerAlreadySeated && !isDM;
 
     // Get the actual seat color from CSS custom property
     const getActualSeatColor = (seatIndex) => {
@@ -117,19 +121,21 @@ export default function PlayerCard({
           className={`
             rounded-lg border border-dashed text-center cursor-pointer transition-all duration-300
             p-[calc(12px*var(--ui-scale))] mb-[calc(12px*var(--ui-scale))]
-            ${playerAlreadySeated 
+            ${!canSitDown 
               ? 'bg-emerald-500/5 border-gray-500/30 opacity-50 cursor-not-allowed' 
               : 'bg-emerald-500/5 border-emerald-500/30 hover:bg-emerald-500/10 hover:border-emerald-500/50'
             }
           `}
-          onClick={playerAlreadySeated ? null : sitSeat}
+          onClick={canSitDown ? sitSeat : null}
         >
           <div 
             className="text-emerald-400 font-medium text-[calc(12px*var(--ui-scale))]"
           >
-            {playerAlreadySeated 
-              ? `🪑 Seat ${seatId + 1} - Leave current seat first`
-              : `🪑 Seat ${seatId + 1} - Click to Join`
+            {isDM 
+              ? `🪑 Seat ${seatId + 1} - DM uses DM Chair`
+              : playerAlreadySeated 
+                ? `🪑 Seat ${seatId + 1} - Leave current seat first`
+                : `🪑 Seat ${seatId + 1} - Click to Join`
             }
           </div>
         </div>
