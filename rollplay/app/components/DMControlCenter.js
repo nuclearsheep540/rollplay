@@ -6,6 +6,7 @@ import {
   DM_CHILD,
   DM_CHILD_LAST,
   PANEL_CHILD_LAST,
+  DM_PROMPT_LIST,
   DM_ARROW,
   COMBAT_TOGGLE_ACTIVE,
   COMBAT_TOGGLE_INACTIVE,
@@ -118,7 +119,7 @@ export default function DMControlCenter({
             </div>
             {activePrompts.length > 1 && (
               <button
-                className={DM_CHILD}
+                className={DM_CHILD +  " max-w-32 text-center"}
                 onClick={() => clearDicePrompt(null, true)}
               >
                 Clear All
@@ -132,16 +133,10 @@ export default function DMControlCenter({
                 <div className="flex items-center justify-between">
                   <div>
                     <div>
-                      {prompt.player} • {prompt.rollType}
+                      {prompt.player.titleCase()} • {prompt.rollType}
                     </div>
-                    {prompt.promptedBy && (
-                      <div>
-                        Prompted by {prompt.promptedBy}
-                      </div>
-                    )}
                   </div>
                   <button
-                    className={DM_CHILD}
                     onClick={() => clearDicePrompt(prompt.id, false)}
                   >
                     Cancel

@@ -109,6 +109,7 @@ export const DM_HEADER = `${PANEL_HEADER} bg-rose-500/20 border-rose-400/50`;
 export const DM_SUB_HEADER = `${PANEL_SUB_HEADER} text-rose-400 border-rose-400/50`;
 export const DM_CHILD = `${PANEL_CHILD} bg-rose-900/50 text-rose-100 border-rose-400/50`;
 export const DM_CHILD_LAST = `${DM_CHILD} ${PANEL_CHILD_LAST}`;
+export const DM_PROMPT_LIST = `${DM_CHILD_LAST}`
 export const DM_ARROW = `${PANEL_ARROW} text-rose-600`;
 
 // Moderator aliases

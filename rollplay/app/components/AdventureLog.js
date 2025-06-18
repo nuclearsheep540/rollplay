@@ -151,9 +151,10 @@ export default function AdventureLog({ rollLog, playerSeatMap }) {
             return (
               <div
                 key={`group-${groupIndex}`}
-                className="party-message-group bg-slate-900/60 rounded-lg p-[calc(8px*var(--ui-scale))] mb-[calc(12px*var(--ui-scale))] shadow-lg backdrop-blur-sm border border-slate-400/10 border-l-4"
+                className="party-message-group bg-slate-900/60 rounded-lg p-[calc(8px*var(--ui-scale))] shadow-lg backdrop-blur-sm border border-slate-400/10 border-l-4"
                 style={{
-                  borderLeftColor: `var(--seat-color-${group.seatIndex || 0})`
+                  borderLeftColor: `var(--seat-color-${group.seatIndex || 0})`,
+                  marginBottom: 'calc(2px * var(--ui-scale))'
                 }}
               >
                 {/* Party member name header with timestamp */}
@@ -197,9 +198,10 @@ export default function AdventureLog({ rollLog, playerSeatMap }) {
             return (
               <div
                 key={`group-${groupIndex}`}
-                className="npc-message-group bg-amber-900/20 rounded-lg p-[calc(8px*var(--ui-scale))] mb-[calc(12px*var(--ui-scale))] shadow-md backdrop-blur-sm border border-amber-500/20"
+                className="npc-message-group bg-amber-900/20 rounded-lg p-[calc(8px*var(--ui-scale))] shadow-md backdrop-blur-sm border border-amber-500/20"
                 style={{
-                  borderLeft: `4px solid #f59e0b`
+                  borderLeft: `4px solid #f59e0b`,
+                  marginBottom: 'calc(2px * var(--ui-scale))'
                 }}
               >
                 {/* NPC name header with timestamp */}
@@ -241,7 +243,8 @@ export default function AdventureLog({ rollLog, playerSeatMap }) {
             return (
               <div
                 key={entry.id}
-                className="dm-message bg-gradient-to-r from-purple-900/40 to-indigo-900/40 rounded-lg p-[calc(8px*var(--ui-scale))] mb-[calc(12px*var(--ui-scale))] border-2 border-purple-500/50 shadow-lg shadow-purple-500/20 backdrop-blur-sm"
+                className="dm-message bg-gradient-to-r from-purple-900/40 to-indigo-900/40 rounded-lg p-[calc(8px*var(--ui-scale))] border-2 border-purple-500/50 shadow-lg shadow-purple-500/20 backdrop-blur-sm"
+                style={{ marginBottom: 'calc(2px * var(--ui-scale))' }}
               >
                 {/* DM Header with special styling */}
                 <div className="dm-header flex items-center gap-[calc(8px*var(--ui-scale))] mb-[calc(4px*var(--ui-scale))]">
@@ -267,7 +270,8 @@ export default function AdventureLog({ rollLog, playerSeatMap }) {
             return (
               <div
                 key={entry.id}
-                className="system-message py-[calc(6px*var(--ui-scale))] px-[calc(12px*var(--ui-scale))] mb-[calc(4px*var(--ui-scale))] text-[calc(11px*var(--ui-scale))] text-slate-400 bg-slate-400/5 rounded border border-slate-400/10 flex justify-between items-center italic"
+                className="system-message py-[calc(6px*var(--ui-scale))] px-[calc(12px*var(--ui-scale))] text-[calc(11px*var(--ui-scale))] text-slate-400 bg-slate-400/5 rounded border border-slate-400/10 flex justify-between items-center italic"
+                style={{ marginBottom: '0px' }}
               >
                 <span>{formatMessageContent(entry)}</span>
                 <span className="text-[calc(9px*var(--ui-scale))] opacity-60 font-mono">
