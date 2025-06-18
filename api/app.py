@@ -153,7 +153,7 @@ def remove_moderator(room_id: str, request: dict):
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.post("/game/{room_id}/dm")
-def set_dm(room_id: str, request: dict):
+async def set_dm(room_id: str, request: dict):
     """Set a player as dungeon master"""
     try:
         check_room = GameService.get_room(id=room_id)
@@ -166,6 +166,19 @@ def set_dm(room_id: str, request: dict):
         
         success = GameService.set_dm(room_id, player_name)
         if success:
+            # Broadcast role change event to all clients in the room
+            from websocket_handlers.connection_manager import manager
+            role_change_message = {
+                "event_type": "role_change",
+                "data": {
+                    "action": "set_dm",
+                    "target_player": player_name,
+                    "changed_by": "System",
+                    "message": f"{player_name} has been set as Dungeon Master"
+                }
+            }
+            await manager.update_data_for_room(room_id, role_change_message)
+            
             return {"success": True, "message": f"{player_name} set as Dungeon Master"}
         else:
             return {"success": False, "message": "Failed to set Dungeon Master"}
@@ -174,15 +187,31 @@ def set_dm(room_id: str, request: dict):
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.delete("/game/{room_id}/dm")
-def unset_dm(room_id: str):
+async def unset_dm(room_id: str):
     """Remove the current dungeon master"""
     try:
         check_room = GameService.get_room(id=room_id)
         if not check_room:
             raise HTTPException(status_code=404, detail=f"Room {room_id} not found")
         
+        # Get current DM name before removing
+        current_dm = check_room.get("dungeon_master", "")
+        
         success = GameService.unset_dm(room_id)
         if success:
+            # Broadcast role change event to all clients in the room
+            from websocket_handlers.connection_manager import manager
+            role_change_message = {
+                "event_type": "role_change",
+                "data": {
+                    "action": "unset_dm",
+                    "target_player": current_dm,
+                    "changed_by": "System",
+                    "message": f"Dungeon Master role has been removed"
+                }
+            }
+            await manager.update_data_for_room(room_id, role_change_message)
+            
             return {"success": True, "message": "Dungeon Master removed"}
         else:
             return {"success": False, "message": "No Dungeon Master to remove"}

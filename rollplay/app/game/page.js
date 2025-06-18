@@ -43,6 +43,9 @@ function GameContent() {
   // Track disconnect timeouts for lobby users
   const [disconnectTimeouts, setDisconnectTimeouts] = useState({});
 
+  // Role change trigger to refresh ModeratorControls when any role changes occur
+  const [roleChangeTrigger, setRoleChangeTrigger] = useState(Date.now());
+
   // Pre-computed player-to-seat mapping for O(1) lookups
   const playerSeatMap = useMemo(() => {
     const map = {};
@@ -403,6 +406,9 @@ function GameContent() {
     if (roomId && thisPlayer) {
       await checkPlayerRoles(roomId, thisPlayer);
     }
+    
+    // Trigger refresh of ModeratorControls room data for all users
+    setRoleChangeTrigger(Date.now());
     
     // Role changes are now broadcasted via WebSocket to all connected users
   };
@@ -959,6 +965,7 @@ function GameContent() {
             handleKickPlayer={handleKickPlayer}
             handleClearSystemMessages={handleClearSystemMessages}
             handleClearAllMessages={handleClearAllMessages}
+            roleChangeTrigger={roleChangeTrigger}
           />
           
           <DMControlCenter
