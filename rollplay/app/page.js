@@ -95,58 +95,54 @@ export default function Home() {
 
   return (
       <div style={{backgroundColor: '#1e293b', minHeight: '100vh'}}>
-        <div className="hero-container">
+        <div className="hero-container" style={{
+          position: 'relative',
+          backgroundImage: 'url(/bg.jpeg)',
+          backgroundSize: 'cover',
+          backgroundPosition: 'center',
+          backgroundRepeat: 'no-repeat',
+          opacity: 0.9
+        }}>
+          <div style={{
+            position: 'absolute',
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            backdropFilter: 'blur(2px)',
+            zIndex: 1
+          }}></div>
           <div className="hero-image"></div>
           
-          <nav className="nav-bar">
-            <div className="logo">TABLETOP<span>TAVERN</span></div>
+          <nav className="nav-bar" style={{zIndex: 2}}>
+            <div className="logo" style={{fontSize: '2.1rem'}}>TABLETOP<span>TAVERN</span></div>
           </nav>
           
-          <div className="hero-content" style={{transform: 'translateY(-10vh)'}}>
-            <h1>Your Virtual D&D Table Awaits</h1>
-            <p>Create or join virtual D&D game rooms in seconds. Connect with friends, manage campaigns, and embark on epic adventures together — no downloads required.</p>
+          <div className="hero-content" style={{transform: 'translateY(-10vh)', zIndex: 2}}>
+            <h1 style={{textShadow: '2px 2px 4px rgba(0,0,0,0.8)'}}>Your Virtual D&D Table Awaits</h1>
+            <p style={{textShadow: '2px 2px 4px rgba(0,0,0,0.8)'}}>Create or join virtual D&D game rooms in seconds. Connect with friends, manage campaigns, and embark on epic adventures together — no downloads required.</p>
             
             <div className="cta-buttons">
                 {/* ENHANCED CTA: Column layout with D&D theming */}
                 <div className="mt-6 flex flex-col gap-y-4 items-center max-w-md mx-auto">
                 <button
                     className={`
-                      group relative px-8 py-4 text-lg font-bold text-white rounded-lg
-                      transition-all duration-300 transform hover:scale-105 hover:shadow-2xl
-                      ${newRoom 
-                        ? 'bg-gradient-to-r from-amber-600 to-orange-600 shadow-amber-500/50' 
-                        : 'bg-gradient-to-r from-slate-700 to-slate-800 hover:from-amber-600 hover:to-orange-600'
-                      }
-                      border-2 border-amber-400/30 shadow-lg
-                      before:absolute before:inset-0 before:rounded-lg 
-                      before:bg-gradient-to-r before:from-amber-500/20 before:to-orange-500/20 
-                      before:opacity-0 hover:before:opacity-100 before:transition-opacity
+                      px-8 py-4 text-lg font-bold text-white rounded-lg w-full
+                      bg-gradient-to-r from-amber-600 to-orange-600
                     `}
                     onClick={()=>{setNewRoom(true),setExistingRoom(false),setModalOpen(true),setRoom404(false),setIsLoading(false)}}
                   >
-                    <span className="relative z-10 flex items-center gap-2">
-                      🏰 Create New Campaign
-                    </span>
+                    🏰 Create New Campaign
                   </button>
                   
                   <button
                     className={`
-                      group relative px-8 py-4 text-lg font-bold text-white rounded-lg
-                      transition-all duration-300 transform hover:scale-105 hover:shadow-2xl
-                      ${existingRoom 
-                        ? 'bg-gradient-to-r from-emerald-600 to-teal-600 shadow-emerald-500/50' 
-                        : 'bg-gradient-to-r from-slate-700 to-slate-800 hover:from-emerald-600 hover:to-teal-600'
-                      }
-                      border-2 border-emerald-400/30 shadow-lg
-                      before:absolute before:inset-0 before:rounded-lg 
-                      before:bg-gradient-to-r before:from-emerald-500/20 before:to-teal-500/20 
-                      before:opacity-0 hover:before:opacity-100 before:transition-opacity
+                      px-8 py-4 text-lg font-bold text-white rounded-lg w-full
+                      bg-gradient-to-r from-emerald-600 to-teal-600
                     `}
                     onClick={()=>{setNewRoom(false),setExistingRoom(true),setModalOpen(true),setRoom404(false),setIsLoading(false)}}
                   >
-                    <span className="relative z-10 flex items-center gap-2">
-                      ⚔️ Join Adventure
-                    </span>
+                    ⚔️ Join Adventure
                   </button>
               </div>
             </div>
@@ -181,7 +177,7 @@ export default function Home() {
                       name="roomId"
                       type="text"
                       value={roomId}
-                      placeholder="Campaign code"
+                      placeholder="Room ID"
                       onChange={(e) => setRoomId(e.target.value)}
                     />
                   )}

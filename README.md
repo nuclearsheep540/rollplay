@@ -37,11 +37,11 @@ environment=dev
 NEXT_PUBLIC_API_URL=http://localhost
 
 # VERSION CONTROL
-app_version=0.0.3
-nginx_version=0.1.4
-mongo_db_version=0.0.1
-certbot_version=0.1.2
-api_version=0.2.4
+app_version=0.0.0
+nginx_version=0.0.0
+mongo_db_version=0.0.0
+certbot_version=0.0.0
+api_version=0.0.0
 
 # DATABASE
 MONGO_INITDB_ROOT_USERNAME=<your creds>

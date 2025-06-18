@@ -28,7 +28,8 @@ export default function ModeratorControls({
   setSeatCount, // Function to change seat count
   handleKickPlayer, // Function to kick players
   handleClearSystemMessages, // Function to clear system messages
-  handleClearAllMessages // Function to clear all messages
+  handleClearAllMessages, // Function to clear all messages
+  roleChangeTrigger // Timestamp or counter that changes when any role change occurs
 }) {
   
   // State for main panel collapse
@@ -95,6 +96,13 @@ export default function ModeratorControls({
       fetchRoomRoles();
     }
   }, [roomId]);
+
+  // Refresh room data when any role change occurs (triggered by WebSocket events)
+  React.useEffect(() => {
+    if (roomId && roleChangeTrigger) {
+      fetchRoomRoles();
+    }
+  }, [roleChangeTrigger, roomId]);
 
   // Handle role changes
   const handleRoleAction = async (action, playerName) => {
