@@ -413,6 +413,25 @@ function GameContent() {
     // Update DM seat based on the action
     if (action === 'set_dm') {
       setDmSeat(playerName);
+      
+      // Business logic: If new DM is sitting in a party seat, remove them from it
+      const playerSeatIndex = gameSeats.findIndex(seat => seat.playerName === playerName);
+      if (playerSeatIndex !== -1) {
+        console.log(`🎭 Removing ${playerName} from party seat ${playerSeatIndex} as they become DM`);
+        
+        // Create updated seats with the DM removed from party
+        const newSeats = [...gameSeats];
+        newSeats[playerSeatIndex] = {
+          ...newSeats[playerSeatIndex],
+          playerName: "empty",
+          characterData: null,
+          isActive: false
+        };
+        
+        // Update local state and broadcast seat change
+        setGameSeats(newSeats);
+        sendSeatChange(newSeats);
+      }
     } else if (action === 'unset_dm') {
       setDmSeat("");
     }
@@ -932,7 +951,12 @@ function GameContent() {
           />
 
           {/* Party Section */}
-          <div className="party-header">
+          <div 
+            className="party-header"
+            style={{
+              borderBottom: '1px solid rgba(74, 222, 128, 0.3)' // Emerald-400/30 border to match party theme
+            }}
+          >
             <span>Party</span>
             <span className="seat-indicator">
               {gameSeats.filter(seat => seat.playerName !== "empty").length}/{gameSeats.length} Seats
