@@ -64,7 +64,7 @@ function GameContent() {
   const [isHost, setIsHost] = useState(false); // Host status
   const [dicePortalActive, setDicePortalActive] = useState(true);
   const [uiScale, setUIScale] = useState('medium'); // UI Scale state
-  const [combatActive, setCombatActive] = useState(true); // Combat state
+  const [combatActive, setCombatActive] = useState(false); // Combat state
   const [rollLog, setRollLog] = useState([
     { id: 1, message: 'Welcome to Tabletop Tavern', type: 'system'}
   ]);

@@ -201,21 +201,23 @@ export default function DMControlCenter({
             
             {/* Initiate Combat Toggle */}
             <div 
-              className={`${DM_CHILD} w-full flex items-center justify-between`}
+              className={`${DM_CHILD} w-full flex items-center justify-between cursor-pointer`}
+              onClick={toggleCombat}
             >
-              ⚔️ Initiate Combat
+              ⚔️ Toggle Combat
               
               <div 
-                className={`relative inline-flex cursor-pointer rounded-full border-2 transition-all duration-300 w-11 h-6 ${
+                className={`rounded-full border-2 transition-all duration-200 w-14 h-7 ${
                   combatActive 
                     ? COMBAT_TOGGLE_ACTIVE 
                     : COMBAT_TOGGLE_INACTIVE
                 }`}
-                onClick={toggleCombat}
+                
               >
+                  {/* This is the dot in the toggle pill */}
                 <div 
                   className={`inline-block rounded-full bg-white shadow-lg transform transition-transform duration-300 w-4 h-4 m-1 ${
-                    combatActive ? 'translate-x-full' : 'translate-x-0'
+                    combatActive ? 'translate-x-6' : 'translate-x-0'
                   }`}
                 ></div>
               </div>

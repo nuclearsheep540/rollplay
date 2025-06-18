@@ -93,8 +93,8 @@ export const MODAL_LABEL = "block text-gray-300 mb-2 text-sm";
 export const MODAL_CANCEL_BUTTON = "px-4 py-2 bg-gray-600 border border-gray-500 text-gray-300 rounded-md transition-all duration-100 hover:bg-gray-500 text-sm";
 
 // Combat toggle
-export const COMBAT_TOGGLE_ACTIVE = "bg-emerald-500 border-emerald-400";
-export const COMBAT_TOGGLE_INACTIVE = "bg-gray-600 border-gray-500";
+export const COMBAT_TOGGLE_ACTIVE = "bg-emerald-800 border-emerald-500";
+export const COMBAT_TOGGLE_INACTIVE = "bg-slate-700 border-slate-500";
 
 // Active/expanded state
 export const ACTIVE_BACKGROUND = ACTIVE_BG;
