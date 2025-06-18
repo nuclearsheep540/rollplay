@@ -151,20 +151,25 @@ export default function AdventureLog({ rollLog, playerSeatMap }) {
             return (
               <div
                 key={`group-${groupIndex}`}
-                className="party-message-group bg-slate-900/60 rounded-lg p-[calc(16px*var(--ui-scale))] mb-[calc(12px*var(--ui-scale))] shadow-lg backdrop-blur-sm border border-slate-400/10 border-l-4"
+                className="party-message-group bg-slate-900/60 rounded-lg p-[calc(8px*var(--ui-scale))] mb-[calc(12px*var(--ui-scale))] shadow-lg backdrop-blur-sm border border-slate-400/10 border-l-4"
                 style={{
                   borderLeftColor: `var(--seat-color-${group.seatIndex || 0})`
                 }}
               >
-                {/* Party member name header */}
+                {/* Party member name header with timestamp */}
                 <div 
-                  className="player-name-header text-[calc(14px*var(--ui-scale))] font-bold mb-[calc(8px*var(--ui-scale))] drop-shadow-sm flex items-center gap-2"
+                  className="player-name-header text-[calc(14px*var(--ui-scale))] font-bold mb-[calc(4px*var(--ui-scale))] drop-shadow-sm flex items-center justify-between"
                   style={{
                     color: `var(--seat-color-${group.seatIndex || 0})`
                   }}
                 >
-                  <span>👥</span>
-                  {toTitleCase(group.playerName)}
+                  <div className="flex items-center gap-2">
+                    <span>👥</span>
+                    {toTitleCase(group.playerName)}
+                  </div>
+                  <span className="text-white/40 text-[calc(10px*var(--ui-scale))] font-mono">
+                    {group.messages[0].timestamp}
+                  </span>
                 </div>
                 
                 {/* Messages in this group */}
@@ -183,9 +188,6 @@ export default function AdventureLog({ rollLog, playerSeatMap }) {
                         {formatMessageContent(entry)}
                       </div>
                     </div>
-                    <div className="text-white/40 text-[calc(10px*var(--ui-scale))] font-mono flex-shrink-0">
-                      {entry.timestamp}
-                    </div>
                   </div>
                 ))}
               </div>
@@ -195,17 +197,22 @@ export default function AdventureLog({ rollLog, playerSeatMap }) {
             return (
               <div
                 key={`group-${groupIndex}`}
-                className="npc-message-group bg-amber-900/20 rounded-lg p-[calc(16px*var(--ui-scale))] mb-[calc(12px*var(--ui-scale))] shadow-md backdrop-blur-sm border border-amber-500/20"
+                className="npc-message-group bg-amber-900/20 rounded-lg p-[calc(8px*var(--ui-scale))] mb-[calc(12px*var(--ui-scale))] shadow-md backdrop-blur-sm border border-amber-500/20"
                 style={{
                   borderLeft: `4px solid #f59e0b`
                 }}
               >
-                {/* NPC name header */}
+                {/* NPC name header with timestamp */}
                 <div 
-                  className="npc-name-header text-[calc(14px*var(--ui-scale))] font-bold mb-[calc(8px*var(--ui-scale))] drop-shadow-sm flex items-center gap-2 text-amber-400"
+                  className="npc-name-header text-[calc(14px*var(--ui-scale))] font-bold mb-[calc(4px*var(--ui-scale))] drop-shadow-sm flex items-center justify-between text-amber-400"
                 >
-                  <span>🗨️</span>
-                  {toTitleCase(group.playerName)}
+                  <div className="flex items-center gap-2">
+                    <span>🗨️</span>
+                    {toTitleCase(group.playerName)}
+                  </div>
+                  <span className="text-white/40 text-[calc(10px*var(--ui-scale))] font-mono">
+                    {group.messages[0].timestamp}
+                  </span>
                 </div>
                 
                 {/* Messages in this group */}
@@ -224,9 +231,6 @@ export default function AdventureLog({ rollLog, playerSeatMap }) {
                         {formatMessageContent(entry)}
                       </div>
                     </div>
-                    <div className="text-amber-200/40 text-[calc(10px*var(--ui-scale))] font-mono flex-shrink-0">
-                      {entry.timestamp}
-                    </div>
                   </div>
                 ))}
               </div>
@@ -237,10 +241,10 @@ export default function AdventureLog({ rollLog, playerSeatMap }) {
             return (
               <div
                 key={entry.id}
-                className="dm-message bg-gradient-to-r from-purple-900/40 to-indigo-900/40 rounded-lg p-[calc(16px*var(--ui-scale))] mb-[calc(12px*var(--ui-scale))] border-2 border-purple-500/50 shadow-lg shadow-purple-500/20 backdrop-blur-sm"
+                className="dm-message bg-gradient-to-r from-purple-900/40 to-indigo-900/40 rounded-lg p-[calc(8px*var(--ui-scale))] mb-[calc(12px*var(--ui-scale))] border-2 border-purple-500/50 shadow-lg shadow-purple-500/20 backdrop-blur-sm"
               >
                 {/* DM Header with special styling */}
-                <div className="dm-header flex items-center gap-[calc(8px*var(--ui-scale))] mb-[calc(8px*var(--ui-scale))]">
+                <div className="dm-header flex items-center gap-[calc(8px*var(--ui-scale))] mb-[calc(4px*var(--ui-scale))]">
                   <span className="text-[calc(18px*var(--ui-scale))] drop-shadow-lg">🔮</span>
                   <span className="text-purple-300 font-bold text-[calc(14px*var(--ui-scale))] drop-shadow-sm uppercase tracking-wider">
                     Dungeon Master
