@@ -10,6 +10,7 @@ import { useSearchParams } from "next/navigation";
 import { getSeatColor } from '../utils/seatColors';
 
 import PlayerCard from "../components/PlayerCard";
+import DMChair from "../components/DMChair";
 import DMControlCenter from '../components/DMControlCenter';
 import ModeratorControls from '../components/ModeratorControls';
 import HorizontalInitiativeTracker from '../components/HorizontalInitiativeTracker';
@@ -45,6 +46,9 @@ function GameContent() {
 
   // Role change trigger to refresh ModeratorControls when any role changes occur
   const [roleChangeTrigger, setRoleChangeTrigger] = useState(Date.now());
+
+  // DM seat state - string containing DM name or empty string
+  const [dmSeat, setDmSeat] = useState("");
 
   // Pre-computed player-to-seat mapping for O(1) lookups
   const playerSeatMap = useMemo(() => {
@@ -169,6 +173,10 @@ function GameContent() {
   
     await req.json().then((res) => {
       setHost(res["room_host"] || res["player_name"]) // Backward compatibility
+      
+      // Set DM seat from room data
+      const currentDM = res["dungeon_master"] || "";
+      setDmSeat(currentDM);
       
       // Use actual seat layout from database if available
       const seatLayout = res["current_seat_layout"] || [];
@@ -401,6 +409,13 @@ function GameContent() {
   // Handle role changes from ModeratorControls and WebSocket events
   const handleRoleChange = async (action, playerName) => {
     console.log(`Role change: ${action} for ${playerName}`);
+    
+    // Update DM seat based on the action
+    if (action === 'set_dm') {
+      setDmSeat(playerName);
+    } else if (action === 'unset_dm') {
+      setDmSeat("");
+    }
     
     // Refresh role status for current player
     if (roomId && thisPlayer) {
@@ -900,6 +915,23 @@ function GameContent() {
       <div className="main-game-area">
         {/* GRID POSITION 1: Left Column - party-sidebar with adventure log */}
         <div className="party-sidebar">
+          {/* DM Section */}
+          <div 
+            className="party-header"
+            style={{
+              color: '#fb7185', // Rose-400 for DM theme
+              borderBottom: '1px solid rgba(251, 113, 133, 0.3)' // Rose-400/30 border
+            }}
+          >
+            <span>Dungeon Master</span>
+          </div>
+          
+          <DMChair 
+            dmName={dmSeat}
+            isEmpty={dmSeat === ""}
+          />
+
+          {/* Party Section */}
           <div className="party-header">
             <span>Party</span>
             <span className="seat-indicator">
@@ -924,13 +956,17 @@ function GameContent() {
                 playerData={seat.characterData}
                 onColorChange={handlePlayerColorChange}
                 currentColor={currentColor}
+                isDM={isDM}
               />
             );
           })}
 
-          {/* Lobby Panel - shows connected users not in party */}
+          {/* Lobby Panel - shows connected users not in party (excluding DM) */}
           <LobbyPanel 
-            lobbyUsers={lobbyUsers}
+            lobbyUsers={lobbyUsers.filter(user => {
+              const userName = user.player_name || user.name || "";
+              return userName !== dmSeat; // Filter out DM from lobby
+            })}
           />
 
           {/* Adventure Log component */}
