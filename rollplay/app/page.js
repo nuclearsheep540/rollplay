@@ -95,16 +95,32 @@ export default function Home() {
 
   return (
       <div style={{backgroundColor: '#1e293b', minHeight: '100vh'}}>
-        <div className="hero-container">
+        <div className="hero-container" style={{
+          position: 'relative',
+          backgroundImage: 'url(/bg.jpeg)',
+          backgroundSize: 'cover',
+          backgroundPosition: 'center',
+          backgroundRepeat: 'no-repeat',
+          opacity: 0.9
+        }}>
+          <div style={{
+            position: 'absolute',
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            backdropFilter: 'blur(2px)',
+            zIndex: 1
+          }}></div>
           <div className="hero-image"></div>
           
-          <nav className="nav-bar">
+          <nav className="nav-bar" style={{zIndex: 2}}>
             <div className="logo">TABLETOP<span>TAVERN</span></div>
           </nav>
           
-          <div className="hero-content" style={{transform: 'translateY(-10vh)'}}>
-            <h1>Your Virtual D&D Table Awaits</h1>
-            <p>Create or join virtual D&D game rooms in seconds. Connect with friends, manage campaigns, and embark on epic adventures together — no downloads required.</p>
+          <div className="hero-content" style={{transform: 'translateY(-10vh)', zIndex: 2}}>
+            <h1 style={{textShadow: '2px 2px 4px rgba(0,0,0,0.8)'}}>Your Virtual D&D Table Awaits</h1>
+            <p style={{textShadow: '2px 2px 4px rgba(0,0,0,0.8)'}}>Create or join virtual D&D game rooms in seconds. Connect with friends, manage campaigns, and embark on epic adventures together — no downloads required.</p>
             
             <div className="cta-buttons">
                 {/* ENHANCED CTA: Column layout with D&D theming */}
