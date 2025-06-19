@@ -198,8 +198,8 @@ class RoomManager:
         self.connection_manager = connection_manager
         self.room_id = room_id
     
-    async def broadcast(self, data):
-        """Broadcast data to all clients in this room only"""
+    async def update_room_data(self, data):
+        """Update data for all clients in this room only"""
         await self.connection_manager.update_room_data(self.room_id, data)
     
     async def send_to_player(self, player_name: str, message: dict):

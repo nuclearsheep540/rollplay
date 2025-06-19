@@ -512,15 +512,21 @@ export const createSendFunctions = (webSocket, isConnected, roomId, playerName) 
     }));
   };
 
-  const sendDiceRoll = (player, formattedMessage, rollFor = null, promptId = null) => {
+  const sendDiceRoll = (player, diceData) => {
     if (!webSocket || !isConnected) return;
 
-    console.log(`🎲 Sending dice roll: ${formattedMessage}${promptId ? ` (prompt_id: ${promptId})` : ''}`);
+    const { diceNotation, results, total, modifier, advantage, context, promptId } = diceData;
+
+    console.log(`🎲 Sending dice roll: ${diceNotation} = ${total}${promptId ? ` (prompt_id: ${promptId})` : ''}`);
 
     const rollData = {
       "player": player,
-      "message": formattedMessage,
-      "roll_for": rollFor
+      "diceNotation": diceNotation,
+      "results": results,
+      "total": total,
+      "modifier": modifier || 0,
+      "advantage": advantage || null,
+      "context": context || ""
     };
     
     // Include prompt_id if provided for adventure log cleanup

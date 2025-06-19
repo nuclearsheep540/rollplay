@@ -861,9 +861,18 @@ function GameContent() {
     // Get the prompt_id for adventure log cleanup (use first matching prompt)
     const promptIdForCleanup = playerPrompts.length > 0 ? playerPrompts[0].id : null;
     
-    // Send pre-formatted message to backend
+    // Send raw dice data to backend for formatting
     if (sendDiceRoll) {
-      sendDiceRoll(playerName, formattedMessage, rollFor, promptIdForCleanup);
+      const diceData = {
+        diceNotation: diceNotation,
+        results: allRolls,
+        total: totalResult,
+        modifier: bonusValue,
+        advantage: useAdvantage ? advantageMode : null,
+        context: rollFor && rollFor !== "Standard Roll" ? rollFor : "",
+        promptId: promptIdForCleanup
+      };
+      sendDiceRoll(playerName, diceData);
     } else {
       console.error("sendDiceRoll function not available - WebSocket may not be connected");
     }
