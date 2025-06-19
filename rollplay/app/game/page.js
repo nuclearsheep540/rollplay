@@ -26,8 +26,7 @@ function GameContent() {
   const [thisPlayer, setThisPlayer] = useState()
   const [roomId, setRoomId] = useState()
 
-  // chat history
-  const [chatLog, setChatLog] = useState([{},])
+  // Removed unused chat history state
 
   // who generated the room
   const [host, setHost] = useState("")
@@ -483,7 +482,6 @@ function GameContent() {
   const gameContext = {
     // State setters
     setGameSeats,
-    setChatLog,
     setCombatActive,
     setRollLog,
     setActivePrompts,
@@ -494,7 +492,6 @@ function GameContent() {
     setCurrentInitiativePromptId,
     
     // Current state values
-    chatLog,
     gameSeats,
     thisPlayer,
     lobbyUsers,

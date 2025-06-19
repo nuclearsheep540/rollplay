@@ -45,10 +45,6 @@ class AdventureLogService:
             # Index for stamp-based queries
             self.adventure_logs.create_index([("room_id", 1), ("timestamp", -1)])
             
-            # Index for whisper queries (sender/recipient)
-            self.adventure_logs.create_index([("room_id", 1), ("from_player", 1)])
-            self.adventure_logs.create_index([("room_id", 1), ("to_player", 1)])
-            
             # Index for cleanup operations
             self.adventure_logs.create_index("log_id")
             
@@ -126,8 +122,7 @@ class AdventureLogService:
         log_type, 
         from_player: Optional[str] = None, 
         max_logs: int = 200,
-        prompt_id: Optional[str] = None,
-        to_player: Optional[str] = None
+        prompt_id: Optional[str] = None
     ) -> Dict:
         """
         Add a log entry and maintain max_logs limit per room using aggregation pipeline
@@ -139,7 +134,6 @@ class AdventureLogService:
             from_player: Name of the player sending the message (optional)
             max_logs: Maximum number of logs to keep per room (default: 200)
             prompt_id: Unique prompt ID for linking (optional)
-            to_player: Name of the player receiving whisper (required for WHISPER type)
             
         Returns:
             Dict: The inserted log document
@@ -147,13 +141,6 @@ class AdventureLogService:
         
         # Handle LogType enum conversion internally
         log_type_value = log_type.value if hasattr(log_type, 'value') else log_type
-        
-        # Validate whisper requirements
-        if log_type_value == "whisper" and not to_player:
-            raise ValueError("Whisper messages require a to_player")
-        
-        if log_type_value != "whisper" and to_player:
-            raise ValueError("Only whisper messages can have a to_player")
         
         # Generate sequential log ID for ordering
         log_id = int(time.time() * 1000000)  # Microsecond precision for better ordering
@@ -165,7 +152,6 @@ class AdventureLogService:
             "type": log_type_value,
             "timestamp": datetime.utcnow(),
             "from_player": from_player,
-            "to_player": to_player,
             "log_id": log_id
         }
         
@@ -256,46 +242,24 @@ class AdventureLogService:
         self, 
         room_id: str, 
         limit: int = 50, 
-        skip: int = 0,
-        requesting_player: Optional[str] = None
+        skip: int = 0
     ) -> List[Dict]:
         """
-        Get recent logs for a room with pagination and whisper filtering
+        Get recent logs for a room with pagination
         
         Args:
             room_id: The room ID to get logs for
             limit: Maximum number of logs to return
             skip: Number of logs to skip (for pagination)
-            requesting_player: The player requesting logs (for whisper filtering)
             
         Returns:
-            List of log documents visible to the requesting player, newest first
+            List of log documents, newest first
         """
         
         try:
-            # Build query filter
-            base_filter = {"room_id": room_id}
-            
-            if requesting_player:
-                # Player can see:
-                # 1. All public messages (to_player is null)
-                # 2. Whispers they sent (from_player matches)
-                # 3. Whispers sent to them (to_player matches)
-                visibility_filter = {
-                    "$or": [
-                        {"to_player": None},  # Public messages
-                        {"from_player": requesting_player},  # Whispers they sent
-                        {"to_player": requesting_player}     # Whispers to them
-                    ]
-                }
-                query_filter = {"$and": [base_filter, visibility_filter]}
-            else:
-                # No requesting player specified - return only public messages
-                query_filter = {**base_filter, "to_player": None}
-            
             logs = list(
                 self.adventure_logs.find(
-                    query_filter,
+                    {"room_id": room_id},
                     {"_id": 0}  # Exclude MongoDB _id from results
                 ).sort("log_id", -1)  # Newest first
                 .skip(skip)

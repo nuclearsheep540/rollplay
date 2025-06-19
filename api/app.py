@@ -28,10 +28,10 @@ adventure_log = AdventureLogService()
 
 
 @app.get("/game/{room_id}/logs")
-async def get_room_logs(room_id: str, limit: int = 100, skip: int = 0, requesting_player: str = None):
-    """Get adventure logs for a room with whisper filtering"""
+async def get_room_logs(room_id: str, limit: int = 100, skip: int = 0):
+    """Get adventure logs for a room"""
     try:
-        logs = adventure_log.get_room_logs(room_id, limit, skip, requesting_player)
+        logs = adventure_log.get_room_logs(room_id, limit, skip)
         count = adventure_log.get_room_log_count(room_id)
         
         return {

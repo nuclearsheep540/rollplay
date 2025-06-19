@@ -35,17 +35,7 @@ export const handleSeatCountChange = (data, { setGameSeats, getCharacterData }) 
   // Backend handles all logging now - no frontend log generation
 };
 
-export const handleChatMessage = (data, { setChatLog, chatLog }) => {
-  console.log("received chat message:", data);
-  setChatLog([
-    ...chatLog,
-    {
-      "player_name": data["player_name"],
-      "chat_message": data["data"],
-      "timestamp": data["utc_timestamp"]
-    }
-  ]);
-};
+// Removed unused handleChatMessage function
 
 export const handlePlayerConnected = (data, {}) => {
   console.log("received player connection:", data);
@@ -544,14 +534,7 @@ export const createSendFunctions = (webSocket, isConnected, roomId, playerName) 
     }));
   };
 
-  const sendChatMessage = (message) => {
-    if (!webSocket || !isConnected) return;
-
-    webSocket.send(JSON.stringify({
-      "event_type": "chat_message",
-      "data": message
-    }));
-  };
+  // Removed unused sendChatMessage function
 
   const sendColorChange = (player, seatIndex, newColor) => {
     if (!webSocket || !isConnected) {
@@ -595,7 +578,6 @@ export const createSendFunctions = (webSocket, isConnected, roomId, playerName) 
     sendCombatStateChange,
     sendPlayerKick,
     sendDiceRoll,
-    sendChatMessage,
     sendClearSystemMessages,
     sendClearAllMessages,
     sendDicePrompt,
@@ -629,12 +611,4 @@ export const handleSystemMessage = (data, {}) => {
   
   // Add system message to adventure log
   // Backend handles system message logging
-};
-
-export const handleWhisper = (data, {}) => {
-  console.log("💬 received whisper:", data);
-  const { from_player, to_player, message } = data;
-  
-  // Backend handles whisper logging and message delivery
-  // Frontend just needs to acknowledge receipt
 };
