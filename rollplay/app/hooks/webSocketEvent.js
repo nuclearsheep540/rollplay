@@ -123,12 +123,14 @@ export const handlePlayerDisconnected = (data, { thisPlayer, setLobbyUsers, setD
   handlePlayerDisconnectedLobby(data, { setLobbyUsers, setDisconnectTimeouts, disconnectTimeouts });
 };
 
-export const handleDiceRoll = (data, {}) => {
+export const handleDiceRoll = (data, { addToLog }) => {
   console.log("received dice roll:", data);
   const { player, message } = data;
   
-  // Server-only logging: all players see all dice rolls with pre-formatted message
-  // Backend handles dice roll logging
+  // Backend handles database storage, frontend handles real-time display
+  if (addToLog) {
+    addToLog(message, 'player-roll', player);
+  }
 };
 
 export const handleSystemMessagesCleared = (data, { setRollLog, thisPlayer }) => {
@@ -155,13 +157,13 @@ export const handleAllMessagesCleared = (data, { setRollLog }) => {
   // Backend handles all message clearing logging
 };
 
-export const handleDicePrompt = (data, { setActivePrompts, setIsDicePromptActive }) => {
+export const handleDicePrompt = (data, { setActivePrompts, setIsDicePromptActive, addToLog }) => {
   console.log("received dice prompt:", data);
   const { prompted_player, roll_type, prompted_by, prompt_id, log_message } = data;
   
-  // Add the log message to Adventure Log with prompt_id for later removal
-  if (log_message) {
-    // Backend handles dice prompt logging
+  // Backend handles database storage, frontend handles real-time display
+  if (addToLog) {
+    addToLog(log_message, 'dungeon-master', prompted_by, prompt_id);
   }
   
   // Add to active prompts array
@@ -189,7 +191,7 @@ export const handleDicePrompt = (data, { setActivePrompts, setIsDicePromptActive
   setIsDicePromptActive(true);
 };
 
-export const handleInitiativePromptAll = (data, { setActivePrompts, setIsDicePromptActive, setCurrentInitiativePromptId, thisPlayer }) => {
+export const handleInitiativePromptAll = (data, { setActivePrompts, setIsDicePromptActive, setCurrentInitiativePromptId, thisPlayer, addToLog }) => {
   console.log("received initiative prompt all:", data);
   const { players_to_prompt, roll_type, prompted_by, prompt_id, initiative_prompt_id, log_message } = data;
   
@@ -198,9 +200,9 @@ export const handleInitiativePromptAll = (data, { setActivePrompts, setIsDicePro
   // Store the initiative prompt ID for potential removal on "clear all"
   setCurrentInitiativePromptId(initiative_prompt_id);
   
-  // Add the log message to Adventure Log with initiative_prompt_id for potential removal
-  if (log_message) {
-    // Backend handles initiative prompt logging
+  // Backend handles database storage, frontend handles real-time display
+  if (addToLog) {
+    addToLog(log_message, 'dungeon-master', prompted_by, initiative_prompt_id);
   }
   
   // For DMs and all players, track ALL prompts created by this initiative call

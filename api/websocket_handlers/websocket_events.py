@@ -274,7 +274,10 @@ class WebsocketEvent():
         broadcast_message = {
             "event_type": "dice_roll",
             "data": {
-                **event_data  # Frontend sends everything we need
+                "player": player,
+                "message": formatted_message,
+                "prompt_id": prompt_id,
+                **event_data  # Include original data for compatibility
             }
         }
         
