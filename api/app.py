@@ -128,7 +128,7 @@ async def update_seat_count(room_id: str, request: dict):
                     "displaced_players": displaced_players
                 }
             }
-            await connection_manager.broadcast_to_room(room_id, seat_change_message)
+            await connection_manager.update_room_data(room_id, seat_change_message)
             print(f"✅ Seat count updated successfully to {max_players}, displaced {len(displaced_players)} players")
         except Exception as e:
             print(f"❌ Error broadcasting seat count change: {str(e)}")
@@ -248,7 +248,7 @@ async def set_dm(room_id: str, request: dict):
                     "message": f"{player_name} has been set as Dungeon Master"
                 }
             }
-            await manager.update_data_for_room(room_id, role_change_message)
+            await manager.update_room_data(room_id, role_change_message)
             
             return {"success": True, "message": f"{player_name} set as Dungeon Master"}
         else:
@@ -281,7 +281,7 @@ async def unset_dm(room_id: str):
                     "message": f"Dungeon Master role has been removed"
                 }
             }
-            await manager.update_data_for_room(room_id, role_change_message)
+            await manager.update_room_data(room_id, role_change_message)
             
             return {"success": True, "message": "Dungeon Master removed"}
         else:

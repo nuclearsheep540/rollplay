@@ -117,10 +117,6 @@ class ConnectionManager:
                 # Connection is dead, remove it
                 self.remove_connection(websocket, room_id, player_name)
 
-    async def broadcast_to_room(self, room_id: str, message: dict):
-        """Broadcast a message to all players in a room"""
-        await self.update_data_for_room(room_id, message)
-
     async def broadcast_lobby_update(self, room_id: str):
         """Send lobby update to all clients in a room"""
         if room_id not in self.room_users:
@@ -146,7 +142,7 @@ class ConnectionManager:
         print(f"🏨 Broadcasting lobby update for room {room_id}: {len(lobby_users)} users")
         
         # Send to all connections in this room
-        await self.update_data_for_room(room_id, lobby_message)
+        await self.update_room_data(room_id, lobby_message)
 
     async def _broadcast_globally(self, data):
         """PRIVATE: Send data to all connected clients across all rooms
@@ -168,7 +164,7 @@ class ConnectionManager:
         for dead_connection in dead_connections:
             self.remove_connection(dead_connection)
 
-    async def update_data_for_room(self, room_id: str, data):
+    async def update_room_data(self, room_id: str, data):
         """Send data only to clients in a specific room"""
         if room_id not in self.room_users:
             return
@@ -204,7 +200,7 @@ class RoomManager:
     
     async def broadcast(self, data):
         """Broadcast data to all clients in this room only"""
-        await self.connection_manager.update_data_for_room(self.room_id, data)
+        await self.connection_manager.update_room_data(self.room_id, data)
     
     async def send_to_player(self, player_name: str, message: dict):
         """Send message to a specific player in this room"""
