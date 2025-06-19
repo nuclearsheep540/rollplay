@@ -339,7 +339,7 @@ function GameContent() {
           message: log.message,
           type: log.type,
           timestamp: formatTimestamp(log.timestamp),
-          player_name: log.player_name,
+          player_name: log.from_player, // Map from_player to player_name for styling
           prompt_id: log.prompt_id // Include prompt_id for removal matching
         }));
         
