@@ -4,7 +4,7 @@ from datetime import datetime
 from fastapi import FastAPI, WebSocket
 from starlette.websockets import WebSocketDisconnect
 
-from .connection_manager import manager
+from .connection_manager import manager, RoomManager
 from .websocket_events import WebsocketEvent
 from adventure_log_service import AdventureLogService
 from models.log_type import LogType
@@ -25,6 +25,9 @@ def register_websocket_routes(app: FastAPI):
         player_name = player_name.lower()
         await manager.connect(websocket, client_id, player_name)
         
+        # Create room-scoped manager for this connection
+        room_manager = RoomManager(manager, client_id)
+        
         # Handle connection event and get result
         result = await WebsocketEvent.player_connection(
             websocket=websocket,
@@ -34,7 +37,7 @@ def register_websocket_routes(app: FastAPI):
             client_id=client_id,
             manager=manager
         )
-        await manager.update_data(result.broadcast_message)
+        await room_manager.broadcast(result.broadcast_message)
 
         try:
             while True:
@@ -70,7 +73,7 @@ def register_websocket_routes(app: FastAPI):
                     broadcast_message = result.broadcast_message
 
                     # After seat change, update lobby
-                    await manager.broadcast_lobby_update(client_id)
+                    await room_manager.broadcast_lobby_update()
 
                 elif event_type == "dice_prompt":
                     result = await WebsocketEvent.dice_prompt(
@@ -227,7 +230,7 @@ def register_websocket_routes(app: FastAPI):
                         player_name=player_name
                     )
                     
-                    await manager.update_data({
+                    await room_manager.broadcast({
                         **data, 
                         "player_name": player_name, 
                         "utc_timestamp": timestamp
@@ -235,7 +238,7 @@ def register_websocket_routes(app: FastAPI):
                     continue
                 
                 # Broadcast the main message
-                await manager.update_data(broadcast_message)
+                await room_manager.broadcast(broadcast_message)
                 
                 # Handle special cases for adventure log removal
                 if event_type == "dice_roll":
@@ -244,16 +247,16 @@ def register_websocket_routes(app: FastAPI):
                     
                     # Send log removal message first
                     if log_removal_message:
-                        await manager.update_data_for_room(client_id, log_removal_message)
+                        await room_manager.broadcast(log_removal_message)
                     
                     # Then send prompt clear message
                     if clear_prompt_message:
-                        await manager.update_data(clear_prompt_message)
+                        await room_manager.broadcast(clear_prompt_message)
                 
                 elif event_type == "dice_prompt_clear":
                     # Send log removal message for cancelled prompts (no delay needed)
                     if log_removal_message:
-                        await manager.update_data_for_room(client_id, log_removal_message)
+                        await room_manager.broadcast(log_removal_message)
                 
         except WebSocketDisconnect:
             # Server-side disconnect handling with seat cleanup
@@ -267,9 +270,9 @@ def register_websocket_routes(app: FastAPI):
             )
             
             # Send lobby update after disconnect (will show user as disconnecting)
-            await manager.broadcast_lobby_update(client_id)
+            await room_manager.broadcast_lobby_update()
             
             # Broadcast disconnect and seat change messages
-            await manager.update_data(result.broadcast_message)
+            await room_manager.broadcast(result.broadcast_message)
             if result.clear_prompt_message:  # This contains the seat change message
-                await manager.update_data(result.clear_prompt_message)
+                await room_manager.broadcast(result.clear_prompt_message)

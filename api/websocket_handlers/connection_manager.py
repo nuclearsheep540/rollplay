@@ -148,8 +148,13 @@ class ConnectionManager:
         # Send to all connections in this room
         await self.update_data_for_room(room_id, lobby_message)
 
-    async def update_data(self, data):
-        """Send data to all connected clients, removing any dead connections"""
+    async def _broadcast_globally(self, data):
+        """PRIVATE: Send data to all connected clients across all rooms
+        
+        WARNING: This broadcasts to ALL clients regardless of room.
+        Only use for server-wide events like maintenance announcements.
+        For normal game events, use RoomManager.broadcast() instead.
+        """
         dead_connections = []
         
         for connection in self.connections:
@@ -186,6 +191,37 @@ class ConnectionManager:
         # Remove all dead connections
         for room, user, ws in dead_connections:
             self.remove_connection(ws, room, user)
+
+class RoomManager:
+    """
+    Room-scoped manager that ensures all broadcasts stay within a specific room.
+    This is the preferred way to handle WebSocket events - it prevents accidental
+    cross-room message leakage.
+    """
+    def __init__(self, connection_manager: ConnectionManager, room_id: str):
+        self.connection_manager = connection_manager
+        self.room_id = room_id
+    
+    async def broadcast(self, data):
+        """Broadcast data to all clients in this room only"""
+        await self.connection_manager.update_data_for_room(self.room_id, data)
+    
+    async def send_to_player(self, player_name: str, message: dict):
+        """Send message to a specific player in this room"""
+        await self.connection_manager.send_to_player(self.room_id, player_name, message)
+    
+    async def broadcast_lobby_update(self):
+        """Send lobby update to all clients in this room"""
+        await self.connection_manager.broadcast_lobby_update(self.room_id)
+    
+    async def remove_player_from_party(self, player_name: str):
+        """Remove a player from party and move them to lobby in this room"""
+        await self.connection_manager.remove_player_from_party(self.room_id, player_name)
+    
+    def update_party_status(self, player_name: str, is_in_party: bool):
+        """Update whether a player is in the party or lobby in this room"""
+        self.connection_manager.update_party_status(self.room_id, player_name, is_in_party)
+
 
 # Create manager instance to be imported by other modules
 manager = ConnectionManager()
