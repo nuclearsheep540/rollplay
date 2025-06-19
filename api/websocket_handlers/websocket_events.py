@@ -582,6 +582,10 @@ class WebsocketEvent():
             from_player=player_name
         )
         
+        # Update party status to move disconnecting player to lobby before marking as disconnected
+        print(f"🚪 Moving {player_name} from party to lobby on disconnect")
+        manager.update_party_status(client_id, player_name, False)
+        
         manager.remove_connection(websocket, client_id, player_name)
         
         # Clean up disconnected player's seat
