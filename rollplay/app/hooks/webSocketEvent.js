@@ -18,7 +18,7 @@ export const handleSeatChange = (data, { setGameSeats, getCharacterData }) => {
   setGameSeats(updatedSeats);
 };
 
-export const handleSeatCountChange = (data, { setGameSeats, getCharacterData, addToLog }) => {
+export const handleSeatCountChange = (data, { setGameSeats, getCharacterData }) => {
   console.log("received seat count change:", data);
   const { max_players, new_seats, updated_by, displaced_players = [] } = data;
   
@@ -32,13 +32,7 @@ export const handleSeatCountChange = (data, { setGameSeats, getCharacterData, ad
   
   setGameSeats(updatedSeats);
   
-  // Log seat count changes with displacement info
-  if (displaced_players.length > 0) {
-    const displacedNames = displaced_players.map(p => p.playerName).join(", ");
-    addToLog(`Seat count changed to ${max_players}. Moved to lobby: ${displacedNames}`, 'system', updated_by);
-  } else {
-    addToLog(`Seat count changed to ${max_players}`, 'system', updated_by);
-  }
+  // Backend handles all logging now - no frontend log generation
 };
 
 export const handleChatMessage = (data, { setChatLog, chatLog }) => {
@@ -53,12 +47,11 @@ export const handleChatMessage = (data, { setChatLog, chatLog }) => {
   ]);
 };
 
-export const handlePlayerConnected = (data, { addToLog }) => {
+export const handlePlayerConnected = (data, {}) => {
   console.log("received player connection:", data);
   const { connected_player } = data;
   
-  // Server-only logging: all players see all connections
-  addToLog(`${connected_player} connected`, 'system');
+  // Backend handles connection logging - no frontend action needed
 };
 
 export const handleLobbyUpdate = (data, { setLobbyUsers }) => {
@@ -92,10 +85,10 @@ export const handlePlayerDisconnectedLobby = (data, { setLobbyUsers, setDisconne
   // The backend will send a lobby_update when user is actually removed
 };
 
-export const handlePlayerKicked = (data, { addToLog, thisPlayer }) => {
+export const handlePlayerKicked = (data, { thisPlayer }) => {
   console.log("received player kick:", data);
   const { kicked_player } = data;
-  addToLog(`${kicked_player} has been kicked from the party.`, 'system');
+  // Backend handles kick logging
 
   // If this player was kicked, go back in browser history
   if (kicked_player === thisPlayer) {
@@ -115,7 +108,7 @@ export const handleCombatState = (data, { setCombatActive }) => {
   // to prevent duplication for the player who initiated the change
 };
 
-export const handlePlayerDisconnected = (data, { addToLog, thisPlayer, setLobbyUsers, setDisconnectTimeouts, disconnectTimeouts }) => {
+export const handlePlayerDisconnected = (data, { thisPlayer, setLobbyUsers, setDisconnectTimeouts, disconnectTimeouts }) => {
   console.log("received player disconnect:", data);
   const disconnected_player = data["disconnected_player"];
 
@@ -123,22 +116,22 @@ export const handlePlayerDisconnected = (data, { addToLog, thisPlayer, setLobbyU
   // No client-side seat modification needed - server-only disconnect management
 
   if (disconnected_player !== thisPlayer) {
-    addToLog(`${disconnected_player} disconnected`, 'system');
+    // Backend handles disconnect logging
   }
   
   // Handle lobby disconnect visualization (just mark as disconnecting)
   handlePlayerDisconnectedLobby(data, { setLobbyUsers, setDisconnectTimeouts, disconnectTimeouts });
 };
 
-export const handleDiceRoll = (data, { addToLog }) => {
+export const handleDiceRoll = (data, {}) => {
   console.log("received dice roll:", data);
   const { player, message } = data;
   
   // Server-only logging: all players see all dice rolls with pre-formatted message
-  addToLog(message, 'dice', player);
+  // Backend handles dice roll logging
 };
 
-export const handleSystemMessagesCleared = (data, { setRollLog, addToLog, thisPlayer }) => {
+export const handleSystemMessagesCleared = (data, { setRollLog, thisPlayer }) => {
   console.log("received system messages cleared:", data);
   const { deleted_count, cleared_by } = data;
   
@@ -147,11 +140,11 @@ export const handleSystemMessagesCleared = (data, { setRollLog, addToLog, thisPl
   
   // Add a new system message about the clearing action
   if (cleared_by !== thisPlayer) {
-    addToLog(`${cleared_by} cleared ${deleted_count} system messages`, 'system');
+    // Backend handles system message clearing logging
   }
 };
 
-export const handleAllMessagesCleared = (data, { setRollLog, addToLog }) => {
+export const handleAllMessagesCleared = (data, { setRollLog }) => {
   console.log("received all messages cleared:", data);
   const { deleted_count, cleared_by } = data;
   
@@ -159,16 +152,16 @@ export const handleAllMessagesCleared = (data, { setRollLog, addToLog }) => {
   setRollLog([]);
   
   // Add a new system message about the clearing action
-  addToLog(`${cleared_by} cleared all ${deleted_count} adventure log messages`, 'system');
+  // Backend handles all message clearing logging
 };
 
-export const handleDicePrompt = (data, { setActivePrompts, setIsDicePromptActive, addToLog }) => {
+export const handleDicePrompt = (data, { setActivePrompts, setIsDicePromptActive }) => {
   console.log("received dice prompt:", data);
   const { prompted_player, roll_type, prompted_by, prompt_id, log_message } = data;
   
   // Add the log message to Adventure Log with prompt_id for later removal
   if (log_message) {
-    addToLog(log_message, 'dungeon-master', prompted_by, prompt_id);
+    // Backend handles dice prompt logging
   }
   
   // Add to active prompts array
@@ -196,7 +189,7 @@ export const handleDicePrompt = (data, { setActivePrompts, setIsDicePromptActive
   setIsDicePromptActive(true);
 };
 
-export const handleInitiativePromptAll = (data, { setActivePrompts, addToLog, setIsDicePromptActive, setCurrentInitiativePromptId, thisPlayer }) => {
+export const handleInitiativePromptAll = (data, { setActivePrompts, setIsDicePromptActive, setCurrentInitiativePromptId, thisPlayer }) => {
   console.log("received initiative prompt all:", data);
   const { players_to_prompt, roll_type, prompted_by, prompt_id, initiative_prompt_id, log_message } = data;
   
@@ -207,7 +200,7 @@ export const handleInitiativePromptAll = (data, { setActivePrompts, addToLog, se
   
   // Add the log message to Adventure Log with initiative_prompt_id for potential removal
   if (log_message) {
-    addToLog(log_message, 'dungeon-master', prompted_by, initiative_prompt_id);
+    // Backend handles initiative prompt logging
   }
   
   // For DMs and all players, track ALL prompts created by this initiative call
@@ -295,13 +288,13 @@ export const handleAdventureLogRemoved = (data, { setRollLog }) => {
   console.log(`🗑️ Removed adventure log entry with prompt_id: ${prompt_id}`);
 };
 
-export const handleRoleChange = (data, { addToLog, handleRoleChange }) => {
+export const handleRoleChange = (data, { handleRoleChange }) => {
   console.log("🎭 Role change received:", data);
   
   const { action, target_player, changed_by, message } = data;
   
   // Add role change to adventure log
-  addToLog(message, 'system', changed_by);
+  // Backend handles role change logging
   
   // Trigger role refresh if handler is available
   if (handleRoleChange) {
@@ -613,7 +606,7 @@ export const createSendFunctions = (webSocket, isConnected, roomId, playerName) 
 
 // New event handlers for displaced players
 
-export const handlePlayerDisplaced = (data, { addToLog, thisPlayer }) => {
+export const handlePlayerDisplaced = (data, { thisPlayer }) => {
   console.log("🚪 Player displaced:", data);
   const { player_name, former_seat, message, reason } = data;
   
@@ -621,17 +614,25 @@ export const handlePlayerDisplaced = (data, { addToLog, thisPlayer }) => {
   if (player_name === thisPlayer) {
     console.log(`⚠️ You have been displaced: ${message}`);
     // You could add a toast notification here
-    addToLog(`You were moved to the lobby from seat ${former_seat + 1}`, 'system', 'System');
+    // Backend handles displacement logging
   }
   
   // Log the displacement for all players to see
-  addToLog(message, 'system', 'System');
+  // Backend handles displacement logging
 };
 
-export const handleSystemMessage = (data, { addToLog }) => {
+export const handleSystemMessage = (data, {}) => {
   console.log("📢 System message:", data);
   const { message, type = 'system' } = data;
   
   // Add system message to adventure log
-  addToLog(message, type, 'System');
+  // Backend handles system message logging
+};
+
+export const handleWhisper = (data, {}) => {
+  console.log("💬 received whisper:", data);
+  const { from_player, to_player, message } = data;
+  
+  // Backend handles whisper logging and message delivery
+  // Frontend just needs to acknowledge receipt
 };

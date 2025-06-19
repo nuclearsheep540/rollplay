@@ -219,6 +219,21 @@ def register_websocket_routes(app: FastAPI):
                         await websocket.send_json(broadcast_message)
                         continue
 
+                elif event_type == "whisper":
+                    result = await WebsocketEvent.whisper(
+                        websocket=websocket,
+                        data=data,
+                        event_data=event_data,
+                        player_name=player_name,
+                        client_id=client_id,
+                        manager=manager
+                    )
+                    broadcast_message = result.broadcast_message
+                    
+                    # Whispers don't broadcast - they're sent directly to recipients
+                    if broadcast_message is None:
+                        continue
+
                 else:
                     # Chat messages - frontend sends pre-formatted
                     timestamp = datetime.now().strftime("%H:%M")
@@ -227,7 +242,7 @@ def register_websocket_routes(app: FastAPI):
                         room_id=client_id,
                         message=data.get("data", ""),
                         log_type=LogType.CHAT, 
-                        player_name=player_name
+                        from_player=player_name
                     )
                     
                     await room_manager.broadcast({

@@ -26,6 +26,7 @@ import {
   handleSeatCountChange,
   handlePlayerDisplaced,
   handleSystemMessage,
+  handleWhisper,
   createSendFunctions
 } from './webSocketEvent'
 
@@ -144,6 +145,10 @@ export function useWebSocket(roomId, playerName, gameContext) {
 
         case "system_message":
           handleSystemMessage(json_data["data"], gameContext);
+          break;
+
+        case "whisper":
+          handleWhisper(json_data["data"], gameContext);
           break;
 
         default:

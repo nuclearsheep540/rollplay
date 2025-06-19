@@ -19,6 +19,9 @@ class LogType(Enum):
     # Dungeon Master actions and announcements
     DUNGEON_MASTER = "dungeon-master"
     
+    # Private messages between players (whispers)
+    WHISPER = "whisper"
+    
     @classmethod
     def get_valid_types(cls):
         """Return a list of all valid log type values."""

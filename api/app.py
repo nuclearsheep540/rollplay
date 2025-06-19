@@ -28,10 +28,10 @@ adventure_log = AdventureLogService()
 
 
 @app.get("/game/{room_id}/logs")
-async def get_room_logs(room_id: str, limit: int = 100, skip: int = 0):
-    """Get adventure logs for a room"""
+async def get_room_logs(room_id: str, limit: int = 100, skip: int = 0, requesting_player: str = None):
+    """Get adventure logs for a room with whisper filtering"""
     try:
-        logs = adventure_log.get_room_logs(room_id, limit, skip)
+        logs = adventure_log.get_room_logs(room_id, limit, skip, requesting_player)
         count = adventure_log.get_room_log_count(room_id)
         
         return {
@@ -94,7 +94,7 @@ async def update_seat_count(room_id: str, request: dict):
                         room_id=room_id,
                         message=log_message,
                         log_type=LogType.SYSTEM,
-                        player_name="System"
+                        from_player="System"
                     )
                     
                 except Exception as e:
@@ -344,7 +344,7 @@ async def update_seat_layout(room_id: str, request: dict):
                 room_id=room_id,
                 message=log_message,
                 log_type=LogType.SYSTEM,
-                player_name=updated_by
+                from_player=updated_by
             )
         
         response_data = {
@@ -388,7 +388,7 @@ async def clear_system_messages(room_id: str, request: dict):
             room_id=room_id,
             message=log_message,
             log_type=LogType.SYSTEM,
-            player_name=cleared_by
+            from_player=cleared_by
         )
         
         return {
@@ -464,7 +464,7 @@ async def clear_all_messages(room_id: str, request: dict):
             room_id=room_id,
             message=log_message,
             log_type=LogType.SYSTEM,
-            player_name=cleared_by
+            from_player=cleared_by
         )
         
         return {
