@@ -286,7 +286,6 @@ export const useUnifiedAudio = () => {
                   playing: false,
                   paused: false,
                   currentTime: 0, // Reset to start for next playback
-                  filename: null,
                   duration: 0 // Reset duration as well
                 }
               }));
@@ -337,7 +336,6 @@ export const useUnifiedAudio = () => {
             ...prev[trackId],
             playing: false,
             paused: false,
-            filename: null,
             currentTime: 0,
             duration: 0
           }
