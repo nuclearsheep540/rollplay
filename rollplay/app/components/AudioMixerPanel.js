@@ -5,7 +5,7 @@
  * SPDX-License-Identifier: GPL-3.0-or-later
  */
 
-import React, { useRef, useEffect } from 'react';
+import React from 'react';
 import AudioTrack from './AudioTrack';
 import {
   DM_HEADER,
@@ -23,37 +23,9 @@ export default function AudioMixerPanel({
   sendRemoteAudioStop,
   sendRemoteAudioVolume,
   setRemoteTrackVolume,
-  toggleRemoteTrackLooping
+  toggleRemoteTrackLooping,
+  remoteTrackAnalysers = {}
 }) {
-  // 1) Create one AudioContext for the panel:
-  const audioCtxRef = useRef(null);
-  useEffect(() => {
-    audioCtxRef.current = new (window.AudioContext || window.webkitAudioContext)();
-  }, []);
-
-  // 2) Keep refs to each <audio> element and to its GainNode
-  const audioElRefs = useRef({});       // { [trackId]: HTMLAudioElement }
-  const gainNodeRefs = useRef({});      // { [trackId]: GainNode }
-
-  // 3) After mount, wire each <audio> → MediaElementSource → Gain → dest
-  useEffect(() => {
-    if (!audioCtxRef.current) return;
-
-    const allConfigs = [...singleTracks, ...sfxTracks];
-    allConfigs.forEach((cfg) => {
-      const id = cfg.trackId;
-      const el = audioElRefs.current[id];
-      if (el && !gainNodeRefs.current[id]) {
-        // create source + gain
-        const src = audioCtxRef.current.createMediaElementSource(el);
-        const gain = audioCtxRef.current.createGain();
-        src.connect(gain);
-        gain.connect(audioCtxRef.current.destination);
-        gainNodeRefs.current[id] = gain;
-      }
-    });
-  }, [isExpanded /* or remoteTrackStates if you load tracks dynamically */]);
-
   // Your track definitions:
   const singleTracks = [
     { trackId: 'music_boss', type: 'music', filename: 'boss.mp3' },
@@ -64,14 +36,8 @@ export default function AudioMixerPanel({
     { trackId: 'sfx_enemy_hit', filename: 'enemy_hit_cinematic.mp3' }
   ];
 
-  // Common play/pause/stop helpers that also drive the <audio>:
+  // Common play/pause/stop helpers:
   const handlePlay = (cfg) => {
-    // resume context in case it’s suspended
-    audioCtxRef.current.resume();
-
-    const el = audioElRefs.current[cfg.trackId];
-    el?.play();
-
     sendRemoteAudioPlay?.(
       cfg.trackId,
       cfg.filename,
@@ -80,15 +46,9 @@ export default function AudioMixerPanel({
     );
   };
   const handlePause = (cfg) => {
-    audioElRefs.current[cfg.trackId]?.pause();
     sendRemoteAudioPause?.(cfg.trackId);
   };
   const handleStop = (cfg) => {
-    const el = audioElRefs.current[cfg.trackId];
-    if (el) {
-      el.pause();
-      el.currentTime = 0;
-    }
     sendRemoteAudioStop?.(cfg.trackId);
   };
 
@@ -101,18 +61,6 @@ export default function AudioMixerPanel({
 
       {isExpanded && (
         <>
-          {/* Hidden audio elements */}
-          <div style={{ display: 'none' }}>
-            {[...singleTracks, ...sfxTracks].map((cfg) => (
-              <audio
-                key={cfg.trackId}
-                ref={(el) => (audioElRefs.current[cfg.trackId] = el)}
-                src={`/audio/${cfg.filename}`}
-                loop={cfg.type !== 'sfx'}
-              />
-            ))}
-          </div>
-
           {/* Music & Ambience */}
           {singleTracks.map((cfg) => (
             <React.Fragment key={cfg.trackId}>
@@ -122,7 +70,7 @@ export default function AudioMixerPanel({
               <AudioTrack
                 config={{
                   ...cfg,
-                  audioNode: gainNodeRefs.current[cfg.trackId]
+                  analyserNode: remoteTrackAnalysers[cfg.trackId]
                 }}
                 trackState={
                   remoteTrackStates[cfg.trackId] || {
@@ -158,7 +106,7 @@ export default function AudioMixerPanel({
               config={{
                 ...cfg,
                 type: 'sfx',
-                audioNode: gainNodeRefs.current[cfg.trackId]
+                analyserNode: remoteTrackAnalysers[cfg.trackId]
               }}
               trackState={
                 remoteTrackStates[cfg.trackId] || {

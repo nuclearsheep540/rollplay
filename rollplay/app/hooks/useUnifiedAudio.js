@@ -96,6 +96,7 @@ export const useUnifiedAudio = () => {
   const audioContextRef = useRef(null);
   const masterGainRef = useRef(null);
   const remoteTrackGainsRef = useRef({});
+  const remoteTrackAnalysersRef = useRef({});
   const audioBuffersRef = useRef({});
   const activeSourcesRef = useRef({});
   const trackTimersRef = useRef({}); // Store timing info for each track
@@ -119,12 +120,22 @@ export const useUnifiedAudio = () => {
         masterGainRef.current.connect(audioContextRef.current.destination);
         masterGainRef.current.gain.value = masterVolume;
 
-        // Create gain nodes for each remote track
+        // Create gain nodes and analyser nodes for each remote track
         ['music_boss', 'ambient_storm', 'sfx_sword', 'sfx_enemy_hit'].forEach(trackId => {
           const gainNode = audioContextRef.current.createGain();
-          gainNode.connect(masterGainRef.current);
+          const analyserNode = audioContextRef.current.createAnalyser();
+          
+          // Configure analyser
+          analyserNode.fftSize = 256;
+          analyserNode.smoothingTimeConstant = 0.9;
+          
+          // Connect: gain → analyser → master
+          gainNode.connect(analyserNode);
+          analyserNode.connect(masterGainRef.current);
+          
           gainNode.gain.value = remoteTrackStates[trackId]?.volume || 0.7;
           remoteTrackGainsRef.current[trackId] = gainNode;
+          remoteTrackAnalysersRef.current[trackId] = analyserNode;
         });
 
         console.log('🎵 Web Audio API initialized for remote tracks');
@@ -473,6 +484,7 @@ export const useUnifiedAudio = () => {
     
     // Remote audio functions (for WebSocket events)
     remoteTrackStates,
+    remoteTrackAnalysers: remoteTrackAnalysersRef.current,
     playRemoteTrack,
     pauseRemoteTrack,
     stopRemoteTrack,

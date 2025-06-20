@@ -42,6 +42,7 @@ export default function DMControlCenter({
   clearDicePrompt,           // UPDATED: Function to clear prompt(s)
   unlockAudio = null,        // NEW: Audio unlock function for DM
   remoteTrackStates = {},    // NEW: Remote track states from unified audio
+  remoteTrackAnalysers = {}, // NEW: Remote track analysers from unified audio
   playRemoteTrack = null,    // NEW: Play remote track function (local)
   stopRemoteTrack = null,    // NEW: Stop remote track function (local)
   setRemoteTrackVolume = null, // NEW: Set remote track volume function (local)
@@ -308,6 +309,7 @@ export default function DMControlCenter({
         isExpanded={expandedSections.audio}
         onToggle={() => toggleSection('audio')}
         remoteTrackStates={remoteTrackStates}
+        remoteTrackAnalysers={remoteTrackAnalysers}
         sendRemoteAudioPlay={sendRemoteAudioPlay}
         sendRemoteAudioPause={sendRemoteAudioPause}
         sendRemoteAudioStop={sendRemoteAudioStop}

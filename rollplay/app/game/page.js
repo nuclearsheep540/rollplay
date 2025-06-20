@@ -487,6 +487,7 @@ function GameContent() {
     unlockAudio,
     playLocalSFX,
     remoteTrackStates,
+    remoteTrackAnalysers,
     playRemoteTrack,
     pauseRemoteTrack,
     stopRemoteTrack,
@@ -1154,6 +1155,7 @@ function GameContent() {
             activePrompts={activePrompts}        // UPDATED: Pass array instead of single prompt
             unlockAudio={unlockAudio}             // NEW: Pass audio unlock function
             remoteTrackStates={remoteTrackStates} // NEW: Pass remote track states
+            remoteTrackAnalysers={remoteTrackAnalysers} // NEW: Pass remote track analysers
             playRemoteTrack={playRemoteTrack}     // NEW: Pass remote track controls (local)
             stopRemoteTrack={stopRemoteTrack}     // NEW: Pass remote track controls (local)
             setRemoteTrackVolume={setRemoteTrackVolume} // NEW: Pass remote track controls (local)

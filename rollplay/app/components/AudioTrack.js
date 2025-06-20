@@ -36,7 +36,7 @@ export default function AudioTrack({
   onLoopToggle,
   isLast = false
 }) {
-  const { trackId, type, icon, label, filename, audioNode } = config;
+  const { trackId, type, icon, label, filename, analyserNode } = config;
   const {
     playing,
     volume = 0.7,
@@ -48,10 +48,8 @@ export default function AudioTrack({
   // refs for debouncing volume send
   const volumeDebounceTimer = useRef(null);
 
-  // refs for analyser + slider fill
+  // refs for slider fill
   const sliderRef = useRef(null);
-  const analyserRef = useRef(null);
-  const dataArrayRef = useRef(null);
   const rafRef = useRef(null);
 
   // cleanup debounce timer on unmount
@@ -62,19 +60,11 @@ export default function AudioTrack({
   }, []);
 
   // ——————————————————————————————————————
-  // 1) Setup AnalyserNode & RAF loop for real-time fill
+  // 1) Setup RAF loop for real-time fill using existing analyser
   useEffect(() => {
-    const node = audioNode;                 // from props.config.audioNode
+    const analyser = analyserNode;          // from props.config.analyserNode
     const sliderEl = sliderRef.current;
-    if (!node || !sliderEl) return;        // bail early if no audio or no DOM
-  
-    const audioCtx = node.context;
-    const analyser = audioCtx.createAnalyser();
-    analyser.fftSize = 256;
-    analyser.smoothingTimeConstant = 0.9;   // built-in analyser smoothing
-  
-    // wire up
-    node.connect(analyser);
+    if (!analyser || !sliderEl) return;     // bail early if no analyser or no DOM
   
     const data = new Uint8Array(analyser.frequencyBinCount);
     let lastRms = 0;                        // remember between frames
@@ -103,7 +93,6 @@ export default function AudioTrack({
       pct = (pct * 2) * (trackState.volume) + 6
   
       // defend against missing ref in mid-cleanup
-
       const threshold1 = 65;
       const threshold2 = 70;
       
@@ -113,7 +102,7 @@ export default function AudioTrack({
         : '#04AA6D';                                 // green below 60
 
       if (sliderRef.current) {
-        // a “flat” gradient: fillColor up to pct, then grey
+        // a "flat" gradient: fillColor up to pct, then grey
         sliderRef.current.style.background = `
           linear-gradient(
             to right,
@@ -124,7 +113,6 @@ export default function AudioTrack({
           )
         `;
       }
-
     };
   
     // kick it off
@@ -132,9 +120,8 @@ export default function AudioTrack({
   
     return () => {
       cancelAnimationFrame(rafRef.current);
-      analyser.disconnect();
     };
-  }, [audioNode, trackState.volume]); 
+  }, [analyserNode, trackState.volume]);
 
   // debounced volume handler
   const handleVolumeChange = (newVol) => {
