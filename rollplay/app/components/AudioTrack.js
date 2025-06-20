@@ -95,24 +95,36 @@ export default function AudioTrack({
       const rms = Math.sqrt(sumSquares / data.length);
   
       // simple low-pass in JS: smooth out jagged changes
-      const smoothed = lastRms * 0.8 + rms * 0.2;
+      const smoothed = lastRms * 0.95 + rms * 0.05;
       lastRms = smoothed;
   
       // convert to percentage
-      const pct = Math.min(1, smoothed) * 100;
+      let pct = Math.min(1, smoothed) * 400;
+      pct = (pct * 2) * (trackState.volume) + 6
   
       // defend against missing ref in mid-cleanup
+
+      const threshold1 = 65;
+      const threshold2 = 70;
+      
+      const fillColor =
+        pct >= threshold2 ? '#FF0000'                // red above 80
+        : pct >= threshold1 ? '#FFD700'              // yellow 60–79
+        : '#04AA6D';                                 // green below 60
+
       if (sliderRef.current) {
+        // a “flat” gradient: fillColor up to pct, then grey
         sliderRef.current.style.background = `
           linear-gradient(
             to right,
-            #04AA6D 0%,
-            #04AA6D ${pct * 25}%,
-            #555 ${pct * 25}%,
+            ${fillColor} 0%,
+            ${fillColor} ${pct}%,
+            #555 ${pct}%,
             #555 100%
           )
         `;
       }
+
     };
   
     // kick it off
@@ -122,7 +134,7 @@ export default function AudioTrack({
       cancelAnimationFrame(rafRef.current);
       analyser.disconnect();
     };
-  }, [audioNode]); 
+  }, [audioNode, trackState.volume]); 
 
   // debounced volume handler
   const handleVolumeChange = (newVol) => {
@@ -203,20 +215,21 @@ export default function AudioTrack({
           <div className="flex-1 font-mono">
             <datalist id="markers">
               <option value="0" label="-inf" />
-              <option value="15" label="-24" />
-              <option value="30" label="-12" />
-              <option value="60" label="-6" />
-              <option value="70" label="-3" />
-              <option value="100" label="-0" className='mr-6' />
+              <option value="15" label="-48" />
+              <option value="30" label="-36" />
+              <option value="40" label="-24" />
+              <option value="50" label="-12" />
+              <option value="60" label="-3" />
+              <option value="70" label="-0" className='mr-6' />
               <option value="130" label="+3" />
             </datalist>
 
             <input
               ref={sliderRef}
               type="range"
-              min="0"
+              min="0.0"
               max="1.3"
-              step="0.01"
+              step="0.05"
               value={volume}
               onChange={(e) =>
                 handleVolumeChange(parseFloat(e.target.value))
