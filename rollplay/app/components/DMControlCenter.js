@@ -36,11 +36,12 @@ export default function DMControlCenter({
   handleClearSystemMessages,
   handleClearAllMessages,   // NEW: Function to clear all messages
   activePrompts = [],        // UPDATED: Array of active prompts
-  clearDicePrompt           // UPDATED: Function to clear prompt(s)
+  clearDicePrompt,           // UPDATED: Function to clear prompt(s)
+  unlockAudio = null         // NEW: Audio unlock function for DM
 }) {
   
   // State for main panel collapse
-  const [isCollapsed, setIsCollapsed] = useState(false);
+  const [isCollapsed, setIsCollapsed] = useState(true); // Default to collapsed to encourage DM to click and unlock audio
 
   // State for collapsible sections
   const [expandedSections, setExpandedSections] = useState({
@@ -92,7 +93,17 @@ export default function DMControlCenter({
       {/* Collapsible Header */}
       <div 
         className={DM_TITLE}
-        onClick={() => setIsCollapsed(!isCollapsed)}
+        onClick={() => {
+          // Unlock audio on first DM interaction
+          if (unlockAudio && isCollapsed) {
+            unlockAudio().then(() => {
+              console.log('🔊 Audio unlocked when DM expanded Control Center');
+            }).catch(err => {
+              console.warn('DM audio unlock failed:', err);
+            });
+          }
+          setIsCollapsed(!isCollapsed);
+        }}
       >
         🎲 DM Command Center
         <div className={`${DM_ARROW} ${isCollapsed ? 'rotate-180' : ''}`}>

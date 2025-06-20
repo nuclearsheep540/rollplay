@@ -1097,6 +1097,7 @@ function GameContent() {
             gameSeats={gameSeats}
             roomId={roomId}
             activePrompts={activePrompts}        // UPDATED: Pass array instead of single prompt
+            unlockAudio={unlockAudio}             // NEW: Pass audio unlock function
             clearDicePrompt={clearDicePrompt}    // UPDATED: Now accepts prompt ID
           />
         </div>
