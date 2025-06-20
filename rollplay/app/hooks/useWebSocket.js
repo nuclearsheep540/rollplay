@@ -8,7 +8,6 @@
 import { useState, useEffect } from 'react'
 import {
   handleSeatChange,
-  handleChatMessage,
   handlePlayerConnected,
   handleLobbyUpdate,
   handlePlayerKicked,
@@ -76,10 +75,6 @@ export function useWebSocket(roomId, playerName, gameContext) {
 
         case "seat_count_change":
           handleSeatCountChange(json_data["data"], gameContext);
-          break;
-
-        case "chat_message":
-          handleChatMessage(json_data, gameContext);
           break;
 
         case "player_connected":

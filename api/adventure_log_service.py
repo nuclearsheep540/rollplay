@@ -120,7 +120,7 @@ class AdventureLogService:
         room_id: str, 
         message: str, 
         log_type, 
-        player_name: Optional[str] = None, 
+        from_player: Optional[str] = None, 
         max_logs: int = 200,
         prompt_id: Optional[str] = None
     ) -> Dict:
@@ -131,7 +131,7 @@ class AdventureLogService:
             room_id: The room/session ID
             message: The log message content
             log_type: Type of log (LogType enum or string)
-            player_name: Name of the player (optional)
+            from_player: Name of the player sending the message (optional)
             max_logs: Maximum number of logs to keep per room (default: 200)
             prompt_id: Unique prompt ID for linking (optional)
             
@@ -151,7 +151,7 @@ class AdventureLogService:
             "message": message,
             "type": log_type_value,
             "timestamp": datetime.utcnow(),
-            "player_name": player_name,
+            "from_player": from_player,
             "log_id": log_id
         }
         
@@ -334,7 +334,7 @@ class AdventureLogService:
                         "_id": None,
                         "total_logs": {"$sum": 1},
                         "types": {"$addToSet": "$type"},
-                        "players": {"$addToSet": "$player_name"},
+                        "players": {"$addToSet": "$from_player"},
                         "oldest_log": {"$min": "$timestamp"},
                         "newest_log": {"$max": "$timestamp"}
                     }

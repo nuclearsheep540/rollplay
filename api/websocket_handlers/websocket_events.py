@@ -36,6 +36,42 @@ class WebsocketEvent():
     player_name: str
     client_id: str
     manager: ConnectionManager
+    
+    @staticmethod
+    def _format_dice_roll_message(roll_data):
+        """Format dice roll message on backend (moved from frontend logic)"""
+        player = roll_data.get("player", "Unknown")
+        dice_notation = roll_data.get("diceNotation", "")
+        results = roll_data.get("results", [])
+        total = roll_data.get("total", 0)
+        modifier = roll_data.get("modifier", 0)
+        advantage = roll_data.get("advantage")
+        context = roll_data.get("context", "")
+        
+        # Build the formatted message without player name (UI displays player separately)
+        message_parts = []
+        
+        if context:
+            message_parts.append(f"[{context}]: ")
+        
+        message_parts.append(f"{dice_notation}")
+        
+        if results:
+            results_str = ", ".join(map(str, results))
+            message_parts.append(f": [{results_str}]")
+        
+        if modifier != 0:
+            sign = "+" if modifier > 0 else ""
+            message_parts.append(f" {sign}{modifier}")
+            
+        message_parts.append(f" = {total}")
+        
+        if advantage == "advantage":
+            message_parts.append(" (Advantage)")
+        elif advantage == "disadvantage":
+            message_parts.append(" (Disadvantage)")
+            
+        return "".join(message_parts)
 
     @staticmethod
     async def player_connection(websocket, data, event_data, player_name, client_id, manager):
@@ -49,7 +85,7 @@ class WebsocketEvent():
             room_id=client_id,
             message=log_message,
             log_type=LogType.SYSTEM,
-            player_name=player_name
+            from_player=player_name
         )
         
         broadcast_message = {
@@ -96,7 +132,7 @@ class WebsocketEvent():
             room_id=client_id,
             message=log_message,
             log_type=LogType.DUNGEON_MASTER,
-            player_name=prompted_by,
+            from_player=prompted_by,
             prompt_id=prompt_id
         )
         
@@ -130,7 +166,7 @@ class WebsocketEvent():
             room_id=client_id,
             message=log_message,
             log_type=LogType.DUNGEON_MASTER,
-            player_name=prompted_by,
+            from_player=prompted_by,
             prompt_id=initiative_prompt_id
         )
         
@@ -218,14 +254,16 @@ class WebsocketEvent():
         """Handle dice roll event - includes auto-clearing prompts"""
         roll_data = event_data
         player = roll_data.get("player")
-        formatted_message = roll_data.get("message")  # Pre-formatted by frontend
         prompt_id = roll_data.get("prompt_id")
+        
+        # Format dice roll message on backend (moved from frontend)
+        formatted_message = WebsocketEvent._format_dice_roll_message(roll_data)
         
         adventure_log.add_log_entry(
             room_id=client_id,
             message=formatted_message,
             log_type=LogType.PLAYER_ROLL, 
-            player_name=player
+            from_player=player
         )
         
         if prompt_id:
@@ -236,7 +274,10 @@ class WebsocketEvent():
         broadcast_message = {
             "event_type": "dice_roll",
             "data": {
-                **event_data  # Frontend sends everything we need
+                "player": player,
+                "message": formatted_message,
+                "prompt_id": prompt_id,
+                **event_data  # Include original data for compatibility
             }
         }
         
@@ -299,7 +340,7 @@ class WebsocketEvent():
             room_id=client_id,
             message=log_message,
             log_type=LogType.SYSTEM,
-            player_name=player_name
+            from_player=player_name
         )
         
         broadcast_message = {
@@ -326,7 +367,7 @@ class WebsocketEvent():
             room_id=client_id,
             message=log_message,
             log_type=LogType.SYSTEM,
-            player_name=player_name
+            from_player=player_name
         )
         
         broadcast_message = {
@@ -350,7 +391,7 @@ class WebsocketEvent():
             room_id=client_id,
             message=log_message,
             log_type=LogType.SYSTEM,
-            player_name="System"
+            from_player="System"
         )
         
         # This event is typically sent to individual players, not broadcast
@@ -365,7 +406,7 @@ class WebsocketEvent():
             room_id=client_id,
             message=message,
             log_type=LogType.SYSTEM,
-            player_name="System"
+            from_player="System"
         )
         
         broadcast_message = {
@@ -386,7 +427,7 @@ class WebsocketEvent():
             room_id=client_id,
             message=log_message,
             log_type=LogType.SYSTEM,
-            player_name=player_name
+            from_player=player_name
         )
         
         broadcast_message = {
@@ -411,7 +452,7 @@ class WebsocketEvent():
                 room_id=client_id,
                 message=log_message,
                 log_type=LogType.SYSTEM,
-                player_name=cleared_by
+                from_player=cleared_by
             )
             
             print(f"🧹 {cleared_by} cleared {deleted_count} system messages from room {client_id}")
@@ -450,7 +491,7 @@ class WebsocketEvent():
                 room_id=client_id,
                 message=log_message,
                 log_type=LogType.SYSTEM,
-                player_name=cleared_by
+                from_player=cleared_by
             )
             
             print(f"🧹 {cleared_by} cleared {deleted_count} total messages from room {client_id}")
@@ -538,8 +579,12 @@ class WebsocketEvent():
             room_id=client_id,
             message=log_message,
             log_type=LogType.SYSTEM,
-            player_name=player_name
+            from_player=player_name
         )
+        
+        # Update party status to move disconnecting player to lobby before marking as disconnected
+        print(f"🚪 Moving {player_name} from party to lobby on disconnect")
+        manager.update_party_status(client_id, player_name, False)
         
         manager.remove_connection(websocket, client_id, player_name)
         
@@ -605,7 +650,7 @@ class WebsocketEvent():
             room_id=client_id,
             message=log_message,
             log_type=LogType.SYSTEM,
-            player_name=player_name
+            from_player=player_name
         )
         
         # Broadcast role change to all clients

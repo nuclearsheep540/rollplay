@@ -10,9 +10,6 @@ class LogType(Enum):
     # System-generated messages (connections, disconnections, combat state changes)
     SYSTEM = "system"
     
-    # Player chat messages
-    CHAT = "chat"
-    
     # Player-initiated dice rolls and roll-related messages
     PLAYER_ROLL = "player-roll"
     

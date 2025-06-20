@@ -100,7 +100,6 @@ export default function AdventureLog({ rollLog, playerSeatMap }) {
     
     switch (type) {
       case "user":
-      case "chat":
         return message; // Don't prefix player name for grouped messages
         
       case "dice":
@@ -125,7 +124,6 @@ export default function AdventureLog({ rollLog, playerSeatMap }) {
       case "player-roll":
         return "🎲";
       case "user":
-      case "chat":
         return "💬";
       case "system":
         return "";

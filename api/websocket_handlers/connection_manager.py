@@ -117,10 +117,6 @@ class ConnectionManager:
                 # Connection is dead, remove it
                 self.remove_connection(websocket, room_id, player_name)
 
-    async def broadcast_to_room(self, room_id: str, message: dict):
-        """Broadcast a message to all players in a room"""
-        await self.update_data_for_room(room_id, message)
-
     async def broadcast_lobby_update(self, room_id: str):
         """Send lobby update to all clients in a room"""
         if room_id not in self.room_users:
@@ -146,10 +142,15 @@ class ConnectionManager:
         print(f"🏨 Broadcasting lobby update for room {room_id}: {len(lobby_users)} users")
         
         # Send to all connections in this room
-        await self.update_data_for_room(room_id, lobby_message)
+        await self.update_room_data(room_id, lobby_message)
 
-    async def update_data(self, data):
-        """Send data to all connected clients, removing any dead connections"""
+    async def _broadcast_globally(self, data):
+        """PRIVATE: Send data to all connected clients across all rooms
+        
+        WARNING: This broadcasts to ALL clients regardless of room.
+        Only use for server-wide events like maintenance announcements.
+        For normal game events, use RoomManager.broadcast() instead.
+        """
         dead_connections = []
         
         for connection in self.connections:
@@ -163,7 +164,7 @@ class ConnectionManager:
         for dead_connection in dead_connections:
             self.remove_connection(dead_connection)
 
-    async def update_data_for_room(self, room_id: str, data):
+    async def update_room_data(self, room_id: str, data):
         """Send data only to clients in a specific room"""
         if room_id not in self.room_users:
             return
@@ -186,6 +187,37 @@ class ConnectionManager:
         # Remove all dead connections
         for room, user, ws in dead_connections:
             self.remove_connection(ws, room, user)
+
+class RoomManager:
+    """
+    Room-scoped manager that ensures all broadcasts stay within a specific room.
+    This is the preferred way to handle WebSocket events - it prevents accidental
+    cross-room message leakage.
+    """
+    def __init__(self, connection_manager: ConnectionManager, room_id: str):
+        self.connection_manager = connection_manager
+        self.room_id = room_id
+    
+    async def update_room_data(self, data):
+        """Update data for all clients in this room only"""
+        await self.connection_manager.update_room_data(self.room_id, data)
+    
+    async def send_to_player(self, player_name: str, message: dict):
+        """Send message to a specific player in this room"""
+        await self.connection_manager.send_to_player(self.room_id, player_name, message)
+    
+    async def broadcast_lobby_update(self):
+        """Send lobby update to all clients in this room"""
+        await self.connection_manager.broadcast_lobby_update(self.room_id)
+    
+    async def remove_player_from_party(self, player_name: str):
+        """Remove a player from party and move them to lobby in this room"""
+        await self.connection_manager.remove_player_from_party(self.room_id, player_name)
+    
+    def update_party_status(self, player_name: str, is_in_party: bool):
+        """Update whether a player is in the party or lobby in this room"""
+        self.connection_manager.update_party_status(self.room_id, player_name, is_in_party)
+
 
 # Create manager instance to be imported by other modules
 manager = ConnectionManager()

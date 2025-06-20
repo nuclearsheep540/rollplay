@@ -26,8 +26,7 @@ function GameContent() {
   const [thisPlayer, setThisPlayer] = useState()
   const [roomId, setRoomId] = useState()
 
-  // chat history
-  const [chatLog, setChatLog] = useState([{},])
+  // Removed unused chat history state
 
   // who generated the room
   const [host, setHost] = useState("")
@@ -340,7 +339,7 @@ function GameContent() {
           message: log.message,
           type: log.type,
           timestamp: formatTimestamp(log.timestamp),
-          player_name: log.player_name,
+          player_name: log.from_player, // Map from_player to player_name for styling
           prompt_id: log.prompt_id // Include prompt_id for removal matching
         }));
         
@@ -483,7 +482,6 @@ function GameContent() {
   const gameContext = {
     // State setters
     setGameSeats,
-    setChatLog,
     setCombatActive,
     setRollLog,
     setActivePrompts,
@@ -494,7 +492,6 @@ function GameContent() {
     setCurrentInitiativePromptId,
     
     // Current state values
-    chatLog,
     gameSeats,
     thisPlayer,
     lobbyUsers,
@@ -864,9 +861,18 @@ function GameContent() {
     // Get the prompt_id for adventure log cleanup (use first matching prompt)
     const promptIdForCleanup = playerPrompts.length > 0 ? playerPrompts[0].id : null;
     
-    // Send pre-formatted message to backend
+    // Send raw dice data to backend for formatting
     if (sendDiceRoll) {
-      sendDiceRoll(playerName, formattedMessage, rollFor, promptIdForCleanup);
+      const diceData = {
+        diceNotation: diceNotation,
+        results: allRolls,
+        total: totalResult,
+        modifier: bonusValue,
+        advantage: useAdvantage ? advantageMode : null,
+        context: rollFor && rollFor !== "Standard Roll" ? rollFor : "",
+        promptId: promptIdForCleanup
+      };
+      sendDiceRoll(playerName, diceData);
     } else {
       console.error("sendDiceRoll function not available - WebSocket may not be connected");
     }
