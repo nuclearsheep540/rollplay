@@ -36,10 +36,11 @@ export default function AudioTrack({
   onLoopToggle,
   isLast = false
 }) {
-  const { trackId, type, icon, label, filename, analyserNode } = config;
+  const { trackId, type, icon, label, analyserNode } = config;
   const {
     playing,
     volume = 1.0,
+    filename,
     currentTime = 0,
     duration = 0,
     looping = true
@@ -146,11 +147,16 @@ export default function AudioTrack({
   };
 
   return (
-    <div key={filename}>
+    <div key={trackId}>
       <div className={isLast ? DM_CHILD_LAST : DM_CHILD}>
         {/* Header */}
         <div className="flex justify-between items-center mb-2">
-          <div className="text-white font-mono text-sm">{filename}</div>
+          <div className="text-white font-mono text-sm">
+            {filename || label || trackId}
+            {filename && (
+              <div className="text-gray-400 text-xs">{label || trackId}</div>
+            )}
+          </div>
           <div className="text-gray-400 font-mono text-xs">
             {formatTime(currentTime)} / {formatTime(duration)}
           </div>

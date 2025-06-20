@@ -26,30 +26,41 @@ export default function AudioMixerPanel({
   toggleRemoteTrackLooping,
   remoteTrackAnalysers = {}
 }) {
-  // Your track definitions:
-  const singleTracks = [
-    { trackId: 'music_boss', type: 'music', filename: 'boss.mp3' },
-    { trackId: 'ambient_storm', type: 'ambient', filename: 'storm.mp3' }
-  ];
-  const sfxTracks = [
-    { trackId: 'sfx_sword', filename: 'sword.mp3' },
-    { trackId: 'sfx_enemy_hit', filename: 'enemy_hit_cinematic.mp3' }
+  // Channel definitions - now using fixed channel numbers with dynamic content
+  const channels = [
+    { channelId: 'audio_channel_1', type: 'music', label: 'Music Channel' },
+    { channelId: 'audio_channel_2', type: 'ambient', label: 'Ambient Channel' },
+    { channelId: 'audio_channel_3', type: 'sfx', label: 'SFX Channel 1' },
+    { channelId: 'audio_channel_4', type: 'sfx', label: 'SFX Channel 2' }
   ];
 
+  // Separate channels by type for UI organization
+  const musicChannels = channels.filter(ch => ch.type === 'music');
+  const ambientChannels = channels.filter(ch => ch.type === 'ambient');
+  const sfxChannels = channels.filter(ch => ch.type === 'sfx');
+
   // Common play/pause/stop helpers:
-  const handlePlay = (cfg) => {
+  const handlePlay = (channel) => {
+    const channelState = remoteTrackStates[channel.channelId];
+    const filename = channelState?.filename;
+    
+    if (!filename) {
+      console.warn(`No audio file loaded in ${channel.channelId}`);
+      return;
+    }
+    
     sendRemoteAudioPlay?.(
-      cfg.trackId,
-      cfg.filename,
-      cfg.type !== 'sfx',             // looping for music/ambient
-      remoteTrackStates[cfg.trackId]?.volume
+      channel.channelId,
+      filename,
+      channel.type !== 'sfx',             // looping for music/ambient
+      channelState?.volume
     );
   };
-  const handlePause = (cfg) => {
-    sendRemoteAudioPause?.(cfg.trackId);
+  const handlePause = (channel) => {
+    sendRemoteAudioPause?.(channel.channelId);
   };
-  const handleStop = (cfg) => {
-    sendRemoteAudioStop?.(cfg.trackId);
+  const handleStop = (channel) => {
+    sendRemoteAudioStop?.(channel.channelId);
   };
 
   return (
@@ -61,75 +72,126 @@ export default function AudioMixerPanel({
 
       {isExpanded && (
         <>
-          {/* Music & Ambience */}
-          {singleTracks.map((cfg) => (
-            <React.Fragment key={cfg.trackId}>
-              <div className="text-white font-bold mt-4">
-                {cfg.type === 'music' ? 'Music' : 'Ambience'}
-              </div>
-              <AudioTrack
-                config={{
-                  ...cfg,
-                  analyserNode: remoteTrackAnalysers[cfg.trackId]
-                }}
-                trackState={
-                  remoteTrackStates[cfg.trackId] || {
-                    playing: false,
-                    volume: 1.0,
-                    currentTime: 0,
-                    duration: 0,
-                    looping: true
+          {/* Music Channels */}
+          {musicChannels.length > 0 && (
+            <>
+              <div className="text-white font-bold mt-4">Music</div>
+              {musicChannels.map((channel) => (
+                <AudioTrack
+                  key={channel.channelId}
+                  config={{
+                    trackId: channel.channelId,
+                    type: channel.type,
+                    label: channel.label,
+                    analyserNode: remoteTrackAnalysers[channel.channelId]
+                  }}
+                  trackState={
+                    remoteTrackStates[channel.channelId] || {
+                      playing: false,
+                      volume: 1.0,
+                      filename: null,
+                      currentTime: 0,
+                      duration: 0,
+                      looping: true
+                    }
                   }
-                }
-                onPlay={() => handlePlay(cfg)}
-                onPause={() => handlePause(cfg)}
-                onStop={() => handleStop(cfg)}
-                onVolumeChange={(v) =>
-                  setRemoteTrackVolume?.(cfg.trackId, v)
-                }
-                onVolumeChangeDebounced={(v) =>
-                  sendRemoteAudioVolume?.(cfg.trackId, v)
-                }
-                onLoopToggle={(id, loop) =>
-                  toggleRemoteTrackLooping?.(id, loop)
-                }
-                isLast={false}
-              />
-            </React.Fragment>
-          ))}
+                  onPlay={() => handlePlay(channel)}
+                  onPause={() => handlePause(channel)}
+                  onStop={() => handleStop(channel)}
+                  onVolumeChange={(v) =>
+                    setRemoteTrackVolume?.(channel.channelId, v)
+                  }
+                  onVolumeChangeDebounced={(v) =>
+                    sendRemoteAudioVolume?.(channel.channelId, v)
+                  }
+                  onLoopToggle={(id, loop) =>
+                    toggleRemoteTrackLooping?.(id, loop)
+                  }
+                  isLast={false}
+                />
+              ))}
+            </>
+          )}
 
-          {/* Sound Effects */}
-          <div className="text-white font-bold mt-6">Sound Effects</div>
-          {sfxTracks.map((cfg, idx) => (
-            <AudioTrack
-              key={cfg.trackId}
-              config={{
-                ...cfg,
-                type: 'sfx',
-                analyserNode: remoteTrackAnalysers[cfg.trackId]
-              }}
-              trackState={
-                remoteTrackStates[cfg.trackId] || {
-                  playing: false,
-                  volume: 1.0,
-                  currentTime: 0,
-                  duration: 0,
-                  looping: false
-                }
-              }
-              onPlay={() => handlePlay(cfg)}
-              onPause={() => handlePause(cfg)}
-              onStop={() => handleStop(cfg)}
-              onVolumeChange={(v) =>
-                setRemoteTrackVolume?.(cfg.trackId, v)
-              }
-              onVolumeChangeDebounced={(v) =>
-                sendRemoteAudioVolume?.(cfg.trackId, v)
-              }
-              onLoopToggle={() => {}}
-              isLast={idx === sfxTracks.length - 1}
-            />
-          ))}
+          {/* Ambient Channels */}
+          {ambientChannels.length > 0 && (
+            <>
+              <div className="text-white font-bold mt-4">Ambience</div>
+              {ambientChannels.map((channel) => (
+                <AudioTrack
+                  key={channel.channelId}
+                  config={{
+                    trackId: channel.channelId,
+                    type: channel.type,
+                    label: channel.label,
+                    analyserNode: remoteTrackAnalysers[channel.channelId]
+                  }}
+                  trackState={
+                    remoteTrackStates[channel.channelId] || {
+                      playing: false,
+                      volume: 1.0,
+                      filename: null,
+                      currentTime: 0,
+                      duration: 0,
+                      looping: true
+                    }
+                  }
+                  onPlay={() => handlePlay(channel)}
+                  onPause={() => handlePause(channel)}
+                  onStop={() => handleStop(channel)}
+                  onVolumeChange={(v) =>
+                    setRemoteTrackVolume?.(channel.channelId, v)
+                  }
+                  onVolumeChangeDebounced={(v) =>
+                    sendRemoteAudioVolume?.(channel.channelId, v)
+                  }
+                  onLoopToggle={(id, loop) =>
+                    toggleRemoteTrackLooping?.(id, loop)
+                  }
+                  isLast={false}
+                />
+              ))}
+            </>
+          )}
+
+          {/* Sound Effects Channels */}
+          {sfxChannels.length > 0 && (
+            <>
+              <div className="text-white font-bold mt-6">Sound Effects</div>
+              {sfxChannels.map((channel, idx) => (
+                <AudioTrack
+                  key={channel.channelId}
+                  config={{
+                    trackId: channel.channelId,
+                    type: channel.type,
+                    label: channel.label,
+                    analyserNode: remoteTrackAnalysers[channel.channelId]
+                  }}
+                  trackState={
+                    remoteTrackStates[channel.channelId] || {
+                      playing: false,
+                      volume: 1.0,
+                      filename: null,
+                      currentTime: 0,
+                      duration: 0,
+                      looping: false
+                    }
+                  }
+                  onPlay={() => handlePlay(channel)}
+                  onPause={() => handlePause(channel)}
+                  onStop={() => handleStop(channel)}
+                  onVolumeChange={(v) =>
+                    setRemoteTrackVolume?.(channel.channelId, v)
+                  }
+                  onVolumeChangeDebounced={(v) =>
+                    sendRemoteAudioVolume?.(channel.channelId, v)
+                  }
+                  onLoopToggle={() => {}}
+                  isLast={idx === sfxChannels.length - 1}
+                />
+              ))}
+            </>
+          )}
         </>
       )}
     </div>

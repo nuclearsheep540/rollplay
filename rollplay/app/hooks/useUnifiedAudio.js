@@ -101,12 +101,12 @@ export const useUnifiedAudio = () => {
   const activeSourcesRef = useRef({});
   const trackTimersRef = useRef({}); // Store timing info for each track
 
-  // Remote track states (for DM-controlled audio) - now uses trackId instead of type
+  // Remote track states (for DM-controlled audio) - using channel-based naming
   const [remoteTrackStates, setRemoteTrackStates] = useState({
-    music_boss: { playing: false, paused: false, volume: 0.7, currentTrack: null, currentTime: 0, duration: 0, looping: true },
-    ambient_storm: { playing: false, paused: false, volume: 0.6, currentTrack: null, currentTime: 0, duration: 0, looping: true },
-    sfx_sword: { playing: false, paused: false, volume: 0.8, currentTrack: null, currentTime: 0, duration: 0, looping: false },
-    sfx_enemy_hit: { playing: false, paused: false, volume: 0.8, currentTrack: null, currentTime: 0, duration: 0, looping: false }
+    audio_channel_1: { playing: false, paused: false, volume: 0.9, filename: 'boss.mp3', type: 'music', currentTime: 0, duration: 0, looping: true },
+    audio_channel_2: { playing: false, paused: false, volume: 0.9, filename: 'storm.mp3', type: 'ambient', currentTime: 0, duration: 0, looping: true },
+    audio_channel_3: { playing: false, paused: false, volume: 0.9, filename: 'sword.mp3', type: 'sfx', currentTime: 0, duration: 0, looping: false },
+    audio_channel_4: { playing: false, paused: false, volume: 0.9, filename: 'enemy_hit_cinematic.mp3', type: 'sfx', currentTime: 0, duration: 0, looping: false }
   });
 
   // Initialize Web Audio API for remote tracks
@@ -121,7 +121,7 @@ export const useUnifiedAudio = () => {
         masterGainRef.current.gain.value = masterVolume;
 
         // Create gain nodes and analyser nodes for each remote track
-        ['music_boss', 'ambient_storm', 'sfx_sword', 'sfx_enemy_hit'].forEach(trackId => {
+        ['audio_channel_1', 'audio_channel_2', 'audio_channel_3', 'audio_channel_4'].forEach(trackId => {
           const gainNode = audioContextRef.current.createGain();
           const analyserNode = audioContextRef.current.createAnalyser();
           
@@ -202,8 +202,9 @@ export const useUnifiedAudio = () => {
       const source = audioContextRef.current.createBufferSource();
       source.buffer = audioBuffer;
       
-      // SFX tracks are hardcoded to never loop
-      const shouldLoop = trackId.startsWith('sfx_') ? false : (remoteTrackStates[trackId]?.looping ?? loop);
+      // SFX tracks (channels 3,4) are hardcoded to never loop
+      const trackType = remoteTrackStates[trackId]?.type;
+      const shouldLoop = trackType === 'sfx' ? false : (remoteTrackStates[trackId]?.looping ?? loop);
       source.loop = shouldLoop;
       source.connect(remoteTrackGainsRef.current[trackId]);
       
@@ -224,7 +225,7 @@ export const useUnifiedAudio = () => {
         [trackId]: {
           ...prev[trackId],
           playing: true,
-          currentTrack: audioFile,
+          filename: audioFile,
           volume: volume !== null ? volume : prev[trackId]?.volume || 0.7,
           currentTime: 0,
           duration: duration
@@ -285,7 +286,7 @@ export const useUnifiedAudio = () => {
                   playing: false,
                   paused: false,
                   currentTime: 0, // Reset to start for next playback
-                  currentTrack: null,
+                  filename: null,
                   duration: 0 // Reset duration as well
                 }
               }));
@@ -336,7 +337,7 @@ export const useUnifiedAudio = () => {
             ...prev[trackId],
             playing: false,
             paused: false,
-            currentTrack: null,
+            filename: null,
             currentTime: 0,
             duration: 0
           }
@@ -392,7 +393,8 @@ export const useUnifiedAudio = () => {
   // Toggle remote track looping (SFX tracks are hardcoded to false)
   const toggleRemoteTrackLooping = (trackId, looping) => {
     // SFX tracks cannot be looped
-    if (trackId.startsWith('sfx_')) {
+    const trackType = remoteTrackStates[trackId]?.type;
+    if (trackType === 'sfx') {
       console.warn('🚫 SFX tracks cannot be looped - ignoring toggle request');
       return;
     }
