@@ -18,6 +18,7 @@ export default function AudioTrack({
   config,
   trackState,
   onPlay,
+  onPause,
   onStop,
   onVolumeChange,
   isLast = false
@@ -50,10 +51,10 @@ export default function AudioTrack({
           ) : 
    
             <button 
-              className="bg-green-600 hover:bg-green-700 text-white px-3 py-1 rounded text-xs flex items-center gap-1"
-              onClick={onPlay}
+              className="bg-orange-600 hover:bg-orange-700 text-white px-3 py-1 rounded text-xs flex items-center gap-1"
+              onClick={onPause}
             >
-              ⏸ Pause
+              ⏸ PAUSE
             </button>
           }
           <button 

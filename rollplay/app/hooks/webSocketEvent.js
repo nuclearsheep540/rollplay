@@ -28,6 +28,16 @@ export const handleRemoteAudioStop = (data, { stopRemoteTrack }) => {
   }
 };
 
+export const handleRemoteAudioPause = (data, { pauseRemoteTrack }) => {
+  console.log("⏸️ Remote audio pause command received:", data);
+  const { track_type, triggered_by } = data;
+  
+  if (pauseRemoteTrack) {
+    pauseRemoteTrack(track_type);
+    console.log(`⏸️ Paused remote ${track_type} (triggered by ${triggered_by})`);
+  }
+};
+
 export const handleRemoteAudioVolume = (data, { setRemoteTrackVolume }) => {
   console.log("🔊 Remote audio volume command received:", data);
   const { track_type, volume, triggered_by } = data;
@@ -651,6 +661,20 @@ export const createSendFunctions = (webSocket, isConnected, roomId, playerName) 
     }));
   };
 
+  const sendRemoteAudioPause = (trackType) => {
+    if (!webSocket || !isConnected) return;
+    
+    console.log(`📡 Sending remote audio pause: ${trackType}`);
+    
+    webSocket.send(JSON.stringify({
+      "event_type": "remote_audio_pause",
+      "data": {
+        "track_type": trackType,
+        "triggered_by": playerName
+      }
+    }));
+  };
+
   const sendRemoteAudioVolume = (trackType, volume) => {
     if (!webSocket || !isConnected) return;
     
@@ -680,6 +704,7 @@ export const createSendFunctions = (webSocket, isConnected, roomId, playerName) 
     sendColorChange,
     sendRoleChange,
     sendRemoteAudioPlay,
+    sendRemoteAudioPause,
     sendRemoteAudioStop,
     sendRemoteAudioVolume
   };

@@ -12,6 +12,7 @@ export default function AudioMixerPanel({
   onToggle,
   remoteTrackStates = {},
   sendRemoteAudioPlay = null,
+  sendRemoteAudioPause = null,
   sendRemoteAudioStop = null,
   sendRemoteAudioVolume = null,
   setRemoteTrackVolume = null
@@ -64,6 +65,12 @@ export default function AudioMixerPanel({
                 console.log(`🎵 Play ${config.type} button clicked - sending to ALL players`);
                 if (sendRemoteAudioPlay) {
                   sendRemoteAudioPlay(config.type, config.filename, config.loop, remoteTrackStates[config.type]?.volume);
+                }
+              }}
+              onPause={() => {
+                console.log(`⏸️ Pause ${config.type} button clicked - sending to ALL players`);
+                if (sendRemoteAudioPause) {
+                  sendRemoteAudioPause(config.type);
                 }
               }}
               onStop={() => {

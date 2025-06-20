@@ -741,6 +741,39 @@ class WebsocketEvent():
         return WebsocketEventResult(broadcast_message=audio_stop_message)
 
     @staticmethod 
+    async def remote_audio_pause(websocket, data, event_data, player_name, client_id, manager):
+        """Handle remote audio pause events - DM pauses audio for all players"""
+        track_type = event_data.get("track_type")  # 'music', 'ambient', 'sfx'
+        triggered_by = event_data.get("triggered_by", player_name)
+        
+        if not track_type:
+            print(f"❌ Invalid remote audio pause request: track_type={track_type}")
+            return WebsocketEventResult(broadcast_message={})
+        
+        print(f"⏸️ Remote audio pause: {triggered_by} pausing {track_type}")
+        
+        # Create log message for audio pause
+        log_message = f"⏸️ {triggered_by} paused {track_type} audio"
+        
+        adventure_log.add_log_entry(
+            room_id=client_id,
+            message=log_message,
+            log_type=LogType.SYSTEM,
+            from_player=triggered_by
+        )
+        
+        # Broadcast audio pause command to all clients
+        audio_pause_message = {
+            "event_type": "remote_audio_pause",
+            "data": {
+                "track_type": track_type,
+                "triggered_by": triggered_by
+            }
+        }
+        
+        return WebsocketEventResult(broadcast_message=audio_pause_message)
+
+    @staticmethod 
     async def remote_audio_volume(websocket, data, event_data, player_name, client_id, manager):
         """Handle remote audio volume events - DM adjusts volume for all players"""
         track_type = event_data.get("track_type")  # 'music', 'ambient', 'sfx'

@@ -488,6 +488,7 @@ function GameContent() {
     playLocalSFX,
     remoteTrackStates,
     playRemoteTrack,
+    pauseRemoteTrack,
     stopRemoteTrack,
     setRemoteTrackVolume
   } = useUnifiedAudio();
@@ -519,6 +520,7 @@ function GameContent() {
     
     // Remote audio functions (for WebSocket events)
     playRemoteTrack,
+    pauseRemoteTrack,
     stopRemoteTrack,
     setRemoteTrackVolume
   };
@@ -540,6 +542,7 @@ function GameContent() {
     sendColorChange,
     sendRoleChange,
     sendRemoteAudioPlay,
+    sendRemoteAudioPause,
     sendRemoteAudioStop,
     sendRemoteAudioVolume
   } = useWebSocket(roomId, thisPlayer, gameContext);
@@ -1153,6 +1156,7 @@ function GameContent() {
             stopRemoteTrack={stopRemoteTrack}     // NEW: Pass remote track controls (local)
             setRemoteTrackVolume={setRemoteTrackVolume} // NEW: Pass remote track controls (local)
             sendRemoteAudioPlay={sendRemoteAudioPlay}     // NEW: Pass WebSocket sending functions
+            sendRemoteAudioPause={sendRemoteAudioPause}   // NEW: Pass WebSocket pause function
             sendRemoteAudioStop={sendRemoteAudioStop}     // NEW: Pass WebSocket sending functions
             sendRemoteAudioVolume={sendRemoteAudioVolume} // NEW: Pass WebSocket sending functions
             clearDicePrompt={clearDicePrompt}    // UPDATED: Now accepts prompt ID

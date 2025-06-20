@@ -98,12 +98,13 @@ export const useUnifiedAudio = () => {
   const remoteTrackGainsRef = useRef({});
   const audioBuffersRef = useRef({});
   const activeSourcesRef = useRef({});
+  const trackTimersRef = useRef({}); // Store timing info for each track
 
   // Remote track states (for DM-controlled audio)
   const [remoteTrackStates, setRemoteTrackStates] = useState({
-    music: { playing: false, volume: 0.7, currentTrack: null, currentTime: 0, duration: 0 },
-    ambient: { playing: false, volume: 0.6, currentTrack: null, currentTime: 0, duration: 0 },
-    sfx: { playing: false, volume: 0.8, currentTrack: null, currentTime: 0, duration: 0 }
+    music: { playing: false, paused: false, volume: 0.7, currentTrack: null, currentTime: 0, duration: 0 },
+    ambient: { playing: false, paused: false, volume: 0.6, currentTrack: null, currentTime: 0, duration: 0 },
+    sfx: { playing: false, paused: false, volume: 0.8, currentTrack: null, currentTime: 0, duration: 0 }
   });
 
   // Initialize Web Audio API for remote tracks
@@ -191,8 +192,12 @@ export const useUnifiedAudio = () => {
       source.loop = loop;
       source.connect(remoteTrackGainsRef.current[trackType]);
       
-      // Start playback
-      source.start(0);
+      // Handle resume from pause vs fresh start
+      const resumeFromPause = remoteTrackStates[trackType]?.paused && remoteTrackStates[trackType]?.currentTime > 0;
+      const startOffset = resumeFromPause ? remoteTrackStates[trackType].currentTime : 0;
+      
+      // Start playback (for Web Audio, we need to start from beginning and track offset)
+      source.start(0, startOffset);
       activeSourcesRef.current[trackType] = source;
 
       // Get duration from audio buffer
@@ -211,22 +216,44 @@ export const useUnifiedAudio = () => {
         }
       }));
 
-      // Start time tracking
+      // Initialize timing for this track
       const startTime = audioContextRef.current.currentTime;
+      const pausedTime = resumeFromPause ? startOffset : 0;
+      
+      trackTimersRef.current[trackType] = {
+        startTime,
+        pausedTime,
+        duration,
+        loop,
+        lastUpdateTime: startTime
+      };
+
+      // Start time tracking with proper loop handling
       const updateTime = () => {
-        if (activeSourcesRef.current[trackType] === source) {
-          const elapsed = audioContextRef.current.currentTime - startTime;
-          const currentTime = Math.min(elapsed, duration);
+        if (activeSourcesRef.current[trackType] === source && trackTimersRef.current[trackType]) {
+          const timer = trackTimersRef.current[trackType];
+          const elapsed = audioContextRef.current.currentTime - timer.startTime + timer.pausedTime;
+          
+          let currentTime;
+          if (timer.loop && timer.duration > 0) {
+            // For looping tracks, use modulo to cycle through the duration
+            currentTime = elapsed % timer.duration;
+          } else {
+            // For non-looping tracks, clamp to duration
+            currentTime = Math.min(elapsed, timer.duration);
+          }
           
           setRemoteTrackStates(prev => ({
             ...prev,
             [trackType]: {
               ...prev[trackType],
-              currentTime: currentTime
+              currentTime: currentTime,
+              paused: false
             }
           }));
 
-          if (currentTime < duration && activeSourcesRef.current[trackType] === source) {
+          // Continue updating if track is still active
+          if (activeSourcesRef.current[trackType] === source) {
             requestAnimationFrame(updateTime);
           }
         }
@@ -248,11 +275,15 @@ export const useUnifiedAudio = () => {
         activeSourcesRef.current[trackType].stop();
         delete activeSourcesRef.current[trackType];
         
+        // Clean up timer
+        delete trackTimersRef.current[trackType];
+        
         setRemoteTrackStates(prev => ({
           ...prev,
           [trackType]: {
             ...prev[trackType],
             playing: false,
+            paused: false,
             currentTrack: null,
             currentTime: 0,
             duration: 0
@@ -264,6 +295,46 @@ export const useUnifiedAudio = () => {
         console.warn(`Failed to stop remote ${trackType}:`, error);
       }
     }
+  };
+
+  // Pause remote track (preserves playhead position)
+  const pauseRemoteTrack = (trackType) => {
+    if (activeSourcesRef.current[trackType] && trackTimersRef.current[trackType]) {
+      try {
+        // Calculate current position before stopping
+        const timer = trackTimersRef.current[trackType];
+        const elapsed = audioContextRef.current.currentTime - timer.startTime + timer.pausedTime;
+        
+        let currentTime;
+        if (timer.loop && timer.duration > 0) {
+          currentTime = elapsed % timer.duration;
+        } else {
+          currentTime = Math.min(elapsed, timer.duration);
+        }
+        
+        // Stop the source
+        activeSourcesRef.current[trackType].stop();
+        delete activeSourcesRef.current[trackType];
+        
+        // Update state to paused with preserved position
+        setRemoteTrackStates(prev => ({
+          ...prev,
+          [trackType]: {
+            ...prev[trackType],
+            playing: false,
+            paused: true,
+            currentTime: currentTime
+          }
+        }));
+
+        console.log(`⏸️ Paused remote ${trackType} at ${currentTime.toFixed(2)}s`);
+        return true;
+      } catch (error) {
+        console.warn(`Failed to pause remote ${trackType}:`, error);
+        return false;
+      }
+    }
+    return false;
   };
 
   // Set remote track volume
@@ -343,6 +414,7 @@ export const useUnifiedAudio = () => {
     // Remote audio functions (for WebSocket events)
     remoteTrackStates,
     playRemoteTrack,
+    pauseRemoteTrack,
     stopRemoteTrack,
     setRemoteTrackVolume,
     
