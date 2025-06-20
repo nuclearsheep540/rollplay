@@ -1,186 +1,188 @@
 /*
+ * AudioMixerPanel.jsx
+ *
  * Copyright (C) 2025 Matthew Davey
  * SPDX-License-Identifier: GPL-3.0-or-later
  */
 
-import React from 'react';
-import { DM_HEADER, DM_ARROW, DM_SUB_HEADER, DM_CHILD, DM_CHILD_LAST, MIXER_FADER, PANEL_HEADER} from '../styles/constants';
-
+import React, { useRef, useEffect } from 'react';
 import AudioTrack from './AudioTrack';
+import {
+  DM_HEADER,
+  DM_ARROW,
+  DM_CHILD,
+  DM_CHILD_LAST
+} from '../styles/constants';
 
 export default function AudioMixerPanel({
   isExpanded,
   onToggle,
   remoteTrackStates = {},
-  sendRemoteAudioPlay = null,
-  sendRemoteAudioPause = null,
-  sendRemoteAudioStop = null,
-  sendRemoteAudioVolume = null,
-  setRemoteTrackVolume = null,
-  toggleRemoteTrackLooping = null
+  sendRemoteAudioPlay,
+  sendRemoteAudioPause,
+  sendRemoteAudioStop,
+  sendRemoteAudioVolume,
+  setRemoteTrackVolume,
+  toggleRemoteTrackLooping
 }) {
-  
-  // Single audio tracks (Music & Ambient)
+  // 1) Create one AudioContext for the panel:
+  const audioCtxRef = useRef(null);
+  useEffect(() => {
+    audioCtxRef.current = new (window.AudioContext || window.webkitAudioContext)();
+  }, []);
+
+  // 2) Keep refs to each <audio> element and to its GainNode
+  const audioElRefs = useRef({});       // { [trackId]: HTMLAudioElement }
+  const gainNodeRefs = useRef({});      // { [trackId]: GainNode }
+
+  // 3) After mount, wire each <audio> → MediaElementSource → Gain → dest
+  useEffect(() => {
+    if (!audioCtxRef.current) return;
+
+    const allConfigs = [...singleTracks, ...sfxTracks];
+    allConfigs.forEach((cfg) => {
+      const id = cfg.trackId;
+      const el = audioElRefs.current[id];
+      if (el && !gainNodeRefs.current[id]) {
+        // create source + gain
+        const src = audioCtxRef.current.createMediaElementSource(el);
+        const gain = audioCtxRef.current.createGain();
+        src.connect(gain);
+        gain.connect(audioCtxRef.current.destination);
+        gainNodeRefs.current[id] = gain;
+      }
+    });
+  }, [isExpanded /* or remoteTrackStates if you load tracks dynamically */]);
+
+  // Your track definitions:
   const singleTracks = [
-    {
-      trackId: 'music_boss',
-      type: 'music',
-      filename: 'boss.mp3'
-    },
-    {
-      trackId: 'ambient_storm',
-      type: 'ambient',
-      filename: 'storm.mp3'
-    }
+    { trackId: 'music_boss', type: 'music', filename: 'boss.mp3' },
+    { trackId: 'ambient_storm', type: 'ambient', filename: 'storm.mp3' }
+  ];
+  const sfxTracks = [
+    { trackId: 'sfx_sword', filename: 'sword.mp3' },
+    { trackId: 'sfx_enemy_hit', filename: 'enemy_hit_cinematic.mp3' }
   ];
 
-  // SFX collection - scalable list of sound effects
-  const sfxTracks = [
-    {
-      trackId: 'sfx_sword',
-      filename: 'sword.mp3'
-    },
-    {
-      trackId: 'sfx_enemy_hit',
-      filename: 'enemy_hit_cinematic.mp3'
+  // Common play/pause/stop helpers that also drive the <audio>:
+  const handlePlay = (cfg) => {
+    // resume context in case it’s suspended
+    audioCtxRef.current.resume();
+
+    const el = audioElRefs.current[cfg.trackId];
+    el?.play();
+
+    sendRemoteAudioPlay?.(
+      cfg.trackId,
+      cfg.filename,
+      cfg.type !== 'sfx',             // looping for music/ambient
+      remoteTrackStates[cfg.trackId]?.volume
+    );
+  };
+  const handlePause = (cfg) => {
+    audioElRefs.current[cfg.trackId]?.pause();
+    sendRemoteAudioPause?.(cfg.trackId);
+  };
+  const handleStop = (cfg) => {
+    const el = audioElRefs.current[cfg.trackId];
+    if (el) {
+      el.pause();
+      el.currentTime = 0;
     }
-  ];
+    sendRemoteAudioStop?.(cfg.trackId);
+  };
 
   return (
     <div className="flex-shrink-0">
-      <div 
-        className={DM_HEADER}
-        onClick={onToggle}
-      >
+      <div className={DM_HEADER} onClick={onToggle}>
         🎵 Audio Management
-        <span className={`${DM_ARROW} ${isExpanded ? 'rotate-180' : ''}`}>
-          ▼
-        </span>
+        <span className={`${DM_ARROW} ${isExpanded ? 'rotate-180' : ''}`}>▼</span>
       </div>
-      {isExpanded && (
-        <div>
-          {/* Single Audio Tracks (Music & Ambient) */}
-          {singleTracks.map((config) => (
 
-            <>
-              <div className={PANEL_HEADER + "-"}>{config.type === 'music' ? 'Music' : 'Ambience'}</div>
+      {isExpanded && (
+        <>
+          {/* Hidden audio elements */}
+          <div style={{ display: 'none' }}>
+            {[...singleTracks, ...sfxTracks].map((cfg) => (
+              <audio
+                key={cfg.trackId}
+                ref={(el) => (audioElRefs.current[cfg.trackId] = el)}
+                src={`/audio/${cfg.filename}`}
+                loop={cfg.type !== 'sfx'}
+              />
+            ))}
+          </div>
+
+          {/* Music & Ambience */}
+          {singleTracks.map((cfg) => (
+            <React.Fragment key={cfg.trackId}>
+              <div className="text-white font-bold mt-4">
+                {cfg.type === 'music' ? 'Music' : 'Ambience'}
+              </div>
               <AudioTrack
-                className="slider"
-                key={config.trackId}
-                config={{...config}}
-                trackState={remoteTrackStates[config.trackId] || { 
-                  playing: false, 
-                  volume: 0.7, 
-                  currentTime: 0, 
-                  duration: 0, 
-                  looping: true 
+                config={{
+                  ...cfg,
+                  audioNode: gainNodeRefs.current[cfg.trackId]
                 }}
-                onPlay={() => {
-                  console.log(`🎵 Play ${config.trackId} (${config.filename}) button clicked - sending to ALL players`);
-                  if (sendRemoteAudioPlay) {
-                    const trackState = remoteTrackStates[config.trackId] || {};
-                    sendRemoteAudioPlay(config.trackId, config.filename, trackState.looping ?? true, trackState.volume);
+                trackState={
+                  remoteTrackStates[cfg.trackId] || {
+                    playing: false,
+                    volume: 0.7,
+                    currentTime: 0,
+                    duration: 0,
+                    looping: true
                   }
-                }}
-                onPause={() => {
-                  console.log(`⏸️ Pause ${config.trackId} button clicked - sending to ALL players`);
-                  if (sendRemoteAudioPause) {
-                    sendRemoteAudioPause(config.trackId);
-                  }
-                }}
-                onStop={() => {
-                  console.log(`🛑 Stop ${config.trackId} button clicked - sending to ALL players`);
-                  if (sendRemoteAudioStop) {
-                    sendRemoteAudioStop(config.trackId);
-                  }
-                }}
-                onVolumeChange={(newVolume) => {
-                  // Immediate local state update for responsive UI
-                  if (setRemoteTrackVolume) {
-                    setRemoteTrackVolume(config.trackId, newVolume);
-                  }
-                }}
-                onVolumeChangeDebounced={(newVolume) => {
-                  // Debounced WebSocket send to reduce API calls
-                  if (sendRemoteAudioVolume) {
-                    sendRemoteAudioVolume(config.trackId, newVolume);
-                  }
-                }}
-                onLoopToggle={(trackId, looping) => {
-                  if (toggleRemoteTrackLooping) {
-                    toggleRemoteTrackLooping(trackId, looping);
-                  }
-                }}
+                }
+                onPlay={() => handlePlay(cfg)}
+                onPause={() => handlePause(cfg)}
+                onStop={() => handleStop(cfg)}
+                onVolumeChange={(v) =>
+                  setRemoteTrackVolume?.(cfg.trackId, v)
+                }
+                onVolumeChangeDebounced={(v) =>
+                  sendRemoteAudioVolume?.(cfg.trackId, v)
+                }
+                onLoopToggle={(id, loop) =>
+                  toggleRemoteTrackLooping?.(id, loop)
+                }
                 isLast={false}
               />
-            </>
+            </React.Fragment>
           ))}
 
-          {/* SFX Collection */}
-          <div className={PANEL_HEADER + "mb-0"}>Sound Effects</div>
-          {sfxTracks.map((sfxConfig, index) => (
-            <>
-              <AudioTrack
-                key={sfxConfig.trackId}
-                config={{
-                  ...sfxConfig,
-                  type: 'sfx',
-                }}
-                trackState={remoteTrackStates[sfxConfig.trackId] || { 
-                  playing: false, 
-                  volume: 0.8, 
-                  currentTime: 0, 
-                  duration: 0, 
-                  looping: false 
-                }}
-                onPlay={() => {
-                  console.log(`🔊 Play SFX ${sfxConfig.trackId} (${sfxConfig.filename}) button clicked - sending to ALL players`);
-                  if (sendRemoteAudioPlay) {
-                    const trackState = remoteTrackStates[sfxConfig.trackId] || {};
-                    sendRemoteAudioPlay(sfxConfig.trackId, sfxConfig.filename, false, trackState.volume);
-                  }
-                }}
-                onPause={() => {
-                  console.log(`⏸️ Pause SFX ${sfxConfig.trackId} button clicked - sending to ALL players`);
-                  if (sendRemoteAudioPause) {
-                    sendRemoteAudioPause(sfxConfig.trackId);
-                  }
-                }}
-                onStop={() => {
-                  console.log(`🛑 Stop SFX ${sfxConfig.trackId} button clicked - sending to ALL players`);
-                  if (sendRemoteAudioStop) {
-                    sendRemoteAudioStop(sfxConfig.trackId);
-                  }
-                }}
-                onVolumeChange={(newVolume) => {
-                  // Immediate local state update for responsive UI
-                  if (setRemoteTrackVolume) {
-                    setRemoteTrackVolume(sfxConfig.trackId, newVolume);
-                  }
-                }}
-                onVolumeChangeDebounced={(newVolume) => {
-                  // Debounced WebSocket send to reduce API calls
-                  if (sendRemoteAudioVolume) {
-                    sendRemoteAudioVolume(sfxConfig.trackId, newVolume);
-                  }
-                }}
-                onLoopToggle={(trackId, looping) => {
-                  // SFX tracks don't support loop toggle - this won't be called
-                  if (toggleRemoteTrackLooping) {
-                    toggleRemoteTrackLooping(trackId, looping);
-                  }
-                }}
-                isLast={index === sfxTracks.length - 1}
-              />
-            </>
+          {/* Sound Effects */}
+          <div className="text-white font-bold mt-6">Sound Effects</div>
+          {sfxTracks.map((cfg, idx) => (
+            <AudioTrack
+              key={cfg.trackId}
+              config={{
+                ...cfg,
+                type: 'sfx',
+                audioNode: gainNodeRefs.current[cfg.trackId]
+              }}
+              trackState={
+                remoteTrackStates[cfg.trackId] || {
+                  playing: false,
+                  volume: 0.8,
+                  currentTime: 0,
+                  duration: 0,
+                  looping: false
+                }
+              }
+              onPlay={() => handlePlay(cfg)}
+              onPause={() => handlePause(cfg)}
+              onStop={() => handleStop(cfg)}
+              onVolumeChange={(v) =>
+                setRemoteTrackVolume?.(cfg.trackId, v)
+              }
+              onVolumeChangeDebounced={(v) =>
+                sendRemoteAudioVolume?.(cfg.trackId, v)
+              }
+              onLoopToggle={() => {}}
+              isLast={idx === sfxTracks.length - 1}
+            />
           ))}
-          
-          {!remoteTrackStates.music_boss && (
-            <div className="text-yellow-400 text-xs mt-2">
-              💡 Expand this panel to unlock audio
-            </div>
-          )}
-        </div>
+        </>
       )}
     </div>
   );
