@@ -101,9 +101,9 @@ export const useUnifiedAudio = () => {
 
   // Remote track states (for DM-controlled audio)
   const [remoteTrackStates, setRemoteTrackStates] = useState({
-    music: { playing: false, volume: 0.7, currentTrack: null },
-    ambient: { playing: false, volume: 0.6, currentTrack: null },
-    sfx: { playing: false, volume: 0.8, currentTrack: null }
+    music: { playing: false, volume: 0.7, currentTrack: null, currentTime: 0, duration: 0 },
+    ambient: { playing: false, volume: 0.6, currentTrack: null, currentTime: 0, duration: 0 },
+    sfx: { playing: false, volume: 0.8, currentTrack: null, currentTime: 0, duration: 0 }
   });
 
   // Initialize Web Audio API for remote tracks
@@ -195,16 +195,43 @@ export const useUnifiedAudio = () => {
       source.start(0);
       activeSourcesRef.current[trackType] = source;
 
-      // Update state
+      // Get duration from audio buffer
+      const duration = audioBuffer.duration;
+
+      // Update state with duration
       setRemoteTrackStates(prev => ({
         ...prev,
         [trackType]: {
           ...prev[trackType],
           playing: true,
           currentTrack: audioFile,
-          volume: volume !== null ? volume : prev[trackType].volume
+          volume: volume !== null ? volume : prev[trackType].volume,
+          currentTime: 0,
+          duration: duration
         }
       }));
+
+      // Start time tracking
+      const startTime = audioContextRef.current.currentTime;
+      const updateTime = () => {
+        if (activeSourcesRef.current[trackType] === source) {
+          const elapsed = audioContextRef.current.currentTime - startTime;
+          const currentTime = Math.min(elapsed, duration);
+          
+          setRemoteTrackStates(prev => ({
+            ...prev,
+            [trackType]: {
+              ...prev[trackType],
+              currentTime: currentTime
+            }
+          }));
+
+          if (currentTime < duration && activeSourcesRef.current[trackType] === source) {
+            requestAnimationFrame(updateTime);
+          }
+        }
+      };
+      requestAnimationFrame(updateTime);
 
       console.log(`▶️ Playing remote ${trackType}: ${audioFile} (loop: ${loop})`);
       return true;
@@ -226,7 +253,9 @@ export const useUnifiedAudio = () => {
           [trackType]: {
             ...prev[trackType],
             playing: false,
-            currentTrack: null
+            currentTrack: null,
+            currentTime: 0,
+            duration: 0
           }
         }));
 

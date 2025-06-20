@@ -822,3 +822,45 @@ body {
   box-sizing: border-box;
 }
 
+/* Audio Mixer Fader Styles - Square Controls */
+.mixer-fader {
+  -webkit-appearance: none;
+  appearance: none;
+  background: #374151;
+  height: 8px;
+  outline: none;
+  border-radius: 0;
+}
+
+.mixer-fader::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 16px;
+  height: 20px;
+  background: #e5e7eb;
+  cursor: pointer;
+  border-radius: 2px;
+  border: 1px solid #9ca3af;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
+}
+
+.mixer-fader::-webkit-slider-thumb:hover {
+  background: #f9fafb;
+  border-color: #6b7280;
+}
+
+.mixer-fader::-moz-range-thumb {
+  width: 16px;
+  height: 20px;
+  background: #e5e7eb;
+  cursor: pointer;
+  border-radius: 2px;
+  border: 1px solid #9ca3af;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
+}
+
+.mixer-fader::-moz-range-thumb:hover {
+  background: #f9fafb;
+  border-color: #6b7280;
+}
+

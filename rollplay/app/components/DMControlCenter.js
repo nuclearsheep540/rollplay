@@ -10,15 +10,18 @@ import {
   DM_ARROW,
   COMBAT_TOGGLE_ACTIVE,
   COMBAT_TOGGLE_INACTIVE,
-  ACTIVE_BACKGROUND
+  ACTIVE_BACKGROUND,
+  PANEL_SUBTITLE
 } from '../styles/constants';
 import DicePrompt from './DMDicePrompt';
+import AudioMixerPanel from './AudioMixerPanel';
 
 String.prototype.titleCase = function() {
   return this.replace(/\w\S*/g, (txt) =>
     txt.charAt(0).toUpperCase() + txt.substr(1).toLowerCase()
   );
 };
+
 
 export default function DMControlCenter({
   isDM,
@@ -299,208 +302,15 @@ export default function DMControlCenter({
       </div>
 
       {/* Audio Tracks Section */}
-      <div className="flex-shrink-0">
-        <div 
-          className={DM_HEADER}
-          onClick={() => toggleSection('audio')}
-        >
-          🎵 Audio Tracks
-          <span className={`${DM_ARROW} ${expandedSections.audio ? 'rotate-180' : ''}`}>
-            ▼
-          </span>
-        </div>
-        {expandedSections.audio && (
-          <div>
-            {/* Music Track */}
-            <div className={DM_SUB_HEADER}>🎵 Music</div>
-            <div className={DM_CHILD}>
-              <div>
-                <div>Boss Battle</div>
-                <div>{remoteTrackStates.music?.playing ? '▶️ Playing' : '⏹️ Stopped'}</div>
-              </div>
-              <div className="flex gap-2 items-center">
-                <button 
-                  className="bg-green-600 hover:bg-green-700 text-white px-2 py-1 rounded text-xs"
-                  onClick={() => {
-                    console.log('🎵 Play Music button clicked - sending to ALL players');
-                    if (sendRemoteAudioPlay) {
-                      // Send WebSocket event to all players
-                      sendRemoteAudioPlay('music', 'boss.mp3', true, remoteTrackStates.music?.volume);
-                    }
-                  }}
-                >
-                  ▶️
-                </button>
-                <button 
-                  className="bg-red-600 hover:bg-red-700 text-white px-2 py-1 rounded text-xs"
-                  onClick={() => {
-                    console.log('🛑 Stop Music button clicked - sending to ALL players');
-                    if (sendRemoteAudioStop) {
-                      // Send WebSocket event to all players
-                      sendRemoteAudioStop('music');
-                    }
-                  }}
-                >
-                  ⏹️
-                </button>
-                <div className="flex items-center gap-1 ml-2">
-                  <span className="text-xs text-gray-400">Vol:</span>
-                  <input
-                    type="range"
-                    min="0"
-                    max="1"
-                    step="0.1"
-                    value={remoteTrackStates.music?.volume || 0.7}
-                    onChange={(e) => {
-                      const newVolume = parseFloat(e.target.value);
-                      
-                      // Update local state immediately for responsiveness
-                      if (setRemoteTrackVolume) {
-                        setRemoteTrackVolume('music', newVolume);
-                      }
-                      
-                      // Send to all players via WebSocket
-                      if (sendRemoteAudioVolume) {
-                        sendRemoteAudioVolume('music', newVolume);
-                      }
-                    }}
-                    className="w-16 h-1 bg-gray-600 rounded-lg appearance-none cursor-pointer slider-thumb-blue"
-                  />
-                  <span className="text-xs text-gray-400 min-w-[24px]">
-                    {Math.round((remoteTrackStates.music?.volume || 0.7) * 100)}%
-                  </span>
-                </div>
-              </div>
-            </div>
-
-            {/* Ambient Track */}
-            <div className={DM_SUB_HEADER}>🌧️ Ambient</div>
-            <div className={DM_CHILD}>
-              <div>
-                <div>Storm Sounds</div>
-                <div>{remoteTrackStates.ambient?.playing ? '▶️ Playing' : '⏹️ Stopped'}</div>
-              </div>
-              <div className="flex gap-2 items-center">
-                <button 
-                  className="bg-green-600 hover:bg-green-700 text-white px-2 py-1 rounded text-xs"
-                  onClick={() => {
-                    console.log('🌧️ Play Ambient button clicked - sending to ALL players');
-                    if (sendRemoteAudioPlay) {
-                      sendRemoteAudioPlay('ambient', 'storm.mp3', true, remoteTrackStates.ambient?.volume);
-                    }
-                  }}
-                >
-                  ▶️
-                </button>
-                <button 
-                  className="bg-red-600 hover:bg-red-700 text-white px-2 py-1 rounded text-xs"
-                  onClick={() => {
-                    console.log('🛡️ Stop Ambient button clicked - sending to ALL players');
-                    if (sendRemoteAudioStop) {
-                      sendRemoteAudioStop('ambient');
-                    }
-                  }}
-                >
-                  ⏹️
-                </button>
-                <div className="flex items-center gap-1 ml-2">
-                  <span className="text-xs text-gray-400">Vol:</span>
-                  <input
-                    type="range"
-                    min="0"
-                    max="1"
-                    step="0.1"
-                    value={remoteTrackStates.ambient?.volume || 0.6}
-                    onChange={(e) => {
-                      const newVolume = parseFloat(e.target.value);
-                      
-                      // Update local state immediately for responsiveness
-                      if (setRemoteTrackVolume) {
-                        setRemoteTrackVolume('ambient', newVolume);
-                      }
-                      
-                      // Send to all players via WebSocket
-                      if (sendRemoteAudioVolume) {
-                        sendRemoteAudioVolume('ambient', newVolume);
-                      }
-                    }}
-                    className="w-16 h-1 bg-gray-600 rounded-lg appearance-none cursor-pointer slider-thumb-blue"
-                  />
-                  <span className="text-xs text-gray-400 min-w-[24px]">
-                    {Math.round((remoteTrackStates.ambient?.volume || 0.6) * 100)}%
-                  </span>
-                </div>
-              </div>
-            </div>
-
-            {/* SFX Track */}
-            <div className={DM_SUB_HEADER}>⚔️ Sound Effects</div>
-            <div className={DM_CHILD_LAST}>
-              <div>
-                <div>Combat Start</div>
-                <div>{remoteTrackStates.sfx?.playing ? '▶️ Playing' : '⏹️ Stopped'}</div>
-              </div>
-              <div className="flex gap-2 items-center">
-                <button 
-                  className="bg-green-600 hover:bg-green-700 text-white px-2 py-1 rounded text-xs"
-                  onClick={() => {
-                    console.log('⚔️ Play SFX button clicked - sending to ALL players');
-                    if (sendRemoteAudioPlay) {
-                      sendRemoteAudioPlay('sfx', 'sword.mp3', false, remoteTrackStates.sfx?.volume);
-                    }
-                  }}
-                >
-                  ▶️
-                </button>
-                <button 
-                  className="bg-red-600 hover:bg-red-700 text-white px-2 py-1 rounded text-xs"
-                  onClick={() => {
-                    console.log('🛡️ Stop SFX button clicked - sending to ALL players');
-                    if (sendRemoteAudioStop) {
-                      sendRemoteAudioStop('sfx');
-                    }
-                  }}
-                >
-                  ⏹️
-                </button>
-                <div className="flex items-center gap-1 ml-2">
-                  <span className="text-xs text-gray-400">Vol:</span>
-                  <input
-                    type="range"
-                    min="0"
-                    max="1"
-                    step="0.1"
-                    value={remoteTrackStates.sfx?.volume || 0.8}
-                    onChange={(e) => {
-                      const newVolume = parseFloat(e.target.value);
-                      
-                      // Update local state immediately for responsiveness
-                      if (setRemoteTrackVolume) {
-                        setRemoteTrackVolume('sfx', newVolume);
-                      }
-                      
-                      // Send to all players via WebSocket
-                      if (sendRemoteAudioVolume) {
-                        sendRemoteAudioVolume('sfx', newVolume);
-                      }
-                    }}
-                    className="w-16 h-1 bg-gray-600 rounded-lg appearance-none cursor-pointer slider-thumb-blue"
-                  />
-                  <span className="text-xs text-gray-400 min-w-[24px]">
-                    {Math.round((remoteTrackStates.sfx?.volume || 0.8) * 100)}%
-                  </span>
-                </div>
-              </div>
-            </div>
-
-            {!remoteTrackStates.music && (
-              <div className="text-yellow-400 text-xs mt-2">
-                💡 Expand this panel to unlock audio
-              </div>
-            )}
-          </div>
-        )}
-      </div>
+      <AudioMixerPanel
+        isExpanded={expandedSections.audio}
+        onToggle={() => toggleSection('audio')}
+        remoteTrackStates={remoteTrackStates}
+        sendRemoteAudioPlay={sendRemoteAudioPlay}
+        sendRemoteAudioStop={sendRemoteAudioStop}
+        sendRemoteAudioVolume={sendRemoteAudioVolume}
+        setRemoteTrackVolume={setRemoteTrackVolume}
+      />
 
 
         </div>
