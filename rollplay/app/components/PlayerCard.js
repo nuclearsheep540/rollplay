@@ -8,6 +8,7 @@ export default function PlayerCard({
     thisPlayer, 
     isSitting, 
     sendSeatChange,
+    unlockAudio = null,
     currentTurn = null,
     onDiceRoll = null,
     playerData = null,
@@ -66,6 +67,15 @@ export default function PlayerCard({
     function sitSeat() {
       // Only allow sitting if seat is empty AND player isn't already seated
       if (!isOccupied && !playerAlreadySeated) {
+        // Unlock audio on first user interaction
+        if (unlockAudio) {
+          unlockAudio().then(() => {
+            console.log('🔊 Audio unlocked when player sat down');
+          }).catch(err => {
+            console.warn('Audio unlock failed:', err);
+          });
+        }
+        
         const newSeats = [...seats];
         
         // Sit in the new seat

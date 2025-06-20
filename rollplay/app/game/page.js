@@ -18,6 +18,7 @@ import AdventureLog from '../components/AdventureLog';
 import LobbyPanel from '../components/LobbyPanel';
 import DiceActionPanel from '../components/DiceActionPanel'; // NEW IMPORT
 import { useWebSocket } from '../hooks/useWebSocket';
+import { useLocalAudio } from '../hooks/useLocalAudio';
 
 function GameContent() {
   const params = useSearchParams(); 
@@ -522,6 +523,22 @@ function GameContent() {
     sendRoleChange
   } = useWebSocket(roomId, thisPlayer, gameContext);
 
+  // Initialize local audio system
+  const {
+    isAudioUnlocked,
+    masterVolume,
+    setMasterVolume,
+    unlockAudio,
+    playLocalSFX
+  } = useLocalAudio();
+
+  // Listen for combat state changes and play audio
+  useEffect(() => {
+    if (combatActive && isAudioUnlocked) {
+      playLocalSFX('combatStart');
+    }
+  }, [combatActive, isAudioUnlocked]);
+
   // Show dice portal for player rolls
   const showDicePortal = (playerName, promptType = null) => {
     setCurrentTurn(playerName);
@@ -918,7 +935,26 @@ function GameContent() {
           >
             Room: {roomId}
           </div>
-          <button className="control-btn">🔧 Room Settings</button>
+          {/* Master Volume Control */}
+          <div className="master-volume-control">
+            <label htmlFor="master-volume" className="volume-label">
+              🔊
+            </label>
+            <input
+              id="master-volume"
+              type="range"
+              min="0"
+              max="1"
+              step="0.1"
+              value={masterVolume}
+              onChange={(e) => setMasterVolume(parseFloat(e.target.value))}
+              className="volume-slider"
+              title={`Master Volume: ${Math.round(masterVolume * 100)}%`}
+            />
+            <span className="volume-percentage">
+              {Math.round(masterVolume * 100)}%
+            </span>
+          </div>
           
           {/* UI Scale Toggle */}
           <div className="ui-scale-nav">
@@ -995,6 +1031,7 @@ function GameContent() {
                 thisPlayer={thisPlayer}
                 isSitting={isSitting}
                 sendSeatChange={sendSeatChange}
+                unlockAudio={unlockAudio}
                 currentTurn={currentTurn}
                 onDiceRoll={handlePlayerDiceRoll}
                 playerData={seat.characterData}
