@@ -133,7 +133,7 @@ export const useUnifiedAudio = () => {
           gainNode.connect(analyserNode);
           analyserNode.connect(masterGainRef.current);
           
-          gainNode.gain.value = remoteTrackStates[trackId]?.volume || 0.7;
+          gainNode.gain.value = remoteTrackStates[trackId]?.volume || 1.0;
           remoteTrackGainsRef.current[trackId] = gainNode;
           remoteTrackAnalysersRef.current[trackId] = analyserNode;
         });

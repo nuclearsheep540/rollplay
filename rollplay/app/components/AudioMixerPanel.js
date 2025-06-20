@@ -75,7 +75,7 @@ export default function AudioMixerPanel({
                 trackState={
                   remoteTrackStates[cfg.trackId] || {
                     playing: false,
-                    volume: 0.7,
+                    volume: 1.0,
                     currentTime: 0,
                     duration: 0,
                     looping: true
@@ -111,7 +111,7 @@ export default function AudioMixerPanel({
               trackState={
                 remoteTrackStates[cfg.trackId] || {
                   playing: false,
-                  volume: 0.8,
+                  volume: 1.0,
                   currentTime: 0,
                   duration: 0,
                   looping: false

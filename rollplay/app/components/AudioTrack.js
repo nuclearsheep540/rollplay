@@ -39,7 +39,7 @@ export default function AudioTrack({
   const { trackId, type, icon, label, filename, analyserNode } = config;
   const {
     playing,
-    volume = 0.7,
+    volume = 1.0,
     currentTime = 0,
     duration = 0,
     looping = true
@@ -85,21 +85,21 @@ export default function AudioTrack({
       const rms = Math.sqrt(sumSquares / data.length);
   
       // simple low-pass in JS: smooth out jagged changes
-      const smoothed = lastRms * 0.95 + rms * 0.05;
+      const smoothed = lastRms * 0.90 + rms * 0.1;
       lastRms = smoothed;
   
       // convert to percentage
-      let pct = Math.min(1, smoothed) * 400;
-      pct = (pct * 2) * (trackState.volume) + 6
+      let pct = Math.min(1, smoothed) * 300;
+      pct = (pct * 3) * (trackState.volume) + (pct ? 3 : 0)
   
       // defend against missing ref in mid-cleanup
-      const threshold1 = 65;
-      const threshold2 = 70;
+      const rms_hot = 60;
+      const rms_peak = 70;
       
       const fillColor =
-        pct >= threshold2 ? '#FF0000'                // red above 80
-        : pct >= threshold1 ? '#FFD700'              // yellow 60–79
-        : '#04AA6D';                                 // green below 60
+        pct >= rms_peak ? '#FF0000'
+        : pct >= rms_hot ? '#FFD700'
+        : '#04AA6D';
 
       if (sliderRef.current) {
         // a "flat" gradient: fillColor up to pct, then grey
@@ -207,7 +207,7 @@ export default function AudioTrack({
               <option value="40" label="-24" />
               <option value="50" label="-12" />
               <option value="60" label="-3" />
-              <option value="70" label="-0" className='mr-6' />
+              <option value="70" label="-0" className='mr-8' />
               <option value="130" label="+3" />
             </datalist>
 
