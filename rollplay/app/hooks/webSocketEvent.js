@@ -4,6 +4,54 @@
  * These functions take data and state setters directly to process events
  */
 
+// =====================================
+// REMOTE AUDIO EVENT HANDLERS
+// =====================================
+
+export const handleRemoteAudioPlay = (data, { playRemoteTrack }) => {
+  console.log("🎵 Remote audio play command received:", data);
+  const { track_type, audio_file, loop = true, volume = 1.0, triggered_by } = data;
+  
+  if (playRemoteTrack) {
+    playRemoteTrack(track_type, audio_file, loop, volume);
+    console.log(`▶️ Playing remote ${track_type}: ${audio_file} (triggered by ${triggered_by})`);
+  }
+};
+
+export const handleRemoteAudioStop = (data, { stopRemoteTrack }) => {
+  console.log("🛑 Remote audio stop command received:", data);
+  const { track_type, triggered_by } = data;
+  
+  if (stopRemoteTrack) {
+    stopRemoteTrack(track_type);
+    console.log(`⏹️ Stopped remote ${track_type} (triggered by ${triggered_by})`);
+  }
+};
+
+export const handleRemoteAudioPause = (data, { pauseRemoteTrack }) => {
+  console.log("⏸️ Remote audio pause command received:", data);
+  const { track_type, triggered_by } = data;
+  
+  if (pauseRemoteTrack) {
+    pauseRemoteTrack(track_type);
+    console.log(`⏸️ Paused remote ${track_type} (triggered by ${triggered_by})`);
+  }
+};
+
+export const handleRemoteAudioVolume = (data, { setRemoteTrackVolume }) => {
+  console.log("🔊 Remote audio volume command received:", data);
+  const { track_type, volume, triggered_by } = data;
+  
+  if (setRemoteTrackVolume) {
+    setRemoteTrackVolume(track_type, volume);
+    console.log(`🔊 Set remote ${track_type} volume to ${Math.round(volume * 100)}% (triggered by ${triggered_by})`);
+  }
+};
+
+// =====================================
+// EXISTING EVENT HANDLERS
+// =====================================
+
 export const handleSeatChange = (data, { setGameSeats, getCharacterData }) => {
   console.log("received a new message with seat change:", data);
   
@@ -578,6 +626,70 @@ export const createSendFunctions = (webSocket, isConnected, roomId, playerName) 
     }));
   };
 
+  // =====================================
+  // REMOTE AUDIO SENDING FUNCTIONS
+  // =====================================
+
+  const sendRemoteAudioPlay = (trackType, audioFile, loop = true, volume = null) => {
+    if (!webSocket || !isConnected) return;
+    
+    console.log(`📡 Sending remote audio play: ${trackType} - ${audioFile}`);
+    
+    webSocket.send(JSON.stringify({
+      "event_type": "remote_audio_play",
+      "data": {
+        "track_type": trackType,
+        "audio_file": audioFile,
+        "loop": loop,
+        "volume": volume,
+        "triggered_by": playerName
+      }
+    }));
+  };
+
+  const sendRemoteAudioStop = (trackType) => {
+    if (!webSocket || !isConnected) return;
+    
+    console.log(`📡 Sending remote audio stop: ${trackType}`);
+    
+    webSocket.send(JSON.stringify({
+      "event_type": "remote_audio_stop",
+      "data": {
+        "track_type": trackType,
+        "triggered_by": playerName
+      }
+    }));
+  };
+
+  const sendRemoteAudioPause = (trackType) => {
+    if (!webSocket || !isConnected) return;
+    
+    console.log(`📡 Sending remote audio pause: ${trackType}`);
+    
+    webSocket.send(JSON.stringify({
+      "event_type": "remote_audio_pause",
+      "data": {
+        "track_type": trackType,
+        "triggered_by": playerName
+      }
+    }));
+  };
+
+  const sendRemoteAudioVolume = (trackType, volume) => {
+    if (!webSocket || !isConnected) return;
+    
+    console.log(`📡 [DEBOUNCED] Sending remote audio volume: ${trackType} - ${Math.round(volume * 100)}%`);
+    
+    webSocket.send(JSON.stringify({
+      "event_type": "remote_audio_volume",
+      "data": {
+        "track_type": trackType,
+        "volume": volume,
+        "triggered_by": playerName
+      }
+    }));
+  };
+
   return {
     sendSeatChange,
     sendSeatCountChange,
@@ -590,7 +702,11 @@ export const createSendFunctions = (webSocket, isConnected, roomId, playerName) 
     sendDicePromptClear,
     sendInitiativePromptAll,
     sendColorChange,
-    sendRoleChange
+    sendRoleChange,
+    sendRemoteAudioPlay,
+    sendRemoteAudioPause,
+    sendRemoteAudioStop,
+    sendRemoteAudioVolume
   };
 };
 

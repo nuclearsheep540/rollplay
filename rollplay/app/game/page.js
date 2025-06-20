@@ -18,6 +18,7 @@ import AdventureLog from '../components/AdventureLog';
 import LobbyPanel from '../components/LobbyPanel';
 import DiceActionPanel from '../components/DiceActionPanel'; // NEW IMPORT
 import { useWebSocket } from '../hooks/useWebSocket';
+import { useUnifiedAudio } from '../hooks/useUnifiedAudio';
 
 function GameContent() {
   const params = useSearchParams(); 
@@ -478,7 +479,23 @@ function GameContent() {
     setSeatColors(newSeatColors);
   };
 
-  // Create game context object for WebSocket handlers (after functions are defined)
+  // Initialize unified audio system (local + remote) FIRST
+  const {
+    isAudioUnlocked,
+    masterVolume,
+    setMasterVolume,
+    unlockAudio,
+    playLocalSFX,
+    remoteTrackStates,
+    remoteTrackAnalysers,
+    playRemoteTrack,
+    pauseRemoteTrack,
+    stopRemoteTrack,
+    setRemoteTrackVolume,
+    toggleRemoteTrackLooping
+  } = useUnifiedAudio();
+
+  // Create game context object for WebSocket handlers (after audio functions are defined)
   const gameContext = {
     // State setters
     setGameSeats,
@@ -501,10 +518,17 @@ function GameContent() {
     // Helper functions
     addToLog,
     getCharacterData,
-    handleRoleChange
+    handleRoleChange,
+    
+    // Remote audio functions (for WebSocket events)
+    playRemoteTrack,
+    pauseRemoteTrack,
+    stopRemoteTrack,
+    setRemoteTrackVolume,
+    toggleRemoteTrackLooping
   };
 
-  // Initialize WebSocket hook with game context
+  // Initialize WebSocket hook with game context (after audio functions are available)
   const {
     webSocket,
     isConnected,
@@ -519,8 +543,42 @@ function GameContent() {
     sendDicePromptClear,
     sendInitiativePromptAll,
     sendColorChange,
-    sendRoleChange
+    sendRoleChange,
+    sendRemoteAudioPlay,
+    sendRemoteAudioPause,
+    sendRemoteAudioStop,
+    sendRemoteAudioVolume
   } = useWebSocket(roomId, thisPlayer, gameContext);
+
+  // Listen for combat state changes and play audio
+  useEffect(() => {
+    if (combatActive && isAudioUnlocked) {
+      playLocalSFX('combatStart');
+    }
+  }, [combatActive, isAudioUnlocked]);
+
+  // Fallback audio unlock on any click (for non-DM players)
+  useEffect(() => {
+    if (!isAudioUnlocked) {
+      const handleFirstClick = () => {
+        if (unlockAudio) {
+          unlockAudio().then(() => {
+            console.log('🔊 Audio unlocked on first user interaction');
+          }).catch(err => {
+            console.warn('Audio unlock failed on first click:', err);
+          });
+        }
+      };
+
+      // Add click listener to document
+      document.addEventListener('click', handleFirstClick, { once: true });
+
+      // Cleanup
+      return () => {
+        document.removeEventListener('click', handleFirstClick);
+      };
+    }
+  }, [isAudioUnlocked, unlockAudio]);
 
   // Show dice portal for player rolls
   const showDicePortal = (playerName, promptType = null) => {
@@ -918,7 +976,41 @@ function GameContent() {
           >
             Room: {roomId}
           </div>
-          <button className="control-btn">🔧 Room Settings</button>
+          {/* Master Volume Control */}
+          <div className="master-volume-control">
+            <label htmlFor="master-volume" className="volume-label">
+              {isAudioUnlocked ? '🔊' : '🔇'}
+            </label>
+            <input
+              id="master-volume"
+              type="range"
+              min="0"
+              max="1"
+              step="0.1"
+              value={masterVolume}
+              onChange={(e) => {
+                // Unlock audio on first volume interaction
+                if (!isAudioUnlocked && unlockAudio) {
+                  unlockAudio().then(() => {
+                    console.log('🔊 Audio unlocked when player adjusted volume');
+                  }).catch(err => {
+                    console.warn('Audio unlock failed on volume adjustment:', err);
+                  });
+                }
+                setMasterVolume(parseFloat(e.target.value));
+              }}
+              className="volume-slider"
+              title={`Master Volume: ${Math.round(masterVolume * 100)}%`}
+            />
+            <span className="volume-percentage">
+              {Math.round(masterVolume * 100)}%
+            </span>
+            {!isAudioUnlocked && (
+              <span className="text-yellow-400 text-xs ml-2">
+                👆 Touch to enable audio
+              </span>
+            )}
+          </div>
           
           {/* UI Scale Toggle */}
           <div className="ui-scale-nav">
@@ -995,6 +1087,7 @@ function GameContent() {
                 thisPlayer={thisPlayer}
                 isSitting={isSitting}
                 sendSeatChange={sendSeatChange}
+                unlockAudio={unlockAudio}
                 currentTurn={currentTurn}
                 onDiceRoll={handlePlayerDiceRoll}
                 playerData={seat.characterData}
@@ -1060,6 +1153,17 @@ function GameContent() {
             gameSeats={gameSeats}
             roomId={roomId}
             activePrompts={activePrompts}        // UPDATED: Pass array instead of single prompt
+            unlockAudio={unlockAudio}             // NEW: Pass audio unlock function
+            remoteTrackStates={remoteTrackStates} // NEW: Pass remote track states
+            remoteTrackAnalysers={remoteTrackAnalysers} // NEW: Pass remote track analysers
+            playRemoteTrack={playRemoteTrack}     // NEW: Pass remote track controls (local)
+            stopRemoteTrack={stopRemoteTrack}     // NEW: Pass remote track controls (local)
+            setRemoteTrackVolume={setRemoteTrackVolume} // NEW: Pass remote track controls (local)
+            toggleRemoteTrackLooping={toggleRemoteTrackLooping} // NEW: Pass loop toggle function
+            sendRemoteAudioPlay={sendRemoteAudioPlay}     // NEW: Pass WebSocket sending functions
+            sendRemoteAudioPause={sendRemoteAudioPause}   // NEW: Pass WebSocket pause function
+            sendRemoteAudioStop={sendRemoteAudioStop}     // NEW: Pass WebSocket sending functions
+            sendRemoteAudioVolume={sendRemoteAudioVolume} // NEW: Pass WebSocket sending functions
             clearDicePrompt={clearDicePrompt}    // UPDATED: Now accepts prompt ID
           />
         </div>

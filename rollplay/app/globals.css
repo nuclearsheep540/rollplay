@@ -743,4 +743,152 @@ body {
   display: none;
 }
 
+/* ==========================================================================
+   AUDIO SYSTEM STYLES
+   ========================================================================== */
 
+/* Master Volume Control Styles */
+.master-volume-control {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 12px;
+  background: rgba(59, 130, 246, 0.1);
+  border: 1px solid rgba(59, 130, 246, 0.3);
+  border-radius: 6px;
+  font-size: 12px;
+  color: #e2e8f0;
+}
+
+.volume-label {
+  font-size: 14px;
+  cursor: pointer;
+}
+
+.volume-slider {
+  width: 80px;
+  height: 4px;
+  background: rgba(255, 255, 255, 0.2);
+  border-radius: 2px;
+  outline: none;
+  appearance: none;
+  cursor: pointer;
+}
+
+.volume-slider::-webkit-slider-thumb {
+  appearance: none;
+  width: 12px;
+  height: 12px;
+  background: #3b82f6;
+  border-radius: 50%;
+  cursor: pointer;
+  border: 1px solid rgba(255, 255, 255, 0.5);
+}
+
+.volume-slider::-moz-range-thumb {
+  width: 12px;
+  height: 12px;
+  background: #3b82f6;
+  border-radius: 50%;
+  cursor: pointer;
+  border: 1px solid rgba(255, 255, 255, 0.5);
+}
+
+.volume-percentage {
+  font-family: monospace;
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.7);
+  min-width: 30px;
+}
+
+/* Track Volume Sliders for DM Control Center */
+.slider-thumb-blue::-webkit-slider-thumb {
+  appearance: none;
+  width: 10px;
+  height: 10px;
+  background: #3b82f6;
+  border-radius: 50%;
+  cursor: pointer;
+  border: 1px solid rgba(255, 255, 255, 0.3);
+}
+
+.slider-thumb-blue::-moz-range-thumb {
+  width: 10px;
+  height: 10px;
+  background: #3b82f6;
+  border-radius: 50%;
+  cursor: pointer;
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  box-sizing: border-box;
+}
+
+/* Audio Mixer Fader Styles - Square Controls */
+.mixer-fader {
+  -webkit-appearance: none;
+  appearance: none;
+  background: #374151;
+  height: 8px;
+  outline: none;
+  border-radius: 0;
+}
+
+.mixer-fader::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 16px;
+  height: 20px;
+  background: #e5e7eb;
+  cursor: pointer;
+  border-radius: 2px;
+  border: 1px solid #9ca3af;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
+}
+
+.mixer-fader::-webkit-slider-thumb:hover {
+  background: #f9fafb;
+  border-color: #6b7280;
+}
+
+.mixer-fader::-moz-range-thumb {
+  width: 16px;
+  height: 20px;
+  background: #e5e7eb;
+  cursor: pointer;
+  border-radius: 2px;
+  border: 1px solid #9ca3af;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
+}
+
+.mixer-fader::-moz-range-thumb:hover {
+  background: #f9fafb;
+  border-color: #6b7280;
+}
+
+datalist {
+  display: flex;
+  flex-direction: row;
+  justify-content: space-between;
+  writing-mode: horizontal-rl;
+  width: 100%;
+}
+
+input[type="range"] {
+  width: 100%;
+  margin: 0;
+}
+
+
+input[type="range"] {
+  -webkit-appearance: none; /* Required for WebKit */
+  appearance: none;
+  border-radius: 6px;
+}
+
+input[type="range"]::-webkit-slider-thumb {
+  -webkit-appearance: none; /* Required */
+  width: 13px;
+  height: 22px;
+  background: lightgrey;
+  cursor: pointer;
+  border-radius: 2px;
+}

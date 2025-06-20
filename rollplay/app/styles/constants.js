@@ -121,3 +121,10 @@ export const MODERATOR_CHILD_LAST = `${MODERATOR_CHILD} ${PANEL_CHILD_LAST}`;
 export const MODERATOR_ARROW = `${PANEL_ARROW} text-blue-500`;
 export const MODERATOR_SUBTITLE = PANEL_SUBTITLE;
 export const MODERATOR_LABEL = PANEL_LABEL;
+
+// =============================================================================
+// AUDIO MIXER STYLES
+// =============================================================================
+
+// Mixer fader control (square slider)
+export const MIXER_FADER = "w-full h-1.5 bg-gray-600 cursor-pointer";

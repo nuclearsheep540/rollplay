@@ -10,15 +10,18 @@ import {
   DM_ARROW,
   COMBAT_TOGGLE_ACTIVE,
   COMBAT_TOGGLE_INACTIVE,
-  ACTIVE_BACKGROUND
+  ACTIVE_BACKGROUND,
+  PANEL_SUBTITLE
 } from '../styles/constants';
 import DicePrompt from './DMDicePrompt';
+import AudioMixerPanel from './AudioMixerPanel';
 
 String.prototype.titleCase = function() {
   return this.replace(/\w\S*/g, (txt) =>
     txt.charAt(0).toUpperCase() + txt.substr(1).toLowerCase()
   );
 };
+
 
 export default function DMControlCenter({
   isDM,
@@ -36,11 +39,22 @@ export default function DMControlCenter({
   handleClearSystemMessages,
   handleClearAllMessages,   // NEW: Function to clear all messages
   activePrompts = [],        // UPDATED: Array of active prompts
-  clearDicePrompt           // UPDATED: Function to clear prompt(s)
+  clearDicePrompt,           // UPDATED: Function to clear prompt(s)
+  unlockAudio = null,        // NEW: Audio unlock function for DM
+  remoteTrackStates = {},    // NEW: Remote track states from unified audio
+  remoteTrackAnalysers = {}, // NEW: Remote track analysers from unified audio
+  playRemoteTrack = null,    // NEW: Play remote track function (local)
+  stopRemoteTrack = null,    // NEW: Stop remote track function (local)
+  setRemoteTrackVolume = null, // NEW: Set remote track volume function (local)
+  sendRemoteAudioPlay = null,  // NEW: Send remote audio play via WebSocket
+  sendRemoteAudioPause = null, // NEW: Send remote audio pause via WebSocket
+  sendRemoteAudioStop = null,  // NEW: Send remote audio stop via WebSocket
+  sendRemoteAudioVolume = null, // NEW: Send remote audio volume via WebSocket
+  toggleRemoteTrackLooping = null // NEW: Toggle loop state function
 }) {
   
   // State for main panel collapse
-  const [isCollapsed, setIsCollapsed] = useState(false);
+  const [isCollapsed, setIsCollapsed] = useState(true); // Default to collapsed to encourage DM to click and unlock audio
 
   // State for collapsible sections
   const [expandedSections, setExpandedSections] = useState({
@@ -92,7 +106,22 @@ export default function DMControlCenter({
       {/* Collapsible Header */}
       <div 
         className={DM_TITLE}
-        onClick={() => setIsCollapsed(!isCollapsed)}
+        onClick={() => {
+          // Unlock both audio systems on first DM interaction
+          if (isCollapsed) {
+            // Unlock basic HTML5 audio (for local sounds)
+            if (unlockAudio) {
+              unlockAudio().then(() => {
+                console.log('🔊 HTML5 Audio unlocked when DM expanded Control Center');
+              }).catch(err => {
+                console.warn('HTML5 audio unlock failed:', err);
+              });
+            }
+            
+            // Note: Web Audio is now part of unified audio system and unlocked with unlockAudio above
+          }
+          setIsCollapsed(!isCollapsed);
+        }}
       >
         🎲 DM Command Center
         <div className={`${DM_ARROW} ${isCollapsed ? 'rotate-180' : ''}`}>
@@ -276,46 +305,18 @@ export default function DMControlCenter({
       </div>
 
       {/* Audio Tracks Section */}
-      <div className="flex-shrink-0">
-        <div 
-          className={DM_HEADER}
-          onClick={() => toggleSection('audio')}
-        >
-          🎵 Audio Tracks
-          <span className={`${DM_ARROW} ${expandedSections.audio ? 'rotate-180' : ''}`}>
-            ▼
-          </span>
-        </div>
-        {expandedSections.audio && (
-          <div>
-            <div className="mb-2">
-              {[
-                { name: '🏰 Tavern Ambience', duration: '3:42 / 8:15' },
-                { name: '⚔️ Combat Music', duration: '0:00 / 4:32' },
-                { name: '🌲 Forest Sounds', duration: '0:00 / 12:08' }
-              ].map((track, index) => (
-                <div 
-                  key={index}
-                  className={index < 2 ? DM_CHILD : DM_CHILD_LAST}
-                >
-                  <div>
-                    <div>{track.name}</div>
-                    <div>{track.duration}</div>
-                  </div>
-                  <div>
-                    <button 
-                      className={DM_CHILD}
-                      onClick={() => handleTrackClick(track.name)}
-                    >
-                      {currentTrack === track.name && isPlaying ? '⏸️' : '▶️'}
-                    </button>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
-      </div>
+      <AudioMixerPanel
+        isExpanded={expandedSections.audio}
+        onToggle={() => toggleSection('audio')}
+        remoteTrackStates={remoteTrackStates}
+        remoteTrackAnalysers={remoteTrackAnalysers}
+        sendRemoteAudioPlay={sendRemoteAudioPlay}
+        sendRemoteAudioPause={sendRemoteAudioPause}
+        sendRemoteAudioStop={sendRemoteAudioStop}
+        sendRemoteAudioVolume={sendRemoteAudioVolume}
+        setRemoteTrackVolume={setRemoteTrackVolume}
+        toggleRemoteTrackLooping={toggleRemoteTrackLooping}
+      />
 
 
         </div>

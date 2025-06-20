@@ -665,3 +665,138 @@ class WebsocketEvent():
         }
         
         return WebsocketEventResult(broadcast_message=role_change_message)
+
+    @staticmethod 
+    async def remote_audio_play(websocket, data, event_data, player_name, client_id, manager):
+        """Handle remote audio play events - DM controls audio for all players"""
+        track_type = event_data.get("track_type")  # 'music', 'ambient', 'sfx'
+        audio_file = event_data.get("audio_file")  # 'boss.mp3', 'storm.mp3', etc.
+        loop = event_data.get("loop", True)
+        volume = event_data.get("volume", 1.0)
+        triggered_by = event_data.get("triggered_by", player_name)
+        
+        if not track_type or not audio_file:
+            print(f"❌ Invalid remote audio play request: track_type={track_type}, audio_file={audio_file}")
+            return WebsocketEventResult(broadcast_message={})
+        
+        print(f"🎵 Remote audio play: {triggered_by} playing {track_type} - {audio_file} (loop: {loop}, volume: {volume})")
+        
+        # Create log message for audio start
+        log_message = f"🎵 {triggered_by} started playing {track_type}: {audio_file}"
+        
+        # Add to adventure log
+        adventure_log.add_log_entry(
+            room_id=client_id,
+            message=log_message,
+            log_type=LogType.SYSTEM,
+            from_player=triggered_by
+        )
+        
+        # Broadcast audio play command to all clients
+        audio_play_message = {
+            "event_type": "remote_audio_play",
+            "data": {
+                "track_type": track_type,
+                "audio_file": audio_file,
+                "loop": loop,
+                "volume": volume,
+                "triggered_by": triggered_by
+            }
+        }
+        
+        return WebsocketEventResult(broadcast_message=audio_play_message)
+
+    @staticmethod 
+    async def remote_audio_stop(websocket, data, event_data, player_name, client_id, manager):
+        """Handle remote audio stop events - DM stops audio for all players"""
+        track_type = event_data.get("track_type")  # 'music', 'ambient', 'sfx'
+        triggered_by = event_data.get("triggered_by", player_name)
+        
+        if not track_type:
+            print(f"❌ Invalid remote audio stop request: track_type={track_type}")
+            return WebsocketEventResult(broadcast_message={})
+        
+        print(f"🛑 Remote audio stop: {triggered_by} stopping {track_type}")
+        
+        # Create log message for audio stop
+        log_message = f"🛑 {triggered_by} stopped {track_type} audio"
+        
+        # Add to adventure log
+        adventure_log.add_log_entry(
+            room_id=client_id,
+            message=log_message,
+            log_type=LogType.SYSTEM,
+            from_player=triggered_by
+        )
+        
+        # Broadcast audio stop command to all clients
+        audio_stop_message = {
+            "event_type": "remote_audio_stop",
+            "data": {
+                "track_type": track_type,
+                "triggered_by": triggered_by
+            }
+        }
+        
+        return WebsocketEventResult(broadcast_message=audio_stop_message)
+
+    @staticmethod 
+    async def remote_audio_pause(websocket, data, event_data, player_name, client_id, manager):
+        """Handle remote audio pause events - DM pauses audio for all players"""
+        track_type = event_data.get("track_type")  # 'music', 'ambient', 'sfx'
+        triggered_by = event_data.get("triggered_by", player_name)
+        
+        if not track_type:
+            print(f"❌ Invalid remote audio pause request: track_type={track_type}")
+            return WebsocketEventResult(broadcast_message={})
+        
+        print(f"⏸️ Remote audio pause: {triggered_by} pausing {track_type}")
+        
+        # Create log message for audio pause
+        log_message = f"⏸️ {triggered_by} paused {track_type} audio"
+        
+        adventure_log.add_log_entry(
+            room_id=client_id,
+            message=log_message,
+            log_type=LogType.SYSTEM,
+            from_player=triggered_by
+        )
+        
+        # Broadcast audio pause command to all clients
+        audio_pause_message = {
+            "event_type": "remote_audio_pause",
+            "data": {
+                "track_type": track_type,
+                "triggered_by": triggered_by
+            }
+        }
+        
+        return WebsocketEventResult(broadcast_message=audio_pause_message)
+
+    @staticmethod 
+    async def remote_audio_volume(websocket, data, event_data, player_name, client_id, manager):
+        """Handle remote audio volume events - DM adjusts volume for all players"""
+        track_type = event_data.get("track_type")  # 'music', 'ambient', 'sfx'
+        volume = event_data.get("volume", 1.0)
+        triggered_by = event_data.get("triggered_by", player_name)
+        
+        if not track_type or volume is None:
+            print(f"❌ Invalid remote audio volume request: track_type={track_type}, volume={volume}")
+            return WebsocketEventResult(broadcast_message={})
+        
+        print(f"🔊 Remote audio volume: {triggered_by} set {track_type} volume to {int(volume * 100)}%")
+        
+        # Note: Not logging volume changes to avoid spam in adventure log
+        # Only log significant events like play/stop
+        
+        # Broadcast audio volume command to all clients
+        audio_volume_message = {
+            "event_type": "remote_audio_volume",
+            "data": {
+                "track_type": track_type,
+                "volume": volume,
+                "triggered_by": triggered_by
+            }
+        }
+        
+        return WebsocketEventResult(broadcast_message=audio_volume_message)
