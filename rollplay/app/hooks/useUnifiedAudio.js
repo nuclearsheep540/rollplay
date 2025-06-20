@@ -100,11 +100,12 @@ export const useUnifiedAudio = () => {
   const activeSourcesRef = useRef({});
   const trackTimersRef = useRef({}); // Store timing info for each track
 
-  // Remote track states (for DM-controlled audio)
+  // Remote track states (for DM-controlled audio) - now uses trackId instead of type
   const [remoteTrackStates, setRemoteTrackStates] = useState({
-    music: { playing: false, paused: false, volume: 0.7, currentTrack: null, currentTime: 0, duration: 0, looping: true },
-    ambient: { playing: false, paused: false, volume: 0.6, currentTrack: null, currentTime: 0, duration: 0, looping: true },
-    sfx: { playing: false, paused: false, volume: 0.8, currentTrack: null, currentTime: 0, duration: 0, looping: false }
+    music_boss: { playing: false, paused: false, volume: 0.7, currentTrack: null, currentTime: 0, duration: 0, looping: true },
+    ambient_storm: { playing: false, paused: false, volume: 0.6, currentTrack: null, currentTime: 0, duration: 0, looping: true },
+    sfx_sword: { playing: false, paused: false, volume: 0.8, currentTrack: null, currentTime: 0, duration: 0, looping: false },
+    sfx_enemy_hit: { playing: false, paused: false, volume: 0.8, currentTrack: null, currentTime: 0, duration: 0, looping: false }
   });
 
   // Initialize Web Audio API for remote tracks
@@ -118,12 +119,12 @@ export const useUnifiedAudio = () => {
         masterGainRef.current.connect(audioContextRef.current.destination);
         masterGainRef.current.gain.value = masterVolume;
 
-        // Create gain nodes for each remote track type
-        ['music', 'ambient', 'sfx'].forEach(type => {
+        // Create gain nodes for each remote track
+        ['music_boss', 'ambient_storm', 'sfx_sword', 'sfx_enemy_hit'].forEach(trackId => {
           const gainNode = audioContextRef.current.createGain();
           gainNode.connect(masterGainRef.current);
-          gainNode.gain.value = remoteTrackStates[type].volume;
-          remoteTrackGainsRef.current[type] = gainNode;
+          gainNode.gain.value = remoteTrackStates[trackId]?.volume || 0.7;
+          remoteTrackGainsRef.current[trackId] = gainNode;
         });
 
         console.log('🎵 Web Audio API initialized for remote tracks');
@@ -137,7 +138,7 @@ export const useUnifiedAudio = () => {
   };
 
   // Load remote audio buffer
-  const loadRemoteAudioBuffer = async (url, trackType) => {
+  const loadRemoteAudioBuffer = async (url, trackId) => {
     if (!audioContextRef.current) return null;
 
     try {
@@ -146,8 +147,8 @@ export const useUnifiedAudio = () => {
       const arrayBuffer = await response.arrayBuffer();
       const audioBuffer = await audioContextRef.current.decodeAudioData(arrayBuffer);
       
-      audioBuffersRef.current[`${trackType}_${url}`] = audioBuffer;
-      console.log(`✅ Loaded remote audio buffer for ${trackType}: ${url}`);
+      audioBuffersRef.current[`${trackId}_${url}`] = audioBuffer;
+      console.log(`✅ Loaded remote audio buffer for ${trackId}: ${url}`);
       return audioBuffer;
     } catch (error) {
       console.warn(`❌ Failed to load remote audio: ${url}`, error);
@@ -156,8 +157,8 @@ export const useUnifiedAudio = () => {
   };
 
   // Play remote track (triggered by WebSocket events)
-  const playRemoteTrack = async (trackType, audioFile, loop = true, volume = null) => {
-    console.log(`🎵 Attempting to play remote track: ${trackType} - ${audioFile}`);
+  const playRemoteTrack = async (trackId, audioFile, loop = true, volume = null) => {
+    console.log(`🎵 Attempting to play remote track: ${trackId} - ${audioFile}`);
     console.log(`🔧 Audio state - isUnlocked: ${isAudioUnlocked}, audioContext: ${audioContextRef.current ? 'exists' : 'null'}, state: ${audioContextRef.current?.state}`);
     
     // Check if Web Audio context exists and is unlocked
@@ -169,19 +170,19 @@ export const useUnifiedAudio = () => {
 
     await initializeWebAudio();
     
-    // Stop current track of this type
-    if (activeSourcesRef.current[trackType]) {
-      activeSourcesRef.current[trackType].stop();
-      delete activeSourcesRef.current[trackType];
+    // Stop current track of this ID
+    if (activeSourcesRef.current[trackId]) {
+      activeSourcesRef.current[trackId].stop();
+      delete activeSourcesRef.current[trackId];
     }
 
     // Load audio buffer if not already loaded
-    const bufferKey = `${trackType}_${audioFile}`;
+    const bufferKey = `${trackId}_${audioFile}`;
     let audioBuffer = audioBuffersRef.current[bufferKey];
     
     if (!audioBuffer) {
       // For testing, use /audio/ path, but in production this would be a remote URL
-      audioBuffer = await loadRemoteAudioBuffer(`/audio/${audioFile}`, trackType);
+      audioBuffer = await loadRemoteAudioBuffer(`/audio/${audioFile}`, trackId);
       if (!audioBuffer) return false;
     }
 
@@ -189,16 +190,19 @@ export const useUnifiedAudio = () => {
       // Create and configure source
       const source = audioContextRef.current.createBufferSource();
       source.buffer = audioBuffer;
-      source.loop = remoteTrackStates[trackType]?.looping ?? loop; // Use current state or fallback to parameter
-      source.connect(remoteTrackGainsRef.current[trackType]);
+      
+      // SFX tracks are hardcoded to never loop
+      const shouldLoop = trackId.startsWith('sfx_') ? false : (remoteTrackStates[trackId]?.looping ?? loop);
+      source.loop = shouldLoop;
+      source.connect(remoteTrackGainsRef.current[trackId]);
       
       // Handle resume from pause vs fresh start
-      const resumeFromPause = remoteTrackStates[trackType]?.paused && remoteTrackStates[trackType]?.currentTime > 0;
-      const startOffset = resumeFromPause ? remoteTrackStates[trackType].currentTime : 0;
+      const resumeFromPause = remoteTrackStates[trackId]?.paused && remoteTrackStates[trackId]?.currentTime > 0;
+      const startOffset = resumeFromPause ? remoteTrackStates[trackId].currentTime : 0;
       
       // Start playback (for Web Audio, we need to start from beginning and track offset)
       source.start(0, startOffset);
-      activeSourcesRef.current[trackType] = source;
+      activeSourcesRef.current[trackId] = source;
 
       // Get duration from audio buffer
       const duration = audioBuffer.duration;
@@ -206,11 +210,11 @@ export const useUnifiedAudio = () => {
       // Update state with duration
       setRemoteTrackStates(prev => ({
         ...prev,
-        [trackType]: {
-          ...prev[trackType],
+        [trackId]: {
+          ...prev[trackId],
           playing: true,
           currentTrack: audioFile,
-          volume: volume !== null ? volume : prev[trackType].volume,
+          volume: volume !== null ? volume : prev[trackId]?.volume || 0.7,
           currentTime: 0,
           duration: duration
         }
@@ -220,68 +224,105 @@ export const useUnifiedAudio = () => {
       const startTime = audioContextRef.current.currentTime;
       const pausedTime = resumeFromPause ? startOffset : 0;
       
-      trackTimersRef.current[trackType] = {
+      trackTimersRef.current[trackId] = {
         startTime,
         pausedTime,
         duration,
-        loop: remoteTrackStates[trackType]?.looping ?? loop,
+        loop: shouldLoop, // Use the same shouldLoop value as the source
         lastUpdateTime: startTime
       };
 
       // Start time tracking with proper loop handling
       const updateTime = () => {
-        if (activeSourcesRef.current[trackType] === source && trackTimersRef.current[trackType]) {
-          const timer = trackTimersRef.current[trackType];
+        if (activeSourcesRef.current[trackId] === source && trackTimersRef.current[trackId]) {
+          const timer = trackTimersRef.current[trackId];
           const elapsed = audioContextRef.current.currentTime - timer.startTime + timer.pausedTime;
           
           let currentTime;
+          let shouldContinueUpdating = true;
+          
           if (timer.loop && timer.duration > 0) {
             // For looping tracks, use modulo to cycle through the duration
             currentTime = elapsed % timer.duration;
           } else {
             // For non-looping tracks, clamp to duration
             currentTime = Math.min(elapsed, timer.duration);
+            
+            // Check if non-looped track has finished
+            if (elapsed >= timer.duration && timer.duration > 0) {
+              console.log(`⏹️ Non-looped ${trackId} track finished, auto-stopping`);
+              shouldContinueUpdating = false;
+              
+              // Auto-stop the track
+              if (activeSourcesRef.current[trackId]) {
+                try {
+                  activeSourcesRef.current[trackId].stop();
+                  delete activeSourcesRef.current[trackId];
+                } catch (e) {
+                  console.warn('Error auto-stopping finished track:', e);
+                }
+              }
+              
+              // Clean up timer
+              delete trackTimersRef.current[trackId];
+              
+              // Update state to stopped and reset time for next play
+              setRemoteTrackStates(prev => ({
+                ...prev,
+                [trackId]: {
+                  ...prev[trackId],
+                  playing: false,
+                  paused: false,
+                  currentTime: 0, // Reset to start for next playback
+                  currentTrack: null,
+                  duration: 0 // Reset duration as well
+                }
+              }));
+              
+              return; // Stop the update loop
+            }
           }
           
+          // Update current time if track is still playing
           setRemoteTrackStates(prev => ({
             ...prev,
-            [trackType]: {
-              ...prev[trackType],
+            [trackId]: {
+              ...prev[trackId],
               currentTime: currentTime,
               paused: false
             }
           }));
 
-          // Continue updating if track is still active
-          if (activeSourcesRef.current[trackType] === source) {
+          // Continue updating if track is still active and should continue
+          if (activeSourcesRef.current[trackId] === source && shouldContinueUpdating) {
             requestAnimationFrame(updateTime);
           }
         }
       };
       requestAnimationFrame(updateTime);
 
-      console.log(`▶️ Playing remote ${trackType}: ${audioFile} (loop: ${loop})`);
+      console.log(`▶️ Playing remote ${trackId}: ${audioFile} (loop: ${shouldLoop})`);
       return true;
     } catch (error) {
-      console.warn(`Failed to play remote ${trackType}:`, error);
+      console.warn(`Failed to play remote ${trackId}:`, error);
       return false;
     }
   };
 
   // Stop remote track
-  const stopRemoteTrack = (trackType) => {
-    if (activeSourcesRef.current[trackType]) {
+  const stopRemoteTrack = (trackId) => {
+    if (activeSourcesRef.current[trackId]) {
       try {
-        activeSourcesRef.current[trackType].stop();
-        delete activeSourcesRef.current[trackType];
+        activeSourcesRef.current[trackId].stop();
+        delete activeSourcesRef.current[trackId];
         
         // Clean up timer
-        delete trackTimersRef.current[trackType];
+        delete trackTimersRef.current[trackId];
         
         setRemoteTrackStates(prev => ({
           ...prev,
-          [trackType]: {
-            ...prev[trackType],
+          [trackId]: {
+            ...prev[trackId],
             playing: false,
             paused: false,
             currentTrack: null,
@@ -290,19 +331,19 @@ export const useUnifiedAudio = () => {
           }
         }));
 
-        console.log(`⏹️ Stopped remote ${trackType}`);
+        console.log(`⏹️ Stopped remote ${trackId}`);
       } catch (error) {
-        console.warn(`Failed to stop remote ${trackType}:`, error);
+        console.warn(`Failed to stop remote ${trackId}:`, error);
       }
     }
   };
 
   // Pause remote track (preserves playhead position)
-  const pauseRemoteTrack = (trackType) => {
-    if (activeSourcesRef.current[trackType] && trackTimersRef.current[trackType]) {
+  const pauseRemoteTrack = (trackId) => {
+    if (activeSourcesRef.current[trackId] && trackTimersRef.current[trackId]) {
       try {
         // Calculate current position before stopping
-        const timer = trackTimersRef.current[trackType];
+        const timer = trackTimersRef.current[trackId];
         const elapsed = audioContextRef.current.currentTime - timer.startTime + timer.pausedTime;
         
         let currentTime;
@@ -313,54 +354,60 @@ export const useUnifiedAudio = () => {
         }
         
         // Stop the source
-        activeSourcesRef.current[trackType].stop();
-        delete activeSourcesRef.current[trackType];
+        activeSourcesRef.current[trackId].stop();
+        delete activeSourcesRef.current[trackId];
         
         // Update state to paused with preserved position
         setRemoteTrackStates(prev => ({
           ...prev,
-          [trackType]: {
-            ...prev[trackType],
+          [trackId]: {
+            ...prev[trackId],
             playing: false,
             paused: true,
             currentTime: currentTime
           }
         }));
 
-        console.log(`⏸️ Paused remote ${trackType} at ${currentTime.toFixed(2)}s`);
+        console.log(`⏸️ Paused remote ${trackId} at ${currentTime.toFixed(2)}s`);
         return true;
       } catch (error) {
-        console.warn(`Failed to pause remote ${trackType}:`, error);
+        console.warn(`Failed to pause remote ${trackId}:`, error);
         return false;
       }
     }
     return false;
   };
 
-  // Toggle remote track looping
-  const toggleRemoteTrackLooping = (trackType, looping) => {
+  // Toggle remote track looping (SFX tracks are hardcoded to false)
+  const toggleRemoteTrackLooping = (trackId, looping) => {
+    // SFX tracks cannot be looped
+    if (trackId.startsWith('sfx_')) {
+      console.warn('🚫 SFX tracks cannot be looped - ignoring toggle request');
+      return;
+    }
+    
     setRemoteTrackStates(prev => ({
       ...prev,
-      [trackType]: {
-        ...prev[trackType],
+      [trackId]: {
+        ...prev[trackId],
         looping
       }
     }));
-    console.log(`🔄 Set remote ${trackType} looping to ${looping ? 'enabled' : 'disabled'}`);
+    console.log(`🔄 Set remote ${trackId} looping to ${looping ? 'enabled' : 'disabled'}`);
   };
 
   // Set remote track volume
-  const setRemoteTrackVolume = (trackType, volume) => {
-    if (remoteTrackGainsRef.current[trackType]) {
-      remoteTrackGainsRef.current[trackType].gain.value = volume;
+  const setRemoteTrackVolume = (trackId, volume) => {
+    if (remoteTrackGainsRef.current[trackId]) {
+      remoteTrackGainsRef.current[trackId].gain.value = volume;
       setRemoteTrackStates(prev => ({
         ...prev,
-        [trackType]: {
-          ...prev[trackType],
+        [trackId]: {
+          ...prev[trackId],
           volume
         }
       }));
-      console.log(`🔊 Set remote ${trackType} volume to ${Math.round(volume * 100)}%`);
+      console.log(`🔊 Set remote ${trackId} volume to ${Math.round(volume * 100)}%`);
     }
   };
 

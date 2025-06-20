@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: GPL-3.0-or-later
  */
 
-import React from 'react';
+import React, { useRef, useEffect } from 'react';
 import { DM_SUB_HEADER, DM_CHILD, DM_CHILD_LAST, MIXER_FADER } from '../styles/constants';
 
 // Helper function to format time in MM:SS format
@@ -25,7 +25,7 @@ export default function AudioTrack({
   isLast = false
 }) {
   
-  const { type, icon, label, filename } = config;
+  const { trackId, type, icon, label, filename } = config;
   const { playing, volume = 0.7, currentTime = 0, duration = 0, looping = true } = trackState;
 
   return (
@@ -65,18 +65,23 @@ export default function AudioTrack({
             ⏹ STOP
           </button>
           
-          {/* Loop Toggle Button */}
-          <button
-            className={`text-xs px-2 py-1 rounded ml-2 transition-all duration-200 ${
-              looping 
-                ? 'bg-blue-600 hover:bg-blue-700 text-white' 
-                : 'bg-gray-600 hover:bg-gray-700 text-gray-300'
-            }`}
-            onClick={() => onLoopToggle && onLoopToggle(type, !looping)}
-            title={looping ? 'Disable looping' : 'Enable looping'}
-          >
-            🔄 {looping ? 'LOOP' : 'ONCE'}
-          </button>
+          {/* Loop Toggle Button - Only show for non-SFX tracks */}
+          {type !== 'sfx' && (
+            <button
+              className={`text-xs px-2 py-1 rounded ml-2 transition-all duration-200 ${
+                looping 
+                  ? 'bg-blue-600 hover:bg-blue-700 text-white' 
+                  : 'bg-gray-600 hover:bg-gray-700 text-gray-300'
+              }`}
+              onClick={() => onLoopToggle && onLoopToggle(trackId, !looping)}
+              title={looping ? 'Disable looping' : 'Enable looping'}
+            >
+              🔄 {looping ? 'LOOP' : 'ONCE'}
+            </button>
+          )}
+          
+          {/* SFX Fixed Label - Always shows ONCE for SFX */}
+          {}
         </div>
         
         {/* Level Control - Mixer Style */}

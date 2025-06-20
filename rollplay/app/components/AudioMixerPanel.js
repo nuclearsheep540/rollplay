@@ -19,25 +19,35 @@ export default function AudioMixerPanel({
   toggleRemoteTrackLooping = null
 }) {
   
-  // Audio track configurations
+  // Audio track configurations - each track needs a unique trackId
   const trackConfigs = [
     {
+      trackId: 'music_boss',
       type: 'music',
       icon: '🎵',
       label: 'Music Channel', 
       filename: 'boss.mp3'
     },
     {
+      trackId: 'ambient_storm',
       type: 'ambient',
       icon: '🌧️',
       label: 'Ambient',
       filename: 'storm.mp3'
     },
     {
+      trackId: 'sfx_sword',
       type: 'sfx',
       icon: '⚔️',
-      label: 'Sound Effects',
+      label: 'Combat SFX',
       filename: 'sword.mp3'
+    },
+    {
+      trackId: 'sfx_enemy_hit',
+      type: 'sfx',
+      icon: '💥',
+      label: 'Enemy Hit SFX',
+      filename: 'enemy_hit_cinematic.mp3'
     }
   ];
 
@@ -56,39 +66,45 @@ export default function AudioMixerPanel({
         <div>
           {trackConfigs.map((config, index) => (
             <AudioTrack
-              key={config.type}
+              key={config.trackId}
               config={config}
-              trackState={remoteTrackStates[config.type] || { playing: false, volume: 0.7, currentTime: 0, duration: 0, looping: true }}
+              trackState={remoteTrackStates[config.trackId] || { 
+                playing: false, 
+                volume: 0.7, 
+                currentTime: 0, 
+                duration: 0, 
+                looping: config.type === 'sfx' ? false : true 
+              }}
               onPlay={() => {
-                console.log(`🎵 Play ${config.type} button clicked - sending to ALL players`);
+                console.log(`🎵 Play ${config.trackId} (${config.filename}) button clicked - sending to ALL players`);
                 if (sendRemoteAudioPlay) {
-                  const trackState = remoteTrackStates[config.type] || {};
-                  sendRemoteAudioPlay(config.type, config.filename, trackState.looping ?? true, trackState.volume);
+                  const trackState = remoteTrackStates[config.trackId] || {};
+                  sendRemoteAudioPlay(config.trackId, config.filename, trackState.looping ?? (config.type === 'sfx' ? false : true), trackState.volume);
                 }
               }}
               onPause={() => {
-                console.log(`⏸️ Pause ${config.type} button clicked - sending to ALL players`);
+                console.log(`⏸️ Pause ${config.trackId} button clicked - sending to ALL players`);
                 if (sendRemoteAudioPause) {
-                  sendRemoteAudioPause(config.type);
+                  sendRemoteAudioPause(config.trackId);
                 }
               }}
               onStop={() => {
-                console.log(`🛑 Stop ${config.type} button clicked - sending to ALL players`);
+                console.log(`🛑 Stop ${config.trackId} button clicked - sending to ALL players`);
                 if (sendRemoteAudioStop) {
-                  sendRemoteAudioStop(config.type);
+                  sendRemoteAudioStop(config.trackId);
                 }
               }}
               onVolumeChange={(newVolume) => {
                 if (setRemoteTrackVolume) {
-                  setRemoteTrackVolume(config.type, newVolume);
+                  setRemoteTrackVolume(config.trackId, newVolume);
                 }
                 if (sendRemoteAudioVolume) {
-                  sendRemoteAudioVolume(config.type, newVolume);
+                  sendRemoteAudioVolume(config.trackId, newVolume);
                 }
               }}
-              onLoopToggle={(trackType, looping) => {
+              onLoopToggle={(trackId, looping) => {
                 if (toggleRemoteTrackLooping) {
-                  toggleRemoteTrackLooping(trackType, looping);
+                  toggleRemoteTrackLooping(trackId, looping);
                 }
               }}
               isLast={index === trackConfigs.length - 1}
