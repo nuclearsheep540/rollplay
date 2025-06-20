@@ -18,7 +18,7 @@ import AdventureLog from '../components/AdventureLog';
 import LobbyPanel from '../components/LobbyPanel';
 import DiceActionPanel from '../components/DiceActionPanel'; // NEW IMPORT
 import { useWebSocket } from '../hooks/useWebSocket';
-import { useLocalAudio } from '../hooks/useLocalAudio';
+import { useUnifiedAudio } from '../hooks/useUnifiedAudio';
 
 function GameContent() {
   const params = useSearchParams(); 
@@ -479,7 +479,20 @@ function GameContent() {
     setSeatColors(newSeatColors);
   };
 
-  // Create game context object for WebSocket handlers (after functions are defined)
+  // Initialize unified audio system (local + remote) FIRST
+  const {
+    isAudioUnlocked,
+    masterVolume,
+    setMasterVolume,
+    unlockAudio,
+    playLocalSFX,
+    remoteTrackStates,
+    playRemoteTrack,
+    stopRemoteTrack,
+    setRemoteTrackVolume
+  } = useUnifiedAudio();
+
+  // Create game context object for WebSocket handlers (after audio functions are defined)
   const gameContext = {
     // State setters
     setGameSeats,
@@ -502,10 +515,15 @@ function GameContent() {
     // Helper functions
     addToLog,
     getCharacterData,
-    handleRoleChange
+    handleRoleChange,
+    
+    // Remote audio functions (for WebSocket events)
+    playRemoteTrack,
+    stopRemoteTrack,
+    setRemoteTrackVolume
   };
 
-  // Initialize WebSocket hook with game context
+  // Initialize WebSocket hook with game context (after audio functions are available)
   const {
     webSocket,
     isConnected,
@@ -522,15 +540,6 @@ function GameContent() {
     sendColorChange,
     sendRoleChange
   } = useWebSocket(roomId, thisPlayer, gameContext);
-
-  // Initialize local audio system
-  const {
-    isAudioUnlocked,
-    masterVolume,
-    setMasterVolume,
-    unlockAudio,
-    playLocalSFX
-  } = useLocalAudio();
 
   // Listen for combat state changes and play audio
   useEffect(() => {
@@ -1098,6 +1107,10 @@ function GameContent() {
             roomId={roomId}
             activePrompts={activePrompts}        // UPDATED: Pass array instead of single prompt
             unlockAudio={unlockAudio}             // NEW: Pass audio unlock function
+            remoteTrackStates={remoteTrackStates} // NEW: Pass remote track states
+            playRemoteTrack={playRemoteTrack}     // NEW: Pass remote track controls
+            stopRemoteTrack={stopRemoteTrack}     // NEW: Pass remote track controls
+            setRemoteTrackVolume={setRemoteTrackVolume} // NEW: Pass remote track controls
             clearDicePrompt={clearDicePrompt}    // UPDATED: Now accepts prompt ID
           />
         </div>

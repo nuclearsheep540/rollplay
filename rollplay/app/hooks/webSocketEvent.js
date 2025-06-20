@@ -4,6 +4,44 @@
  * These functions take data and state setters directly to process events
  */
 
+// =====================================
+// REMOTE AUDIO EVENT HANDLERS
+// =====================================
+
+export const handleRemoteAudioPlay = (data, { playRemoteTrack }) => {
+  console.log("🎵 Remote audio play command received:", data);
+  const { track_type, audio_file, loop = true, volume = 1.0, triggered_by } = data;
+  
+  if (playRemoteTrack) {
+    playRemoteTrack(track_type, audio_file, loop, volume);
+    console.log(`▶️ Playing remote ${track_type}: ${audio_file} (triggered by ${triggered_by})`);
+  }
+};
+
+export const handleRemoteAudioStop = (data, { stopRemoteTrack }) => {
+  console.log("🛑 Remote audio stop command received:", data);
+  const { track_type, triggered_by } = data;
+  
+  if (stopRemoteTrack) {
+    stopRemoteTrack(track_type);
+    console.log(`⏹️ Stopped remote ${track_type} (triggered by ${triggered_by})`);
+  }
+};
+
+export const handleRemoteAudioVolume = (data, { setRemoteTrackVolume }) => {
+  console.log("🔊 Remote audio volume command received:", data);
+  const { track_type, volume, triggered_by } = data;
+  
+  if (setRemoteTrackVolume) {
+    setRemoteTrackVolume(track_type, volume);
+    console.log(`🔊 Set remote ${track_type} volume to ${Math.round(volume * 100)}% (triggered by ${triggered_by})`);
+  }
+};
+
+// =====================================
+// EXISTING EVENT HANDLERS
+// =====================================
+
 export const handleSeatChange = (data, { setGameSeats, getCharacterData }) => {
   console.log("received a new message with seat change:", data);
   

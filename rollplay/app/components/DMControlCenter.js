@@ -37,7 +37,11 @@ export default function DMControlCenter({
   handleClearAllMessages,   // NEW: Function to clear all messages
   activePrompts = [],        // UPDATED: Array of active prompts
   clearDicePrompt,           // UPDATED: Function to clear prompt(s)
-  unlockAudio = null         // NEW: Audio unlock function for DM
+  unlockAudio = null,        // NEW: Audio unlock function for DM
+  remoteTrackStates = {},    // NEW: Remote track states from unified audio
+  playRemoteTrack = null,    // NEW: Play remote track function
+  stopRemoteTrack = null,    // NEW: Stop remote track function
+  setRemoteTrackVolume = null // NEW: Set remote track volume function
 }) {
   
   // State for main panel collapse
@@ -94,13 +98,18 @@ export default function DMControlCenter({
       <div 
         className={DM_TITLE}
         onClick={() => {
-          // Unlock audio on first DM interaction
-          if (unlockAudio && isCollapsed) {
-            unlockAudio().then(() => {
-              console.log('🔊 Audio unlocked when DM expanded Control Center');
-            }).catch(err => {
-              console.warn('DM audio unlock failed:', err);
-            });
+          // Unlock both audio systems on first DM interaction
+          if (isCollapsed) {
+            // Unlock basic HTML5 audio (for local sounds)
+            if (unlockAudio) {
+              unlockAudio().then(() => {
+                console.log('🔊 HTML5 Audio unlocked when DM expanded Control Center');
+              }).catch(err => {
+                console.warn('HTML5 audio unlock failed:', err);
+              });
+            }
+            
+            // Note: Web Audio is now part of unified audio system and unlocked with unlockAudio above
           }
           setIsCollapsed(!isCollapsed);
         }}
@@ -299,31 +308,164 @@ export default function DMControlCenter({
         </div>
         {expandedSections.audio && (
           <div>
-            <div className="mb-2">
-              {[
-                { name: '🏰 Tavern Ambience', duration: '3:42 / 8:15' },
-                { name: '⚔️ Combat Music', duration: '0:00 / 4:32' },
-                { name: '🌲 Forest Sounds', duration: '0:00 / 12:08' }
-              ].map((track, index) => (
-                <div 
-                  key={index}
-                  className={index < 2 ? DM_CHILD : DM_CHILD_LAST}
+            {/* Music Track */}
+            <div className={DM_SUB_HEADER}>🎵 Music</div>
+            <div className={DM_CHILD}>
+              <div>
+                <div>Boss Battle</div>
+                <div>{remoteTrackStates.music?.playing ? '▶️ Playing' : '⏹️ Stopped'}</div>
+              </div>
+              <div className="flex gap-2 items-center">
+                <button 
+                  className="bg-green-600 hover:bg-green-700 text-white px-2 py-1 rounded text-xs"
+                  onClick={() => {
+                    console.log('🎵 Play Music button clicked');
+                    if (playRemoteTrack) {
+                      playRemoteTrack('music', 'boss.mp3', true);
+                    }
+                  }}
                 >
-                  <div>
-                    <div>{track.name}</div>
-                    <div>{track.duration}</div>
-                  </div>
-                  <div>
-                    <button 
-                      className={DM_CHILD}
-                      onClick={() => handleTrackClick(track.name)}
-                    >
-                      {currentTrack === track.name && isPlaying ? '⏸️' : '▶️'}
-                    </button>
-                  </div>
+                  ▶️
+                </button>
+                <button 
+                  className="bg-red-600 hover:bg-red-700 text-white px-2 py-1 rounded text-xs"
+                  onClick={() => {
+                    if (stopRemoteTrack) {
+                      stopRemoteTrack('music');
+                    }
+                  }}
+                >
+                  ⏹️
+                </button>
+                <div className="flex items-center gap-1 ml-2">
+                  <span className="text-xs text-gray-400">Vol:</span>
+                  <input
+                    type="range"
+                    min="0"
+                    max="1"
+                    step="0.1"
+                    value={remoteTrackStates.music?.volume || 0.7}
+                    onChange={(e) => {
+                      if (setRemoteTrackVolume) {
+                        setRemoteTrackVolume('music', parseFloat(e.target.value));
+                      }
+                    }}
+                    className="w-16 h-1 bg-gray-600 rounded-lg appearance-none cursor-pointer slider-thumb-blue"
+                  />
+                  <span className="text-xs text-gray-400 min-w-[24px]">
+                    {Math.round((remoteTrackStates.music?.volume || 0.7) * 100)}%
+                  </span>
                 </div>
-              ))}
+              </div>
             </div>
+
+            {/* Ambient Track */}
+            <div className={DM_SUB_HEADER}>🌧️ Ambient</div>
+            <div className={DM_CHILD}>
+              <div>
+                <div>Storm Sounds</div>
+                <div>{remoteTrackStates.ambient?.playing ? '▶️ Playing' : '⏹️ Stopped'}</div>
+              </div>
+              <div className="flex gap-2 items-center">
+                <button 
+                  className="bg-green-600 hover:bg-green-700 text-white px-2 py-1 rounded text-xs"
+                  onClick={() => {
+                    console.log('🌧️ Play Ambient button clicked');
+                    if (playRemoteTrack) {
+                      playRemoteTrack('ambient', 'storm.mp3', true);
+                    }
+                  }}
+                >
+                  ▶️
+                </button>
+                <button 
+                  className="bg-red-600 hover:bg-red-700 text-white px-2 py-1 rounded text-xs"
+                  onClick={() => {
+                    if (stopRemoteTrack) {
+                      stopRemoteTrack('ambient');
+                    }
+                  }}
+                >
+                  ⏹️
+                </button>
+                <div className="flex items-center gap-1 ml-2">
+                  <span className="text-xs text-gray-400">Vol:</span>
+                  <input
+                    type="range"
+                    min="0"
+                    max="1"
+                    step="0.1"
+                    value={remoteTrackStates.ambient?.volume || 0.6}
+                    onChange={(e) => {
+                      if (setRemoteTrackVolume) {
+                        setRemoteTrackVolume('ambient', parseFloat(e.target.value));
+                      }
+                    }}
+                    className="w-16 h-1 bg-gray-600 rounded-lg appearance-none cursor-pointer slider-thumb-blue"
+                  />
+                  <span className="text-xs text-gray-400 min-w-[24px]">
+                    {Math.round((remoteTrackStates.ambient?.volume || 0.6) * 100)}%
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            {/* SFX Track */}
+            <div className={DM_SUB_HEADER}>⚔️ Sound Effects</div>
+            <div className={DM_CHILD_LAST}>
+              <div>
+                <div>Combat Start</div>
+                <div>{remoteTrackStates.sfx?.playing ? '▶️ Playing' : '⏹️ Stopped'}</div>
+              </div>
+              <div className="flex gap-2 items-center">
+                <button 
+                  className="bg-green-600 hover:bg-green-700 text-white px-2 py-1 rounded text-xs"
+                  onClick={() => {
+                    console.log('⚔️ Play SFX button clicked');
+                    if (playRemoteTrack) {
+                      playRemoteTrack('sfx', 'sword.mp3', false);
+                    }
+                  }}
+                >
+                  ▶️
+                </button>
+                <button 
+                  className="bg-red-600 hover:bg-red-700 text-white px-2 py-1 rounded text-xs"
+                  onClick={() => {
+                    if (stopRemoteTrack) {
+                      stopRemoteTrack('sfx');
+                    }
+                  }}
+                >
+                  ⏹️
+                </button>
+                <div className="flex items-center gap-1 ml-2">
+                  <span className="text-xs text-gray-400">Vol:</span>
+                  <input
+                    type="range"
+                    min="0"
+                    max="1"
+                    step="0.1"
+                    value={remoteTrackStates.sfx?.volume || 0.8}
+                    onChange={(e) => {
+                      if (setRemoteTrackVolume) {
+                        setRemoteTrackVolume('sfx', parseFloat(e.target.value));
+                      }
+                    }}
+                    className="w-16 h-1 bg-gray-600 rounded-lg appearance-none cursor-pointer slider-thumb-blue"
+                  />
+                  <span className="text-xs text-gray-400 min-w-[24px]">
+                    {Math.round((remoteTrackStates.sfx?.volume || 0.8) * 100)}%
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            {!remoteTrackStates.music && (
+              <div className="text-yellow-400 text-xs mt-2">
+                💡 Expand this panel to unlock audio
+              </div>
+            )}
           </div>
         )}
       </div>

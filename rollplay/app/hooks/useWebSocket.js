@@ -25,6 +25,9 @@ import {
   handleSeatCountChange,
   handlePlayerDisplaced,
   handleSystemMessage,
+  handleRemoteAudioPlay,
+  handleRemoteAudioStop,
+  handleRemoteAudioVolume,
   createSendFunctions
 } from './webSocketEvent'
 
@@ -139,6 +142,18 @@ export function useWebSocket(roomId, playerName, gameContext) {
 
         case "system_message":
           handleSystemMessage(json_data["data"], gameContext);
+          break;
+
+        case "remote_audio_play":
+          handleRemoteAudioPlay(json_data["data"], gameContext);
+          break;
+
+        case "remote_audio_stop":
+          handleRemoteAudioStop(json_data["data"], gameContext);
+          break;
+
+        case "remote_audio_volume":
+          handleRemoteAudioVolume(json_data["data"], gameContext);
           break;
 
         default:
