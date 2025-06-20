@@ -490,7 +490,8 @@ function GameContent() {
     playRemoteTrack,
     pauseRemoteTrack,
     stopRemoteTrack,
-    setRemoteTrackVolume
+    setRemoteTrackVolume,
+    toggleRemoteTrackLooping
   } = useUnifiedAudio();
 
   // Create game context object for WebSocket handlers (after audio functions are defined)
@@ -522,7 +523,8 @@ function GameContent() {
     playRemoteTrack,
     pauseRemoteTrack,
     stopRemoteTrack,
-    setRemoteTrackVolume
+    setRemoteTrackVolume,
+    toggleRemoteTrackLooping
   };
 
   // Initialize WebSocket hook with game context (after audio functions are available)
@@ -1155,6 +1157,7 @@ function GameContent() {
             playRemoteTrack={playRemoteTrack}     // NEW: Pass remote track controls (local)
             stopRemoteTrack={stopRemoteTrack}     // NEW: Pass remote track controls (local)
             setRemoteTrackVolume={setRemoteTrackVolume} // NEW: Pass remote track controls (local)
+            toggleRemoteTrackLooping={toggleRemoteTrackLooping} // NEW: Pass loop toggle function
             sendRemoteAudioPlay={sendRemoteAudioPlay}     // NEW: Pass WebSocket sending functions
             sendRemoteAudioPause={sendRemoteAudioPause}   // NEW: Pass WebSocket pause function
             sendRemoteAudioStop={sendRemoteAudioStop}     // NEW: Pass WebSocket sending functions

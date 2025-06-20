@@ -46,8 +46,10 @@ export default function DMControlCenter({
   stopRemoteTrack = null,    // NEW: Stop remote track function (local)
   setRemoteTrackVolume = null, // NEW: Set remote track volume function (local)
   sendRemoteAudioPlay = null,  // NEW: Send remote audio play via WebSocket
+  sendRemoteAudioPause = null, // NEW: Send remote audio pause via WebSocket
   sendRemoteAudioStop = null,  // NEW: Send remote audio stop via WebSocket
-  sendRemoteAudioVolume = null // NEW: Send remote audio volume via WebSocket
+  sendRemoteAudioVolume = null, // NEW: Send remote audio volume via WebSocket
+  toggleRemoteTrackLooping = null // NEW: Toggle loop state function
 }) {
   
   // State for main panel collapse
@@ -307,9 +309,11 @@ export default function DMControlCenter({
         onToggle={() => toggleSection('audio')}
         remoteTrackStates={remoteTrackStates}
         sendRemoteAudioPlay={sendRemoteAudioPlay}
+        sendRemoteAudioPause={sendRemoteAudioPause}
         sendRemoteAudioStop={sendRemoteAudioStop}
         sendRemoteAudioVolume={sendRemoteAudioVolume}
         setRemoteTrackVolume={setRemoteTrackVolume}
+        toggleRemoteTrackLooping={toggleRemoteTrackLooping}
       />
 
 

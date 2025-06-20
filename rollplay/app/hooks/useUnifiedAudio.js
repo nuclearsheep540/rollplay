@@ -102,9 +102,9 @@ export const useUnifiedAudio = () => {
 
   // Remote track states (for DM-controlled audio)
   const [remoteTrackStates, setRemoteTrackStates] = useState({
-    music: { playing: false, paused: false, volume: 0.7, currentTrack: null, currentTime: 0, duration: 0 },
-    ambient: { playing: false, paused: false, volume: 0.6, currentTrack: null, currentTime: 0, duration: 0 },
-    sfx: { playing: false, paused: false, volume: 0.8, currentTrack: null, currentTime: 0, duration: 0 }
+    music: { playing: false, paused: false, volume: 0.7, currentTrack: null, currentTime: 0, duration: 0, looping: true },
+    ambient: { playing: false, paused: false, volume: 0.6, currentTrack: null, currentTime: 0, duration: 0, looping: true },
+    sfx: { playing: false, paused: false, volume: 0.8, currentTrack: null, currentTime: 0, duration: 0, looping: false }
   });
 
   // Initialize Web Audio API for remote tracks
@@ -189,7 +189,7 @@ export const useUnifiedAudio = () => {
       // Create and configure source
       const source = audioContextRef.current.createBufferSource();
       source.buffer = audioBuffer;
-      source.loop = loop;
+      source.loop = remoteTrackStates[trackType]?.looping ?? loop; // Use current state or fallback to parameter
       source.connect(remoteTrackGainsRef.current[trackType]);
       
       // Handle resume from pause vs fresh start
@@ -224,7 +224,7 @@ export const useUnifiedAudio = () => {
         startTime,
         pausedTime,
         duration,
-        loop,
+        loop: remoteTrackStates[trackType]?.looping ?? loop,
         lastUpdateTime: startTime
       };
 
@@ -337,6 +337,18 @@ export const useUnifiedAudio = () => {
     return false;
   };
 
+  // Toggle remote track looping
+  const toggleRemoteTrackLooping = (trackType, looping) => {
+    setRemoteTrackStates(prev => ({
+      ...prev,
+      [trackType]: {
+        ...prev[trackType],
+        looping
+      }
+    }));
+    console.log(`🔄 Set remote ${trackType} looping to ${looping ? 'enabled' : 'disabled'}`);
+  };
+
   // Set remote track volume
   const setRemoteTrackVolume = (trackType, volume) => {
     if (remoteTrackGainsRef.current[trackType]) {
@@ -417,6 +429,7 @@ export const useUnifiedAudio = () => {
     pauseRemoteTrack,
     stopRemoteTrack,
     setRemoteTrackVolume,
+    toggleRemoteTrackLooping,
     
     // Unified functions
     unlockAudio

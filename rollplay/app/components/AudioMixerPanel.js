@@ -15,7 +15,8 @@ export default function AudioMixerPanel({
   sendRemoteAudioPause = null,
   sendRemoteAudioStop = null,
   sendRemoteAudioVolume = null,
-  setRemoteTrackVolume = null
+  setRemoteTrackVolume = null,
+  toggleRemoteTrackLooping = null
 }) {
   
   // Audio track configurations
@@ -24,22 +25,19 @@ export default function AudioMixerPanel({
       type: 'music',
       icon: '🎵',
       label: 'Music Channel', 
-      filename: 'boss.mp3',
-      loop: true
+      filename: 'boss.mp3'
     },
     {
       type: 'ambient',
       icon: '🌧️',
       label: 'Ambient',
-      filename: 'storm.mp3', 
-      loop: true
+      filename: 'storm.mp3'
     },
     {
       type: 'sfx',
       icon: '⚔️',
       label: 'Sound Effects',
-      filename: 'sword.mp3',
-      loop: false
+      filename: 'sword.mp3'
     }
   ];
 
@@ -60,11 +58,12 @@ export default function AudioMixerPanel({
             <AudioTrack
               key={config.type}
               config={config}
-              trackState={remoteTrackStates[config.type] || { playing: false, volume: 0.7, currentTime: 0, duration: 0 }}
+              trackState={remoteTrackStates[config.type] || { playing: false, volume: 0.7, currentTime: 0, duration: 0, looping: true }}
               onPlay={() => {
                 console.log(`🎵 Play ${config.type} button clicked - sending to ALL players`);
                 if (sendRemoteAudioPlay) {
-                  sendRemoteAudioPlay(config.type, config.filename, config.loop, remoteTrackStates[config.type]?.volume);
+                  const trackState = remoteTrackStates[config.type] || {};
+                  sendRemoteAudioPlay(config.type, config.filename, trackState.looping ?? true, trackState.volume);
                 }
               }}
               onPause={() => {
@@ -85,6 +84,11 @@ export default function AudioMixerPanel({
                 }
                 if (sendRemoteAudioVolume) {
                   sendRemoteAudioVolume(config.type, newVolume);
+                }
+              }}
+              onLoopToggle={(trackType, looping) => {
+                if (toggleRemoteTrackLooping) {
+                  toggleRemoteTrackLooping(trackType, looping);
                 }
               }}
               isLast={index === trackConfigs.length - 1}
