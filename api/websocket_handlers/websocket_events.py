@@ -48,17 +48,17 @@ class WebsocketEvent():
         advantage = roll_data.get("advantage")
         context = roll_data.get("context", "")
         
-        # Build the formatted message similar to frontend logic
-        message_parts = [player]
+        # Build the formatted message without player name (UI displays player separately)
+        message_parts = []
         
         if context:
-            message_parts.append(f" [{context}]")
+            message_parts.append(f"[{context}]: ")
         
-        message_parts.append(f": {dice_notation}")
+        message_parts.append(f"{dice_notation}")
         
         if results:
             results_str = ", ".join(map(str, results))
-            message_parts.append(f": {results_str}")
+            message_parts.append(f": [{results_str}]")
         
         if modifier != 0:
             sign = "+" if modifier > 0 else ""
