@@ -156,8 +156,13 @@ export const useUnifiedAudio = () => {
 
   // Play remote track (triggered by WebSocket events)
   const playRemoteTrack = async (trackType, audioFile, loop = true, volume = null) => {
-    if (!isAudioUnlocked) {
-      console.warn('Audio context not unlocked yet - cannot play remote audio');
+    console.log(`🎵 Attempting to play remote track: ${trackType} - ${audioFile}`);
+    console.log(`🔧 Audio state - isUnlocked: ${isAudioUnlocked}, audioContext: ${audioContextRef.current ? 'exists' : 'null'}, state: ${audioContextRef.current?.state}`);
+    
+    // Check if Web Audio context exists and is unlocked
+    if (!audioContextRef.current || audioContextRef.current.state === 'suspended') {
+      console.warn('Web Audio context not ready - cannot play remote audio');
+      console.log('💡 User needs to interact with the page to unlock audio (click volume slider, sit in seat, etc.)');
       return false;
     }
 
@@ -265,16 +270,27 @@ export const useUnifiedAudio = () => {
   // Unlock both audio systems
   const unlockAudio = async () => {
     try {
+      console.log('🔓 Starting audio unlock process...');
+      
       // Unlock HTML5 audio with silent audio
       const silentAudio = new Audio();
       silentAudio.src = 'data:audio/wav;base64,UklGRnoGAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQoGAACBhYqFbF1fdJivrJBhNjVgodDbq2EcBj+a2/LDciUFLIHO8tiJNwgZaLvt559NEAxQp+PwtmMcBjiR1/LMeSwFJHfH8N2QQAoUXrTp66hVFApGn+DyvmwhGS2Q1/LNeSsFJHfH8N2QQAoUXrTp66hVFApGn+DyvmwhGS2Q1/LNeSsFJHfH8N2QQAoUXrTp66hVFApGn+DyvmwhGS2Q1/LNeSsFJHfH8N2QQAoUXrTp66hVFApGn+DyvmwhGS2Q1/LNeSsFJHfH8N2QQAoUXrTp66hVFApGn+DyvmwhGS2Q1/LNeSsFJHfH8N2QQAoUXrTp66hVFApGn+DyvmwhGS2Q1/LNeSsFJHfH8N2QQAoUXrTp66hVFApGn+DyvmwhGS2Q1/LNeSsFJHfH8N2QQAoUXrTp66hVFApGn+DyvmwhGS2Q1/LNeSsFJHfH8N2QQAoUXrTp66hVFApGn+DyvmwhGS2Q1/LNeSsFJHfH8N2QQAoUXrTp66hVFApGn+DyvmwhGS2Q1/LNeSsFJHfH8N2QQAoUXrTp66hVFApGn+DyvmzhGS2Q1/LNeSsFJHfH8N2QQAoUXrTp66hVFApGn+DyvmwhGS2Q1/LNeSsFJHfH8N2QQAoUXrTp66hVFApGn+DyvmwhGS2Q1/LNeSsFJHfH8N2QQAoUXrTp66hVFApGn+DyvmwhGS2Q1/LNeSsFJHfH8N2QQAoUXrTp66hVFApGn+DyvmwhGS2Q1/LNeSsFJHfH8N2QQAoUXrTp66hVFApGn+DyvmwhGS2Q1/LNeSsFJHfH8N2QQAoUXrTp66hVFApGn+DyvmwhGS2Q1/LNeSsFJHfH8N2QQAoUXrTp66hVFApGn+DyvmwhGS2Q1/LNeSsFJHfH8N2QQAoUXrTp66hVFApGn+DyvmwhGS2Q1/LNeSsFJHfH8N2QQAoUXrTp66hVFApGn+DyvmzhGS2Q1/LNeSsFJHfH8N2QQAoUXrTp66hVFApGn+DyvmwhGS2Q1/LNeSsFJHfH8N2QQAoUXrTp66hVFApGn+DyvmwhGS2Q1/LNeSsFJHfH8N2QQAoUXrTp66hVFApGn+DyvmwhGS2Q1/LNeSsFJHfH8N2QQAoUXrTp66hVFApGn+DyvmwhGS2Q1/LNeSsFJHfH8N2QQAoUXrTp66hVFApGn+DyvmwhGS2Q1/LNeSsFJHfH8N2QQAoUXrTp66hVFApGn+DyvmwhGS2Q1/LNeSsFJHfH8N2QQAoUXrTp66hVFApGn+DyvmwhGS2Q1/LNeSsFJHfH8N2QQAoUXrTp66hVFApGn+DyvmwhGS2Q1/LNeSsFJHfH8N2QQAoUXrTp66hVFApGn+DyvmzhGS2Q1/LNeSsFJHfH8N2QQAoUXrTp66hVFApGn+DyvmwhGS2Q1/LNeSsFJHfH8N2QQAoUXrTp66hVFApGn+DyvmwhGS2Q1/LNeSsFJHfH8N2QQAoUXrTp66hVFApGn+DyvmwhGS2Q1/LNeSsFJHfH8N2QQAoUXrTp66hVFApGn+DyvmwhGS2Q1/LNeSsFJHfH8N2QQAoUXrTp66hVFApGn+DyvmwhGS2Q1/LNeSsFJHfH8N2QQAoUXrTp66hVFApGn+DyvmwhGS2Q1/LNeSsFJHfH8N2QQAoUXrTp66hVFApGn+DyvmwhGS2Q1/LNeSsFJHfH8N2QQAoUXrTp66hVFApGn+DyvmwhGS2Q1/LNeSsFJHfH8N2QQAoUXrTp66hVFApGn+Dy';
       silentAudio.volume = 0;
       await silentAudio.play();
+      console.log('✅ HTML5 audio unlocked');
 
       // Unlock Web Audio API
+      console.log('🎵 Initializing Web Audio API...');
       const webAudioSuccess = await initializeWebAudio();
-      if (webAudioSuccess && audioContextRef.current.state === 'suspended') {
+      if (!webAudioSuccess) {
+        throw new Error('Failed to initialize Web Audio API');
+      }
+      
+      console.log(`🔧 Web Audio context state: ${audioContextRef.current?.state}`);
+      if (audioContextRef.current && audioContextRef.current.state === 'suspended') {
+        console.log('🔄 Resuming suspended Web Audio context...');
         await audioContextRef.current.resume();
+        console.log(`✅ Web Audio context resumed, new state: ${audioContextRef.current.state}`);
       }
       
       setIsAudioUnlocked(true);

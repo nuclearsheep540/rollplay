@@ -219,6 +219,39 @@ def register_websocket_routes(app: FastAPI):
                         await websocket.send_json(broadcast_message)
                         continue
 
+                elif event_type == "remote_audio_play":
+                    result = await WebsocketEvent.remote_audio_play(
+                        websocket=websocket,
+                        data=data,
+                        event_data=event_data,
+                        player_name=player_name,
+                        client_id=client_id,
+                        manager=manager
+                    )
+                    broadcast_message = result.broadcast_message
+
+                elif event_type == "remote_audio_stop":
+                    result = await WebsocketEvent.remote_audio_stop(
+                        websocket=websocket,
+                        data=data,
+                        event_data=event_data,
+                        player_name=player_name,
+                        client_id=client_id,
+                        manager=manager
+                    )
+                    broadcast_message = result.broadcast_message
+
+                elif event_type == "remote_audio_volume":
+                    result = await WebsocketEvent.remote_audio_volume(
+                        websocket=websocket,
+                        data=data,
+                        event_data=event_data,
+                        player_name=player_name,
+                        client_id=client_id,
+                        manager=manager
+                    )
+                    broadcast_message = result.broadcast_message
+
                 else:
                     # Unknown event type - log and ignore
                     print(f"⚠️ Unknown WebSocket event type: {event_type}")

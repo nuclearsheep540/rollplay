@@ -39,9 +39,12 @@ export default function DMControlCenter({
   clearDicePrompt,           // UPDATED: Function to clear prompt(s)
   unlockAudio = null,        // NEW: Audio unlock function for DM
   remoteTrackStates = {},    // NEW: Remote track states from unified audio
-  playRemoteTrack = null,    // NEW: Play remote track function
-  stopRemoteTrack = null,    // NEW: Stop remote track function
-  setRemoteTrackVolume = null // NEW: Set remote track volume function
+  playRemoteTrack = null,    // NEW: Play remote track function (local)
+  stopRemoteTrack = null,    // NEW: Stop remote track function (local)
+  setRemoteTrackVolume = null, // NEW: Set remote track volume function (local)
+  sendRemoteAudioPlay = null,  // NEW: Send remote audio play via WebSocket
+  sendRemoteAudioStop = null,  // NEW: Send remote audio stop via WebSocket
+  sendRemoteAudioVolume = null // NEW: Send remote audio volume via WebSocket
 }) {
   
   // State for main panel collapse
@@ -319,9 +322,10 @@ export default function DMControlCenter({
                 <button 
                   className="bg-green-600 hover:bg-green-700 text-white px-2 py-1 rounded text-xs"
                   onClick={() => {
-                    console.log('🎵 Play Music button clicked');
-                    if (playRemoteTrack) {
-                      playRemoteTrack('music', 'boss.mp3', true);
+                    console.log('🎵 Play Music button clicked - sending to ALL players');
+                    if (sendRemoteAudioPlay) {
+                      // Send WebSocket event to all players
+                      sendRemoteAudioPlay('music', 'boss.mp3', true, remoteTrackStates.music?.volume);
                     }
                   }}
                 >
@@ -330,8 +334,10 @@ export default function DMControlCenter({
                 <button 
                   className="bg-red-600 hover:bg-red-700 text-white px-2 py-1 rounded text-xs"
                   onClick={() => {
-                    if (stopRemoteTrack) {
-                      stopRemoteTrack('music');
+                    console.log('🛑 Stop Music button clicked - sending to ALL players');
+                    if (sendRemoteAudioStop) {
+                      // Send WebSocket event to all players
+                      sendRemoteAudioStop('music');
                     }
                   }}
                 >
@@ -346,8 +352,16 @@ export default function DMControlCenter({
                     step="0.1"
                     value={remoteTrackStates.music?.volume || 0.7}
                     onChange={(e) => {
+                      const newVolume = parseFloat(e.target.value);
+                      
+                      // Update local state immediately for responsiveness
                       if (setRemoteTrackVolume) {
-                        setRemoteTrackVolume('music', parseFloat(e.target.value));
+                        setRemoteTrackVolume('music', newVolume);
+                      }
+                      
+                      // Send to all players via WebSocket
+                      if (sendRemoteAudioVolume) {
+                        sendRemoteAudioVolume('music', newVolume);
                       }
                     }}
                     className="w-16 h-1 bg-gray-600 rounded-lg appearance-none cursor-pointer slider-thumb-blue"
@@ -370,9 +384,9 @@ export default function DMControlCenter({
                 <button 
                   className="bg-green-600 hover:bg-green-700 text-white px-2 py-1 rounded text-xs"
                   onClick={() => {
-                    console.log('🌧️ Play Ambient button clicked');
-                    if (playRemoteTrack) {
-                      playRemoteTrack('ambient', 'storm.mp3', true);
+                    console.log('🌧️ Play Ambient button clicked - sending to ALL players');
+                    if (sendRemoteAudioPlay) {
+                      sendRemoteAudioPlay('ambient', 'storm.mp3', true, remoteTrackStates.ambient?.volume);
                     }
                   }}
                 >
@@ -381,8 +395,9 @@ export default function DMControlCenter({
                 <button 
                   className="bg-red-600 hover:bg-red-700 text-white px-2 py-1 rounded text-xs"
                   onClick={() => {
-                    if (stopRemoteTrack) {
-                      stopRemoteTrack('ambient');
+                    console.log('🛡️ Stop Ambient button clicked - sending to ALL players');
+                    if (sendRemoteAudioStop) {
+                      sendRemoteAudioStop('ambient');
                     }
                   }}
                 >
@@ -397,8 +412,16 @@ export default function DMControlCenter({
                     step="0.1"
                     value={remoteTrackStates.ambient?.volume || 0.6}
                     onChange={(e) => {
+                      const newVolume = parseFloat(e.target.value);
+                      
+                      // Update local state immediately for responsiveness
                       if (setRemoteTrackVolume) {
-                        setRemoteTrackVolume('ambient', parseFloat(e.target.value));
+                        setRemoteTrackVolume('ambient', newVolume);
+                      }
+                      
+                      // Send to all players via WebSocket
+                      if (sendRemoteAudioVolume) {
+                        sendRemoteAudioVolume('ambient', newVolume);
                       }
                     }}
                     className="w-16 h-1 bg-gray-600 rounded-lg appearance-none cursor-pointer slider-thumb-blue"
@@ -421,9 +444,9 @@ export default function DMControlCenter({
                 <button 
                   className="bg-green-600 hover:bg-green-700 text-white px-2 py-1 rounded text-xs"
                   onClick={() => {
-                    console.log('⚔️ Play SFX button clicked');
-                    if (playRemoteTrack) {
-                      playRemoteTrack('sfx', 'sword.mp3', false);
+                    console.log('⚔️ Play SFX button clicked - sending to ALL players');
+                    if (sendRemoteAudioPlay) {
+                      sendRemoteAudioPlay('sfx', 'sword.mp3', false, remoteTrackStates.sfx?.volume);
                     }
                   }}
                 >
@@ -432,8 +455,9 @@ export default function DMControlCenter({
                 <button 
                   className="bg-red-600 hover:bg-red-700 text-white px-2 py-1 rounded text-xs"
                   onClick={() => {
-                    if (stopRemoteTrack) {
-                      stopRemoteTrack('sfx');
+                    console.log('🛡️ Stop SFX button clicked - sending to ALL players');
+                    if (sendRemoteAudioStop) {
+                      sendRemoteAudioStop('sfx');
                     }
                   }}
                 >
@@ -448,8 +472,16 @@ export default function DMControlCenter({
                     step="0.1"
                     value={remoteTrackStates.sfx?.volume || 0.8}
                     onChange={(e) => {
+                      const newVolume = parseFloat(e.target.value);
+                      
+                      // Update local state immediately for responsiveness
                       if (setRemoteTrackVolume) {
-                        setRemoteTrackVolume('sfx', parseFloat(e.target.value));
+                        setRemoteTrackVolume('sfx', newVolume);
+                      }
+                      
+                      // Send to all players via WebSocket
+                      if (sendRemoteAudioVolume) {
+                        sendRemoteAudioVolume('sfx', newVolume);
                       }
                     }}
                     className="w-16 h-1 bg-gray-600 rounded-lg appearance-none cursor-pointer slider-thumb-blue"

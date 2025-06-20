@@ -616,6 +616,56 @@ export const createSendFunctions = (webSocket, isConnected, roomId, playerName) 
     }));
   };
 
+  // =====================================
+  // REMOTE AUDIO SENDING FUNCTIONS
+  // =====================================
+
+  const sendRemoteAudioPlay = (trackType, audioFile, loop = true, volume = null) => {
+    if (!webSocket || !isConnected) return;
+    
+    console.log(`📡 Sending remote audio play: ${trackType} - ${audioFile}`);
+    
+    webSocket.send(JSON.stringify({
+      "event_type": "remote_audio_play",
+      "data": {
+        "track_type": trackType,
+        "audio_file": audioFile,
+        "loop": loop,
+        "volume": volume,
+        "triggered_by": playerName
+      }
+    }));
+  };
+
+  const sendRemoteAudioStop = (trackType) => {
+    if (!webSocket || !isConnected) return;
+    
+    console.log(`📡 Sending remote audio stop: ${trackType}`);
+    
+    webSocket.send(JSON.stringify({
+      "event_type": "remote_audio_stop",
+      "data": {
+        "track_type": trackType,
+        "triggered_by": playerName
+      }
+    }));
+  };
+
+  const sendRemoteAudioVolume = (trackType, volume) => {
+    if (!webSocket || !isConnected) return;
+    
+    console.log(`📡 Sending remote audio volume: ${trackType} - ${Math.round(volume * 100)}%`);
+    
+    webSocket.send(JSON.stringify({
+      "event_type": "remote_audio_volume",
+      "data": {
+        "track_type": trackType,
+        "volume": volume,
+        "triggered_by": playerName
+      }
+    }));
+  };
+
   return {
     sendSeatChange,
     sendSeatCountChange,
@@ -628,7 +678,10 @@ export const createSendFunctions = (webSocket, isConnected, roomId, playerName) 
     sendDicePromptClear,
     sendInitiativePromptAll,
     sendColorChange,
-    sendRoleChange
+    sendRoleChange,
+    sendRemoteAudioPlay,
+    sendRemoteAudioStop,
+    sendRemoteAudioVolume
   };
 };
 

@@ -538,7 +538,10 @@ function GameContent() {
     sendDicePromptClear,
     sendInitiativePromptAll,
     sendColorChange,
-    sendRoleChange
+    sendRoleChange,
+    sendRemoteAudioPlay,
+    sendRemoteAudioStop,
+    sendRemoteAudioVolume
   } = useWebSocket(roomId, thisPlayer, gameContext);
 
   // Listen for combat state changes and play audio
@@ -547,6 +550,29 @@ function GameContent() {
       playLocalSFX('combatStart');
     }
   }, [combatActive, isAudioUnlocked]);
+
+  // Fallback audio unlock on any click (for non-DM players)
+  useEffect(() => {
+    if (!isAudioUnlocked) {
+      const handleFirstClick = () => {
+        if (unlockAudio) {
+          unlockAudio().then(() => {
+            console.log('🔊 Audio unlocked on first user interaction');
+          }).catch(err => {
+            console.warn('Audio unlock failed on first click:', err);
+          });
+        }
+      };
+
+      // Add click listener to document
+      document.addEventListener('click', handleFirstClick, { once: true });
+
+      // Cleanup
+      return () => {
+        document.removeEventListener('click', handleFirstClick);
+      };
+    }
+  }, [isAudioUnlocked, unlockAudio]);
 
   // Show dice portal for player rolls
   const showDicePortal = (playerName, promptType = null) => {
@@ -947,7 +973,7 @@ function GameContent() {
           {/* Master Volume Control */}
           <div className="master-volume-control">
             <label htmlFor="master-volume" className="volume-label">
-              🔊
+              {isAudioUnlocked ? '🔊' : '🔇'}
             </label>
             <input
               id="master-volume"
@@ -956,13 +982,28 @@ function GameContent() {
               max="1"
               step="0.1"
               value={masterVolume}
-              onChange={(e) => setMasterVolume(parseFloat(e.target.value))}
+              onChange={(e) => {
+                // Unlock audio on first volume interaction
+                if (!isAudioUnlocked && unlockAudio) {
+                  unlockAudio().then(() => {
+                    console.log('🔊 Audio unlocked when player adjusted volume');
+                  }).catch(err => {
+                    console.warn('Audio unlock failed on volume adjustment:', err);
+                  });
+                }
+                setMasterVolume(parseFloat(e.target.value));
+              }}
               className="volume-slider"
               title={`Master Volume: ${Math.round(masterVolume * 100)}%`}
             />
             <span className="volume-percentage">
               {Math.round(masterVolume * 100)}%
             </span>
+            {!isAudioUnlocked && (
+              <span className="text-yellow-400 text-xs ml-2">
+                👆 Touch to enable audio
+              </span>
+            )}
           </div>
           
           {/* UI Scale Toggle */}
@@ -1108,9 +1149,12 @@ function GameContent() {
             activePrompts={activePrompts}        // UPDATED: Pass array instead of single prompt
             unlockAudio={unlockAudio}             // NEW: Pass audio unlock function
             remoteTrackStates={remoteTrackStates} // NEW: Pass remote track states
-            playRemoteTrack={playRemoteTrack}     // NEW: Pass remote track controls
-            stopRemoteTrack={stopRemoteTrack}     // NEW: Pass remote track controls
-            setRemoteTrackVolume={setRemoteTrackVolume} // NEW: Pass remote track controls
+            playRemoteTrack={playRemoteTrack}     // NEW: Pass remote track controls (local)
+            stopRemoteTrack={stopRemoteTrack}     // NEW: Pass remote track controls (local)
+            setRemoteTrackVolume={setRemoteTrackVolume} // NEW: Pass remote track controls (local)
+            sendRemoteAudioPlay={sendRemoteAudioPlay}     // NEW: Pass WebSocket sending functions
+            sendRemoteAudioStop={sendRemoteAudioStop}     // NEW: Pass WebSocket sending functions
+            sendRemoteAudioVolume={sendRemoteAudioVolume} // NEW: Pass WebSocket sending functions
             clearDicePrompt={clearDicePrompt}    // UPDATED: Now accepts prompt ID
           />
         </div>
