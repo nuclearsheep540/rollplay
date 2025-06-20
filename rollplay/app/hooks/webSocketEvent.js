@@ -678,7 +678,7 @@ export const createSendFunctions = (webSocket, isConnected, roomId, playerName) 
   const sendRemoteAudioVolume = (trackType, volume) => {
     if (!webSocket || !isConnected) return;
     
-    console.log(`📡 Sending remote audio volume: ${trackType} - ${Math.round(volume * 100)}%`);
+    console.log(`📡 [DEBOUNCED] Sending remote audio volume: ${trackType} - ${Math.round(volume * 100)}%`);
     
     webSocket.send(JSON.stringify({
       "event_type": "remote_audio_volume",

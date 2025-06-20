@@ -127,4 +127,4 @@ export const MODERATOR_LABEL = PANEL_LABEL;
 // =============================================================================
 
 // Mixer fader control (square slider)
-export const MIXER_FADER = "w-full h-2 bg-gray-700 rounded-none appearance-none cursor-pointer";
+export const MIXER_FADER = "w-full h-1.5 bg-gray-600 cursor-pointer";

@@ -14,6 +14,12 @@ const formatTime = (seconds) => {
   return `${minutes.toString().padStart(2, '0')}:${remainingSeconds.toString().padStart(2, '0')}`;
 };
 
+// Read out to DB in the track level
+function volumeToDb(volume) {
+  if (volume === 0) return -Infinity;
+  return 40 * Math.log10(volume);
+}
+
 export default function AudioTrack({
   config,
   trackState,
@@ -21,16 +27,66 @@ export default function AudioTrack({
   onPause,
   onStop,
   onVolumeChange,
+  onVolumeChangeDebounced,
   onLoopToggle,
   isLast = false
 }) {
   
   const { trackId, type, icon, label, filename } = config;
   const { playing, volume = 0.7, currentTime = 0, duration = 0, looping = true } = trackState;
+  
+  // Debounce timer for volume changes
+  const volumeDebounceTimer = useRef(null);
+
+  // Cleanup timer on unmount
+  useEffect(() => {
+    return () => {
+      if (volumeDebounceTimer.current) {
+        clearTimeout(volumeDebounceTimer.current);
+      }
+    };
+  }, []);
+
+  // Debounced volume change handler
+  const handleVolumeChange = (newVolume) => {
+    console.log(`🎛️ [LOCAL] Volume changed to ${Math.round(newVolume * 100)}% for ${trackId}`);
+    
+    // Immediately update local UI (onVolumeChange updates local state)
+    onVolumeChange(newVolume);
+    
+    // Clear existing timer
+    if (volumeDebounceTimer.current) {
+      clearTimeout(volumeDebounceTimer.current);
+    }
+    
+    // Set new timer to delay the WebSocket send
+    volumeDebounceTimer.current = setTimeout(() => {
+      console.log(`⏰ [TIMEOUT] Sending debounced volume for ${trackId} after 500ms`);
+      // This should trigger the WebSocket send after 500ms of no changes
+      if (onVolumeChangeDebounced) {
+        onVolumeChangeDebounced(newVolume);
+      }
+    }, 500);
+  };
+
+  // Handle slider release (immediate send like color picker close)
+  const handleVolumeRelease = (newVolume) => {
+    console.log(`🖱️ [RELEASE] Slider released at ${Math.round(newVolume * 100)}% for ${trackId}, sending immediately`);
+    
+    // Clear any pending debounced calls
+    if (volumeDebounceTimer.current) {
+      clearTimeout(volumeDebounceTimer.current);
+      volumeDebounceTimer.current = null;
+    }
+    
+    // Immediately send the final volume when slider is released
+    if (onVolumeChangeDebounced) {
+      onVolumeChangeDebounced(newVolume);
+    }
+  };
 
   return (
-    <>
-      <div className={DM_SUB_HEADER}>{icon} {label}</div>
+    <div key={config.filename}>
       <div className={isLast ? DM_CHILD_LAST : DM_CHILD}>
         {/* Track Header with File Name and Time */}
         <div className="flex justify-between items-center mb-2">
@@ -85,24 +141,33 @@ export default function AudioTrack({
         </div>
         
         {/* Level Control - Mixer Style */}
-        <div className="flex items-center gap-2">
-          <span className="text-xs text-gray-300 font-semibold min-w-[40px]">LEVEL</span>
+        <div className="flex items-center gap-1">
+          <span className='mt-3'>dB</span>
           <div className="flex-1">
+            <datalist id="markers">
+              <option value="0" label="-inf"></option>
+              <option value="15" label="-24"></option>
+              <option value="30" label="-12"></option>
+              <option value="60" label="-6"></option>
+              <option value="70" label="-3"></option>
+              <option value="100" label="-0" className='mr-6'></option>
+              <option value="130" label="+3"></option>
+            </datalist>
             <input
               type="range"
               min="0"
-              max="1"
-              step="0.01"
+              max="1.3"
+              step="0.05"
               value={volume}
-              onChange={(e) => onVolumeChange(parseFloat(e.target.value))}
-              className={MIXER_FADER}
+              onChange={(e) => handleVolumeChange(parseFloat(e.target.value))}
+              onMouseUp={(e) => handleVolumeRelease(parseFloat(e.target.value))}
+              onTouchEnd={(e) => handleVolumeRelease(parseFloat(e.target.value))}
+              className="slider bg-slate-800"
+              list="markers"
             />
           </div>
-          <span className="text-xs text-gray-300 font-mono min-w-[35px]">
-            {Math.round(volume * 100)}%
-          </span>
         </div>
       </div>
-    </>
+    </div>
   );
 }

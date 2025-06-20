@@ -407,7 +407,8 @@ export const useUnifiedAudio = () => {
           volume
         }
       }));
-      console.log(`🔊 Set remote ${trackId} volume to ${Math.round(volume * 100)}%`);
+      // Removed logging to avoid confusion with WebSocket debouncing
+      // Only WebSocket sends should be logged for clarity
     }
   };
 

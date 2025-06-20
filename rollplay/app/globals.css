@@ -796,7 +796,7 @@ body {
 
 .volume-percentage {
   font-family: monospace;
-  font-size: 11px;
+  font-size: 12px;
   color: rgba(255, 255, 255, 0.7);
   min-width: 30px;
 }
@@ -864,3 +864,31 @@ body {
   border-color: #6b7280;
 }
 
+datalist {
+  display: flex;
+  flex-direction: row;
+  justify-content: space-between;
+  writing-mode: horizontal-rl;
+  width: 100%;
+}
+
+input[type="range"] {
+  width: 100%;
+  margin: 0;
+}
+
+
+input[type="range"] {
+  -webkit-appearance: none; /* Required for WebKit */
+  appearance: none;
+  border-radius: 6px;
+}
+
+input[type="range"]::-webkit-slider-thumb {
+  -webkit-appearance: none; /* Required */
+  width: 13px;
+  height: 22px;
+  background: lightgrey;
+  cursor: pointer;
+  border-radius: 2px;
+}
