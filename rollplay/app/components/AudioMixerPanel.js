@@ -157,44 +157,91 @@ export default function AudioMixerPanel({
             <div className={DM_CHILD}>
               <div className="text-white font-bold mb-2">🎛️ Track Mix</div>
               
-              {/* Sync Toggle - Only show if both music and ambient have A/B tracks */}
+              {/* Explicit Sync Buttons - Only show if both music and ambient have A/B tracks */}
               {hasABTracks.music && hasABTracks.ambient && (
-                <div className="flex items-center gap-2 mb-3">
-                  <button
-                    className={`text-xs px-3 py-1 rounded transition-all duration-200 ${
-                      abSyncEnabled
-                        ? 'bg-blue-600 hover:bg-blue-700 text-white'
-                        : 'bg-gray-600 hover:bg-gray-700 text-gray-300'
-                    }`}
-                    onClick={() => {
-                      const newSyncState = !abSyncEnabled;
-                      setAbSyncEnabled?.(newSyncState);
-                      
-                      // If enabling sync, enforce current routing by stopping non-routed playing tracks
-                      if (newSyncState) {
-                        console.log('🔗 Enabling sync - enforcing current routing');
+                <div className="mb-3">
+                  <div className="text-white text-sm mb-2">Sync Music ↔ Ambient:</div>
+                  <div className="flex items-center gap-2">
+                    <button
+                      className={`text-xs px-3 py-1 rounded transition-all duration-200 ${
+                        abSyncEnabled && abRouting.music === 'A' && abRouting.ambient === 'A'
+                          ? 'bg-green-600 hover:bg-green-700 text-white'
+                          : 'bg-gray-600 hover:bg-gray-700 text-gray-300'
+                      }`}
+                      onClick={() => {
+                        console.log('🔗 Syncing to A tracks');
                         
-                        // For each channel group, stop tracks that aren't currently routed
+                        // Enable sync and set both to A
+                        setAbSyncEnabled?.(true);
+                        switchABRouting?.('music', 'A');
+                        switchABRouting?.('ambient', 'A');
+                        
+                        // Stop any B tracks that are playing
                         ['music', 'ambient'].forEach(group => {
-                          const currentRoute = abRouting[group];
                           const channelsInGroup = channels.filter(ch => ch.channelGroup === group);
-                          
                           channelsInGroup.forEach(channel => {
-                            if (channel.track !== currentRoute && remoteTrackStates[channel.channelId]?.playing) {
-                              console.log(`⏹️ Stopping non-routed ${group} track ${channel.track} (${channel.channelId})`);
+                            if (channel.track === 'B' && remoteTrackStates[channel.channelId]?.playing) {
+                              console.log(`⏹️ Stopping ${group} track B (${channel.channelId})`);
                               sendRemoteAudioStop?.(channel.channelId);
                             }
                           });
                         });
-                      }
-                    }}
-                    title={abSyncEnabled ? 'Disable track sync' : 'Enable track sync'}
-                  >
-                    🔗 {abSyncEnabled ? 'SYNC ON' : 'SYNC OFF'}
-                  </button>
-                  <span className="text-gray-400 text-xs">
-                    {abSyncEnabled ? 'Music ↔ Ambient synced' : 'Independent routing'}
-                  </span>
+                      }}
+                      title="Sync both music and ambient to A tracks"
+                    >
+                      🔗 Sync A
+                    </button>
+                    
+                    <button
+                      className={`text-xs px-3 py-1 rounded transition-all duration-200 ${
+                        abSyncEnabled && abRouting.music === 'B' && abRouting.ambient === 'B'
+                          ? 'bg-green-600 hover:bg-green-700 text-white'
+                          : 'bg-gray-600 hover:bg-gray-700 text-gray-300'
+                      }`}
+                      onClick={() => {
+                        console.log('🔗 Syncing to B tracks');
+                        
+                        // Enable sync and set both to B
+                        setAbSyncEnabled?.(true);
+                        switchABRouting?.('music', 'B');
+                        switchABRouting?.('ambient', 'B');
+                        
+                        // Stop any A tracks that are playing
+                        ['music', 'ambient'].forEach(group => {
+                          const channelsInGroup = channels.filter(ch => ch.channelGroup === group);
+                          channelsInGroup.forEach(channel => {
+                            if (channel.track === 'A' && remoteTrackStates[channel.channelId]?.playing) {
+                              console.log(`⏹️ Stopping ${group} track A (${channel.channelId})`);
+                              sendRemoteAudioStop?.(channel.channelId);
+                            }
+                          });
+                        });
+                      }}
+                      title="Sync both music and ambient to B tracks"
+                    >
+                      🔗 Sync B
+                    </button>
+
+                    <button
+                      className={`text-xs px-2 py-1 rounded transition-all duration-200 ${
+                        !abSyncEnabled
+                          ? 'bg-orange-600 hover:bg-orange-700 text-white'
+                          : 'bg-gray-600 hover:bg-gray-700 text-gray-300'
+                      }`}
+                      onClick={() => {
+                        console.log('🔗 Disabling sync');
+                        setAbSyncEnabled?.(false);
+                      }}
+                      title="Disable sync - independent control"
+                    >
+                      🔓 Off
+                    </button>
+                  </div>
+                  <div className="text-gray-400 text-xs mt-1">
+                    {abSyncEnabled 
+                      ? `Synced to ${abRouting.music} tracks` 
+                      : 'Independent control'}
+                  </div>
                 </div>
               )}
 
