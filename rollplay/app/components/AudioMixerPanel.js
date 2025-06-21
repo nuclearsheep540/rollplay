@@ -287,19 +287,20 @@ export default function AudioMixerPanel({
     
     // If sync is enabled and this is a music/ambient A/B track, pause the corresponding sync track
     if (syncMode && channel.channelGroup && channel.track) {
-      const { channelGroup, track } = channel;
+      const { channelGroup } = channel;
       
       // Only trigger sync for music/ambient tracks
       if (channelGroup === 'music' || channelGroup === 'ambient') {
-        // Find the corresponding track in the other group
+        // Find the corresponding track in the other group using routing configuration
         const otherGroup = channelGroup === 'music' ? 'ambient' : 'music';
+        const otherGroupTrack = trackRouting[otherGroup]; // Use routing, not track letter
         const syncChannelId = Object.keys(remoteTrackStates).find(id => 
           remoteTrackStates[id].channelGroup === otherGroup && 
-          remoteTrackStates[id].track === track
+          remoteTrackStates[id].track === otherGroupTrack
         );
         
         if (syncChannelId && remoteTrackStates[syncChannelId]?.playbackState === PlaybackState.PLAYING) {
-          console.log(`🔗 Sync pause: Pausing ${otherGroup} track ${track} (${syncChannelId})`);
+          console.log(`🔗 Sync pause: Pausing ${otherGroup} track ${otherGroupTrack} (${syncChannelId})`);
           sendRemoteAudioPause?.(syncChannelId);
         }
       }
@@ -322,19 +323,20 @@ export default function AudioMixerPanel({
     
     // If sync is enabled and this is a music/ambient A/B track, stop the corresponding sync track
     if (syncMode && channel.channelGroup && channel.track) {
-      const { channelGroup, track } = channel;
+      const { channelGroup } = channel;
       
       // Only trigger sync for music/ambient tracks
       if (channelGroup === 'music' || channelGroup === 'ambient') {
-        // Find the corresponding track in the other group
+        // Find the corresponding track in the other group using routing configuration
         const otherGroup = channelGroup === 'music' ? 'ambient' : 'music';
+        const otherGroupTrack = trackRouting[otherGroup]; // Use routing, not track letter
         const syncChannelId = Object.keys(remoteTrackStates).find(id => 
           remoteTrackStates[id].channelGroup === otherGroup && 
-          remoteTrackStates[id].track === track
+          remoteTrackStates[id].track === otherGroupTrack
         );
         
         if (syncChannelId && remoteTrackStates[syncChannelId]?.playbackState === PlaybackState.PLAYING) {
-          console.log(`🔗 Sync stop: Stopping ${otherGroup} track ${track} (${syncChannelId})`);
+          console.log(`🔗 Sync stop: Stopping ${otherGroup} track ${otherGroupTrack} (${syncChannelId})`);
           sendRemoteAudioStop?.(syncChannelId);
         }
       }
@@ -361,8 +363,8 @@ export default function AudioMixerPanel({
                 Select a sync mode to determine what tracks play at the same time
                   <div className="text-white text-sm mb-2 font-mono">
                     Matched = Matching channels play <br />
-                    __Mixed = Mix an A ↔ B combination for play
-                    Off = Play all tracks individually
+                    __Mixed = Mix an A ↔ B combination for play <br />
+                    ____Off = Play all tracks individually
                     </div>
                   <div className="flex items-center gap-2">
                     <button
