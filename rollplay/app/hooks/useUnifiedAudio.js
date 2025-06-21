@@ -425,10 +425,10 @@ export const useUnifiedAudio = () => {
   };
 
   // Switch A/B routing for a channel group (state only)
-  const switchABRouting = (channelGroup, newTrack) => {
-    console.log(`🔀 Updating routing state: ${channelGroup} to ${newTrack}`);
+  const switchABRouting = (channelGroup, newTrack, forceIndependent = false) => {
+    console.log(`🔀 Updating routing state: ${channelGroup} to ${newTrack}${forceIndependent ? ' (forced independent)' : ''}`);
     
-    if (abSyncEnabled && (channelGroup === 'music' || channelGroup === 'ambient')) {
+    if (!forceIndependent && abSyncEnabled && (channelGroup === 'music' || channelGroup === 'ambient')) {
       // Sync mode: switch both music and ambient together
       setAbRouting(prev => ({
         ...prev,

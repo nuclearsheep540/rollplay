@@ -34,7 +34,18 @@ export default function AudioMixerPanel({
   isAudioUnlocked = false
 }) {
   
-  // Enhanced A/B switching with actual audio control
+  // Individual A/B selector - disables sync to allow mixed routing (AB, BA)
+  const handleIndividualABSwitch = (channelGroup, newTrack) => {
+    console.log(`🔀 Individual selector: ${channelGroup} to ${newTrack} (disabling sync for mixed routing)`);
+    
+    // Disable sync to allow mixed combinations
+    setAbSyncEnabled?.(false);
+    
+    // Set only the specific channel group with forceIndependent flag
+    switchABRouting?.(channelGroup, newTrack, true);
+  };
+
+  // Enhanced A/B switching with actual audio control (used by other functions)
   const handleABSwitch = (channelGroup, newTrack) => {
     console.log(`🔀 Switching ${channelGroup} from ${abRouting[channelGroup]} to ${newTrack}`);
     
@@ -142,11 +153,12 @@ export default function AudioMixerPanel({
       return;
     }
     
-    // Check if sync is enabled and this is a music/ambient A/B track
+    // Check if this is a music/ambient A/B track that should sync playback
     console.log(`🔍 Play button clicked: channel=${channel.channelId}, group=${channel.channelGroup}, track=${channel.track}, syncEnabled=${abSyncEnabled}`);
     console.log(`🔍 Current routing:`, abRouting);
     
-    if (abSyncEnabled && channel.channelGroup && channel.track && 
+    // Always attempt synchronized playback for music/ambient tracks, regardless of sync mode
+    if (channel.channelGroup && channel.track && 
         (channel.channelGroup === 'music' || channel.channelGroup === 'ambient')) {
       
       const { channelGroup, track } = channel;
@@ -355,7 +367,7 @@ export default function AudioMixerPanel({
                           ? 'bg-green-600 text-white'
                           : 'bg-gray-600 hover:bg-gray-500 text-gray-300'
                       }`}
-                      onClick={() => handleABSwitch('music', 'A')}
+                      onClick={() => handleIndividualABSwitch('music', 'A')}
                     >
                       A
                     </button>
@@ -365,7 +377,7 @@ export default function AudioMixerPanel({
                           ? 'bg-green-600 text-white'
                           : 'bg-gray-600 hover:bg-gray-500 text-gray-300'
                       }`}
-                      onClick={() => handleABSwitch('music', 'B')}
+                      onClick={() => handleIndividualABSwitch('music', 'B')}
                     >
                       B
                     </button>
@@ -384,7 +396,7 @@ export default function AudioMixerPanel({
                           ? 'bg-green-600 text-white'
                           : 'bg-gray-600 hover:bg-gray-500 text-gray-300'
                       }`}
-                      onClick={() => handleABSwitch('ambient', 'A')}
+                      onClick={() => handleIndividualABSwitch('ambient', 'A')}
                     >
                       A
                     </button>
@@ -394,7 +406,7 @@ export default function AudioMixerPanel({
                           ? 'bg-green-600 text-white'
                           : 'bg-gray-600 hover:bg-gray-500 text-gray-300'
                       }`}
-                      onClick={() => handleABSwitch('ambient', 'B')}
+                      onClick={() => handleIndividualABSwitch('ambient', 'B')}
                     >
                       B
                     </button>
