@@ -40,6 +40,7 @@ export default function AudioTrack({
   onVolumeChangeDebounced,
   onLoopToggle,
   syncMode = false,
+  pendingOperations = { play: false, pause: false, stop: false, loop: false },
   isLast = false
 }) {
   const { trackId, type, icon, label, analyserNode, isRouted, track, isDisabled } = config;
@@ -195,47 +196,62 @@ export default function AudioTrack({
         <div className="flex gap-2 items-center mb-3">
           {playbackState === PlaybackState.PLAYING ? (
             <button
-              className="bg-orange-600 hover:bg-orange-700 text-white px-3 py-1 rounded text-xs flex items-center gap-1"
+              className={`bg-orange-600 hover:bg-orange-700 text-white px-3 py-1 rounded text-xs flex items-center gap-1 ${
+                pendingOperations.pause ? 'opacity-50 cursor-not-allowed' : ''
+              }`}
               onClick={onPause}
+              disabled={pendingOperations.pause}
             >
-              ⏸ PAUSE
+              ⏸ {pendingOperations.pause ? 'PAUSING...' : 'PAUSE'}
             </button>
           ) : playbackState === PlaybackState.PAUSED ? (
             <button
-              className="bg-blue-600 hover:bg-blue-700 text-white px-3 py-1 rounded text-xs flex items-center gap-1"
+              className={`bg-blue-600 hover:bg-blue-700 text-white px-3 py-1 rounded text-xs flex items-center gap-1 ${
+                pendingOperations.play ? 'opacity-50 cursor-not-allowed' : ''
+              }`}
               onClick={onPlay}
+              disabled={pendingOperations.play}
               title="Resume from paused position"
             >
-              ▶ RESUME
+              ▶ {pendingOperations.play ? 'RESUMING...' : 'RESUME'}
             </button>
           ) : (
             <button
-              className="bg-green-600 hover:bg-green-700 text-white px-3 py-1 rounded text-xs flex items-center gap-1"
+              className={`bg-green-600 hover:bg-green-700 text-white px-3 py-1 rounded text-xs flex items-center gap-1 ${
+                pendingOperations.play ? 'opacity-50 cursor-not-allowed' : ''
+              }`}
               onClick={onPlay}
+              disabled={pendingOperations.play}
               title="Play from beginning"
             >
-              ▶ PLAY
+              ▶ {pendingOperations.play ? 'PLAYING...' : 'PLAY'}
             </button>
           )}
           <button
-            className="bg-red-600 hover:bg-red-700 text-white px-3 py-1 rounded text-xs flex items-center gap-1"
+            className={`bg-red-600 hover:bg-red-700 text-white px-3 py-1 rounded text-xs flex items-center gap-1 ${
+              pendingOperations.stop ? 'opacity-50 cursor-not-allowed' : ''
+            }`}
             onClick={onStop}
+            disabled={pendingOperations.stop}
           >
-            ⏹ STOP
+            ⏹ {pendingOperations.stop ? 'STOPPING...' : 'STOP'}
           </button>
           {type !== 'sfx' && (
             <button
               className={`text-xs px-2 py-1 rounded ml-2 transition-all duration-200 ${
-                looping
-                  ? 'bg-blue-600 hover:bg-blue-700 text-white'
-                  : 'bg-gray-600 hover:bg-gray-700 text-gray-300'
+                pendingOperations.loop 
+                  ? 'opacity-50 cursor-not-allowed bg-gray-500 text-gray-300'
+                  : looping
+                    ? 'bg-blue-600 hover:bg-blue-700 text-white'
+                    : 'bg-gray-600 hover:bg-gray-700 text-gray-300'
               }`}
               onClick={() =>
                 onLoopToggle && onLoopToggle(trackId, !looping)
               }
-              title={looping ? 'Disable looping' : 'Enable looping'}
+              disabled={pendingOperations.loop}
+              title={pendingOperations.loop ? 'Updating loop setting...' : (looping ? 'Disable looping' : 'Enable looping')}
             >
-              🔄 {looping ? 'LOOP' : 'ONCE'}
+              🔄 {pendingOperations.loop ? 'UPDATING...' : (looping ? 'LOOP' : 'ONCE')}
             </button>
           )}
         </div>

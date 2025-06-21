@@ -194,7 +194,7 @@ export const useUnifiedAudio = () => {
   };
 
   // Play remote track (triggered by WebSocket events)
-  const playRemoteTrack = async (trackId, audioFile, loop = true, volume = null, resumeFromTime = null) => {
+  const playRemoteTrack = async (trackId, audioFile, loop = true, volume = null, resumeFromTime = null, completeTrackState = null) => {
     const operationId = `${trackId}_${Date.now()}`;
     console.log(`🎵 [${operationId}] Attempting to play remote track: ${trackId} - ${audioFile}`);
     
@@ -281,13 +281,15 @@ export const useUnifiedAudio = () => {
       const source = audioContextRef.current.createBufferSource();
       source.buffer = audioBuffer;
   
-      // Determine looping
-      const trackType = remoteTrackStates[trackId]?.type;
+      // Determine looping - prefer complete track state if provided, then passed parameter
+      const trackType = completeTrackState?.type || remoteTrackStates[trackId]?.type;
       const shouldLoop =
         trackType === 'sfx'
           ? false
-          : remoteTrackStates[trackId]?.looping ?? loop;
+          : completeTrackState?.looping ?? loop; // Use complete state first, then fallback to parameter
       source.loop = shouldLoop;
+      
+      console.log(`🔄 Loop determination: trackType=${trackType}, completeState.looping=${completeTrackState?.looping}, fallback.loop=${loop}, final.shouldLoop=${shouldLoop}`);
   
       // Connect to the track’s gain node
       source.connect(remoteTrackGainsRef.current[trackId]);
@@ -485,7 +487,17 @@ export const useUnifiedAudio = () => {
       return;
     }
     
-    // Update the state first
+    // Check if track is currently playing BEFORE updating state
+    // Prioritize actual audio state over potentially stale React state
+    const hasActiveSource = !!activeSourcesRef.current[trackId];
+    const currentState = remoteTrackStates[trackId];
+    const playbackState = currentState?.playbackState;
+    const wasPlaying = hasActiveSource; // If there's an active source, consider it playing
+    
+    console.log(`🔄 Toggle loop for ${trackId}: ${looping ? 'enabled' : 'disabled'}`);
+    console.log(`🔍 Debug state: hasActiveSource=${hasActiveSource}, playbackState=${playbackState}, wasPlaying=${wasPlaying}`);
+    
+    // Update the state
     setRemoteTrackStates(prev => ({
       ...prev,
       [trackId]: {
@@ -494,12 +506,24 @@ export const useUnifiedAudio = () => {
       }
     }));
     
-    // If track is currently playing, restart it with new loop setting
-    if (activeSourcesRef.current[trackId] && remoteTrackStates[trackId]?.playbackState === PlaybackState.PLAYING) {
-      const currentState = remoteTrackStates[trackId];
+    // If track was playing, restart it with new loop setting while preserving playback position
+    if (wasPlaying && currentState) {
       const { filename, volume } = currentState;
       
-      console.log(`🔄 Restarting ${trackId} with looping ${looping ? 'enabled' : 'disabled'}`);
+      console.log(`🔄 Restarting ${trackId} with looping ${looping ? 'enabled' : 'disabled'} (preserving position)`);
+      
+      // Calculate current playback position before stopping
+      let currentPlaybackTime = 0;
+      const timer = trackTimersRef.current[trackId];
+      if (timer && audioContextRef.current) {
+        const elapsed = audioContextRef.current.currentTime - timer.startTime + timer.pausedTime;
+        if (timer.loop && timer.duration > 0) {
+          currentPlaybackTime = elapsed % timer.duration;
+        } else {
+          currentPlaybackTime = Math.min(elapsed, timer.duration);
+        }
+        console.log(`📍 Preserving playback position: ${currentPlaybackTime.toFixed(2)}s`);
+      }
       
       // Stop current playback
       try {
@@ -510,9 +534,16 @@ export const useUnifiedAudio = () => {
         console.warn(`Warning stopping ${trackId} for loop change:`, e);
       }
       
-      // Restart with new loop setting
+      // Restart with new loop setting and preserved position - create complete track state
+      const completeTrackState = {
+        ...currentState,
+        looping,
+        channelId: trackId,
+        filename
+      };
+      
       setTimeout(() => {
-        playRemoteTrack(trackId, filename, looping, volume);
+        playRemoteTrack(trackId, filename, looping, volume, currentPlaybackTime, completeTrackState);
       }, 50); // Small delay to ensure cleanup
     }
     

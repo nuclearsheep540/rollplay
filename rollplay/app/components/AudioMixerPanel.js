@@ -5,7 +5,7 @@
  * SPDX-License-Identifier: GPL-3.0-or-later
  */
 
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import AudioTrack from './AudioTrack';
 import { PlaybackState } from '../hooks/useUnifiedAudio';
 import {
@@ -35,8 +35,57 @@ export default function AudioMixerPanel({
   setSyncMode,
   switchTrackRouting,
   unlockAudio = null,
-  isAudioUnlocked = false
+  isAudioUnlocked = false,
+  clearPendingOperation = null
 }) {
+  
+  // Track pending audio operations to disable buttons
+  const [pendingOperations, setPendingOperations] = useState(new Set());
+  
+  // Helper to add pending operation
+  const addPendingOperation = (operation) => {
+    setPendingOperations(prev => new Set(prev).add(operation));
+    
+    // Auto-clear after 5 seconds (timeout fallback)
+    setTimeout(() => {
+      setPendingOperations(prev => {
+        const newSet = new Set(prev);
+        newSet.delete(operation);
+        return newSet;
+      });
+    }, 5000);
+  };
+  
+  // Helper to clear pending operation
+  const clearPendingOperationLocal = (operation) => {
+    setPendingOperations(prev => {
+      const newSet = new Set(prev);
+      newSet.delete(operation);
+      return newSet;
+    });
+  };
+  
+  // Expose clear function to parent component
+  useEffect(() => {
+    if (clearPendingOperation) {
+      clearPendingOperation(clearPendingOperationLocal);
+    }
+  }, [clearPendingOperation]);
+  
+  // Auto-clear pending operations when track states change (WebSocket responses)
+  useEffect(() => {
+    // Clear pending operations when state changes indicate WebSocket response received
+    Object.keys(remoteTrackStates).forEach(trackId => {
+      const trackState = remoteTrackStates[trackId];
+      if (trackState) {
+        // Clear play/pause operations when playback state changes
+        clearPendingOperationLocal(`play_${trackId}`);
+        clearPendingOperationLocal(`pause_${trackId}`);
+        clearPendingOperationLocal(`stop_${trackId}`);
+        clearPendingOperationLocal(`loop_${trackId}`);
+      }
+    });
+  }, [remoteTrackStates]);
   
   // Clean unified routing function
   const handleTrackRoutingChange = (channelGroup, newTrack) => {
@@ -62,11 +111,21 @@ export default function AudioMixerPanel({
     setSyncMode?.(false);
   };
 
-  // Handle loop toggle with WebSocket broadcast
+  // Handle loop toggle with WebSocket broadcast (server-authoritative)
   const handleLoopToggle = (trackId, looping) => {
-    // Update local state
-    toggleRemoteTrackLooping?.(trackId, looping);
-    // Broadcast to other players
+    const operationKey = `loop_${trackId}`;
+    
+    // Don't allow if operation is already pending
+    if (pendingOperations.has(operationKey)) {
+      console.log(`⏳ Loop operation already pending for ${trackId}`);
+      return;
+    }
+    
+    // Mark operation as pending
+    addPendingOperation(operationKey);
+    
+    // Only broadcast to server - no local state update
+    // Server response will update state via handleRemoteAudioLoop
     sendRemoteAudioLoop?.(trackId, looping);
   };
   // Dynamically generate channels from remoteTrackStates
@@ -106,14 +165,26 @@ export default function AudioMixerPanel({
     ambient: ambientChannels.some(ch => ch.track === 'A') && ambientChannels.some(ch => ch.track === 'B')
   };
 
-  // Clean play handler with unified sync logic
+  // Clean play handler with unified sync logic and complete track state
   const handlePlay = async (channel) => {
+    const operationKey = `play_${channel.channelId}`;
+    
+    // Don't allow if operation is already pending
+    if (pendingOperations.has(operationKey)) {
+      console.log(`⏳ Play operation already pending for ${channel.channelId}`);
+      return;
+    }
+    
+    // Mark operation as pending
+    addPendingOperation(operationKey);
+    
     // Ensure audio is unlocked before playing
     if (!isAudioUnlocked) {
       console.log('🔓 Unlocking audio for play action...');
       const unlocked = await unlockAudio();
       if (!unlocked) {
         console.warn('❌ Failed to unlock audio - cannot play');
+        clearPendingOperationLocal(operationKey);
         return;
       }
     }
@@ -123,12 +194,13 @@ export default function AudioMixerPanel({
     
     if (!filename) {
       console.warn(`No audio file loaded in ${channel.channelId}`);
+      clearPendingOperationLocal(operationKey);
       return;
     }
     
     console.log(`🔍 Play clicked: ${channel.channelId}, syncMode=${syncMode}`);
     console.log(`🔍 Current routing:`, trackRouting);
-    console.log(`🔍 Track state: playbackState=${channelState?.playbackState}`);
+    console.log(`🔍 Track state: playbackState=${channelState?.playbackState}, looping=${channelState?.looping}`);
     
     // Check if this track (or sync pair) is paused and should resume instead of play fresh
     const isTrackPaused = channelState?.playbackState === PlaybackState.PAUSED;
@@ -156,49 +228,72 @@ export default function AudioMixerPanel({
         
         console.log(`🔗 Sync ${shouldResume ? 'resume' : 'play'}: ${channelGroup}=${trackRouting[channelGroup]} + ${otherGroup}=${trackRouting[otherGroup]}`);
         
+        // Include complete state information for each track
         const tracks = [{
           channelId: channel.channelId,
           filename: filename,
-          looping: channel.type !== 'sfx',
-          volume: channelState.volume
+          looping: channelState.looping ?? (channel.type !== 'sfx'),
+          volume: channelState.volume,
+          playbackState: channelState.playbackState,
+          currentTime: channelState.currentTime
         }];
         
         if (syncChannelState?.filename) {
           tracks.push({
             channelId: syncChannelId,
             filename: syncChannelState.filename,
-            looping: true,
-            volume: syncChannelState.volume
+            looping: syncChannelState.looping ?? true,
+            volume: syncChannelState.volume,
+            playbackState: syncChannelState.playbackState,
+            currentTime: syncChannelState.currentTime
           });
         }
         
         if (shouldResume) {
-          console.log(`📡 Sending synchronized resume tracks:`, tracks);
+          console.log(`📡 Sending synchronized resume tracks with complete state:`, tracks);
           sendRemoteAudioResumeTracks?.(tracks);
         } else {
-          console.log(`📡 Sending synchronized play tracks:`, tracks);
+          console.log(`📡 Sending synchronized play tracks with complete state:`, tracks);
           sendRemoteAudioPlayTracks?.(tracks);
         }
         return;
       }
     }
     
-    // Individual track play (sync disabled or SFX)
+    // Individual track play (sync disabled or SFX) - include complete state
     if (isTrackPaused) {
       console.log(`🎵 Resuming individual track: ${channel.channelId}`);
+      // For resume, we just send the channel ID as current implementation expects
       sendRemoteAudioResume?.(channel.channelId);
     } else {
-      console.log(`🎵 Playing individual track: ${channel.channelId}`);
-      sendRemoteAudioPlay?.(
-        channel.channelId,
-        filename,
-        channel.type !== 'sfx',
-        channelState?.volume
-      );
+      console.log(`🎵 Playing individual track with complete state: ${channel.channelId}`);
+      // Send enhanced play command with all current state
+      const trackWithState = {
+        channelId: channel.channelId,
+        filename: filename,
+        looping: channelState.looping ?? (channel.type !== 'sfx'),
+        volume: channelState?.volume,
+        playbackState: channelState.playbackState,
+        currentTime: channelState.currentTime || 0
+      };
+      
+      // Use the multi-track play format even for single tracks to include complete state
+      sendRemoteAudioPlayTracks?.([trackWithState]);
     }
   };
   // Enhanced pause handler with synchronized control
   const handlePause = (channel) => {
+    const operationKey = `pause_${channel.channelId}`;
+    
+    // Don't allow if operation is already pending
+    if (pendingOperations.has(operationKey)) {
+      console.log(`⏳ Pause operation already pending for ${channel.channelId}`);
+      return;
+    }
+    
+    // Mark operation as pending
+    addPendingOperation(operationKey);
+    
     sendRemoteAudioPause?.(channel.channelId);
     
     // If sync is enabled and this is a music/ambient A/B track, pause the corresponding sync track
@@ -223,6 +318,17 @@ export default function AudioMixerPanel({
   };
   // Enhanced stop handler with synchronized control
   const handleStop = (channel) => {
+    const operationKey = `stop_${channel.channelId}`;
+    
+    // Don't allow if operation is already pending
+    if (pendingOperations.has(operationKey)) {
+      console.log(`⏳ Stop operation already pending for ${channel.channelId}`);
+      return;
+    }
+    
+    // Mark operation as pending
+    addPendingOperation(operationKey);
+    
     sendRemoteAudioStop?.(channel.channelId);
     
     // If sync is enabled and this is a music/ambient A/B track, stop the corresponding sync track
@@ -383,6 +489,12 @@ export default function AudioMixerPanel({
               {musicChannels.map((channel) => {
                 const isRouted = trackRouting.music === channel.track;
                 const isDisabled = syncMode && !isRouted;
+                const pendingOps = {
+                  play: pendingOperations.has(`play_${channel.channelId}`),
+                  pause: pendingOperations.has(`pause_${channel.channelId}`),
+                  stop: pendingOperations.has(`stop_${channel.channelId}`),
+                  loop: pendingOperations.has(`loop_${channel.channelId}`)
+                };
                 return (
                   <AudioTrack
                     key={channel.channelId}
@@ -395,6 +507,7 @@ export default function AudioMixerPanel({
                       track: channel.track,
                       isDisabled: isDisabled
                     }}
+                    pendingOperations={pendingOps}
                     trackState={
                       remoteTrackStates[channel.channelId] || {
                         playbackState: PlaybackState.STOPPED,
@@ -432,6 +545,12 @@ export default function AudioMixerPanel({
               {ambientChannels.map((channel) => {
                 const isRouted = trackRouting.ambient === channel.track;
                 const isDisabled = syncMode && !isRouted;
+                const pendingOps = {
+                  play: pendingOperations.has(`play_${channel.channelId}`),
+                  pause: pendingOperations.has(`pause_${channel.channelId}`),
+                  stop: pendingOperations.has(`stop_${channel.channelId}`),
+                  loop: pendingOperations.has(`loop_${channel.channelId}`)
+                };
                 return (
                   <AudioTrack
                     key={channel.channelId}
@@ -444,6 +563,7 @@ export default function AudioMixerPanel({
                       track: channel.track,
                       isDisabled: isDisabled
                     }}
+                    pendingOperations={pendingOps}
                     trackState={
                       remoteTrackStates[channel.channelId] || {
                         playbackState: PlaybackState.STOPPED,
@@ -478,16 +598,24 @@ export default function AudioMixerPanel({
           {sfxChannels.length > 0 && (
             <>
               <div className="text-white font-bold mt-6">Sound Effects</div>
-              {sfxChannels.map((channel, idx) => (
-                <AudioTrack
-                  key={channel.channelId}
-                  config={{
-                    trackId: channel.channelId,
-                    type: channel.type,
-                    label: channel.label,
-                    analyserNode: remoteTrackAnalysers[channel.channelId],
-                    track: "SFX"
-                  }}
+              {sfxChannels.map((channel, idx) => {
+                const pendingOps = {
+                  play: pendingOperations.has(`play_${channel.channelId}`),
+                  pause: pendingOperations.has(`pause_${channel.channelId}`),
+                  stop: pendingOperations.has(`stop_${channel.channelId}`),
+                  loop: pendingOperations.has(`loop_${channel.channelId}`)
+                };
+                return (
+                  <AudioTrack
+                    key={channel.channelId}
+                    config={{
+                      trackId: channel.channelId,
+                      type: channel.type,
+                      label: channel.label,
+                      analyserNode: remoteTrackAnalysers[channel.channelId],
+                      track: "SFX"
+                    }}
+                    pendingOperations={pendingOps}
                   trackState={
                     remoteTrackStates[channel.channelId] || {
                       playbackState: PlaybackState.STOPPED,
@@ -511,7 +639,8 @@ export default function AudioMixerPanel({
                   syncMode={syncMode}
                   isLast={idx === sfxChannels.length - 1}
                 />
-              ))}
+                );
+              })}
             </>
           )}
         </>

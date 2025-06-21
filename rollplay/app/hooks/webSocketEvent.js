@@ -21,7 +21,8 @@ export const handleRemoteAudioPlay = async (data, { playRemoteTrack }) => {
       const playPromises = tracks.map(async (track, index) => {
         const { channelId, filename, looping = true, volume = 1.0 } = track;
         console.log(`▶️ [SYNC ${index + 1}/${tracks.length}] About to play remote ${channelId}: ${filename} (volume: ${volume}, loop: ${looping})`);
-        const success = await playRemoteTrack(channelId, filename, looping, volume);
+        // Pass the complete track state from the WebSocket message
+        const success = await playRemoteTrack(channelId, filename, looping, volume, null, track);
         console.log(`▶️ [SYNC ${index + 1}/${tracks.length}] Play result for ${channelId}: ${success}`);
         return success;
       });
@@ -36,7 +37,9 @@ export const handleRemoteAudioPlay = async (data, { playRemoteTrack }) => {
       // Legacy single track format
       const { track_type, audio_file, loop = true, volume = 1.0 } = data;
       console.log(`▶️ Playing single remote track: ${track_type}: ${audio_file}`);
-      const success = await playRemoteTrack(track_type, audio_file, loop, volume);
+      // For legacy format, create a simple track state object
+      const trackState = { channelId: track_type, filename: audio_file, looping: loop, volume };
+      const success = await playRemoteTrack(track_type, audio_file, loop, volume, null, trackState);
       console.log(`▶️ Single track play result: ${success}`);
     }
   } else {
