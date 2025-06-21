@@ -249,12 +249,17 @@ export default function AudioMixerPanel({
           {/* A/B Routing Controls - Only show if any channel groups have A/B tracks */}
           {(hasABTracks.music || hasABTracks.ambient) && (
             <div className={DM_CHILD}>
-              <div className="text-white font-bold mb-2">🎛️ Track Mix</div>
+              <div className="text-white font-bold mb-2">🎛️ Channel Sync</div>
               
               {/* Explicit Sync Buttons - Only show if both music and ambient have A/B tracks */}
               {hasABTracks.music && hasABTracks.ambient && (
                 <div className="mb-3">
-                  <div className="text-white text-sm mb-2">Sync Music ↔ Ambient:</div>
+                Select a sync mode to determine what tracks play at the same time
+                  <div className="text-white text-sm mb-2 font-mono">
+                    Matched = Matching channels play <br />
+                    __Mixed = Mix an A ↔ B combination for play
+                    Off = Play all tracks individually
+                    </div>
                   <div className="flex items-center gap-2">
                     <button
                       className={`text-xs px-3 py-1 rounded transition-all duration-200 ${
