@@ -117,11 +117,12 @@ export const useUnifiedAudio = () => {
     audio_channel_1B: { playing: false, paused: false, volume: 0.7, filename: 'shop.mp3', type: 'music', channelGroup: 'music', track: 'B', currentTime: 0, duration: 0, looping: true },
     // Ambient A/B Channels  
     audio_channel_2A: { playing: false, paused: false, volume: 0.9, filename: 'storm.mp3', type: 'ambient', channelGroup: 'ambient', track: 'A', currentTime: 0, duration: 0, looping: true },
-    audio_channel_2B: { playing: false, paused: false, volume: 0.7, filename: null, type: 'ambient', channelGroup: 'ambient', track: 'B', currentTime: 0, duration: 0, looping: true },
+    audio_channel_2B: { playing: false, paused: false, volume: 0.7, filename: 'shop.mp3', type: 'ambient', channelGroup: 'ambient', track: 'B', currentTime: 0, duration: 0, looping: true },
     // SFX Channels (unchanged)
     audio_channel_3: { playing: false, paused: false, volume: 0.9, filename: 'sword.mp3', type: 'sfx', currentTime: 0, duration: 0, looping: false },
     audio_channel_4: { playing: false, paused: false, volume: 0.9, filename: 'enemy_hit_cinematic.mp3', type: 'sfx', currentTime: 0, duration: 0, looping: false },
-    audio_channel_5: { playing: false, paused: false, volume: 0.9, filename: 'link_attack.mp3', type: 'sfx', currentTime: 0, duration: 0, looping: false }
+    audio_channel_5: { playing: false, paused: false, volume: 0.9, filename: 'link_attack.mp3', type: 'sfx', currentTime: 0, duration: 0, looping: false },
+    audio_channel_6: { playing: false, paused: false, volume: 0.9, filename: 'link_fall.mp3', type: 'sfx', currentTime: 0, duration: 0, looping: false }
 
   });
 

@@ -166,7 +166,28 @@ export default function AudioMixerPanel({
                         ? 'bg-blue-600 hover:bg-blue-700 text-white'
                         : 'bg-gray-600 hover:bg-gray-700 text-gray-300'
                     }`}
-                    onClick={() => setAbSyncEnabled?.(!abSyncEnabled)}
+                    onClick={() => {
+                      const newSyncState = !abSyncEnabled;
+                      setAbSyncEnabled?.(newSyncState);
+                      
+                      // If enabling sync, enforce current routing by stopping non-routed playing tracks
+                      if (newSyncState) {
+                        console.log('🔗 Enabling sync - enforcing current routing');
+                        
+                        // For each channel group, stop tracks that aren't currently routed
+                        ['music', 'ambient'].forEach(group => {
+                          const currentRoute = abRouting[group];
+                          const channelsInGroup = channels.filter(ch => ch.channelGroup === group);
+                          
+                          channelsInGroup.forEach(channel => {
+                            if (channel.track !== currentRoute && remoteTrackStates[channel.channelId]?.playing) {
+                              console.log(`⏹️ Stopping non-routed ${group} track ${channel.track} (${channel.channelId})`);
+                              sendRemoteAudioStop?.(channel.channelId);
+                            }
+                          });
+                        });
+                      }
+                    }}
                     title={abSyncEnabled ? 'Disable track sync' : 'Enable track sync'}
                   >
                     🔗 {abSyncEnabled ? 'SYNC ON' : 'SYNC OFF'}
@@ -243,6 +264,7 @@ export default function AudioMixerPanel({
               <div className="text-white font-bold mt-4">Music</div>
               {musicChannels.map((channel) => {
                 const isRouted = abRouting.music === channel.track;
+                const isDisabled = abSyncEnabled && !isRouted;
                 return (
                   <AudioTrack
                     key={channel.channelId}
@@ -252,7 +274,8 @@ export default function AudioMixerPanel({
                       label: channel.label,
                       analyserNode: remoteTrackAnalysers[channel.channelId],
                       isRouted: isRouted,
-                      track: channel.track
+                      track: channel.track,
+                      isDisabled: isDisabled
                     }}
                     trackState={
                       remoteTrackStates[channel.channelId] || {
@@ -289,6 +312,7 @@ export default function AudioMixerPanel({
               <div className="text-white font-bold mt-4">Ambience</div>
               {ambientChannels.map((channel) => {
                 const isRouted = abRouting.ambient === channel.track;
+                const isDisabled = abSyncEnabled && !isRouted;
                 return (
                   <AudioTrack
                     key={channel.channelId}
@@ -298,7 +322,8 @@ export default function AudioMixerPanel({
                       label: channel.label,
                       analyserNode: remoteTrackAnalysers[channel.channelId],
                       isRouted: isRouted,
-                      track: channel.track
+                      track: channel.track,
+                      isDisabled: isDisabled
                     }}
                     trackState={
                       remoteTrackStates[channel.channelId] || {

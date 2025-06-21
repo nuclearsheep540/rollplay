@@ -36,7 +36,7 @@ export default function AudioTrack({
   onLoopToggle,
   isLast = false
 }) {
-  const { trackId, type, icon, label, analyserNode, isRouted, track } = config;
+  const { trackId, type, icon, label, analyserNode, isRouted, track, isDisabled } = config;
   const {
     playing,
     volume = 1.0,
@@ -148,7 +148,7 @@ export default function AudioTrack({
 
   return (
     <div key={trackId}>
-      <div className={isLast ? DM_CHILD_LAST : DM_CHILD}>
+      <div className={`${isLast ? DM_CHILD_LAST : DM_CHILD} ${isDisabled ? 'opacity-40 pointer-events-none' : ''}`}>
         {/* Header */}
         <div className="flex justify-between items-center mb-2">
           <div className="text-white font-mono text-sm">
@@ -166,6 +166,9 @@ export default function AudioTrack({
               )}
               {isRouted && (
                 <span className="text-green-400 text-xs">🔊 LIVE</span>
+              )}
+              {isDisabled && (
+                <span className="text-gray-500 text-xs">🚫 DISABLED</span>
               )}
             </div>
             {filename && (
