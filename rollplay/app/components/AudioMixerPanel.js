@@ -471,7 +471,8 @@ export default function AudioMixerPanel({
                     trackId: channel.channelId,
                     type: channel.type,
                     label: channel.label,
-                    analyserNode: remoteTrackAnalysers[channel.channelId]
+                    analyserNode: remoteTrackAnalysers[channel.channelId],
+                    track: "SFX"
                   }}
                   trackState={
                     remoteTrackStates[channel.channelId] || {

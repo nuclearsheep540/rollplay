@@ -92,16 +92,19 @@ export default function AudioTrack({
       const rms = Math.sqrt(sumSquares / data.length);
   
       // simple low-pass in JS: smooth out jagged changes
-      const smoothed = lastRms * 0.90 + rms * 0.1;
+      const smoothed = lastRms * 0.85 + rms * 0.15;
       lastRms = smoothed;
   
       // convert to percentage
       let pct = Math.min(1, smoothed) * 100;
-      pct = (pct * 4) * (trackState.volume) + (pct ? 3 : 0)
+      pct = (pct * 3) * (trackState.volume)
+
+      // fake a 15% boost based off our smoothness
+      pct > 5 ? pct = pct * 1.15 : null
   
       // defend against missing ref in mid-cleanup
-      const rms_hot = 60;
-      const rms_peak = 70;
+      const rms_hot = 40;
+      const rms_peak = 60;
       
       const fillColor =
         pct >= rms_peak ? '#FF0000'
@@ -242,13 +245,12 @@ export default function AudioTrack({
           <span className="mt-3 font-mono">dB</span>
           <div className="flex-1 font-mono">
             <datalist id="markers">
-              <option value="0" label="-inf" />
               <option value="15" label="-48" />
               <option value="30" label="-36" />
               <option value="40" label="-24" />
               <option value="50" label="-12" />
               <option value="60" label="-3" />
-              <option value="70" label="-0" className='mr-8' />
+              <option value="70" label="-0" className='mr-12' />
               <option value="130" label="+3" />
             </datalist>
 
