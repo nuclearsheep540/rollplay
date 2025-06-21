@@ -551,6 +551,7 @@ body {
   min-height: 0;
   max-height: 100vh;
   overflow-y: auto;
+  /* width: 420px; */
   
   /* Hide scrollbar completely */
   scrollbar-width: none; /* Firefox */

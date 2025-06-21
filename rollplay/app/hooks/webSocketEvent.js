@@ -74,6 +74,43 @@ export const handleRemoteAudioVolume = (data, { setRemoteTrackVolume }) => {
   }
 };
 
+export const handleRemoteAudioResume = async (data, { resumeRemoteTrack, remoteTrackStates }) => {
+  console.log("▶️ Remote audio resume command received:", data);
+  const { tracks, track_type, triggered_by } = data;
+  
+  if (resumeRemoteTrack) {
+    if (tracks && Array.isArray(tracks)) {
+      // Multiple tracks for synchronized resume
+      console.log(`🔗 Processing ${tracks.length} synchronized resume tracks:`, tracks);
+      
+      // Start all tracks simultaneously using Promise.all for true sync
+      const resumePromises = tracks.map(async (track, index) => {
+        const { channelId } = track;
+        console.log(`▶️ [RESUME ${index + 1}/${tracks.length}] About to resume ${channelId} from paused position`);
+        
+        const success = await resumeRemoteTrack(channelId);
+        console.log(`▶️ [RESUME ${index + 1}/${tracks.length}] Resume result for ${channelId}: ${success}`);
+        return success;
+      });
+      
+      try {
+        const results = await Promise.all(resumePromises);
+        console.log(`🎯 Synchronized resume completed: ${results.filter(r => r).length}/${tracks.length} tracks resumed successfully`);
+      } catch (error) {
+        console.error(`❌ Synchronized resume failed:`, error);
+      }
+    } else {
+      // Legacy single track resume format
+      console.log(`▶️ Resuming single remote track: ${track_type} from paused position`);
+      
+      const success = await resumeRemoteTrack(track_type);
+      console.log(`▶️ Single track resume result: ${success}`);
+    }
+  } else {
+    console.warn("❌ resumeRemoteTrack function not available");
+  }
+};
+
 
 // =====================================
 // EXISTING EVENT HANDLERS
@@ -747,6 +784,47 @@ export const createSendFunctions = (webSocket, isConnected, roomId, playerName) 
     }));
   };
 
+  const sendRemoteAudioResume = (trackType) => {
+    if (!webSocket || !isConnected) return;
+    
+    console.log(`📡 Sending remote audio resume: ${trackType}`);
+    
+    webSocket.send(JSON.stringify({
+      "event_type": "remote_audio_resume",
+      "data": {
+        "track_type": trackType,
+        "triggered_by": playerName
+      }
+    }));
+  };
+
+  const sendRemoteAudioResumeTracks = (tracks) => {
+    if (!webSocket || !isConnected) {
+      console.warn(`❌ Cannot send synchronized audio resume - WebSocket not ready. connected=${isConnected}, webSocket=${!!webSocket}`);
+      return;
+    }
+    
+    const trackDescriptions = tracks.map(t => `${t.channelId} (paused)`).join(' + ');
+    console.log(`📡 Sending synchronized audio resume: ${trackDescriptions}`);
+    
+    const message = {
+      "event_type": "remote_audio_resume",
+      "data": {
+        "tracks": tracks,
+        "triggered_by": playerName
+      }
+    };
+    
+    console.log(`📡 WebSocket resume message being sent:`, message);
+    
+    try {
+      webSocket.send(JSON.stringify(message));
+      console.log(`✅ WebSocket resume send successful`);
+    } catch (error) {
+      console.error(`❌ WebSocket resume send failed:`, error);
+    }
+  };
+
 
   return {
     sendSeatChange,
@@ -765,7 +843,9 @@ export const createSendFunctions = (webSocket, isConnected, roomId, playerName) 
     sendRemoteAudioPlayTracks,
     sendRemoteAudioPause,
     sendRemoteAudioStop,
-    sendRemoteAudioVolume
+    sendRemoteAudioVolume,
+    sendRemoteAudioResume,
+    sendRemoteAudioResumeTracks
   };
 };
 

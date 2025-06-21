@@ -49,6 +49,8 @@ export default function DMControlCenter({
   setRemoteTrackVolume = null, // NEW: Set remote track volume function (local)
   sendRemoteAudioPlay = null,  // NEW: Send remote audio play via WebSocket
   sendRemoteAudioPlayTracks = null, // NEW: Send remote audio play tracks via WebSocket
+  sendRemoteAudioResume = null, // NEW: Send remote audio resume via WebSocket
+  sendRemoteAudioResumeTracks = null, // NEW: Send remote audio resume tracks via WebSocket
   sendRemoteAudioPause = null, // NEW: Send remote audio pause via WebSocket
   sendRemoteAudioStop = null,  // NEW: Send remote audio stop via WebSocket
   sendRemoteAudioVolume = null, // NEW: Send remote audio volume via WebSocket
@@ -318,6 +320,8 @@ export default function DMControlCenter({
         remoteTrackAnalysers={remoteTrackAnalysers}
         sendRemoteAudioPlay={sendRemoteAudioPlay}
         sendRemoteAudioPlayTracks={sendRemoteAudioPlayTracks}
+        sendRemoteAudioResume={sendRemoteAudioResume}
+        sendRemoteAudioResumeTracks={sendRemoteAudioResumeTracks}
         sendRemoteAudioPause={sendRemoteAudioPause}
         sendRemoteAudioStop={sendRemoteAudioStop}
         sendRemoteAudioVolume={sendRemoteAudioVolume}

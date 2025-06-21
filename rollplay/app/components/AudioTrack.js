@@ -4,6 +4,7 @@
  */
 
 import React, { useRef, useEffect } from 'react';
+import { PlaybackState } from '../hooks/useUnifiedAudio';
 import {
   DM_SUB_HEADER,
   DM_CHILD,
@@ -38,7 +39,7 @@ export default function AudioTrack({
 }) {
   const { trackId, type, icon, label, analyserNode, isRouted, track, isDisabled } = config;
   const {
-    playing,
+    playbackState = PlaybackState.STOPPED,
     volume = 1.0,
     filename,
     currentTime = 0,
@@ -147,23 +148,28 @@ export default function AudioTrack({
   };
 
   return (
-    <div key={trackId}>
-      <div className={`${isLast ? DM_CHILD_LAST : DM_CHILD} ${isDisabled ? 'opacity-40 pointer-events-none' : ''}`}>
+    <div key={trackId} className='flex'>
+      {filename && (
+        <div className="flex-none w-[auto]" style={{ writingMode: 'vertical-rl' }}>
+          {track && (
+          <div className={`text-center text-xs px-3 py-0.5 rounded font-bold ${
+            isRouted 
+              ? 'bg-green-600 text-white' 
+              : 'bg-gray-600 text-gray-300'
+          }`}>
+            {track}
+          </div>
+        )}
+        </div>
+      )}
+      <div className={`${isLast ? DM_CHILD_LAST : DM_CHILD} ${isDisabled ? 'opacity-40 pointer-events-none' : ''} flex-1`}>
         {/* Header */}
         <div className="flex justify-between items-center mb-2">
           <div className="text-white font-mono text-sm">
             <div className="flex items-center gap-2">
               {filename || label || trackId}
               {/* A/B Routing Indicator */}
-              {track && (
-                <span className={`text-xs px-2 py-0.5 rounded font-bold ${
-                  isRouted 
-                    ? 'bg-green-600 text-white' 
-                    : 'bg-gray-600 text-gray-300'
-                }`}>
-                  {track}
-                </span>
-              )}
+
               {isRouted && (
                 <span className="text-green-400 text-xs">🔊 LIVE</span>
               )}
@@ -171,9 +177,6 @@ export default function AudioTrack({
                 <span className="text-gray-500 text-xs">🚫 DISABLED</span>
               )}
             </div>
-            {filename && (
-              <div className="text-gray-400 text-xs">{label || trackId}</div>
-            )}
           </div>
           <div className="text-gray-400 font-mono text-xs">
             {formatTime(currentTime)} / {formatTime(duration)}
@@ -182,19 +185,28 @@ export default function AudioTrack({
 
         {/* Transport */}
         <div className="flex gap-2 items-center mb-3">
-          {!playing ? (
-            <button
-              className="bg-green-600 hover:bg-green-700 text-white px-3 py-1 rounded text-xs flex items-center gap-1"
-              onClick={onPlay}
-            >
-              ▶ PLAY
-            </button>
-          ) : (
+          {playbackState === PlaybackState.PLAYING ? (
             <button
               className="bg-orange-600 hover:bg-orange-700 text-white px-3 py-1 rounded text-xs flex items-center gap-1"
               onClick={onPause}
             >
               ⏸ PAUSE
+            </button>
+          ) : playbackState === PlaybackState.PAUSED ? (
+            <button
+              className="bg-blue-600 hover:bg-blue-700 text-white px-3 py-1 rounded text-xs flex items-center gap-1"
+              onClick={onPlay}
+              title="Resume from paused position"
+            >
+              ▶ RESUME
+            </button>
+          ) : (
+            <button
+              className="bg-green-600 hover:bg-green-700 text-white px-3 py-1 rounded text-xs flex items-center gap-1"
+              onClick={onPlay}
+              title="Play from beginning"
+            >
+              ▶ PLAY
             </button>
           )}
           <button

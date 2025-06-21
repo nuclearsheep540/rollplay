@@ -22,6 +22,13 @@ import { useState, useEffect, useRef } from 'react';
  * Both audio types respect the master volume slider
  */
 
+// Playback state enum to avoid boolean conflicts
+export const PlaybackState = {
+  STOPPED: 'stopped',
+  PLAYING: 'playing', 
+  PAUSED: 'paused'
+};
+
 export const useUnifiedAudio = () => {
   const [isAudioUnlocked, setIsAudioUnlocked] = useState(false);
   
@@ -100,6 +107,8 @@ export const useUnifiedAudio = () => {
   const audioBuffersRef = useRef({});
   const activeSourcesRef = useRef({});
   const trackTimersRef = useRef({}); // Store timing info for each track
+  const resumeOperationsRef = useRef({}); // Track active resume operations to prevent duplicates
+  const playOperationsRef = useRef({}); // Track active play operations to prevent duplicates
 
   // Track routing state - controls which tracks are paired
   const [trackRouting, setTrackRouting] = useState({
@@ -113,16 +122,16 @@ export const useUnifiedAudio = () => {
   // Remote track states (for DM-controlled audio) - A/B channel structure
   const [remoteTrackStates, setRemoteTrackStates] = useState({
     // Music A/B Channels
-    audio_channel_1A: { playing: false, paused: false, volume: 0.9, filename: 'boss.mp3', type: 'music', channelGroup: 'music', track: 'A', currentTime: 0, duration: 0, looping: true },
-    audio_channel_1B: { playing: false, paused: false, volume: 0.7, filename: 'shop.mp3', type: 'music', channelGroup: 'music', track: 'B', currentTime: 0, duration: 0, looping: true },
+    audio_channel_1A: { playbackState: PlaybackState.STOPPED, volume: 0.9, filename: 'boss.mp3', type: 'music', channelGroup: 'music', track: 'A', currentTime: 0, duration: 0, looping: true },
+    audio_channel_1B: { playbackState: PlaybackState.STOPPED, volume: 0.7, filename: 'shop.mp3', type: 'music', channelGroup: 'music', track: 'B', currentTime: 0, duration: 0, looping: true },
     // Ambient A/B Channels  
-    audio_channel_2A: { playing: false, paused: false, volume: 0.9, filename: 'storm.mp3', type: 'ambient', channelGroup: 'ambient', track: 'A', currentTime: 0, duration: 0, looping: true },
-    audio_channel_2B: { playing: false, paused: false, volume: 0.7, filename: 'zelda_night_loop.mp3', type: 'ambient', channelGroup: 'ambient', track: 'B', currentTime: 0, duration: 0, looping: true },
+    audio_channel_2A: { playbackState: PlaybackState.STOPPED, volume: 0.9, filename: 'storm.mp3', type: 'ambient', channelGroup: 'ambient', track: 'A', currentTime: 0, duration: 0, looping: true },
+    audio_channel_2B: { playbackState: PlaybackState.STOPPED, volume: 0.7, filename: 'zelda_night_loop.mp3', type: 'ambient', channelGroup: 'ambient', track: 'B', currentTime: 0, duration: 0, looping: true },
     // SFX Channels (unchanged)
-    audio_channel_3: { playing: false, paused: false, volume: 0.9, filename: 'sword.mp3', type: 'sfx', currentTime: 0, duration: 0, looping: false },
-    audio_channel_4: { playing: false, paused: false, volume: 0.9, filename: 'enemy_hit_cinematic.mp3', type: 'sfx', currentTime: 0, duration: 0, looping: false },
-    audio_channel_5: { playing: false, paused: false, volume: 0.9, filename: 'link_attack.mp3', type: 'sfx', currentTime: 0, duration: 0, looping: false },
-    audio_channel_6: { playing: false, paused: false, volume: 0.9, filename: 'link_fall.mp3', type: 'sfx', currentTime: 0, duration: 0, looping: false }
+    audio_channel_3: { playbackState: PlaybackState.STOPPED, volume: 0.9, filename: 'sword.mp3', type: 'sfx', currentTime: 0, duration: 0, looping: false },
+    audio_channel_4: { playbackState: PlaybackState.STOPPED, volume: 0.9, filename: 'enemy_hit_cinematic.mp3', type: 'sfx', currentTime: 0, duration: 0, looping: false },
+    audio_channel_5: { playbackState: PlaybackState.STOPPED, volume: 0.9, filename: 'link_attack.mp3', type: 'sfx', currentTime: 0, duration: 0, looping: false },
+    audio_channel_6: { playbackState: PlaybackState.STOPPED, volume: 0.9, filename: 'link_fall.mp3', type: 'sfx', currentTime: 0, duration: 0, looping: false }
 
   });
 
@@ -185,160 +194,223 @@ export const useUnifiedAudio = () => {
   };
 
   // Play remote track (triggered by WebSocket events)
-  const playRemoteTrack = async (trackId, audioFile, loop = true, volume = null) => {
-    console.log(`🎵 Attempting to play remote track: ${trackId} - ${audioFile}`);
-    console.log(`🔧 Audio state - isUnlocked: ${isAudioUnlocked}, audioContext: ${audioContextRef.current ? 'exists' : 'null'}, state: ${audioContextRef.current?.state}`);
+  const playRemoteTrack = async (trackId, audioFile, loop = true, volume = null, resumeFromTime = null) => {
+    const operationId = `${trackId}_${Date.now()}`;
+    console.log(`🎵 [${operationId}] Attempting to play remote track: ${trackId} - ${audioFile}`);
     
-    // Check if Web Audio context exists and is unlocked
-    if (!audioContextRef.current || audioContextRef.current.state === 'suspended') {
-      console.warn('Web Audio context not ready - cannot play remote audio');
-      console.log('💡 User needs to interact with the page to unlock audio (click volume slider, sit in seat, etc.)');
+    // Check if a play operation is already in progress for this track
+    if (playOperationsRef.current[trackId]) {
+      console.warn(`⚠️ [${operationId}] Play operation already in progress for ${trackId}, ignoring duplicate`);
       return false;
     }
-
-    await initializeWebAudio();
     
-    // Stop current track of this ID
-    if (activeSourcesRef.current[trackId]) {
-      activeSourcesRef.current[trackId].stop();
-      delete activeSourcesRef.current[trackId];
-    }
-
-    // Load audio buffer if not already loaded
-    const bufferKey = `${trackId}_${audioFile}`;
-    let audioBuffer = audioBuffersRef.current[bufferKey];
+    // Mark this track as having an active play operation
+    playOperationsRef.current[trackId] = operationId;
+    console.log(`🔒 [${operationId}] Locked play operation for ${trackId}`);
     
-    if (!audioBuffer) {
-      // For testing, use /audio/ path, but in production this would be a remote URL
-      audioBuffer = await loadRemoteAudioBuffer(`/audio/${audioFile}`, trackId);
-      if (!audioBuffer) return false;
-    }
-
     try {
-      // Create and configure source
+      console.log(
+        `🔧 Audio state - isUnlocked: ${isAudioUnlocked}, ` +
+        `audioContext: ${audioContextRef.current ? 'exists' : 'null'}, ` +
+        `state: ${audioContextRef.current?.state}`
+      );
+  
+      // Debug the pause state detection
+      const currentTrackState = remoteTrackStates[trackId];
+      console.log(`🔍 Track state for ${trackId}:`, currentTrackState);
+      console.log(
+        `🔍 Playback state: ${currentTrackState?.playbackState}, ` +
+        `currentTime=${currentTrackState?.currentTime}`
+      );
+  
+      // Check if Web Audio context exists and is unlocked
+      if (
+        !audioContextRef.current ||
+        audioContextRef.current.state === 'suspended'
+      ) {
+        console.warn('Web Audio context not ready - cannot play remote audio');
+        console.log(
+          '💡 User needs to interact with the page to unlock audio ' +
+          '(click volume slider, sit in seat, etc.)'
+        );
+        return false;
+      }
+  
+      // Ensure the context is initialized
+      await initializeWebAudio();
+  
+      // Stop any existing source for this track
+      if (activeSourcesRef.current[trackId]) {
+        try {
+          activeSourcesRef.current[trackId].stop();
+          console.log(
+            `🛑 Stopped existing source for ${trackId} before starting new one`
+          );
+        } catch (e) {
+          console.warn(
+            `Warning: Could not stop existing source for ${trackId}:`,
+            e
+          );
+        }
+        delete activeSourcesRef.current[trackId];
+      }
+  
+      // Clean up any existing timer
+      if (trackTimersRef.current[trackId]) {
+        delete trackTimersRef.current[trackId];
+        console.log(`🧹 Cleaned up existing timer for ${trackId}`);
+      }
+  
+      // Load (or reuse) the AudioBuffer
+      const bufferKey = `${trackId}_${audioFile}`;
+      let audioBuffer = audioBuffersRef.current[bufferKey];
+      if (!audioBuffer) {
+        console.log(
+          `📁 [${operationId}] Loading remote audio buffer: /audio/${audioFile}`
+        );
+        audioBuffer = await loadRemoteAudioBuffer(`/audio/${audioFile}`, trackId);
+        if (!audioBuffer) return false;
+        audioBuffersRef.current[bufferKey] = audioBuffer;
+      } else {
+        console.log(
+          `♻️ [${operationId}] Using cached audio buffer: /audio/${audioFile}`
+        );
+      }
+  
+      // Create and configure the BufferSource
       const source = audioContextRef.current.createBufferSource();
       source.buffer = audioBuffer;
-      
-      // SFX tracks (channels 3,4) are hardcoded to never loop
+  
+      // Determine looping
       const trackType = remoteTrackStates[trackId]?.type;
-      const shouldLoop = trackType === 'sfx' ? false : (remoteTrackStates[trackId]?.looping ?? loop);
+      const shouldLoop =
+        trackType === 'sfx'
+          ? false
+          : remoteTrackStates[trackId]?.looping ?? loop;
       source.loop = shouldLoop;
+  
+      // Connect to the track’s gain node
       source.connect(remoteTrackGainsRef.current[trackId]);
-      
-      // Handle resume from pause vs fresh start
-      const resumeFromPause = remoteTrackStates[trackId]?.paused && remoteTrackStates[trackId]?.currentTime > 0;
-      const startOffset = resumeFromPause ? remoteTrackStates[trackId].currentTime : 0;
-      
-      // Start playback (for Web Audio, we need to start from beginning and track offset)
+  
+      // Compute resume offset
+      const resumeFromPause =
+        resumeFromTime !== null ||
+        (remoteTrackStates[trackId]?.playbackState === PlaybackState.PAUSED &&
+          remoteTrackStates[trackId]?.currentTime > 0);
+      const startOffset =
+        resumeFromTime !== null
+          ? resumeFromTime
+          : resumeFromPause
+          ? remoteTrackStates[trackId].currentTime
+          : 0;
+  
+      console.log(
+        `🔍 Resume logic: resumeFromTime=${resumeFromTime}, ` +
+        `resumeFromPause=${resumeFromPause}, startOffset=${startOffset}`
+      );
+  
+      // Start playback
       source.start(0, startOffset);
       activeSourcesRef.current[trackId] = source;
-
-      // Get duration from audio buffer
+  
+      // Grab duration from the buffer
       const duration = audioBuffer.duration;
-
-      // Update state with duration
-      setRemoteTrackStates(prev => ({
+  
+      // Update React state
+      setRemoteTrackStates((prev) => ({
         ...prev,
         [trackId]: {
           ...prev[trackId],
-          playing: true,
-          paused: false,
+          playbackState: PlaybackState.PLAYING,
           filename: audioFile,
-          volume: volume !== null ? volume : prev[trackId]?.volume || 0.7,
-          currentTime: resumeFromPause ? prev[trackId].currentTime : 0,
-          duration: duration
+          volume:
+            volume !== null ? volume : prev[trackId]?.volume ?? 0.7,
+          currentTime: startOffset,
+          duration
         }
       }));
-
-      // Initialize timing for this track
+  
+      // Set up our time‐update loop
       const startTime = audioContextRef.current.currentTime;
       const pausedTime = resumeFromPause ? startOffset : 0;
-      
       trackTimersRef.current[trackId] = {
         startTime,
         pausedTime,
         duration,
-        loop: shouldLoop, // Use the same shouldLoop value as the source
+        loop: shouldLoop,
         lastUpdateTime: startTime
       };
-
-      // Start time tracking with proper loop handling
+  
       const updateTime = () => {
-        if (activeSourcesRef.current[trackId] === source && trackTimersRef.current[trackId]) {
-          const timer = trackTimersRef.current[trackId];
-          const elapsed = audioContextRef.current.currentTime - timer.startTime + timer.pausedTime;
-          
-          let currentTime;
-          let shouldContinueUpdating = true;
-          
-          if (timer.loop && timer.duration > 0) {
-            // For looping tracks, use modulo to cycle through the duration
-            currentTime = elapsed % timer.duration;
-          } else {
-            // For non-looping tracks, clamp to duration
-            currentTime = Math.min(elapsed, timer.duration);
-            
-            // Check if non-looped track has finished
-            if (elapsed >= timer.duration && timer.duration > 0) {
-              console.log(`⏹️ Non-looped ${trackId} track finished, auto-stopping`);
-              shouldContinueUpdating = false;
-              
-              // Auto-stop the track
-              if (activeSourcesRef.current[trackId]) {
-                try {
-                  activeSourcesRef.current[trackId].stop();
-                  delete activeSourcesRef.current[trackId];
-                } catch (e) {
-                  console.warn('Error auto-stopping finished track:', e);
-                }
+        const timer = trackTimersRef.current[trackId];
+        if (!timer || activeSourcesRef.current[trackId] !== source) {
+          return; // track stopped or replaced
+        }
+  
+        const elapsed =
+          audioContextRef.current.currentTime -
+          timer.startTime +
+          timer.pausedTime;
+  
+        let currentTime;
+        let keepUpdating = true;
+  
+        if (timer.loop && timer.duration > 0) {
+          currentTime = elapsed % timer.duration;
+        } else {
+          currentTime = Math.min(elapsed, timer.duration);
+          if (elapsed >= timer.duration && timer.duration > 0) {
+            console.log(`⏹️ ${trackId} finished, auto-stopping`);
+            try {
+              source.stop();
+            } catch (_) {}
+            delete activeSourcesRef.current[trackId];
+            delete trackTimersRef.current[trackId];
+            setRemoteTrackStates((prev) => ({
+              ...prev,
+              [trackId]: {
+                ...prev[trackId],
+                playbackState: PlaybackState.STOPPED,
+                currentTime: 0,
+                duration: 0
               }
-              
-              // Clean up timer
-              delete trackTimersRef.current[trackId];
-              
-              // Update state to stopped and reset time for next play
-              setRemoteTrackStates(prev => ({
-                ...prev,
-                [trackId]: {
-                  ...prev[trackId],
-                  playing: false,
-                  paused: false,
-                  currentTime: 0, // Reset to start for next playback
-                  duration: 0 // Reset duration as well
-                }
-              }));
-              
-              return; // Stop the update loop
-            }
+            }));
+            keepUpdating = false;
           }
-          
-          // Update current time if track is still playing
-          setRemoteTrackStates(prev => ({
+        }
+  
+        if (keepUpdating) {
+          setRemoteTrackStates((prev) => ({
             ...prev,
             [trackId]: {
               ...prev[trackId],
-              currentTime: currentTime,
-              paused: false
+              currentTime,
+              playbackState: PlaybackState.PLAYING
             }
           }));
-
-          // Continue updating if track is still active and should continue
-          if (activeSourcesRef.current[trackId] === source && shouldContinueUpdating) {
-            requestAnimationFrame(updateTime);
-          }
+          requestAnimationFrame(updateTime);
         }
       };
+  
       requestAnimationFrame(updateTime);
-
-      console.log(`▶️ Playing remote ${trackId}: ${audioFile} (loop: ${shouldLoop})`);
+  
+      console.log(
+        `▶️ Playing remote ${trackId}: ${audioFile} (loop: ${shouldLoop})`
+      );
       return true;
     } catch (error) {
       console.warn(`Failed to play remote ${trackId}:`, error);
       return false;
+    } finally {
+      // Always release the play operation lock
+      if (playOperationsRef.current[trackId] === operationId) {
+        delete playOperationsRef.current[trackId];
+        console.log(
+          `🔓 [${operationId}] Unlocked play operation for ${trackId}`
+        );
+      }
     }
   };
-
-  // Stop remote track
   const stopRemoteTrack = (trackId) => {
     if (activeSourcesRef.current[trackId]) {
       try {
@@ -352,8 +424,7 @@ export const useUnifiedAudio = () => {
           ...prev,
           [trackId]: {
             ...prev[trackId],
-            playing: false,
-            paused: false,
+            playbackState: PlaybackState.STOPPED,
             currentTime: 0,
             duration: 0
           }
@@ -390,8 +461,7 @@ export const useUnifiedAudio = () => {
           ...prev,
           [trackId]: {
             ...prev[trackId],
-            playing: false,
-            paused: true,
+            playbackState: PlaybackState.PAUSED,
             currentTime: currentTime
           }
         }));
@@ -501,6 +571,55 @@ export const useUnifiedAudio = () => {
     }
   };
 
+  // Resume remote track from paused position
+  const resumeRemoteTrack = async (trackId) => {
+    console.log(`🔄 Resume requested for ${trackId}`);
+    
+    // Check if a resume operation is already in progress for this track
+    if (resumeOperationsRef.current[trackId]) {
+      console.warn(`⚠️ Resume operation already in progress for ${trackId}, ignoring duplicate`);
+      return false;
+    }
+    
+    // Mark this track as having an active resume operation
+    resumeOperationsRef.current[trackId] = true;
+    
+    console.log(`🔍 Current remoteTrackStates:`, remoteTrackStates);
+    
+    try {
+      // Use a callback to get the most current state
+      return await new Promise((resolve) => {
+        setRemoteTrackStates(currentState => {
+          const trackState = currentState[trackId];
+          console.log(`🔍 Current state for ${trackId}:`, trackState);
+          
+          if (!trackState) {
+            console.warn(`❌ No track state found for ${trackId}`);
+            resolve(false);
+            return currentState; // Don't modify state
+          }
+          
+          if (trackState.playbackState !== PlaybackState.PAUSED) {
+            console.warn(`❌ Track ${trackId} is not paused (state=${trackState.playbackState}), cannot resume`);
+            resolve(false);
+            return currentState; // Don't modify state
+          }
+          
+          const { filename, currentTime, looping, volume } = trackState;
+          console.log(`🔄 Resuming ${trackId} from ${currentTime}s`);
+          
+          // Call playRemoteTrack with the explicit resume time
+          playRemoteTrack(trackId, filename, looping, volume, currentTime).then(resolve);
+          
+          return currentState; // Don't modify state here, playRemoteTrack will do it
+        });
+      });
+    } finally {
+      // Clear the resume operation flag when done
+      delete resumeOperationsRef.current[trackId];
+    }
+  };
+
   return {
     // Audio state
     isAudioUnlocked,
@@ -514,6 +633,7 @@ export const useUnifiedAudio = () => {
     remoteTrackStates,
     remoteTrackAnalysers: remoteTrackAnalysersRef.current,
     playRemoteTrack,
+    resumeRemoteTrack,
     pauseRemoteTrack,
     stopRemoteTrack,
     setRemoteTrackVolume,

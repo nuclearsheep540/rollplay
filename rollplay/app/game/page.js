@@ -489,6 +489,7 @@ function GameContent() {
     remoteTrackStates,
     remoteTrackAnalysers,
     playRemoteTrack,
+    resumeRemoteTrack,
     pauseRemoteTrack,
     stopRemoteTrack,
     setRemoteTrackVolume,
@@ -526,10 +527,14 @@ function GameContent() {
     
     // Remote audio functions (for WebSocket events)
     playRemoteTrack,
+    resumeRemoteTrack,
     pauseRemoteTrack,
     stopRemoteTrack,
     setRemoteTrackVolume,
-    toggleRemoteTrackLooping
+    toggleRemoteTrackLooping,
+    
+    // Remote audio state (for resume functionality)
+    remoteTrackStates
   };
 
   // Initialize WebSocket hook with game context (after audio functions are available)
@@ -550,6 +555,8 @@ function GameContent() {
     sendRoleChange,
     sendRemoteAudioPlay,
     sendRemoteAudioPlayTracks,
+    sendRemoteAudioResume,
+    sendRemoteAudioResumeTracks,
     sendRemoteAudioPause,
     sendRemoteAudioStop,
     sendRemoteAudioVolume
@@ -1127,7 +1134,7 @@ function GameContent() {
         />
 
         {/* GRID POSITION 3: Right Panel - DM Controls (Full Height) */}
-        <div className="right-panel p-2">
+        <div className="right-panel p-4">
           {/* Moderator Controls - shown if player is host or moderator */}
           <ModeratorControls
             isModerator={isModerator}
@@ -1168,6 +1175,8 @@ function GameContent() {
             toggleRemoteTrackLooping={toggleRemoteTrackLooping} // NEW: Pass loop toggle function
             sendRemoteAudioPlay={sendRemoteAudioPlay}     // NEW: Pass WebSocket sending functions
             sendRemoteAudioPlayTracks={sendRemoteAudioPlayTracks} // NEW: Pass WebSocket multi-track function
+            sendRemoteAudioResume={sendRemoteAudioResume} // NEW: Pass WebSocket resume function
+            sendRemoteAudioResumeTracks={sendRemoteAudioResumeTracks} // NEW: Pass WebSocket multi-track resume function
             sendRemoteAudioPause={sendRemoteAudioPause}   // NEW: Pass WebSocket pause function
             sendRemoteAudioStop={sendRemoteAudioStop}     // NEW: Pass WebSocket sending functions
             sendRemoteAudioVolume={sendRemoteAudioVolume} // NEW: Pass WebSocket sending functions

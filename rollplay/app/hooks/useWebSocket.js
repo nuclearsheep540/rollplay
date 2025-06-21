@@ -29,6 +29,7 @@ import {
   handleRemoteAudioPause,
   handleRemoteAudioStop,
   handleRemoteAudioVolume,
+  handleRemoteAudioResume,
   createSendFunctions
 } from './webSocketEvent'
 
@@ -159,6 +160,10 @@ export function useWebSocket(roomId, playerName, gameContext) {
 
         case "remote_audio_volume":
           handleRemoteAudioVolume(json_data["data"], gameContext);
+          break;
+
+        case "remote_audio_resume":
+          handleRemoteAudioResume(json_data["data"], gameContext);
           break;
 
 

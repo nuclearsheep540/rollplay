@@ -7,6 +7,7 @@
 
 import React from 'react';
 import AudioTrack from './AudioTrack';
+import { PlaybackState } from '../hooks/useUnifiedAudio';
 import {
   DM_HEADER,
   DM_ARROW,
@@ -20,6 +21,8 @@ export default function AudioMixerPanel({
   remoteTrackStates = {},
   sendRemoteAudioPlay,
   sendRemoteAudioPlayTracks,
+  sendRemoteAudioResume,
+  sendRemoteAudioResumeTracks,
   sendRemoteAudioPause,
   sendRemoteAudioStop,
   sendRemoteAudioVolume,
@@ -116,6 +119,10 @@ export default function AudioMixerPanel({
     
     console.log(`🔍 Play clicked: ${channel.channelId}, syncMode=${syncMode}`);
     console.log(`🔍 Current routing:`, trackRouting);
+    console.log(`🔍 Track state: playbackState=${channelState?.playbackState}`);
+    
+    // Check if this track (or sync pair) is paused and should resume instead of play fresh
+    const isTrackPaused = channelState?.playbackState === PlaybackState.PAUSED;
     
     // Check if sync mode is enabled and this is a music/ambient track
     if (syncMode && channel.channelGroup && 
@@ -133,8 +140,12 @@ export default function AudioMixerPanel({
       
       if (syncChannelId) {
         const syncChannelState = remoteTrackStates[syncChannelId];
+        const isSyncChannelPaused = syncChannelState?.playbackState === PlaybackState.PAUSED;
         
-        console.log(`🔗 Sync play: ${channelGroup}=${trackRouting[channelGroup]} + ${otherGroup}=${trackRouting[otherGroup]}`);
+        // Determine if this should be a resume or fresh play
+        const shouldResume = isTrackPaused || isSyncChannelPaused;
+        
+        console.log(`🔗 Sync ${shouldResume ? 'resume' : 'play'}: ${channelGroup}=${trackRouting[channelGroup]} + ${otherGroup}=${trackRouting[otherGroup]}`);
         
         const tracks = [{
           channelId: channel.channelId,
@@ -152,20 +163,30 @@ export default function AudioMixerPanel({
           });
         }
         
-        console.log(`📡 Sending synchronized tracks:`, tracks);
-        sendRemoteAudioPlayTracks?.(tracks);
+        if (shouldResume) {
+          console.log(`📡 Sending synchronized resume tracks:`, tracks);
+          sendRemoteAudioResumeTracks?.(tracks);
+        } else {
+          console.log(`📡 Sending synchronized play tracks:`, tracks);
+          sendRemoteAudioPlayTracks?.(tracks);
+        }
         return;
       }
     }
     
     // Individual track play (sync disabled or SFX)
-    console.log(`🎵 Playing individual track: ${channel.channelId}`);
-    sendRemoteAudioPlay?.(
-      channel.channelId,
-      filename,
-      channel.type !== 'sfx',
-      channelState?.volume
-    );
+    if (isTrackPaused) {
+      console.log(`🎵 Resuming individual track: ${channel.channelId}`);
+      sendRemoteAudioResume?.(channel.channelId);
+    } else {
+      console.log(`🎵 Playing individual track: ${channel.channelId}`);
+      sendRemoteAudioPlay?.(
+        channel.channelId,
+        filename,
+        channel.type !== 'sfx',
+        channelState?.volume
+      );
+    }
   };
   // Enhanced pause handler with synchronized control
   const handlePause = (channel) => {
@@ -184,7 +205,7 @@ export default function AudioMixerPanel({
           remoteTrackStates[id].track === track
         );
         
-        if (syncChannelId && remoteTrackStates[syncChannelId]?.playing) {
+        if (syncChannelId && remoteTrackStates[syncChannelId]?.playbackState === PlaybackState.PLAYING) {
           console.log(`🔗 Sync pause: Pausing ${otherGroup} track ${track} (${syncChannelId})`);
           sendRemoteAudioPause?.(syncChannelId);
         }
@@ -208,7 +229,7 @@ export default function AudioMixerPanel({
           remoteTrackStates[id].track === track
         );
         
-        if (syncChannelId && remoteTrackStates[syncChannelId]?.playing) {
+        if (syncChannelId && remoteTrackStates[syncChannelId]?.playbackState === PlaybackState.PLAYING) {
           console.log(`🔗 Sync stop: Stopping ${otherGroup} track ${track} (${syncChannelId})`);
           sendRemoteAudioStop?.(syncChannelId);
         }
@@ -362,7 +383,7 @@ export default function AudioMixerPanel({
                     }}
                     trackState={
                       remoteTrackStates[channel.channelId] || {
-                        playing: false,
+                        playbackState: PlaybackState.STOPPED,
                         volume: 1.0,
                         filename: null,
                         currentTime: 0,
@@ -410,7 +431,7 @@ export default function AudioMixerPanel({
                     }}
                     trackState={
                       remoteTrackStates[channel.channelId] || {
-                        playing: false,
+                        playbackState: PlaybackState.STOPPED,
                         volume: 1.0,
                         filename: null,
                         currentTime: 0,
@@ -452,7 +473,7 @@ export default function AudioMixerPanel({
                   }}
                   trackState={
                     remoteTrackStates[channel.channelId] || {
-                      playing: false,
+                      playbackState: PlaybackState.STOPPED,
                       volume: 1.0,
                       filename: null,
                       currentTime: 0,

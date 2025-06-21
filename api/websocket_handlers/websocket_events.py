@@ -828,3 +828,48 @@ class WebsocketEvent():
         }
         
         return WebsocketEventResult(broadcast_message=audio_volume_message)
+
+    @staticmethod
+    async def remote_audio_resume(websocket, data, event_data, player_name, client_id, manager):
+        """Handle remote audio resume events - DM resumes paused audio for all players"""
+        triggered_by = event_data.get("triggered_by", player_name)
+        tracks = event_data.get("tracks")
+        track_type = event_data.get("track_type")  # Legacy single track format
+        
+        # Determine if this is single track or multi-track resume
+        if tracks and isinstance(tracks, list):
+            # Multi-track resume (synchronized tracks)
+            track_descriptions = [f"{track.get('channelId', 'unknown')}" for track in tracks]
+            log_message = f"▶️ {triggered_by} resumed synchronized audio: {', '.join(track_descriptions)}"
+            print(f"🔗 Remote audio resume (sync): {triggered_by} resuming {len(tracks)} tracks: {', '.join(track_descriptions)}")
+        else:
+            # Legacy single track resume
+            if not track_type:
+                print(f"❌ Invalid remote audio resume request: no track_type or tracks provided")
+                return WebsocketEventResult(broadcast_message={})
+            
+            # Convert single track to tracks array format for consistency
+            tracks = [{"channelId": track_type}]
+            log_message = f"▶️ {triggered_by} resumed {track_type} audio"
+            print(f"▶️ Remote audio resume: {triggered_by} resuming {track_type}")
+        
+        # Add to adventure log
+        adventure_log.add_log_entry(
+            room_id=client_id,
+            message=log_message,
+            log_type=LogType.SYSTEM,
+            from_player=triggered_by
+        )
+        
+        # Broadcast audio resume command to all clients
+        audio_resume_message = {
+            "event_type": "remote_audio_resume",
+            "data": {
+                "tracks": tracks,
+                "triggered_by": triggered_by,
+                # Keep legacy field for backward compatibility if single track
+                **({"track_type": track_type} if track_type else {})
+            }
+        }
+        
+        return WebsocketEventResult(broadcast_message=audio_resume_message)
