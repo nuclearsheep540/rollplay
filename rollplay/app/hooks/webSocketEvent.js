@@ -8,7 +8,7 @@
 // REMOTE AUDIO EVENT HANDLERS
 // =====================================
 
-export const handleRemoteAudioPlay = (data, { playRemoteTrack }) => {
+export const handleRemoteAudioPlay = async (data, { playRemoteTrack }) => {
   console.log("🎵 Remote audio play command received:", data);
   const { tracks, triggered_by } = data;
   
@@ -16,17 +16,27 @@ export const handleRemoteAudioPlay = (data, { playRemoteTrack }) => {
     if (tracks && Array.isArray(tracks)) {
       // Multiple tracks for synchronized playback
       console.log(`🔗 Processing ${tracks.length} synchronized tracks:`, tracks);
-      tracks.forEach((track, index) => {
+      
+      // Start all tracks simultaneously using Promise.all for true sync
+      const playPromises = tracks.map(async (track, index) => {
         const { channelId, filename, looping = true, volume = 1.0 } = track;
         console.log(`▶️ [SYNC ${index + 1}/${tracks.length}] About to play remote ${channelId}: ${filename} (volume: ${volume}, loop: ${looping})`);
-        const success = playRemoteTrack(channelId, filename, looping, volume);
+        const success = await playRemoteTrack(channelId, filename, looping, volume);
         console.log(`▶️ [SYNC ${index + 1}/${tracks.length}] Play result for ${channelId}: ${success}`);
+        return success;
       });
+      
+      try {
+        const results = await Promise.all(playPromises);
+        console.log(`🎯 Synchronized playback completed: ${results.filter(r => r).length}/${tracks.length} tracks started successfully`);
+      } catch (error) {
+        console.error(`❌ Synchronized playback failed:`, error);
+      }
     } else {
       // Legacy single track format
       const { track_type, audio_file, loop = true, volume = 1.0 } = data;
       console.log(`▶️ Playing single remote track: ${track_type}: ${audio_file}`);
-      const success = playRemoteTrack(track_type, audio_file, loop, volume);
+      const success = await playRemoteTrack(track_type, audio_file, loop, volume);
       console.log(`▶️ Single track play result: ${success}`);
     }
   } else {
