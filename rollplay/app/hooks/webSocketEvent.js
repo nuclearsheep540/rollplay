@@ -202,15 +202,32 @@ export const handlePlayerDisconnectedLobby = (data, { setLobbyUsers, setDisconne
   // The backend will send a lobby_update when user is actually removed
 };
 
-export const handlePlayerKicked = (data, { thisPlayer }) => {
+export const handlePlayerKicked = (data, { thisPlayer, stopRemoteTrack, remoteTrackStates }) => {
   console.log("received player kick:", data);
   const { kicked_player } = data;
   // Backend handles kick logging
 
-  // If this player was kicked, go back in browser history
+  // If this player was kicked, stop all audio and redirect
   if (kicked_player === thisPlayer) {
-    window.history.replaceState(null, '', '/');
-    window.history.back();
+    console.log("🚪 Player was kicked - stopping all audio before redirect");
+    
+    // Stop all currently active audio tracks
+    if (stopRemoteTrack && remoteTrackStates) {
+      Object.keys(remoteTrackStates).forEach(trackId => {
+        try {
+          stopRemoteTrack(trackId);
+          console.log(`🛑 Stopped audio track: ${trackId}`);
+        } catch (error) {
+          console.warn(`Failed to stop track ${trackId}:`, error);
+        }
+      });
+    }
+    
+    // Small delay to ensure audio stops before redirect
+    setTimeout(() => {
+      window.history.replaceState(null, '', '/');
+      window.history.back();
+    }, 100);
     return;
   }
 };

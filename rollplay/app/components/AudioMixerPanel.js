@@ -73,19 +73,8 @@ export default function AudioMixerPanel({
   }, [clearPendingOperation]);
   
   // Auto-clear pending operations when track states change (WebSocket responses)
-  useEffect(() => {
-    // Clear pending operations when state changes indicate WebSocket response received
-    Object.keys(remoteTrackStates).forEach(trackId => {
-      const trackState = remoteTrackStates[trackId];
-      if (trackState) {
-        // Clear play/pause operations when playback state changes
-        clearPendingOperationLocal(`play_${trackId}`);
-        clearPendingOperationLocal(`pause_${trackId}`);
-        clearPendingOperationLocal(`stop_${trackId}`);
-        clearPendingOperationLocal(`loop_${trackId}`);
-      }
-    });
-  }, [remoteTrackStates]);
+  // Note: Removed automatic clearing to prevent infinite loops
+  // Operations are cleared by timeout fallback (5 seconds) which is sufficient
   
   // Clean unified routing function
   const handleTrackRoutingChange = (channelGroup, newTrack) => {
