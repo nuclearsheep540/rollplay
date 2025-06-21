@@ -175,17 +175,7 @@ export default function AudioTrack({
         {/* Header */}
         <div className="flex justify-between items-center mb-2">
           <div className="text-white font-mono text-sm">
-            <div className="flex items-center gap-2">
-              {filename || label || trackId}
-              {/* A/B Routing Indicator */}
-
-              {isRouted && (
-                <span className="text-green-400 text-xs">🔊 LIVE</span>
-              )}
-              {isDisabled && (
-                <span className="text-gray-500 text-xs">🚫 DISABLED</span>
-              )}
-            </div>
+            {filename || label || trackId}
           </div>
           <div className="text-gray-400 font-mono text-xs">
             {formatTime(currentTime)} / {formatTime(duration)}

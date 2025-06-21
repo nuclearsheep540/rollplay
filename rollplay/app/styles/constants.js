@@ -7,6 +7,7 @@
 // bg-blue-950 bg-rose-900/50 text-blue-100 text-rose-100 text-blue-400
 // text-rose-400 text-blue-500 text-rose-600
 // bg-green-600 bg-gray-600 bg-rose-900/50 text-white text-gray-300 text-rose-100
+// border-gray-400 border-green-400
 
 // =============================================================================
 // THEME CONFIGURATION (Change colors, spacing, fonts here)
@@ -131,7 +132,7 @@ export const MODERATOR_LABEL = PANEL_LABEL;
 export const MIXER_FADER = "w-full h-1.5 bg-gray-600 cursor-pointer";
 
 // Audio track indicators - shows sync status  
-export const AUDIO_INDICATOR_BASE = "border p-2.5 mb-1 w-full text-left text-sm transition-all duration-100 rounded border-rose-400/50"; // Layout without colors
+export const AUDIO_INDICATOR_BASE = "border p-2.5 mb-1 w-full text-left text-sm transition-all duration-100 rounded"; // Layout without colors
 export const AUDIO_INDICATOR_SYNCED = "bg-green-600 text-white border-green-400";     // Track is synced/routed
 export const AUDIO_INDICATOR_UNSYNCED = "bg-gray-600 text-gray-300 border-gray-400"; // Track not synced but sync mode on
-export const AUDIO_INDICATOR_NORMAL = "bg-rose-900/50 text-rose-100"; // Normal state when sync is off (matches DM styling)
+export const AUDIO_INDICATOR_NORMAL = "bg-rose-900/50 text-rose-100 border-rose-400/50"; // Normal state when sync is off (matches DM styling)
