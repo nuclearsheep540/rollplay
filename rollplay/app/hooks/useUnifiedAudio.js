@@ -122,16 +122,16 @@ export const useUnifiedAudio = () => {
   // Remote track states (for DM-controlled audio) - A/B channel structure
   const [remoteTrackStates, setRemoteTrackStates] = useState({
     // Music A/B Channels
-    audio_channel_1A: { playbackState: PlaybackState.STOPPED, volume: 0.9, filename: 'boss.mp3', type: 'music', channelGroup: 'music', track: 'A', currentTime: 0, duration: 0, looping: true },
-    audio_channel_1B: { playbackState: PlaybackState.STOPPED, volume: 0.7, filename: 'shop.mp3', type: 'music', channelGroup: 'music', track: 'B', currentTime: 0, duration: 0, looping: true },
+    audio_channel_1A: { playbackState: PlaybackState.STOPPED, volume: 0.8, filename: 'boss.mp3', type: 'music', channelGroup: 'music', track: 'A', currentTime: 0, duration: 0, looping: true },
+    audio_channel_1B: { playbackState: PlaybackState.STOPPED, volume: 0.8, filename: 'shop.mp3', type: 'music', channelGroup: 'music', track: 'B', currentTime: 0, duration: 0, looping: true },
     // Ambient A/B Channels  
-    audio_channel_2A: { playbackState: PlaybackState.STOPPED, volume: 0.9, filename: 'storm.mp3', type: 'ambient', channelGroup: 'ambient', track: 'A', currentTime: 0, duration: 0, looping: true },
-    audio_channel_2B: { playbackState: PlaybackState.STOPPED, volume: 0.7, filename: 'zelda_night_loop.mp3', type: 'ambient', channelGroup: 'ambient', track: 'B', currentTime: 0, duration: 0, looping: true },
+    audio_channel_2A: { playbackState: PlaybackState.STOPPED, volume: 0.8, filename: 'storm.mp3', type: 'ambient', channelGroup: 'ambient', track: 'A', currentTime: 0, duration: 0, looping: true },
+    audio_channel_2B: { playbackState: PlaybackState.STOPPED, volume: 0.8, filename: 'zelda_night_loop.mp3', type: 'ambient', channelGroup: 'ambient', track: 'B', currentTime: 0, duration: 0, looping: true },
     // SFX Channels (unchanged)
-    audio_channel_3: { playbackState: PlaybackState.STOPPED, volume: 0.9, filename: 'sword.mp3', type: 'sfx', currentTime: 0, duration: 0, looping: false },
-    audio_channel_4: { playbackState: PlaybackState.STOPPED, volume: 0.9, filename: 'enemy_hit_cinematic.mp3', type: 'sfx', currentTime: 0, duration: 0, looping: false },
-    audio_channel_5: { playbackState: PlaybackState.STOPPED, volume: 0.9, filename: 'link_attack.mp3', type: 'sfx', currentTime: 0, duration: 0, looping: false },
-    audio_channel_6: { playbackState: PlaybackState.STOPPED, volume: 0.9, filename: 'link_fall.mp3', type: 'sfx', currentTime: 0, duration: 0, looping: false }
+    audio_channel_3: { playbackState: PlaybackState.STOPPED, volume: 0.8, filename: 'sword.mp3', type: 'sfx', currentTime: 0, duration: 0, looping: false },
+    audio_channel_4: { playbackState: PlaybackState.STOPPED, volume: 0.8, filename: 'enemy_hit_cinematic.mp3', type: 'sfx', currentTime: 0, duration: 0, looping: false },
+    audio_channel_5: { playbackState: PlaybackState.STOPPED, volume: 0.8, filename: 'link_attack.mp3', type: 'sfx', currentTime: 0, duration: 0, looping: false },
+    audio_channel_6: { playbackState: PlaybackState.STOPPED, volume: 0.8, filename: 'link_fall.mp3', type: 'sfx', currentTime: 0, duration: 0, looping: false }
 
   });
 

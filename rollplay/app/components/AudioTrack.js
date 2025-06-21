@@ -238,12 +238,12 @@ export default function AudioTrack({
           </button>
           {type !== 'sfx' && (
             <button
-              className={`text-xs px-2 py-1 rounded ml-2 transition-all duration-200 ${
+              className={`p-0 rounded ml-2 transition-all duration-200 flex items-center ${
                 pendingOperations.loop 
-                  ? 'opacity-50 cursor-not-allowed bg-gray-500 text-gray-300'
+                  ? 'opacity-50 cursor-not-allowed bg-gray-500'
                   : looping
-                    ? 'bg-blue-600 hover:bg-blue-700 text-white'
-                    : 'bg-gray-600 hover:bg-gray-700 text-gray-300'
+                    ? 'bg-blue-600 hover:bg-blue-700'
+                    : 'bg-gray-600 hover:bg-gray-700'
               }`}
               onClick={() =>
                 onLoopToggle && onLoopToggle(trackId, !looping)
@@ -251,7 +251,17 @@ export default function AudioTrack({
               disabled={pendingOperations.loop}
               title={pendingOperations.loop ? 'Updating loop setting...' : (looping ? 'Disable looping' : 'Enable looping')}
             >
-              🔄 {pendingOperations.loop ? 'UPDATING...' : (looping ? 'LOOP' : 'ONCE')}
+              <img 
+                src="/ico/loop.png" 
+                alt="Loop" 
+                className={`w-6 h-6 filter brightness-0 invert ${
+                  pendingOperations.loop 
+                    ? 'opacity-30' 
+                    : looping 
+                      ? 'opacity-100' 
+                      : 'opacity-60'
+                }`}
+              />
             </button>
           )}
         </div>
