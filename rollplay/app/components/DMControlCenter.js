@@ -54,6 +54,7 @@ export default function DMControlCenter({
   sendRemoteAudioPause = null, // NEW: Send remote audio pause via WebSocket
   sendRemoteAudioStop = null,  // NEW: Send remote audio stop via WebSocket
   sendRemoteAudioVolume = null, // NEW: Send remote audio volume via WebSocket
+  sendRemoteAudioLoop = null,      // NEW: Send remote audio loop via WebSocket
   toggleRemoteTrackLooping = null, // NEW: Toggle loop state function
   trackRouting = {},            // NEW: Track routing state
   syncMode = false,             // NEW: Sync mode state
@@ -325,6 +326,7 @@ export default function DMControlCenter({
         sendRemoteAudioPause={sendRemoteAudioPause}
         sendRemoteAudioStop={sendRemoteAudioStop}
         sendRemoteAudioVolume={sendRemoteAudioVolume}
+        sendRemoteAudioLoop={sendRemoteAudioLoop}
         setRemoteTrackVolume={setRemoteTrackVolume}
         toggleRemoteTrackLooping={toggleRemoteTrackLooping}
         trackRouting={trackRouting}

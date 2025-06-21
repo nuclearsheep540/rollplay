@@ -111,6 +111,18 @@ export const handleRemoteAudioResume = async (data, { resumeRemoteTrack, remoteT
   }
 };
 
+export const handleRemoteAudioLoop = (data, { toggleRemoteTrackLooping }) => {
+  console.log("🔄 Remote audio loop command received:", data);
+  const { track_type, looping, triggered_by } = data;
+  
+  if (toggleRemoteTrackLooping) {
+    toggleRemoteTrackLooping(track_type, looping);
+    console.log(`🔄 Set remote ${track_type} looping to ${looping ? 'enabled' : 'disabled'} (triggered by ${triggered_by})`);
+  } else {
+    console.warn("❌ toggleRemoteTrackLooping function not available");
+  }
+};
+
 
 // =====================================
 // EXISTING EVENT HANDLERS
@@ -825,6 +837,21 @@ export const createSendFunctions = (webSocket, isConnected, roomId, playerName) 
     }
   };
 
+  const sendRemoteAudioLoop = (trackType, looping) => {
+    if (!webSocket || !isConnected) return;
+    
+    console.log(`📡 Sending remote audio loop toggle: ${trackType} - ${looping ? 'enabled' : 'disabled'}`);
+    
+    webSocket.send(JSON.stringify({
+      "event_type": "remote_audio_loop",
+      "data": {
+        "track_type": trackType,
+        "looping": looping,
+        "triggered_by": playerName
+      }
+    }));
+  };
+
 
   return {
     sendSeatChange,
@@ -845,7 +872,8 @@ export const createSendFunctions = (webSocket, isConnected, roomId, playerName) 
     sendRemoteAudioStop,
     sendRemoteAudioVolume,
     sendRemoteAudioResume,
-    sendRemoteAudioResumeTracks
+    sendRemoteAudioResumeTracks,
+    sendRemoteAudioLoop
   };
 };
 

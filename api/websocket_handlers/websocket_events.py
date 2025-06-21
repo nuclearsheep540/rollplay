@@ -873,3 +873,39 @@ class WebsocketEvent():
         }
         
         return WebsocketEventResult(broadcast_message=audio_resume_message)
+
+    @staticmethod
+    async def remote_audio_loop(websocket, data, event_data, player_name, client_id, manager):
+        """Handle remote audio loop events - DM toggles loop for all players"""
+        track_type = event_data.get("track_type")  # 'music', 'ambient', 'sfx'
+        looping = event_data.get("looping", True)
+        triggered_by = event_data.get("triggered_by", player_name)
+        
+        if not track_type or looping is None:
+            print(f"❌ Invalid remote audio loop request: track_type={track_type}, looping={looping}")
+            return WebsocketEventResult(broadcast_message={})
+        
+        loop_status = "enabled" if looping else "disabled"
+        print(f"🔄 Remote audio loop: {triggered_by} set {track_type} looping to {loop_status}")
+        
+        # Create log message for loop toggle
+        log_message = f"🔄 {triggered_by} set {track_type} looping {loop_status}"
+        
+        adventure_log.add_log_entry(
+            room_id=client_id,
+            message=log_message,
+            log_type=LogType.SYSTEM,
+            from_player=triggered_by
+        )
+        
+        # Broadcast audio loop command to all clients
+        audio_loop_message = {
+            "event_type": "remote_audio_loop",
+            "data": {
+                "track_type": track_type,
+                "looping": looping,
+                "triggered_by": triggered_by
+            }
+        }
+        
+        return WebsocketEventResult(broadcast_message=audio_loop_message)

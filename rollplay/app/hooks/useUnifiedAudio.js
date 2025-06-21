@@ -485,6 +485,7 @@ export const useUnifiedAudio = () => {
       return;
     }
     
+    // Update the state first
     setRemoteTrackStates(prev => ({
       ...prev,
       [trackId]: {
@@ -492,6 +493,29 @@ export const useUnifiedAudio = () => {
         looping
       }
     }));
+    
+    // If track is currently playing, restart it with new loop setting
+    if (activeSourcesRef.current[trackId] && remoteTrackStates[trackId]?.playbackState === PlaybackState.PLAYING) {
+      const currentState = remoteTrackStates[trackId];
+      const { filename, volume } = currentState;
+      
+      console.log(`🔄 Restarting ${trackId} with looping ${looping ? 'enabled' : 'disabled'}`);
+      
+      // Stop current playback
+      try {
+        activeSourcesRef.current[trackId].stop();
+        delete activeSourcesRef.current[trackId];
+        delete trackTimersRef.current[trackId];
+      } catch (e) {
+        console.warn(`Warning stopping ${trackId} for loop change:`, e);
+      }
+      
+      // Restart with new loop setting
+      setTimeout(() => {
+        playRemoteTrack(trackId, filename, looping, volume);
+      }, 50); // Small delay to ensure cleanup
+    }
+    
     console.log(`🔄 Set remote ${trackId} looping to ${looping ? 'enabled' : 'disabled'}`);
   };
 

@@ -559,7 +559,8 @@ function GameContent() {
     sendRemoteAudioResumeTracks,
     sendRemoteAudioPause,
     sendRemoteAudioStop,
-    sendRemoteAudioVolume
+    sendRemoteAudioVolume,
+    sendRemoteAudioLoop
   } = useWebSocket(roomId, thisPlayer, gameContext);
 
   // Listen for combat state changes and play audio
@@ -1180,6 +1181,7 @@ function GameContent() {
             sendRemoteAudioPause={sendRemoteAudioPause}   // NEW: Pass WebSocket pause function
             sendRemoteAudioStop={sendRemoteAudioStop}     // NEW: Pass WebSocket sending functions
             sendRemoteAudioVolume={sendRemoteAudioVolume} // NEW: Pass WebSocket sending functions
+            sendRemoteAudioLoop={sendRemoteAudioLoop}     // NEW: Pass WebSocket loop function
             trackRouting={trackRouting}           // NEW: Pass track routing state
             syncMode={syncMode}                   // NEW: Pass sync mode state  
             setSyncMode={setSyncMode}             // NEW: Pass sync mode toggle function

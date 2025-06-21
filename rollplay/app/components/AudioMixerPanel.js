@@ -26,6 +26,7 @@ export default function AudioMixerPanel({
   sendRemoteAudioPause,
   sendRemoteAudioStop,
   sendRemoteAudioVolume,
+  sendRemoteAudioLoop,
   setRemoteTrackVolume,
   toggleRemoteTrackLooping,
   remoteTrackAnalysers = {},
@@ -59,6 +60,14 @@ export default function AudioMixerPanel({
   const disableSync = () => {
     console.log(`🔓 Disabling sync mode`);
     setSyncMode?.(false);
+  };
+
+  // Handle loop toggle with WebSocket broadcast
+  const handleLoopToggle = (trackId, looping) => {
+    // Update local state
+    toggleRemoteTrackLooping?.(trackId, looping);
+    // Broadcast to other players
+    sendRemoteAudioLoop?.(trackId, looping);
   };
   // Dynamically generate channels from remoteTrackStates
   const channels = Object.keys(remoteTrackStates).map(channelId => {
@@ -406,7 +415,7 @@ export default function AudioMixerPanel({
                       sendRemoteAudioVolume?.(channel.channelId, v)
                     }
                     onLoopToggle={(id, loop) =>
-                      toggleRemoteTrackLooping?.(id, loop)
+                      handleLoopToggle(id, loop)
                     }
                     syncMode={syncMode}
                     isLast={false}
@@ -455,7 +464,7 @@ export default function AudioMixerPanel({
                       sendRemoteAudioVolume?.(channel.channelId, v)
                     }
                     onLoopToggle={(id, loop) =>
-                      toggleRemoteTrackLooping?.(id, loop)
+                      handleLoopToggle(id, loop)
                     }
                     syncMode={syncMode}
                     isLast={false}
