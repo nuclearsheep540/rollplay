@@ -150,13 +150,13 @@ export default function AudioTrack({
   return (
     <div key={trackId} className='flex'>
       {filename && (
-        <div className="flex-none w-[auto]" style={{ writingMode: 'vertical-rl' }}>
+        <div className="flex-none w-[18px] mr-2 flex items-start justify-center pt-2">
           {track && (
-          <div className={`text-center text-xs px-3 py-0.5 rounded font-bold ${
+          <div className={`text-center text-xs px-1 py-8 rounded-sm font-bold w-full flex items-center justify-center ${
             isRouted 
               ? 'bg-green-600 text-white' 
               : 'bg-gray-600 text-gray-300'
-          }`}>
+          }`} style={{ writingMode: 'vertical-rl' }}>
             {track}
           </div>
         )}
