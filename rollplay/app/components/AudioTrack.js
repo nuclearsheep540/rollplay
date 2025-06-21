@@ -177,7 +177,7 @@ export default function AudioTrack({
           <div className="text-white font-mono text-sm">
             {filename || label || trackId}
           </div>
-          <div className="text-gray-400 font-mono text-xs">
+          <div className="text-gray-400 font-mono text-sm">
             {formatTime(currentTime)} / {formatTime(duration)}
           </div>
         </div>
