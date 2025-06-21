@@ -119,7 +119,7 @@ export default function AudioMixerPanel({
     ambient: ambientChannels.some(ch => ch.track === 'A') && ambientChannels.some(ch => ch.track === 'B')
   };
 
-  // Common play/pause/stop helpers:
+  // Enhanced play handler with synchronized playback
   const handlePlay = (channel) => {
     const channelState = remoteTrackStates[channel.channelId];
     const filename = channelState?.filename;
@@ -129,18 +129,89 @@ export default function AudioMixerPanel({
       return;
     }
     
+    // Play the requested track
     sendRemoteAudioPlay?.(
       channel.channelId,
       filename,
       channel.type !== 'sfx',             // looping for music/ambient
       channelState?.volume
     );
+    
+    // If sync is enabled and this is a music/ambient A/B track, play the corresponding sync track
+    if (abSyncEnabled && channel.channelGroup && channel.track) {
+      const { channelGroup, track } = channel;
+      
+      // Only trigger sync for music/ambient tracks
+      if (channelGroup === 'music' || channelGroup === 'ambient') {
+        // Find the corresponding track in the other group
+        const otherGroup = channelGroup === 'music' ? 'ambient' : 'music';
+        const syncChannelId = Object.keys(remoteTrackStates).find(id => 
+          remoteTrackStates[id].channelGroup === otherGroup && 
+          remoteTrackStates[id].track === track
+        );
+        
+        if (syncChannelId) {
+          const syncChannelState = remoteTrackStates[syncChannelId];
+          if (syncChannelState?.filename && !syncChannelState?.playing) {
+            console.log(`🔗 Sync play: Starting ${otherGroup} track ${track} (${syncChannelId})`);
+            sendRemoteAudioPlay?.(
+              syncChannelId,
+              syncChannelState.filename,
+              true, // music/ambient always loop
+              syncChannelState.volume
+            );
+          }
+        }
+      }
+    }
   };
+  // Enhanced pause handler with synchronized control
   const handlePause = (channel) => {
     sendRemoteAudioPause?.(channel.channelId);
+    
+    // If sync is enabled and this is a music/ambient A/B track, pause the corresponding sync track
+    if (abSyncEnabled && channel.channelGroup && channel.track) {
+      const { channelGroup, track } = channel;
+      
+      // Only trigger sync for music/ambient tracks
+      if (channelGroup === 'music' || channelGroup === 'ambient') {
+        // Find the corresponding track in the other group
+        const otherGroup = channelGroup === 'music' ? 'ambient' : 'music';
+        const syncChannelId = Object.keys(remoteTrackStates).find(id => 
+          remoteTrackStates[id].channelGroup === otherGroup && 
+          remoteTrackStates[id].track === track
+        );
+        
+        if (syncChannelId && remoteTrackStates[syncChannelId]?.playing) {
+          console.log(`🔗 Sync pause: Pausing ${otherGroup} track ${track} (${syncChannelId})`);
+          sendRemoteAudioPause?.(syncChannelId);
+        }
+      }
+    }
   };
+  // Enhanced stop handler with synchronized control
   const handleStop = (channel) => {
     sendRemoteAudioStop?.(channel.channelId);
+    
+    // If sync is enabled and this is a music/ambient A/B track, stop the corresponding sync track
+    if (abSyncEnabled && channel.channelGroup && channel.track) {
+      const { channelGroup, track } = channel;
+      
+      // Only trigger sync for music/ambient tracks
+      if (channelGroup === 'music' || channelGroup === 'ambient') {
+        // Find the corresponding track in the other group
+        const otherGroup = channelGroup === 'music' ? 'ambient' : 'music';
+        const syncChannelId = Object.keys(remoteTrackStates).find(id => 
+          remoteTrackStates[id].channelGroup === otherGroup && 
+          remoteTrackStates[id].track === track
+        );
+        
+        if (syncChannelId && remoteTrackStates[syncChannelId]?.playing) {
+          console.log(`🔗 Sync stop: Stopping ${otherGroup} track ${track} (${syncChannelId})`);
+          sendRemoteAudioStop?.(syncChannelId);
+        }
+      }
+    }
   };
 
   return (
