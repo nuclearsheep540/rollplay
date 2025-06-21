@@ -242,9 +242,10 @@ export const useUnifiedAudio = () => {
         [trackId]: {
           ...prev[trackId],
           playing: true,
+          paused: false,
           filename: audioFile,
           volume: volume !== null ? volume : prev[trackId]?.volume || 0.7,
-          currentTime: 0,
+          currentTime: resumeFromPause ? prev[trackId].currentTime : 0,
           duration: duration
         }
       }));
