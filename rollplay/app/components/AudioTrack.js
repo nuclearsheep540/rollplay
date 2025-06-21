@@ -9,7 +9,11 @@ import {
   DM_SUB_HEADER,
   DM_CHILD,
   DM_CHILD_LAST,
-  MIXER_FADER
+  MIXER_FADER,
+  AUDIO_INDICATOR_BASE,
+  AUDIO_INDICATOR_SYNCED,
+  AUDIO_INDICATOR_UNSYNCED,
+  AUDIO_INDICATOR_NORMAL
 } from '../styles/constants';
 
 // Helper: format seconds → MM:SS
@@ -35,6 +39,7 @@ export default function AudioTrack({
   onVolumeChange,
   onVolumeChangeDebounced,
   onLoopToggle,
+  syncMode = false,
   isLast = false
 }) {
   const { trackId, type, icon, label, analyserNode, isRouted, track, isDisabled } = config;
@@ -150,13 +155,13 @@ export default function AudioTrack({
   return (
     <div key={trackId} className='flex'>
       {filename && (
-        <div className="flex-none w-[18px] mr-2 flex items-start justify-center pt-2">
+        <div className="flex-none w-[18px] mr-2 flex">
           {track && (
-          <div className={`text-center text-xs px-1 py-8 rounded-sm font-bold w-full flex items-center justify-center ${
-            isRouted 
-              ? 'bg-green-600 text-white' 
-              : 'bg-gray-600 text-gray-300'
-          }`} style={{ writingMode: 'vertical-rl' }}>
+          <div className={`text-center text-xs px-1 rounded-sm font-bold w-full flex items-center justify-center ${AUDIO_INDICATOR_BASE} ${
+            syncMode 
+              ? (isRouted ? AUDIO_INDICATOR_SYNCED : AUDIO_INDICATOR_UNSYNCED)
+              : AUDIO_INDICATOR_NORMAL
+          } ${isLast ? 'mb-4' : ''}`} style={{ writingMode: 'vertical-rl' }}>
             {track}
           </div>
         )}

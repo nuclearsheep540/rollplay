@@ -403,6 +403,7 @@ export default function AudioMixerPanel({
                     onLoopToggle={(id, loop) =>
                       toggleRemoteTrackLooping?.(id, loop)
                     }
+                    syncMode={syncMode}
                     isLast={false}
                   />
                 );
@@ -451,6 +452,7 @@ export default function AudioMixerPanel({
                     onLoopToggle={(id, loop) =>
                       toggleRemoteTrackLooping?.(id, loop)
                     }
+                    syncMode={syncMode}
                     isLast={false}
                   />
                 );
@@ -491,6 +493,7 @@ export default function AudioMixerPanel({
                     sendRemoteAudioVolume?.(channel.channelId, v)
                   }
                   onLoopToggle={() => {}}
+                  syncMode={syncMode}
                   isLast={idx === sfxChannels.length - 1}
                 />
               ))}
