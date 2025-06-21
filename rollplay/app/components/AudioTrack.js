@@ -36,7 +36,7 @@ export default function AudioTrack({
   onLoopToggle,
   isLast = false
 }) {
-  const { trackId, type, icon, label, analyserNode } = config;
+  const { trackId, type, icon, label, analyserNode, isRouted, track } = config;
   const {
     playing,
     volume = 1.0,
@@ -90,8 +90,8 @@ export default function AudioTrack({
       lastRms = smoothed;
   
       // convert to percentage
-      let pct = Math.min(1, smoothed) * 300;
-      pct = (pct * 3) * (trackState.volume) + (pct ? 3 : 0)
+      let pct = Math.min(1, smoothed) * 100;
+      pct = (pct * 4) * (trackState.volume) + (pct ? 3 : 0)
   
       // defend against missing ref in mid-cleanup
       const rms_hot = 60;
@@ -152,7 +152,22 @@ export default function AudioTrack({
         {/* Header */}
         <div className="flex justify-between items-center mb-2">
           <div className="text-white font-mono text-sm">
-            {filename || label || trackId}
+            <div className="flex items-center gap-2">
+              {filename || label || trackId}
+              {/* A/B Routing Indicator */}
+              {track && (
+                <span className={`text-xs px-2 py-0.5 rounded font-bold ${
+                  isRouted 
+                    ? 'bg-green-600 text-white' 
+                    : 'bg-gray-600 text-gray-300'
+                }`}>
+                  {track}
+                </span>
+              )}
+              {isRouted && (
+                <span className="text-green-400 text-xs">🔊 LIVE</span>
+              )}
+            </div>
             {filename && (
               <div className="text-gray-400 text-xs">{label || trackId}</div>
             )}

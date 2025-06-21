@@ -101,12 +101,28 @@ export const useUnifiedAudio = () => {
   const activeSourcesRef = useRef({});
   const trackTimersRef = useRef({}); // Store timing info for each track
 
-  // Remote track states (for DM-controlled audio) - using channel-based naming
+  // A/B routing state - controls which track is sent to mix
+  const [abRouting, setAbRouting] = useState({
+    music: 'A',    // Either 'A' or 'B'
+    ambient: 'A'   // Either 'A' or 'B'
+  });
+
+  // A/B sync state - when enabled, switching one group switches both
+  const [abSyncEnabled, setAbSyncEnabled] = useState(false);
+
+  // Remote track states (for DM-controlled audio) - A/B channel structure
   const [remoteTrackStates, setRemoteTrackStates] = useState({
-    audio_channel_1: { playing: false, paused: false, volume: 0.9, filename: 'boss.mp3', type: 'music', currentTime: 0, duration: 0, looping: true },
-    audio_channel_2: { playing: false, paused: false, volume: 0.9, filename: 'storm.mp3', type: 'ambient', currentTime: 0, duration: 0, looping: true },
+    // Music A/B Channels
+    audio_channel_1A: { playing: false, paused: false, volume: 0.9, filename: 'boss.mp3', type: 'music', channelGroup: 'music', track: 'A', currentTime: 0, duration: 0, looping: true },
+    audio_channel_1B: { playing: false, paused: false, volume: 0.7, filename: 'shop.mp3', type: 'music', channelGroup: 'music', track: 'B', currentTime: 0, duration: 0, looping: true },
+    // Ambient A/B Channels  
+    audio_channel_2A: { playing: false, paused: false, volume: 0.9, filename: 'storm.mp3', type: 'ambient', channelGroup: 'ambient', track: 'A', currentTime: 0, duration: 0, looping: true },
+    audio_channel_2B: { playing: false, paused: false, volume: 0.7, filename: null, type: 'ambient', channelGroup: 'ambient', track: 'B', currentTime: 0, duration: 0, looping: true },
+    // SFX Channels (unchanged)
     audio_channel_3: { playing: false, paused: false, volume: 0.9, filename: 'sword.mp3', type: 'sfx', currentTime: 0, duration: 0, looping: false },
-    audio_channel_4: { playing: false, paused: false, volume: 0.9, filename: 'enemy_hit_cinematic.mp3', type: 'sfx', currentTime: 0, duration: 0, looping: false }
+    audio_channel_4: { playing: false, paused: false, volume: 0.9, filename: 'enemy_hit_cinematic.mp3', type: 'sfx', currentTime: 0, duration: 0, looping: false },
+    audio_channel_5: { playing: false, paused: false, volume: 0.9, filename: 'link_attack.mp3', type: 'sfx', currentTime: 0, duration: 0, looping: false }
+
   });
 
   // Initialize Web Audio API for remote tracks
@@ -120,8 +136,8 @@ export const useUnifiedAudio = () => {
         masterGainRef.current.connect(audioContextRef.current.destination);
         masterGainRef.current.gain.value = masterVolume;
 
-        // Create gain nodes and analyser nodes for each remote track
-        ['audio_channel_1', 'audio_channel_2', 'audio_channel_3', 'audio_channel_4'].forEach(trackId => {
+        // Create gain nodes and analyser nodes for each remote track (dynamic)
+        Object.keys(remoteTrackStates).forEach(trackId => {
           const gainNode = audioContextRef.current.createGain();
           const analyserNode = audioContextRef.current.createAnalyser();
           
@@ -407,6 +423,27 @@ export const useUnifiedAudio = () => {
     console.log(`🔄 Set remote ${trackId} looping to ${looping ? 'enabled' : 'disabled'}`);
   };
 
+  // Switch A/B routing for a channel group (state only)
+  const switchABRouting = (channelGroup, newTrack) => {
+    console.log(`🔀 Updating routing state: ${channelGroup} to ${newTrack}`);
+    
+    if (abSyncEnabled && (channelGroup === 'music' || channelGroup === 'ambient')) {
+      // Sync mode: switch both music and ambient together
+      setAbRouting(prev => ({
+        ...prev,
+        music: newTrack,
+        ambient: newTrack
+      }));
+      console.log(`🔗 Sync enabled: routing both music and ambient to ${newTrack}`);
+    } else {
+      // Independent mode: switch only the requested channel group
+      setAbRouting(prev => ({
+        ...prev,
+        [channelGroup]: newTrack
+      }));
+    }
+  };
+
   // Set remote track volume
   const setRemoteTrackVolume = (trackId, volume) => {
     if (remoteTrackGainsRef.current[trackId]) {
@@ -490,6 +527,12 @@ export const useUnifiedAudio = () => {
     stopRemoteTrack,
     setRemoteTrackVolume,
     toggleRemoteTrackLooping,
+    
+    // A/B routing functions
+    abRouting,
+    abSyncEnabled,
+    setAbSyncEnabled,
+    switchABRouting,
     
     // Unified functions
     unlockAudio
