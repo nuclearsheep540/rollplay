@@ -542,9 +542,8 @@ export const useUnifiedAudio = () => {
         filename
       };
       
-      setTimeout(() => {
-        playRemoteTrack(trackId, filename, looping, volume, currentPlaybackTime, completeTrackState);
-      }, 50); // Small delay to ensure cleanup
+      // Restart immediately - no delay needed
+      playRemoteTrack(trackId, filename, looping, volume, currentPlaybackTime, completeTrackState);
     }
     
     console.log(`🔄 Set remote ${trackId} looping to ${looping ? 'enabled' : 'disabled'}`);
