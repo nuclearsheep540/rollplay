@@ -161,6 +161,7 @@ export function useWebSocket(roomId, playerName, gameContext) {
           handleRemoteAudioVolume(json_data["data"], gameContext);
           break;
 
+
         default:
           console.log("Unhandled WebSocket event:", event_type, json_data);
       }

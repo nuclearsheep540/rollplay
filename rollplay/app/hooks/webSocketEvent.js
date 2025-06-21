@@ -10,11 +10,27 @@
 
 export const handleRemoteAudioPlay = (data, { playRemoteTrack }) => {
   console.log("🎵 Remote audio play command received:", data);
-  const { track_type, audio_file, loop = true, volume = 1.0, triggered_by } = data;
+  const { tracks, triggered_by } = data;
   
   if (playRemoteTrack) {
-    playRemoteTrack(track_type, audio_file, loop, volume);
-    console.log(`▶️ Playing remote ${track_type}: ${audio_file} (triggered by ${triggered_by})`);
+    if (tracks && Array.isArray(tracks)) {
+      // Multiple tracks for synchronized playback
+      console.log(`🔗 Processing ${tracks.length} synchronized tracks:`, tracks);
+      tracks.forEach((track, index) => {
+        const { channelId, filename, looping = true, volume = 1.0 } = track;
+        console.log(`▶️ [SYNC ${index + 1}/${tracks.length}] About to play remote ${channelId}: ${filename} (volume: ${volume}, loop: ${looping})`);
+        const success = playRemoteTrack(channelId, filename, looping, volume);
+        console.log(`▶️ [SYNC ${index + 1}/${tracks.length}] Play result for ${channelId}: ${success}`);
+      });
+    } else {
+      // Legacy single track format
+      const { track_type, audio_file, loop = true, volume = 1.0 } = data;
+      console.log(`▶️ Playing single remote track: ${track_type}: ${audio_file}`);
+      const success = playRemoteTrack(track_type, audio_file, loop, volume);
+      console.log(`▶️ Single track play result: ${success}`);
+    }
+  } else {
+    console.warn("❌ playRemoteTrack function not available");
   }
 };
 
@@ -47,6 +63,7 @@ export const handleRemoteAudioVolume = (data, { setRemoteTrackVolume }) => {
     console.log(`🔊 Set remote ${track_type} volume to ${Math.round(volume * 100)}% (triggered by ${triggered_by})`);
   }
 };
+
 
 // =====================================
 // EXISTING EVENT HANDLERS
@@ -647,6 +664,36 @@ export const createSendFunctions = (webSocket, isConnected, roomId, playerName) 
     }));
   };
 
+  const sendRemoteAudioPlayTracks = (tracks) => {
+    console.log(`🔍 sendRemoteAudioPlayTracks called with:`, tracks);
+    console.log(`🔍 WebSocket state: connected=${isConnected}, readyState=${webSocket?.readyState}`);
+    
+    if (!webSocket || !isConnected) {
+      console.warn(`❌ Cannot send synchronized audio - WebSocket not ready. connected=${isConnected}, webSocket=${!!webSocket}`);
+      return;
+    }
+    
+    const trackDescriptions = tracks.map(t => `${t.channelId} (${t.filename})`).join(' + ');
+    console.log(`📡 Sending synchronized audio play: ${trackDescriptions}`);
+    
+    const message = {
+      "event_type": "remote_audio_play",
+      "data": {
+        "tracks": tracks,
+        "triggered_by": playerName
+      }
+    };
+    
+    console.log(`📡 WebSocket message being sent:`, message);
+    
+    try {
+      webSocket.send(JSON.stringify(message));
+      console.log(`✅ WebSocket send successful`);
+    } catch (error) {
+      console.error(`❌ WebSocket send failed:`, error);
+    }
+  };
+
   const sendRemoteAudioStop = (trackType) => {
     if (!webSocket || !isConnected) return;
     
@@ -690,6 +737,7 @@ export const createSendFunctions = (webSocket, isConnected, roomId, playerName) 
     }));
   };
 
+
   return {
     sendSeatChange,
     sendSeatCountChange,
@@ -704,6 +752,7 @@ export const createSendFunctions = (webSocket, isConnected, roomId, playerName) 
     sendColorChange,
     sendRoleChange,
     sendRemoteAudioPlay,
+    sendRemoteAudioPlayTracks,
     sendRemoteAudioPause,
     sendRemoteAudioStop,
     sendRemoteAudioVolume

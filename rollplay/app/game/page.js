@@ -549,6 +549,7 @@ function GameContent() {
     sendColorChange,
     sendRoleChange,
     sendRemoteAudioPlay,
+    sendRemoteAudioPlayTracks,
     sendRemoteAudioPause,
     sendRemoteAudioStop,
     sendRemoteAudioVolume
@@ -1158,6 +1159,7 @@ function GameContent() {
             roomId={roomId}
             activePrompts={activePrompts}        // UPDATED: Pass array instead of single prompt
             unlockAudio={unlockAudio}             // NEW: Pass audio unlock function
+            isAudioUnlocked={isAudioUnlocked}    // NEW: Pass audio unlock status
             remoteTrackStates={remoteTrackStates} // NEW: Pass remote track states
             remoteTrackAnalysers={remoteTrackAnalysers} // NEW: Pass remote track analysers
             playRemoteTrack={playRemoteTrack}     // NEW: Pass remote track controls (local)
@@ -1165,6 +1167,7 @@ function GameContent() {
             setRemoteTrackVolume={setRemoteTrackVolume} // NEW: Pass remote track controls (local)
             toggleRemoteTrackLooping={toggleRemoteTrackLooping} // NEW: Pass loop toggle function
             sendRemoteAudioPlay={sendRemoteAudioPlay}     // NEW: Pass WebSocket sending functions
+            sendRemoteAudioPlayTracks={sendRemoteAudioPlayTracks} // NEW: Pass WebSocket multi-track function
             sendRemoteAudioPause={sendRemoteAudioPause}   // NEW: Pass WebSocket pause function
             sendRemoteAudioStop={sendRemoteAudioStop}     // NEW: Pass WebSocket sending functions
             sendRemoteAudioVolume={sendRemoteAudioVolume} // NEW: Pass WebSocket sending functions

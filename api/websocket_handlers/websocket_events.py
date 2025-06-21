@@ -669,20 +669,49 @@ class WebsocketEvent():
     @staticmethod 
     async def remote_audio_play(websocket, data, event_data, player_name, client_id, manager):
         """Handle remote audio play events - DM controls audio for all players"""
-        track_type = event_data.get("track_type")  # 'music', 'ambient', 'sfx'
-        audio_file = event_data.get("audio_file")  # 'boss.mp3', 'storm.mp3', etc.
-        loop = event_data.get("loop", True)
-        volume = event_data.get("volume", 1.0)
+        print(f"🎵 Backend received remote_audio_play event from {player_name}: {event_data}")
         triggered_by = event_data.get("triggered_by", player_name)
         
-        if not track_type or not audio_file:
-            print(f"❌ Invalid remote audio play request: track_type={track_type}, audio_file={audio_file}")
-            return WebsocketEventResult(broadcast_message={})
-        
-        print(f"🎵 Remote audio play: {triggered_by} playing {track_type} - {audio_file} (loop: {loop}, volume: {volume})")
-        
-        # Create log message for audio start
-        log_message = f"🎵 {triggered_by} started playing {track_type}: {audio_file}"
+        # Support both single track and multiple tracks (for synchronized playback)
+        tracks = event_data.get("tracks")
+        if tracks:
+            # Multiple tracks for synchronized playback
+            if not isinstance(tracks, list) or len(tracks) == 0:
+                print(f"❌ Invalid remote audio play request: tracks must be a non-empty array")
+                return WebsocketEventResult(broadcast_message={})
+            
+            # Validate all tracks
+            for track in tracks:
+                if not track.get("channelId") or not track.get("filename"):
+                    print(f"❌ Invalid track in synchronized play request: {track}")
+                    return WebsocketEventResult(broadcast_message={})
+            
+            # Create log message for synchronized playback
+            track_descriptions = [f"{track['channelId']} ({track['filename']})" for track in tracks]
+            log_message = f"🔗 {triggered_by} started synchronized playback: {' + '.join(track_descriptions)}"
+            print(log_message)
+            
+        else:
+            # Single track (legacy format)
+            track_type = event_data.get("track_type")  # 'music', 'ambient', 'sfx'
+            audio_file = event_data.get("audio_file")  # 'boss.mp3', 'storm.mp3', etc.
+            loop = event_data.get("loop", True)
+            volume = event_data.get("volume", 1.0)
+            
+            if not track_type or not audio_file:
+                print(f"❌ Invalid remote audio play request: track_type={track_type}, audio_file={audio_file}")
+                return WebsocketEventResult(broadcast_message={})
+            
+            # Convert single track to tracks array format
+            tracks = [{
+                "channelId": track_type,  # For legacy compatibility
+                "filename": audio_file,
+                "looping": loop,
+                "volume": volume
+            }]
+            
+            log_message = f"🎵 {triggered_by} started playing {track_type}: {audio_file}"
+            print(f"🎵 Remote audio play: {triggered_by} playing {track_type} - {audio_file} (loop: {loop}, volume: {volume})")
         
         # Add to adventure log
         adventure_log.add_log_entry(
@@ -696,11 +725,10 @@ class WebsocketEvent():
         audio_play_message = {
             "event_type": "remote_audio_play",
             "data": {
-                "track_type": track_type,
-                "audio_file": audio_file,
-                "loop": loop,
-                "volume": volume,
-                "triggered_by": triggered_by
+                "tracks": tracks,
+                "triggered_by": triggered_by,
+                # Keep legacy fields for backward compatibility if single track
+                **(event_data if len(tracks) == 1 and not event_data.get("tracks") else {})
             }
         }
         

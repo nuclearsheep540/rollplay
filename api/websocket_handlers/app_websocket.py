@@ -45,6 +45,8 @@ def register_websocket_routes(app: FastAPI):
                 event_type = data.get("event_type")
                 event_data = data.get("data")
                 
+                print(f"📨 WebSocket received: {event_type} from {player_name}")
+                
                 # Initialize variables for post-processing
                 broadcast_message = None
                 log_removal_message = None

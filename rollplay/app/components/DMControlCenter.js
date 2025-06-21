@@ -41,12 +41,14 @@ export default function DMControlCenter({
   activePrompts = [],        // UPDATED: Array of active prompts
   clearDicePrompt,           // UPDATED: Function to clear prompt(s)
   unlockAudio = null,        // NEW: Audio unlock function for DM
+  isAudioUnlocked = false,   // NEW: Audio unlock status
   remoteTrackStates = {},    // NEW: Remote track states from unified audio
   remoteTrackAnalysers = {}, // NEW: Remote track analysers from unified audio
   playRemoteTrack = null,    // NEW: Play remote track function (local)
   stopRemoteTrack = null,    // NEW: Stop remote track function (local)
   setRemoteTrackVolume = null, // NEW: Set remote track volume function (local)
   sendRemoteAudioPlay = null,  // NEW: Send remote audio play via WebSocket
+  sendRemoteAudioPlayTracks = null, // NEW: Send remote audio play tracks via WebSocket
   sendRemoteAudioPause = null, // NEW: Send remote audio pause via WebSocket
   sendRemoteAudioStop = null,  // NEW: Send remote audio stop via WebSocket
   sendRemoteAudioVolume = null, // NEW: Send remote audio volume via WebSocket
@@ -315,6 +317,7 @@ export default function DMControlCenter({
         remoteTrackStates={remoteTrackStates}
         remoteTrackAnalysers={remoteTrackAnalysers}
         sendRemoteAudioPlay={sendRemoteAudioPlay}
+        sendRemoteAudioPlayTracks={sendRemoteAudioPlayTracks}
         sendRemoteAudioPause={sendRemoteAudioPause}
         sendRemoteAudioStop={sendRemoteAudioStop}
         sendRemoteAudioVolume={sendRemoteAudioVolume}
@@ -324,6 +327,8 @@ export default function DMControlCenter({
         abSyncEnabled={abSyncEnabled}
         setAbSyncEnabled={setAbSyncEnabled}
         switchABRouting={switchABRouting}
+        unlockAudio={unlockAudio}
+        isAudioUnlocked={isAudioUnlocked}
       />
 
 

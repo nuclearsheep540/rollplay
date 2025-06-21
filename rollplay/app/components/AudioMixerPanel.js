@@ -19,6 +19,7 @@ export default function AudioMixerPanel({
   onToggle,
   remoteTrackStates = {},
   sendRemoteAudioPlay,
+  sendRemoteAudioPlayTracks,
   sendRemoteAudioPause,
   sendRemoteAudioStop,
   sendRemoteAudioVolume,
@@ -28,7 +29,9 @@ export default function AudioMixerPanel({
   abRouting = {},
   abSyncEnabled = false,
   setAbSyncEnabled,
-  switchABRouting
+  switchABRouting,
+  unlockAudio = null,
+  isAudioUnlocked = false
 }) {
   
   // Enhanced A/B switching with actual audio control
@@ -120,7 +123,17 @@ export default function AudioMixerPanel({
   };
 
   // Enhanced play handler with synchronized playback
-  const handlePlay = (channel) => {
+  const handlePlay = async (channel) => {
+    // Ensure audio is unlocked before playing
+    if (!isAudioUnlocked) {
+      console.log('🔓 Unlocking audio for play action...');
+      const unlocked = await unlockAudio();
+      if (!unlocked) {
+        console.warn('❌ Failed to unlock audio - cannot play');
+        return;
+      }
+    }
+    
     const channelState = remoteTrackStates[channel.channelId];
     const filename = channelState?.filename;
     
@@ -129,41 +142,64 @@ export default function AudioMixerPanel({
       return;
     }
     
-    // Play the requested track
+    // Check if sync is enabled and this is a music/ambient A/B track
+    console.log(`🔍 Play button clicked: channel=${channel.channelId}, group=${channel.channelGroup}, track=${channel.track}, syncEnabled=${abSyncEnabled}`);
+    console.log(`🔍 Current routing:`, abRouting);
+    
+    if (abSyncEnabled && channel.channelGroup && channel.track && 
+        (channel.channelGroup === 'music' || channel.channelGroup === 'ambient')) {
+      
+      const { channelGroup, track } = channel;
+      
+      // Find the corresponding track in the other group based on current routing
+      const otherGroup = channelGroup === 'music' ? 'ambient' : 'music';
+      const otherGroupTrack = abRouting[otherGroup]; // Use routing state, not same track letter
+      
+      console.log(`🔍 Looking for sync pair: ${otherGroup} track ${otherGroupTrack}`);
+      
+      const syncChannelId = Object.keys(remoteTrackStates).find(id => 
+        remoteTrackStates[id].channelGroup === otherGroup && 
+        remoteTrackStates[id].track === otherGroupTrack
+      );
+      
+      console.log(`🔍 Found sync channel:`, syncChannelId);
+      
+      if (syncChannelId) {
+        const syncChannelState = remoteTrackStates[syncChannelId];
+        
+        // Use tracks array to start both tracks simultaneously
+        console.log(`🔗 Sync play: Starting ${channelGroup} ${track} + ${otherGroup} ${otherGroupTrack} (routing: ${channelGroup}=${abRouting[channelGroup]}, ${otherGroup}=${abRouting[otherGroup]})`);
+        
+        const tracks = [{
+          channelId: channel.channelId,
+          filename: filename,
+          looping: channel.type !== 'sfx',
+          volume: channelState.volume
+        }];
+        
+        if (syncChannelState?.filename) {
+          tracks.push({
+            channelId: syncChannelId,
+            filename: syncChannelState.filename,
+            looping: true, // music/ambient always loop
+            volume: syncChannelState.volume
+          });
+        }
+        
+        console.log(`📡 About to send WebSocket event with tracks:`, tracks);
+        sendRemoteAudioPlayTracks?.(tracks);
+        console.log(`📡 WebSocket event sent`);
+        return;
+      }
+    }
+    
+    // Fallback to regular play for non-sync tracks or when sync is disabled
     sendRemoteAudioPlay?.(
       channel.channelId,
       filename,
       channel.type !== 'sfx',             // looping for music/ambient
       channelState?.volume
     );
-    
-    // If sync is enabled and this is a music/ambient A/B track, play the corresponding sync track
-    if (abSyncEnabled && channel.channelGroup && channel.track) {
-      const { channelGroup, track } = channel;
-      
-      // Only trigger sync for music/ambient tracks
-      if (channelGroup === 'music' || channelGroup === 'ambient') {
-        // Find the corresponding track in the other group
-        const otherGroup = channelGroup === 'music' ? 'ambient' : 'music';
-        const syncChannelId = Object.keys(remoteTrackStates).find(id => 
-          remoteTrackStates[id].channelGroup === otherGroup && 
-          remoteTrackStates[id].track === track
-        );
-        
-        if (syncChannelId) {
-          const syncChannelState = remoteTrackStates[syncChannelId];
-          if (syncChannelState?.filename && !syncChannelState?.playing) {
-            console.log(`🔗 Sync play: Starting ${otherGroup} track ${track} (${syncChannelId})`);
-            sendRemoteAudioPlay?.(
-              syncChannelId,
-              syncChannelState.filename,
-              true, // music/ambient always loop
-              syncChannelState.volume
-            );
-          }
-        }
-      }
-    }
   };
   // Enhanced pause handler with synchronized control
   const handlePause = (channel) => {
@@ -242,21 +278,17 @@ export default function AudioMixerPanel({
                       onClick={() => {
                         console.log('🔗 Syncing to A tracks');
                         
-                        // Enable sync and set both to A
+                        // Enable sync first
                         setAbSyncEnabled?.(true);
-                        switchABRouting?.('music', 'A');
-                        switchABRouting?.('ambient', 'A');
                         
-                        // Stop any B tracks that are playing
-                        ['music', 'ambient'].forEach(group => {
-                          const channelsInGroup = channels.filter(ch => ch.channelGroup === group);
-                          channelsInGroup.forEach(channel => {
-                            if (channel.track === 'B' && remoteTrackStates[channel.channelId]?.playing) {
-                              console.log(`⏹️ Stopping ${group} track B (${channel.channelId})`);
-                              sendRemoteAudioStop?.(channel.channelId);
-                            }
-                          });
-                        });
+                        // Directly set both routes to ensure sync works
+                        setTimeout(() => {
+                          console.log('🔄 Manually setting both routes to A');
+                          switchABRouting?.('music', 'A');
+                          switchABRouting?.('ambient', 'A');
+                        }, 10); // Slightly longer delay to ensure state propagation
+                        
+                        console.log(`🔗 Sync enabled and routing to A`);
                       }}
                       title="Sync both music and ambient to A tracks"
                     >
@@ -272,21 +304,17 @@ export default function AudioMixerPanel({
                       onClick={() => {
                         console.log('🔗 Syncing to B tracks');
                         
-                        // Enable sync and set both to B
+                        // Enable sync first
                         setAbSyncEnabled?.(true);
-                        switchABRouting?.('music', 'B');
-                        switchABRouting?.('ambient', 'B');
                         
-                        // Stop any A tracks that are playing
-                        ['music', 'ambient'].forEach(group => {
-                          const channelsInGroup = channels.filter(ch => ch.channelGroup === group);
-                          channelsInGroup.forEach(channel => {
-                            if (channel.track === 'A' && remoteTrackStates[channel.channelId]?.playing) {
-                              console.log(`⏹️ Stopping ${group} track A (${channel.channelId})`);
-                              sendRemoteAudioStop?.(channel.channelId);
-                            }
-                          });
-                        });
+                        // Directly set both routes to ensure sync works
+                        setTimeout(() => {
+                          console.log('🔄 Manually setting both routes to B');
+                          switchABRouting?.('music', 'B');
+                          switchABRouting?.('ambient', 'B');
+                        }, 10); // Slightly longer delay to ensure state propagation
+                        
+                        console.log(`🔗 Sync enabled and routing to B`);
                       }}
                       title="Sync both music and ambient to B tracks"
                     >
