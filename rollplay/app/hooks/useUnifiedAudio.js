@@ -508,9 +508,13 @@ export const useUnifiedAudio = () => {
     
     // If track was playing, restart it with new loop setting while preserving playback position
     if (wasPlaying && currentState) {
-      const { filename, volume } = currentState;
+      const { filename } = currentState;
       
       console.log(`🔄 Restarting ${trackId} with looping ${looping ? 'enabled' : 'disabled'} (preserving position)`);
+      
+      // Get the actual current volume from the Web Audio gain node (not React state)
+      const actualVolume = remoteTrackGainsRef.current[trackId]?.gain.value || currentState.volume;
+      console.log(`🔊 Preserving actual volume: ${actualVolume} (state volume: ${currentState.volume})`);
       
       // Calculate current playback position before stopping
       let currentPlaybackTime = 0;
@@ -539,11 +543,12 @@ export const useUnifiedAudio = () => {
         ...currentState,
         looping,
         channelId: trackId,
-        filename
+        filename,
+        volume: actualVolume // Use the actual Web Audio volume, not React state
       };
       
       // Restart immediately - no delay needed
-      playRemoteTrack(trackId, filename, looping, volume, currentPlaybackTime, completeTrackState);
+      playRemoteTrack(trackId, filename, looping, actualVolume, currentPlaybackTime, completeTrackState);
     }
     
     console.log(`🔄 Set remote ${trackId} looping to ${looping ? 'enabled' : 'disabled'}`);
