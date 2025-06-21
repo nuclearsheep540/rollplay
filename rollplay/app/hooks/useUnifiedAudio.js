@@ -101,14 +101,14 @@ export const useUnifiedAudio = () => {
   const activeSourcesRef = useRef({});
   const trackTimersRef = useRef({}); // Store timing info for each track
 
-  // A/B routing state - controls which track is sent to mix
-  const [abRouting, setAbRouting] = useState({
+  // Track routing state - controls which tracks are paired
+  const [trackRouting, setTrackRouting] = useState({
     music: 'A',    // Either 'A' or 'B'
     ambient: 'A'   // Either 'A' or 'B'
   });
 
-  // A/B sync state - when enabled, switching one group switches both
-  const [abSyncEnabled, setAbSyncEnabled] = useState(false);
+  // Sync mode - when true, play tracks in pairs; when false, play individual tracks
+  const [syncMode, setSyncMode] = useState(false);
 
   // Remote track states (for DM-controlled audio) - A/B channel structure
   const [remoteTrackStates, setRemoteTrackStates] = useState({
@@ -424,25 +424,14 @@ export const useUnifiedAudio = () => {
     console.log(`🔄 Set remote ${trackId} looping to ${looping ? 'enabled' : 'disabled'}`);
   };
 
-  // Switch A/B routing for a channel group (state only)
-  const switchABRouting = (channelGroup, newTrack, forceIndependent = false) => {
-    console.log(`🔀 Updating routing state: ${channelGroup} to ${newTrack}${forceIndependent ? ' (forced independent)' : ''}`);
+  // Switch track routing for a channel group
+  const switchTrackRouting = (channelGroup, newTrack) => {
+    console.log(`🔀 Updating ${channelGroup} routing to ${newTrack}`);
     
-    if (!forceIndependent && abSyncEnabled && (channelGroup === 'music' || channelGroup === 'ambient')) {
-      // Sync mode: switch both music and ambient together
-      setAbRouting(prev => ({
-        ...prev,
-        music: newTrack,
-        ambient: newTrack
-      }));
-      console.log(`🔗 Sync enabled: routing both music and ambient to ${newTrack}`);
-    } else {
-      // Independent mode: switch only the requested channel group
-      setAbRouting(prev => ({
-        ...prev,
-        [channelGroup]: newTrack
-      }));
-    }
+    setTrackRouting(prev => ({
+      ...prev,
+      [channelGroup]: newTrack
+    }));
   };
 
   // Set remote track volume
@@ -529,11 +518,11 @@ export const useUnifiedAudio = () => {
     setRemoteTrackVolume,
     toggleRemoteTrackLooping,
     
-    // A/B routing functions
-    abRouting,
-    abSyncEnabled,
-    setAbSyncEnabled,
-    switchABRouting,
+    // Track routing functions
+    trackRouting,
+    syncMode,
+    setSyncMode,
+    switchTrackRouting,
     
     // Unified functions
     unlockAudio

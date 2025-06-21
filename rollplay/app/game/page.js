@@ -493,10 +493,10 @@ function GameContent() {
     stopRemoteTrack,
     setRemoteTrackVolume,
     toggleRemoteTrackLooping,
-    abRouting,
-    abSyncEnabled,
-    setAbSyncEnabled,
-    switchABRouting
+    trackRouting,
+    syncMode,
+    setSyncMode,
+    switchTrackRouting
   } = useUnifiedAudio();
 
   // Create game context object for WebSocket handlers (after audio functions are defined)
@@ -1171,10 +1171,10 @@ function GameContent() {
             sendRemoteAudioPause={sendRemoteAudioPause}   // NEW: Pass WebSocket pause function
             sendRemoteAudioStop={sendRemoteAudioStop}     // NEW: Pass WebSocket sending functions
             sendRemoteAudioVolume={sendRemoteAudioVolume} // NEW: Pass WebSocket sending functions
-            abRouting={abRouting}                 // NEW: Pass A/B routing state
-            abSyncEnabled={abSyncEnabled}         // NEW: Pass A/B sync state  
-            setAbSyncEnabled={setAbSyncEnabled}   // NEW: Pass A/B sync toggle function
-            switchABRouting={switchABRouting}     // NEW: Pass A/B routing switch function
+            trackRouting={trackRouting}           // NEW: Pass track routing state
+            syncMode={syncMode}                   // NEW: Pass sync mode state  
+            setSyncMode={setSyncMode}             // NEW: Pass sync mode toggle function
+            switchTrackRouting={switchTrackRouting} // NEW: Pass track routing switch function
             clearDicePrompt={clearDicePrompt}    // UPDATED: Now accepts prompt ID
           />
         </div>

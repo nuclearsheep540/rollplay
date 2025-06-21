@@ -26,75 +26,36 @@ export default function AudioMixerPanel({
   setRemoteTrackVolume,
   toggleRemoteTrackLooping,
   remoteTrackAnalysers = {},
-  abRouting = {},
-  abSyncEnabled = false,
-  setAbSyncEnabled,
-  switchABRouting,
+  trackRouting = {},
+  syncMode = false,
+  setSyncMode,
+  switchTrackRouting,
   unlockAudio = null,
   isAudioUnlocked = false
 }) {
   
-  // Individual A/B selector - disables sync to allow mixed routing (AB, BA)
-  const handleIndividualABSwitch = (channelGroup, newTrack) => {
-    console.log(`🔀 Individual selector: ${channelGroup} to ${newTrack} (disabling sync for mixed routing)`);
+  // Clean unified routing function
+  const handleTrackRoutingChange = (channelGroup, newTrack) => {
+    console.log(`🔀 Setting ${channelGroup} routing to ${newTrack} (enabling sync)`);
     
-    // Disable sync to allow mixed combinations
-    setAbSyncEnabled?.(false);
+    // Enable sync mode when any routing change happens
+    setSyncMode?.(true);
     
-    // Set only the specific channel group with forceIndependent flag
-    switchABRouting?.(channelGroup, newTrack, true);
+    // Update the routing for this channel group
+    switchTrackRouting?.(channelGroup, newTrack);
   };
 
-  // Enhanced A/B switching with actual audio control (used by other functions)
-  const handleABSwitch = (channelGroup, newTrack) => {
-    console.log(`🔀 Switching ${channelGroup} from ${abRouting[channelGroup]} to ${newTrack}`);
-    
-    const channelGroupsToSwitch = [];
-    
-    if (abSyncEnabled && (channelGroup === 'music' || channelGroup === 'ambient')) {
-      // Sync mode: switch both music and ambient together
-      channelGroupsToSwitch.push('music', 'ambient');
-      console.log(`🔗 Sync enabled: switching both music and ambient to ${newTrack}`);
-    } else {
-      // Independent mode: switch only the requested channel group
-      channelGroupsToSwitch.push(channelGroup);
-    }
+  // Sync mode control functions
+  const enableMatchedSync = (track) => {
+    console.log(`🔗 Enabling matched sync: ${track}${track}`);
+    setSyncMode?.(true);
+    switchTrackRouting?.('music', track);
+    switchTrackRouting?.('ambient', track);
+  };
 
-    // For each channel group to switch, handle the track transition
-    channelGroupsToSwitch.forEach(group => {
-      const oldTrack = abRouting[group];
-      
-      if (oldTrack !== newTrack) {
-        // Find the old and new channel IDs
-        const oldChannelId = Object.keys(remoteTrackStates).find(id => 
-          remoteTrackStates[id].channelGroup === group && remoteTrackStates[id].track === oldTrack
-        );
-        const newChannelId = Object.keys(remoteTrackStates).find(id => 
-          remoteTrackStates[id].channelGroup === group && remoteTrackStates[id].track === newTrack
-        );
-
-        // Stop the currently playing track (if any)
-        if (oldChannelId && remoteTrackStates[oldChannelId]?.playing) {
-          console.log(`⏹️ Stopping ${group} track ${oldTrack} (${oldChannelId})`);
-          sendRemoteAudioStop?.(oldChannelId);
-        }
-
-        // Start the new track (if it has a filename and isn't already playing)
-        if (newChannelId && remoteTrackStates[newChannelId]?.filename && !remoteTrackStates[newChannelId]?.playing) {
-          console.log(`▶️ Starting ${group} track ${newTrack} (${newChannelId})`);
-          const trackState = remoteTrackStates[newChannelId];
-          sendRemoteAudioPlay?.(
-            newChannelId, 
-            trackState.filename, 
-            trackState.looping, 
-            trackState.volume
-          );
-        }
-      }
-    });
-
-    // Update the routing state using the original function
-    switchABRouting?.(channelGroup, newTrack);
+  const disableSync = () => {
+    console.log(`🔓 Disabling sync mode`);
+    setSyncMode?.(false);
   };
   // Dynamically generate channels from remoteTrackStates
   const channels = Object.keys(remoteTrackStates).map(channelId => {
@@ -133,7 +94,7 @@ export default function AudioMixerPanel({
     ambient: ambientChannels.some(ch => ch.track === 'A') && ambientChannels.some(ch => ch.track === 'B')
   };
 
-  // Enhanced play handler with synchronized playback
+  // Clean play handler with unified sync logic
   const handlePlay = async (channel) => {
     // Ensure audio is unlocked before playing
     if (!isAudioUnlocked) {
@@ -153,34 +114,27 @@ export default function AudioMixerPanel({
       return;
     }
     
-    // Check if this is a music/ambient A/B track that should sync playback
-    console.log(`🔍 Play button clicked: channel=${channel.channelId}, group=${channel.channelGroup}, track=${channel.track}, syncEnabled=${abSyncEnabled}`);
-    console.log(`🔍 Current routing:`, abRouting);
+    console.log(`🔍 Play clicked: ${channel.channelId}, syncMode=${syncMode}`);
+    console.log(`🔍 Current routing:`, trackRouting);
     
-    // Always attempt synchronized playback for music/ambient tracks, regardless of sync mode
-    if (channel.channelGroup && channel.track && 
+    // Check if sync mode is enabled and this is a music/ambient track
+    if (syncMode && channel.channelGroup && 
         (channel.channelGroup === 'music' || channel.channelGroup === 'ambient')) {
       
-      const { channelGroup, track } = channel;
-      
-      // Find the corresponding track in the other group based on current routing
+      const { channelGroup } = channel;
       const otherGroup = channelGroup === 'music' ? 'ambient' : 'music';
-      const otherGroupTrack = abRouting[otherGroup]; // Use routing state, not same track letter
+      const otherGroupTrack = trackRouting[otherGroup];
       
-      console.log(`🔍 Looking for sync pair: ${otherGroup} track ${otherGroupTrack}`);
-      
+      // Find the pair track
       const syncChannelId = Object.keys(remoteTrackStates).find(id => 
         remoteTrackStates[id].channelGroup === otherGroup && 
         remoteTrackStates[id].track === otherGroupTrack
       );
       
-      console.log(`🔍 Found sync channel:`, syncChannelId);
-      
       if (syncChannelId) {
         const syncChannelState = remoteTrackStates[syncChannelId];
         
-        // Use tracks array to start both tracks simultaneously
-        console.log(`🔗 Sync play: Starting ${channelGroup} ${track} + ${otherGroup} ${otherGroupTrack} (routing: ${channelGroup}=${abRouting[channelGroup]}, ${otherGroup}=${abRouting[otherGroup]})`);
+        console.log(`🔗 Sync play: ${channelGroup}=${trackRouting[channelGroup]} + ${otherGroup}=${trackRouting[otherGroup]}`);
         
         const tracks = [{
           channelId: channel.channelId,
@@ -193,23 +147,23 @@ export default function AudioMixerPanel({
           tracks.push({
             channelId: syncChannelId,
             filename: syncChannelState.filename,
-            looping: true, // music/ambient always loop
+            looping: true,
             volume: syncChannelState.volume
           });
         }
         
-        console.log(`📡 About to send WebSocket event with tracks:`, tracks);
+        console.log(`📡 Sending synchronized tracks:`, tracks);
         sendRemoteAudioPlayTracks?.(tracks);
-        console.log(`📡 WebSocket event sent`);
         return;
       }
     }
     
-    // Fallback to regular play for non-sync tracks or when sync is disabled
+    // Individual track play (sync disabled or SFX)
+    console.log(`🎵 Playing individual track: ${channel.channelId}`);
     sendRemoteAudioPlay?.(
       channel.channelId,
       filename,
-      channel.type !== 'sfx',             // looping for music/ambient
+      channel.type !== 'sfx',
       channelState?.volume
     );
   };
@@ -218,7 +172,7 @@ export default function AudioMixerPanel({
     sendRemoteAudioPause?.(channel.channelId);
     
     // If sync is enabled and this is a music/ambient A/B track, pause the corresponding sync track
-    if (abSyncEnabled && channel.channelGroup && channel.track) {
+    if (syncMode && channel.channelGroup && channel.track) {
       const { channelGroup, track } = channel;
       
       // Only trigger sync for music/ambient tracks
@@ -242,7 +196,7 @@ export default function AudioMixerPanel({
     sendRemoteAudioStop?.(channel.channelId);
     
     // If sync is enabled and this is a music/ambient A/B track, stop the corresponding sync track
-    if (abSyncEnabled && channel.channelGroup && channel.track) {
+    if (syncMode && channel.channelGroup && channel.track) {
       const { channelGroup, track } = channel;
       
       // Only trigger sync for music/ambient tracks
@@ -283,75 +237,46 @@ export default function AudioMixerPanel({
                   <div className="flex items-center gap-2">
                     <button
                       className={`text-xs px-3 py-1 rounded transition-all duration-200 ${
-                        abSyncEnabled && abRouting.music === 'A' && abRouting.ambient === 'A'
+                        syncMode && trackRouting.music === 'A' && trackRouting.ambient === 'A'
                           ? 'bg-green-600 hover:bg-green-700 text-white'
                           : 'bg-gray-600 hover:bg-gray-700 text-gray-300'
                       }`}
-                      onClick={() => {
-                        console.log('🔗 Syncing to A tracks');
-                        
-                        // Enable sync first
-                        setAbSyncEnabled?.(true);
-                        
-                        // Directly set both routes to ensure sync works
-                        setTimeout(() => {
-                          console.log('🔄 Manually setting both routes to A');
-                          switchABRouting?.('music', 'A');
-                          switchABRouting?.('ambient', 'A');
-                        }, 10); // Slightly longer delay to ensure state propagation
-                        
-                        console.log(`🔗 Sync enabled and routing to A`);
-                      }}
-                      title="Sync both music and ambient to A tracks"
+                      onClick={() => enableMatchedSync('A')}
+                      title="Enable matched sync: Music A + Ambient A"
                     >
                       🔗 Sync A
                     </button>
                     
                     <button
                       className={`text-xs px-3 py-1 rounded transition-all duration-200 ${
-                        abSyncEnabled && abRouting.music === 'B' && abRouting.ambient === 'B'
+                        syncMode && trackRouting.music === 'B' && trackRouting.ambient === 'B'
                           ? 'bg-green-600 hover:bg-green-700 text-white'
                           : 'bg-gray-600 hover:bg-gray-700 text-gray-300'
                       }`}
-                      onClick={() => {
-                        console.log('🔗 Syncing to B tracks');
-                        
-                        // Enable sync first
-                        setAbSyncEnabled?.(true);
-                        
-                        // Directly set both routes to ensure sync works
-                        setTimeout(() => {
-                          console.log('🔄 Manually setting both routes to B');
-                          switchABRouting?.('music', 'B');
-                          switchABRouting?.('ambient', 'B');
-                        }, 10); // Slightly longer delay to ensure state propagation
-                        
-                        console.log(`🔗 Sync enabled and routing to B`);
-                      }}
-                      title="Sync both music and ambient to B tracks"
+                      onClick={() => enableMatchedSync('B')}
+                      title="Enable matched sync: Music B + Ambient B"
                     >
                       🔗 Sync B
                     </button>
 
                     <button
                       className={`text-xs px-2 py-1 rounded transition-all duration-200 ${
-                        !abSyncEnabled
+                        !syncMode
                           ? 'bg-orange-600 hover:bg-orange-700 text-white'
                           : 'bg-gray-600 hover:bg-gray-700 text-gray-300'
                       }`}
-                      onClick={() => {
-                        console.log('🔗 Disabling sync');
-                        setAbSyncEnabled?.(false);
-                      }}
-                      title="Disable sync - independent control"
+                      onClick={disableSync}
+                      title="Disable sync - play individual tracks"
                     >
                       🔓 Off
                     </button>
                   </div>
                   <div className="text-gray-400 text-xs mt-1">
-                    {abSyncEnabled 
-                      ? `Synced to ${abRouting.music} tracks` 
-                      : 'Independent control'}
+                    {!syncMode 
+                      ? 'Individual tracks' 
+                      : trackRouting.music === trackRouting.ambient
+                        ? `Matched sync: ${trackRouting.music}${trackRouting.ambient}`
+                        : `Mixed sync: ${trackRouting.music}${trackRouting.ambient}`}
                   </div>
                 </div>
               )}
@@ -363,21 +288,21 @@ export default function AudioMixerPanel({
                   <div className="flex bg-gray-700 rounded overflow-hidden">
                     <button
                       className={`px-3 py-1 text-xs transition-all duration-200 ${
-                        abRouting.music === 'A'
+                        trackRouting.music === 'A'
                           ? 'bg-green-600 text-white'
                           : 'bg-gray-600 hover:bg-gray-500 text-gray-300'
                       }`}
-                      onClick={() => handleIndividualABSwitch('music', 'A')}
+                      onClick={() => handleTrackRoutingChange('music', 'A')}
                     >
                       A
                     </button>
                     <button
                       className={`px-3 py-1 text-xs transition-all duration-200 ${
-                        abRouting.music === 'B'
+                        trackRouting.music === 'B'
                           ? 'bg-green-600 text-white'
                           : 'bg-gray-600 hover:bg-gray-500 text-gray-300'
                       }`}
-                      onClick={() => handleIndividualABSwitch('music', 'B')}
+                      onClick={() => handleTrackRoutingChange('music', 'B')}
                     >
                       B
                     </button>
@@ -392,21 +317,21 @@ export default function AudioMixerPanel({
                   <div className="flex bg-gray-700 rounded overflow-hidden">
                     <button
                       className={`px-3 py-1 text-xs transition-all duration-200 ${
-                        abRouting.ambient === 'A'
+                        trackRouting.ambient === 'A'
                           ? 'bg-green-600 text-white'
                           : 'bg-gray-600 hover:bg-gray-500 text-gray-300'
                       }`}
-                      onClick={() => handleIndividualABSwitch('ambient', 'A')}
+                      onClick={() => handleTrackRoutingChange('ambient', 'A')}
                     >
                       A
                     </button>
                     <button
                       className={`px-3 py-1 text-xs transition-all duration-200 ${
-                        abRouting.ambient === 'B'
+                        trackRouting.ambient === 'B'
                           ? 'bg-green-600 text-white'
                           : 'bg-gray-600 hover:bg-gray-500 text-gray-300'
                       }`}
-                      onClick={() => handleIndividualABSwitch('ambient', 'B')}
+                      onClick={() => handleTrackRoutingChange('ambient', 'B')}
                     >
                       B
                     </button>
@@ -421,8 +346,8 @@ export default function AudioMixerPanel({
             <>
               <div className="text-white font-bold mt-4">Music</div>
               {musicChannels.map((channel) => {
-                const isRouted = abRouting.music === channel.track;
-                const isDisabled = abSyncEnabled && !isRouted;
+                const isRouted = trackRouting.music === channel.track;
+                const isDisabled = syncMode && !isRouted;
                 return (
                   <AudioTrack
                     key={channel.channelId}
@@ -469,8 +394,8 @@ export default function AudioMixerPanel({
             <>
               <div className="text-white font-bold mt-4">Ambience</div>
               {ambientChannels.map((channel) => {
-                const isRouted = abRouting.ambient === channel.track;
-                const isDisabled = abSyncEnabled && !isRouted;
+                const isRouted = trackRouting.ambient === channel.track;
+                const isDisabled = syncMode && !isRouted;
                 return (
                   <AudioTrack
                     key={channel.channelId}
