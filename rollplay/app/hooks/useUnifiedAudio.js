@@ -501,14 +501,19 @@ export const useUnifiedAudio = () => {
         }
   
         if (keepUpdating) {
-          setRemoteTrackStates((prev) => ({
-            ...prev,
-            [trackId]: {
-              ...prev[trackId],
-              currentTime,
-              playbackState: PlaybackState.PLAYING
-            }
-          }));
+          // Throttle updates to avoid excessive re-renders (only update if time changed significantly)
+          const timeDiff = Math.abs(currentTime - (timer.lastUpdateTime || 0));
+          if (timeDiff > 0.1) { // Only update every 100ms
+            timer.lastUpdateTime = currentTime;
+            setRemoteTrackStates((prev) => ({
+              ...prev,
+              [trackId]: {
+                ...prev[trackId],
+                currentTime,
+                playbackState: PlaybackState.PLAYING
+              }
+            }));
+          }
           requestAnimationFrame(updateTime);
         }
       };
