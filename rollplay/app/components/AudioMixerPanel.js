@@ -5,7 +5,7 @@
  * SPDX-License-Identifier: GPL-3.0-or-later
  */
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import AudioTrack from './AudioTrack';
 import { PlaybackState, getSyncTargets } from '../hooks/useUnifiedAudio';
 import {
@@ -118,6 +118,70 @@ export default function AudioMixerPanel({
     switchTrackRouting?.('ambient', track);
   };
 
+  // Crossfade execution function (memoized to prevent re-renders)
+  const executeCrossfade = useCallback(() => {
+    if (!currentCue?.targetTracks?.length) return;
+    
+    console.log(`🎚️ Executing crossfade transition: PGM → PFL (${fadeDurationMs}ms)`);
+    
+    // Get channels arrays (recalculated from current remoteTrackStates)
+    const currentChannels = Object.keys(remoteTrackStates).map(channelId => {
+      const trackState = remoteTrackStates[channelId];
+      return {
+        channelId,
+        type: trackState.type,
+        channelGroup: trackState.channelGroup,
+        track: trackState.track
+      };
+    });
+    
+    const currentMusicChannels = currentChannels.filter(ch => ch.type === 'music');
+    const currentAmbientChannels = currentChannels.filter(ch => ch.type === 'ambient');
+    
+    // Get tracks that need to start and stop
+    const tracksToStart = [...currentMusicChannels, ...currentAmbientChannels].filter(channel => {
+      const isCurrentlyPlaying = remoteTrackStates[channel.channelId]?.playbackState === 'playing';
+      const isSelectedInPFL = currentCue.targetTracks.includes(channel.channelId);
+      return isSelectedInPFL && !isCurrentlyPlaying; // Will start
+    });
+    
+    const tracksToStop = [...currentMusicChannels, ...currentAmbientChannels].filter(channel => {
+      const isCurrentlyPlaying = remoteTrackStates[channel.channelId]?.playbackState === 'playing';
+      const isSelectedInPFL = currentCue.targetTracks.includes(channel.channelId);
+      return !isSelectedInPFL && isCurrentlyPlaying; // Will stop
+    });
+    
+    console.log(`🎚️ Tracks to start:`, tracksToStart.map(t => t.channelId));
+    console.log(`🎚️ Tracks to stop:`, tracksToStop.map(t => t.channelId));
+    
+    // Stop tracks immediately
+    tracksToStop.forEach(channel => {
+      sendRemoteAudioStop?.(channel.channelId);
+    });
+    
+    // Start new tracks immediately
+    if (tracksToStart.length > 0) {
+      const targets = tracksToStart.map(channel => {
+        const track = remoteTrackStates[channel.channelId];
+        return {
+          channelId: channel.channelId,
+          filename: track.filename,
+          looping: track.looping ?? (track.type !== 'sfx'),
+          volume: track.volume,
+          playbackState: track.playbackState,
+          currentTime: 0,
+          type: track.type,
+          channelGroup: track.channelGroup,
+          track: track.track
+        };
+      });
+      sendRemoteAudioPlayTracks?.(targets);
+    }
+    
+    // Clear the cue after execution
+    setCurrentCue(null);
+  }, [currentCue, fadeDurationMs, remoteTrackStates, sendRemoteAudioStop, sendRemoteAudioPlayTracks]);
+
   const disableSync = () => {
     console.log(`🔓 Disabling sync mode`);
     setSyncMode?.(false);
@@ -169,7 +233,7 @@ export default function AudioMixerPanel({
     console.log(`✂️ Executing CUT transition:`, currentCue);
     
     // Stop tracks immediately
-    currentCue.tracksToStop.forEach(trackId => {
+    currentCue.tracksToStop?.forEach(trackId => {
       sendRemoteAudioStop?.(trackId);
     });
     
@@ -697,10 +761,11 @@ export default function AudioMixerPanel({
                   {/* Preview Column - Show the differential result of the transition */}
                   <div className="flex flex-col gap-1 w-16">
                     {[...musicChannels, ...ambientChannels].map((channel) => {
-                      const isCurrentlyPlaying = remoteTrackStates[channel.channelId]?.playbackState === 'playing';
+                      const trackState = remoteTrackStates[channel.channelId];
+                      const isCurrentlyPlaying = trackState?.playbackState === 'playing';
                       const isSelectedInPFL = currentCue?.targetTracks?.includes?.(channel.channelId);
                       
-                      // Calculate what will change
+                      // Calculate what will change (no hooks here)
                       let changeType = null;
                       let displayText = '-';
                       let colorClass = 'bg-gray-600 text-gray-300';
@@ -716,7 +781,6 @@ export default function AudioMixerPanel({
                         displayText = channel.channelId.replace('audio_channel_', '');
                         colorClass = 'bg-red-500 text-white'; // Red for stopping
                       }
-                      // If track is both playing AND selected, or neither playing NOR selected = no change, show dash
                       
                       return (
                         <div 
@@ -736,19 +800,34 @@ export default function AudioMixerPanel({
                 </div>
               </div>
 
-              {/* Fade Duration Control */}
-              <div className="flex items-center justify-center gap-2">
-                <label className="text-white text-xs">Fade:</label>
-                <input
-                  type="number"
-                  min="100"
-                  max="3000"
-                  step="100"
-                  value={fadeDurationMs}
-                  onChange={(e) => setFadeDurationMs(parseInt(e.target.value) || 1000)}
-                  className="bg-gray-700 text-white text-xs px-2 py-1 rounded w-16"
-                />
-                <span className="text-gray-400 text-xs">ms</span>
+              {/* Crossfade Control */}
+              <div className="flex items-center justify-center gap-4">
+                <div className="flex items-center gap-2">
+                  <label className="text-white text-xs">Fade:</label>
+                  <input
+                    type="number"
+                    min="100"
+                    max="3000"
+                    step="100"
+                    value={fadeDurationMs}
+                    onChange={(e) => setFadeDurationMs(parseInt(e.target.value) || 1000)}
+                    className="bg-gray-700 text-white text-xs px-2 py-1 rounded w-16"
+                  />
+                  <span className="text-gray-400 text-xs">ms</span>
+                </div>
+                
+                <button
+                  className={`px-6 py-2 rounded text-sm font-bold transition-all duration-200 ${
+                    currentCue?.targetTracks?.length > 0 
+                      ? 'bg-purple-600 hover:bg-purple-700 text-white' 
+                      : 'bg-gray-600 text-gray-400 cursor-not-allowed'
+                  }`}
+                  onClick={executeCrossfade}
+                  disabled={!currentCue?.targetTracks?.length}
+                  title={`Execute crossfade transition (${fadeDurationMs}ms)`}
+                >
+                  ⚡ CROSSFADE
+                </button>
               </div>
               </div>
           )}
