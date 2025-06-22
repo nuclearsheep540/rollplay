@@ -44,7 +44,7 @@ export default function AudioMixerPanel({
   
   // Cue system state
   const [currentCue, setCurrentCue] = useState(null); // { tracksToStart: [], tracksToStop: [], cueId: string }
-  const [fadeDurationMs, setFadeDurationMs] = useState(1000); // Default 1 second
+  const [fadeDurationMs, setFadeDurationMs] = useState(500); // Default 1 second
   
   // Helper to add pending operation
   const addPendingOperation = (operation) => {
@@ -119,10 +119,10 @@ export default function AudioMixerPanel({
   };
 
   // Crossfade execution function (memoized to prevent re-renders)
-  const executeCrossfade = useCallback(() => {
+  const executeCrossfade = useCallback(async () => {
     if (!currentCue?.targetTracks?.length) return;
     
-    console.log(`🎚️ Executing crossfade transition: PGM → PFL (${fadeDurationMs}ms)`);
+    console.log(`🎚️ Executing seamless crossfade transition: PGM → PFL (${fadeDurationMs}ms)`);
     
     // Get channels arrays (recalculated from current remoteTrackStates)
     const currentChannels = Object.keys(remoteTrackStates).map(channelId => {
@@ -154,28 +154,48 @@ export default function AudioMixerPanel({
     console.log(`🎚️ Tracks to start:`, tracksToStart.map(t => t.channelId));
     console.log(`🎚️ Tracks to stop:`, tracksToStop.map(t => t.channelId));
     
-    // Stop tracks immediately
-    tracksToStop.forEach(channel => {
-      sendRemoteAudioStop?.(channel.channelId);
-    });
-    
-    // Start new tracks immediately
-    if (tracksToStart.length > 0) {
-      const targets = tracksToStart.map(channel => {
-        const track = remoteTrackStates[channel.channelId];
-        return {
-          channelId: channel.channelId,
-          filename: track.filename,
-          looping: track.looping ?? (track.type !== 'sfx'),
-          volume: track.volume,
-          playbackState: track.playbackState,
-          currentTime: 0,
-          type: track.type,
-          channelGroup: track.channelGroup,
-          track: track.track
-        };
-      });
-      sendRemoteAudioPlayTracks?.(targets);
+    try {
+      // PHASE 1: Start new tracks first (with preloading via sendRemoteAudioPlayTracks)
+      if (tracksToStart.length > 0) {
+        console.log(`🎼 Starting ${tracksToStart.length} new tracks with preloading...`);
+        
+        const targets = tracksToStart.map(channel => {
+          const track = remoteTrackStates[channel.channelId];
+          return {
+            channelId: channel.channelId,
+            filename: track.filename,
+            looping: track.looping ?? (track.type !== 'sfx'),
+            volume: track.volume,
+            playbackState: track.playbackState,
+            currentTime: 0,
+            type: track.type,
+            channelGroup: track.channelGroup,
+            track: track.track
+          };
+        });
+        
+        // Start new tracks (sendRemoteAudioPlayTracks includes preloading)
+        await sendRemoteAudioPlayTracks?.(targets);
+        console.log(`✅ New tracks started and playing`);
+      }
+      
+      // PHASE 2: Wait a brief moment for new audio to stabilize, then stop old tracks
+      if (tracksToStop.length > 0) {
+        // Small delay to ensure new tracks are fully playing before stopping old ones
+        setTimeout(() => {
+          console.log(`🛑 Stopping ${tracksToStop.length} old tracks after seamless handoff...`);
+          tracksToStop.forEach(channel => {
+            sendRemoteAudioStop?.(channel.channelId);
+          });
+          console.log(`✅ Seamless crossfade completed`);
+        }, 100); // 100ms delay for audio buffer stabilization
+      }
+      
+    } catch (error) {
+      console.error(`❌ Crossfade failed:`, error);
+      
+      // Fallback: If new tracks fail to start, don't stop old ones
+      console.log(`⚠️ Keeping current tracks playing due to crossfade error`);
     }
     
     // Clear the cue after execution
@@ -589,8 +609,8 @@ export default function AudioMixerPanel({
           {/* DJ Cue System - Only show if both music and ambient have A/B tracks */}
           {hasABTracks.music && hasABTracks.ambient && (
             <div className={DM_CHILD}>
-              <div className="text-white font-bold mb-3">🎧 DJ Cue System</div>
-              
+              <div className="text-white font-bold mb-3">🎧 Channel Cue </div>
+              <p>Easily cut/fade to a combination of tracks</p>
               {/* DJ Cue System Layout matching cue.png exactly */}
               <div className="mb-4">
                 {/* Header Row */}
@@ -822,12 +842,13 @@ export default function AudioMixerPanel({
                       ? 'bg-purple-600 hover:bg-purple-700 text-white' 
                       : 'bg-gray-600 text-gray-400 cursor-not-allowed'
                   }`}
-                  onClick={executeCrossfade}
+                  onClick={executeCrossfade} // TODO: Also call disableSync() 
                   disabled={!currentCue?.targetTracks?.length}
                   title={`Execute crossfade transition (${fadeDurationMs}ms)`}
                 >
                   ⚡ CROSSFADE
                 </button>
+                {/* TODO: add a Stop All playing Button */}
               </div>
               </div>
           )}
