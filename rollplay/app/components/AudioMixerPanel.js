@@ -42,6 +42,10 @@ export default function AudioMixerPanel({
   // Track pending audio operations to disable buttons
   const [pendingOperations, setPendingOperations] = useState(new Set());
   
+  // Cue system state
+  const [currentCue, setCurrentCue] = useState(null); // { tracksToStart: [], tracksToStop: [], cueId: string }
+  const [fadeDurationMs, setFadeDurationMs] = useState(1000); // Default 1 second
+  
   // Helper to add pending operation
   const addPendingOperation = (operation) => {
     setPendingOperations(prev => new Set(prev).add(operation));
@@ -117,6 +121,101 @@ export default function AudioMixerPanel({
   const disableSync = () => {
     console.log(`🔓 Disabling sync mode`);
     setSyncMode?.(false);
+  };
+
+  // Cue system functions
+  const createCue = (targetRouting) => {
+    // Use getSyncTargets to determine what tracks would be affected by this routing
+    const musicTrackId = Object.keys(remoteTrackStates).find(id => 
+      remoteTrackStates[id].channelGroup === 'music' && 
+      remoteTrackStates[id].track === targetRouting.music
+    );
+    
+    if (!musicTrackId) {
+      console.warn(`No music track found for ${targetRouting.music}`);
+      return;
+    }
+    
+    // Get targets for the new routing
+    const targets = getSyncTargets(musicTrackId, targetRouting, true, remoteTrackStates);
+    
+    // Determine what needs to start vs stop
+    const tracksToStart = targets.filter(track => 
+      track.playbackState !== PlaybackState.PLAYING
+    ).map(track => track.channelId);
+    
+    const tracksToStop = Object.keys(remoteTrackStates).filter(trackId => {
+      const track = remoteTrackStates[trackId];
+      // Stop tracks that are playing but not in the new target list
+      return track.playbackState === PlaybackState.PLAYING && 
+             !targets.some(t => t.channelId === trackId);
+    });
+    
+    const cueId = `cue_${Date.now()}`;
+    const newCue = {
+      cueId,
+      tracksToStart,
+      tracksToStop,
+      targetRouting
+    };
+    
+    setCurrentCue(newCue);
+    console.log(`🎯 Cue created:`, newCue);
+  };
+
+  const executeCut = () => {
+    if (!currentCue) return;
+    
+    console.log(`✂️ Executing CUT transition:`, currentCue);
+    
+    // Stop tracks immediately
+    currentCue.tracksToStop.forEach(trackId => {
+      sendRemoteAudioStop?.(trackId);
+    });
+    
+    // Start tracks immediately  
+    if (currentCue.tracksToStart.length > 0) {
+      const targets = currentCue.tracksToStart.map(trackId => {
+        const track = remoteTrackStates[trackId];
+        return {
+          channelId: trackId,
+          filename: track.filename,
+          looping: track.looping ?? (track.type !== 'sfx'),
+          volume: track.volume,
+          playbackState: track.playbackState,
+          currentTime: 0,
+          type: track.type,
+          channelGroup: track.channelGroup,
+          track: track.track
+        };
+      });
+      sendRemoteAudioPlayTracks?.(targets);
+    }
+    
+    // Update routing to match the cue
+    if (currentCue.targetRouting) {
+      setSyncMode?.(true);
+      switchTrackRouting?.('music', currentCue.targetRouting.music);
+      switchTrackRouting?.('ambient', currentCue.targetRouting.ambient);
+    }
+    
+    // Clear the cue
+    setCurrentCue(null);
+  };
+
+  const executeFade = () => {
+    if (!currentCue) return;
+    
+    console.log(`🌊 Executing FADE transition:`, currentCue, `Duration: ${fadeDurationMs}ms`);
+    
+    // TODO: Implement client-side fade logic
+    // For now, just do a cut (we'll implement fade in next step)
+    executeCut();
+  };
+
+  const clearCue = () => {
+    setCurrentCue(null);
+    console.log(`🗑️ Cue cleared`);
   };
 
   // Handle loop toggle with WebSocket broadcast (server-authoritative)
@@ -423,6 +522,237 @@ export default function AudioMixerPanel({
             </div>
           )}
 
+          {/* DJ Cue System - Only show if both music and ambient have A/B tracks */}
+          {hasABTracks.music && hasABTracks.ambient && (
+            <div className={DM_CHILD}>
+              <div className="text-white font-bold mb-3">🎧 DJ Cue System</div>
+              
+              {/* DJ Cue System Layout matching cue.png exactly */}
+              <div className="mb-4">
+                {/* Header Row */}
+                <div className="flex items-center gap-8 mb-2">
+                  <div className="text-white text-sm font-bold w-16">PGM</div>
+                  <div className="text-white text-sm font-bold w-32">Transition</div>
+                  <div className="text-white text-sm font-bold flex-1 text-center">PFL</div>
+                  <div className="text-white text-sm font-bold w-16 text-center">Preview</div>
+                </div>
+                
+                {/* Tracks Layout */}
+                <div className="flex items-start gap-8">
+                  {/* PGM Column - Show ALL track IDs that exist in state */}
+                  <div className="flex flex-col gap-1 w-16">
+                    {/* All Music channels */}
+                    {musicChannels.map((channel) => {
+                      const isPlaying = remoteTrackStates[channel.channelId]?.playbackState === 'playing';
+                      return (
+                        <div 
+                          key={`pgm-${channel.channelId}`}
+                          className={`w-8 h-8 rounded text-center text-xs transition-all duration-200 flex items-center justify-center ${
+                            isPlaying ? 'bg-green-600 text-white' : 'bg-gray-600 text-gray-300'
+                          }`}
+                        >
+                          {channel.channelId.replace('audio_channel_', '')}
+                        </div>
+                      );
+                    })}
+                    {/* All Ambient channels */}
+                    {ambientChannels.map((channel) => {
+                      const isPlaying = remoteTrackStates[channel.channelId]?.playbackState === 'playing';
+                      return (
+                        <div 
+                          key={`pgm-${channel.channelId}`}
+                          className={`w-8 h-8 rounded text-center text-xs transition-all duration-200 flex items-center justify-center ${
+                            isPlaying ? 'bg-green-600 text-white' : 'bg-gray-600 text-gray-300'
+                          }`}
+                        >
+                          {channel.channelId.replace('audio_channel_', '')}
+                        </div>
+                      );
+                    })}
+                  </div>
+
+                  {/* Transition Buttons Column - CUT and FADE button for each track */}
+                  <div className="flex flex-col gap-1 w-32">
+                    {/* Music channel buttons */}
+                    {musicChannels.map((channel) => (
+                      <div key={`transition-${channel.channelId}`} className="flex gap-1">
+                        <button 
+                          className="w-12 h-8 bg-cyan-500 text-black text-xs font-bold rounded"
+                          onClick={executeCut}
+                          disabled={!currentCue}
+                        >
+                          CUT
+                        </button>
+                        <button 
+                          className="w-12 h-8 bg-cyan-500 text-black text-xs font-bold rounded"
+                          onClick={executeFade}
+                          disabled={!currentCue}
+                        >
+                          FADE
+                        </button>
+                      </div>
+                    ))}
+                    {/* Ambient channel buttons */}
+                    {ambientChannels.map((channel) => (
+                      <div key={`transition-${channel.channelId}`} className="flex gap-1">
+                        <button 
+                          className="w-12 h-8 bg-cyan-500 text-black text-xs font-bold rounded"
+                          onClick={executeCut}
+                          disabled={!currentCue}
+                        >
+                          CUT
+                        </button>
+                        <button 
+                          className="w-12 h-8 bg-cyan-500 text-black text-xs font-bold rounded"
+                          onClick={executeFade}
+                          disabled={!currentCue}
+                        >
+                          FADE
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+
+                  {/* PFL Column - Same data source as PGM, showing selection state */}
+                  <div className="flex-1">
+                    <div className="flex flex-col gap-1">
+                      {/* Music channels */}
+                      {musicChannels.map((channel) => (
+                        <div 
+                          key={`pfl-${channel.channelId}`}
+                          className={`w-8 h-8 rounded text-center text-xs transition-all duration-200 cursor-pointer flex items-center justify-center ${
+                            currentCue?.targetTracks?.includes?.(channel.channelId) 
+                              ? 'bg-green-600 text-white' 
+                              : 'bg-gray-600 hover:bg-gray-500 text-gray-300'
+                          }`}
+                          onClick={() => {
+                            setCurrentCue(prev => {
+                              const currentTargets = prev?.targetTracks || [];
+                              const channelId = channel.channelId;
+                              
+                              // Toggle selection
+                              if (Array.isArray(currentTargets)) {
+                                const isSelected = currentTargets.includes(channelId);
+                                return {
+                                  ...prev,
+                                  targetTracks: isSelected 
+                                    ? currentTargets.filter(id => id !== channelId)
+                                    : [...currentTargets, channelId]
+                                };
+                              } else {
+                                // Convert to array format
+                                return {
+                                  ...prev,
+                                  targetTracks: [channelId]
+                                };
+                              }
+                            });
+                          }}
+                        >
+                          {channel.channelId.replace('audio_channel_', '')}
+                        </div>
+                      ))}
+                      {/* Ambient channels */}
+                      {ambientChannels.map((channel) => (
+                        <div 
+                          key={`pfl-${channel.channelId}`}
+                          className={`w-8 h-8 rounded text-center text-xs transition-all duration-200 cursor-pointer flex items-center justify-center ${
+                            currentCue?.targetTracks?.includes?.(channel.channelId)
+                              ? 'bg-green-600 text-white' 
+                              : 'bg-gray-600 hover:bg-gray-500 text-gray-300'
+                          }`}
+                          onClick={() => {
+                            setCurrentCue(prev => {
+                              const currentTargets = prev?.targetTracks || [];
+                              const channelId = channel.channelId;
+                              
+                              // Toggle selection
+                              if (Array.isArray(currentTargets)) {
+                                const isSelected = currentTargets.includes(channelId);
+                                return {
+                                  ...prev,
+                                  targetTracks: isSelected 
+                                    ? currentTargets.filter(id => id !== channelId)
+                                    : [...currentTargets, channelId]
+                                };
+                              } else {
+                                // Convert to array format
+                                return {
+                                  ...prev,
+                                  targetTracks: [channelId]
+                                };
+                              }
+                            });
+                          }}
+                        >
+                          {channel.channelId.replace('audio_channel_', '')}
+                        </div>
+                      ))}
+                    </div>
+
+                    {/* Arrow */}
+                    <div className="text-center text-gray-400 text-lg mt-2">⇒</div>
+                  </div>
+
+                  {/* Preview Column - Show the differential result of the transition */}
+                  <div className="flex flex-col gap-1 w-16">
+                    {[...musicChannels, ...ambientChannels].map((channel) => {
+                      const isCurrentlyPlaying = remoteTrackStates[channel.channelId]?.playbackState === 'playing';
+                      const isSelectedInPFL = currentCue?.targetTracks?.includes?.(channel.channelId);
+                      
+                      // Calculate what will change
+                      let changeType = null;
+                      let displayText = '-';
+                      let colorClass = 'bg-gray-600 text-gray-300';
+                      
+                      if (isSelectedInPFL && !isCurrentlyPlaying) {
+                        // Track will start playing (coming in)
+                        changeType = 'start';
+                        displayText = channel.channelId.replace('audio_channel_', '');
+                        colorClass = 'bg-green-500 text-white'; // Green for starting
+                      } else if (!isSelectedInPFL && isCurrentlyPlaying) {
+                        // Track will stop playing (going out)  
+                        changeType = 'stop';
+                        displayText = channel.channelId.replace('audio_channel_', '');
+                        colorClass = 'bg-red-500 text-white'; // Red for stopping
+                      }
+                      // If track is both playing AND selected, or neither playing NOR selected = no change, show dash
+                      
+                      return (
+                        <div 
+                          key={`preview-${channel.channelId}`}
+                          className={`w-8 h-8 rounded text-center text-xs transition-all duration-200 flex items-center justify-center ${colorClass}`}
+                          title={
+                            changeType === 'start' ? `${displayText} will start playing` :
+                            changeType === 'stop' ? `${displayText} will stop playing` :
+                            'No change'
+                          }
+                        >
+                          {displayText}
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              </div>
+
+              {/* Fade Duration Control */}
+              <div className="flex items-center justify-center gap-2">
+                <label className="text-white text-xs">Fade:</label>
+                <input
+                  type="number"
+                  min="100"
+                  max="3000"
+                  step="100"
+                  value={fadeDurationMs}
+                  onChange={(e) => setFadeDurationMs(parseInt(e.target.value) || 1000)}
+                  className="bg-gray-700 text-white text-xs px-2 py-1 rounded w-16"
+                />
+                <span className="text-gray-400 text-xs">ms</span>
+              </div>
+              </div>
+          )}
+
           {/* Music Channels */}
           {musicChannels.length > 0 && (
             <>
@@ -557,16 +887,16 @@ export default function AudioMixerPanel({
                       track: "SFX"
                     }}
                     pendingOperations={pendingOps}
-                  trackState={
-                    remoteTrackStates[channel.channelId] || {
-                      playbackState: PlaybackState.STOPPED,
-                      volume: 1.0,
-                      filename: null,
-                      currentTime: 0,
-                      duration: 0,
-                      looping: false
+                    trackState={
+                      remoteTrackStates[channel.channelId] || {
+                        playbackState: PlaybackState.STOPPED,
+                        volume: 1.0,
+                        filename: null,
+                        currentTime: 0,
+                        duration: 0,
+                        looping: false
+                      }
                     }
-                  }
                   onPlay={() => handlePlay(channel)}
                   onPause={() => handlePause(channel)}
                   onStop={() => handleStop(channel)}
