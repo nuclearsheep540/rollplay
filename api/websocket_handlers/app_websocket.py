@@ -232,39 +232,6 @@ def register_websocket_routes(app: FastAPI):
                     )
                     broadcast_message = result.broadcast_message
 
-                elif event_type == "remote_audio_pause":
-                    result = await WebsocketEvent.remote_audio_pause(
-                        websocket=websocket,
-                        data=data,
-                        event_data=event_data,
-                        player_name=player_name,
-                        client_id=client_id,
-                        manager=manager
-                    )
-                    broadcast_message = result.broadcast_message
-
-                elif event_type == "remote_audio_stop":
-                    result = await WebsocketEvent.remote_audio_stop(
-                        websocket=websocket,
-                        data=data,
-                        event_data=event_data,
-                        player_name=player_name,
-                        client_id=client_id,
-                        manager=manager
-                    )
-                    broadcast_message = result.broadcast_message
-
-                elif event_type == "remote_audio_volume":
-                    result = await WebsocketEvent.remote_audio_volume(
-                        websocket=websocket,
-                        data=data,
-                        event_data=event_data,
-                        player_name=player_name,
-                        client_id=client_id,
-                        manager=manager
-                    )
-                    broadcast_message = result.broadcast_message
-
                 elif event_type == "remote_audio_resume":
                     result = await WebsocketEvent.remote_audio_resume(
                         websocket=websocket,
@@ -276,8 +243,8 @@ def register_websocket_routes(app: FastAPI):
                     )
                     broadcast_message = result.broadcast_message
 
-                elif event_type == "remote_audio_loop":
-                    result = await WebsocketEvent.remote_audio_loop(
+                elif event_type == "remote_audio_batch":
+                    result = await WebsocketEvent.remote_audio_batch(
                         websocket=websocket,
                         data=data,
                         event_data=event_data,

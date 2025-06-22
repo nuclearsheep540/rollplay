@@ -68,36 +68,6 @@ export const handleRemoteAudioPlay = async (data, { playRemoteTrack, loadRemoteA
   }
 };
 
-export const handleRemoteAudioStop = (data, { stopRemoteTrack }) => {
-  console.log("🛑 Remote audio stop command received:", data);
-  const { track_type, triggered_by } = data;
-  
-  if (stopRemoteTrack) {
-    stopRemoteTrack(track_type);
-    console.log(`⏹️ Stopped remote ${track_type} (triggered by ${triggered_by})`);
-  }
-};
-
-export const handleRemoteAudioPause = (data, { pauseRemoteTrack }) => {
-  console.log("⏸️ Remote audio pause command received:", data);
-  const { track_type, triggered_by } = data;
-  
-  if (pauseRemoteTrack) {
-    pauseRemoteTrack(track_type);
-    console.log(`⏸️ Paused remote ${track_type} (triggered by ${triggered_by})`);
-  }
-};
-
-export const handleRemoteAudioVolume = (data, { setRemoteTrackVolume }) => {
-  console.log("🔊 Remote audio volume command received:", data);
-  const { track_type, volume, triggered_by } = data;
-  
-  if (setRemoteTrackVolume) {
-    setRemoteTrackVolume(track_type, volume);
-    console.log(`🔊 Set remote ${track_type} volume to ${Math.round(volume * 100)}% (triggered by ${triggered_by})`);
-  }
-};
-
 export const handleRemoteAudioResume = async (data, { resumeRemoteTrack, remoteTrackStates }) => {
   console.log("▶️ Remote audio resume command received:", data);
   const { tracks, track_type, triggered_by } = data;
@@ -135,18 +105,108 @@ export const handleRemoteAudioResume = async (data, { resumeRemoteTrack, remoteT
   }
 };
 
-export const handleRemoteAudioLoop = (data, { toggleRemoteTrackLooping }) => {
-  console.log("🔄 Remote audio loop command received:", data);
-  const { track_type, looping, triggered_by } = data;
-  
-  if (toggleRemoteTrackLooping) {
-    toggleRemoteTrackLooping(track_type, looping);
-    console.log(`🔄 Set remote ${track_type} looping to ${looping ? 'enabled' : 'disabled'} (triggered by ${triggered_by})`);
-  } else {
-    console.warn("❌ toggleRemoteTrackLooping function not available");
-  }
-};
 
+export const handleRemoteAudioBatch = (data, { 
+  playRemoteTrack, 
+  stopRemoteTrack, 
+  pauseRemoteTrack, 
+  resumeRemoteTrack, 
+  setRemoteTrackVolume, 
+  toggleRemoteTrackLooping,
+  loadRemoteAudioBuffer,
+  audioBuffersRef 
+}) => {
+  console.log("🎛️ Remote audio batch command received:", data);
+  const { operations, triggered_by } = data;
+  
+  if (!operations || !Array.isArray(operations) || operations.length === 0) {
+    console.warn("❌ Invalid batch operations received");
+    return;
+  }
+  
+  console.log(`🎛️ Processing ${operations.length} batch operations from ${triggered_by}`);
+  
+  // Process each operation
+  operations.forEach(async (op, index) => {
+    const { trackId, operation } = op;
+    
+    try {
+      switch (operation) {
+        case 'play':
+          if (playRemoteTrack && loadRemoteAudioBuffer && audioBuffersRef) {
+            const { filename, looping = true, volume = 1.0 } = op;
+            
+            // Load buffer if needed
+            const buffer = await loadRemoteAudioBuffer(`/audio/${filename}`, trackId);
+            if (buffer && audioBuffersRef) {
+              const expectedKey = `${trackId}_${filename}`;
+              audioBuffersRef.current[expectedKey] = buffer;
+            }
+            
+            await playRemoteTrack(trackId, filename, looping, volume, null, op, true);
+            console.log(`✅ Batch operation ${index + 1}: played ${trackId} (${filename})`);
+          } else {
+            console.warn(`❌ Batch operation ${index + 1}: playRemoteTrack function not available`);
+          }
+          break;
+          
+        case 'stop':
+          if (stopRemoteTrack) {
+            stopRemoteTrack(trackId);
+            console.log(`✅ Batch operation ${index + 1}: stopped ${trackId}`);
+          } else {
+            console.warn(`❌ Batch operation ${index + 1}: stopRemoteTrack function not available`);
+          }
+          break;
+          
+        case 'pause':
+          if (pauseRemoteTrack) {
+            pauseRemoteTrack(trackId);
+            console.log(`✅ Batch operation ${index + 1}: paused ${trackId}`);
+          } else {
+            console.warn(`❌ Batch operation ${index + 1}: pauseRemoteTrack function not available`);
+          }
+          break;
+          
+        case 'resume':
+          if (resumeRemoteTrack) {
+            resumeRemoteTrack(trackId);
+            console.log(`✅ Batch operation ${index + 1}: resumed ${trackId}`);
+          } else {
+            console.warn(`❌ Batch operation ${index + 1}: resumeRemoteTrack function not available`);
+          }
+          break;
+          
+        case 'volume':
+          if (setRemoteTrackVolume) {
+            const { volume } = op;
+            setRemoteTrackVolume(trackId, volume);
+            console.log(`✅ Batch operation ${index + 1}: set ${trackId} volume to ${volume}`);
+          } else {
+            console.warn(`❌ Batch operation ${index + 1}: setRemoteTrackVolume function not available`);
+          }
+          break;
+          
+        case 'loop':
+          if (toggleRemoteTrackLooping) {
+            const { looping } = op;
+            toggleRemoteTrackLooping(trackId, looping);
+            console.log(`✅ Batch operation ${index + 1}: set ${trackId} looping to ${looping}`);
+          } else {
+            console.warn(`❌ Batch operation ${index + 1}: toggleRemoteTrackLooping function not available`);
+          }
+          break;
+          
+        default:
+          console.warn(`❌ Batch operation ${index + 1}: unknown operation '${operation}'`);
+      }
+    } catch (error) {
+      console.error(`❌ Batch operation ${index + 1} failed:`, error);
+    }
+  });
+  
+  console.log(`🎛️ Completed processing ${operations.length} batch operations from ${triggered_by}`);
+};
 
 // =====================================
 // EXISTING EVENT HANDLERS
@@ -223,7 +283,7 @@ export const handlePlayerDisconnectedLobby = (data, { setLobbyUsers, setDisconne
   // The backend will send a lobby_update when user is actually removed
 };
 
-export const handlePlayerKicked = (data, { thisPlayer, stopRemoteTrack, remoteTrackStates }) => {
+export const handlePlayerKicked = (data, { thisPlayer, stopRemoteTrack, remoteTrackStates, handleRemoteAudioBatch }) => {
   console.log("received player kick:", data);
   const { kicked_player } = data;
   // Backend handles kick logging
@@ -232,16 +292,31 @@ export const handlePlayerKicked = (data, { thisPlayer, stopRemoteTrack, remoteTr
   if (kicked_player === thisPlayer) {
     console.log("🚪 Player was kicked - stopping all audio before redirect");
     
-    // Stop all currently active audio tracks
-    if (stopRemoteTrack && remoteTrackStates) {
-      Object.keys(remoteTrackStates).forEach(trackId => {
-        try {
-          stopRemoteTrack(trackId);
-          console.log(`🛑 Stopped audio track: ${trackId}`);
-        } catch (error) {
-          console.warn(`Failed to stop track ${trackId}:`, error);
-        }
-      });
+    // Stop all currently active audio tracks using batch operations
+    if (remoteTrackStates && Object.keys(remoteTrackStates).length > 0) {
+      if (handleRemoteAudioBatch) {
+        // Use batch operations for better performance
+        const stopOperations = Object.keys(remoteTrackStates).map(trackId => ({
+          trackId: trackId,
+          operation: 'stop'
+        }));
+        
+        console.log(`🛑 Batch stopping ${stopOperations.length} audio tracks`);
+        handleRemoteAudioBatch(
+          { operations: stopOperations, triggered_by: 'player_kicked' },
+          { stopRemoteTrack }
+        );
+      } else if (stopRemoteTrack) {
+        // Fallback to individual stops if batch handler not available
+        Object.keys(remoteTrackStates).forEach(trackId => {
+          try {
+            stopRemoteTrack(trackId);
+            console.log(`🛑 Stopped audio track: ${trackId}`);
+          } catch (error) {
+            console.warn(`Failed to stop track ${trackId}:`, error);
+          }
+        });
+      }
     }
     
     // Small delay to ensure audio stops before redirect
@@ -764,78 +839,6 @@ export const createSendFunctions = (webSocket, isConnected, roomId, playerName) 
     }));
   };
 
-  const sendRemoteAudioPlayTracks = (tracks) => {
-    console.log(`🔍 sendRemoteAudioPlayTracks called with:`, tracks);
-    console.log(`🔍 WebSocket state: connected=${isConnected}, readyState=${webSocket?.readyState}`);
-    
-    if (!webSocket || !isConnected) {
-      console.warn(`❌ Cannot send synchronized audio - WebSocket not ready. connected=${isConnected}, webSocket=${!!webSocket}`);
-      return;
-    }
-    
-    const trackDescriptions = tracks.map(t => `${t.channelId} (${t.filename})`).join(' + ');
-    console.log(`📡 Sending synchronized audio play: ${trackDescriptions}`);
-    
-    const message = {
-      "event_type": "remote_audio_play",
-      "data": {
-        "tracks": tracks,
-        "triggered_by": playerName
-      }
-    };
-    
-    console.log(`📡 WebSocket message being sent:`, message);
-    
-    try {
-      webSocket.send(JSON.stringify(message));
-      console.log(`✅ WebSocket send successful`);
-    } catch (error) {
-      console.error(`❌ WebSocket send failed:`, error);
-    }
-  };
-
-  const sendRemoteAudioStop = (trackType) => {
-    if (!webSocket || !isConnected) return;
-    
-    console.log(`📡 Sending remote audio stop: ${trackType}`);
-    
-    webSocket.send(JSON.stringify({
-      "event_type": "remote_audio_stop",
-      "data": {
-        "track_type": trackType,
-        "triggered_by": playerName
-      }
-    }));
-  };
-
-  const sendRemoteAudioPause = (trackType) => {
-    if (!webSocket || !isConnected) return;
-    
-    console.log(`📡 Sending remote audio pause: ${trackType}`);
-    
-    webSocket.send(JSON.stringify({
-      "event_type": "remote_audio_pause",
-      "data": {
-        "track_type": trackType,
-        "triggered_by": playerName
-      }
-    }));
-  };
-
-  const sendRemoteAudioVolume = (trackType, volume) => {
-    if (!webSocket || !isConnected) return;
-    
-    console.log(`📡 [DEBOUNCED] Sending remote audio volume: ${trackType} - ${Math.round(volume * 100)}%`);
-    
-    webSocket.send(JSON.stringify({
-      "event_type": "remote_audio_volume",
-      "data": {
-        "track_type": trackType,
-        "volume": volume,
-        "triggered_by": playerName
-      }
-    }));
-  };
 
   const sendRemoteAudioResume = (trackType) => {
     if (!webSocket || !isConnected) return;
@@ -851,48 +854,19 @@ export const createSendFunctions = (webSocket, isConnected, roomId, playerName) 
     }));
   };
 
-  const sendRemoteAudioResumeTracks = (tracks) => {
-    if (!webSocket || !isConnected) {
-      console.warn(`❌ Cannot send synchronized audio resume - WebSocket not ready. connected=${isConnected}, webSocket=${!!webSocket}`);
-      return;
-    }
-    
-    const trackDescriptions = tracks.map(t => `${t.channelId} (paused)`).join(' + ');
-    console.log(`📡 Sending synchronized audio resume: ${trackDescriptions}`);
-    
-    const message = {
-      "event_type": "remote_audio_resume",
-      "data": {
-        "tracks": tracks,
-        "triggered_by": playerName
-      }
-    };
-    
-    console.log(`📡 WebSocket resume message being sent:`, message);
-    
-    try {
-      webSocket.send(JSON.stringify(message));
-      console.log(`✅ WebSocket resume send successful`);
-    } catch (error) {
-      console.error(`❌ WebSocket resume send failed:`, error);
-    }
-  };
-
-  const sendRemoteAudioLoop = (trackType, looping) => {
+  const sendRemoteAudioBatch = (operations) => {
     if (!webSocket || !isConnected) return;
     
-    console.log(`📡 Sending remote audio loop toggle: ${trackType} - ${looping ? 'enabled' : 'disabled'}`);
+    console.log(`📡 Sending remote audio batch (${operations.length} operations):`, operations);
     
     webSocket.send(JSON.stringify({
-      "event_type": "remote_audio_loop",
+      "event_type": "remote_audio_batch",
       "data": {
-        "track_type": trackType,
-        "looping": looping,
+        "operations": operations,
         "triggered_by": playerName
       }
     }));
   };
-
 
   return {
     sendSeatChange,
@@ -908,13 +882,8 @@ export const createSendFunctions = (webSocket, isConnected, roomId, playerName) 
     sendColorChange,
     sendRoleChange,
     sendRemoteAudioPlay,
-    sendRemoteAudioPlayTracks,
-    sendRemoteAudioPause,
-    sendRemoteAudioStop,
-    sendRemoteAudioVolume,
     sendRemoteAudioResume,
-    sendRemoteAudioResumeTracks,
-    sendRemoteAudioLoop
+    sendRemoteAudioBatch
   };
 };
 

@@ -5,30 +5,20 @@
  * SPDX-License-Identifier: GPL-3.0-or-later
  */
 
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import AudioTrack from './AudioTrack';
 import { PlaybackState, getSyncTargets } from '../hooks/useUnifiedAudio';
 import {
   DM_HEADER,
   DM_ARROW,
   DM_CHILD,
-  DM_CHILD_LAST
 } from '../styles/constants';
 
 export default function AudioMixerPanel({
   isExpanded,
   onToggle,
   remoteTrackStates = {},
-  sendRemoteAudioPlay,
-  sendRemoteAudioPlayTracks,
-  sendRemoteAudioResume,
-  sendRemoteAudioResumeTracks,
-  sendRemoteAudioPause,
-  sendRemoteAudioStop,
-  sendRemoteAudioVolume,
-  sendRemoteAudioLoop,
-  setRemoteTrackVolume,
-  toggleRemoteTrackLooping,
+  sendRemoteAudioBatch,
   remoteTrackAnalysers = {},
   trackRouting = {},
   syncMode = false,
@@ -155,40 +145,48 @@ export default function AudioMixerPanel({
     console.log(`🎚️ Tracks to stop:`, tracksToStop.map(t => t.channelId));
     
     try {
-      // PHASE 1: Start new tracks first (with preloading via sendRemoteAudioPlayTracks)
-      if (tracksToStart.length > 0) {
-        console.log(`🎼 Starting ${tracksToStart.length} new tracks with preloading...`);
-        
-        const targets = tracksToStart.map(channel => {
-          const track = remoteTrackStates[channel.channelId];
-          return {
-            channelId: channel.channelId,
-            filename: track.filename,
-            looping: track.looping ?? (track.type !== 'sfx'),
-            volume: track.volume,
-            playbackState: track.playbackState,
-            currentTime: 0,
-            type: track.type,
-            channelGroup: track.channelGroup,
-            track: track.track
-          };
-        });
-        
-        // Start new tracks (sendRemoteAudioPlayTracks includes preloading)
-        await sendRemoteAudioPlayTracks?.(targets);
-        console.log(`✅ New tracks started and playing`);
-      }
+      // Create batch operations for seamless crossfade
+      const batchOperations = [];
       
-      // PHASE 2: Wait a brief moment for new audio to stabilize, then stop old tracks
-      if (tracksToStop.length > 0) {
-        // Small delay to ensure new tracks are fully playing before stopping old ones
+      // Add play operations for tracks to start
+      tracksToStart.forEach(channel => {
+        const track = remoteTrackStates[channel.channelId];
+        batchOperations.push({
+          trackId: channel.channelId,
+          operation: 'play',
+          filename: track.filename,
+          looping: track.looping ?? (track.type !== 'sfx'),
+          volume: track.volume,
+          type: track.type,
+          channelGroup: track.channelGroup,
+          track: track.track
+        });
+      });
+      
+      // Add stop operations for tracks to stop (with slight delay for seamless handoff)
+      if (tracksToStop.length > 0 && tracksToStart.length > 0) {
+        // For crossfade: start new tracks first, then stop old ones after brief delay
+        console.log(`🎚️ Executing batch crossfade: ${tracksToStart.length} starting, ${tracksToStop.length} stopping after delay`);
+        
+        // Send start operations first
+        const startOperations = batchOperations.filter(op => op.operation === 'play');
+        if (startOperations.length > 0) {
+          sendRemoteAudioBatch?.(startOperations);
+        }
+        
+        // Stop old tracks after brief delay for seamless handoff
         setTimeout(() => {
-          console.log(`🛑 Stopping ${tracksToStop.length} old tracks after seamless handoff...`);
-          tracksToStop.forEach(channel => {
-            sendRemoteAudioStop?.(channel.channelId);
-          });
+          const stopOperations = tracksToStop.map(channel => ({
+            trackId: channel.channelId,
+            operation: 'stop'
+          }));
+          sendRemoteAudioBatch?.(stopOperations);
           console.log(`✅ Seamless crossfade completed`);
         }, 100); // 100ms delay for audio buffer stabilization
+      } else {
+        // No crossfade needed, just execute all operations at once
+        console.log(`🎚️ Executing batch audio operations: ${batchOperations.length} operations`);
+        sendRemoteAudioBatch?.(batchOperations);
       }
       
     } catch (error) {
@@ -200,7 +198,7 @@ export default function AudioMixerPanel({
     
     // Clear the cue after execution
     setCurrentCue(null);
-  }, [currentCue, fadeDurationMs, remoteTrackStates, sendRemoteAudioStop, sendRemoteAudioPlayTracks]);
+  }, [currentCue, fadeDurationMs, remoteTrackStates, sendRemoteAudioBatch]);
 
   const disableSync = () => {
     console.log(`🔓 Disabling sync mode`);
@@ -252,28 +250,38 @@ export default function AudioMixerPanel({
     
     console.log(`✂️ Executing CUT transition:`, currentCue);
     
-    // Stop tracks immediately
+    // Create batch operations for cut transition
+    const batchOperations = [];
+    
+    // Add stop operations
     currentCue.tracksToStop?.forEach(trackId => {
-      sendRemoteAudioStop?.(trackId);
+      batchOperations.push({
+        trackId,
+        operation: 'stop'
+      });
     });
     
-    // Start tracks immediately  
+    // Add play operations
     if (currentCue.tracksToStart.length > 0) {
-      const targets = currentCue.tracksToStart.map(trackId => {
+      currentCue.tracksToStart.forEach(trackId => {
         const track = remoteTrackStates[trackId];
-        return {
-          channelId: trackId,
+        batchOperations.push({
+          trackId,
+          operation: 'play',
           filename: track.filename,
           looping: track.looping ?? (track.type !== 'sfx'),
           volume: track.volume,
-          playbackState: track.playbackState,
-          currentTime: 0,
           type: track.type,
           channelGroup: track.channelGroup,
           track: track.track
-        };
+        });
       });
-      sendRemoteAudioPlayTracks?.(targets);
+    }
+    
+    // Execute all operations simultaneously
+    if (batchOperations.length > 0) {
+      console.log(`✂️ Executing ${batchOperations.length} cut operations:`, batchOperations);
+      sendRemoteAudioBatch?.(batchOperations);
     }
     
     // Update routing to match the cue
@@ -302,6 +310,31 @@ export default function AudioMixerPanel({
     console.log(`🗑️ Cue cleared`);
   };
 
+  // Stop all tracks function using batch operation
+  const stopAllTracks = () => {
+    const allTrackIds = channels.map(channel => channel.channelId);
+    console.log(`🛑 Stopping all tracks:`, allTrackIds);
+    
+    // Create batch operations to stop all tracks
+    const stopOperations = allTrackIds.map(trackId => ({
+      trackId,
+      operation: 'stop'
+    }));
+    
+    // Send batch stop command
+    sendRemoteAudioBatch?.(stopOperations);
+  };
+
+  // Volume change handler using batch operation
+  const handleVolumeChange = (channelId, volume) => {
+    const volumeOperation = [{
+      trackId: channelId,
+      operation: 'volume',
+      volume
+    }];
+    sendRemoteAudioBatch?.(volumeOperation);
+  };
+
   // Handle loop toggle with WebSocket broadcast (server-authoritative)
   const handleLoopToggle = (trackId, looping) => {
     const operationKey = `loop_${trackId}`;
@@ -317,7 +350,12 @@ export default function AudioMixerPanel({
     
     // Only broadcast to server - no local state update
     // Server response will update state via handleRemoteAudioLoop
-    sendRemoteAudioLoop?.(trackId, looping);
+    const loopOperation = [{
+      trackId,
+      operation: 'loop',
+      looping
+    }];
+    sendRemoteAudioBatch?.(loopOperation);
   };
   // Dynamically generate channels from remoteTrackStates
   const channels = Object.keys(remoteTrackStates).map(channelId => {
@@ -406,15 +444,33 @@ export default function AudioMixerPanel({
     
     if (shouldResume) {
       if (targets.length === 1) {
-        // Single track resume - use existing single-track API
-        sendRemoteAudioResume?.(targets[0].channelId);
+        // Single track resume - use batch API
+        const resumeOperation = [{
+          trackId: targets[0].channelId,
+          operation: 'resume'
+        }];
+        sendRemoteAudioBatch?.(resumeOperation);
       } else {
         // Multi-track resume - use batch API
-        sendRemoteAudioResumeTracks?.(targets);
+        const resumeOperations = targets.map(target => ({
+          trackId: target.channelId,
+          operation: 'resume'
+        }));
+        sendRemoteAudioBatch?.(resumeOperations);
       }
     } else {
-      // Always use batch API for consistency (works for single tracks too)
-      sendRemoteAudioPlayTracks?.(targets);
+      // Multi-track play - use batch API
+      const playOperations = targets.map(target => ({
+        trackId: target.channelId,
+        operation: 'play',
+        filename: target.filename,
+        looping: target.looping,
+        volume: target.volume,
+        type: target.type,
+        channelGroup: target.channelGroup,
+        track: target.track
+      }));
+      sendRemoteAudioBatch?.(playOperations);
     }
   };
   // Simplified pause handler using centralized sync logic
@@ -438,13 +494,17 @@ export default function AudioMixerPanel({
       remoteTrackStates
     );
     
-    // Pause all target tracks
-    targets.forEach(target => {
-      // Only pause if the track is actually playing
-      if (target.playbackState === PlaybackState.PLAYING) {
-        sendRemoteAudioPause?.(target.channelId);
-      }
-    });
+    // Pause all target tracks using batch operation
+    const pauseOperations = targets
+      .filter(target => target.playbackState === PlaybackState.PLAYING)
+      .map(target => ({
+        trackId: target.channelId,
+        operation: 'pause'
+      }));
+    
+    if (pauseOperations.length > 0) {
+      sendRemoteAudioBatch?.(pauseOperations);
+    }
   };
   // Simplified stop handler using centralized sync logic
   const handleStop = (channel) => {
@@ -467,13 +527,17 @@ export default function AudioMixerPanel({
       remoteTrackStates
     );
     
-    // Stop all target tracks
-    targets.forEach(target => {
-      // Only stop if the track is actually playing or paused
-      if (target.playbackState === PlaybackState.PLAYING || target.playbackState === PlaybackState.PAUSED) {
-        sendRemoteAudioStop?.(target.channelId);
-      }
-    });
+    // Stop all target tracks using batch operation
+    const stopOperations = targets
+      .filter(target => target.playbackState === PlaybackState.PLAYING || target.playbackState === PlaybackState.PAUSED)
+      .map(target => ({
+        trackId: target.channelId,
+        operation: 'stop'
+      }));
+    
+    if (stopOperations.length > 0) {
+      sendRemoteAudioBatch?.(stopOperations);
+    }
   };
 
   return (
@@ -848,7 +912,14 @@ export default function AudioMixerPanel({
                 >
                   ⚡ CROSSFADE
                 </button>
-                {/* TODO: add a Stop All playing Button */}
+                
+                <button
+                  className="px-6 py-2 rounded text-sm font-bold transition-all duration-200 bg-red-600 hover:bg-red-700 text-white ml-4"
+                  onClick={stopAllTracks}
+                  title="Stop all playing tracks immediately"
+                >
+                  🛑 STOP ALL
+                </button>
               </div>
               </div>
           )}
@@ -893,10 +964,10 @@ export default function AudioMixerPanel({
                     onPause={() => handlePause(channel)}
                     onStop={() => handleStop(channel)}
                     onVolumeChange={(v) =>
-                      setRemoteTrackVolume?.(channel.channelId, v)
+                      handleVolumeChange(channel.channelId, v)
                     }
                     onVolumeChangeDebounced={(v) =>
-                      sendRemoteAudioVolume?.(channel.channelId, v)
+                      handleVolumeChange(channel.channelId, v)
                     }
                     onLoopToggle={(id, loop) =>
                       handleLoopToggle(id, loop)
@@ -949,10 +1020,10 @@ export default function AudioMixerPanel({
                     onPause={() => handlePause(channel)}
                     onStop={() => handleStop(channel)}
                     onVolumeChange={(v) =>
-                      setRemoteTrackVolume?.(channel.channelId, v)
+                      handleVolumeChange(channel.channelId, v)
                     }
                     onVolumeChangeDebounced={(v) =>
-                      sendRemoteAudioVolume?.(channel.channelId, v)
+                      handleVolumeChange(channel.channelId, v)
                     }
                     onLoopToggle={(id, loop) =>
                       handleLoopToggle(id, loop)
@@ -1001,10 +1072,10 @@ export default function AudioMixerPanel({
                   onPause={() => handlePause(channel)}
                   onStop={() => handleStop(channel)}
                   onVolumeChange={(v) =>
-                    setRemoteTrackVolume?.(channel.channelId, v)
+                    handleVolumeChange(channel.channelId, v)
                   }
                   onVolumeChangeDebounced={(v) =>
-                    sendRemoteAudioVolume?.(channel.channelId, v)
+                    handleVolumeChange(channel.channelId, v)
                   }
                   onLoopToggle={() => {}}
                   syncMode={syncMode}

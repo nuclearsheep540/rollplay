@@ -568,13 +568,8 @@ function GameContent() {
     sendColorChange,
     sendRoleChange,
     sendRemoteAudioPlay,
-    sendRemoteAudioPlayTracks,
     sendRemoteAudioResume,
-    sendRemoteAudioResumeTracks,
-    sendRemoteAudioPause,
-    sendRemoteAudioStop,
-    sendRemoteAudioVolume,
-    sendRemoteAudioLoop
+    sendRemoteAudioBatch
   } = useWebSocket(roomId, thisPlayer, gameContext);
 
   // Listen for combat state changes and play audio
@@ -1186,16 +1181,9 @@ function GameContent() {
             remoteTrackAnalysers={remoteTrackAnalysers} // NEW: Pass remote track analysers
             playRemoteTrack={playRemoteTrack}     // NEW: Pass remote track controls (local)
             stopRemoteTrack={stopRemoteTrack}     // NEW: Pass remote track controls (local)
-            setRemoteTrackVolume={setRemoteTrackVolume} // NEW: Pass remote track controls (local)
-            toggleRemoteTrackLooping={toggleRemoteTrackLooping} // NEW: Pass loop toggle function
             sendRemoteAudioPlay={sendRemoteAudioPlay}     // NEW: Pass WebSocket sending functions
-            sendRemoteAudioPlayTracks={sendRemoteAudioPlayTracks} // NEW: Pass WebSocket multi-track function
             sendRemoteAudioResume={sendRemoteAudioResume} // NEW: Pass WebSocket resume function
-            sendRemoteAudioResumeTracks={sendRemoteAudioResumeTracks} // NEW: Pass WebSocket multi-track resume function
-            sendRemoteAudioPause={sendRemoteAudioPause}   // NEW: Pass WebSocket pause function
-            sendRemoteAudioStop={sendRemoteAudioStop}     // NEW: Pass WebSocket sending functions
-            sendRemoteAudioVolume={sendRemoteAudioVolume} // NEW: Pass WebSocket sending functions
-            sendRemoteAudioLoop={sendRemoteAudioLoop}     // NEW: Pass WebSocket loop function
+            sendRemoteAudioBatch={sendRemoteAudioBatch}   // NEW: Pass WebSocket batch function
             trackRouting={trackRouting}           // NEW: Pass track routing state
             syncMode={syncMode}                   // NEW: Pass sync mode state  
             setSyncMode={setSyncMode}             // NEW: Pass sync mode toggle function

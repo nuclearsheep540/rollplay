@@ -26,11 +26,8 @@ import {
   handlePlayerDisplaced,
   handleSystemMessage,
   handleRemoteAudioPlay,
-  handleRemoteAudioPause,
-  handleRemoteAudioStop,
-  handleRemoteAudioVolume,
   handleRemoteAudioResume,
-  handleRemoteAudioLoop,
+  handleRemoteAudioBatch,
   createSendFunctions
 } from './webSocketEvent'
 
@@ -151,26 +148,14 @@ export function useWebSocket(roomId, playerName, gameContext) {
           handleRemoteAudioPlay(json_data["data"], gameContext);
           break;
 
-        case "remote_audio_pause":
-          handleRemoteAudioPause(json_data["data"], gameContext);
-          break;
-
-        case "remote_audio_stop":
-          handleRemoteAudioStop(json_data["data"], gameContext);
-          break;
-
-        case "remote_audio_volume":
-          handleRemoteAudioVolume(json_data["data"], gameContext);
-          break;
-
         case "remote_audio_resume":
           handleRemoteAudioResume(json_data["data"], gameContext);
           break;
 
-        case "remote_audio_loop":
-          handleRemoteAudioLoop(json_data["data"], gameContext);
+        case "remote_audio_batch":
+          console.log("🎛️ Frontend received remote_audio_batch event:", json_data);
+          handleRemoteAudioBatch(json_data["data"], gameContext);
           break;
-
 
         default:
           console.log("Unhandled WebSocket event:", event_type, json_data);
