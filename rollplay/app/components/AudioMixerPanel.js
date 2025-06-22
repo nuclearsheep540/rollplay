@@ -7,7 +7,7 @@
 
 import React, { useState, useEffect } from 'react';
 import AudioTrack from './AudioTrack';
-import { PlaybackState } from '../hooks/useUnifiedAudio';
+import { PlaybackState, getSyncTargets } from '../hooks/useUnifiedAudio';
 import {
   DM_HEADER,
   DM_ARROW,
@@ -154,7 +154,7 @@ export default function AudioMixerPanel({
     ambient: ambientChannels.some(ch => ch.track === 'A') && ambientChannels.some(ch => ch.track === 'B')
   };
 
-  // Clean play handler with unified sync logic and complete track state
+  // Simplified play handler using centralized sync logic
   const handlePlay = async (channel) => {
     const operationKey = `play_${channel.channelId}`;
     
@@ -179,98 +179,60 @@ export default function AudioMixerPanel({
     }
     
     const channelState = remoteTrackStates[channel.channelId];
-    const filename = channelState?.filename;
-    
-    if (!filename) {
+    if (!channelState?.filename) {
       console.warn(`No audio file loaded in ${channel.channelId}`);
       clearPendingOperationLocal(operationKey);
       return;
     }
     
-    console.log(`🔍 Play clicked: ${channel.channelId}, syncMode=${syncMode}`);
-    console.log(`🔍 Current routing:`, trackRouting);
-    console.log(`🔍 Track state: playbackState=${channelState?.playbackState}, looping=${channelState?.looping}`);
+    console.log(`🔍 [UAT] PLAY clicked: ${channel.channelId}, syncMode=${syncMode}`);
+    console.log(`🔍 [UAT] Current routing:`, trackRouting);
+    console.log(`🔍 [UAT] Channel info:`, { 
+      channelGroup: channel.channelGroup, 
+      track: channel.track, 
+      type: channel.type 
+    });
     
-    // Check if this track (or sync pair) is paused and should resume instead of play fresh
-    const isTrackPaused = channelState?.playbackState === PlaybackState.PAUSED;
+    // Use centralized sync logic to determine what tracks to affect
+    console.log(`🔍 [UAT] Calling getSyncTargets...`);
+    const targets = getSyncTargets(
+      channel.channelId,
+      trackRouting,
+      syncMode,
+      remoteTrackStates
+    );
     
-    // Check if sync mode is enabled and this is a music/ambient track
-    if (syncMode && channel.channelGroup && 
-        (channel.channelGroup === 'music' || channel.channelGroup === 'ambient')) {
-      
-      const { channelGroup } = channel;
-      const otherGroup = channelGroup === 'music' ? 'ambient' : 'music';
-      const otherGroupTrack = trackRouting[otherGroup];
-      
-      // Find the pair track
-      const syncChannelId = Object.keys(remoteTrackStates).find(id => 
-        remoteTrackStates[id].channelGroup === otherGroup && 
-        remoteTrackStates[id].track === otherGroupTrack
-      );
-      
-      if (syncChannelId) {
-        const syncChannelState = remoteTrackStates[syncChannelId];
-        const isSyncChannelPaused = syncChannelState?.playbackState === PlaybackState.PAUSED;
-        
-        // Determine if this should be a resume or fresh play
-        const shouldResume = isTrackPaused || isSyncChannelPaused;
-        
-        console.log(`🔗 Sync ${shouldResume ? 'resume' : 'play'}: ${channelGroup}=${trackRouting[channelGroup]} + ${otherGroup}=${trackRouting[otherGroup]}`);
-        
-        // Include complete state information for each track
-        const tracks = [{
-          channelId: channel.channelId,
-          filename: filename,
-          looping: channelState.looping ?? (channel.type !== 'sfx'),
-          volume: channelState.volume,
-          playbackState: channelState.playbackState,
-          currentTime: channelState.currentTime
-        }];
-        
-        if (syncChannelState?.filename) {
-          tracks.push({
-            channelId: syncChannelId,
-            filename: syncChannelState.filename,
-            looping: syncChannelState.looping ?? true,
-            volume: syncChannelState.volume,
-            playbackState: syncChannelState.playbackState,
-            currentTime: syncChannelState.currentTime
-          });
-        }
-        
-        if (shouldResume) {
-          console.log(`📡 Sending synchronized resume tracks with complete state:`, tracks);
-          sendRemoteAudioResumeTracks?.(tracks);
-        } else {
-          console.log(`📡 Sending synchronized play tracks with complete state:`, tracks);
-          sendRemoteAudioPlayTracks?.(tracks);
-        }
-        return;
-      }
+    if (targets.length === 0) {
+      console.warn(`❌ [UAT] No targets returned for ${channel.channelId}`);
+      clearPendingOperationLocal(operationKey);
+      return;
     }
     
-    // Individual track play (sync disabled or SFX) - include complete state
-    if (isTrackPaused) {
-      console.log(`🎵 Resuming individual track: ${channel.channelId}`);
-      // For resume, we just send the channel ID as current implementation expects
-      sendRemoteAudioResume?.(channel.channelId);
-    } else {
-      console.log(`🎵 Playing individual track with complete state: ${channel.channelId}`);
-      // Send enhanced play command with all current state
-      const trackWithState = {
-        channelId: channel.channelId,
-        filename: filename,
-        looping: channelState.looping ?? (channel.type !== 'sfx'),
-        volume: channelState?.volume,
-        playbackState: channelState.playbackState,
-        currentTime: channelState.currentTime || 0
-      };
+    // Determine if any tracks are paused (should resume instead of fresh play)
+    const shouldResume = targets.some(track => track.playbackState === PlaybackState.PAUSED);
+    console.log(`🔍 [UAT] Should resume? ${shouldResume} (based on playback states: ${targets.map(t => `${t.channelId}=${t.playbackState}`).join(', ')})`);
+    
+    if (shouldResume) {
+      console.log(`📡 [UAT] RESUMING ${targets.length} track(s):`, targets.map(t => t.channelId));
       
-      // Use the multi-track play format even for single tracks to include complete state
-      sendRemoteAudioPlayTracks?.([trackWithState]);
+      if (targets.length === 1) {
+        // Single track resume - use existing single-track API
+        console.log(`📡 [UAT] Using single-track resume API`);
+        sendRemoteAudioResume?.(targets[0].channelId);
+      } else {
+        // Multi-track resume - use batch API
+        console.log(`📡 [UAT] Using batch resume API`);
+        sendRemoteAudioResumeTracks?.(targets);
+      }
+    } else {
+      console.log(`📡 [UAT] PLAYING ${targets.length} track(s):`, targets.map(t => t.channelId));
+      console.log(`📡 [UAT] Using batch play API`);
+      
+      // Always use batch API for consistency (works for single tracks too)
+      sendRemoteAudioPlayTracks?.(targets);
     }
   };
-  // Enhanced pause handler with synchronized control
+  // Simplified pause handler using centralized sync logic
   const handlePause = (channel) => {
     const operationKey = `pause_${channel.channelId}`;
     
@@ -283,30 +245,32 @@ export default function AudioMixerPanel({
     // Mark operation as pending
     addPendingOperation(operationKey);
     
-    sendRemoteAudioPause?.(channel.channelId);
+    console.log(`🔍 [UAT] PAUSE clicked: ${channel.channelId}, syncMode=${syncMode}`);
+    console.log(`🔍 [UAT] Current routing:`, trackRouting);
     
-    // If sync is enabled and this is a music/ambient A/B track, pause the corresponding sync track
-    if (syncMode && channel.channelGroup && channel.track) {
-      const { channelGroup } = channel;
-      
-      // Only trigger sync for music/ambient tracks
-      if (channelGroup === 'music' || channelGroup === 'ambient') {
-        // Find the corresponding track in the other group using routing configuration
-        const otherGroup = channelGroup === 'music' ? 'ambient' : 'music';
-        const otherGroupTrack = trackRouting[otherGroup]; // Use routing, not track letter
-        const syncChannelId = Object.keys(remoteTrackStates).find(id => 
-          remoteTrackStates[id].channelGroup === otherGroup && 
-          remoteTrackStates[id].track === otherGroupTrack
-        );
-        
-        if (syncChannelId && remoteTrackStates[syncChannelId]?.playbackState === PlaybackState.PLAYING) {
-          console.log(`🔗 Sync pause: Pausing ${otherGroup} track ${otherGroupTrack} (${syncChannelId})`);
-          sendRemoteAudioPause?.(syncChannelId);
-        }
+    // Use centralized sync logic to determine what tracks to pause
+    console.log(`🔍 [UAT] Calling getSyncTargets for pause...`);
+    const targets = getSyncTargets(
+      channel.channelId,
+      trackRouting,
+      syncMode,
+      remoteTrackStates
+    );
+    
+    console.log(`📡 [UAT] PAUSING ${targets.length} track(s):`, targets.map(t => t.channelId));
+    
+    // Pause all target tracks
+    targets.forEach(target => {
+      // Only pause if the track is actually playing
+      if (target.playbackState === PlaybackState.PLAYING) {
+        console.log(`📡 [UAT] Sending pause for ${target.channelId} (currently ${target.playbackState})`);
+        sendRemoteAudioPause?.(target.channelId);
+      } else {
+        console.log(`📡 [UAT] Skipping pause for ${target.channelId} (currently ${target.playbackState})`);
       }
-    }
+    });
   };
-  // Enhanced stop handler with synchronized control
+  // Simplified stop handler using centralized sync logic
   const handleStop = (channel) => {
     const operationKey = `stop_${channel.channelId}`;
     
@@ -319,28 +283,30 @@ export default function AudioMixerPanel({
     // Mark operation as pending
     addPendingOperation(operationKey);
     
-    sendRemoteAudioStop?.(channel.channelId);
+    console.log(`🔍 [UAT] STOP clicked: ${channel.channelId}, syncMode=${syncMode}`);
+    console.log(`🔍 [UAT] Current routing:`, trackRouting);
     
-    // If sync is enabled and this is a music/ambient A/B track, stop the corresponding sync track
-    if (syncMode && channel.channelGroup && channel.track) {
-      const { channelGroup } = channel;
-      
-      // Only trigger sync for music/ambient tracks
-      if (channelGroup === 'music' || channelGroup === 'ambient') {
-        // Find the corresponding track in the other group using routing configuration
-        const otherGroup = channelGroup === 'music' ? 'ambient' : 'music';
-        const otherGroupTrack = trackRouting[otherGroup]; // Use routing, not track letter
-        const syncChannelId = Object.keys(remoteTrackStates).find(id => 
-          remoteTrackStates[id].channelGroup === otherGroup && 
-          remoteTrackStates[id].track === otherGroupTrack
-        );
-        
-        if (syncChannelId && remoteTrackStates[syncChannelId]?.playbackState === PlaybackState.PLAYING) {
-          console.log(`🔗 Sync stop: Stopping ${otherGroup} track ${otherGroupTrack} (${syncChannelId})`);
-          sendRemoteAudioStop?.(syncChannelId);
-        }
+    // Use centralized sync logic to determine what tracks to stop
+    console.log(`🔍 [UAT] Calling getSyncTargets for stop...`);
+    const targets = getSyncTargets(
+      channel.channelId,
+      trackRouting,
+      syncMode,
+      remoteTrackStates
+    );
+    
+    console.log(`📡 [UAT] STOPPING ${targets.length} track(s):`, targets.map(t => t.channelId));
+    
+    // Stop all target tracks
+    targets.forEach(target => {
+      // Only stop if the track is actually playing or paused
+      if (target.playbackState === PlaybackState.PLAYING || target.playbackState === PlaybackState.PAUSED) {
+        console.log(`📡 [UAT] Sending stop for ${target.channelId} (currently ${target.playbackState})`);
+        sendRemoteAudioStop?.(target.channelId);
+      } else {
+        console.log(`📡 [UAT] Skipping stop for ${target.channelId} (currently ${target.playbackState})`);
       }
-    }
+    });
   };
 
   return (

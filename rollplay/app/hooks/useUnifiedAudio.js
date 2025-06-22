@@ -29,6 +29,121 @@ export const PlaybackState = {
   PAUSED: 'paused'
 };
 
+/**
+ * Centralized Sync Logic - Determines what tracks should be affected by an operation
+ * 
+ * Handles all sync scenarios:
+ * - Independent playback (sync off, SFX tracks)
+ * - Matched sync (AA, BB)  
+ * - Mixed sync (AB, BA)
+ * - Manual overrides
+ * 
+ * @param {string} clickedTrackId - The track that was clicked ('audio_channel_1A')
+ * @param {object} trackRouting - Current routing config ({ music: 'A', ambient: 'A' })
+ * @param {boolean} syncMode - Whether sync is enabled
+ * @param {object} remoteTrackStates - All track states
+ * @param {object} options - Additional options { forceIndependent, stopConflicting }
+ * @returns {array} Array of complete track objects ready for WebSocket transmission
+ */
+export const getSyncTargets = (
+  clickedTrackId,
+  trackRouting,
+  syncMode,
+  remoteTrackStates,
+  options = {}
+) => {
+  const clickedTrack = remoteTrackStates[clickedTrackId];
+  
+  if (!clickedTrack) {
+    console.warn(`❌ getSyncTargets: Track ${clickedTrackId} not found`);
+    return [];
+  }
+  
+  // Helper function to build complete track object for WebSocket
+  const buildTrackObject = (track, trackId) => ({
+    channelId: trackId,
+    filename: track.filename,
+    looping: track.looping ?? (track.type !== 'sfx'),
+    volume: track.volume,
+    playbackState: track.playbackState,
+    currentTime: track.currentTime || 0,
+    type: track.type,
+    channelGroup: track.channelGroup,
+    track: track.track
+  });
+  
+  // Independence cases - return single track
+  if (!syncMode) {
+    console.log(`🎵 [UAT] getSyncTargets: Sync disabled, returning single track ${clickedTrackId}`);
+    const result = [buildTrackObject(clickedTrack, clickedTrackId)];
+    console.log(`🎵 [UAT] Result:`, result);
+    return result;
+  }
+  
+  if (clickedTrack.type === 'sfx') {
+    console.log(`🎵 [UAT] getSyncTargets: SFX track ${clickedTrackId}, returning single track`);
+    const result = [buildTrackObject(clickedTrack, clickedTrackId)];
+    console.log(`🎵 [UAT] Result:`, result);
+    return result;
+  }
+  
+  if (options.forceIndependent) {
+    console.log(`🎵 [UAT] getSyncTargets: Force independent ${clickedTrackId}, returning single track`);
+    const result = [buildTrackObject(clickedTrack, clickedTrackId)];
+    console.log(`🎵 [UAT] Result:`, result);
+    return result;
+  }
+  
+  // Sync cases - find the paired track
+  if (!clickedTrack.channelGroup || !clickedTrack.track) {
+    console.warn(`❌ getSyncTargets: Track ${clickedTrackId} missing channelGroup or track properties`);
+    return [buildTrackObject(clickedTrack, clickedTrackId)];
+  }
+  
+  if (clickedTrack.channelGroup !== 'music' && clickedTrack.channelGroup !== 'ambient') {
+    console.log(`🎵 getSyncTargets: Non-syncable track type ${clickedTrack.channelGroup}, returning single track`);
+    return [buildTrackObject(clickedTrack, clickedTrackId)];
+  }
+  
+  // Find the sync pair using routing configuration
+  const otherGroup = clickedTrack.channelGroup === 'music' ? 'ambient' : 'music';
+  const otherGroupTrack = trackRouting[otherGroup];
+  
+  if (!otherGroupTrack) {
+    console.warn(`❌ getSyncTargets: No routing found for ${otherGroup} group`);
+    return [buildTrackObject(clickedTrack, clickedTrackId)];
+  }
+  
+  // Find the sync pair track
+  const syncTrackId = Object.keys(remoteTrackStates).find(id => 
+    remoteTrackStates[id].channelGroup === otherGroup && 
+    remoteTrackStates[id].track === otherGroupTrack
+  );
+  
+  if (!syncTrackId) {
+    console.warn(`❌ getSyncTargets: Sync pair not found for ${otherGroup} track ${otherGroupTrack}`);
+    return [buildTrackObject(clickedTrack, clickedTrackId)];
+  }
+  
+  const syncTrack = remoteTrackStates[syncTrackId];
+  if (!syncTrack.filename) {
+    console.warn(`❌ getSyncTargets: Sync pair ${syncTrackId} has no filename loaded`);
+    return [buildTrackObject(clickedTrack, clickedTrackId)];
+  }
+  
+  // Return both tracks for synchronized operation
+  const currentRouting = `${trackRouting.music}${trackRouting.ambient}`;
+  console.log(`🔗 [UAT] getSyncTargets: Sync pair found - ${clickedTrack.channelGroup}=${clickedTrack.track} + ${syncTrack.channelGroup}=${syncTrack.track} (${currentRouting})`);
+  
+  const result = [
+    buildTrackObject(clickedTrack, clickedTrackId),
+    buildTrackObject(syncTrack, syncTrackId)
+  ];
+  
+  console.log(`🔗 [UAT] Result:`, result);
+  return result;
+};
+
 export const useUnifiedAudio = () => {
   const [isAudioUnlocked, setIsAudioUnlocked] = useState(false);
   
@@ -194,7 +309,7 @@ export const useUnifiedAudio = () => {
   };
 
   // Play remote track (triggered by WebSocket events)
-  const playRemoteTrack = async (trackId, audioFile, loop = true, volume = null, resumeFromTime = null, completeTrackState = null) => {
+  const playRemoteTrack = async (trackId, audioFile, loop = true, volume = null, resumeFromTime = null, completeTrackState = null, skipBufferLoad = false) => {
     const operationId = `${trackId}_${Date.now()}`;
     console.log(`🎵 [${operationId}] Attempting to play remote track: ${trackId} - ${audioFile}`);
     
@@ -264,7 +379,14 @@ export const useUnifiedAudio = () => {
       // Load (or reuse) the AudioBuffer
       const bufferKey = `${trackId}_${audioFile}`;
       let audioBuffer = audioBuffersRef.current[bufferKey];
-      if (!audioBuffer) {
+      
+      if (skipBufferLoad) {
+        console.log(`⚡ [${operationId}] Skipping buffer load (synchronized playback) - using pre-loaded buffer`);
+        if (!audioBuffer) {
+          console.error(`❌ [${operationId}] Expected pre-loaded buffer not found for ${trackId}`);
+          return false;
+        }
+      } else if (!audioBuffer) {
         console.log(
           `📁 [${operationId}] Loading remote audio buffer: /audio/${audioFile}`
         );
@@ -697,6 +819,8 @@ export const useUnifiedAudio = () => {
     stopRemoteTrack,
     setRemoteTrackVolume,
     toggleRemoteTrackLooping,
+    loadRemoteAudioBuffer,
+    audioBuffersRef,
     
     // Track routing functions
     trackRouting,

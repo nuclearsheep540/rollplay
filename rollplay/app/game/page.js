@@ -494,6 +494,8 @@ function GameContent() {
     stopRemoteTrack,
     setRemoteTrackVolume,
     toggleRemoteTrackLooping,
+    loadRemoteAudioBuffer,
+    audioBuffersRef,
     trackRouting,
     syncMode,
     setSyncMode,
@@ -532,6 +534,8 @@ function GameContent() {
     stopRemoteTrack,
     setRemoteTrackVolume,
     toggleRemoteTrackLooping,
+    loadRemoteAudioBuffer,
+    audioBuffersRef,
     
     // Remote audio state (for resume functionality)
     remoteTrackStates
