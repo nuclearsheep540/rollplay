@@ -147,6 +147,9 @@ export const getSyncTargets = (
 export const useUnifiedAudio = () => {
   const [isAudioUnlocked, setIsAudioUnlocked] = useState(false);
   
+  // Callback to clear pending operations when tracks auto-stop
+  const clearPendingOperationCallbackRef = useRef(null);
+  
   // Master volume (client-controlled)
   const [masterVolume, setMasterVolume] = useState(() => {
     if (typeof window !== 'undefined') {
@@ -499,6 +502,13 @@ export const useUnifiedAudio = () => {
                 duration: 0
               }
             }));
+            
+            // Clear pending operation for this track when it auto-stops
+            if (clearPendingOperationCallbackRef.current) {
+              console.log(`🧹 Clearing pending operation for auto-stopped track: ${trackId}`);
+              clearPendingOperationCallbackRef.current(`play_${trackId}`);
+            }
+            
             keepUpdating = false;
           }
         }
@@ -686,6 +696,11 @@ export const useUnifiedAudio = () => {
     }));
   };
 
+  // Set callback to clear pending operations when tracks auto-stop
+  const setClearPendingOperationCallback = (callback) => {
+    clearPendingOperationCallbackRef.current = callback;
+  };
+
   // Set remote track volume
   const setRemoteTrackVolume = (trackId, volume) => {
     if (remoteTrackGainsRef.current[trackId]) {
@@ -827,6 +842,9 @@ export const useUnifiedAudio = () => {
     syncMode,
     setSyncMode,
     switchTrackRouting,
+    
+    // Pending operation management
+    setClearPendingOperationCallback,
     
     // Unified functions
     unlockAudio

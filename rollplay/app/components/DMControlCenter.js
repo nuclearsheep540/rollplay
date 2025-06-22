@@ -59,7 +59,8 @@ export default function DMControlCenter({
   trackRouting = {},            // NEW: Track routing state
   syncMode = false,             // NEW: Sync mode state
   setSyncMode = null,           // NEW: Sync mode toggle function
-  switchTrackRouting = null     // NEW: Track routing switch function
+  switchTrackRouting = null,    // NEW: Track routing switch function
+  clearPendingOperation = null  // NEW: Function to set pending operation clearer
 }) {
   
   // State for main panel collapse
@@ -335,6 +336,7 @@ export default function DMControlCenter({
         switchTrackRouting={switchTrackRouting}
         unlockAudio={unlockAudio}
         isAudioUnlocked={isAudioUnlocked}
+        clearPendingOperation={clearPendingOperation}
       />
 
 

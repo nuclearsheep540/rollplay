@@ -5,7 +5,7 @@
  * SPDX-License-Identifier: GPL-3.0-or-later
  */
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import AudioTrack from './AudioTrack';
 import { PlaybackState, getSyncTargets } from '../hooks/useUnifiedAudio';
 import {
@@ -56,21 +56,21 @@ export default function AudioMixerPanel({
     }, 5000);
   };
   
-  // Helper to clear pending operation
-  const clearPendingOperationLocal = (operation) => {
+  // Helper to clear pending operation (memoized to prevent unnecessary re-renders)
+  const clearPendingOperationLocal = useCallback((operation) => {
     setPendingOperations(prev => {
       const newSet = new Set(prev);
       newSet.delete(operation);
       return newSet;
     });
-  };
+  }, []);
   
   // Expose clear function to parent component
   useEffect(() => {
     if (clearPendingOperation) {
       clearPendingOperation(clearPendingOperationLocal);
     }
-  }, [clearPendingOperation]);
+  }, [clearPendingOperation, clearPendingOperationLocal]);
   
   // Auto-clear pending operations when track states change (WebSocket responses)
   // Note: Removed automatic clearing to prevent infinite loops

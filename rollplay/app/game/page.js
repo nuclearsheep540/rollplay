@@ -5,7 +5,7 @@
 
 'use client'
 
-import { React, useEffect, useState, useMemo, Suspense } from 'react'
+import { React, useEffect, useState, useMemo, useCallback, useRef, Suspense } from 'react'
 import { useSearchParams } from "next/navigation";
 import { getSeatColor } from '../utils/seatColors';
 
@@ -499,8 +499,18 @@ function GameContent() {
     trackRouting,
     syncMode,
     setSyncMode,
-    switchTrackRouting
+    switchTrackRouting,
+    setClearPendingOperationCallback
   } = useUnifiedAudio();
+
+  // Ref to hold the pending operation clearing function from AudioMixerPanel
+  const clearPendingOperationFnRef = useRef(null);
+
+  // Function to set the callback (called by AudioMixerPanel)
+  const setClearPendingOperationFn = useCallback((fn) => {
+    clearPendingOperationFnRef.current = fn;
+    setClearPendingOperationCallback(fn);
+  }, [setClearPendingOperationCallback]);
 
   // Create game context object for WebSocket handlers (after audio functions are defined)
   const gameContext = {
@@ -1190,6 +1200,7 @@ function GameContent() {
             syncMode={syncMode}                   // NEW: Pass sync mode state  
             setSyncMode={setSyncMode}             // NEW: Pass sync mode toggle function
             switchTrackRouting={switchTrackRouting} // NEW: Pass track routing switch function
+            clearPendingOperation={setClearPendingOperationFn} // NEW: Pass function to set pending operation clearer
             clearDicePrompt={clearDicePrompt}    // UPDATED: Now accepts prompt ID
           />
         </div>
