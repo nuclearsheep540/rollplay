@@ -204,16 +204,7 @@ export default function AudioMixerPanel({
       return;
     }
     
-    console.log(`🔍 [UAT] PLAY clicked: ${channel.channelId}, syncMode=${syncMode}`);
-    console.log(`🔍 [UAT] Current routing:`, trackRouting);
-    console.log(`🔍 [UAT] Channel info:`, { 
-      channelGroup: channel.channelGroup, 
-      track: channel.track, 
-      type: channel.type 
-    });
-    
     // Use centralized sync logic to determine what tracks to affect
-    console.log(`🔍 [UAT] Calling getSyncTargets...`);
     const targets = getSyncTargets(
       channel.channelId,
       trackRouting,
@@ -222,31 +213,23 @@ export default function AudioMixerPanel({
     );
     
     if (targets.length === 0) {
-      console.warn(`❌ [UAT] No targets returned for ${channel.channelId}`);
+      console.warn(`❌ No targets returned for ${channel.channelId}`);
       clearPendingOperationLocal(operationKey);
       return;
     }
     
     // Determine if any tracks are paused (should resume instead of fresh play)
     const shouldResume = targets.some(track => track.playbackState === PlaybackState.PAUSED);
-    console.log(`🔍 [UAT] Should resume? ${shouldResume} (based on playback states: ${targets.map(t => `${t.channelId}=${t.playbackState}`).join(', ')})`);
     
     if (shouldResume) {
-      console.log(`📡 [UAT] RESUMING ${targets.length} track(s):`, targets.map(t => t.channelId));
-      
       if (targets.length === 1) {
         // Single track resume - use existing single-track API
-        console.log(`📡 [UAT] Using single-track resume API`);
         sendRemoteAudioResume?.(targets[0].channelId);
       } else {
         // Multi-track resume - use batch API
-        console.log(`📡 [UAT] Using batch resume API`);
         sendRemoteAudioResumeTracks?.(targets);
       }
     } else {
-      console.log(`📡 [UAT] PLAYING ${targets.length} track(s):`, targets.map(t => t.channelId));
-      console.log(`📡 [UAT] Using batch play API`);
-      
       // Always use batch API for consistency (works for single tracks too)
       sendRemoteAudioPlayTracks?.(targets);
     }
@@ -264,11 +247,7 @@ export default function AudioMixerPanel({
     // Mark operation as pending
     addPendingOperation(operationKey);
     
-    console.log(`🔍 [UAT] PAUSE clicked: ${channel.channelId}, syncMode=${syncMode}`);
-    console.log(`🔍 [UAT] Current routing:`, trackRouting);
-    
     // Use centralized sync logic to determine what tracks to pause
-    console.log(`🔍 [UAT] Calling getSyncTargets for pause...`);
     const targets = getSyncTargets(
       channel.channelId,
       trackRouting,
@@ -276,16 +255,11 @@ export default function AudioMixerPanel({
       remoteTrackStates
     );
     
-    console.log(`📡 [UAT] PAUSING ${targets.length} track(s):`, targets.map(t => t.channelId));
-    
     // Pause all target tracks
     targets.forEach(target => {
       // Only pause if the track is actually playing
       if (target.playbackState === PlaybackState.PLAYING) {
-        console.log(`📡 [UAT] Sending pause for ${target.channelId} (currently ${target.playbackState})`);
         sendRemoteAudioPause?.(target.channelId);
-      } else {
-        console.log(`📡 [UAT] Skipping pause for ${target.channelId} (currently ${target.playbackState})`);
       }
     });
   };
@@ -302,11 +276,7 @@ export default function AudioMixerPanel({
     // Mark operation as pending
     addPendingOperation(operationKey);
     
-    console.log(`🔍 [UAT] STOP clicked: ${channel.channelId}, syncMode=${syncMode}`);
-    console.log(`🔍 [UAT] Current routing:`, trackRouting);
-    
     // Use centralized sync logic to determine what tracks to stop
-    console.log(`🔍 [UAT] Calling getSyncTargets for stop...`);
     const targets = getSyncTargets(
       channel.channelId,
       trackRouting,
@@ -314,16 +284,11 @@ export default function AudioMixerPanel({
       remoteTrackStates
     );
     
-    console.log(`📡 [UAT] STOPPING ${targets.length} track(s):`, targets.map(t => t.channelId));
-    
     // Stop all target tracks
     targets.forEach(target => {
       // Only stop if the track is actually playing or paused
       if (target.playbackState === PlaybackState.PLAYING || target.playbackState === PlaybackState.PAUSED) {
-        console.log(`📡 [UAT] Sending stop for ${target.channelId} (currently ${target.playbackState})`);
         sendRemoteAudioStop?.(target.channelId);
-      } else {
-        console.log(`📡 [UAT] Skipping stop for ${target.channelId} (currently ${target.playbackState})`);
       }
     });
   };

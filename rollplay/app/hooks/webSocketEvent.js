@@ -19,40 +19,33 @@ export const handleRemoteAudioPlay = async (data, { playRemoteTrack, loadRemoteA
       
       try {
         // Phase 1: Load all audio buffers in parallel (but wait for ALL to complete)
-        console.log(`📁 [SYNC] Loading ${tracks.length} audio buffers in parallel...`);
-        const loadPromises = tracks.map(async (track, index) => {
+        const loadPromises = tracks.map(async (track) => {
           const { channelId, filename } = track;
-          console.log(`📁 [SYNC ${index + 1}/${tracks.length}] Loading buffer for ${channelId}: ${filename}`);
           
           // Use the existing loadRemoteAudioBuffer function from useUnifiedAudio
           const buffer = await loadRemoteAudioBuffer(`/audio/${filename}`, channelId);
           
           // Store the buffer with the same key format that playRemoteTrack expects
-          // playRemoteTrack expects: trackId_audioFile (e.g., "audio_channel_1A_boss.mp3")
           if (buffer && audioBuffersRef) {
             const expectedKey = `${channelId}_${filename}`;
             audioBuffersRef.current[expectedKey] = buffer;
-            console.log(`📁 [SYNC] Stored buffer with expected key: ${expectedKey}`);
           }
-          return { track, buffer, index };
+          return { track, buffer };
         });
         
         const loadResults = await Promise.all(loadPromises);
-        console.log(`✅ [SYNC] All ${tracks.length} buffers loaded, starting synchronized playback...`);
         
         // Phase 2: Start all tracks simultaneously (now that all buffers are ready)
-        const playPromises = loadResults.map(async ({ track, buffer, index }) => {
+        const playPromises = loadResults.map(async ({ track, buffer }) => {
           if (!buffer) {
-            console.warn(`❌ [SYNC ${index + 1}/${tracks.length}] Buffer failed to load for ${track.channelId}`);
+            console.warn(`❌ Buffer failed to load for ${track.channelId}`);
             return false;
           }
           
           const { channelId, filename, looping = true, volume = 1.0 } = track;
-          console.log(`▶️ [SYNC ${index + 1}/${tracks.length}] Starting pre-loaded ${channelId}: ${filename}`);
           
           // Call playRemoteTrack with a flag to skip buffer loading since we already have it
           const success = await playRemoteTrack(channelId, filename, looping, volume, null, track, true);
-          console.log(`▶️ [SYNC ${index + 1}/${tracks.length}] Play result for ${channelId}: ${success}`);
           return success;
         });
         

@@ -74,24 +74,15 @@ export const getSyncTargets = (
   
   // Independence cases - return single track
   if (!syncMode) {
-    console.log(`🎵 [UAT] getSyncTargets: Sync disabled, returning single track ${clickedTrackId}`);
-    const result = [buildTrackObject(clickedTrack, clickedTrackId)];
-    console.log(`🎵 [UAT] Result:`, result);
-    return result;
+    return [buildTrackObject(clickedTrack, clickedTrackId)];
   }
   
   if (clickedTrack.type === 'sfx') {
-    console.log(`🎵 [UAT] getSyncTargets: SFX track ${clickedTrackId}, returning single track`);
-    const result = [buildTrackObject(clickedTrack, clickedTrackId)];
-    console.log(`🎵 [UAT] Result:`, result);
-    return result;
+    return [buildTrackObject(clickedTrack, clickedTrackId)];
   }
   
   if (options.forceIndependent) {
-    console.log(`🎵 [UAT] getSyncTargets: Force independent ${clickedTrackId}, returning single track`);
-    const result = [buildTrackObject(clickedTrack, clickedTrackId)];
-    console.log(`🎵 [UAT] Result:`, result);
-    return result;
+    return [buildTrackObject(clickedTrack, clickedTrackId)];
   }
   
   // Sync cases - find the paired track
@@ -132,16 +123,10 @@ export const getSyncTargets = (
   }
   
   // Return both tracks for synchronized operation
-  const currentRouting = `${trackRouting.music}${trackRouting.ambient}`;
-  console.log(`🔗 [UAT] getSyncTargets: Sync pair found - ${clickedTrack.channelGroup}=${clickedTrack.track} + ${syncTrack.channelGroup}=${syncTrack.track} (${currentRouting})`);
-  
-  const result = [
+  return [
     buildTrackObject(clickedTrack, clickedTrackId),
     buildTrackObject(syncTrack, syncTrackId)
   ];
-  
-  console.log(`🔗 [UAT] Result:`, result);
-  return result;
 };
 
 export const useUnifiedAudio = () => {
@@ -505,7 +490,6 @@ export const useUnifiedAudio = () => {
             
             // Clear ALL pending operations for this track when it auto-stops
             if (clearPendingOperationCallbackRef.current) {
-              console.log(`🧹 Clearing all pending operations for auto-stopped track: ${trackId}`);
               clearPendingOperationCallbackRef.current(`play_${trackId}`);
               clearPendingOperationCallbackRef.current(`pause_${trackId}`);
               clearPendingOperationCallbackRef.current(`stop_${trackId}`);
