@@ -503,10 +503,13 @@ export const useUnifiedAudio = () => {
               }
             }));
             
-            // Clear pending operation for this track when it auto-stops
+            // Clear ALL pending operations for this track when it auto-stops
             if (clearPendingOperationCallbackRef.current) {
-              console.log(`🧹 Clearing pending operation for auto-stopped track: ${trackId}`);
+              console.log(`🧹 Clearing all pending operations for auto-stopped track: ${trackId}`);
               clearPendingOperationCallbackRef.current(`play_${trackId}`);
+              clearPendingOperationCallbackRef.current(`pause_${trackId}`);
+              clearPendingOperationCallbackRef.current(`stop_${trackId}`);
+              clearPendingOperationCallbackRef.current(`loop_${trackId}`);
             }
             
             keepUpdating = false;
