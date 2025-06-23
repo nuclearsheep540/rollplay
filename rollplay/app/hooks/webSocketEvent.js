@@ -134,16 +134,10 @@ export const handleRemoteAudioBatch = async (data, {
     try {
       switch (operation) {
         case 'play':
-          if (playRemoteTrack && loadRemoteAudioBuffer && audioBuffersRef) {
+          if (playRemoteTrack && audioBuffersRef) {
             const { filename, looping = true, volume = 1.0 } = op;
             
-            // Load buffer if needed
-            const buffer = await loadRemoteAudioBuffer(`/audio/${filename}`, trackId);
-            if (buffer && audioBuffersRef) {
-              const expectedKey = `${trackId}_${filename}`;
-              audioBuffersRef.current[expectedKey] = buffer;
-            }
-            
+            // Skip buffer loading - already done in pre-load phase for synchronized operations
             // Pass synchronized start time for batch operations
             await playRemoteTrack(trackId, filename, looping, volume, null, op, true, syncStartTime);
             console.log(`✅ Batch operation ${index + 1}: played ${trackId} (${filename}) at sync time ${syncStartTime}`);
@@ -212,19 +206,53 @@ export const handleRemoteAudioBatch = async (data, {
   const playOperations = operations.filter(op => op.operation === 'play');
   const hasMultiplePlayOps = playOperations.length > 1;
   
-  // For multiple play operations, schedule them to start at the same time
-  // Use audio context currentTime + small buffer (100ms) to allow preparation
-  const syncStartTime = hasMultiplePlayOps && audioContextRef?.current
-    ? audioContextRef.current.currentTime + 0.1 
-    : null;
-  
-  if (hasMultiplePlayOps && syncStartTime) {
-    console.log(`🎵 Scheduling ${playOperations.length} tracks to start simultaneously at audio time ${syncStartTime}`);
-  }
+  console.log(`🎛️ Batch analysis: ${operations.length} total operations, ${playOperations.length} play operations`);
+  console.log(`🎛️ Audio context available:`, !!audioContextRef?.current);
+  console.log(`🎛️ Audio context state:`, audioContextRef?.current?.state);
+  console.log(`🎛️ Audio context currentTime:`, audioContextRef?.current?.currentTime);
 
   // Execute all operations in parallel
   try {
-    await Promise.all(operations.map((op, index) => processOperation(op, index, syncStartTime)));
+    if (hasMultiplePlayOps && audioContextRef?.current) {
+      // For synchronized playback: Load all buffers first, then calculate sync time
+      console.log(`🎵 🔄 Pre-loading ${playOperations.length} audio buffers for synchronized playback...`);
+      
+      // Load all play operation buffers in parallel
+      const bufferLoadPromises = operations.map(async (op, index) => {
+        if (op.operation === 'play' && loadRemoteAudioBuffer && audioBuffersRef) {
+          const { filename, trackId } = op;
+          
+          // Load buffer if needed
+          const buffer = await loadRemoteAudioBuffer(`/audio/${filename}`, trackId);
+          if (buffer && audioBuffersRef) {
+            const expectedKey = `${trackId}_${filename}`;
+            audioBuffersRef.current[expectedKey] = buffer;
+          }
+        }
+        return op;
+      });
+      
+      // Wait for all buffers to load
+      await Promise.all(bufferLoadPromises);
+      console.log(`🎵 ✅ All buffers loaded, calculating sync time...`);
+      
+      // NOW calculate sync time after all buffers are ready
+      const syncStartTime = audioContextRef.current.currentTime + 0.2; // Increased buffer for safety
+      console.log(`🎵 ✅ Scheduling ${playOperations.length} tracks to start simultaneously at audio time ${syncStartTime}`);
+      
+      // Execute all operations with the calculated sync time
+      await Promise.all(operations.map((op, index) => processOperation(op, index, syncStartTime)));
+      
+    } else {
+      // Non-synchronized operations (single track or non-play operations)
+      if (!hasMultiplePlayOps) {
+        console.log(`🎵 Single/non-play operation - no synchronization needed`);
+      } else {
+        console.warn(`⚠️ Multiple play operations but no audio context available!`);
+      }
+      await Promise.all(operations.map((op, index) => processOperation(op, index, null)));
+    }
+    
     console.log(`🎛️ ✅ Completed processing ${operations.length} batch operations from ${triggered_by} (synchronized)`);
   } catch (error) {
     console.error(`❌ Some batch operations failed:`, error);

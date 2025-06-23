@@ -693,7 +693,7 @@ class WebsocketEvent():
             
         else:
             # Single track (legacy format)
-            track_type = event_data.get("track_type")  # 'music', 'ambient', 'sfx'
+            track_type = event_data.get("track_type")  # 'bgm', 'sfx' (legacy: 'music', 'ambient')
             audio_file = event_data.get("audio_file")  # 'boss.mp3', 'storm.mp3', etc.
             loop = event_data.get("loop", True)
             volume = event_data.get("volume", 1.0)

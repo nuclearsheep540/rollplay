@@ -15,7 +15,7 @@ import { useState, useEffect, useRef } from 'react';
  *    - Triggered by client-side events
  *    - Uses HTML5 Audio for simplicity
  * 
- * 2. REMOTE AUDIO: DM-controlled audio (music, ambient, custom SFX)
+ * 2. REMOTE AUDIO: DM-controlled audio (BGM, custom SFX)
  *    - Triggered by WebSocket events from DM
  *    - Uses Web Audio API for precise mixing
  * 
@@ -29,105 +29,6 @@ export const PlaybackState = {
   PAUSED: 'paused'
 };
 
-/**
- * Centralized Sync Logic - Determines what tracks should be affected by an operation
- * 
- * Handles all sync scenarios:
- * - Independent playback (sync off, SFX tracks)
- * - Matched sync (AA, BB)  
- * - Mixed sync (AB, BA)
- * - Manual overrides
- * 
- * @param {string} clickedTrackId - The track that was clicked ('audio_channel_1A')
- * @param {object} trackRouting - Current routing config ({ music: 'A', ambient: 'A' })
- * @param {boolean} syncMode - Whether sync is enabled
- * @param {object} remoteTrackStates - All track states
- * @param {object} options - Additional options { forceIndependent, stopConflicting }
- * @returns {array} Array of complete track objects ready for WebSocket transmission
- */
-export const getSyncTargets = (
-  clickedTrackId,
-  trackRouting,
-  syncMode,
-  remoteTrackStates,
-  options = {}
-) => {
-  const clickedTrack = remoteTrackStates[clickedTrackId];
-  
-  if (!clickedTrack) {
-    console.warn(`❌ getSyncTargets: Track ${clickedTrackId} not found`);
-    return [];
-  }
-  
-  // Helper function to build complete track object for WebSocket
-  const buildTrackObject = (track, trackId) => ({
-    channelId: trackId,
-    filename: track.filename,
-    looping: track.looping ?? (track.type !== 'sfx'),
-    volume: track.volume,
-    playbackState: track.playbackState,
-    currentTime: track.currentTime || 0,
-    type: track.type,
-    channelGroup: track.channelGroup,
-    track: track.track
-  });
-  
-  // Independence cases - return single track
-  if (!syncMode) {
-    return [buildTrackObject(clickedTrack, clickedTrackId)];
-  }
-  
-  if (clickedTrack.type === 'sfx') {
-    return [buildTrackObject(clickedTrack, clickedTrackId)];
-  }
-  
-  if (options.forceIndependent) {
-    return [buildTrackObject(clickedTrack, clickedTrackId)];
-  }
-  
-  // Sync cases - find the paired track
-  if (!clickedTrack.channelGroup || !clickedTrack.track) {
-    console.warn(`❌ getSyncTargets: Track ${clickedTrackId} missing channelGroup or track properties`);
-    return [buildTrackObject(clickedTrack, clickedTrackId)];
-  }
-  
-  if (clickedTrack.channelGroup !== 'music' && clickedTrack.channelGroup !== 'ambient') {
-    console.log(`🎵 getSyncTargets: Non-syncable track type ${clickedTrack.channelGroup}, returning single track`);
-    return [buildTrackObject(clickedTrack, clickedTrackId)];
-  }
-  
-  // Find the sync pair using routing configuration
-  const otherGroup = clickedTrack.channelGroup === 'music' ? 'ambient' : 'music';
-  const otherGroupTrack = trackRouting[otherGroup];
-  
-  if (!otherGroupTrack) {
-    console.warn(`❌ getSyncTargets: No routing found for ${otherGroup} group`);
-    return [buildTrackObject(clickedTrack, clickedTrackId)];
-  }
-  
-  // Find the sync pair track
-  const syncTrackId = Object.keys(remoteTrackStates).find(id => 
-    remoteTrackStates[id].channelGroup === otherGroup && 
-    remoteTrackStates[id].track === otherGroupTrack
-  );
-  
-  if (!syncTrackId) {
-    console.warn(`❌ getSyncTargets: Sync pair not found for ${otherGroup} track ${otherGroupTrack}`);
-    return [buildTrackObject(clickedTrack, clickedTrackId)];
-  }
-  
-  const syncTrack = remoteTrackStates[syncTrackId];
-  if (!syncTrack.filename) {
-    console.warn(`❌ getSyncTargets: Sync pair ${syncTrackId} has no filename loaded`);
-    return [buildTrackObject(clickedTrack, clickedTrackId)];
-  }
-  
-  // Return both tracks for synchronized operation
-  return [
-    buildTrackObject(clickedTrack, clickedTrackId),
-    buildTrackObject(syncTrack, syncTrackId)
-  ];
-};
 
 export const useUnifiedAudio = () => {
   const [isAudioUnlocked, setIsAudioUnlocked] = useState(false);
@@ -214,14 +115,13 @@ export const useUnifiedAudio = () => {
   const playOperationsRef = useRef({}); // Track active play operations to prevent duplicates
 
 
-  // Remote track states (for DM-controlled audio) - A/B channel structure
+  // Remote track states (for DM-controlled audio) - A/B/C/D BGM + SFX channels
   const [remoteTrackStates, setRemoteTrackStates] = useState({
-    // Music A/B Channels
-    audio_channel_1A: { playbackState: PlaybackState.STOPPED, volume: 0.8, filename: 'boss.mp3', type: 'music', channelGroup: 'music', track: 'A', currentTime: 0, duration: 0, looping: true },
-    audio_channel_1B: { playbackState: PlaybackState.STOPPED, volume: 0.8, filename: 'shop.mp3', type: 'music', channelGroup: 'music', track: 'B', currentTime: 0, duration: 0, looping: true },
-    // Ambient A/B Channels  
-    audio_channel_2A: { playbackState: PlaybackState.STOPPED, volume: 0.8, filename: 'storm.mp3', type: 'ambient', channelGroup: 'ambient', track: 'A', currentTime: 0, duration: 0, looping: true },
-    audio_channel_2B: { playbackState: PlaybackState.STOPPED, volume: 0.8, filename: 'zelda_night_loop.mp3', type: 'ambient', channelGroup: 'ambient', track: 'B', currentTime: 0, duration: 0, looping: true },
+    // BGM Channels
+    audio_channel_A: { playbackState: PlaybackState.STOPPED, volume: 0.8, filename: 'boss.mp3', type: 'bgm', channelGroup: 'bgm', track: 'A', currentTime: 0, duration: 0, looping: true },
+    audio_channel_B: { playbackState: PlaybackState.STOPPED, volume: 0.8, filename: 'shop.mp3', type: 'bgm', channelGroup: 'bgm', track: 'B', currentTime: 0, duration: 0, looping: true },
+    audio_channel_C: { playbackState: PlaybackState.STOPPED, volume: 0.8, filename: 'storm.mp3', type: 'bgm', channelGroup: 'bgm', track: 'C', currentTime: 0, duration: 0, looping: true },
+    audio_channel_D: { playbackState: PlaybackState.STOPPED, volume: 0.8, filename: 'zelda_night_loop.mp3', type: 'bgm', channelGroup: 'bgm', track: 'D', currentTime: 0, duration: 0, looping: true },
     // SFX Channels (unchanged)
     audio_channel_3: { playbackState: PlaybackState.STOPPED, volume: 0.8, filename: 'sword.mp3', type: 'sfx', currentTime: 0, duration: 0, looping: false },
     audio_channel_4: { playbackState: PlaybackState.STOPPED, volume: 0.8, filename: 'enemy_hit_cinematic.mp3', type: 'sfx', currentTime: 0, duration: 0, looping: false },
