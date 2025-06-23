@@ -65,7 +65,7 @@ export function useWebSocket(roomId, playerName, gameContext) {
     };
 
     // Handle incoming messages
-    ws.onmessage = (event) => {
+    ws.onmessage = async (event) => {
       const json_data = JSON.parse(event.data);
       const event_type = json_data["event_type"];
       console.log("NEW EVENT", json_data);
@@ -154,7 +154,11 @@ export function useWebSocket(roomId, playerName, gameContext) {
 
         case "remote_audio_batch":
           console.log("🎛️ Frontend received remote_audio_batch event:", json_data);
-          handleRemoteAudioBatch(json_data["data"], gameContext);
+          try {
+            await handleRemoteAudioBatch(json_data["data"], gameContext);
+          } catch (error) {
+            console.error("❌ Error handling remote audio batch:", error);
+          }
           break;
 
         default:

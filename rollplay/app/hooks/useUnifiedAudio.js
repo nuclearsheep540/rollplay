@@ -289,7 +289,7 @@ export const useUnifiedAudio = () => {
   };
 
   // Play remote track (triggered by WebSocket events)
-  const playRemoteTrack = async (trackId, audioFile, loop = true, volume = null, resumeFromTime = null, completeTrackState = null, skipBufferLoad = false) => {
+  const playRemoteTrack = async (trackId, audioFile, loop = true, volume = null, resumeFromTime = null, completeTrackState = null, skipBufferLoad = false, syncStartTime = null) => {
     const operationId = `${trackId}_${Date.now()}`;
     console.log(`🎵 [${operationId}] Attempting to play remote track: ${trackId} - ${audioFile}`);
     
@@ -410,11 +410,18 @@ export const useUnifiedAudio = () => {
   
       console.log(
         `🔍 Resume logic: resumeFromTime=${resumeFromTime}, ` +
-        `resumeFromPause=${resumeFromPause}, startOffset=${startOffset}`
+        `resumeFromPause=${resumeFromPause}, startOffset=${startOffset}` +
+        `${syncStartTime ? `, syncStartTime=${syncStartTime}` : ''}`
       );
   
-      // Start playback
-      source.start(0, startOffset);
+      // Start playback (synchronized if syncStartTime provided)
+      if (syncStartTime) {
+        source.start(syncStartTime, startOffset);
+        console.log(`🎵 [${operationId}] Scheduled synchronized start at audio time ${syncStartTime}`);
+      } else {
+        source.start(0, startOffset);
+        console.log(`🎵 [${operationId}] Started immediately`);
+      }
       activeSourcesRef.current[trackId] = source;
   
       // Grab duration from the buffer
@@ -811,7 +818,7 @@ export const useUnifiedAudio = () => {
     toggleRemoteTrackLooping,
     loadRemoteAudioBuffer,
     audioBuffersRef,
-    
+    audioContextRef,
     
     // Pending operation management
     setClearPendingOperationCallback,

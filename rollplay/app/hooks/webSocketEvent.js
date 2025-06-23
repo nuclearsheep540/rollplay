@@ -106,7 +106,7 @@ export const handleRemoteAudioResume = async (data, { resumeRemoteTrack, remoteT
 };
 
 
-export const handleRemoteAudioBatch = (data, { 
+export const handleRemoteAudioBatch = async (data, { 
   playRemoteTrack, 
   stopRemoteTrack, 
   pauseRemoteTrack, 
@@ -114,7 +114,8 @@ export const handleRemoteAudioBatch = (data, {
   setRemoteTrackVolume, 
   toggleRemoteTrackLooping,
   loadRemoteAudioBuffer,
-  audioBuffersRef 
+  audioBuffersRef,
+  audioContextRef
 }) => {
   console.log("🎛️ Remote audio batch command received:", data);
   const { operations, triggered_by } = data;
@@ -126,8 +127,8 @@ export const handleRemoteAudioBatch = (data, {
   
   console.log(`🎛️ Processing ${operations.length} batch operations from ${triggered_by}`);
   
-  // Process each operation
-  operations.forEach(async (op, index) => {
+  // Process all operations in parallel using Promise.all()
+  const processOperation = async (op, index, syncStartTime = null) => {
     const { trackId, operation } = op;
     
     try {
@@ -143,8 +144,9 @@ export const handleRemoteAudioBatch = (data, {
               audioBuffersRef.current[expectedKey] = buffer;
             }
             
-            await playRemoteTrack(trackId, filename, looping, volume, null, op, true);
-            console.log(`✅ Batch operation ${index + 1}: played ${trackId} (${filename})`);
+            // Pass synchronized start time for batch operations
+            await playRemoteTrack(trackId, filename, looping, volume, null, op, true, syncStartTime);
+            console.log(`✅ Batch operation ${index + 1}: played ${trackId} (${filename}) at sync time ${syncStartTime}`);
           } else {
             console.warn(`❌ Batch operation ${index + 1}: playRemoteTrack function not available`);
           }
@@ -202,10 +204,32 @@ export const handleRemoteAudioBatch = (data, {
       }
     } catch (error) {
       console.error(`❌ Batch operation ${index + 1} failed:`, error);
+      throw error; // Re-throw to handle in Promise.all
     }
-  });
+  };
+
+  // Calculate synchronized start time for play operations
+  const playOperations = operations.filter(op => op.operation === 'play');
+  const hasMultiplePlayOps = playOperations.length > 1;
   
-  console.log(`🎛️ Completed processing ${operations.length} batch operations from ${triggered_by}`);
+  // For multiple play operations, schedule them to start at the same time
+  // Use audio context currentTime + small buffer (100ms) to allow preparation
+  const syncStartTime = hasMultiplePlayOps && audioContextRef?.current
+    ? audioContextRef.current.currentTime + 0.1 
+    : null;
+  
+  if (hasMultiplePlayOps && syncStartTime) {
+    console.log(`🎵 Scheduling ${playOperations.length} tracks to start simultaneously at audio time ${syncStartTime}`);
+  }
+
+  // Execute all operations in parallel
+  try {
+    await Promise.all(operations.map((op, index) => processOperation(op, index, syncStartTime)));
+    console.log(`🎛️ ✅ Completed processing ${operations.length} batch operations from ${triggered_by} (synchronized)`);
+  } catch (error) {
+    console.error(`❌ Some batch operations failed:`, error);
+    console.log(`🎛️ ⚠️ Partially completed processing ${operations.length} batch operations from ${triggered_by}`);
+  }
 };
 
 // =====================================

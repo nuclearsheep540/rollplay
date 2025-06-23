@@ -496,6 +496,7 @@ function GameContent() {
     toggleRemoteTrackLooping,
     loadRemoteAudioBuffer,
     audioBuffersRef,
+    audioContextRef,
     setClearPendingOperationCallback
   } = useUnifiedAudio();
 
@@ -542,6 +543,7 @@ function GameContent() {
     toggleRemoteTrackLooping,
     loadRemoteAudioBuffer,
     audioBuffersRef,
+    audioContextRef,
     
     // Remote audio state (for resume functionality)
     remoteTrackStates
