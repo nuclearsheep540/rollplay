@@ -30,7 +30,7 @@ export default function AudioMixerPanel({
   
   // Cue system state
   const [currentCue, setCurrentCue] = useState(null); // { tracksToStart: [], tracksToStop: [], cueId: string }
-  const [fadeDurationMs, setFadeDurationMs] = useState(500); // Default 1 second
+  const [useFade, setUseFade] = useState(false); // When true, use fade; defaults to cut
   
   // Helper to add pending operation
   const addPendingOperation = (operation) => {
@@ -90,7 +90,7 @@ export default function AudioMixerPanel({
   const executeCrossfade = useCallback(async () => {
     if (!currentCue?.targetTracks?.length) return;
     
-    console.log(`🎚️ Executing seamless crossfade transition: PGM → PFL (${fadeDurationMs}ms)`);
+    console.log(`🎚️ Executing seamless crossfade transition: PGM → PFL`);
     
     // Get channels arrays (recalculated from current remoteTrackStates)
     const currentChannels = Object.keys(remoteTrackStates).map(channelId => {
@@ -176,7 +176,7 @@ export default function AudioMixerPanel({
     
     // Clear the cue after execution
     setCurrentCue(null);
-  }, [currentCue, fadeDurationMs, remoteTrackStates, sendRemoteAudioBatch]);
+  }, [currentCue, remoteTrackStates, sendRemoteAudioBatch]);
 
   // Cue system functions - simplified to work with explicit track selections
   const createCue = (targetTracks) => {
@@ -256,7 +256,7 @@ export default function AudioMixerPanel({
   const executeFade = () => {
     if (!currentCue) return;
     
-    console.log(`🌊 Executing FADE transition:`, currentCue, `Duration: ${fadeDurationMs}ms`);
+    console.log(`🌊 Executing FADE transition:`, currentCue);
     
     // TODO: Implement client-side fade logic
     // For now, just do a cut (we'll implement fade in next step)
@@ -476,27 +476,152 @@ export default function AudioMixerPanel({
             <div className={DM_CHILD}>
               <div className="text-white font-bold mb-3">🎧 Channel Cue </div>
               <p>Easily cut/fade to a combination of tracks</p>
-              {/* DJ Cue System Layout matching cue.png exactly */}
+              {/* DJ Cue System Layout matching cue2.png exactly */}
               <div className="mb-4">
                 {/* Header Row */}
-                <div className="flex items-center gap-8 mb-2">
-                  <div className="text-white text-sm font-bold w-16">PGM</div>
-                  <div className="text-white text-sm font-bold w-32">Transition</div>
-                  <div className="text-white text-sm font-bold flex-1 text-center">PFL</div>
-                  <div className="text-white text-sm font-bold w-16 text-center">Preview</div>
+                <div className="grid grid-cols-4 gap-4 mb-2">
+                  <div className="text-white text-sm font-bold text-center">PFL</div>
+                  <div className="text-white text-sm font-bold text-center">Transition</div>
+                  <div className="text-white text-sm font-bold text-center">PGM</div>
+                  <div className="text-white text-sm font-bold text-center">Preview</div>
                 </div>
                 
-                {/* Tracks Layout */}
-                <div className="flex items-start gap-8">
-                  {/* PGM Column - Show ALL track IDs that exist in state */}
-                  <div className="flex flex-col gap-1 w-16">
+                {/* Tracks Layout - 4 equal columns */}
+                <div className="grid grid-cols-4 gap-4 items-start">
+                  {/* PFL Column - Channel selection */}
+                  <div className="flex flex-col gap-1">
+                    {/* Music channels */}
+                    {musicChannels.map((channel) => (
+                      <div 
+                        key={`pfl-${channel.channelId}`}
+                        className={`w-10 h-8 rounded text-center text-xs transition-all duration-200 cursor-pointer flex items-center justify-center ${
+                          currentCue?.targetTracks?.includes?.(channel.channelId) 
+                            ? 'bg-green-600 text-white' 
+                            : 'bg-gray-600 hover:bg-gray-500 text-gray-300'
+                        }`}
+                        onClick={() => {
+                          setCurrentCue(prev => {
+                            const currentTargets = prev?.targetTracks || [];
+                            const channelId = channel.channelId;
+                            
+                            // Toggle selection
+                            if (Array.isArray(currentTargets)) {
+                              const isSelected = currentTargets.includes(channelId);
+                              return {
+                                ...prev,
+                                targetTracks: isSelected 
+                                  ? currentTargets.filter(id => id !== channelId)
+                                  : [...currentTargets, channelId]
+                              };
+                            } else {
+                              // Convert to array format
+                              return {
+                                ...prev,
+                                targetTracks: [channelId]
+                              };
+                            }
+                          });
+                        }}
+                      >
+                        {channel.channelId.replace('audio_channel_', '')}
+                      </div>
+                    ))}
+                    {/* Ambient channels */}
+                    {ambientChannels.map((channel) => (
+                      <div 
+                        key={`pfl-${channel.channelId}`}
+                        className={`w-10 h-8 rounded text-center text-xs transition-all duration-200 cursor-pointer flex items-center justify-center ${
+                          currentCue?.targetTracks?.includes?.(channel.channelId)
+                            ? 'bg-green-600 text-white' 
+                            : 'bg-gray-600 hover:bg-gray-500 text-gray-300'
+                        }`}
+                        onClick={() => {
+                          setCurrentCue(prev => {
+                            const currentTargets = prev?.targetTracks || [];
+                            const channelId = channel.channelId;
+                            
+                            // Toggle selection
+                            if (Array.isArray(currentTargets)) {
+                              const isSelected = currentTargets.includes(channelId);
+                              return {
+                                ...prev,
+                                targetTracks: isSelected 
+                                  ? currentTargets.filter(id => id !== channelId)
+                                  : [...currentTargets, channelId]
+                              };
+                            } else {
+                              // Convert to array format
+                              return {
+                                ...prev,
+                                targetTracks: [channelId]
+                              };
+                            }
+                          });
+                        }}
+                      >
+                        {channel.channelId.replace('audio_channel_', '')}
+                      </div>
+                    ))}
+                  </div>
+
+                  {/* Transition Controls */}
+                  <div className="flex flex-col gap-1">                   
+                    {/* Individual Fade Buttons for Music Channels */}
+                    {musicChannels.map((channel) => (
+                      <button 
+                        key={`transition-${channel.channelId}`}
+                        className="w-full h-8 bg-purple-500 hover:bg-purple-600 text-white text-xs font-bold rounded"
+                        onClick={() => {
+                          // Create a cue for just this track and execute based on mode
+                          createCue([channel.channelId]);
+                          // Execute transition immediately after creating cue
+                          setTimeout(() => {
+                            if (useFade) {
+                              executeFade();
+                            } else {
+                              executeCrossfade();
+                            }
+                          }, 50);
+                        }}
+                        title={`${useFade ? 'Fade' : 'Cut'} to ${channel.label}`}
+                      >
+                        FADE
+                      </button>
+                    ))}
+                    
+                    {/* Individual Fade Buttons for Ambient Channels */}
+                    {ambientChannels.map((channel) => (
+                      <button 
+                        key={`transition-${channel.channelId}`}
+                        className="w-full h-8 bg-purple-500 hover:bg-purple-600 text-white text-xs font-bold rounded"
+                        onClick={() => {
+                          // Create a cue for just this track and execute based on mode
+                          createCue([channel.channelId]);
+                          // Execute transition immediately after creating cue
+                          setTimeout(() => {
+                            if (useFade) {
+                              executeFade();
+                            } else {
+                              executeCrossfade();
+                            }
+                          }, 50);
+                        }}
+                        title={`${useFade ? 'Fade' : 'Cut'} to ${channel.label}`}
+                      >
+                        FADE
+                      </button>
+                    ))}
+                  </div>
+
+                  {/* PGM Column - Show what's currently playing */}
+                  <div className="flex flex-col gap-1">
                     {/* All Music channels */}
                     {musicChannels.map((channel) => {
                       const isPlaying = remoteTrackStates[channel.channelId]?.playbackState === 'playing';
                       return (
                         <div 
                           key={`pgm-${channel.channelId}`}
-                          className={`w-8 h-8 rounded text-center text-xs transition-all duration-200 flex items-center justify-center ${
+                          className={`w-10 h-8 rounded text-center text-xs transition-all duration-200 flex items-center justify-center ${
                             isPlaying ? 'bg-green-600 text-white' : 'bg-gray-600 text-gray-300'
                           }`}
                         >
@@ -510,7 +635,7 @@ export default function AudioMixerPanel({
                       return (
                         <div 
                           key={`pgm-${channel.channelId}`}
-                          className={`w-8 h-8 rounded text-center text-xs transition-all duration-200 flex items-center justify-center ${
+                          className={`w-10 h-8 rounded text-center text-xs transition-all duration-200 flex items-center justify-center ${
                             isPlaying ? 'bg-green-600 text-white' : 'bg-gray-600 text-gray-300'
                           }`}
                         >
@@ -520,131 +645,8 @@ export default function AudioMixerPanel({
                     })}
                   </div>
 
-                  {/* Transition Buttons Column - CUT and FADE button for each track */}
-                  <div className="flex flex-col gap-1 w-32">
-                    {/* Music channel buttons */}
-                    {musicChannels.map((channel) => (
-                      <div key={`transition-${channel.channelId}`} className="flex gap-1">
-                        <button 
-                          className="w-12 h-8 bg-cyan-500 text-black text-xs font-bold rounded"
-                          onClick={executeCut}
-                          disabled={!currentCue}
-                        >
-                          CUT
-                        </button>
-                        <button 
-                          className="w-12 h-8 bg-cyan-500 text-black text-xs font-bold rounded"
-                          onClick={executeFade}
-                          disabled={!currentCue}
-                        >
-                          FADE
-                        </button>
-                      </div>
-                    ))}
-                    {/* Ambient channel buttons */}
-                    {ambientChannels.map((channel) => (
-                      <div key={`transition-${channel.channelId}`} className="flex gap-1">
-                        <button 
-                          className="w-12 h-8 bg-cyan-500 text-black text-xs font-bold rounded"
-                          onClick={executeCut}
-                          disabled={!currentCue}
-                        >
-                          CUT
-                        </button>
-                        <button 
-                          className="w-12 h-8 bg-cyan-500 text-black text-xs font-bold rounded"
-                          onClick={executeFade}
-                          disabled={!currentCue}
-                        >
-                          FADE
-                        </button>
-                      </div>
-                    ))}
-                  </div>
-
-                  {/* PFL Column - Same data source as PGM, showing selection state */}
-                  <div className="flex-1">
-                    <div className="flex flex-col gap-1">
-                      {/* Music channels */}
-                      {musicChannels.map((channel) => (
-                        <div 
-                          key={`pfl-${channel.channelId}`}
-                          className={`w-8 h-8 rounded text-center text-xs transition-all duration-200 cursor-pointer flex items-center justify-center ${
-                            currentCue?.targetTracks?.includes?.(channel.channelId) 
-                              ? 'bg-green-600 text-white' 
-                              : 'bg-gray-600 hover:bg-gray-500 text-gray-300'
-                          }`}
-                          onClick={() => {
-                            setCurrentCue(prev => {
-                              const currentTargets = prev?.targetTracks || [];
-                              const channelId = channel.channelId;
-                              
-                              // Toggle selection
-                              if (Array.isArray(currentTargets)) {
-                                const isSelected = currentTargets.includes(channelId);
-                                return {
-                                  ...prev,
-                                  targetTracks: isSelected 
-                                    ? currentTargets.filter(id => id !== channelId)
-                                    : [...currentTargets, channelId]
-                                };
-                              } else {
-                                // Convert to array format
-                                return {
-                                  ...prev,
-                                  targetTracks: [channelId]
-                                };
-                              }
-                            });
-                          }}
-                        >
-                          {channel.channelId.replace('audio_channel_', '')}
-                        </div>
-                      ))}
-                      {/* Ambient channels */}
-                      {ambientChannels.map((channel) => (
-                        <div 
-                          key={`pfl-${channel.channelId}`}
-                          className={`w-8 h-8 rounded text-center text-xs transition-all duration-200 cursor-pointer flex items-center justify-center ${
-                            currentCue?.targetTracks?.includes?.(channel.channelId)
-                              ? 'bg-green-600 text-white' 
-                              : 'bg-gray-600 hover:bg-gray-500 text-gray-300'
-                          }`}
-                          onClick={() => {
-                            setCurrentCue(prev => {
-                              const currentTargets = prev?.targetTracks || [];
-                              const channelId = channel.channelId;
-                              
-                              // Toggle selection
-                              if (Array.isArray(currentTargets)) {
-                                const isSelected = currentTargets.includes(channelId);
-                                return {
-                                  ...prev,
-                                  targetTracks: isSelected 
-                                    ? currentTargets.filter(id => id !== channelId)
-                                    : [...currentTargets, channelId]
-                                };
-                              } else {
-                                // Convert to array format
-                                return {
-                                  ...prev,
-                                  targetTracks: [channelId]
-                                };
-                              }
-                            });
-                          }}
-                        >
-                          {channel.channelId.replace('audio_channel_', '')}
-                        </div>
-                      ))}
-                    </div>
-
-                    {/* Arrow */}
-                    <div className="text-center text-gray-400 text-lg mt-2">⇒</div>
-                  </div>
-
                   {/* Preview Column - Show the differential result of the transition */}
-                  <div className="flex flex-col gap-1 w-16">
+                  <div className="flex flex-col gap-1">
                     {[...musicChannels, ...ambientChannels].map((channel) => {
                       const trackState = remoteTrackStates[channel.channelId];
                       const isCurrentlyPlaying = trackState?.playbackState === 'playing';
@@ -670,7 +672,7 @@ export default function AudioMixerPanel({
                       return (
                         <div 
                           key={`preview-${channel.channelId}`}
-                          className={`w-8 h-8 rounded text-center text-xs transition-all duration-200 flex items-center justify-center ${colorClass}`}
+                          className={`w-10 h-8 rounded text-center text-xs transition-all duration-200 flex items-center justify-center ${colorClass}`}
                           title={
                             changeType === 'start' ? `${displayText} will start playing` :
                             changeType === 'stop' ? `${displayText} will stop playing` :
@@ -685,37 +687,29 @@ export default function AudioMixerPanel({
                 </div>
               </div>
 
-              {/* Crossfade Control */}
-              <div className="flex items-center justify-center gap-4">
-                <div className="flex items-center gap-2">
-                  <label className="text-white text-xs">Fade:</label>
-                  <input
-                    type="number"
-                    min="100"
-                    max="3000"
-                    step="100"
-                    value={fadeDurationMs}
-                    onChange={(e) => setFadeDurationMs(parseInt(e.target.value) || 1000)}
-                    className="bg-gray-700 text-white text-xs px-2 py-1 rounded w-16"
-                  />
-                  <span className="text-gray-400 text-xs">ms</span>
-                </div>
-                
+              {/* Cut and Stop All Buttons */}
+              <div className="flex items-center justify-center gap-4 mt-4">
                 <button
                   className={`px-6 py-2 rounded text-sm font-bold transition-all duration-200 ${
                     currentCue?.targetTracks?.length > 0 
-                      ? 'bg-purple-600 hover:bg-purple-700 text-white' 
+                      ? 'bg-red-600 hover:bg-red-700 text-white' 
                       : 'bg-gray-600 text-gray-400 cursor-not-allowed'
                   }`}
-                  onClick={executeCrossfade} 
+                  onClick={() => {
+                    if (useFade) {
+                      executeFade();
+                    } else {
+                      executeCrossfade();
+                    }
+                  }}
                   disabled={!currentCue?.targetTracks?.length}
-                  title={`Execute crossfade transition (${fadeDurationMs}ms)`}
+                  title={`Execute ${useFade ? 'fade' : 'cut'} transition`}
                 >
-                  ⚡ CROSSFADE
+                  CUT
                 </button>
                 
                 <button
-                  className="px-6 py-2 rounded text-sm font-bold transition-all duration-200 bg-red-600 hover:bg-red-700 text-white ml-4"
+                  className="px-6 py-2 rounded text-sm font-bold transition-all duration-200 bg-red-600 hover:bg-red-700 text-white"
                   onClick={stopAllTracks}
                   title="Stop all playing tracks immediately"
                 >
