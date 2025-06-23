@@ -496,10 +496,6 @@ function GameContent() {
     toggleRemoteTrackLooping,
     loadRemoteAudioBuffer,
     audioBuffersRef,
-    trackRouting,
-    syncMode,
-    setSyncMode,
-    switchTrackRouting,
     setClearPendingOperationCallback
   } = useUnifiedAudio();
 
@@ -1184,10 +1180,6 @@ function GameContent() {
             sendRemoteAudioPlay={sendRemoteAudioPlay}     // NEW: Pass WebSocket sending functions
             sendRemoteAudioResume={sendRemoteAudioResume} // NEW: Pass WebSocket resume function
             sendRemoteAudioBatch={sendRemoteAudioBatch}   // NEW: Pass WebSocket batch function
-            trackRouting={trackRouting}           // NEW: Pass track routing state
-            syncMode={syncMode}                   // NEW: Pass sync mode state  
-            setSyncMode={setSyncMode}             // NEW: Pass sync mode toggle function
-            switchTrackRouting={switchTrackRouting} // NEW: Pass track routing switch function
             clearPendingOperation={setClearPendingOperationFn} // NEW: Pass function to set pending operation clearer
             clearDicePrompt={clearDicePrompt}    // UPDATED: Now accepts prompt ID
           />

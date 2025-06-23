@@ -49,10 +49,6 @@ export default function DMControlCenter({
   sendRemoteAudioPlay = null,  // NEW: Send remote audio play via WebSocket
   sendRemoteAudioResume = null, // NEW: Send remote audio resume via WebSocket
   sendRemoteAudioBatch = null,     // NEW: Send remote audio batch operations via WebSocket
-  trackRouting = {},            // NEW: Track routing state
-  syncMode = false,             // NEW: Sync mode state
-  setSyncMode = null,           // NEW: Sync mode toggle function
-  switchTrackRouting = null,    // NEW: Track routing switch function
   clearPendingOperation = null  // NEW: Function to set pending operation clearer
 }) {
   
@@ -316,10 +312,6 @@ export default function DMControlCenter({
         sendRemoteAudioPlay={sendRemoteAudioPlay}
         sendRemoteAudioResume={sendRemoteAudioResume}
         sendRemoteAudioBatch={sendRemoteAudioBatch}
-        trackRouting={trackRouting}
-        syncMode={syncMode}
-        setSyncMode={setSyncMode}
-        switchTrackRouting={switchTrackRouting}
         unlockAudio={unlockAudio}
         isAudioUnlocked={isAudioUnlocked}
         clearPendingOperation={clearPendingOperation}

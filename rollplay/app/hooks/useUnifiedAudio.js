@@ -213,14 +213,6 @@ export const useUnifiedAudio = () => {
   const resumeOperationsRef = useRef({}); // Track active resume operations to prevent duplicates
   const playOperationsRef = useRef({}); // Track active play operations to prevent duplicates
 
-  // Track routing state - controls which tracks are paired
-  const [trackRouting, setTrackRouting] = useState({
-    music: 'A',    // Either 'A' or 'B'
-    ambient: 'A'   // Either 'A' or 'B'
-  });
-
-  // Sync mode - when true, play tracks in pairs; when false, play individual tracks
-  const [syncMode, setSyncMode] = useState(false);
 
   // Remote track states (for DM-controlled audio) - A/B channel structure
   const [remoteTrackStates, setRemoteTrackStates] = useState({
@@ -678,15 +670,6 @@ export const useUnifiedAudio = () => {
     console.log(`🔄 Set remote ${trackId} looping to ${looping ? 'enabled' : 'disabled'}`);
   };
 
-  // Switch track routing for a channel group
-  const switchTrackRouting = (channelGroup, newTrack) => {
-    console.log(`🔀 Updating ${channelGroup} routing to ${newTrack}`);
-    
-    setTrackRouting(prev => ({
-      ...prev,
-      [channelGroup]: newTrack
-    }));
-  };
 
   // Set callback to clear pending operations when tracks auto-stop
   const setClearPendingOperationCallback = (callback) => {
@@ -829,11 +812,6 @@ export const useUnifiedAudio = () => {
     loadRemoteAudioBuffer,
     audioBuffersRef,
     
-    // Track routing functions
-    trackRouting,
-    syncMode,
-    setSyncMode,
-    switchTrackRouting,
     
     // Pending operation management
     setClearPendingOperationCallback,

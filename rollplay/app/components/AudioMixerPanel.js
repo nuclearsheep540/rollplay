@@ -7,7 +7,7 @@
 
 import React, { useState, useEffect, useCallback } from 'react';
 import AudioTrack from './AudioTrack';
-import { PlaybackState, getSyncTargets } from '../hooks/useUnifiedAudio';
+import { PlaybackState } from '../hooks/useUnifiedAudio';
 import {
   DM_HEADER,
   DM_ARROW,
@@ -20,10 +20,6 @@ export default function AudioMixerPanel({
   remoteTrackStates = {},
   sendRemoteAudioBatch,
   remoteTrackAnalysers = {},
-  trackRouting = {},
-  syncMode = false,
-  setSyncMode,
-  switchTrackRouting,
   unlockAudio = null,
   isAudioUnlocked = false,
   clearPendingOperation = null
@@ -89,24 +85,6 @@ export default function AudioMixerPanel({
     });
   }, [remoteTrackStates]);
   
-  // Clean unified routing function
-  const handleTrackRoutingChange = (channelGroup, newTrack) => {
-    console.log(`🔀 Setting ${channelGroup} routing to ${newTrack} (enabling sync)`);
-    
-    // Enable sync mode when any routing change happens
-    setSyncMode?.(true);
-    
-    // Update the routing for this channel group
-    switchTrackRouting?.(channelGroup, newTrack);
-  };
-
-  // Sync mode control functions
-  const enableMatchedSync = (track) => {
-    console.log(`🔗 Enabling matched sync: ${track}${track}`);
-    setSyncMode?.(true);
-    switchTrackRouting?.('music', track);
-    switchTrackRouting?.('ambient', track);
-  };
 
   // Crossfade execution function (memoized to prevent re-renders)
   const executeCrossfade = useCallback(async () => {
@@ -200,37 +178,24 @@ export default function AudioMixerPanel({
     setCurrentCue(null);
   }, [currentCue, fadeDurationMs, remoteTrackStates, sendRemoteAudioBatch]);
 
-  const disableSync = () => {
-    console.log(`🔓 Disabling sync mode`);
-    setSyncMode?.(false);
-  };
-
-  // Cue system functions
-  const createCue = (targetRouting) => {
-    // Use getSyncTargets to determine what tracks would be affected by this routing
-    const musicTrackId = Object.keys(remoteTrackStates).find(id => 
-      remoteTrackStates[id].channelGroup === 'music' && 
-      remoteTrackStates[id].track === targetRouting.music
-    );
-    
-    if (!musicTrackId) {
-      console.warn(`No music track found for ${targetRouting.music}`);
+  // Cue system functions - simplified to work with explicit track selections
+  const createCue = (targetTracks) => {
+    // targetTracks is an array of track IDs that should be playing
+    if (!Array.isArray(targetTracks)) {
+      console.warn('createCue requires an array of track IDs');
       return;
     }
     
-    // Get targets for the new routing
-    const targets = getSyncTargets(musicTrackId, targetRouting, true, remoteTrackStates);
-    
     // Determine what needs to start vs stop
-    const tracksToStart = targets.filter(track => 
-      track.playbackState !== PlaybackState.PLAYING
-    ).map(track => track.channelId);
+    const tracksToStart = targetTracks.filter(trackId => 
+      remoteTrackStates[trackId]?.playbackState !== PlaybackState.PLAYING
+    );
     
     const tracksToStop = Object.keys(remoteTrackStates).filter(trackId => {
       const track = remoteTrackStates[trackId];
       // Stop tracks that are playing but not in the new target list
       return track.playbackState === PlaybackState.PLAYING && 
-             !targets.some(t => t.channelId === trackId);
+             !targetTracks.includes(trackId);
     });
     
     const cueId = `cue_${Date.now()}`;
@@ -238,7 +203,7 @@ export default function AudioMixerPanel({
       cueId,
       tracksToStart,
       tracksToStop,
-      targetRouting
+      targetTracks
     };
     
     setCurrentCue(newCue);
@@ -282,13 +247,6 @@ export default function AudioMixerPanel({
     if (batchOperations.length > 0) {
       console.log(`✂️ Executing ${batchOperations.length} cut operations:`, batchOperations);
       sendRemoteAudioBatch?.(batchOperations);
-    }
-    
-    // Update routing to match the cue
-    if (currentCue.targetRouting) {
-      setSyncMode?.(true);
-      switchTrackRouting?.('music', currentCue.targetRouting.music);
-      switchTrackRouting?.('ambient', currentCue.targetRouting.ambient);
     }
     
     // Clear the cue
@@ -388,11 +346,6 @@ export default function AudioMixerPanel({
   const ambientChannels = channels.filter(ch => ch.type === 'ambient');
   const sfxChannels = channels.filter(ch => ch.type === 'sfx');
 
-  // Check which channel groups have A/B tracks for routing controls
-  const hasABTracks = {
-    music: musicChannels.some(ch => ch.track === 'A') && musicChannels.some(ch => ch.track === 'B'),
-    ambient: ambientChannels.some(ch => ch.track === 'A') && ambientChannels.some(ch => ch.track === 'B')
-  };
 
   // Simplified play handler using centralized sync logic
   const handlePlay = async (channel) => {
@@ -425,55 +378,41 @@ export default function AudioMixerPanel({
       return;
     }
     
-    // Use centralized sync logic to determine what tracks to affect
-    const targets = getSyncTargets(
-      channel.channelId,
-      trackRouting,
-      syncMode,
-      remoteTrackStates
-    );
+    // Simple individual track operation (sync removed - use cue system for multi-track)
+    const trackState = remoteTrackStates[channel.channelId];
     
-    if (targets.length === 0) {
-      console.warn(`❌ No targets returned for ${channel.channelId}`);
+    if (!trackState) {
+      console.warn(`❌ No track state found for ${channel.channelId}`);
       clearPendingOperationLocal(operationKey);
       return;
     }
     
-    // Determine if any tracks are paused (should resume instead of fresh play)
-    const shouldResume = targets.some(track => track.playbackState === PlaybackState.PAUSED);
+    // Determine if track is paused (should resume instead of fresh play)
+    const shouldResume = trackState.playbackState === PlaybackState.PAUSED;
     
     if (shouldResume) {
-      if (targets.length === 1) {
-        // Single track resume - use batch API
-        const resumeOperation = [{
-          trackId: targets[0].channelId,
-          operation: 'resume'
-        }];
-        sendRemoteAudioBatch?.(resumeOperation);
-      } else {
-        // Multi-track resume - use batch API
-        const resumeOperations = targets.map(target => ({
-          trackId: target.channelId,
-          operation: 'resume'
-        }));
-        sendRemoteAudioBatch?.(resumeOperations);
-      }
+      // Resume single track
+      const resumeOperation = [{
+        trackId: channel.channelId,
+        operation: 'resume'
+      }];
+      sendRemoteAudioBatch?.(resumeOperation);
     } else {
-      // Multi-track play - use batch API
-      const playOperations = targets.map(target => ({
-        trackId: target.channelId,
+      // Play single track
+      const playOperation = [{
+        trackId: channel.channelId,
         operation: 'play',
-        filename: target.filename,
-        looping: target.looping,
-        volume: target.volume,
-        type: target.type,
-        channelGroup: target.channelGroup,
-        track: target.track
-      }));
-      sendRemoteAudioBatch?.(playOperations);
+        filename: trackState.filename,
+        looping: trackState.looping,
+        volume: trackState.volume,
+        type: trackState.type,
+        channelGroup: trackState.channelGroup,
+        track: trackState.track
+      }];
+      sendRemoteAudioBatch?.(playOperation);
     }
   };
-  // Simplified pause handler using centralized sync logic
+  // Simplified pause handler for individual tracks
   const handlePause = (channel) => {
     const operationKey = `pause_${channel.channelId}`;
     
@@ -486,27 +425,18 @@ export default function AudioMixerPanel({
     // Mark operation as pending
     addPendingOperation(operationKey);
     
-    // Use centralized sync logic to determine what tracks to pause
-    const targets = getSyncTargets(
-      channel.channelId,
-      trackRouting,
-      syncMode,
-      remoteTrackStates
-    );
+    // Simple individual track pause (sync removed - use cue system for multi-track)
+    const trackState = remoteTrackStates[channel.channelId];
     
-    // Pause all target tracks using batch operation
-    const pauseOperations = targets
-      .filter(target => target.playbackState === PlaybackState.PLAYING)
-      .map(target => ({
-        trackId: target.channelId,
+    if (trackState && trackState.playbackState === PlaybackState.PLAYING) {
+      const pauseOperation = [{
+        trackId: channel.channelId,
         operation: 'pause'
-      }));
-    
-    if (pauseOperations.length > 0) {
-      sendRemoteAudioBatch?.(pauseOperations);
+      }];
+      sendRemoteAudioBatch?.(pauseOperation);
     }
   };
-  // Simplified stop handler using centralized sync logic
+  // Simplified stop handler for individual tracks
   const handleStop = (channel) => {
     const operationKey = `stop_${channel.channelId}`;
     
@@ -519,24 +449,15 @@ export default function AudioMixerPanel({
     // Mark operation as pending
     addPendingOperation(operationKey);
     
-    // Use centralized sync logic to determine what tracks to stop
-    const targets = getSyncTargets(
-      channel.channelId,
-      trackRouting,
-      syncMode,
-      remoteTrackStates
-    );
+    // Simple individual track stop (sync removed - use cue system for multi-track)
+    const trackState = remoteTrackStates[channel.channelId];
     
-    // Stop all target tracks using batch operation
-    const stopOperations = targets
-      .filter(target => target.playbackState === PlaybackState.PLAYING || target.playbackState === PlaybackState.PAUSED)
-      .map(target => ({
-        trackId: target.channelId,
+    if (trackState && (trackState.playbackState === PlaybackState.PLAYING || trackState.playbackState === PlaybackState.PAUSED)) {
+      const stopOperation = [{
+        trackId: channel.channelId,
         operation: 'stop'
-      }));
-    
-    if (stopOperations.length > 0) {
-      sendRemoteAudioBatch?.(stopOperations);
+      }];
+      sendRemoteAudioBatch?.(stopOperation);
     }
   };
 
@@ -549,129 +470,9 @@ export default function AudioMixerPanel({
 
       {isExpanded && (
         <>
-          {/* A/B Routing Controls - Only show if any channel groups have A/B tracks */}
-          {(hasABTracks.music || hasABTracks.ambient) && (
-            <div className={DM_CHILD}>
-              <div className="text-white font-bold mb-2">🎛️ Channel Sync</div>
-              
-              {/* Explicit Sync Buttons - Only show if both music and ambient have A/B tracks */}
-              {hasABTracks.music && hasABTracks.ambient && (
-                <div className="mb-3">
-                Select a sync mode to determine what tracks play at the same time
-                  <div className="text-white text-sm mb-2 font-mono">
-                    Matched = Matching channels play <br />
-                    __Mixed = Mix an A ↔ B combination for play <br />
-                    ____Off = Play all tracks individually
-                    </div>
-                  <div className="flex items-center gap-2">
-                    <button
-                      className={`text-xs px-3 py-1 rounded transition-all duration-200 ${
-                        syncMode && trackRouting.music === 'A' && trackRouting.ambient === 'A'
-                          ? 'bg-green-600 hover:bg-green-700 text-white'
-                          : 'bg-gray-600 hover:bg-gray-700 text-gray-300'
-                      }`}
-                      onClick={() => enableMatchedSync('A')}
-                      title="Enable matched sync: Music A + Ambient A"
-                    >
-                      🔗 Sync A
-                    </button>
-                    
-                    <button
-                      className={`text-xs px-3 py-1 rounded transition-all duration-200 ${
-                        syncMode && trackRouting.music === 'B' && trackRouting.ambient === 'B'
-                          ? 'bg-green-600 hover:bg-green-700 text-white'
-                          : 'bg-gray-600 hover:bg-gray-700 text-gray-300'
-                      }`}
-                      onClick={() => enableMatchedSync('B')}
-                      title="Enable matched sync: Music B + Ambient B"
-                    >
-                      🔗 Sync B
-                    </button>
 
-                    <button
-                      className={`text-xs px-2 py-1 rounded transition-all duration-200 ${
-                        !syncMode
-                          ? 'bg-orange-600 hover:bg-orange-700 text-white'
-                          : 'bg-gray-600 hover:bg-gray-700 text-gray-300'
-                      }`}
-                      onClick={disableSync}
-                      title="Disable sync - play individual tracks"
-                    >
-                      🔓 Off
-                    </button>
-                  </div>
-                  <div className="text-gray-400 text-xs mt-1">
-                    {!syncMode 
-                      ? 'Individual tracks' 
-                      : trackRouting.music === trackRouting.ambient
-                        ? `Matched sync: ${trackRouting.music}${trackRouting.ambient}`
-                        : `Mixed sync: ${trackRouting.music}${trackRouting.ambient}`}
-                  </div>
-                </div>
-              )}
-
-              {/* Music A/B Selector */}
-              {hasABTracks.music && (
-                <div className="flex items-center gap-2 mb-2">
-                  <span className="text-white text-sm w-16">Music:</span>
-                  <div className="flex bg-gray-700 rounded overflow-hidden">
-                    <button
-                      className={`px-3 py-1 text-xs transition-all duration-200 ${
-                        trackRouting.music === 'A'
-                          ? 'bg-green-600 text-white'
-                          : 'bg-gray-600 hover:bg-gray-500 text-gray-300'
-                      }`}
-                      onClick={() => handleTrackRoutingChange('music', 'A')}
-                    >
-                      A
-                    </button>
-                    <button
-                      className={`px-3 py-1 text-xs transition-all duration-200 ${
-                        trackRouting.music === 'B'
-                          ? 'bg-green-600 text-white'
-                          : 'bg-gray-600 hover:bg-gray-500 text-gray-300'
-                      }`}
-                      onClick={() => handleTrackRoutingChange('music', 'B')}
-                    >
-                      B
-                    </button>
-                  </div>
-                </div>
-              )}
-
-              {/* Ambient A/B Selector */}
-              {hasABTracks.ambient && (
-                <div className="flex items-center gap-2">
-                  <span className="text-white text-sm w-16">Ambient:</span>
-                  <div className="flex bg-gray-700 rounded overflow-hidden">
-                    <button
-                      className={`px-3 py-1 text-xs transition-all duration-200 ${
-                        trackRouting.ambient === 'A'
-                          ? 'bg-green-600 text-white'
-                          : 'bg-gray-600 hover:bg-gray-500 text-gray-300'
-                      }`}
-                      onClick={() => handleTrackRoutingChange('ambient', 'A')}
-                    >
-                      A
-                    </button>
-                    <button
-                      className={`px-3 py-1 text-xs transition-all duration-200 ${
-                        trackRouting.ambient === 'B'
-                          ? 'bg-green-600 text-white'
-                          : 'bg-gray-600 hover:bg-gray-500 text-gray-300'
-                      }`}
-                      onClick={() => handleTrackRoutingChange('ambient', 'B')}
-                    >
-                      B
-                    </button>
-                  </div>
-                </div>
-              )}
-            </div>
-          )}
-
-          {/* DJ Cue System - Only show if both music and ambient have A/B tracks */}
-          {hasABTracks.music && hasABTracks.ambient && (
+          {/* DJ Cue System - Show when music and ambient channels are available */}
+          {musicChannels.length > 0 && ambientChannels.length > 0 && (
             <div className={DM_CHILD}>
               <div className="text-white font-bold mb-3">🎧 Channel Cue </div>
               <p>Easily cut/fade to a combination of tracks</p>
@@ -906,7 +707,7 @@ export default function AudioMixerPanel({
                       ? 'bg-purple-600 hover:bg-purple-700 text-white' 
                       : 'bg-gray-600 text-gray-400 cursor-not-allowed'
                   }`}
-                  onClick={executeCrossfade} // TODO: Also call disableSync() 
+                  onClick={executeCrossfade} 
                   disabled={!currentCue?.targetTracks?.length}
                   title={`Execute crossfade transition (${fadeDurationMs}ms)`}
                 >
@@ -929,8 +730,6 @@ export default function AudioMixerPanel({
             <>
               <div className="text-white font-bold mt-4">Music</div>
               {musicChannels.map((channel) => {
-                const isRouted = trackRouting.music === channel.track;
-                const isDisabled = syncMode && !isRouted;
                 const pendingOps = {
                   play: pendingOperations.has(`play_${channel.channelId}`),
                   pause: pendingOperations.has(`pause_${channel.channelId}`),
@@ -945,9 +744,7 @@ export default function AudioMixerPanel({
                       type: channel.type,
                       label: channel.label,
                       analyserNode: remoteTrackAnalysers[channel.channelId],
-                      isRouted: isRouted,
-                      track: channel.track,
-                      isDisabled: isDisabled
+                      track: channel.track
                     }}
                     pendingOperations={pendingOps}
                     trackState={
@@ -972,7 +769,6 @@ export default function AudioMixerPanel({
                     onLoopToggle={(id, loop) =>
                       handleLoopToggle(id, loop)
                     }
-                    syncMode={syncMode}
                     isLast={false}
                   />
                 );
@@ -985,8 +781,6 @@ export default function AudioMixerPanel({
             <>
               <div className="text-white font-bold mt-4">Ambience</div>
               {ambientChannels.map((channel) => {
-                const isRouted = trackRouting.ambient === channel.track;
-                const isDisabled = syncMode && !isRouted;
                 const pendingOps = {
                   play: pendingOperations.has(`play_${channel.channelId}`),
                   pause: pendingOperations.has(`pause_${channel.channelId}`),
@@ -1001,9 +795,7 @@ export default function AudioMixerPanel({
                       type: channel.type,
                       label: channel.label,
                       analyserNode: remoteTrackAnalysers[channel.channelId],
-                      isRouted: isRouted,
-                      track: channel.track,
-                      isDisabled: isDisabled
+                      track: channel.track
                     }}
                     pendingOperations={pendingOps}
                     trackState={
@@ -1028,7 +820,6 @@ export default function AudioMixerPanel({
                     onLoopToggle={(id, loop) =>
                       handleLoopToggle(id, loop)
                     }
-                    syncMode={syncMode}
                     isLast={false}
                   />
                 );
@@ -1078,7 +869,6 @@ export default function AudioMixerPanel({
                     handleVolumeChange(channel.channelId, v)
                   }
                   onLoopToggle={() => {}}
-                  syncMode={syncMode}
                   isLast={idx === sfxChannels.length - 1}
                 />
                 );
