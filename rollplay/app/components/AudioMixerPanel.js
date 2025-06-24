@@ -7,7 +7,7 @@
 
 import React, { useState, useEffect, useCallback } from 'react';
 import AudioTrack from './AudioTrack';
-import { PlaybackState } from '../hooks/useUnifiedAudio';
+import { PlaybackState, ChannelType } from '../audio_management/types';
 import {
   DM_HEADER,
   DM_ARROW,
@@ -270,7 +270,7 @@ export default function AudioMixerPanel({
 
   // Stop all tracks function using batch operation
   const stopAllTracks = () => {
-    const allTrackIds = channels.map(channel => channel.channelId);
+    const allTrackIds = channels.filter((channel)=> channel.type === ChannelType.BGM).map(channel => channel.channelId);
     console.log(`🛑 Stopping all tracks:`, allTrackIds);
     
     // Create batch operations to stop all tracks
@@ -342,8 +342,8 @@ export default function AudioMixerPanel({
   });
 
   // Organize channels by type for UI organization
-  const bgmChannels = channels.filter(ch => ch.type === 'bgm');
-  const sfxChannels = channels.filter(ch => ch.type === 'sfx');
+  const bgmChannels = channels.filter(ch => ch.type === ChannelType.BGM);
+  const sfxChannels = channels.filter(ch => ch.type === ChannelType.SFX);
 
 
   // Simplified play handler using centralized sync logic
@@ -643,7 +643,7 @@ export default function AudioMixerPanel({
                   onClick={stopAllTracks}
                   title="Stop all playing tracks immediately"
                 >
-                  🛑 STOP ALL
+                  STOP ALL
                 </button>
               </div>
               </div>

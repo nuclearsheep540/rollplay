@@ -4,7 +4,7 @@
  */
 
 import React, { useRef, useEffect } from 'react';
-import { PlaybackState } from '../hooks/useUnifiedAudio';
+import { PlaybackState } from '../audio_management/types';
 import {
   DM_SUB_HEADER,
   DM_CHILD,

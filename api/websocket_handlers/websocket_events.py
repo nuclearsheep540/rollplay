@@ -688,7 +688,6 @@ class WebsocketEvent():
             
             # Create log message for synchronized playback
             track_descriptions = [f"{track['channelId']} ({track['filename']})" for track in tracks]
-            log_message = f"🔗 {triggered_by} started synchronized playback: {' + '.join(track_descriptions)}"
             print(log_message)
             
         else:
@@ -710,16 +709,8 @@ class WebsocketEvent():
                 "volume": volume
             }]
             
-            log_message = f"🎵 {triggered_by} started playing {track_type}: {audio_file}"
             print(f"🎵 Remote audio play: {triggered_by} playing {track_type} - {audio_file} (loop: {loop}, volume: {volume})")
         
-        # Add to adventure log
-        adventure_log.add_log_entry(
-            room_id=client_id,
-            message=log_message,
-            log_type=LogType.SYSTEM,
-            from_player=triggered_by
-        )
         
         # Broadcast audio play command to all clients
         audio_play_message = {
@@ -758,13 +749,6 @@ class WebsocketEvent():
             log_message = f"▶️ {triggered_by} resumed {track_type} audio"
             print(f"▶️ Remote audio resume: {triggered_by} resuming {track_type}")
         
-        # Add to adventure log
-        adventure_log.add_log_entry(
-            room_id=client_id,
-            message=log_message,
-            log_type=LogType.SYSTEM,
-            from_player=triggered_by
-        )
         
         # Broadcast audio resume command to all clients
         audio_resume_message = {
@@ -849,13 +833,6 @@ class WebsocketEvent():
         log_message = f"🎛️ {triggered_by} executed batch audio operations: {', '.join(operation_summaries)}"
         print(log_message)
         
-        # Add to adventure log
-        adventure_log.add_log_entry(
-            room_id=client_id,
-            message=log_message,
-            log_type=LogType.SYSTEM,
-            from_player=triggered_by
-        )
         
         # Broadcast batch audio command to all clients
         batch_audio_message = {

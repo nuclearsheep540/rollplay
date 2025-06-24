@@ -6,6 +6,7 @@
 'use client'
 
 import { useState, useEffect, useRef } from 'react';
+import { PlaybackState, ChannelType } from '../audio_management/types';
 
 /**
  * Unified Audio System for Tabletop Tavern
@@ -21,14 +22,6 @@ import { useState, useEffect, useRef } from 'react';
  * 
  * Both audio types respect the master volume slider
  */
-
-// Playback state enum to avoid boolean conflicts
-export const PlaybackState = {
-  STOPPED: 'stopped',
-  PLAYING: 'playing', 
-  PAUSED: 'paused'
-};
-
 
 export const useUnifiedAudio = () => {
   const [isAudioUnlocked, setIsAudioUnlocked] = useState(false);
@@ -118,15 +111,15 @@ export const useUnifiedAudio = () => {
   // Remote track states (for DM-controlled audio) - A/B/C/D BGM + SFX channels
   const [remoteTrackStates, setRemoteTrackStates] = useState({
     // BGM Channels
-    audio_channel_A: { playbackState: PlaybackState.STOPPED, volume: 0.8, filename: 'boss.mp3', type: 'bgm', channelGroup: 'bgm', track: 'A', currentTime: 0, duration: 0, looping: true },
-    audio_channel_B: { playbackState: PlaybackState.STOPPED, volume: 0.8, filename: 'shop.mp3', type: 'bgm', channelGroup: 'bgm', track: 'B', currentTime: 0, duration: 0, looping: true },
-    audio_channel_C: { playbackState: PlaybackState.STOPPED, volume: 0.8, filename: 'storm.mp3', type: 'bgm', channelGroup: 'bgm', track: 'C', currentTime: 0, duration: 0, looping: true },
-    audio_channel_D: { playbackState: PlaybackState.STOPPED, volume: 0.8, filename: 'zelda_night_loop.mp3', type: 'bgm', channelGroup: 'bgm', track: 'D', currentTime: 0, duration: 0, looping: true },
+    audio_channel_A: { playbackState: PlaybackState.STOPPED, volume: 0.8, filename: 'boss.mp3', type: ChannelType.BGM, channelGroup: ChannelType.BGM, track: 'A', currentTime: 0, duration: 0, looping: true },
+    audio_channel_B: { playbackState: PlaybackState.STOPPED, volume: 0.8, filename: 'shop.mp3', type: ChannelType.BGM, channelGroup: ChannelType.BGM, track: 'B', currentTime: 0, duration: 0, looping: true },
+    audio_channel_C: { playbackState: PlaybackState.STOPPED, volume: 0.8, filename: 'storm.mp3', type: ChannelType.BGM, channelGroup: ChannelType.BGM, track: 'C', currentTime: 0, duration: 0, looping: true },
+    audio_channel_D: { playbackState: PlaybackState.STOPPED, volume: 0.8, filename: 'zelda_night_loop.mp3', type: ChannelType.BGM, channelGroup: ChannelType.BGM, track: 'D', currentTime: 0, duration: 0, looping: true },
     // SFX Channels (unchanged)
-    audio_channel_3: { playbackState: PlaybackState.STOPPED, volume: 0.8, filename: 'sword.mp3', type: 'sfx', currentTime: 0, duration: 0, looping: false },
-    audio_channel_4: { playbackState: PlaybackState.STOPPED, volume: 0.8, filename: 'enemy_hit_cinematic.mp3', type: 'sfx', currentTime: 0, duration: 0, looping: false },
-    audio_channel_5: { playbackState: PlaybackState.STOPPED, volume: 0.8, filename: 'link_attack.mp3', type: 'sfx', currentTime: 0, duration: 0, looping: false },
-    audio_channel_6: { playbackState: PlaybackState.STOPPED, volume: 0.8, filename: 'link_fall.mp3', type: 'sfx', currentTime: 0, duration: 0, looping: false }
+    audio_channel_3: { playbackState: PlaybackState.STOPPED, volume: 0.8, filename: 'sword.mp3', type: ChannelType.SFX, currentTime: 0, duration: 0, looping: false },
+    audio_channel_4: { playbackState: PlaybackState.STOPPED, volume: 0.8, filename: 'enemy_hit_cinematic.mp3', type: ChannelType.SFX, currentTime: 0, duration: 0, looping: false },
+    audio_channel_5: { playbackState: PlaybackState.STOPPED, volume: 0.8, filename: 'link_attack.mp3', type: ChannelType.SFX, currentTime: 0, duration: 0, looping: false },
+    audio_channel_6: { playbackState: PlaybackState.STOPPED, volume: 0.8, filename: 'link_fall.mp3', type: ChannelType.SFX, currentTime: 0, duration: 0, looping: false }
 
   });
 
