@@ -756,6 +756,21 @@ export default function AudioMixerPanel({
               </div>
           )}
 
+          {/* Preset Section */}
+          <div className={DM_CHILD}>
+            <div className="flex items-center gap-3">
+              <span className="text-white font-medium">Preset:</span>
+
+              <select
+                value="Default"
+                disabled
+                className={`${DM_CHILD} bg-slate-800 text-gray-100 cursor-not-allowed`}
+              >
+                <option value="Default">Default</option>
+              </select>
+            </div>
+          </div>
+
           {/* BGM Channels */}
           {bgmChannels.length > 0 && (
             <>
