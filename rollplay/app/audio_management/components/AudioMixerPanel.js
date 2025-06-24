@@ -32,6 +32,7 @@ export default function AudioMixerPanel({
   // Cue system state
   const [currentCue, setCurrentCue] = useState(null); // { tracksToStart: [], tracksToStop: [], cueId: string }
   const [trackFadeStates, setTrackFadeStates] = useState({}); // Per-track fade configuration { trackId: boolean }
+  const [fadeDuration, setFadeDuration] = useState(1000); // Global fade duration in ms
   
   // Helper to add pending operation
   const addPendingOperation = (operation) => {
@@ -163,8 +164,18 @@ export default function AudioMixerPanel({
         }, 100); // 100ms delay for audio buffer stabilization
       } else {
         // No crossfade needed, just execute all operations at once
+        // Add stop operations for tracks to stop (when no tracks are starting)
+        tracksToStop.forEach(channel => {
+          batchOperations.push({
+            trackId: channel.channelId,
+            operation: 'stop'
+          });
+        });
+        
         console.log(`🎚️ Executing batch audio operations: ${batchOperations.length} operations`);
-        sendRemoteAudioBatch?.(batchOperations);
+        if (batchOperations.length > 0) {
+          sendRemoteAudioBatch?.(batchOperations);
+        }
       }
       
     } catch (error) {
@@ -256,11 +267,67 @@ export default function AudioMixerPanel({
   const executeFade = () => {
     if (!currentCue) return;
     
-    console.log(`🌊 Executing FADE transition:`, currentCue);
+    console.log(`🌊 Executing FADE transition with ${fadeDuration}ms duration:`, currentCue);
     
-    // TODO: Implement client-side fade logic
-    // For now, just do a cut (we'll implement fade in next step)
-    executeCut();
+    // Calculate tracks to start/stop based on targetTracks (same logic as createCue)
+    const targetTracks = currentCue.targetTracks || [];
+    
+    const tracksToStart = targetTracks.filter(trackId => 
+      remoteTrackStates[trackId]?.playbackState !== PlaybackState.PLAYING
+    );
+    
+    const tracksToStop = Object.keys(remoteTrackStates).filter(trackId => {
+      const track = remoteTrackStates[trackId];
+      // Stop tracks that are playing but not in the new target list
+      return track.playbackState === PlaybackState.PLAYING && 
+             !targetTracks.includes(trackId);
+    });
+    
+    console.log(`🌊 Fade tracks to start:`, tracksToStart);
+    console.log(`🌊 Fade tracks to stop:`, tracksToStop);
+    
+    // Create batch operations with fade flags
+    const batchOperations = [];
+    
+    // Add stop operations (fade out)
+    tracksToStop.forEach(trackId => {
+      const hasFade = trackFadeStates[trackId];
+      console.log(`🌊 Track ${trackId} fade state:`, hasFade, `trackFadeStates:`, trackFadeStates);
+      const stopOp = {
+        trackId,
+        operation: 'stop',
+        fade: hasFade || false
+      };
+      console.log(`🌊 Creating stop operation:`, stopOp);
+      batchOperations.push(stopOp);
+    });
+    
+    // Add play operations (fade in)
+    tracksToStart.forEach(trackId => {
+      const track = remoteTrackStates[trackId];
+      const hasFade = trackFadeStates[trackId];
+      console.log(`🌊 Track ${trackId} fade state:`, hasFade);
+      batchOperations.push({
+        trackId,
+        operation: 'play',
+        filename: track.filename,
+        looping: track.looping ?? (track.type !== 'sfx'),
+        volume: track.volume,
+        type: track.type,
+        channelGroup: track.channelGroup,
+        track: track.track,
+        fade: hasFade || false
+      });
+    });
+    
+    // Execute with fade duration
+    if (batchOperations.length > 0) {
+      console.log(`🌊 Executing ${batchOperations.length} fade operations:`, batchOperations);
+      sendRemoteAudioBatch?.(batchOperations, fadeDuration);
+    }
+    
+    // Clear the cue
+    setCurrentCue(null);
   };
 
   const clearCue = () => {
@@ -614,6 +681,21 @@ export default function AudioMixerPanel({
                 </div>
               </div>
 
+              {/* Fade Duration Control */}
+              <div className="flex items-center justify-center gap-2 mt-3 mb-2">
+                <label className="text-white text-sm font-medium">Fade Duration:</label>
+                <input
+                  type="number"
+                  min="100"
+                  max="10000"
+                  step="100"
+                  value={fadeDuration}
+                  onChange={(e) => setFadeDuration(Number(e.target.value))}
+                  className={`${DM_CHILD} w-20 text-center`}
+                />
+                <span className="text-white text-sm">ms</span>
+              </div>
+
               {/* Cut and Stop All Buttons */}
               <div className="flex items-center justify-center gap-4 mt-4">
                 <button
@@ -623,12 +705,37 @@ export default function AudioMixerPanel({
                       : 'bg-gray-600 text-gray-400 cursor-not-allowed'
                   }`}
                   onClick={() => {
-                    // Check if any tracks in the cue are armed for fade
-                    const hasFadeTracks = currentCue?.targetTracks?.some(trackId => trackFadeStates[trackId]);
+                    console.log(`🎚️ CUT button clicked. currentCue:`, currentCue);
+                    
+                    // Calculate tracks that will be affected by this operation
+                    const targetTracks = currentCue?.targetTracks || [];
+                    
+                    const tracksToStart = targetTracks.filter(trackId => 
+                      remoteTrackStates[trackId]?.playbackState !== PlaybackState.PLAYING
+                    );
+                    
+                    const tracksToStop = Object.keys(remoteTrackStates).filter(trackId => {
+                      const track = remoteTrackStates[trackId];
+                      return track.playbackState === PlaybackState.PLAYING && 
+                             !targetTracks.includes(trackId);
+                    });
+                    
+                    // Check if any tracks that will be affected are armed for fade
+                    const allAffectedTracks = [...tracksToStart, ...tracksToStop];
+                    const hasFadeTracks = allAffectedTracks.some(trackId => trackFadeStates[trackId]);
+                    
+                    console.log(`🎚️ targetTracks:`, targetTracks);
+                    console.log(`🎚️ tracksToStart:`, tracksToStart);
+                    console.log(`🎚️ tracksToStop:`, tracksToStop);
+                    console.log(`🎚️ allAffectedTracks:`, allAffectedTracks);
+                    console.log(`🎚️ trackFadeStates:`, trackFadeStates);
+                    console.log(`🎚️ hasFadeTracks:`, hasFadeTracks);
                     
                     if (hasFadeTracks) {
+                      console.log(`🌊 Calling executeFade()`);
                       executeFade();
                     } else {
+                      console.log(`✂️ Calling executeCrossfade()`);
                       executeCrossfade();
                     }
                   }}

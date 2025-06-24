@@ -123,6 +123,9 @@ export const useUnifiedAudio = () => {
 
   });
 
+  // Active fade transitions state
+  const [activeFades, setActiveFades] = useState({}); // { trackId: { type, startTime, duration, startGain, targetGain, operation, animationId } }
+
   // Initialize Web Audio API for remote tracks
   const initializeWebAudio = async () => {
     if (!audioContextRef.current) {
@@ -181,8 +184,93 @@ export const useUnifiedAudio = () => {
     }
   };
 
+  // =====================================
+  // FADE TRANSITION FUNCTIONS
+  // =====================================
+  
+  // Start a fade transition for a track
+  const startFade = (trackId, type, duration, startGain, targetGain, operation) => {
+    // Cancel any existing fade for this track
+    if (activeFades[trackId]) {
+      cancelAnimationFrame(activeFades[trackId].animationId);
+    }
+    
+    const startTime = performance.now();
+    const fadeConfig = {
+      type, // 'in' or 'out'
+      startTime,
+      duration,
+      startGain,
+      targetGain,
+      operation,
+      animationId: null
+    };
+    
+    console.log(`🌊 Starting ${type} fade for ${trackId}: ${startGain} → ${targetGain} over ${duration}ms`);
+    
+    // Start the animation loop
+    const animate = (currentTime) => {
+      const elapsed = currentTime - startTime;
+      const progress = Math.min(elapsed / duration, 1.0);
+      
+      // Calculate current gain using linear interpolation
+      const currentGain = startGain + (targetGain - startGain) * progress;
+      
+      // Apply gain if track's gain node exists
+      if (remoteTrackGainsRef.current[trackId]) {
+        remoteTrackGainsRef.current[trackId].gain.value = currentGain;
+      }
+      
+      if (progress < 1.0) {
+        // Continue animation
+        const animationId = requestAnimationFrame(animate);
+        setActiveFades(prev => ({
+          ...prev,
+          [trackId]: { ...fadeConfig, animationId }
+        }));
+      } else {
+        // Fade complete
+        console.log(`✅ Fade ${type} complete for ${trackId}`);
+        
+        // Remove from active fades
+        setActiveFades(prev => {
+          const newFades = { ...prev };
+          delete newFades[trackId];
+          return newFades;
+        });
+        
+        // If fade out completed, stop the track
+        if (type === 'out') {
+          setTimeout(() => {
+            stopRemoteTrack(trackId);
+          }, 50); // Small delay to ensure fade is visually complete
+        }
+      }
+    };
+    
+    // Start the animation
+    const animationId = requestAnimationFrame(animate);
+    setActiveFades(prev => ({
+      ...prev,
+      [trackId]: { ...fadeConfig, animationId }
+    }));
+  };
+  
+  // Cancel an active fade (for interruptions)
+  const cancelFade = (trackId) => {
+    if (activeFades[trackId]) {
+      cancelAnimationFrame(activeFades[trackId].animationId);
+      setActiveFades(prev => {
+        const newFades = { ...prev };
+        delete newFades[trackId];
+        return newFades;
+      });
+      console.log(`🚫 Cancelled fade for ${trackId}`);
+    }
+  };
+
   // Play remote track (triggered by WebSocket events)
-  const playRemoteTrack = async (trackId, audioFile, loop = true, volume = null, resumeFromTime = null, completeTrackState = null, skipBufferLoad = false, syncStartTime = null) => {
+  const playRemoteTrack = async (trackId, audioFile, loop = true, volume = null, resumeFromTime = null, completeTrackState = null, skipBufferLoad = false, syncStartTime = null, fade = false, fadeDuration = 1000) => {
     const operationId = `${trackId}_${Date.now()}`;
     console.log(`🎵 [${operationId}] Attempting to play remote track: ${trackId} - ${audioFile}`);
     
@@ -321,18 +409,33 @@ export const useUnifiedAudio = () => {
       const duration = audioBuffer.duration;
   
       // Update React state
+      const finalVolume = volume !== null ? volume : remoteTrackStates[trackId]?.volume ?? 0.7;
       setRemoteTrackStates((prev) => ({
         ...prev,
         [trackId]: {
           ...prev[trackId],
           playbackState: PlaybackState.PLAYING,
           filename: audioFile,
-          volume:
-            volume !== null ? volume : prev[trackId]?.volume ?? 0.7,
+          volume: finalVolume,
           currentTime: startOffset,
           duration
         }
       }));
+      
+      // Handle fade-in if requested
+      if (fade) {
+        console.log(`🌊 Starting fade-in for ${trackId}`);
+        // Cancel any existing fade for this track first
+        cancelFade(trackId);
+        // Set initial gain to 0 and fade to target volume
+        if (remoteTrackGainsRef.current[trackId]) {
+          remoteTrackGainsRef.current[trackId].gain.value = 0;
+        }
+        startFade(trackId, 'in', fadeDuration, 0, finalVolume, 'play');
+      } else if (remoteTrackGainsRef.current[trackId]) {
+        // Set volume immediately for non-fade playback
+        remoteTrackGainsRef.current[trackId].gain.value = finalVolume;
+      }
   
       // Set up our time‐update loop
       const startTime = audioContextRef.current.currentTime;
@@ -429,26 +532,40 @@ export const useUnifiedAudio = () => {
       }
     }
   };
-  const stopRemoteTrack = (trackId) => {
+  const stopRemoteTrack = (trackId, fade = false, fadeDuration = 1000) => {
     if (activeSourcesRef.current[trackId]) {
       try {
-        activeSourcesRef.current[trackId].stop();
-        delete activeSourcesRef.current[trackId];
-        
-        // Clean up timer
-        delete trackTimersRef.current[trackId];
-        
-        setRemoteTrackStates(prev => ({
-          ...prev,
-          [trackId]: {
-            ...prev[trackId],
-            playbackState: PlaybackState.STOPPED,
-            currentTime: 0,
-            duration: 0
-          }
-        }));
+        if (fade) {
+          console.log(`🌊 Starting fade-out for ${trackId}`);
+          // Cancel any existing fade for this track first
+          cancelFade(trackId);
+          // Get current gain and fade to 0
+          const currentGain = remoteTrackGainsRef.current[trackId]?.gain.value || 0;
+          startFade(trackId, 'out', fadeDuration, currentGain, 0, 'stop');
+          // Note: actual stop() will be called by the fade completion handler
+        } else {
+          // Immediate stop
+          activeSourcesRef.current[trackId].stop();
+          delete activeSourcesRef.current[trackId];
+          
+          // Clean up timer
+          delete trackTimersRef.current[trackId];
+          
+          // Cancel any active fade
+          cancelFade(trackId);
+          
+          setRemoteTrackStates(prev => ({
+            ...prev,
+            [trackId]: {
+              ...prev[trackId],
+              playbackState: PlaybackState.STOPPED,
+              currentTime: 0,
+              duration: 0
+            }
+          }));
 
-        console.log(`⏹️ Stopped remote ${trackId}`);
+          console.log(`⏹️ Stopped remote ${trackId}`);
+        }
       } catch (error) {
         console.warn(`Failed to stop remote ${trackId}:`, error);
       }
@@ -712,6 +829,11 @@ export const useUnifiedAudio = () => {
     loadRemoteAudioBuffer,
     audioBuffersRef,
     audioContextRef,
+    
+    // Fade transition functions
+    activeFades,
+    startFade,
+    cancelFade,
     
     // Pending operation management
     setClearPendingOperationCallback,

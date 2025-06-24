@@ -118,10 +118,18 @@ export const handleRemoteAudioBatch = async (data, {
   toggleRemoteTrackLooping,
   loadRemoteAudioBuffer,
   audioBuffersRef,
-  audioContextRef
+  audioContextRef,
+  activeFades,
+  cancelFade
 }) => {
   console.log("🎛️ Remote audio batch command received:", data);
-  const { operations, triggered_by } = data;
+  const { operations, triggered_by, fade_duration } = data;
+  
+  // Extract fade duration (defaults to 1000ms if not provided)
+  const fadeDuration = fade_duration || 1000;
+  if (fade_duration) {
+    console.log(`🌊 Batch includes fade duration: ${fadeDuration}ms`);
+  }
   
   if (!operations || !Array.isArray(operations) || operations.length === 0) {
     console.warn("❌ Invalid batch operations received");
@@ -129,6 +137,15 @@ export const handleRemoteAudioBatch = async (data, {
   }
   
   console.log(`🎛️ Processing ${operations.length} batch operations from ${triggered_by}`);
+  
+  // Handle fade conflicts: Cancel any active fades for tracks being operated on
+  operations.forEach(op => {
+    const { trackId } = op;
+    if (activeFades && activeFades[trackId] && cancelFade) {
+      console.log(`🚫 Cancelling active fade for ${trackId} due to new batch operation`);
+      cancelFade(trackId);
+    }
+  });
   
   // Process all operations in parallel using Promise.all()
   const processOperation = async (op, index, syncStartTime = null) => {
@@ -138,7 +155,7 @@ export const handleRemoteAudioBatch = async (data, {
       switch (operation) {
         case 'play':
           if (playRemoteTrack && loadRemoteAudioBuffer && audioBuffersRef) {
-            const { filename, looping = true, volume = 1.0 } = op;
+            const { filename, looping = true, volume = 1.0, fade = false } = op;
             
             // For synchronized operations, buffer is pre-loaded; for single operations, load it now
             if (!syncStartTime) {
@@ -152,8 +169,8 @@ export const handleRemoteAudioBatch = async (data, {
             // else: Buffer already pre-loaded for synchronized operations
             
             // Pass synchronized start time for batch operations (null for single operations)
-            await playRemoteTrack(trackId, filename, looping, volume, null, op, true, syncStartTime);
-            console.log(`✅ Batch operation ${index + 1}: played ${trackId} (${filename}) ${syncStartTime ? `at sync time ${syncStartTime}` : 'immediately'}`);
+            await playRemoteTrack(trackId, filename, looping, volume, null, op, true, syncStartTime, fade, fadeDuration);
+            console.log(`✅ Batch operation ${index + 1}: played ${trackId} (${filename}) ${syncStartTime ? `at sync time ${syncStartTime}` : 'immediately'}${fade ? ` with ${fadeDuration}ms fade-in` : ''}`);
           } else {
             console.warn(`❌ Batch operation ${index + 1}: playRemoteTrack function not available`);
           }
@@ -161,8 +178,9 @@ export const handleRemoteAudioBatch = async (data, {
           
         case 'stop':
           if (stopRemoteTrack) {
-            stopRemoteTrack(trackId);
-            console.log(`✅ Batch operation ${index + 1}: stopped ${trackId}`);
+            const { fade = false } = op;
+            stopRemoteTrack(trackId, fade, fadeDuration);
+            console.log(`✅ Batch operation ${index + 1}: stopped ${trackId}${fade ? ` with ${fadeDuration}ms fade-out` : ''}`);
           } else {
             console.warn(`❌ Batch operation ${index + 1}: stopRemoteTrack function not available`);
           }
@@ -309,18 +327,28 @@ export const createAudioSendFunctions = (webSocket, isConnected, playerName) => 
     }));
   };
 
-  const sendRemoteAudioBatch = (operations) => {
+  const sendRemoteAudioBatch = (operations, fadeDuration = null) => {
     if (!webSocket || !isConnected) return;
     
     console.log(`📡 Sending remote audio batch (${operations.length} operations):`, operations);
+    if (fadeDuration) {
+      console.log(`🌊 Batch includes fade duration: ${fadeDuration}ms`);
+    }
     
-    webSocket.send(JSON.stringify({
+    const payload = {
       "event_type": "remote_audio_batch",
       "data": {
         "operations": operations,
         "triggered_by": playerName
       }
-    }));
+    };
+    
+    // Add fade_duration if provided
+    if (fadeDuration !== null) {
+      payload.data.fade_duration = fadeDuration;
+    }
+    
+    webSocket.send(JSON.stringify(payload));
   };
 
   return {

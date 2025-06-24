@@ -768,6 +768,7 @@ class WebsocketEvent():
         """Handle batch audio operations - execute multiple track operations in a single message"""
         operations = event_data.get("operations")  # Array of {trackId, operation, ...params}
         triggered_by = event_data.get("triggered_by", player_name)
+        fade_duration = event_data.get("fade_duration")  # Optional fade duration for transitions
         
         if not operations or not isinstance(operations, list) or len(operations) == 0:
             print(f"❌ Invalid batch audio request: operations must be a non-empty array")
@@ -842,6 +843,10 @@ class WebsocketEvent():
                 "triggered_by": triggered_by
             }
         }
+        
+        # Include fade_duration if provided
+        if fade_duration is not None:
+            batch_audio_message["data"]["fade_duration"] = fade_duration
         
         print(f"🎛️ Backend broadcasting batch operations: {batch_audio_message}")
         return WebsocketEventResult(broadcast_message=batch_audio_message)
