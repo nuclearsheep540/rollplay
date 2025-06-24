@@ -28,8 +28,7 @@ export const useWebAudio = (externalMasterVolume = null) => {
 
   // Track states
   const [trackStates, setTrackStates] = useState({
-    music: { playing: false, volume: 0.7, currentTrack: null },
-    ambient: { playing: false, volume: 0.6, currentTrack: null },
+    bgm: { playing: false, volume: 0.7, currentTrack: null },
     sfx: { playing: false, volume: 0.8, currentTrack: null }
   });
 
@@ -45,7 +44,7 @@ export const useWebAudio = (externalMasterVolume = null) => {
         masterGainRef.current.gain.value = masterVolume;
 
         // Create gain nodes for each track type
-        ['music', 'ambient', 'sfx'].forEach(type => {
+        ['bgm', 'sfx'].forEach(type => {
           const gainNode = audioContextRef.current.createGain();
           gainNode.connect(masterGainRef.current);
           gainNode.gain.value = trackStates[type].volume;

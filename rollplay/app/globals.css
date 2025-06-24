@@ -422,7 +422,7 @@ body {
 .main-game-area {
   flex: 1;
   display: grid;
-  grid-template-columns: calc(380px + var(--panel-width-addition)) 1fr calc(300px * var(--ui-scale));
+  grid-template-columns: calc(380px + var(--panel-width-addition)) 1fr calc(375px * var(--ui-scale));
   grid-template-rows: 1fr;
   grid-template-areas: 
     "party-sidebar map-canvas right-panel";
@@ -551,6 +551,7 @@ body {
   min-height: 0;
   max-height: 100vh;
   overflow-y: auto;
+  /* width: 420px; */
   
   /* Hide scrollbar completely */
   scrollbar-width: none; /* Firefox */
@@ -701,7 +702,7 @@ body {
 .main-game-area {
   flex: 1;
   display: grid;
-  grid-template-columns: calc(380px + var(--panel-width-addition)) 1fr calc(300px * var(--ui-scale)); /* Changed from 360px to 380px */
+  grid-template-columns: calc(380px + var(--panel-width-addition)) 1fr calc(375px * var(--ui-scale)); /* Right panel: 25% wider (300px -> 375px) */
   grid-template-rows: 1fr;
   grid-template-areas: 
     "party-sidebar map-canvas right-panel";

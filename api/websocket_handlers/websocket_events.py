@@ -669,134 +669,184 @@ class WebsocketEvent():
     @staticmethod 
     async def remote_audio_play(websocket, data, event_data, player_name, client_id, manager):
         """Handle remote audio play events - DM controls audio for all players"""
-        track_type = event_data.get("track_type")  # 'music', 'ambient', 'sfx'
-        audio_file = event_data.get("audio_file")  # 'boss.mp3', 'storm.mp3', etc.
-        loop = event_data.get("loop", True)
-        volume = event_data.get("volume", 1.0)
+        print(f"🎵 Backend received remote_audio_play event from {player_name}: {event_data}")
         triggered_by = event_data.get("triggered_by", player_name)
         
-        if not track_type or not audio_file:
-            print(f"❌ Invalid remote audio play request: track_type={track_type}, audio_file={audio_file}")
-            return WebsocketEventResult(broadcast_message={})
+        # Support both single track and multiple tracks (for synchronized playback)
+        tracks = event_data.get("tracks")
+        if tracks:
+            # Multiple tracks for synchronized playback
+            if not isinstance(tracks, list) or len(tracks) == 0:
+                print(f"❌ Invalid remote audio play request: tracks must be a non-empty array")
+                return WebsocketEventResult(broadcast_message={})
+            
+            # Validate all tracks
+            for track in tracks:
+                if not track.get("channelId") or not track.get("filename"):
+                    print(f"❌ Invalid track in synchronized play request: {track}")
+                    return WebsocketEventResult(broadcast_message={})
+            
+            # Create log message for synchronized playback
+            track_descriptions = [f"{track['channelId']} ({track['filename']})" for track in tracks]
+            print(log_message)
+            
+        else:
+            # Single track (legacy format)
+            track_type = event_data.get("track_type")  # 'bgm', 'sfx' (legacy: 'music', 'ambient')
+            audio_file = event_data.get("audio_file")  # 'boss.mp3', 'storm.mp3', etc.
+            loop = event_data.get("loop", True)
+            volume = event_data.get("volume", 1.0)
+            
+            if not track_type or not audio_file:
+                print(f"❌ Invalid remote audio play request: track_type={track_type}, audio_file={audio_file}")
+                return WebsocketEventResult(broadcast_message={})
+            
+            # Convert single track to tracks array format
+            tracks = [{
+                "channelId": track_type,  # For legacy compatibility
+                "filename": audio_file,
+                "looping": loop,
+                "volume": volume
+            }]
+            
+            print(f"🎵 Remote audio play: {triggered_by} playing {track_type} - {audio_file} (loop: {loop}, volume: {volume})")
         
-        print(f"🎵 Remote audio play: {triggered_by} playing {track_type} - {audio_file} (loop: {loop}, volume: {volume})")
-        
-        # Create log message for audio start
-        log_message = f"🎵 {triggered_by} started playing {track_type}: {audio_file}"
-        
-        # Add to adventure log
-        adventure_log.add_log_entry(
-            room_id=client_id,
-            message=log_message,
-            log_type=LogType.SYSTEM,
-            from_player=triggered_by
-        )
         
         # Broadcast audio play command to all clients
         audio_play_message = {
             "event_type": "remote_audio_play",
             "data": {
-                "track_type": track_type,
-                "audio_file": audio_file,
-                "loop": loop,
-                "volume": volume,
-                "triggered_by": triggered_by
+                "tracks": tracks,
+                "triggered_by": triggered_by,
+                # Keep legacy fields for backward compatibility if single track
+                **(event_data if len(tracks) == 1 and not event_data.get("tracks") else {})
             }
         }
         
         return WebsocketEventResult(broadcast_message=audio_play_message)
 
-    @staticmethod 
-    async def remote_audio_stop(websocket, data, event_data, player_name, client_id, manager):
-        """Handle remote audio stop events - DM stops audio for all players"""
-        track_type = event_data.get("track_type")  # 'music', 'ambient', 'sfx'
+    @staticmethod
+    async def remote_audio_resume(websocket, data, event_data, player_name, client_id, manager):
+        """Handle remote audio resume events - DM resumes paused audio for all players"""
         triggered_by = event_data.get("triggered_by", player_name)
+        tracks = event_data.get("tracks")
+        track_type = event_data.get("track_type")  # Legacy single track format
         
-        if not track_type:
-            print(f"❌ Invalid remote audio stop request: track_type={track_type}")
-            return WebsocketEventResult(broadcast_message={})
+        # Determine if this is single track or multi-track resume
+        if tracks and isinstance(tracks, list):
+            # Multi-track resume (synchronized tracks)
+            track_descriptions = [f"{track.get('channelId', 'unknown')}" for track in tracks]
+            log_message = f"▶️ {triggered_by} resumed synchronized audio: {', '.join(track_descriptions)}"
+            print(f"🔗 Remote audio resume (sync): {triggered_by} resuming {len(tracks)} tracks: {', '.join(track_descriptions)}")
+        else:
+            # Legacy single track resume
+            if not track_type:
+                print(f"❌ Invalid remote audio resume request: no track_type or tracks provided")
+                return WebsocketEventResult(broadcast_message={})
+            
+            # Convert single track to tracks array format for consistency
+            tracks = [{"channelId": track_type}]
+            log_message = f"▶️ {triggered_by} resumed {track_type} audio"
+            print(f"▶️ Remote audio resume: {triggered_by} resuming {track_type}")
         
-        print(f"🛑 Remote audio stop: {triggered_by} stopping {track_type}")
         
-        # Create log message for audio stop
-        log_message = f"🛑 {triggered_by} stopped {track_type} audio"
-        
-        # Add to adventure log
-        adventure_log.add_log_entry(
-            room_id=client_id,
-            message=log_message,
-            log_type=LogType.SYSTEM,
-            from_player=triggered_by
-        )
-        
-        # Broadcast audio stop command to all clients
-        audio_stop_message = {
-            "event_type": "remote_audio_stop",
+        # Broadcast audio resume command to all clients
+        audio_resume_message = {
+            "event_type": "remote_audio_resume",
             "data": {
-                "track_type": track_type,
-                "triggered_by": triggered_by
+                "tracks": tracks,
+                "triggered_by": triggered_by,
+                # Keep legacy field for backward compatibility if single track
+                **({"track_type": track_type} if track_type else {})
             }
         }
         
-        return WebsocketEventResult(broadcast_message=audio_stop_message)
+        return WebsocketEventResult(broadcast_message=audio_resume_message)
 
-    @staticmethod 
-    async def remote_audio_pause(websocket, data, event_data, player_name, client_id, manager):
-        """Handle remote audio pause events - DM pauses audio for all players"""
-        track_type = event_data.get("track_type")  # 'music', 'ambient', 'sfx'
+    @staticmethod
+    async def remote_audio_batch(websocket, data, event_data, player_name, client_id, manager):
+        """Handle batch audio operations - execute multiple track operations in a single message"""
+        operations = event_data.get("operations")  # Array of {trackId, operation, ...params}
         triggered_by = event_data.get("triggered_by", player_name)
+        fade_duration = event_data.get("fade_duration")  # Optional fade duration for transitions
         
-        if not track_type:
-            print(f"❌ Invalid remote audio pause request: track_type={track_type}")
+        if not operations or not isinstance(operations, list) or len(operations) == 0:
+            print(f"❌ Invalid batch audio request: operations must be a non-empty array")
             return WebsocketEventResult(broadcast_message={})
         
-        print(f"⏸️ Remote audio pause: {triggered_by} pausing {track_type}")
+        print(f"🎛️ Backend received batch audio operations from {triggered_by}: {len(operations)} operations")
         
-        # Create log message for audio pause
-        log_message = f"⏸️ {triggered_by} paused {track_type} audio"
+        # Validate all operations
+        valid_operations = ["play", "stop", "pause", "resume", "volume", "loop"]
+        for i, op in enumerate(operations):
+            if not isinstance(op, dict):
+                print(f"❌ Invalid operation {i}: must be an object")
+                return WebsocketEventResult(broadcast_message={})
+            
+            track_id = op.get("trackId")
+            operation = op.get("operation")
+            
+            if not track_id or not operation:
+                print(f"❌ Invalid operation {i}: missing trackId or operation")
+                return WebsocketEventResult(broadcast_message={})
+            
+            if operation not in valid_operations:
+                print(f"❌ Invalid operation {i}: operation '{operation}' not supported")
+                return WebsocketEventResult(broadcast_message={})
+            
+            # Validate operation-specific required parameters
+            if operation == "play":
+                if not op.get("filename"):
+                    print(f"❌ Invalid play operation {i}: missing filename")
+                    return WebsocketEventResult(broadcast_message={})
+            elif operation == "volume":
+                if "volume" not in op:
+                    print(f"❌ Invalid volume operation {i}: missing volume parameter")
+                    return WebsocketEventResult(broadcast_message={})
+            elif operation == "loop":
+                if "looping" not in op:
+                    print(f"❌ Invalid loop operation {i}: missing looping parameter")
+                    return WebsocketEventResult(broadcast_message={})
         
-        adventure_log.add_log_entry(
-            room_id=client_id,
-            message=log_message,
-            log_type=LogType.SYSTEM,
-            from_player=triggered_by
-        )
+        # Create log message describing the batch operation
+        operation_summaries = []
+        for op in operations:
+            track_id = op.get("trackId")
+            operation = op.get("operation")
+            
+            if operation == "play":
+                filename = op.get("filename", "unknown")
+                operation_summaries.append(f"play {track_id} ({filename})")
+            elif operation == "stop":
+                operation_summaries.append(f"stop {track_id}")
+            elif operation == "pause":
+                operation_summaries.append(f"pause {track_id}")
+            elif operation == "resume":
+                operation_summaries.append(f"resume {track_id}")
+            elif operation == "volume":
+                volume = op.get("volume", 1.0)
+                operation_summaries.append(f"set {track_id} volume to {volume}")
+            elif operation == "loop":
+                looping = op.get("looping", True)
+                loop_text = "enable" if looping else "disable"
+                operation_summaries.append(f"{loop_text} {track_id} looping")
         
-        # Broadcast audio pause command to all clients
-        audio_pause_message = {
-            "event_type": "remote_audio_pause",
+        log_message = f"🎛️ {triggered_by} executed batch audio operations: {', '.join(operation_summaries)}"
+        print(log_message)
+        
+        
+        # Broadcast batch audio command to all clients
+        batch_audio_message = {
+            "event_type": "remote_audio_batch",
             "data": {
-                "track_type": track_type,
+                "operations": operations,
                 "triggered_by": triggered_by
             }
         }
         
-        return WebsocketEventResult(broadcast_message=audio_pause_message)
-
-    @staticmethod 
-    async def remote_audio_volume(websocket, data, event_data, player_name, client_id, manager):
-        """Handle remote audio volume events - DM adjusts volume for all players"""
-        track_type = event_data.get("track_type")  # 'music', 'ambient', 'sfx'
-        volume = event_data.get("volume", 1.0)
-        triggered_by = event_data.get("triggered_by", player_name)
+        # Include fade_duration if provided
+        if fade_duration is not None:
+            batch_audio_message["data"]["fade_duration"] = fade_duration
         
-        if not track_type or volume is None:
-            print(f"❌ Invalid remote audio volume request: track_type={track_type}, volume={volume}")
-            return WebsocketEventResult(broadcast_message={})
-        
-        print(f"🔊 Remote audio volume: {triggered_by} set {track_type} volume to {int(volume * 100)}%")
-        
-        # Note: Not logging volume changes to avoid spam in adventure log
-        # Only log significant events like play/stop
-        
-        # Broadcast audio volume command to all clients
-        audio_volume_message = {
-            "event_type": "remote_audio_volume",
-            "data": {
-                "track_type": track_type,
-                "volume": volume,
-                "triggered_by": triggered_by
-            }
-        }
-        
-        return WebsocketEventResult(broadcast_message=audio_volume_message)
+        print(f"🎛️ Backend broadcasting batch operations: {batch_audio_message}")
+        return WebsocketEventResult(broadcast_message=batch_audio_message)

@@ -1,55 +1,22 @@
+/* Copyright (C) 2025 Matthew Davey */
+/* SPDX-License-Identifier: GPL-3.0-or-later */
+
 /**
  * WebSocket Event Handlers
  * Contains all the business logic for handling incoming WebSocket messages
  * These functions take data and state setters directly to process events
  */
 
-// =====================================
-// REMOTE AUDIO EVENT HANDLERS
-// =====================================
-
-export const handleRemoteAudioPlay = (data, { playRemoteTrack }) => {
-  console.log("🎵 Remote audio play command received:", data);
-  const { track_type, audio_file, loop = true, volume = 1.0, triggered_by } = data;
-  
-  if (playRemoteTrack) {
-    playRemoteTrack(track_type, audio_file, loop, volume);
-    console.log(`▶️ Playing remote ${track_type}: ${audio_file} (triggered by ${triggered_by})`);
-  }
-};
-
-export const handleRemoteAudioStop = (data, { stopRemoteTrack }) => {
-  console.log("🛑 Remote audio stop command received:", data);
-  const { track_type, triggered_by } = data;
-  
-  if (stopRemoteTrack) {
-    stopRemoteTrack(track_type);
-    console.log(`⏹️ Stopped remote ${track_type} (triggered by ${triggered_by})`);
-  }
-};
-
-export const handleRemoteAudioPause = (data, { pauseRemoteTrack }) => {
-  console.log("⏸️ Remote audio pause command received:", data);
-  const { track_type, triggered_by } = data;
-  
-  if (pauseRemoteTrack) {
-    pauseRemoteTrack(track_type);
-    console.log(`⏸️ Paused remote ${track_type} (triggered by ${triggered_by})`);
-  }
-};
-
-export const handleRemoteAudioVolume = (data, { setRemoteTrackVolume }) => {
-  console.log("🔊 Remote audio volume command received:", data);
-  const { track_type, volume, triggered_by } = data;
-  
-  if (setRemoteTrackVolume) {
-    setRemoteTrackVolume(track_type, volume);
-    console.log(`🔊 Set remote ${track_type} volume to ${Math.round(volume * 100)}% (triggered by ${triggered_by})`);
-  }
-};
+// Import audio event handlers from the audio management module
+import { 
+  handleRemoteAudioPlay, 
+  handleRemoteAudioResume, 
+  handleRemoteAudioBatch,
+  createAudioSendFunctions
+} from '../../audio_management/hooks/webSocketAudioEvents';
 
 // =====================================
-// EXISTING EVENT HANDLERS
+// GAME EVENT HANDLERS
 // =====================================
 
 export const handleSeatChange = (data, { setGameSeats, getCharacterData }) => {
@@ -123,15 +90,47 @@ export const handlePlayerDisconnectedLobby = (data, { setLobbyUsers, setDisconne
   // The backend will send a lobby_update when user is actually removed
 };
 
-export const handlePlayerKicked = (data, { thisPlayer }) => {
+export const handlePlayerKicked = (data, { thisPlayer, stopRemoteTrack, remoteTrackStates, handleRemoteAudioBatch }) => {
   console.log("received player kick:", data);
   const { kicked_player } = data;
   // Backend handles kick logging
 
-  // If this player was kicked, go back in browser history
+  // If this player was kicked, stop all audio and redirect
   if (kicked_player === thisPlayer) {
-    window.history.replaceState(null, '', '/');
-    window.history.back();
+    console.log("🚪 Player was kicked - stopping all audio before redirect");
+    
+    // Stop all currently active audio tracks using batch operations
+    if (remoteTrackStates && Object.keys(remoteTrackStates).length > 0) {
+      if (handleRemoteAudioBatch) {
+        // Use batch operations for better performance
+        const stopOperations = Object.keys(remoteTrackStates).map(trackId => ({
+          trackId: trackId,
+          operation: 'stop'
+        }));
+        
+        console.log(`🛑 Batch stopping ${stopOperations.length} audio tracks`);
+        handleRemoteAudioBatch(
+          { operations: stopOperations, triggered_by: 'player_kicked' },
+          { stopRemoteTrack }
+        );
+      } else if (stopRemoteTrack) {
+        // Fallback to individual stops if batch handler not available
+        Object.keys(remoteTrackStates).forEach(trackId => {
+          try {
+            stopRemoteTrack(trackId);
+            console.log(`🛑 Stopped audio track: ${trackId}`);
+          } catch (error) {
+            console.warn(`Failed to stop track ${trackId}:`, error);
+          }
+        });
+      }
+    }
+    
+    // Small delay to ensure audio stops before redirect
+    setTimeout(() => {
+      window.history.replaceState(null, '', '/');
+      window.history.back();
+    }, 100);
     return;
   }
 };
@@ -626,69 +625,9 @@ export const createSendFunctions = (webSocket, isConnected, roomId, playerName) 
     }));
   };
 
-  // =====================================
-  // REMOTE AUDIO SENDING FUNCTIONS
-  // =====================================
-
-  const sendRemoteAudioPlay = (trackType, audioFile, loop = true, volume = null) => {
-    if (!webSocket || !isConnected) return;
-    
-    console.log(`📡 Sending remote audio play: ${trackType} - ${audioFile}`);
-    
-    webSocket.send(JSON.stringify({
-      "event_type": "remote_audio_play",
-      "data": {
-        "track_type": trackType,
-        "audio_file": audioFile,
-        "loop": loop,
-        "volume": volume,
-        "triggered_by": playerName
-      }
-    }));
-  };
-
-  const sendRemoteAudioStop = (trackType) => {
-    if (!webSocket || !isConnected) return;
-    
-    console.log(`📡 Sending remote audio stop: ${trackType}`);
-    
-    webSocket.send(JSON.stringify({
-      "event_type": "remote_audio_stop",
-      "data": {
-        "track_type": trackType,
-        "triggered_by": playerName
-      }
-    }));
-  };
-
-  const sendRemoteAudioPause = (trackType) => {
-    if (!webSocket || !isConnected) return;
-    
-    console.log(`📡 Sending remote audio pause: ${trackType}`);
-    
-    webSocket.send(JSON.stringify({
-      "event_type": "remote_audio_pause",
-      "data": {
-        "track_type": trackType,
-        "triggered_by": playerName
-      }
-    }));
-  };
-
-  const sendRemoteAudioVolume = (trackType, volume) => {
-    if (!webSocket || !isConnected) return;
-    
-    console.log(`📡 [DEBOUNCED] Sending remote audio volume: ${trackType} - ${Math.round(volume * 100)}%`);
-    
-    webSocket.send(JSON.stringify({
-      "event_type": "remote_audio_volume",
-      "data": {
-        "track_type": trackType,
-        "volume": volume,
-        "triggered_by": playerName
-      }
-    }));
-  };
+  // Import and use audio send functions from the audio management module
+  const audioSendFunctions = createAudioSendFunctions(webSocket, isConnected, playerName);
+  const { sendRemoteAudioPlay, sendRemoteAudioResume, sendRemoteAudioBatch } = audioSendFunctions;
 
   return {
     sendSeatChange,
@@ -704,9 +643,8 @@ export const createSendFunctions = (webSocket, isConnected, roomId, playerName) 
     sendColorChange,
     sendRoleChange,
     sendRemoteAudioPlay,
-    sendRemoteAudioPause,
-    sendRemoteAudioStop,
-    sendRemoteAudioVolume
+    sendRemoteAudioResume,
+    sendRemoteAudioBatch
   };
 };
 
@@ -734,3 +672,6 @@ export const handleSystemMessage = (data, {}) => {
   // Add system message to adventure log
   // Backend handles system message logging
 };
+
+// Re-export audio handlers for backward compatibility
+export { handleRemoteAudioPlay, handleRemoteAudioResume, handleRemoteAudioBatch };

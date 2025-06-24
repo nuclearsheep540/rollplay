@@ -5,20 +5,20 @@
 
 'use client'
 
-import { React, useEffect, useState, useMemo, Suspense } from 'react'
+import { React, useEffect, useState, useMemo, useCallback, useRef, Suspense } from 'react'
 import { useSearchParams } from "next/navigation";
 import { getSeatColor } from '../utils/seatColors';
 
-import PlayerCard from "../components/PlayerCard";
-import DMChair from "../components/DMChair";
-import DMControlCenter from '../components/DMControlCenter';
-import ModeratorControls from '../components/ModeratorControls';
-import HorizontalInitiativeTracker from '../components/HorizontalInitiativeTracker';
-import AdventureLog from '../components/AdventureLog';
-import LobbyPanel from '../components/LobbyPanel';
-import DiceActionPanel from '../components/DiceActionPanel'; // NEW IMPORT
-import { useWebSocket } from '../hooks/useWebSocket';
-import { useUnifiedAudio } from '../hooks/useUnifiedAudio';
+import PlayerCard from "./components/PlayerCard";
+import DMChair from "./components/DMChair";
+import DMControlCenter from './components/DMControlCenter';
+import ModeratorControls from './components/ModeratorControls';
+import HorizontalInitiativeTracker from './components/HorizontalInitiativeTracker';
+import AdventureLog from './components/AdventureLog';
+import LobbyPanel from './components/LobbyPanel';
+import DiceActionPanel from './components/DiceActionPanel'; // NEW IMPORT
+import { useWebSocket } from './hooks/useWebSocket';
+import { useUnifiedAudio } from '../audio_management';
 
 function GameContent() {
   const params = useSearchParams(); 
@@ -489,11 +489,25 @@ function GameContent() {
     remoteTrackStates,
     remoteTrackAnalysers,
     playRemoteTrack,
+    resumeRemoteTrack,
     pauseRemoteTrack,
     stopRemoteTrack,
     setRemoteTrackVolume,
-    toggleRemoteTrackLooping
+    toggleRemoteTrackLooping,
+    loadRemoteAudioBuffer,
+    audioBuffersRef,
+    audioContextRef,
+    setClearPendingOperationCallback
   } = useUnifiedAudio();
+
+  // Ref to hold the pending operation clearing function from AudioMixerPanel
+  const clearPendingOperationFnRef = useRef(null);
+
+  // Function to set the callback (called by AudioMixerPanel)
+  const setClearPendingOperationFn = useCallback((fn) => {
+    clearPendingOperationFnRef.current = fn;
+    setClearPendingOperationCallback(fn);
+  }, [setClearPendingOperationCallback]);
 
   // Create game context object for WebSocket handlers (after audio functions are defined)
   const gameContext = {
@@ -522,10 +536,17 @@ function GameContent() {
     
     // Remote audio functions (for WebSocket events)
     playRemoteTrack,
+    resumeRemoteTrack,
     pauseRemoteTrack,
     stopRemoteTrack,
     setRemoteTrackVolume,
-    toggleRemoteTrackLooping
+    toggleRemoteTrackLooping,
+    loadRemoteAudioBuffer,
+    audioBuffersRef,
+    audioContextRef,
+    
+    // Remote audio state (for resume functionality)
+    remoteTrackStates
   };
 
   // Initialize WebSocket hook with game context (after audio functions are available)
@@ -545,9 +566,8 @@ function GameContent() {
     sendColorChange,
     sendRoleChange,
     sendRemoteAudioPlay,
-    sendRemoteAudioPause,
-    sendRemoteAudioStop,
-    sendRemoteAudioVolume
+    sendRemoteAudioResume,
+    sendRemoteAudioBatch
   } = useWebSocket(roomId, thisPlayer, gameContext);
 
   // Listen for combat state changes and play audio
@@ -1122,7 +1142,7 @@ function GameContent() {
         />
 
         {/* GRID POSITION 3: Right Panel - DM Controls (Full Height) */}
-        <div className="right-panel p-2">
+        <div className="right-panel p-4">
           {/* Moderator Controls - shown if player is host or moderator */}
           <ModeratorControls
             isModerator={isModerator}
@@ -1154,16 +1174,15 @@ function GameContent() {
             roomId={roomId}
             activePrompts={activePrompts}        // UPDATED: Pass array instead of single prompt
             unlockAudio={unlockAudio}             // NEW: Pass audio unlock function
+            isAudioUnlocked={isAudioUnlocked}    // NEW: Pass audio unlock status
             remoteTrackStates={remoteTrackStates} // NEW: Pass remote track states
             remoteTrackAnalysers={remoteTrackAnalysers} // NEW: Pass remote track analysers
             playRemoteTrack={playRemoteTrack}     // NEW: Pass remote track controls (local)
             stopRemoteTrack={stopRemoteTrack}     // NEW: Pass remote track controls (local)
-            setRemoteTrackVolume={setRemoteTrackVolume} // NEW: Pass remote track controls (local)
-            toggleRemoteTrackLooping={toggleRemoteTrackLooping} // NEW: Pass loop toggle function
             sendRemoteAudioPlay={sendRemoteAudioPlay}     // NEW: Pass WebSocket sending functions
-            sendRemoteAudioPause={sendRemoteAudioPause}   // NEW: Pass WebSocket pause function
-            sendRemoteAudioStop={sendRemoteAudioStop}     // NEW: Pass WebSocket sending functions
-            sendRemoteAudioVolume={sendRemoteAudioVolume} // NEW: Pass WebSocket sending functions
+            sendRemoteAudioResume={sendRemoteAudioResume} // NEW: Pass WebSocket resume function
+            sendRemoteAudioBatch={sendRemoteAudioBatch}   // NEW: Pass WebSocket batch function
+            clearPendingOperation={setClearPendingOperationFn} // NEW: Pass function to set pending operation clearer
             clearDicePrompt={clearDicePrompt}    // UPDATED: Now accepts prompt ID
           />
         </div>

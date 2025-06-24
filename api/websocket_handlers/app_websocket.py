@@ -45,6 +45,8 @@ def register_websocket_routes(app: FastAPI):
                 event_type = data.get("event_type")
                 event_data = data.get("data")
                 
+                print(f"📨 WebSocket received: {event_type} from {player_name}")
+                
                 # Initialize variables for post-processing
                 broadcast_message = None
                 log_removal_message = None
@@ -230,8 +232,8 @@ def register_websocket_routes(app: FastAPI):
                     )
                     broadcast_message = result.broadcast_message
 
-                elif event_type == "remote_audio_pause":
-                    result = await WebsocketEvent.remote_audio_pause(
+                elif event_type == "remote_audio_resume":
+                    result = await WebsocketEvent.remote_audio_resume(
                         websocket=websocket,
                         data=data,
                         event_data=event_data,
@@ -241,19 +243,8 @@ def register_websocket_routes(app: FastAPI):
                     )
                     broadcast_message = result.broadcast_message
 
-                elif event_type == "remote_audio_stop":
-                    result = await WebsocketEvent.remote_audio_stop(
-                        websocket=websocket,
-                        data=data,
-                        event_data=event_data,
-                        player_name=player_name,
-                        client_id=client_id,
-                        manager=manager
-                    )
-                    broadcast_message = result.broadcast_message
-
-                elif event_type == "remote_audio_volume":
-                    result = await WebsocketEvent.remote_audio_volume(
+                elif event_type == "remote_audio_batch":
+                    result = await WebsocketEvent.remote_audio_batch(
                         websocket=websocket,
                         data=data,
                         event_data=event_data,

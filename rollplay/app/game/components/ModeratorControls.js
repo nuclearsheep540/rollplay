@@ -13,7 +13,7 @@ import {
   MODERATOR_ARROW,
   MODERATOR_SUBTITLE,
   MODERATOR_LABEL
-} from '../styles/constants';
+} from '../../styles/constants';
 
 export default function ModeratorControls({
   isModerator,

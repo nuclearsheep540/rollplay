@@ -12,9 +12,9 @@ import {
   COMBAT_TOGGLE_INACTIVE,
   ACTIVE_BACKGROUND,
   PANEL_SUBTITLE
-} from '../styles/constants';
+} from '../../styles/constants';
 import DicePrompt from './DMDicePrompt';
-import AudioMixerPanel from './AudioMixerPanel';
+import { AudioMixerPanel } from '../../audio_management/components';
 
 String.prototype.titleCase = function() {
   return this.replace(/\w\S*/g, (txt) =>
@@ -41,16 +41,15 @@ export default function DMControlCenter({
   activePrompts = [],        // UPDATED: Array of active prompts
   clearDicePrompt,           // UPDATED: Function to clear prompt(s)
   unlockAudio = null,        // NEW: Audio unlock function for DM
+  isAudioUnlocked = false,   // NEW: Audio unlock status
   remoteTrackStates = {},    // NEW: Remote track states from unified audio
   remoteTrackAnalysers = {}, // NEW: Remote track analysers from unified audio
   playRemoteTrack = null,    // NEW: Play remote track function (local)
   stopRemoteTrack = null,    // NEW: Stop remote track function (local)
-  setRemoteTrackVolume = null, // NEW: Set remote track volume function (local)
   sendRemoteAudioPlay = null,  // NEW: Send remote audio play via WebSocket
-  sendRemoteAudioPause = null, // NEW: Send remote audio pause via WebSocket
-  sendRemoteAudioStop = null,  // NEW: Send remote audio stop via WebSocket
-  sendRemoteAudioVolume = null, // NEW: Send remote audio volume via WebSocket
-  toggleRemoteTrackLooping = null // NEW: Toggle loop state function
+  sendRemoteAudioResume = null, // NEW: Send remote audio resume via WebSocket
+  sendRemoteAudioBatch = null,     // NEW: Send remote audio batch operations via WebSocket
+  clearPendingOperation = null  // NEW: Function to set pending operation clearer
 }) {
   
   // State for main panel collapse
@@ -311,11 +310,11 @@ export default function DMControlCenter({
         remoteTrackStates={remoteTrackStates}
         remoteTrackAnalysers={remoteTrackAnalysers}
         sendRemoteAudioPlay={sendRemoteAudioPlay}
-        sendRemoteAudioPause={sendRemoteAudioPause}
-        sendRemoteAudioStop={sendRemoteAudioStop}
-        sendRemoteAudioVolume={sendRemoteAudioVolume}
-        setRemoteTrackVolume={setRemoteTrackVolume}
-        toggleRemoteTrackLooping={toggleRemoteTrackLooping}
+        sendRemoteAudioResume={sendRemoteAudioResume}
+        sendRemoteAudioBatch={sendRemoteAudioBatch}
+        unlockAudio={unlockAudio}
+        isAudioUnlocked={isAudioUnlocked}
+        clearPendingOperation={clearPendingOperation}
       />
 
 
