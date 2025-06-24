@@ -21,4 +21,4 @@ export {
   handleRemoteAudioResume, 
   handleRemoteAudioBatch,
   createAudioSendFunctions
-} from './webSocketAudioEvents';
+} from './hooks/webSocketAudioEvents';

@@ -17,7 +17,7 @@ import HorizontalInitiativeTracker from './components/HorizontalInitiativeTracke
 import AdventureLog from './components/AdventureLog';
 import LobbyPanel from './components/LobbyPanel';
 import DiceActionPanel from './components/DiceActionPanel'; // NEW IMPORT
-import { useWebSocket } from '../hooks/useWebSocket';
+import { useWebSocket } from './hooks/useWebSocket';
 import { useUnifiedAudio } from '../audio_management';
 
 function GameContent() {

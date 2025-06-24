@@ -8,3 +8,4 @@
 
 export { useWebAudio } from './useWebAudio';
 export { useUnifiedAudio } from './useUnifiedAudio';
+export * from './webSocketAudioEvents';

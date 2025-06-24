@@ -13,7 +13,7 @@ import {
   handleRemoteAudioResume, 
   handleRemoteAudioBatch,
   createAudioSendFunctions
-} from '../audio_management/webSocketAudioEvents';
+} from '../../audio_management/hooks/webSocketAudioEvents';
 
 // =====================================
 // GAME EVENT HANDLERS
