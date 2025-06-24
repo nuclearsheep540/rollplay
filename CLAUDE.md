@@ -8,14 +8,30 @@ Rollplay is a virtual D&D/tabletop gaming platform called "Tabletop Tavern" that
 
 ## Architecture
 
-### Frontend (Next.js 13)
+### Frontend (Next.js 13) - Functional Slice Architecture
 - **Location**: `/rollplay/` directory
 - **Framework**: Next.js 13 with App Router, TailwindCSS
+- **Architecture**: Organized by business domain (functional slices) rather than technical layers
 - **Key Pages**: 
   - `app/page.js` - Landing page for room creation/joining
   - `app/game/page.js` - Main game interface
-- **WebSocket Integration**: `app/hooks/useWebSocket.js` handles real-time communication
-- **Components**: Modular design in `app/components/` (dice panels, chat, DM controls, initiative tracker)
+
+#### **Functional Slices Structure:**
+
+**🎲 Game Domain** (`app/game/`)
+- `components/` - Game UI components (PlayerCard, DMControlCenter, AdventureLog, DiceActionPanel, etc.)
+- `hooks/` - Game-specific hooks (webSocketEvent.js, useWebSocket.js)
+- `page.js` - Main game interface
+
+**🎵 Audio Management Domain** (`app/audio_management/`)
+- `components/` - Audio controls (AudioMixerPanel, AudioTrack)
+- `hooks/` - Audio functionality (useUnifiedAudio, useWebAudio, webSocketAudioEvents)
+- `types/` - Audio-related type definitions
+- `index.js` - Exports all audio functionality
+
+**🎨 Shared Resources** (`app/`)
+- `styles/constants.js` - UI styling constants (DM_TITLE, DM_HEADER, etc.)
+- `utils/seatColors.js` - Shared utilities
 
 ### Backend (FastAPI)
 - **Location**: `/api/` directory  
@@ -101,12 +117,43 @@ MONGO_INITDB_DATABASE=rollplay
 - Check that mongo-init templates use `${MONGO_INITDB_ROOT_USERNAME}` and `${MONGO_INITDB_ROOT_PASSWORD}`
 - Ensure GameService reads from `os.environ` for database credentials
 
-## WebSocket Architecture
+## WebSocket Architecture & Event System
 
-- **Connection Management**: Centralized ConnectionManager in `api/app.py`
-- **Event Types**: seat_change, dice_roll, combat_state, player_connection, system_message
-- **Broadcasting**: All connected clients receive real-time updates
-- **Frontend Hook**: `useWebSocket.js` manages connection lifecycle and event handling
+### **Connection Management**
+- **Backend**: Centralized ConnectionManager in `api/app.py`
+- **Frontend**: `app/game/hooks/useWebSocket.js` manages connection lifecycle
+- **URL Pattern**: `/ws/{room_id}?player_name={player_name}`
+
+### **Atomic Event Publishing & Handling**
+- **Event Structure**: `{event_type: string, data: object}`
+- **Backend Validation**: All events validated before broadcasting in `websocket_events.py`
+- **Frontend Routing**: Events routed to domain-specific handlers via event_type switch
+- **Error Handling**: Malformed events logged and ignored, never crash the system
+
+### **Event Types by Domain**
+**Game Events**: `seat_change`, `dice_roll`, `combat_state`, `player_connection`, `system_message`, `role_change`
+**Audio Events**: `remote_audio_play`, `remote_audio_resume`, `remote_audio_batch`
+
+### **Audio Batch Processing System**
+- **Atomic Operations**: Multiple track operations executed as single batch
+- **Synchronized Playback**: Audio context timing ensures perfect sync across clients
+- **Batch Structure**: 
+  ```javascript
+  {
+    event_type: "remote_audio_batch",
+    data: {
+      operations: [
+        {trackId: "audio_channel_A", operation: "play", filename: "boss.mp3", fade: true},
+        {trackId: "audio_channel_B", operation: "stop", fade: true}
+      ],
+      fade_duration: 2000,
+      triggered_by: "player_name"
+    }
+  }
+  ```
+- **Fade Transitions**: 60Hz requestAnimationFrame interpolation for smooth volume changes
+- **Conflict Resolution**: New batch operations automatically cancel active fades
+- **Validation**: Server validates all operations before broadcasting to prevent client desync
 
 ## Key Development Patterns
 
