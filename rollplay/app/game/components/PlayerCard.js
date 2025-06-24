@@ -1,5 +1,5 @@
 import { React, useEffect, useState, useRef } from 'react'
-import { getSeatColor } from '../utils/seatColors'
+import { getSeatColor } from '../../utils/seatColors'
 import ColorPicker from './ColorPicker'
 
 export default function PlayerCard({

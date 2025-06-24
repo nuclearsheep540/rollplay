@@ -12,9 +12,9 @@ import {
   COMBAT_TOGGLE_INACTIVE,
   ACTIVE_BACKGROUND,
   PANEL_SUBTITLE
-} from '../styles/constants';
+} from '../../styles/constants';
 import DicePrompt from './DMDicePrompt';
-import AudioMixerPanel from './AudioMixerPanel';
+import { AudioMixerPanel } from '../../audio_management/components';
 
 String.prototype.titleCase = function() {
   return this.replace(/\w\S*/g, (txt) =>

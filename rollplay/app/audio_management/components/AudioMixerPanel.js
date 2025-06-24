@@ -7,13 +7,13 @@
 
 import React, { useState, useEffect, useCallback } from 'react';
 import AudioTrack from './AudioTrack';
-import { PlaybackState, ChannelType } from '../audio_management/types';
+import { PlaybackState, ChannelType } from '../types';
 import {
   DM_HEADER,
   DM_ARROW,
   DM_CHILD,
   PANEL_CHILD,
-} from '../styles/constants';
+} from '../../styles/constants';
 
 export default function AudioMixerPanel({
   isExpanded,

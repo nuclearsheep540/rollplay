@@ -4,7 +4,7 @@
  */
 
 import React, { useRef, useEffect } from 'react';
-import { PlaybackState } from '../audio_management/types';
+import { PlaybackState } from '../types';
 import {
   DM_SUB_HEADER,
   DM_CHILD,
@@ -14,7 +14,7 @@ import {
   AUDIO_INDICATOR_SYNCED,
   AUDIO_INDICATOR_UNSYNCED,
   AUDIO_INDICATOR_NORMAL
-} from '../styles/constants';
+} from '../../styles/constants';
 
 // Helper: format seconds → MM:SS
 const formatTime = (seconds) => {

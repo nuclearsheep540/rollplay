@@ -9,16 +9,16 @@ import { React, useEffect, useState, useMemo, useCallback, useRef, Suspense } fr
 import { useSearchParams } from "next/navigation";
 import { getSeatColor } from '../utils/seatColors';
 
-import PlayerCard from "../components/PlayerCard";
-import DMChair from "../components/DMChair";
-import DMControlCenter from '../components/DMControlCenter';
-import ModeratorControls from '../components/ModeratorControls';
-import HorizontalInitiativeTracker from '../components/HorizontalInitiativeTracker';
-import AdventureLog from '../components/AdventureLog';
-import LobbyPanel from '../components/LobbyPanel';
-import DiceActionPanel from '../components/DiceActionPanel'; // NEW IMPORT
+import PlayerCard from "./components/PlayerCard";
+import DMChair from "./components/DMChair";
+import DMControlCenter from './components/DMControlCenter';
+import ModeratorControls from './components/ModeratorControls';
+import HorizontalInitiativeTracker from './components/HorizontalInitiativeTracker';
+import AdventureLog from './components/AdventureLog';
+import LobbyPanel from './components/LobbyPanel';
+import DiceActionPanel from './components/DiceActionPanel'; // NEW IMPORT
 import { useWebSocket } from '../hooks/useWebSocket';
-import { useUnifiedAudio } from '../hooks/useUnifiedAudio';
+import { useUnifiedAudio } from '../audio_management';
 
 function GameContent() {
   const params = useSearchParams(); 

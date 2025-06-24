@@ -17,7 +17,7 @@ import {
   MODAL_INPUT,
   MODAL_LABEL,
   MODAL_CANCEL_BUTTON
-} from '../styles/constants';
+} from '../../styles/constants';
 
 export default function DicePrompt({
   isOpen,
