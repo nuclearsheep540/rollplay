@@ -12,6 +12,7 @@ import {
   DM_HEADER,
   DM_ARROW,
   DM_CHILD,
+  PANEL_CHILD,
 } from '../styles/constants';
 
 export default function AudioMixerPanel({
@@ -30,7 +31,7 @@ export default function AudioMixerPanel({
   
   // Cue system state
   const [currentCue, setCurrentCue] = useState(null); // { tracksToStart: [], tracksToStop: [], cueId: string }
-  const [useFade, setUseFade] = useState(false); // When true, use fade; defaults to cut
+  const [trackFadeStates, setTrackFadeStates] = useState({}); // Per-track fade configuration { trackId: boolean }
   
   // Helper to add pending operation
   const addPendingOperation = (operation) => {
@@ -472,30 +473,29 @@ export default function AudioMixerPanel({
           {/* DJ Cue System - Show when multiple BGM channels are available */}
           {bgmChannels.length > 1 && (
             <div className={DM_CHILD}>
-              <div className="text-white font-bold mb-3">🎧 Channel Cue </div>
-              <p>Easily cut/fade to a combination of tracks</p>
+              <div className="text-white font-bold mb-3">🎧 Channel Cue</div>
               {/* DJ Cue System Layout matching cue2.png exactly */}
               <div className="mb-4">
                 {/* Header Row */}
                 <div className="grid grid-cols-4 gap-4 mb-2">
-                  <div className="text-white text-sm font-bold text-center">PFL</div>
+                  <div className="text-white text-sm font-bold text-center">Cue</div>
                   <div className="text-white text-sm font-bold text-center">Transition</div>
                   <div className="text-white text-sm font-bold text-center">PGM</div>
                   <div className="text-white text-sm font-bold text-center">Preview</div>
                 </div>
                 
                 {/* Tracks Layout - 4 equal columns */}
-                <div className="grid grid-cols-4 gap-4 items-start">
+                <div className="grid grid-cols-4 gap-4 items-center">
                   {/* PFL Column - Channel selection */}
-                  <div className="flex flex-col gap-1">
+                  <div className="flex flex-col gap-1 items-center">
                     {/* BGM channels */}
                     {bgmChannels.map((channel) => (
                       <div 
                         key={`pfl-${channel.channelId}`}
-                        className={`w-10 h-8 rounded text-center text-xs transition-all duration-200 cursor-pointer flex items-center justify-center ${
+                        className={`w-10 h-8 rounded text-center text-xs transition-all duration-200 cursor-pointer flex items-center justify-center border ${
                           currentCue?.targetTracks?.includes?.(channel.channelId) 
-                            ? 'bg-green-600 text-white' 
-                            : 'bg-gray-600 hover:bg-gray-500 text-gray-300'
+                            ? 'bg-green-600 text-white border-green-500' 
+                            : 'bg-gray-600 hover:bg-gray-500 text-gray-300 border-gray-500'
                         }`}
                         onClick={() => {
                           setCurrentCue(prev => {
@@ -527,41 +527,42 @@ export default function AudioMixerPanel({
                   </div>
 
                   {/* Transition Controls */}
-                  <div className="flex flex-col gap-1">                   
-                    {/* Individual Fade Buttons for BGM Channels */}
-                    {bgmChannels.map((channel) => (
-                      <button 
-                        key={`transition-${channel.channelId}`}
-                        className="w-full h-8 bg-purple-500 hover:bg-purple-600 text-white text-xs font-bold rounded"
-                        onClick={() => {
-                          // Create a cue for just this track and execute based on mode
-                          createCue([channel.channelId]);
-                          // Execute transition immediately after creating cue
-                          setTimeout(() => {
-                            if (useFade) {
-                              executeFade();
-                            } else {
-                              executeCrossfade();
-                            }
-                          }, 50);
-                        }}
-                        title={`${useFade ? 'Fade' : 'Cut'} to ${channel.label}`}
-                      >
-                        FADE
-                      </button>
-                    ))}
+                  <div className="flex flex-col gap-1 items-center">                   
+                    {/* Individual Fade Configuration Buttons for BGM Channels */}
+                    {bgmChannels.map((channel) => {
+                      const isFadeArmed = trackFadeStates[channel.channelId] || false;
+                      return (
+                        <button 
+                          key={`fade-config-${channel.channelId}`}
+                          className={`w-full h-8 text-xs font-bold rounded transition-all duration-200 border ${
+                            isFadeArmed 
+                              ? 'bg-blue-600 text-white border-blue-500 hover:bg-blue-700' 
+                              : 'bg-gray-600 text-gray-300 border-gray-500 hover:bg-gray-500'
+                          }`}
+                          onClick={() => {
+                            setTrackFadeStates(prev => ({
+                              ...prev,
+                              [channel.channelId]: !isFadeArmed
+                            }));
+                          }}
+                          title={`${isFadeArmed ? 'Armed for fade' : 'Armed for cut'} - ${channel.label}`}
+                        >
+                          FADE
+                        </button>
+                      );
+                    })}
                   </div>
 
                   {/* PGM Column - Show what's currently playing */}
-                  <div className="flex flex-col gap-1">
+                  <div className="flex flex-col gap-1 items-center">
                     {/* All BGM channels */}
                     {bgmChannels.map((channel) => {
                       const isPlaying = remoteTrackStates[channel.channelId]?.playbackState === 'playing';
                       return (
                         <div 
                           key={`pgm-${channel.channelId}`}
-                          className={`w-10 h-8 rounded text-center text-xs transition-all duration-200 flex items-center justify-center ${
-                            isPlaying ? 'bg-green-600 text-white' : 'bg-gray-600 text-gray-300'
+                          className={`w-10 h-8 rounded text-center text-xs transition-all duration-200 flex items-center justify-center border ${
+                            isPlaying ? 'bg-green-600 text-white border-green-500' : 'bg-gray-600 text-gray-300 border-gray-500'
                           }`}
                         >
                           {channel.channelId.replace('audio_channel_', '')}
@@ -571,7 +572,7 @@ export default function AudioMixerPanel({
                   </div>
 
                   {/* Preview Column - Show the differential result of the transition */}
-                  <div className="flex flex-col gap-1">
+                  <div className="flex flex-col gap-1 items-center">
                     {bgmChannels.map((channel) => {
                       const trackState = remoteTrackStates[channel.channelId];
                       const isCurrentlyPlaying = trackState?.playbackState === 'playing';
@@ -580,24 +581,25 @@ export default function AudioMixerPanel({
                       // Calculate what will change (no hooks here)
                       let changeType = null;
                       let displayText = '-';
-                      let colorClass = 'bg-gray-600 text-gray-300';
                       
                       if (isSelectedInPFL && !isCurrentlyPlaying) {
                         // Track will start playing (coming in)
                         changeType = 'start';
                         displayText = channel.channelId.replace('audio_channel_', '');
-                        colorClass = 'bg-green-500 text-white'; // Green for starting
                       } else if (!isSelectedInPFL && isCurrentlyPlaying) {
                         // Track will stop playing (going out)  
                         changeType = 'stop';
                         displayText = channel.channelId.replace('audio_channel_', '');
-                        colorClass = 'bg-red-500 text-white'; // Red for stopping
                       }
                       
                       return (
                         <div 
                           key={`preview-${channel.channelId}`}
-                          className={`w-10 h-8 rounded text-center text-xs transition-all duration-200 flex items-center justify-center ${colorClass}`}
+                          className={`w-10 h-8 rounded text-center text-xs transition-all duration-200 flex items-center justify-center border ${
+                            changeType === 'start' ? 'bg-green-500 text-white border-green-400' :
+                            changeType === 'stop' ? 'bg-red-500 text-white border-red-400' :
+                            'bg-gray-600 text-gray-300 border-gray-500'
+                          }`}
                           title={
                             changeType === 'start' ? `${displayText} will start playing` :
                             changeType === 'stop' ? `${displayText} will stop playing` :
@@ -621,14 +623,17 @@ export default function AudioMixerPanel({
                       : 'bg-gray-600 text-gray-400 cursor-not-allowed'
                   }`}
                   onClick={() => {
-                    if (useFade) {
+                    // Check if any tracks in the cue are armed for fade
+                    const hasFadeTracks = currentCue?.targetTracks?.some(trackId => trackFadeStates[trackId]);
+                    
+                    if (hasFadeTracks) {
                       executeFade();
                     } else {
                       executeCrossfade();
                     }
                   }}
                   disabled={!currentCue?.targetTracks?.length}
-                  title={`Execute ${useFade ? 'fade' : 'cut'} transition`}
+                  title={`Execute transition (${currentCue?.targetTracks?.some(trackId => trackFadeStates[trackId]) ? 'some tracks will fade' : 'all tracks will cut'})`}
                 >
                   CUT
                 </button>

@@ -134,13 +134,23 @@ export const handleRemoteAudioBatch = async (data, {
     try {
       switch (operation) {
         case 'play':
-          if (playRemoteTrack && audioBuffersRef) {
+          if (playRemoteTrack && loadRemoteAudioBuffer && audioBuffersRef) {
             const { filename, looping = true, volume = 1.0 } = op;
             
-            // Skip buffer loading - already done in pre-load phase for synchronized operations
-            // Pass synchronized start time for batch operations
+            // For synchronized operations, buffer is pre-loaded; for single operations, load it now
+            if (!syncStartTime) {
+              // Single track operation - load buffer now
+              const buffer = await loadRemoteAudioBuffer(`/audio/${filename}`, trackId);
+              if (buffer && audioBuffersRef) {
+                const expectedKey = `${trackId}_${filename}`;
+                audioBuffersRef.current[expectedKey] = buffer;
+              }
+            }
+            // else: Buffer already pre-loaded for synchronized operations
+            
+            // Pass synchronized start time for batch operations (null for single operations)
             await playRemoteTrack(trackId, filename, looping, volume, null, op, true, syncStartTime);
-            console.log(`✅ Batch operation ${index + 1}: played ${trackId} (${filename}) at sync time ${syncStartTime}`);
+            console.log(`✅ Batch operation ${index + 1}: played ${trackId} (${filename}) ${syncStartTime ? `at sync time ${syncStartTime}` : 'immediately'}`);
           } else {
             console.warn(`❌ Batch operation ${index + 1}: playRemoteTrack function not available`);
           }
