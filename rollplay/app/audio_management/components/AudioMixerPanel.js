@@ -86,6 +86,7 @@ export default function AudioMixerPanel({
       }
     });
   }, [remoteTrackStates]);
+
   
 
   // Crossfade execution function (memoized to prevent re-renders)
@@ -189,80 +190,6 @@ export default function AudioMixerPanel({
     setCurrentCue(null);
   }, [currentCue, remoteTrackStates, sendRemoteAudioBatch]);
 
-  // Cue system functions - simplified to work with explicit track selections
-  const createCue = (targetTracks) => {
-    // targetTracks is an array of track IDs that should be playing
-    if (!Array.isArray(targetTracks)) {
-      console.warn('createCue requires an array of track IDs');
-      return;
-    }
-    
-    // Determine what needs to start vs stop
-    const tracksToStart = targetTracks.filter(trackId => 
-      remoteTrackStates[trackId]?.playbackState !== PlaybackState.PLAYING
-    );
-    
-    const tracksToStop = Object.keys(remoteTrackStates).filter(trackId => {
-      const track = remoteTrackStates[trackId];
-      // Stop tracks that are playing but not in the new target list
-      return track.playbackState === PlaybackState.PLAYING && 
-             !targetTracks.includes(trackId);
-    });
-    
-    const cueId = `cue_${Date.now()}`;
-    const newCue = {
-      cueId,
-      tracksToStart,
-      tracksToStop,
-      targetTracks
-    };
-    
-    setCurrentCue(newCue);
-    console.log(`🎯 Cue created:`, newCue);
-  };
-
-  const executeCut = () => {
-    if (!currentCue) return;
-    
-    console.log(`✂️ Executing CUT transition:`, currentCue);
-    
-    // Create batch operations for cut transition
-    const batchOperations = [];
-    
-    // Add stop operations
-    currentCue.tracksToStop?.forEach(trackId => {
-      batchOperations.push({
-        trackId,
-        operation: 'stop'
-      });
-    });
-    
-    // Add play operations
-    if (currentCue.tracksToStart.length > 0) {
-      currentCue.tracksToStart.forEach(trackId => {
-        const track = remoteTrackStates[trackId];
-        batchOperations.push({
-          trackId,
-          operation: 'play',
-          filename: track.filename,
-          looping: track.looping ?? (track.type !== 'sfx'),
-          volume: track.volume,
-          type: track.type,
-          channelGroup: track.channelGroup,
-          track: track.track
-        });
-      });
-    }
-    
-    // Execute all operations simultaneously
-    if (batchOperations.length > 0) {
-      console.log(`✂️ Executing ${batchOperations.length} cut operations:`, batchOperations);
-      sendRemoteAudioBatch?.(batchOperations);
-    }
-    
-    // Clear the cue
-    setCurrentCue(null);
-  };
 
   const executeFade = () => {
     if (!currentCue) return;
@@ -330,10 +257,6 @@ export default function AudioMixerPanel({
     setCurrentCue(null);
   };
 
-  const clearCue = () => {
-    setCurrentCue(null);
-    console.log(`🗑️ Cue cleared`);
-  };
 
   // Stop all tracks function using batch operation
   const stopAllTracks = () => {
@@ -723,13 +646,7 @@ export default function AudioMixerPanel({
                     // Check if any tracks that will be affected are armed for fade
                     const allAffectedTracks = [...tracksToStart, ...tracksToStop];
                     const hasFadeTracks = allAffectedTracks.some(trackId => trackFadeStates[trackId]);
-                    
-                    console.log(`🎚️ targetTracks:`, targetTracks);
-                    console.log(`🎚️ tracksToStart:`, tracksToStart);
-                    console.log(`🎚️ tracksToStop:`, tracksToStop);
-                    console.log(`🎚️ allAffectedTracks:`, allAffectedTracks);
-                    console.log(`🎚️ trackFadeStates:`, trackFadeStates);
-                    console.log(`🎚️ hasFadeTracks:`, hasFadeTracks);
+
                     
                     if (hasFadeTracks) {
                       console.log(`🌊 Calling executeFade()`);
@@ -739,7 +656,12 @@ export default function AudioMixerPanel({
                       executeCrossfade();
                     }
                   }}
-                  disabled={!currentCue?.targetTracks?.length}
+                  disabled={
+                    !currentCue?.targetTracks?.length && 
+                    !Object.keys(remoteTrackStates).some(trackId => 
+                      remoteTrackStates[trackId]?.playbackState === PlaybackState.PLAYING
+                    )
+                  }
                   title={`Execute transition (${currentCue?.targetTracks?.some(trackId => trackFadeStates[trackId]) ? 'some tracks will fade' : 'all tracks will cut'})`}
                 >
                   CUT
