@@ -89,14 +89,25 @@ function GameContent() {
 
   // Map system state
   const [activeMap, setActiveMap] = useState(null); // Current active map data
-  const [mapEditMode, setMapEditMode] = useState(false); // Is DM editing the map?
+  const [mapEditMode, setMapEditMode] = useState(false); // Is DM editing the grid?
+  const [mapImageEditMode, setMapImageEditMode] = useState(false); // Is DM editing the map image?
   const [gridConfig, setGridConfig] = useState(null); // Current grid configuration
+  const [mapImageConfig, setMapImageConfig] = useState(null); // Map image positioning/scaling
 
   // Handle grid configuration changes during editing
   const handleGridChange = (newGridConfig) => {
+    console.log('🎯 handleGridChange called with:', newGridConfig);
+    console.log('🎯 Current gridConfig before update:', gridConfig);
     setGridConfig(newGridConfig);
     // TODO: Save to backend when grid editing is complete
-    console.log('Grid config updated:', newGridConfig);
+    console.log('🎯 Grid config updated, setGridConfig called');
+  };
+
+  // Handle map image configuration changes during editing
+  const handleMapImageChange = (newMapImageConfig) => {
+    setMapImageConfig(newMapImageConfig);
+    // TODO: Save to backend when map editing is complete
+    console.log('Map image config updated:', newMapImageConfig);
   };
 
   // Helper function to get character data
@@ -1075,14 +1086,6 @@ function GameContent() {
         </div>
       </div>
 
-      {/* Map Display Background - Sits behind all panels */}
-      <MapDisplay 
-        activeMap={activeMap}
-        isEditMode={mapEditMode && isDM}
-        gridConfig={gridConfig}
-        onGridChange={handleGridChange}
-      />
-
       {/* Main Game Area */}
       <div className="main-game-area">
         {/* GRID POSITION 1: Left Column - party-sidebar with adventure log */}
@@ -1155,12 +1158,26 @@ function GameContent() {
         </div>
 
         {/* GRID POSITION 2: Center Column - map-canvas with horizontal initiative */}
-        <HorizontalInitiativeTracker 
-          initiativeOrder={initiativeOrder}
-          handleInitiativeClick={handleInitiativeClick}
-          currentTurn={currentTurn}
-          combatActive={combatActive}
-        />
+        <div className="grid-area-map-canvas relative">
+          {/* Map Display Background - Now properly positioned in center area */}
+          <MapDisplay 
+            activeMap={activeMap}
+            isEditMode={mapEditMode && isDM}
+            gridConfig={gridConfig}
+            onGridChange={handleGridChange}
+            mapImageEditMode={mapImageEditMode && isDM}
+            mapImageConfig={mapImageConfig}
+            onMapImageChange={handleMapImageChange}
+          />
+          
+          {/* Horizontal Initiative Tracker overlaid on map */}
+          <HorizontalInitiativeTracker 
+            initiativeOrder={initiativeOrder}
+            handleInitiativeClick={handleInitiativeClick}
+            currentTurn={currentTurn}
+            combatActive={combatActive}
+          />
+        </div>
 
         {/* GRID POSITION 3: Right Panel - DM Controls (Full Height) */}
         <div className="right-panel p-4">
@@ -1209,7 +1226,11 @@ function GameContent() {
             mapEditMode={mapEditMode}
             setMapEditMode={setMapEditMode}
             activeMap={activeMap}
+            setActiveMap={setActiveMap}
             gridConfig={gridConfig}
+            mapImageEditMode={mapImageEditMode}
+            setMapImageEditMode={setMapImageEditMode}
+            handleGridChange={handleGridChange}
           />
         </div>
 

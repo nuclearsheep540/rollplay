@@ -54,7 +54,11 @@ export default function DMControlCenter({
   mapEditMode = false,       // NEW: Map edit mode state
   setMapEditMode = null,     // NEW: Function to toggle map edit mode
   activeMap = null,          // NEW: Current active map data
-  gridConfig = null          // NEW: Current grid configuration
+  gridConfig = null,         // NEW: Current grid configuration
+  setActiveMap = null,       // NEW: Function to set active map
+  mapImageEditMode = false,  // NEW: Map image edit mode state  
+  setMapImageEditMode = null, // NEW: Function to toggle map image edit mode
+  handleGridChange = null     // NEW: Function to handle grid config changes
 }) {
   
   // State for main panel collapse
@@ -75,6 +79,10 @@ export default function DMControlCenter({
   const [isPlayerSelectExpanded, setIsPlayerSelectExpanded] = useState(false);
   const [rollPromptModalOpen, setRollPromptModalOpen] = useState(false);
   const [selectedPlayerForModal, setSelectedPlayerForModal] = useState('');
+
+  // NEW: State for grid dimensions input
+  const [gridDimensions, setGridDimensions] = useState({ width: 8, height: 12 });
+  const [isDimensionsExpanded, setIsDimensionsExpanded] = useState(false);
 
   const toggleSection = (section) => {
     setExpandedSections(prev => ({
@@ -100,6 +108,49 @@ export default function DMControlCenter({
 
   // Get list of players currently in seats (excluding empty seats)
   const activePlayers = gameSeats?.filter(seat => seat.playerName !== "empty") || [];
+
+  // NEW: Create grid configuration from dimensions (pure dimensional grid)
+  const createGridFromDimensions = (gridWidth, gridHeight) => {
+    return {
+      grid_width: gridWidth,
+      grid_height: gridHeight,
+      enabled: true,
+      colors: gridConfig?.colors || {
+        edit_mode: {
+          line_color: "#ff0000",
+          opacity: 0.8,
+          line_width: 2
+        },
+        display_mode: {
+          line_color: "#ffffff", 
+          opacity: 0.3,
+          line_width: 1
+        }
+      }
+    };
+  };
+
+  // NEW: Apply grid dimensions to current map
+  const applyGridDimensions = () => {
+    console.log('🎯 Applying grid dimensions - activeMap:', activeMap, 'gridConfig:', gridConfig, 'handleGridChange:', typeof handleGridChange);
+    
+    const newGridConfig = createGridFromDimensions(
+      gridDimensions.width,
+      gridDimensions.height
+    );
+    
+    console.log('🎯 Created new grid config:', newGridConfig);
+    
+    // Use the same callback as grid editing
+    if (typeof handleGridChange === 'function') {
+      handleGridChange(newGridConfig);
+      console.log('🎯 handleGridChange called successfully');
+    } else {
+      console.error('🎯 handleGridChange is not a function:', handleGridChange);
+    }
+    
+    console.log('🎯 Applied grid dimensions:', gridDimensions, 'resulting config:', newGridConfig);
+  };
 
   if (!isDM) {
     return null;
@@ -195,17 +246,61 @@ export default function DMControlCenter({
         {expandedSections.map && (
           <div>
             <button 
-              className={DM_CHILD}
+              className={`${DM_CHILD} ${activeMap ? ACTIVE_BACKGROUND : ''}`}
+              onClick={() => {
+                if (setActiveMap) {
+                  if (activeMap) {
+                    // Clear the current map
+                    setActiveMap(null);
+                    console.log('🗺️ Map cleared');
+                  } else {
+                    // Load the test map
+                    const testMap = {
+                      id: "test-map-1",
+                      filename: "map-bg-no-grid.jpg",
+                      original_filename: "Test Battle Map", 
+                      file_path: "/map-bg-no-grid.jpg",
+                      upload_date: new Date().toISOString(),
+                      dimensions: { width: 1200, height: 800 }, // Estimated
+                      grid_config: {
+                        grid_width: 8,
+                        grid_height: 12,
+                        enabled: true,
+                        colors: {
+                          edit_mode: {
+                            line_color: "#ff0000",
+                            opacity: 0.8,
+                            line_width: 2
+                          },
+                          display_mode: {
+                            line_color: "#ffffff", 
+                            opacity: 0.3,
+                            line_width: 1
+                          }
+                        }
+                      }
+                    };
+                    setActiveMap(testMap);
+                    console.log('🗺️ Test map loaded:', testMap);
+                  }
+                }
+              }}
+              disabled={!setActiveMap}
             >
-              📁 Upload Map
+              📁 {activeMap ? 'Clear Map' : 'Load Test Map'}
             </button>
             <button 
               className={DM_CHILD}
+              onClick={() => {
+                // Future: Implement actual file upload
+                console.log('📁 File upload not implemented yet');
+                alert('File upload will be implemented in future session');
+              }}
             >
-              💾 Load Map
+              🔄 Upload New Map
             </button>
             <button 
-              className={`${DM_CHILD_LAST} ${mapEditMode ? ACTIVE_BACKGROUND : ''}`}
+              className={`${DM_CHILD} ${mapEditMode ? ACTIVE_BACKGROUND : ''}`}
               onClick={() => {
                 if (setMapEditMode) {
                   setMapEditMode(!mapEditMode);
@@ -215,6 +310,76 @@ export default function DMControlCenter({
             >
               📏 {mapEditMode ? 'Exit Grid Edit' : 'Grid Settings'}
             </button>
+            <button 
+              className={`${DM_CHILD} ${mapImageEditMode ? ACTIVE_BACKGROUND : ''}`}
+              onClick={() => {
+                if (setMapImageEditMode) {
+                  setMapImageEditMode(!mapImageEditMode);
+                }
+              }}
+              disabled={!setMapImageEditMode || !activeMap}
+            >
+              🗺️ {mapImageEditMode ? 'Exit Map Edit' : 'Edit Map'}
+            </button>
+            
+            {/* Grid Dimensions Controls */}
+            <button 
+              className={`${DM_CHILD} ${isDimensionsExpanded ? ACTIVE_BACKGROUND : ''}`}
+              onClick={() => setIsDimensionsExpanded(!isDimensionsExpanded)}
+              disabled={!activeMap}
+            >
+              📐 {isDimensionsExpanded ? 'Hide Grid Size' : 'Set Grid Size'}
+            </button>
+            
+            {/* Grid Dimensions Input (expandable) */}
+            {isDimensionsExpanded && activeMap && (
+              <div className="ml-4 mb-6">
+                <div className={PANEL_SUBTITLE + " mb-2"}>
+                  Grid Dimensions (cells across map)
+                </div>
+                <div className="flex gap-2 mb-3">
+                  <div className="flex-1">
+                    <label className="block text-xs text-gray-400 mb-1">Width</label>
+                    <input
+                      type="number"
+                      min="1"
+                      max="50"
+                      value={gridDimensions.width}
+                      onChange={(e) => setGridDimensions(prev => ({ 
+                        ...prev, 
+                        width: parseInt(e.target.value) || 1 
+                      }))}
+                      className="w-full px-2 py-1 bg-gray-800 border border-gray-600 rounded text-sm text-white focus:border-blue-500 focus:outline-none"
+                    />
+                  </div>
+                  <div className="flex-1">
+                    <label className="block text-xs text-gray-400 mb-1">Height</label>
+                    <input
+                      type="number"
+                      min="1"
+                      max="50"
+                      value={gridDimensions.height}
+                      onChange={(e) => setGridDimensions(prev => ({ 
+                        ...prev, 
+                        height: parseInt(e.target.value) || 1 
+                      }))}
+                      className="w-full px-2 py-1 bg-gray-800 border border-gray-600 rounded text-sm text-white focus:border-blue-500 focus:outline-none"
+                    />
+                  </div>
+                </div>
+                <button
+                  className={DM_CHILD_LAST}
+                  onClick={applyGridDimensions}
+                >
+                  ✨ Apply {gridDimensions.width}×{gridDimensions.height} Grid
+                </button>
+                {activeMap?.dimensions && (
+                  <div className="text-xs text-gray-400 mt-2">
+                    Map: {activeMap.dimensions.width}×{activeMap.dimensions.height}px
+                  </div>
+                )}
+              </div>
+            )}
           </div>
         )}
       </div>

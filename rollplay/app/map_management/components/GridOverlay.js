@@ -13,18 +13,17 @@ const GridOverlay = ({
   containerWidth = '100%',
   containerHeight = '100%',
   showLabels = true,
-  onGridChange = null // Callback for when grid config changes
+  onGridChange = null, // Callback for when grid config changes
+  activeMap = null, // NEW: Map data with dimensions
+  mapImageConfig = null, // NEW: Map image positioning/scaling
+  mapImageRef = null // NEW: Reference to the actual map image element
 }) => {
-  // Local state for editing
-  const [isDragging, setIsDragging] = useState(false);
-  const [dragStart, setDragStart] = useState({ x: 0, y: 0 });
-  const [tempOffset, setTempOffset] = useState({ x: 0, y: 0 });
+  // Local state for editing (simplified - no more offset management)
   const svgRef = useRef(null);
-  // Default grid configuration
+  // Default grid configuration - pure dimensional grid anchored to map
   const defaultConfig = {
-    cell_size: 50,      // 50px cells by default
-    offset_x: 0,        // No offset
-    offset_y: 0,        // No offset
+    grid_width: 8,      // Number of cells across map width
+    grid_height: 12,    // Number of cells across map height
     enabled: true,
     colors: {
       edit_mode: {
@@ -40,141 +39,51 @@ const GridOverlay = ({
     }
   };
 
-  // Use provided config or default, applying temporary offsets in edit mode
+  // Use provided config or default (no more offset management needed)
   const config = gridConfig || defaultConfig;
+  console.log('🎯 GridOverlay received gridConfig:', gridConfig, 'using config:', config);
   const currentColors = isEditMode ? config.colors.edit_mode : config.colors.display_mode;
-  
-  // Apply temporary offsets during dragging
-  const effectiveConfig = {
-    ...config,
-    offset_x: config.offset_x + (isDragging ? tempOffset.x : 0),
-    offset_y: config.offset_y + (isDragging ? tempOffset.y : 0)
-  };
 
-  // Mouse event handlers for grid dragging
-  const handleMouseDown = useCallback((e) => {
-    if (!isEditMode) return;
-    
-    const rect = svgRef.current?.getBoundingClientRect();
-    if (!rect) return;
-    
-    setIsDragging(true);
-    setDragStart({
-      x: e.clientX - rect.left,
-      y: e.clientY - rect.top
-    });
-    setTempOffset({ x: 0, y: 0 });
-    
-    e.preventDefault();
-  }, [isEditMode]);
 
-  const handleMouseMove = useCallback((e) => {
-    if (!isDragging || !isEditMode) return;
-    
-    const rect = svgRef.current?.getBoundingClientRect();
-    if (!rect) return;
-    
-    const currentX = e.clientX - rect.left;
-    const currentY = e.clientY - rect.top;
-    
-    setTempOffset({
-      x: currentX - dragStart.x,
-      y: currentY - dragStart.y
-    });
-  }, [isDragging, isEditMode, dragStart]);
-
-  const handleMouseUp = useCallback(() => {
-    if (!isDragging || !isEditMode) return;
-    
-    // Apply the temporary offset to the actual config
-    if (onGridChange && (tempOffset.x !== 0 || tempOffset.y !== 0)) {
-      const newConfig = {
-        ...config,
-        offset_x: config.offset_x + tempOffset.x,
-        offset_y: config.offset_y + tempOffset.y
-      };
-      onGridChange(newConfig);
-    }
-    
-    setIsDragging(false);
-    setTempOffset({ x: 0, y: 0 });
-  }, [isDragging, isEditMode, tempOffset, config, onGridChange]);
-
-  // Mouse wheel handler for grid scaling
-  const handleWheel = useCallback((e) => {
-    if (!isEditMode) return;
-    
-    e.preventDefault();
-    e.stopPropagation();
-    
-    // Scroll up = zoom in = larger cells = fewer cells
-    // Scroll down = zoom out = smaller cells = more cells
-    const delta = e.deltaY > 0 ? -2 : 2; // Smaller increments for smoother scaling
-    const newCellSize = Math.max(4, Math.min(120, config.cell_size + delta));
-    
-    if (onGridChange && newCellSize !== config.cell_size) {
-      const newConfig = {
-        ...config,
-        cell_size: newCellSize
-      };
-      onGridChange(newConfig);
-    }
-  }, [isEditMode, config, onGridChange]);
-
-  // Add global event listeners for mouse events when in edit mode
-  useEffect(() => {
-    if (!isEditMode) return;
-
-    const handleGlobalMouseMove = (e) => handleMouseMove(e);
-    const handleGlobalMouseUp = (e) => handleMouseUp(e);
-    const handleGlobalWheel = (e) => handleWheel(e);
-
-    // Add global listeners
-    document.addEventListener('mousemove', handleGlobalMouseMove);
-    document.addEventListener('mouseup', handleGlobalMouseUp);
-    document.addEventListener('wheel', handleGlobalWheel, { passive: false });
-
-    // Cleanup on unmount or when edit mode changes
-    return () => {
-      document.removeEventListener('mousemove', handleGlobalMouseMove);
-      document.removeEventListener('mouseup', handleGlobalMouseUp);
-      document.removeEventListener('wheel', handleGlobalWheel);
-    };
-  }, [isEditMode, handleMouseMove, handleMouseUp, handleWheel]);
-
-  // Calculate grid dimensions and lines
+  // Calculate grid based on container dimensions (1:1 square cells)
   const gridData = useMemo(() => {
-    if (!effectiveConfig.enabled) return { lines: [], labels: [] };
+    if (!config.enabled || !activeMap?.dimensions) return { lines: [], labels: [] };
 
-    // For now, calculate based on viewport - will be dynamic later
-    const viewportWidth = typeof window !== 'undefined' ? window.innerWidth : 1920;
-    const viewportHeight = typeof window !== 'undefined' ? window.innerHeight : 1080;
+    // Use container size (100% of parent) for grid calculation
+    const containerWidth = typeof window !== 'undefined' ? window.innerWidth : 1920;
+    const containerHeight = typeof window !== 'undefined' ? window.innerHeight : 1080;
     
-    const cellSize = effectiveConfig.cell_size;
-    const offsetX = effectiveConfig.offset_x;
-    const offsetY = effectiveConfig.offset_y;
-
-    // Calculate how many lines we need to fill the viewport
-    const numVerticalLines = Math.ceil(viewportWidth / cellSize) + 2;
-    const numHorizontalLines = Math.ceil(viewportHeight / cellSize) + 2;
+    // Grid configuration (purely dimensional)
+    const gridCols = config.grid_width || 8;
+    const gridRows = config.grid_height || 12;
+    
+    // Calculate square cell size - use the smaller dimension to ensure cells fit
+    // and maintain 1:1 aspect ratio (square cells)
+    const cellSizeFromWidth = containerWidth / gridCols;
+    const cellSizeFromHeight = containerHeight / gridRows;
+    const cellSize = Math.min(cellSizeFromWidth, cellSizeFromHeight);
+    
+    // Calculate how many cells actually fit with square cells
+    const actualCols = Math.floor(containerWidth / cellSize);
+    const actualRows = Math.floor(containerHeight / cellSize);
 
     const lines = [];
     const labels = [];
 
-    // Vertical lines (columns)
-    for (let i = 0; i < numVerticalLines; i++) {
-      const x = (i * cellSize) + offsetX;
+    // Vertical lines (columns) - anchored to container origin
+    for (let i = 0; i <= actualCols; i++) {
+      const x = i * cellSize;
       lines.push({
         type: 'vertical',
         x1: x,
         y1: 0,
         x2: x,
-        y2: viewportHeight,
+        y2: actualRows * cellSize,
         key: `v-${i}`
       });
 
-      // Column labels (A, B, C, etc.)
-      if (showLabels && x >= 0 && x < viewportWidth) {
+      // Column labels (A, B, C, etc.) - only for cell centers
+      if (showLabels && i < actualCols) {
         const letter = String.fromCharCode(65 + (i % 26)); // A-Z, then wraps
         labels.push({
           type: 'column',
@@ -186,20 +95,20 @@ const GridOverlay = ({
       }
     }
 
-    // Horizontal lines (rows)
-    for (let i = 0; i < numHorizontalLines; i++) {
-      const y = (i * cellSize) + offsetY;
+    // Horizontal lines (rows) - anchored to container origin
+    for (let i = 0; i <= actualRows; i++) {
+      const y = i * cellSize;
       lines.push({
         type: 'horizontal',
         x1: 0,
         y1: y,
-        x2: viewportWidth,
+        x2: actualCols * cellSize,
         y2: y,
         key: `h-${i}`
       });
 
-      // Row labels (1, 2, 3, etc.)
-      if (showLabels && y >= 0 && y < viewportHeight) {
+      // Row labels (1, 2, 3, etc.) - only for cell centers
+      if (showLabels && i < actualRows) {
         labels.push({
           type: 'row',
           x: 15,
@@ -210,8 +119,12 @@ const GridOverlay = ({
       }
     }
 
+    console.log('🎯 Grid calculated - Container:', containerWidth, 'x', containerHeight, 
+                'Requested grid:', gridCols, 'x', gridRows, 'Actual grid:', actualCols, 'x', actualRows, 
+                'Square cell size:', cellSize.toFixed(1));
+
     return { lines, labels };
-  }, [effectiveConfig, showLabels]);
+  }, [config, showLabels, activeMap]);
 
   if (!config.enabled) return null;
 
@@ -224,13 +137,11 @@ const GridOverlay = ({
         left: 0,
         width: '100%',
         height: '100%',
-        pointerEvents: isEditMode ? 'auto' : 'none', // Allow interaction in edit mode
+        pointerEvents: 'none', // Parent handles all interactions
         zIndex: isEditMode ? 20 : 5, // Higher z-index in edit mode
         overflow: 'visible',
-        cursor: isEditMode ? (isDragging ? 'grabbing' : 'grab') : 'default'
+        backgroundColor: 'transparent'
       }}
-      onMouseDown={handleMouseDown}
-      onMouseLeave={handleMouseUp} // Stop dragging if mouse leaves SVG
     >
       {/* Grid lines */}
       {gridData.lines.map(line => (
@@ -286,7 +197,7 @@ const GridOverlay = ({
               pointerEvents: 'none'
             }}
           >
-            🎯 Grid Edit Mode - Drag to position, scroll to resize
+            🎯 Grid Edit Mode - Use DM controls to adjust cells
           </text>
           <text
             x="50%"
@@ -302,7 +213,7 @@ const GridOverlay = ({
               pointerEvents: 'none'
             }}
           >
-            Cell Size: {effectiveConfig.cell_size}px (Range: 4px - 120px)
+            Grid: {config.grid_width || 8}×{config.grid_height || 12} cells (Range: 2-50)
           </text>
         </g>
       )}
