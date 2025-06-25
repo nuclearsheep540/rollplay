@@ -29,6 +29,11 @@ Rollplay is a virtual D&D/tabletop gaming platform called "Tabletop Tavern" that
 - `types/` - Audio-related type definitions
 - `index.js` - Exports all audio functionality
 
+**🗺️ Map Management Domain** (`app/map_management/`)
+- `components/` - Map UI components (MapManager, MapEditor, GridOverlay, etc.)
+- `hooks/` - Map functionality (useMapState, useGridEditor, webSocketMapEvents)
+- `index.js` - Exports all map functionality
+
 **🎨 Shared Resources** (`app/`)
 - `styles/constants.js` - UI styling constants (DM_TITLE, DM_HEADER, etc.)
 - `utils/seatColors.js` - Shared utilities

@@ -19,6 +19,7 @@ import LobbyPanel from './components/LobbyPanel';
 import DiceActionPanel from './components/DiceActionPanel'; // NEW IMPORT
 import { useWebSocket } from './hooks/useWebSocket';
 import { useUnifiedAudio } from '../audio_management';
+import { MapDisplay, GridOverlay } from '../map_management';
 
 function GameContent() {
   const params = useSearchParams(); 
@@ -85,6 +86,18 @@ function GameContent() {
   const [activePrompts, setActivePrompts] = useState([]); // Array of {id, player, rollType, promptedBy}
   const [isDicePromptActive, setIsDicePromptActive] = useState(false); // Is any prompt active?
   const [currentInitiativePromptId, setCurrentInitiativePromptId] = useState(null); // Track initiative prompt ID for removal
+
+  // Map system state
+  const [activeMap, setActiveMap] = useState(null); // Current active map data
+  const [mapEditMode, setMapEditMode] = useState(false); // Is DM editing the map?
+  const [gridConfig, setGridConfig] = useState(null); // Current grid configuration
+
+  // Handle grid configuration changes during editing
+  const handleGridChange = (newGridConfig) => {
+    setGridConfig(newGridConfig);
+    // TODO: Save to backend when grid editing is complete
+    console.log('Grid config updated:', newGridConfig);
+  };
 
   // Helper function to get character data
   const getCharacterData = (playerName) => {
@@ -1062,6 +1075,14 @@ function GameContent() {
         </div>
       </div>
 
+      {/* Map Display Background - Sits behind all panels */}
+      <MapDisplay 
+        activeMap={activeMap}
+        isEditMode={mapEditMode && isDM}
+        gridConfig={gridConfig}
+        onGridChange={handleGridChange}
+      />
+
       {/* Main Game Area */}
       <div className="main-game-area">
         {/* GRID POSITION 1: Left Column - party-sidebar with adventure log */}
@@ -1184,6 +1205,11 @@ function GameContent() {
             sendRemoteAudioBatch={sendRemoteAudioBatch}   // NEW: Pass WebSocket batch function
             clearPendingOperation={setClearPendingOperationFn} // NEW: Pass function to set pending operation clearer
             clearDicePrompt={clearDicePrompt}    // UPDATED: Now accepts prompt ID
+            // Map management props
+            mapEditMode={mapEditMode}
+            setMapEditMode={setMapEditMode}
+            activeMap={activeMap}
+            gridConfig={gridConfig}
           />
         </div>
 

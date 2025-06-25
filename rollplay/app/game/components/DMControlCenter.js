@@ -49,7 +49,12 @@ export default function DMControlCenter({
   sendRemoteAudioPlay = null,  // NEW: Send remote audio play via WebSocket
   sendRemoteAudioResume = null, // NEW: Send remote audio resume via WebSocket
   sendRemoteAudioBatch = null,     // NEW: Send remote audio batch operations via WebSocket
-  clearPendingOperation = null  // NEW: Function to set pending operation clearer
+  clearPendingOperation = null,  // NEW: Function to set pending operation clearer
+  // Map management props
+  mapEditMode = false,       // NEW: Map edit mode state
+  setMapEditMode = null,     // NEW: Function to toggle map edit mode
+  activeMap = null,          // NEW: Current active map data
+  gridConfig = null          // NEW: Current grid configuration
 }) {
   
   // State for main panel collapse
@@ -200,9 +205,15 @@ export default function DMControlCenter({
               💾 Load Map
             </button>
             <button 
-              className={DM_CHILD_LAST}
+              className={`${DM_CHILD_LAST} ${mapEditMode ? ACTIVE_BACKGROUND : ''}`}
+              onClick={() => {
+                if (setMapEditMode) {
+                  setMapEditMode(!mapEditMode);
+                }
+              }}
+              disabled={!setMapEditMode}
             >
-              📏 Grid Settings
+              📏 {mapEditMode ? 'Exit Grid Edit' : 'Grid Settings'}
             </button>
           </div>
         )}
