@@ -5,7 +5,7 @@
 
 'use client'
 
-import React, { useMemo, useState, useRef, useCallback } from 'react';
+import React, { useMemo, useState, useRef, useCallback, useEffect } from 'react';
 
 const GridOverlay = ({ 
   gridConfig = null,
@@ -105,9 +105,12 @@ const GridOverlay = ({
     if (!isEditMode) return;
     
     e.preventDefault();
+    e.stopPropagation();
     
-    const delta = e.deltaY > 0 ? -5 : 5; // Zoom out/in
-    const newCellSize = Math.max(20, Math.min(100, config.cell_size + delta));
+    // Scroll up = zoom in = larger cells = fewer cells
+    // Scroll down = zoom out = smaller cells = more cells
+    const delta = e.deltaY > 0 ? -2 : 2; // Smaller increments for smoother scaling
+    const newCellSize = Math.max(4, Math.min(120, config.cell_size + delta));
     
     if (onGridChange && newCellSize !== config.cell_size) {
       const newConfig = {
@@ -117,6 +120,27 @@ const GridOverlay = ({
       onGridChange(newConfig);
     }
   }, [isEditMode, config, onGridChange]);
+
+  // Add global event listeners for mouse events when in edit mode
+  useEffect(() => {
+    if (!isEditMode) return;
+
+    const handleGlobalMouseMove = (e) => handleMouseMove(e);
+    const handleGlobalMouseUp = (e) => handleMouseUp(e);
+    const handleGlobalWheel = (e) => handleWheel(e);
+
+    // Add global listeners
+    document.addEventListener('mousemove', handleGlobalMouseMove);
+    document.addEventListener('mouseup', handleGlobalMouseUp);
+    document.addEventListener('wheel', handleGlobalWheel, { passive: false });
+
+    // Cleanup on unmount or when edit mode changes
+    return () => {
+      document.removeEventListener('mousemove', handleGlobalMouseMove);
+      document.removeEventListener('mouseup', handleGlobalMouseUp);
+      document.removeEventListener('wheel', handleGlobalWheel);
+    };
+  }, [isEditMode, handleMouseMove, handleMouseUp, handleWheel]);
 
   // Calculate grid dimensions and lines
   const gridData = useMemo(() => {
@@ -206,10 +230,7 @@ const GridOverlay = ({
         cursor: isEditMode ? (isDragging ? 'grabbing' : 'grab') : 'default'
       }}
       onMouseDown={handleMouseDown}
-      onMouseMove={handleMouseMove}
-      onMouseUp={handleMouseUp}
       onMouseLeave={handleMouseUp} // Stop dragging if mouse leaves SVG
-      onWheel={handleWheel}
     >
       {/* Grid lines */}
       {gridData.lines.map(line => (
@@ -250,22 +271,40 @@ const GridOverlay = ({
 
       {/* Edit mode indicator */}
       {isEditMode && (
-        <text
-          x="50%"
-          y="50"
-          fill={currentColors.line_color}
-          opacity={currentColors.opacity}
-          fontSize="14"
-          fontFamily="system-ui"
-          fontWeight="600"
-          textAnchor="middle"
-          style={{
-            userSelect: 'none',
-            pointerEvents: 'none'
-          }}
-        >
-          🎯 Grid Edit Mode - Drag to position, scroll to resize
-        </text>
+        <g>
+          <text
+            x="50%"
+            y="50"
+            fill={currentColors.line_color}
+            opacity={Math.min(currentColors.opacity * 2, 1)}
+            fontSize="14"
+            fontFamily="system-ui"
+            fontWeight="600"
+            textAnchor="middle"
+            style={{
+              userSelect: 'none',
+              pointerEvents: 'none'
+            }}
+          >
+            🎯 Grid Edit Mode - Drag to position, scroll to resize
+          </text>
+          <text
+            x="50%"
+            y="75"
+            fill={currentColors.line_color}
+            opacity={Math.min(currentColors.opacity * 2, 1)}
+            fontSize="12"
+            fontFamily="monospace"
+            fontWeight="500"
+            textAnchor="middle"
+            style={{
+              userSelect: 'none',
+              pointerEvents: 'none'
+            }}
+          >
+            Cell Size: {effectiveConfig.cell_size}px (Range: 4px - 120px)
+          </text>
+        </g>
       )}
     </svg>
   );

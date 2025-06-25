@@ -122,6 +122,7 @@ const MapDisplay = ({
           gridConfig={gridConfig || activeMap.grid_config}
           isEditMode={isEditMode}
           showLabels={showGridLabels}
+          onGridChange={onGridChange}
         />
       )}
 
