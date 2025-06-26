@@ -47,12 +47,18 @@ const GridOverlay = ({
 
   // Calculate grid based on map image dimensions (1:1 square cells)
   const gridData = useMemo(() => {
-    if (!config.enabled || !activeMap?.dimensions || !mapImageRef?.current) return { lines: [], labels: [] };
+    if (!config.enabled || !activeMap || !mapImageRef?.current) return { lines: [], labels: [] };
 
-    // Get the actual map image element size (this is the container size we want)
+    // Get the actual rendered image dimensions (preserving aspect ratio)
     const mapElement = mapImageRef.current;
-    const mapWidth = mapElement.offsetWidth;
-    const mapHeight = mapElement.offsetHeight;
+    const mapWidth = mapElement.clientWidth;  // Actual rendered width
+    const mapHeight = mapElement.clientHeight; // Actual rendered height
+    
+    // Also get the image's position within the container for proper grid alignment
+    const mapRect = mapElement.getBoundingClientRect();
+    const containerRect = mapElement.parentElement.getBoundingClientRect();
+    const offsetX = mapRect.left - containerRect.left;
+    const offsetY = mapRect.top - containerRect.top;
     
     // Grid configuration (purely dimensional)
     const gridCols = config.grid_width || 8;
@@ -70,15 +76,15 @@ const GridOverlay = ({
     const lines = [];
     const labels = [];
 
-    // Vertical lines (columns) - spanning the full map height
+    // Vertical lines (columns) - positioned relative to image location
     for (let i = 0; i <= gridCols; i++) {
-      const x = (i * mapWidth) / gridCols; // Distribute evenly across map width
+      const x = offsetX + (i * mapWidth) / gridCols; // Distribute evenly across map width
       lines.push({
         type: 'vertical',
         x1: x,
-        y1: 0,
+        y1: offsetY,
         x2: x,
-        y2: mapHeight, // Full map height
+        y2: offsetY + mapHeight, // Full map height
         key: `v-${i}`
       });
 
@@ -89,21 +95,21 @@ const GridOverlay = ({
         labels.push({
           type: 'column',
           x: cellCenterX,
-          y: 20,
+          y: offsetY + 20,
           text: letter,
           key: `col-${i}`
         });
       }
     }
 
-    // Horizontal lines (rows) - spanning the full map width
+    // Horizontal lines (rows) - positioned relative to image location
     for (let i = 0; i <= gridRows; i++) {
-      const y = (i * mapHeight) / gridRows; // Distribute evenly across map height
+      const y = offsetY + (i * mapHeight) / gridRows; // Distribute evenly across map height
       lines.push({
         type: 'horizontal',
-        x1: 0,
+        x1: offsetX,
         y1: y,
-        x2: mapWidth, // Full map width
+        x2: offsetX + mapWidth, // Full map width
         y2: y,
         key: `h-${i}`
       });
@@ -113,7 +119,7 @@ const GridOverlay = ({
         const cellCenterY = y + (mapHeight / gridRows) / 2 + 4;
         labels.push({
           type: 'row',
-          x: 15,
+          x: offsetX + 15,
           y: cellCenterY,
           text: (i + 1).toString(),
           key: `row-${i}`

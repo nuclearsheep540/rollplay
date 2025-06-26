@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   DM_TITLE, 
   DM_HEADER, 
@@ -19,6 +19,50 @@ import { AudioMixerPanel } from '../../audio_management/components';
 String.prototype.titleCase = function() {
   return this.replace(/\w\S*/g, (txt) =>
     txt.charAt(0).toUpperCase() + txt.substr(1).toLowerCase()
+  );
+};
+
+// Component to read actual image file dimensions
+const ImageDimensions = ({ activeMap }) => {
+  const [dimensions, setDimensions] = useState(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    if (!activeMap?.file_path) return;
+
+    setLoading(true);
+    const img = new Image();
+    
+    img.onload = () => {
+      setDimensions({
+        width: img.naturalWidth,
+        height: img.naturalHeight
+      });
+      setLoading(false);
+      console.log('📏 Actual image dimensions:', img.naturalWidth, 'x', img.naturalHeight);
+    };
+    
+    img.onerror = () => {
+      setDimensions(null);
+      setLoading(false);
+      console.warn('📏 Failed to load image for dimensions');
+    };
+    
+    img.src = activeMap.file_path;
+  }, [activeMap?.file_path]);
+
+  if (loading) return <span>Reading image dimensions...</span>;
+  if (!dimensions) return <span>Unable to read image dimensions</span>;
+
+  // Determine orientation
+  const isPortrait = dimensions.height > dimensions.width;
+  const isSquare = dimensions.width === dimensions.height;
+  const orientation = isSquare ? 'square' : (isPortrait ? 'portrait' : 'landscape');
+  
+  return (
+    <span>
+      Image: {dimensions.width}w × {dimensions.height}h px ({orientation})
+    </span>
   );
 };
 
@@ -261,7 +305,7 @@ export default function DMControlCenter({
                       original_filename: "Test Battle Map", 
                       file_path: "/map-bg-no-grid.jpg",
                       upload_date: new Date().toISOString(),
-                      dimensions: { width: 1200, height: 800 }, // Estimated
+                      // dimensions removed - will be read from actual image file
                       grid_config: {
                         grid_width: 8,
                         grid_height: 12,
@@ -373,9 +417,9 @@ export default function DMControlCenter({
                 >
                   ✨ Apply {gridDimensions.width}×{gridDimensions.height} Grid
                 </button>
-                {activeMap?.dimensions && (
+                {activeMap && (
                   <div className="text-xs text-gray-400 mt-2">
-                    Map: {activeMap.dimensions.width}×{activeMap.dimensions.height}px
+                    <ImageDimensions activeMap={activeMap} />
                   </div>
                 )}
               </div>

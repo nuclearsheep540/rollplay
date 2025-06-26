@@ -216,19 +216,31 @@ const MapDisplay = ({
 
       {/* Transformed content container */}
       <div style={contentTransform}>
-        {/* Simplified map image (no individual transforms) */}
-        <div
+        {/* Map image with true aspect ratio */}
+        <img
           ref={mapImageRef}
+          src={activeMap?.file_path}
+          alt={activeMap?.filename || 'Map'}
           style={{
             position: 'absolute',
-            top: 0,
-            left: 0,
-            width: '100%',
-            height: '100%',
-            backgroundImage: activeMap?.file_path ? `url(${activeMap.file_path})` : 'none',
-            backgroundSize: 'cover',
-            backgroundPosition: 'center',
-            backgroundRepeat: 'no-repeat'
+            top: '50%',
+            left: '50%',
+            transform: 'translate(-50%, -50%)',
+            maxWidth: '100%',
+            maxHeight: '100%',
+            width: 'auto',
+            height: 'auto',
+            objectFit: 'contain', // Preserves aspect ratio, shows full image
+            pointerEvents: 'none'
+          }}
+          onLoad={() => {
+            // Force grid recalculation when image loads
+            const img = mapImageRef.current;
+            console.log('🗺️ Image loaded:', {
+              natural: `${img.naturalWidth}×${img.naturalHeight}`,
+              rendered: `${img.clientWidth}×${img.clientHeight}`,
+              aspectRatio: (img.naturalWidth / img.naturalHeight).toFixed(2)
+            });
           }}
         />
 
