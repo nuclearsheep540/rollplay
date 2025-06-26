@@ -45,49 +45,50 @@ const GridOverlay = ({
   const currentColors = isEditMode ? config.colors.edit_mode : config.colors.display_mode;
 
 
-  // Calculate grid based on container dimensions (1:1 square cells)
+  // Calculate grid based on map image dimensions (1:1 square cells)
   const gridData = useMemo(() => {
-    if (!config.enabled || !activeMap?.dimensions) return { lines: [], labels: [] };
+    if (!config.enabled || !activeMap?.dimensions || !mapImageRef?.current) return { lines: [], labels: [] };
 
-    // Use container size (100% of parent) for grid calculation
-    const containerWidth = typeof window !== 'undefined' ? window.innerWidth : 1920;
-    const containerHeight = typeof window !== 'undefined' ? window.innerHeight : 1080;
+    // Get the actual map image element size (this is the container size we want)
+    const mapElement = mapImageRef.current;
+    const mapWidth = mapElement.offsetWidth;
+    const mapHeight = mapElement.offsetHeight;
     
     // Grid configuration (purely dimensional)
     const gridCols = config.grid_width || 8;
     const gridRows = config.grid_height || 12;
     
-    // Calculate square cell size - use the smaller dimension to ensure cells fit
-    // and maintain 1:1 aspect ratio (square cells)
-    const cellSizeFromWidth = containerWidth / gridCols;
-    const cellSizeFromHeight = containerHeight / gridRows;
-    const cellSize = Math.min(cellSizeFromWidth, cellSizeFromHeight);
+    // Option 1: Exact grid dimensions (may result in non-square cells)
+    // const cellWidth = mapWidth / gridCols;
+    // const cellHeight = mapHeight / gridRows;
     
-    // Calculate how many cells actually fit with square cells
-    const actualCols = Math.floor(containerWidth / cellSize);
-    const actualRows = Math.floor(containerHeight / cellSize);
+    // Option 2: Square cells (may not show exact requested dimensions)
+    const cellSize = Math.min(mapWidth / gridCols, mapHeight / gridRows);
+    const actualCols = gridCols; // Use requested dimensions
+    const actualRows = gridRows; // Use requested dimensions
 
     const lines = [];
     const labels = [];
 
-    // Vertical lines (columns) - anchored to container origin
-    for (let i = 0; i <= actualCols; i++) {
-      const x = i * cellSize;
+    // Vertical lines (columns) - spanning the full map height
+    for (let i = 0; i <= gridCols; i++) {
+      const x = (i * mapWidth) / gridCols; // Distribute evenly across map width
       lines.push({
         type: 'vertical',
         x1: x,
         y1: 0,
         x2: x,
-        y2: actualRows * cellSize,
+        y2: mapHeight, // Full map height
         key: `v-${i}`
       });
 
-      // Column labels (A, B, C, etc.) - only for cell centers
-      if (showLabels && i < actualCols) {
+      // Column labels (A, B, C, etc.) - only for cell interiors
+      if (showLabels && i < gridCols) {
         const letter = String.fromCharCode(65 + (i % 26)); // A-Z, then wraps
+        const cellCenterX = x + (mapWidth / gridCols) / 2;
         labels.push({
           type: 'column',
-          x: x + (cellSize / 2),
+          x: cellCenterX,
           y: 20,
           text: letter,
           key: `col-${i}`
@@ -95,36 +96,37 @@ const GridOverlay = ({
       }
     }
 
-    // Horizontal lines (rows) - anchored to container origin
-    for (let i = 0; i <= actualRows; i++) {
-      const y = i * cellSize;
+    // Horizontal lines (rows) - spanning the full map width
+    for (let i = 0; i <= gridRows; i++) {
+      const y = (i * mapHeight) / gridRows; // Distribute evenly across map height
       lines.push({
         type: 'horizontal',
         x1: 0,
         y1: y,
-        x2: actualCols * cellSize,
+        x2: mapWidth, // Full map width
         y2: y,
         key: `h-${i}`
       });
 
-      // Row labels (1, 2, 3, etc.) - only for cell centers
-      if (showLabels && i < actualRows) {
+      // Row labels (1, 2, 3, etc.) - only for cell interiors
+      if (showLabels && i < gridRows) {
+        const cellCenterY = y + (mapHeight / gridRows) / 2 + 4;
         labels.push({
           type: 'row',
           x: 15,
-          y: y + (cellSize / 2) + 4, // Center vertically + small offset
+          y: cellCenterY,
           text: (i + 1).toString(),
           key: `row-${i}`
         });
       }
     }
 
-    console.log('🎯 Grid calculated - Container:', containerWidth, 'x', containerHeight, 
-                'Requested grid:', gridCols, 'x', gridRows, 'Actual grid:', actualCols, 'x', actualRows, 
-                'Square cell size:', cellSize.toFixed(1));
+    console.log('🎯 Grid calculated - Map size:', mapWidth, 'x', mapHeight, 
+                'Grid dimensions:', gridCols, 'x', gridRows,
+                'Cell size:', (mapWidth/gridCols).toFixed(1), 'x', (mapHeight/gridRows).toFixed(1));
 
     return { lines, labels };
-  }, [config, showLabels, activeMap]);
+  }, [config, showLabels, activeMap, mapImageRef]);
 
   if (!config.enabled) return null;
 
