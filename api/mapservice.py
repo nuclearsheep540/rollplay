@@ -19,7 +19,7 @@ class MapSettings(BaseModel):
     filename: str
     original_filename: str
     file_path: str
-    grid_config: Dict[str, Any]
+    grid_config: Optional[Dict[str, Any]] = None
     map_image_config: Optional[Dict[str, Any]] = None
     uploaded_by: str
     active: bool = True
@@ -133,11 +133,18 @@ class MapService:
         try:
             update_data = {}
             
+            # Allow explicit null values to clear configurations
             if grid_config is not None:
                 update_data["grid_config"] = grid_config
+            elif grid_config is None and "grid_config" in locals():
+                # Explicitly passed None to clear grid config
+                update_data["grid_config"] = None
                 
             if map_image_config is not None:
                 update_data["map_image_config"] = map_image_config
+            elif map_image_config is None and "map_image_config" in locals():
+                # Explicitly passed None to clear map image config
+                update_data["map_image_config"] = None
             
             if not update_data:
                 return True  # Nothing to update

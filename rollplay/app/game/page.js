@@ -675,54 +675,20 @@ function GameContent() {
     handleMapConfigUpdate
   } = useMapWebSocket(webSocket, isConnected, roomId, thisPlayer, mapContext);
 
-  // Add map handlers to the main WebSocket via direct event listening
-  useEffect(() => {
-    if (!webSocket || !isConnected) return;
+  // Map handlers are managed by useMapWebSocket hook - no additional event listeners needed
 
-    const handleMapMessage = (event) => {
-      try {
-        const message = JSON.parse(event.data);
-        const { event_type, data } = message;
-
-        // Only handle map-related events
-        switch (event_type) {
-          case 'map_load':
-            handleMapLoad(data);
-            break;
-          case 'map_clear':
-            handleMapClear(data);
-            break;
-          case 'map_config_update':
-            handleMapConfigUpdate(data);
-            break;
-          default:
-            // Let main WebSocket hook handle other events
-            break;
-        }
-      } catch (error) {
-        console.error('Error processing map WebSocket message:', error);
-      }
-    };
-
-    webSocket.addEventListener('message', handleMapMessage);
-
-    return () => {
-      if (webSocket) {
-        webSocket.removeEventListener('message', handleMapMessage);
-      }
-    };
-  }, [webSocket, isConnected, handleMapLoad, handleMapClear, handleMapConfigUpdate]);
-
-  // Request current map when player connects
+  // Request current map when player connects (only once)
   useEffect(() => {
     if (webSocket && isConnected && sendMapRequest) {
       // Small delay to ensure connection is fully established
-      setTimeout(() => {
+      const timeoutId = setTimeout(() => {
         sendMapRequest();
         console.log('🗺️ Requested current map on player connection');
       }, 1000);
+      
+      return () => clearTimeout(timeoutId);
     }
-  }, [webSocket, isConnected, sendMapRequest]);
+  }, [webSocket, isConnected]); // Removed sendMapRequest from dependencies to prevent re-running
 
   // Listen for combat state changes and play audio
   useEffect(() => {

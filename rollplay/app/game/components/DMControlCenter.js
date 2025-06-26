@@ -176,9 +176,14 @@ export default function DMControlCenter({
     };
   };
 
-  // NEW: Apply grid dimensions to current map
+  // NEW: Apply grid dimensions to current map via WebSocket (atomic update)
   const applyGridDimensions = () => {
-    console.log('🎯 Applying grid dimensions - activeMap:', activeMap, 'gridConfig:', gridConfig, 'handleGridChange:', typeof handleGridChange);
+    if (!activeMap) {
+      console.error('🎯 Cannot apply grid - no active map');
+      return;
+    }
+    
+    console.log('🎯 Applying grid dimensions via WebSocket - activeMap:', activeMap);
     
     const newGridConfig = createGridFromDimensions(
       gridDimensions.width,
@@ -187,12 +192,17 @@ export default function DMControlCenter({
     
     console.log('🎯 Created new grid config:', newGridConfig);
     
-    // Use the same callback as grid editing
-    if (typeof handleGridChange === 'function') {
-      handleGridChange(newGridConfig);
-      console.log('🎯 handleGridChange called successfully');
+    // Send atomic update via WebSocket
+    if (sendMapConfigUpdate) {
+      sendMapConfigUpdate(activeMap.map_id, newGridConfig, null); // map_id, grid_config, map_image_config
+      console.log('🎯 Sent grid config update via WebSocket for map:', activeMap.map_id);
     } else {
-      console.error('🎯 handleGridChange is not a function:', handleGridChange);
+      console.warn('🎯 sendMapConfigUpdate not available, falling back to local update');
+      // Fallback to local update if WebSocket not available
+      if (typeof handleGridChange === 'function') {
+        handleGridChange(newGridConfig);
+        console.log('🎯 handleGridChange called successfully (fallback)');
+      }
     }
     
     console.log('🎯 Applied grid dimensions:', gridDimensions, 'resulting config:', newGridConfig);

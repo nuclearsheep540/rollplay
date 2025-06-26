@@ -75,23 +75,60 @@ export const useMapWebSocket = (webSocket, isConnected, roomId, thisPlayer, mapC
     const handlers = eventHandlersRef.current;
     
     if (handlers) {
-      // Update grid configuration if provided
-      if (grid_config && handlers.setGridConfig) {
+      // Update grid configuration (can be null to clear grid)
+      if (grid_config !== undefined && handlers.setGridConfig) {
+        console.log('🗺️ Updating grid config:', grid_config);
         handlers.setGridConfig(grid_config);
       }
       
       // Update map image configuration if provided
-      if (map_image_config && handlers.setMapImageConfig) {
+      if (map_image_config !== undefined && handlers.setMapImageConfig) {
+        console.log('🗺️ Updating map image config:', map_image_config);
         handlers.setMapImageConfig(map_image_config);
       }
       
-      console.log(`🗺️ Map config updated by ${updated_by}`);
+      console.log(`🗺️ Map config updated by ${updated_by} for map ${map_id}`);
     }
   };
 
-  // Note: Event handling is done through the main WebSocket hook
-  // Map events are processed by the main game WebSocket system
-  // This hook only provides send functions and event handlers for the main hook to use
+  // Register event handlers with main WebSocket
+  useEffect(() => {
+    if (!webSocket || !isConnected) return;
+
+    const handleMessage = (event) => {
+      try {
+        const message = JSON.parse(event.data);
+        const { event_type, data } = message;
+
+        // Only handle map-related events
+        switch (event_type) {
+          case 'map_load':
+            handleMapLoad(data);
+            break;
+          case 'map_clear':
+            handleMapClear(data);
+            break;
+          case 'map_config_update':
+            handleMapConfigUpdate(data);
+            break;
+          // map_request is handled server-side, no client handling needed
+          default:
+            // Ignore non-map events
+            break;
+        }
+      } catch (error) {
+        console.error('Error processing map WebSocket message:', error);
+      }
+    };
+
+    webSocket.addEventListener('message', handleMessage);
+
+    return () => {
+      if (webSocket) {
+        webSocket.removeEventListener('message', handleMessage);
+      }
+    };
+  }, [webSocket, isConnected]);
 
   // Map send functions
   const sendMapLoad = (mapData) => {
