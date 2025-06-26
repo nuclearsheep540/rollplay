@@ -91,6 +91,12 @@ function GameContent() {
   const [activeMap, setActiveMap] = useState(null); // Current active map data
   const [gridEditMode, setGridEditMode] = useState(false); // Is DM editing grid dimensions?
   const [gridConfig, setGridConfig] = useState(null); // Current grid configuration
+  
+  // Debug wrapper for setGridConfig
+  const debugSetGridConfig = (config) => {
+    console.log('🎯 setGridConfig called with:', config);
+    setGridConfig(config);
+  };
   const [mapImageConfig, setMapImageConfig] = useState(null); // Map image positioning/scaling
 
   // Handle grid configuration changes during editing
@@ -655,7 +661,7 @@ function GameContent() {
   // Map management WebSocket hook
   const mapContext = {
     setActiveMap,
-    setGridConfig,
+    setGridConfig: debugSetGridConfig,
     setMapImageConfig
   };
   

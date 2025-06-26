@@ -103,7 +103,6 @@ db.active_maps.insertOne({
     filename: "map-bg-no-grid.jpg",
     original_filename: "Test Battle Map",
     file_path: "/map-bg-no-grid.jpg",
-    upload_date: ISODate("2025-01-09T10:00:00Z"),
     grid_config: {
         grid_width: 8,
         grid_height: 12,

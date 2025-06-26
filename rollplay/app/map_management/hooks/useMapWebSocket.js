@@ -36,7 +36,13 @@ export const useMapWebSocket = (webSocket, isConnected, roomId, thisPlayer, mapC
       
       // Apply grid configuration if present
       if (map.grid_config && handlers.setGridConfig) {
+        console.log('🗺️ Setting grid config from map:', map.grid_config);
         handlers.setGridConfig(map.grid_config);
+      } else {
+        console.log('🗺️ No grid config to set:', { 
+          hasGridConfig: !!map.grid_config, 
+          hasSetGridConfig: !!handlers.setGridConfig 
+        });
       }
       
       // Apply map image configuration if present

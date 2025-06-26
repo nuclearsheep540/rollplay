@@ -314,7 +314,6 @@ export default function DMControlCenter({
                     filename: "map-bg-no-grid.jpg",
                     original_filename: "Test Battle Map", 
                     file_path: "/map-bg-no-grid.jpg",
-                    upload_date: new Date().toISOString(),
                     grid_config: {
                       grid_width: 8,
                       grid_height: 12,

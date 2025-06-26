@@ -6,7 +6,6 @@ from pymongo import MongoClient
 from bson.objectid import ObjectId
 from config.settings import get_settings
 import logging
-from datetime import datetime
 from typing import Optional, Dict, Any
 
 logger = logging.getLogger()
@@ -20,7 +19,6 @@ class MapSettings(BaseModel):
     filename: str
     original_filename: str
     file_path: str
-    upload_date: datetime
     grid_config: Dict[str, Any]
     map_image_config: Optional[Dict[str, Any]] = None
     uploaded_by: str

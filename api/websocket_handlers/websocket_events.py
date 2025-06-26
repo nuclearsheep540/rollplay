@@ -875,7 +875,6 @@ class WebsocketEvent():
                 filename=map_data.get("filename", "unknown.jpg"),
                 original_filename=map_data.get("original_filename", map_data.get("filename", "unknown.jpg")),
                 file_path=map_data.get("file_path", ""),
-                upload_date=map_data.get("upload_date", time.time()),
                 grid_config=map_data.get("grid_config", {
                     "grid_width": 8,
                     "grid_height": 12,
