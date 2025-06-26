@@ -95,14 +95,12 @@ export default function DMControlCenter({
   sendRemoteAudioBatch = null,     // NEW: Send remote audio batch operations via WebSocket
   clearPendingOperation = null,  // NEW: Function to set pending operation clearer
   // Map management props
-  mapEditMode = false,       // NEW: Map edit mode state
-  setMapEditMode = null,     // NEW: Function to toggle map edit mode
   activeMap = null,          // NEW: Current active map data
-  gridConfig = null,         // NEW: Current grid configuration
   setActiveMap = null,       // NEW: Function to set active map
-  mapImageEditMode = false,  // NEW: Map image edit mode state  
-  setMapImageEditMode = null, // NEW: Function to toggle map image edit mode
-  handleGridChange = null     // NEW: Function to handle grid config changes
+  gridConfig = null,         // NEW: Current grid configuration
+  gridEditMode = false,      // NEW: Grid edit mode state
+  setGridEditMode = null,    // NEW: Function to toggle grid edit mode
+  handleGridChange = null    // NEW: Function to handle grid config changes
 }) {
   
   // State for main panel collapse
@@ -343,36 +341,20 @@ export default function DMControlCenter({
             >
               🔄 Upload New Map
             </button>
-            <button 
-              className={`${DM_CHILD} ${mapEditMode ? ACTIVE_BACKGROUND : ''}`}
-              onClick={() => {
-                if (setMapEditMode) {
-                  setMapEditMode(!mapEditMode);
-                }
-              }}
-              disabled={!setMapEditMode}
-            >
-              📏 {mapEditMode ? 'Exit Grid Edit' : 'Grid Settings'}
-            </button>
-            <button 
-              className={`${DM_CHILD} ${mapImageEditMode ? ACTIVE_BACKGROUND : ''}`}
-              onClick={() => {
-                if (setMapImageEditMode) {
-                  setMapImageEditMode(!mapImageEditMode);
-                }
-              }}
-              disabled={!setMapImageEditMode || !activeMap}
-            >
-              🗺️ {mapImageEditMode ? 'Exit Map Edit' : 'Edit Map'}
-            </button>
-            
-            {/* Grid Dimensions Controls */}
+            {/* Grid Dimensions Controls - now the main edit mode */}
             <button 
               className={`${DM_CHILD} ${isDimensionsExpanded ? ACTIVE_BACKGROUND : ''}`}
-              onClick={() => setIsDimensionsExpanded(!isDimensionsExpanded)}
+              onClick={() => {
+                const newExpanded = !isDimensionsExpanded;
+                setIsDimensionsExpanded(newExpanded);
+                // Enable/disable grid edit mode when expanding/collapsing
+                if (setGridEditMode) {
+                  setGridEditMode(newExpanded);
+                }
+              }}
               disabled={!activeMap}
             >
-              📐 {isDimensionsExpanded ? 'Hide Grid Size' : 'Set Grid Size'}
+              📐 {isDimensionsExpanded ? 'Exit Grid Edit' : 'Set Grid Size'}
             </button>
             
             {/* Grid Dimensions Input (expandable) */}

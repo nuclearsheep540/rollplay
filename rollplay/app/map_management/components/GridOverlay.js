@@ -20,6 +20,22 @@ const GridOverlay = ({
 }) => {
   // Local state for editing (simplified - no more offset management)
   const svgRef = useRef(null);
+  const [windowSize, setWindowSize] = useState({ width: 0, height: 0 });
+
+  // Listen for window resize to recalculate grid positioning
+  useEffect(() => {
+    const updateWindowSize = () => {
+      setWindowSize({
+        width: window.innerWidth,
+        height: window.innerHeight
+      });
+    };
+
+    updateWindowSize(); // Initial size
+    window.addEventListener('resize', updateWindowSize);
+
+    return () => window.removeEventListener('resize', updateWindowSize);
+  }, []);
   // Default grid configuration - pure dimensional grid anchored to map
   const defaultConfig = {
     grid_width: 8,      // Number of cells across map width
@@ -49,16 +65,15 @@ const GridOverlay = ({
   const gridData = useMemo(() => {
     if (!config.enabled || !activeMap || !mapImageRef?.current) return { lines: [], labels: [] };
 
-    // Get the actual rendered image dimensions (preserving aspect ratio)
+    // Get the actual rendered image dimensions
     const mapElement = mapImageRef.current;
     const mapWidth = mapElement.clientWidth;  // Actual rendered width
     const mapHeight = mapElement.clientHeight; // Actual rendered height
     
-    // Also get the image's position within the container for proper grid alignment
-    const mapRect = mapElement.getBoundingClientRect();
-    const containerRect = mapElement.parentElement.getBoundingClientRect();
-    const offsetX = mapRect.left - containerRect.left;
-    const offsetY = mapRect.top - containerRect.top;
+    // Since the SVG container is now sized exactly to match the image,
+    // we can use coordinates relative to the SVG (0,0 = image top-left)
+    const offsetX = 0;
+    const offsetY = 0;
     
     // Grid configuration (purely dimensional)
     const gridCols = config.grid_width || 8;
@@ -132,25 +147,37 @@ const GridOverlay = ({
                 'Cell size:', (mapWidth/gridCols).toFixed(1), 'x', (mapHeight/gridRows).toFixed(1));
 
     return { lines, labels };
-  }, [config, showLabels, activeMap, mapImageRef]);
+  }, [config, showLabels, activeMap, mapImageRef, windowSize]);
 
   if (!config.enabled) return null;
 
   return (
-    <svg
-      ref={svgRef}
+    <div
       style={{
         position: 'absolute',
-        top: 0,
-        left: 0,
-        width: '100%',
-        height: '100%',
-        pointerEvents: 'none', // Parent handles all interactions
-        zIndex: isEditMode ? 20 : 5, // Higher z-index in edit mode
-        overflow: 'visible',
-        backgroundColor: 'transparent'
+        top: '50%',
+        left: '50%',
+        transform: 'translate(-50%, -50%)',
+        width: mapImageRef?.current ? `${mapImageRef.current.clientWidth}px` : '100%',
+        height: mapImageRef?.current ? `${mapImageRef.current.clientHeight}px` : '100%',
+        pointerEvents: 'none',
+        zIndex: isEditMode ? 20 : 5,
+        overflow: 'visible'
       }}
     >
+      <svg
+        ref={svgRef}
+        style={{
+          position: 'absolute',
+          top: 0,
+          left: 0,
+          width: '100%',
+          height: '100%',
+          pointerEvents: 'none',
+          overflow: 'visible',
+          backgroundColor: 'transparent'
+        }}
+      >
       {/* Grid lines */}
       {gridData.lines.map(line => (
         <line
@@ -226,6 +253,7 @@ const GridOverlay = ({
         </g>
       )}
     </svg>
+    </div>
   );
 };
 

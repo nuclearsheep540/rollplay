@@ -89,8 +89,7 @@ function GameContent() {
 
   // Map system state
   const [activeMap, setActiveMap] = useState(null); // Current active map data
-  const [mapEditMode, setMapEditMode] = useState(false); // Is DM editing the grid?
-  const [mapImageEditMode, setMapImageEditMode] = useState(false); // Is DM editing the map image?
+  const [gridEditMode, setGridEditMode] = useState(false); // Is DM editing grid dimensions?
   const [gridConfig, setGridConfig] = useState(null); // Current grid configuration
   const [mapImageConfig, setMapImageConfig] = useState(null); // Map image positioning/scaling
 
@@ -1162,10 +1161,10 @@ function GameContent() {
           {/* Map Display Background - Now properly positioned in center area */}
           <MapDisplay 
             activeMap={activeMap}
-            isEditMode={mapEditMode && isDM}
+            isEditMode={gridEditMode && isDM}
             gridConfig={gridConfig}
             onGridChange={handleGridChange}
-            mapImageEditMode={mapImageEditMode && isDM}
+            mapImageEditMode={gridEditMode && isDM}
             mapImageConfig={mapImageConfig}
             onMapImageChange={handleMapImageChange}
           />
@@ -1223,13 +1222,11 @@ function GameContent() {
             clearPendingOperation={setClearPendingOperationFn} // NEW: Pass function to set pending operation clearer
             clearDicePrompt={clearDicePrompt}    // UPDATED: Now accepts prompt ID
             // Map management props
-            mapEditMode={mapEditMode}
-            setMapEditMode={setMapEditMode}
             activeMap={activeMap}
             setActiveMap={setActiveMap}
             gridConfig={gridConfig}
-            mapImageEditMode={mapImageEditMode}
-            setMapImageEditMode={setMapImageEditMode}
+            gridEditMode={gridEditMode}
+            setGridEditMode={setGridEditMode}
             handleGridChange={handleGridChange}
           />
         </div>
