@@ -673,5 +673,100 @@ export const handleSystemMessage = (data, {}) => {
   // Backend handles system message logging
 };
 
+// =====================================
+// MAP EVENT HANDLERS
+// =====================================
+
+export const handleMapLoad = (data, { setActiveMap, setGridConfig, setMapImageConfig }) => {
+  console.log("🗺️ Map loaded:", data);
+  const { map, loaded_by } = data;
+  
+  if (map) {
+    // Set the active map
+    setActiveMap(map);
+    
+    // Apply grid configuration if present
+    if (map.grid_config) {
+      setGridConfig(map.grid_config);
+    }
+    
+    // Apply map image configuration if present
+    if (map.map_image_config) {
+      setMapImageConfig(map.map_image_config);
+    }
+    
+    console.log(`🗺️ Map "${map.original_filename}" loaded by ${loaded_by}`);
+  }
+};
+
+export const handleMapClear = (data, { setActiveMap, setGridConfig, setMapImageConfig }) => {
+  console.log("🗺️ Map cleared:", data);
+  const { cleared_by } = data;
+  
+  // Clear all map-related state
+  setActiveMap(null);
+  setGridConfig(null);
+  setMapImageConfig(null);
+  
+  console.log(`🗺️ Map cleared by ${cleared_by}`);
+};
+
+export const handleMapConfigUpdate = (data, { setGridConfig, setMapImageConfig }) => {
+  console.log("🗺️ Map config updated:", data);
+  const { map_id, grid_config, map_image_config, updated_by } = data;
+  
+  // Update grid configuration if provided
+  if (grid_config) {
+    setGridConfig(grid_config);
+  }
+  
+  // Update map image configuration if provided
+  if (map_image_config) {
+    setMapImageConfig(map_image_config);
+  }
+  
+  console.log(`🗺️ Map config updated by ${updated_by}`);
+};
+
+// =====================================
+// MAP SEND FUNCTIONS
+// =====================================
+
+export const createMapSendFunctions = (sendMessage, roomId, thisPlayer) => ({
+  sendMapLoad: (mapData) => {
+    sendMessage({
+      event_type: 'map_load',
+      data: {
+        map_data: mapData
+      }
+    });
+  },
+  
+  sendMapClear: () => {
+    sendMessage({
+      event_type: 'map_clear',
+      data: {}
+    });
+  },
+  
+  sendMapConfigUpdate: (mapId, gridConfig = null, mapImageConfig = null) => {
+    sendMessage({
+      event_type: 'map_config_update',
+      data: {
+        map_id: mapId,
+        grid_config: gridConfig,
+        map_image_config: mapImageConfig
+      }
+    });
+  },
+  
+  sendMapRequest: () => {
+    sendMessage({
+      event_type: 'map_request',
+      data: {}
+    });
+  }
+});
+
 // Re-export audio handlers for backward compatibility
 export { handleRemoteAudioPlay, handleRemoteAudioResume, handleRemoteAudioBatch };

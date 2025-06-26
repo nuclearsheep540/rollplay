@@ -100,7 +100,11 @@ export default function DMControlCenter({
   gridConfig = null,         // NEW: Current grid configuration
   gridEditMode = false,      // NEW: Grid edit mode state
   setGridEditMode = null,    // NEW: Function to toggle grid edit mode
-  handleGridChange = null    // NEW: Function to handle grid config changes
+  handleGridChange = null,   // NEW: Function to handle grid config changes
+  // WebSocket map functions
+  sendMapLoad = null,        // NEW: Send map load via WebSocket
+  sendMapClear = null,       // NEW: Send map clear via WebSocket
+  sendMapConfigUpdate = null // NEW: Send map config update via WebSocket
 }) {
   
   // State for main panel collapse
@@ -290,40 +294,56 @@ export default function DMControlCenter({
             <button 
               className={`${DM_CHILD} ${activeMap ? ACTIVE_BACKGROUND : ''}`}
               onClick={() => {
-                if (setActiveMap) {
-                  if (activeMap) {
-                    // Clear the current map
-                    setActiveMap(null);
-                    console.log('🗺️ Map cleared');
+                if (activeMap) {
+                  // Clear the current map via WebSocket
+                  if (sendMapClear) {
+                    sendMapClear();
+                    console.log('🗺️ Map clear sent via WebSocket');
                   } else {
-                    // Load the test map
-                    const testMap = {
-                      id: "test-map-1",
-                      filename: "map-bg-no-grid.jpg",
-                      original_filename: "Test Battle Map", 
-                      file_path: "/map-bg-no-grid.jpg",
-                      upload_date: new Date().toISOString(),
-                      // dimensions removed - will be read from actual image file
-                      grid_config: {
-                        grid_width: 8,
-                        grid_height: 12,
-                        enabled: true,
-                        colors: {
-                          edit_mode: {
-                            line_color: "#ff0000",
-                            opacity: 0.8,
-                            line_width: 2
-                          },
-                          display_mode: {
-                            line_color: "#ffffff", 
-                            opacity: 0.3,
-                            line_width: 1
-                          }
+                    // Fallback to local state if WebSocket not available
+                    if (setActiveMap) {
+                      setActiveMap(null);
+                      console.log('🗺️ Map cleared locally (WebSocket unavailable)');
+                    }
+                  }
+                } else {
+                  // Load the test map via WebSocket
+                  const testMapData = {
+                    room_id: roomId,
+                    map_id: "test-map-1",
+                    filename: "map-bg-no-grid.jpg",
+                    original_filename: "Test Battle Map", 
+                    file_path: "/map-bg-no-grid.jpg",
+                    upload_date: new Date().toISOString(),
+                    grid_config: {
+                      grid_width: 8,
+                      grid_height: 12,
+                      enabled: true,
+                      colors: {
+                        edit_mode: {
+                          line_color: "#ff0000",
+                          opacity: 0.8,
+                          line_width: 2
+                        },
+                        display_mode: {
+                          line_color: "#ffffff", 
+                          opacity: 0.3,
+                          line_width: 1
                         }
                       }
-                    };
-                    setActiveMap(testMap);
-                    console.log('🗺️ Test map loaded:', testMap);
+                    },
+                    uploaded_by: "dm" // Add uploaded_by field
+                  };
+                  
+                  if (sendMapLoad) {
+                    sendMapLoad(testMapData);
+                    console.log('🗺️ Test map load sent via WebSocket:', testMapData);
+                  } else {
+                    // Fallback to local state if WebSocket not available
+                    if (setActiveMap) {
+                      setActiveMap(testMapData);
+                      console.log('🗺️ Test map loaded locally (WebSocket unavailable):', testMapData);
+                    }
                   }
                 }
               }}

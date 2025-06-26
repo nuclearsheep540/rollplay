@@ -254,6 +254,60 @@ def register_websocket_routes(app: FastAPI):
                     )
                     broadcast_message = result.broadcast_message
 
+                # Map management events
+                elif event_type == "map_load":
+                    try:
+                        result = await WebsocketEvent.map_load(
+                            websocket=websocket,
+                            data=data,
+                            event_data=event_data,
+                            player_name=player_name,
+                            client_id=client_id,
+                            manager=manager
+                        )
+                        broadcast_message = result.broadcast_message
+                        print(f"🗺️ Map load result broadcast_message: {broadcast_message}")
+                    except Exception as e:
+                        print(f"❌ Exception in map_load handler: {e}")
+                        broadcast_message = {"event_type": "error", "data": f"Map load failed: {str(e)}"}
+
+                elif event_type == "map_clear":
+                    result = await WebsocketEvent.map_clear(
+                        websocket=websocket,
+                        data=data,
+                        event_data=event_data,
+                        player_name=player_name,
+                        client_id=client_id,
+                        manager=manager
+                    )
+                    broadcast_message = result.broadcast_message
+
+                elif event_type == "map_config_update":
+                    result = await WebsocketEvent.map_config_update(
+                        websocket=websocket,
+                        data=data,
+                        event_data=event_data,
+                        player_name=player_name,
+                        client_id=client_id,
+                        manager=manager
+                    )
+                    broadcast_message = result.broadcast_message
+
+                elif event_type == "map_request":
+                    result = await WebsocketEvent.map_request(
+                        websocket=websocket,
+                        data=data,
+                        event_data=event_data,
+                        player_name=player_name,
+                        client_id=client_id,
+                        manager=manager
+                    )
+                    # map_request sends directly to client, no broadcast needed
+                    if result.broadcast_message:
+                        broadcast_message = result.broadcast_message
+                    else:
+                        continue  # Skip broadcasting for direct client responses
+
                 else:
                     # Unknown event type - log and ignore
                     print(f"⚠️ Unknown WebSocket event type: {event_type}")

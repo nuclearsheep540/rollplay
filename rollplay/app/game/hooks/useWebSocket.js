@@ -23,7 +23,11 @@ import {
   handleSeatCountChange,
   handlePlayerDisplaced,
   handleSystemMessage,
-  createSendFunctions
+  createSendFunctions,
+  handleMapLoad,
+  handleMapClear,
+  handleMapConfigUpdate,
+  createMapSendFunctions
 } from './webSocketEvent';
 import {
   handleRemoteAudioPlay,
@@ -140,6 +144,15 @@ export const useWebSocket = (roomId, thisPlayer, gameContext) => {
           case 'remote_audio_batch':
             handleRemoteAudioBatch(data, handlers);
             break;
+          case 'map_load':
+            handleMapLoad(data, handlers);
+            break;
+          case 'map_clear':
+            handleMapClear(data, handlers);
+            break;
+          case 'map_config_update':
+            handleMapConfigUpdate(data, handlers);
+            break;
           default:
             console.warn(`Unknown WebSocket event type: ${event_type}`);
         }
@@ -171,9 +184,19 @@ export const useWebSocket = (roomId, thisPlayer, gameContext) => {
     ? createSendFunctions(webSocket, isConnected, roomId, thisPlayer)
     : {};
 
+  // Create map send functions
+  const mapSendFunctions = webSocket && isConnected
+    ? createMapSendFunctions(
+        (message) => webSocket.send(JSON.stringify(message)),
+        roomId,
+        thisPlayer
+      )
+    : {};
+
   return {
     webSocket,
     isConnected,
-    ...sendFunctions
+    ...sendFunctions,
+    ...mapSendFunctions
   };
 };

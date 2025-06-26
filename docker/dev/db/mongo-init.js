@@ -44,6 +44,9 @@ print("Created active_sessions collection");
 db.createCollection("adventure_logs");
 print("Created adventure_logs collection");
 
+db.createCollection("active_maps");
+print("Created active_maps collection");
+
 // Insert test data
 var test_room = db.active_sessions.insertOne({
     _id: "test_room",   
@@ -93,5 +96,41 @@ db.adventure_logs.insertMany([
         log_id: 1736420380000000
     }
 ]);
+
+// Insert test map data
+db.active_maps.insertOne({
+    room_id: testRoomId.toString(),
+    map_id: "test-map-1",
+    filename: "map-bg-no-grid.jpg",
+    original_filename: "Test Battle Map",
+    file_path: "/map-bg-no-grid.jpg",
+    upload_date: ISODate("2025-01-09T10:00:00Z"),
+    grid_config: {
+        grid_width: 8,
+        grid_height: 12,
+        enabled: true,
+        colors: {
+            edit_mode: {
+                line_color: "#ff0000",
+                opacity: 0.8,
+                line_width: 2
+            },
+            display_mode: {
+                line_color: "#ffffff",
+                opacity: 0.3,
+                line_width: 1
+            }
+        }
+    },
+    map_image_config: null,
+    uploaded_by: "matt",
+    active: true
+});
+print("Inserted test map data");
+
+// Create indexes for optimal query performance
+db.active_maps.createIndex({ "room_id": 1 });
+db.active_maps.createIndex({ "room_id": 1, "active": 1 });
+print("Created indexes for active_maps collection");
 
 print("Database initialization completed successfully!");

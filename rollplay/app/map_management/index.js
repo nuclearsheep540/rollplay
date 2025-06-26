@@ -14,8 +14,8 @@ export { default as GridOverlay } from './components/GridOverlay';
 // export { default as GridControls } from './components/GridControls';
 // export { default as MapViewControls } from './components/MapViewControls';
 
-// Export hooks when created:
+// Export hooks:
+export { useMapWebSocket } from './hooks/useMapWebSocket';
 // export { default as useMapState } from './hooks/useMapState';
 // export { default as useGridEditor } from './hooks/useGridEditor';
 // export { default as useMapUpload } from './hooks/useMapUpload';
-// export { webSocketMapEvents } from './hooks/webSocketMapEvents';

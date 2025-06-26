@@ -8,6 +8,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from gameservice import GameService, GameSettings
 from adventure_log_service import AdventureLogService
+from mapservice import MapService
 from message_templates import format_message, MESSAGE_TEMPLATES
 from models.log_type import LogType
 from websocket_handlers.connection_manager import manager as connection_manager
@@ -25,6 +26,7 @@ app.add_middleware(
 
 
 adventure_log = AdventureLogService()
+map_service = MapService()
 
 
 @app.get("/game/{room_id}/logs")
@@ -50,6 +52,22 @@ async def get_room_log_stats(room_id: str):
         return stats
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/game/{room_id}/active-map")
+async def get_active_map(room_id: str):
+    """Get the currently active map for a room"""
+    try:
+        active_map = map_service.get_active_map(room_id)
+        
+        if active_map:
+            return {"active_map": active_map}
+        else:
+            raise HTTPException(status_code=404, detail="No active map found for this room")
+            
+    except Exception as e:
+        logger.error(f"Error getting active map for room {room_id}: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
 @app.put("/game/{room_id}/seats")
 async def update_seat_count(room_id: str, request: dict):
     """Update the maximum number of seats for a game room and handle displaced players"""

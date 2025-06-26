@@ -24,6 +24,9 @@ const MapDisplay = ({
   const mapImageRef = useRef(null); // Reference to the map image element
   const containerRef = useRef(null); // Reference to the main container
   
+  // Map interaction state - available to all players
+  const [isMapLocked, setIsMapLocked] = useState(true); // Default to locked
+  
   // Unified view state (replaces separate map/grid zoom)
   const [viewTransform, setViewTransform] = useState({
     x: 0,        // Pan X
@@ -45,7 +48,7 @@ const MapDisplay = ({
 
   // Unified zoom handler for the entire view
   const handleWheel = useCallback((e) => {
-    if (!mapImageEditMode && !isEditMode) return; // Only allow zoom in edit modes
+    if (isMapLocked) return; // Only allow zoom when map is unlocked
     
     e.preventDefault();
     e.stopPropagation();
@@ -59,14 +62,14 @@ const MapDisplay = ({
     }));
     
     console.log('🎯 Unified zoom:', newScale);
-  }, [mapImageEditMode, isEditMode, viewTransform.scale]);
+  }, [isMapLocked, viewTransform.scale]);
 
   // Unified pan handler for dragging the view
   const [isDragging, setIsDragging] = useState(false);
   const [dragStart, setDragStart] = useState({ x: 0, y: 0 });
 
   const handleMouseDown = useCallback((e) => {
-    if (!mapImageEditMode) return; // Only allow pan in map edit mode
+    if (isMapLocked) return; // Only allow pan when map is unlocked
     
     setIsDragging(true);
     setDragStart({
@@ -75,10 +78,10 @@ const MapDisplay = ({
     });
     
     e.preventDefault();
-  }, [mapImageEditMode]);
+  }, [isMapLocked]);
 
   const handleMouseMove = useCallback((e) => {
-    if (!isDragging || !mapImageEditMode) return;
+    if (!isDragging || isMapLocked) return;
     
     const deltaX = e.clientX - dragStart.x;
     const deltaY = e.clientY - dragStart.y;
@@ -93,7 +96,7 @@ const MapDisplay = ({
       x: e.clientX,
       y: e.clientY
     });
-  }, [isDragging, mapImageEditMode, dragStart]);
+  }, [isDragging, isMapLocked, dragStart]);
 
   const handleMouseUp = useCallback(() => {
     setIsDragging(false);
@@ -122,7 +125,7 @@ const MapDisplay = ({
     zIndex: 1, // Behind initiative tracker but above base background
     backgroundColor: '#1a1a2e', // Fallback background
     overflow: 'hidden', // Clip zoomed content
-    cursor: mapImageEditMode ? (isDragging ? 'grabbing' : 'grab') : 'default'
+    cursor: !isMapLocked ? (isDragging ? 'grabbing' : 'grab') : 'default'
   };
 
   // Unified transform styles for the content
@@ -212,6 +215,47 @@ const MapDisplay = ({
         >
           📍 {activeMap.filename} • Scale: {viewTransform.scale.toFixed(1)}x
         </div>
+      )}
+
+      {/* Lock Map Toggle - Available to all players */}
+      {activeMap && mapLoaded && (
+        <button
+          onClick={() => setIsMapLocked(!isMapLocked)}
+          style={{
+            position: 'absolute',
+            top: '20px',
+            right: '20px',
+            background: isMapLocked ? 'rgba(139, 69, 19, 0.9)' : 'rgba(34, 139, 34, 0.9)', // Brown when locked, green when unlocked
+            color: '#ffffff',
+            border: '2px solid rgba(255, 255, 255, 0.3)',
+            borderRadius: '8px',
+            padding: '10px 16px',
+            fontSize: '14px',
+            fontWeight: '600',
+            cursor: 'pointer',
+            zIndex: 25,
+            display: 'flex',
+            alignItems: 'center',
+            gap: '8px',
+            transition: 'all 0.2s ease',
+            fontFamily: 'system-ui'
+          }}
+          onMouseEnter={(e) => {
+            e.target.style.transform = 'scale(1.05)';
+            e.target.style.boxShadow = '0 4px 12px rgba(0, 0, 0, 0.3)';
+          }}
+          onMouseLeave={(e) => {
+            e.target.style.transform = 'scale(1)';
+            e.target.style.boxShadow = 'none';
+          }}
+        >
+          <span style={{ fontSize: '16px' }}>
+            {isMapLocked ? '🔒' : '🔓'}
+          </span>
+          <span>
+            {isMapLocked ? 'Unlock Map' : 'Lock Map'}
+          </span>
+        </button>
       )}
 
       {/* Transformed content container */}

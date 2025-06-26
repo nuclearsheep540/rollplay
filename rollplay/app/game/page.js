@@ -19,7 +19,7 @@ import LobbyPanel from './components/LobbyPanel';
 import DiceActionPanel from './components/DiceActionPanel'; // NEW IMPORT
 import { useWebSocket } from './hooks/useWebSocket';
 import { useUnifiedAudio } from '../audio_management';
-import { MapDisplay, GridOverlay } from '../map_management';
+import { MapDisplay, GridOverlay, useMapWebSocket } from '../map_management';
 
 function GameContent() {
   const params = useSearchParams(); 
@@ -238,6 +238,9 @@ function GameContent() {
     
     // Load adventure logs for this room
     await loadAdventureLogs(roomId);
+    
+    // Load active map for this room
+    await loadActiveMap(roomId);
   }
   
   // Check player roles
@@ -389,6 +392,62 @@ function GameContent() {
   const formatTimestamp = (timestamp) => {
     const date = new Date(timestamp);
     return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  };
+
+  // Load active map for the room
+  const loadActiveMap = async (roomId) => {
+    try {
+      console.log("🗺️ Loading active map from database...");
+      
+      const response = await fetch(`/api/game/${roomId}/active-map`);
+      
+      if (response.ok) {
+        const mapData = await response.json();
+        
+        if (mapData && mapData.active_map) {
+          const activeMapData = mapData.active_map;
+          console.log(`🗺️ Loaded active map: ${activeMapData.original_filename}`);
+          
+          // Set the active map
+          setActiveMap(activeMapData);
+          
+          // Apply grid configuration if present
+          if (activeMapData.grid_config) {
+            setGridConfig(activeMapData.grid_config);
+            console.log('🗺️ Applied grid config:', activeMapData.grid_config);
+          }
+          
+          // Apply map image configuration if present
+          if (activeMapData.map_image_config) {
+            setMapImageConfig(activeMapData.map_image_config);
+            console.log('🗺️ Applied map image config:', activeMapData.map_image_config);
+          }
+          
+        } else {
+          console.log("🗺️ No active map found for room");
+          // Clear map state if no active map
+          setActiveMap(null);
+          setGridConfig(null);
+          setMapImageConfig(null);
+        }
+        
+      } else if (response.status === 404) {
+        console.log("🗺️ No active map found for room");
+        // Clear map state if no active map
+        setActiveMap(null);
+        setGridConfig(null);
+        setMapImageConfig(null);
+      } else {
+        console.error("🗺️ Failed to fetch active map:", response.status, response.statusText);
+      }
+      
+    } catch (error) {
+      console.error("🗺️ Error loading active map:", error);
+      // Don't set fallback map data - leave empty if error
+      setActiveMap(null);
+      setGridConfig(null);
+      setMapImageConfig(null);
+    }
   };
 
   // UPDATED: Handle player kick
@@ -592,6 +651,72 @@ function GameContent() {
     sendRemoteAudioResume,
     sendRemoteAudioBatch
   } = useWebSocket(roomId, thisPlayer, gameContext);
+
+  // Map management WebSocket hook
+  const mapContext = {
+    setActiveMap,
+    setGridConfig,
+    setMapImageConfig
+  };
+  
+  const {
+    sendMapLoad,
+    sendMapClear,
+    sendMapConfigUpdate,
+    sendMapRequest,
+    handleMapLoad,
+    handleMapClear,
+    handleMapConfigUpdate
+  } = useMapWebSocket(webSocket, isConnected, roomId, thisPlayer, mapContext);
+
+  // Add map handlers to the main WebSocket via direct event listening
+  useEffect(() => {
+    if (!webSocket || !isConnected) return;
+
+    const handleMapMessage = (event) => {
+      try {
+        const message = JSON.parse(event.data);
+        const { event_type, data } = message;
+
+        // Only handle map-related events
+        switch (event_type) {
+          case 'map_load':
+            handleMapLoad(data);
+            break;
+          case 'map_clear':
+            handleMapClear(data);
+            break;
+          case 'map_config_update':
+            handleMapConfigUpdate(data);
+            break;
+          default:
+            // Let main WebSocket hook handle other events
+            break;
+        }
+      } catch (error) {
+        console.error('Error processing map WebSocket message:', error);
+      }
+    };
+
+    webSocket.addEventListener('message', handleMapMessage);
+
+    return () => {
+      if (webSocket) {
+        webSocket.removeEventListener('message', handleMapMessage);
+      }
+    };
+  }, [webSocket, isConnected, handleMapLoad, handleMapClear, handleMapConfigUpdate]);
+
+  // Request current map when player connects
+  useEffect(() => {
+    if (webSocket && isConnected && sendMapRequest) {
+      // Small delay to ensure connection is fully established
+      setTimeout(() => {
+        sendMapRequest();
+        console.log('🗺️ Requested current map on player connection');
+      }, 1000);
+    }
+  }, [webSocket, isConnected, sendMapRequest]);
 
   // Listen for combat state changes and play audio
   useEffect(() => {
@@ -1228,6 +1353,11 @@ function GameContent() {
             gridEditMode={gridEditMode}
             setGridEditMode={setGridEditMode}
             handleGridChange={handleGridChange}
+            // WebSocket map functions
+            sendMapLoad={sendMapLoad}
+            sendMapClear={sendMapClear}
+            sendMapConfigUpdate={sendMapConfigUpdate}
+            sendMapRequest={sendMapRequest}
           />
         </div>
 
