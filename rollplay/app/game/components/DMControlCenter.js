@@ -67,6 +67,55 @@ const ImageDimensions = ({ activeMap }) => {
   );
 };
 
+// Component to calculate square cell ratio in real-time
+const SquareCellRatioCalculator = ({ activeMap, gridDimensions }) => {
+  const [imageDimensions, setImageDimensions] = useState(null);
+
+  useEffect(() => {
+    if (!activeMap?.file_path) return;
+
+    const img = new Image();
+    img.onload = () => {
+      setImageDimensions({
+        width: img.naturalWidth,
+        height: img.naturalHeight
+      });
+    };
+    img.src = activeMap.file_path;
+  }, [activeMap?.file_path]);
+
+  if (!imageDimensions || !gridDimensions) return null;
+
+  // Calculate current cell dimensions
+  const cellWidth = imageDimensions.width / gridDimensions.width;
+  const cellHeight = imageDimensions.height / gridDimensions.height;
+  
+  // Calculate aspect ratio
+  const cellAspectRatio = cellWidth / cellHeight;
+  const isSquare = Math.abs(cellAspectRatio - 1.0) < 0.05; // Within 5% tolerance
+  
+  // Calculate ideal dimensions for square cells
+  const idealSquareSize = Math.min(cellWidth, cellHeight);
+  const idealGridWidth = Math.round(imageDimensions.width / idealSquareSize);
+  const idealGridHeight = Math.round(imageDimensions.height / idealSquareSize);
+  
+  return (
+    <div className="mb-3 p-2 bg-gray-800 rounded border border-gray-600">
+      <div className="text-xs text-gray-300 mb-1">
+        <strong>Cell Analysis:</strong>
+      </div>
+      <div className="text-xs text-gray-400 space-y-1">
+        <div>Current: {cellWidth.toFixed(0)}×{cellHeight.toFixed(0)}px {isSquare ? '✅ Square' : '⚠️ Rectangle'}</div>
+        <div>Ratio: {cellAspectRatio.toFixed(2)}:1 {isSquare ? '' : `(${cellAspectRatio > 1 ? 'wide' : 'tall'})`}</div>
+        {!isSquare && (
+          <div className="text-yellow-400">
+            For square cells: {idealGridWidth}×{idealGridHeight} grid
+          </div>
+        )}
+      </div>
+    </div>
+  );
+};
 
 export default function DMControlCenter({
   isDM,
@@ -452,7 +501,7 @@ export default function DMControlCenter({
               }}
               disabled={!activeMap}
             >
-              📐 {isDimensionsExpanded ? 'Exit Grid Edit' : 'Set Grid Size'}
+              📐 {isDimensionsExpanded ? 'Exit Grid Edit' : 'Edit Grid'}
             </button>
             
             {/* Grid Dimensions Input (expandable) */}
@@ -521,6 +570,12 @@ export default function DMControlCenter({
                     <span>100%</span>
                   </div>
                 </div>
+                
+                {/* Square Cell Ratio Calculator */}
+                <SquareCellRatioCalculator 
+                  activeMap={activeMap}
+                  gridDimensions={gridDimensions}
+                />
                 
                 <button
                   className={DM_CHILD_LAST}

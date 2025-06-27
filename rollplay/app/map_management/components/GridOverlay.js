@@ -122,7 +122,7 @@ const GridOverlay = ({
         labels.push({
           type: 'column',
           x: cellCenterX,
-          y: offsetY - 10, // Above the map
+          y: offsetY - 15, // Above the map, adjusted for middle baseline
           text: letter,
           key: `col-${i}`
         });
@@ -146,7 +146,7 @@ const GridOverlay = ({
         const cellCenterY = y + (mapHeight / gridRows) / 2;
         labels.push({
           type: 'row',
-          x: offsetX - 20, // To the left of the map
+          x: offsetX - 15, // To the left of the map, consistent spacing
           y: cellCenterY,
           text: (i + 1).toString(),
           key: `row-${i}`
@@ -231,12 +231,12 @@ const GridOverlay = ({
           x={label.x}
           y={label.y}
           fill={currentColors.line_color}
-          opacity={Math.min(currentColors.opacity * 2, 1)} // Labels slightly more visible
+          opacity={1.0} // Labels always at 100% opacity, unaffected by grid opacity
           fontSize="12"
           fontFamily="monospace"
           fontWeight="500"
           textAnchor="middle"
-          dominantBaseline={label.type === 'row' ? 'middle' : 'hanging'}
+          dominantBaseline="middle" // Use middle baseline for consistent spacing
           style={{
             userSelect: 'none',
             pointerEvents: 'none'
@@ -253,7 +253,7 @@ const GridOverlay = ({
             x="50%"
             y="50"
             fill={currentColors.line_color}
-            opacity={Math.min(currentColors.opacity * 2, 1)}
+            opacity={1.0} // Edit mode indicators always at 100% opacity
             fontSize="14"
             fontFamily="system-ui"
             fontWeight="600"
@@ -269,7 +269,7 @@ const GridOverlay = ({
             x="50%"
             y="75"
             fill={currentColors.line_color}
-            opacity={Math.min(currentColors.opacity * 2, 1)}
+            opacity={1.0} // Edit mode indicators always at 100% opacity
             fontSize="12"
             fontFamily="monospace"
             fontWeight="500"
