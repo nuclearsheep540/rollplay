@@ -385,9 +385,18 @@ export default function DMControlCenter({
         {expandedSections.map && (
           <div>
             <button 
-              className={`${DM_CHILD} ${activeMap ? ACTIVE_BACKGROUND : ''}`}
+              className={DM_CHILD}
               onClick={() => {
-                if (activeMap) {
+                // Always open map selection modal
+                setIsMapSelectionOpen(true);
+              }}
+            >
+              📁 Load Map
+            </button>
+            {activeMap && (
+              <button 
+                className={`${DM_CHILD} ${ACTIVE_BACKGROUND}`}
+                onClick={() => {
                   // Clear the current map via WebSocket
                   if (sendMapClear) {
                     sendMapClear();
@@ -399,15 +408,11 @@ export default function DMControlCenter({
                       console.log('🗺️ Map cleared locally (WebSocket unavailable)');
                     }
                   }
-                } else {
-                  // Open map selection modal
-                  setIsMapSelectionOpen(true);
-                }
-              }}
-              disabled={!setActiveMap}
-            >
-              📁 {activeMap ? 'Clear Map' : 'Load Map'}
-            </button>
+                }}
+              >
+                🗑️ Clear Map
+              </button>
+            )}
             <button 
               className={DM_CHILD}
               onClick={() => {
