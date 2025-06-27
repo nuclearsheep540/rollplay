@@ -21,6 +21,7 @@ const GridOverlay = ({
   // Local state for editing (simplified - no more offset management)
   const svgRef = useRef(null);
   const [windowSize, setWindowSize] = useState({ width: 0, height: 0 });
+  const [mapDimensions, setMapDimensions] = useState({ width: 0, height: 0 });
 
   // Listen for window resize to recalculate grid positioning
   useEffect(() => {
@@ -37,6 +38,40 @@ const GridOverlay = ({
     return () => window.removeEventListener('resize', updateWindowSize);
   }, []);
 
+  // Watch for map image dimension changes (e.g., when UI scale changes panel layout)
+  useEffect(() => {
+    if (!mapImageRef?.current) return;
+
+    const updateMapDimensions = () => {
+      const mapElement = mapImageRef.current;
+      if (mapElement) {
+        const newDimensions = {
+          width: mapElement.clientWidth,
+          height: mapElement.clientHeight
+        };
+        setMapDimensions(prev => {
+          // Only update if dimensions actually changed to avoid unnecessary re-renders
+          if (prev.width !== newDimensions.width || prev.height !== newDimensions.height) {
+            console.log('🎯 Map dimensions changed:', prev, '->', newDimensions);
+            return newDimensions;
+          }
+          return prev;
+        });
+      }
+    };
+
+    // Initial measurement
+    updateMapDimensions();
+
+    // Use ResizeObserver to watch for size changes
+    const resizeObserver = new ResizeObserver(updateMapDimensions);
+    resizeObserver.observe(mapImageRef.current);
+
+    return () => {
+      resizeObserver.disconnect();
+    };
+  }, [mapImageRef, activeMap]); // Re-run when map changes
+
   // Calculate grid based on map image dimensions (1:1 square cells)
   const gridData = useMemo(() => {
     if (!gridConfig || !gridConfig.enabled || !activeMap || !mapImageRef?.current) return { lines: [], labels: [] };
@@ -46,8 +81,9 @@ const GridOverlay = ({
     const mapWidth = mapElement.clientWidth;  // Actual rendered width
     const mapHeight = mapElement.clientHeight; // Actual rendered height
     
-    // Account for label space in positioning
-    const offsetX = 30; // Space for row labels on left
+    // Since grid overlay uses same positioning as map image (both centered),
+    // we can position grid lines directly on the image coordinates
+    const offsetX = 30; // Space for row labels on left  
     const offsetY = 20; // Space for column labels on top
     
     // Grid configuration (purely dimensional)
@@ -117,12 +153,15 @@ const GridOverlay = ({
       }
     }
 
-    console.log('🎯 Grid calculated - Map size:', mapWidth, 'x', mapHeight, 
-                'Grid dimensions:', gridCols, 'x', gridRows,
-                'Cell size:', (mapWidth/gridCols).toFixed(1), 'x', (mapHeight/gridRows).toFixed(1));
+    console.log('🎯 Grid calculated:', {
+      mapSize: `${mapWidth}×${mapHeight}`,
+      trackedDimensions: `${mapDimensions.width}×${mapDimensions.height}`,
+      gridDimensions: `${gridCols}×${gridRows}`,
+      cellSize: `${(mapWidth/gridCols).toFixed(1)}×${(mapHeight/gridRows).toFixed(1)}`
+    });
 
     return { lines, labels };
-  }, [gridConfig, showLabels, activeMap, mapImageRef, windowSize]);
+  }, [gridConfig, showLabels, activeMap, mapImageRef, windowSize, mapDimensions]);
 
   // Don't show grid if no config provided
   if (!gridConfig) {
@@ -139,11 +178,10 @@ const GridOverlay = ({
     <div
       style={{
         position: 'absolute',
-        top: '50%',
-        left: '50%',
-        transform: 'translate(-50%, -50%)',
-        width: mapImageRef?.current ? `${mapImageRef.current.clientWidth + 60}px` : '100%', // Extra space for labels
-        height: mapImageRef?.current ? `${mapImageRef.current.clientHeight + 40}px` : '100%', // Extra space for labels
+        top: 0,
+        left: 0,
+        right: 0,
+        bottom: 0,
         pointerEvents: 'none',
         zIndex: isEditMode ? 20 : 5,
         overflow: 'visible'
@@ -151,12 +189,14 @@ const GridOverlay = ({
     >
       <svg
         ref={svgRef}
+        viewBox={`0 0 ${mapImageRef?.current ? mapImageRef.current.clientWidth + 60 : 800} ${mapImageRef?.current ? mapImageRef.current.clientHeight + 40 : 600}`}
         style={{
           position: 'absolute',
-          top: 0,
-          left: 0,
-          width: '100%',
-          height: '100%',
+          top: '50%',
+          left: '50%',
+          transform: 'translate(-50%, -50%)',
+          width: mapImageRef?.current ? `${mapImageRef.current.clientWidth + 60}px` : '100%',
+          height: mapImageRef?.current ? `${mapImageRef.current.clientHeight + 40}px` : '100%',
           pointerEvents: 'none',
           overflow: 'visible',
           backgroundColor: 'transparent'

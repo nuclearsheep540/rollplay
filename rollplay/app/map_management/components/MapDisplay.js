@@ -24,7 +24,7 @@ const MapDisplay = ({
   const containerRef = useRef(null); // Reference to the main container
   
   // Map interaction state - available to all players
-  const [isMapLocked, setIsMapLocked] = useState(true); // Default to locked
+  const [isMapLocked, setIsMapLocked] = useState(false); // Default to locked
   
   // Unified view state (replaces separate map/grid zoom)
   const [viewTransform, setViewTransform] = useState({
@@ -239,14 +239,6 @@ const MapDisplay = ({
             transition: 'all 0.2s ease',
             fontFamily: 'system-ui'
           }}
-          onMouseEnter={(e) => {
-            e.target.style.transform = 'scale(1.05)';
-            e.target.style.boxShadow = '0 4px 12px rgba(0, 0, 0, 0.3)';
-          }}
-          onMouseLeave={(e) => {
-            e.target.style.transform = 'scale(1)';
-            e.target.style.boxShadow = 'none';
-          }}
         >
           <span style={{ fontSize: '16px' }}>
             {isMapLocked ? '🔒' : '🔓'}
@@ -287,7 +279,7 @@ const MapDisplay = ({
           }}
         />
 
-        {/* Grid overlay for active map - atomic approach */}
+        {/* Grid overlay for active map - atomic approach - now properly coupled inside transform container */}
         {showGrid && (
           <GridOverlay 
             gridConfig={activeMap?.grid_config || null}
