@@ -286,26 +286,28 @@ body {
    ========================================================================== */
 .game-interface {
   font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-  background: linear-gradient(135deg, #0a0a0a 0%, #1a1a2e 50%, #16213e 100%);
+  background: #1a1a2e;
   color: #e0e0e0;
   height: 100vh;
   overflow: hidden;
   display: flex;
   flex-direction: column;
+  position: relative;
 }
 
 /* Top Command Bar
    ========================================================================== */
 .command-bar {
   height: calc(50px * var(--ui-scale));
-  background: linear-gradient(90deg, rgba(0,0,0,0.8) 0%, rgba(26,26,46,0.6) 100%);
+  background: linear-gradient(90deg, rgba(0,0,0,0.9) 0%, rgba(26,26,46,0.8) 100%);
+  backdrop-filter: blur(8px);
   border-bottom: 1px solid rgba(74, 222, 128, 0.3);
   display: flex;
   align-items: center;
   justify-content: space-between;
   padding: 0 calc(24px * var(--ui-scale));
   position: relative;
-  z-index: 100;
+  z-index: 100; /* Above everything */
 }
 
 .campaign-info {
@@ -428,18 +430,23 @@ body {
     "party-sidebar map-canvas right-panel";
   min-height: 0;
   overflow: hidden;
+  position: relative;
+  z-index: 10; /* Above map background */
 }
 
-/* Party Sidebar - UPDATED: With scaling
+/* Party Sidebar - UPDATED: With scaling and map transparency
    ========================================================================== */
 .party-sidebar {
   grid-area: party-sidebar;
-  background: linear-gradient(180deg, rgba(0,0,0,0.4) 0%, rgba(26,26,46,0.2) 100%);
+  background: linear-gradient(180deg, rgba(0,0,0,0.8) 0%, rgba(26,26,46,0.7) 100%);
+  backdrop-filter: blur(8px);
   border-right: 1px solid rgba(255, 255, 255, 0.1);
   padding: calc(20px * var(--ui-scale)) calc(16px * var(--ui-scale));
   overflow-y: auto;
   display: flex;
   flex-direction: column;
+  position: relative;
+  z-index: 15; /* Above map */
 }
 
 .party-header {
@@ -541,17 +548,20 @@ body {
   position: relative;
 }
 
-/* Right Panel Container - UPDATED: With scaling
+/* Right Panel Container - UPDATED: With scaling and map transparency
    ========================================================================== */
 .right-panel {
   grid-area: right-panel;
+  background: linear-gradient(180deg, rgba(0,0,0,0.8) 0%, rgba(26,26,46,0.7) 100%);
+  backdrop-filter: blur(8px);
   border-left: 1px solid rgba(255, 255, 255, 0.1);
   display: flex;
   flex-direction: column;
   min-height: 0;
   max-height: 100vh;
   overflow-y: auto;
-  /* width: 420px; */
+  position: relative;
+  z-index: 15; /* Above map */
   
   /* Hide scrollbar completely */
   scrollbar-width: none; /* Firefox */

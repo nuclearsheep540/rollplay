@@ -19,6 +19,7 @@ import LobbyPanel from './components/LobbyPanel';
 import DiceActionPanel from './components/DiceActionPanel'; // NEW IMPORT
 import { useWebSocket } from './hooks/useWebSocket';
 import { useUnifiedAudio } from '../audio_management';
+import { MapDisplay, GridOverlay, useMapWebSocket } from '../map_management';
 
 function GameContent() {
   const params = useSearchParams(); 
@@ -85,6 +86,35 @@ function GameContent() {
   const [activePrompts, setActivePrompts] = useState([]); // Array of {id, player, rollType, promptedBy}
   const [isDicePromptActive, setIsDicePromptActive] = useState(false); // Is any prompt active?
   const [currentInitiativePromptId, setCurrentInitiativePromptId] = useState(null); // Track initiative prompt ID for removal
+
+  // Map system state
+  const [activeMap, setActiveMap] = useState(null); // Current active map data
+  const [gridEditMode, setGridEditMode] = useState(false); // Is DM editing grid dimensions?
+  const [gridConfig, setGridConfig] = useState(null); // Current grid configuration
+  const [liveGridOpacity, setLiveGridOpacity] = useState(0.2); // Live grid opacity for real-time updates
+  
+  // Debug wrapper for setGridConfig
+  const debugSetGridConfig = (config) => {
+    console.log('🎯 setGridConfig called with:', config);
+    setGridConfig(config);
+  };
+  const [mapImageConfig, setMapImageConfig] = useState(null); // Map image positioning/scaling
+
+  // Handle grid configuration changes during editing
+  const handleGridChange = (newGridConfig) => {
+    console.log('🎯 handleGridChange called with:', newGridConfig);
+    console.log('🎯 Current gridConfig before update:', gridConfig);
+    setGridConfig(newGridConfig);
+    // TODO: Save to backend when grid editing is complete
+    console.log('🎯 Grid config updated, setGridConfig called');
+  };
+
+  // Handle map image configuration changes during editing
+  const handleMapImageChange = (newMapImageConfig) => {
+    setMapImageConfig(newMapImageConfig);
+    // TODO: Save to backend when map editing is complete
+    console.log('Map image config updated:', newMapImageConfig);
+  };
 
   // Helper function to get character data
   const getCharacterData = (playerName) => {
@@ -215,6 +245,9 @@ function GameContent() {
     
     // Load adventure logs for this room
     await loadAdventureLogs(roomId);
+    
+    // Load active map for this room
+    await loadActiveMap(roomId);
   }
   
   // Check player roles
@@ -366,6 +399,49 @@ function GameContent() {
   const formatTimestamp = (timestamp) => {
     const date = new Date(timestamp);
     return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  };
+
+  // Load active map for the room
+  const loadActiveMap = async (roomId) => {
+    try {
+      console.log("🗺️ Loading active map from database...");
+      
+      const response = await fetch(`/api/game/${roomId}/active-map`);
+      
+      if (response.ok) {
+        const mapData = await response.json();
+        
+        if (mapData && mapData.active_map) {
+          const activeMapData = mapData.active_map;
+          console.log(`🗺️ Loaded active map: ${activeMapData.original_filename}`);
+          
+          // Set the active map (atomic - contains all map data including grid_config)
+          setActiveMap(activeMapData);
+          console.log('🗺️ Loaded complete map atomically:', {
+            filename: activeMapData.filename,
+            hasGridConfig: !!activeMapData.grid_config,
+            hasImageConfig: !!activeMapData.map_image_config
+          });
+          
+        } else {
+          console.log("🗺️ No active map found for room");
+          // Clear map state if no active map (atomic)
+          setActiveMap(null);
+        }
+        
+      } else if (response.status === 404) {
+        console.log("🗺️ No active map found for room");
+        // Clear map state if no active map (atomic)
+        setActiveMap(null);
+      } else {
+        console.error("🗺️ Failed to fetch active map:", response.status, response.statusText);
+      }
+      
+    } catch (error) {
+      console.error("🗺️ Error loading active map:", error);
+      // Don't set fallback map data - leave empty if error (atomic)
+      setActiveMap(null);
+    }
   };
 
   // UPDATED: Handle player kick
@@ -569,6 +645,28 @@ function GameContent() {
     sendRemoteAudioResume,
     sendRemoteAudioBatch
   } = useWebSocket(roomId, thisPlayer, gameContext);
+
+  // Map management WebSocket hook (atomic approach)
+  const mapContext = {
+    setActiveMap,
+    activeMap // All map data including grid_config handled atomically
+    // No separate setGridConfig or setMapImageConfig - everything goes through setActiveMap
+  };
+  
+  const {
+    sendMapLoad,
+    sendMapClear,
+    sendMapConfigUpdate,
+    sendMapRequest,
+    handleMapLoad,
+    handleMapClear,
+    handleMapConfigUpdate
+  } = useMapWebSocket(webSocket, isConnected, roomId, thisPlayer, mapContext);
+
+  // Map handlers are managed by useMapWebSocket hook - no additional event listeners needed
+
+  // WebSocket map requests are handled via user actions (load/clear/update)
+  // Initial map loading is handled by HTTP fetch in onLoad function
 
   // Listen for combat state changes and play audio
   useEffect(() => {
@@ -1134,12 +1232,25 @@ function GameContent() {
         </div>
 
         {/* GRID POSITION 2: Center Column - map-canvas with horizontal initiative */}
-        <HorizontalInitiativeTracker 
-          initiativeOrder={initiativeOrder}
-          handleInitiativeClick={handleInitiativeClick}
-          currentTurn={currentTurn}
-          combatActive={combatActive}
-        />
+        <div className="grid-area-map-canvas relative">
+          {/* Map Display Background - Now properly positioned in center area */}
+          <MapDisplay 
+            activeMap={activeMap}
+            isEditMode={gridEditMode && isDM}
+            onGridChange={handleGridChange}
+            mapImageEditMode={gridEditMode && isDM}
+            onMapImageChange={handleMapImageChange}
+            liveGridOpacity={liveGridOpacity}
+          />
+          
+          {/* Horizontal Initiative Tracker overlaid on map */}
+          <HorizontalInitiativeTracker 
+            initiativeOrder={initiativeOrder}
+            handleInitiativeClick={handleInitiativeClick}
+            currentTurn={currentTurn}
+            combatActive={combatActive}
+          />
+        </div>
 
         {/* GRID POSITION 3: Right Panel - DM Controls (Full Height) */}
         <div className="right-panel p-4">
@@ -1184,6 +1295,17 @@ function GameContent() {
             sendRemoteAudioBatch={sendRemoteAudioBatch}   // NEW: Pass WebSocket batch function
             clearPendingOperation={setClearPendingOperationFn} // NEW: Pass function to set pending operation clearer
             clearDicePrompt={clearDicePrompt}    // UPDATED: Now accepts prompt ID
+            // Map management props
+            activeMap={activeMap}
+            setActiveMap={setActiveMap}
+            gridEditMode={gridEditMode}
+            setGridEditMode={setGridEditMode}
+            handleGridChange={handleGridChange}
+            liveGridOpacity={liveGridOpacity}
+            setLiveGridOpacity={setLiveGridOpacity}
+            // WebSocket map functions
+            sendMapLoad={sendMapLoad}
+            sendMapClear={sendMapClear}
           />
         </div>
 

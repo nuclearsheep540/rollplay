@@ -6,6 +6,36 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 Rollplay is a virtual D&D/tabletop gaming platform called "Tabletop Tavern" that enables real-time multiplayer dice rolling and campaign management. The application supports room creation, party management, DM tools, initiative tracking, and comprehensive adventure logging.
 
+## 🚨 CRITICAL ARCHITECTURAL PRINCIPLES
+
+### Server-Authoritative Design
+**The backend controls ALL state changes. Never send state updates via WebSocket directly.**
+
+**Correct Flow**: User Action → HTTP API → Database Update → WebSocket Broadcast
+**Incorrect Flow**: User Action → WebSocket Message → State Change
+
+#### Examples:
+✅ **CORRECT**: DM applies grid config → `PUT /game/{room_id}/map` → Database update → Broadcast to clients
+❌ **WRONG**: DM applies grid config → WebSocket `map_config_update` → Direct state change
+
+### Atomic Data Updates  
+**Always send complete objects, never fragmented updates.**
+
+**Atomic means**: Send the entire updated object as one unit, replacing the complete state
+**Non-atomic means**: Send partial updates (individual fields) that fragment state
+
+#### Examples:
+✅ **ATOMIC**: `{ map: { ...completeMapObject, grid_config: newConfig } }`
+❌ **FRAGMENTED**: `{ grid_config: newConfig }` (missing rest of map data)
+
+### Why These Principles Matter:
+- **Consistency**: All clients receive identical state
+- **Race Conditions**: Prevented by single source of truth (server)
+- **Debugging**: Clear flow of state changes through HTTP endpoints
+- **Reliability**: Database transactions ensure atomic updates
+
+**⚠️ IMPORTANT**: Violating these principles leads to state desync, persistence failures, and hard-to-debug issues.
+
 ## Architecture
 
 ### Frontend (Next.js 13) - Functional Slice Architecture
@@ -28,6 +58,11 @@ Rollplay is a virtual D&D/tabletop gaming platform called "Tabletop Tavern" that
 - `hooks/` - Audio functionality (useUnifiedAudio, useWebAudio, webSocketAudioEvents)
 - `types/` - Audio-related type definitions
 - `index.js` - Exports all audio functionality
+
+**🗺️ Map Management Domain** (`app/map_management/`)
+- `components/` - Map UI components (MapManager, MapEditor, GridOverlay, etc.)
+- `hooks/` - Map functionality (useMapState, useGridEditor, webSocketMapEvents)
+- `index.js` - Exports all map functionality
 
 **🎨 Shared Resources** (`app/`)
 - `styles/constants.js` - UI styling constants (DM_TITLE, DM_HEADER, etc.)

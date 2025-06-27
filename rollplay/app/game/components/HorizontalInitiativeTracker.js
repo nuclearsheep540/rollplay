@@ -47,19 +47,7 @@ export default function HorizontalInitiativeTracker({
   };
 
   return (
-    <div className="grid-area-map-canvas bg-gradient-to-br from-slate-900/80 via-slate-800/60 to-slate-900/80 relative flex flex-col items-center justify-center border border-white/5 overflow-hidden">
-      
-      {/* Map Background */}
-      <div 
-        className="absolute inset-0 bg-cover bg-center bg-no-repeat"
-        style={{
-          backgroundImage: "url('https://runefoundry.com/cdn/shop/files/ForestWaterfallIsometric_digital_grid_day.jpg?v=1688628972&width=1946')",
-          opacity: 0.6,
-        }}
-      >
-        {/* Dark overlay for better contrast with UI elements */}
-        <div className="absolute inset-0 bg-black/30"></div>
-      </div>
+    <div className="grid-area-map-canvas relative flex flex-col items-center justify-center overflow-hidden">
 
       {/* Initiative Order - Animated show/hide based on combat state */}
       {shouldRender && (

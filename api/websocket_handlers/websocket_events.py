@@ -8,9 +8,11 @@ from .connection_manager import ConnectionManager
 from message_templates import format_message, MESSAGE_TEMPLATES
 from adventure_log_service import AdventureLogService
 from models.log_type import LogType
+from mapservice import MapService, MapSettings
 
 
 adventure_log = AdventureLogService()
+map_service = MapService()
 
 
 class WebsocketEventResult:
@@ -850,3 +852,214 @@ class WebsocketEvent():
         
         print(f"🎛️ Backend broadcasting batch operations: {batch_audio_message}")
         return WebsocketEventResult(broadcast_message=batch_audio_message)
+    
+    @staticmethod
+    async def map_load(websocket, data, event_data, player_name, client_id, manager):
+        """Load/set active map for the room"""
+        print(f"🗺️ Map load handler called for room {client_id} by {player_name}")
+        print(f"🗺️ event_data: {event_data}")
+        print(f"🗺️ data: {data}")
+        
+        room_id = client_id  # Use client_id as room_id
+        map_data = event_data.get("map_data")
+        
+        if not room_id or not map_data:
+            print(f"❌ Invalid map load request: missing room_id or map_data")
+            return WebsocketEventResult(broadcast_message={
+                "event_type": "error",
+                "data": {"error": "Invalid map load request"}
+            })
+        
+        try:
+            # Check if this map already exists with grid config
+            existing_map = map_service.collection.find_one(
+                {"room_id": room_id, "filename": map_data.get("filename")}
+            ) if map_service.collection is not None else None
+            
+            # Only use existing grid_config if found, otherwise NO grid config
+            grid_config_to_use = None
+            if existing_map and existing_map.get("grid_config"):
+                grid_config_to_use = existing_map["grid_config"]
+                print(f"🗺️ Using existing grid config for map {map_data.get('filename')}: {grid_config_to_use}")
+            else:
+                print(f"🗺️ No existing grid config for map {map_data.get('filename')} - map will have no grid until DM sets one")
+            
+            # Create MapSettings with existing grid config or None
+            map_settings = MapSettings(
+                room_id=room_id,
+                filename=map_data.get("filename", "unknown.jpg"),
+                original_filename=map_data.get("original_filename", map_data.get("filename", "unknown.jpg")),
+                file_path=map_data.get("file_path", ""),
+                grid_config=grid_config_to_use,
+                map_image_config=map_data.get("map_image_config"),
+                uploaded_by=player_name,
+                active=True
+            )
+            
+            # Save to database
+            success = map_service.set_active_map(room_id, map_settings)
+            
+            if success:
+                # Get the actual saved map from database (includes preserved grid_config)
+                saved_map = map_service.get_active_map(room_id)
+                
+                if saved_map:
+                    # Log map loading
+                    log_message = f"🗺️ {player_name.title()} loaded map: {map_settings.original_filename}"
+                    adventure_log.add_log_entry(room_id, log_message, LogType.SYSTEM, player_name)
+                    
+                    # Broadcast the actual saved map (with preserved grid_config from MongoDB)
+                    map_load_message = {
+                        "event_type": "map_load",
+                        "data": {
+                            "map": saved_map,
+                            "loaded_by": player_name
+                        }
+                    }
+                else:
+                    print(f"❌ Failed to retrieve saved map after setting active")
+                    return WebsocketEventResult(broadcast_message={
+                        "event_type": "error",
+                        "data": {"error": "Failed to retrieve saved map"}
+                    })
+                
+                print(f"🗺️ Map loaded for room {room_id}: {map_settings.filename}")
+                return WebsocketEventResult(broadcast_message=map_load_message)
+            else:
+                print(f"❌ Failed to save map to database for room {room_id}")
+                return WebsocketEventResult(broadcast_message={
+                    "event_type": "error", 
+                    "data": {"error": "Failed to save map"}
+                })
+                
+        except Exception as e:
+            print(f"❌ Error loading map for room {room_id}: {e}")
+            return WebsocketEventResult(broadcast_message={
+                "event_type": "error",
+                "data": {"error": f"Failed to load map: {str(e)}"}
+            })
+    
+    @staticmethod
+    async def map_clear(websocket, data, event_data, player_name, client_id, manager):
+        """Clear the active map for the room"""
+        room_id = client_id  # Use client_id as room_id
+        
+        if not room_id:
+            print(f"❌ Invalid map clear request: missing room_id")
+            return WebsocketEventResult(broadcast_message={"error": "Invalid map clear request"})
+        
+        try:
+            # Clear from database
+            success = map_service.clear_active_map(room_id)
+            
+            if success:
+                # Log map clearing
+                log_message = f"🗺️ {player_name.title()} cleared the active map"
+                adventure_log.add_log_entry(room_id, log_message, LogType.SYSTEM, player_name)
+                
+                # Broadcast to all clients
+                map_clear_message = {
+                    "event_type": "map_clear",
+                    "data": {
+                        "cleared_by": player_name
+                    }
+                }
+                
+                print(f"🗺️ Map cleared for room {room_id}")
+                return WebsocketEventResult(broadcast_message=map_clear_message)
+            else:
+                print(f"❌ Failed to clear map from database for room {room_id}")
+                return WebsocketEventResult(broadcast_message={"error": "Failed to clear map"})
+                
+        except Exception as e:
+            print(f"❌ Error clearing map for room {room_id}: {e}")
+            return WebsocketEventResult(broadcast_message={"error": f"Failed to clear map: {str(e)}"})
+    
+    @staticmethod
+    async def map_config_update(websocket, data, event_data, player_name, client_id, manager):
+        """Update map configuration (grid settings, etc.)"""
+        room_id = client_id  # Use client_id as room_id
+        filename = event_data.get("filename")
+        grid_config = event_data.get("grid_config")
+        map_image_config = event_data.get("map_image_config")
+        
+        if not room_id:
+            print(f"❌ Invalid map config update request: missing room_id")
+            return WebsocketEventResult(broadcast_message={"error": "Invalid map config update request"})
+        
+        try:
+            # Update in database
+            print(f"🗺️ Updating map config in database for room {room_id}, filename {filename}")
+            print(f"   Grid config: {grid_config}")
+            print(f"   Map image config: {map_image_config}")
+            
+            success = map_service.update_map_config(
+                room_id, 
+                filename, 
+                grid_config=grid_config,
+                map_image_config=map_image_config
+            )
+            
+            if success:
+                # Broadcast configuration update to all clients
+                config_update_message = {
+                    "event_type": "map_config_update",
+                    "data": {
+                        "filename": filename,
+                        "grid_config": grid_config,
+                        "map_image_config": map_image_config,
+                        "updated_by": player_name
+                    }
+                }
+                
+                print(f"🗺️ Map config updated for room {room_id}")
+                return WebsocketEventResult(broadcast_message=config_update_message)
+            else:
+                print(f"❌ No map config updated for room {room_id} (no active map or no changes)")
+                return WebsocketEventResult(broadcast_message={"info": "No map config updated"})
+                
+        except Exception as e:
+            print(f"❌ Error updating map config for room {room_id}: {e}")
+            return WebsocketEventResult(broadcast_message={"error": f"Failed to update map config: {str(e)}"})
+    
+    @staticmethod
+    async def map_request(websocket, data, event_data, player_name, client_id, manager):
+        """Request current active map (for new players joining)"""
+        room_id = client_id  # Use client_id as room_id
+        
+        if not room_id:
+            print(f"❌ Invalid map request: missing room_id")
+            return WebsocketEventResult(broadcast_message={"error": "Invalid map request"})
+        
+        try:
+            # Get active map from database
+            active_map = map_service.get_active_map(room_id)
+            
+            if active_map:
+                # Send current map to requesting client only
+                map_response_message = {
+                    "event_type": "map_load",
+                    "data": {
+                        "map": active_map,
+                        "loaded_by": active_map.get("uploaded_by", "unknown")
+                    }
+                }
+                
+                print(f"🗺️ Sent current map to {player_name} in room {room_id}")
+                # Only send to the requesting client (not broadcast)
+                await websocket.send_json(map_response_message)
+                return WebsocketEventResult(broadcast_message=None)
+            else:
+                # No active map
+                no_map_message = {
+                    "event_type": "map_clear",
+                    "data": {"cleared_by": "system"}
+                }
+                
+                print(f"🗺️ No active map found for room {room_id}")
+                await websocket.send_json(no_map_message)
+                return WebsocketEventResult(broadcast_message=None)
+                
+        except Exception as e:
+            print(f"❌ Error requesting map for room {room_id}: {e}")
+            return WebsocketEventResult(broadcast_message={"error": f"Failed to request map: {str(e)}"})
