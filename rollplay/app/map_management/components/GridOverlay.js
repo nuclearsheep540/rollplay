@@ -36,48 +36,23 @@ const GridOverlay = ({
 
     return () => window.removeEventListener('resize', updateWindowSize);
   }, []);
-  // Default grid configuration - pure dimensional grid anchored to map
-  const defaultConfig = {
-    grid_width: 8,      // Number of cells across map width
-    grid_height: 12,    // Number of cells across map height
-    enabled: true,
-    colors: {
-      edit_mode: {
-        line_color: "#ffffff",
-        opacity: 0.4,
-        line_width: 1
-      },
-      display_mode: {
-        line_color: "#ffffff", 
-        opacity: 0.2,
-        line_width: 1
-      }
-    }
-  };
-
-  // Use provided config or default (no more offset management needed)
-  const config = gridConfig || defaultConfig;
-  console.log('🎯 GridOverlay received gridConfig:', gridConfig, 'using config:', config);
-  const currentColors = isEditMode ? config.colors.edit_mode : config.colors.display_mode;
-
 
   // Calculate grid based on map image dimensions (1:1 square cells)
   const gridData = useMemo(() => {
-    if (!config.enabled || !activeMap || !mapImageRef?.current) return { lines: [], labels: [] };
+    if (!gridConfig || !gridConfig.enabled || !activeMap || !mapImageRef?.current) return { lines: [], labels: [] };
 
     // Get the actual rendered image dimensions
     const mapElement = mapImageRef.current;
     const mapWidth = mapElement.clientWidth;  // Actual rendered width
     const mapHeight = mapElement.clientHeight; // Actual rendered height
     
-    // Since the SVG container is now sized exactly to match the image,
-    // we can use coordinates relative to the SVG (0,0 = image top-left)
-    const offsetX = 0;
-    const offsetY = 0;
+    // Account for label space in positioning
+    const offsetX = 30; // Space for row labels on left
+    const offsetY = 20; // Space for column labels on top
     
     // Grid configuration (purely dimensional)
-    const gridCols = config.grid_width || 8;
-    const gridRows = config.grid_height || 12;
+    const gridCols = gridConfig.grid_width || 8;
+    const gridRows = gridConfig.grid_height || 12;
     
     // Option 1: Exact grid dimensions (may result in non-square cells)
     // const cellWidth = mapWidth / gridCols;
@@ -103,14 +78,14 @@ const GridOverlay = ({
         key: `v-${i}`
       });
 
-      // Column labels (A, B, C, etc.) - only for cell interiors
+      // Column labels (A, B, C, etc.) - positioned above map
       if (showLabels && i < gridCols) {
         const letter = String.fromCharCode(65 + (i % 26)); // A-Z, then wraps
         const cellCenterX = x + (mapWidth / gridCols) / 2;
         labels.push({
           type: 'column',
           x: cellCenterX,
-          y: offsetY + 20,
+          y: offsetY - 10, // Above the map
           text: letter,
           key: `col-${i}`
         });
@@ -129,12 +104,12 @@ const GridOverlay = ({
         key: `h-${i}`
       });
 
-      // Row labels (1, 2, 3, etc.) - only for cell interiors
+      // Row labels (1, 2, 3, etc.) - positioned to the left of map
       if (showLabels && i < gridRows) {
-        const cellCenterY = y + (mapHeight / gridRows) / 2 + 4;
+        const cellCenterY = y + (mapHeight / gridRows) / 2;
         labels.push({
           type: 'row',
-          x: offsetX + 15,
+          x: offsetX - 20, // To the left of the map
           y: cellCenterY,
           text: (i + 1).toString(),
           key: `row-${i}`
@@ -147,9 +122,18 @@ const GridOverlay = ({
                 'Cell size:', (mapWidth/gridCols).toFixed(1), 'x', (mapHeight/gridRows).toFixed(1));
 
     return { lines, labels };
-  }, [config, showLabels, activeMap, mapImageRef, windowSize]);
+  }, [gridConfig, showLabels, activeMap, mapImageRef, windowSize]);
 
-  if (!config.enabled) return null;
+  // Don't show grid if no config provided
+  if (!gridConfig) {
+    console.log('🎯 GridOverlay: No grid config provided - not rendering grid');
+    return null;
+  }
+
+  console.log('🎯 GridOverlay received gridConfig:', gridConfig);
+  const currentColors = isEditMode ? gridConfig.colors.edit_mode : gridConfig.colors.display_mode;
+
+  if (!gridConfig.enabled) return null;
 
   return (
     <div
@@ -158,8 +142,8 @@ const GridOverlay = ({
         top: '50%',
         left: '50%',
         transform: 'translate(-50%, -50%)',
-        width: mapImageRef?.current ? `${mapImageRef.current.clientWidth}px` : '100%',
-        height: mapImageRef?.current ? `${mapImageRef.current.clientHeight}px` : '100%',
+        width: mapImageRef?.current ? `${mapImageRef.current.clientWidth + 60}px` : '100%', // Extra space for labels
+        height: mapImageRef?.current ? `${mapImageRef.current.clientHeight + 40}px` : '100%', // Extra space for labels
         pointerEvents: 'none',
         zIndex: isEditMode ? 20 : 5,
         overflow: 'visible'
@@ -248,7 +232,7 @@ const GridOverlay = ({
               pointerEvents: 'none'
             }}
           >
-            Grid: {config.grid_width || 8}×{config.grid_height || 12} cells (Range: 2-50)
+            Grid: {gridConfig.grid_width || 8}×{gridConfig.grid_height || 12} cells (Range: 2-50)
           </text>
         </g>
       )}

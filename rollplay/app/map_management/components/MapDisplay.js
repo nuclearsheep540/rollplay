@@ -12,7 +12,6 @@ const MapDisplay = ({
   activeMap = null,
   isEditMode = false,
   className = "",
-  gridConfig = null,
   showGrid = true,
   showGridLabels = true,
   onGridChange = null,
@@ -149,15 +148,15 @@ const MapDisplay = ({
         onMouseDown={handleMouseDown}
       >
         <div style={contentTransform}>
-          {/* Grid overlay with default settings */}
+          {/* Grid overlay with default settings (atomic approach) */}
           {showGrid && (
             <GridOverlay 
-              gridConfig={gridConfig}
+              gridConfig={activeMap?.grid_config || null}
               isEditMode={isEditMode}
               showLabels={showGridLabels}
               onGridChange={onGridChange}
-              activeMap={null}
-              mapImageConfig={null}
+              activeMap={activeMap}
+              mapImageConfig={activeMap?.map_image_config || null}
               mapImageRef={null}
             />
           )}
@@ -288,14 +287,10 @@ const MapDisplay = ({
           }}
         />
 
-        {/* Grid overlay for active map */}
+        {/* Grid overlay for active map - atomic approach */}
         {showGrid && (
           <GridOverlay 
-            gridConfig={(() => {
-              const finalConfig = gridConfig || activeMap.grid_config;
-              console.log('🎯 MapDisplay GridOverlay - gridConfig prop:', gridConfig, 'activeMap.grid_config:', activeMap.grid_config, 'final:', finalConfig);
-              return finalConfig;
-            })()}
+            gridConfig={activeMap?.grid_config || null}
             isEditMode={isEditMode}
             showLabels={showGridLabels}
             onGridChange={onGridChange}

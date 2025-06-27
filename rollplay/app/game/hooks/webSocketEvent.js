@@ -711,21 +711,22 @@ export const handleMapClear = (data, { setActiveMap, setGridConfig, setMapImageC
   console.log(`🗺️ Map cleared by ${cleared_by}`);
 };
 
-export const handleMapConfigUpdate = (data, { setGridConfig, setMapImageConfig }) => {
+export const handleMapConfigUpdate = (data, { setActiveMap, activeMap }) => {
   console.log("🗺️ Map config updated:", data);
-  const { map_id, grid_config, map_image_config, updated_by } = data;
+  const { filename, grid_config, map_image_config, updated_by } = data;
   
-  // Update grid configuration if provided
-  if (grid_config) {
-    setGridConfig(grid_config);
+  // Atomic update - update the complete map object
+  if (activeMap && activeMap.filename === filename) {
+    const updatedMap = {
+      ...activeMap,
+      ...(grid_config !== undefined && { grid_config }),
+      ...(map_image_config !== undefined && { map_image_config })
+    };
+    setActiveMap(updatedMap);
+    console.log(`🗺️ Map ${filename} config updated atomically by ${updated_by}`);
+  } else {
+    console.warn(`🗺️ Config update for ${filename} but current map is different or missing`);
   }
-  
-  // Update map image configuration if provided
-  if (map_image_config) {
-    setMapImageConfig(map_image_config);
-  }
-  
-  console.log(`🗺️ Map config updated by ${updated_by}`);
 };
 
 // =====================================
@@ -749,11 +750,11 @@ export const createMapSendFunctions = (sendMessage, roomId, thisPlayer) => ({
     });
   },
   
-  sendMapConfigUpdate: (mapId, gridConfig = null, mapImageConfig = null) => {
+  sendMapConfigUpdate: (filename, gridConfig = null, mapImageConfig = null) => {
     sendMessage({
       event_type: 'map_config_update',
       data: {
-        map_id: mapId,
+        filename: filename,
         grid_config: gridConfig,
         map_image_config: mapImageConfig
       }

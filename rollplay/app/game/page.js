@@ -414,45 +414,32 @@ function GameContent() {
           const activeMapData = mapData.active_map;
           console.log(`🗺️ Loaded active map: ${activeMapData.original_filename}`);
           
-          // Set the active map
+          // Set the active map (atomic - contains all map data including grid_config)
           setActiveMap(activeMapData);
-          
-          // Apply grid configuration if present
-          if (activeMapData.grid_config) {
-            setGridConfig(activeMapData.grid_config);
-            console.log('🗺️ Applied grid config:', activeMapData.grid_config);
-          }
-          
-          // Apply map image configuration if present
-          if (activeMapData.map_image_config) {
-            setMapImageConfig(activeMapData.map_image_config);
-            console.log('🗺️ Applied map image config:', activeMapData.map_image_config);
-          }
+          console.log('🗺️ Loaded complete map atomically:', {
+            filename: activeMapData.filename,
+            hasGridConfig: !!activeMapData.grid_config,
+            hasImageConfig: !!activeMapData.map_image_config
+          });
           
         } else {
           console.log("🗺️ No active map found for room");
-          // Clear map state if no active map
+          // Clear map state if no active map (atomic)
           setActiveMap(null);
-          setGridConfig(null);
-          setMapImageConfig(null);
         }
         
       } else if (response.status === 404) {
         console.log("🗺️ No active map found for room");
-        // Clear map state if no active map
+        // Clear map state if no active map (atomic)
         setActiveMap(null);
-        setGridConfig(null);
-        setMapImageConfig(null);
       } else {
         console.error("🗺️ Failed to fetch active map:", response.status, response.statusText);
       }
       
     } catch (error) {
       console.error("🗺️ Error loading active map:", error);
-      // Don't set fallback map data - leave empty if error
+      // Don't set fallback map data - leave empty if error (atomic)
       setActiveMap(null);
-      setGridConfig(null);
-      setMapImageConfig(null);
     }
   };
 
@@ -658,11 +645,11 @@ function GameContent() {
     sendRemoteAudioBatch
   } = useWebSocket(roomId, thisPlayer, gameContext);
 
-  // Map management WebSocket hook
+  // Map management WebSocket hook (atomic approach)
   const mapContext = {
     setActiveMap,
-    setGridConfig: debugSetGridConfig,
-    setMapImageConfig
+    activeMap // All map data including grid_config handled atomically
+    // No separate setGridConfig or setMapImageConfig - everything goes through setActiveMap
   };
   
   const {
@@ -677,18 +664,8 @@ function GameContent() {
 
   // Map handlers are managed by useMapWebSocket hook - no additional event listeners needed
 
-  // Request current map when player connects (only once)
-  useEffect(() => {
-    if (webSocket && isConnected && sendMapRequest) {
-      // Small delay to ensure connection is fully established
-      const timeoutId = setTimeout(() => {
-        sendMapRequest();
-        console.log('🗺️ Requested current map on player connection');
-      }, 1000);
-      
-      return () => clearTimeout(timeoutId);
-    }
-  }, [webSocket, isConnected]); // Removed sendMapRequest from dependencies to prevent re-running
+  // WebSocket map requests are handled via user actions (load/clear/update)
+  // Initial map loading is handled by HTTP fetch in onLoad function
 
   // Listen for combat state changes and play audio
   useEffect(() => {
@@ -1259,10 +1236,8 @@ function GameContent() {
           <MapDisplay 
             activeMap={activeMap}
             isEditMode={gridEditMode && isDM}
-            gridConfig={gridConfig}
             onGridChange={handleGridChange}
             mapImageEditMode={gridEditMode && isDM}
-            mapImageConfig={mapImageConfig}
             onMapImageChange={handleMapImageChange}
           />
           
@@ -1321,15 +1296,12 @@ function GameContent() {
             // Map management props
             activeMap={activeMap}
             setActiveMap={setActiveMap}
-            gridConfig={gridConfig}
             gridEditMode={gridEditMode}
             setGridEditMode={setGridEditMode}
             handleGridChange={handleGridChange}
             // WebSocket map functions
             sendMapLoad={sendMapLoad}
             sendMapClear={sendMapClear}
-            sendMapConfigUpdate={sendMapConfigUpdate}
-            sendMapRequest={sendMapRequest}
           />
         </div>
 

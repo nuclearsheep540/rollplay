@@ -24,70 +24,61 @@ export const useMapWebSocket = (webSocket, isConnected, roomId, thisPlayer, mapC
 
   // Map event handlers
   const handleMapLoad = (data) => {
-    console.log("🗺️ Map loaded:", data);
+    console.log("🗺️ Map loaded (atomic):", data);
     const { map, loaded_by } = data;
     const handlers = eventHandlersRef.current;
     
-    if (map && handlers) {
-      // Set the active map
-      if (handlers.setActiveMap) {
-        handlers.setActiveMap(map);
-      }
-      
-      // Apply grid configuration if present
-      if (map.grid_config && handlers.setGridConfig) {
-        console.log('🗺️ Setting grid config from map:', map.grid_config);
-        handlers.setGridConfig(map.grid_config);
-      } else {
-        console.log('🗺️ No grid config to set:', { 
-          hasGridConfig: !!map.grid_config, 
-          hasSetGridConfig: !!handlers.setGridConfig 
-        });
-      }
-      
-      // Apply map image configuration if present
-      if (map.map_image_config && handlers.setMapImageConfig) {
-        handlers.setMapImageConfig(map.map_image_config);
-      }
-      
-      console.log(`🗺️ Map "${map.original_filename}" loaded by ${loaded_by}`);
+    if (map && handlers && handlers.setActiveMap) {
+      // Atomic map loading - set the complete map object
+      // The map contains ALL its properties: grid_config, map_image_config, etc.
+      handlers.setActiveMap(map);
+      console.log(`🗺️ Map "${map.original_filename}" loaded atomically by ${loaded_by}`);
+      console.log(`🗺️ Map includes grid_config: ${!!map.grid_config}, map_image_config: ${!!map.map_image_config}`);
+    } else {
+      console.warn("🗺️ Cannot load map - missing map data or setActiveMap handler");
     }
   };
 
   const handleMapClear = (data) => {
-    console.log("🗺️ Map cleared:", data);
+    console.log("🗺️ Map cleared (atomic):", data);
     const { cleared_by } = data;
     const handlers = eventHandlersRef.current;
     
-    if (handlers) {
-      // Clear all map-related state
-      if (handlers.setActiveMap) handlers.setActiveMap(null);
-      if (handlers.setGridConfig) handlers.setGridConfig(null);
-      if (handlers.setMapImageConfig) handlers.setMapImageConfig(null);
-      
-      console.log(`🗺️ Map cleared by ${cleared_by}`);
+    if (handlers && handlers.setActiveMap) {
+      // Atomic map clearing - clear the complete map object
+      // This automatically clears ALL map properties including grid_config, map_image_config
+      handlers.setActiveMap(null);
+      console.log(`🗺️ Map cleared atomically by ${cleared_by}`);
+    } else {
+      console.warn("🗺️ Cannot clear map - missing setActiveMap handler");
     }
   };
 
   const handleMapConfigUpdate = (data) => {
-    console.log("🗺️ Map config updated:", data);
-    const { map_id, grid_config, map_image_config, updated_by } = data;
+    console.log("🗺️ Map config updated (atomic):", data);
+    const { filename, grid_config, map_image_config, updated_by } = data;
     const handlers = eventHandlersRef.current;
     
-    if (handlers) {
-      // Update grid configuration (can be null to clear grid)
-      if (grid_config !== undefined && handlers.setGridConfig) {
-        console.log('🗺️ Updating grid config:', grid_config);
-        handlers.setGridConfig(grid_config);
+    if (handlers && handlers.setActiveMap) {
+      // Atomic map config update - update the complete map object
+      // Get current active map and update its config properties
+      const currentMap = handlers.activeMap;
+      if (currentMap && currentMap.filename === filename) {
+        const updatedMap = {
+          ...currentMap,
+          // Update only the provided config properties
+          ...(grid_config !== undefined && { grid_config }),
+          ...(map_image_config !== undefined && { map_image_config })
+        };
+        
+        handlers.setActiveMap(updatedMap);
+        console.log(`🗺️ Map ${filename} config updated atomically by ${updated_by}`);
+        console.log(`🗺️ Updated grid_config: ${!!updatedMap.grid_config}, map_image_config: ${!!updatedMap.map_image_config}`);
+      } else {
+        console.warn(`🗺️ Config update for ${filename} but current map is different or missing`);
       }
-      
-      // Update map image configuration if provided
-      if (map_image_config !== undefined && handlers.setMapImageConfig) {
-        console.log('🗺️ Updating map image config:', map_image_config);
-        handlers.setMapImageConfig(map_image_config);
-      }
-      
-      console.log(`🗺️ Map config updated by ${updated_by} for map ${map_id}`);
+    } else {
+      console.warn("🗺️ Cannot update map config - missing setActiveMap handler or activeMap");
     }
   };
 
@@ -99,6 +90,12 @@ export const useMapWebSocket = (webSocket, isConnected, roomId, thisPlayer, mapC
       try {
         const message = JSON.parse(event.data);
         const { event_type, data } = message;
+
+        // Check for valid event structure
+        if (!event_type) {
+          console.warn('Map WebSocket message missing event_type:', message);
+          return;
+        }
 
         // Only handle map-related events
         switch (event_type) {
@@ -162,17 +159,17 @@ export const useMapWebSocket = (webSocket, isConnected, roomId, thisPlayer, mapC
     }));
   };
 
-  const sendMapConfigUpdate = (mapId, gridConfig = null, mapImageConfig = null) => {
+  const sendMapConfigUpdate = (filename, gridConfig = null, mapImageConfig = null) => {
     if (!webSocket || !isConnected) {
       console.warn('❌ Cannot send map config update - WebSocket not connected');
       return;
     }
 
-    console.log('🗺️ Sending map config update:', { mapId, gridConfig, mapImageConfig });
+    console.log('🗺️ Sending map config update:', { filename, gridConfig, mapImageConfig });
     webSocket.send(JSON.stringify({
       event_type: 'map_config_update',
       data: {
-        map_id: mapId,
+        filename: filename,
         grid_config: gridConfig,
         map_image_config: mapImageConfig
       }

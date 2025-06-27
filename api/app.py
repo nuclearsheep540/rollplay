@@ -60,12 +60,61 @@ async def get_active_map(room_id: str):
         active_map = map_service.get_active_map(room_id)
         
         if active_map:
+            logger.info(f"🌐 HTTP endpoint returning active map for room {room_id}: {active_map.get('filename')} with grid_config: {active_map.get('grid_config')}")
             return {"active_map": active_map}
         else:
+            logger.info(f"🌐 HTTP endpoint: No active map found for room {room_id}")
             raise HTTPException(status_code=404, detail="No active map found for this room")
             
     except Exception as e:
         logger.error(f"Error getting active map for room {room_id}: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.put("/game/{room_id}/map")
+async def update_map(room_id: str, request: dict):
+    """Update complete map object - server authoritative atomic update"""
+    try:
+        updated_map = request.get("map")
+        updated_by = request.get("updated_by", "unknown")
+        
+        if not updated_map or not updated_map.get("filename"):
+            raise HTTPException(status_code=400, detail="Complete map object with filename is required")
+        
+        filename = updated_map.get("filename")
+        
+        # Replace entire map in database (atomic)
+        logger.info(f"🌐 HTTP: Updating complete map for room {room_id}, filename {filename} by {updated_by}")
+        success = map_service.update_complete_map(room_id, updated_map)
+        
+        if success:
+            # Get the updated map to broadcast via WebSocket
+            updated_map_result = map_service.get_active_map(room_id)
+            
+            if updated_map_result:
+                # Broadcast the complete updated map to all clients via WebSocket (atomic)
+                map_update_message = {
+                    "event_type": "map_config_update",
+                    "data": {
+                        "filename": filename,
+                        "grid_config": updated_map_result.get("grid_config"),
+                        "map_image_config": updated_map_result.get("map_image_config"),
+                        "updated_by": updated_by
+                    }
+                }
+                
+                # Broadcast to all connected clients in this room
+                await connection_manager.update_room_data(room_id, map_update_message)
+                
+                logger.info(f"🌐 HTTP: Complete map updated and broadcasted for room {room_id}")
+                return {"success": True, "updated_map": updated_map_result}
+            else:
+                logger.warning(f"🌐 HTTP: Map updated but could not retrieve updated map")
+                return {"success": True, "message": "Map updated but could not retrieve updated map"}
+        else:
+            raise HTTPException(status_code=404, detail="No active map found or no changes made")
+            
+    except Exception as e:
+        logger.error(f"Error updating map config for room {room_id}: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.put("/game/{room_id}/seats")

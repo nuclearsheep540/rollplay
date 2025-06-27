@@ -66,6 +66,12 @@ export const useWebSocket = (roomId, thisPlayer, gameContext) => {
         const message = JSON.parse(event.data);
         const { event_type, data } = message;
         
+        // Check for valid event structure
+        if (!event_type) {
+          console.warn('WebSocket message missing event_type:', message);
+          return;
+        }
+        
         console.log(`📨 WebSocket message received: ${event_type}`, data);
 
         // Get current event handlers
@@ -140,9 +146,12 @@ export const useWebSocket = (roomId, thisPlayer, gameContext) => {
           case 'remote_audio_batch':
             handleRemoteAudioBatch(data, handlers);
             break;
+          case 'error':
+            console.error('WebSocket error received:', data);
+            break;
           default:
             // Map events are handled by useMapWebSocket hook
-            if (!event_type.startsWith('map_')) {
+            if (event_type && !event_type.startsWith('map_')) {
               console.warn(`Unknown WebSocket event type: ${event_type}`);
             }
         }

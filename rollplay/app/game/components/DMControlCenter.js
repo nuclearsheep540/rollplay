@@ -15,6 +15,7 @@ import {
 } from '../../styles/constants';
 import DicePrompt from './DMDicePrompt';
 import { AudioMixerPanel } from '../../audio_management/components';
+import MapSelectionModal from './MapSelectionModal';
 
 String.prototype.titleCase = function() {
   return this.replace(/\w\S*/g, (txt) =>
@@ -95,16 +96,15 @@ export default function DMControlCenter({
   sendRemoteAudioBatch = null,     // NEW: Send remote audio batch operations via WebSocket
   clearPendingOperation = null,  // NEW: Function to set pending operation clearer
   // Map management props
-  activeMap = null,          // NEW: Current active map data
+  activeMap = null,          // NEW: Current active map data (contains grid_config atomically)
   setActiveMap = null,       // NEW: Function to set active map
-  gridConfig = null,         // NEW: Current grid configuration
   gridEditMode = false,      // NEW: Grid edit mode state
   setGridEditMode = null,    // NEW: Function to toggle grid edit mode
   handleGridChange = null,   // NEW: Function to handle grid config changes
   // WebSocket map functions
   sendMapLoad = null,        // NEW: Send map load via WebSocket
-  sendMapClear = null,       // NEW: Send map clear via WebSocket
-  sendMapConfigUpdate = null // NEW: Send map config update via WebSocket
+  sendMapClear = null        // NEW: Send map clear via WebSocket
+  // Note: Grid config updates now use HTTP API instead of WebSocket
 }) {
   
   // State for main panel collapse
@@ -129,6 +129,43 @@ export default function DMControlCenter({
   // NEW: State for grid dimensions input
   const [gridDimensions, setGridDimensions] = useState({ width: 8, height: 12 });
   const [isDimensionsExpanded, setIsDimensionsExpanded] = useState(false);
+
+  // NEW: State for grid opacity
+  const [gridOpacity, setGridOpacity] = useState(0.2);
+
+  // NEW: State for map selection modal
+  const [isMapSelectionOpen, setIsMapSelectionOpen] = useState(false);
+
+  // Sync form inputs with loaded grid config (atomic approach)
+  useEffect(() => {
+    const gridConfig = activeMap?.grid_config;
+    
+    if (gridConfig) {
+      const newDimensions = {
+        width: gridConfig.grid_width || 8,
+        height: gridConfig.grid_height || 12
+      };
+      setGridDimensions(newDimensions);
+      
+      // Extract opacity from grid config (try both edit and display mode)
+      const editOpacity = gridConfig.colors?.edit_mode?.opacity;
+      const displayOpacity = gridConfig.colors?.display_mode?.opacity;
+      const configOpacity = editOpacity || displayOpacity || 0.2;
+      setGridOpacity(configOpacity);
+      
+      console.log('🎯 Synced form inputs with atomic map grid config:', {
+        dimensions: newDimensions,
+        opacity: configOpacity,
+        filename: activeMap.filename,
+        source: gridConfig
+      });
+    } else if (!activeMap || activeMap.grid_config === null) {
+      // Reset to defaults when no map or no grid config
+      setGridDimensions({ width: 8, height: 12 });
+      setGridOpacity(0.2);
+      console.log('🎯 Reset form inputs to defaults (no active map or grid config)');
+    }
+  }, [activeMap]);
 
   const toggleSection = (section) => {
     setExpandedSections(prev => ({
@@ -161,29 +198,46 @@ export default function DMControlCenter({
       grid_width: gridWidth,
       grid_height: gridHeight,
       enabled: true,
-      colors: gridConfig?.colors || {
+      colors: {
         edit_mode: {
-          line_color: "#ff0000",
-          opacity: 0.8,
-          line_width: 2
+          line_color: "#d1d5db", // light-grey-200
+          opacity: gridOpacity,
+          line_width: 1
         },
         display_mode: {
-          line_color: "#ffffff", 
-          opacity: 0.3,
+          line_color: "#d1d5db", // light-grey-200
+          opacity: gridOpacity,
           line_width: 1
         }
       }
     };
   };
 
-  // NEW: Apply grid dimensions to current map via WebSocket (atomic update)
-  const applyGridDimensions = () => {
+  // NEW: Handle map selection from modal
+  const handleMapSelection = (mapData) => {
+    console.log('🗺️ Map selected:', mapData);
+    
+    if (sendMapLoad) {
+      sendMapLoad(mapData);
+      console.log('🗺️ Selected map load sent via WebSocket:', mapData);
+    } else {
+      // Fallback to local state if WebSocket not available
+      if (setActiveMap) {
+        setActiveMap(mapData);
+        console.log('🗺️ Selected map loaded locally (WebSocket unavailable):', mapData);
+      }
+    }
+  };
+
+  // NEW: Apply grid dimensions to current map via HTTP API (server authoritative)
+  const applyGridDimensions = async () => {
     if (!activeMap) {
       console.error('🎯 Cannot apply grid - no active map');
       return;
     }
     
-    console.log('🎯 Applying grid dimensions via WebSocket - activeMap:', activeMap);
+    console.log('🎯 Applying grid dimensions via HTTP API - activeMap:', activeMap);
+    console.log('🎯 activeMap.filename:', activeMap.filename);
     
     const newGridConfig = createGridFromDimensions(
       gridDimensions.width,
@@ -192,17 +246,38 @@ export default function DMControlCenter({
     
     console.log('🎯 Created new grid config:', newGridConfig);
     
-    // Send atomic update via WebSocket
-    if (sendMapConfigUpdate) {
-      sendMapConfigUpdate(activeMap.map_id, newGridConfig, null); // map_id, grid_config, map_image_config
-      console.log('🎯 Sent grid config update via WebSocket for map:', activeMap.map_id);
-    } else {
-      console.warn('🎯 sendMapConfigUpdate not available, falling back to local update');
-      // Fallback to local update if WebSocket not available
-      if (typeof handleGridChange === 'function') {
-        handleGridChange(newGridConfig);
-        console.log('🎯 handleGridChange called successfully (fallback)');
+    try {
+      // Send COMPLETE updated map via HTTP API (atomic)
+      // Remove MongoDB _id field to avoid immutable field error
+      const { _id, ...mapWithoutId } = activeMap;
+      const updatedMap = {
+        ...mapWithoutId,
+        grid_config: newGridConfig
+      };
+      
+      const response = await fetch(`/api/game/${roomId}/map`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          map: updatedMap,
+          updated_by: 'dm'
+        })
+      });
+      
+      if (response.ok) {
+        const result = await response.json();
+        console.log('🎯 ✅ Grid config updated successfully via HTTP API:', result);
+        // The backend will broadcast the update via WebSocket to all clients
+      } else {
+        const error = await response.text();
+        console.error('🎯 ❌ Failed to update grid config via HTTP API:', error);
+        alert('Failed to update grid configuration. Please try again.');
       }
+    } catch (error) {
+      console.error('🎯 ❌ Error updating grid config via HTTP API:', error);
+      alert('Failed to update grid configuration. Please try again.');
     }
     
     console.log('🎯 Applied grid dimensions:', gridDimensions, 'resulting config:', newGridConfig);
@@ -248,6 +323,14 @@ export default function DMControlCenter({
           onClose={() => setRollPromptModalOpen(false)}
           selectedPlayer={selectedPlayerForModal}
           onPromptRoll={handlePromptPlayerForRoll}
+        />
+        
+        <MapSelectionModal
+          isOpen={isMapSelectionOpen}
+          onClose={() => setIsMapSelectionOpen(false)}
+          onSelectMap={handleMapSelection}
+          roomId={roomId}
+          currentMap={activeMap}
         />
 
       {/* UPDATED: Active Dice Prompts Status (show list of active prompts) */}
@@ -317,48 +400,13 @@ export default function DMControlCenter({
                     }
                   }
                 } else {
-                  // Load the test map via WebSocket
-                  const testMapData = {
-                    room_id: roomId,
-                    map_id: "test-map-1",
-                    filename: "map-bg-no-grid.jpg",
-                    original_filename: "Test Battle Map", 
-                    file_path: "/map-bg-no-grid.jpg",
-                    grid_config: {
-                      grid_width: 8,
-                      grid_height: 12,
-                      enabled: true,
-                      colors: {
-                        edit_mode: {
-                          line_color: "#ff0000",
-                          opacity: 0.8,
-                          line_width: 2
-                        },
-                        display_mode: {
-                          line_color: "#ffffff", 
-                          opacity: 0.3,
-                          line_width: 1
-                        }
-                      }
-                    },
-                    uploaded_by: "dm" // Add uploaded_by field
-                  };
-                  
-                  if (sendMapLoad) {
-                    sendMapLoad(testMapData);
-                    console.log('🗺️ Test map load sent via WebSocket:', testMapData);
-                  } else {
-                    // Fallback to local state if WebSocket not available
-                    if (setActiveMap) {
-                      setActiveMap(testMapData);
-                      console.log('🗺️ Test map loaded locally (WebSocket unavailable):', testMapData);
-                    }
-                  }
+                  // Open map selection modal
+                  setIsMapSelectionOpen(true);
                 }
               }}
               disabled={!setActiveMap}
             >
-              📁 {activeMap ? 'Clear Map' : 'Load Test Map'}
+              📁 {activeMap ? 'Clear Map' : 'Load Map'}
             </button>
             <button 
               className={DM_CHILD}
@@ -422,11 +470,32 @@ export default function DMControlCenter({
                     />
                   </div>
                 </div>
+                
+                <div className="mb-3">
+                  <label className="block text-xs text-gray-400 mb-1">
+                    Grid Opacity: {(gridOpacity * 100).toFixed(0)}%
+                  </label>
+                  <input
+                    type="range"
+                    min="0.1"
+                    max="1.0"
+                    step="0.1"
+                    value={gridOpacity}
+                    onChange={(e) => setGridOpacity(parseFloat(e.target.value))}
+                    className="w-full h-2 bg-gray-700 rounded-lg appearance-none cursor-pointer slider"
+                  />
+                  <div className="flex justify-between text-xs text-gray-500 mt-1">
+                    <span>10%</span>
+                    <span>50%</span>
+                    <span>100%</span>
+                  </div>
+                </div>
+                
                 <button
                   className={DM_CHILD_LAST}
                   onClick={applyGridDimensions}
                 >
-                  ✨ Apply {gridDimensions.width}×{gridDimensions.height} Grid
+                  ✨ Apply {gridDimensions.width}×{gridDimensions.height} Grid ({(gridOpacity * 100).toFixed(0)}% opacity)
                 </button>
                 {activeMap && (
                   <div className="text-xs text-gray-400 mt-2">
