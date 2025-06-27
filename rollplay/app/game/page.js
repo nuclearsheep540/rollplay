@@ -91,6 +91,7 @@ function GameContent() {
   const [activeMap, setActiveMap] = useState(null); // Current active map data
   const [gridEditMode, setGridEditMode] = useState(false); // Is DM editing grid dimensions?
   const [gridConfig, setGridConfig] = useState(null); // Current grid configuration
+  const [liveGridOpacity, setLiveGridOpacity] = useState(0.2); // Live grid opacity for real-time updates
   
   // Debug wrapper for setGridConfig
   const debugSetGridConfig = (config) => {
@@ -1239,6 +1240,7 @@ function GameContent() {
             onGridChange={handleGridChange}
             mapImageEditMode={gridEditMode && isDM}
             onMapImageChange={handleMapImageChange}
+            liveGridOpacity={liveGridOpacity}
           />
           
           {/* Horizontal Initiative Tracker overlaid on map */}
@@ -1299,6 +1301,8 @@ function GameContent() {
             gridEditMode={gridEditMode}
             setGridEditMode={setGridEditMode}
             handleGridChange={handleGridChange}
+            liveGridOpacity={liveGridOpacity}
+            setLiveGridOpacity={setLiveGridOpacity}
             // WebSocket map functions
             sendMapLoad={sendMapLoad}
             sendMapClear={sendMapClear}

@@ -17,7 +17,8 @@ const MapDisplay = ({
   onGridChange = null,
   mapImageEditMode = false,
   mapImageConfig = null,
-  onMapImageChange = null
+  onMapImageChange = null,
+  liveGridOpacity = null
 }) => {
   const [mapLoaded, setMapLoaded] = useState(false);
   const mapImageRef = useRef(null); // Reference to the map image element
@@ -158,6 +159,7 @@ const MapDisplay = ({
               activeMap={activeMap}
               mapImageConfig={activeMap?.map_image_config || null}
               mapImageRef={null}
+              liveGridOpacity={liveGridOpacity}
             />
           )}
         </div>
@@ -288,6 +290,7 @@ const MapDisplay = ({
             onGridChange={onGridChange}
             activeMap={activeMap}
             mapImageRef={mapImageRef}
+            liveGridOpacity={liveGridOpacity}
           />
         )}
       </div>

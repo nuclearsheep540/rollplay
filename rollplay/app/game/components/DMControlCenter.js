@@ -101,6 +101,8 @@ export default function DMControlCenter({
   gridEditMode = false,      // NEW: Grid edit mode state
   setGridEditMode = null,    // NEW: Function to toggle grid edit mode
   handleGridChange = null,   // NEW: Function to handle grid config changes
+  liveGridOpacity = 0.2,     // NEW: Live grid opacity for real-time updates
+  setLiveGridOpacity = null, // NEW: Function to set live grid opacity
   // WebSocket map functions
   sendMapLoad = null,        // NEW: Send map load via WebSocket
   sendMapClear = null        // NEW: Send map clear via WebSocket
@@ -130,8 +132,8 @@ export default function DMControlCenter({
   const [gridDimensions, setGridDimensions] = useState({ width: 8, height: 12 });
   const [isDimensionsExpanded, setIsDimensionsExpanded] = useState(false);
 
-  // NEW: State for grid opacity
-  const [gridOpacity, setGridOpacity] = useState(0.2);
+  // Store original server opacity when entering edit mode
+  const [originalServerOpacity, setOriginalServerOpacity] = useState(null);
 
   // NEW: State for map selection modal
   const [isMapSelectionOpen, setIsMapSelectionOpen] = useState(false);
@@ -151,7 +153,9 @@ export default function DMControlCenter({
       const editOpacity = gridConfig.colors?.edit_mode?.opacity;
       const displayOpacity = gridConfig.colors?.display_mode?.opacity;
       const configOpacity = editOpacity || displayOpacity || 0.2;
-      setGridOpacity(configOpacity);
+      if (setLiveGridOpacity) {
+        setLiveGridOpacity(configOpacity);
+      }
       
       console.log('🎯 Synced form inputs with atomic map grid config:', {
         dimensions: newDimensions,
@@ -162,7 +166,9 @@ export default function DMControlCenter({
     } else if (!activeMap || activeMap.grid_config === null) {
       // Reset to defaults when no map or no grid config
       setGridDimensions({ width: 8, height: 12 });
-      setGridOpacity(0.2);
+      if (setLiveGridOpacity) {
+        setLiveGridOpacity(0.2);
+      }
       console.log('🎯 Reset form inputs to defaults (no active map or grid config)');
     }
   }, [activeMap]);
@@ -201,12 +207,12 @@ export default function DMControlCenter({
       colors: {
         edit_mode: {
           line_color: "#d1d5db", // light-grey-200
-          opacity: gridOpacity,
+          opacity: liveGridOpacity,
           line_width: 1
         },
         display_mode: {
           line_color: "#d1d5db", // light-grey-200
-          opacity: gridOpacity,
+          opacity: liveGridOpacity,
           line_width: 1
         }
       }
@@ -433,6 +439,16 @@ export default function DMControlCenter({
                 if (setGridEditMode) {
                   setGridEditMode(newExpanded);
                 }
+                // Store original server opacity when entering edit mode
+                if (newExpanded && originalServerOpacity === null) {
+                  setOriginalServerOpacity(liveGridOpacity);
+                } else if (!newExpanded && originalServerOpacity !== null) {
+                  // Exiting edit mode - revert to original server opacity
+                  if (setLiveGridOpacity) {
+                    setLiveGridOpacity(originalServerOpacity);
+                  }
+                  setOriginalServerOpacity(null);
+                }
               }}
               disabled={!activeMap}
             >
@@ -478,15 +494,25 @@ export default function DMControlCenter({
                 
                 <div className="mb-3">
                   <label className="block text-xs text-gray-400 mb-1">
-                    Grid Opacity: {(gridOpacity * 100).toFixed(0)}%
+                    Grid Opacity: {(liveGridOpacity * 100).toFixed(0)}%
                   </label>
                   <input
                     type="range"
                     min="0.1"
                     max="1.0"
                     step="0.1"
-                    value={gridOpacity}
-                    onChange={(e) => setGridOpacity(parseFloat(e.target.value))}
+                    value={liveGridOpacity}
+                    onChange={(e) => {
+                      // Update grid opacity in real-time during edit mode
+                      const newOpacity = parseFloat(e.target.value);
+                      if (setLiveGridOpacity) {
+                        setLiveGridOpacity(newOpacity);
+                      }
+                      // Trigger grid re-render with new opacity
+                      if (setGridEditMode) {
+                        setGridEditMode(true); // Ensure edit mode stays active
+                      }
+                    }}
                     className="w-full h-2 bg-gray-700 rounded-lg appearance-none cursor-pointer slider"
                   />
                   <div className="flex justify-between text-xs text-gray-500 mt-1">
@@ -500,7 +526,7 @@ export default function DMControlCenter({
                   className={DM_CHILD_LAST}
                   onClick={applyGridDimensions}
                 >
-                  ✨ Apply {gridDimensions.width}×{gridDimensions.height} Grid ({(gridOpacity * 100).toFixed(0)}% opacity)
+                  ✨ Apply {gridDimensions.width}×{gridDimensions.height} Grid ({(liveGridOpacity * 100).toFixed(0)}% opacity)
                 </button>
                 {activeMap && (
                   <div className="text-xs text-gray-400 mt-2">

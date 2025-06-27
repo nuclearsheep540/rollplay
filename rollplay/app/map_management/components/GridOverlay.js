@@ -16,7 +16,8 @@ const GridOverlay = ({
   onGridChange = null, // Callback for when grid config changes
   activeMap = null, // NEW: Map data with dimensions
   mapImageConfig = null, // NEW: Map image positioning/scaling
-  mapImageRef = null // NEW: Reference to the actual map image element
+  mapImageRef = null, // NEW: Reference to the actual map image element
+  liveGridOpacity = null // NEW: Live grid opacity for real-time updates during edit mode
 }) => {
   // Local state for editing (simplified - no more offset management)
   const svgRef = useRef(null);
@@ -170,7 +171,13 @@ const GridOverlay = ({
   }
 
   console.log('🎯 GridOverlay received gridConfig:', gridConfig);
-  const currentColors = isEditMode ? gridConfig.colors.edit_mode : gridConfig.colors.display_mode;
+  const baseColors = isEditMode ? gridConfig.colors.edit_mode : gridConfig.colors.display_mode;
+  
+  // Use live grid opacity during edit mode for real-time updates
+  const currentColors = {
+    ...baseColors,
+    opacity: (isEditMode && liveGridOpacity !== null) ? liveGridOpacity : baseColors.opacity
+  };
 
   if (!gridConfig.enabled) return null;
 
