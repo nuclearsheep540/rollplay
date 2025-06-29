@@ -33,6 +33,9 @@ services:
     ports:
       - "8081:8081"
     restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
     networks:
       - default
       
@@ -67,6 +70,12 @@ services:
       - "27017:27017"
     volumes:
       - db_data:/data/db
+    healthcheck:
+      test: ["CMD", "mongosh", "--quiet", "--eval", "db.runCommand('ping').ok"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
     networks:
       - default
 
