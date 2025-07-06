@@ -23,7 +23,7 @@ class Settings(BaseSettings):
     from_email: str = os.getenv("FROM_EMAIL", "noreply@tabletop-tavern.com")
     
     # Frontend URL for magic links
-    frontend_url: str = os.getenv("FRONTEND_URL", "http://localhost:3000")
+    frontend_url: str = os.getenv("NEXT_PUBLIC_API_URL", "http://localhost")
     
     # Database Settings (PostgreSQL)
     database_url: str = os.getenv("DATABASE_URL", "postgresql://user:password@localhost/rollplay")

@@ -4,9 +4,18 @@ const nextConfig = {
   async rewrites() {
     return [
       {
-        source: '/auth/:path*',
-        destination: 'http://nginx:80/auth/:path*', // Proxy to nginx container
+        source: '/auth/magic-link',
+        destination: 'http://nginx:80/auth/magic-link', // Proxy magic-link endpoint
       },
+      {
+        source: '/auth/validate',
+        destination: 'http://nginx:80/auth/validate', // Proxy validate endpoint
+      },
+      {
+        source: '/auth/verify/:token',
+        destination: 'http://nginx:80/auth/verify/:token', // Proxy API verify endpoint (path param)
+      },
+      // Note: /auth/verify (without path param) stays as frontend page
       {
         source: '/api/game/:path*',
         destination: 'http://nginx:80/api/game/:path*', // Proxy to nginx container

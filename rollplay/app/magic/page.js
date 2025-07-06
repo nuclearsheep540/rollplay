@@ -5,12 +5,13 @@
 
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useRouter } from "next/navigation"
 
 export default function Magic() {
   const router = useRouter()
   const [isLoading, setIsLoading] = useState(false)
+  const [isCheckingAuth, setIsCheckingAuth] = useState(true)
   
   // Form state
   const [email, setEmail] = useState("")
@@ -19,6 +20,112 @@ export default function Magic() {
   const [emailError, setEmailError] = useState("")
   const [successMessage, setSuccessMessage] = useState("")
   const [generalError, setGeneralError] = useState("")
+  
+  // Retry functionality
+  const [emailSent, setEmailSent] = useState(false)
+  const [retryCountdown, setRetryCountdown] = useState(0)
+  const [canRetry, setCanRetry] = useState(false)
+
+  // Check if user is already authenticated
+  useEffect(() => {
+    const checkAuthentication = async () => {
+      try {
+        const token = localStorage.getItem('access_token')
+        if (!token) {
+          setIsCheckingAuth(false)
+          return
+        }
+
+        // Validate token with FastAPI auth service
+        const response = await fetch('/auth/validate', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            token: token
+          }),
+        })
+
+        if (response.ok) {
+          const data = await response.json()
+          if (data.valid) {
+            // User is authenticated, redirect to dashboard
+            router.push('/dashboard')
+            return
+          }
+        }
+
+        // Token is invalid, remove it
+        localStorage.removeItem('access_token')
+        localStorage.removeItem('user_data')
+        
+      } catch (error) {
+        console.error('Auth check error:', error)
+        // Continue to magic page on error
+      } finally {
+        setIsCheckingAuth(false)
+      }
+    }
+
+    checkAuthentication()
+  }, [router])
+
+  // Countdown timer effect
+  useEffect(() => {
+    let interval = null
+    if (retryCountdown > 0) {
+      interval = setInterval(() => {
+        setRetryCountdown(retryCountdown - 1)
+      }, 1000)
+    } else if (retryCountdown === 0 && emailSent) {
+      setCanRetry(true)
+    }
+    return () => clearInterval(interval)
+  }, [retryCountdown, emailSent])
+
+  const startRetryCountdown = () => {
+    setRetryCountdown(30)
+    setCanRetry(false)
+    setEmailSent(true)
+  }
+
+  const handleRetry = async () => {
+    setIsLoading(true)
+    clearErrors()
+    
+    try {
+      const response = await fetch('/auth/magic-link', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          email: email.trim()
+        }),
+      })
+
+      if (!response.ok) {
+        const errorData = await response.json()
+        throw new Error(errorData.message || 'Authentication failed')
+      }
+
+      // Success - magic link sent again
+      setSuccessMessage(
+        `We've sent another secure magic link to ${email}. Click the link in your email to access Tabletop Tavern.`
+      )
+      
+      // Start retry countdown again
+      startRetryCountdown()
+      
+    } catch (error) {
+      console.error("Authentication error:", error)
+      setGeneralError("Something went wrong. Please try again.")
+      setEmailSent(false) // Allow user to go back to form
+    } finally {
+      setIsLoading(false)
+    }
+  }
 
   const clearErrors = () => {
     setEmailError("")
@@ -70,8 +177,8 @@ export default function Magic() {
         `We've sent a secure magic link to ${email}. Click the link in your email to access Tabletop Tavern.`
       )
       
-      // Clear form
-      setEmail("")
+      // Start retry countdown
+      startRetryCountdown()
       
     } catch (error) {
       console.error("Authentication error:", error)
@@ -79,6 +186,15 @@ export default function Magic() {
     } finally {
       setIsLoading(false)
     }
+  }
+
+  // Show loading while checking authentication
+  if (isCheckingAuth) {
+    return (
+      <div style={{backgroundColor: '#1e293b', minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center'}}>
+        <div style={{color: 'white', fontSize: '1.2rem'}}>Checking authentication...</div>
+      </div>
+    )
   }
 
   return (
@@ -98,7 +214,7 @@ export default function Magic() {
           left: 0,
           right: 0,
           bottom: 0,
-          backdropFilter: 'blur(2px)',
+          backdropFilter: 'blur(8px)',
           zIndex: 1
         }}></div>
         
@@ -183,75 +299,128 @@ export default function Magic() {
               </div>
             )}
 
-            <form onSubmit={handleSubmit} style={{display: 'flex', flexDirection: 'column', gap: '1rem'}}>
-              <div>
-                <input
-                  type="email"
-                  placeholder="Your email address"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  required
+            {!emailSent ? (
+              <form onSubmit={handleSubmit} style={{display: 'flex', flexDirection: 'column', gap: '1rem'}}>
+                <div>
+                  <input
+                    type="email"
+                    placeholder="Your email address"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    required
+                    style={{
+                      width: '100%',
+                      padding: '0.875rem',
+                      borderRadius: '0.5rem',
+                      border: emailError ? '2px solid #ef4444' : '1px solid rgba(255, 255, 255, 0.2)',
+                      backgroundColor: 'rgba(255, 255, 255, 0.1)',
+                      color: 'white',
+                      fontSize: '1rem',
+                      outline: 'none',
+                      transition: 'border-color 0.2s'
+                    }}
+                    onFocus={(e) => {
+                      if (!emailError) e.target.style.borderColor = 'rgba(217, 119, 6, 0.5)'
+                    }}
+                    onBlur={(e) => {
+                      if (!emailError) e.target.style.borderColor = 'rgba(255, 255, 255, 0.2)'
+                    }}
+                  />
+                  {emailError && (
+                    <p style={{color: '#ef4444', fontSize: '0.8rem', marginTop: '0.25rem'}}>{emailError}</p>
+                  )}
+                </div>
+
+                <button
+                  type="submit"
+                  disabled={isLoading}
                   style={{
                     width: '100%',
                     padding: '0.875rem',
                     borderRadius: '0.5rem',
-                    border: emailError ? '2px solid #ef4444' : '1px solid rgba(255, 255, 255, 0.2)',
-                    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+                    border: 'none',
+                    background: isLoading 
+                      ? '#6b7280' 
+                      : 'linear-gradient(to right, #d97706, #ea580c)',
                     color: 'white',
-                    fontSize: '1rem',
-                    outline: 'none',
-                    transition: 'border-color 0.2s'
+                    fontSize: '1.1rem',
+                    fontWeight: 'bold',
+                    cursor: isLoading ? 'not-allowed' : 'pointer',
+                    transition: 'all 0.2s',
+                    marginTop: '0.5rem'
                   }}
-                  onFocus={(e) => {
-                    if (!emailError) e.target.style.borderColor = 'rgba(217, 119, 6, 0.5)'
+                  onMouseEnter={(e) => {
+                    if (!isLoading) {
+                      e.target.style.background = 'linear-gradient(to right, #c2410c, #dc2626)'
+                    }
                   }}
-                  onBlur={(e) => {
-                    if (!emailError) e.target.style.borderColor = 'rgba(255, 255, 255, 0.2)'
+                  onMouseLeave={(e) => {
+                    if (!isLoading) {
+                      e.target.style.background = 'linear-gradient(to right, #d97706, #ea580c)'
+                    }
                   }}
-                />
-                {emailError && (
-                  <p style={{color: '#ef4444', fontSize: '0.8rem', marginTop: '0.25rem'}}>{emailError}</p>
+                >
+                  {isLoading ? 'Sending Magic Link...' : '🪄 Continue with Email'}
+                </button>
+              </form>
+            ) : (
+              <div style={{display: 'flex', flexDirection: 'column', gap: '1rem', alignItems: 'center'}}>
+                <button
+                  onClick={handleRetry}
+                  disabled={!canRetry || isLoading}
+                  style={{
+                    width: '100%',
+                    padding: '0.875rem',
+                    borderRadius: '0.5rem',
+                    border: 'none',
+                    background: !canRetry || isLoading
+                      ? '#6b7280' 
+                      : 'linear-gradient(to right, #d97706, #ea580c)',
+                    color: 'white',
+                    fontSize: '1.1rem',
+                    fontWeight: 'bold',
+                    cursor: !canRetry || isLoading ? 'not-allowed' : 'pointer',
+                    transition: 'all 0.2s',
+                    opacity: !canRetry ? 0.6 : 1
+                  }}
+                  onMouseEnter={(e) => {
+                    if (canRetry && !isLoading) {
+                      e.target.style.background = 'linear-gradient(to right, #c2410c, #dc2626)'
+                    }
+                  }}
+                  onMouseLeave={(e) => {
+                    if (canRetry && !isLoading) {
+                      e.target.style.background = 'linear-gradient(to right, #d97706, #ea580c)'
+                    }
+                  }}
+                >
+                  {isLoading 
+                    ? 'Sending Magic Link...' 
+                    : !canRetry 
+                      ? `🔄 Retry in ${retryCountdown}s`
+                      : '🔄 Send Another Magic Link'
+                  }
+                </button>
+                
+                {retryCountdown > 0 && (
+                  <div style={{
+                    width: '100%',
+                    height: '4px',
+                    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+                    borderRadius: '2px',
+                    overflow: 'hidden'
+                  }}>
+                    <div style={{
+                      height: '100%',
+                      backgroundColor: '#d97706',
+                      borderRadius: '2px',
+                      width: `${((30 - retryCountdown) / 30) * 100}%`,
+                      transition: 'width 1s linear'
+                    }}></div>
+                  </div>
                 )}
               </div>
-
-
-              <button
-                type="submit"
-                disabled={isLoading || !!successMessage}
-                style={{
-                  width: '100%',
-                  padding: '0.875rem',
-                  borderRadius: '0.5rem',
-                  border: 'none',
-                  background: isLoading || successMessage 
-                    ? '#6b7280' 
-                    : 'linear-gradient(to right, #d97706, #ea580c)',
-                  color: 'white',
-                  fontSize: '1.1rem',
-                  fontWeight: 'bold',
-                  cursor: isLoading || successMessage ? 'not-allowed' : 'pointer',
-                  transition: 'all 0.2s',
-                  marginTop: '0.5rem'
-                }}
-                onMouseEnter={(e) => {
-                  if (!isLoading && !successMessage) {
-                    e.target.style.background = 'linear-gradient(to right, #c2410c, #dc2626)'
-                  }
-                }}
-                onMouseLeave={(e) => {
-                  if (!isLoading && !successMessage) {
-                    e.target.style.background = 'linear-gradient(to right, #d97706, #ea580c)'
-                  }
-                }}
-              >
-                {isLoading 
-                  ? 'Sending Magic Link...' 
-                  : successMessage 
-                    ? 'Check Your Email!'
-                    : '🪄 Continue with Email'
-                }
-              </button>
-            </form>
+            )}
 
             <div style={{
               textAlign: 'center',

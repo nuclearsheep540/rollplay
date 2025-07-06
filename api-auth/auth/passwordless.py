@@ -36,7 +36,7 @@ class PasswordlessAuth:
             # Generate JWT magic link token
             magic_token = self.jwt_handler.create_magic_token(email)
             
-            # Generate magic link URL
+            # Generate magic link URL for frontend page (query parameter)
             magic_link_url = f"{self.settings.frontend_url}/auth/verify?token={magic_token}"
             
             # Send email and get detailed response
