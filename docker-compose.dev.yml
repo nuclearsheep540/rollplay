@@ -99,6 +99,16 @@ services:
         volumes:
         - db_data:/data/db
 
+    mailhog:
+        image: mailhog/mailhog:latest
+        container_name: "mailhog-dev"
+        hostname: mailhog
+        ports:
+        - "1025:1025"  # SMTP port
+        - "8025:8025"  # Web UI port
+        networks:
+        - default
+
 networks:
   default:
     driver: bridge

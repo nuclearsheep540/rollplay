@@ -54,6 +54,41 @@ async def health_check():
     }
 
 # Authentication endpoints
+@app.post("/auth/magic-link")
+async def magic_link_request(request: LoginRequest):
+    """
+    Send magic link to user's email for passwordless authentication
+    """
+    try:
+        result = await passwordless_auth.send_magic_link(request.email)
+        
+        if result["success"]:
+            logger.info(f"Magic link sent successfully to {request.email}")
+            logger.info(f"SMTP Response Details: {result.get('email_response', {}).get('smtp_response', 'No SMTP details')}")
+            
+            return {
+                "success": True,
+                "message": "Magic link sent to your email",
+                "email": request.email,
+                "smtp_details": result.get("email_response", {}).get("smtp_response", {})
+            }
+        else:
+            logger.error(f"Failed to send magic link to {request.email}: {result.get('message', 'Unknown error')}")
+            raise HTTPException(
+                status_code=500, 
+                detail={
+                    "message": "Failed to send magic link",
+                    "details": result.get("email_response", {}),
+                    "error": result.get("error", "Unknown error")
+                }
+            )
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Unexpected error sending magic link to {request.email}: {str(e)}")
+        raise HTTPException(status_code=500, detail="Failed to send magic link")
+
 @app.post("/auth/login-request", response_model=LoginResponse)
 async def login_request(request: LoginRequest):
     """
@@ -80,20 +115,18 @@ async def verify_magic_link(token: str):
     Verify magic link token and return JWT
     """
     try:
-        user_data = await passwordless_auth.verify_magic_link(token)
+        auth_result = await passwordless_auth.verify_magic_link(token)
         
-        if not user_data:
+        if not auth_result:
             raise HTTPException(status_code=400, detail="Invalid or expired magic link")
         
-        # Generate JWT for the user
-        jwt_token = jwt_handler.create_token(user_data)
-        
-        logger.info(f"Successfully authenticated user: {user_data.get('email')}")
+        logger.info(f"Successfully authenticated user: {auth_result['user']['email']}")
         
         return {
             "success": True,
-            "token": jwt_token,
-            "user": user_data,
+            "access_token": auth_result["access_token"],
+            "token_type": auth_result["token_type"],
+            "user": auth_result["user"],
             "message": "Successfully authenticated"
         }
         

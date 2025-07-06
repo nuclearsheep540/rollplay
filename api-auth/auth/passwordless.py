@@ -9,6 +9,7 @@ from typing import Optional, Dict, Any
 import logging
 
 from .email_service import EmailService
+from .jwt_handler import JWTHandler
 
 logger = logging.getLogger(__name__)
 
@@ -20,74 +21,81 @@ class PasswordlessAuth:
     def __init__(self, settings):
         self.settings = settings
         self.email_service = EmailService(settings)
+        self.jwt_handler = JWTHandler(settings)
         # In production, this would be a database or Redis
-        self.magic_links = {}  # token -> {email, expires_at, user_data}
         self.users = {}  # email -> user_data
         
-    async def send_magic_link(self, email: str) -> str:
+    async def send_magic_link(self, email: str) -> dict:
         """
         Generate and send a magic link to the user's email
         """
         try:
-            # Generate secure token
-            token = secrets.token_urlsafe(32)
-            
-            # Create or get user
+            # Create or get user (for user creation tracking)
             user_data = self._get_or_create_user(email)
             
-            # Store magic link with expiration (15 minutes)
-            expires_at = datetime.utcnow() + timedelta(minutes=15)
-            self.magic_links[token] = {
-                "email": email,
-                "expires_at": expires_at,
-                "user_data": user_data
-            }
+            # Generate JWT magic link token
+            magic_token = self.jwt_handler.create_magic_token(email)
             
             # Generate magic link URL
-            magic_link_url = f"{self.settings.frontend_url}/auth/verify?token={token}"
+            magic_link_url = f"{self.settings.frontend_url}/auth/verify?token={magic_token}"
             
-            # Send email
-            await self.email_service.send_magic_link_email(email, magic_link_url)
+            # Send email and get detailed response
+            email_result = await self.email_service.send_magic_link_email(email, magic_link_url)
             
-            logger.info(f"Magic link generated for {email}, expires at {expires_at}")
-            
-            return magic_link_url
+            if email_result["success"]:
+                logger.info(f"Magic link generated and sent successfully for {email}")
+                return {
+                    "success": True,
+                    "message": "Magic link sent successfully",
+                    "email_response": email_result,
+                    "magic_link_url": magic_link_url  # For debugging
+                }
+            else:
+                logger.error(f"Failed to send magic link email to {email}: {email_result.get('error', 'Unknown error')}")
+                return {
+                    "success": False,
+                    "message": "Failed to send magic link email",
+                    "email_response": email_result
+                }
             
         except Exception as e:
             logger.error(f"Error sending magic link to {email}: {str(e)}")
-            raise
+            return {
+                "success": False,
+                "message": f"Error generating magic link: {str(e)}",
+                "error": str(e)
+            }
     
     async def verify_magic_link(self, token: str) -> Optional[Dict[str, Any]]:
         """
-        Verify magic link token and return user data
+        Verify magic link token and return user data with JWT access token
         """
         try:
-            if token not in self.magic_links:
-                logger.warning(f"Invalid magic link token: {token}")
+            # Verify magic link token using JWT handler
+            email = self.jwt_handler.verify_magic_token(token)
+            if not email:
                 return None
             
-            link_data = self.magic_links[token]
-            
-            # Check if token has expired
-            if datetime.utcnow() > link_data["expires_at"]:
-                logger.warning(f"Expired magic link token for {link_data['email']}")
-                # Clean up expired token
-                del self.magic_links[token]
-                return None
-            
-            # Get user data
-            user_data = link_data["user_data"]
+            # Get or create user
+            user_data = self._get_or_create_user(email)
             
             # Update last login
             user_data["last_login"] = datetime.utcnow().isoformat()
-            self.users[user_data["email"]] = user_data
+            self.users[email] = user_data
             
-            # Clean up used token
-            del self.magic_links[token]
+            # Generate access token
+            access_token = self.jwt_handler.create_token(user_data)
             
-            logger.info(f"Successfully verified magic link for {user_data['email']}")
+            # Return user data with access token
+            result = {
+                "user": user_data,
+                "access_token": access_token,
+                "token_type": "bearer"
+            }
             
-            return user_data
+            logger.info(f"Successfully verified magic link for {email}")
+            
+            return result
             
         except Exception as e:
             logger.error(f"Error verifying magic link: {str(e)}")
