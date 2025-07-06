@@ -43,7 +43,7 @@ class GameService:
         username = CONFIG.get('MONGO_USER')
         password = CONFIG.get('MONGO_PASS')
         try: 
-            conn = MongoClient(f'mongodb://{username}:{password}@db')
+            conn = MongoClient(f'mongodb://{username}:{password}@mongo')
             db = conn.rollplay
             collection = db.active_sessions
             logger.info("Connected successfully to mongo DB") 

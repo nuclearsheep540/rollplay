@@ -1,0 +1,30 @@
+# --- Builder Stage ---
+FROM node:18-alpine AS builder
+WORKDIR /app
+
+# Copy package files first for better caching
+COPY package*.json ./
+RUN npm install
+
+# Now copy the rest of the code and build the Next.js app
+COPY . .
+
+# Set environment for site build
+ENV NEXT_PUBLIC_APP_TYPE=site
+RUN npm run build
+
+# --- Runner Stage ---
+FROM node:18-alpine AS runner
+WORKDIR /app
+
+# Set production environment variables
+ENV NODE_ENV=production
+ENV NEXT_PUBLIC_APP_TYPE=site
+
+# Copy built application and only the production dependencies from the builder stage
+COPY --from=builder /app ./
+
+EXPOSE 3000
+
+# Run your production Next.js server
+CMD ["npm", "run", "start"]

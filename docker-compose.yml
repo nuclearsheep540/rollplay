@@ -13,7 +13,8 @@ services:
       - "81:81"
     restart: unless-stopped
     depends_on:
-      - api
+      - api-game
+      - api-site
       - app
     networks:
       - default
@@ -21,21 +22,36 @@ services:
       - certbot_data:/etc/letsencrypt
       - certbot_www:/var/www/certbot
 
-  api:
-    hostname: api
+  api-game:
+    hostname: api-game
     env_file:
       - .env
-    container_name: "api"
-    image: ghcr.io/nuclearsheep540/rollplay/api:${api_version}
+    container_name: "api-game"
+    image: ghcr.io/nuclearsheep540/rollplay/api-game:${api_game_version}
     build:
-      context: ./api
-      dockerfile: ../docker/prod/api/Dockerfile
+      context: ./api-game
+      dockerfile: ../docker/prod/api-game/Dockerfile
     ports:
       - "8081:8081"
     restart: unless-stopped
     depends_on:
-      db:
+      mongo:
         condition: service_healthy
+    networks:
+      - default
+
+  api-site:
+    hostname: api-site
+    env_file:
+      - .env
+    container_name: "api-site"
+    image: ghcr.io/nuclearsheep540/rollplay/api-site:${api_site_version}
+    build:
+      context: ./api-site
+      dockerfile: ../docker/prod/api-site/Dockerfile
+    ports:
+      - "8082:8082"
+    restart: unless-stopped
     networks:
       - default
       
@@ -53,11 +69,11 @@ services:
     networks:
       - default
 
-  db:
+  mongo:
     restart: always
     env_file:
       - .env
-    container_name: "db"
+    container_name: "mongo"
     hostname: mongo
     image: ghcr.io/nuclearsheep540/rollplay/db:${mongo_db_version}
     build:

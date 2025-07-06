@@ -28,7 +28,7 @@ class AdventureLogService:
         username = CONFIG.get('MONGO_USER',"")
         password = CONFIG.get('MONGO_PASS',"")
         try: 
-            conn = MongoClient('mongodb://%s:%s@db' % (username, password))
+            conn = MongoClient('mongodb://%s:%s@mongo' % (username, password))
             db = conn.rollplay
             collection = db.adventure_logs
             logger.info("Connected successfully to mongo DB") 

@@ -1,0 +1,25 @@
+# Copyright (C) 2025 Matthew Davey
+# SPDX-License-Identifier: GPL-3.0-or-later
+
+FROM node:18-alpine AS base
+
+# Dependencies stage
+FROM base AS deps
+WORKDIR /app
+COPY rollplay/package.json rollplay/package-lock.json* ./
+RUN npm install
+
+# Development stage for site functionality
+FROM base AS site-dev
+WORKDIR /app
+COPY --from=deps /app/node_modules ./node_modules
+COPY rollplay/ .
+
+# Set environment for site build
+ENV NODE_ENV=development
+ENV NEXT_PUBLIC_BUILD_TARGET=site
+
+EXPOSE 3000
+
+# Development command
+CMD ["npm", "run", "dev"]

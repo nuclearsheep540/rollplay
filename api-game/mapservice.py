@@ -37,7 +37,7 @@ class MapService:
         password = CONFIG.get('MONGO_PASS')
         try:
             self.client = MongoClient(
-                f'mongodb://{username}:{password}@db',
+                f'mongodb://{username}:{password}@mongo',
                 serverSelectionTimeoutMS=5000  # 5 second timeout
             )
             self.db = self.client.rollplay
