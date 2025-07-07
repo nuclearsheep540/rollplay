@@ -61,6 +61,8 @@ services:
             - 8083:8083
         volumes:
             - ./api-auth:/app
+        depends_on:
+            - redis
     
     app:
         hostname: rollplay
@@ -109,10 +111,23 @@ services:
         networks:
         - default
 
+    redis:
+        image: redis:7-alpine
+        container_name: "redis-dev"
+        hostname: redis
+        ports:
+        - "6379:6379"
+        command: redis-server --appendonly yes
+        volumes:
+        - redis_data:/data
+        networks:
+        - default
+
 networks:
   default:
     driver: bridge
 
 volumes:
   db_data:
+  redis_data:
   rollplay_node_modules:

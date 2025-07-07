@@ -15,6 +15,7 @@ services:
     depends_on:
       - api-game
       - api-site
+      - api-auth
       - app
     networks:
       - default
@@ -52,6 +53,23 @@ services:
     ports:
       - "8082:8082"
     restart: unless-stopped
+    networks:
+      - default
+
+  api-auth:
+    hostname: api-auth
+    env_file:
+      - .env
+    container_name: "api-auth"
+    image: ghcr.io/nuclearsheep540/rollplay/api-auth:${api_auth_version}
+    build:
+      context: ./api-auth
+      dockerfile: ../docker/prod/api-auth/Dockerfile
+    ports:
+      - "8083:8083"
+    restart: unless-stopped
+    depends_on:
+      - redis
     networks:
       - default
       
@@ -95,6 +113,19 @@ services:
     networks:
       - default
 
+  redis:
+    image: redis:7-alpine
+    container_name: "redis"
+    hostname: redis
+    ports:
+      - "6379:6379"
+    command: redis-server --appendonly yes
+    volumes:
+      - redis_data:/data
+    restart: unless-stopped
+    networks:
+      - default
+
   certbot-renewer:
     image: ghcr.io/nuclearsheep540/rollplay/certbot:${certbot_version}
     build:
@@ -116,5 +147,6 @@ networks:
 
 volumes:
   db_data:
+  redis_data:
   certbot_data:
   certbot_www:

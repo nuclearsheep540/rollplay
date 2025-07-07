@@ -23,7 +23,7 @@ class EmailService:
         self.smtp_password = settings.smtp_password
         self.from_email = settings.from_email
         
-    async def send_magic_link_email(self, to_email: str, magic_link: str) -> dict:
+    async def send_magic_link_email(self, to_email: str, magic_link: str, short_code: Optional[str] = None, jwt_token: Optional[str] = None) -> dict:
         """
         Send magic link email to user
         Returns dict with success status and SMTP response details
@@ -32,7 +32,34 @@ class EmailService:
             # Create email content
             subject = "Sign in to Tabletop Tavern"
             
-            # HTML email template
+            # HTML email template with short code and JWT fallback support
+            alt_auth_section = ""
+            if short_code or jwt_token:
+                alt_auth_section = f"""
+                    <div style="background-color: #f8fafc; border: 1px solid #e2e8f0; border-radius: 6px; padding: 20px; margin: 20px 0;">
+                        <h3 style="color: #2563eb; margin-top: 0;">Alternative: Manual Code Entry</h3>
+                        <p>Can't click the link? Use this code instead:</p>
+                        """
+                
+                if short_code:
+                    formatted_code = f"{short_code[:3]} {short_code[3:]}" if len(short_code) == 6 else short_code
+                    alt_auth_section += f"""
+                        <div style="margin: 15px 0;">
+                            <p style="margin: 5px 0; font-weight: bold;">Quick Code (Recommended):</p>
+                            <div style="background-color: #fff; border: 2px solid #10b981; border-radius: 6px; padding: 15px; text-align: center; font-family: 'Courier New', monospace; font-size: 24px; font-weight: bold; color: #059669; letter-spacing: 3px;">
+                                {formatted_code}
+                            </div>
+                            <p style="color: #666; font-size: 12px; margin-top: 8px;">
+                                Enter this 6-character code on the login page
+                            </p>
+                        </div>
+                        """
+                
+                
+                alt_auth_section += """
+                    </div>
+                """
+            
             html_body = f"""
             <html>
             <head></head>
@@ -49,6 +76,8 @@ class EmailService:
                             Sign In to Tabletop Tavern
                         </a>
                     </div>
+                    
+                    {alt_auth_section}
                     
                     <p style="color: #666; font-size: 14px;">
                         This link will expire in 15 minutes for security reasons.
@@ -68,13 +97,28 @@ class EmailService:
             </html>
             """
             
-            # Plain text fallback
+            # Plain text fallback with short code and JWT support
+            alt_text_section = ""
+            if short_code or jwt_token:
+                alt_text_section = """
+            Alternative: Manual Code Entry
+            Can't click the link? Use this code instead:
+            """
+                
+                if short_code:
+                    formatted_code = f"{short_code[:3]} {short_code[3:]}" if len(short_code) == 6 else short_code
+                    alt_text_section += f"""
+            Quick Code (Recommended): {formatted_code}
+            Enter this 6-character code on the login page.
+            """
+                
+            
             text_body = f"""
             Welcome to Tabletop Tavern!
             
             Click the link below to sign in to your account:
             {magic_link}
-            
+            {alt_text_section}
             This link will expire in 15 minutes for security reasons.
             
             If you didn't request this email, you can safely ignore it.

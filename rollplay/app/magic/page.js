@@ -15,9 +15,11 @@ export default function Magic() {
   
   // Form state
   const [email, setEmail] = useState("")
+  const [otpToken, setOtpToken] = useState("")
   
   // Error states
   const [emailError, setEmailError] = useState("")
+  const [otpError, setOtpError] = useState("")
   const [successMessage, setSuccessMessage] = useState("")
   const [generalError, setGeneralError] = useState("")
   
@@ -129,11 +131,12 @@ export default function Magic() {
 
   const clearErrors = () => {
     setEmailError("")
+    setOtpError("")
     setGeneralError("")
     setSuccessMessage("")
   }
 
-  const validateForm = () => {
+  const validateEmailForm = () => {
     clearErrors()
     let isValid = true
 
@@ -147,10 +150,72 @@ export default function Magic() {
     return isValid
   }
 
+  const validateOtpForm = () => {
+    clearErrors()
+    let isValid = true
+
+    // OTP validation - handle both short codes and full JWT tokens
+    const cleanToken = otpToken.trim().replace(/\s+/g, '')
+    if (!cleanToken) {
+      setOtpError("Please enter a code or token")
+      isValid = false
+    } else if (cleanToken.length === 6 && /^[A-Z0-9]+$/.test(cleanToken)) {
+      // Valid short code format
+    } else if (cleanToken.length > 50) {
+      // Likely a JWT token
+    } else {
+      setOtpError("Please enter a 6-character code (e.g., ABC123) or full token")
+      isValid = false
+    }
+
+    return isValid
+  }
+
+  const handleOtpVerification = async (e) => {
+    e.preventDefault()
+    
+    if (!validateOtpForm()) return
+
+    setIsLoading(true)
+    clearErrors()
+
+    try {
+      const response = await fetch('/auth/verify-otp', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          token: otpToken.trim().replace(/\s+/g, '')
+        }),
+      })
+
+      if (!response.ok) {
+        const errorData = await response.json()
+        throw new Error(errorData.detail || 'OTP verification failed')
+      }
+
+      const data = await response.json()
+      
+      // Store authentication data
+      localStorage.setItem('access_token', data.access_token)
+      localStorage.setItem('user_data', JSON.stringify(data.user))
+      
+      // Redirect to dashboard
+      router.push('/dashboard')
+      
+    } catch (error) {
+      console.error("OTP verification error:", error)
+      setOtpError("Invalid or expired OTP token. Please try again.")
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
   const handleSubmit = async (e) => {
     e.preventDefault()
     
-    if (!validateForm()) return
+    if (!validateEmailForm()) return
 
     setIsLoading(true)
     clearErrors()
@@ -266,7 +331,7 @@ export default function Magic() {
               fontSize: '1rem',
               lineHeight: '1.5'
             }}>
-              Enter your email and we'll send you a secure magic link to sign in or create your account instantly
+              Enter your email to receive a magic link, or if you already have a code from an email, enter it below.
             </p>
 
             {successMessage && (
@@ -300,71 +365,170 @@ export default function Magic() {
             )}
 
             {!emailSent ? (
-              <form onSubmit={handleSubmit} style={{display: 'flex', flexDirection: 'column', gap: '1rem'}}>
-                <div>
-                  <input
-                    type="email"
-                    placeholder="Your email address"
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
-                    required
+              <div style={{display: 'flex', flexDirection: 'column', gap: '1.5rem'}}>
+                {/* Email Form */}
+                <form onSubmit={handleSubmit} style={{display: 'flex', flexDirection: 'column', gap: '1rem'}}>
+                  <div>
+                    <label style={{color: 'rgba(255, 255, 255, 0.8)', fontSize: '0.9rem', marginBottom: '0.5rem', display: 'block'}}>
+                      📧 Get a Magic Link
+                    </label>
+                    <input
+                      type="email"
+                      placeholder="Your email address"
+                      value={email}
+                      onChange={(e) => setEmail(e.target.value)}
+                      required
+                      style={{
+                        width: '100%',
+                        padding: '0.875rem',
+                        borderRadius: '0.5rem',
+                        border: emailError ? '2px solid #ef4444' : '1px solid rgba(255, 255, 255, 0.2)',
+                        backgroundColor: 'rgba(255, 255, 255, 0.1)',
+                        color: 'white',
+                        fontSize: '1rem',
+                        outline: 'none',
+                        transition: 'border-color 0.2s'
+                      }}
+                      onFocus={(e) => {
+                        if (!emailError) e.target.style.borderColor = 'rgba(217, 119, 6, 0.5)'
+                      }}
+                      onBlur={(e) => {
+                        if (!emailError) e.target.style.borderColor = 'rgba(255, 255, 255, 0.2)'
+                      }}
+                    />
+                    {emailError && (
+                      <p style={{color: '#ef4444', fontSize: '0.8rem', marginTop: '0.25rem'}}>{emailError}</p>
+                    )}
+                  </div>
+
+                  <button
+                    type="submit"
+                    disabled={isLoading}
                     style={{
                       width: '100%',
                       padding: '0.875rem',
                       borderRadius: '0.5rem',
-                      border: emailError ? '2px solid #ef4444' : '1px solid rgba(255, 255, 255, 0.2)',
-                      backgroundColor: 'rgba(255, 255, 255, 0.1)',
+                      border: 'none',
+                      background: isLoading 
+                        ? '#6b7280' 
+                        : 'linear-gradient(to right, #d97706, #ea580c)',
                       color: 'white',
-                      fontSize: '1rem',
-                      outline: 'none',
-                      transition: 'border-color 0.2s'
+                      fontSize: '1.1rem',
+                      fontWeight: 'bold',
+                      cursor: isLoading ? 'not-allowed' : 'pointer',
+                      transition: 'all 0.2s',
+                      marginTop: '0.5rem'
                     }}
-                    onFocus={(e) => {
-                      if (!emailError) e.target.style.borderColor = 'rgba(217, 119, 6, 0.5)'
+                    onMouseEnter={(e) => {
+                      if (!isLoading) {
+                        e.target.style.background = 'linear-gradient(to right, #c2410c, #dc2626)'
+                      }
                     }}
-                    onBlur={(e) => {
-                      if (!emailError) e.target.style.borderColor = 'rgba(255, 255, 255, 0.2)'
+                    onMouseLeave={(e) => {
+                      if (!isLoading) {
+                        e.target.style.background = 'linear-gradient(to right, #d97706, #ea580c)'
+                      }
                     }}
-                  />
-                  {emailError && (
-                    <p style={{color: '#ef4444', fontSize: '0.8rem', marginTop: '0.25rem'}}>{emailError}</p>
-                  )}
+                  >
+                    {isLoading ? 'Sending Magic Link...' : '🪄 Send Magic Link'}
+                  </button>
+                </form>
+
+                {/* Divider */}
+                <div style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  margin: '0.5rem 0'
+                }}>
+                  <div style={{flex: 1, height: '1px', backgroundColor: 'rgba(255, 255, 255, 0.2)'}}></div>
+                  <span style={{padding: '0 1rem', color: 'rgba(255, 255, 255, 0.5)', fontSize: '0.875rem'}}>OR</span>
+                  <div style={{flex: 1, height: '1px', backgroundColor: 'rgba(255, 255, 255, 0.2)'}}></div>
                 </div>
 
-                <button
-                  type="submit"
-                  disabled={isLoading}
-                  style={{
-                    width: '100%',
-                    padding: '0.875rem',
-                    borderRadius: '0.5rem',
-                    border: 'none',
-                    background: isLoading 
-                      ? '#6b7280' 
-                      : 'linear-gradient(to right, #d97706, #ea580c)',
-                    color: 'white',
-                    fontSize: '1.1rem',
-                    fontWeight: 'bold',
-                    cursor: isLoading ? 'not-allowed' : 'pointer',
-                    transition: 'all 0.2s',
-                    marginTop: '0.5rem'
-                  }}
-                  onMouseEnter={(e) => {
-                    if (!isLoading) {
-                      e.target.style.background = 'linear-gradient(to right, #c2410c, #dc2626)'
-                    }
-                  }}
-                  onMouseLeave={(e) => {
-                    if (!isLoading) {
-                      e.target.style.background = 'linear-gradient(to right, #d97706, #ea580c)'
-                    }
-                  }}
-                >
-                  {isLoading ? 'Sending Magic Link...' : '🪄 Continue with Email'}
-                </button>
-              </form>
+                {/* OTP Form */}
+                <form onSubmit={handleOtpVerification} style={{display: 'flex', flexDirection: 'column', gap: '1rem'}}>
+                  <div>
+                    <label style={{color: 'rgba(255, 255, 255, 0.8)', fontSize: '0.9rem', marginBottom: '0.5rem', display: 'block'}}>
+                      🔑 Already Have a Code?
+                    </label>
+                    <input
+                      type="text"
+                      placeholder="Enter 6-digit code (e.g., ABC 123)"
+                      value={otpToken}
+                      onChange={(e) => {
+                        let value = e.target.value.toUpperCase()
+                        // Auto-format short codes with space after 3 characters
+                        if (value.length === 3 && !value.includes(' ') && /^[A-Z0-9]+$/.test(value)) {
+                          value = value + ' '
+                        }
+                        // Remove extra spaces for short codes
+                        if (value.length <= 7 && /^[A-Z0-9\s]+$/.test(value)) {
+                          value = value.replace(/\s+/g, ' ')
+                        }
+                        setOtpToken(value)
+                      }}
+                      style={{
+                        width: '100%',
+                        padding: '0.875rem',
+                        borderRadius: '0.5rem',
+                        border: otpError ? '2px solid #ef4444' : '1px solid rgba(255, 255, 255, 0.2)',
+                        backgroundColor: 'rgba(255, 255, 255, 0.1)',
+                        color: 'white',
+                        fontSize: '1.1rem',
+                        fontFamily: 'monospace',
+                        outline: 'none',
+                        transition: 'border-color 0.2s',
+                        textAlign: 'center',
+                        letterSpacing: '2px'
+                      }}
+                      onFocus={(e) => {
+                        if (!otpError) e.target.style.borderColor = 'rgba(217, 119, 6, 0.5)'
+                      }}
+                      onBlur={(e) => {
+                        if (!otpError) e.target.style.borderColor = 'rgba(255, 255, 255, 0.2)'
+                      }}
+                    />
+                    {otpError && (
+                      <p style={{color: '#ef4444', fontSize: '0.8rem', marginTop: '0.25rem'}}>{otpError}</p>
+                    )}
+                  </div>
+
+                  <button
+                    type="submit"
+                    disabled={isLoading || !otpToken.trim()}
+                    style={{
+                      width: '100%',
+                      padding: '0.875rem',
+                      borderRadius: '0.5rem',
+                      border: 'none',
+                      background: (isLoading || !otpToken.trim())
+                        ? '#6b7280' 
+                        : 'linear-gradient(to right, #059669, #047857)',
+                      color: 'white',
+                      fontSize: '1.1rem',
+                      fontWeight: 'bold',
+                      cursor: (isLoading || !otpToken.trim()) ? 'not-allowed' : 'pointer',
+                      transition: 'all 0.2s',
+                      marginTop: '0.5rem'
+                    }}
+                    onMouseEnter={(e) => {
+                      if (!isLoading && otpToken.trim()) {
+                        e.target.style.background = 'linear-gradient(to right, #047857, #065f46)'
+                      }
+                    }}
+                    onMouseLeave={(e) => {
+                      if (!isLoading && otpToken.trim()) {
+                        e.target.style.background = 'linear-gradient(to right, #059669, #047857)'
+                      }
+                    }}
+                  >
+                    {isLoading ? 'Verifying Code...' : '🔑 Sign In with Code'}
+                  </button>
+                </form>
+              </div>
             ) : (
-              <div style={{display: 'flex', flexDirection: 'column', gap: '1rem', alignItems: 'center'}}>
+              <div style={{display: 'flex', flexDirection: 'column', gap: '1.5rem'}}>
+                {/* Retry Button */}
                 <button
                   onClick={handleRetry}
                   disabled={!canRetry || isLoading}
@@ -419,6 +583,109 @@ export default function Magic() {
                     }}></div>
                   </div>
                 )}
+
+                {/* Divider */}
+                <div style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  margin: '0.5rem 0'
+                }}>
+                  <div style={{flex: 1, height: '1px', backgroundColor: 'rgba(255, 255, 255, 0.2)'}}></div>
+                  <span style={{padding: '0 1rem', color: 'rgba(255, 255, 255, 0.5)', fontSize: '0.875rem'}}>OR</span>
+                  <div style={{flex: 1, height: '1px', backgroundColor: 'rgba(255, 255, 255, 0.2)'}}></div>
+                </div>
+
+                {/* OTP Form for the success modal */}
+                <form onSubmit={handleOtpVerification} style={{display: 'flex', flexDirection: 'column', gap: '1rem'}}>
+                  <div>
+                    <label style={{color: 'rgba(255, 255, 255, 0.8)', fontSize: '0.9rem', marginBottom: '0.5rem', display: 'block'}}>
+                      🔑 Got Your Code?
+                    </label>
+                    <input
+                      type="text"
+                      placeholder="Enter 6-digit code (e.g., ABC 123)"
+                      value={otpToken}
+                      onChange={(e) => {
+                        let value = e.target.value.toUpperCase()
+                        // Auto-format short codes with space after 3 characters
+                        if (value.length === 3 && !value.includes(' ') && /^[A-Z0-9]+$/.test(value)) {
+                          value = value + ' '
+                        }
+                        // Remove extra spaces for short codes
+                        if (value.length <= 7 && /^[A-Z0-9\s]+$/.test(value)) {
+                          value = value.replace(/\s+/g, ' ')
+                        }
+                        setOtpToken(value)
+                      }}
+                      style={{
+                        width: '100%',
+                        padding: '0.875rem',
+                        borderRadius: '0.5rem',
+                        border: otpError ? '2px solid #ef4444' : '1px solid rgba(255, 255, 255, 0.2)',
+                        backgroundColor: 'rgba(255, 255, 255, 0.1)',
+                        color: 'white',
+                        fontSize: '1.1rem',
+                        fontFamily: 'monospace',
+                        outline: 'none',
+                        transition: 'border-color 0.2s',
+                        textAlign: 'center',
+                        letterSpacing: '2px'
+                      }}
+                      onFocus={(e) => {
+                        if (!otpError) e.target.style.borderColor = 'rgba(217, 119, 6, 0.5)'
+                      }}
+                      onBlur={(e) => {
+                        if (!otpError) e.target.style.borderColor = 'rgba(255, 255, 255, 0.2)'
+                      }}
+                    />
+                    {otpError && (
+                      <p style={{color: '#ef4444', fontSize: '0.8rem', marginTop: '0.25rem'}}>{otpError}</p>
+                    )}
+                    <div style={{
+                      marginTop: '0.5rem',
+                      padding: '0.5rem',
+                      backgroundColor: 'rgba(255, 255, 255, 0.05)',
+                      borderRadius: '0.375rem',
+                      fontSize: '0.75rem',
+                      color: 'rgba(255, 255, 255, 0.6)',
+                      textAlign: 'center'
+                    }}>
+                      💡 Check your email for a 6-character code to sign in instantly
+                    </div>
+                  </div>
+
+                  <button
+                    type="submit"
+                    disabled={isLoading || !otpToken.trim()}
+                    style={{
+                      width: '100%',
+                      padding: '0.875rem',
+                      borderRadius: '0.5rem',
+                      border: 'none',
+                      background: (isLoading || !otpToken.trim())
+                        ? '#6b7280' 
+                        : 'linear-gradient(to right, #059669, #047857)',
+                      color: 'white',
+                      fontSize: '1.1rem',
+                      fontWeight: 'bold',
+                      cursor: (isLoading || !otpToken.trim()) ? 'not-allowed' : 'pointer',
+                      transition: 'all 0.2s',
+                      marginTop: '0.5rem'
+                    }}
+                    onMouseEnter={(e) => {
+                      if (!isLoading && otpToken.trim()) {
+                        e.target.style.background = 'linear-gradient(to right, #047857, #065f46)'
+                      }
+                    }}
+                    onMouseLeave={(e) => {
+                      if (!isLoading && otpToken.trim()) {
+                        e.target.style.background = 'linear-gradient(to right, #059669, #047857)'
+                      }
+                    }}
+                  >
+                    {isLoading ? 'Verifying Code...' : '🔑 Sign In with Code'}
+                  </button>
+                </form>
               </div>
             )}
 
@@ -429,7 +696,7 @@ export default function Magic() {
               borderTop: '1px solid rgba(255, 255, 255, 0.1)'
             }}>
               <p style={{color: 'rgba(255, 255, 255, 0.6)', fontSize: '0.85rem', lineHeight: '1.4'}}>
-                New users will automatically get an account. Returning users will be signed in. No passwords required!
+                New users will automatically get an account. Returning users will be signed in. No passwords required! The email will include both a clickable magic link and a short 6-character code for manual entry.
               </p>
             </div>
           </div>

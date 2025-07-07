@@ -136,6 +136,33 @@ async def verify_magic_link(token: str):
         logger.error(f"Error verifying magic link: {str(e)}")
         raise HTTPException(status_code=500, detail="Authentication failed")
 
+@app.post("/auth/verify-otp")
+async def verify_otp_token(request: ValidateRequest):
+    """
+    Verify OTP token manually typed by the user
+    """
+    try:
+        auth_result = await passwordless_auth.verify_otp_token(request.token)
+        
+        if not auth_result:
+            raise HTTPException(status_code=400, detail="Invalid or expired OTP token")
+        
+        logger.info(f"Successfully authenticated user via OTP: {auth_result['user']['email']}")
+        
+        return {
+            "success": True,
+            "access_token": auth_result["access_token"],
+            "token_type": auth_result["token_type"],
+            "user": auth_result["user"],
+            "message": "Successfully authenticated via OTP"
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error verifying OTP token: {str(e)}")
+        raise HTTPException(status_code=500, detail="OTP authentication failed")
+
 @app.post("/auth/validate", response_model=ValidateResponse)
 async def validate_token(request: ValidateRequest):
     """
