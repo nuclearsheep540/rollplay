@@ -3,11 +3,11 @@
 
 import os
 import logging
-from fastapi import FastAPI, HTTPException, Depends
+from fastapi import FastAPI, HTTPException, Depends, Response, Request
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from typing import Optional
-from datetime import datetime
+from datetime import datetime, timedelta
 
 from auth.passwordless import PasswordlessAuth
 from auth.jwt_handler import JWTHandler
@@ -110,9 +110,9 @@ async def login_request(request: LoginRequest):
         raise HTTPException(status_code=500, detail="Failed to send magic link")
 
 @app.get("/auth/verify/{token}")
-async def verify_magic_link(token: str):
+async def verify_magic_link(token: str, response: Response):
     """
-    Verify magic link token and return JWT
+    Verify magic link token and set httpOnly cookie
     """
     try:
         auth_result = await passwordless_auth.verify_magic_link(token)
@@ -122,10 +122,19 @@ async def verify_magic_link(token: str):
         
         logger.info(f"Successfully authenticated user: {auth_result['user']['email']}")
         
+        # Set httpOnly cookie with the JWT token
+        response.set_cookie(
+            key="auth_token",
+            value=auth_result["access_token"],
+            httponly=True,
+            secure=True,  # Use HTTPS in production
+            samesite="lax",
+            max_age=86400,  # 24 hours
+            path="/"
+        )
+        
         return {
             "success": True,
-            "access_token": auth_result["access_token"],
-            "token_type": auth_result["token_type"],
             "user": auth_result["user"],
             "message": "Successfully authenticated"
         }
@@ -137,7 +146,7 @@ async def verify_magic_link(token: str):
         raise HTTPException(status_code=500, detail="Authentication failed")
 
 @app.post("/auth/verify-otp")
-async def verify_otp_token(request: ValidateRequest):
+async def verify_otp_token(request: ValidateRequest, response: Response):
     """
     Verify OTP token manually typed by the user
     """
@@ -149,10 +158,19 @@ async def verify_otp_token(request: ValidateRequest):
         
         logger.info(f"Successfully authenticated user via OTP: {auth_result['user']['email']}")
         
+        # Set httpOnly cookie with the JWT token
+        response.set_cookie(
+            key="auth_token",
+            value=auth_result["access_token"],
+            httponly=True,
+            secure=True,  # Use HTTPS in production
+            samesite="lax",
+            max_age=86400,  # 24 hours
+            path="/"
+        )
+        
         return {
             "success": True,
-            "access_token": auth_result["access_token"],
-            "token_type": auth_result["token_type"],
             "user": auth_result["user"],
             "message": "Successfully authenticated via OTP"
         }
@@ -164,12 +182,18 @@ async def verify_otp_token(request: ValidateRequest):
         raise HTTPException(status_code=500, detail="OTP authentication failed")
 
 @app.post("/auth/validate", response_model=ValidateResponse)
-async def validate_token(request: ValidateRequest):
+async def validate_token(request: Request):
     """
-    Validate JWT token (used by other services)
+    Validate JWT token from httpOnly cookie (used by other services and Next.js middleware)
     """
     try:
-        user_data = jwt_handler.verify_token(request.token)
+        # Get token from httpOnly cookie
+        token = request.cookies.get("auth_token")
+        
+        if not token:
+            raise HTTPException(status_code=401, detail="No authentication token found")
+        
+        user_data = jwt_handler.verify_token(token)
         
         if not user_data:
             raise HTTPException(status_code=401, detail="Invalid or expired token")
@@ -187,13 +211,22 @@ async def validate_token(request: ValidateRequest):
         raise HTTPException(status_code=500, detail="Token validation failed")
 
 @app.post("/auth/logout")
-async def logout(token: str = Depends(jwt_handler.get_token_from_header)):
+async def logout(response: Response):
     """
-    Logout user by invalidating token
+    Logout user by clearing httpOnly cookie
     """
     try:
-        # In a production system, you'd add the token to a blacklist
-        # For now, just return success
+        # Clear the httpOnly cookie
+        response.set_cookie(
+            key="auth_token",
+            value="",
+            httponly=True,
+            secure=True,
+            samesite="lax",
+            max_age=0,  # Immediate expiry
+            path="/"
+        )
+        
         logger.info("User logged out successfully")
         
         return {

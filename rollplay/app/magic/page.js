@@ -5,8 +5,9 @@
 
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback, memo } from 'react'
 import { useRouter } from "next/navigation"
+import OTPInput from './components/OTPInput'
 
 export default function Magic() {
   const router = useRouter()
@@ -15,7 +16,6 @@ export default function Magic() {
   
   // Form state
   const [email, setEmail] = useState("")
-  const [otpToken, setOtpToken] = useState("")
   
   // Error states
   const [emailError, setEmailError] = useState("")
@@ -32,21 +32,13 @@ export default function Magic() {
   useEffect(() => {
     const checkAuthentication = async () => {
       try {
-        const token = localStorage.getItem('access_token')
-        if (!token) {
-          setIsCheckingAuth(false)
-          return
-        }
-
-        // Validate token with FastAPI auth service
+        // Validate token with FastAPI auth service (reads from httpOnly cookie)
         const response = await fetch('/auth/validate', {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
           },
-          body: JSON.stringify({
-            token: token
-          }),
+          credentials: 'include' // Include cookies in the request
         })
 
         if (response.ok) {
@@ -58,9 +50,8 @@ export default function Magic() {
           }
         }
 
-        // Token is invalid, remove it
-        localStorage.removeItem('access_token')
-        localStorage.removeItem('user_data')
+        // Token is invalid or not present
+        // No need to clear localStorage as we're using httpOnly cookies
         
       } catch (error) {
         console.error('Auth check error:', error)
@@ -102,6 +93,7 @@ export default function Magic() {
         headers: {
           'Content-Type': 'application/json',
         },
+        credentials: 'include', // Include cookies
         body: JSON.stringify({
           email: email.trim()
         }),
@@ -136,6 +128,7 @@ export default function Magic() {
     setSuccessMessage("")
   }
 
+
   const validateEmailForm = () => {
     clearErrors()
     let isValid = true
@@ -150,32 +143,41 @@ export default function Magic() {
     return isValid
   }
 
-  const validateOtpForm = () => {
-    clearErrors()
-    let isValid = true
 
-    // OTP validation - handle both short codes and full JWT tokens
-    const cleanToken = otpToken.trim().replace(/\s+/g, '')
-    if (!cleanToken) {
-      setOtpError("Please enter a code or token")
-      isValid = false
-    } else if (cleanToken.length === 6 && /^[A-Z0-9]+$/.test(cleanToken)) {
-      // Valid short code format
-    } else if (cleanToken.length > 50) {
-      // Likely a JWT token
-    } else {
-      setOtpError("Please enter a 6-character code (e.g., ABC123) or full token")
-      isValid = false
-    }
 
-    return isValid
-  }
+  // Countdown Timer Component (isolated to prevent OTP re-renders)
+  const CountdownTimer = memo(({ retryCountdown, isLoading, canRetry, onRetry }) => (
+    <>
+      <button
+        onClick={onRetry}
+        disabled={!canRetry || isLoading}
+        className={`w-full p-3.5 rounded-lg border-none text-white text-lg font-bold transition-all duration-200 ${
+          !canRetry || isLoading
+            ? 'bg-gray-500 cursor-not-allowed opacity-60' 
+            : 'bg-gradient-to-r from-amber-600 to-orange-600 hover:from-orange-700 hover:to-red-600 cursor-pointer opacity-100'
+        }`}
+      >
+        {isLoading 
+          ? 'Sending Magic Link...' 
+          : !canRetry 
+            ? `Retry in ${retryCountdown}s`
+            : 'Send Another Magic Link'
+        }
+      </button>
+      
+      {retryCountdown > 0 && (
+        <div className="w-full h-1 bg-white/20 rounded-sm overflow-hidden">
+          <div 
+            className="h-full bg-amber-600 rounded-sm transition-all duration-1000 ease-linear"
+            style={{width: `${((30 - retryCountdown) / 30) * 100}%`}}
+          ></div>
+        </div>
+      )}
+    </>
+  ))
 
-  const handleOtpVerification = async (e) => {
-    e.preventDefault()
-    
-    if (!validateOtpForm()) return
 
+  const handleOtpVerification = async (token) => {
     setIsLoading(true)
     clearErrors()
 
@@ -185,8 +187,9 @@ export default function Magic() {
         headers: {
           'Content-Type': 'application/json',
         },
+        credentials: 'include', // Include cookies
         body: JSON.stringify({
-          token: otpToken.trim().replace(/\s+/g, '')
+          token: token.trim().replace(/\s+/g, '')
         }),
       })
 
@@ -197,10 +200,7 @@ export default function Magic() {
 
       const data = await response.json()
       
-      // Store authentication data
-      localStorage.setItem('access_token', data.access_token)
-      localStorage.setItem('user_data', JSON.stringify(data.user))
-      
+      // No need to store in localStorage - httpOnly cookie is set by backend
       // Redirect to dashboard
       router.push('/dashboard')
       
@@ -227,6 +227,7 @@ export default function Magic() {
         headers: {
           'Content-Type': 'application/json',
         },
+        credentials: 'include', // Include cookies
         body: JSON.stringify({
           email: email.trim()
         }),
@@ -256,446 +257,141 @@ export default function Magic() {
   // Show loading while checking authentication
   if (isCheckingAuth) {
     return (
-      <div style={{backgroundColor: '#1e293b', minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center'}}>
-        <div style={{color: 'white', fontSize: '1.2rem'}}>Checking authentication...</div>
+      <div className="bg-slate-800 min-h-screen flex items-center justify-center">
+        <div className="text-white text-xl">Checking authentication...</div>
       </div>
     )
   }
 
   return (
-    <div style={{backgroundColor: '#1e293b', minHeight: '100vh'}}>
-      <div className="auth-container" style={{
-        position: 'relative',
-        backgroundImage: 'url(/bg.jpeg)',
-        backgroundSize: 'cover',
-        backgroundPosition: 'center',
-        backgroundRepeat: 'no-repeat',
-        opacity: 0.9,
-        minHeight: '100vh'
-      }}>
-        <div style={{
-          position: 'absolute',
-          top: 0,
-          left: 0,
-          right: 0,
-          bottom: 0,
-          backdropFilter: 'blur(8px)',
-          zIndex: 1
-        }}></div>
+    <div className="bg-slate-800 min-h-screen">
+      <div className="relative bg-cover bg-center bg-no-repeat opacity-90 min-h-screen" 
+           style={{backgroundImage: 'url(/bg.jpeg)'}}>
+        <div className="absolute inset-0 backdrop-blur-lg z-[1]"></div>
         
-        <nav className="nav-bar" style={{zIndex: 2}}>
-          <div className="logo" style={{fontSize: '2.1rem'}}>TABLETOP<span>TAVERN</span></div>
+        <nav className="nav-bar relative z-[2]">
+          <div className="logo text-4xl">TABLETOP<span>TAVERN</span></div>
           <button 
             onClick={() => router.push('/')}
-            className="text-white hover:text-amber-300 transition-colors duration-200"
-            style={{fontSize: '1rem', background: 'none', border: 'none', cursor: 'pointer'}}
+            className="text-white hover:text-amber-300 transition-colors duration-200 text-base bg-none border-none cursor-pointer"
           >
             ← Back to Home
           </button>
         </nav>
         
-        <div className="auth-content" style={{
-          position: 'relative',
-          zIndex: 2,
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          minHeight: 'calc(100vh - 80px)',
-          padding: '2rem'
-        }}>
-          <div className="auth-card" style={{
-            backgroundColor: 'rgba(0, 0, 0, 0.8)',
-            backdropFilter: 'blur(10px)',
-            borderRadius: '1rem',
-            border: '1px solid rgba(255, 255, 255, 0.1)',
-            padding: '3rem',
-            width: '100%',
-            maxWidth: '400px',
-            boxShadow: '0 20px 40px rgba(0, 0, 0, 0.3)'
-          }}>
-            <h1 style={{
-              color: 'white',
-              fontSize: '2.5rem',
-              fontWeight: 'bold',
-              textAlign: 'center',
-              marginBottom: '0.5rem',
-              textShadow: '0 2px 4px rgba(0,0,0,0.8)'
-            }}>
-              Welcome to Tabletop Tavern
-            </h1>
+        <div className="relative z-[2] flex items-center justify-center p-8" 
+             style={{minHeight: 'calc(100vh - 80px)'}}>
+          <div className="bg-black/80 backdrop-blur-xl rounded-2xl border border-white/10 p-12 w-full max-w-md shadow-2xl"
+               style={{boxShadow: '0 20px 40px rgba(0, 0, 0, 0.3)'}}>
+
             
-            <p style={{
-              color: 'rgba(255, 255, 255, 0.7)',
-              textAlign: 'center',
-              marginBottom: '2rem',
-              fontSize: '1rem',
-              lineHeight: '1.5'
-            }}>
-              Enter your email to receive a magic link, or if you already have a code from an email, enter it below.
+            <p className="text-white/70 text-center mb-8 text-base leading-relaxed">
+              Enter your email to receive a magic link <b>and</b> one-time-password.
             </p>
 
             {successMessage && (
-              <div style={{
-                backgroundColor: 'rgba(16, 185, 129, 0.1)',
-                color: '#10b981',
-                padding: '1rem',
-                borderRadius: '0.5rem',
-                marginBottom: '1.5rem',
-                fontSize: '0.9rem',
-                lineHeight: '1.4',
-                textAlign: 'center',
-                border: '1px solid rgba(16, 185, 129, 0.3)'
-              }}>
+              <div className="bg-emerald-500/10 text-emerald-400 p-4 rounded-lg mb-6 text-sm leading-relaxed text-center border border-emerald-500/30">
                 {successMessage}
               </div>
             )}
 
             {generalError && (
-              <div style={{
-                backgroundColor: 'rgba(239, 68, 68, 0.1)',
-                color: '#ef4444',
-                padding: '0.75rem',
-                borderRadius: '0.5rem',
-                marginBottom: '1rem',
-                fontSize: '0.9rem',
-                textAlign: 'center'
-              }}>
+              <div className="bg-red-500/10 text-red-400 p-3 rounded-lg mb-4 text-sm text-center">
                 {generalError}
               </div>
             )}
 
             {!emailSent ? (
-              <div style={{display: 'flex', flexDirection: 'column', gap: '1.5rem'}}>
+              <div className="flex flex-col gap-6">
                 {/* Email Form */}
-                <form onSubmit={handleSubmit} style={{display: 'flex', flexDirection: 'column', gap: '1rem'}}>
+                <form onSubmit={handleSubmit} className="flex flex-col gap-4">
                   <div>
-                    <label style={{color: 'rgba(255, 255, 255, 0.8)', fontSize: '0.9rem', marginBottom: '0.5rem', display: 'block'}}>
-                      📧 Get a Magic Link
-                    </label>
                     <input
                       type="email"
                       placeholder="Your email address"
                       value={email}
                       onChange={(e) => setEmail(e.target.value)}
                       required
-                      style={{
-                        width: '100%',
-                        padding: '0.875rem',
-                        borderRadius: '0.5rem',
-                        border: emailError ? '2px solid #ef4444' : '1px solid rgba(255, 255, 255, 0.2)',
-                        backgroundColor: 'rgba(255, 255, 255, 0.1)',
-                        color: 'white',
-                        fontSize: '1rem',
-                        outline: 'none',
-                        transition: 'border-color 0.2s'
-                      }}
-                      onFocus={(e) => {
-                        if (!emailError) e.target.style.borderColor = 'rgba(217, 119, 6, 0.5)'
-                      }}
-                      onBlur={(e) => {
-                        if (!emailError) e.target.style.borderColor = 'rgba(255, 255, 255, 0.2)'
-                      }}
+                      className={`w-full p-3.5 rounded-lg ${
+                        emailError 
+                          ? 'border-2 border-red-400' 
+                          : 'border border-white/20 focus:border-amber-500/50'
+                      } bg-white/10 text-white text-base outline-none transition-colors duration-200 placeholder:text-white/40`}
                     />
                     {emailError && (
-                      <p style={{color: '#ef4444', fontSize: '0.8rem', marginTop: '0.25rem'}}>{emailError}</p>
+                      <p className="text-red-400 text-xs mt-1">{emailError}</p>
                     )}
                   </div>
 
                   <button
                     type="submit"
                     disabled={isLoading}
-                    style={{
-                      width: '100%',
-                      padding: '0.875rem',
-                      borderRadius: '0.5rem',
-                      border: 'none',
-                      background: isLoading 
-                        ? '#6b7280' 
-                        : 'linear-gradient(to right, #d97706, #ea580c)',
-                      color: 'white',
-                      fontSize: '1.1rem',
-                      fontWeight: 'bold',
-                      cursor: isLoading ? 'not-allowed' : 'pointer',
-                      transition: 'all 0.2s',
-                      marginTop: '0.5rem'
-                    }}
-                    onMouseEnter={(e) => {
-                      if (!isLoading) {
-                        e.target.style.background = 'linear-gradient(to right, #c2410c, #dc2626)'
-                      }
-                    }}
-                    onMouseLeave={(e) => {
-                      if (!isLoading) {
-                        e.target.style.background = 'linear-gradient(to right, #d97706, #ea580c)'
-                      }
-                    }}
+                    className={`w-full p-3.5 rounded-lg border-none text-white text-lg font-bold transition-all duration-200 mt-2 ${
+                      isLoading 
+                        ? 'bg-gray-500 cursor-not-allowed' 
+                        : 'bg-gradient-to-r from-amber-600 to-orange-600 hover:from-orange-700 hover:to-red-600 cursor-pointer'
+                    }`}
                   >
-                    {isLoading ? 'Sending Magic Link...' : '🪄 Send Magic Link'}
+                    {isLoading ? 'Sending Magic Link...' : 'Send Magic Link'}
                   </button>
                 </form>
 
                 {/* Divider */}
-                <div style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  margin: '0.5rem 0'
-                }}>
-                  <div style={{flex: 1, height: '1px', backgroundColor: 'rgba(255, 255, 255, 0.2)'}}></div>
-                  <span style={{padding: '0 1rem', color: 'rgba(255, 255, 255, 0.5)', fontSize: '0.875rem'}}>OR</span>
-                  <div style={{flex: 1, height: '1px', backgroundColor: 'rgba(255, 255, 255, 0.2)'}}></div>
+                <div className="flex items-center my-2">
+                  <div className="flex-1 h-px bg-white/20"></div>
+                  <span className="px-4 text-white/50 text-sm">OR</span>
+                  <div className="flex-1 h-px bg-white/20"></div>
                 </div>
+
+              <p className="text-white/70 text-center text-base leading-relaxed">
+              If you already have a one-time passcode from an email, enter it below.
+              </p>
 
                 {/* OTP Form */}
-                <form onSubmit={handleOtpVerification} style={{display: 'flex', flexDirection: 'column', gap: '1rem'}}>
-                  <div>
-                    <label style={{color: 'rgba(255, 255, 255, 0.8)', fontSize: '0.9rem', marginBottom: '0.5rem', display: 'block'}}>
-                      🔑 Already Have a Code?
-                    </label>
-                    <input
-                      type="text"
-                      placeholder="Enter 6-digit code (e.g., ABC 123)"
-                      value={otpToken}
-                      onChange={(e) => {
-                        let value = e.target.value.toUpperCase()
-                        // Auto-format short codes with space after 3 characters
-                        if (value.length === 3 && !value.includes(' ') && /^[A-Z0-9]+$/.test(value)) {
-                          value = value + ' '
-                        }
-                        // Remove extra spaces for short codes
-                        if (value.length <= 7 && /^[A-Z0-9\s]+$/.test(value)) {
-                          value = value.replace(/\s+/g, ' ')
-                        }
-                        setOtpToken(value)
-                      }}
-                      style={{
-                        width: '100%',
-                        padding: '0.875rem',
-                        borderRadius: '0.5rem',
-                        border: otpError ? '2px solid #ef4444' : '1px solid rgba(255, 255, 255, 0.2)',
-                        backgroundColor: 'rgba(255, 255, 255, 0.1)',
-                        color: 'white',
-                        fontSize: '1.1rem',
-                        fontFamily: 'monospace',
-                        outline: 'none',
-                        transition: 'border-color 0.2s',
-                        textAlign: 'center',
-                        letterSpacing: '2px'
-                      }}
-                      onFocus={(e) => {
-                        if (!otpError) e.target.style.borderColor = 'rgba(217, 119, 6, 0.5)'
-                      }}
-                      onBlur={(e) => {
-                        if (!otpError) e.target.style.borderColor = 'rgba(255, 255, 255, 0.2)'
-                      }}
-                    />
-                    {otpError && (
-                      <p style={{color: '#ef4444', fontSize: '0.8rem', marginTop: '0.25rem'}}>{otpError}</p>
-                    )}
-                  </div>
-
-                  <button
-                    type="submit"
-                    disabled={isLoading || !otpToken.trim()}
-                    style={{
-                      width: '100%',
-                      padding: '0.875rem',
-                      borderRadius: '0.5rem',
-                      border: 'none',
-                      background: (isLoading || !otpToken.trim())
-                        ? '#6b7280' 
-                        : 'linear-gradient(to right, #059669, #047857)',
-                      color: 'white',
-                      fontSize: '1.1rem',
-                      fontWeight: 'bold',
-                      cursor: (isLoading || !otpToken.trim()) ? 'not-allowed' : 'pointer',
-                      transition: 'all 0.2s',
-                      marginTop: '0.5rem'
-                    }}
-                    onMouseEnter={(e) => {
-                      if (!isLoading && otpToken.trim()) {
-                        e.target.style.background = 'linear-gradient(to right, #047857, #065f46)'
-                      }
-                    }}
-                    onMouseLeave={(e) => {
-                      if (!isLoading && otpToken.trim()) {
-                        e.target.style.background = 'linear-gradient(to right, #059669, #047857)'
-                      }
-                    }}
-                  >
-                    {isLoading ? 'Verifying Code...' : '🔑 Sign In with Code'}
-                  </button>
-                </form>
+                <OTPInput
+                  helpText="💡 Enter the 6-character code from your email"
+                  onSubmit={handleOtpVerification}
+                  isLoading={isLoading}
+                  error={otpError}
+                  buttonText="Sign In with Code"
+                  buttonLoadingText="Verifying Code..."
+                />
               </div>
             ) : (
-              <div style={{display: 'flex', flexDirection: 'column', gap: '1.5rem'}}>
-                {/* Retry Button */}
-                <button
-                  onClick={handleRetry}
-                  disabled={!canRetry || isLoading}
-                  style={{
-                    width: '100%',
-                    padding: '0.875rem',
-                    borderRadius: '0.5rem',
-                    border: 'none',
-                    background: !canRetry || isLoading
-                      ? '#6b7280' 
-                      : 'linear-gradient(to right, #d97706, #ea580c)',
-                    color: 'white',
-                    fontSize: '1.1rem',
-                    fontWeight: 'bold',
-                    cursor: !canRetry || isLoading ? 'not-allowed' : 'pointer',
-                    transition: 'all 0.2s',
-                    opacity: !canRetry ? 0.6 : 1
-                  }}
-                  onMouseEnter={(e) => {
-                    if (canRetry && !isLoading) {
-                      e.target.style.background = 'linear-gradient(to right, #c2410c, #dc2626)'
-                    }
-                  }}
-                  onMouseLeave={(e) => {
-                    if (canRetry && !isLoading) {
-                      e.target.style.background = 'linear-gradient(to right, #d97706, #ea580c)'
-                    }
-                  }}
-                >
-                  {isLoading 
-                    ? 'Sending Magic Link...' 
-                    : !canRetry 
-                      ? `🔄 Retry in ${retryCountdown}s`
-                      : '🔄 Send Another Magic Link'
-                  }
-                </button>
-                
-                {retryCountdown > 0 && (
-                  <div style={{
-                    width: '100%',
-                    height: '4px',
-                    backgroundColor: 'rgba(255, 255, 255, 0.2)',
-                    borderRadius: '2px',
-                    overflow: 'hidden'
-                  }}>
-                    <div style={{
-                      height: '100%',
-                      backgroundColor: '#d97706',
-                      borderRadius: '2px',
-                      width: `${((30 - retryCountdown) / 30) * 100}%`,
-                      transition: 'width 1s linear'
-                    }}></div>
-                  </div>
-                )}
+              <div className="flex flex-col gap-6">
+                {/* Retry Button with Countdown Timer */}
+                <CountdownTimer 
+                  retryCountdown={retryCountdown}
+                  isLoading={isLoading}
+                  canRetry={canRetry}
+                  onRetry={handleRetry}
+                />
 
                 {/* Divider */}
-                <div style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  margin: '0.5rem 0'
-                }}>
-                  <div style={{flex: 1, height: '1px', backgroundColor: 'rgba(255, 255, 255, 0.2)'}}></div>
-                  <span style={{padding: '0 1rem', color: 'rgba(255, 255, 255, 0.5)', fontSize: '0.875rem'}}>OR</span>
-                  <div style={{flex: 1, height: '1px', backgroundColor: 'rgba(255, 255, 255, 0.2)'}}></div>
+                <div className="flex items-center my-2">
+                  <div className="flex-1 h-px bg-white/20"></div>
+                  <span className="px-4 text-white/50 text-sm">OR</span>
+                  <div className="flex-1 h-px bg-white/20"></div>
                 </div>
 
-                {/* OTP Form for the success modal */}
-                <form onSubmit={handleOtpVerification} style={{display: 'flex', flexDirection: 'column', gap: '1rem'}}>
-                  <div>
-                    <label style={{color: 'rgba(255, 255, 255, 0.8)', fontSize: '0.9rem', marginBottom: '0.5rem', display: 'block'}}>
-                      🔑 Got Your Code?
-                    </label>
-                    <input
-                      type="text"
-                      placeholder="Enter 6-digit code (e.g., ABC 123)"
-                      value={otpToken}
-                      onChange={(e) => {
-                        let value = e.target.value.toUpperCase()
-                        // Auto-format short codes with space after 3 characters
-                        if (value.length === 3 && !value.includes(' ') && /^[A-Z0-9]+$/.test(value)) {
-                          value = value + ' '
-                        }
-                        // Remove extra spaces for short codes
-                        if (value.length <= 7 && /^[A-Z0-9\s]+$/.test(value)) {
-                          value = value.replace(/\s+/g, ' ')
-                        }
-                        setOtpToken(value)
-                      }}
-                      style={{
-                        width: '100%',
-                        padding: '0.875rem',
-                        borderRadius: '0.5rem',
-                        border: otpError ? '2px solid #ef4444' : '1px solid rgba(255, 255, 255, 0.2)',
-                        backgroundColor: 'rgba(255, 255, 255, 0.1)',
-                        color: 'white',
-                        fontSize: '1.1rem',
-                        fontFamily: 'monospace',
-                        outline: 'none',
-                        transition: 'border-color 0.2s',
-                        textAlign: 'center',
-                        letterSpacing: '2px'
-                      }}
-                      onFocus={(e) => {
-                        if (!otpError) e.target.style.borderColor = 'rgba(217, 119, 6, 0.5)'
-                      }}
-                      onBlur={(e) => {
-                        if (!otpError) e.target.style.borderColor = 'rgba(255, 255, 255, 0.2)'
-                      }}
-                    />
-                    {otpError && (
-                      <p style={{color: '#ef4444', fontSize: '0.8rem', marginTop: '0.25rem'}}>{otpError}</p>
-                    )}
-                    <div style={{
-                      marginTop: '0.5rem',
-                      padding: '0.5rem',
-                      backgroundColor: 'rgba(255, 255, 255, 0.05)',
-                      borderRadius: '0.375rem',
-                      fontSize: '0.75rem',
-                      color: 'rgba(255, 255, 255, 0.6)',
-                      textAlign: 'center'
-                    }}>
-                      💡 Check your email for a 6-character code to sign in instantly
-                    </div>
-                  </div>
+                <p className="text-white/70 text-center text-base leading-relaxed">
+                If you already have a one-time passcode from an email, enter it below.
+                </p>
 
-                  <button
-                    type="submit"
-                    disabled={isLoading || !otpToken.trim()}
-                    style={{
-                      width: '100%',
-                      padding: '0.875rem',
-                      borderRadius: '0.5rem',
-                      border: 'none',
-                      background: (isLoading || !otpToken.trim())
-                        ? '#6b7280' 
-                        : 'linear-gradient(to right, #059669, #047857)',
-                      color: 'white',
-                      fontSize: '1.1rem',
-                      fontWeight: 'bold',
-                      cursor: (isLoading || !otpToken.trim()) ? 'not-allowed' : 'pointer',
-                      transition: 'all 0.2s',
-                      marginTop: '0.5rem'
-                    }}
-                    onMouseEnter={(e) => {
-                      if (!isLoading && otpToken.trim()) {
-                        e.target.style.background = 'linear-gradient(to right, #047857, #065f46)'
-                      }
-                    }}
-                    onMouseLeave={(e) => {
-                      if (!isLoading && otpToken.trim()) {
-                        e.target.style.background = 'linear-gradient(to right, #059669, #047857)'
-                      }
-                    }}
-                  >
-                    {isLoading ? 'Verifying Code...' : '🔑 Sign In with Code'}
-                  </button>
-                </form>
+                {/* OTP Form for the success modal */}
+                <OTPInput
+                  helpText="💡 Check your email for a 6-character code to sign in instantly"
+                  onSubmit={handleOtpVerification}
+                  isLoading={isLoading}
+                  error={otpError}
+                  buttonText="Sign In with Code"
+                  buttonLoadingText="Verifying Code..."
+                />
               </div>
             )}
 
-            <div style={{
-              textAlign: 'center',
-              marginTop: '2rem',
-              paddingTop: '1.5rem',
-              borderTop: '1px solid rgba(255, 255, 255, 0.1)'
-            }}>
-              <p style={{color: 'rgba(255, 255, 255, 0.6)', fontSize: '0.85rem', lineHeight: '1.4'}}>
+            <div className="text-center mt-8 pt-6 border-t border-white/10">
+              <p className="text-white/60 text-sm leading-relaxed">
                 New users will automatically get an account. Returning users will be signed in. No passwords required! The email will include both a clickable magic link and a short 6-character code for manual entry.
               </p>
             </div>

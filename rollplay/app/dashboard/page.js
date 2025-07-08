@@ -30,23 +30,52 @@ export default function Dashboard() {
   ]
 
   useEffect(() => {
-    // Check for authentication token
-    const token = localStorage.getItem('access_token')
-    if (!token) {
-      router.push('/magic')
-      return
+    const checkAuthentication = async () => {
+      try {
+        // Validate authentication with backend (reads from httpOnly cookie)
+        const response = await fetch('/auth/validate', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          credentials: 'include' // Include httpOnly cookies
+        })
+
+        if (response.ok) {
+          const data = await response.json()
+          if (data.valid && data.user) {
+            setUser(data.user)
+            return
+          }
+        }
+
+        // Authentication failed, redirect to login
+        router.push('/magic')
+        
+      } catch (error) {
+        console.error('Auth check error:', error)
+        router.push('/magic')
+      }
     }
 
-    // Get user data from localStorage or API
-    const userData = localStorage.getItem('user_data')
-    if (userData) {
-      setUser(JSON.parse(userData))
-    }
+    checkAuthentication()
   }, [router])
 
-  const handleLogout = () => {
-    localStorage.removeItem('access_token')
-    localStorage.removeItem('user_data')
+  const handleLogout = async () => {
+    try {
+      // Call backend logout endpoint to clear httpOnly cookie
+      await fetch('/auth/logout', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        credentials: 'include' // Include httpOnly cookies
+      })
+    } catch (error) {
+      console.error('Logout error:', error)
+    }
+    
+    // Redirect regardless of API success
     router.push('/')
   }
 

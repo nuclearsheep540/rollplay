@@ -33,6 +33,7 @@ export default function MagicLinkVerify() {
         headers: {
           'Content-Type': 'application/json',
         },
+        credentials: 'include', // Include cookies
       })
 
       if (!response.ok) {
@@ -41,11 +42,8 @@ export default function MagicLinkVerify() {
 
       const data = await response.json()
 
-      if (data.success && data.access_token && data.user) {
-        // Store authentication data
-        localStorage.setItem('access_token', data.access_token)
-        localStorage.setItem('user_data', JSON.stringify(data.user))
-        
+      if (data.success && data.user) {
+        // No need to store in localStorage - httpOnly cookie is set by backend
         setStatus('success')
         setMessage('Successfully authenticated! Redirecting to your dashboard...')
         
@@ -54,7 +52,7 @@ export default function MagicLinkVerify() {
           router.push('/dashboard')
         }, 2000)
       } else {
-        throw new Error(data.message || 'Authentication failed')
+        console.log(data.message || 'Authentication failed')
       }
     } catch (error) {
       console.error('Magic link verification error:', error)
@@ -68,83 +66,34 @@ export default function MagicLinkVerify() {
   }
 
   return (
-    <div style={{backgroundColor: '#1e293b', minHeight: '100vh'}}>
-      <div className="auth-container" style={{
-        position: 'relative',
-        backgroundImage: 'url(/bg.jpeg)',
-        backgroundSize: 'cover',
-        backgroundPosition: 'center',
-        backgroundRepeat: 'no-repeat',
-        opacity: 0.9,
-        minHeight: '100vh'
-      }}>
-        <div style={{
-          position: 'absolute',
-          top: 0,
-          left: 0,
-          right: 0,
-          bottom: 0,
-          backdropFilter: 'blur(2px)',
-          zIndex: 1
-        }}></div>
+    <div className="bg-slate-800 min-h-screen">
+      <div className="relative bg-cover bg-center bg-no-repeat opacity-90 min-h-screen" 
+           style={{backgroundImage: 'url(/bg.jpeg)'}}>
+        <div className="absolute inset-0 backdrop-blur-lg z-[1]"></div>
         
-        <nav className="nav-bar" style={{zIndex: 2}}>
-          <div className="logo" style={{fontSize: '2.1rem'}}>TABLETOP<span>TAVERN</span></div>
+        <nav className="nav-bar relative z-[2]">
+          <div className="logo text-4xl">TABLETOP<span>TAVERN</span></div>
           <button 
             onClick={() => router.push('/')}
-            className="text-white hover:text-amber-300 transition-colors duration-200"
-            style={{fontSize: '1rem', background: 'none', border: 'none', cursor: 'pointer'}}
+            className="text-white hover:text-amber-300 transition-colors duration-200 text-base bg-none border-none cursor-pointer"
           >
             ← Back to Home
           </button>
         </nav>
         
-        <div className="auth-content" style={{
-          position: 'relative',
-          zIndex: 2,
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          minHeight: 'calc(100vh - 80px)',
-          padding: '2rem'
-        }}>
-          <div className="auth-card" style={{
-            backgroundColor: 'rgba(0, 0, 0, 0.8)',
-            backdropFilter: 'blur(10px)',
-            borderRadius: '1rem',
-            border: '1px solid rgba(255, 255, 255, 0.1)',
-            padding: '3rem',
-            width: '100%',
-            maxWidth: '500px',
-            boxShadow: '0 20px 40px rgba(0, 0, 0, 0.3)',
-            textAlign: 'center'
-          }}>
+        <div className="relative z-[2] flex items-center justify-center p-8" 
+             style={{minHeight: 'calc(100vh - 80px)'}}>
+          <div className="bg-black/80 backdrop-blur-xl rounded-2xl border border-white/10 p-12 w-full max-w-lg shadow-2xl text-center"
+               style={{boxShadow: '0 20px 40px rgba(0, 0, 0, 0.3)'}}>
+            
             {status === 'verifying' && (
               <>
-                <div style={{
-                  width: '60px',
-                  height: '60px',
-                  border: '4px solid rgba(255, 255, 255, 0.1)',
-                  borderTop: '4px solid #d97706',
-                  borderRadius: '50%',
-                  animation: 'spin 1s linear infinite',
-                  margin: '0 auto 2rem'
-                }}>
+                <div className="w-15 h-15 border-4 border-white/10 border-t-amber-600 rounded-full mx-auto mb-8">
                 </div>
-                <h1 style={{
-                  color: 'white',
-                  fontSize: '2rem',
-                  fontWeight: 'bold',
-                  marginBottom: '1rem',
-                  textShadow: '0 2px 4px rgba(0,0,0,0.8)'
-                }}>
+                <h1 className="text-white text-3xl font-bold mb-4 text-shadow-lg">
                   Verifying Magic Link
                 </h1>
-                <p style={{
-                  color: 'rgba(255, 255, 255, 0.7)',
-                  fontSize: '1rem',
-                  lineHeight: '1.5'
-                }}>
+                <p className="text-white/70 text-base leading-relaxed">
                   {message}
                 </p>
               </>
@@ -152,33 +101,13 @@ export default function MagicLinkVerify() {
 
             {status === 'success' && (
               <>
-                <div style={{
-                  width: '60px',
-                  height: '60px',
-                  backgroundColor: '#10b981',
-                  borderRadius: '50%',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  margin: '0 auto 2rem',
-                  fontSize: '2rem'
-                }}>
+                <div className="w-15 h-15 bg-emerald-600 rounded-full flex items-center justify-center mx-auto mb-8 text-2xl text-white">
                   ✓
                 </div>
-                <h1 style={{
-                  color: 'white',
-                  fontSize: '2rem',
-                  fontWeight: 'bold',
-                  marginBottom: '1rem',
-                  textShadow: '0 2px 4px rgba(0,0,0,0.8)'
-                }}>
+                <h1 className="text-white text-3xl font-bold mb-4 text-shadow-lg">
                   Welcome to Tabletop Tavern!
                 </h1>
-                <p style={{
-                  color: 'rgba(255, 255, 255, 0.7)',
-                  fontSize: '1rem',
-                  lineHeight: '1.5'
-                }}>
+                <p className="text-white/70 text-base leading-relaxed">
                   {message}
                 </p>
               </>
@@ -186,57 +115,18 @@ export default function MagicLinkVerify() {
 
             {status === 'error' && (
               <>
-                <div style={{
-                  width: '60px',
-                  height: '60px',
-                  backgroundColor: '#ef4444',
-                  borderRadius: '50%',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  margin: '0 auto 2rem',
-                  fontSize: '2rem',
-                  color: 'white'
-                }}>
+                <div className="w-15 h-15 bg-red-500 rounded-full flex items-center justify-center mx-auto mb-8 text-2xl text-white">
                   ✕
                 </div>
-                <h1 style={{
-                  color: 'white',
-                  fontSize: '2rem',
-                  fontWeight: 'bold',
-                  marginBottom: '1rem',
-                  textShadow: '0 2px 4px rgba(0,0,0,0.8)'
-                }}>
+                <h1 className="text-white text-3xl font-bold mb-4 text-shadow-lg">
                   Authentication Failed
                 </h1>
-                <p style={{
-                  color: 'rgba(255, 255, 255, 0.7)',
-                  fontSize: '1rem',
-                  lineHeight: '1.5',
-                  marginBottom: '2rem'
-                }}>
+                <p className="text-white/70 text-base leading-relaxed mb-8">
                   {message}
                 </p>
                 <button
                   onClick={handleBackToLogin}
-                  style={{
-                    width: '100%',
-                    padding: '0.875rem',
-                    borderRadius: '0.5rem',
-                    border: 'none',
-                    background: 'linear-gradient(to right, #d97706, #ea580c)',
-                    color: 'white',
-                    fontSize: '1.1rem',
-                    fontWeight: 'bold',
-                    cursor: 'pointer',
-                    transition: 'all 0.2s'
-                  }}
-                  onMouseEnter={(e) => {
-                    e.target.style.background = 'linear-gradient(to right, #c2410c, #dc2626)'
-                  }}
-                  onMouseLeave={(e) => {
-                    e.target.style.background = 'linear-gradient(to right, #d97706, #ea580c)'
-                  }}
+                  className="w-full p-3.5 rounded-lg border-none bg-gradient-to-r from-amber-600 to-orange-600 hover:from-orange-700 hover:to-red-600 text-white text-lg font-bold cursor-pointer transition-all duration-200"
                 >
                   🪄 Try Again
                 </button>
@@ -245,13 +135,6 @@ export default function MagicLinkVerify() {
           </div>
         </div>
       </div>
-
-      <style jsx>{`
-        @keyframes spin {
-          0% { transform: rotate(0deg); }
-          100% { transform: rotate(360deg); }
-        }
-      `}</style>
     </div>
   )
 }
