@@ -15,7 +15,7 @@ const PROTECTED_ROUTES = [
 
 // Define auth routes that authenticated users shouldn't access
 const AUTH_ROUTES = [
-  '/magic',
+  '/auth/magic',
   '/auth/verify'
 ]
 
@@ -40,7 +40,7 @@ export async function middleware(request) {
     if (!authToken) {
       // No token found, redirect to login
       console.log(`Protected route access denied: ${pathname} - No token`)
-      return NextResponse.redirect(new URL('/magic', request.url))
+      return NextResponse.redirect(new URL('/auth/magic', request.url))
     }
     
     // Validate token with backend
@@ -56,7 +56,7 @@ export async function middleware(request) {
       if (!validateResponse.ok) {
         // Token is invalid, redirect to login
         console.log(`Protected route access denied: ${pathname} - Invalid token`)
-        const response = NextResponse.redirect(new URL('/magic', request.url))
+        const response = NextResponse.redirect(new URL('/auth/magic', request.url))
         // Clear the invalid cookie
         response.cookies.set('auth_token', '', { maxAge: 0 })
         return response
@@ -69,7 +69,7 @@ export async function middleware(request) {
     } catch (error) {
       // Backend validation failed, redirect to login
       console.error(`Token validation failed: ${error.message}`)
-      const response = NextResponse.redirect(new URL('/magic', request.url))
+      const response = NextResponse.redirect(new URL('/auth/magic', request.url))
       response.cookies.set('auth_token', '', { maxAge: 0 })
       return response
     }

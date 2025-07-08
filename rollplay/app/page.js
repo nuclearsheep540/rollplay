@@ -54,7 +54,7 @@ export default function Home() {
                       backgroundSize: '200% 100%',
                       backgroundPosition: '0% 0%'
                     }}
-                    onClick={() => router.push('/magic')}
+                    onClick={() => router.push('/auth/magic')}
                     onMouseEnter={(e) => {
                       e.target.style.backgroundPosition = '100% 0%'
                     }}

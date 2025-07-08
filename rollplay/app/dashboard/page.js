@@ -50,11 +50,11 @@ export default function Dashboard() {
         }
 
         // Authentication failed, redirect to login
-        router.push('/magic')
+        router.push('/auth/magic')
         
       } catch (error) {
         console.error('Auth check error:', error)
-        router.push('/magic')
+        router.push('/auth/magic')
       }
     }
 

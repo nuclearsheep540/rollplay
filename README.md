@@ -53,6 +53,17 @@ logging_log_level=DEBUG
 logging_email_from=""
 logging_email_to=""
 logging_email_subject=test
+
+# MAIL
+SMTP_SERVER=
+SMTP_PORT=
+SMTP_USERNAME=
+SMTP_PASSWORD=
+FROM_EMAIL=
+
+# REDIS CONFIGURATION (for short code storage)
+REDIS_URL=redis://redis:6379
+
 ```
 
 ###

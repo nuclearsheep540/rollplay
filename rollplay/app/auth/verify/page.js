@@ -62,7 +62,7 @@ export default function MagicLinkVerify() {
   }
 
   const handleBackToLogin = () => {
-    router.push('/magic')
+    router.push('/auth/magic')
   }
 
   return (
@@ -71,15 +71,7 @@ export default function MagicLinkVerify() {
            style={{backgroundImage: 'url(/bg.jpeg)'}}>
         <div className="absolute inset-0 backdrop-blur-lg z-[1]"></div>
         
-        <nav className="nav-bar relative z-[2]">
-          <div className="logo text-4xl">TABLETOP<span>TAVERN</span></div>
-          <button 
-            onClick={() => router.push('/')}
-            className="text-white hover:text-amber-300 transition-colors duration-200 text-base bg-none border-none cursor-pointer"
-          >
-            ← Back to Home
-          </button>
-        </nav>
+
         
         <div className="relative z-[2] flex items-center justify-center p-8" 
              style={{minHeight: 'calc(100vh - 80px)'}}>
