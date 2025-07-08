@@ -43,49 +43,82 @@ export default function Home() {
             
             <div className="cta-buttons" style={{marginTop: '2rem', display: 'flex', justifyContent: 'center'}}>
                   <button
-                    className="px-12 py-4 text-xl font-bold text-white rounded-lg transition-all duration-200 transform hover:scale-105 shadow-lg hover:shadow-xl"
+                    className="px-12 py-4 text-xl font-bold text-white rounded-lg shadow-lg"
                     style={{
-                      background: 'linear-gradient(to right, #d97706, #ea580c)',
+                      background: 'linear-gradient(to right, #d97706, #ea580c, #c2410c, #dc2626)',
                       border: 'none',
                       cursor: 'pointer',
                       position: 'relative',
-                      zIndex: 10
+                      zIndex: 10,
+                      transition: 'background-position 400ms ease-in-out',
+                      backgroundSize: '200% 100%',
+                      backgroundPosition: '0% 0%'
                     }}
                     onClick={() => router.push('/magic')}
                     onMouseEnter={(e) => {
-                      e.target.style.background = 'linear-gradient(to right, #c2410c, #dc2626)'
+                      e.target.style.backgroundPosition = '100% 0%'
                     }}
                     onMouseLeave={(e) => {
-                      e.target.style.background = 'linear-gradient(to right, #d97706, #ea580c)'
+                      e.target.style.backgroundPosition = '0% 0%'
                     }}
                   >
-                    🎲 Get Started
+                    Get Started
                   </button>
             </div>
 
           </div>
         </div>
         
-        <section className="how-it-works">
-          <h2 style={{color: '#1e293b', fontSize: '2.5rem', fontWeight: 'bold', textAlign: 'center', marginBottom: '3rem', textShadow: '0 2px 4px rgba(0,0,0,0.1)'}}>How It Works</h2>
+        <section className="how-it-works bg-white py-16 min-h-[600px] flex flex-col justify-center">
+          <h2 className="text-slate-800 text-4xl font-bold text-center mb-12" style={{textShadow: '0 2px 4px rgba(0,0,0,0.1)'}}>How It Works</h2>
           
-          <div className="steps" style={{display: 'flex', justifyContent: 'center', flexWrap: 'wrap', gap: '2rem', maxWidth: '1200px', margin: '0 auto', padding: '0 2rem'}}>
-            <div className="step" style={{backgroundColor: '#1e293b', padding: '2rem', borderRadius: '1rem', border: '2px solid #3b82f6', textAlign: 'center', boxShadow: '0 4px 12px rgba(59, 130, 246, 0.2)', maxWidth: '300px', flex: '1', minWidth: '280px'}}>
-              <div className="step-icon" style={{fontSize: '3rem', marginBottom: '1rem'}}>🏰</div>
-              <h3 style={{color: '#f8fafc', fontSize: '1.5rem', fontWeight: 'bold', marginBottom: '1rem', textShadow: '0 1px 2px rgba(0,0,0,0.5)'}}>Create a Campaign</h3>
-              <p style={{color: '#cbd5e1', fontSize: '1.1rem', lineHeight: '1.6', fontWeight: '500'}}>Set up your game room with customizable settings for your adventure style and party size.</p>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-12 max-w-6xl mx-auto px-8">
+            <div className="p-8 rounded-xl text-center max-w-sm flex-1 min-w-[320px]" style={{
+              border: '2px solid transparent', 
+              backgroundImage: 'linear-gradient(#0f172a), linear-gradient(to right, #d97706, #ea580c)', 
+              backgroundOrigin: 'border-box', 
+              backgroundClip: 'padding-box, border-box',
+              boxShadow: '0 4px 12px rgba(217, 119, 6, 0.5)'
+            }}>
+              <div className="text-5xl mb-4">📧</div>
+              <h3 className="text-slate-50 text-2xl font-bold mb-4" style={{textShadow: '0 1px 2px rgba(0,0,0,0.5)'}}>Sign Up</h3>
+              <p className="text-slate-300 text-lg leading-relaxed font-medium">All you need to start is an email address and you can sign up passwordless to start managing campaigns and characters</p>
             </div>
             
-            <div className="step" style={{backgroundColor: '#1e293b', padding: '2rem', borderRadius: '1rem', border: '2px solid #8b5cf6', textAlign: 'center', boxShadow: '0 4px 12px rgba(139, 92, 246, 0.2)', maxWidth: '300px', flex: '1', minWidth: '280px'}}>
-              <div className="step-icon" style={{fontSize: '3rem', marginBottom: '1rem'}}>🗡️</div>
-              <h3 style={{color: '#f8fafc', fontSize: '1.5rem', fontWeight: 'bold', marginBottom: '1rem', textShadow: '0 1px 2px rgba(0,0,0,0.5)'}}>Gather Your Party</h3>
-              <p style={{color: '#cbd5e1', fontSize: '1.1rem', lineHeight: '1.6', fontWeight: '500'}}>Share a simple campaign code with friends so they can join your virtual table instantly.</p>
+            <div className="p-12 rounded-xl text-center max-w-sm flex-1 min-w-[320px]" style={{
+              border: '2px solid transparent', 
+              backgroundImage: 'linear-gradient(#0f172a), linear-gradient(135deg, #ea580c, #c2410c)', 
+              backgroundOrigin: 'border-box', 
+              backgroundClip: 'padding-box, border-box',
+              boxShadow: '0 4px 12px rgba(234, 88, 12, 0.5)'
+            }}>
+              <div className="text-5xl mb-4">🏰</div>
+              <h3 className="text-slate-50 text-2xl font-bold mb-4" style={{textShadow: '0 1px 2px rgba(0,0,0,0.5)'}}>Create a Campaign</h3>
+              <p className="text-slate-300 text-lg leading-relaxed font-medium">Using our intuitive tools prepare your campaign by preparing maps, sound tracks and combat encounters</p>
             </div>
             
-            <div className="step" style={{backgroundColor: '#1e293b', padding: '2rem', borderRadius: '1rem', border: '2px solid #10b981', textAlign: 'center', boxShadow: '0 4px 12px rgba(16, 185, 129, 0.2)', maxWidth: '300px', flex: '1', minWidth: '280px'}}>
-              <div className="step-icon" style={{fontSize: '3rem', marginBottom: '1rem'}}>🎲</div>
-              <h3 style={{color: '#f8fafc', fontSize: '1.5rem', fontWeight: 'bold', marginBottom: '1rem', textShadow: '0 1px 2px rgba(0,0,0,0.5)'}}>Begin Your Quest</h3>
-              <p style={{color: '#cbd5e1', fontSize: '1.1rem', lineHeight: '1.6', fontWeight: '500'}}>Use our tools to manage characters, roll dice, and track your epic journey together.</p>
+            <div className="p-12 rounded-xl text-center max-w-sm flex-1 min-w-[320px]" style={{
+              border: '2px solid transparent', 
+              backgroundImage: 'linear-gradient(#0f172a), linear-gradient(to bottom, #c2410c, #dc2626)', 
+              backgroundOrigin: 'border-box', 
+              backgroundClip: 'padding-box, border-box',
+              boxShadow: '0 4px 12px rgba(194, 65, 12, 0.5)'
+            }}>
+              <div className="text-5xl mb-4">🗡️</div>
+              <h3 className="text-slate-50 text-2xl font-bold mb-4" style={{textShadow: '0 1px 2px rgba(0,0,0,0.5)'}}>Gather Your Party</h3>
+              <p className="text-slate-300 text-lg leading-relaxed font-medium">Invite your friends to Table-Top Tavern so they can create a character and join your campaign</p>
+            </div>
+            
+            <div className="p-12 rounded-xl text-center max-w-sm flex-1 min-w-[320px]" style={{
+              border: '2px solid transparent', 
+              backgroundImage: 'linear-gradient(#0f172a), linear-gradient(45deg, #dc2626, #d97706)', 
+              backgroundOrigin: 'border-box', 
+              backgroundClip: 'padding-box, border-box',
+              boxShadow: '0 4px 12px rgba(220, 38, 38, 0.5)'
+            }}>
+              <div className="text-5xl mb-4">🎉</div>
+              <h3 className="text-slate-50 text-2xl font-bold mb-4" style={{textShadow: '0 1px 2px rgba(0,0,0,0.5)'}}>Play!</h3>
+              <p className="text-slate-300 text-lg leading-relaxed font-medium">Together you can experience your D&D adventure tracking in real time, with roll prompts and live map updates and audio sharing across your party</p>
             </div>
           </div>
         </section>

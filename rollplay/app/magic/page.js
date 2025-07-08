@@ -5,7 +5,7 @@
 
 'use client'
 
-import { useState, useEffect, useCallback, memo } from 'react'
+import { useState, useEffect, memo } from 'react'
 import { useRouter } from "next/navigation"
 import OTPInput from './components/OTPInput'
 
@@ -143,8 +143,6 @@ export default function Magic() {
     return isValid
   }
 
-
-
   // Countdown Timer Component (isolated to prevent OTP re-renders)
   const CountdownTimer = memo(({ retryCountdown, isLoading, canRetry, onRetry }) => (
     <>
@@ -175,7 +173,6 @@ export default function Magic() {
       )}
     </>
   ))
-
 
   const handleOtpVerification = async (token) => {
     setIsLoading(true)
@@ -271,12 +268,6 @@ export default function Magic() {
         
         <nav className="nav-bar relative z-[2]">
           <div className="logo text-4xl">TABLETOP<span>TAVERN</span></div>
-          <button 
-            onClick={() => router.push('/')}
-            className="text-white hover:text-amber-300 transition-colors duration-200 text-base bg-none border-none cursor-pointer"
-          >
-            ← Back to Home
-          </button>
         </nav>
         
         <div className="relative z-[2] flex items-center justify-center p-8" 
@@ -301,8 +292,9 @@ export default function Magic() {
               </div>
             )}
 
+            {/* Email Form or Retry Section */}
             {!emailSent ? (
-              <div className="flex flex-col gap-6">
+              <div className="flex flex-col gap-4 mb-6">
                 {/* Email Form */}
                 <form onSubmit={handleSubmit} className="flex flex-col gap-4">
                   <div>
@@ -335,30 +327,9 @@ export default function Magic() {
                     {isLoading ? 'Sending Magic Link...' : 'Send Magic Link'}
                   </button>
                 </form>
-
-                {/* Divider */}
-                <div className="flex items-center my-2">
-                  <div className="flex-1 h-px bg-white/20"></div>
-                  <span className="px-4 text-white/50 text-sm">OR</span>
-                  <div className="flex-1 h-px bg-white/20"></div>
-                </div>
-
-              <p className="text-white/70 text-center text-base leading-relaxed">
-              If you already have a one-time passcode from an email, enter it below.
-              </p>
-
-                {/* OTP Form */}
-                <OTPInput
-                  helpText="💡 Enter the 6-character code from your email"
-                  onSubmit={handleOtpVerification}
-                  isLoading={isLoading}
-                  error={otpError}
-                  buttonText="Sign In with Code"
-                  buttonLoadingText="Verifying Code..."
-                />
               </div>
             ) : (
-              <div className="flex flex-col gap-6">
+              <div className="flex flex-col gap-4 mb-6">
                 {/* Retry Button with Countdown Timer */}
                 <CountdownTimer 
                   retryCountdown={retryCountdown}
@@ -366,29 +337,27 @@ export default function Magic() {
                   canRetry={canRetry}
                   onRetry={handleRetry}
                 />
-
-                {/* Divider */}
-                <div className="flex items-center my-2">
-                  <div className="flex-1 h-px bg-white/20"></div>
-                  <span className="px-4 text-white/50 text-sm">OR</span>
-                  <div className="flex-1 h-px bg-white/20"></div>
-                </div>
-
-                <p className="text-white/70 text-center text-base leading-relaxed">
-                If you already have a one-time passcode from an email, enter it below.
-                </p>
-
-                {/* OTP Form for the success modal */}
-                <OTPInput
-                  helpText="💡 Check your email for a 6-character code to sign in instantly"
-                  onSubmit={handleOtpVerification}
-                  isLoading={isLoading}
-                  error={otpError}
-                  buttonText="Sign In with Code"
-                  buttonLoadingText="Verifying Code..."
-                />
               </div>
             )}
+
+            {/* Divider */}
+            <div className="flex items-center my-2">
+              <div className="flex-1 h-px bg-white/20"></div>
+              <span className="px-4 text-white/50 text-sm">OR</span>
+              <div className="flex-1 h-px bg-white/20"></div>
+            </div>
+
+            <p className="text-white/70 text-center text-base leading-relaxed mb-4">
+              If you already have a one-time passcode from an email, enter it below.
+            </p>
+
+            {/* OTP Form - Always Available */}
+            <OTPInput
+              helpText="💡 Enter the 6-character code from your email"
+              onSubmit={handleOtpVerification}
+              isLoading={isLoading}
+              error={otpError}
+            />
 
             <div className="text-center mt-8 pt-6 border-t border-white/10">
               <p className="text-white/60 text-sm leading-relaxed">
