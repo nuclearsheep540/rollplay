@@ -1,4 +1,4 @@
-version: "3.8"
+version: "3.3"
 
 services:
     nginx:
@@ -10,26 +10,62 @@ services:
         - "80:80"
         - "443:443"
         depends_on:
-        - api
+        - api-game
+        - api-site
+        - api-auth
         - app
         networks:
         - default
-    api:
-        hostname: api
+    
+    api-game:
+        hostname: api-game
         stdin_open: true
         tty: true
         env_file:
             - .env
-        container_name: "api-dev"
+        container_name: "api-game-dev"
         build:
-            context: ./api
-            dockerfile: ../docker/dev/api/Dockerfile
+            context: ./api-game
+            dockerfile: ../docker/dev/api-game/Dockerfile
         ports: 
             - 8081:8081
         volumes:
-            - ./api:/api
+            - ./api-game:/api
+    
+    api-site:
+        hostname: api-site
+        stdin_open: true
+        tty: true
+        env_file:
+            - .env
+        container_name: "api-site-dev"
+        build:
+            context: ./api-site
+            dockerfile: Dockerfile
+        ports: 
+            - 8082:8082
+        volumes:
+            - ./api-site:/api
+
+    api-auth:
+        hostname: api-auth
+        stdin_open: true
+        tty: true
+        env_file:
+            - .env
+        container_name: "api-auth-dev"
+        build:
+            context: ./api-auth
+            dockerfile: Dockerfile
+        ports: 
+            - 8083:8083
+        volumes:
+            - ./api-auth:/app
+        depends_on:
+            - redis
+    
     app:
-        platform: linux/amd64
+        hostname: rollplay
         stdin_open: true
         tty: true
         env_file:
@@ -37,19 +73,22 @@ services:
         container_name: "rollplay-dev"
         build:
             context: ./rollplay
-            dockerfile: ../docker/dev/rollplay/Dockerfile.mac
+            dockerfile: ../docker/dev/rollplay/Dockerfile
         ports:
-        - "3000:3000"
+            - "3000:3000"
         volumes:
-        - ./rollplay:/rollplay
+            - ./rollplay:/app
+            - rollplay_node_modules:/app/node_modules
+        environment:
+            - NODE_ENV=development
 
-    db:
+    mongo:
         stdin_open: true
         tty: true
         restart: always
         env_file:
             - .env
-        container_name: "db-dev"
+        container_name: "mongo-dev"
         hostname: mongo
         build:
             context: ./docker
@@ -62,9 +101,23 @@ services:
         volumes:
         - db_data:/data/db
 
+    redis:
+        image: redis:7-alpine
+        container_name: "redis-dev"
+        hostname: redis
+        ports:
+        - "6379:6379"
+        command: redis-server --appendonly yes
+        volumes:
+        - redis_data:/data
+        networks:
+        - default
+
 networks:
   default:
     driver: bridge
 
 volumes:
   db_data:
+  redis_data:
+  rollplay_node_modules:

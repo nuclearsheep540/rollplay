@@ -45,10 +45,10 @@ export default async function PatchNotesPage({ params }) {
         {/* Header */}
         <div className="mb-8 text-center">
           <a 
-            href="/" 
+            href="/patch_notes" 
             className="inline-block bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg transition-colors mb-4"
           >
-            ← Back to Tabletop Tavern
+            ← Back to Patch Notes
           </a>
         </div>
 

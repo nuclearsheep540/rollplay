@@ -1,6 +1,6 @@
 FROM node:18
 
-WORKDIR /rollplay
+WORKDIR /app
 
 # Copy only the package files first
 COPY package*.json ./
