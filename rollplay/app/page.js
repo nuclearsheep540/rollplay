@@ -127,6 +127,7 @@ export default function Home() {
           <div className="footer-links" style={{textAlign: 'center', padding: '2rem 0'}}>
             <a href="#" style={{color: '#94a3b8', margin: '0 1rem', textDecoration: 'none', fontSize: '1rem', fontWeight: '500'}}>Terms of Service</a>
             <a href="#" style={{color: '#94a3b8', margin: '0 1rem', textDecoration: 'none', fontSize: '1rem', fontWeight: '500'}}>Privacy Policy</a>
+            <a href="/patch_notes" style={{color: '#94a3b8', margin: '0 1rem', textDecoration: 'none', fontSize: '1rem', fontWeight: '500'}}>Patch Notes</a>
             <a href="#" style={{color: '#94a3b8', margin: '0 1rem', textDecoration: 'none', fontSize: '1rem', fontWeight: '500'}}>Help Center</a>
           </div>
           <div className="px-6 py-6 auto space-y-6 overflow-hidden sm:px-6 lg:px-6">
