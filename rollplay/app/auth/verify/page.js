@@ -5,10 +5,10 @@
 
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useCallback, Suspense } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 
-export default function MagicLinkVerify() {
+function MagicLinkVerifyContent() {
   const router = useRouter()
   const searchParams = useSearchParams()
   const [status, setStatus] = useState('verifying') // 'verifying', 'success', 'error'
@@ -24,9 +24,9 @@ export default function MagicLinkVerify() {
     }
 
     verifyMagicLink(token)
-  }, [searchParams])
+  }, [searchParams, verifyMagicLink])
 
-  const verifyMagicLink = async (token) => {
+  const verifyMagicLink = useCallback(async (token) => {
     try {
       const response = await fetch(`/auth/verify/${token}`, {
         method: 'GET',
@@ -59,7 +59,7 @@ export default function MagicLinkVerify() {
       setStatus('error')
       setMessage('Invalid or expired magic link. Please request a new one.')
     }
-  }
+  }, [router])
 
   const handleBackToLogin = () => {
     router.push('/auth/magic')
@@ -128,5 +128,13 @@ export default function MagicLinkVerify() {
         </div>
       </div>
     </div>
+  )
+}
+
+export default function MagicLinkVerify() {
+  return (
+    <Suspense fallback={<div className="bg-slate-800 min-h-screen flex items-center justify-center"><div className="text-white text-xl">Loading...</div></div>}>
+      <MagicLinkVerifyContent />
+    </Suspense>
   )
 }
