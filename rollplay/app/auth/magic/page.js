@@ -173,6 +173,8 @@ export default function Magic() {
       )}
     </>
   ))
+  
+  CountdownTimer.displayName = 'CountdownTimer'
 
   const handleOtpVerification = async (token) => {
     setIsLoading(true)
