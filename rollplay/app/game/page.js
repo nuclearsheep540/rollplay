@@ -250,21 +250,53 @@ function GameContent() {
     await loadActiveMap(roomId);
   }
   
-  // Check player roles
+  // Check player roles - now validates DM status against PostgreSQL campaign data
   const checkPlayerRoles = async (roomId, playerName) => {
     try {
       console.log(`🔍 Checking roles for player: ${playerName} in room: ${roomId}`);
-      const response = await fetch(`/api/game/${roomId}/roles?playerName=${playerName}`);
-      if (response.ok) {
-        const roles = await response.json();
-        console.log('📋 Received roles:', roles);
-        setIsHost(roles.is_host);
-        setIsModerator(roles.is_moderator);
-        setIsDM(roles.is_dm);
-        console.log(`✅ Set roles - Host: ${roles.is_host}, Moderator: ${roles.is_moderator}, DM: ${roles.is_dm}`);
+      
+      // Get MongoDB-based roles (host, moderator) 
+      const mongoRolesResponse = await fetch(`/api/game/${roomId}/roles?playerName=${playerName}`);
+      let isHost = false;
+      let isModerator = false;
+      
+      if (mongoRolesResponse.ok) {
+        const mongoRoles = await mongoRolesResponse.json();
+        isHost = mongoRoles.is_host;
+        isModerator = mongoRoles.is_moderator;
+        console.log('📋 Received MongoDB roles:', mongoRoles);
       } else {
-        console.error('❌ Failed to fetch roles:', response.status, response.statusText);
+        console.error('❌ Failed to fetch MongoDB roles:', mongoRolesResponse.status);
       }
+      
+      // Get PostgreSQL-based DM status
+      let isDMRole = false;
+      try {
+        const dmStatusResponse = await fetch(`/api/games/${roomId}/dm-status`, {
+          method: 'GET',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          credentials: 'include'
+        });
+        
+        if (dmStatusResponse.ok) {
+          const dmStatus = await dmStatusResponse.json();
+          isDMRole = dmStatus.is_dm;
+          console.log('🎭 PostgreSQL DM status:', dmStatus);
+        } else {
+          console.error('❌ Failed to fetch DM status:', dmStatusResponse.status);
+        }
+      } catch (error) {
+        console.error('Error checking DM status:', error);
+      }
+      
+      // Set all roles
+      setIsHost(isHost);
+      setIsModerator(isModerator);
+      setIsDM(isDMRole);
+      console.log(`✅ Set roles - Host: ${isHost}, Moderator: ${isModerator}, DM: ${isDMRole}`);
+      
     } catch (error) {
       console.error('Error checking player roles:', error);
     }

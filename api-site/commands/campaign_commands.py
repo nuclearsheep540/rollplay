@@ -40,3 +40,14 @@ class GetCampaignGames:
         """Execute the command to get campaign's games"""
         games = self.campaign_service.get_campaign_games(campaign_id)
         return games
+
+class DeleteCampaign:
+    """Command to soft delete a campaign"""
+    
+    def __init__(self, db: Session):
+        self.campaign_service = CampaignService(db)
+    
+    def execute(self, campaign_id: UUID) -> bool:
+        """Execute the command to soft delete a campaign"""
+        campaign = self.campaign_service.soft_delete_campaign(campaign_id)
+        return campaign is not None

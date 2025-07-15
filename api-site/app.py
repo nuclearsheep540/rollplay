@@ -10,12 +10,12 @@ import logging
 from uuid import UUID
 from config.settings import Settings
 from models.base import get_db
-from commands.user_commands import GetOrCreateUser, AddTempGameId
+from commands.user_commands import GetOrCreateUser, AddTempGameId, UpdateScreenName
 from commands.character_commands import GetUserCharacters
-from commands.campaign_commands import GetUserCampaigns, CreateCampaign, GetCampaignGames
+from commands.campaign_commands import GetUserCampaigns, CreateCampaign, GetCampaignGames, DeleteCampaign
 from commands.game_commands import GetUserGames, CreateGame, StartGame, EndGame
 from commands.friendship_commands import SendFriendRequest, AcceptFriendRequest, RejectFriendRequest, RemoveFriend, GetFriendsList, GetPendingFriendRequests, GetSentFriendRequests
-from schemas.user_schemas import UserResponse
+from schemas.user_schemas import UserResponse, ScreenNameUpdate
 from schemas.character_schemas import CharacterResponse
 from schemas.campaign_schemas import CampaignResponse, CampaignCreate
 from schemas.game_schemas import GameResponse, GameCreate
@@ -150,6 +150,36 @@ async def add_temp_game_id(
         # Business logic errors
         raise HTTPException(status_code=400, detail=str(e))
 
+@app.put("/api/users/screen-name", response_model=UserResponse)
+async def update_screen_name(
+    screen_name_data: ScreenNameUpdate,
+    db: Session = Depends(get_db),
+    authenticated_email: str = Depends(verify_auth_token)
+):
+    """
+    Update the authenticated user's screen name.
+    
+    Returns:
+        UserResponse: Updated user data
+    """
+    try:
+        # Get user first to get user ID
+        user_command = GetOrCreateUser(db)
+        user, _ = user_command.execute(authenticated_email)
+        
+        # Update screen name
+        update_command = UpdateScreenName(db)
+        updated_user = update_command.execute(user.id, screen_name_data.screen_name)
+        
+        if updated_user:
+            return UserResponse.from_orm(updated_user)
+        else:
+            raise HTTPException(status_code=404, detail="User not found")
+            
+    except ValueError as e:
+        # Business logic errors (validation, uniqueness)
+        raise HTTPException(status_code=400, detail=str(e))
+
 # Character endpoints
 
 @app.get("/api/characters/", response_model=list[CharacterResponse])
@@ -261,6 +291,100 @@ async def get_campaign_games(
         games = games_command.execute(campaign_id)
         
         return [GameResponse.from_orm(game) for game in games]
+    except ValueError as e:
+        # Business logic errors
+        raise HTTPException(status_code=400, detail=str(e))
+
+@app.delete("/api/campaigns/{campaign_id}")
+async def delete_campaign(
+    campaign_id: UUID,
+    db: Session = Depends(get_db),
+    authenticated_email: str = Depends(verify_auth_token)
+):
+    """
+    Soft delete a campaign.
+    
+    Returns:
+        Success message
+    """
+    try:
+        # Get user first to verify ownership
+        user_command = GetOrCreateUser(db)
+        user, _ = user_command.execute(authenticated_email)
+        
+        # Verify user owns the campaign
+        campaigns_command = GetUserCampaigns(db)
+        user_campaigns = campaigns_command.execute(user.id)
+        
+        if not any(campaign.id == campaign_id for campaign in user_campaigns):
+            raise HTTPException(status_code=403, detail="You can only delete your own campaigns")
+        
+        # Delete the campaign
+        delete_command = DeleteCampaign(db)
+        success = delete_command.execute(campaign_id)
+        
+        if success:
+            return {"message": "Campaign deleted successfully"}
+        else:
+            raise HTTPException(status_code=404, detail="Campaign not found")
+            
+    except ValueError as e:
+        # Business logic errors
+        raise HTTPException(status_code=400, detail=str(e))
+
+@app.get("/api/games/{game_id}/dm-status")
+async def check_dm_status(
+    game_id: UUID,
+    db: Session = Depends(get_db),
+    authenticated_email: str = Depends(verify_auth_token)
+):
+    """
+    Check if the authenticated user is the DM of the specified game.
+    
+    Returns:
+        dict: {"is_dm": bool, "game_id": str, "campaign_id": str}
+    """
+    try:
+        # Get user first to get user ID
+        user_command = GetOrCreateUser(db)
+        user, _ = user_command.execute(authenticated_email)
+        
+        # Get game by ID
+        game_command = GetUserGames(db)
+        user_games = game_command.execute(user.id)
+        
+        # Find the specific game
+        target_game = None
+        for game in user_games:
+            if game.id == game_id:
+                target_game = game
+                break
+        
+        if not target_game:
+            # Check if game exists but user is not DM
+            from services.game_service import GameService
+            game_service = GameService(db)
+            game = game_service.get_game_by_id(game_id)
+            
+            if game:
+                # Game exists but user is not the DM
+                return {
+                    "is_dm": False,
+                    "game_id": str(game_id),
+                    "campaign_id": str(game.campaign_id)
+                }
+            else:
+                raise HTTPException(status_code=404, detail="Game not found")
+        
+        # Check if user is the DM
+        is_dm = target_game.dm_id == user.id
+        
+        return {
+            "is_dm": is_dm,
+            "game_id": str(game_id),
+            "campaign_id": str(target_game.campaign_id)
+        }
+        
     except ValueError as e:
         # Business logic errors
         raise HTTPException(status_code=400, detail=str(e))

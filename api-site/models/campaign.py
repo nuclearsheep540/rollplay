@@ -1,7 +1,7 @@
 # Copyright (C) 2025 Matthew Davey
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-from sqlalchemy import Column, String, DateTime, ForeignKey
+from sqlalchemy import Column, String, DateTime, ForeignKey, Boolean
 from sqlalchemy.orm import relationship
 from sqlalchemy.dialects.postgresql import UUID
 from datetime import datetime
@@ -17,6 +17,10 @@ class Campaign(Base):
     description = Column(String, nullable=True)
     dm_id = Column(UUID(as_uuid=True), ForeignKey("users.id"))
     status = Column(String, default="active")  # active, paused, completed
+    
+    # Soft delete
+    deleted_at = Column(DateTime, nullable=True)
+    is_deleted = Column(Boolean, default=False)
     
     # Timestamps
     created_at = Column(DateTime, default=datetime.utcnow)

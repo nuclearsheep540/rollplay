@@ -5,11 +5,12 @@
 
 'use client'
 
-import { useState, useEffect } from 'react'
-import { useRouter } from 'next/navigation'
+import { useState, useEffect, useCallback, Suspense } from 'react'
+import { useRouter, useSearchParams } from 'next/navigation'
 
-export default function Dashboard() {
+function DashboardContent() {
   const router = useRouter()
+  const searchParams = useSearchParams()
   const [activeSection, setActiveSection] = useState('characters')
   const [user, setUser] = useState(null)
   const [characters, setCharacters] = useState([])
@@ -17,7 +18,27 @@ export default function Dashboard() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
   const [creatingCampaign, setCreatingCampaign] = useState(false)
+  const [showCampaignModal, setShowCampaignModal] = useState(false)
+  const [campaignName, setCampaignName] = useState('')
+  const [deletingCampaign, setDeletingCampaign] = useState(null)
+  const [screenName, setScreenName] = useState('')
+  const [updatingScreenName, setUpdatingScreenName] = useState(false)
+  const [showScreenNameModal, setShowScreenNameModal] = useState(false)
 
+  // Initialize activeSection from URL parameter - run only once on mount
+  useEffect(() => {
+    const tabParam = searchParams.get('tab')
+    if (tabParam && ['characters', 'campaigns', 'profile'].includes(tabParam)) {
+      setActiveSection(tabParam)
+    } else if (!tabParam) {
+      // If no tab parameter, set default and update URL
+      const current = new URLSearchParams(Array.from(searchParams.entries()))
+      current.set('tab', 'characters')
+      const search = current.toString()
+      router.replace(`/dashboard?${search}`)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []) // Intentionally empty - only run on mount
 
   // Fetch characters from API
   const fetchCharacters = async () => {
@@ -67,9 +88,15 @@ export default function Dashboard() {
     }
   }
 
+  // Show campaign creation modal
+  const handleCreateCampaign = () => {
+    setCampaignName('')
+    setShowCampaignModal(true)
+  }
+
   // Create a new campaign using proper PostgreSQL-first flow
   const createCampaign = async () => {
-    if (!user) return
+    if (!user || !campaignName.trim()) return
     
     setCreatingCampaign(true)
     setError(null)
@@ -77,7 +104,7 @@ export default function Dashboard() {
     try {
       // Step 1: Create a campaign in PostgreSQL
       const campaignData = {
-        name: `Campaign ${new Date().toLocaleDateString()}`,
+        name: campaignName.trim(),
         description: `Campaign created on ${new Date().toLocaleDateString()}`
       }
 
@@ -146,13 +173,81 @@ export default function Dashboard() {
       // Refresh the campaigns list
       await fetchCampaigns()
       
-      // Show success message
-      alert('Campaign created successfully!')
+      // Close modal and show success
+      setShowCampaignModal(false)
+      setCampaignName('')
     } catch (error) {
       console.error('Error creating campaign:', error)
       setError('Failed to create campaign: ' + error.message)
     } finally {
       setCreatingCampaign(false)
+    }
+  }
+
+  // Delete a campaign
+  const deleteCampaign = async (campaignId, campaignName) => {
+    if (!confirm(`Are you sure you want to delete "${campaignName}"? This action cannot be undone.`)) {
+      return
+    }
+
+    setDeletingCampaign(campaignId)
+    setError(null)
+
+    try {
+      const response = await fetch(`/api/campaigns/${campaignId}`, {
+        method: 'DELETE',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        credentials: 'include'
+      })
+
+      if (response.ok) {
+        // Refresh the campaigns list
+        await fetchCampaigns()
+      } else {
+        const errorData = await response.json()
+        setError(errorData.detail || 'Failed to delete campaign')
+      }
+    } catch (error) {
+      console.error('Error deleting campaign:', error)
+      setError('Failed to delete campaign')
+    } finally {
+      setDeletingCampaign(null)
+    }
+  }
+
+  // Update screen name
+  const updateScreenName = async () => {
+    if (!screenName.trim()) return
+
+    setUpdatingScreenName(true)
+    setError(null)
+
+    try {
+      const response = await fetch('/api/users/screen-name', {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        credentials: 'include',
+        body: JSON.stringify({ screen_name: screenName.trim() })
+      })
+
+      if (response.ok) {
+        const updatedUser = await response.json()
+        setUser(updatedUser)
+        setShowScreenNameModal(false)
+        setScreenName('')
+      } else {
+        const errorData = await response.json()
+        setError(errorData.detail || 'Failed to update screen name')
+      }
+    } catch (error) {
+      console.error('Error updating screen name:', error)
+      setError('Failed to update screen name')
+    } finally {
+      setUpdatingScreenName(false)
     }
   }
 
@@ -171,6 +266,11 @@ export default function Dashboard() {
         if (userResponse.ok) {
           const userData = await userResponse.json()
           setUser(userData)
+          
+          // Check if user needs to set a screen name
+          if (!userData.screen_name) {
+            setShowScreenNameModal(true)
+          }
           
           // Once user is authenticated, fetch characters and campaigns
           await Promise.all([
@@ -221,6 +321,14 @@ export default function Dashboard() {
 
   const switchSection = (targetId) => {
     setActiveSection(targetId)
+    
+    // Update URL with tab parameter
+    const current = new URLSearchParams(Array.from(searchParams.entries()))
+    current.set('tab', targetId)
+    const search = current.toString()
+    const query = search ? `?${search}` : ''
+    
+    router.push(`/dashboard${query}`)
   }
 
   const renderCharacters = () => {
@@ -315,7 +423,7 @@ export default function Dashboard() {
               <p className="text-slate-500 text-xs mt-1">Created: {campaign.created_at ? new Date(campaign.created_at).toLocaleDateString() : 'Unknown'}</p>
             </div>
           </div>
-          <div className="flex-shrink-0">
+          <div className="flex-shrink-0 flex space-x-2">
             <button 
               onClick={async () => {
                 try {
@@ -357,9 +465,22 @@ export default function Dashboard() {
                   setError('Failed to enter room')
                 }
               }}
-              className="w-full text-center bg-indigo-600 text-white font-semibold px-4 py-2 rounded-lg shadow-md hover:bg-indigo-700 transition-colors duration-200"
+              className="bg-indigo-600 text-white font-semibold px-4 py-2 rounded-lg shadow-md hover:bg-indigo-700 transition-colors duration-200"
             >
               Enter Room
+            </button>
+            
+            <button 
+              onClick={() => deleteCampaign(campaign.id, campaign.name)}
+              disabled={deletingCampaign === campaign.id}
+              className={`px-3 py-2 rounded-lg shadow-md transition-colors duration-200 ${
+                deletingCampaign === campaign.id
+                  ? 'bg-red-300 text-red-700 cursor-not-allowed'
+                  : 'bg-red-600 text-white hover:bg-red-700'
+              }`}
+              title="Delete Campaign"
+            >
+              {deletingCampaign === campaign.id ? '⏳' : '🗑️'}
             </button>
           </div>
         </div>
@@ -473,7 +594,7 @@ export default function Dashboard() {
               </div>
               <div className="flex justify-end items-center mb-6 space-x-4">
                 <button 
-                  onClick={createCampaign}
+                  onClick={handleCreateCampaign}
                   disabled={creatingCampaign}
                   className={`font-semibold px-5 py-3 rounded-xl shadow-md transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-slate-500 focus:ring-offset-2 flex items-center ${
                     creatingCampaign 
@@ -515,11 +636,13 @@ export default function Dashboard() {
                   <h3 className="text-xl font-semibold text-slate-700 mb-4">Account Settings</h3>
                   <div className="space-y-4">
                     <div>
-                      <label htmlFor="username" className="block text-sm font-medium text-slate-700 mb-1">Username</label>
+                      <label htmlFor="screenName" className="block text-sm font-medium text-slate-700 mb-1">Screen Name</label>
                       <input 
                         type="text" 
-                        id="username" 
-                        defaultValue={user.screen_name || user.email.split('@')[0]}
+                        id="screenName" 
+                        value={screenName || user.screen_name || ''}
+                        onChange={(e) => setScreenName(e.target.value)}
+                        placeholder={user.screen_name || "Enter your screen name"}
                         className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:outline-none"
                       />
                     </div>
@@ -534,8 +657,16 @@ export default function Dashboard() {
                     </div>
                   </div>
                   <div className="flex justify-end mt-6">
-                    <button className="bg-indigo-600 text-white font-semibold px-6 py-3 rounded-xl shadow-md hover:bg-indigo-700 transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2">
-                      Save Changes
+                    <button 
+                      onClick={updateScreenName}
+                      disabled={updatingScreenName || !screenName.trim() || screenName === user.screen_name}
+                      className={`font-semibold px-6 py-3 rounded-xl shadow-md transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 ${
+                        updatingScreenName || !screenName.trim() || screenName === user.screen_name
+                          ? 'bg-slate-300 text-slate-500 cursor-not-allowed'
+                          : 'bg-indigo-600 text-white hover:bg-indigo-700'
+                      }`}
+                    >
+                      {updatingScreenName ? 'Saving...' : 'Save Changes'}
                     </button>
                   </div>
                 </div>
@@ -544,6 +675,129 @@ export default function Dashboard() {
           )}
         </main>
       </div>
+
+      {/* Campaign Creation Modal */}
+      {showCampaignModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg p-6 w-full max-w-md mx-4">
+            <h3 className="text-xl font-bold text-slate-800 mb-4">Create New Campaign</h3>
+            
+            <div className="mb-4">
+              <label htmlFor="campaignName" className="block text-sm font-medium text-slate-700 mb-2">
+                Campaign Name
+              </label>
+              <input
+                type="text"
+                id="campaignName"
+                value={campaignName}
+                onChange={(e) => setCampaignName(e.target.value)}
+                placeholder="Enter campaign name..."
+                className="w-full px-3 py-2 border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+                disabled={creatingCampaign}
+                onKeyPress={(e) => {
+                  if (e.key === 'Enter' && campaignName.trim()) {
+                    createCampaign()
+                  }
+                }}
+              />
+            </div>
+
+            {error && (
+              <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-md">
+                <p className="text-red-700 text-sm">{error}</p>
+              </div>
+            )}
+
+            <div className="flex justify-end space-x-3">
+              <button
+                onClick={() => {
+                  setShowCampaignModal(false)
+                  setCampaignName('')
+                  setError(null)
+                }}
+                disabled={creatingCampaign}
+                className="px-4 py-2 text-slate-600 hover:text-slate-800 transition-colors disabled:opacity-50"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={createCampaign}
+                disabled={creatingCampaign || !campaignName.trim()}
+                className={`px-4 py-2 rounded-md font-semibold transition-colors focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 ${
+                  creatingCampaign || !campaignName.trim()
+                    ? 'bg-slate-200 text-slate-500 cursor-not-allowed'
+                    : 'bg-indigo-600 text-white hover:bg-indigo-700'
+                }`}
+              >
+                {creatingCampaign ? 'Creating...' : 'Create Campaign'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Screen Name Setup Modal */}
+      {showScreenNameModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg p-6 w-full max-w-md mx-4">
+            <div className="text-center mb-6">
+              <h3 className="text-2xl font-bold text-slate-800 mb-2">Welcome to Tabletop Tavern! 🎲</h3>
+              <p className="text-slate-600">To get started, please choose a screen name that other players will see.</p>
+            </div>
+            
+            <div className="mb-4">
+              <label htmlFor="newScreenName" className="block text-sm font-medium text-slate-700 mb-2">
+                Choose Your Screen Name
+              </label>
+              <input
+                type="text"
+                id="newScreenName"
+                value={screenName}
+                onChange={(e) => setScreenName(e.target.value)}
+                placeholder="Enter your screen name..."
+                className="w-full px-3 py-2 border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+                disabled={updatingScreenName}
+                onKeyPress={(e) => {
+                  if (e.key === 'Enter' && screenName.trim()) {
+                    updateScreenName()
+                  }
+                }}
+              />
+              <p className="text-xs text-slate-500 mt-1">You can change this later in your profile settings.</p>
+            </div>
+
+            {error && (
+              <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-md">
+                <p className="text-red-700 text-sm">{error}</p>
+              </div>
+            )}
+
+            <div className="flex justify-center">
+              <button
+                onClick={updateScreenName}
+                disabled={updatingScreenName || !screenName.trim()}
+                className={`px-6 py-2 rounded-md font-semibold transition-colors focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 ${
+                  updatingScreenName || !screenName.trim()
+                    ? 'bg-slate-200 text-slate-500 cursor-not-allowed'
+                    : 'bg-indigo-600 text-white hover:bg-indigo-700'
+                }`}
+              >
+                {updatingScreenName ? 'Setting up...' : 'Continue'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
+  )
+}
+
+export default function Dashboard() {
+  return (
+    <Suspense fallback={<div className="min-h-screen bg-slate-50 flex items-center justify-center">
+      <div className="text-slate-600">Loading...</div>
+    </div>}>
+      <DashboardContent />
+    </Suspense>
   )
 }

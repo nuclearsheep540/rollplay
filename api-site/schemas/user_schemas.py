@@ -21,3 +21,12 @@ class UserResponse(BaseModel):
 class UserCreate(BaseModel):
     """Schema for creating a new user"""
     email: EmailStr
+
+class ScreenNameUpdate(BaseModel):
+    """Schema for updating user's screen name"""
+    screen_name: str
+    
+    class Config:
+        # Validation
+        min_anystr_length = 1
+        max_anystr_length = 50

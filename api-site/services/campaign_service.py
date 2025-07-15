@@ -14,8 +14,11 @@ class CampaignService:
         self.db = db
     
     def get_campaigns_by_user_id(self, user_id: UUID) -> List[Campaign]:
-        """Get campaigns where user is DM"""
-        return self.db.query(Campaign).filter(Campaign.dm_id == user_id).all()
+        """Get campaigns where user is DM (excluding deleted)"""
+        return self.db.query(Campaign).filter(
+            Campaign.dm_id == user_id,
+            Campaign.is_deleted == False
+        ).all()
     
     def create_campaign(self, dm_id: UUID, name: str, description: str = None) -> Campaign:
         """Create new campaign"""
@@ -34,5 +37,23 @@ class CampaignService:
         return self.db.query(Game).filter(Game.campaign_id == campaign_id).all()
     
     def get_campaign_by_id(self, campaign_id: UUID) -> Optional[Campaign]:
-        """Get campaign by ID"""
-        return self.db.query(Campaign).filter(Campaign.id == campaign_id).first()
+        """Get campaign by ID (excluding deleted)"""
+        return self.db.query(Campaign).filter(
+            Campaign.id == campaign_id,
+            Campaign.is_deleted == False
+        ).first()
+    
+    def soft_delete_campaign(self, campaign_id: UUID) -> Optional[Campaign]:
+        """Soft delete a campaign"""
+        from datetime import datetime
+        
+        campaign = self.db.query(Campaign).filter(Campaign.id == campaign_id).first()
+        if not campaign:
+            return None
+            
+        campaign.is_deleted = True
+        campaign.deleted_at = datetime.utcnow()
+        
+        self.db.commit()
+        self.db.refresh(campaign)
+        return campaign

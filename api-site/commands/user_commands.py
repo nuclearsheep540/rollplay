@@ -50,3 +50,25 @@ class AddTempGameId:
     def execute(self, user_id: UUID, game_id: str) -> Optional[User]:
         """Add a temporary game ID to user's list"""
         return self.user_service.add_temp_game_id(user_id, game_id)
+
+class UpdateScreenName:
+    """Command to update a user's screen name"""
+    
+    def __init__(self, db: Session):
+        self.db = db
+        self.user_service = UserService(db)
+    
+    def execute(self, user_id: UUID, screen_name: str) -> Optional[User]:
+        """Update user's screen name"""
+        # Validate screen name (basic validation)
+        if not screen_name or not screen_name.strip():
+            raise ValueError("Screen name cannot be empty")
+        
+        screen_name = screen_name.strip()
+        
+        # Check if screen name is already taken
+        existing_user = self.db.query(User).filter(User.screen_name == screen_name, User.id != user_id).first()
+        if existing_user:
+            raise ValueError("Screen name is already taken")
+        
+        return self.user_service.update_screen_name(user_id, screen_name)

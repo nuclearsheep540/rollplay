@@ -42,3 +42,12 @@ class UserService:
                 self.db.commit()
                 self.db.refresh(user)
         return user
+    
+    def update_screen_name(self, user_id: UUID, screen_name: str) -> Optional[User]:
+        """Update user's screen name"""
+        user = self.db.query(User).filter(User.id == user_id).first()
+        if user:
+            user.screen_name = screen_name
+            self.db.commit()
+            self.db.refresh(user)
+        return user
