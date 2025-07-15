@@ -12,22 +12,9 @@ export default function Dashboard() {
   const router = useRouter()
   const [activeSection, setActiveSection] = useState('characters')
   const [user, setUser] = useState(null)
-
-  // Mock data - replace with actual API calls
-  const mockCharacters = [
-    { name: 'Kaelen', race: 'Sun Elf', class: 'Wizard', level: 8, lastPlayed: '2 days ago', campaign: 'The Dragon\'s Demise' },
-    { name: 'Grom', race: 'Half-Orc', class: 'Barbarian', level: 7, lastPlayed: '5 days ago', campaign: 'Shadows over Silver-reach' },
-    { name: 'Lyra', race: 'Halfling', class: 'Rogue', level: 7, lastPlayed: '1 week ago', campaign: 'The Dragon\'s Demise' },
-    { name: 'Seraphina', race: 'Aasimar', class: 'Cleric', level: 8, lastPlayed: '3 days ago', campaign: 'Curse of the Crimson Throne' },
-    { name: 'Borg', race: 'Dwarf', class: 'Fighter', level: 7, lastPlayed: '1 day ago', campaign: 'Shadows over Silver-reach' },
-    { name: 'Elara', race: 'Human', class: 'Bard', level: 6, lastPlayed: '4 days ago', campaign: 'The Dragon\'s Demise' },
-  ]
-
-  const mockCampaigns = [
-    { name: 'The Dragon\'s Demise', gm: 'DM Dave', status: 'Active' },
-    { name: 'Shadows over Silver-reach', gm: 'GM Jane', status: 'Active' },
-    { name: 'Curse of the Crimson Throne', gm: 'DM Dave', status: 'Inactive' },
-  ]
+  const [characters, setCharacters] = useState([])
+  const [campaigns, setCampaigns] = useState([])
+  const [loading, setLoading] = useState(true)
 
   useEffect(() => {
     const checkAuthenticationAndGetUser = async () => {

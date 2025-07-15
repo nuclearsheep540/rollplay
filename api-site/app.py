@@ -10,7 +10,11 @@ import logging
 from config.settings import Settings
 from models.base import get_db
 from commands.user_commands import GetOrCreateUser
+from commands.character_commands import GetUserCharacters
+from commands.campaign_commands import GetUserCampaigns
 from schemas.user_schemas import UserResponse
+from schemas.character_schemas import CharacterResponse
+from schemas.campaign_schemas import CampaignResponse
 from sqlalchemy.orm import Session
 from auth.jwt_helper import JWTHelper
 
@@ -108,6 +112,70 @@ async def get_or_create_user(
         command = GetOrCreateUser(db)
         user, was_created = command.execute(authenticated_email)
         return UserResponse.from_orm(user)
+    except ValueError as e:
+        # Business logic errors
+        raise HTTPException(status_code=400, detail=str(e))
+
+# Character endpoints
+
+@app.get("/api/characters/", response_model=list[CharacterResponse])
+async def get_user_characters(
+    db: Session = Depends(get_db),
+    authenticated_email: str = Depends(verify_auth_token)
+):
+    """
+    Get all characters for the authenticated user.
+    
+    This endpoint:
+    - Validates auth token and gets user email
+    - Looks up user by email to get user ID
+    - Returns all characters belonging to that user
+    
+    Returns:
+        List[CharacterResponse]: List of user's characters
+    """
+    try:
+        # Get user first to get user ID
+        user_command = GetOrCreateUser(db)
+        user, _ = user_command.execute(authenticated_email)
+        
+        # Get user's characters
+        characters_command = GetUserCharacters(db)
+        characters = characters_command.execute(user.id)
+        
+        return [CharacterResponse.from_orm(char) for char in characters]
+    except ValueError as e:
+        # Business logic errors
+        raise HTTPException(status_code=400, detail=str(e))
+
+# Campaign endpoints
+
+@app.get("/api/campaigns/", response_model=list[CampaignResponse])
+async def get_user_campaigns(
+    db: Session = Depends(get_db),
+    authenticated_email: str = Depends(verify_auth_token)
+):
+    """
+    Get all campaigns for the authenticated user.
+    
+    This endpoint:
+    - Validates auth token and gets user email
+    - Looks up user by email to get user ID
+    - Returns all campaigns where user is DM or player
+    
+    Returns:
+        List[CampaignResponse]: List of user's campaigns
+    """
+    try:
+        # Get user first to get user ID
+        user_command = GetOrCreateUser(db)
+        user, _ = user_command.execute(authenticated_email)
+        
+        # Get user's campaigns
+        campaigns_command = GetUserCampaigns(db)
+        campaigns = campaigns_command.execute(user.id)
+        
+        return [CampaignResponse.from_orm(campaign) for campaign in campaigns]
     except ValueError as e:
         # Business logic errors
         raise HTTPException(status_code=400, detail=str(e))
