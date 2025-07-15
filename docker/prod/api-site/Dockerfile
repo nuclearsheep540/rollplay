@@ -1,11 +1,29 @@
-FROM python:3.8.12
+# Copyright (C) 2025 Matthew Davey
+# SPDX-License-Identifier: GPL-3.0-or-later
 
-RUN mkdir /api
-COPY . /api
+FROM python:3.11-slim
 
-WORKDIR /api
-RUN pip install --upgrade pip
-RUN pip install --upgrade -r requirements.txt
-RUN pip install pyyaml
+WORKDIR /app
 
-CMD ["uvicorn", "app:app", "--host", "0.0.0.0", "--port", "8082", "--reload", "--log-config", "./config/log_conf.yaml"]
+# Install system dependencies
+RUN apt-get update && apt-get install -y \
+    gcc \
+    curl \
+    && rm -rf /var/lib/apt/lists/*
+
+# Copy requirements first for better caching
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+
+# Copy source code
+COPY . .
+
+# Expose port
+EXPOSE 8082
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
+    CMD curl -f http://localhost:8082/health || exit 1
+
+# Run the application (no reload in production)
+CMD ["uvicorn", "app:app", "--host", "0.0.0.0", "--port", "8082"]

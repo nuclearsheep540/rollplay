@@ -81,7 +81,7 @@ class GameService:
             
             # Call api-game to create the active session with specific ID
             response = requests.post(
-                f"http://api-game-dev:8081/game/{game.id}",
+                f"http://api-game:8081/game/{game.id}",
                 json=active_session_data,
                 headers={"Content-Type": "application/json"}
             )

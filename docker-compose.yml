@@ -126,6 +126,32 @@ services:
     networks:
       - default
 
+  postgres:
+    container_name: "postgres"
+    hostname: postgres
+    image: ghcr.io/nuclearsheep540/rollplay/postgres:${postgres_version}
+    build:
+      context: ./docker
+      dockerfile: prod/postgres/Dockerfile
+      args:
+        POSTGRES_USER: ${POSTGRES_USER}
+        POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+        POSTGRES_DB: rollplay
+        APP_DB_PASSWORD: ${APP_DB_PASSWORD}
+    env_file:
+      - .env
+    environment:
+      POSTGRES_DB: rollplay
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    restart: unless-stopped
+    networks:
+      - default
+
   certbot-renewer:
     image: ghcr.io/nuclearsheep540/rollplay/certbot:${certbot_version}
     build:
@@ -148,5 +174,6 @@ networks:
 volumes:
   db_data:
   redis_data:
+  postgres_data:
   certbot_data:
   certbot_www:
