@@ -17,10 +17,10 @@ class GameSettings(BaseModel):
     max_players: int
     seat_layout: list
     created_at: datetime
-    room_host: str
     seat_colors: dict
     moderators: list = []
     dungeon_master: str = ""
+    room_host: str = dungeon_master
     
     def __init__(self, **data):
         # Lowercase the room_host and any names in seat_layout

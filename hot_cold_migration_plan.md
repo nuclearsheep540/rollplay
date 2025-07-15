@@ -51,33 +51,38 @@ INACTIVE → STARTING → ACTIVE → CLOSING → INACTIVE
 
 ```sql
 -- Campaign data with atomic state configuration
-campaigns:
+campaign:
 - id (UUID)
 - name (String)
 - description (String)
 - dm_id (UUID)
-- party_members (JSON) -- List of invited user_ids with character assignments
+- invited_players (JSON) -- List of invited user_ids with character assignments
 - moderators (JSON) -- List of user_ids with moderator permissions
-- available_maps (JSON) -- List of map_ids available for this campaign
-- audio_presets (JSON) -- Named audio configurations
+- maps (JSON) -- List of map_ids available for this campaign
+- audio (JSON) -- Named audio configurations
+- media (JSON) -- Static media for non-combat story telling and immersion
+- scenes(JSON) -- Collection of preset linked audio and media, think of a library of presets
 - created_at (DateTime)
 - updated_at (DateTime)
 - is_deleted (Boolean)
 - deleted_at (DateTime)
 
 -- Game instance (one-to-one relationship with campaigns)
-games:
+game:
 - id (UUID)
 - campaign_id (UUID) -- FK to campaigns (one-to-one)
 - name (String) -- Game instance name
 - dm_id (UUID) -- FK to users.id
-- status (ENUM: 'inactive', 'starting', 'active', 'closing')
-- max_players (Integer, default 8)
+- status (ENUM: 'inactive', 'starting', 'active', 'stopping')
 - current_session_number (Integer, default 1)
 - total_play_time (Integer, default 0) -- Total minutes played
 - started_at (DateTime)
 - ended_at (DateTime)
 - last_activity_at (DateTime)
+- location (String) -- Current in-game location
+- party (JSON) -- List of user_ids who actually played in this game session
+- max_players (Integer, default 8)
+- adventure_logs (JSON) -- Chat messages, dice rolls, system events from this game session
 ```
 
 ### MongoDB (Hot Storage)
@@ -86,12 +91,13 @@ games:
 active_sessions: {
   _id: "game_id", // Same as PostgreSQL games.id
   campaign_id: "uuid",
-  session_name: "string",
+  name: "string", // Game instance name
   dm_id: "uuid", // DM is always the host
+  location: "string", // Current in-game location
   
   // Real-time game state
-  seats: [...],
-  party: [...],
+  seats: [...], // Current seat assignments during gameplay
+  party: [...], // Players who actually joined this game session
   seat_colors: {...},
   moderators: [...], // Additional moderators beyond DM
   
