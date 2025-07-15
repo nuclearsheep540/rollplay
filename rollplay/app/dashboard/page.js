@@ -30,35 +30,40 @@ export default function Dashboard() {
   ]
 
   useEffect(() => {
-    const checkAuthentication = async () => {
+    const checkAuthenticationAndGetUser = async () => {
       try {
-        // Validate authentication with backend (reads from httpOnly cookie)
-        const response = await fetch('/auth/validate', {
-          method: 'POST',
+        // Get or create user from api-site (this validates auth and gets user data)
+        const userResponse = await fetch('/api/users/', {
+          method: 'GET',
           headers: {
             'Content-Type': 'application/json',
           },
           credentials: 'include' // Include httpOnly cookies
         })
 
-        if (response.ok) {
-          const data = await response.json()
-          if (data.valid && data.user) {
-            setUser(data.user)
-            return
-          }
+        if (userResponse.ok) {
+          const userData = await userResponse.json()
+          setUser(userData)
+          return
         }
 
-        // Authentication failed, redirect to login
+        // If 401, user is not authenticated
+        if (userResponse.status === 401) {
+          router.push('/auth/magic')
+          return
+        }
+
+        // Other errors
+        console.error('Failed to get user data:', userResponse.status)
         router.push('/auth/magic')
         
       } catch (error) {
-        console.error('Auth check error:', error)
+        console.error('Auth/user check error:', error)
         router.push('/auth/magic')
       }
     }
 
-    checkAuthentication()
+    checkAuthenticationAndGetUser()
   }, [router])
 
   const handleLogout = async () => {
@@ -265,10 +270,10 @@ export default function Dashboard() {
               <div className="bg-white p-8 rounded-xl shadow-lg border border-gray-200 max-w-2xl mx-auto">
                 <div className="flex items-center mb-6">
                   <div className="w-24 h-24 bg-indigo-100 rounded-full flex items-center justify-center text-indigo-600 text-5xl font-bold mr-6">
-                    {user.display_name ? user.display_name[0].toUpperCase() : user.email[0].toUpperCase()}
+                    {user.screen_name ? user.screen_name[0].toUpperCase() : user.email[0].toUpperCase()}
                   </div>
                   <div>
-                    <p className="text-3xl font-semibold text-slate-800">{user.display_name || user.email.split('@')[0]}</p>
+                    <p className="text-3xl font-semibold text-slate-800">{user.screen_name || user.email.split('@')[0]}</p>
                     <p className="text-slate-600 mt-1">{user.email}</p>
                   </div>
                 </div>
@@ -280,7 +285,7 @@ export default function Dashboard() {
                       <input 
                         type="text" 
                         id="username" 
-                        defaultValue={user.display_name || user.email.split('@')[0]}
+                        defaultValue={user.screen_name || user.email.split('@')[0]}
                         className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:outline-none"
                       />
                     </div>

@@ -2,19 +2,25 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 
 import os
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Depends, Query, Request
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from typing import Optional
 import logging
 from config.settings import Settings
+from models.base import get_db
+from commands.user_commands import GetOrCreateUser
+from schemas.user_schemas import UserResponse
+from sqlalchemy.orm import Session
+from auth.jwt_helper import JWTHelper
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-# Initialize settings
+# Initialize settings and JWT helper
 settings = Settings()
+jwt_helper = JWTHelper()
 
 # Create FastAPI app
 app = FastAPI(
@@ -49,6 +55,20 @@ async def health_check():
         version="1.0.0"
     )
 
+# Authentication dependency
+async def verify_auth_token(request: Request):
+    """Verify auth token using JWT validation"""
+    auth_token = jwt_helper.get_token_from_cookie(request)
+    
+    if not auth_token:
+        raise HTTPException(status_code=401, detail="Authentication required")
+    
+    email = jwt_helper.verify_auth_token(auth_token)
+    if not email:
+        raise HTTPException(status_code=401, detail="Invalid or expired authentication token")
+        
+    return email
+
 # Site endpoints (non-game related)
 
 @app.get("/")
@@ -59,6 +79,39 @@ async def root():
         "version": "1.0.0",
         "description": "Site-wide API for Tabletop Tavern"
     }
+
+# User endpoints
+
+@app.get("/api/test")
+async def test_route():
+    """Test route to check if API is working"""
+    return {"message": "API is working"}
+
+@app.get("/api/users/", response_model=UserResponse)
+async def get_or_create_user(
+    db: Session = Depends(get_db),
+    authenticated_email: str = Depends(verify_auth_token)
+):
+    """
+    Get authenticated user's data, or create if doesn't exist.
+    
+    This endpoint handles the authentication flow:
+    - Validates auth token with api-auth service
+    - If user exists: returns user data
+    - If user doesn't exist: creates new user with authenticated email
+    
+    Returns:
+        UserResponse: User data for authenticated user
+    """
+    try:
+        # TODO: breakpoint here and test its reachable
+        command = GetOrCreateUser(db)
+        user, was_created = command.execute(authenticated_email)
+        return UserResponse.from_orm(user)
+    except ValueError as e:
+        # Business logic errors
+        raise HTTPException(status_code=400, detail=str(e))
+
 
 if __name__ == "__main__":
     import uvicorn

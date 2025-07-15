@@ -27,11 +27,26 @@ class Settings(BaseSettings):
     environment:Environment = getattr(Environment, env.get("environment"))
     
     # DATABASE - PostgreSQL for site-wide data
-    POSTGRES_USER: str = env.get("POSTGRES_USER", "rollplay")
-    POSTGRES_PASSWORD: str = env.get("POSTGRES_PASSWORD")
-    POSTGRES_HOST: str = env.get("POSTGRES_HOST", "db-core")
+    POSTGRES_HOST: str = env.get("POSTGRES_HOST", "postgres")
     POSTGRES_PORT: str = env.get("POSTGRES_PORT", "5432")
-    POSTGRES_DB: str = env.get("POSTGRES_DB", "rollplay_core")
+    POSTGRES_DB: str = env.get("POSTGRES_DB", "rollplay")
+    
+    # Application database credentials (limited privileges)
+    APP_DB_USER: str = "rollplay"
+    APP_DB_PASSWORD: str = env.get("APP_DB_PASSWORD")
+    
+    # Migration database credentials (full privileges)
+    MIGRATION_DB_USER: str = env.get("POSTGRES_USER", "postgres")
+    MIGRATION_DB_PASSWORD: str = env.get("POSTGRES_PASSWORD")
+    
+    # Computed database URLs
+    @property
+    def APP_DATABASE_URL(self) -> str:
+        return f"postgresql://{self.APP_DB_USER}:{self.APP_DB_PASSWORD}@{self.POSTGRES_HOST}:{self.POSTGRES_PORT}/{self.POSTGRES_DB}"
+    
+    @property 
+    def MIGRATION_DATABASE_URL(self) -> str:
+        return f"postgresql://{self.MIGRATION_DB_USER}:{self.MIGRATION_DB_PASSWORD}@{self.POSTGRES_HOST}:{self.POSTGRES_PORT}/{self.POSTGRES_DB}"
 
     # LOGGING
     logging_level = "DEBUG"

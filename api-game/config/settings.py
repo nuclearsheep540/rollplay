@@ -22,8 +22,24 @@ class Settings(BaseSettings):
     APP_NAME = "rollplay_app"
     APP_VERSION = env.get("app_version")
     environment:Environment = getattr(Environment, env.get("environment"))
+    
+    # MONGODB (for active game sessions)
     MONGO_USER = env.get("MONGO_INITDB_ROOT_USERNAME")
     MONGO_PASS = env.get("MONGO_INITDB_ROOT_PASSWORD")
+    
+    # POSTGRESQL (for user/character/game data)
+    POSTGRES_HOST: str = env.get("POSTGRES_HOST", "postgres")
+    POSTGRES_PORT: str = env.get("POSTGRES_PORT", "5432")
+    POSTGRES_DB: str = env.get("POSTGRES_DB", "rollplay")
+    
+    # Application database credentials (limited privileges)
+    APP_DB_USER: str = "rollplay"
+    APP_DB_PASSWORD: str = env.get("APP_DB_PASSWORD")
+    
+    # Computed database URL
+    @property
+    def APP_DATABASE_URL(self) -> str:
+        return f"postgresql://{self.APP_DB_USER}:{self.APP_DB_PASSWORD}@{self.POSTGRES_HOST}:{self.POSTGRES_PORT}/{self.POSTGRES_DB}"
 
 
     # LOGGING
