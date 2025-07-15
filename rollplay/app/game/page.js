@@ -274,6 +274,10 @@ function GameContent() {
   useEffect(() => {
     const roomId = params.get('roomId')
     const thisPlayer = params.get('playerName')?.toLowerCase() // Normalize once at entry point
+    
+    console.log('Game page params:', { roomId, thisPlayer })
+    console.log('All params:', Array.from(params.entries()))
+    
     setRoomId(roomId)
     setThisPlayer(thisPlayer)
 

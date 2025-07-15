@@ -362,6 +362,12 @@ def gameservice_create(settings: GameSettings):
     new_room = GameService.create_room(settings=settings)
     return {"id": new_room}
 
+@app.post("/game/{room_id}")
+def gameservice_create_with_id(room_id: str, settings: GameSettings):
+    """Create a game room with a specific ID (for PostgreSQL integration)"""
+    new_room = GameService.create_room(settings=settings, room_id=room_id)
+    return {"id": new_room}
+
 @app.put("/game/{room_id}/seat-layout")
 async def update_seat_layout(room_id: str, request: dict):
     """Update the seat layout for a game room"""

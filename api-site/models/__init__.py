@@ -6,5 +6,8 @@ from .user import User
 from .character import Character
 from .game import Game
 from .game_player import GamePlayers
+from .campaign import Campaign
+from .campaign_map import CampaignMap
+from .friendship import Friendship
 
-__all__ = ["Base", "User", "Character", "Game", "GamePlayers"]
+__all__ = ["Base", "User", "Character", "Game", "GamePlayers", "Campaign", "CampaignMap", "Friendship"]

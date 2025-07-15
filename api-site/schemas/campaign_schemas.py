@@ -9,11 +9,11 @@ from uuid import UUID
 class CampaignResponse(BaseModel):
     """Schema for campaign data returned by API"""
     id: UUID
-    dm_id: UUID
     name: str
     description: Optional[str]
+    dm_id: UUID
+    status: str
     created_at: datetime
-    status: str = "active"
     
     class Config:
         from_attributes = True  # For SQLAlchemy models

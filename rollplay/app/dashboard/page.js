@@ -15,6 +15,146 @@ export default function Dashboard() {
   const [characters, setCharacters] = useState([])
   const [campaigns, setCampaigns] = useState([])
   const [loading, setLoading] = useState(true)
+  const [error, setError] = useState(null)
+  const [creatingCampaign, setCreatingCampaign] = useState(false)
+
+
+  // Fetch characters from API
+  const fetchCharacters = async () => {
+    try {
+      const response = await fetch('/api/characters/', {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        credentials: 'include'
+      })
+
+      if (response.ok) {
+        const charactersData = await response.json()
+        setCharacters(charactersData)
+      } else {
+        console.error('Failed to fetch characters:', response.status)
+        setError('Failed to load characters')
+      }
+    } catch (error) {
+      console.error('Error fetching characters:', error)
+      setError('Failed to load characters')
+    }
+  }
+
+  // Fetch campaigns from API
+  const fetchCampaigns = async () => {
+    try {
+      const response = await fetch('/api/campaigns/', {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        credentials: 'include'
+      })
+
+      if (response.ok) {
+        const campaignsData = await response.json()
+        setCampaigns(campaignsData)
+      } else {
+        console.error('Failed to fetch campaigns:', response.status)
+        setError('Failed to load campaigns')
+      }
+    } catch (error) {
+      console.error('Error fetching campaigns:', error)
+      setError('Failed to load campaigns')
+    }
+  }
+
+  // Create a new campaign using proper PostgreSQL-first flow
+  const createCampaign = async () => {
+    if (!user) return
+    
+    setCreatingCampaign(true)
+    setError(null)
+
+    try {
+      // Step 1: Create a campaign in PostgreSQL
+      const campaignData = {
+        name: `Campaign ${new Date().toLocaleDateString()}`,
+        description: `Campaign created on ${new Date().toLocaleDateString()}`
+      }
+
+      const campaignResponse = await fetch('/api/campaigns/', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        credentials: 'include',
+        body: JSON.stringify(campaignData)
+      })
+
+      if (!campaignResponse.ok) {
+        throw new Error('Failed to create campaign')
+      }
+
+      const campaign = await campaignResponse.json()
+      console.log('Created campaign:', campaign.id)
+      
+      // Step 2: Create a game within the campaign
+      const gameData = {
+        session_name: `Session 1`,
+        max_players: 6,
+        seat_colors: {
+          "0": "#3b82f6",
+          "1": "#ef4444", 
+          "2": "#22c55e",
+          "3": "#f97316",
+          "4": "#8b5cf6",
+          "5": "#f59e0b"
+        }
+      }
+
+      const gameResponse = await fetch(`/api/campaigns/${campaign.id}/games/`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        credentials: 'include',
+        body: JSON.stringify(gameData)
+      })
+
+      if (!gameResponse.ok) {
+        throw new Error('Failed to create game')
+      }
+
+      const game = await gameResponse.json()
+      console.log('Created game:', game.id)
+      
+      // Step 3: Start the game to create MongoDB active_session
+      const startResponse = await fetch(`/api/games/${game.id}/start`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        credentials: 'include'
+      })
+
+      if (!startResponse.ok) {
+        throw new Error('Failed to start game')
+      }
+
+      const startedGame = await startResponse.json()
+      console.log('Started game:', startedGame.id)
+      
+      // Refresh the campaigns list
+      await fetchCampaigns()
+      
+      // Show success message
+      alert('Campaign created successfully!')
+    } catch (error) {
+      console.error('Error creating campaign:', error)
+      setError('Failed to create campaign: ' + error.message)
+    } finally {
+      setCreatingCampaign(false)
+    }
+  }
 
   useEffect(() => {
     const checkAuthenticationAndGetUser = async () => {
@@ -31,6 +171,14 @@ export default function Dashboard() {
         if (userResponse.ok) {
           const userData = await userResponse.json()
           setUser(userData)
+          
+          // Once user is authenticated, fetch characters and campaigns
+          await Promise.all([
+            fetchCharacters(),
+            fetchCampaigns()
+          ])
+          
+          setLoading(false)
           return
         }
 
@@ -76,17 +224,42 @@ export default function Dashboard() {
   }
 
   const renderCharacters = () => {
-    return mockCharacters.map((char, index) => (
-      <div key={index} className="bg-white p-4 rounded-lg shadow-md border border-gray-200 flex items-center justify-between hover:shadow-lg transition-all duration-300">
+    if (loading) {
+      return (
+        <div className="flex justify-center items-center py-8">
+          <div className="text-slate-600">Loading characters...</div>
+        </div>
+      )
+    }
+
+    if (error) {
+      return (
+        <div className="bg-red-50 border border-red-200 rounded-lg p-4">
+          <p className="text-red-700">{error}</p>
+        </div>
+      )
+    }
+
+    if (characters.length === 0) {
+      return (
+        <div className="bg-slate-50 border border-slate-200 rounded-lg p-8 text-center">
+          <p className="text-slate-600 text-lg mb-4">No characters found</p>
+          <p className="text-slate-500">Create your first character to get started!</p>
+        </div>
+      )
+    }
+
+    return characters.map((char, index) => (
+      <div key={char.id || index} className="bg-white p-4 rounded-lg shadow-md border border-gray-200 flex items-center justify-between hover:shadow-lg transition-all duration-300">
         <div className="flex items-center flex-grow">
           <div className="w-12 h-12 bg-indigo-100 rounded-full flex items-center justify-center text-indigo-600 text-xl font-bold mr-4 flex-shrink-0">
-            {char.name[0].toUpperCase()}
+            {char.name ? char.name[0].toUpperCase() : '?'}
           </div>
           <div className="flex-grow">
-            <h3 className="text-lg font-bold text-slate-800">{char.name}</h3>
-            <p className="text-slate-600 text-sm">{char.race} {char.class} - Level {char.level}</p>
-            <p className="text-slate-500 text-xs mt-1">Campaign: {char.campaign}</p>
-            <p className="text-slate-500 text-xs mt-1">Last Played: {char.lastPlayed}</p>
+            <h3 className="text-lg font-bold text-slate-800">{char.name || 'Unnamed Character'}</h3>
+            <p className="text-slate-600 text-sm">{char.race || 'Unknown'} {char.class || 'Unknown'} - Level {char.level || 1}</p>
+            <p className="text-slate-500 text-xs mt-1">Campaign: {char.campaign || 'No Campaign'}</p>
+            <p className="text-slate-500 text-xs mt-1">Created: {char.created_at ? new Date(char.created_at).toLocaleDateString() : 'Unknown'}</p>
           </div>
         </div>
         <div className="flex space-x-2 flex-shrink-0">
@@ -102,23 +275,88 @@ export default function Dashboard() {
   }
 
   const renderCampaigns = () => {
-    return mockCampaigns.map((campaign, index) => {
-      const statusColor = campaign.status === 'Active' ? 'text-green-600 bg-green-100' : 'text-slate-600 bg-slate-100'
+    if (loading) {
       return (
-        <div key={index} className="bg-white p-4 rounded-lg shadow-md border border-gray-200 flex items-center justify-between hover:shadow-lg transition-all duration-300">
+        <div className="flex justify-center items-center py-8">
+          <div className="text-slate-600">Loading campaigns...</div>
+        </div>
+      )
+    }
+
+    if (error) {
+      return (
+        <div className="bg-red-50 border border-red-200 rounded-lg p-4">
+          <p className="text-red-700">{error}</p>
+        </div>
+      )
+    }
+
+    if (campaigns.length === 0) {
+      return (
+        <div className="bg-slate-50 border border-slate-200 rounded-lg p-8 text-center">
+          <p className="text-slate-600 text-lg mb-4">No campaigns found</p>
+          <p className="text-slate-500">Create your first campaign to get started!</p>
+        </div>
+      )
+    }
+
+    return campaigns.map((campaign, index) => {
+      const statusColor = campaign.status === 'active' ? 'text-green-600 bg-green-100' : 'text-slate-600 bg-slate-100'
+      return (
+        <div key={campaign.id || index} className="bg-white p-4 rounded-lg shadow-md border border-gray-200 flex items-center justify-between hover:shadow-lg transition-all duration-300">
           <div className="flex items-center flex-grow">
             <div className="w-12 h-12 bg-indigo-100 rounded-full flex items-center justify-center text-indigo-600 text-xl font-bold mr-4 flex-shrink-0">
-              {campaign.name[0].toUpperCase()}
+              {campaign.name ? campaign.name[0].toUpperCase() : '?'}
             </div>
             <div className="flex-grow">
-              <h3 className="text-lg font-bold text-slate-800">{campaign.name}</h3>
-              <p className="text-slate-600 text-sm">GM: {campaign.gm}</p>
-              <p className="text-slate-500 text-xs mt-1">Status: <span className={`font-semibold ${statusColor}`}>{campaign.status}</span></p>
+              <h3 className="text-lg font-bold text-slate-800">{campaign.name || 'Unnamed Campaign'}</h3>
+              <p className="text-slate-600 text-sm">DM: {user?.screen_name || user?.email || 'Unknown'}</p>
+              <p className="text-slate-500 text-xs mt-1">Status: <span className={`font-semibold ${statusColor}`}>{campaign.status || 'Unknown'}</span></p>
+              <p className="text-slate-500 text-xs mt-1">Created: {campaign.created_at ? new Date(campaign.created_at).toLocaleDateString() : 'Unknown'}</p>
             </div>
           </div>
           <div className="flex-shrink-0">
             <button 
-              onClick={() => router.push('/game')}
+              onClick={async () => {
+                try {
+                  // For real campaigns, get the games and start the first one
+                  const gamesResponse = await fetch(`/api/campaigns/${campaign.id}/games/`, {
+                    method: 'GET',
+                    headers: {
+                      'Content-Type': 'application/json',
+                    },
+                    credentials: 'include'
+                  })
+                  
+                  if (gamesResponse.ok) {
+                    const games = await gamesResponse.json()
+                    if (games.length > 0) {
+                      const game = games[0] // Use the first game
+                      
+                      // If game is not active, start it
+                      if (game.status !== 'active') {
+                        await fetch(`/api/games/${game.id}/start`, {
+                          method: 'POST',
+                          headers: {
+                            'Content-Type': 'application/json',
+                          },
+                          credentials: 'include'
+                        })
+                      }
+                      
+                      // Navigate to the game room
+                      router.push(`/game?roomId=${game.id}`)
+                    } else {
+                      setError('No games found for this campaign')
+                    }
+                  } else {
+                    setError('Failed to load campaign games')
+                  }
+                } catch (error) {
+                  console.error('Error entering room:', error)
+                  setError('Failed to enter room')
+                }
+              }}
               className="w-full text-center bg-indigo-600 text-white font-semibold px-4 py-2 rounded-lg shadow-md hover:bg-indigo-700 transition-colors duration-200"
             >
               Enter Room
@@ -129,7 +367,7 @@ export default function Dashboard() {
     })
   }
 
-  if (!user) {
+  if (!user || loading) {
     return <div className="min-h-screen bg-slate-50 flex items-center justify-center">
       <div className="text-slate-600">Loading...</div>
     </div>
@@ -234,8 +472,17 @@ export default function Dashboard() {
                 <p className="mt-2 text-slate-600">Here you'll find all the game rooms and campaigns you've joined. Each campaign card provides a quick overview, letting you see the Game Master and its current status, so you can jump right back into the action.</p>
               </div>
               <div className="flex justify-end items-center mb-6 space-x-4">
-                <button className="bg-slate-300 text-slate-800 font-semibold px-5 py-3 rounded-xl shadow-md hover:bg-slate-400 transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-slate-500 focus:ring-offset-2 flex items-center">
-                  <span className="text-xl mr-2">➕</span> Create Campaign
+                <button 
+                  onClick={createCampaign}
+                  disabled={creatingCampaign}
+                  className={`font-semibold px-5 py-3 rounded-xl shadow-md transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-slate-500 focus:ring-offset-2 flex items-center ${
+                    creatingCampaign 
+                      ? 'bg-slate-200 text-slate-500 cursor-not-allowed' 
+                      : 'bg-slate-300 text-slate-800 hover:bg-slate-400'
+                  }`}
+                >
+                  <span className="text-xl mr-2">{creatingCampaign ? '⏳' : '➕'}</span> 
+                  {creatingCampaign ? 'Creating...' : 'Create Campaign'}
                 </button>
                 <button className="bg-indigo-600 text-white font-semibold px-5 py-3 rounded-xl shadow-md hover:bg-indigo-700 transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 flex items-center">
                   <span className="text-xl mr-2">🔗</span> Join Campaign

@@ -18,5 +18,5 @@ class GamePlayers(Base):
     is_active = Column(Boolean, default=True)  # For leaving/rejoining games
     
     # Relationships
-    game = relationship("Game", back_populates="players")
+    game = relationship("Game")
     character = relationship("Character", back_populates="game_participations")

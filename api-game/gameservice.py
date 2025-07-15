@@ -79,13 +79,22 @@ class GameService:
 
     # need to be able to query a room_id
     @staticmethod
-    def create_room(settings: GameSettings):
+    def create_room(settings: GameSettings, room_id: str = None):
         "Creates a room by adding a new record in mongodb with player config, returning the hash as the route"
         collection = GameService._get_active_session()
 
-        result = collection.insert_one(json.loads(settings.model_dump_json()))
-        id = str(result.inserted_id)
-        return id
+        room_data = json.loads(settings.model_dump_json())
+        
+        # If room_id is provided, use it as the MongoDB _id
+        if room_id:
+            room_data["_id"] = room_id
+            result = collection.insert_one(room_data)
+            return room_id
+        else:
+            # Original behavior - auto-generate ObjectId
+            result = collection.insert_one(room_data)
+            id = str(result.inserted_id)
+            return id
 
     @staticmethod
     def update_seat_layout(room_id: str, seat_layout: list):

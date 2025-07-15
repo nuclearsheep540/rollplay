@@ -7,3 +7,4 @@ sqlalchemy==2.0.25
 alembic==1.13.1
 PyJWT==2.8.0
 email-validator==2.1.0
+requests==2.31.0 # For inter-service communication

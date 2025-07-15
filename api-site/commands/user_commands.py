@@ -5,6 +5,7 @@ from sqlalchemy.orm import Session
 from services.user_service import UserService
 from models.user import User
 from typing import Optional, Tuple
+from uuid import UUID
 import logging
 
 logger = logging.getLogger(__name__)
@@ -38,3 +39,14 @@ class GetOrCreateUser:
         logger.info(f"User created: {email}")
         
         return new_user_id, True
+
+class AddTempGameId:
+    """Command to add a temporary game ID to a user"""
+    
+    def __init__(self, db: Session):
+        self.db = db
+        self.user_service = UserService(db)
+    
+    def execute(self, user_id: UUID, game_id: str) -> Optional[User]:
+        """Add a temporary game ID to user's list"""
+        return self.user_service.add_temp_game_id(user_id, game_id)

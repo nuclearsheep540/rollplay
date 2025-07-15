@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 
 from pydantic import BaseModel, EmailStr
-from typing import Optional
+from typing import Optional, List
 from datetime import datetime
 from uuid import UUID
 
@@ -13,6 +13,7 @@ class UserResponse(BaseModel):
     screen_name: Optional[str]
     created_at: datetime
     last_login: Optional[datetime]
+    temp_game_ids: Optional[List[str]] = []
     
     class Config:
         from_attributes = True  # For SQLAlchemy models
