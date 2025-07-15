@@ -12,6 +12,7 @@ from mapservice import MapService
 from message_templates import format_message, MESSAGE_TEMPLATES
 from models.log_type import LogType
 from websocket_handlers.connection_manager import manager as connection_manager
+from s3_client import s3_game_client
 
 logger = logging.getLogger()
 app = FastAPI()
@@ -545,6 +546,60 @@ async def clear_all_messages(room_id: str, request: dict):
         print(f"❌ Error clearing all messages: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
 
+
+# S3 Asset Management Endpoints (via api-site)
+@app.get("/s3/assets")
+async def list_game_assets(asset_type: str = None):
+    """List all game assets from S3 bucket via api-site"""
+    try:
+        assets = s3_game_client.list_game_assets(asset_type)
+        return assets
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/s3/assets/with-urls")
+async def get_assets_with_urls(asset_type: str = None):
+    """Get all game assets with presigned URLs via api-site"""
+    try:
+        assets = s3_game_client.get_assets_with_presigned_urls(asset_type)
+        return assets
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/s3/assets/{object_key}")
+async def get_asset_with_url(object_key: str):
+    """Get a specific asset with presigned URL via api-site"""
+    try:
+        asset = s3_game_client.get_asset_with_presigned_url(object_key)
+        if not asset:
+            raise HTTPException(status_code=404, detail=f"Asset {object_key} not found")
+        return asset
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/s3/assets/{object_key}/url")
+async def get_presigned_url(object_key: str, expiry: int = None):
+    """Generate a presigned URL for a specific asset via api-site"""
+    try:
+        url = s3_game_client.generate_presigned_url(object_key, expiry)
+        if not url:
+            raise HTTPException(status_code=404, detail=f"Asset {object_key} not found")
+        return {"presigned_url": url, "expires_in": expiry or 3600}
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/s3/health")
+async def check_s3_health():
+    """Check S3 bucket access and configuration via api-site"""
+    try:
+        health = s3_game_client.check_s3_health()
+        return health
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
 # Register WebSocket routes - avoid circular dependencies
 from websocket_handlers.app_websocket import register_websocket_routes
