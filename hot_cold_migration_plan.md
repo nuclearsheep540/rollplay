@@ -47,30 +47,37 @@ INACTIVE → STARTING → ACTIVE → CLOSING → INACTIVE
 
 ## Data Models
 
-### PostgreSQL (Cold Storage)
+### PostgreSQL (Cold Storage) - Pragmatic Design
+
 ```sql
--- Campaign configuration and persistent data
+-- Campaign data with atomic state configuration
 campaigns:
 - id (UUID)
 - name (String)
 - description (String)
 - dm_id (UUID)
+- party_members (JSON) -- List of invited user_ids with character assignments
+- moderators (JSON) -- List of user_ids with moderator permissions
+- available_maps (JSON) -- List of map_ids available for this campaign
+- audio_presets (JSON) -- Named audio configurations
 - created_at (DateTime)
 - updated_at (DateTime)
 - is_deleted (Boolean)
 - deleted_at (DateTime)
-- configuration (JSON) -- Campaign settings, characters, etc.
 
--- Game session metadata (one-to-one relationship with campaigns)
+-- Game instance (one-to-one relationship with campaigns)
 games:
 - id (UUID)
 - campaign_id (UUID) -- FK to campaigns (one-to-one)
-- session_name (String)
-- dm_id (UUID)
+- name (String) -- Game instance name
+- dm_id (UUID) -- FK to users.id
 - status (ENUM: 'inactive', 'starting', 'active', 'closing')
+- max_players (Integer, default 8)
+- current_session_number (Integer, default 1)
+- total_play_time (Integer, default 0) -- Total minutes played
 - started_at (DateTime)
 - ended_at (DateTime)
-- session_data (JSON) -- Final session state for archival
+- last_activity_at (DateTime)
 ```
 
 ### MongoDB (Hot Storage)
