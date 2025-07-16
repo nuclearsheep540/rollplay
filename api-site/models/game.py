@@ -3,10 +3,11 @@
 
 from sqlalchemy import Column, String, Integer, DateTime, ForeignKey, Boolean, JSON
 from sqlalchemy.orm import relationship
-from sqlalchemy.dialects.postgresql import UUID
+from sqlalchemy.dialects.postgresql import UUID, ENUM
 from datetime import datetime
 from uuid import uuid4
-from .base import Base
+from models.base import Base
+from enums.game_status import GameStatus
 
 class Game(Base):
     __tablename__ = "games"
@@ -14,19 +15,25 @@ class Game(Base):
     # Core identity
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid4)
     campaign_id = Column(UUID(as_uuid=True), ForeignKey("campaigns.id"))
-    session_name = Column(String, nullable=True)
-    status = Column(String, default="configured")  # configured, active, paused, completed
-    
-    # Game mechanics
+    name = Column(String, nullable=True)  # Game instance name
     dm_id = Column(UUID(as_uuid=True), ForeignKey("users.id"))
-    player_ids = Column(JSON, default=list)  # List[UUID]
-    moderator_ids = Column(JSON, default=list)  # List[UUID]
+    
+    # Game lifecycle
+    status = Column(ENUM(GameStatus), default=GameStatus.INACTIVE)
+    
+    # Game state (persisted from hot storage)
+    location = Column(String, nullable=True)  # Current in-game location
+    party = Column(JSON, default=list)  # List of user_ids who actually played in this game session
     max_players = Column(Integer, default=8)
-    seat_colors = Column(JSON, default=dict)  # Dict[str, str]
+    adventure_logs = Column(JSON, default=list)  # Chat messages, dice rolls, system events from this game session
+    combat_active = Column(Boolean, default=False)  # Whether combat is currently active
+    turn_order = Column(JSON, default=list)  # Initiative order for combat turns
     
     # Session tracking
     current_session_number = Column(Integer, default=1)
-    session_started_at = Column(DateTime, nullable=True)
+    total_play_time = Column(Integer, default=0)  # Total minutes played
+    started_at = Column(DateTime, nullable=True)
+    ended_at = Column(DateTime, nullable=True)
     last_activity_at = Column(DateTime, default=datetime.utcnow)
     
     # Timestamps

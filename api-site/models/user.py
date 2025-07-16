@@ -6,7 +6,7 @@ from sqlalchemy.orm import relationship
 from sqlalchemy.dialects.postgresql import UUID
 from datetime import datetime
 from uuid import uuid4
-from .base import Base
+from models.base import Base
 
 class User(Base):
     __tablename__ = "users"

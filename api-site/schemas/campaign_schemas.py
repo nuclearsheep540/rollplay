@@ -12,8 +12,9 @@ class CampaignResponse(BaseModel):
     name: str
     description: Optional[str]
     dm_id: UUID
-    status: str
     created_at: datetime
+    updated_at: Optional[datetime] = None
+    is_deleted: bool = False
     
     class Config:
         from_attributes = True  # For SQLAlchemy models

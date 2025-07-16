@@ -15,6 +15,7 @@ from commands.character_commands import GetUserCharacters
 from commands.campaign_commands import GetUserCampaigns, CreateCampaign, GetCampaignGames, DeleteCampaign
 from commands.game_commands import GetUserGames, CreateGame, StartGame, EndGame
 from commands.friendship_commands import SendFriendRequest, AcceptFriendRequest, RejectFriendRequest, RemoveFriend, GetFriendsList, GetPendingFriendRequests, GetSentFriendRequests
+from routers.game_migration import router as game_migration_router
 from schemas.user_schemas import UserResponse, ScreenNameUpdate
 from schemas.character_schemas import CharacterResponse
 from schemas.campaign_schemas import CampaignResponse, CampaignCreate
@@ -46,6 +47,9 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Include migration router
+app.include_router(game_migration_router, prefix="/api/migration", tags=["migration"])
 
 # Request/Response models
 

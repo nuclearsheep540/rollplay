@@ -58,10 +58,10 @@ campaign:
 - dm_id (UUID)
 - invited_players (JSON) -- List of invited user_ids with character assignments
 - moderators (JSON) -- List of user_ids with moderator permissions
-- maps (JSON) -- List of map_ids available for this campaign
-- audio (JSON) -- Named audio configurations
-- media (JSON) -- Static media for non-combat story telling and immersion
-- scenes(JSON) -- Collection of preset linked audio and media, think of a library of presets
+- maps (JSON) -- Aggregate: List of map_ids (serialized via repository layer)
+- audio (JSON) -- Aggregate: Named audio configurations (serialized via repository layer)
+- media (JSON) -- Aggregate: Static media for storytelling (serialized via repository layer)
+- scenes (JSON) -- Aggregate: Preset collections of audio/media (serialized via repository layer)
 - created_at (DateTime)
 - updated_at (DateTime)
 - is_deleted (Boolean)
@@ -83,6 +83,8 @@ game:
 - party (JSON) -- List of user_ids who actually played in this game session
 - max_players (Integer, default 8)
 - adventure_logs (JSON) -- Chat messages, dice rolls, system events from this game session
+- combat_active (Boolean, default false) -- Whether combat is currently active
+- turn_order (JSON) -- Collection of party members - Initiative order for combat turns
 ```
 
 ### MongoDB (Hot Storage)
@@ -102,18 +104,19 @@ active_sessions: {
   moderators: [...], // Additional moderators beyond DM
   
   // Game state
-  current_turn: "player_name",
+  current_turn: "player.id",
   combat_active: false,
-  initiative_order: [...],
+  turn_order: [...], // Initiative order for combat turns
   
   // Session metadata
   created_at: ISODate,
   last_activity: ISODate,
-  players_online: [...],
+  players_connected: [...], // Players currently connected to this game session
   
-  // Map and audio state
+  // Map, audio, and media state
   active_map: {...},
-  audio_state: {...}
+  audio_state: {...},
+  media_state: {...}
 }
 ```
 
@@ -432,6 +435,7 @@ async function cleanupOrphanedSessions() {
 - [ ] Implement simple hot/cold migration
 - [ ] Add game access validation
 - [ ] Update UI to show campaign vs game states
+- [ ] **NOTE**: Character stats (current/max HP, etc.) will migrate naturally via the `game.party` collection during hot→cold migration. Character model design to be addressed in later phase to ensure seamless integration.
 
 ### Phase 2: Error Handling
 - [ ] Add graceful shutdown procedures
@@ -633,92 +637,138 @@ ALTER TABLE games ADD COLUMN:
 
 ### Domain-Driven Architecture Implementation
 
+#### Domain Models (api-site/domain/)
+```python
+# domain/game_domain.py
+@dataclass
+class Player:
+    user_id: UUID
+    character_id: Optional[UUID]
+    character_name: Optional[str]
+    joined_at: datetime
+    character_stats: Dict[str, Any]
+    
+    def update_character_stats(self, stats: Dict[str, Any]) -> None
+    def to_dict(self) -> Dict[str, Any]
+    @classmethod
+    def from_dict(cls, data: Dict[str, Any]) -> 'Player'
+
+@dataclass
+class Game:  # Aggregate Root
+    id: UUID
+    campaign_id: UUID
+    name: str
+    dm_id: UUID
+    status: GameStatus
+    location: Optional[str]
+    party: List[Player]
+    max_players: int
+    adventure_logs: List[Dict[str, Any]]
+    combat_active: bool
+    turn_order: List[TurnEntry]
+    
+    def add_player(self, player: Player) -> None
+    def remove_player(self, user_id: UUID) -> None
+    def start_combat(self, initiative_order: List[TurnEntry]) -> None
+    def end_combat(self) -> None
+    def change_location(self, new_location: str) -> None
+    def add_adventure_log(self, log_entry: Dict[str, Any]) -> None
+    def transition_to(self, target_status: GameStatus) -> None
+    def to_hot_storage(self) -> Dict[str, Any]
+    @classmethod
+    def from_hot_storage(cls, data: Dict[str, Any]) -> 'Game'
+
+# domain/campaign_domain.py
+@dataclass
+class Campaign:  # Aggregate Root
+    id: UUID
+    name: str
+    description: Optional[str]
+    dm_id: UUID
+    invited_players: List[InvitedPlayer]
+    moderators: List[Moderator]
+    maps: List[UUID]
+    audio: Dict[str, Any]
+    media: Dict[str, Any]
+    scenes: Dict[str, Any]
+    
+    def invite_player(self, user_id: UUID, character_id: Optional[UUID]) -> None
+    def add_moderator(self, user_id: UUID, granted_by: UUID) -> None
+    def add_map(self, map_id: UUID) -> None
+    def update_audio_config(self, audio_config: Dict[str, Any]) -> None
+    def to_dict(self) -> Dict[str, Any]
+    @classmethod
+    def from_dict(cls, data: Dict[str, Any]) -> 'Campaign'
+```
+
 #### Repository Layer (api-site/repositories/)
 ```python
-# repositories/game_log_repository.py
-class GameLogRepository:
-    async def create_log_entry(self, game_id: UUID, log_data: dict) -> GameLog
-    async def get_logs_by_game(self, game_id: UUID, limit: int = 100) -> List[GameLog]
-    async def get_logs_by_type(self, game_id: UUID, log_type: str) -> List[GameLog]
-    async def archive_old_logs(self, game_id: UUID, before_date: datetime) -> int
+# repositories/campaign_repository.py
+class CampaignRepository:
+    def to_domain(self, model: CampaignModel) -> Campaign
+    def from_domain(self, domain: Campaign) -> Dict[str, Any]
+    async def get_by_id(self, campaign_id: UUID) -> Optional[Campaign]
+    async def create(self, campaign: Campaign) -> Campaign
+    async def update(self, campaign: Campaign) -> Campaign
 
-# repositories/game_session_repository.py
-class GameSessionRepository:
-    async def create_session_snapshot(self, game_id: UUID, session_data: dict) -> GameSession
-    async def get_latest_session(self, game_id: UUID) -> GameSession
-    async def get_session_history(self, game_id: UUID) -> List[GameSession]
-    async def update_session_end_time(self, session_id: UUID, end_time: datetime) -> GameSession
-
-# repositories/active_map_repository.py
-class ActiveMapRepository:
-    async def create_active_map(self, game_id: UUID, map_data: dict) -> ActiveMap
-    async def get_current_map(self, game_id: UUID) -> ActiveMap
-    async def update_map_config(self, map_id: UUID, config: dict) -> ActiveMap
-    async def set_current_map(self, game_id: UUID, map_id: UUID) -> ActiveMap
-
-# repositories/combat_state_repository.py
-class CombatStateRepository:
-    async def create_combat_state(self, game_id: UUID, combat_data: dict) -> CombatState
-    async def get_active_combat(self, game_id: UUID) -> CombatState
-    async def update_turn_order(self, combat_id: UUID, initiative: dict) -> CombatState
-    async def end_combat(self, combat_id: UUID) -> CombatState
-
-# repositories/audio_channel_repository.py
-class AudioChannelRepository:
-    async def create_audio_channel(self, game_id: UUID, channel_data: dict) -> AudioChannel
-    async def get_game_channels(self, game_id: UUID) -> List[AudioChannel]
-    async def update_channel_state(self, channel_id: UUID, state: dict) -> AudioChannel
-    async def delete_channel(self, channel_id: UUID) -> bool
+# repositories/game_repository.py
+class GameRepository:
+    def to_domain(self, model: GameModel) -> Game
+    def from_domain(self, domain: Game) -> Dict[str, Any]
+    async def get_by_id(self, game_id: UUID) -> Optional[Game]
+    async def create(self, game: Game) -> Game
+    async def update(self, game: Game) -> Game
 ```
 
 #### Command Layer (api-site/commands/)
 ```python
 # commands/migration_commands.py
 class MigrationCommands:
-    async def migrate_to_hot_storage(self, game_id: UUID) -> dict
-    async def migrate_to_cold_storage(self, game_id: UUID) -> dict
-    async def validate_migration_integrity(self, game_id: UUID) -> bool
-    async def rollback_failed_migration(self, game_id: UUID) -> bool
-
-# commands/game_state_commands.py
-class GameStateCommands:
-    async def start_game_session(self, game_id: UUID, session_config: dict) -> dict
-    async def end_game_session(self, game_id: UUID) -> dict
-    async def create_session_snapshot(self, game_id: UUID) -> dict
-    async def restore_from_snapshot(self, game_id: UUID, snapshot_id: UUID) -> dict
-
-# commands/combat_commands.py
-class CombatCommands:
-    async def start_combat(self, game_id: UUID, participants: list) -> dict
-    async def update_initiative(self, game_id: UUID, initiative_order: list) -> dict
-    async def advance_turn(self, game_id: UUID) -> dict
-    async def end_combat(self, game_id: UUID) -> dict
+    async def migrate_to_hot_storage(self, campaign_id: UUID, game_id: UUID) -> Dict[str, Any]:
+        # Get domain objects
+        campaign = await self.campaign_repo.get_by_id(campaign_id)
+        game = await self.game_repo.get_by_id(game_id)
+        
+        # Use business logic to transform
+        game.transition_to(GameStatus.ACTIVE)
+        
+        # Serialize using domain method
+        return game.to_hot_storage()
+    
+    async def migrate_to_cold_storage(self, game_id: UUID, hot_storage_data: Dict[str, Any]) -> Dict[str, Any]:
+        # Deserialize using domain method
+        game = Game.from_hot_storage(hot_storage_data)
+        
+        # Use business logic to finalize
+        game.transition_to(GameStatus.INACTIVE)
+        
+        # Save using repository
+        await self.game_repo.update(game)
 ```
 
 #### Application Layer (api-site/services/)
 ```python
 # services/hot_cold_migration_service.py
 class HotColdMigrationService:
-    def __init__(self, game_repo, session_repo, log_repo, map_repo, combat_repo, audio_repo):
-        self.game_repo = game_repo
-        self.session_repo = session_repo
-        self.log_repo = log_repo
-        self.map_repo = map_repo
-        self.combat_repo = combat_repo
-        self.audio_repo = audio_repo
-    
-    async def execute_cold_to_hot_migration(self, game_id: UUID) -> dict
-    async def execute_hot_to_cold_migration(self, game_id: UUID) -> dict
-    async def validate_migration_success(self, game_id: UUID) -> bool
-    async def handle_migration_failure(self, game_id: UUID, error: Exception) -> dict
-
-# services/game_state_service.py
-class GameStateService:
-    async def initialize_game_session(self, campaign_id: UUID) -> dict
-    async def finalize_game_session(self, game_id: UUID) -> dict
-    async def create_periodic_snapshot(self, game_id: UUID) -> dict
-    async def recover_from_failure(self, game_id: UUID) -> dict
+    async def start_game_session(self, campaign_id: UUID, session_config: Dict[str, Any]) -> Dict[str, Any]:
+        # Returns success/failure - no complex state tracking
+        # Uses domain objects and business logic
+        
+    async def end_game_session(self, game_id: UUID) -> Dict[str, Any]:
+        # Returns success/failure - no complex state tracking
+        # Uses domain objects and business logic
+        
+    async def validate_game_access(self, game_id: UUID) -> Dict[str, Any]:
+        # Simple validation - hot storage exists = game active
 ```
+
+#### Key Design Principles:
+1. **Domain Objects**: Rich objects with business logic, not JSON blobs
+2. **Repository Pattern**: `to_domain()` and `from_domain()` for serialization
+3. **Aggregate Roots**: `Game` and `Campaign` as aggregate roots
+4. **Type Safety**: Strong typing with enums and dataclasses
+5. **Business Logic**: Domain objects contain business rules and validation
+6. **No Over-Engineering**: Simple success/failure responses, no complex state tracking
 
 ### Alembic Migration Strategy
 
