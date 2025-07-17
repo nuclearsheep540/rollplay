@@ -90,6 +90,8 @@ class Game:
     total_play_time: int = 0
     created_at: datetime = field(default_factory=datetime.utcnow)
     last_activity_at: datetime = field(default_factory=datetime.utcnow)
+    started_at: Optional[datetime] = None
+    ended_at: Optional[datetime] = None
     
     def add_player(self, player: Player) -> None:
         """Add a player to the game."""
@@ -142,6 +144,12 @@ class Game:
         
         self.status = target_status
         self.last_activity_at = datetime.utcnow()
+        
+        # Update timestamp fields based on status
+        if target_status == GameStatus.ACTIVE:
+            self.started_at = datetime.utcnow()
+        elif target_status == GameStatus.INACTIVE:
+            self.ended_at = datetime.utcnow()
     
     def to_hot_storage(self) -> Dict[str, Any]:
         """Convert to hot storage format (MongoDB)."""
@@ -181,5 +189,7 @@ class Game:
             current_session_number=data.get('current_session_number', 1),
             total_play_time=data.get('total_play_time', 0),
             created_at=datetime.fromisoformat(data['created_at']),
-            last_activity_at=datetime.fromisoformat(data['last_activity'])
+            last_activity_at=datetime.fromisoformat(data['last_activity']),
+            started_at=datetime.fromisoformat(data['started_at']) if data.get('started_at') else None,
+            ended_at=datetime.fromisoformat(data['ended_at']) if data.get('ended_at') else None
         )

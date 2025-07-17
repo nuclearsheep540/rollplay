@@ -19,7 +19,7 @@ router = APIRouter()
 jwt_helper = JWTHelper()
 
 
-async def verify_auth_token(request: Request):
+def verify_auth_token(request: Request):
     """Verify auth token using JWT validation"""
     auth_token = jwt_helper.get_token_from_cookie(request)
     
@@ -42,7 +42,7 @@ def get_migration_service(db: Session = Depends(get_db)) -> HotColdMigrationServ
 
 
 @router.post("/campaigns/{campaign_id}/start-game")
-async def start_game_session(
+def start_game_session(
     campaign_id: UUID,
     session_config: Dict[str, Any] = None,
     migration_service: HotColdMigrationService = Depends(get_migration_service),
@@ -53,7 +53,7 @@ async def start_game_session(
         if session_config is None:
             session_config = {}
         
-        result = await migration_service.start_game_session(campaign_id, session_config)
+        result = migration_service.start_game_session(campaign_id, session_config)
         
         return {
             "success": True,
@@ -74,14 +74,14 @@ async def start_game_session(
 
 
 @router.post("/games/{game_id}/end-game")
-async def end_game_session(
+def end_game_session(
     game_id: UUID,
     migration_service: HotColdMigrationService = Depends(get_migration_service),
     authenticated_email: str = Depends(verify_auth_token)
 ):
     """End a game session by migrating hot storage back to cold storage."""
     try:
-        result = await migration_service.end_game_session(game_id)
+        result = migration_service.end_game_session(game_id)
         
         return {
             "success": True,
@@ -103,14 +103,14 @@ async def end_game_session(
 
 
 @router.get("/games/{game_id}/access-check")
-async def validate_game_access(
+def validate_game_access(
     game_id: UUID,
     migration_service: HotColdMigrationService = Depends(get_migration_service),
     authenticated_email: str = Depends(verify_auth_token)
 ):
     """Validate that a game can be accessed (hot storage exists)."""
     try:
-        result = await migration_service.validate_game_access(game_id)
+        result = migration_service.validate_game_access(game_id)
         
         if result["valid"]:
             return {
@@ -138,7 +138,7 @@ async def validate_game_access(
 
 
 @router.get("/games/{game_id}")
-async def get_game_session(
+def get_game_session(
     game_id: UUID,
     migration_service: HotColdMigrationService = Depends(get_migration_service),
     authenticated_email: str = Depends(verify_auth_token)
@@ -146,7 +146,7 @@ async def get_game_session(
     """Get game session data (only works if game is active)."""
     try:
         # First validate access
-        access_result = await migration_service.validate_game_access(game_id)
+        access_result = migration_service.validate_game_access(game_id)
         
         if not access_result["valid"]:
             if access_result["reason"] == "game_not_active":

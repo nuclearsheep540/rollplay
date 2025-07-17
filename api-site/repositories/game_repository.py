@@ -26,7 +26,7 @@ class GameRepository:
             campaign_id=model.campaign_id,
             name=model.name,
             dm_id=model.dm_id,
-            status=model.status,
+            status=GameStatus.from_string(model.status),  # Convert string to enum
             location=model.location,
             party=[Player.from_dict(p) for p in model.party or []],
             max_players=model.max_players,
@@ -36,7 +36,9 @@ class GameRepository:
             current_session_number=model.current_session_number,
             total_play_time=model.total_play_time,
             created_at=model.created_at,
-            last_activity_at=model.last_activity_at
+            last_activity_at=model.last_activity_at,
+            started_at=model.started_at,
+            ended_at=model.ended_at
         )
     
     def from_domain(self, domain: Game) -> Dict[str, Any]:
@@ -46,7 +48,7 @@ class GameRepository:
             'campaign_id': domain.campaign_id,
             'name': domain.name,
             'dm_id': domain.dm_id,
-            'status': domain.status,
+            'status': domain.status.value,  # Convert enum to string value
             'location': domain.location,
             'party': [p.to_dict() for p in domain.party],
             'max_players': domain.max_players,
@@ -56,107 +58,88 @@ class GameRepository:
             'current_session_number': domain.current_session_number,
             'total_play_time': domain.total_play_time,
             'created_at': domain.created_at,
-            'last_activity_at': domain.last_activity_at
+            'last_activity_at': domain.last_activity_at,
+            'started_at': domain.started_at,
+            'ended_at': domain.ended_at
         }
     
-    async def get_by_id(self, game_id: UUID) -> Optional[Game]:
+    def get_by_id(self, game_id: UUID) -> Optional[Game]:
         """Get game by ID."""
-        query = select(GameModel).where(GameModel.id == game_id)
-        result = await self.db.execute(query)
-        model = result.scalar_one_or_none()
+        model = self.db.query(GameModel).filter(GameModel.id == game_id).first()
         
         if not model:
             return None
         
         return self.to_domain(model)
     
-    async def get_by_campaign_id(self, campaign_id: UUID) -> Optional[Game]:
+    def get_by_campaign_id(self, campaign_id: UUID) -> Optional[Game]:
         """Get game by campaign ID (one-to-one relationship)."""
-        query = select(GameModel).where(GameModel.campaign_id == campaign_id)
-        result = await self.db.execute(query)
-        model = result.scalar_one_or_none()
+        model = self.db.query(GameModel).filter(GameModel.campaign_id == campaign_id).first()
         
         if not model:
             return None
         
         return self.to_domain(model)
     
-    async def get_by_status(self, status: GameStatus) -> List[Game]:
+    def get_by_status(self, status: GameStatus) -> List[Game]:
         """Get all games with specific status."""
-        query = select(GameModel).where(GameModel.status == status)
-        result = await self.db.execute(query)
-        models = result.scalars().all()
+        # Convert enum to string value for database query
+        models = self.db.query(GameModel).filter(GameModel.status == status.value).all()
         
         return [self.to_domain(model) for model in models]
     
-    async def create(self, game_domain: Game) -> Game:
+    def create(self, game_domain: Game) -> Game:
         """Create a new game instance."""
         game_data = self.from_domain(game_domain)
         model = GameModel(**game_data)
         self.db.add(model)
-        await self.db.commit()
-        await self.db.refresh(model)
+        self.db.commit()
+        self.db.refresh(model)
         return self.to_domain(model)
     
-    async def update(self, game_domain: Game) -> Optional[Game]:
+    def update(self, game_domain: Game) -> Optional[Game]:
         """Update an existing game."""
         game_domain.last_activity_at = datetime.utcnow()
         game_data = self.from_domain(game_domain)
         
-        query = (
-            update(GameModel)
-            .where(GameModel.id == game_domain.id)
-            .values(**game_data)
-            .returning(GameModel)
-        )
+        # Remove fields that don't need updating
+        game_data.pop('id', None)
+        game_data.pop('created_at', None)
         
-        result = await self.db.execute(query)
-        model = result.scalar_one_or_none()
+        # Update the model
+        updated_count = self.db.query(GameModel).filter(GameModel.id == game_domain.id).update(game_data)
         
-        if model:
-            await self.db.commit()
-            await self.db.refresh(model)
+        if updated_count > 0:
+            self.db.commit()
+            model = self.db.query(GameModel).filter(GameModel.id == game_domain.id).first()
             return self.to_domain(model)
         
         return None
     
-    async def update_status(self, game_id: UUID, status: GameStatus) -> Optional[Game]:
+    def update_status(self, game_id: UUID, status: GameStatus) -> Optional[Game]:
         """Update game status with timestamp tracking."""
-        game = await self.get_by_id(game_id)
+        game = self.get_by_id(game_id)
         if not game:
             return None
         
         game.transition_to(status)
         
-        # Add specific timestamp fields based on status
-        if status == GameStatus.ACTIVE:
-            game.started_at = datetime.utcnow()
-        elif status == GameStatus.INACTIVE:
-            game.ended_at = datetime.utcnow()
-        
-        return await self.update(game)
+        return self.update(game)
     
-    async def delete(self, game_id: UUID) -> bool:
+    def delete(self, game_id: UUID) -> bool:
         """Delete a game instance."""
-        query = delete(GameModel).where(GameModel.id == game_id)
-        result = await self.db.execute(query)
-        await self.db.commit()
-        return result.rowcount > 0
+        deleted_count = self.db.query(GameModel).filter(GameModel.id == game_id).delete()
+        self.db.commit()
+        return deleted_count > 0
     
-    async def get_stuck_games(self, status: GameStatus, minutes_ago: int = 5) -> List[Game]:
+    def get_stuck_games(self, status: GameStatus, minutes_ago: int = 5) -> List[Game]:
         """Get games stuck in a specific status for recovery."""
         cutoff_time = datetime.utcnow() - timedelta(minutes=minutes_ago)
         
-        query = (
-            select(GameModel)
-            .where(
-                GameModel.status == status,
-                GameModel.last_activity_at < cutoff_time
-            )
-        )
-        
-        result = await self.db.execute(query)
-        models = result.scalars().all()
+        models = self.db.query(GameModel).filter(
+            GameModel.status == status.value,  # Convert enum to string value
+            GameModel.last_activity_at < cutoff_time
+        ).all()
         
         return [self.to_domain(model) for model in models]
     

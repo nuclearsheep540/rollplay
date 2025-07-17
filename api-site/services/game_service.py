@@ -2,7 +2,9 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 
 from sqlalchemy.orm import Session
-from models.game import Game
+from repositories.game_repository import GameRepository
+from domain.game_domain import Game
+from enums.game_status import GameStatus
 from typing import List, Optional
 from uuid import UUID
 from datetime import datetime
@@ -12,43 +14,47 @@ class GameService:
     
     def __init__(self, db: Session):
         self.db = db
+        self.game_repository = GameRepository(db)
     
     def get_games_by_user_id(self, user_id: UUID) -> List[Game]:
         """Get games where user is DM or player"""
-        # Games where user is DM
-        dm_games = self.db.query(Game).filter(Game.dm_id == user_id).all()
+        # This method needs to be implemented in the repository
+        # For now, we'll get all games and filter in Python (not ideal but works)
+        all_games = self.game_repository.get_by_status(GameStatus.INACTIVE) + \
+                   self.game_repository.get_by_status(GameStatus.ACTIVE) + \
+                   self.game_repository.get_by_status(GameStatus.STARTING) + \
+                   self.game_repository.get_by_status(GameStatus.STOPPING)
         
-        # Games where user is player (JSON array contains user_id)
-        # Note: This is a simplified approach - in production you'd want proper indexing
-        player_games = self.db.query(Game).filter(
-            Game.player_ids.op('?')(str(user_id))
-        ).all()
+        # Filter games where user is DM or player
+        user_games = []
+        for game in all_games:
+            if game.dm_id == user_id or any(player.user_id == user_id for player in game.party):
+                user_games.append(game)
         
-        # Combine and deduplicate
-        all_games = dm_games + player_games
-        unique_games = list({game.id: game for game in all_games}.values())
-        return unique_games
+        return user_games
     
-    def create_game(self, campaign_id: UUID, dm_id: UUID, session_name: str, 
-                   max_players: int = 8, seat_colors: dict = None) -> Game:
+    def create_game(self, campaign_id: UUID, dm_id: UUID, name: str, 
+                   max_players: int = 8) -> Game:
         """Create new game session"""
-        game = Game(
+        from uuid import uuid4
+        
+        # Create domain object
+        game_domain = Game(
+            id=uuid4(),
             campaign_id=campaign_id,
             dm_id=dm_id,
-            session_name=session_name,
+            name=name,
             max_players=max_players,
-            seat_colors=seat_colors or {},
-            player_ids=[],
-            moderator_ids=[]
+            party=[],
+            status=GameStatus.INACTIVE
         )
-        self.db.add(game)
-        self.db.commit()
-        self.db.refresh(game)
-        return game
+        
+        # Use repository to persist
+        return self.game_repository.create(game_domain)
     
     def get_game_by_id(self, game_id: UUID) -> Optional[Game]:
         """Get game by ID"""
-        return self.db.query(Game).filter(Game.id == game_id).first()
+        return self.game_repository.get_by_id(game_id)
     
     def start_game(self, game_id: UUID) -> Game:
         """Start game session (activate)"""

@@ -333,7 +333,7 @@ async def delete_campaign(
             raise HTTPException(status_code=404, detail="Campaign not found")
             
     except ValueError as e:
-        # Business logic errors
+        # Business logic errors (e.g., campaign has active games)
         raise HTTPException(status_code=400, detail=str(e))
 
 @app.get("/api/games/{game_id}/dm-status")
@@ -447,9 +447,8 @@ async def create_game(
         game = create_command.execute(
             campaign_id=campaign_id,
             dm_id=user.id,
-            session_name=game_data.session_name,
-            max_players=game_data.max_players,
-            seat_colors=game_data.seat_colors
+            name=game_data.name,
+            max_players=game_data.max_players
         )
         
         return GameResponse.from_orm(game)

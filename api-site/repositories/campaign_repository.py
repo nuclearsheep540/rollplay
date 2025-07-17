@@ -10,6 +10,7 @@ from datetime import datetime
 from models.campaign import Campaign as CampaignModel
 from models.game import Game as GameModel
 from domain.campaign_domain import Campaign, InvitedPlayer, Moderator
+from enums.game_status import GameStatus
 
 
 class CampaignRepository:
@@ -56,92 +57,78 @@ class CampaignRepository:
             'deleted_at': domain.deleted_at
         }
     
-    async def get_by_id(self, campaign_id: UUID) -> Optional[Campaign]:
+    def get_by_id(self, campaign_id: UUID) -> Optional[Campaign]:
         """Get campaign by ID."""
-        query = select(CampaignModel).where(CampaignModel.id == campaign_id)
-        result = await self.db.execute(query)
-        model = result.scalar_one_or_none()
+        model = self.db.query(CampaignModel).filter(CampaignModel.id == campaign_id).first()
         
         if not model:
             return None
         
         return self.to_domain(model)
     
-    async def get_by_dm_id(self, dm_id: UUID) -> List[Campaign]:
+    def get_by_dm_id(self, dm_id: UUID) -> List[Campaign]:
         """Get all campaigns for a DM."""
-        query = select(CampaignModel).where(
+        models = self.db.query(CampaignModel).filter(
             CampaignModel.dm_id == dm_id,
             CampaignModel.is_deleted == False
-        )
-        result = await self.db.execute(query)
-        models = result.scalars().all()
+        ).all()
         return [self.to_domain(model) for model in models]
     
-    async def create(self, campaign_data: Dict[str, Any]) -> Campaign:
+    def create(self, campaign_data: Dict[str, Any]) -> Campaign:
         """Create a new campaign."""
         campaign = CampaignModel(**campaign_data)
         self.db.add(campaign)
-        await self.db.commit()
-        await self.db.refresh(campaign)
+        self.db.commit()
+        self.db.refresh(campaign)
         return self.to_domain(campaign)
     
-    async def update(self, campaign_domain: Campaign) -> Optional[Campaign]:
+    def update(self, campaign_domain: Campaign) -> Optional[Campaign]:
         """Update an existing campaign."""
         campaign_domain.updated_at = datetime.utcnow()
         campaign_data = self.from_domain(campaign_domain)
         
-        query = (
-            update(CampaignModel)
-            .where(CampaignModel.id == campaign_domain.id)
-            .values(**campaign_data)
-            .returning(CampaignModel)
-        )
+        # Remove fields that don't need updating
+        campaign_data.pop('id', None)
+        campaign_data.pop('created_at', None)
         
-        result = await self.db.execute(query)
-        model = result.scalar_one_or_none()
+        # Update the model
+        updated_count = self.db.query(CampaignModel).filter(CampaignModel.id == campaign_domain.id).update(campaign_data)
         
-        if model:
-            await self.db.commit()
-            await self.db.refresh(model)
+        if updated_count > 0:
+            self.db.commit()
+            model = self.db.query(CampaignModel).filter(CampaignModel.id == campaign_domain.id).first()
             return self.to_domain(model)
         
         return None
     
-    async def delete(self, campaign_id: UUID) -> bool:
+    def delete(self, campaign_id: UUID) -> bool:
         """Soft delete a campaign."""
-        query = (
-            update(CampaignModel)
-            .where(CampaignModel.id == campaign_id)
-            .values(
-                is_deleted=True,
-                deleted_at=datetime.utcnow()
-            )
-        )
+        updated_count = self.db.query(CampaignModel).filter(CampaignModel.id == campaign_id).update({
+            'is_deleted': True,
+            'deleted_at': datetime.utcnow()
+        })
         
-        result = await self.db.execute(query)
-        await self.db.commit()
-        return result.rowcount > 0
+        self.db.commit()
+        return updated_count > 0
     
-    async def get_campaign_with_game_status(self, campaign_id: UUID) -> Optional[Dict[str, Any]]:
+    def get_campaign_with_game_status(self, campaign_id: UUID) -> Optional[Dict[str, Any]]:
         """Get campaign with its associated game status for access control."""
-        query = (
-            select(CampaignModel, GameModel)
-            .outerjoin(GameModel, CampaignModel.id == GameModel.campaign_id)
-            .where(CampaignModel.id == campaign_id, CampaignModel.is_deleted == False)
-        )
+        result = self.db.query(CampaignModel, GameModel).outerjoin(
+            GameModel, CampaignModel.id == GameModel.campaign_id
+        ).filter(
+            CampaignModel.id == campaign_id, 
+            CampaignModel.is_deleted == False
+        ).first()
         
-        result = await self.db.execute(query)
-        row = result.first()
-        
-        if not row:
+        if not result:
             return None
         
-        campaign, game = row
+        campaign, game = result
         
         return {
             'campaign': self.to_domain(campaign),
             'game': game,
-            'can_configure': game is None or game.status == 'inactive'
+            'can_configure': game is None or game.status == GameStatus.INACTIVE
         }
     
     # Aggregate serialization methods
@@ -232,9 +219,9 @@ class CampaignRepository:
         """Deserialize scene presets from database storage."""
         return scenes_json or {}
     
-    async def get_campaign_for_migration(self, campaign_id: UUID) -> Optional[Dict[str, Any]]:
+    def get_campaign_for_migration(self, campaign_id: UUID) -> Optional[Dict[str, Any]]:
         """Get campaign with deserialized aggregates for hot storage migration."""
-        campaign = await self.get_by_id(campaign_id)
+        campaign = self.get_by_id(campaign_id)
         if not campaign:
             return None
         

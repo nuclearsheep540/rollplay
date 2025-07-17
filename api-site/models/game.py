@@ -1,9 +1,9 @@
 # Copyright (C) 2025 Matthew Davey
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-from sqlalchemy import Column, String, Integer, DateTime, ForeignKey, Boolean, JSON
+from sqlalchemy import Column, String, Integer, DateTime, ForeignKey, Boolean, JSON, Enum
 from sqlalchemy.orm import relationship
-from sqlalchemy.dialects.postgresql import UUID, ENUM
+from sqlalchemy.dialects.postgresql import UUID
 from datetime import datetime
 from uuid import uuid4
 from models.base import Base
@@ -19,7 +19,7 @@ class Game(Base):
     dm_id = Column(UUID(as_uuid=True), ForeignKey("users.id"))
     
     # Game lifecycle
-    status = Column(ENUM(GameStatus), default=GameStatus.INACTIVE)
+    status = Column(Enum('inactive', 'starting', 'active', 'stopping', name='gamestatus'))
     
     # Game state (persisted from hot storage)
     location = Column(String, nullable=True)  # Current in-game location

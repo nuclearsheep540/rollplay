@@ -24,14 +24,13 @@ class CreateGame:
     def __init__(self, db: Session):
         self.game_service = GameService(db)
     
-    def execute(self, campaign_id: UUID, dm_id: UUID, session_name: str, **config) -> Game:
+    def execute(self, campaign_id: UUID, dm_id: UUID, name: str, **config) -> Game:
         """Execute the command to create a game"""
         game = self.game_service.create_game(
             campaign_id=campaign_id,
             dm_id=dm_id,
-            session_name=session_name,
-            max_players=config.get('max_players', 8),
-            seat_colors=config.get('seat_colors', {})
+            name=name,
+            max_players=config.get('max_players', 8)
         )
         return game
 
