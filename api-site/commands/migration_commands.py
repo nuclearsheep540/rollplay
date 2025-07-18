@@ -49,9 +49,8 @@ class MigrationCommands:
         
         # Update game with initial party
         game.party = initial_party
-        game.transition_to(GameStatus.ACTIVE)
         
-        # Convert to hot storage format
+        # Convert to hot storage format (don't change status yet - that happens in service layer)
         return game.to_hot_storage()
     
     def migrate_to_cold_storage(self, game_id: UUID, hot_storage_data: Dict[str, Any]) -> Dict[str, Any]:
@@ -61,8 +60,9 @@ class MigrationCommands:
         if not hot_storage_data:
             raise ValueError("Hot storage data is required for migration")
         
-        if hot_storage_data.get('_id') != str(game_id):
-            raise ValueError("Hot storage game ID mismatch")
+        # Note: MongoDB _id is an ObjectId, not the PostgreSQL UUID
+        # The game_id validation is handled by the service layer lookup
+        # so we don't need to validate _id here
         
         # Get current game state
         game = self.game_repo.get_by_id(game_id)
@@ -74,12 +74,16 @@ class MigrationCommands:
             raise ValueError(f"Game must be in 'stopping' state, currently: {game.status}")
         
         # Create game domain object from hot storage
-        updated_game = Game.from_hot_storage(hot_storage_data)
+        # Replace MongoDB ObjectId with PostgreSQL UUID in hot storage data
+        hot_storage_data_with_correct_id = hot_storage_data.copy()
+        hot_storage_data_with_correct_id['_id'] = str(game_id)
+        
+        updated_game = Game.from_hot_storage(hot_storage_data_with_correct_id)
         updated_game.transition_to(GameStatus.INACTIVE)
         
         # Update campaign with any changes that should persist
-        campaign_id = UUID(hot_storage_data['campaign_id'])
-        campaign = self.campaign_repo.get_by_id(campaign_id)
+        # Use campaign_id from the existing game record, not from hot storage
+        campaign = self.campaign_repo.get_by_id(game.campaign_id)
         if campaign:
             campaign.update_audio_config(hot_storage_data.get('audio_state', {}))
             campaign.update_media_config(hot_storage_data.get('media_state', {}))
@@ -88,7 +92,7 @@ class MigrationCommands:
         return {
             'game': updated_game,
             'campaign': campaign,
-            'campaign_id': campaign_id
+            'campaign_id': game.campaign_id
         }
     
     
@@ -105,7 +109,7 @@ class MigrationCommands:
             if not campaign:
                 return False
             
-            # Check hot storage structure
+            # Check hot storage structure - only require essential fields
             required_fields = ['_id', 'campaign_id', 'name', 'dm_id', 'party', 'moderators']
             for field in required_fields:
                 if field not in hot_storage_data:

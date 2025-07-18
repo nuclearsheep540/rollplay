@@ -43,16 +43,29 @@ class HotColdMigrationService:
             if game.status != GameStatus.INACTIVE:
                 raise ValueError(f"Game not in inactive state. Current status: {game.status}")
             
-            # 3. Set game to 'starting' state (locks campaign configuration)
+            # 3. Get campaign data for migration and validate BEFORE setting game to STARTING
+            campaign_data = self.campaign_repo.get_campaign_with_game(campaign_id)
+            if not campaign_data:
+                raise ValueError(f"Campaign {campaign_id} not found or has been deleted")
+            
+            # Check if campaign has required data for game start
+            campaign = campaign_data.get('campaign')
+            if not campaign:
+                raise ValueError(f"Campaign {campaign_id} data is incomplete - missing campaign information")
+            
+            # Check if campaign is properly configured
+            if not campaign.is_configured:
+                raise ValueError(f"Campaign {campaign_id} is not properly configured - must have a name and at least one invited player")
+            
+            # Check for conflicting active games (service layer logic) - check BEFORE setting to STARTING
+            existing_game = campaign_data.get('game')
+            if existing_game and existing_game.status in [GameStatus.ACTIVE.value, GameStatus.STARTING.value]:
+                raise ValueError(f"Cannot start game - campaign already has an active game (status: {existing_game.status})")
+            
+            # 4. NOW set game to 'starting' state (locks campaign configuration) - only after all checks pass
             game = self.game_repo.update_status(game.id, GameStatus.STARTING)
             if not game:
                 raise RuntimeError("Failed to update game status to starting")
-            
-            # 4. Get campaign data for migration
-            campaign_data = self.campaign_repo.get_campaign_with_game_status(campaign_id)
-            if not campaign_data or not campaign_data['can_configure']:
-                self.game_repo.update_status(game.id, GameStatus.INACTIVE)  # Rollback
-                raise ValueError("Campaign cannot be configured - game may be active")
             
             # 5. Migrate campaign data to MongoDB hot storage
             hot_storage_data = self.migration_commands.migrate_to_hot_storage(
@@ -67,8 +80,73 @@ class HotColdMigrationService:
                 self.game_repo.update_status(game.id, GameStatus.INACTIVE)  # Rollback
                 raise RuntimeError("Migration validation failed")
             
-            # 7. TODO: Save hot storage data to MongoDB
-            # This would be: await self.mongodb_client.save_active_session(hot_storage_data)
+            # 7. Save hot storage data to MongoDB via api-game
+            import requests
+            try:
+                logger.info(f"Attempting to create MongoDB session for game {game.id}")
+                
+                # Remove the _id field - let MongoDB create its own ObjectId
+                hot_storage_data_for_mongo = hot_storage_data.copy()
+                hot_storage_data_for_mongo.pop('_id', None)
+                
+                # Add required MongoDB fields from session_config
+                hot_storage_data_for_mongo['seat_colors'] = session_config.get('seat_colors', {
+                    "0": "#3b82f6",
+                    "1": "#ef4444", 
+                    "2": "#22c55e",
+                    "3": "#f97316",
+                    "4": "#8b5cf6",
+                    "5": "#f59e0b"
+                })
+                
+                # Generate default seat_layout based on max_players
+                max_players = session_config.get('max_players', 6)
+                hot_storage_data_for_mongo['seat_layout'] = ["empty"] * max_players
+                hot_storage_data_for_mongo['max_players'] = max_players
+                
+                # Add other required MongoDB fields
+                hot_storage_data_for_mongo['dungeon_master'] = ""  # Will be set by game service
+                hot_storage_data_for_mongo['room_host'] = ""  # Will be set by game service
+                
+                logger.info(f"Hot storage data for MongoDB: {hot_storage_data_for_mongo}")
+                
+                # POST to api-game to create new session (don't specify ID in URL)
+                response = requests.post(
+                    f"http://api-game:8081/game",
+                    json=hot_storage_data_for_mongo,
+                    headers={"Content-Type": "application/json"}
+                )
+                
+                logger.info(f"API-game response: {response.status_code} - {response.text}")
+                
+                if response.status_code != 200:
+                    self.game_repo.update_status(game.id, GameStatus.INACTIVE)  # Rollback
+                    raise RuntimeError(f"Failed to create MongoDB session: {response.status_code} - {response.text}")
+                    
+                # Get the MongoDB ObjectId from the response
+                mongodb_response = response.json()
+                mongodb_session_id = mongodb_response.get('id')
+                
+                if not mongodb_session_id:
+                    self.game_repo.update_status(game.id, GameStatus.INACTIVE)  # Rollback
+                    raise RuntimeError(f"No MongoDB session ID returned: {mongodb_response}")
+                
+                logger.info(f"MongoDB session created successfully with ID: {mongodb_session_id}")
+                
+                # Store the MongoDB session ID in the PostgreSQL game record
+                from models.game import Game as GameModel
+                db_game = self.game_repo.db.query(GameModel).filter(GameModel.id == game.id).first()
+                if db_game:
+                    db_game.mongodb_session_id = mongodb_session_id
+                    self.game_repo.db.commit()
+                    logger.info(f"Stored MongoDB session ID {mongodb_session_id} for game {game.id}")
+                else:
+                    logger.error(f"Could not find game {game.id} to store MongoDB session ID")
+                
+            except Exception as e:
+                logger.error(f"Exception creating MongoDB session: {e}")
+                self.game_repo.update_status(game.id, GameStatus.INACTIVE)  # Rollback
+                raise RuntimeError(f"Failed to create MongoDB session: {e}")
             
             # 8. Set game to 'active' state
             game = self.game_repo.update_status(game.id, GameStatus.ACTIVE)
@@ -103,12 +181,27 @@ class HotColdMigrationService:
         logger.info(f"Ending game session {game_id}")
         
         try:
-            # 1. TODO: Get hot storage data from MongoDB
-            # This would be: hot_storage_data = await self.mongodb_client.get_active_session(game_id)
-            hot_storage_data = {}  # Placeholder
-            
-            if not hot_storage_data:
+            # 1. Get the game and its MongoDB session ID
+            from models.game import Game as GameModel
+            db_game = self.game_repo.db.query(GameModel).filter(GameModel.id == game_id).first()
+            if not db_game or not db_game.mongodb_session_id:
                 raise ValueError(f"Game session {game_id} not found in hot storage")
+                
+            mongodb_session_id = db_game.mongodb_session_id
+            logger.info(f"Found MongoDB session ID: {mongodb_session_id} for game {game_id}")
+            
+            # 2. Get hot storage data from MongoDB via api-game
+            import requests
+            try:
+                response = requests.get(f"http://api-game:8081/game/{mongodb_session_id}")
+                if response.status_code != 200:
+                    raise ValueError(f"MongoDB session {mongodb_session_id} not found: {response.status_code}")
+                    
+                hot_storage_data = response.json()
+                logger.info(f"Retrieved hot storage data for session {mongodb_session_id}")
+                
+            except Exception as e:
+                raise ValueError(f"Failed to retrieve hot storage data: {e}")
             
             # 2. Validate game exists and is active
             game = self.game_repo.get_by_id(game_id)

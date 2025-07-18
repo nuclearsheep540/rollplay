@@ -111,8 +111,8 @@ class CampaignRepository:
         self.db.commit()
         return updated_count > 0
     
-    def get_campaign_with_game_status(self, campaign_id: UUID) -> Optional[Dict[str, Any]]:
-        """Get campaign with its associated game status for access control."""
+    def get_campaign_with_game(self, campaign_id: UUID) -> Optional[Dict[str, Any]]:
+        """Get campaign with its associated game data (no business logic)."""
         result = self.db.query(CampaignModel, GameModel).outerjoin(
             GameModel, CampaignModel.id == GameModel.campaign_id
         ).filter(
@@ -127,8 +127,7 @@ class CampaignRepository:
         
         return {
             'campaign': self.to_domain(campaign),
-            'game': game,
-            'can_configure': game is None or game.status == GameStatus.INACTIVE
+            'game': game  # Keep as model object for now - service layer handles conversion
         }
     
     # Aggregate serialization methods

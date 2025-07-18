@@ -21,6 +21,7 @@ class GameResponse(BaseModel):
     turn_order: List[dict]
     adventure_logs: List[dict]
     total_play_time: int
+    mongodb_session_id: Optional[str]
     started_at: Optional[datetime]
     ended_at: Optional[datetime]
     last_activity_at: datetime
@@ -33,11 +34,11 @@ class GameResponse(BaseModel):
     def from_orm(cls, obj):
         """Custom from_orm to handle enum serialization"""
         return cls(
-            id=obj.id,
-            campaign_id=obj.campaign_id,
+            id=str(obj.id),
+            campaign_id=str(obj.campaign_id),
             name=obj.name,
             status=str(obj.status),  # Convert enum to string
-            dm_id=obj.dm_id,
+            dm_id=str(obj.dm_id),
             party=obj.party or [],
             max_players=obj.max_players,
             location=obj.location,
@@ -46,6 +47,7 @@ class GameResponse(BaseModel):
             turn_order=obj.turn_order or [],
             adventure_logs=obj.adventure_logs or [],
             total_play_time=obj.total_play_time,
+            mongodb_session_id=obj.mongodb_session_id,
             started_at=obj.started_at,
             ended_at=obj.ended_at,
             last_activity_at=obj.last_activity_at,

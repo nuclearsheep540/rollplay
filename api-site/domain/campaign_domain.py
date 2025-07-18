@@ -132,6 +132,22 @@ class Campaign:
         self.scenes = scenes_config
         self.updated_at = datetime.utcnow()
     
+    @property
+    def is_configured(self) -> bool:
+        """
+        Check if campaign is properly configured to start games.
+        
+        Returns:
+            bool: True if campaign has minimum required configuration
+        """
+        # TODO: Add proper validation when ready for production
+        # Minimum requirements for starting a game:
+        # 1. Must have a name
+        # 2. Must have at least one invited player (to form initial party)
+        # 
+        # For now, return True to allow testing without configuration requirements
+        return True
+    
     def soft_delete(self) -> None:
         """Soft delete the campaign."""
         self.is_deleted = True

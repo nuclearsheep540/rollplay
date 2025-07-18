@@ -19,7 +19,7 @@ class Game(Base):
     dm_id = Column(UUID(as_uuid=True), ForeignKey("users.id"))
     
     # Game lifecycle
-    status = Column(Enum('inactive', 'starting', 'active', 'stopping', name='gamestatus'))
+    status = Column(Enum('inactive', 'starting', 'active', 'stopping', name='gamestatus'), default='inactive')
     
     # Game state (persisted from hot storage)
     location = Column(String, nullable=True)  # Current in-game location
@@ -32,6 +32,7 @@ class Game(Base):
     # Session tracking
     current_session_number = Column(Integer, default=1)
     total_play_time = Column(Integer, default=0)  # Total minutes played
+    mongodb_session_id = Column(String, nullable=True)  # MongoDB ObjectId for active session
     started_at = Column(DateTime, nullable=True)
     ended_at = Column(DateTime, nullable=True)
     last_activity_at = Column(DateTime, default=datetime.utcnow)

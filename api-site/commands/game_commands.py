@@ -77,3 +77,14 @@ class RemovePlayerFromGame:
         """Execute the command to remove player from game"""
         game = self.game_service.remove_player_from_game(game_id, user_id)
         return game
+
+class DeleteGame:
+    """Command to delete a game (only if INACTIVE)"""
+    
+    def __init__(self, db: Session):
+        self.game_service = GameService(db)
+    
+    def execute(self, game_id: UUID) -> Game:
+        """Execute the command to delete a game"""
+        game = self.game_service.delete_game(game_id)
+        return game

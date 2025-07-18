@@ -13,7 +13,7 @@ from models.base import get_db
 from commands.user_commands import GetOrCreateUser, AddTempGameId, UpdateScreenName
 from commands.character_commands import GetUserCharacters
 from commands.campaign_commands import GetUserCampaigns, CreateCampaign, GetCampaignGames, DeleteCampaign
-from commands.game_commands import GetUserGames, CreateGame, StartGame, EndGame
+from commands.game_commands import GetUserGames, CreateGame, StartGame, EndGame, DeleteGame
 from commands.friendship_commands import SendFriendRequest, AcceptFriendRequest, RejectFriendRequest, RemoveFriend, GetFriendsList, GetPendingFriendRequests, GetSentFriendRequests
 from routers.game_migration import router as game_migration_router
 from schemas.user_schemas import UserResponse, ScreenNameUpdate
@@ -120,7 +120,6 @@ async def get_or_create_user(
         UserResponse: User data for authenticated user
     """
     try:
-        # TODO: breakpoint here and test its reachable
         command = GetOrCreateUser(db)
         user, was_created = command.execute(authenticated_email)
         return UserResponse.from_orm(user)
@@ -496,6 +495,27 @@ async def end_game(
         return GameResponse.from_orm(game)
     except ValueError as e:
         # Business logic errors
+        raise HTTPException(status_code=400, detail=str(e))
+
+@app.delete("/api/games/{game_id}", response_model=GameResponse)
+async def delete_game(
+    game_id: UUID,
+    db: Session = Depends(get_db),
+    authenticated_email: str = Depends(verify_auth_token)
+):
+    """
+    Delete a game (only if INACTIVE).
+    
+    Returns:
+        GameResponse: Deleted game data
+    """
+    try:
+        delete_command = DeleteGame(db)
+        game = delete_command.execute(game_id)
+        
+        return GameResponse.from_orm(game)
+    except ValueError as e:
+        # Business logic errors (e.g., game not INACTIVE)
         raise HTTPException(status_code=400, detail=str(e))
 
 # Friend endpoints

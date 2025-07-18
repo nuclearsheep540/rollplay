@@ -88,6 +88,7 @@ class Game:
     turn_order: List[TurnEntry] = field(default_factory=list)
     current_session_number: int = 1
     total_play_time: int = 0
+    mongodb_session_id: Optional[str] = None
     created_at: datetime = field(default_factory=datetime.utcnow)
     last_activity_at: datetime = field(default_factory=datetime.utcnow)
     started_at: Optional[datetime] = None
@@ -168,7 +169,8 @@ class Game:
             'total_play_time': self.total_play_time,
             'created_at': self.created_at.isoformat(),
             'last_activity': self.last_activity_at.isoformat(),
-            'players_connected': []  # Will be populated by WebSocket manager
+            'players_connected': [],  # Will be populated by WebSocket manager
+            'moderators': []  # Empty list by default, can be populated later
         }
     
     @classmethod

@@ -21,8 +21,9 @@ export default function CampaignManager({ user }) {
   const [selectedCampaign, setSelectedCampaign] = useState(null)
   const [campaignGames, setCampaignGames] = useState([])
   const [allCampaignGames, setAllCampaignGames] = useState({}) // Store games for all campaigns
-  const [startingGame, setStartingGame] = useState(null)
+  const [creatingGame, setCreatingGame] = useState(null)
   const [endingGame, setEndingGame] = useState(null)
+  const [deletingGame, setDeletingGame] = useState(null)
 
   // Fetch campaigns from API
   const fetchCampaigns = async () => {
@@ -113,9 +114,58 @@ export default function CampaignManager({ user }) {
     }
   }
 
+  // Create game (without starting it)
+  const createGame = async (campaignId) => {
+    setCreatingGame(campaignId)
+    setError(null)
+
+    try {
+      const gameData = {
+        name: `Session 1`,
+        max_players: 6,
+        seat_colors: {
+          "0": "#3b82f6",
+          "1": "#ef4444", 
+          "2": "#22c55e",
+          "3": "#f97316",
+          "4": "#8b5cf6",
+          "5": "#f59e0b"
+        }
+      }
+
+      const response = await fetch(`/api/campaigns/${campaignId}/games/`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        credentials: 'include',
+        body: JSON.stringify(gameData)
+      })
+
+      if (response.ok) {
+        const result = await response.json()
+        console.log('Game created:', result)
+        
+        // Refresh campaigns and games
+        await fetchCampaigns()
+        if (selectedCampaign) {
+          await fetchCampaignGames(selectedCampaign.id)
+        }
+      } else {
+        const errorData = await response.json()
+        throw new Error(errorData.detail || 'Failed to create game')
+      }
+    } catch (error) {
+      console.error('Error creating game:', error)
+      setError('Failed to create game: ' + error.message)
+    } finally {
+      setCreatingGame(null)
+    }
+  }
+
   // Start game session (cold → hot storage migration)
   const startGameSession = async (campaignId) => {
-    setStartingGame(campaignId)
+    setCreatingGame(campaignId)
     setError(null)
 
     try {
@@ -144,8 +194,11 @@ export default function CampaignManager({ user }) {
         const result = await response.json()
         console.log('Game session started:', result)
         
-        // Navigate to the active game
-        router.push(`/game?roomId=${result.data.game_id}`)
+        // Refresh campaigns and games
+        await fetchCampaigns()
+        if (selectedCampaign) {
+          await fetchCampaignGames(selectedCampaign.id)
+        }
       } else {
         const errorData = await response.json()
         throw new Error(errorData.detail || 'Failed to start game session')
@@ -154,7 +207,7 @@ export default function CampaignManager({ user }) {
       console.error('Error starting game session:', error)
       setError('Failed to start game session: ' + error.message)
     } finally {
-      setStartingGame(null)
+      setCreatingGame(null)
     }
   }
 
@@ -193,6 +246,44 @@ export default function CampaignManager({ user }) {
     }
   }
 
+  // Delete game (only if INACTIVE)
+  const deleteGame = async (gameId, gameName) => {
+    if (!confirm(`Are you sure you want to delete "${gameName || 'this game'}"?\n\nAll progress on this game will be lost. This action cannot be undone.`)) {
+      return
+    }
+
+    setDeletingGame(gameId)
+    setError(null)
+
+    try {
+      const response = await fetch(`/api/games/${gameId}`, {
+        method: 'DELETE',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        credentials: 'include'
+      })
+
+      if (response.ok) {
+        console.log('Game deleted successfully')
+        
+        // Refresh campaigns and games
+        await fetchCampaigns()
+        if (selectedCampaign) {
+          await fetchCampaignGames(selectedCampaign.id)
+        }
+      } else {
+        const errorData = await response.json()
+        throw new Error(errorData.detail || 'Failed to delete game')
+      }
+    } catch (error) {
+      console.error('Error deleting game:', error)
+      setError('Failed to delete game: ' + error.message)
+    } finally {
+      setDeletingGame(null)
+    }
+  }
+
   // Create a new campaign
   const createCampaign = async () => {
     if (!user || !campaignName.trim()) return
@@ -221,36 +312,6 @@ export default function CampaignManager({ user }) {
 
       const campaign = await response.json()
       console.log('Created campaign:', campaign.id)
-      
-      // Create an initial game within the campaign
-      const gameData = {
-        name: `Session 1`,
-        max_players: 6,
-        seat_colors: {
-          "0": "#3b82f6",
-          "1": "#ef4444", 
-          "2": "#22c55e",
-          "3": "#f97316",
-          "4": "#8b5cf6",
-          "5": "#f59e0b"
-        }
-      }
-
-      const gameResponse = await fetch(`/api/campaigns/${campaign.id}/games/`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        credentials: 'include',
-        body: JSON.stringify(gameData)
-      })
-
-      if (!gameResponse.ok) {
-        throw new Error('Failed to create initial game')
-      }
-
-      const game = await gameResponse.json()
-      console.log('Created initial game:', game.id)
       
       // Refresh campaigns list
       await fetchCampaigns()
@@ -327,10 +388,10 @@ export default function CampaignManager({ user }) {
       <style jsx>{`
         @keyframes gradient-x {
           0%{
-            background-position: 0% 0%;
+            background-position: 100% 100%;
           }
           100%{
-            background-position: 100% 100%;
+            background-position: 0% 0%;
           }
         }
         .animate-gradient-x {
@@ -460,32 +521,10 @@ export default function CampaignManager({ user }) {
                               Game In Session
                             </button>
                           )
-                        } else if (inactiveGames.length > 0) {
-                          return (
-                            <button
-                              onClick={(e) => {
-                                e.stopPropagation()
-                                startGameSession(campaign.id)
-                              }}
-                              disabled={startingGame === campaign.id}
-                              className="bg-green-600 hover:bg-green-700 text-white px-3 py-1 rounded text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-                            >
-                              {startingGame === campaign.id ? 'Starting...' : 'Start Game'}
-                            </button>
-                          )
                         } else {
+                          // Always show Configure when no active games
                           return (
                             <>
-                              <button
-                                onClick={(e) => {
-                                  e.stopPropagation()
-                                  startGameSession(campaign.id)
-                                }}
-                                disabled={startingGame === campaign.id}
-                                className="bg-green-600 hover:bg-green-700 text-white px-3 py-1 rounded text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-                              >
-                                {startingGame === campaign.id ? 'Starting...' : 'Start Game'}
-                              </button>
                               <button
                                 onClick={(e) => {
                                   e.stopPropagation()
@@ -494,6 +533,16 @@ export default function CampaignManager({ user }) {
                                 className="bg-blue-600 hover:bg-blue-700 text-white px-3 py-1 rounded text-sm font-medium transition-colors"
                               >
                                 Configure
+                              </button>
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation()
+                                  createGame(campaign.id)
+                                }}
+                                disabled={creatingGame === campaign.id}
+                                className="bg-green-600 hover:bg-green-700 text-white px-3 py-1 rounded text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                              >
+                                {creatingGame === campaign.id ? 'Creating...' : 'Create Game'}
                               </button>
                             </>
                           )
@@ -546,12 +595,22 @@ export default function CampaignManager({ user }) {
                           <div className="flex space-x-2">
                             {game.status === 'active' ? (
                               <>
-                                <button
-                                  onClick={() => router.push(`/game?roomId=${game.id}`)}
-                                  className="bg-blue-600 hover:bg-blue-700 text-white px-3 py-1 rounded text-sm font-medium transition-colors"
-                                >
-                                  Join Game
-                                </button>
+                                {game.mongodb_session_id && (
+                                  <button
+                                    onClick={() => router.push(`/game?roomId=${game.mongodb_session_id}`)}
+                                    className="bg-blue-600 hover:bg-blue-700 text-white px-3 py-1 rounded text-sm font-medium transition-colors"
+                                  >
+                                    Join Game
+                                  </button>
+                                )}
+                                {!game.mongodb_session_id && (
+                                  <button
+                                    disabled={true}
+                                    className="bg-gray-400 text-white px-3 py-1 rounded text-sm font-medium cursor-not-allowed"
+                                  >
+                                    Session Loading...
+                                  </button>
+                                )}
                                 <button
                                   onClick={() => endGameSession(game.id)}
                                   disabled={endingGame === game.id}
@@ -561,13 +620,26 @@ export default function CampaignManager({ user }) {
                                 </button>
                               </>
                             ) : (
-                              <button
-                                onClick={() => startGameSession(selectedCampaign.id)}
-                                disabled={startingGame === selectedCampaign.id}
-                                className="bg-green-600 hover:bg-green-700 text-white px-3 py-1 rounded text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-                              >
-                                {startingGame === selectedCampaign.id ? 'Starting...' : 'Start Game'}
-                              </button>
+                              <>
+                                {game.status === 'inactive' && (
+                                  <>
+                                    <button
+                                      onClick={() => startGameSession(selectedCampaign.id)}
+                                      disabled={creatingGame === selectedCampaign.id}
+                                      className="bg-green-600 hover:bg-green-700 text-white px-3 py-1 rounded text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                                    >
+                                      {creatingGame === selectedCampaign.id ? 'Starting...' : 'Start Game'}
+                                    </button>
+                                    <button
+                                      onClick={() => deleteGame(game.id, game.name)}
+                                      disabled={deletingGame === game.id}
+                                      className="bg-red-600 hover:bg-red-700 text-white px-3 py-1 rounded text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                                    >
+                                      {deletingGame === game.id ? 'Deleting...' : 'Delete'}
+                                    </button>
+                                  </>
+                                )}
+                              </>
                             )}
                           </div>
                         </div>

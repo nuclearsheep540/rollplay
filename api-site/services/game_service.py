@@ -58,12 +58,13 @@ class GameService:
     
     def start_game(self, game_id: UUID) -> Game:
         """Start game session (activate)"""
-        game = self.db.query(Game).filter(Game.id == game_id).first()
+        from models.game import Game as GameModel
+        game = self.db.query(GameModel).filter(GameModel.id == game_id).first()
         if not game:
             raise ValueError("Game not found")
         
-        game.status = "active"
-        game.session_started_at = datetime.utcnow()
+        game.status = GameStatus.ACTIVE
+        game.started_at = datetime.utcnow()
         game.last_activity_at = datetime.utcnow()
         
         self.db.commit()
@@ -118,11 +119,13 @@ class GameService:
     
     def end_game(self, game_id: UUID) -> Game:
         """End game session (archive and cleanup)"""
-        game = self.db.query(Game).filter(Game.id == game_id).first()
+        from models.game import Game as GameModel
+        game = self.db.query(GameModel).filter(GameModel.id == game_id).first()
         if not game:
             raise ValueError("Game not found")
         
-        game.status = "completed"
+        game.status = GameStatus.INACTIVE
+        game.ended_at = datetime.utcnow()
         game.last_activity_at = datetime.utcnow()
         
         self.db.commit()
@@ -130,6 +133,24 @@ class GameService:
         
         # TODO: Archive MongoDB data to PostgreSQL
         # TODO: Cleanup WebSocket connections
+        
+        return game
+    
+    def delete_game(self, game_id: UUID) -> Game:
+        """Delete game (soft delete - only if INACTIVE)"""
+        from models.game import Game as GameModel
+        game = self.db.query(GameModel).filter(GameModel.id == game_id).first()
+        if not game:
+            raise ValueError("Game not found")
+        
+        # Validate that game is INACTIVE before deletion
+        if game.status != GameStatus.INACTIVE:
+            raise ValueError(f"Cannot delete game with status '{game.status}'. Only INACTIVE games can be deleted.")
+        
+        # TODO: Implement soft delete by adding a 'deleted_at' field
+        # For now, we'll actually delete the record
+        self.db.delete(game)
+        self.db.commit()
         
         return game
     
