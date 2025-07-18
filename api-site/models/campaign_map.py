@@ -26,5 +26,5 @@ class CampaignMap(Base):
     created_at = Column(DateTime, default=datetime.utcnow)
     
     # Relationships
-    campaign = relationship("Campaign", back_populates="maps")
+    campaign = relationship("Campaign", back_populates="campaign_maps")
     uploader = relationship("User", foreign_keys=[uploaded_by])

@@ -77,7 +77,9 @@ class HotColdMigrationService:
                 game.id, hot_storage_data
             )
             if not is_valid:
-                self.game_repo.update_status(game.id, GameStatus.INACTIVE)  # Rollback
+                # Rollback with proper state transition: ACTIVE -> STOPPING -> INACTIVE
+                self.game_repo.update_status(game.id, GameStatus.STOPPING)
+                self.game_repo.update_status(game.id, GameStatus.INACTIVE)
                 raise RuntimeError("Migration validation failed")
             
             # 7. Save hot storage data to MongoDB via api-game
@@ -120,7 +122,9 @@ class HotColdMigrationService:
                 logger.info(f"API-game response: {response.status_code} - {response.text}")
                 
                 if response.status_code != 200:
-                    self.game_repo.update_status(game.id, GameStatus.INACTIVE)  # Rollback
+                    # Rollback with proper state transition: ACTIVE -> STOPPING -> INACTIVE
+                    self.game_repo.update_status(game.id, GameStatus.STOPPING)
+                    self.game_repo.update_status(game.id, GameStatus.INACTIVE)
                     raise RuntimeError(f"Failed to create MongoDB session: {response.status_code} - {response.text}")
                     
                 # Get the MongoDB ObjectId from the response
@@ -128,7 +132,9 @@ class HotColdMigrationService:
                 mongodb_session_id = mongodb_response.get('id')
                 
                 if not mongodb_session_id:
-                    self.game_repo.update_status(game.id, GameStatus.INACTIVE)  # Rollback
+                    # Rollback with proper state transition: ACTIVE -> STOPPING -> INACTIVE
+                    self.game_repo.update_status(game.id, GameStatus.STOPPING)
+                    self.game_repo.update_status(game.id, GameStatus.INACTIVE)
                     raise RuntimeError(f"No MongoDB session ID returned: {mongodb_response}")
                 
                 logger.info(f"MongoDB session created successfully with ID: {mongodb_session_id}")
@@ -145,7 +151,9 @@ class HotColdMigrationService:
                 
             except Exception as e:
                 logger.error(f"Exception creating MongoDB session: {e}")
-                self.game_repo.update_status(game.id, GameStatus.INACTIVE)  # Rollback
+                # Rollback with proper state transition: ACTIVE -> STOPPING -> INACTIVE
+                self.game_repo.update_status(game.id, GameStatus.STOPPING)
+                self.game_repo.update_status(game.id, GameStatus.INACTIVE)
                 raise RuntimeError(f"Failed to create MongoDB session: {e}")
             
             # 8. Set game to 'active' state
@@ -216,21 +224,32 @@ class HotColdMigrationService:
             if not game:
                 raise RuntimeError("Failed to update game status to stopping")
             
-            # 4. Migrate hot storage changes back to PostgreSQL
+            # 4. Add missing fields to hot storage data (required by from_hot_storage)
+            hot_storage_data['campaign_id'] = str(game.campaign_id)
+            hot_storage_data['name'] = game.name
+            hot_storage_data['dm_id'] = str(game.dm_id)
+            hot_storage_data['created_at'] = game.created_at.isoformat()
+            hot_storage_data['last_activity'] = game.last_activity_at.isoformat()
+            if game.started_at:
+                hot_storage_data['started_at'] = game.started_at.isoformat()
+            if game.ended_at:
+                hot_storage_data['ended_at'] = game.ended_at.isoformat()
+            
+            # 5. Migrate hot storage changes back to PostgreSQL
             migration_data = self.migration_commands.migrate_to_cold_storage(
                 game_id, hot_storage_data
             )
             
-            # 5. Update game record with final state
+            # 6. Update game record with final state
             updated_game = self.game_repo.update(migration_data['game'])
             if not updated_game:
                 raise RuntimeError("Failed to update game with final state")
             
-            # 6. Update campaign with persistent changes
+            # 7. Update campaign with persistent changes
             if migration_data['campaign']:
                 self.campaign_repo.update(migration_data['campaign'])
             
-            # 7. Validate cold storage migration
+            # 8. Validate cold storage migration
             is_valid = self._validate_cold_storage_migration(game_id, hot_storage_data)
             if not is_valid:
                 logger.warning(f"Cold storage migration validation failed for game {game_id}")

@@ -79,6 +79,9 @@ class MigrationCommands:
         hot_storage_data_with_correct_id['_id'] = str(game_id)
         
         updated_game = Game.from_hot_storage(hot_storage_data_with_correct_id)
+        # Follow proper state machine: ACTIVE -> STOPPING -> INACTIVE
+        if updated_game.status == GameStatus.ACTIVE:
+            updated_game.transition_to(GameStatus.STOPPING)
         updated_game.transition_to(GameStatus.INACTIVE)
         
         # Update campaign with any changes that should persist

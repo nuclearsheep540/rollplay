@@ -35,5 +35,5 @@ class Campaign(Base):
     
     # Relationships
     games = relationship("Game", back_populates="campaign")
-    maps = relationship("CampaignMap", back_populates="campaign")
+    campaign_maps = relationship("CampaignMap", back_populates="campaign")
     dm = relationship("User", foreign_keys=[dm_id])
