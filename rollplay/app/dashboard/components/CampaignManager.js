@@ -353,7 +353,8 @@ export default function CampaignManager({ user }) {
           setCampaignGames([])
         }
       } else {
-        throw new Error('Failed to delete campaign')
+        const errorData = await response.json()
+        throw new Error(errorData.detail || 'Failed to delete campaign')
       }
     } catch (error) {
       console.error('Error deleting campaign:', error)
@@ -543,6 +544,16 @@ export default function CampaignManager({ user }) {
                                 className="bg-green-600 hover:bg-green-700 text-white px-3 py-1 rounded text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                               >
                                 {creatingGame === campaign.id ? 'Creating...' : 'Create Game'}
+                              </button>
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation()
+                                  deleteCampaign(campaign.id, campaign.name)
+                                }}
+                                disabled={deletingCampaign === campaign.id}
+                                className="bg-red-600 hover:bg-red-700 text-white px-3 py-1 rounded text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                              >
+                                {deletingCampaign === campaign.id ? 'Deleting...' : 'Delete'}
                               </button>
                             </>
                           )
