@@ -46,67 +46,212 @@ Rollplay is a virtual D&D/tabletop gaming platform called "Tabletop Tavern" that
 
 **🔄 Note**: These principles are specific to the **game service managing active sessions in MongoDB**. Regular application features (users, campaigns, etc.) follow standard DDD patterns with PostgreSQL.
 
-## Backend Architecture - Domain-Driven Design (DDD)
+## Backend Architecture - Aggregate-Centric Modules
 
-### 🚨 CRITICAL DDD PRINCIPLES
+### 🚨 CRITICAL ARCHITECTURAL PRINCIPLES
 
-#### **Proper Layer Architecture**
-**API → Application → Domain → Adapters**
+#### **Aggregate-Centric Structure**
+**Organize by domain/aggregate, not by technical layers**
 
-**Correct Flow**: HTTP Request → Command → Aggregate → Repository → Database
-**Incorrect Flow**: API → Direct Database Access (bypassing domain logic)
+**Pattern**: Each aggregate gets its own module with all layers contained within
+**Benefit**: Vertical cohesion - everything related to User/Campaign lives together
 
-#### **Aggregate Design Rules**
-- **Single Responsibility**: Each aggregate protects one set of business invariants
-- **Reference by ID**: Aggregates reference other aggregates by ID only, never direct object references
-- **Transaction Boundaries**: One aggregate per transaction
-- **Small and Focused**: Keep aggregates as small as possible while maintaining consistency
+#### **DDD Principles Within Each Aggregate**
+- **API → Application → Domain → Adapters** (maintained within each module)
+- **Repository Injection**: Inject repositories directly to endpoints
+- **Clean Boundaries**: Domain layer pure, no infrastructure dependencies
+- **Reference by ID**: Aggregates reference other aggregates by ID only
 
-#### **Clean Boundaries**
-- **Domain Layer**: Pure business logic, no infrastructure dependencies
-- **Application Layer**: Orchestration only, no business rules
-- **Adapters Layer**: Infrastructure concerns (databases, external APIs)
-- **API Layer**: HTTP concerns, input validation, response formatting
+#### **Entity Relationships**
+- **Root Aggregates**: User, Campaign (each gets own module)
+- **Entities**: Game is an entity within Campaign aggregate
+- **Structure**: Game lives under `/campaign/game/` since Campaign is root
 
-### Backend Directory Structure (DDD)
+#### **Naming Conventions**
+- **Commands**: No "Command" suffix (e.g., `GetOrCreateUser`)
+- **Aggregates**: Suffix with "Aggregate" (e.g., `UserAggregate`)
+- **Repositories**: Suffix with "Repository" (e.g., `UserRepository`)
+- **Modules**: Use aggregate name as directory (e.g., `user/`, `campaign/`)
+
+#### **🚨 IMPLEMENTATION AUTHORITY**
+- **PRIMARY REFERENCE**: `/ddd_refactor.md` contains the authoritative implementation plan
+- **ARCHITECTURAL PATTERN**: Aggregate-Centric Modules (vertical slicing)
+- **KEY PRINCIPLE**: Feature-focused cohesion over layer-focused separation
+- **RULE**: All code related to an aggregate lives in its module
+
+### Backend Directory Structure (Aggregate-Centric)
 ```
 api-site/
-├── api/                       # FastAPI route handlers
-│   ├── users.py              # User endpoints 
-│   ├── campaigns.py          # Campaign endpoints
-│   └── schemas/              # Pydantic request/response models
-│       ├── user_schemas.py   # UserResponse, UserRequest
-│       └── campaign_schemas.py
-├── application/              # Orchestration layer
-│   └── commands/             # Use case implementations
-│       ├── user_commands.py
-│       └── campaign_commands.py
-├── domain/                   # Pure business logic
-│   ├── aggregates/           # Business entities with invariants
-│   │   ├── user_aggregate.py
-│   │   ├── campaign_aggregate.py
-│   │   └── game_aggregate.py
-│   └── services/             # Domain policies and cross-aggregate rules
-│       └── campaign_policies.py
-├── adapters/                 # Infrastructure layer
-│   ├── repositories/         # Data access abstraction
-│   │   ├── user_repository.py
-│   │   └── campaign_repository.py
-│   ├── mappers/              # ORM ↔ Aggregate translation
-│   │   ├── user_mapper.py
-│   │   └── campaign_mapper.py
-│   └── db/
-│       └── session.py        # Database session management
-├── dependencies/             # FastAPI dependency injection
-│   ├── repositories.py      # Repository DI setup
-│   └── auth.py              # Authentication DI
-├── orm/                      # SQLAlchemy models (data layer only)
-│   ├── user_model.py
-│   └── campaign_model.py
-└── legacy/                   # OLD - Being removed
-    ├── services/             # OLD - These were actually repositories
-    └── models/               # OLD - Moving to orm/
+├── main.py                        # FastAPI app setup and include_router calls
+├── routers.py                     # Maps routers from each aggregate
+├── user/
+│   ├── api/
+│   │   └── endpoints.py           # FastAPI route handlers for user actions
+│   ├── schemas/
+│   │   └── user_schemas.py        # Pydantic models: UserRequest, UserResponse
+│   ├── application/
+│   │   └── commands.py            # GetOrCreateUser, UpdateUserLogin
+│   ├── domain/
+│   │   ├── aggregates.py          # UserAggregate
+│   │   └── services.py            # Domain-specific auth logic (is_verified_user)
+│   ├── adapters/
+│   │   ├── repositories.py        # UserRepository (implements interface)
+│   │   └── mappers.py             # user_mapper (to_domain / from_domain)
+│   ├── orm/
+│   │   └── user_model.py          # SQLAlchemy model for User
+│   ├── dependencies/
+│   │   └── repositories.py        # get_user_repository (module-specific DI)
+│   └── tests/
+│       └── test_user.py
+├── campaign/
+│   ├── api/
+│   │   └── endpoints.py           # Campaign endpoints (create, list, start game)
+│   ├── schemas/
+│   │   └── campaign_schemas.py    # CampaignRequest, CampaignResponse
+│   ├── application/
+│   │   └── commands.py            # CreateCampaign, GetUserCampaigns
+│   ├── domain/
+│   │   ├── aggregates.py          # CampaignAggregate
+│   │   └── services.py            # Campaign rules, visibility policies
+│   ├── game/                      # Game ENTITY within Campaign aggregate
+│   │   ├── domain/
+│   │   │   └── entities.py        # GameEntity (not root), state transitions
+│   │   ├── dependencies/
+│   │   │   └── access.py          # Game participation checks (can_take_turn)
+│   │   └── tests/
+│   │       └── test_game_logic.py
+│   ├── adapters/
+│   │   ├── repositories.py        # CampaignRepository (includes Game persistence)
+│   │   └── mappers.py             # campaign_mapper (includes Game mapping)
+│   ├── orm/
+│   │   ├── campaign_model.py      # Campaign SQLAlchemy model
+│   │   └── game_model.py          # Game model (if persisted independently)
+│   ├── dependencies/
+│   │   ├── repositories.py        # get_campaign_repository
+│   │   └── auth_checks.py         # Campaign role checks (is_dm, can_edit_campaign)
+│   └── tests/
+│       └── test_campaign_flow.py
+├── shared/
+│   ├── dependencies/
+│   │   └── auth.py                # Token decoding, user resolution, session lifecycle
+│   ├── db.py                      # get_db(), engine setup
+│   ├── auth.py                    # JWT decoding utilities only (no DI logic)
+│   └── config.py                  # App settings and env management
+└── legacy/                        # OLD - Being migrated
+    ├── services/                  # OLD service layer (being removed)
+    ├── commands/                  # OLD commands (being moved to aggregates)
+    └── models/                    # OLD models (moving to aggregate/orm/)
 ```
+
+## Blueprint for Moving Forward
+
+### **🚨 CRITICAL: Follow Aggregate-Centric Pattern**
+
+#### **Phase 1: ✅ User Module (Complete)**
+- User aggregate-centric module fully implemented
+- Repository injection pattern established
+- Cross-aggregate coordination ready
+
+#### **Phase 2: Campaign Module Implementation (Next Priority)**
+
+**Step 1: Create Campaign Module Structure**
+```bash
+mkdir -p campaign/{api,schemas,application,domain,adapters,orm,game/domain,tests}
+```
+
+**Step 2: Campaign Domain Rules**
+- Campaign can have multiple Games (entities)
+- DM can create/delete campaigns
+- Games inherit campaign visibility rules
+- Campaign deletion cascades to games
+
+**Step 3: Game Entity Rules**
+- Game is entity within Campaign aggregate
+- Game lifecycle controlled by Campaign
+- Game states: INACTIVE, ACTIVE, PAUSED, COMPLETED
+- Only DM can start/end games
+
+**Step 4: Cross-Aggregate Coordination**
+```python
+# Example: User dashboard needs Campaign data
+class GetUserDashboard:
+    def __init__(self, user_repo: UserRepository, campaign_repo: CampaignRepository):
+        # Multiple repository injection for orchestration
+```
+
+**Step 5: Repository Patterns**
+```python
+# shared/dependencies/repositories.py - Add to existing
+def get_campaign_repository(db: Session = Depends(get_db)) -> CampaignRepository:
+    return CampaignRepository(db)
+```
+
+#### **Phase 3: Legacy Migration Strategy**
+
+**Move from Horizontal to Vertical:**
+1. **Create aggregate modules** first (campaign/, game/ under campaign/)
+2. **Move existing logic** to appropriate modules
+3. **Update imports** in main app to use new routers
+4. **Remove legacy** directories (commands/, services/, etc.)
+
+#### **Cross-Aggregate Coordination Rules**
+
+**✅ CORRECT Patterns:**
+- **Application Layer Orchestration**: Commands inject multiple repositories
+- **Repository DI**: All repositories available in shared/dependencies/
+- **Reference by ID**: Aggregates never import other aggregates directly
+- **Event Coordination**: Use application layer for complex workflows
+
+**❌ FORBIDDEN Patterns:**
+- Direct imports between aggregate modules
+- Aggregate-to-aggregate direct calls
+- Business logic in shared layer
+- Repository logic in domain layer
+
+### **Development Workflow**
+
+#### **Adding New Features:**
+1. **Identify Aggregate**: Which module owns this feature?
+2. **Domain First**: Add business rules to aggregate
+3. **Repository Pattern**: Extend repository if needed
+4. **Command Orchestration**: Create application command
+5. **API Integration**: Add endpoint with repository injection
+
+#### **Cross-Aggregate Features:**
+1. **Choose Primary Module**: Which aggregate "owns" the feature?
+2. **Multiple Repository Injection**: Inject all needed repositories
+3. **Application Orchestration**: Coordinate in command layer
+4. **No Direct Dependencies**: Never import between modules
+
+### **Immediate Next Steps**
+
+#### **Ready to Implement: Campaign Module**
+The User module is complete and serves as the blueprint. Next implementation:
+
+**Priority 1: Campaign Aggregate-Centric Module**
+```bash
+# Create the structure
+mkdir -p campaign/{api,schemas,application,domain,adapters,orm,game/domain,tests}
+
+# Follow the exact pattern from User module:
+# 1. campaign/domain/aggregates.py - CampaignAggregate with Game entities
+# 2. campaign/adapters/repositories.py - CampaignRepository
+# 3. campaign/application/commands.py - CreateCampaign, GetUserCampaigns
+# 4. campaign/api/endpoints.py - Campaign/Game endpoints
+# 5. Add to shared/dependencies/repositories.py
+```
+
+**Migration Pattern:**
+- Use existing User module as exact template
+- Follow ddd_refactor.md updated plan
+- Campaign contains Game entities (not separate root)
+- Cross-aggregate coordination via application layer
+
+**Success Criteria:**
+- All campaign logic moves to `/campaign/` module
+- Repository injection pattern maintained
+- Cross-aggregate commands work (User + Campaign)
+- Legacy campaign code removed
 
 ### **Key DDD Patterns**
 

@@ -41,7 +41,7 @@ services:
         container_name: "api-site-dev"
         build:
             context: ./api-site
-            dockerfile: Dockerfile
+            dockerfile: ../docker/dev/api-site/Dockerfile
         ports: 
             - 8082:8082
         volumes:
@@ -92,7 +92,7 @@ services:
         hostname: mongo
         build:
             context: ./docker
-            dockerfile: dev/db/Dockerfile
+            dockerfile: dev/mongo/Dockerfile
             args:
                 MONGO_INITDB_ROOT_USERNAME: ${MONGO_INITDB_ROOT_USERNAME}
                 MONGO_INITDB_ROOT_PASSWORD: ${MONGO_INITDB_ROOT_PASSWORD}
