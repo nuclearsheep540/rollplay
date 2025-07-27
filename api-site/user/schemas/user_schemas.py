@@ -30,6 +30,7 @@ class UserResponse(BaseModel):
     """
     id: str
     email: str
+    screen_name: Optional[str]
     created_at: datetime
     last_login: Optional[datetime]
     is_recently_active: bool

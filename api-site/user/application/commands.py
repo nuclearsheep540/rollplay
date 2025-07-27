@@ -41,6 +41,21 @@ class UpdateUserLogin:
         self.repository.save(user)
         return user
 
+class UpdateScreenName:
+    def __init__(self, repository: UserRepository):
+        self.repository = repository
+    
+    def execute(self, user_id: str, screen_name: str) -> UserAggregate:
+        """Update user screen name with business rule validation"""
+        user = self.repository.get_by_id(user_id)
+        if not user:
+            raise ValueError(f"User {user_id} not found")
+        
+        # Business logic in aggregate
+        user.update_screen_name(screen_name)
+        self.repository.save(user)
+        return user
+
 class GetUserDashboard:
     """Cross-aggregate coordination command for user dashboard"""
     def __init__(self, user_repository: UserRepository, campaign_repository):

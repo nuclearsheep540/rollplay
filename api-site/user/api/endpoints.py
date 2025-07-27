@@ -16,7 +16,7 @@ from campaign.dependencies.repositories import get_campaign_repository
 
 from user.adapters.repositories import UserRepository
 from campaign.adapters.repositories import CampaignRepository
-from user.application.commands import GetOrCreateUser, UpdateUserLogin, GetUserDashboard
+from user.application.commands import GetOrCreateUser, UpdateUserLogin, UpdateScreenName, GetUserDashboard
 from shared.dependencies.auth import get_current_user_from_token
 from user.domain.aggregates import UserAggregate
 
@@ -56,6 +56,7 @@ async def login_user(
         user_response = UserResponse(
             id=str(user.id),
             email=user.email,
+            screen_name=user.screen_name,
             created_at=user.created_at,
             last_login=user.last_login,
             is_recently_active=user.is_recently_active()
@@ -95,12 +96,13 @@ async def get_current_user(
     return UserResponse(
         id=str(current_user.id),
         email=current_user.email,
+        screen_name=current_user.screen_name,
         created_at=current_user.created_at,
         last_login=current_user.last_login,
         is_recently_active=current_user.is_recently_active()
     )
 
-@router.put("/screen-name")
+@router.put("/screen-name", response_model=UserResponse)
 async def update_screen_name(
     request: ScreenNameUpdateRequest,
     current_user: UserAggregate = Depends(get_current_user_from_token),
@@ -109,13 +111,32 @@ async def update_screen_name(
     """
     Update user screen name.
     
-    Note: This is a placeholder - needs proper implementation.
+    Allows authenticated users to set or update their screen name.
+    Screen name must be 1-30 characters and cannot be empty.
     """
-    # TODO: Implement screen name update functionality
-    raise HTTPException(
-        status_code=status.HTTP_501_NOT_IMPLEMENTED,
-        detail="Screen name update not yet implemented"
-    )
+    try:
+        command = UpdateScreenName(user_repo)
+        updated_user = command.execute(str(current_user.id), request.screen_name)
+        
+        return UserResponse(
+            id=str(updated_user.id),
+            email=updated_user.email,
+            screen_name=updated_user.screen_name,
+            created_at=updated_user.created_at,
+            last_login=updated_user.last_login,
+            is_recently_active=updated_user.is_recently_active()
+        )
+        
+    except ValueError as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Invalid screen name: {str(e)}"
+        )
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Internal server error during screen name update"
+        )
 
 @router.post("/create", response_model=UserResponse)
 async def create_user(
@@ -139,6 +160,7 @@ async def create_user(
         return UserResponse(
             id=str(user.id),
             email=user.email,
+            screen_name=user.screen_name,
             created_at=user.created_at,
             last_login=user.last_login,
             is_recently_active=user.is_recently_active()
@@ -172,6 +194,7 @@ async def get_user_dashboard(
             "user": {
                 "id": str(dashboard_data['user'].id),
                 "email": dashboard_data['user'].email,
+                "screen_name": dashboard_data['user'].screen_name,
                 "created_at": dashboard_data['user'].created_at,
                 "last_login": dashboard_data['user'].last_login,
                 "is_recently_active": dashboard_data['user'].is_recently_active()

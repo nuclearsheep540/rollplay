@@ -27,6 +27,7 @@ def to_domain(model):
     return UserAggregate(
         id=model.id,
         email=model.email,
+        screen_name=model.screen_name,
         created_at=model.created_at,
         last_login=model.last_login
     )
@@ -53,6 +54,7 @@ def from_domain(aggregate):
     return UserModel(
         id=aggregate.id,
         email=aggregate.email,
+        screen_name=aggregate.screen_name,
         created_at=aggregate.created_at,
         last_login=aggregate.last_login
     )
@@ -80,6 +82,7 @@ def update_model_from_domain(model, aggregate):
     # Update mutable fields only
     # Note: id and created_at are immutable, email is immutable after creation
     model.last_login = aggregate.last_login
+    model.screen_name = aggregate.screen_name
     
     # Email should not change after creation (business rule)
     # If this changes, it indicates a business rule violation

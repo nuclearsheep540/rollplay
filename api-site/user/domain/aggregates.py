@@ -17,9 +17,10 @@ class UserAggregate:
     - Last login is recorded automatically
     - User creation requires valid email
     """
-    def __init__(self, id=None, email=None, created_at=None, last_login=None):
+    def __init__(self, id=None, email=None, screen_name=None, created_at=None, last_login=None):
         self.id = id
         self.email = email
+        self.screen_name = screen_name
         self.created_at = created_at
         self.last_login = last_login
     
@@ -59,6 +60,7 @@ class UserAggregate:
         return cls(
             id=None,  # Set by repository after persistence
             email=normalized_email,
+            screen_name=None,  # To be set later by user
             created_at=datetime.utcnow()
         )
    
@@ -67,9 +69,40 @@ class UserAggregate:
         Business rule: Record user login timestamp.
         
         Updates the last_login field to current UTC time.
-        This is the only mutable operation allowed on a user.
         """
         self.last_login = utc_now()
+    
+    def update_screen_name(self, screen_name):
+        """
+        Business rule: Update user screen name with validation.
+        
+        Business Rules Enforced:
+        - Screen name must be 1-30 characters
+        - Screen name cannot be empty or just whitespace
+        - Screen name is trimmed of whitespace
+        
+        Args:
+            screen_name: New screen name for the user
+            
+        Raises:
+            ValueError: If screen name is invalid
+        """
+        if not screen_name:
+            raise ValueError("Screen name cannot be empty")
+        
+        # Normalize screen name
+        normalized_name = screen_name.strip()
+        
+        if not normalized_name:
+            raise ValueError("Screen name cannot be empty or just whitespace")
+        
+        if len(normalized_name) < 1:
+            raise ValueError("Screen name must be at least 1 character")
+            
+        if len(normalized_name) > 30:
+            raise ValueError("Screen name cannot exceed 30 characters")
+        
+        self.screen_name = normalized_name
     
     def is_recently_active(self, hours=24):
         """
