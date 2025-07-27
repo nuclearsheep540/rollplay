@@ -14,12 +14,18 @@ import sys
 # Add the project root to the path so we can import our models
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)) + '/..')
 
-# Import your models here
-from models.base import Base
-from models.user import User
-from models.character import Character
-from models.game import Game
-from models.game_player import GamePlayers
+# Import your models here - using new DDD structure
+from shared.db import Base
+
+# Import all models to ensure they're registered with SQLAlchemy
+try:
+    from user.orm.user_model import User
+    from characters.orm.character_model import Character
+    print("Models imported successfully")
+except ImportError as e:
+    print(f"Error importing models: {e}")
+    # Fallback - just import Base for now
+    pass
 
 # this is the Alembic Config object, which provides
 # access to the values within the .ini file in use.

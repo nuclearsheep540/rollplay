@@ -19,6 +19,7 @@ class User(Base):
     
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid4)
     email = Column(String, unique=True, nullable=False, index=True)
+    screen_name = Column(String, nullable=True)  # Added missing field from database
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
     last_login = Column(DateTime, nullable=True)
     

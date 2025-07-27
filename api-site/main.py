@@ -4,12 +4,19 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 import logging
+from shared.db import configure_mappers
 
-from routers import include_aggregate_routers
+# Import aggregate routers directly
+from user.api.endpoints import router as user_router
+from campaign.api.endpoints import router as campaign_router
+from characters.api.endpoints import router as characters_router
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
+
+# Configure SQLAlchemy mappers early
+configure_mappers()
 
 # Create FastAPI app
 app = FastAPI(
@@ -27,8 +34,10 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Include all aggregate routers
-include_aggregate_routers(app)
+# Include aggregate routers
+app.include_router(user_router, prefix="/api/users")
+app.include_router(campaign_router, prefix="/api/campaign")
+app.include_router(characters_router, prefix="/api/characters")
 
 # Health check endpoint
 @app.get("/health")

@@ -61,28 +61,7 @@ class UserAggregate:
             email=normalized_email,
             created_at=datetime.utcnow()
         )
-    
-    @classmethod
-    def from_persistence(cls, id, email, created_at, last_login=None):
-        """
-        Reconstruct user from persistence layer.
-        
-        Args:
-            id: User UUID
-            email: User email address
-            created_at: When user was created
-            last_login: Last login timestamp (optional)
-            
-        Returns:
-            UserAggregate: Reconstructed user aggregate
-        """
-        return cls(
-            id=id,
-            email=email,
-            created_at=created_at,
-            last_login=last_login
-        )
-    
+   
     def record_login(self):
         """
         Business rule: Record user login timestamp.
@@ -124,19 +103,3 @@ class UserAggregate:
             
         return bool(cls._EMAIL_REGEX.match(email))
     
-    def to_dict(self):
-        """
-        Serialization helper for API responses.
-        
-        Returns:
-            dict: User data as dictionary
-        """
-        return {
-            'id': str(self.id) if self.id else None,
-            'email': self.email,
-            'created_at': self.created_at.isoformat(),
-            'last_login': self.last_login.isoformat() if self.last_login else None
-        }
-    
-    def __repr__(self):
-        return "<UserAggregate {}>".format(self.email)

@@ -32,9 +32,22 @@ async def get_current_user_from_token(
     Raises:
         HTTPException: If authentication fails
     """
-    # Extract token from cookie
-    token = jwt_helper.get_token_from_cookie(request)
-    if not token:
+    # Debug: Log authentication attempt with print to ensure visibility
+    print("🔍 DEBUG: get_current_user_from_token called")
+    
+    try:
+        # Extract token from cookie
+        token = jwt_helper.get_token_from_cookie(request)
+        print(f"🔍 DEBUG: Token extracted: {token[:50] if token else 'None'}...")
+        
+        if not token:
+            print("🔍 DEBUG: No auth token found in request")
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Authentication required - no auth token found"
+            )
+    except Exception as e:
+        print(f"🔍 DEBUG: Exception in token extraction: {e}")
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Authentication required - no auth token found"
@@ -49,14 +62,20 @@ async def get_current_user_from_token(
         )
     
     try:
+        print(f"🔍 DEBUG: Creating GetOrCreateUser command for email: {email}")
         # Get or create user using authenticated email via new DDD pattern
         command = GetOrCreateUser(user_repo)
+        print("🔍 DEBUG: Executing GetOrCreateUser command")
         user, created = command.execute(email)
+        print(f"🔍 DEBUG: User command executed successfully. Created: {created}")
         
         return user
         
     except Exception as e:
+        print(f"🔍 DEBUG: Exception in user retrieval: {type(e).__name__}: {str(e)}")
+        import traceback
+        print(f"🔍 DEBUG: Full traceback: {traceback.format_exc()}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Authentication error during user retrieval"
+            detail=f"Authentication error during user retrieval: {str(e)}"
         )

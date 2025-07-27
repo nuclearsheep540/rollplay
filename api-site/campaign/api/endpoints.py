@@ -39,7 +39,7 @@ from campaign.application.commands import (
 from shared.dependencies.auth import get_current_user_from_token
 from user.domain.aggregates import UserAggregate
 
-router = APIRouter(prefix="/campaigns", tags=["campaigns"])
+router = APIRouter()
 
 
 # Campaign endpoints

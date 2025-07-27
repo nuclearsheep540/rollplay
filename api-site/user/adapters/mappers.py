@@ -24,7 +24,7 @@ def to_domain(model):
     if not model:
         raise ValueError("Cannot convert None model to domain aggregate")
         
-    return UserAggregate.from_persistence(
+    return UserAggregate(
         id=model.id,
         email=model.email,
         created_at=model.created_at,
