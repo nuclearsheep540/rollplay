@@ -94,7 +94,7 @@ class CharacterAggregate:
                 raise ValueError("Character level must be between 1 and 20")
             self.level = level
         
-        self.update_timestamp()
+        # self.update_timestamp()  # Removed to match database schema
     
     def update_stats(self, stats: Dict[str, Any]):
         """Update character stats/sheet data"""
@@ -104,7 +104,7 @@ class CharacterAggregate:
         # Business rule: Validate stats structure (basic validation)
         # More complex validation could be added based on game rules
         self.stats = stats
-        self.update_timestamp()
+        # self.update_timestamp()  # Removed to match database schema
     
     def level_up(self):
         """Level up the character"""
@@ -112,7 +112,7 @@ class CharacterAggregate:
             raise ValueError("Character is already at maximum level (20)")
         
         self.level += 1
-        self.update_timestamp()
+        # self.update_timestamp()  # Removed to match database schema
     
     def level_down(self):
         """Level down the character (for corrections)"""
@@ -120,11 +120,11 @@ class CharacterAggregate:
             raise ValueError("Character is already at minimum level (1)")
         
         self.level -= 1
-        self.update_timestamp()
+        # self.update_timestamp()  # Removed to match database schema
     
-    def update_timestamp(self):
-        """Update the last modified timestamp"""
-        self.updated_at = datetime.utcnow()
+    # def update_timestamp(self):
+    #     """Update the last modified timestamp"""
+    #     self.updated_at = datetime.utcnow()  # Removed to match database schema
     
     def is_owned_by(self, user_id: UUID) -> bool:
         """Check if character is owned by specific user"""
@@ -133,12 +133,12 @@ class CharacterAggregate:
     def soft_delete(self):
         """Soft delete the character"""
         self.is_deleted = True
-        self.update_timestamp()
+        # self.update_timestamp()  # Removed to match database schema
     
     def restore(self):
         """Restore a soft-deleted character"""
         self.is_deleted = False
-        self.update_timestamp()
+        # self.update_timestamp()  # Removed to match database schema
     
     def can_be_deleted(self) -> bool:
         """Business rule: Characters can be deleted if not in active games"""
@@ -160,4 +160,4 @@ class CharacterAggregate:
             self.stats = {}
         
         self.stats[stat_name] = value
-        self.update_timestamp()
+        # self.update_timestamp()  # Removed to match database schema

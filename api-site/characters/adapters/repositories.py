@@ -30,7 +30,7 @@ class CharacterRepository:
         models = (
             self.db.query(CharacterModel)
             .filter_by(user_id=user_id, is_deleted=False)
-            .order_by(CharacterModel.created_at.desc())
+            .order_by(CharacterModel.updated_at.desc())
             .all()
         )
         return [to_domain(model) for model in models]
