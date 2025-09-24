@@ -8,7 +8,8 @@ from pydantic import BaseModel, Field
 
 class CharacterCreateRequest(BaseModel):
     name: str = Field(..., min_length=1, max_length=50, description="Character name")
-    character_class: str = Field(..., min_length=1, max_length=30, description="Character class")
+    character_class: str = Field(..., min_length=1, max_length=50, description="Character class")
+    character_race: str = Field(..., min_length=1, max_length=50, description="Character race")
     level: int = Field(1, ge=1, le=20, description="Character level")
     stats: Optional[Dict[str, Any]] = Field(None, description="Character stats/sheet data")
 
@@ -28,6 +29,7 @@ class CharacterResponse(BaseModel):
     user_id: str
     name: str
     character_class: str
+    character_race: str
     level: int
     stats: Dict[str, Any]
     created_at: datetime
@@ -42,6 +44,7 @@ class CharacterResponse(BaseModel):
             user_id=str(aggregate.user_id),
             name=aggregate.name,
             character_class=aggregate.character_class,
+            character_race=aggregate.character_race,
             level=aggregate.level,
             stats=aggregate.stats,
             created_at=aggregate.created_at,
@@ -58,6 +61,7 @@ class CharacterSummaryResponse(BaseModel):
     id: str
     name: str
     character_class: str
+    character_race: str
     level: int
     created_at: datetime
     display_name: str
@@ -69,6 +73,7 @@ class CharacterSummaryResponse(BaseModel):
             id=str(aggregate.id),
             name=aggregate.name,
             character_class=aggregate.character_class,
+            character_race=aggregate.character_race,
             level=aggregate.level,
             created_at=aggregate.created_at,
             display_name=aggregate.get_display_name()

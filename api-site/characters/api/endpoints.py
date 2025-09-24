@@ -33,7 +33,7 @@ router = APIRouter()
 
 
 # Character endpoints
-@router.post("/", response_model=CharacterResponse)
+@router.post("/create", response_model=CharacterResponse)
 async def create_character(
     request: CharacterCreateRequest,
     current_user: UserAggregate = Depends(get_current_user_from_token),
@@ -46,6 +46,7 @@ async def create_character(
             user_id=current_user.id,
             name=request.name,
             character_class=request.character_class,
+            character_race=request.character_race,
             level=request.level,
             stats=request.stats
         )

@@ -20,7 +20,7 @@ export default function ProfileManager({ user, onUserUpdate }) {
     setError(null)
 
     try {
-      const response = await fetch('/api/users/screen-name', {
+      const response = await fetch('/api/users/screen_name', {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',

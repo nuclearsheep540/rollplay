@@ -16,7 +16,8 @@ class Character(Base):
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     user_id = Column(UUID(as_uuid=True), ForeignKey('users.id'), nullable=False)
     name = Column(String(50), nullable=False)
-    character_class = Column(String(30), nullable=False)
+    character_class = Column(String(50), nullable=False)
+    character_race = Column(String(50), nullable=False)
     level = Column(Integer, default=1, nullable=False)
     stats = Column(JSON, nullable=False, default=lambda: {})  # Character sheet data
     created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)

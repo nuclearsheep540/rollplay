@@ -39,7 +39,7 @@ export default function CampaignManager({ user }) {
       if (response.ok) {
         const campaignsData = await response.json()
         setCampaigns(campaignsData)
-        
+
         // Fetch games for each campaign
         await fetchAllCampaignGames(campaignsData)
       } else {

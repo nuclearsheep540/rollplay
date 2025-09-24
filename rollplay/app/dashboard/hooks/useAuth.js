@@ -25,7 +25,7 @@ export function useAuth() {
     setError(null)
 
     try {
-      const response = await fetch('/api/users/screen-name', {
+      const response = await fetch('/api/users/screen_name', {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
@@ -75,7 +75,7 @@ export function useAuth() {
     const checkAuthenticationAndGetUser = async () => {
       try {
         // Get or create user from api-site (this validates auth and gets user data)
-        const userResponse = await fetch('/api/users/', {
+        const userResponse = await fetch('/api/users/get_current_user', {
           method: 'GET',
           headers: {
             'Content-Type': 'application/json',
@@ -103,7 +103,6 @@ export function useAuth() {
         }
 
         // Other errors
-        console.error('Failed to get user data:', userResponse.status)
         router.push('/auth/magic')
         
       } catch (error) {

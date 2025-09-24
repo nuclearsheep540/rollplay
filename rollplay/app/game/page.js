@@ -336,7 +336,7 @@ function GameContent() {
     const fetchCurrentUser = async () => {
       try {
         setUserLoading(true);
-        const response = await fetch('/api/users/', {
+        const response = await fetch('/api/users/get_current_user', {
           method: 'GET',
           credentials: 'include'
         });

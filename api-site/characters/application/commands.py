@@ -16,7 +16,8 @@ class CreateCharacter:
         self, 
         user_id: UUID, 
         name: str, 
-        character_class: str, 
+        character_class: str,
+        character_race: str, 
         level: int = 1,
         stats: Optional[Dict[str, Any]] = None
     ) -> CharacterAggregate:
@@ -30,6 +31,7 @@ class CreateCharacter:
             user_id=user_id,
             name=name,
             character_class=character_class,
+            character_race=character_race,
             level=level,
             stats=stats
         )

@@ -36,7 +36,7 @@ app.add_middleware(
 
 # Include aggregate routers
 app.include_router(user_router, prefix="/api/users")
-app.include_router(campaign_router, prefix="/api/campaign")
+app.include_router(campaign_router, prefix="/api/campaigns")
 app.include_router(characters_router, prefix="/api/characters")
 
 # Health check endpoint

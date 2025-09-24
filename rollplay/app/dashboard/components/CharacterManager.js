@@ -6,8 +6,10 @@
 'use client'
 
 import { useState, useEffect } from 'react'
+import { useRouter } from 'next/navigation'
 
 export default function CharacterManager({ user }) {
+  const router = useRouter()
   const [characters, setCharacters] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
@@ -81,7 +83,7 @@ export default function CharacterManager({ user }) {
           </div>
           <div className="flex-grow">
             <h3 className="text-lg font-bold text-slate-800">{char.name || 'Unnamed Character'}</h3>
-            <p className="text-slate-600 text-sm">{char.race || 'Unknown'} {char.class || 'Unknown'} - Level {char.level || 1}</p>
+            <p className="text-slate-600 text-sm">Level {char.level || 1} {char.character_race || 'Unknown'} {char.character_class || 'Unknown'}</p>
             <p className="text-slate-500 text-xs mt-1">Campaign: {char.campaign || 'No Campaign'}</p>
             <p className="text-slate-500 text-xs mt-1">Created: {char.created_at ? new Date(char.created_at).toLocaleDateString() : 'Unknown'}</p>
           </div>
@@ -111,7 +113,10 @@ export default function CharacterManager({ user }) {
         <button className="bg-slate-300 text-slate-800 font-semibold px-5 py-3 rounded-xl shadow-md hover:bg-slate-400 transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-slate-500 focus:ring-offset-2 flex items-center">
           <span className="text-xl mr-2">📋</span> Clone Character
         </button>
-        <button className="bg-indigo-600 text-white font-semibold px-5 py-3 rounded-xl shadow-md hover:bg-indigo-700 transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 flex items-center">
+        <button 
+          onClick={() => router.push('/character/create')}
+          className="bg-indigo-600 text-white font-semibold px-5 py-3 rounded-xl shadow-md hover:bg-indigo-700 transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 flex items-center"
+        >
           <span className="text-xl mr-2">+</span> Create New Character
         </button>
       </div>

@@ -85,7 +85,7 @@ async def test_endpoint():
     print("🔍 TEST: Test endpoint called!")
     return {"message": "Test endpoint working", "timestamp": "now"}
 
-@router.get("/", response_model=UserResponse)
+@router.get("/get_current_user", response_model=UserResponse)
 async def get_current_user(
     current_user: UserAggregate = Depends(get_current_user_from_token)
 ):
@@ -102,7 +102,7 @@ async def get_current_user(
         is_recently_active=current_user.is_recently_active()
     )
 
-@router.put("/screen-name", response_model=UserResponse)
+@router.put("/screen_name", response_model=UserResponse)
 async def update_screen_name(
     request: ScreenNameUpdateRequest,
     current_user: UserAggregate = Depends(get_current_user_from_token),
