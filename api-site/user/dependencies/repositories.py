@@ -4,7 +4,8 @@
 from fastapi import Depends
 from sqlalchemy.orm import Session
 from shared.db import get_db
-from user.adapters.repositories import UserRepository
+from user.repositories.user_repository import UserRepository
 
-def get_user_repository(db: Session = Depends(get_db)) -> UserRepository:
+# Dependencies we want FAST to inject in endpoints
+def user_repository(db: Session = Depends(get_db)) -> UserRepository:
     return UserRepository(db)

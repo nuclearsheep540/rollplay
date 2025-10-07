@@ -5,8 +5,8 @@ from fastapi import Depends, HTTPException, Request, status
 from typing import Optional
 
 from shared.auth import JWTHelper
-from user.dependencies.repositories import get_user_repository
-from user.adapters.repositories import UserRepository
+from user.dependencies.repositories import user_repository
+from user.repositories.user_repository import UserRepository
 from user.application.commands import GetOrCreateUser
 from user.domain.aggregates import UserAggregate
 
@@ -15,7 +15,7 @@ jwt_helper = JWTHelper()
 
 async def get_current_user_from_token(
     request: Request,
-    user_repo: UserRepository = Depends(get_user_repository)
+    user_repo: UserRepository = Depends(user_repository)
 ) -> UserAggregate:
     """
     FastAPI dependency to get current authenticated user from JWT token.
