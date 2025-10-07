@@ -8,53 +8,34 @@ from user.domain.aggregates import UserAggregate
 class GetOrCreateUser:
     def __init__(self, repository: UserRepository):
         self.repository = repository
-    
+
     def execute(self, email: str) -> Tuple[UserAggregate, bool]:
         """Get existing user or create new one"""
         user = self.repository.get_by_email(email)
         if user:
             return user, False
-        
+
         # Create new user through aggregate
         new_user = UserAggregate.create(email)
         self.repository.save(new_user)
         return new_user, True
 
-class GetUserById:
-    def __init__(self, repository: UserRepository):
-        self.repository = repository
-    
-    def execute(self, user_id):
-        return self.repository.get_by_id(user_id)
-
-class UpdateUserLogin:
-    def __init__(self, repository: UserRepository):
-        self.repository = repository
-    
-    def execute(self, user_id: str) -> UserAggregate:
-        """Record user login timestamp"""
-        user = self.repository.get_by_id(user_id)
-        if not user:
-            raise ValueError(f"User {user_id} not found")
-        
-        user.record_login()  # Business logic in aggregate
-        self.repository.save(user)
-        return user
 
 class UpdateScreenName:
     def __init__(self, repository: UserRepository):
         self.repository = repository
-    
+
     def execute(self, user_id: str, screen_name: str) -> UserAggregate:
         """Update user screen name with business rule validation"""
         user = self.repository.get_by_id(user_id)
         if not user:
             raise ValueError(f"User {user_id} not found")
-        
+
         # Business logic in aggregate
         user.update_screen_name(screen_name)
         self.repository.save(user)
         return user
+
 
 class GetUserDashboard:
     """Cross-aggregate coordination command for user dashboard"""
