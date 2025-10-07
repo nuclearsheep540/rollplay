@@ -7,24 +7,35 @@ from uuid import UUID
 
 from characters.schemas.character_schemas import (
     CharacterCreateRequest,
-    CharacterResponse,
-    CharacterSummaryResponse
+    CharacterResponse
 )
 from characters.dependencies.repositories import get_character_repository
-from characters.adapters.repositories import CharacterRepository
-from characters.application.commands import (
-    CreateCharacter,
-    GetUserCharacters,
-    GetCharacterById,
-    DeleteCharacter,
-)
+from characters.repositories.character_repository import CharacterRepository
+from characters.application.commands import CreateCharacter, DeleteCharacter
+from characters.application.queries import GetUserCharacters, GetCharacterById
 from shared.dependencies.auth import get_current_user_from_token
 from user.domain.aggregates import UserAggregate
+from characters.domain.aggregates import CharacterAggregate
 
 router = APIRouter()
 
 
-# Character endpoints
+def _to_character_response(character: CharacterAggregate) -> CharacterResponse:
+    """Helper to convert CharacterAggregate to CharacterResponse"""
+    return CharacterResponse(
+        id=str(character.id),
+        user_id=str(character.user_id),
+        name=character.name,
+        character_class=character.character_class,
+        character_race=character.character_race,
+        level=character.level,
+        stats=character.stats,
+        created_at=character.created_at,
+        updated_at=character.updated_at,
+        display_name=character.get_display_name()
+    )
+
+
 @router.post("/create", response_model=CharacterResponse)
 async def create_character(
     request: CharacterCreateRequest,
@@ -42,9 +53,9 @@ async def create_character(
             level=request.level,
             stats=request.stats
         )
-        
-        return CharacterResponse.from_aggregate(character)
-        
+
+        return _to_character_response(character)
+
     except ValueError as e:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -52,18 +63,18 @@ async def create_character(
         )
 
 
-@router.get("/", response_model=List[CharacterSummaryResponse])
+@router.get("/", response_model=List[CharacterResponse])
 async def get_user_characters(
     current_user: UserAggregate = Depends(get_current_user_from_token),
     character_repo: CharacterRepository = Depends(get_character_repository)
 ):
     """Get all characters for the current user"""
     try:
-        command = GetUserCharacters(character_repo)
-        characters = command.execute(current_user.id)
-        
-        return [CharacterSummaryResponse.from_aggregate(character) for character in characters]
-        
+        query = GetUserCharacters(character_repo)
+        characters = query.execute(current_user.id)
+
+        return [_to_character_response(character) for character in characters]
+
     except ValueError as e:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -79,24 +90,24 @@ async def get_character(
 ):
     """Get character by ID"""
     try:
-        command = GetCharacterById(character_repo)
-        character = command.execute(character_id)
-        
+        query = GetCharacterById(character_repo)
+        character = query.execute(character_id)
+
         if not character:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail="Character not found"
             )
-        
+
         # Business rule: Only character owner can view details
         if not character.is_owned_by(current_user.id):
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="Access denied - only character owner can view details"
             )
-        
-        return CharacterResponse.from_aggregate(character)
-        
+
+        return _to_character_response(character)
+
     except ValueError as e:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -114,7 +125,7 @@ async def delete_character(
     try:
         command = DeleteCharacter(character_repo)
         success = command.execute(character_id, current_user.id)
-        
+
         if success:
             return {"message": "Character deleted successfully"}
         else:
@@ -122,7 +133,7 @@ async def delete_character(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail="Character not found"
             )
-            
+
     except ValueError as e:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,

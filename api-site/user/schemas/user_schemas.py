@@ -32,7 +32,6 @@ class UserResponse(BaseModel):
     screen_name: Optional[str]
     created_at: datetime
     last_login: Optional[datetime]
-    is_recently_active: bool
 
 
 class UserLoginResponse(BaseModel):

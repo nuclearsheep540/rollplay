@@ -34,7 +34,6 @@ def _to_user_response(user: UserAggregate) -> UserResponse:
         screen_name=user.screen_name,
         created_at=user.created_at,
         last_login=user.last_login,
-        is_recently_active=user.is_recently_active()
     )
 
 
@@ -159,7 +158,6 @@ async def get_user_dashboard(
                 "screen_name": dashboard_data['user'].screen_name,
                 "created_at": dashboard_data['user'].created_at,
                 "last_login": dashboard_data['user'].last_login,
-                "is_recently_active": dashboard_data['user'].is_recently_active()
             },
             "campaigns_summary": [
                 {

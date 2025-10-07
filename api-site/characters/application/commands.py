@@ -1,32 +1,27 @@
 # Copyright (C) 2025 Matthew Davey
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-from typing import List, Optional, Dict, Any
+from typing import Optional, Dict, Any
 from uuid import UUID
 
-from characters.adapters.repositories import CharacterRepository
+from characters.repositories.character_repository import CharacterRepository
 from characters.domain.aggregates import CharacterAggregate
 
 
 class CreateCharacter:
     def __init__(self, repository: CharacterRepository):
         self.repository = repository
-    
+
     def execute(
-        self, 
-        user_id: UUID, 
-        name: str, 
+        self,
+        user_id: UUID,
+        name: str,
         character_class: str,
-        character_race: str, 
+        character_race: str,
         level: int = 1,
         stats: Optional[Dict[str, Any]] = None
     ) -> CharacterAggregate:
         """Create a new character"""
-        # Business rule: Character name must be unique per user
-        existing_character = self.repository.get_by_name(user_id, name)
-        if existing_character:
-            raise ValueError(f"Character named '{name}' already exists for this user")
-        
         character = CharacterAggregate.create(
             user_id=user_id,
             name=name,
@@ -35,45 +30,27 @@ class CreateCharacter:
             level=level,
             stats=stats
         )
-        
+
         self.repository.save(character)
         return character
-
-
-class GetUserCharacters:
-    def __init__(self, repository: CharacterRepository):
-        self.repository = repository
-    
-    def execute(self, user_id: UUID) -> List[CharacterAggregate]:
-        """Get all characters for a user"""
-        return self.repository.get_by_user_id(user_id)
-
-
-class GetCharacterById:
-    def __init__(self, repository: CharacterRepository):
-        self.repository = repository
-    
-    def execute(self, character_id: UUID) -> Optional[CharacterAggregate]:
-        """Get character by ID"""
-        return self.repository.get_by_id(character_id)
 
 
 class DeleteCharacter:
     def __init__(self, repository: CharacterRepository):
         self.repository = repository
-    
+
     def execute(self, character_id: UUID, user_id: UUID) -> bool:
         """Delete character (soft delete)"""
         character = self.repository.get_by_id(character_id)
         if not character:
             return False
-        
+
         # Business rule: Only character owner can delete
         if not character.is_owned_by(user_id):
             raise ValueError("Only the character owner can delete this character")
-        
+
         # Business rule: Check if character can be deleted
         if not character.can_be_deleted():
             raise ValueError("Cannot delete character - it may be in an active game")
-        
+
         return self.repository.delete(character_id)
