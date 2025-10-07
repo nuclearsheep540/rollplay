@@ -19,7 +19,7 @@ from shared.db import Base
 
 # Import all models to ensure they're registered with SQLAlchemy
 try:
-    from user.orm.user_model import User
+    from user.model.user_model import User
     from characters.orm.character_model import Character
     print("Models imported successfully")
 except ImportError as e:

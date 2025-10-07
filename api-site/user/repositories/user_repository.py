@@ -5,7 +5,7 @@ from sqlalchemy.orm import Session
 from sqlalchemy.exc import IntegrityError
 from typing import Optional
 
-from user.orm.user_model import User as UserModel
+from user.model.user_model import User as UserModel
 from user.domain.aggregates import UserAggregate
 
 

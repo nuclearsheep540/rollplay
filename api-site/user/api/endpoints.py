@@ -9,7 +9,7 @@ from user.schemas.user_schemas import (
     UserResponse,
     UserLoginResponse
 )
-from user.dependencies.repositories import get_user_repository
+from user.dependencies.repositories import user_repository
 from campaign.dependencies.repositories import get_campaign_repository
 from user.repositories.user_repository import UserRepository
 from campaign.adapters.repositories import CampaignRepository
@@ -41,7 +41,7 @@ def _to_user_response(user: UserAggregate) -> UserResponse:
 @router.post("/login", response_model=UserLoginResponse)
 async def login_user(
     request: UserEmailRequest,
-    user_repo: UserRepository = Depends(get_user_repository)
+    user_repo: UserRepository = Depends(user_repository)
 ):
     """
     Login or create user by email.
@@ -90,7 +90,7 @@ async def get_current_user(
 async def update_screen_name(
     request: ScreenNameUpdateRequest,
     current_user: UserAggregate = Depends(get_current_user_from_token),
-    user_repo: UserRepository = Depends(get_user_repository)
+    user_repo: UserRepository = Depends(user_repository)
 ):
     """
     Update user screen name.
@@ -119,7 +119,7 @@ async def update_screen_name(
 @router.post("/create", response_model=UserResponse)
 async def create_user(
     request: UserEmailRequest,
-    user_repo: UserRepository = Depends(get_user_repository)
+    user_repo: UserRepository = Depends(user_repository)
 ):
     """Create a new user."""
     try:
@@ -138,7 +138,7 @@ async def create_user(
 @router.get("/dashboard")
 async def get_user_dashboard(
     current_user: UserAggregate = Depends(get_current_user_from_token),
-    user_repo: UserRepository = Depends(get_user_repository),
+    user_repo: UserRepository = Depends(user_repository),
     campaign_repo: CampaignRepository = Depends(get_campaign_repository)
 ):
     """

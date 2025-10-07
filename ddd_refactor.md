@@ -128,7 +128,7 @@ class UserAggregate:
 # user/adapters/repositories.py
 from typing import Optional, Tuple
 from sqlalchemy.orm import Session
-from user.orm.user_model import User as UserModel
+from user.model.user_model import User as UserModel
 from user.domain.aggregates import UserAggregate
 from user.adapters.mappers import to_domain, from_domain, update_model_from_domain
 

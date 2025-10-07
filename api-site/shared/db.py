@@ -21,7 +21,7 @@ def configure_mappers():
     This ensures all models are registered with SQLAlchemy's mapper registry.
     """
     # Import all ORM models to register them with SQLAlchemy
-    from user.orm.user_model import User
+    from user.model.user_model import User
     from characters.orm.character_model import Character
     # Import any other models from other aggregates
     
