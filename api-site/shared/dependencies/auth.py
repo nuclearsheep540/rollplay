@@ -5,10 +5,10 @@ from fastapi import Depends, HTTPException, Request, status
 from typing import Optional
 
 from shared.auth import JWTHelper
-from user.dependencies.repositories import user_repository
-from user.repositories.user_repository import UserRepository
-from user.application.commands import GetOrCreateUser
-from user.domain.aggregates import UserAggregate
+from modules.user.dependencies.repositories import user_repository
+from modules.user.repositories.user_repository import UserRepository
+from modules.user.application.commands import GetOrCreateUser
+from modules.user.domain.user_aggregate import UserAggregate
 
 # Initialize JWT helper (singleton for performance)
 jwt_helper = JWTHelper()

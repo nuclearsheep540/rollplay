@@ -7,9 +7,9 @@ import logging
 from shared.db import configure_mappers
 
 # Import aggregate routers directly
-from user.api.endpoints import router as user_router
-from campaign.api.endpoints import router as campaign_router
-from characters.api.endpoints import router as characters_router
+from modules.user.api.endpoints import router as user_router
+from modules.campaign.api.endpoints import router as campaign_router
+from modules.characters.api.endpoints import router as characters_router
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
