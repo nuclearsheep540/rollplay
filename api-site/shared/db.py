@@ -23,6 +23,8 @@ def configure_mappers():
     # Import all ORM models to register them with SQLAlchemy
     from user.model.user_model import User
     from characters.model.character_model import Character
+    from campaign.model.campaign_model import Campaign
+    from campaign.model.game_model import Game
     # Import any other models from other aggregates
 
     # Configure the registry

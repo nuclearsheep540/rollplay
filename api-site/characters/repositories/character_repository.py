@@ -139,26 +139,3 @@ class CharacterRepository:
         self.db.commit()
         return True
 
-    def get_deleted_by_user_id(self, user_id: UUID) -> List[CharacterAggregate]:
-        """Get all soft-deleted characters for a user (for potential restoration)"""
-        models = (
-            self.db.query(CharacterModel)
-            .filter_by(user_id=user_id, is_deleted=True)
-            .order_by(CharacterModel.updated_at.desc())
-            .all()
-        )
-        return [
-            CharacterAggregate(
-                id=model.id,
-                user_id=model.user_id,
-                name=model.name,
-                character_class=model.character_class,
-                character_race=model.character_race,
-                level=model.level,
-                stats=model.stats,
-                created_at=model.created_at,
-                updated_at=model.updated_at,
-                is_deleted=model.is_deleted
-            )
-            for model in models
-        ]

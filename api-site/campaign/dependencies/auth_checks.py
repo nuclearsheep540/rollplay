@@ -14,14 +14,14 @@ from fastapi import Depends, HTTPException, status
 from uuid import UUID
 
 from user.domain.aggregates import UserAggregate
-from campaign.adapters.repositories import CampaignRepository
-from campaign.dependencies.repositories import get_campaign_repository
+from campaign.repositories.campaign_repository import CampaignRepository
+from campaign.dependencies.repositories import campaign_repository
 from shared.dependencies.auth import get_current_user_from_token
 
 async def verify_campaign_dm(
     campaign_id: UUID,
     current_user: UserAggregate = Depends(get_current_user_from_token),
-    campaign_repo: CampaignRepository = Depends(get_campaign_repository)
+    campaign_repo: CampaignRepository = Depends(campaign_repository)
 ) -> UserAggregate:
     """
     Verify that current user is DM of the specified campaign.

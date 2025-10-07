@@ -65,7 +65,7 @@ api-site/
 │   │   ├── campaign_model.py      # Campaign SQLAlchemy model
 │   │   └── game_model.py          # Game model (if persisted independently)
 │   ├── dependencies/
-│   │   ├── repositories.py        # get_campaign_repository
+│   │   ├── repositories.py        # campaign_repository
 │   │   └── auth_checks.py         # Campaign role checks (is_dm, can_edit_campaign)
 │   └── tests/
 │       └── test_campaign_flow.py
@@ -265,12 +265,12 @@ class GetUserDashboard:
 
 # user/api/endpoints.py - Multiple repository injection
 from user.dependencies.repositories import get_user_repository
-from campaign.dependencies.repositories import get_campaign_repository
+from campaign.dependencies.repositories import campaign_repository
 
 @router.get("/dashboard")
 async def get_user_dashboard(
     user_repo: UserRepository = Depends(get_user_repository),
-    campaign_repo: CampaignRepository = Depends(get_campaign_repository)
+    campaign_repo: CampaignRepository = Depends(campaign_repository)
 ):
     command = GetUserDashboard(user_repo, campaign_repo)
     return command.execute(current_user_id)

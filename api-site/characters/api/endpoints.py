@@ -12,7 +12,7 @@ from characters.schemas.character_schemas import (
 from characters.dependencies.repositories import get_character_repository
 from characters.repositories.character_repository import CharacterRepository
 from characters.application.commands import CreateCharacter, DeleteCharacter
-from characters.application.queries import GetUserCharacters, GetCharacterById
+from characters.application.queries import GetCharactersByUser, GetCharacterById
 from shared.dependencies.auth import get_current_user_from_token
 from user.domain.aggregates import UserAggregate
 from characters.domain.aggregates import CharacterAggregate
@@ -70,7 +70,7 @@ async def get_user_characters(
 ):
     """Get all characters for the current user"""
     try:
-        query = GetUserCharacters(character_repo)
+        query = GetCharactersByUser(character_repo)
         characters = query.execute(current_user.id)
 
         return [_to_character_response(character) for character in characters]

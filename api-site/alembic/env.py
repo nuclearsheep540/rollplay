@@ -21,6 +21,8 @@ from shared.db import Base
 try:
     from user.model.user_model import User
     from characters.model.character_model import Character
+    from campaign.model.campaign_model import Campaign
+    from campaign.model.game_model import Game
     print("Models imported successfully")
 except ImportError as e:
     print(f"Error importing models: {e}")

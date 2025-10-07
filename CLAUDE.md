@@ -127,7 +127,7 @@ api-site/
 │   │   ├── campaign_model.py      # Campaign SQLAlchemy model
 │   │   └── game_model.py          # Game model (if persisted independently)
 │   ├── dependencies/
-│   │   ├── repositories.py        # get_campaign_repository
+│   │   ├── repositories.py        # campaign_repository
 │   │   └── auth_checks.py         # Campaign role checks (is_dm, can_edit_campaign)
 │   └── tests/
 │       └── test_campaign_flow.py
@@ -182,7 +182,7 @@ class GetUserDashboard:
 **Step 5: Repository Patterns**
 ```python
 # shared/dependencies/repositories.py - Add to existing
-def get_campaign_repository(db: Session = Depends(get_db)) -> CampaignRepository:
+def campaign_repository(db: Session = Depends(get_db)) -> CampaignRepository:
     return CampaignRepository(db)
 ```
 
@@ -319,7 +319,7 @@ class CreateCampaignRequest(BaseModel):
 async def create_campaign(
     request: CreateCampaignRequest,
     user: AuthenticatedUser = Depends(verify_jwt_token),
-    repo: CampaignRepository = Depends(get_campaign_repository)
+    repo: CampaignRepository = Depends(campaign_repository)
 ):
     command = CreateCampaign(repo)
     campaign = command.execute(user.id, request.name)

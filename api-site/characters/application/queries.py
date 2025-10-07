@@ -8,7 +8,7 @@ from characters.repositories.character_repository import CharacterRepository
 from characters.domain.aggregates import CharacterAggregate
 
 
-class GetUserCharacters:
+class GetCharactersByUser:
     def __init__(self, repository: CharacterRepository):
         self.repository = repository
 

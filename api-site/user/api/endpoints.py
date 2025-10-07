@@ -4,19 +4,19 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel
 
+from shared.dependencies.auth import get_current_user_from_token
 from user.schemas.user_schemas import (
     UserEmailRequest,
     UserResponse,
     UserLoginResponse
 )
 from user.dependencies.repositories import user_repository
-from campaign.dependencies.repositories import get_campaign_repository
 from user.repositories.user_repository import UserRepository
-from campaign.adapters.repositories import CampaignRepository
 from user.application.commands import GetOrCreateUser, UpdateScreenName
 from user.application.queries import GetUserDashboard
-from shared.dependencies.auth import get_current_user_from_token
 from user.domain.aggregates import UserAggregate
+from campaign.dependencies.repositories import campaign_repository
+from campaign.repositories.campaign_repository import CampaignRepository
 
 
 class ScreenNameUpdateRequest(BaseModel):
@@ -138,7 +138,7 @@ async def create_user(
 async def get_user_dashboard(
     current_user: UserAggregate = Depends(get_current_user_from_token),
     user_repo: UserRepository = Depends(user_repository),
-    campaign_repo: CampaignRepository = Depends(get_campaign_repository)
+    campaign_repo: CampaignRepository = Depends(campaign_repository)
 ):
     """
     Get user dashboard data demonstrating cross-aggregate coordination.
