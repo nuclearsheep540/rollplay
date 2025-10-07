@@ -7,7 +7,7 @@ from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 import uuid
 
-from shared.db import Base
+from shared.dependencies.db import Base
 
 
 class Game(Base):

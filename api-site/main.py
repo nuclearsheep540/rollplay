@@ -4,15 +4,18 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 import logging
-from shared.db import configure_mappers
+import logging.config
+from shared.config import Settings
+from shared.dependencies.db import configure_mappers
 
 # Import aggregate routers directly
 from modules.user.api.endpoints import router as user_router
 from modules.campaign.api.endpoints import router as campaign_router
 from modules.characters.api.endpoints import router as characters_router
 
-# Configure logging
-logging.basicConfig(level=logging.INFO)
+# Configure logging from settings
+settings = Settings()
+logging.config.dictConfig(settings.LOGGING_CONFIG)
 logger = logging.getLogger(__name__)
 
 # Configure SQLAlchemy mappers early

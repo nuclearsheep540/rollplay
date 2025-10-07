@@ -3,7 +3,7 @@
 
 from fastapi import Depends
 from sqlalchemy.orm import Session
-from shared.db import get_db
+from shared.dependencies.db import get_db
 from modules.characters.repositories.character_repository import CharacterRepository
 
 

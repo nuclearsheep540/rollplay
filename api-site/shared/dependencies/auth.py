@@ -4,7 +4,7 @@
 from fastapi import Depends, HTTPException, Request, status
 from typing import Optional
 
-from shared.auth import JWTHelper
+from shared.jwt_helper import JWTHelper
 from modules.user.dependencies.repositories import user_repository
 from modules.user.repositories.user_repository import UserRepository
 from modules.user.application.commands import GetOrCreateUser

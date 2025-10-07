@@ -21,20 +21,44 @@ class Environment(Enum):
 
 class Settings(BaseSettings):
     """Main application configuration object"""
-    
+
     # Environment vars
     environment: Environment = Environment.development
-    
+
     # DB
     app_database_url: str = env.get(
         "APP_DATABASE_URL",
         "postgresql://postgres:postgres@postgres:5432/rollplay"
     )
     APP_DATABASE_URL = app_database_url  # Backwards compatibility
-    
+
     # JWT
     jwt_secret_key: str = env.get("JWT_SECRET_KEY", "your-secret-key")
     jwt_algorithm: str = env.get("JWT_ALGORITHM", "HS256")
-    
+
+    # Logging configuration for dictConfig
+    LOGGING_CONFIG = {
+        "version": 1,
+        "disable_existing_loggers": False,
+        "formatters": {
+            "default": {
+                "()": "uvicorn.logging.DefaultFormatter",
+                "fmt": "%(levelprefix)s %(asctime)s | %(message)s",
+                "datefmt": "%Y-%m-%d %H:%M:%S",
+            }
+        },
+        "handlers": {
+            "default": {
+                "formatter": "default",
+                "class": "logging.StreamHandler",
+                "stream": "ext://sys.stdout",
+            }
+        },
+        "root": {
+            "level": "DEBUG",
+            "handlers": ["default"]
+        }
+    }
+
     class Config:
         case_sensitive = False

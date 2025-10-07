@@ -15,7 +15,7 @@ import sys
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)) + '/..')
 
 # Import your models here - using new DDD structure
-from shared.db import Base
+from shared.dependencies.db import Base
 
 # Import all models to ensure they're registered with SQLAlchemy
 try:
