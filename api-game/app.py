@@ -18,7 +18,7 @@ app = FastAPI()
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000"],
+    allow_origins=["*"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -360,6 +360,12 @@ async def unset_dm(room_id: str):
 @app.post("/game/")
 def gameservice_create(settings: GameSettings):
     new_room = GameService.create_room(settings=settings)
+    return {"id": new_room}
+
+@app.post("/game/{room_id}")
+def gameservice_create_with_id(room_id: str, settings: GameSettings):
+    """Create a game room with a specific ID (for PostgreSQL integration)"""
+    new_room = GameService.create_room(settings=settings, room_id=room_id)
     return {"id": new_room}
 
 @app.put("/game/{room_id}/seat-layout")

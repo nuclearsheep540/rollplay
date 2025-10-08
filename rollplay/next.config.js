@@ -1,28 +1,25 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
-  // Remove experimental flag - likely no longer needed in Next.js 15
+  // Most API routing is handled by NGINX reverse proxy
+  // These rewrites only apply when requests come directly to Next.js (rare in our setup)
   async rewrites() {
     return [
+      // Auth API endpoints - proxy to backend through NGINX
       {
         source: '/auth/magic-link',
-        destination: 'http://nginx:80/auth/magic-link', // Proxy magic-link endpoint
+        destination: 'http://nginx:80/api/auth/magic-link',
       },
       {
-        source: '/auth/validate',
-        destination: 'http://nginx:80/auth/validate', // Proxy validate endpoint
+        source: '/auth/validate', 
+        destination: 'http://nginx:80/api/auth/validate',
       },
       {
-        source: '/auth/verify/:token',
-        destination: 'http://nginx:80/auth/verify/:token', // Proxy API verify endpoint (path param)
-      },
-      // Note: /auth/verify (without path param) stays as frontend page
-      {
-        source: '/api/game/:path*',
-        destination: 'http://nginx:80/api/game/:path*', // Proxy to nginx container
+        source: '/auth/verify-otp',
+        destination: 'http://nginx:80/api/auth/verify-otp',
       },
       {
-        source: '/api/site/:path*',
-        destination: 'http://nginx:80/api/site/:path*', // Proxy to nginx container
+        source: '/auth/logout',
+        destination: 'http://nginx:80/api/auth/logout',
       },
     ]
   },

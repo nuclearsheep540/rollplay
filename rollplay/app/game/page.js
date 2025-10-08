@@ -27,6 +27,10 @@ function GameContent() {
   const [room404, setRoom404] = useState(false)
   const [thisPlayer, setThisPlayer] = useState()
   const [roomId, setRoomId] = useState()
+  
+  // Current user state - fetched once on page load
+  const [currentUser, setCurrentUser] = useState(null)
+  const [userLoading, setUserLoading] = useState(true)
 
   // Removed unused chat history state
 
@@ -250,41 +254,142 @@ function GameContent() {
     await loadActiveMap(roomId);
   }
   
-  // Check player roles
-  const checkPlayerRoles = async (roomId, playerName) => {
+  // Check player roles on initial page load - single source of truth
+  const checkPlayerRoles = async (roomId, user) => {
     try {
-      console.log(`🔍 Checking roles for player: ${playerName} in room: ${roomId}`);
-      const response = await fetch(`/api/game/${roomId}/roles?playerName=${playerName}`);
-      if (response.ok) {
-        const roles = await response.json();
-        console.log('📋 Received roles:', roles);
-        setIsHost(roles.is_host);
-        setIsModerator(roles.is_moderator);
-        setIsDM(roles.is_dm);
-        console.log(`✅ Set roles - Host: ${roles.is_host}, Moderator: ${roles.is_moderator}, DM: ${roles.is_dm}`);
+      console.log(`🔍 Initial role check for user: ${user.screen_name || user.email} (ID: ${user.id}) in room: ${roomId}`);
+      
+      // Get MongoDB-based roles (host, moderator) - can change during session
+      const playerName = user.screen_name || user.email;
+      const mongoRolesResponse = await fetch(`/api/game/${roomId}/roles?playerName=${playerName}`);
+      let isHost = false;
+      let isModerator = false;
+      
+      if (mongoRolesResponse.ok) {
+        const mongoRoles = await mongoRolesResponse.json();
+        isHost = mongoRoles.is_host;
+        isModerator = mongoRoles.is_moderator;
+        console.log('📋 MongoDB roles (dynamic):', mongoRoles);
       } else {
-        console.error('❌ Failed to fetch roles:', response.status, response.statusText);
+        console.error('❌ Failed to fetch MongoDB roles:', mongoRolesResponse.status);
       }
+      
+      // Get PostgreSQL-based DM status - static, never changes during session
+      let isDMRole = false;
+      try {
+        const dmStatusResponse = await fetch(`/api/games/${roomId}/dm-status`, {
+          method: 'GET',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          credentials: 'include'
+        });
+        
+        if (dmStatusResponse.ok) {
+          const dmStatus = await dmStatusResponse.json();
+          isDMRole = dmStatus.is_dm;
+          console.log('🎭 PostgreSQL DM status (static):', dmStatus);
+        } else {
+          console.error('❌ Failed to fetch DM status:', dmStatusResponse.status);
+        }
+      } catch (error) {
+        console.error('Error checking DM status:', error);
+      }
+      
+      // Set roles in component state
+      setIsHost(isHost);
+      setIsModerator(isModerator);
+      setIsDM(isDMRole);
+      console.log(`✅ Initial roles set - Host: ${isHost}, Moderator: ${isModerator}, DM: ${isDMRole}`);
+      
     } catch (error) {
       console.error('Error checking player roles:', error);
     }
   };
 
+  // Refresh dynamic roles (host/moderator) after WebSocket events
+  // DM status is static and never changes during session
+  const refreshDynamicRoles = async (roomId, user) => {
+    try {
+      console.log(`🔄 Refreshing dynamic roles for user: ${user.screen_name || user.email}`);
+      
+      // Only fetch MongoDB-based roles (host, moderator) - DM status is static
+      const playerName = user.screen_name || user.email;
+      const mongoRolesResponse = await fetch(`/api/game/${roomId}/roles?playerName=${playerName}`);
+      
+      if (mongoRolesResponse.ok) {
+        const mongoRoles = await mongoRolesResponse.json();
+        setIsHost(mongoRoles.is_host);
+        setIsModerator(mongoRoles.is_moderator);
+        console.log('🔄 Dynamic roles updated:', mongoRoles);
+      } else {
+        console.error('❌ Failed to refresh dynamic roles:', mongoRolesResponse.status);
+      }
+      
+    } catch (error) {
+      console.error('Error refreshing dynamic roles:', error);
+    }
+  };
+
+  // Fetch current user data once on page load
+  useEffect(() => {
+    const fetchCurrentUser = async () => {
+      try {
+        setUserLoading(true);
+        const response = await fetch('/api/users/get_current_user', {
+          method: 'GET',
+          credentials: 'include'
+        });
+        
+        if (response.ok) {
+          const userData = await response.json();
+          setCurrentUser(userData);
+          console.log('✅ Current user loaded:', userData);
+        } else {
+          console.error('Failed to fetch user data:', response.status);
+        }
+      } catch (error) {
+        console.error('Error fetching current user:', error);
+      } finally {
+        setUserLoading(false);
+      }
+    };
+
+    fetchCurrentUser();
+  }, []);
+
   // initialise the game lobby
   useEffect(() => {
     const roomId = params.get('roomId')
-    const thisPlayer = params.get('playerName')?.toLowerCase() // Normalize once at entry point
+    
+    console.log('Game page params:', { roomId })
+    console.log('All params:', Array.from(params.entries()))
+    
     setRoomId(roomId)
-    setThisPlayer(thisPlayer)
+    
+    // Wait for user to be loaded before proceeding
+    if (!currentUser || userLoading) {
+      console.log('Waiting for user data to load...');
+      return;
+    }
+    
+    // Set thisPlayer to use user's screen_name or email
+    const playerName = currentUser.screen_name || currentUser.email;
+    setThisPlayer(playerName?.toLowerCase());
+    console.log('Using player name from user data:', playerName);
 
     // fetches the room ID, and loads data
     onLoad(roomId)
     
-    // Check player roles after loading room data
-    if (roomId && thisPlayer) {
-      checkPlayerRoles(roomId, thisPlayer);
+    console.log('roomId ', roomId)
+    console.log('thisPlayer ', thisPlayer)
+    console.log('roomId && thisPlayer ', roomId && thisPlayer)
+
+    // Initial role check on page load - single source of truth
+    if (roomId && currentUser) {
+      checkPlayerRoles(roomId, currentUser);
     }
-  }, [])
+  }, [currentUser, userLoading])
 
   // UPDATED: Seat count management with displaced player handling
   const setSeatCount = async (newSeatCount) => {
@@ -332,7 +437,7 @@ function GameContent() {
         },
         body: JSON.stringify({
           max_players: newSeatCount,
-          updated_by: thisPlayer,
+          updated_by: getCurrentPlayerName(),
           displaced_players: displacedPlayers
         }),
       });
@@ -526,9 +631,10 @@ function GameContent() {
       setDmSeat("");
     }
     
-    // Refresh role status for current player
-    if (roomId && thisPlayer) {
-      await checkPlayerRoles(roomId, thisPlayer);
+    // Refresh dynamic roles (host/moderator) for current user
+    // DM status is static and doesn't change during session
+    if (roomId && currentUser) {
+      await refreshDynamicRoles(roomId, currentUser);
     }
     
     // Trigger refresh of ModeratorControls room data for all users
@@ -601,6 +707,7 @@ function GameContent() {
     // Current state values
     gameSeats,
     thisPlayer,
+    currentUser,
     lobbyUsers,
     disconnectTimeouts,
     currentInitiativePromptId,
@@ -727,7 +834,7 @@ function GameContent() {
       id: promptId,
       player: playerName,
       rollType: rollType,
-      promptedBy: thisPlayer
+      promptedBy: getCurrentPlayerName()
     };
     
     setActivePrompts(prev => {
@@ -865,6 +972,14 @@ function GameContent() {
   if (!roomId) {
     return <div>Loading...</div>;
   }
+
+  if (userLoading || !currentUser) {
+    return <div>Loading user data...</div>;
+  }
+
+  // Helper functions to access current user data
+  const getCurrentUserId = () => currentUser?.id;
+  const getCurrentPlayerName = () => currentUser?.screen_name || currentUser?.email;
 
   // Helper to format dice notation properly
   const formatDiceNotation = (primaryDice, secondDice) => {
@@ -1194,7 +1309,7 @@ function GameContent() {
           </div>
           
           {gameSeats.map((seat) => {
-            const isSitting = seat.playerName === thisPlayer;
+            const isSitting = seat.playerName === getCurrentPlayerName();
             const currentColor = seatColors[seat.seatId] || getSeatColor(seat.seatId);
             
             return (
@@ -1202,7 +1317,8 @@ function GameContent() {
                 key={seat.seatId}
                 seatId={seat.seatId}
                 seats={gameSeats}
-                thisPlayer={thisPlayer}
+                thisPlayer={getCurrentPlayerName()}
+                currentUser={currentUser}
                 isSitting={isSitting}
                 sendSeatChange={sendSeatChange}
                 unlockAudio={unlockAudio}
@@ -1262,7 +1378,8 @@ function GameContent() {
             gameSeats={gameSeats}
             lobbyUsers={lobbyUsers}
             roomId={roomId}
-            thisPlayer={thisPlayer}
+            thisPlayer={getCurrentPlayerName()}
+            currentUser={currentUser}
             onRoleChange={handleRoleChange}
             sendRoleChange={sendRoleChange}
             setSeatCount={setSeatCount}
@@ -1314,7 +1431,8 @@ function GameContent() {
       {/* UPDATED: DiceActionPanel with multiple prompts support */}
       <DiceActionPanel
         currentTurn={currentTurn}
-        thisPlayer={thisPlayer}
+        thisPlayer={getCurrentPlayerName()}
+        currentUser={currentUser}
         combatActive={combatActive}
         onRollDice={handlePlayerDiceRoll}
         onEndTurn={handleEndTurn}

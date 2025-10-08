@@ -3,3 +3,8 @@ pydantic-settings == 2.1.0
 uvicorn == 0.25.0
 urllib3==1.26.19 # needed for OpenSSL 1.1.1+
 psycopg2-binary==2.9.9 # PostgreSQL adapter
+sqlalchemy==2.0.25
+alembic==1.13.1
+PyJWT==2.8.0
+email-validator==2.1.0
+requests==2.31.0 # For inter-service communication

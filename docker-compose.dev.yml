@@ -41,7 +41,7 @@ services:
         container_name: "api-site-dev"
         build:
             context: ./api-site
-            dockerfile: Dockerfile
+            dockerfile: ../docker/dev/api-site/Dockerfile
         ports: 
             - 8082:8082
         volumes:
@@ -92,7 +92,7 @@ services:
         hostname: mongo
         build:
             context: ./docker
-            dockerfile: dev/db/Dockerfile
+            dockerfile: dev/mongo/Dockerfile
             args:
                 MONGO_INITDB_ROOT_USERNAME: ${MONGO_INITDB_ROOT_USERNAME}
                 MONGO_INITDB_ROOT_PASSWORD: ${MONGO_INITDB_ROOT_PASSWORD}
@@ -113,6 +113,30 @@ services:
         networks:
         - default
 
+    postgres:
+        container_name: "postgres-dev"
+        hostname: postgres
+        build:
+            context: ./docker
+            dockerfile: dev/postgres/Dockerfile
+            args:
+                POSTGRES_USER: ${POSTGRES_USER}
+                POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+                POSTGRES_DB: rollplay
+                APP_DB_PASSWORD: ${APP_DB_PASSWORD}
+        env_file:
+            - .env
+        environment:
+            POSTGRES_DB: rollplay
+            POSTGRES_USER: ${POSTGRES_USER}
+            POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+        ports:
+        - "5432:5432"
+        volumes:
+        - postgres_data:/var/lib/postgresql/data
+        networks:
+        - default
+
 networks:
   default:
     driver: bridge
@@ -120,4 +144,5 @@ networks:
 volumes:
   db_data:
   redis_data:
+  postgres_data:
   rollplay_node_modules:
