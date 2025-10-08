@@ -73,134 +73,121 @@ Rollplay is a virtual D&D/tabletop gaming platform called "Tabletop Tavern" that
 - **Repositories**: Suffix with "Repository" (e.g., `UserRepository`)
 - **Modules**: Use aggregate name as directory (e.g., `user/`, `campaign/`)
 
-#### **🚨 IMPLEMENTATION AUTHORITY**
-- **PRIMARY REFERENCE**: `/ddd_refactor.md` contains the authoritative implementation plan
-- **ARCHITECTURAL PATTERN**: Aggregate-Centric Modules (vertical slicing)
+#### **🚨 IMPLEMENTATION COMPLETE**
+- **ARCHITECTURAL PATTERN**: Aggregate-Centric Modules (vertical slicing) - FULLY IMPLEMENTED
 - **KEY PRINCIPLE**: Feature-focused cohesion over layer-focused separation
 - **RULE**: All code related to an aggregate lives in its module
+- **LESSON LEARNED**: Removed over-engineered patterns (adapters layer, mappers, routers.py) - simplicity won
 
-### Backend Directory Structure (Aggregate-Centric)
+### Backend Directory Structure (Aggregate-Centric) - CURRENT STATE
 ```
 api-site/
-├── main.py                        # FastAPI app setup and include_router calls
-├── routers.py                     # Maps routers from each aggregate
-├── user/
-│   ├── api/
-│   │   └── endpoints.py           # FastAPI route handlers for user actions
-│   ├── schemas/
-│   │   └── user_schemas.py        # Pydantic models: UserRequest, UserResponse
-│   ├── application/
-│   │   └── commands.py            # GetOrCreateUser, UpdateUserLogin
-│   ├── domain/
-│   │   ├── aggregates.py          # UserAggregate
-│   │   └── services.py            # Domain-specific auth logic (is_verified_user)
-│   ├── adapters/
-│   │   ├── repositories.py        # UserRepository (implements interface)
-│   │   └── mappers.py             # user_mapper (to_domain / from_domain)
-│   ├── orm/
-│   │   └── user_model.py          # SQLAlchemy model for User
-│   ├── dependencies/
-│   │   └── repositories.py        # get_user_repository (module-specific DI)
-│   └── tests/
-│       └── test_user.py
-├── campaign/
-│   ├── api/
-│   │   └── endpoints.py           # Campaign endpoints (create, list, start game)
-│   ├── schemas/
-│   │   └── campaign_schemas.py    # CampaignRequest, CampaignResponse
-│   ├── application/
-│   │   └── commands.py            # CreateCampaign, GetUserCampaigns
-│   ├── domain/
-│   │   ├── aggregates.py          # CampaignAggregate
-│   │   └── services.py            # Campaign rules, visibility policies
-│   ├── game/                      # Game ENTITY within Campaign aggregate
+├── main.py                        # FastAPI app setup, imports routers directly from modules
+├── alembic/                       # Database migrations
+│   ├── versions/                  # Migration files
+│   └── env.py                     # Alembic environment configuration
+├── modules/                       # All aggregates live under modules/ parent directory
+│   ├── user/
+│   │   ├── api/
+│   │   │   └── endpoints.py       # FastAPI route handlers for user actions
+│   │   ├── schemas/
+│   │   │   └── user_schemas.py    # Pydantic models: UserRequest, UserResponse
+│   │   ├── application/
+│   │   │   ├── commands.py        # GetOrCreateUser, UpdateUserLogin
+│   │   │   └── queries.py         # GetUserById, GetUserByEmail (CQRS pattern)
 │   │   ├── domain/
-│   │   │   └── entities.py        # GameEntity (not root), state transitions
+│   │   │   └── user_aggregate.py  # UserAggregate with business rules
+│   │   ├── repositories/
+│   │   │   └── user_repository.py # UserRepository (handles ORM ↔ Domain directly)
+│   │   ├── model/
+│   │   │   └── user_model.py      # SQLAlchemy model for User
 │   │   ├── dependencies/
-│   │   │   └── access.py          # Game participation checks (can_take_turn)
+│   │   │   └── repositories.py    # get_user_repository (module-specific DI)
 │   │   └── tests/
-│   │       └── test_game_logic.py
-│   ├── adapters/
-│   │   ├── repositories.py        # CampaignRepository (includes Game persistence)
-│   │   └── mappers.py             # campaign_mapper (includes Game mapping)
-│   ├── orm/
-│   │   ├── campaign_model.py      # Campaign SQLAlchemy model
-│   │   └── game_model.py          # Game model (if persisted independently)
-│   ├── dependencies/
-│   │   ├── repositories.py        # campaign_repository
-│   │   └── auth_checks.py         # Campaign role checks (is_dm, can_edit_campaign)
-│   └── tests/
-│       └── test_campaign_flow.py
+│   │       └── test_user.py
+│   ├── campaign/
+│   │   ├── api/
+│   │   │   └── endpoints.py       # Campaign & Game endpoints (CRUD + lifecycle)
+│   │   ├── schemas/
+│   │   │   ├── campaign_schemas.py # CampaignRequest, CampaignResponse
+│   │   │   └── game_schemas.py     # GameRequest, GameResponse, GameStartRequest
+│   │   ├── application/
+│   │   │   ├── commands.py        # CreateCampaign, UpdateCampaign, DeleteCampaign
+│   │   │   │                      # CreateGame, StartGame, EndGame, DeleteGame
+│   │   │   │                      # AddPlayerToCampaign, RemovePlayerFromCampaign
+│   │   │   └── queries.py         # GetUserCampaigns, GetCampaignById, GetGameById (CQRS)
+│   │   ├── domain/
+│   │   │   ├── campaign_aggregate.py # CampaignAggregate with Game entities
+│   │   │   └── services.py           # Domain services (minimal, most logic in aggregate)
+│   │   ├── game/                  # Game ENTITY within Campaign aggregate
+│   │   │   ├── domain/
+│   │   │   │   ├── entities.py    # GameEntity (not root), state transitions
+│   │   │   │   └── game_status.py # GameStatus enum (INACTIVE, STARTING, ACTIVE, etc.)
+│   │   │   ├── dependencies/
+│   │   │   │   └── access.py      # Game participation checks
+│   │   │   └── tests/
+│   │   │       └── test_game_logic.py
+│   │   ├── repositories/
+│   │   │   └── campaign_repository.py # CampaignRepository (includes Game persistence)
+│   │   ├── model/
+│   │   │   ├── campaign_model.py  # Campaign SQLAlchemy model
+│   │   │   └── game_model.py      # Game SQLAlchemy model
+│   │   ├── dependencies/
+│   │   │   ├── repositories.py    # campaign_repository DI
+│   │   │   └── auth_checks.py     # Campaign access control
+│   │   └── tests/
+│   │       └── test_campaign_flow.py
+│   └── characters/
+│       ├── api/
+│       │   └── endpoints.py       # Character CRUD endpoints
+│       ├── schemas/
+│       │   └── character_schemas.py
+│       ├── application/
+│       │   ├── commands.py        # CreateCharacter, UpdateCharacter, DeleteCharacter
+│       │   └── queries.py         # GetCharacterById, GetUserCharacters (CQRS)
+│       ├── domain/
+│       │   └── character_aggregate.py
+│       ├── repositories/
+│       │   └── character_repository.py
+│       ├── model/
+│       │   └── character_model.py
+│       ├── dependencies/
+│       │   └── repositories.py
+│       └── tests/
 ├── shared/
-│   ├── dependencies/
-│   │   └── auth.py                # Token decoding, user resolution, session lifecycle
-│   ├── db.py                      # get_db(), engine setup
-│   ├── auth.py                    # JWT decoding utilities only (no DI logic)
-│   └── config.py                  # App settings and env management
-└── legacy/                        # OLD - Being migrated
-    ├── services/                  # OLD service layer (being removed)
-    ├── commands/                  # OLD commands (being moved to aggregates)
-    └── models/                    # OLD models (moving to aggregate/orm/)
+│   ├── config.py                  # Settings + LOGGING_CONFIG (dictConfig)
+│   ├── jwt_helper.py              # JWT utilities (decode, verify, etc.)
+│   └── dependencies/
+│       ├── auth.py                # get_current_user_from_token (JWT → UserAggregate)
+│       └── db.py                  # get_db(), engine setup, configure_mappers()
 ```
 
-## Blueprint for Moving Forward
-
-### **🚨 CRITICAL: Follow Aggregate-Centric Pattern**
-
-#### **Phase 1: ✅ User Module (Complete)**
-- User aggregate-centric module fully implemented
-- Repository injection pattern established
-- Cross-aggregate coordination ready
-
-#### **Phase 2: Campaign Module Implementation (Next Priority)**
-
-**Step 1: Create Campaign Module Structure**
-```bash
-mkdir -p campaign/{api,schemas,application,domain,adapters,orm,game/domain,tests}
+**KEY SIMPLIFICATIONS FROM ORIGINAL PLAN:**
+- ❌ **Removed `adapters/` layer** - Repositories handle ORM translation directly
+- ❌ **Removed `mappers.py` files** - Over-engineered for this scale
+- ❌ **Removed `routers.py`** - Routers imported directly in main.py
+- ❌ **No `legacy/` directory** - Migration complete, legacy code removed
+- ✅ **Added CQRS pattern** - Separate commands.py and queries.py (not in original plan)
+- ✅ **Added `/modules/` parent** - Better organization than aggregates at root
+- ✅ **Renamed `orm/` → `model/`** - Simpler, clearer naming
 ```
 
-**Step 2: Campaign Domain Rules**
-- Campaign can have multiple Games (entities)
-- DM can create/delete campaigns
-- Games inherit campaign visibility rules
-- Campaign deletion cascades to games
+## ✅ Refactor Complete - Current Implementation Patterns
 
-**Step 3: Game Entity Rules**
-- Game is entity within Campaign aggregate
-- Game lifecycle controlled by Campaign
-- Game states: INACTIVE, ACTIVE, PAUSED, COMPLETED
-- Only DM can start/end games
+### **Aggregate-Centric Pattern - IMPLEMENTED**
 
-**Step 4: Cross-Aggregate Coordination**
-```python
-# Example: User dashboard needs Campaign data
-class GetUserDashboard:
-    def __init__(self, user_repo: UserRepository, campaign_repo: CampaignRepository):
-        # Multiple repository injection for orchestration
-```
+**All Three Aggregates Complete:**
+- ✅ **User Module** - Full CRUD, authentication integration
+- ✅ **Campaign Module** - Full CRUD + Game entity management + player management
+- ✅ **Characters Module** - Basic CRUD (minimal implementation)
 
-**Step 5: Repository Patterns**
-```python
-# shared/dependencies/repositories.py - Add to existing
-def campaign_repository(db: Session = Depends(get_db)) -> CampaignRepository:
-    return CampaignRepository(db)
-```
+### **Cross-Aggregate Coordination Rules**
 
-#### **Phase 3: Legacy Migration Strategy**
-
-**Move from Horizontal to Vertical:**
-1. **Create aggregate modules** first (campaign/, game/ under campaign/)
-2. **Move existing logic** to appropriate modules
-3. **Update imports** in main app to use new routers
-4. **Remove legacy** directories (commands/, services/, etc.)
-
-#### **Cross-Aggregate Coordination Rules**
-
-**✅ CORRECT Patterns:**
-- **Application Layer Orchestration**: Commands inject multiple repositories
-- **Repository DI**: All repositories available in shared/dependencies/
-- **Reference by ID**: Aggregates never import other aggregates directly
-- **Event Coordination**: Use application layer for complex workflows
+**✅ IMPLEMENTED Patterns:**
+- **Application Layer Orchestration**: Commands inject multiple repositories when needed
+- **Repository DI**: All repositories available via module dependencies
+- **Reference by ID**: Aggregates reference other aggregates by ID only (no direct imports)
+- **CQRS Separation**: Commands for writes, Queries for reads
 
 **❌ FORBIDDEN Patterns:**
 - Direct imports between aggregate modules
@@ -208,103 +195,160 @@ def campaign_repository(db: Session = Depends(get_db)) -> CampaignRepository:
 - Business logic in shared layer
 - Repository logic in domain layer
 
-### **Development Workflow**
+### **Development Workflow - Adding New Features**
 
-#### **Adding New Features:**
-1. **Identify Aggregate**: Which module owns this feature?
-2. **Domain First**: Add business rules to aggregate
-3. **Repository Pattern**: Extend repository if needed
-4. **Command Orchestration**: Create application command
-5. **API Integration**: Add endpoint with repository injection
+#### **1. Identify Aggregate Ownership**
+Which module owns this feature? User, Campaign, or Characters?
 
-#### **Cross-Aggregate Features:**
-1. **Choose Primary Module**: Which aggregate "owns" the feature?
-2. **Multiple Repository Injection**: Inject all needed repositories
-3. **Application Orchestration**: Coordinate in command layer
-4. **No Direct Dependencies**: Never import between modules
-
-### **Immediate Next Steps**
-
-#### **Ready to Implement: Campaign Module**
-The User module is complete and serves as the blueprint. Next implementation:
-
-**Priority 1: Campaign Aggregate-Centric Module**
-```bash
-# Create the structure
-mkdir -p campaign/{api,schemas,application,domain,adapters,orm,game/domain,tests}
-
-# Follow the exact pattern from User module:
-# 1. campaign/domain/aggregates.py - CampaignAggregate with Game entities
-# 2. campaign/adapters/repositories.py - CampaignRepository
-# 3. campaign/application/commands.py - CreateCampaign, GetUserCampaigns
-# 4. campaign/api/endpoints.py - Campaign/Game endpoints
-# 5. Add to shared/dependencies/repositories.py
+#### **2. Domain First**
+Add business rules to aggregate:
+```python
+# modules/campaign/domain/campaign_aggregate.py
+class CampaignAggregate:
+    def add_player(self, player_id: UUID):
+        if player_id in self.player_ids:
+            raise ValueError("Player already in campaign")
+        self.player_ids.append(player_id)
+        self.updated_at = datetime.utcnow()
 ```
 
-**Migration Pattern:**
-- Use existing User module as exact template
-- Follow ddd_refactor.md updated plan
-- Campaign contains Game entities (not separate root)
-- Cross-aggregate coordination via application layer
+#### **3. Create Command (Write) or Query (Read)**
+```python
+# modules/campaign/application/commands.py
+class AddPlayerToCampaign:
+    def __init__(self, repository):
+        self.repository = repository
 
-**Success Criteria:**
-- All campaign logic moves to `/campaign/` module
-- Repository injection pattern maintained
-- Cross-aggregate commands work (User + Campaign)
-- Legacy campaign code removed
+    def execute(self, campaign_id: UUID, player_id: UUID, dm_id: UUID):
+        campaign = self.repository.get_by_id(campaign_id)
+        if not campaign.is_owned_by(dm_id):
+            raise ValueError("Only DM can add players")
+        campaign.add_player(player_id)
+        self.repository.save(campaign)
+        return campaign
+```
 
-### **Key DDD Patterns**
+#### **4. Add API Endpoint**
+```python
+# modules/campaign/api/endpoints.py
+@router.post("/{campaign_id}/players/{player_id}")
+async def add_player_to_campaign(
+    campaign_id: UUID,
+    player_id: UUID,
+    current_user: UserAggregate = Depends(get_current_user_from_token),
+    campaign_repo: CampaignRepository = Depends(campaign_repository)
+):
+    command = AddPlayerToCampaign(campaign_repo)
+    campaign = command.execute(campaign_id, player_id, current_user.id)
+    return _to_campaign_response(campaign)
+```
+
+### **Cross-Aggregate Features Pattern**
+
+When a feature needs multiple aggregates:
+
+```python
+# Example: Dashboard needs User + Campaign data
+# modules/user/application/queries.py
+class GetUserDashboard:
+    def __init__(self, user_repo: UserRepository, campaign_repo: CampaignRepository):
+        self.user_repo = user_repo
+        self.campaign_repo = campaign_repo
+
+    def execute(self, user_id: UUID):
+        user = self.user_repo.get_by_id(user_id)
+        campaigns = self.campaign_repo.get_by_member_id(user_id)
+        return {
+            'user': user,
+            'campaigns': campaigns,
+            'total_campaigns': len(campaigns)
+        }
+```
+
+### **Key DDD Patterns - ACTUAL IMPLEMENTATION**
 
 #### **1. Aggregates Define Business Rules**
 ```python
-# domain/aggregates/campaign_aggregate.py
+# modules/campaign/domain/campaign_aggregate.py
 class CampaignAggregate:
-    def add_game(self, game_name: str):
-        if len(self.games) >= self.max_games:
-            raise DomainError("Campaign cannot exceed maximum games")
-        # Business logic here
+    def add_game(self, name: str, max_players: int = 6):
+        # Business rule: Validate game can be added
+        game = GameEntity.create(
+            name=name,
+            campaign_id=self.id,
+            dm_id=self.dm_id,
+            max_players=max_players
+        )
+        self.games.append(game)
+        self.updated_at = datetime.utcnow()
+        return game
 ```
 
 #### **2. Commands Orchestrate, Don't Execute Business Logic**
 ```python
-# application/commands/campaign_commands.py
+# modules/campaign/application/commands.py
 class CreateGame:
-    def execute(self, campaign_id: UUID, game_name: str):
-        campaign = self.campaign_repo.get_by_id(campaign_id)
-        campaign.add_game(game_name)  # Aggregate handles rules
-        self.campaign_repo.save(campaign)
+    def __init__(self, repository):
+        self.repository = repository
+
+    def execute(self, campaign_id: UUID, dm_id: UUID, name: str, max_players: int):
+        campaign = self.repository.get_by_id(campaign_id)
+        if not campaign.is_owned_by(dm_id):
+            raise ValueError("Only DM can create games")
+
+        game = campaign.add_game(name, max_players)  # Aggregate handles rules
+        self.repository.save(campaign)
+        return game
 ```
 
-#### **3. Repositories Abstract Data Access**
+#### **3. Repositories Abstract Data Access (No Separate Mappers)**
 ```python
-# adapters/repositories/campaign_repository.py
+# modules/campaign/repositories/campaign_repository.py
 class CampaignRepository:
-    def get_by_id(self, id: UUID) -> CampaignAggregate:
+    def __init__(self, db_session: Session):
+        self.db = db_session
+
+    def get_by_id(self, id: UUID) -> Optional[CampaignAggregate]:
         model = self.db.query(CampaignModel).filter_by(id=id).first()
-        return to_domain(model)  # Mapper handles conversion
+        if not model:
+            return None
+
+        # Repository handles ORM → Domain translation directly (no separate mapper)
+        return CampaignAggregate.from_persistence(
+            id=model.id,
+            name=model.name,
+            description=model.description,
+            dm_id=model.dm_id,
+            games=[self._game_to_entity(g) for g in model.games],
+            # ... other fields
+        )
 ```
 
-#### **4. Mappers Handle ORM ↔ Domain Translation**
+#### **4. CQRS Pattern - Commands vs Queries**
 ```python
-# adapters/mappers/campaign_mapper.py
-def to_domain(model: CampaignModel) -> CampaignAggregate:
-    return CampaignAggregate.from_persistence(
-        id=model.id,
-        name=model.name,
-        # No ORM objects leak to domain
-    )
+# modules/campaign/application/commands.py - WRITES
+class CreateCampaign:
+    def execute(self, dm_id: UUID, name: str) -> CampaignAggregate:
+        campaign = CampaignAggregate.create(name=name, dm_id=dm_id)
+        self.repository.save(campaign)
+        return campaign
+
+# modules/campaign/application/queries.py - READS
+class GetUserCampaigns:
+    def execute(self, user_id: UUID) -> List[CampaignAggregate]:
+        return self.repository.get_by_member_id(user_id)
 ```
 
 ### **FastAPI + Pydantic Integration**
 
 #### **API Schemas for Type Safety**
 ```python
-# api/schemas/campaign_schemas.py
+# modules/campaign/schemas/campaign_schemas.py
 class CampaignResponse(BaseModel):
     id: str
     name: str
     created_at: datetime
-    
+
     class Config:
         from_attributes = True
 
@@ -314,47 +358,36 @@ class CreateCampaignRequest(BaseModel):
 
 #### **Dependency Injection Pattern**
 ```python
-# api/campaigns.py
+# modules/campaign/api/endpoints.py
 @router.post("/", response_model=CampaignResponse)
 async def create_campaign(
     request: CreateCampaignRequest,
-    user: AuthenticatedUser = Depends(verify_jwt_token),
-    repo: CampaignRepository = Depends(campaign_repository)
+    current_user: UserAggregate = Depends(get_current_user_from_token),
+    campaign_repo: CampaignRepository = Depends(campaign_repository)
 ):
-    command = CreateCampaign(repo)
-    campaign = command.execute(user.id, request.name)
-    return CampaignResponse(
-        id=str(campaign.id),
-        name=campaign.name,
-        created_at=campaign.created_at
-    )
+    command = CreateCampaign(campaign_repo)
+    campaign = command.execute(current_user.id, request.name)
+    return _to_campaign_response(campaign)
 ```
 
 #### **Authentication at API Boundary Only**
 ```python
-# dependencies/auth.py
-@dataclass
-class AuthenticatedUser:
-    user_id: UUID
-    email: str
-    roles: List[str]
+# shared/dependencies/auth.py
+async def get_current_user_from_token(
+    request: Request,
+    user_repo: UserRepository = Depends(get_user_repository)
+) -> UserAggregate:
+    token = jwt_helper.get_token_from_cookie(request)
+    if not token:
+        raise HTTPException(status_code=401, detail="No auth token")
 
-async def verify_jwt_token(token: str = Depends(security)) -> AuthenticatedUser:
-    # JWT processing happens here, domain never sees JWT
+    email = jwt_helper.verify_auth_token(token)
+    user = user_repo.get_by_email(email)
+    if not user:
+        raise HTTPException(status_code=401, detail="User not found")
+
+    return user  # Returns domain aggregate, not JWT payload
 ```
-
-### **Migration Strategy**
-- **Phase 1**: Users (Complete DDD implementation)
-- **Phase 2**: Campaigns/Games (You implement)
-- **Phase 3**: Hot/Cold Migration (Event-driven with RabbitMQ)
-- **Legacy**: Old `services/` directory being phased out
-
-### **Rules for New Development**
-1. **Always create aggregates first** - Define business rules before data access
-2. **Commands orchestrate only** - No business logic in application layer
-3. **Use mappers** - Never pass ORM objects to domain layer
-4. **Pydantic for API boundaries** - Type-safe request/response models
-5. **Reference by ID** - Aggregates never hold direct references to other aggregates
 
 ## Frontend Architecture - Functional Slice Pattern
 
@@ -536,10 +569,20 @@ This architecture makes the frontend highly maintainable and allows different te
 - **Migration Pattern**: ETL from PostgreSQL → MongoDB (game start) → PostgreSQL (game end)
 
 #### **Hot/Cold Storage Pattern**
-- **Cold Storage (PostgreSQL)**: Persistent campaign/game metadata, users, configurations
-- **Hot Storage (MongoDB)**: **Active game sessions only** with real-time multiplayer requirements
-- **Server-Authoritative**: MongoDB maintains authoritative game state during sessions
-- **Migration**: Event-driven ETL process (future: RabbitMQ-based) for session start/end
+- **Cold Storage (PostgreSQL via api-site)**:
+  - Persistent campaign/game metadata, users, configurations
+  - Game lifecycle states (INACTIVE, STARTING, ACTIVE, STOPPING)
+  - All prerequisites for game (maps, music, sound effects, campaign data)
+- **Hot Storage (MongoDB via api-game)**:
+  - **Active game sessions only** - ephemeral real-time state
+  - Atomic game state + atomic player states
+  - WebSocket-broadcasted state updates
+  - Deleted when session ends and ETL completes
+- **The Gap (Not Yet Implemented)**:
+  - No ETL pipeline between cold ↔ hot storage
+  - Event-driven service/middleware planned (possibly RabbitMQ)
+  - Game creation partially broken due to incomplete lifecycle
+- **Critical Rule**: api-game and api-site are completely isolated - no direct communication
 
 ## Development Commands
 
@@ -563,14 +606,14 @@ npm run build        # Production build
 npm run start        # Start production build
 ```
 
-### Backend Commands  
+### Backend Commands
 ```bash
 # API Site (Main DDD Application)
 cd api-site
 pip install -r requirements.txt  # Install dependencies
-uvicorn app:app --reload         # Start FastAPI server on port 8082
+uvicorn main:app --reload        # Start FastAPI server on port 8082
 
-# API Game (Legacy Game Service)  
+# API Game (Game Service)
 cd api-game
 python app.py                    # Start FastAPI server on port 8081
 
@@ -740,51 +783,6 @@ API_KEY_SECRET=<api-key-for-external-services>
 - JavaScript files: `/* Copyright (C) 2025 Matthew Davey */` and `/* SPDX-License-Identifier: GPL-3.0-or-later */`
 - Python files: `# Copyright (C) 2025 Matthew Davey` and `# SPDX-License-Identifier: GPL-3.0-or-later`
 
-## DDD Development Guidelines
-
-### **Adding New Features (DDD Flow)**
-1. **Start with Domain**: Create aggregate with business rules first
-2. **Add Repository**: Implement data access with mapper
-3. **Create Command**: Orchestrate the use case in application layer
-4. **Build API**: Add FastAPI endpoint with Pydantic schemas
-5. **Setup DI**: Configure dependency injection
-6. **Test Flow**: Verify domain → repository → API integration
-
-### **Aggregate Development Rules**
-- **Business Logic First**: Define what the aggregate can do before how it's stored
-- **Invariants Protection**: Aggregate methods should enforce business rules
-- **No Infrastructure**: Domain layer imports no external dependencies
-- **Small and Focused**: One aggregate per transaction boundary
-- **Factory Methods**: Use `create()` and `from_persistence()` class methods
-
-### **Repository Implementation**
-- **Interface First**: Define what operations are needed
-- **Use Mappers**: Never pass ORM objects to domain layer
-- **Handle Not Found**: Return `None` or raise domain exceptions
-- **Transaction Management**: Let SQLAlchemy handle database transactions
-- **Query in Repository**: Don't expose ORM query details to commands
-
-### **Command Design**
-- **Single Responsibility**: One command per use case
-- **No Business Logic**: Only orchestration and coordination
-- **Error Handling**: Let domain exceptions bubble up to API layer
-- **Dependency Injection**: Receive repositories as constructor parameters
-- **Return Aggregates**: Commands return domain objects, not data structures
-
-### **FastAPI + Pydantic Patterns**
-- **Request/Response Models**: Always use Pydantic schemas for API boundaries
-- **Type Safety**: Leverage FastAPI's automatic validation
-- **Dependency Injection**: Use `Depends()` for repositories and auth
-- **Error Handling**: Convert domain exceptions to HTTP status codes
-- **Authentication**: Handle JWT at API boundary, pass clean DTOs to commands
-
-### **Migration from Legacy Code**
-- **Gradual Approach**: Implement new features with DDD, migrate existing gradually
-- **Keep Both**: Legacy `services/` and new `adapters/repositories/` can coexist
-- **Update Imports**: Change imports from old services to new repositories
-- **Preserve Behavior**: Maintain exact same API responses during migration
-- **Test Compatibility**: Ensure new implementation matches old behavior
-
 ## Infrastructure Architecture
 
 ### **NGINX Reverse Proxy - Service Discovery**
@@ -938,18 +936,223 @@ docker exec nginx-dev ping api-game
 - [ ] Verify correct backend service receives request
 - [ ] Check NGINX logs for any errors
 
+## Service Boundaries & Responsibilities
+
+### **Three Independent Services**
+
+#### **api-auth (Authentication Service)**
+**Responsibility**: Magic link generation, OTP creation, JWT token generation
+- **Does**: Creates JWT tokens, sends magic link emails, manages OTP verification
+- **Does NOT**: Create/update users, know about campaigns/games
+- **Technology**: Redis (OTP storage), minimal PostgreSQL if needed
+- **Pattern**: "Dumb" auth service - only knows about tokens, not user domain logic
+
+#### **api-site (Main DDD Application)**
+**Responsibility**: All business domain logic, cold storage, user/campaign/game metadata
+- **Does**:
+  - User aggregate management (create, update, persist users)
+  - Campaign aggregate management (CRUD campaigns)
+  - Game entity management (create game metadata, track game lifecycle state)
+  - JWT validation (verifies tokens WITHOUT calling api-auth - shared secret pattern)
+  - Prepares ALL prerequisites for game to exist (maps, music, sound effects, campaign data)
+  - Cold storage management (PostgreSQL)
+- **Does NOT**:
+  - Handle active game sessions
+  - Manage WebSocket connections
+  - Store real-time game state
+- **Technology**: PostgreSQL (cold storage), SQLAlchemy ORM, DDD aggregates
+- **Pattern**: Domain-driven design with aggregate-centric modules
+
+#### **api-game (Game Session Service)**
+**Responsibility**: ONLY active game sessions - real-time multiplayer state
+- **Does**:
+  - Manage atomic game state in MongoDB during active sessions
+  - Handle WebSocket connections for all players
+  - Broadcast state changes to connected clients
+  - Maintain atomic player state per session
+  - Server-authoritative state updates (HTTP → MongoDB → WebSocket broadcast)
+- **Does NOT**:
+  - Know about campaigns, users, or site concepts
+  - Read from PostgreSQL
+  - Persist to cold storage
+  - Handle game lifecycle (INACTIVE/STARTING/STOPPING states are api-site's concern)
+- **Technology**: MongoDB (hot storage), WebSocket, atomic state objects
+- **Pattern**: Stateful service managing ephemeral session data
+
+### **Service Integration - Current State**
+
+#### **✅ What Works Today:**
+1. **Authentication Flow**: Frontend → api-auth (JWT/OTP) → api-site validates JWT (shared secret)
+2. **Campaign/Game Metadata**: Frontend → api-site (CRUD via DDD aggregates) → PostgreSQL
+3. **Active Game Sessions**: Frontend → api-game (WebSocket + MongoDB `active_sessions`)
+
+#### **❌ The Gap - Not Yet Implemented:**
+- No ETL pipeline bridging api-site ↔ api-game
+- Cannot start/end game sessions (no cold ↔ hot migration)
+- Game entity partially broken (needs integration into Campaign aggregate)
+
+#### **🚧 Planned ETL Pipeline (Event-Driven Design):**
+
+**Game Start Flow (Cold → Hot)**:
+1. DM clicks "Start Game" in frontend
+2. Frontend → api-site: `POST /api/campaigns/games/{game_id}/start`
+3. api-site: Updates game status to STARTING, publishes event
+4. **ETL Service**: Receives event, gathers all game state from PostgreSQL
+5. **ETL Service**: Sends complete state payload to api-game
+6. api-game: Creates MongoDB `active_sessions` document, confirms ready
+7. **ETL Service**: Publishes "game_ready" event
+8. api-site: Updates game status to ACTIVE, frontend can now connect WebSocket
+
+**Game End Flow (Hot → Cold)**:
+1. DM clicks "End Game" in frontend
+2. Frontend → api-site: `POST /api/campaigns/games/{game_id}/end`
+3. api-site: Updates game status to STOPPING, publishes event
+4. **ETL Service**: Receives event, requests final state from api-game
+5. api-game: Sends complete atomic state as payload
+6. **ETL Service**: Updates PostgreSQL with final state (players, game data)
+7. **ETL Service**: Confirms persistence complete
+8. **ETL Service**: Sends delete confirmation to api-game
+9. api-game: Deletes MongoDB `active_sessions` document
+10. api-site: Updates game status to INACTIVE
+
+**Why Event-Driven?**:
+- api-site can respond synchronously to HTTP requests
+- Frontend awaits events asynchronously for completion
+- ETL pipeline can be complex without blocking api-site
+- Clean separation of concerns
+
+### **Key Design Decisions**
+
+#### **JWT Validation Pattern**
+**Current**: api-site validates JWT using shared secret (NO call to api-auth)
+- **Pros**: Fast, no network call, stateless
+- **Cons**: If api-auth revokes token, api-site doesn't know immediately
+- **Trade-off**: Accepted for performance, rely on JWT expiration
+
+#### **Service Isolation**
+**Current**: api-game and api-site completely independent
+- api-game has NO knowledge of campaigns, users, site concepts
+- api-game ONLY receives/returns state payloads via ETL
+- Clean separation enables independent scaling/deployment
+
+#### **Game Entity Relationship**
+**Rule**: You cannot have a Game without a Campaign
+- Game is entity within Campaign aggregate (not root)
+- Game should be defined INSIDE campaign aggregate (not separate module)
+- Game entity exists exclusively to the Campaign aggregate
+- Game lifecycle tied to Campaign existence
+- Game metadata (INACTIVE/ACTIVE status) lives in api-site
+- **Current Issue**: Game entity defined in `/modules/campaign/game/` but needs refactoring to be properly integrated into Campaign aggregate
+
 ## Docker Services
-- **rollplay**: Next.js frontend application
+- **rollplay**: Next.js frontend application (single SPA, NOT split)
 - **nginx**: Reverse proxy with service discovery and SSL termination
-- **api-site**: Main DDD application (PostgreSQL-based)
-- **api-game**: Game sessions with WebSocket support (MongoDB-based)
-- **api-auth**: Authentication service (Redis + PostgreSQL)
-- **postgres**: Primary database for business data
-- **mongodb**: Hot storage for active game sessions  
-- **redis**: Session storage and caching
+- **api-site**: Main DDD application (PostgreSQL-based, all business logic)
+- **api-game**: Game session service (MongoDB-based, WebSocket, stateful)
+- **api-auth**: Authentication service (JWT/magic links only, "dumb" auth)
+- **postgres**: Primary database for cold storage (business data)
+- **mongodb**: Hot storage for active game sessions (ephemeral state)
+- **redis**: Session storage and caching (OTP for magic links)
 - **certbot-renewer**: Automated SSL certificate renewal (production)
 
 ## Current Branch Context
 - **Main branch**: `main` (use for PRs)
-- **Feature branch**: `dice_rolls` (current active development)
-- **Recent focus**: Dice rolling UI improvements and DM control center enhancements
+- **Current branch**: `auth-to-game`
+- **Recent work**: Completed DDD refactor (User, Campaign, Characters aggregates), CQRS implementation, removed over-engineered patterns
+- **Status**: Refactor complete, ready for feature development
+
+---
+
+## 🚧 Current Implementation Status - CRITICAL REFERENCE
+
+### **✅ Working Features**
+- **User Authentication**: Magic link, OTP, JWT (full flow works)
+- **User Aggregate**: Complete CRUD operations
+- **Campaign Aggregate**: Full CRUD + player management
+- **Infrastructure**: NGINX, PostgreSQL, MongoDB, Redis, Docker
+
+### **⚠️ Partially Broken - DO NOT MODIFY**
+- **Game Entity**: Exists at `/modules/campaign/game/` but not integrated into Campaign aggregate (commands broken: CreateGame, StartGame, EndGame, DeleteGame)
+- **Block Reason**: Waiting on ETL pipeline design
+
+### **❌ Not Yet Implemented**
+- **ETL Pipeline**: No bridge between api-site ↔ api-game
+- **Game Sessions**: Cannot start/end from frontend
+- **Characters Aggregate**: Placeholder only, not tested
+
+### **🔧 Local Development Expectations**
+
+**Works**: ✅ Auth, User dashboard, Campaign CRUD
+**Broken**: ❌ Game creation, Game sessions, Characters
+
+**Safe to work on**: User/Campaign features, Auth improvements, Frontend UI
+**NOT safe**: Game entity, ETL pipeline, service-to-service communication
+
+---
+
+## 📚 Lessons Learned - Over-Engineering Removed
+
+### **What We Removed and Why**
+
+During the 3-month refactor (human time), we learned valuable lessons about over-engineering. Here's what we removed:
+
+#### **1. Adapters Layer - REMOVED**
+- **Planned**: Separate `/adapters/` directory with `repositories.py` and `mappers.py`
+- **Reality**: Unnecessary abstraction layer for this scale
+- **Solution**: Repositories handle ORM translation directly
+- **Lesson**: Don't add layers "because DDD says so" - add them when needed
+
+#### **2. Mapper Pattern - REMOVED**
+- **Planned**: Separate `mappers.py` files with `to_domain()` / `from_domain()` functions
+- **Reality**: Extra boilerplate with no benefit
+- **Solution**: Repositories call `Aggregate.from_persistence()` directly
+- **Lesson**: If a pattern adds code without adding value, remove it
+
+#### **3. Centralized routers.py - REMOVED**
+- **Planned**: Single `routers.py` file mapping all aggregate routers
+- **Reality**: Unnecessary indirection for 3 aggregates
+- **Solution**: Import routers directly in `main.py`
+- **Lesson**: Premature abstraction is worse than duplication
+
+#### **4. Frontend Split - NOT IMPLEMENTED**
+- **Planned**: Separate `app-site` and `app-game` Next.js applications
+- **Reality**: Premature optimization, adds deployment complexity
+- **Solution**: Single Next.js app serves all functionality
+- **Lesson**: Split when you have real scaling problems, not hypothetical ones
+
+#### **5. Domain Services - MINIMAL USE**
+- **Planned**: Separate `services.py` files for domain logic
+- **Reality**: Most logic belongs directly in aggregates
+- **Solution**: Keep services.py files but use sparingly
+- **Lesson**: Aggregates ARE the domain services in most cases
+
+### **What We Added (Not in Original Plan)**
+
+#### **1. CQRS Pattern - ADDED**
+- Separate `commands.py` (writes) and `queries.py` (reads)
+- Clear separation of concerns
+- **Why**: Improves code organization and intent clarity
+
+#### **2. /modules/ Parent Directory - ADDED**
+- All aggregates under `/modules/` instead of at root
+- **Why**: Better organization, clearer separation from infrastructure
+
+#### **3. Game Status Enum - ADDED**
+- Explicit `GameStatus` enum (INACTIVE, STARTING, ACTIVE, STOPPING, etc.)
+- **Why**: Type safety and clear state machine logic
+
+### **Key Takeaways**
+
+✅ **Do**:
+- Start simple, add complexity when needed
+- Question every layer: "What value does this add?"
+- Remove patterns that add boilerplate without benefit
+- Trust your repository to handle ORM translation
+
+❌ **Don't**:
+- Add layers because "the pattern says to"
+- Split services/frontends before you have scaling problems
+- Create separate mappers when repositories can do it
+- Over-abstract for hypothetical future requirements
+
+**Remember**: The goal is maintainable, understandable code - not perfect adherence to patterns.

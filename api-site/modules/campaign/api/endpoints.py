@@ -38,8 +38,7 @@ from modules.campaign.application.queries import (
     GetGameById,
     CheckGameDMStatus
 )
-from modules.campaign.domain.campaign_aggregate import CampaignAggregate
-from modules.campaign.game.domain.entities import GameEntity
+from modules.campaign.domain.campaign_aggregate import CampaignAggregate, GameEntity
 from shared.dependencies.auth import get_current_user_from_token
 from modules.user.domain.user_aggregate import UserAggregate
 
