@@ -9,11 +9,25 @@ from uuid import UUID
 
 
 class GameStatus(str, Enum):
-    """Game lifecycle status enumeration."""
+    """
+    Game lifecycle status enumeration.
+    
+    Games will need to have their state moved from 
+    cold storage into an active_session in the game service
+    via an ETL to syncronise game state data.
+
+    We use these states to understand the game's status
+
+    Inactive means this game has no current active_session
+    Active means this game has an active_session
+    Starting means the ETL pipeline has started and we're waiting for an Active state
+    Stopping means the ETL pipeline has started and we're waiting for an Inactive state
+
+    """
 
     INACTIVE = "inactive"
-    STARTING = "starting"
     ACTIVE = "active"
+    STARTING = "starting"
     STOPPING = "stopping"
 
     def __str__(self) -> str:
