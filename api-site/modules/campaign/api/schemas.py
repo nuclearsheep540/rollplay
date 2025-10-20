@@ -6,7 +6,7 @@ from typing import List, Optional
 from pydantic import BaseModel, Field
 
 
-# REQUEST SCHEMAS
+# CAMPAIGN REQUEST SCHEMAS
 
 class CampaignCreateRequest(BaseModel):
     name: str = Field(..., min_length=1, max_length=100)
@@ -18,10 +18,26 @@ class CampaignUpdateRequest(BaseModel):
     description: Optional[str] = Field(None, max_length=500)
 
 
-# RESPONSE SCHEMAS
+# GAME REQUEST SCHEMAS
+
+class GameCreateRequest(BaseModel):
+    name: str = Field(..., min_length=1, max_length=100)
+    max_players: int = Field(6, ge=1, le=20)
+
+
+class GameUpdateRequest(BaseModel):
+    name: Optional[str] = Field(None, min_length=1, max_length=100)
+    max_players: Optional[int] = Field(None, ge=1, le=20)
+
+
+class GameStartRequest(BaseModel):
+    mongodb_session_id: str = Field(...)
+
+
+# GAME RESPONSE SCHEMAS
 
 class GameResponse(BaseModel):
-    """Embedded game response in campaign details"""
+    """Game response schema - used for both list and detail views"""
     id: str
     name: str
     campaign_id: str
@@ -33,7 +49,16 @@ class GameResponse(BaseModel):
     updated_at: datetime
     started_at: Optional[datetime]
     ended_at: Optional[datetime]
+    session_duration_seconds: Optional[int] = None
 
+
+class DMStatusResponse(BaseModel):
+    is_dm: bool
+    game_id: str
+    campaign_id: str
+
+
+# CAMPAIGN RESPONSE SCHEMAS
 
 class CampaignResponse(BaseModel):
     """Full campaign response with games - used for detail view"""

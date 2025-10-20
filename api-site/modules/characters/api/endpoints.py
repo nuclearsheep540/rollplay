@@ -5,12 +5,12 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from typing import List
 from uuid import UUID
 
-from modules.characters.schemas.character_schemas import (
+from .schemas import (
     CharacterCreateRequest,
     CharacterResponse
 )
-from modules.characters.dependencies.repositories import get_character_repository
-from modules.characters.repositories.character_repository import CharacterRepository
+from modules.characters.dependencies.providers import get_character_repository
+from modules.characters.orm.character_repository import CharacterRepository
 from modules.characters.application.commands import CreateCharacter, DeleteCharacter
 from modules.characters.application.queries import GetCharactersByUser, GetCharacterById
 from shared.dependencies.auth import get_current_user_from_token

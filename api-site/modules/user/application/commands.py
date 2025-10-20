@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 
 from typing import Tuple
-from modules.user.repositories.user_repository import UserRepository
+from modules.user.orm.user_repository import UserRepository
 from modules.user.domain.user_aggregate import UserAggregate
 
 
