@@ -7,9 +7,7 @@ from sqlalchemy.orm import Session
 
 from modules.campaign.model.campaign_model import Campaign as CampaignModel
 from modules.campaign.model.game_model import Game as GameModel
-from modules.campaign.domain.campaign_aggregate import CampaignAggregate
-from modules.campaign.game.domain.entities import GameEntity
-from modules.campaign.game.domain.game_status import GameStatus
+from modules.campaign.domain.campaign_aggregate import CampaignAggregate, GameEntity, GameStatus
 
 
 class CampaignRepository:

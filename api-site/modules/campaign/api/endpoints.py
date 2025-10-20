@@ -5,21 +5,19 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from typing import List
 from uuid import UUID
 
-from modules.campaign.schemas.campaign_schemas import (
+from .schemas import (
     CampaignCreateRequest,
     CampaignUpdateRequest,
     CampaignResponse,
-    CampaignSummaryResponse
-)
-from modules.campaign.schemas.game_schemas import (
+    CampaignSummaryResponse,
     GameCreateRequest,
     GameUpdateRequest,
     GameStartRequest,
     GameResponse,
     DMStatusResponse
 )
-from modules.campaign.dependencies.repositories import campaign_repository
-from modules.campaign.repositories.campaign_repository import CampaignRepository
+from modules.campaign.dependencies.providers import campaign_repository
+from modules.campaign.orm.campaign_repository import CampaignRepository
 from modules.campaign.application.commands import (
     CreateCampaign,
     UpdateCampaign,
@@ -38,8 +36,7 @@ from modules.campaign.application.queries import (
     GetGameById,
     CheckGameDMStatus
 )
-from modules.campaign.domain.campaign_aggregate import CampaignAggregate
-from modules.campaign.game.domain.entities import GameEntity
+from modules.campaign.domain.campaign_aggregate import CampaignAggregate, GameEntity
 from shared.dependencies.auth import get_current_user_from_token
 from modules.user.domain.user_aggregate import UserAggregate
 

@@ -4,8 +4,7 @@
 from typing import Optional
 from uuid import UUID
 
-from modules.campaign.domain.campaign_aggregate import CampaignAggregate
-from modules.campaign.game.domain.entities import GameEntity
+from modules.campaign.domain.campaign_aggregate import CampaignAggregate, GameEntity
 
 
 class CreateCampaign:

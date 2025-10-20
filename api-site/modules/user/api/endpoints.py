@@ -5,18 +5,18 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel
 
 from shared.dependencies.auth import get_current_user_from_token
-from modules.user.schemas.user_schemas import (
+from .schemas import (
     UserEmailRequest,
     UserResponse,
     UserLoginResponse
 )
-from modules.user.dependencies.repositories import user_repository
-from modules.user.repositories.user_repository import UserRepository
+from modules.user.dependencies.providers import user_repository
+from modules.user.orm.user_repository import UserRepository
 from modules.user.application.commands import GetOrCreateUser, UpdateScreenName
 from modules.user.application.queries import GetUserDashboard
 from modules.user.domain.user_aggregate import UserAggregate
-from modules.campaign.dependencies.repositories import campaign_repository
-from modules.campaign.repositories.campaign_repository import CampaignRepository
+from modules.campaign.dependencies.providers import campaign_repository
+from modules.campaign.orm.campaign_repository import CampaignRepository
 
 
 class ScreenNameUpdateRequest(BaseModel):

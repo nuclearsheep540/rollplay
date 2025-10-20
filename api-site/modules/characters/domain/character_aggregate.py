@@ -102,10 +102,6 @@ class CharacterAggregate:
         """Soft delete the character"""
         self.is_deleted = True
 
-    def restore(self):
-        """Restore a soft-deleted character"""
-        self.is_deleted = False
-
     def can_be_deleted(self) -> bool:
         """
         Business rule: Characters can be deleted if not in active games.
@@ -123,9 +119,3 @@ class CharacterAggregate:
         """Get a specific stat value"""
         return self.stats.get(stat_name, default)
 
-    def set_stat(self, stat_name: str, value: Any):
-        """Set a specific stat value"""
-        if not isinstance(self.stats, dict):
-            self.stats = {}
-
-        self.stats[stat_name] = value
