@@ -2,6 +2,9 @@ version: "3.8"
 
 services:
   nginx:
+    hostname: nginx
+    env_file:
+      - .env
     image: ghcr.io/nuclearsheep540/rollplay/nginx:${nginx_version}
     build:
       context: ./docker/prod/nginx
@@ -74,6 +77,7 @@ services:
       - default
       
   app:
+    hostname: app
     env_file:
       - .env
     container_name: "rollplay"

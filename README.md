@@ -4,16 +4,25 @@ Table-Top management app for virtual D&D sessions.
 ![GitHub release (latest by date)](https://img.shields.io/github/v/release/nuclearsheep540/rollplay?include_prereleases)
 ![GitHub](https://img.shields.io/github/license/nuclearsheep540/rollplay)
 
-Rollplay is not intended to replace actual gameplay mechanics nor automate gameplay for players. The tools here are to help manage the manual intervention players conduct in order to play Dungeons & Dragons in a online format.
+Rollplay is a virtual table-top application for dungeons and dragons campaigns.
 
-Features intended from the app:
-- Map management
-- Sound/Music
-- Roll management
-- Tracking combat turns
-- Player map position tracking
+The goal is to enable users a way to easily create characters, campaigns and instantiate online multiplayer games to interactively track high level attributes of your campaign and characters, while also providing some fun unique story telling tools such as music/SFX, interactive maps with grid, and story telling visuals.
 
-Alongside these features I've tried my best to implement the game lobby style application, allowing users to manage their own characters as well as users in the lobby and party, enabling as much agency over their experience as reasonably possible.
+This repository is currently a monolith containing the multi-services required to run both the core site application as well as the main game api, application and other infra services.
+
+Core services are:
+* api-auth
+  * contains global user authentication including OTP and Magic Links
+* api-game
+  * contains all backend logic for the game app, including websockets and state management with the mongoDB service
+* api-site
+  * high level site application used to create an account, campaign, character etc..
+* rollplay
+  * the core game application handling the frontend for both the site and game (needs to be separated in a later release)
+
+The api-site service is structured in a Domain Driven Design (DDD) pattern, aggregating our core business services around character and campaign creation. We're using a Command Query Responsibility Segregation (CQRS) pattern to handle reading and writing data.
+
+Currently this application is deployed to a single t2.micro instance in AWS, credits expire frequently so production downtime is expected during this early development phase of the application.
 
 ## License
 This project is licensed under the GNU General Public License v3.0 - see the [LICENSE](LICENSE) file for
