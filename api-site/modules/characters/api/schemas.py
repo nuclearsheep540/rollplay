@@ -32,7 +32,7 @@ class CharacterResponse(BaseModel):
     """
     id: str
     user_id: str
-    name: str
+    character_name: str
     character_class: str
     character_race: str
     level: int

@@ -3,14 +3,34 @@
 
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
-from typing import Optional
+from typing import Optional, List
 from uuid import UUID
+from enum import Enum
 import re
 
+class InviteStatus(str, Enum):
+    """
+    When inviting a player to a game
+    we store the status of the invite
+    """
+
+    PENDING = "pending"
+    ACCEPTED = "accepted"
+    DECLINED = "declined"
+
+    def __str__(self) -> str:
+        return self.value
+
+@dataclass
+class GameInvites:
+    """Represents a game invite for a user"""
+    game_id: UUID
+    game_host: str
+    game_name: str
+    invite_status: InviteStatus
 
 def utc_now():
     return datetime.now(timezone.utc)
-
 
 @dataclass
 class UserAggregate:
@@ -22,6 +42,7 @@ class UserAggregate:
     screen_name: Optional[str]
     created_at: datetime
     last_login: Optional[datetime] = None
+    game_invites: Optional[List[GameInvites]] = None
 
     @classmethod
     def create(cls, email: str) -> 'UserAggregate':

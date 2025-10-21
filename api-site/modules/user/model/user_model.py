@@ -24,8 +24,8 @@ class User(Base):
     last_login = Column(DateTime, nullable=True)
     
     # Relationships (for ORM convenience, not exposed to domain)
-    campaigns = relationship("Campaign", back_populates="dm")
-    games = relationship("Game", back_populates="dm")
+    campaigns = relationship("Campaign", back_populates="host")  # UPDATED from "dm"
+    games = relationship("Game", back_populates="host")  # UPDATED from "dungeon_master"
     
     def __repr__(self):
         return "<User {}>".format(self.email)

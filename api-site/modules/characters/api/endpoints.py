@@ -25,7 +25,7 @@ def _to_character_response(character: CharacterAggregate) -> CharacterResponse:
     return CharacterResponse(
         id=str(character.id),
         user_id=str(character.user_id),
-        name=character.name,
+        character_name=character.character_name,
         character_class=character.character_class,
         character_race=character.character_race,
         level=character.level,
@@ -47,7 +47,7 @@ async def create_character(
         command = CreateCharacter(character_repo)
         character = command.execute(
             user_id=current_user.id,
-            name=request.name,
+            character_name=request.name,
             character_class=request.character_class,
             character_race=request.character_race,
             level=request.level,

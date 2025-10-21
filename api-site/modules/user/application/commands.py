@@ -19,7 +19,7 @@ class GetOrCreateUser:
         # Create new user through aggregate
         new_user = UserAggregate.create(email)
         self.repository.save(new_user)
-        return new_user
+        return new_user, True
 
 
 class UpdateScreenName:

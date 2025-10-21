@@ -72,14 +72,14 @@ export default function HorizontalInitiativeTracker({
                       : 'scale-100'
                     }
                   `}
-                  onClick={() => handleInitiativeClick(character.name)}
+                  onClick={() => handleInitiativeClick(character.character_name)}
                 >
                   {/* Character Frame - Subtle container with party/enemy colors */}
                   <div className={`
                     rounded transition-all duration-300 p-[calc(2.4px*var(--ui-scale))]
                     ${character.active 
                       ? 'bg-emerald-500/20 border-2 border-emerald-400/80' 
-                      : isEnemy(character.name)
+                      : isEnemy(character.character_name)
                         ? 'bg-black/20 border-2 border-red-400/60'
                         : 'bg-black/20 border-2 border-blue-400/60'
                     }
@@ -88,7 +88,7 @@ export default function HorizontalInitiativeTracker({
                     {/* Character Portrait - 2:3 Rectangle (20% bigger) */}
                     <div className={`
                       rounded transition-all duration-300 flex items-center justify-center text-white font-bold shadow-md overflow-hidden w-[calc(38px*var(--ui-scale))] h-[calc(58px*var(--ui-scale))] text-[calc(14px*var(--ui-scale))]
-                      ${getBackgroundColor(character.name)}
+                      ${getBackgroundColor(character.character_name)}
                     `}>
                       {/* Placeholder for future avatar image */}
                       <div className="w-full h-full bg-black/20 flex items-center justify-center text-white/50 text-[calc(10px*var(--ui-scale))]">
@@ -107,7 +107,7 @@ export default function HorizontalInitiativeTracker({
                   {/* Name Tooltip - Appears on hover */}
                   <div className="absolute -bottom-12 left-1/2 transform -translate-x-1/2 opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none z-30">
                     <div className="bg-black/90 text-white py-[calc(5px*var(--ui-scale))] px-[calc(10px*var(--ui-scale))] rounded whitespace-nowrap backdrop-blur-sm text-[calc(13px*var(--ui-scale))]">
-                      {character.name}
+                      {character.character_name}
                     </div>
                     {/* Tooltip Arrow */}
                     <div className="absolute top-0 left-1/2 transform -translate-x-1/2 -translate-y-1 w-0 h-0 border-l-[calc(5px*var(--ui-scale))] border-r-[calc(5px*var(--ui-scale))] border-b-[calc(5px*var(--ui-scale))] border-transparent border-b-black/90"></div>

@@ -15,12 +15,11 @@ export default function CampaignManager({ user }) {
   const [error, setError] = useState(null)
   const [creatingCampaign, setCreatingCampaign] = useState(false)
   const [showCampaignModal, setShowCampaignModal] = useState(false)
-  const [campaignName, setCampaignName] = useState('')
+  const [campaignTitle, setCampaignTitle] = useState('')
   const [campaignDescription, setCampaignDescription] = useState('')
   const [deletingCampaign, setDeletingCampaign] = useState(null)
   const [selectedCampaign, setSelectedCampaign] = useState(null)
-  const [campaignGames, setCampaignGames] = useState([])
-  const [allCampaignGames, setAllCampaignGames] = useState({}) // Store games for all campaigns
+  const [allGames, setAllGames] = useState([]) // Store all games from all campaigns
   const [creatingGame, setCreatingGame] = useState(null)
   const [endingGame, setEndingGame] = useState(null)
   const [deletingGame, setDeletingGame] = useState(null)
@@ -40,8 +39,8 @@ export default function CampaignManager({ user }) {
         const campaignsData = await response.json()
         setCampaigns(campaignsData)
 
-        // Fetch games for each campaign
-        await fetchAllCampaignGames(campaignsData)
+        // Fetch games for all campaigns
+        await fetchAllGames(campaignsData)
       } else {
         console.error('Failed to fetch campaigns:', response.status)
         setError('Failed to load campaigns')
@@ -54,15 +53,15 @@ export default function CampaignManager({ user }) {
     }
   }
 
-  // Fetch games for all campaigns
-  const fetchAllCampaignGames = async (campaignsData) => {
+  // Fetch all games for all campaigns
+  const fetchAllGames = async (campaignsData) => {
     try {
-      const gamesMap = {}
-      
+      const allGamesArray = []
+
       // Fetch games for each campaign in parallel
       const gamesPromises = campaignsData.map(async (campaign) => {
         try {
-          const response = await fetch(`/api/campaigns/${campaign.id}/games/`, {
+          const response = await fetch(`/api/games/campaign/${campaign.id}`, {
             method: 'GET',
             headers: {
               'Content-Type': 'application/json',
@@ -72,45 +71,24 @@ export default function CampaignManager({ user }) {
 
           if (response.ok) {
             const gamesData = await response.json()
-            gamesMap[campaign.id] = gamesData
+            // Backend returns GameListResponse with {games: [...], total: n}
+            return gamesData.games || []
           } else {
             console.error(`Failed to fetch games for campaign ${campaign.id}:`, response.status)
-            gamesMap[campaign.id] = []
+            return []
           }
         } catch (error) {
           console.error(`Error fetching games for campaign ${campaign.id}:`, error)
-          gamesMap[campaign.id] = []
+          return []
         }
       })
 
-      await Promise.all(gamesPromises)
-      setAllCampaignGames(gamesMap)
+      const gamesArrays = await Promise.all(gamesPromises)
+      // Flatten all games into single array
+      gamesArrays.forEach(games => allGamesArray.push(...games))
+      setAllGames(allGamesArray)
     } catch (error) {
-      console.error('Error fetching all campaign games:', error)
-    }
-  }
-
-  // Fetch games for a specific campaign
-  const fetchCampaignGames = async (campaignId) => {
-    try {
-      const response = await fetch(`/api/campaigns/${campaignId}/games/`, {
-        method: 'GET',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        credentials: 'include'
-      })
-
-      if (response.ok) {
-        const gamesData = await response.json()
-        setCampaignGames(gamesData)
-      } else {
-        console.error('Failed to fetch campaign games:', response.status)
-        setError('Failed to load campaign games')
-      }
-    } catch (error) {
-      console.error('Error fetching campaign games:', error)
-      setError('Failed to load campaign games')
+      console.error('Error fetching all games:', error)
     }
   }
 
@@ -130,10 +108,11 @@ export default function CampaignManager({ user }) {
           "3": "#f97316",
           "4": "#8b5cf6",
           "5": "#f59e0b"
-        }
+        },
+        campaign_id: `${campaignId}`
       }
 
-      const response = await fetch(`/api/campaigns/${campaignId}/games/`, {
+      const response = await fetch(`/api/campaigns/games?campaign_id=${campaignId}`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -145,12 +124,9 @@ export default function CampaignManager({ user }) {
       if (response.ok) {
         const result = await response.json()
         console.log('Game created:', result)
-        
+
         // Refresh campaigns and games
         await fetchCampaigns()
-        if (selectedCampaign) {
-          await fetchCampaignGames(selectedCampaign.id)
-        }
       } else {
         const errorData = await response.json()
         throw new Error(errorData.detail || 'Failed to create game')
@@ -193,12 +169,9 @@ export default function CampaignManager({ user }) {
       if (response.ok) {
         const result = await response.json()
         console.log('Game session started:', result)
-        
+
         // Refresh campaigns and games
         await fetchCampaigns()
-        if (selectedCampaign) {
-          await fetchCampaignGames(selectedCampaign.id)
-        }
       } else {
         const errorData = await response.json()
         throw new Error(errorData.detail || 'Failed to start game session')
@@ -228,12 +201,9 @@ export default function CampaignManager({ user }) {
       if (response.ok) {
         const result = await response.json()
         console.log('Game session ended:', result)
-        
+
         // Refresh campaigns and games
         await fetchCampaigns()
-        if (selectedCampaign) {
-          await fetchCampaignGames(selectedCampaign.id)
-        }
       } else {
         const errorData = await response.json()
         throw new Error(errorData.detail || 'Failed to end game session')
@@ -266,12 +236,9 @@ export default function CampaignManager({ user }) {
 
       if (response.ok) {
         console.log('Game deleted successfully')
-        
+
         // Refresh campaigns and games
         await fetchCampaigns()
-        if (selectedCampaign) {
-          await fetchCampaignGames(selectedCampaign.id)
-        }
       } else {
         const errorData = await response.json()
         throw new Error(errorData.detail || 'Failed to delete game')
@@ -286,14 +253,14 @@ export default function CampaignManager({ user }) {
 
   // Create a new campaign
   const createCampaign = async () => {
-    if (!user || !campaignName.trim()) return
+    if (!user || !campaignTitle.trim()) return
 
     setCreatingCampaign(true)
     setError(null)
 
     try {
       const campaignData = {
-        name: campaignName.trim(),
+        title: campaignTitle.trim(),
         description: campaignDescription.trim() || `Campaign created on ${new Date().toLocaleDateString()}`
       }
 
@@ -312,13 +279,13 @@ export default function CampaignManager({ user }) {
 
       const campaign = await response.json()
       console.log('Created campaign:', campaign.id)
-      
+
       // Refresh campaigns list
       await fetchCampaigns()
-      
+
       // Close modal and reset form
       setShowCampaignModal(false)
-      setCampaignName('')
+      setCampaignTitle('')
       setCampaignDescription('')
     } catch (error) {
       console.error('Error creating campaign:', error)
@@ -329,8 +296,8 @@ export default function CampaignManager({ user }) {
   }
 
   // Delete a campaign
-  const deleteCampaign = async (campaignId, campaignName) => {
-    if (!confirm(`Are you sure you want to delete "${campaignName}"? This action cannot be undone.`)) {
+  const deleteCampaign = async (campaignId, campaignTitle) => {
+    if (!confirm(`Are you sure you want to delete "${campaignTitle}"? This action cannot be undone.`)) {
       return
     }
 
@@ -350,7 +317,6 @@ export default function CampaignManager({ user }) {
         await fetchCampaigns()
         if (selectedCampaign && selectedCampaign.id === campaignId) {
           setSelectedCampaign(null)
-          setCampaignGames([])
         }
       } else {
         const errorData = await response.json()
@@ -365,9 +331,8 @@ export default function CampaignManager({ user }) {
   }
 
   // Show campaign details
-  const showCampaignDetails = async (campaign) => {
+  const showCampaignDetails = (campaign) => {
     setSelectedCampaign(campaign)
-    await fetchCampaignGames(campaign.id)
   }
 
   useEffect(() => {
@@ -455,14 +420,14 @@ export default function CampaignManager({ user }) {
                   <div className="flex items-center justify-between">
                     <div className="flex items-center flex-grow">
                       <div className="w-12 h-12 bg-indigo-100 rounded-full flex items-center justify-center text-indigo-600 text-xl font-bold mr-4 flex-shrink-0">
-                        {campaign.name ? campaign.name[0].toUpperCase() : '?'}
+                        {campaign.title ? campaign.title[0].toUpperCase() : '?'}
                       </div>
                       <div className="flex-grow">
-                        <h4 className="text-lg font-bold text-slate-800">{campaign.name || 'Unnamed Campaign'}</h4>
+                        <h4 className="text-lg font-bold text-slate-800">{campaign.title || 'Unnamed Campaign'}</h4>
                         <p className="text-slate-600 text-sm">DM: {user?.screen_name || user?.email || 'Unknown'}</p>
                         {/* Game Status Indicator */}
                         {(() => {
-                          const campaignGames = allCampaignGames[campaign.id] || []
+                          const campaignGames = allGames.filter(game => game.campaign_id === campaign.id)
                           const activeGames = campaignGames.filter(game => game.status === 'active')
                           const inactiveGames = campaignGames.filter(game => game.status === 'inactive')
                           const startingGames = campaignGames.filter(game => game.status === 'starting')
@@ -509,7 +474,7 @@ export default function CampaignManager({ user }) {
                       {/* Determine button state based on campaign games */}
                       {(() => {
                         // Get games for this specific campaign
-                        const campaignGames = allCampaignGames[campaign.id] || []
+                        const campaignGames = allGames.filter(game => game.campaign_id === campaign.id)
                         const activeGames = campaignGames.filter(game => game.status === 'active')
                         const inactiveGames = campaignGames.filter(game => game.status === 'inactive')
                         
@@ -548,7 +513,7 @@ export default function CampaignManager({ user }) {
                               <button
                                 onClick={(e) => {
                                   e.stopPropagation()
-                                  deleteCampaign(campaign.id, campaign.name)
+                                  deleteCampaign(campaign.id, campaign.title)
                                 }}
                                 disabled={deletingCampaign === campaign.id}
                                 className="bg-red-600 hover:bg-red-700 text-white px-3 py-1 rounded text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
@@ -582,11 +547,13 @@ export default function CampaignManager({ user }) {
 
                 <div className="space-y-3">
                   <h5 className="font-medium text-gray-700">Game Sessions</h5>
-                  {campaignGames.length === 0 ? (
-                    <p className="text-gray-500 text-sm">No game sessions yet.</p>
-                  ) : (
-                    <div className="space-y-2">
-                      {campaignGames.map((game) => (
+                  {(() => {
+                    const campaignGames = allGames.filter(game => game.campaign_id === selectedCampaign.id)
+                    return campaignGames.length === 0 ? (
+                      <p className="text-gray-500 text-sm">No game sessions yet.</p>
+                    ) : (
+                      <div className="space-y-2">
+                        {campaignGames.map((game) => (
                         <div
                           key={game.id}
                           className="flex items-center justify-between p-3 bg-gray-50 rounded border"
@@ -654,9 +621,10 @@ export default function CampaignManager({ user }) {
                             )}
                           </div>
                         </div>
-                      ))}
-                    </div>
-                  )}
+                        ))}
+                      </div>
+                    )
+                  })()}
                 </div>
               </div>
             </>
@@ -676,14 +644,14 @@ export default function CampaignManager({ user }) {
             <div className="space-y-4">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Campaign Name
+                  Campaign Title
                 </label>
                 <input
                   type="text"
-                  value={campaignName}
-                  onChange={(e) => setCampaignName(e.target.value)}
+                  value={campaignTitle}
+                  onChange={(e) => setCampaignTitle(e.target.value)}
                   className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  placeholder="Enter campaign name"
+                  placeholder="Enter campaign title"
                 />
               </div>
               <div>
@@ -703,7 +671,7 @@ export default function CampaignManager({ user }) {
               <button
                 onClick={() => {
                   setShowCampaignModal(false)
-                  setCampaignName('')
+                  setCampaignTitle('')
                   setCampaignDescription('')
                 }}
                 className="px-4 py-2 text-gray-600 hover:text-gray-800"
@@ -712,7 +680,7 @@ export default function CampaignManager({ user }) {
               </button>
               <button
                 onClick={createCampaign}
-                disabled={!campaignName.trim() || creatingCampaign}
+                disabled={!campaignTitle.trim() || creatingCampaign}
                 className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg font-medium disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
               >
                 {creatingCampaign ? 'Creating...' : 'Create Campaign'}

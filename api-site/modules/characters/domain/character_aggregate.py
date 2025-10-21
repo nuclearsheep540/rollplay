@@ -26,7 +26,7 @@ class CharacterAggregate:
     """
     id: Optional[UUID]
     user_id: UUID
-    name: str
+    character_name: str
     character_class: str
     character_race: str
     level: int
@@ -34,12 +34,13 @@ class CharacterAggregate:
     created_at: datetime
     updated_at: datetime
     is_deleted: bool = False
+    active_game: Optional[UUID] = None  # the gameID they're associated with
 
     @classmethod
     def create(
         cls,
-        user_id: UUID,
-        name: str,
+        user_id: UUID,# owner
+        character_name: str,
         character_class: str,
         character_race: str,
         level: int = 1,
@@ -57,10 +58,10 @@ class CharacterAggregate:
         - Must belong to a user
         """
         # Business rule: Character name must be provided and valid
-        if not name or not name.strip():
+        if not character_name or not character_name.strip():
             raise ValueError("Character name is required")
 
-        normalized_name = name.strip()
+        normalized_name = character_name.strip()
         if len(normalized_name) > 50:
             raise ValueError("Character name too long (max 50 characters)")
 
@@ -84,7 +85,7 @@ class CharacterAggregate:
         return cls(
             id=None,  # Will be set by repository
             user_id=user_id,
-            name=normalized_name,
+            character_name=normalized_name,
             character_class=character_class,
             character_race=character_race,
             level=level,
@@ -113,9 +114,26 @@ class CharacterAggregate:
 
     def get_display_name(self) -> str:
         """Get formatted display name"""
-        return f"{self.name} (Level {self.level} {self.character_class})"
+        return f"{self.character_name} (Level {self.level} {self.character_class})"
 
     def get_stat(self, stat_name: str, default: Any = None) -> Any:
         """Get a specific stat value"""
         return self.stats.get(stat_name, default)
+    
+    def join_game(self, game_id):
+        """
+        Joins the character to a game.id
+        Characters can only join one game at a time
+        """
+        if self.active_game:
+            return ValueError("Character is already in a game")
+
+        self.active_game = game_id
+        return game_id
+    
+    def leave_game(self, game_id):
+        """
+        Removes the character from its associated game
+        """
+        self.active_game = None
 

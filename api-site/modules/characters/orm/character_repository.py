@@ -28,7 +28,7 @@ class CharacterRepository:
         return CharacterAggregate(
             id=model.id,
             user_id=model.user_id,
-            name=model.name,
+            character_name=model.character_name,
             character_class=model.character_class,
             character_race=model.character_race,
             level=model.level,
@@ -50,7 +50,7 @@ class CharacterRepository:
             CharacterAggregate(
                 id=model.id,
                 user_id=model.user_id,
-                name=model.name,
+                character_name=model.character_name,
                 character_class=model.character_class,
                 character_race=model.character_race,
                 level=model.level,
@@ -75,7 +75,7 @@ class CharacterRepository:
                 raise ValueError(f"Character {aggregate.id} not found")
 
             character_model.user_id = aggregate.user_id
-            character_model.name = aggregate.name
+            character_model.character_name = aggregate.character_name
             character_model.character_class = aggregate.character_class
             character_model.character_race = aggregate.character_race
             character_model.level = aggregate.level
@@ -86,7 +86,7 @@ class CharacterRepository:
             # Create new character
             character_model = CharacterModel(
                 user_id=aggregate.user_id,
-                name=aggregate.name,
+                character_name=aggregate.character_name,
                 character_class=aggregate.character_class,
                 character_race=aggregate.character_race,
                 level=aggregate.level,
@@ -120,7 +120,7 @@ class CharacterRepository:
         character = CharacterAggregate(
             id=character_model.id,
             user_id=character_model.user_id,
-            name=character_model.name,
+            character_name=character_model.character_name,
             character_class=character_model.character_class,
             character_race=character_model.character_race,
             level=character_model.level,

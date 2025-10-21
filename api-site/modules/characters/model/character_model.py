@@ -15,7 +15,7 @@ class Character(Base):
     
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     user_id = Column(UUID(as_uuid=True), ForeignKey('users.id'), nullable=False)
-    name = Column(String(50), nullable=False)
+    character_name = Column(String(50), nullable=False)
     character_class = Column(String(50), nullable=False)
     character_race = Column(String(50), nullable=False)
     level = Column(Integer, default=1, nullable=False)
@@ -23,8 +23,9 @@ class Character(Base):
     created_at = Column(DateTime(timezone=True), nullable=False)
     updated_at = Column(DateTime(timezone=True), onupdate=func.now(), nullable=False)
     is_deleted = Column(Boolean, default=False, nullable=False)  # Soft delete flag
-    
+
     # No relationships - follow DDD principle of reference by ID only
-    
+    # Characters are referenced by Game via game_characters association table
+
     def __repr__(self):
-        return f"<Character(id={self.id}, name='{self.name}', class='{self.character_class}', level={self.level})>"
+        return f"<Character(id={self.id}, name='{self.character_name}', class='{self.character_class}', level={self.level})>"
