@@ -108,10 +108,11 @@ export default function CampaignManager({ user }) {
           "3": "#f97316",
           "4": "#8b5cf6",
           "5": "#f59e0b"
-        }
+        },
+        campaign_id: `${campaignId}`
       }
 
-      const response = await fetch(`/api/campaigns/${campaignId}/games/`, {
+      const response = await fetch(`/api/campaigns/games?campaign_id=${campaignId}`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

@@ -62,26 +62,6 @@ def _to_game_response(game: GameAggregate) -> GameResponse:
     )
 
 
-@router.post("/", response_model=GameResponse, status_code=status.HTTP_201_CREATED)
-async def create_game(
-    request: CreateGameRequest,
-    current_user: UserAggregate = Depends(get_current_user_from_token),
-    game_repo: GameRepository = Depends(get_game_repository),
-    campaign_repo: CampaignRepository = Depends(campaign_repository)
-):
-    """Create a new game within a campaign"""
-    try:
-        command = CreateGame(game_repo, campaign_repo)
-        game = command.execute(
-            name=request.name,
-            campaign_id=request.campaign_id,
-            dm_id=current_user.id
-        )
-        return _to_game_response(game)
-    except ValueError as e:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
-
-
 @router.get("/{game_id}", response_model=GameResponse)
 async def get_game(
     game_id: UUID,

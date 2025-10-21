@@ -9,10 +9,16 @@ from .schemas import (
     CampaignCreateRequest,
     CampaignUpdateRequest,
     CampaignResponse,
-    CampaignSummaryResponse
+    CampaignSummaryResponse,
 )
+from modules.game.schemas.game_schemas import (
+    CreateGameRequest, GameResponse
+)
+from modules.game.api.endpoints import _to_game_response
 from modules.campaign.dependencies.providers import campaign_repository
 from modules.campaign.orm.campaign_repository import CampaignRepository
+from modules.game.dependencies.repositories import get_game_repository
+from modules.game.repositories.game_repository import GameRepository
 from modules.campaign.application.commands import (
     CreateCampaign,
     UpdateCampaign,
@@ -20,6 +26,7 @@ from modules.campaign.application.commands import (
     AddPlayerToCampaign,
     RemovePlayerFromCampaign
 )
+from modules.game.application.commands import CreateGame
 from modules.campaign.application.queries import (
     GetUserCampaigns,
     GetCampaignById
@@ -68,9 +75,29 @@ def _to_campaign_summary_response(campaign: CampaignAggregate) -> CampaignSummar
         active_games=0  # TODO: Query game module for active count
     )
 
+# Game is a parent of campaign so we'll define the POST here
+@router.post("/games", response_model=GameResponse, status_code=status.HTTP_201_CREATED)
+async def create_game(
+    request: CreateGameRequest,
+    current_user: UserAggregate = Depends(get_current_user_from_token),
+    game_repo: GameRepository = Depends(get_game_repository),
+    campaign_repo: CampaignRepository = Depends(campaign_repository)
+):
+    """Create a new game within a campaign"""
+    
+    try:
+        command = CreateGame(game_repo, campaign_repo)
+        game = command.execute(
+            name=request.name,
+            campaign_id=request.campaign_id,
+            dm_id=current_user.id
+        )
+        return _to_game_response(game)
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+
 
 # Campaign endpoints
-
 @router.post("/", response_model=CampaignResponse)
 async def create_campaign(
     request: CampaignCreateRequest,
@@ -198,66 +225,3 @@ async def delete_campaign(
             detail=str(e)
         )
 
-
-# Game endpoints - DEPRECATED: Moved to /api/games router
-# See modules/game/api/endpoints.py for game management
-
-# NOTE: All game-related endpoints have been moved to the Game aggregate module
-# Use /api/games/* routes instead of /api/campaigns/{id}/games/*
-
-
-# DM Status check moved to game module
-# @router.get("/games/{game_id}/dm-status", response_model=DMStatusResponse)
-# DEPRECATED: Use game module endpoints instead
-
-
-# Player management endpoints
-
-@router.post("/{campaign_id}/players/{player_id}", response_model=CampaignResponse)
-async def add_player_to_campaign(
-    campaign_id: UUID,
-    player_id: UUID,
-    current_user: UserAggregate = Depends(get_current_user_from_token),
-    campaign_repo: CampaignRepository = Depends(campaign_repository)
-):
-    """Add a player to campaign (DM only)"""
-    try:
-        command = AddPlayerToCampaign(campaign_repo)
-        campaign = command.execute(
-            campaign_id=campaign_id,
-            player_id=player_id,
-            dm_id=current_user.id
-        )
-
-        return _to_campaign_response(campaign)
-
-    except ValueError as e:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=str(e)
-        )
-
-
-@router.delete("/{campaign_id}/players/{player_id}", response_model=CampaignResponse)
-async def remove_player_from_campaign(
-    campaign_id: UUID,
-    player_id: UUID,
-    current_user: UserAggregate = Depends(get_current_user_from_token),
-    campaign_repo: CampaignRepository = Depends(campaign_repository)
-):
-    """Remove a player from campaign (DM or self-removal)"""
-    try:
-        command = RemovePlayerFromCampaign(campaign_repo)
-        campaign = command.execute(
-            campaign_id=campaign_id,
-            player_id=player_id,
-            requesting_user_id=current_user.id
-        )
-
-        return _to_campaign_response(campaign)
-
-    except ValueError as e:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=str(e)
-        )
