@@ -15,7 +15,7 @@ class CreateCharacter:
     def execute(
         self,
         user_id: UUID,
-        name: str,
+        character_name: str,
         character_class: str,
         character_race: str,
         level: int = 1,
@@ -24,7 +24,7 @@ class CreateCharacter:
         """Create a new character"""
         character = CharacterAggregate.create(
             user_id=user_id,
-            name=name,
+            character_name=character_name,
             character_class=character_class,
             character_race=character_race,
             level=level,

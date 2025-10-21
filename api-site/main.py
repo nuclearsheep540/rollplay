@@ -12,6 +12,7 @@ from shared.dependencies.db import configure_mappers
 from modules.user.api.endpoints import router as user_router
 from modules.campaign.api.endpoints import router as campaign_router
 from modules.characters.api.endpoints import router as characters_router
+from modules.game.api.endpoints import router as game_router
 
 # Configure logging from settings
 settings = Settings()
@@ -41,6 +42,7 @@ app.add_middleware(
 app.include_router(user_router, prefix="/api/users")
 app.include_router(campaign_router, prefix="/api/campaigns")
 app.include_router(characters_router, prefix="/api/characters")
+app.include_router(game_router, prefix="/api/games")  # Game router defines its own prefix
 
 # Health check endpoint
 @app.get("/health")

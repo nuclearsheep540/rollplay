@@ -79,10 +79,10 @@ export default function CharacterManager({ user }) {
       <div key={char.id || index} className="bg-white p-4 rounded-lg shadow-md border border-gray-200 flex items-center justify-between hover:shadow-lg transition-all duration-300">
         <div className="flex items-center flex-grow">
           <div className="w-12 h-12 bg-indigo-100 rounded-full flex items-center justify-center text-indigo-600 text-xl font-bold mr-4 flex-shrink-0">
-            {char.name ? char.name[0].toUpperCase() : '?'}
+            {char.character_name ? char.character_name[0].toUpperCase() : '?'}
           </div>
           <div className="flex-grow">
-            <h3 className="text-lg font-bold text-slate-800">{char.name || 'Unnamed Character'}</h3>
+            <h3 className="text-lg font-bold text-slate-800">{char.character_name || 'Unnamed Character'}</h3>
             <p className="text-slate-600 text-sm">Level {char.level || 1} {char.character_race || 'Unknown'} {char.character_class || 'Unknown'}</p>
             <p className="text-slate-500 text-xs mt-1">Campaign: {char.campaign || 'No Campaign'}</p>
             <p className="text-slate-500 text-xs mt-1">Created: {char.created_at ? new Date(char.created_at).toLocaleDateString() : 'Unknown'}</p>

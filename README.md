@@ -30,6 +30,10 @@ details.
 
 ---
 
+To reach the local running application just visit localhost, dont provide the port numbers as nginx will handle service discovery.
+
+---
+
 # Setup
 
 Dependencies

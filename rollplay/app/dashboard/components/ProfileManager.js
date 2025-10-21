@@ -11,6 +11,14 @@ export default function ProfileManager({ user, onUserUpdate }) {
   const [screenName, setScreenName] = useState('')
   const [updatingScreenName, setUpdatingScreenName] = useState(false)
   const [error, setError] = useState(null)
+  const [copied, setCopied] = useState(false)
+
+  // Copy UUID to clipboard
+  const handleCopyUUID = async () => {
+    await navigator.clipboard.writeText(user.id)
+    setCopied(true)
+    setTimeout(() => setCopied(false), 3000)
+  }
 
   // Update screen name
   const updateScreenName = async () => {
@@ -112,6 +120,28 @@ export default function ProfileManager({ user, onUserUpdate }) {
                 title="Email cannot be changed"
               />
               <p className="text-xs text-slate-500 mt-1">Email address cannot be changed</p>
+            </div>
+            {/* ID Field (Read-only) */}
+            <div>
+              <label htmlFor="email" className="block text-sm font-medium text-slate-700 mb-1">UUID</label>
+              <div className="flex gap-2">
+                <input
+                  type="id"
+                  id="id"
+                  value={user.id}
+                  className="flex-1 px-4 py-2 border border-slate-300 rounded-lg bg-slate-50 text-slate-600 cursor-not-allowed"
+                  disabled
+                  title="id cannot be changed"
+                />
+                <button
+                  onClick={handleCopyUUID}
+                  className="w-24 px-4 py-2 border border-indigo-200 rounded-lg bg-indigo-100 text-indigo-700 hover:bg-indigo-200 transition-colors font-medium"
+                  title="Copy to clipboard"
+                >
+                  {copied ? 'Copied!' : 'Copy'}
+                </button>
+              </div>
+              <p className="text-xs text-slate-500 mt-1">ID cannot be changed</p>
             </div>
           </div>
 

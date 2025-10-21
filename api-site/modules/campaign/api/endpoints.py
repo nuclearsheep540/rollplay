@@ -9,12 +9,7 @@ from .schemas import (
     CampaignCreateRequest,
     CampaignUpdateRequest,
     CampaignResponse,
-    CampaignSummaryResponse,
-    GameCreateRequest,
-    GameUpdateRequest,
-    GameStartRequest,
-    GameResponse,
-    DMStatusResponse
+    CampaignSummaryResponse
 )
 from modules.campaign.dependencies.providers import campaign_repository
 from modules.campaign.orm.campaign_repository import CampaignRepository
@@ -22,21 +17,14 @@ from modules.campaign.application.commands import (
     CreateCampaign,
     UpdateCampaign,
     DeleteCampaign,
-    CreateGame,
-    StartGame,
-    EndGame,
-    DeleteGame,
     AddPlayerToCampaign,
     RemovePlayerFromCampaign
 )
 from modules.campaign.application.queries import (
     GetUserCampaigns,
-    GetCampaignById,
-    GetCampaignGames,
-    GetGameById,
-    CheckGameDMStatus
+    GetCampaignById
 )
-from modules.campaign.domain.campaign_aggregate import CampaignAggregate, GameEntity
+from modules.campaign.domain.campaign_aggregate import CampaignAggregate
 from shared.dependencies.auth import get_current_user_from_token
 from modules.user.domain.user_aggregate import UserAggregate
 
@@ -45,28 +33,10 @@ router = APIRouter()
 
 # Helper functions for response construction
 
-def _to_game_response(game: GameEntity) -> GameResponse:
-    """Convert GameEntity to GameResponse"""
-    return GameResponse(
-        id=str(game.id),
-        name=game.name,
-        campaign_id=str(game.campaign_id),
-        dm_id=str(game.dm_id),
-        max_players=game.max_players,
-        status=game.status.value,
-        mongodb_session_id=game.mongodb_session_id,
-        created_at=game.created_at,
-        updated_at=game.updated_at,
-        started_at=game.started_at,
-        ended_at=game.ended_at,
-        session_duration_seconds=game.get_session_duration()
-    )
-
-
 def _to_campaign_response(campaign: CampaignAggregate) -> CampaignResponse:
     """Convert CampaignAggregate to CampaignResponse"""
-    games = [_to_game_response(game) for game in campaign.games]
-    active_games = len(campaign.get_active_games())
+    # Campaign now only stores game_ids, not full game objects
+    # Frontend should fetch games separately from /api/games/campaign/{id}
 
     return CampaignResponse(
         id=str(campaign.id),
@@ -76,17 +46,16 @@ def _to_campaign_response(campaign: CampaignAggregate) -> CampaignResponse:
         maps=campaign.maps,
         created_at=campaign.created_at,
         updated_at=campaign.updated_at,
-        games=games,
+        games=[],  # Games fetched separately via game module
         player_ids=[str(player_id) for player_id in campaign.player_ids],
         total_games=campaign.get_total_games(),
-        active_games=active_games,
+        active_games=0,  # TODO: Query game module for active count
         player_count=campaign.get_player_count()
     )
 
 
 def _to_campaign_summary_response(campaign: CampaignAggregate) -> CampaignSummaryResponse:
     """Convert CampaignAggregate to CampaignSummaryResponse"""
-    active_games = len(campaign.get_active_games())
 
     return CampaignSummaryResponse(
         id=str(campaign.id),
@@ -96,7 +65,7 @@ def _to_campaign_summary_response(campaign: CampaignAggregate) -> CampaignSummar
         created_at=campaign.created_at,
         updated_at=campaign.updated_at,
         total_games=campaign.get_total_games(),
-        active_games=active_games
+        active_games=0  # TODO: Query game module for active count
     )
 
 
@@ -230,179 +199,16 @@ async def delete_campaign(
         )
 
 
-# Game endpoints
+# Game endpoints - DEPRECATED: Moved to /api/games router
+# See modules/game/api/endpoints.py for game management
 
-@router.post("/{campaign_id}/games/", response_model=GameResponse)
-async def create_game(
-    campaign_id: UUID,
-    request: GameCreateRequest,
-    current_user: UserAggregate = Depends(get_current_user_from_token),
-    campaign_repo: CampaignRepository = Depends(campaign_repository)
-):
-    """Create a new game in campaign"""
-    try:
-        command = CreateGame(campaign_repo)
-        game = command.execute(
-            campaign_id=campaign_id,
-            dm_id=current_user.id,
-            name=request.name,
-            max_players=request.max_players
-        )
-
-        return _to_game_response(game)
-
-    except ValueError as e:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=str(e)
-        )
+# NOTE: All game-related endpoints have been moved to the Game aggregate module
+# Use /api/games/* routes instead of /api/campaigns/{id}/games/*
 
 
-@router.get("/{campaign_id}/games/", response_model=List[GameResponse])
-async def get_campaign_games(
-    campaign_id: UUID,
-    current_user: UserAggregate = Depends(get_current_user_from_token),
-    campaign_repo: CampaignRepository = Depends(campaign_repository)
-):
-    """Get all games in a campaign"""
-    try:
-        query = GetCampaignGames(campaign_repo)
-        games = query.execute(campaign_id)
-
-        return [_to_game_response(game) for game in games]
-
-    except ValueError as e:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=str(e)
-        )
-
-
-@router.post("/games/{game_id}/start", response_model=GameResponse)
-async def start_game(
-    game_id: UUID,
-    request: GameStartRequest,
-    current_user: UserAggregate = Depends(get_current_user_from_token),
-    campaign_repo: CampaignRepository = Depends(campaign_repository)
-):
-    """Start a game session (transition to hot storage)"""
-    try:
-        # Verify DM status first
-        check_query = CheckGameDMStatus(campaign_repo)
-        dm_status = check_query.execute(game_id, current_user.id)
-
-        if not dm_status["is_dm"]:
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail="Only the DM can start this game"
-            )
-
-        command = StartGame(campaign_repo)
-        game = command.execute(game_id, request.mongodb_session_id)
-
-        return _to_game_response(game)
-
-    except ValueError as e:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=str(e)
-        )
-
-
-@router.post("/games/{game_id}/end", response_model=GameResponse)
-async def end_game(
-    game_id: UUID,
-    current_user: UserAggregate = Depends(get_current_user_from_token),
-    campaign_repo: CampaignRepository = Depends(campaign_repository)
-):
-    """End a game session (transition back to cold storage)"""
-    try:
-        # Verify DM status first
-        check_query = CheckGameDMStatus(campaign_repo)
-        dm_status = check_query.execute(game_id, current_user.id)
-
-        if not dm_status["is_dm"]:
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail="Only the DM can end this game"
-            )
-
-        command = EndGame(campaign_repo)
-        game = command.execute(game_id)
-
-        return _to_game_response(game)
-
-    except ValueError as e:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=str(e)
-        )
-
-
-@router.delete("/games/{game_id}", response_model=GameResponse)
-async def delete_game(
-    game_id: UUID,
-    current_user: UserAggregate = Depends(get_current_user_from_token),
-    campaign_repo: CampaignRepository = Depends(campaign_repository)
-):
-    """Delete a game (only if INACTIVE)"""
-    try:
-        command = DeleteGame(campaign_repo)
-        game = command.execute(game_id, current_user.id)
-
-        return _to_game_response(game)
-
-    except ValueError as e:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=str(e)
-        )
-
-
-@router.get("/games/{game_id}", response_model=GameResponse)
-async def get_game(
-    game_id: UUID,
-    current_user: UserAggregate = Depends(get_current_user_from_token),
-    campaign_repo: CampaignRepository = Depends(campaign_repository)
-):
-    """Get game by ID"""
-    try:
-        query = GetGameById(campaign_repo)
-        game = query.execute(game_id)
-
-        if not game:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail="Game not found"
-            )
-
-        return _to_game_response(game)
-
-    except ValueError as e:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=str(e)
-        )
-
-
-@router.get("/games/{game_id}/dm-status", response_model=DMStatusResponse)
-async def check_dm_status(
-    game_id: UUID,
-    current_user: UserAggregate = Depends(get_current_user_from_token),
-    campaign_repo: CampaignRepository = Depends(campaign_repository)
-):
-    """Check if authenticated user is DM of the game"""
-    try:
-        query = CheckGameDMStatus(campaign_repo)
-        result = query.execute(game_id, current_user.id)
-
-        return DMStatusResponse(**result)
-
-    except ValueError as e:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=str(e)
-        )
+# DM Status check moved to game module
+# @router.get("/games/{game_id}/dm-status", response_model=DMStatusResponse)
+# DEPRECATED: Use game module endpoints instead
 
 
 # Player management endpoints

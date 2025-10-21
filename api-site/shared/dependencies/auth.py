@@ -2,7 +2,6 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 
 from fastapi import Depends, HTTPException, Request, status
-from typing import Optional
 
 from shared.jwt_helper import JWTHelper
 from modules.user.dependencies.providers import user_repository
