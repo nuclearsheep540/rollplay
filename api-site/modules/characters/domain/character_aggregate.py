@@ -38,7 +38,7 @@ class CharacterAggregate:
     @classmethod
     def create(
         cls,
-        user_id: UUID,
+        user_id: UUID,# owner
         name: str,
         character_class: str,
         character_race: str,
