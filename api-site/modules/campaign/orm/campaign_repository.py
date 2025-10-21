@@ -27,23 +27,23 @@ class CampaignRepository:
 
         return self._model_to_aggregate(model)
 
-    def get_by_dm_id(self, dm_id: UUID) -> List[CampaignAggregate]:
-        """Get all campaigns where user is DM"""
+    def get_by_host_id(self, host_id: UUID) -> List[CampaignAggregate]:
+        """Get all campaigns where user is host"""
         models = (
             self.db.query(CampaignModel)
-            .filter_by(dm_id=dm_id)
+            .filter_by(host_id=host_id)
             .order_by(CampaignModel.created_at.desc())
             .all()
         )
         return [self._model_to_aggregate(model) for model in models]
 
     def get_by_member_id(self, user_id: UUID) -> List[CampaignAggregate]:
-        """Get all campaigns where user is either DM or player"""
+        """Get all campaigns where user is either host or player"""
         try:
-            # Get campaigns where user is DM
+            # Get campaigns where user is host
             models = (
                 self.db.query(CampaignModel)
-                .filter(CampaignModel.dm_id == user_id)
+                .filter(CampaignModel.host_id == user_id)
                 .order_by(CampaignModel.created_at.desc())
                 .all()
             )
@@ -79,22 +79,26 @@ class CampaignRepository:
                 raise ValueError(f"Campaign {aggregate.id} not found")
 
             # Update campaign fields
-            campaign_model.name = aggregate.name
+            campaign_model.title = aggregate.title
             campaign_model.description = aggregate.description
             campaign_model.updated_at = aggregate.updated_at
-            campaign_model.maps = aggregate.maps
+            campaign_model.assets = aggregate.assets
+            campaign_model.scenes = aggregate.scenes
+            campaign_model.npc_factory = aggregate.npc_factory
             campaign_model.player_ids = [str(player_id) for player_id in aggregate.player_ids]
 
         else:
             # Create new campaign
             campaign_model = CampaignModel(
                 id=aggregate.id,
-                name=aggregate.name,
+                title=aggregate.title,
                 description=aggregate.description,
-                dm_id=aggregate.dm_id,
+                host_id=aggregate.host_id,
                 created_at=aggregate.created_at,
                 updated_at=aggregate.updated_at,
-                maps=aggregate.maps,
+                assets=aggregate.assets,
+                scenes=aggregate.scenes,
+                npc_factory=aggregate.npc_factory,
                 player_ids=[str(player_id) for player_id in aggregate.player_ids]
             )
             self.db.add(campaign_model)
@@ -139,12 +143,14 @@ class CampaignRepository:
 
         return CampaignAggregate(
             id=model.id,
-            name=model.name,
+            title=model.title,
             description=model.description,
-            dm_id=model.dm_id,
+            host_id=model.host_id,
             created_at=model.created_at,
             updated_at=model.updated_at,
-            maps=model.maps,
+            assets=model.assets,
+            scenes=model.scenes,
+            npc_factory=model.npc_factory,
             game_ids=game_ids,
             player_ids=player_ids
         )

@@ -24,7 +24,7 @@ class CreateGame:
         self,
         name: str,
         campaign_id: UUID,
-        dm_id: UUID
+        host_id: UUID
     ) -> GameAggregate:
         """
         Create a new game and add it to the campaign.
@@ -33,16 +33,16 @@ class CreateGame:
         - Creates Game aggregate
         - Updates Campaign to include game_id
         """
-        # Validate campaign exists and user is DM
+        # Validate campaign exists and user is host
         campaign = self.campaign_repo.get_by_id(campaign_id)
         if not campaign:
             raise ValueError(f"Campaign {campaign_id} not found")
 
-        if not campaign.is_owned_by(dm_id):
-            raise ValueError("Only campaign DM can create games")
+        if not campaign.is_owned_by(host_id):
+            raise ValueError("Only campaign host can create games")
 
-        # Create game aggregate
-        game = GameAggregate.create(name=name, campaign_id=campaign_id, dm_id=dm_id)
+        # Create game aggregate (host_id auto-inherited from campaign)
+        game = GameAggregate.create(name=name, campaign_id=campaign_id, host_id=host_id)
 
         # Save game first to get ID
         self.game_repo.save(game)
@@ -76,7 +76,7 @@ class InviteUserToGame:
 
         Validation:
         - User must exist (fail early for UX)
-        - Only DM can invite
+        - Only host can invite
         - Business rules in GameAggregate
         """
         # Validate user exists (fail early)
@@ -89,9 +89,9 @@ class InviteUserToGame:
         if not game:
             raise ValueError(f"Game {game_id} not found")
 
-        # Verify inviter is DM
-        if game.dungeon_master_id != invited_by:
-            raise ValueError("Only DM can invite users")
+        # Verify inviter is host
+        if game.host_id != invited_by:
+            raise ValueError("Only host can invite users")
 
         # Business logic in aggregate
         game.invite_user(user_id)
@@ -195,7 +195,7 @@ class DeclineGameInvite:
 
 
 class RemovePlayerFromGame:
-    """DM removes a player character from the game"""
+    """Host removes a player character from the game"""
 
     def __init__(
         self,
@@ -214,7 +214,7 @@ class RemovePlayerFromGame:
         """
         Remove player character from game.
 
-        Only DM can remove players.
+        Only host can remove players.
         """
         # Validate character exists
         character = self.character_repo.get_by_id(character_id)
@@ -226,9 +226,9 @@ class RemovePlayerFromGame:
         if not game:
             raise ValueError(f"Game {game_id} not found")
 
-        # Verify remover is DM
-        if game.dungeon_master_id != removed_by:
-            raise ValueError("Only DM can remove players")
+        # Verify remover is host
+        if game.host_id != removed_by:
+            raise ValueError("Only host can remove players")
 
         # Business logic in aggregate
         game.remove_player_character(character_id)
@@ -248,16 +248,16 @@ class UpdateGame:
     def execute(
         self,
         game_id: UUID,
-        dm_id: UUID,
+        host_id: UUID,
         name: str = None
     ) -> GameAggregate:
-        """Update game details (only DM can update)"""
+        """Update game details (only host can update)"""
         game = self.game_repo.get_by_id(game_id)
         if not game:
             raise ValueError(f"Game {game_id} not found")
 
-        if game.dungeon_master_id != dm_id:
-            raise ValueError("Only DM can update game details")
+        if game.host_id != host_id:
+            raise ValueError("Only host can update game details")
 
         if name is not None:
             game.update_name(name)
@@ -280,7 +280,7 @@ class DeleteGame:
     def execute(
         self,
         game_id: UUID,
-        dm_id: UUID
+        host_id: UUID
     ) -> bool:
         """
         Delete game and remove from campaign.
@@ -293,8 +293,8 @@ class DeleteGame:
         if not game:
             raise ValueError(f"Game {game_id} not found")
 
-        if game.dungeon_master_id != dm_id:
-            raise ValueError("Only DM can delete game")
+        if game.host_id != host_id:
+            raise ValueError("Only host can delete game")
 
         # Get campaign to update
         campaign = self.campaign_repo.get_by_id(game.campaign_id)

@@ -49,7 +49,7 @@ def _to_game_response(game: GameAggregate) -> GameResponse:
         id=game.id,
         name=game.name,
         campaign_id=game.campaign_id,
-        dungeon_master_id=game.dungeon_master_id,
+        host_id=game.host_id,
         status=game.status.value,
         created_at=game.created_at,
         started_at=game.started_at,
@@ -116,12 +116,12 @@ async def update_game(
     current_user: UserAggregate = Depends(get_current_user_from_token),
     game_repo: GameRepository = Depends(get_game_repository)
 ):
-    """Update game details (DM only)"""
+    """Update game details (host only)"""
     try:
         command = UpdateGame(game_repo)
         game = command.execute(
             game_id=game_id,
-            dm_id=current_user.id,
+            host_id=current_user.id,
             name=request.name
         )
         return _to_game_response(game)
@@ -136,10 +136,10 @@ async def delete_game(
     game_repo: GameRepository = Depends(get_game_repository),
     campaign_repo: CampaignRepository = Depends(campaign_repository)
 ):
-    """Delete a game (DM only)"""
+    """Delete a game (host only)"""
     try:
         command = DeleteGame(game_repo, campaign_repo)
-        command.execute(game_id=game_id, dm_id=current_user.id)
+        command.execute(game_id=game_id, host_id=current_user.id)
     except ValueError as e:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
 
@@ -154,7 +154,7 @@ async def invite_user_to_game(
     game_repo: GameRepository = Depends(get_game_repository),
     user_repo: UserRepository = Depends(get_user_repository)
 ):
-    """Invite a user to join the game (DM only)"""
+    """Invite a user to join the game (host only)"""
     try:
         command = InviteUserToGame(game_repo, user_repo)
         game = command.execute(
@@ -216,7 +216,7 @@ async def remove_player_from_game(
     game_repo: GameRepository = Depends(get_game_repository),
     character_repo: CharacterRepository = Depends(get_character_repository)
 ):
-    """Remove a player character from the game (DM only)"""
+    """Remove a player character from the game (host only)"""
     try:
         command = RemovePlayerFromGame(game_repo, character_repo)
         game = command.execute(

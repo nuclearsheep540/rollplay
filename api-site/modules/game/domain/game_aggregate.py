@@ -58,7 +58,7 @@ class GameAggregate:
         id: Optional[UUID] = None,
         name: Optional[str] = None,
         campaign_id: Optional[UUID] = None,
-        dungeon_master_id: Optional[UUID] = None,
+        host_id: Optional[UUID] = None,  
         status: GameStatus = GameStatus.INACTIVE,
         created_at: Optional[datetime] = None,
         started_at: Optional[datetime] = None,  # time ETL successfully started the game
@@ -70,7 +70,7 @@ class GameAggregate:
         self.id = id
         self.name = name
         self.campaign_id = campaign_id
-        self.dungeon_master_id = dungeon_master_id
+        self.host_id = host_id  
         self.status = status
         self.created_at = created_at
         self.started_at = started_at
@@ -80,13 +80,13 @@ class GameAggregate:
         self.player_characters = player_characters if player_characters is not None else []
 
     @classmethod
-    def create(cls, name: str, campaign_id: UUID, dm_id: UUID):
+    def create(cls, name: str, campaign_id: UUID, host_id: UUID):
         """Create new game with business rules validation"""
 
         if not campaign_id:
             raise ValueError("Game must belong to a campaign")
-        if not dm_id:
-            raise ValueError("Game must have a DM")
+        if not host_id:
+            raise ValueError("Game must have a host")
 
         normalized_name = name.strip()
         if not name or not normalized_name:
@@ -98,7 +98,7 @@ class GameAggregate:
             id=None,  # Will be set by repository
             name=normalized_name,
             campaign_id=campaign_id,  # The campaign that spawned this game
-            dungeon_master_id=dm_id,  # User ID not the character
+            host_id=host_id,  # User ID (inherited from campaign host)
             status=GameStatus.INACTIVE,
             created_at=datetime.utcnow(),
             invited_users=[],
@@ -111,12 +111,12 @@ class GameAggregate:
         User must select a character to complete the invite.
 
         Business Rules:
-        - Cannot invite the dungeon master
+        - Cannot invite the host
         - Cannot invite user who already has pending invite
         - Cannot invite user whose character is already in game (checked in repository)
         """
-        if user_id == self.dungeon_master_id:
-            raise ValueError("Cannot invite the dungeon master as a player")
+        if user_id == self.host_id:
+            raise ValueError("Cannot invite the host as a player")
 
         if user_id in self.invited_users:
             raise ValueError("User already has a pending invite")

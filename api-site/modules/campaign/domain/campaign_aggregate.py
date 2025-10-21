@@ -16,44 +16,48 @@ class CampaignAggregate:
     Game is now a separate aggregate - Campaign only stores game_ids.
     """
     id: Optional[UUID]
-    name: str
+    title: str  
     description: str
-    dm_id: UUID
+    host_id: UUID  
     created_at: datetime
     updated_at: datetime
-    maps: Optional[str]
-    game_ids: List[UUID] = field(default_factory=list)  # References to Game aggregates
+    assets: Optional[dict] 
+    scenes: Optional[dict]
+    npc_factory: Optional[dict] 
+    game_ids: List[UUID] = field(default_factory=list) 
     player_ids: List[UUID] = field(default_factory=list)
 
     @classmethod
-    def create(cls, name: str, description: str, dm_id: UUID):
+    def create(cls, title: str, description: str, host_id: UUID):
         """Create new campaign with business rules validation"""
-        # Business rule: Campaign name must be provided and valid
-        if not name or not name.strip():
-            raise ValueError("Campaign name is required")
+        # Business rule: Campaign title must be provided and valid
+        if not title or not title.strip():
+            raise ValueError("Campaign title is required")
 
-        normalized_name = name.strip()
-        if len(normalized_name) > 100:
-            raise ValueError("Campaign name too long (max 100 characters)")
+        normalized_title = title.strip()
+        if len(normalized_title) > 100:
+            raise ValueError("Campaign title too long (max 100 characters)")
 
         # Business rule: Description is optional but has length limit
         normalized_description = description.strip() if description else ""
         if len(normalized_description) > 500:
             raise ValueError("Campaign description too long (max 500 characters)")
 
-        # Business rule: DM must be specified
-        if not dm_id:
-            raise ValueError("Campaign must have a DM")
+        # Business rule: Host must be specified
+        if not host_id:
+            raise ValueError("Campaign must have a host")
 
         now = datetime.utcnow()
         return cls(
             id=None,  # Will be set by repository
-            name=normalized_name,
+            title=normalized_title,
             description=normalized_description,
-            dm_id=dm_id,
+            host_id=host_id,
             created_at=now,
             updated_at=now,
-            maps=None,
+            assets=None,
+            scenes=None,
+            npc_factory=None,
             game_ids=[],
             player_ids=[]
         )
@@ -89,15 +93,15 @@ class CampaignAggregate:
             return True
         return False
 
-    def update_details(self, name: Optional[str] = None, description: Optional[str] = None):
+    def update_details(self, title: Optional[str] = None, description: Optional[str] = None):
         """Update campaign details with business rules"""
-        if name is not None:
-            normalized_name = name.strip()
-            if not normalized_name:
-                raise ValueError("Campaign name cannot be empty")
-            if len(normalized_name) > 100:
-                raise ValueError("Campaign name too long (max 100 characters)")
-            self.name = normalized_name
+        if title is not None:
+            normalized_title = title.strip()
+            if not normalized_title:
+                raise ValueError("Campaign title cannot be empty")
+            if len(normalized_title) > 100:
+                raise ValueError("Campaign title too long (max 100 characters)")
+            self.title = normalized_title
 
         if description is not None:
             normalized_description = description.strip()
@@ -113,7 +117,7 @@ class CampaignAggregate:
 
     def is_owned_by(self, user_id: UUID) -> bool:
         """Check if campaign is owned by specific user"""
-        return self.dm_id == user_id
+        return self.host_id == user_id
 
     def get_total_games(self) -> int:
         """Get total number of games in campaign"""
@@ -130,9 +134,9 @@ class CampaignAggregate:
 
     def add_player(self, user_id: UUID) -> None:
         """Add a player to this campaign"""
-        # Business rule: Cannot add DM as player
-        if user_id == self.dm_id:
-            raise ValueError("DM cannot be added as a player")
+        # Business rule: Cannot add host as player
+        if user_id == self.host_id:
+            raise ValueError("Host cannot be added as a player")
 
         # Business rule: Player must be unique
         if user_id in self.player_ids:
@@ -160,5 +164,5 @@ class CampaignAggregate:
         return len(self.player_ids)
 
     def get_all_member_ids(self) -> List[UUID]:
-        """Get all member IDs (DM + players)"""
-        return [self.dm_id] + self.player_ids
+        """Get all member IDs (host + players)"""
+        return [self.host_id] + self.player_ids

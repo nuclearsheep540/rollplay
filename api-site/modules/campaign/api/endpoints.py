@@ -47,10 +47,12 @@ def _to_campaign_response(campaign: CampaignAggregate) -> CampaignResponse:
 
     return CampaignResponse(
         id=str(campaign.id),
-        name=campaign.name,
+        title=campaign.title,
         description=campaign.description,
-        dm_id=str(campaign.dm_id),
-        maps=campaign.maps,
+        host_id=str(campaign.host_id),
+        assets=campaign.assets,
+        scenes=campaign.scenes,
+        npc_factory=campaign.npc_factory,
         created_at=campaign.created_at,
         updated_at=campaign.updated_at,
         games=[],  # Games fetched separately via game module
@@ -66,9 +68,9 @@ def _to_campaign_summary_response(campaign: CampaignAggregate) -> CampaignSummar
 
     return CampaignSummaryResponse(
         id=str(campaign.id),
-        name=campaign.name,
+        title=campaign.title,
         description=campaign.description,
-        dm_id=str(campaign.dm_id),
+        host_id=str(campaign.host_id),
         created_at=campaign.created_at,
         updated_at=campaign.updated_at,
         total_games=campaign.get_total_games(),
@@ -84,13 +86,13 @@ async def create_game(
     campaign_repo: CampaignRepository = Depends(campaign_repository)
 ):
     """Create a new game within a campaign"""
-    
+
     try:
         command = CreateGame(game_repo, campaign_repo)
         game = command.execute(
             name=request.name,
             campaign_id=request.campaign_id,
-            dm_id=current_user.id
+            host_id=current_user.id
         )
         return _to_game_response(game)
     except ValueError as e:
@@ -108,8 +110,8 @@ async def create_campaign(
     try:
         command = CreateCampaign(campaign_repo)
         campaign = command.execute(
-            dm_id=current_user.id,
-            name=request.name,
+            host_id=current_user.id,
+            title=request.title,
             description=request.description or ""
         )
 
@@ -127,7 +129,7 @@ async def get_user_campaigns(
     current_user: UserAggregate = Depends(get_current_user_from_token),
     campaign_repo: CampaignRepository = Depends(campaign_repository)
 ):
-    """Get all campaigns where user is DM"""
+    """Get all campaigns where user is host"""
     try:
         query = GetUserCampaigns(campaign_repo)
         campaigns = query.execute(current_user.id)
@@ -158,11 +160,11 @@ async def get_campaign(
                 detail="Campaign not found"
             )
 
-        # Business rule: Only DM can view campaign details
+        # Business rule: Only host can view campaign details
         if not campaign.is_owned_by(current_user.id):
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
-                detail="Access denied - only DM can view campaign details"
+                detail="Access denied - only host can view campaign details"
             )
 
         return _to_campaign_response(campaign)
@@ -186,8 +188,8 @@ async def update_campaign(
         command = UpdateCampaign(campaign_repo)
         campaign = command.execute(
             campaign_id=campaign_id,
-            dm_id=current_user.id,
-            name=request.name,
+            host_id=current_user.id,
+            title=request.title,
             description=request.description
         )
 

@@ -37,7 +37,7 @@ class Game(Base):
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     name = Column(String(100), nullable=False)
     campaign_id = Column(UUID(as_uuid=True), ForeignKey('campaigns.id'), nullable=False)
-    dungeon_master_id = Column(UUID(as_uuid=True), ForeignKey('users.id'), nullable=False)
+    host_id = Column(UUID(as_uuid=True), ForeignKey('users.id'), nullable=False)  # RENAMED from dungeon_master_id
     status = Column(String(20), default='INACTIVE', nullable=False)
     created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
     started_at = Column(DateTime(timezone=True))
@@ -46,7 +46,7 @@ class Game(Base):
 
     # Relationships
     campaign = relationship("Campaign", back_populates="games")
-    dungeon_master = relationship("User", back_populates="games")
+    host = relationship("User", back_populates="games")  # RENAMED from dungeon_master
 
     # Many-to-many: Users with pending invites
     invited_users = relationship(

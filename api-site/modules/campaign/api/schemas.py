@@ -9,12 +9,12 @@ from pydantic import BaseModel, Field
 # CAMPAIGN REQUEST SCHEMAS
 
 class CampaignCreateRequest(BaseModel):
-    name: str = Field(..., min_length=1, max_length=100)
+    title: str = Field(..., min_length=1, max_length=100)
     description: Optional[str] = Field(None, max_length=500)
 
 
 class CampaignUpdateRequest(BaseModel):
-    name: Optional[str] = Field(None, min_length=1, max_length=100)
+    title: Optional[str] = Field(None, min_length=1, max_length=100)
     description: Optional[str] = Field(None, max_length=500)
 
 
@@ -41,7 +41,7 @@ class GameResponse(BaseModel):
     id: str
     name: str
     campaign_id: str
-    dm_id: str
+    host_id: str
     max_players: int
     status: str
     mongodb_session_id: Optional[str]
@@ -52,8 +52,8 @@ class GameResponse(BaseModel):
     session_duration_seconds: Optional[int] = None
 
 
-class DMStatusResponse(BaseModel):
-    is_dm: bool
+class HostStatusResponse(BaseModel):
+    is_host: bool
     game_id: str
     campaign_id: str
 
@@ -63,10 +63,12 @@ class DMStatusResponse(BaseModel):
 class CampaignResponse(BaseModel):
     """Full campaign response with games - used for detail view"""
     id: str
-    name: str
+    title: str
     description: Optional[str]
-    dm_id: str
-    maps: Optional[str]
+    host_id: str
+    assets: Optional[dict]
+    scenes: Optional[dict]
+    npc_factory: Optional[dict]
     created_at: datetime
     updated_at: datetime
     games: List[GameResponse] = []
@@ -79,9 +81,9 @@ class CampaignResponse(BaseModel):
 class CampaignSummaryResponse(BaseModel):
     """Lightweight campaign response without games - used for list view"""
     id: str
-    name: str
+    title: str
     description: Optional[str]
-    dm_id: str
+    host_id: str
     created_at: datetime
     updated_at: datetime
     total_games: int = 0

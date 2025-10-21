@@ -15,7 +15,7 @@ export default function CampaignManager({ user }) {
   const [error, setError] = useState(null)
   const [creatingCampaign, setCreatingCampaign] = useState(false)
   const [showCampaignModal, setShowCampaignModal] = useState(false)
-  const [campaignName, setCampaignName] = useState('')
+  const [campaignTitle, setCampaignTitle] = useState('')
   const [campaignDescription, setCampaignDescription] = useState('')
   const [deletingCampaign, setDeletingCampaign] = useState(null)
   const [selectedCampaign, setSelectedCampaign] = useState(null)
@@ -253,14 +253,14 @@ export default function CampaignManager({ user }) {
 
   // Create a new campaign
   const createCampaign = async () => {
-    if (!user || !campaignName.trim()) return
+    if (!user || !campaignTitle.trim()) return
 
     setCreatingCampaign(true)
     setError(null)
 
     try {
       const campaignData = {
-        name: campaignName.trim(),
+        title: campaignTitle.trim(),
         description: campaignDescription.trim() || `Campaign created on ${new Date().toLocaleDateString()}`
       }
 
@@ -279,13 +279,13 @@ export default function CampaignManager({ user }) {
 
       const campaign = await response.json()
       console.log('Created campaign:', campaign.id)
-      
+
       // Refresh campaigns list
       await fetchCampaigns()
-      
+
       // Close modal and reset form
       setShowCampaignModal(false)
-      setCampaignName('')
+      setCampaignTitle('')
       setCampaignDescription('')
     } catch (error) {
       console.error('Error creating campaign:', error)
@@ -296,8 +296,8 @@ export default function CampaignManager({ user }) {
   }
 
   // Delete a campaign
-  const deleteCampaign = async (campaignId, campaignName) => {
-    if (!confirm(`Are you sure you want to delete "${campaignName}"? This action cannot be undone.`)) {
+  const deleteCampaign = async (campaignId, campaignTitle) => {
+    if (!confirm(`Are you sure you want to delete "${campaignTitle}"? This action cannot be undone.`)) {
       return
     }
 
@@ -420,10 +420,10 @@ export default function CampaignManager({ user }) {
                   <div className="flex items-center justify-between">
                     <div className="flex items-center flex-grow">
                       <div className="w-12 h-12 bg-indigo-100 rounded-full flex items-center justify-center text-indigo-600 text-xl font-bold mr-4 flex-shrink-0">
-                        {campaign.name ? campaign.name[0].toUpperCase() : '?'}
+                        {campaign.title ? campaign.title[0].toUpperCase() : '?'}
                       </div>
                       <div className="flex-grow">
-                        <h4 className="text-lg font-bold text-slate-800">{campaign.name || 'Unnamed Campaign'}</h4>
+                        <h4 className="text-lg font-bold text-slate-800">{campaign.title || 'Unnamed Campaign'}</h4>
                         <p className="text-slate-600 text-sm">DM: {user?.screen_name || user?.email || 'Unknown'}</p>
                         {/* Game Status Indicator */}
                         {(() => {
@@ -513,7 +513,7 @@ export default function CampaignManager({ user }) {
                               <button
                                 onClick={(e) => {
                                   e.stopPropagation()
-                                  deleteCampaign(campaign.id, campaign.name)
+                                  deleteCampaign(campaign.id, campaign.title)
                                 }}
                                 disabled={deletingCampaign === campaign.id}
                                 className="bg-red-600 hover:bg-red-700 text-white px-3 py-1 rounded text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
@@ -644,14 +644,14 @@ export default function CampaignManager({ user }) {
             <div className="space-y-4">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Campaign Name
+                  Campaign Title
                 </label>
                 <input
                   type="text"
-                  value={campaignName}
-                  onChange={(e) => setCampaignName(e.target.value)}
+                  value={campaignTitle}
+                  onChange={(e) => setCampaignTitle(e.target.value)}
                   className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  placeholder="Enter campaign name"
+                  placeholder="Enter campaign title"
                 />
               </div>
               <div>
@@ -671,7 +671,7 @@ export default function CampaignManager({ user }) {
               <button
                 onClick={() => {
                   setShowCampaignModal(false)
-                  setCampaignName('')
+                  setCampaignTitle('')
                   setCampaignDescription('')
                 }}
                 className="px-4 py-2 text-gray-600 hover:text-gray-800"
@@ -680,7 +680,7 @@ export default function CampaignManager({ user }) {
               </button>
               <button
                 onClick={createCampaign}
-                disabled={!campaignName.trim() || creatingCampaign}
+                disabled={!campaignTitle.trim() || creatingCampaign}
                 className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg font-medium disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
               >
                 {creatingCampaign ? 'Creating...' : 'Create Campaign'}

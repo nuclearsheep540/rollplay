@@ -33,7 +33,7 @@ class GameResponse(BaseModel):
     id: UUID
     name: str
     campaign_id: UUID
-    dungeon_master_id: UUID
+    host_id: UUID
     status: str
     created_at: datetime
     started_at: Optional[datetime]
