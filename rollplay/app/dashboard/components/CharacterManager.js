@@ -13,6 +13,10 @@ export default function CharacterManager({ user }) {
   const [characters, setCharacters] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
+  const [showDeleteModal, setShowDeleteModal] = useState(false)
+  const [characterToDelete, setCharacterToDelete] = useState(null)
+  const [deleteLoading, setDeleteLoading] = useState(false)
+  const [deleteError, setDeleteError] = useState(null)
 
   // Fetch characters from API
   const fetchCharacters = async () => {
@@ -47,6 +51,51 @@ export default function CharacterManager({ user }) {
       fetchCharacters()
     }
   }, [user])
+
+  // Handle delete button click - show confirmation modal
+  const handleDeleteClick = (character) => {
+    setCharacterToDelete(character)
+    setShowDeleteModal(true)
+    setDeleteError(null)
+  }
+
+  // Handle confirmed delete action
+  const handleConfirmDelete = async () => {
+    if (!characterToDelete) return
+
+    setDeleteLoading(true)
+    setDeleteError(null)
+
+    try {
+      const response = await fetch(`/api/characters/${characterToDelete.id}`, {
+        method: 'DELETE',
+        credentials: 'include'
+      })
+
+      if (response.ok) {
+        // Remove character from list
+        setCharacters(characters.filter(c => c.id !== characterToDelete.id))
+        // Close modal
+        setShowDeleteModal(false)
+        setCharacterToDelete(null)
+      } else {
+        const errorData = await response.json()
+        setDeleteError(errorData.detail || 'Failed to delete character')
+      }
+    } catch (error) {
+      console.error('Error deleting character:', error)
+      setDeleteError('Failed to delete character')
+    } finally {
+      setDeleteLoading(false)
+    }
+  }
+
+  // Handle cancel delete
+  const handleCancelDelete = () => {
+    setShowDeleteModal(false)
+    setCharacterToDelete(null)
+    setDeleteError(null)
+  }
 
   const renderCharacters = () => {
     if (loading) {
@@ -89,11 +138,19 @@ export default function CharacterManager({ user }) {
           </div>
         </div>
         <div className="flex space-x-2 flex-shrink-0">
-          <button className="p-2 rounded-full bg-slate-100 text-slate-600 hover:bg-slate-200 transition-colors" title="Edit Character">
+          <button
+            onClick={() => router.push(`/character/edit/${char.id}`)}
+            className="p-2 rounded-full bg-slate-100 text-slate-600 hover:bg-slate-200 transition-colors"
+            title="Edit Character"
+          >
             <span className="text-lg">✎</span>
           </button>
-          <button className="p-2 rounded-full bg-indigo-100 text-indigo-600 hover:bg-indigo-200 transition-colors" title="View Character">
-            <span className="text-lg">📖</span>
+          <button
+            onClick={() => handleDeleteClick(char)}
+            className="p-2 rounded-full bg-red-100 text-red-600 hover:bg-red-200 transition-colors"
+            title="Delete Character"
+          >
+            <span className="text-lg">🗑️</span>
           </button>
         </div>
       </div>
@@ -125,6 +182,49 @@ export default function CharacterManager({ user }) {
       <div className="flex flex-col gap-4">
         {renderCharacters()}
       </div>
+
+      {/* Delete Confirmation Modal */}
+      {showDeleteModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg shadow-xl p-6 max-w-md w-full mx-4">
+            <h3 className="text-xl font-bold text-gray-900 mb-2">Delete Character</h3>
+            <p className="text-gray-600 mb-1">
+              Are you sure you want to delete <strong>{characterToDelete?.character_name}</strong>?
+            </p>
+            <p className="text-sm text-gray-500 mb-4">This action cannot be undone.</p>
+
+            {deleteError && (
+              <div className="mb-4 bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded">
+                {deleteError}
+              </div>
+            )}
+
+            <div className="flex gap-3 justify-end">
+              <button
+                onClick={handleCancelDelete}
+                disabled={deleteLoading}
+                className="px-4 py-2 bg-gray-200 text-gray-800 rounded-lg hover:bg-gray-300 transition-colors disabled:opacity-50"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleConfirmDelete}
+                disabled={deleteLoading}
+                className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors disabled:opacity-50 flex items-center"
+              >
+                {deleteLoading ? (
+                  <>
+                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+                    Deleting...
+                  </>
+                ) : (
+                  'Delete'
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
