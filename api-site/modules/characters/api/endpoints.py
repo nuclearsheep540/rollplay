@@ -36,7 +36,10 @@ def _to_character_response(character: CharacterAggregate) -> CharacterResponse:
         ability_scores=character.ability_scores.to_dict(),  # AbilityScores → dict
         created_at=character.created_at,
         updated_at=character.updated_at,
-        display_name=character.get_display_name()
+        display_name=character.get_display_name(),
+        hp_max=character.hp_max,
+        hp_current=character.hp_current,
+        ac=character.ac
     )
 
 
@@ -65,9 +68,12 @@ async def create_character(
             user_id=current_user.id,
             character_name=request.name,
             character_class=request.character_class,
-            character_race=request.character_race, 
+            character_race=request.character_race,
             level=request.level,
-            ability_scores=ability_scores
+            ability_scores=ability_scores,
+            hp_current=request.hp_current,
+            hp_max=request.hp_max,
+            ac=request.ac
         )
 
         return _to_character_response(character)
@@ -163,7 +169,10 @@ async def update_character(
             character_class=request.character_class,
             character_race=request.character_race,
             level=request.level,
-            ability_scores=ability_scores
+            ability_scores=ability_scores,
+            hp_max=request.hp_max,
+            hp_current=request.hp_current,
+            ac=request.ac
         )
 
         return _to_character_response(character)

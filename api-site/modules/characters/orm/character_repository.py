@@ -35,7 +35,10 @@ class CharacterRepository:
             created_at=model.created_at,
             updated_at=model.updated_at,
             is_deleted=model.is_deleted,
-            active_game=model.active_game
+            active_game=model.active_game,
+            hp_current=model.hp_current,
+            hp_max=model.hp_max,
+            ac=model.ac,
         )
 
     def get_by_id(self, character_id: UUID) -> Optional[CharacterAggregate]:
@@ -81,6 +84,9 @@ class CharacterRepository:
             character_model.is_deleted = aggregate.is_deleted
             character_model.updated_at = aggregate.updated_at
             character_model.active_game = aggregate.active_game
+            character_model.hp_max = aggregate.hp_max
+            character_model.hp_current = aggregate.hp_current
+            character_model.ac = aggregate.ac
 
         else:
             # Create new character
@@ -94,7 +100,10 @@ class CharacterRepository:
                 is_deleted=aggregate.is_deleted,
                 created_at=aggregate.created_at,
                 updated_at=aggregate.updated_at,
-                active_game=aggregate.active_game
+                active_game=aggregate.active_game,
+                hp_max=aggregate.hp_max,
+                hp_current=aggregate.hp_current,
+                ac=aggregate.ac
             )
             self.db.add(character_model)
 

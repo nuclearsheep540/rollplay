@@ -67,16 +67,13 @@ class UserAggregate:
         # Validate email length (RFC 5322 limit)
         if len(normalized_email) > 254:
             raise ValueError("Email address too long (maximum 254 characters)")
-        
-        # We create accounts on first log in, so this event is technically a login
-        cls.record_login()
 
         return cls(
             id=None,  # Set by repository after persistence
             email=normalized_email,
             screen_name=None,  # To be set later by user
             created_at=utc_now(),
-            last_login=None
+            last_login=utc_now()  # We create accounts on first login, so set last_login to now
         )
 
     def record_login(self):

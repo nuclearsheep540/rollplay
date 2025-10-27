@@ -30,7 +30,10 @@ export default function CharacterForm({
       intelligence: 1,
       wisdom: 1,
       charisma: 1
-    }
+    },
+    hp_max: initialData?.hp_max || 10,
+    hp_current: initialData?.hp_current || 10,
+    ac: initialData?.ac || 10,
   })
 
   const handleInputChange = (field, value) => {
@@ -112,6 +115,50 @@ export default function CharacterForm({
           required
         />
       </div>
+
+      {/* HP and AC */}
+
+      <label htmlFor="hp_current" className="block text-sm font-medium text-gray-700 mb-2">
+          Current HP <span className="text-red-500">*</span>
+        </label>
+        <input
+          id="hp_current"
+          type="number"
+          min="-100"
+          max="999"
+          value={formData.hp_current}
+          onChange={(e) => handleInputChange('hp_current', parseInt(e.target.value, 10) || 1)}
+          className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+          required
+        />
+
+      <label htmlFor="hp_max" className="block text-sm font-medium text-gray-700 mb-2">
+          Max HP <span className="text-red-500">*</span>
+        </label>
+        <input
+          id="hp_max"
+          type="number"
+          min="1"
+          max="999"
+          value={formData.hp_max}
+          onChange={(e) => handleInputChange('hp_max', parseInt(e.target.value, 10) || 1)}
+          className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+          required
+        />
+
+      <label htmlFor="ac" className="block text-sm font-medium text-gray-700 mb-2">
+          Armor Class <span className="text-red-500">*</span>
+        </label>
+        <input
+          id="ac"
+          type="number"
+          min="1"
+          max="50"
+          value={formData.ac}
+          onChange={(e) => handleInputChange('ac', parseInt(e.target.value, 10) || 1)}
+          className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+          required
+        />
 
       {/* Ability Scores */}
       <div>

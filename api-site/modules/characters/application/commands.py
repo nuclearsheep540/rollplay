@@ -25,7 +25,10 @@ class CreateCharacter:
         character_class: CharacterClass,
         character_race: CharacterRace,
         level: int = 1,
-        ability_scores: Optional[AbilityScores] = None
+        ability_scores: Optional[AbilityScores] = None,
+        hp_max: int = 10,
+        hp_current: int = 10,
+        ac: int = 10
     ) -> CharacterAggregate:
         """Create a new character"""
         character = CharacterAggregate.create(
@@ -35,7 +38,10 @@ class CreateCharacter:
             character_race=character_race,
             level=level,
             ability_scores=ability_scores,
-            active_game=None
+            active_game=None,
+            hp_max=hp_max,
+            hp_current=hp_current,
+            ac=ac
         )
 
         self.repository.save(character)
@@ -83,7 +89,10 @@ class UpdateCharacter:
         character_class: CharacterClass,
         character_race: CharacterRace,
         level: int,
-        ability_scores: AbilityScores
+        ability_scores: AbilityScores,
+        hp_max: int,
+        hp_current: int,
+        ac: int,
     ) -> CharacterAggregate:
         """Update an existing character with new values"""
         # Fetch existing character
@@ -95,13 +104,19 @@ class UpdateCharacter:
         if not character.is_owned_by(user_id):
             raise ValueError("Only character owner can update this character")
 
-        # Update all fields
-        character.character_name = character_name.strip()
-        character.character_class = character_class
-        character.character_race = character_race
-        character.level = level
-        character.ability_scores = ability_scores
-        character.updated_at = datetime.now()
+        # Update via domain method (includes business rule validation)
+        character.update_character(
+            character_name=character_name,
+            character_class=character_class,
+            character_race=character_race,
+            level=level,
+            hp_max=hp_max,
+            hp_current=hp_current,
+            ac=ac
+        )
+
+        # Update ability scores separately (has its own method)
+        character.update_ability_scores(ability_scores)
 
         # Save updated character
         self.repository.save(character)

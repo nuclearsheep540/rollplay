@@ -30,12 +30,15 @@ class CharacterCreateRequest(BaseModel):
     character_class: CharacterClass = Field(..., description="D&D 5e character class")
     character_race: CharacterRace = Field(..., description="D&D 5e character race")
     level: int = Field(1, ge=1, le=20, description="Character level (1-20)")
+    hp_max: int = Field(1, ge=1, le=999, description="Character max hit points (1-999)")
+    hp_current: int = Field(1, ge=-100, le=999, description="Character current hit points (-100 to 999, negative for unconscious)")
+    ac: int = Field(1, ge=1, le=50, description="Character armour class (1-50)")
     ability_scores: Optional[AbilityScoresRequest] = Field(
         None,
         description="Ability scores (defaults to 1 for all if omitted)"
     )
 
-
+# TODO: this is DRY as AbilityScoresRequest is the same, refactor.
 class UpdateAbilityScoresRequest(BaseModel):
     """Request schema for updating ability scores - all fields optional for partial updates"""
     strength: Optional[int] = Field(None, ge=1, description="Strength score")
@@ -65,3 +68,6 @@ class CharacterResponse(BaseModel):
     created_at: datetime
     updated_at: datetime
     display_name: str
+    hp_max: int
+    hp_current: int
+    ac: int

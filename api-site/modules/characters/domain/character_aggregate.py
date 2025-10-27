@@ -118,6 +118,9 @@ class CharacterAggregate:
     ability_scores: AbilityScores
     created_at: datetime
     updated_at: datetime
+    hp_max: int
+    hp_current: int
+    ac: int
     is_deleted: bool = False
     active_game: Optional[UUID] = None  # the gameID they're associated with
 
@@ -129,6 +132,9 @@ class CharacterAggregate:
         character_name: str,
         character_class: CharacterClass,
         character_race: CharacterRace,
+        hp_max: int,
+        hp_current: int,
+        ac: int,
         level: int = 1,
         ability_scores: Optional[AbilityScores] = None,
     ) -> 'CharacterAggregate':
@@ -183,7 +189,10 @@ class CharacterAggregate:
             created_at=now,
             updated_at=now,
             is_deleted=False,
-            active_game=active_game
+            active_game=active_game,
+            hp_max=hp_max,
+            hp_current=hp_current,
+            ac=ac
         )
 
     def is_owned_by(self, user_id: UUID) -> bool:
@@ -211,7 +220,62 @@ class CharacterAggregate:
         """Update character's ability scores (for when user sets them via interface)"""
         self.ability_scores = new_scores
         self.updated_at = datetime.now()
-    
+
+    def update_character(
+        self,
+        character_name: Optional[str] = None,
+        character_class: Optional[CharacterClass] = None,
+        character_race: Optional[CharacterRace] = None,
+        level: Optional[int] = None,
+        hp_max: Optional[int] = None,
+        hp_current: Optional[int] = None,
+        ac: Optional[int] = None
+    ) -> None:
+        """
+        Update character details with business rules validation.
+
+        All parameters are optional - only provided fields will be updated.
+
+        Business Rules:
+        - Character name must be valid and <= 50 characters
+        - Level must be between 1 and 20
+        - Character class and race must be valid if provided
+        """
+        if character_name is not None:
+            normalized_name = character_name.strip()
+            if not normalized_name:
+                raise ValueError("Character name cannot be empty")
+            if len(normalized_name) > 50:
+                raise ValueError("Character name too long (max 50 characters)")
+            self.character_name = normalized_name
+
+        if character_class is not None:
+            if not character_class or not str(character_class).strip():
+                raise ValueError("Character class is required")
+            self.character_class = character_class
+
+        if character_race is not None:
+            if not character_race:
+                raise ValueError("Character race is required")
+            self.character_race = character_race
+
+        if level is not None:
+            if level < 1 or level > 20:
+                raise ValueError("Character level must be between 1 and 20")
+            self.level = level
+
+        if hp_max is not None:
+            self.hp_max = hp_max
+
+        if hp_current is not None:
+            # you can have temporary hitpoints so current may exceed max
+            self.hp_current = hp_current
+
+        if ac is not None:
+            self.ac = ac
+
+        self.updated_at = datetime.now()
+
     def join_game(self, game_id):
         """
         Joins the character to a game.id
