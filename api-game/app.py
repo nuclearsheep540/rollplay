@@ -12,6 +12,8 @@ from mapservice import MapService
 from message_templates import format_message, MESSAGE_TEMPLATES
 from models.log_type import LogType
 from websocket_handlers.connection_manager import manager as connection_manager
+from schemas.session_schemas import SessionStartRequest, SessionStartResponse, SessionEndRequest, SessionEndResponse
+from datetime import datetime
 
 logger = logging.getLogger()
 app = FastAPI()
@@ -367,6 +369,219 @@ def gameservice_create_with_id(room_id: str, settings: GameSettings):
     """Create a game room with a specific ID (for PostgreSQL integration)"""
     new_room = GameService.create_room(settings=settings, room_id=room_id)
     return {"id": new_room}
+
+@app.post("/game/session/start", response_model=SessionStartResponse)
+async def create_session(request: SessionStartRequest):
+    """
+    Create MongoDB active_session for a game.
+
+    This endpoint is called by api-site when starting a game session.
+    It creates a minimal session with empty seats that players fill during gameplay.
+
+    Request:
+    {
+        "game_id": "550e8400-e29b-41d4-a716-446655440000",
+        "dm_username": "player1",
+        "max_players": 8
+    }
+
+    Response:
+    {
+        "success": true,
+        "session_id": "550e8400-e29b-41d4-a716-446655440000",
+        "message": "Session created successfully"
+    }
+    """
+    try:
+        # Check if session already exists
+        existing = GameService.get_room(request.game_id)
+        if existing:
+            raise HTTPException(
+                status_code=409,
+                detail="Session already exists for this game"
+            )
+
+        # Default color palette for seats
+        def get_default_color(index):
+            colors = [
+                "#3b82f6",  # blue
+                "#ef4444",  # red
+                "#22c55e",  # green
+                "#f97316",  # orange
+                "#a855f7",  # purple
+                "#06b6d4",  # cyan
+                "#ec4899",  # pink
+                "#65a30d",  # lime
+            ]
+            return colors[index] if index < len(colors) else "#3b82f6"
+
+        # Create minimal session
+        settings = GameSettings(
+            max_players=request.max_players,
+            seat_layout=["empty"] * request.max_players,
+            seat_colors={str(i): get_default_color(i) for i in range(request.max_players)},
+            created_at=datetime.utcnow(),
+            moderators=[],
+            dungeon_master=request.dm_username.lower(),
+            room_host=request.dm_username.lower()
+        )
+
+        # Use game_id as MongoDB _id
+        session_id = GameService.create_room(settings, room_id=request.game_id)
+
+        logger.info(f"✅ Created session {session_id} for game {request.game_id}")
+
+        return SessionStartResponse(
+            success=True,
+            session_id=session_id,
+            message="Session created successfully"
+        )
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"❌ Failed to create session: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/game/session/end", response_model=SessionEndResponse)
+async def end_session(request: SessionEndRequest, validate_only: bool = False):
+    """
+    Return final game state from MongoDB.
+
+    If validate_only=True: Fetch state but DO NOT delete session (Phase 1 of fail-safe pattern)
+    If validate_only=False: Deprecated - use DELETE /game/session/{game_id} instead
+
+    This endpoint is called by api-site when ending a game session.
+    The validate_only parameter allows for fail-safe two-phase commit:
+    1. Fetch state (this endpoint with validate_only=True)
+    2. Write to PostgreSQL
+    3. Delete session (DELETE endpoint)
+
+    Request:
+    {
+        "game_id": "550e8400-e29b-41d4-a716-446655440000"
+    }
+
+    Response:
+    {
+        "success": true,
+        "final_state": {
+            "players": [...],
+            "session_stats": {...}
+        }
+    }
+    """
+    try:
+        # Get room from MongoDB
+        room = GameService.get_room(request.game_id)
+        if not room:
+            raise HTTPException(status_code=404, detail="Session not found")
+
+        # Extract player data from seat_layout
+        players = []
+        for idx, seat in enumerate(room.get("seat_layout", [])):
+            if seat != "empty":
+                players.append({
+                    "player_name": seat,
+                    "seat_position": idx,
+                    "seat_color": room.get("seat_colors", {}).get(str(idx))
+                })
+
+        # Calculate session duration
+        created_at = room.get("created_at")
+        duration_minutes = 0
+        if created_at:
+            # Handle datetime object directly from MongoDB
+            if isinstance(created_at, datetime):
+                duration = datetime.utcnow() - created_at
+                duration_minutes = int(duration.total_seconds() / 60)
+
+        # Get adventure log count
+        log_count = adventure_log.get_room_log_count(request.game_id)
+
+        # Build final state
+        final_state = {
+            "players": players,
+            "session_stats": {
+                "duration_minutes": duration_minutes,
+                "total_logs": log_count,
+                "max_players": room.get("max_players", 0)
+            }
+        }
+
+        # If not validate_only, delete the session (deprecated flow)
+        if not validate_only:
+            logger.warning(f"⚠️ Using deprecated delete flow for {request.game_id}")
+            GameService.delete_room(request.game_id)
+
+        logger.info(f"✅ Returned final state for {request.game_id} (validate_only={validate_only})")
+
+        return SessionEndResponse(
+            success=True,
+            final_state=final_state,
+            message="Final state retrieved" if validate_only else "Session ended"
+        )
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"❌ Failed to end session: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.delete("/game/session/{game_id}")
+async def delete_session(game_id: str, keep_logs: bool = True):
+    """
+    Delete MongoDB active_session.
+
+    Called after PostgreSQL write succeeds (Phase 3 of fail-safe pattern).
+    This is the cleanup phase - session data has already been persisted to PostgreSQL.
+
+    Query params:
+    - keep_logs: If true, preserve adventure_logs and active_maps (default: true)
+
+    Response:
+    {
+        "success": true,
+        "message": "Session deleted"
+    }
+    """
+    try:
+        # Check if session exists
+        room = GameService.get_room(game_id)
+        if not room:
+            # Already deleted - return success
+            logger.info(f"✅ Session {game_id} already deleted")
+            return {
+                "success": True,
+                "message": "Session already deleted"
+            }
+
+        # Gracefully disconnect all WebSocket clients before deletion
+        logger.info(f"🔌 Closing WebSocket connections for room {game_id}")
+        await connection_manager.close_room_connections(game_id, reason="Session ended")
+
+        # Delete active_session from MongoDB
+        GameService.delete_room(game_id)
+
+        # Optionally delete logs and maps
+        if not keep_logs:
+            logger.info(f"🗑️ Deleting logs and maps for {game_id}")
+            adventure_log.delete_room_logs(game_id)
+            map_service.clear_active_map(game_id)
+
+        logger.info(f"✅ Deleted session {game_id} (keep_logs={keep_logs})")
+
+        return {
+            "success": True,
+            "message": "Session deleted successfully"
+        }
+
+    except Exception as e:
+        logger.error(f"❌ Failed to delete session {game_id}: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
 
 @app.put("/game/{room_id}/seat-layout")
 async def update_seat_layout(room_id: str, request: dict):

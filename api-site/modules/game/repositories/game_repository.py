@@ -62,6 +62,7 @@ class GameRepository:
             model.session_id = aggregate.session_id
             model.started_at = aggregate.started_at
             model.stopped_at = aggregate.stopped_at
+            model.max_players = aggregate.max_players
 
             # Sync invited_users relationship
             invited_user_models = self.db.query(User).filter(User.id.in_(aggregate.invited_users)).all()
@@ -82,7 +83,8 @@ class GameRepository:
                 session_id=aggregate.session_id,
                 created_at=aggregate.created_at,
                 started_at=aggregate.started_at,
-                stopped_at=aggregate.stopped_at
+                stopped_at=aggregate.stopped_at,
+                max_players=aggregate.max_players
             )
             self.db.add(model)
             self.db.flush()  # Get ID before setting relationships
@@ -139,5 +141,6 @@ class GameRepository:
             stopped_at=model.stopped_at,
             session_id=model.session_id,
             invited_users=[user.id for user in model.invited_users],
-            player_characters=[char.id for char in model.player_characters]
+            player_characters=[char.id for char in model.player_characters],
+            max_players=model.max_players
         )

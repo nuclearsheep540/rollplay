@@ -58,7 +58,7 @@ class GameAggregate:
         id: Optional[UUID] = None,
         name: Optional[str] = None,
         campaign_id: Optional[UUID] = None,
-        host_id: Optional[UUID] = None,  
+        host_id: Optional[UUID] = None,
         status: GameStatus = GameStatus.INACTIVE,
         created_at: Optional[datetime] = None,
         started_at: Optional[datetime] = None,  # time ETL successfully started the game
@@ -66,11 +66,12 @@ class GameAggregate:
         session_id: Optional[str] = None,  # MongoDB active_session objectID
         invited_users: Optional[List[UUID]] = None,  # User IDs with pending invites
         player_characters: Optional[List[UUID]] = None,  # Character IDs who joined game
+        max_players: int = 8,  # Seat count (1-8)
     ):
         self.id = id
         self.name = name
         self.campaign_id = campaign_id
-        self.host_id = host_id  
+        self.host_id = host_id
         self.status = status
         self.created_at = created_at
         self.started_at = started_at
@@ -78,9 +79,19 @@ class GameAggregate:
         self.session_id = session_id
         self.invited_users = invited_users if invited_users is not None else []
         self.player_characters = player_characters if player_characters is not None else []
+        self.max_players = self._validate_max_players(max_players)
+
+    @staticmethod
+    def _validate_max_players(max_players: int) -> int:
+        """Validate max_players is within allowed range (1-8)"""
+        if not isinstance(max_players, int):
+            raise ValueError("max_players must be an integer")
+        if max_players < 1 or max_players > 8:
+            raise ValueError("max_players must be between 1 and 8")
+        return max_players
 
     @classmethod
-    def create(cls, name: str, campaign_id: UUID, host_id: UUID):
+    def create(cls, name: str, campaign_id: UUID, host_id: UUID, max_players: int = 8):
         """Create new game with business rules validation"""
 
         if not campaign_id:
@@ -102,7 +113,8 @@ class GameAggregate:
             status=GameStatus.INACTIVE,
             created_at=datetime.utcnow(),
             invited_users=[],
-            player_characters=[]
+            player_characters=[],
+            max_players=max_players
         )
 
     def invite_user(self, user_id: UUID) -> None:
@@ -197,8 +209,9 @@ class GameAggregate:
         if self.status != GameStatus.INACTIVE:
             raise ValueError("Can only start games that are INACTIVE")
 
-        if self.get_player_count() == 0:
-            raise ValueError("Cannot start game with no players")
+        # Validation removed - DM (host_id) counts as participant
+        # Game can start with just DM (0 player characters + 1 DM = valid)
+        # Will re-add proper validation when invite system is implemented
 
         self.status = GameStatus.STARTING
 

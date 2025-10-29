@@ -43,6 +43,7 @@ class Game(Base):
     started_at = Column(DateTime(timezone=True))
     stopped_at = Column(DateTime(timezone=True))
     session_id = Column(String(100))  # MongoDB active_session objectID reference
+    max_players = Column(Integer, default=8, nullable=False)  # Seat count (1-8)
 
     # Relationships
     campaign = relationship("Campaign", back_populates="games")

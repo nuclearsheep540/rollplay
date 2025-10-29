@@ -92,7 +92,8 @@ async def create_game(
         game = command.execute(
             name=request.name,
             campaign_id=request.campaign_id,
-            host_id=current_user.id
+            host_id=current_user.id,
+            max_players=request.max_players
         )
         return _to_game_response(game)
     except ValueError as e:

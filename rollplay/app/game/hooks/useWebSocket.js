@@ -23,6 +23,7 @@ import {
   handleSeatCountChange,
   handlePlayerDisplaced,
   handleSystemMessage,
+  handleSessionEnded,
   createSendFunctions
 } from './webSocketEvent';
 import {
@@ -136,6 +137,9 @@ export const useWebSocket = (roomId, thisPlayer, gameContext) => {
             break;
           case 'system_message':
             handleSystemMessage(data, handlers);
+            break;
+          case 'session_ended':
+            handleSessionEnded(data, handlers);
             break;
           case 'remote_audio_play':
             handleRemoteAudioPlay(data, handlers);
