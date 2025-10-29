@@ -9,6 +9,7 @@ import { useState, Suspense } from 'react'
 import CampaignManager from './components/CampaignManager'
 import CharacterManager from './components/CharacterManager'
 import ProfileManager from './components/ProfileManager'
+import FriendsManager from './components/FriendsManager'
 import DashboardLayout from './components/DashboardLayout'
 import ScreenNameModal from './components/ScreenNameModal'
 import { useAuth } from './hooks/useAuth'
@@ -57,6 +58,13 @@ function DashboardContent() {
       {activeSection === 'campaigns' && (
         <section>
           <CampaignManager user={user} />
+        </section>
+      )}
+
+      {/* Friends Section */}
+      {activeSection === 'friends' && (
+        <section>
+          <FriendsManager user={user} />
         </section>
       )}
 

@@ -3,6 +3,7 @@
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel
+from uuid import UUID
 
 from shared.dependencies.auth import get_current_user_from_token
 from .schemas import (
@@ -83,6 +84,28 @@ async def get_current_user(
 ):
     """Get current user info from JWT token."""
     return _to_user_response(current_user)
+
+
+@router.get("/{user_uuid}", response_model=UserResponse)
+async def get_user_by_uuid(
+    user_uuid: UUID,
+    current_user: UserAggregate = Depends(get_current_user_from_token),
+    user_repo: UserRepository = Depends(user_repository)
+):
+    """
+    Get user info by UUID (for friend lookups).
+
+    Returns limited public user information for adding friends.
+    Requires authentication to prevent abuse.
+    """
+    user = user_repo.get_by_id(user_uuid)
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="User not found"
+        )
+
+    return _to_user_response(user)
 
 
 @router.put("/screen_name", response_model=UserResponse)
