@@ -3,7 +3,10 @@
 
 from typing import List
 from uuid import UUID
+import logging
 from fastapi import APIRouter, Depends, HTTPException, status
+
+logger = logging.getLogger(__name__)
 
 from modules.game.schemas.game_schemas import (
     CreateGameRequest,
@@ -15,6 +18,8 @@ from modules.game.schemas.game_schemas import (
 )
 from modules.game.application.commands import (
     CreateGame,
+    StartGame,
+    EndGame,
     InviteUserToGame,
     AcceptGameInvite,
     DeclineGameInvite,
@@ -58,7 +63,8 @@ def _to_game_response(game: GameAggregate) -> GameResponse:
         invited_users=game.invited_users,
         player_characters=game.player_characters,
         pending_invites_count=game.get_pending_invites_count(),
-        player_count=game.get_player_count()
+        player_count=game.get_player_count(),
+        max_players=game.max_players
     )
 
 
@@ -227,3 +233,78 @@ async def remove_player_from_game(
         return _to_game_response(game)
     except ValueError as e:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+
+
+@router.post("/{game_id}/start", response_model=GameResponse)
+async def start_game(
+    game_id: UUID,
+    current_user: UserAggregate = Depends(get_current_user_from_token),
+    game_repo: GameRepository = Depends(get_game_repository),
+    user_repo: UserRepository = Depends(get_user_repository)
+):
+    """
+    Start a game session (INACTIVE → ACTIVE).
+
+    This endpoint:
+    1. Validates game ownership
+    2. Sets game status to STARTING
+    3. Calls api-game to create MongoDB active_session
+    4. Sets game status to ACTIVE with session_id
+
+    Returns game with status='ACTIVE' and session_id set.
+    Frontend can then redirect to /game?room_id={session_id}
+    """
+    try:
+        command = StartGame(game_repo, user_repo)
+        game = await command.execute(game_id, current_user.id)
+        return _to_game_response(game)
+
+    except ValueError as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(e)
+        )
+    except Exception as e:
+        logger.error(f"Unexpected error starting game {game_id}: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to start game"
+        )
+
+
+@router.post("/{game_id}/end", response_model=GameResponse)
+async def end_game(
+    game_id: UUID,
+    current_user: UserAggregate = Depends(get_current_user_from_token),
+    game_repo: GameRepository = Depends(get_game_repository),
+    user_repo: UserRepository = Depends(get_user_repository)
+):
+    """
+    End a game session (ACTIVE → INACTIVE) using fail-safe three-phase pattern.
+
+    This endpoint:
+    1. Validates game ownership
+    2. Sets game status to STOPPING
+    3. PHASE 1: Fetches final state from MongoDB (non-destructive)
+    4. PHASE 2: Writes to PostgreSQL (fail-safe - MongoDB preserved on error)
+    5. PHASE 3: Background cleanup of MongoDB session
+
+    Returns game with status='inactive'.
+    If PostgreSQL write fails, MongoDB session is preserved and error returned.
+    """
+    try:
+        command = EndGame(game_repo, user_repo)
+        game = await command.execute(game_id, current_user.id)
+        return _to_game_response(game)
+
+    except ValueError as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(e)
+        )
+    except Exception as e:
+        logger.error(f"Unexpected error ending game {game_id}: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to end game"
+        )

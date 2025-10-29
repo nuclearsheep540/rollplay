@@ -1,11 +1,17 @@
 # Copyright (C) 2025 Matthew Davey
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-from typing import Optional, Dict, Any
+from datetime import datetime
+from typing import Optional
 from uuid import UUID
 
 from modules.characters.orm.character_repository import CharacterRepository
-from modules.characters.domain.character_aggregate import CharacterAggregate
+from modules.characters.domain.character_aggregate import (
+    CharacterAggregate,
+    AbilityScores,
+    CharacterRace,
+    CharacterClass
+)
 
 
 class CreateCharacter:
@@ -16,10 +22,13 @@ class CreateCharacter:
         self,
         user_id: UUID,
         character_name: str,
-        character_class: str,
-        character_race: str,
+        character_class: CharacterClass,
+        character_race: CharacterRace,
         level: int = 1,
-        stats: Optional[Dict[str, Any]] = None
+        ability_scores: Optional[AbilityScores] = None,
+        hp_max: int = 10,
+        hp_current: int = 10,
+        ac: int = 10
     ) -> CharacterAggregate:
         """Create a new character"""
         character = CharacterAggregate.create(
@@ -28,9 +37,88 @@ class CreateCharacter:
             character_class=character_class,
             character_race=character_race,
             level=level,
-            stats=stats
+            ability_scores=ability_scores,
+            active_game=None,
+            hp_max=hp_max,
+            hp_current=hp_current,
+            ac=ac
         )
 
+        self.repository.save(character)
+        return character
+
+
+class UpdateAbilityScores:
+    """Update character ability scores"""
+    def __init__(self, repository: CharacterRepository):
+        self.repository = repository
+
+    def execute(
+        self,
+        character_id: UUID,
+        user_id: UUID,
+        ability_scores: AbilityScores
+    ) -> CharacterAggregate:
+        """Update character's ability scores (for leveling, magic items)"""
+        character = self.repository.get_by_id(character_id)
+        if not character:
+            raise ValueError(f"Character {character_id} not found")
+
+        # Business rule: Only owner can update
+        if not character.is_owned_by(user_id):
+            raise ValueError("Only character owner can update ability scores")
+
+        # Update via aggregate method
+        character.update_ability_scores(ability_scores)
+
+        # Save
+        self.repository.save(character)
+        return character
+
+
+class UpdateCharacter:
+    """Update existing character"""
+    def __init__(self, repository: CharacterRepository):
+        self.repository = repository
+
+    def execute(
+        self,
+        character_id: UUID,
+        user_id: UUID,
+        character_name: str,
+        character_class: CharacterClass,
+        character_race: CharacterRace,
+        level: int,
+        ability_scores: AbilityScores,
+        hp_max: int,
+        hp_current: int,
+        ac: int,
+    ) -> CharacterAggregate:
+        """Update an existing character with new values"""
+        # Fetch existing character
+        character = self.repository.get_by_id(character_id)
+        if not character:
+            raise ValueError(f"Character {character_id} not found")
+
+        # Business rule: Only owner can update
+        if not character.is_owned_by(user_id):
+            raise ValueError("Only character owner can update this character")
+
+        # Update via domain method (includes business rule validation)
+        character.update_character(
+            character_name=character_name,
+            character_class=character_class,
+            character_race=character_race,
+            level=level,
+            hp_max=hp_max,
+            hp_current=hp_current,
+            ac=ac
+        )
+
+        # Update ability scores separately (has its own method)
+        character.update_ability_scores(ability_scores)
+
+        # Save updated character
         self.repository.save(character)
         return character
 

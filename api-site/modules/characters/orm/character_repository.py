@@ -6,7 +6,12 @@ from uuid import UUID
 from sqlalchemy.orm import Session
 
 from modules.characters.model.character_model import Character as CharacterModel
-from modules.characters.domain.character_aggregate import CharacterAggregate
+from modules.characters.domain.character_aggregate import (
+    CharacterAggregate,
+    AbilityScores,
+    CharacterRace,
+    CharacterClass
+)
 
 
 class CharacterRepository:
@@ -14,6 +19,27 @@ class CharacterRepository:
 
     def __init__(self, db_session: Session):
         self.db = db_session
+
+    def _model_to_aggregate(self, model: CharacterModel) -> CharacterAggregate:
+        """Helper to convert ORM model → Domain aggregate"""
+        ability_scores = AbilityScores.from_dict(model.stats or {})
+
+        return CharacterAggregate(
+            id=model.id,
+            user_id=model.user_id,
+            character_name=model.character_name,
+            character_class=CharacterClass(model.character_class),
+            character_race=CharacterRace(model.character_race),
+            level=model.level,
+            ability_scores=ability_scores,
+            created_at=model.created_at,
+            updated_at=model.updated_at,
+            is_deleted=model.is_deleted,
+            active_game=model.active_game,
+            hp_current=model.hp_current,
+            hp_max=model.hp_max,
+            ac=model.ac,
+        )
 
     def get_by_id(self, character_id: UUID) -> Optional[CharacterAggregate]:
         """Get character by ID"""
@@ -25,18 +51,7 @@ class CharacterRepository:
         if not model:
             return None
 
-        return CharacterAggregate(
-            id=model.id,
-            user_id=model.user_id,
-            character_name=model.character_name,
-            character_class=model.character_class,
-            character_race=model.character_race,
-            level=model.level,
-            stats=model.stats,
-            created_at=model.created_at,
-            updated_at=model.updated_at,
-            is_deleted=model.is_deleted
-        )
+        return self._model_to_aggregate(model)
 
     def get_by_user_id(self, user_id: UUID) -> List[CharacterAggregate]:
         """Get all characters for a specific user"""
@@ -46,21 +61,7 @@ class CharacterRepository:
             .order_by(CharacterModel.updated_at.desc())
             .all()
         )
-        return [
-            CharacterAggregate(
-                id=model.id,
-                user_id=model.user_id,
-                character_name=model.character_name,
-                character_class=model.character_class,
-                character_race=model.character_race,
-                level=model.level,
-                stats=model.stats,
-                created_at=model.created_at,
-                updated_at=model.updated_at,
-                is_deleted=model.is_deleted
-            )
-            for model in models
-        ]
+        return [self._model_to_aggregate(model) for model in models]
 
     def save(self, aggregate: CharacterAggregate) -> UUID:
         """Save character aggregate"""
@@ -76,24 +77,33 @@ class CharacterRepository:
 
             character_model.user_id = aggregate.user_id
             character_model.character_name = aggregate.character_name
-            character_model.character_class = aggregate.character_class
-            character_model.character_race = aggregate.character_race
+            character_model.character_class = aggregate.character_class.value
+            character_model.character_race = aggregate.character_race.value
             character_model.level = aggregate.level
-            character_model.stats = aggregate.stats
+            character_model.stats = aggregate.ability_scores.to_dict()
             character_model.is_deleted = aggregate.is_deleted
+            character_model.updated_at = aggregate.updated_at
+            character_model.active_game = aggregate.active_game
+            character_model.hp_max = aggregate.hp_max
+            character_model.hp_current = aggregate.hp_current
+            character_model.ac = aggregate.ac
 
         else:
             # Create new character
             character_model = CharacterModel(
                 user_id=aggregate.user_id,
                 character_name=aggregate.character_name,
-                character_class=aggregate.character_class,
-                character_race=aggregate.character_race,
+                character_class=aggregate.character_class.value,
+                character_race=aggregate.character_race.value,
                 level=aggregate.level,
-                stats=aggregate.stats,
+                stats=aggregate.ability_scores.to_dict(),
                 is_deleted=aggregate.is_deleted,
                 created_at=aggregate.created_at,
                 updated_at=aggregate.updated_at,
+                active_game=aggregate.active_game,
+                hp_max=aggregate.hp_max,
+                hp_current=aggregate.hp_current,
+                ac=aggregate.ac
             )
             self.db.add(character_model)
 
@@ -117,18 +127,7 @@ class CharacterRepository:
             return False
 
         # Convert to aggregate for business rule validation
-        character = CharacterAggregate(
-            id=character_model.id,
-            user_id=character_model.user_id,
-            character_name=character_model.character_name,
-            character_class=character_model.character_class,
-            character_race=character_model.character_race,
-            level=character_model.level,
-            stats=character_model.stats,
-            created_at=character_model.created_at,
-            updated_at=character_model.updated_at,
-            is_deleted=character_model.is_deleted
-        )
+        character = self._model_to_aggregate(character_model)
 
         if not character.can_be_deleted():
             raise ValueError("Cannot delete character - it may be in an active game")

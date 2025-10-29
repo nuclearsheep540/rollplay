@@ -360,11 +360,11 @@ function GameContent() {
 
   // initialise the game lobby
   useEffect(() => {
-    const roomId = params.get('roomId')
-    
+    const roomId = params.get('room_id')
+
     console.log('Game page params:', { roomId })
     console.log('All params:', Array.from(params.entries()))
-    
+
     setRoomId(roomId)
     
     // Wait for user to be loaded before proceeding

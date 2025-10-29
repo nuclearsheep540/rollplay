@@ -3,10 +3,12 @@
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.exceptions import RequestValidationError
 import logging
 import logging.config
 from shared.config import Settings
 from shared.dependencies.db import configure_mappers
+from shared.error_handlers import validation_exception_handler
 
 # Import aggregate routers directly
 from modules.user.api.endpoints import router as user_router
@@ -28,6 +30,9 @@ app = FastAPI(
     description="Site-wide API for Tabletop Tavern - handles landing page, user management, and core site functionality",
     version="1.0.0"
 )
+
+# Register custom exception handlers
+app.add_exception_handler(RequestValidationError, validation_exception_handler)
 
 # CORS middleware
 app.add_middleware(

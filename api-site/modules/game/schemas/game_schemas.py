@@ -11,6 +11,7 @@ class CreateGameRequest(BaseModel):
     """Request to create a new game"""
     name: str = Field(..., min_length=1, max_length=100)
     campaign_id: UUID
+    max_players: int = Field(default=8, ge=1, le=8, description="Number of player seats (1-8)")
 
 
 class UpdateGameRequest(BaseModel):
@@ -43,6 +44,7 @@ class GameResponse(BaseModel):
     player_characters: List[UUID]
     pending_invites_count: int
     player_count: int
+    max_players: int
 
     class Config:
         from_attributes = True

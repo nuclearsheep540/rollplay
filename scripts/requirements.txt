@@ -1,0 +1,11 @@
+# Copyright (C) 2025 Matthew Davey
+# SPDX-License-Identifier: GPL-3.0-or-later
+
+# Dependencies for cleanup_orphaned_sessions.py script
+
+# HTTP client for calling api-game endpoints
+requests==2.31.0
+
+# PostgreSQL database access
+sqlalchemy==2.0.25
+psycopg2-binary==2.9.9

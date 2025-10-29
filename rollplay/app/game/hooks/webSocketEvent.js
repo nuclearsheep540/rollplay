@@ -668,9 +668,52 @@ export const handlePlayerDisplaced = (data, { thisPlayer }) => {
 export const handleSystemMessage = (data, {}) => {
   console.log("📢 System message:", data);
   const { message, type = 'system' } = data;
-  
+
   // Add system message to adventure log
   // Backend handles system message logging
+};
+
+export const handleSessionEnded = (data, { stopRemoteTrack, remoteTrackStates, handleRemoteAudioBatch }) => {
+  console.log("🛑 Session ended:", data);
+  const { reason, message } = data;
+
+  console.log(`🚪 Game session ended: ${message || reason}`);
+
+  // Stop all currently active audio tracks using batch operations
+  if (remoteTrackStates && Object.keys(remoteTrackStates).length > 0) {
+    if (handleRemoteAudioBatch) {
+      // Use batch operations for better performance
+      const stopOperations = Object.keys(remoteTrackStates).map(trackId => ({
+        trackId: trackId,
+        operation: 'stop'
+      }));
+
+      console.log(`🛑 Batch stopping ${stopOperations.length} audio tracks before redirect`);
+      handleRemoteAudioBatch(
+        { operations: stopOperations, triggered_by: 'session_ended' },
+        { stopRemoteTrack }
+      );
+    } else if (stopRemoteTrack) {
+      // Fallback to individual stops if batch handler not available
+      Object.keys(remoteTrackStates).forEach(trackId => {
+        try {
+          stopRemoteTrack(trackId);
+          console.log(`🛑 Stopped audio track: ${trackId}`);
+        } catch (error) {
+          console.warn(`Failed to stop track ${trackId}:`, error);
+        }
+      });
+    }
+  }
+
+  // Show user-friendly message
+  alert(message || `This game session has ended: ${reason}`);
+
+  // Small delay to ensure audio stops and alert is dismissed
+  setTimeout(() => {
+    // Redirect to dashboard
+    window.location.href = '/dashboard';
+  }, 100);
 };
 
 // =====================================

@@ -1,20 +1,105 @@
 # Copyright (C) 2025 Matthew Davey
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import datetime
-from typing import Optional, Dict, Any
+from typing import Optional, Dict
 from uuid import UUID
+from enum import Enum
 
 
-class CharacterRaces:
-    """Character race options"""
-    # TODO: enumerate race options
+@dataclass(frozen=True)
+class AbilityScores:
+    """
+    D&D 5e Ability Scores Value Object.
+
+    Immutable, validated set of six core abilities.
+    """
+    strength: int
+    dexterity: int
+    constitution: int
+    intelligence: int
+    wisdom: int
+    charisma: int
+
+    def update_score(self, **kwargs) -> 'AbilityScores':
+        """
+        Update specified ability scores, keeping others unchanged.
+
+        Example:
+            new_scores = scores.update_score(intelligence=9, strength=16)
+        """
+        return replace(self, **kwargs)
+
+    def to_dict(self) -> Dict[str, int]:
+        """Serialize to dict for JSON storage in PostgreSQL"""
+        return {
+            "strength": self.strength,
+            "dexterity": self.dexterity,
+            "constitution": self.constitution,
+            "intelligence": self.intelligence,
+            "wisdom": self.wisdom,
+            "charisma": self.charisma
+        }
+
+    @classmethod
+    def from_dict(cls, data: Dict[str, int]) -> 'AbilityScores':
+        """Deserialize from dict (for ORM → Domain conversion)"""
+        return cls(
+            strength=data.get("strength", 1),
+            dexterity=data.get("dexterity", 1),
+            constitution=data.get("constitution", 1),
+            intelligence=data.get("intelligence", 1),
+            wisdom=data.get("wisdom", 1),
+            charisma=data.get("charisma", 1)
+        )
+
+    @classmethod
+    def default(cls) -> 'AbilityScores':
+        """Default ability scores - all set to 1"""
+        return cls(
+            strength=1,
+            dexterity=1,
+            constitution=1,
+            intelligence=1,
+            wisdom=1,
+            charisma=1
+        )
 
 
-class CharacterClasses:
-    """Character class options"""
-    # TODO: enumerate class options
+class CharacterRace(str, Enum):
+    """D&D 5e Player's Handbook races"""
+    HUMAN = "Human"
+    ELF = "Elf"
+    DWARF = "Dwarf"
+    HALFLING = "Halfling"
+    DRAGONBORN = "Dragonborn"
+    GNOME = "Gnome"
+    HALF_ELF = "Half-Elf"
+    HALF_ORC = "Half-Orc"
+    TIEFLING = "Tiefling"
+
+    def __str__(self) -> str:
+        return self.value
+
+
+class CharacterClass(str, Enum):
+    """D&D 5e Player's Handbook classes"""
+    BARBARIAN = "Barbarian"
+    BARD = "Bard"
+    CLERIC = "Cleric"
+    DRUID = "Druid"
+    FIGHTER = "Fighter"
+    MONK = "Monk"
+    PALADIN = "Paladin"
+    RANGER = "Ranger"
+    ROGUE = "Rogue"
+    SORCERER = "Sorcerer"
+    WARLOCK = "Warlock"
+    WIZARD = "Wizard"
+
+    def __str__(self) -> str:
+        return self.value
 
 
 @dataclass
@@ -27,24 +112,31 @@ class CharacterAggregate:
     id: Optional[UUID]
     user_id: UUID
     character_name: str
-    character_class: str
-    character_race: str
+    character_class: CharacterClass
+    character_race: CharacterRace
     level: int
-    stats: Dict[str, Any]
+    ability_scores: AbilityScores
     created_at: datetime
     updated_at: datetime
+    hp_max: int
+    hp_current: int
+    ac: int
     is_deleted: bool = False
     active_game: Optional[UUID] = None  # the gameID they're associated with
 
     @classmethod
     def create(
         cls,
-        user_id: UUID,# owner
+        active_game: None,
+        user_id: UUID,  # owner
         character_name: str,
-        character_class: str,
-        character_race: str,
+        character_class: CharacterClass,
+        character_race: CharacterRace,
+        hp_max: int,
+        hp_current: int,
+        ac: int,
         level: int = 1,
-        stats: Optional[Dict[str, Any]] = None
+        ability_scores: Optional[AbilityScores] = None,
     ) -> 'CharacterAggregate':
         """
         Create new character with business rules validation.
@@ -81,6 +173,10 @@ class CharacterAggregate:
         if not user_id:
             raise ValueError("Character must belong to a user")
 
+        # Default ability scores to 1 if not provided
+        if not ability_scores:
+            ability_scores = AbilityScores.default()
+
         now = datetime.now()
         return cls(
             id=None,  # Will be set by repository
@@ -89,10 +185,14 @@ class CharacterAggregate:
             character_class=character_class,
             character_race=character_race,
             level=level,
-            stats=stats or {},
+            ability_scores=ability_scores,
             created_at=now,
             updated_at=now,
-            is_deleted=False
+            is_deleted=False,
+            active_game=active_game,
+            hp_max=hp_max,
+            hp_current=hp_current,
+            ac=ac
         )
 
     def is_owned_by(self, user_id: UUID) -> bool:
@@ -114,12 +214,68 @@ class CharacterAggregate:
 
     def get_display_name(self) -> str:
         """Get formatted display name"""
-        return f"{self.character_name} (Level {self.level} {self.character_class})"
+        return f"{self.character_name} (Level {self.level} {self.character_class.value})"
 
-    def get_stat(self, stat_name: str, default: Any = None) -> Any:
-        """Get a specific stat value"""
-        return self.stats.get(stat_name, default)
-    
+    def update_ability_scores(self, new_scores: AbilityScores) -> None:
+        """Update character's ability scores (for when user sets them via interface)"""
+        self.ability_scores = new_scores
+        self.updated_at = datetime.now()
+
+    def update_character(
+        self,
+        character_name: Optional[str] = None,
+        character_class: Optional[CharacterClass] = None,
+        character_race: Optional[CharacterRace] = None,
+        level: Optional[int] = None,
+        hp_max: Optional[int] = None,
+        hp_current: Optional[int] = None,
+        ac: Optional[int] = None
+    ) -> None:
+        """
+        Update character details with business rules validation.
+
+        All parameters are optional - only provided fields will be updated.
+
+        Business Rules:
+        - Character name must be valid and <= 50 characters
+        - Level must be between 1 and 20
+        - Character class and race must be valid if provided
+        """
+        if character_name is not None:
+            normalized_name = character_name.strip()
+            if not normalized_name:
+                raise ValueError("Character name cannot be empty")
+            if len(normalized_name) > 50:
+                raise ValueError("Character name too long (max 50 characters)")
+            self.character_name = normalized_name
+
+        if character_class is not None:
+            if not character_class or not str(character_class).strip():
+                raise ValueError("Character class is required")
+            self.character_class = character_class
+
+        if character_race is not None:
+            if not character_race:
+                raise ValueError("Character race is required")
+            self.character_race = character_race
+
+        if level is not None:
+            if level < 1 or level > 20:
+                raise ValueError("Character level must be between 1 and 20")
+            self.level = level
+
+        if hp_max is not None:
+            self.hp_max = hp_max
+
+        if hp_current is not None:
+            # you can have temporary hitpoints so current may exceed max
+            self.hp_current = hp_current
+
+        if ac is not None:
+            self.ac = ac
+
+        self.updated_at = datetime.now()
+
     def join_game(self, game_id):
         """
         Joins the character to a game.id

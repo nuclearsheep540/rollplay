@@ -77,6 +77,26 @@ class GameService:
         except IndexError:
             return
 
+    @staticmethod
+    def delete_room(id):
+        """Delete a room from active_sessions collection"""
+        collection = GameService._get_active_session()
+        try:
+            # Try ObjectId first
+            oid = ObjectId(oid=id)
+            result = collection.delete_one({"_id": oid})
+            logger.info(f"Deleted room {id} (ObjectId): {result.deleted_count} documents")
+            return result.deleted_count > 0
+        except Exception:
+            # Fall back to string ID (for UUIDs from PostgreSQL)
+            try:
+                result = collection.delete_one({"_id": id})
+                logger.info(f"Deleted room {id} (string): {result.deleted_count} documents")
+                return result.deleted_count > 0
+            except Exception as e:
+                logger.error(f"Failed to delete room {id}: {e}")
+                return False
+
     # need to be able to query a room_id
     @staticmethod
     def create_room(settings: GameSettings, room_id: str = None):

@@ -168,25 +168,80 @@ class ConnectionManager:
         """Send data only to clients in a specific room"""
         if room_id not in self.room_users:
             return
-        
+
         dead_connections = []
-        
+
         for user_name, user_data in self.room_users[room_id].items():
             websocket = user_data["websocket"]
-            
+
             # Skip disconnected users (websocket is None)
             if websocket is None:
                 continue
-                
+
             try:
                 await websocket.send_json(data=data)
             except Exception:
                 # Mark this connection as dead
                 dead_connections.append((room_id, user_name, websocket))
-        
+
         # Remove all dead connections
         for room, user, ws in dead_connections:
             self.remove_connection(ws, room, user)
+
+    async def close_room_connections(self, room_id: str, reason: str = "Room closed"):
+        """Gracefully close all WebSocket connections in a room"""
+        if room_id not in self.room_users:
+            print(f"🔌 No connections to close for room {room_id}")
+            return
+
+        # Send closure notification to all clients
+        closure_message = {
+            "event_type": "session_ended",
+            "data": {
+                "reason": reason,
+                "message": "This game session has ended. You will be redirected shortly."
+            }
+        }
+
+        # Get all users in this room before closing
+        users_to_close = list(self.room_users[room_id].items())
+
+        print(f"🔌 Closing {len(users_to_close)} WebSocket connections for room {room_id}")
+
+        for user_name, user_data in users_to_close:
+            websocket = user_data["websocket"]
+
+            # Skip already disconnected users
+            if websocket is None:
+                continue
+
+            try:
+                # Send closure notification
+                await websocket.send_json(closure_message)
+
+                # Close the WebSocket connection gracefully
+                await websocket.close(code=1000, reason=reason)
+
+                print(f"✅ Closed WebSocket for {user_name} in room {room_id}")
+            except Exception as e:
+                print(f"⚠️ Error closing WebSocket for {user_name}: {e}")
+            finally:
+                # Remove from connections list
+                if websocket in self.connections:
+                    self.connections.remove(websocket)
+
+        # Clean up room data
+        if room_id in self.room_users:
+            del self.room_users[room_id]
+
+        # Clean up disconnect timeouts for this room
+        if room_id in self.disconnect_timeouts:
+            # Cancel all pending timeout tasks
+            for timeout_task in self.disconnect_timeouts[room_id].values():
+                timeout_task.cancel()
+            del self.disconnect_timeouts[room_id]
+
+        print(f"✅ All connections closed for room {room_id}")
 
 class RoomManager:
     """
