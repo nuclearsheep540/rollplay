@@ -131,10 +131,22 @@ export default function CharacterManager({ user }) {
             {char.character_name ? char.character_name[0].toUpperCase() : '?'}
           </div>
           <div className="flex-grow">
-            <h3 className="text-lg font-bold text-slate-800">{char.character_name || 'Unnamed Character'}</h3>
+            <div className="flex items-center gap-2">
+              <h3 className="text-lg font-bold text-slate-800">{char.character_name || 'Unnamed Character'}</h3>
+              {char.active_game && (
+                <span className="px-2 py-1 bg-green-100 text-green-700 text-xs font-semibold rounded-full">
+                  🎲 In Game
+                </span>
+              )}
+            </div>
             <p className="text-slate-600 text-sm">Level {char.level || 1} {char.character_race || 'Unknown'} {char.character_class || 'Unknown'}</p>
-            <p className="text-slate-500 text-xs mt-1">Campaign: {char.campaign || 'No Campaign'}</p>
+            <p className="text-slate-500 text-xs mt-1">HP: {char.hp_current || 0}/{char.hp_max || 0} | AC: {char.ac || 0}</p>
             <p className="text-slate-500 text-xs mt-1">Created: {char.created_at ? new Date(char.created_at).toLocaleDateString() : 'Unknown'}</p>
+            {char.active_game && (
+              <p className="text-xs text-green-600 mt-1 font-semibold">
+                ⚠️ Character is currently assigned to a game and cannot be used elsewhere
+              </p>
+            )}
           </div>
         </div>
         <div className="flex space-x-2 flex-shrink-0">
@@ -149,6 +161,7 @@ export default function CharacterManager({ user }) {
             onClick={() => handleDeleteClick(char)}
             className="p-2 rounded-full bg-red-100 text-red-600 hover:bg-red-200 transition-colors"
             title="Delete Character"
+            disabled={char.active_game}
           >
             <span className="text-lg">🗑️</span>
           </button>

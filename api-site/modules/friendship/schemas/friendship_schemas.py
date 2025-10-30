@@ -12,20 +12,51 @@ class SendFriendRequestRequest(BaseModel):
     friend_uuid: UUID = Field(..., description="UUID of the user to add as friend")
 
 
-class FriendshipResponse(BaseModel):
-    """Friendship response"""
-    user_id: UUID
-    friend_id: UUID
-    status: str
+class FriendRequestResponse(BaseModel):
+    """
+    Friend request response.
+
+    For incoming requests: shows requester info
+    For outgoing requests: shows recipient info
+    """
+    id: UUID
+    requester_id: UUID
+    recipient_id: UUID
+    requester_screen_name: Optional[str] = None  # For incoming requests
+    recipient_screen_name: Optional[str] = None  # For outgoing requests
     created_at: datetime
-    friend_screen_name: Optional[str] = None  # Populated by endpoint
-    friend_email: Optional[str] = None  # Populated by endpoint
 
     class Config:
         from_attributes = True
 
 
-class FriendListResponse(BaseModel):
-    """List of friendships"""
-    friendships: List[FriendshipResponse]
-    total: int
+class FriendshipResponse(BaseModel):
+    """
+    Friendship response - simplified with computed friend_id.
+
+    The friend_id field represents the "other user" (computed by endpoint).
+    """
+    id: UUID
+    friend_id: UUID  # The OTHER user in the friendship (computed)
+    friend_screen_name: Optional[str] = None
+    created_at: datetime
+
+    class Config:
+        from_attributes = True
+
+
+class CategorizedFriendListResponse(BaseModel):
+    """
+    Categorized list of all user friendships and friend requests.
+
+    Clear separation between:
+    - accepted: Actual friendships (mutual, accepted)
+    - incoming_requests: Pending requests TO the user
+    - outgoing_requests: Pending requests FROM the user
+    """
+    accepted: List[FriendshipResponse]
+    incoming_requests: List[FriendRequestResponse]
+    outgoing_requests: List[FriendRequestResponse]
+    total_accepted: int
+    total_incoming: int
+    total_outgoing: int

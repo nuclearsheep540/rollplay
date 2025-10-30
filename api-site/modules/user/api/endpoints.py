@@ -9,7 +9,8 @@ from shared.dependencies.auth import get_current_user_from_token
 from .schemas import (
     UserEmailRequest,
     UserResponse,
-    UserLoginResponse
+    UserLoginResponse,
+    PublicUserResponse
 )
 from modules.user.dependencies.providers import user_repository
 from modules.user.orm.user_repository import UserRepository
@@ -86,16 +87,16 @@ async def get_current_user(
     return _to_user_response(current_user)
 
 
-@router.get("/{user_uuid}", response_model=UserResponse)
+@router.get("/{user_uuid}", response_model=PublicUserResponse)
 async def get_user_by_uuid(
     user_uuid: UUID,
     current_user: UserAggregate = Depends(get_current_user_from_token),
     user_repo: UserRepository = Depends(user_repository)
 ):
     """
-    Get user info by UUID (for friend lookups).
+    Get public user info by UUID (for friend lookups).
 
-    Returns limited public user information for adding friends.
+    Returns limited public user information without email or sensitive data.
     Requires authentication to prevent abuse.
     """
     user = user_repo.get_by_id(user_uuid)
@@ -105,7 +106,12 @@ async def get_user_by_uuid(
             detail="User not found"
         )
 
-    return _to_user_response(user)
+    # Return only public information
+    return PublicUserResponse(
+        id=str(user.id),
+        screen_name=user.screen_name,
+        created_at=user.created_at
+    )
 
 
 @router.put("/screen_name", response_model=UserResponse)

@@ -5,26 +5,42 @@ from uuid import UUID
 import logging
 
 from modules.friendship.repositories.friendship_repository import FriendshipRepository
+from modules.friendship.repositories.friend_request_repository import FriendRequestRepository
 from modules.user.orm.user_repository import UserRepository
 from modules.friendship.domain.friendship_aggregate import FriendshipAggregate
+from modules.friendship.domain.friend_request_aggregate import FriendRequestAggregate
 
 logger = logging.getLogger(__name__)
 
 
 class SendFriendRequest:
-    """Send a friend request to another user"""
+    """
+    Send a friend request to another user.
+
+    Implements auto-accept for mutual requests:
+    - If User A sends request to User B
+    - And User B has already sent request to User A
+    - Then both requests are deleted and friendship is created instantly
+    """
 
     def __init__(
         self,
         friendship_repository: FriendshipRepository,
+        friend_request_repository: FriendRequestRepository,
         user_repository: UserRepository
     ):
         self.friendship_repo = friendship_repository
+        self.friend_request_repo = friend_request_repository
         self.user_repo = user_repository
 
-    def execute(self, user_id: UUID, friend_uuid: UUID) -> FriendshipAggregate:
+    def execute(self, user_id: UUID, friend_uuid: UUID) -> dict:
         """
         Send friend request by friend's UUID.
+
+        Returns dict with:
+        - 'type': 'friendship' or 'friend_request'
+        - 'data': FriendshipAggregate or FriendRequestAggregate
+        - 'auto_accepted': bool (True if mutual request triggered instant friendship)
 
         Validation:
         - Both users must exist
@@ -40,29 +56,68 @@ class SendFriendRequest:
         if not friend:
             raise ValueError(f"Friend user {friend_uuid} not found")
 
-        # Check if friendship already exists (in any direction)
-        existing = self.friendship_repo.get_by_ids(user_id, friend_uuid)
-        if existing:
-            if existing.is_accepted():
-                raise ValueError("You are already friends with this user")
-            elif existing.is_pending():
-                raise ValueError("Friend request already pending")
+        # Check if friendship already exists
+        existing_friendship = self.friendship_repo.get_by_canonical_ids(user_id, friend_uuid)
+        if existing_friendship:
+            raise ValueError("You are already friends with this user")
 
-        # Create new friendship request
-        friendship = FriendshipAggregate.create(user_id=user_id, friend_id=friend_uuid)
+        # Check if request already exists (A → B)
+        existing_request = self.friend_request_repo.get_by_ids(user_id, friend_uuid)
+        if existing_request:
+            raise ValueError("Friend request already sent")
+
+        # Check for reverse request (B → A) - mutual interest!
+        reverse_request = self.friend_request_repo.get_reverse_request(user_id, friend_uuid)
+        if reverse_request:
+            # AUTO-ACCEPT: Both users want to be friends!
+            logger.info(f"Mutual friend request detected: {user_id} ↔ {friend_uuid}. Auto-accepting.")
+
+            # Delete the reverse request
+            self.friend_request_repo.delete(friend_uuid, user_id)
+
+            # Create friendship with canonical ordering
+            friendship = FriendshipAggregate.create(user_id, friend_uuid)
+            self.friendship_repo.save(friendship)
+
+            logger.info(f"Instant friendship created (mutual): {user_id} and {friend_uuid}")
+
+            return {
+                'type': 'friendship',
+                'data': friendship,
+                'auto_accepted': True
+            }
+
+        # Create new friend request (normal flow)
+        friend_request = FriendRequestAggregate.create(
+            requester_id=user_id,
+            recipient_id=friend_uuid
+        )
 
         # Persist
-        self.friendship_repo.save(friendship)
+        self.friend_request_repo.save(friend_request)
         logger.info(f"Friend request sent from {user_id} to {friend_uuid}")
 
-        return friendship
+        return {
+            'type': 'friend_request',
+            'data': friend_request,
+            'auto_accepted': False
+        }
 
 
 class AcceptFriendRequest:
-    """Accept an incoming friend request"""
+    """
+    Accept an incoming friend request.
 
-    def __init__(self, friendship_repository: FriendshipRepository):
+    Deletes the friend_request and creates a friendship.
+    """
+
+    def __init__(
+        self,
+        friendship_repository: FriendshipRepository,
+        friend_request_repository: FriendRequestRepository
+    ):
         self.friendship_repo = friendship_repository
+        self.friend_request_repo = friend_request_repository
 
     def execute(self, user_id: UUID, requester_id: UUID) -> FriendshipAggregate:
         """
@@ -70,33 +125,34 @@ class AcceptFriendRequest:
 
         Validation:
         - Request must exist
-        - Request must be pending
         - User must be the recipient (not the sender)
         """
-        # Get friendship
-        friendship = self.friendship_repo.get_by_ids(user_id, requester_id)
-        if not friendship:
+        # Get friend request
+        friend_request = self.friend_request_repo.get_by_ids(requester_id, user_id)
+        if not friend_request:
             raise ValueError("Friend request not found")
 
-        # Verify this user is the recipient (friend_id in the friendship)
-        if friendship.friend_id != user_id:
+        # Verify this user is the recipient
+        if friend_request.recipient_id != user_id:
             raise ValueError("Cannot accept a friend request you sent")
 
-        # Accept the request
-        friendship.accept()
+        # Delete the friend request
+        self.friend_request_repo.delete(requester_id, user_id)
 
-        # Persist
+        # Create friendship with canonical ordering
+        friendship = FriendshipAggregate.create(requester_id, user_id)
         self.friendship_repo.save(friendship)
+
         logger.info(f"Friend request accepted: {requester_id} and {user_id} are now friends")
 
         return friendship
 
 
 class DeclineFriendRequest:
-    """Decline an incoming friend request"""
+    """Decline an incoming friend request (delete it)"""
 
-    def __init__(self, friendship_repository: FriendshipRepository):
-        self.friendship_repo = friendship_repository
+    def __init__(self, friend_request_repository: FriendRequestRepository):
+        self.friend_request_repo = friend_request_repository
 
     def execute(self, user_id: UUID, requester_id: UUID) -> bool:
         """
@@ -106,17 +162,17 @@ class DeclineFriendRequest:
         - Request must exist
         - User must be the recipient
         """
-        # Get friendship
-        friendship = self.friendship_repo.get_by_ids(user_id, requester_id)
-        if not friendship:
+        # Get friend request
+        friend_request = self.friend_request_repo.get_by_ids(requester_id, user_id)
+        if not friend_request:
             raise ValueError("Friend request not found")
 
         # Verify this user is the recipient
-        if friendship.friend_id != user_id:
+        if friend_request.recipient_id != user_id:
             raise ValueError("Cannot decline a friend request you sent")
 
         # Delete the request
-        success = self.friendship_repo.delete(user_id, requester_id)
+        success = self.friend_request_repo.delete(requester_id, user_id)
         if success:
             logger.info(f"Friend request declined: {requester_id} -> {user_id}")
 
@@ -124,7 +180,7 @@ class DeclineFriendRequest:
 
 
 class RemoveFriend:
-    """Remove a friend (unfriend)"""
+    """Remove a friend (unfriend) - deletes the friendship"""
 
     def __init__(self, friendship_repository: FriendshipRepository):
         self.friendship_repo = friendship_repository
@@ -133,12 +189,14 @@ class RemoveFriend:
         """
         Remove friendship (can be done by either user).
 
+        Uses canonical ordering to find friendship.
+
         Validation:
         - Friendship must exist
         - User must be part of the friendship
         """
-        # Get friendship
-        friendship = self.friendship_repo.get_by_ids(user_id, friend_id)
+        # Get friendship using canonical IDs
+        friendship = self.friendship_repo.get_by_canonical_ids(user_id, friend_id)
         if not friendship:
             raise ValueError("Friendship not found")
 

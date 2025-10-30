@@ -44,13 +44,20 @@ class GameAggregate:
     """
     Game Aggregate Root
 
-    Stores high level game state and manages invite workflow.
+    Stores high level game state and manages invite/join workflow.
     Game is independent from Campaign - Campaign only references Game by ID.
 
-    Invite Workflow:
-    1. DM invites User → added to invited_users
-    2. User selects Character → moved to player_characters
-    3. Invite complete when character joins
+    Invite/Join Workflow (Updated):
+    1. DM invites User → added to invited_users (pending)
+    2. User accepts invite → moved to joined_users (roster)
+    3. User selects Character → character association tracked in game_joined_users table
+    4. User enters session → character added to active_session (MongoDB)
+
+    Key Concepts:
+    - invited_users: Users with pending invites (not yet accepted)
+    - joined_users: Users who accepted invite (game roster)
+    - Character association: Tracked separately in game_joined_users table
+    - Active session: Handled by api-game service (MongoDB)
     """
 
     def __init__(
@@ -65,8 +72,8 @@ class GameAggregate:
         stopped_at: Optional[datetime] = None,  # time ETL successfully stopped the game
         session_id: Optional[str] = None,  # MongoDB active_session objectID
         invited_users: Optional[List[UUID]] = None,  # User IDs with pending invites
-        player_characters: Optional[List[UUID]] = None,  # Character IDs who joined game
-        max_players: int = 8,  # Seat count (1-8)
+        joined_users: Optional[List[UUID]] = None,  # User IDs who accepted (roster)
+        max_players: int = 8,  # Seat count in active session (1-8)
     ):
         self.id = id
         self.name = name
@@ -78,7 +85,7 @@ class GameAggregate:
         self.stopped_at = stopped_at
         self.session_id = session_id
         self.invited_users = invited_users if invited_users is not None else []
-        self.player_characters = player_characters if player_characters is not None else []
+        self.joined_users = joined_users if joined_users is not None else []
         self.max_players = self._validate_max_players(max_players)
 
     @staticmethod
@@ -113,19 +120,19 @@ class GameAggregate:
             status=GameStatus.INACTIVE,
             created_at=datetime.utcnow(),
             invited_users=[],
-            player_characters=[],
+            joined_users=[],
             max_players=max_players
         )
 
     def invite_user(self, user_id: UUID) -> None:
         """
         Invite a user to join the game.
-        User must select a character to complete the invite.
+        User must accept invite to join the roster.
 
         Business Rules:
         - Cannot invite the host
         - Cannot invite user who already has pending invite
-        - Cannot invite user whose character is already in game (checked in repository)
+        - Cannot invite user who already joined
         """
         if user_id == self.host_id:
             raise ValueError("Cannot invite the host as a player")
@@ -133,56 +140,56 @@ class GameAggregate:
         if user_id in self.invited_users:
             raise ValueError("User already has a pending invite")
 
+        if user_id in self.joined_users:
+            raise ValueError("User has already joined this game")
+
         self.invited_users.append(user_id)
 
-    def accept_invite_with_character(self, user_id: UUID, character_id: UUID) -> None:
+    def accept_invite(self, user_id: UUID) -> None:
         """
-        User accepts invite by selecting a character.
-        Moves user from invited_users to player_characters.
+        User accepts invite to join the game roster.
+        Moves user from invited_users to joined_users.
+        Character selection happens separately.
 
         Business Rules:
         - User must have pending invite
-        - Character cannot already be in game
-        - Character ownership validated in application layer
         """
         if user_id not in self.invited_users:
             raise ValueError("User does not have a pending invite")
 
-        if character_id in self.player_characters:
-            raise ValueError("Character is already in this game")
-
-        # Complete the invite cycle
+        # Move user from invited to joined
         self.invited_users.remove(user_id)
-        self.player_characters.append(character_id)
+        self.joined_users.append(user_id)
 
     def decline_invite(self, user_id: UUID) -> None:
         """User declines the game invite."""
         if user_id in self.invited_users:
             self.invited_users.remove(user_id)
 
-    def remove_player_character(self, character_id: UUID) -> None:
+    def remove_user(self, user_id: UUID) -> None:
         """
-        Remove a character from the game.
-        DM can use this to kick a player.
+        Remove a user from the game entirely.
+        DM can use this to kick a player from the roster.
+        Character unlocking handled in application layer.
         """
-        if character_id in self.player_characters:
-            self.player_characters.remove(character_id)
+        if user_id in self.joined_users:
+            self.joined_users.remove(user_id)
 
     def get_pending_invites_count(self) -> int:
         """Get count of pending invites."""
         return len(self.invited_users)
 
     def get_player_count(self) -> int:
-        """Get count of players who have joined with characters."""
-        return len(self.player_characters)
+        """Get count of users who have joined the roster."""
+        return len(self.joined_users)
 
     def is_user_invited(self, user_id: UUID) -> bool:
         """Check if user has a pending invite."""
         return user_id in self.invited_users
 
-    def has_character(self, character_id: UUID) -> bool:
-        """Check if character is in the game."""
-        return character_id in self.player_characters
+    def is_user_joined(self, user_id: UUID) -> bool:
+        """Check if user has joined the game roster."""
+        return user_id in self.joined_users
 
     def is_active(self) -> bool:
         """Check if game is currently active"""

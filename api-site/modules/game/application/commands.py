@@ -8,6 +8,7 @@ import asyncio
 from modules.game.repositories.game_repository import GameRepository
 from modules.user.orm.user_repository import UserRepository
 from modules.characters.orm.character_repository import CharacterRepository
+from modules.characters.domain.character_aggregate import CharacterAggregate
 from modules.campaign.orm.campaign_repository import CampaignRepository
 from modules.game.domain.game_aggregate import GameAggregate, GameStatus
 
@@ -109,31 +110,28 @@ class InviteUserToGame:
 
 
 class AcceptGameInvite:
-    """User accepts invite by selecting a character"""
+    """User accepts invite to join game roster (no character selection yet)"""
 
     def __init__(
         self,
         game_repository: GameRepository,
-        user_repository: UserRepository,
-        character_repository: CharacterRepository
+        user_repository: UserRepository
     ):
         self.game_repo = game_repository
         self.user_repo = user_repository
-        self.character_repo = character_repository
 
     def execute(
         self,
         game_id: UUID,
-        user_id: UUID,
-        character_id: UUID
+        user_id: UUID
     ) -> GameAggregate:
         """
-        Accept invite with character selection.
+        Accept invite to join game roster.
+
+        Character selection happens later when user enters session.
 
         Cross-aggregate validation:
         - User must exist
-        - Character must exist
-        - Character must be owned by user
         - Business rules in GameAggregate
         """
         # Validate user exists
@@ -141,22 +139,13 @@ class AcceptGameInvite:
         if not user:
             raise ValueError(f"User {user_id} not found")
 
-        # Validate character exists
-        character = self.character_repo.get_by_id(character_id)
-        if not character:
-            raise ValueError(f"Character {character_id} not found")
-
-        # Validate character ownership
-        if character.user_id != user_id:
-            raise ValueError("Character not owned by user")
-
         # Get game aggregate
         game = self.game_repo.get_by_id(game_id)
         if not game:
             raise ValueError(f"Game {game_id} not found")
 
-        # Business logic in aggregate
-        game.accept_invite_with_character(user_id, character_id)
+        # Business logic in aggregate (moves user from invited_users to joined_users)
+        game.accept_invite(user_id)
 
         # Persist
         self.game_repo.save(game)
@@ -201,7 +190,7 @@ class DeclineGameInvite:
 
 
 class RemovePlayerFromGame:
-    """Host removes a player character from the game"""
+    """Host removes a player from the game roster"""
 
     def __init__(
         self,
@@ -214,19 +203,15 @@ class RemovePlayerFromGame:
     def execute(
         self,
         game_id: UUID,
-        character_id: UUID,
+        user_id: UUID,
         removed_by: UUID
     ) -> GameAggregate:
         """
-        Remove player character from game.
+        Remove player from game roster.
 
+        Unlocks their character and removes them from joined_users.
         Only host can remove players.
         """
-        # Validate character exists
-        character = self.character_repo.get_by_id(character_id)
-        if not character:
-            raise ValueError(f"Character {character_id} not found")
-
         # Get game aggregate
         game = self.game_repo.get_by_id(game_id)
         if not game:
@@ -236,8 +221,21 @@ class RemovePlayerFromGame:
         if game.host_id != removed_by:
             raise ValueError("Only host can remove players")
 
-        # Business logic in aggregate
-        game.remove_player_character(character_id)
+        # Verify user is in joined roster
+        if not game.is_user_joined(user_id):
+            raise ValueError("User is not in game roster")
+
+        # Find and unlock character (if any) locked to this game
+        # User's characters locked to this game
+        user_characters = self.character_repo.get_by_user_id(user_id)
+        for character in user_characters:
+            if character.active_game == game_id:
+                character.unlock_from_game()
+                self.character_repo.save(character)
+                break
+
+        # Business logic in aggregate - remove user from joined_users
+        game.remove_user(user_id)
 
         # Persist
         self.game_repo.save(game)
@@ -564,3 +562,210 @@ class EndGame:
             # Cleanup failed - cron will handle it
             logger.warning(f"⚠️ Background cleanup failed for {game_id}: {e}")
             logger.warning(f"Cron job will clean up session {session_id}")
+
+
+class SelectCharacterForGame:
+    """User selects a character for a joined game"""
+
+    def __init__(
+        self,
+        game_repository: GameRepository,
+        character_repository: CharacterRepository
+    ):
+        self.game_repo = game_repository
+        self.character_repo = character_repository
+
+    def execute(
+        self,
+        game_id: UUID,
+        user_id: UUID,
+        character_id: UUID
+    ) -> CharacterAggregate:
+        """
+        Select character for a game.
+
+        Business rules:
+        - User must be in joined_users (game roster)
+        - Character must be owned by user
+        - Character must not be locked to another game
+        """
+        # Get game
+        game = self.game_repo.get_by_id(game_id)
+        if not game:
+            raise ValueError(f"Game {game_id} not found")
+
+        # Verify user is in game roster
+        if not game.is_user_joined(user_id):
+            raise ValueError("User has not joined this game")
+
+        # Get character
+        character = self.character_repo.get_by_id(character_id)
+        if not character:
+            raise ValueError(f"Character {character_id} not found")
+
+        # Verify character ownership
+        if not character.is_owned_by(user_id):
+            raise ValueError("Character not owned by user")
+
+        # Verify character not locked to another game
+        if character.is_locked():
+            raise ValueError(f"Character already locked to game {character.active_game}")
+
+        # Lock character to game
+        character.lock_to_game(game_id)
+        self.character_repo.save(character)
+
+        return character
+
+
+class ChangeCharacterForGame:
+    """User changes their character for a game (between sessions)"""
+
+    def __init__(
+        self,
+        game_repository: GameRepository,
+        character_repository: CharacterRepository
+    ):
+        self.game_repo = game_repository
+        self.character_repo = character_repository
+
+    def execute(
+        self,
+        game_id: UUID,
+        user_id: UUID,
+        old_character_id: UUID,
+        new_character_id: UUID
+    ) -> CharacterAggregate:
+        """
+        Change character for a game.
+
+        Business rules:
+        - User must be in joined_users (game roster)
+        - Old character must be owned by user and locked to this game
+        - New character must be owned by user and not locked
+        - Old character must NOT be in active session (check via is_alive or other means)
+        """
+        # Get game
+        game = self.game_repo.get_by_id(game_id)
+        if not game:
+            raise ValueError(f"Game {game_id} not found")
+
+        # Verify user is in game roster
+        if not game.is_user_joined(user_id):
+            raise ValueError("User has not joined this game")
+
+        # Get old character
+        old_character = self.character_repo.get_by_id(old_character_id)
+        if not old_character:
+            raise ValueError(f"Old character {old_character_id} not found")
+
+        # Verify old character ownership and lock
+        if not old_character.is_owned_by(user_id):
+            raise ValueError("Old character not owned by user")
+
+        if old_character.active_game != game_id:
+            raise ValueError("Old character not locked to this game")
+
+        # TODO: Verify old character not in active session (would need MongoDB check)
+        # For now, we'll trust the frontend to enforce this rule
+
+        # Get new character
+        new_character = self.character_repo.get_by_id(new_character_id)
+        if not new_character:
+            raise ValueError(f"New character {new_character_id} not found")
+
+        # Verify new character ownership
+        if not new_character.is_owned_by(user_id):
+            raise ValueError("New character not owned by user")
+
+        # Verify new character not locked
+        if new_character.is_locked():
+            raise ValueError(f"New character already locked to game {new_character.active_game}")
+
+        # Unlock old character
+        old_character.unlock_from_game()
+        self.character_repo.save(old_character)
+
+        # Lock new character
+        new_character.lock_to_game(game_id)
+        self.character_repo.save(new_character)
+
+        return new_character
+
+
+class DisconnectFromSession:
+    """Handle player disconnect from active session (partial ETL)"""
+
+    def __init__(
+        self,
+        game_repository: GameRepository,
+        character_repository: CharacterRepository
+    ):
+        self.game_repo = game_repository
+        self.character_repo = character_repository
+
+    def execute(
+        self,
+        game_id: UUID,
+        user_id: UUID,
+        character_id: UUID,
+        character_state: dict
+    ) -> CharacterAggregate:
+        """
+        Save character state when player disconnects from active session.
+
+        Partial ETL - updates ONLY the character's state from MongoDB to PostgreSQL.
+
+        Business rules:
+        - Game must be ACTIVE
+        - Character must be owned by user
+        - Character must be locked to this game
+
+        character_state structure:
+        {
+            "current_hp": int,
+            "current_position": {"x": int, "y": int},
+            "status_effects": [...],
+            ... other session-specific state
+        }
+        """
+        # Get game
+        game = self.game_repo.get_by_id(game_id)
+        if not game:
+            raise ValueError(f"Game {game_id} not found")
+
+        # Verify game is active
+        if not game.is_active():
+            raise ValueError("Game is not active")
+
+        # Get character
+        character = self.character_repo.get_by_id(character_id)
+        if not character:
+            raise ValueError(f"Character {character_id} not found")
+
+        # Verify character ownership
+        if not character.is_owned_by(user_id):
+            raise ValueError("Character not owned by user")
+
+        # Verify character is locked to this game
+        if character.active_game != game_id:
+            raise ValueError("Character not locked to this game")
+
+        # Update character state from MongoDB
+        if "current_hp" in character_state:
+            character.hp_current = character_state["current_hp"]
+
+        # Mark character dead if HP reached 0
+        if character.hp_current <= 0 and character.is_alive:
+            character.mark_dead()
+
+        # TODO: Add position tracking and other state fields when implemented
+        # character.position = character_state.get("current_position")
+        # character.status_effects = character_state.get("status_effects", [])
+
+        # Save character (partial ETL complete)
+        self.character_repo.save(character)
+
+        logger.info(f"Partial ETL complete for character {character_id} in game {game_id}")
+
+        return character

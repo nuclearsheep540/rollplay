@@ -34,6 +34,18 @@ class UserResponse(BaseModel):
     last_login: Optional[datetime]
 
 
+class PublicUserResponse(BaseModel):
+    """
+    Public user response schema - for user lookups by other users.
+
+    Returns minimal user information without sensitive data like email.
+    Used for friend lookups, public profiles, etc.
+    """
+    id: str
+    screen_name: Optional[str]
+    created_at: datetime
+
+
 class UserLoginResponse(BaseModel):
     """
     Enhanced login response with additional context.

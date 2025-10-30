@@ -25,8 +25,8 @@ class InviteUserRequest(BaseModel):
 
 
 class AcceptInviteRequest(BaseModel):
-    """Request to accept game invite with character selection"""
-    character_id: UUID
+    """Request to accept game invite (no character needed)"""
+    pass  # No fields needed - user just accepts invite
 
 
 class GameResponse(BaseModel):
@@ -40,10 +40,10 @@ class GameResponse(BaseModel):
     started_at: Optional[datetime]
     stopped_at: Optional[datetime]
     session_id: Optional[str]
-    invited_users: List[UUID]
-    player_characters: List[UUID]
-    pending_invites_count: int
-    player_count: int
+    invited_users: List[UUID]  # Users with pending invites
+    joined_users: List[UUID]  # Users who accepted invite (roster)
+    pending_invites_count: int  # Count of invited_users
+    player_count: int  # Count of joined_users
     max_players: int
 
     class Config:

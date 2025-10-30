@@ -14,14 +14,72 @@ export default function FriendsManager({ user }) {
   const [friendUuid, setFriendUuid] = useState('')
   const [sending, setSending] = useState(false)
   const [actionLoading, setActionLoading] = useState({})
+  const [lookupUser, setLookupUser] = useState(null)
+  const [lookupLoading, setLookupLoading] = useState(false)
+  const [lookupError, setLookupError] = useState(null)
 
   useEffect(() => {
     fetchFriends()
   }, [])
 
+  // Validate UUID format
+  const isValidUUID = (uuid) => {
+    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+    return uuidRegex.test(uuid)
+  }
+
+  // Lookup user by UUID when valid UUID is entered
+  useEffect(() => {
+    const lookupUserByUuid = async () => {
+      if (!friendUuid.trim()) {
+        setLookupUser(null)
+        setLookupError(null)
+        return
+      }
+
+      if (!isValidUUID(friendUuid.trim())) {
+        setLookupUser(null)
+        setLookupError(null)
+        return
+      }
+
+      try {
+        setLookupLoading(true)
+        setLookupError(null)
+
+        const response = await fetch(`/api/users/${friendUuid.trim()}`, {
+          credentials: 'include'
+        })
+
+        if (response.ok) {
+          const userData = await response.json()
+          setLookupUser(userData)
+        } else if (response.status === 404) {
+          setLookupError('User not found')
+          setLookupUser(null)
+        } else {
+          setLookupError('Failed to lookup user')
+          setLookupUser(null)
+        }
+      } catch (err) {
+        console.error('Error looking up user:', err)
+        setLookupError('Failed to lookup user')
+        setLookupUser(null)
+      } finally {
+        setLookupLoading(false)
+      }
+    }
+
+    // Debounce the lookup
+    const timeoutId = setTimeout(lookupUserByUuid, 500)
+    return () => clearTimeout(timeoutId)
+  }, [friendUuid])
+
   const fetchFriends = async () => {
     try {
       setLoading(true)
+
+      // Single API call to get all friendships categorized
       const response = await fetch('/api/friends/', {
         credentials: 'include'
       })
@@ -31,7 +89,9 @@ export default function FriendsManager({ user }) {
       }
 
       const data = await response.json()
-      setFriends(data.friendships || [])
+
+      // Store the categorized response directly (no merging needed!)
+      setFriends(data)
       setError(null)
     } catch (err) {
       console.error('Error fetching friends:', err)
@@ -77,11 +137,8 @@ export default function FriendsManager({ user }) {
     }
   }
 
-  const acceptFriendRequest = async (friendshipUserId, friendshipFriendId) => {
-    const actionKey = `accept-${friendshipUserId}-${friendshipFriendId}`
-
-    // Determine which ID is the requester (the one who sent the request)
-    const requesterId = friendshipUserId === user.id ? friendshipFriendId : friendshipUserId
+  const acceptFriendRequest = async (requesterId) => {
+    const actionKey = `accept-${requesterId}`
 
     try {
       setActionLoading({ ...actionLoading, [actionKey]: true })
@@ -106,11 +163,8 @@ export default function FriendsManager({ user }) {
     }
   }
 
-  const rejectFriendRequest = async (friendshipUserId, friendshipFriendId) => {
-    const actionKey = `reject-${friendshipUserId}-${friendshipFriendId}`
-
-    // Determine which ID is the requester (the one who sent the request)
-    const requesterId = friendshipUserId === user.id ? friendshipFriendId : friendshipUserId
+  const rejectFriendRequest = async (requesterId) => {
+    const actionKey = `reject-${requesterId}`
 
     try {
       setActionLoading({ ...actionLoading, [actionKey]: true })
@@ -135,21 +189,18 @@ export default function FriendsManager({ user }) {
     }
   }
 
-  const removeFriend = async (friendshipUserId, friendshipFriendId) => {
-    const actionKey = `remove-${friendshipUserId}-${friendshipFriendId}`
+  const removeFriend = async (friendId) => {
+    const actionKey = `remove-${friendId}`
 
     if (!confirm('Are you sure you want to remove this friend?')) {
       return
     }
 
-    // Determine which ID is the other user (not current user)
-    const otherUserId = friendshipUserId === user.id ? friendshipFriendId : friendshipUserId
-
     try {
       setActionLoading({ ...actionLoading, [actionKey]: true })
       setError(null)
 
-      const response = await fetch(`/api/friends/${otherUserId}`, {
+      const response = await fetch(`/api/friends/${friendId}`, {
         method: 'DELETE',
         credentials: 'include'
       })
@@ -168,10 +219,10 @@ export default function FriendsManager({ user }) {
     }
   }
 
-  // Separate friends by status
-  const acceptedFriends = friends.filter(f => f.status === 'accepted')
-  const pendingReceived = friends.filter(f => f.status === 'pending' && f.user_id !== user.id)
-  const pendingSent = friends.filter(f => f.status === 'pending' && f.user_id === user.id)
+  // Friends are already categorized by backend - no filtering needed!
+  const acceptedFriends = friends.accepted || []
+  const pendingReceived = friends.incoming_requests || []
+  const pendingSent = friends.outgoing_requests || []
 
   if (loading) {
     return (
@@ -196,57 +247,83 @@ export default function FriendsManager({ user }) {
       {/* Add Friend Form */}
       <div className="bg-white p-6 rounded-lg shadow">
         <h2 className="text-xl font-semibold text-slate-800 mb-4">Add Friend</h2>
-        <form onSubmit={sendFriendRequest} className="flex gap-2">
-          <input
-            type="text"
-            value={friendUuid}
-            onChange={(e) => setFriendUuid(e.target.value)}
-            placeholder="Enter friend's UUID"
-            className="flex-1 px-4 py-2 border border-slate-300 rounded focus:outline-none focus:ring-2 focus:ring-indigo-500"
-            disabled={sending}
-          />
+        <form onSubmit={sendFriendRequest} className="space-y-3">
+          <div>
+            <input
+              type="text"
+              value={friendUuid}
+              onChange={(e) => setFriendUuid(e.target.value)}
+              placeholder="Enter friend's UUID"
+              className="w-full px-4 py-2 border border-slate-300 rounded focus:outline-none focus:ring-2 focus:ring-indigo-500"
+              disabled={sending}
+            />
+            {/* Real-time lookup feedback */}
+            {friendUuid && isValidUUID(friendUuid) && (
+              <div className="mt-2">
+                {lookupLoading && (
+                  <p className="text-sm text-slate-500 flex items-center gap-2">
+                    <span className="animate-spin">⏳</span> Looking up user...
+                  </p>
+                )}
+                {!lookupLoading && lookupUser && (
+                  <div className="p-3 bg-green-50 border border-green-200 rounded">
+                    <p className="text-sm text-green-800 font-semibold">
+                      ✓ User found: {lookupUser.screen_name || 'User #' + lookupUser.id.substring(0, 8)}
+                    </p>
+                    <p className="text-xs text-green-600">ID: {lookupUser.id}</p>
+                  </div>
+                )}
+                {!lookupLoading && lookupError && (
+                  <p className="text-sm text-red-600">✗ {lookupError}</p>
+                )}
+              </div>
+            )}
+          </div>
           <button
             type="submit"
-            disabled={sending}
-            className="px-6 py-2 bg-indigo-600 text-white rounded hover:bg-indigo-700 disabled:bg-slate-400 disabled:cursor-not-allowed transition-colors"
+            disabled={sending || !lookupUser}
+            className="w-full px-6 py-2 bg-indigo-600 text-white rounded hover:bg-indigo-700 disabled:bg-slate-400 disabled:cursor-not-allowed transition-colors font-semibold"
           >
-            {sending ? 'Sending...' : 'Send Request'}
+            {sending ? 'Sending...' : lookupUser ? `Send Friend Request to ${lookupUser.screen_name || 'User'}` : 'Send Friend Request'}
           </button>
         </form>
-        <p className="text-sm text-slate-600 mt-2">
-          Your UUID: <code className="bg-slate-100 px-2 py-1 rounded">{user.id}</code>
+        <p className="text-sm text-slate-600 mt-4">
+          Your UUID: <code className="bg-slate-100 px-2 py-1 rounded text-xs">{user.id}</code>
         </p>
       </div>
 
-      {/* Incoming Friend Requests */}
-      {pendingReceived.length > 0 && (
-        <div className="bg-white p-6 rounded-lg shadow">
-          <h2 className="text-xl font-semibold text-slate-800 mb-4">
-            Incoming Requests ({pendingReceived.length})
-          </h2>
+      {/* Pending Requests (Received from others) */}
+      <div className="bg-white p-6 rounded-lg shadow">
+        <h2 className="text-xl font-semibold text-slate-800 mb-4">
+          Pending Requests ({pendingReceived.length})
+        </h2>
+        <p className="text-sm text-slate-600 mb-4">Friend requests you've received from other players</p>
+        {pendingReceived.length === 0 ? (
+          <p className="text-slate-500 text-sm py-4">No pending requests</p>
+        ) : (
           <div className="space-y-3">
-            {pendingReceived.map((friendship) => (
+            {pendingReceived.map((request) => (
               <div
-                key={`${friendship.user_id}-${friendship.friend_id}`}
+                key={request.id}
                 className="flex items-center justify-between p-4 bg-slate-50 rounded border border-slate-200"
               >
                 <div>
                   <p className="font-semibold text-slate-800">
-                    {friendship.friend_screen_name || friendship.friend_email}
+                    {request.requester_screen_name || 'User'}
                   </p>
-                  <p className="text-sm text-slate-600">{friendship.friend_email}</p>
+                  <p className="text-sm text-slate-600">ID: {request.requester_id}</p>
                 </div>
                 <div className="flex gap-2">
                   <button
-                    onClick={() => acceptFriendRequest(friendship.user_id, friendship.friend_id)}
-                    disabled={actionLoading[`accept-${friendship.user_id}-${friendship.friend_id}`]}
+                    onClick={() => acceptFriendRequest(request.requester_id)}
+                    disabled={actionLoading[`accept-${request.requester_id}`]}
                     className="px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700 disabled:bg-slate-400 disabled:cursor-not-allowed transition-colors"
                   >
                     Accept
                   </button>
                   <button
-                    onClick={() => rejectFriendRequest(friendship.user_id, friendship.friend_id)}
-                    disabled={actionLoading[`reject-${friendship.user_id}-${friendship.friend_id}`]}
+                    onClick={() => rejectFriendRequest(request.requester_id)}
+                    disabled={actionLoading[`reject-${request.requester_id}`]}
                     className="px-4 py-2 bg-red-600 text-white rounded hover:bg-red-700 disabled:bg-slate-400 disabled:cursor-not-allowed transition-colors"
                   >
                     Reject
@@ -255,31 +332,34 @@ export default function FriendsManager({ user }) {
               </div>
             ))}
           </div>
-        </div>
-      )}
+        )}
+      </div>
 
-      {/* Outgoing Friend Requests */}
-      {pendingSent.length > 0 && (
-        <div className="bg-white p-6 rounded-lg shadow">
-          <h2 className="text-xl font-semibold text-slate-800 mb-4">
-            Pending Requests ({pendingSent.length})
-          </h2>
+      {/* Pending Invites (Sent by you) */}
+      <div className="bg-white p-6 rounded-lg shadow">
+        <h2 className="text-xl font-semibold text-slate-800 mb-4">
+          Pending Invites ({pendingSent.length})
+        </h2>
+        <p className="text-sm text-slate-600 mb-4">Friend invites you've sent to other players</p>
+        {pendingSent.length === 0 ? (
+          <p className="text-slate-500 text-sm py-4">No pending invites</p>
+        ) : (
           <div className="space-y-3">
-            {pendingSent.map((friendship) => (
+            {pendingSent.map((request) => (
               <div
-                key={`${friendship.user_id}-${friendship.friend_id}`}
+                key={request.id}
                 className="flex items-center justify-between p-4 bg-slate-50 rounded border border-slate-200"
               >
                 <div>
                   <p className="font-semibold text-slate-800">
-                    {friendship.friend_screen_name || friendship.friend_email}
+                    {request.recipient_screen_name || 'User'}
                   </p>
-                  <p className="text-sm text-slate-600">{friendship.friend_email}</p>
+                  <p className="text-sm text-slate-600">ID: {request.recipient_id}</p>
                   <p className="text-xs text-slate-500 mt-1">Waiting for response...</p>
                 </div>
                 <button
-                  onClick={() => removeFriend(friendship.user_id, friendship.friend_id)}
-                  disabled={actionLoading[`remove-${friendship.user_id}-${friendship.friend_id}`]}
+                  onClick={() => removeFriend(request.recipient_id)}
+                  disabled={actionLoading[`remove-${request.recipient_id}`]}
                   className="px-4 py-2 bg-slate-600 text-white rounded hover:bg-slate-700 disabled:bg-slate-400 disabled:cursor-not-allowed transition-colors"
                 >
                   Cancel
@@ -287,8 +367,8 @@ export default function FriendsManager({ user }) {
               </div>
             ))}
           </div>
-        </div>
-      )}
+        )}
+      </div>
 
       {/* Accepted Friends */}
       <div className="bg-white p-6 rounded-lg shadow">
@@ -301,18 +381,18 @@ export default function FriendsManager({ user }) {
           <div className="space-y-3">
             {acceptedFriends.map((friendship) => (
               <div
-                key={`${friendship.user_id}-${friendship.friend_id}`}
+                key={friendship.id}
                 className="flex items-center justify-between p-4 bg-slate-50 rounded border border-slate-200"
               >
                 <div>
                   <p className="font-semibold text-slate-800">
-                    {friendship.friend_screen_name || friendship.friend_email}
+                    {friendship.friend_screen_name || 'User'}
                   </p>
-                  <p className="text-sm text-slate-600">{friendship.friend_email}</p>
+                  <p className="text-sm text-slate-600">ID: {friendship.friend_id}</p>
                 </div>
                 <button
-                  onClick={() => removeFriend(friendship.user_id, friendship.friend_id)}
-                  disabled={actionLoading[`remove-${friendship.user_id}-${friendship.friend_id}`]}
+                  onClick={() => removeFriend(friendship.friend_id)}
+                  disabled={actionLoading[`remove-${friendship.friend_id}`]}
                   className="px-4 py-2 bg-red-600 text-white rounded hover:bg-red-700 disabled:bg-slate-400 disabled:cursor-not-allowed transition-colors"
                 >
                   Remove

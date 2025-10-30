@@ -71,3 +71,4 @@ class CharacterResponse(BaseModel):
     hp_max: int
     hp_current: int
     ac: int
+    active_game: Optional[str] = None  # UUID of game character is currently in

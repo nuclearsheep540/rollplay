@@ -39,7 +39,8 @@ def _to_character_response(character: CharacterAggregate) -> CharacterResponse:
         display_name=character.get_display_name(),
         hp_max=character.hp_max,
         hp_current=character.hp_current,
-        ac=character.ac
+        ac=character.ac,
+        active_game=str(character.active_game) if character.active_game else None
     )
 
 

@@ -39,6 +39,7 @@ class CharacterRepository:
             hp_current=model.hp_current,
             hp_max=model.hp_max,
             ac=model.ac,
+            is_alive=model.is_alive,
         )
 
     def get_by_id(self, character_id: UUID) -> Optional[CharacterAggregate]:
@@ -87,6 +88,7 @@ class CharacterRepository:
             character_model.hp_max = aggregate.hp_max
             character_model.hp_current = aggregate.hp_current
             character_model.ac = aggregate.ac
+            character_model.is_alive = aggregate.is_alive
 
         else:
             # Create new character
@@ -103,7 +105,8 @@ class CharacterRepository:
                 active_game=aggregate.active_game,
                 hp_max=aggregate.hp_max,
                 hp_current=aggregate.hp_current,
-                ac=aggregate.ac
+                ac=aggregate.ac,
+                is_alive=aggregate.is_alive
             )
             self.db.add(character_model)
 
