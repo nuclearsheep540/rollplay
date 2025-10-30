@@ -136,7 +136,8 @@ class GameRepository:
             text("SELECT user_id FROM game_joined_users WHERE game_id = :game_id"),
             {"game_id": game_id}
         ).fetchall()
-        current_user_ids = {row[0] for row in current_joined}
+        # Convert to UUID objects if they're strings (SQLite compatibility)
+        current_user_ids = {UUID(row[0]) if isinstance(row[0], str) else row[0] for row in current_joined}
         target_user_ids = set(joined_user_ids)
 
         # Add new joined users
@@ -162,7 +163,8 @@ class GameRepository:
             text("SELECT user_id FROM game_joined_users WHERE game_id = :game_id"),
             {"game_id": model.id}
         ).fetchall()
-        joined_user_ids = [row[0] for row in joined_users_result]
+        # Convert to UUID objects if they're strings (SQLite compatibility)
+        joined_user_ids = [UUID(row[0]) if isinstance(row[0], str) else row[0] for row in joined_users_result]
 
         return GameAggregate(
             id=model.id,

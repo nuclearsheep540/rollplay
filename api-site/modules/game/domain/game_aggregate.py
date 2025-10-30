@@ -153,9 +153,14 @@ class GameAggregate:
 
         Business Rules:
         - User must have pending invite
+        - Game must not be full (max_players limit)
         """
         if user_id not in self.invited_users:
             raise ValueError("User does not have a pending invite")
+
+        # Check if game is full
+        if len(self.joined_users) >= self.max_players:
+            raise ValueError("Game is full")
 
         # Move user from invited to joined
         self.invited_users.remove(user_id)
