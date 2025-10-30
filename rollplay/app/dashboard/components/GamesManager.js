@@ -264,10 +264,10 @@ export default function GamesManager({ user }) {
     }
   }
 
-  // Separate games into three categories
-  const myGames = games.filter(game => isUserHost(game))
-  const invitedGames = games.filter(game => isUserInvited(game) && !isUserHost(game))
-  const joinedGames = games.filter(game => isUserJoined(game) && !isUserHost(game))
+  // Separate games into two categories
+  // "My Games" includes both games I host (DM) and games I've joined (Player)
+  const myGames = games.filter(game => isUserHost(game) || isUserJoined(game))
+  const invitedGames = games.filter(game => isUserInvited(game) && !isUserHost(game) && !isUserJoined(game))
 
   if (loading) {
     return (
@@ -475,6 +475,45 @@ export default function GamesManager({ user }) {
           </div>
         )}
 
+        {/* Roster Display - Show players who have joined */}
+        {game.roster && game.roster.length > 0 && (
+          <div className="mt-4 pt-4 border-t border-slate-200">
+            <h4 className="text-sm font-semibold text-slate-700 mb-2">
+              Game Roster ({game.roster.length}/{game.max_players})
+            </h4>
+            <div className="space-y-2">
+              {game.roster.map((player) => (
+                <div key={player.user_id} className="flex items-center justify-between bg-slate-50 px-3 py-2 rounded">
+                  <div>
+                    {player.character_name ? (
+                      <div>
+                        <p className="text-sm font-semibold text-slate-800">
+                          {player.character_name}
+                        </p>
+                        <p className="text-xs text-slate-600">
+                          Level {player.character_level} {player.character_race} {player.character_class}
+                        </p>
+                        <p className="text-xs text-slate-500">
+                          Player: {player.username}
+                        </p>
+                      </div>
+                    ) : (
+                      <div>
+                        <p className="text-sm font-semibold text-slate-800">
+                          {player.username}
+                        </p>
+                        <p className="text-xs text-amber-600">
+                          ⚠ No character selected
+                        </p>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
         {/* Game Info for DMs */}
         {role === 'DM' && game.pending_invites_count > 0 && (
           <div className="mt-4 pt-4 border-t border-slate-200">
@@ -499,25 +538,29 @@ export default function GamesManager({ user }) {
         </div>
       )}
 
-      {/* My Games Section (DM) */}
+      {/* My Games Section (DM + Joined) */}
       <div className="space-y-4">
         <div className="flex items-center gap-3">
           <h2 className="text-2xl font-semibold text-slate-800">My Games</h2>
-          <span className="px-3 py-1 bg-purple-100 text-purple-700 rounded-full text-sm font-semibold">
+          <span className="px-3 py-1 bg-blue-100 text-blue-700 rounded-full text-sm font-semibold">
             {myGames.length}
           </span>
         </div>
 
         {myGames.length === 0 ? (
           <div className="bg-white p-8 rounded-lg shadow text-center border-2 border-dashed border-slate-300">
-            <p className="text-slate-600 mb-2">You haven't created any games yet.</p>
+            <p className="text-slate-600 mb-2">You haven't joined any games yet.</p>
             <p className="text-sm text-slate-500">
-              Create a campaign and start a game from the Campaign tab!
+              Create a game from the Campaign tab, or accept an invite from a friend!
             </p>
           </div>
         ) : (
           <div className="space-y-4">
-            {myGames.map((game) => renderGameCard(game, 'DM'))}
+            {myGames.map((game) => {
+              // Determine role: DM if host, Player if joined
+              const role = isUserHost(game) ? 'DM' : 'Player'
+              return renderGameCard(game, role)
+            })}
           </div>
         )}
       </div>
@@ -541,29 +584,6 @@ export default function GamesManager({ user }) {
         ) : (
           <div className="space-y-4">
             {invitedGames.map((game) => renderGameCard(game, 'Invited'))}
-          </div>
-        )}
-      </div>
-
-      {/* Joined Games Section (Accepted Roster) */}
-      <div className="space-y-4">
-        <div className="flex items-center gap-3">
-          <h2 className="text-2xl font-semibold text-slate-800">Joined Games</h2>
-          <span className="px-3 py-1 bg-blue-100 text-blue-700 rounded-full text-sm font-semibold">
-            {joinedGames.length}
-          </span>
-        </div>
-
-        {joinedGames.length === 0 ? (
-          <div className="bg-white p-8 rounded-lg shadow text-center border-2 border-dashed border-slate-300">
-            <p className="text-slate-600 mb-2">You haven't joined any games yet.</p>
-            <p className="text-sm text-slate-500">
-              Accept an invite to join a game and start playing!
-            </p>
-          </div>
-        ) : (
-          <div className="space-y-4">
-            {joinedGames.map((game) => renderGameCard(game, 'Player'))}
           </div>
         )}
       </div>

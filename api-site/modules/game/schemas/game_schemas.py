@@ -29,6 +29,18 @@ class AcceptInviteRequest(BaseModel):
     pass  # No fields needed - user just accepts invite
 
 
+class RosterPlayerResponse(BaseModel):
+    """Roster player information with character details"""
+    user_id: UUID
+    username: str  # screen_name or email
+    character_id: Optional[UUID] = None
+    character_name: Optional[str] = None
+    character_level: Optional[int] = None
+    character_class: Optional[str] = None
+    character_race: Optional[str] = None
+    joined_at: datetime
+
+
 class GameResponse(BaseModel):
     """Game aggregate response"""
     id: UUID
@@ -41,7 +53,8 @@ class GameResponse(BaseModel):
     stopped_at: Optional[datetime]
     session_id: Optional[str]
     invited_users: List[UUID]  # Users with pending invites
-    joined_users: List[UUID]  # Users who accepted invite (roster)
+    joined_users: List[UUID]  # Users who accepted invite (roster) - kept for backward compatibility
+    roster: List[RosterPlayerResponse]  # Enriched roster with character details
     pending_invites_count: int  # Count of invited_users
     player_count: int  # Count of joined_users
     max_players: int

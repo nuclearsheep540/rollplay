@@ -25,6 +25,24 @@ game_invites = Table(
 # Active characters tracked in MongoDB active_session during live gameplay
 
 
+class GameJoinedUser(Base):
+    """Association table for users who have accepted invite and joined the roster"""
+    __tablename__ = 'game_joined_users'
+
+    game_id = Column(UUID(as_uuid=True), ForeignKey('games.id', ondelete='CASCADE'), primary_key=True)
+    user_id = Column(UUID(as_uuid=True), ForeignKey('users.id', ondelete='CASCADE'), primary_key=True)
+    joined_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    selected_character_id = Column(UUID(as_uuid=True), ForeignKey('characters.id', ondelete='SET NULL'), nullable=True)
+
+    # Relationships for easy access
+    game = relationship("Game", backref="roster_entries")
+    user = relationship("User", backref="joined_games")
+    character = relationship("Character", backref="selected_for_games")
+
+    def __repr__(self):
+        return f"<GameJoinedUser(game_id={self.game_id}, user_id={self.user_id}, character_id={self.selected_character_id})>"
+
+
 class Game(Base):
     __tablename__ = 'games'
 

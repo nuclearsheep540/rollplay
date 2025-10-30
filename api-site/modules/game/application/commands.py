@@ -615,6 +615,18 @@ class SelectCharacterForGame:
         character.lock_to_game(game_id)
         self.character_repo.save(character)
 
+        # Update game_joined_users.selected_character_id for roster display
+        from sqlalchemy import update
+        from modules.campaign.model.game_model import GameJoinedUser
+        db_session = self.game_repo.db
+        db_session.execute(
+            update(GameJoinedUser)
+            .where(GameJoinedUser.game_id == game_id)
+            .where(GameJoinedUser.user_id == user_id)
+            .values(selected_character_id=character_id)
+        )
+        db_session.commit()
+
         return character
 
 
@@ -689,6 +701,18 @@ class ChangeCharacterForGame:
         # Lock new character
         new_character.lock_to_game(game_id)
         self.character_repo.save(new_character)
+
+        # Update game_joined_users.selected_character_id for roster display
+        from sqlalchemy import update
+        from modules.campaign.model.game_model import GameJoinedUser
+        db_session = self.game_repo.db
+        db_session.execute(
+            update(GameJoinedUser)
+            .where(GameJoinedUser.game_id == game_id)
+            .where(GameJoinedUser.user_id == user_id)
+            .values(selected_character_id=new_character_id)
+        )
+        db_session.commit()
 
         return new_character
 
