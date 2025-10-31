@@ -20,7 +20,7 @@ export default function DashboardLayout({
   // Initialize activeSection from URL parameter - run only once on mount
   useEffect(() => {
     const tabParam = searchParams.get('tab')
-    if (tabParam && ['characters', 'campaigns', 'profile'].includes(tabParam)) {
+    if (tabParam && ['characters', 'campaigns', 'games', 'friends', 'profile'].includes(tabParam)) {
       setActiveSection(tabParam)
     } else if (!tabParam) {
       // If no tab parameter, set default and update URL
@@ -96,7 +96,7 @@ export default function DashboardLayout({
                   </button>
                 </li>
                 <li className="mb-4">
-                  <button 
+                  <button
                     onClick={() => switchSection('campaigns')}
                     className={`w-full flex items-center p-3 transition-colors duration-200 text-slate-700 hover:bg-slate-300 ${
                       activeSection === 'campaigns' ? 'border-l-4 border-indigo-600 text-indigo-600 font-semibold bg-indigo-100' : ''
@@ -105,6 +105,30 @@ export default function DashboardLayout({
                   >
                     <span className="text-xl mr-3">🗺️</span>
                     <span className="font-semibold">Campaigns</span>
+                  </button>
+                </li>
+                <li className="mb-4">
+                  <button
+                    onClick={() => switchSection('games')}
+                    className={`w-full flex items-center p-3 transition-colors duration-200 text-slate-700 hover:bg-slate-300 ${
+                      activeSection === 'games' ? 'border-l-4 border-indigo-600 text-indigo-600 font-semibold bg-indigo-100' : ''
+                    }`}
+                    title="Games"
+                  >
+                    <span className="text-xl mr-3">🎲</span>
+                    <span className="font-semibold">Games</span>
+                  </button>
+                </li>
+                <li className="mb-4">
+                  <button
+                    onClick={() => switchSection('friends')}
+                    className={`w-full flex items-center p-3 transition-colors duration-200 text-slate-700 hover:bg-slate-300 ${
+                      activeSection === 'friends' ? 'border-l-4 border-indigo-600 text-indigo-600 font-semibold bg-indigo-100' : ''
+                    }`}
+                    title="Friends"
+                  >
+                    <span className="text-xl mr-3">👫</span>
+                    <span className="font-semibold">Friends</span>
                   </button>
                 </li>
               </ul>

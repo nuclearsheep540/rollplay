@@ -23,10 +23,11 @@ class Character(Base):
     created_at = Column(DateTime(timezone=True), nullable=False)
     updated_at = Column(DateTime(timezone=True), onupdate=func.now(), nullable=False)
     is_deleted = Column(Boolean, default=False, nullable=False)  # Soft delete flag
-    active_game = Column(UUID(as_uuid=True), ForeignKey('games.id'), nullable=True)  # Currently active game
+    active_game = Column('active_in_game_id', UUID(as_uuid=True), ForeignKey('games.id'), nullable=True)  # Game character is locked to
     hp_max = Column(Integer, default=10, nullable=False)
     hp_current = Column(Integer, default=10, nullable=False)
     ac = Column(Integer, default=10, nullable=False)
+    is_alive = Column(Boolean, default=True, nullable=False)  # Character alive status
     
     # No relationships - follow DDD principle of reference by ID only
     # Characters are referenced by Game via game_characters association table

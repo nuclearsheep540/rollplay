@@ -1,0 +1,1 @@
+- when I ask to make patch notes remember to check the rollplay/patch_notes/ directory for the naming convention and style conventions of writing. remember to keep things simple, and feature led on the bullet points

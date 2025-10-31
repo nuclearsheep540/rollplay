@@ -17,18 +17,30 @@ game_invites = Table(
     Column('game_id', UUID(as_uuid=True), ForeignKey('games.id', ondelete='CASCADE'), primary_key=True),
     Column('user_id', UUID(as_uuid=True), ForeignKey('users.id', ondelete='CASCADE'), primary_key=True),
     Column('invited_at', DateTime(timezone=True), server_default=func.now(), nullable=False),
-    Column('invited_by', UUID(as_uuid=True), ForeignKey('users.id'), nullable=False)
+    Column('invited_by', UUID(as_uuid=True), ForeignKey('users.id'), nullable=True)
 )
 
 
-# Association table: Tracks active players (Character → Game, after character selection)
-game_characters = Table(
-    'game_characters',
-    Base.metadata,
-    Column('game_id', UUID(as_uuid=True), ForeignKey('games.id', ondelete='CASCADE'), primary_key=True),
-    Column('character_id', UUID(as_uuid=True), ForeignKey('characters.id', ondelete='CASCADE'), primary_key=True),
-    Column('joined_at', DateTime(timezone=True), server_default=func.now(), nullable=False)
-)
+# Note: game_characters table removed - character association now tracked in game_joined_users.selected_character_id
+# Active characters tracked in MongoDB active_session during live gameplay
+
+
+class GameJoinedUser(Base):
+    """Association table for users who have accepted invite and joined the roster"""
+    __tablename__ = 'game_joined_users'
+
+    game_id = Column(UUID(as_uuid=True), ForeignKey('games.id', ondelete='CASCADE'), primary_key=True)
+    user_id = Column(UUID(as_uuid=True), ForeignKey('users.id', ondelete='CASCADE'), primary_key=True)
+    joined_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    selected_character_id = Column(UUID(as_uuid=True), ForeignKey('characters.id', ondelete='SET NULL'), nullable=True)
+
+    # Relationships for easy access
+    game = relationship("Game", backref="roster_entries")
+    user = relationship("User", backref="joined_games")
+    character = relationship("Character", backref="selected_for_games")
+
+    def __repr__(self):
+        return f"<GameJoinedUser(game_id={self.game_id}, user_id={self.user_id}, character_id={self.selected_character_id})>"
 
 
 class Game(Base):
@@ -59,13 +71,8 @@ class Game(Base):
         lazy="joined"
     )
 
-    # Many-to-many: Characters who have joined the game
-    player_characters = relationship(
-        "Character",
-        secondary=game_characters,
-        backref="games",
-        lazy="joined"
-    )
+    # Joined users are accessed via game_joined_users table (not a simple relationship)
+    # Use repository methods to fetch joined_users list
 
     def __repr__(self):
         return f"<Game(id={self.id}, name='{self.name}', campaign_id={self.campaign_id}, status='{self.status}')>"

@@ -25,6 +25,8 @@ def configure_mappers():
     from modules.characters.model.character_model import Character
     from modules.campaign.model.campaign_model import Campaign
     from modules.campaign.model.game_model import Game
+    from modules.friendship.model.friendship_model import FriendshipModel
+    from modules.friendship.model.friend_request_model import FriendRequestModel
     # Import any other models from other aggregates
 
     # Configure the registry

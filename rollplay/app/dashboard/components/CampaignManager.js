@@ -6,10 +6,8 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { useRouter } from 'next/navigation'
 
 export default function CampaignManager({ user }) {
-  const router = useRouter()
   const [campaigns, setCampaigns] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
@@ -20,10 +18,7 @@ export default function CampaignManager({ user }) {
   const [deletingCampaign, setDeletingCampaign] = useState(null)
   const [selectedCampaign, setSelectedCampaign] = useState(null)
   const [allGames, setAllGames] = useState([]) // Store all games from all campaigns
-  const [creatingGame, setCreatingGame] = useState(null)
-  const [endingGame, setEndingGame] = useState(null)
-  const [deletingGame, setDeletingGame] = useState(null)
-  const [joiningGame, setJoiningGame] = useState(null)
+  const [creatingGame, setCreatingGame] = useState(false) // For game creation modal
   const [showGameModal, setShowGameModal] = useState(false)
   const [gameName, setGameName] = useState('')
   const [gameMaxPlayers, setGameMaxPlayers] = useState(8)
@@ -109,7 +104,7 @@ export default function CampaignManager({ user }) {
   const createGame = async () => {
     if (!selectedCampaignForGame) return
 
-    setCreatingGame(selectedCampaignForGame)
+    setCreatingGame(true)
     setError(null)
 
     try {
@@ -143,113 +138,11 @@ export default function CampaignManager({ user }) {
       console.error('Error creating game:', error)
       setError('Failed to create game: ' + error.message)
     } finally {
-      setCreatingGame(null)
+      setCreatingGame(false)
     }
   }
 
-  // Start game session (cold → hot storage migration)
-  const startGameSession = async (gameId) => {
-    setCreatingGame(gameId)
-    setError(null)
-
-    try {
-      const response = await fetch(`/api/games/${gameId}/start`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        credentials: 'include'
-      })
-
-      if (response.ok) {
-        const gameData = await response.json()
-        console.log('Game session started:', gameData)
-
-        // Update the game in local state directly (faster than refetching)
-        setAllGames(prevGames =>
-          prevGames.map(g => g.id === gameId ? gameData : g)
-        )
-
-        // Clear loading state so button switches to "Join Game"
-        setCreatingGame(null)
-      } else {
-        const errorData = await response.json()
-        setCreatingGame(null)
-        throw new Error(errorData.detail || 'Failed to start game session')
-      }
-    } catch (error) {
-      console.error('Error starting game session:', error)
-      setError('Failed to start game session: ' + error.message)
-      setCreatingGame(null)
-    }
-  }
-
-  // End game session (hot → cold storage migration)
-  const endGameSession = async (gameId) => {
-    setEndingGame(gameId)
-    setError(null)
-
-    try {
-      const response = await fetch(`/api/games/${gameId}/end`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        credentials: 'include'
-      })
-
-      if (response.ok) {
-        const result = await response.json()
-        console.log('Game session ended:', result)
-
-        // Refresh campaigns and games
-        await fetchCampaigns()
-      } else {
-        const errorData = await response.json()
-        throw new Error(errorData.detail || 'Failed to end game session')
-      }
-    } catch (error) {
-      console.error('Error ending game session:', error)
-      setError('Failed to end game session: ' + error.message)
-    } finally {
-      setEndingGame(null)
-    }
-  }
-
-  // Delete game (only if INACTIVE)
-  const deleteGame = async (gameId, gameName) => {
-    if (!confirm(`Are you sure you want to delete "${gameName || 'this game'}"?\n\nAll progress on this game will be lost. This action cannot be undone.`)) {
-      return
-    }
-
-    setDeletingGame(gameId)
-    setError(null)
-
-    try {
-      const response = await fetch(`/api/games/${gameId}`, {
-        method: 'DELETE',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        credentials: 'include'
-      })
-
-      if (response.ok) {
-        console.log('Game deleted successfully')
-
-        // Refresh campaigns and games
-        await fetchCampaigns()
-      } else {
-        const errorData = await response.json()
-        throw new Error(errorData.detail || 'Failed to delete game')
-      }
-    } catch (error) {
-      console.error('Error deleting game:', error)
-      setError('Failed to delete game: ' + error.message)
-    } finally {
-      setDeletingGame(null)
-    }
-  }
+  // Game session controls (Start, End, Delete, Invite) moved to Games tab
 
   // Create a new campaign
   const createCampaign = async () => {
@@ -536,7 +429,7 @@ export default function CampaignManager({ user }) {
           {selectedCampaign ? (
             <>
               <h3 className="text-lg font-semibold text-gray-700">
-                {selectedCampaign.name} - Game Sessions
+                Game Sessions
               </h3>
               <div className="bg-white p-4 rounded-lg shadow-md border border-gray-200">
                 <div className="mb-4">
@@ -570,45 +463,7 @@ export default function CampaignManager({ user }) {
                             </p>
                           </div>
                           <div className="flex space-x-2">
-                            {game.status === 'inactive' && (
-                                  <>
-                                    <button
-                                      onClick={() => startGameSession(game.id)}
-                                      disabled={creatingGame === game.id}
-                                      className="bg-green-600 hover:bg-green-700 text-white px-3 py-1 rounded text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-                                    >
-                                      {creatingGame === game.id ? 'Session Loading...' : 'Start Game'}
-                                    </button>
-                                    <button
-                                      onClick={() => deleteGame(game.id, game.name)}
-                                      disabled={deletingGame === game.id}
-                                      className="bg-red-600 hover:bg-red-700 text-white px-3 py-1 rounded text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-                                    >
-                                      {deletingGame === game.id ? 'Deleting...' : 'Delete'}
-                                    </button>
-                                  </>
-                                )}
-                                {game.status === 'active' && (
-                                  <>
-                                    <button
-                                      onClick={() => {
-                                        setJoiningGame(game.id)
-                                        router.push(`/game?room_id=${game.session_id}`)
-                                      }}
-                                      disabled={joiningGame === game.id}
-                                      className="bg-blue-600 hover:bg-blue-700 text-white px-3 py-1 rounded text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-                                    >
-                                      {joiningGame === game.id ? 'Joining...' : 'Join Game'}
-                                    </button>
-                                    <button
-                                      onClick={() => endGameSession(game.id)}
-                                      disabled={endingGame === game.id}
-                                      className="bg-orange-600 hover:bg-orange-700 text-white px-3 py-1 rounded text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-                                    >
-                                      {endingGame === game.id ? 'Ending...' : 'End Game'}
-                                    </button>
-                                  </>
-                                )}
+                            {/* Game session controls moved to Games tab */}
                           </div>
                         </div>
                         ))}
@@ -734,6 +589,7 @@ export default function CampaignManager({ user }) {
           </div>
         </div>
       )}
+
     </div>
   )
 }

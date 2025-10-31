@@ -108,6 +108,10 @@ class CharacterAggregate:
     Character aggregate root - represents a player character in the game.
 
     Characters are created by users and represent their in-game personas.
+
+    Locking:
+    - active_game: UUID of game character is locked to (can only be in one game at a time)
+    - is_alive: Whether character is alive (for D&D death mechanics)
     """
     id: Optional[UUID]
     user_id: UUID
@@ -122,7 +126,8 @@ class CharacterAggregate:
     hp_current: int
     ac: int
     is_deleted: bool = False
-    active_game: Optional[UUID] = None  # the gameID they're associated with
+    active_game: Optional[UUID] = None  # Game character is locked to
+    is_alive: bool = True  # Character alive status (D&D death mechanics)
 
     @classmethod
     def create(
@@ -189,7 +194,8 @@ class CharacterAggregate:
             created_at=now,
             updated_at=now,
             is_deleted=False,
-            active_game=active_game,
+            active_game=None,  # New characters not locked to any game
+            is_alive=True,  # New characters start alive
             hp_max=hp_max,
             hp_current=hp_current,
             ac=ac
@@ -205,12 +211,14 @@ class CharacterAggregate:
 
     def can_be_deleted(self) -> bool:
         """
-        Business rule: Characters can be deleted if not in active games.
-
-        Note: This would need to check for active game participation.
-        For now, always allow deletion (business rules can be added later).
+        Business rule: Characters cannot be deleted if locked to a game.
+        Must leave game first to unlock character before deletion.
         """
-        return True
+        return self.active_game is None
+
+    def is_locked(self) -> bool:
+        """Check if character is locked to a game."""
+        return self.active_game is not None
 
     def get_display_name(self) -> str:
         """Get formatted display name"""
@@ -276,20 +284,43 @@ class CharacterAggregate:
 
         self.updated_at = datetime.now()
 
-    def join_game(self, game_id):
+    def lock_to_game(self, game_id: UUID) -> None:
         """
-        Joins the character to a game.id
-        Characters can only join one game at a time
+        Lock character to a specific game.
+        Characters can only be locked to one game at a time.
+
+        Business Rules:
+        - Character must not already be locked
+        - Dead characters can still be locked (they remain in roster)
         """
-        if self.active_game:
-            return ValueError("Character is already in a game")
+        if self.active_game is not None:
+            raise ValueError(f"Character already locked to game {self.active_game}")
 
         self.active_game = game_id
-        return game_id
-    
-    def leave_game(self, game_id):
+        self.updated_at = datetime.now()
+
+    def unlock_from_game(self) -> None:
         """
-        Removes the character from its associated game
+        Unlock character from game.
+        Allows character to be used in another game or deleted.
         """
         self.active_game = None
+        self.updated_at = datetime.now()
+
+    def mark_dead(self) -> None:
+        """
+        Mark character as dead (D&D death mechanics).
+        Character remains locked to game, user must select new character.
+        """
+        self.is_alive = False
+        self.hp_current = 0
+        self.updated_at = datetime.now()
+
+    def resurrect(self) -> None:
+        """
+        Bring character back to life (resurrection spell, etc.).
+        """
+        self.is_alive = True
+        self.hp_current = 1  # Revived with 1 HP
+        self.updated_at = datetime.now()
 

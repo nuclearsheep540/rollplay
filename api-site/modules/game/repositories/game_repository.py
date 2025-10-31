@@ -4,10 +4,10 @@
 from typing import List, Optional
 from uuid import UUID
 from sqlalchemy.orm import Session
+from sqlalchemy import text
 
 from modules.campaign.model.game_model import Game as GameModel
 from modules.user.model.user_model import User
-from modules.characters.model.character_model import Character
 from modules.game.domain.game_aggregate import GameAggregate, GameStatus
 
 
@@ -68,9 +68,8 @@ class GameRepository:
             invited_user_models = self.db.query(User).filter(User.id.in_(aggregate.invited_users)).all()
             model.invited_users = invited_user_models
 
-            # Sync player_characters relationship
-            character_models = self.db.query(Character).filter(Character.id.in_(aggregate.player_characters)).all()
-            model.player_characters = character_models
+            # Sync joined_users (game_joined_users table)
+            self._sync_joined_users(model.id, aggregate.joined_users)
 
         else:
             # Create new
@@ -94,10 +93,9 @@ class GameRepository:
                 invited_user_models = self.db.query(User).filter(User.id.in_(aggregate.invited_users)).all()
                 model.invited_users = invited_user_models
 
-            # Set player_characters relationship
-            if aggregate.player_characters:
-                character_models = self.db.query(Character).filter(Character.id.in_(aggregate.player_characters)).all()
-                model.player_characters = character_models
+            # Set joined_users (game_joined_users table)
+            if aggregate.joined_users:
+                self._sync_joined_users(model.id, aggregate.joined_users)
 
         self.db.commit()
         self.db.refresh(model)
@@ -128,8 +126,46 @@ class GameRepository:
         self.db.commit()
         return True
 
+    def _sync_joined_users(self, game_id: UUID, joined_user_ids: List[UUID]) -> None:
+        """
+        Sync joined_users list with game_joined_users table.
+        This maintains the roster of users who have accepted invites.
+        """
+        # Get current joined users
+        current_joined = self.db.execute(
+            text("SELECT user_id FROM game_joined_users WHERE game_id = :game_id"),
+            {"game_id": game_id}
+        ).fetchall()
+        # Convert to UUID objects if they're strings (SQLite compatibility)
+        current_user_ids = {UUID(row[0]) if isinstance(row[0], str) else row[0] for row in current_joined}
+        target_user_ids = set(joined_user_ids)
+
+        # Add new joined users
+        to_add = target_user_ids - current_user_ids
+        for user_id in to_add:
+            self.db.execute(
+                text("INSERT INTO game_joined_users (game_id, user_id) VALUES (:game_id, :user_id)"),
+                {"game_id": game_id, "user_id": user_id}
+            )
+
+        # Remove users who left
+        to_remove = current_user_ids - target_user_ids
+        for user_id in to_remove:
+            self.db.execute(
+                text("DELETE FROM game_joined_users WHERE game_id = :game_id AND user_id = :user_id"),
+                {"game_id": game_id, "user_id": user_id}
+            )
+
     def _model_to_aggregate(self, model: GameModel) -> GameAggregate:
         """Helper to convert game model to aggregate"""
+        # Fetch joined_users from game_joined_users table
+        joined_users_result = self.db.execute(
+            text("SELECT user_id FROM game_joined_users WHERE game_id = :game_id"),
+            {"game_id": model.id}
+        ).fetchall()
+        # Convert to UUID objects if they're strings (SQLite compatibility)
+        joined_user_ids = [UUID(row[0]) if isinstance(row[0], str) else row[0] for row in joined_users_result]
+
         return GameAggregate(
             id=model.id,
             name=model.name,
@@ -141,6 +177,6 @@ class GameRepository:
             stopped_at=model.stopped_at,
             session_id=model.session_id,
             invited_users=[user.id for user in model.invited_users],
-            player_characters=[char.id for char in model.player_characters],
+            joined_users=joined_user_ids,
             max_players=model.max_players
         )
