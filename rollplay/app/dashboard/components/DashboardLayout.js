@@ -7,6 +7,15 @@
 
 import { useRouter, useSearchParams } from 'next/navigation'
 import { useEffect } from 'react'
+import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
+import {
+  faUsers,
+  faMap,
+  faDiceD20,
+  faUserGroup,
+  faUser,
+  faRightFromBracket
+} from '@fortawesome/free-solid-svg-icons'
 
 export default function DashboardLayout({ 
   children, 
@@ -45,31 +54,33 @@ export default function DashboardLayout({
   }
 
   return (
-    <div className="min-h-screen flex flex-col bg-slate-50 text-slate-700">
+    <div className="min-h-screen flex flex-col bg-slate-950 text-slate-200">
       {/* Top Navigation Bar */}
-      <header className="bg-white p-4 shadow-md flex justify-between items-center">
-        <div className="text-2xl font-extrabold text-slate-800 flex items-center">
+      <header className="bg-gray-900 border-b border-gray-800 p-4 flex justify-between items-center">
+        <div className="text-2xl font-extrabold text-white flex items-center">
           <span>Tabletop Tavern</span>
         </div>
         <nav>
           <ul className="flex space-x-4 sm:space-x-6">
             <li>
-              <button 
+              <button
                 onClick={() => switchSection('profile')}
-                className={`flex items-center p-2 transition-colors duration-200 text-slate-700 hover:bg-slate-200 ${
-                  activeSection === 'profile' ? 'border-b-2 border-indigo-600 text-indigo-600 font-semibold' : ''
+                className={`flex items-center px-3 py-2 rounded-lg transition-all duration-200 ${
+                  activeSection === 'profile'
+                    ? 'bg-purple-500/20 text-purple-400 font-semibold'
+                    : 'text-slate-400 hover:bg-purple-500/10 hover:text-purple-300'
                 }`}
               >
-                <span className="text-xl mr-2">👤</span>
+                <FontAwesomeIcon icon={faUser} className="text-base mr-2" />
                 <span className="font-semibold hidden sm:inline">Profile</span>
               </button>
             </li>
             <li>
-              <button 
+              <button
                 onClick={onLogout}
-                className="flex items-center p-2 transition-colors duration-200 text-slate-600 hover:bg-slate-200"
+                className="flex items-center px-3 py-2 rounded-lg transition-all duration-200 text-slate-400 hover:bg-red-500/10 hover:text-red-400"
               >
-                <span className="text-xl mr-2">🚪</span>
+                <FontAwesomeIcon icon={faRightFromBracket} className="text-base mr-2" />
                 <span className="font-semibold hidden sm:inline">Logout</span>
               </button>
             </li>
@@ -79,55 +90,63 @@ export default function DashboardLayout({
 
       <div className="flex flex-1">
         {/* Sidebar Navigation */}
-        <aside className="w-64 bg-slate-200 p-4 flex flex-col justify-between shadow-lg">
+        <aside className="w-64 bg-gray-900 border-r border-gray-800 p-4 flex flex-col justify-between">
           <div>
             <nav>
-              <ul>
-                <li className="mb-4">
-                  <button 
+              <ul className="space-y-1">
+                <li>
+                  <button
                     onClick={() => switchSection('characters')}
-                    className={`w-full flex items-center p-3 transition-colors duration-200 text-slate-700 hover:bg-slate-300 ${
-                      activeSection === 'characters' ? 'border-l-4 border-indigo-600 text-indigo-600 font-semibold bg-indigo-100' : ''
+                    className={`w-full flex items-center p-3 transition-all duration-200 ${
+                      activeSection === 'characters'
+                        ? 'border-l-[3px] border-purple-500 text-purple-400 font-semibold'
+                        : 'border-l-[3px] border-transparent text-slate-400 hover:bg-purple-500/5 hover:text-slate-300'
                     }`}
                     title="Characters"
                   >
-                    <span className="text-xl mr-3">👥</span>
+                    <FontAwesomeIcon icon={faUsers} className="text-base mr-3 w-5" />
                     <span className="font-semibold">Characters</span>
                   </button>
                 </li>
-                <li className="mb-4">
+                <li>
                   <button
                     onClick={() => switchSection('campaigns')}
-                    className={`w-full flex items-center p-3 transition-colors duration-200 text-slate-700 hover:bg-slate-300 ${
-                      activeSection === 'campaigns' ? 'border-l-4 border-indigo-600 text-indigo-600 font-semibold bg-indigo-100' : ''
+                    className={`w-full flex items-center p-3 transition-all duration-200 ${
+                      activeSection === 'campaigns'
+                        ? 'border-l-[3px] border-purple-500 text-purple-400 font-semibold'
+                        : 'border-l-[3px] border-transparent text-slate-400 hover:bg-purple-500/5 hover:text-slate-300'
                     }`}
                     title="Campaigns"
                   >
-                    <span className="text-xl mr-3">🗺️</span>
+                    <FontAwesomeIcon icon={faMap} className="text-base mr-3 w-5" />
                     <span className="font-semibold">Campaigns</span>
                   </button>
                 </li>
-                <li className="mb-4">
+                <li>
                   <button
                     onClick={() => switchSection('games')}
-                    className={`w-full flex items-center p-3 transition-colors duration-200 text-slate-700 hover:bg-slate-300 ${
-                      activeSection === 'games' ? 'border-l-4 border-indigo-600 text-indigo-600 font-semibold bg-indigo-100' : ''
+                    className={`w-full flex items-center p-3 transition-all duration-200 ${
+                      activeSection === 'games'
+                        ? 'border-l-[3px] border-purple-500 text-purple-400 font-semibold'
+                        : 'border-l-[3px] border-transparent text-slate-400 hover:bg-purple-500/5 hover:text-slate-300'
                     }`}
                     title="Games"
                   >
-                    <span className="text-xl mr-3">🎲</span>
+                    <FontAwesomeIcon icon={faDiceD20} className="text-base mr-3 w-5" />
                     <span className="font-semibold">Games</span>
                   </button>
                 </li>
-                <li className="mb-4">
+                <li>
                   <button
                     onClick={() => switchSection('friends')}
-                    className={`w-full flex items-center p-3 transition-colors duration-200 text-slate-700 hover:bg-slate-300 ${
-                      activeSection === 'friends' ? 'border-l-4 border-indigo-600 text-indigo-600 font-semibold bg-indigo-100' : ''
+                    className={`w-full flex items-center p-3 transition-all duration-200 ${
+                      activeSection === 'friends'
+                        ? 'border-l-[3px] border-purple-500 text-purple-400 font-semibold'
+                        : 'border-l-[3px] border-transparent text-slate-400 hover:bg-purple-500/5 hover:text-slate-300'
                     }`}
                     title="Friends"
                   >
-                    <span className="text-xl mr-3">👫</span>
+                    <FontAwesomeIcon icon={faUserGroup} className="text-base mr-3 w-5" />
                     <span className="font-semibold">Friends</span>
                   </button>
                 </li>

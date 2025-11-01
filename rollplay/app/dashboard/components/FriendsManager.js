@@ -6,6 +6,15 @@
 'use client'
 
 import { useState, useEffect } from 'react'
+import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
+import {
+  faUserPlus,
+  faUserCheck,
+  faUserXmark,
+  faUserMinus,
+  faUndo,
+  faCopy
+} from '@fortawesome/free-solid-svg-icons'
 
 export default function FriendsManager({ user }) {
   const [friends, setFriends] = useState([])
@@ -15,6 +24,7 @@ export default function FriendsManager({ user }) {
   const [sending, setSending] = useState(false)
   const [actionLoading, setActionLoading] = useState({})
   const [lookupUser, setLookupUser] = useState(null)
+  const [copiedUuid, setCopiedUuid] = useState(false)
   const [lookupLoading, setLookupLoading] = useState(false)
   const [lookupError, setLookupError] = useState(null)
 
@@ -26,6 +36,13 @@ export default function FriendsManager({ user }) {
   const isValidUUID = (uuid) => {
     const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
     return uuidRegex.test(uuid)
+  }
+
+  // Copy UUID to clipboard
+  const handleCopyUuid = async () => {
+    await navigator.clipboard.writeText(user.id)
+    setCopiedUuid(true)
+    setTimeout(() => setCopiedUuid(false), 2000)
   }
 
   // Lookup user by UUID when valid UUID is entered
@@ -227,26 +244,28 @@ export default function FriendsManager({ user }) {
   if (loading) {
     return (
       <div className="flex items-center justify-center py-12">
-        <div className="text-slate-600">Loading friends...</div>
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-purple-500 mr-3"></div>
+        <div className="text-slate-400">Loading friends...</div>
       </div>
     )
   }
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <h1 className="text-3xl font-bold text-slate-800">Friends</h1>
+      <div className="mb-8">
+        <h1 className="text-4xl font-bold text-white uppercase">Friends</h1>
+        <p className="mt-2 text-slate-400">Manage your friend connections and invitations</p>
       </div>
 
       {error && (
-        <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded">
+        <div className="bg-red-500/20 border border-red-500/30 text-red-400 px-4 py-3 rounded">
           {error}
         </div>
       )}
 
       {/* Add Friend Form */}
-      <div className="bg-white p-6 rounded-lg shadow">
-        <h2 className="text-xl font-semibold text-slate-800 mb-4">Add Friend</h2>
+      <div className="bg-slate-800 p-6 rounded-lg border border-purple-500/30 max-w-xl mx-auto">
+        <h2 className="text-xl font-semibold text-purple-400 mb-4">Add Friend</h2>
         <form onSubmit={sendFriendRequest} className="space-y-3">
           <div>
             <input
@@ -254,7 +273,7 @@ export default function FriendsManager({ user }) {
               value={friendUuid}
               onChange={(e) => setFriendUuid(e.target.value)}
               placeholder="Enter friend's UUID"
-              className="w-full px-4 py-2 border border-slate-300 rounded focus:outline-none focus:ring-2 focus:ring-indigo-500"
+              className="w-full px-4 py-2 bg-slate-700 border border-slate-600 text-slate-200 rounded focus:outline-none focus:ring-2 focus:ring-purple-500"
               disabled={sending}
             />
             {/* Real-time lookup feedback */}
@@ -266,15 +285,19 @@ export default function FriendsManager({ user }) {
                   </p>
                 )}
                 {!lookupLoading && lookupUser && (
-                  <div className="p-3 bg-green-50 border border-green-200 rounded">
-                    <p className="text-sm text-green-800 font-semibold">
-                      ✓ User found: {lookupUser.screen_name || 'User #' + lookupUser.id.substring(0, 8)}
+                  <div className="p-3 bg-green-500/20 border border-green-500/30 rounded">
+                    <p className="text-sm text-green-400 font-semibold flex items-center gap-2">
+                      <FontAwesomeIcon icon={faUserCheck} />
+                      User found: {lookupUser.screen_name || 'User #' + lookupUser.id.substring(0, 8)}
                     </p>
-                    <p className="text-xs text-green-600">ID: {lookupUser.id}</p>
+                    <p className="text-xs text-green-500">ID: {lookupUser.id}</p>
                   </div>
                 )}
                 {!lookupLoading && lookupError && (
-                  <p className="text-sm text-red-600">✗ {lookupError}</p>
+                  <p className="text-sm text-red-400 flex items-center gap-2">
+                    <FontAwesomeIcon icon={faUserXmark} />
+                    {lookupError}
+                  </p>
                 )}
               </div>
             )}
@@ -282,22 +305,75 @@ export default function FriendsManager({ user }) {
           <button
             type="submit"
             disabled={sending || !lookupUser}
-            className="w-full px-6 py-2 bg-indigo-600 text-white rounded hover:bg-indigo-700 disabled:bg-slate-400 disabled:cursor-not-allowed transition-colors font-semibold"
+            className="w-full px-6 py-2 bg-purple-600 text-white rounded-lg border border-purple-500 hover:bg-purple-500 hover:shadow-lg hover:shadow-purple-500/30 disabled:bg-slate-600 disabled:border-slate-600 disabled:cursor-not-allowed transition-all font-semibold flex items-center justify-center gap-2"
           >
-            {sending ? 'Sending...' : lookupUser ? `Send Friend Request to ${lookupUser.screen_name || 'User'}` : 'Send Friend Request'}
+            {sending ? (
+              <>
+                <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                Sending...
+              </>
+            ) : (
+              <>
+                <FontAwesomeIcon icon={faUserPlus} />
+                {lookupUser ? `Send Request to ${lookupUser.screen_name || 'User'}` : 'Send Friend Request'}
+              </>
+            )}
           </button>
         </form>
-        <p className="text-sm text-slate-600 mt-4">
-          Your UUID: <code className="bg-slate-100 px-2 py-1 rounded text-xs">{user.id}</code>
-        </p>
+        <div className="mt-4 flex items-center gap-2">
+          <p className="text-sm text-slate-400">
+            Your UUID: <code className="bg-slate-900 border border-slate-700 px-2 py-1 rounded text-xs font-mono text-purple-400">{user.id}</code>
+          </p>
+          <button
+            onClick={handleCopyUuid}
+            className="px-3 py-0.5 bg-purple-500/20 text-purple-400 border border-purple-500/30 rounded-lg font-semibold text-sm flex items-center"
+            title="Copy UUID"
+          >
+            <FontAwesomeIcon icon={faCopy} className="text-xs" />
+            {copiedUuid ? 'Copied!' : 'Copy'}
+          </button>
+        </div>
+      </div>
+
+      {/* Accepted Friends */}
+      <div className="bg-slate-800 p-6 rounded-lg border border-purple-500/30">
+        <h2 className="text-xl font-semibold text-purple-400 mb-4">
+          Friends ({acceptedFriends.length})
+        </h2>
+        {acceptedFriends.length === 0 ? (
+          <p className="text-slate-400">No friends yet. Add some friends to get started!</p>
+        ) : (
+          <div className="space-y-3">
+            {acceptedFriends.map((friendship) => (
+              <div
+                key={friendship.id}
+                className="flex items-center justify-between p-4 bg-slate-900 rounded border border-slate-700"
+              >
+                <div>
+                  <p className="font-semibold text-slate-200">
+                    {friendship.friend_screen_name || 'User'}
+                  </p>
+                  <p className="text-sm text-slate-500 font-mono">ID: {friendship.friend_id}</p>
+                </div>
+                <button
+                  onClick={() => removeFriend(friendship.friend_id)}
+                  disabled={actionLoading[`remove-${friendship.friend_id}`]}
+                  className="px-4 py-2 bg-red-600 text-white rounded hover:bg-red-700 disabled:bg-slate-400 disabled:cursor-not-allowed transition-colors"
+                >
+                  Remove
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
 
       {/* Pending Requests (Received from others) */}
-      <div className="bg-white p-6 rounded-lg shadow">
-        <h2 className="text-xl font-semibold text-slate-800 mb-4">
+      <div className="bg-slate-800 p-6 rounded-lg border border-purple-500/30">
+        <h2 className="text-xl font-semibold text-purple-400 mb-4">
           Pending Requests ({pendingReceived.length})
         </h2>
-        <p className="text-sm text-slate-600 mb-4">Friend requests you've received from other players</p>
+        <p className="text-sm text-slate-400 mb-4">Friend requests you've received from other players</p>
         {pendingReceived.length === 0 ? (
           <p className="text-slate-500 text-sm py-4">No pending requests</p>
         ) : (
@@ -305,27 +381,29 @@ export default function FriendsManager({ user }) {
             {pendingReceived.map((request) => (
               <div
                 key={request.id}
-                className="flex items-center justify-between p-4 bg-slate-50 rounded border border-slate-200"
+                className="flex items-center justify-between p-4 bg-slate-900 rounded border border-slate-700"
               >
                 <div>
-                  <p className="font-semibold text-slate-800">
+                  <p className="font-semibold text-slate-200">
                     {request.requester_screen_name || 'User'}
                   </p>
-                  <p className="text-sm text-slate-600">ID: {request.requester_id}</p>
+                  <p className="text-sm text-slate-500 font-mono">ID: {request.requester_id}</p>
                 </div>
                 <div className="flex gap-2">
                   <button
                     onClick={() => acceptFriendRequest(request.requester_id)}
                     disabled={actionLoading[`accept-${request.requester_id}`]}
-                    className="px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700 disabled:bg-slate-400 disabled:cursor-not-allowed transition-colors"
+                    className="px-4 py-2 bg-green-600 text-white rounded-lg border border-green-500 hover:bg-green-500 hover:shadow-lg hover:shadow-green-500/30 disabled:bg-slate-600 disabled:border-slate-600 disabled:cursor-not-allowed transition-all flex items-center gap-2"
                   >
+                    <FontAwesomeIcon icon={faUserCheck} />
                     Accept
                   </button>
                   <button
                     onClick={() => rejectFriendRequest(request.requester_id)}
                     disabled={actionLoading[`reject-${request.requester_id}`]}
-                    className="px-4 py-2 bg-red-600 text-white rounded hover:bg-red-700 disabled:bg-slate-400 disabled:cursor-not-allowed transition-colors"
+                    className="px-4 py-2 bg-red-600 text-white rounded-lg border border-red-500 hover:bg-red-500 hover:shadow-lg hover:shadow-red-500/30 disabled:bg-slate-600 disabled:border-slate-600 disabled:cursor-not-allowed transition-all flex items-center gap-2"
                   >
+                    <FontAwesomeIcon icon={faUserXmark} />
                     Reject
                   </button>
                 </div>
@@ -336,11 +414,11 @@ export default function FriendsManager({ user }) {
       </div>
 
       {/* Pending Invites (Sent by you) */}
-      <div className="bg-white p-6 rounded-lg shadow">
-        <h2 className="text-xl font-semibold text-slate-800 mb-4">
+      <div className="bg-slate-800 p-6 rounded-lg border border-purple-500/30">
+        <h2 className="text-xl font-semibold text-purple-400 mb-4">
           Pending Invites ({pendingSent.length})
         </h2>
-        <p className="text-sm text-slate-600 mb-4">Friend invites you've sent to other players</p>
+        <p className="text-sm text-slate-400 mb-4">Friend invites you've sent to other players</p>
         {pendingSent.length === 0 ? (
           <p className="text-slate-500 text-sm py-4">No pending invites</p>
         ) : (
@@ -348,13 +426,13 @@ export default function FriendsManager({ user }) {
             {pendingSent.map((request) => (
               <div
                 key={request.id}
-                className="flex items-center justify-between p-4 bg-slate-50 rounded border border-slate-200"
+                className="flex items-center justify-between p-4 bg-slate-900 rounded border border-slate-700"
               >
                 <div>
-                  <p className="font-semibold text-slate-800">
+                  <p className="font-semibold text-slate-200">
                     {request.recipient_screen_name || 'User'}
                   </p>
-                  <p className="text-sm text-slate-600">ID: {request.recipient_id}</p>
+                  <p className="text-sm text-slate-500 font-mono">ID: {request.recipient_id}</p>
                   <p className="text-xs text-slate-500 mt-1">Waiting for response...</p>
                 </div>
                 <button
@@ -363,39 +441,6 @@ export default function FriendsManager({ user }) {
                   className="px-4 py-2 bg-slate-600 text-white rounded hover:bg-slate-700 disabled:bg-slate-400 disabled:cursor-not-allowed transition-colors"
                 >
                   Cancel
-                </button>
-              </div>
-            ))}
-          </div>
-        )}
-      </div>
-
-      {/* Accepted Friends */}
-      <div className="bg-white p-6 rounded-lg shadow">
-        <h2 className="text-xl font-semibold text-slate-800 mb-4">
-          Friends ({acceptedFriends.length})
-        </h2>
-        {acceptedFriends.length === 0 ? (
-          <p className="text-slate-600">No friends yet. Add some friends to get started!</p>
-        ) : (
-          <div className="space-y-3">
-            {acceptedFriends.map((friendship) => (
-              <div
-                key={friendship.id}
-                className="flex items-center justify-between p-4 bg-slate-50 rounded border border-slate-200"
-              >
-                <div>
-                  <p className="font-semibold text-slate-800">
-                    {friendship.friend_screen_name || 'User'}
-                  </p>
-                  <p className="text-sm text-slate-600">ID: {friendship.friend_id}</p>
-                </div>
-                <button
-                  onClick={() => removeFriend(friendship.friend_id)}
-                  disabled={actionLoading[`remove-${friendship.friend_id}`]}
-                  className="px-4 py-2 bg-red-600 text-white rounded hover:bg-red-700 disabled:bg-slate-400 disabled:cursor-not-allowed transition-colors"
-                >
-                  Remove
                 </button>
               </div>
             ))}

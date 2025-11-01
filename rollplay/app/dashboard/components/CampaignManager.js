@@ -6,6 +6,15 @@
 'use client'
 
 import { useState, useEffect } from 'react'
+import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
+import {
+  faGear,
+  faGamepad,
+  faTrash,
+  faCheck,
+  faXmark,
+  faPlus
+} from '@fortawesome/free-solid-svg-icons'
 
 export default function CampaignManager({ user }) {
   const [campaigns, setCampaigns] = useState([])
@@ -235,8 +244,8 @@ export default function CampaignManager({ user }) {
   if (loading) {
     return (
       <div className="flex items-center justify-center p-8">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
-        <span className="ml-2 text-gray-600">Loading campaigns...</span>
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-purple-500"></div>
+        <span className="ml-2 text-slate-400">Loading campaigns...</span>
       </div>
     )
   }
@@ -266,27 +275,31 @@ export default function CampaignManager({ user }) {
             #16a34a 87.5%,
             #22c55e 100%
           );
-        
+
           background-size: 400% 400%;
           animation: gradient-x 3s linear infinite;
         }
-        
+
       `}</style>
-      
+
       {/* Header */}
-      <div className="flex justify-between items-center">
-        <h2 className="text-2xl font-bold text-gray-800">Campaign Management</h2>
+      <div className="flex justify-between items-center mb-8">
+        <div>
+          <h1 className="text-4xl font-bold text-white uppercase">Campaign Management</h1>
+          <p className="mt-2 text-slate-400">Organize your adventures and game sessions</p>
+        </div>
         <button
           onClick={() => setShowCampaignModal(true)}
-          className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg font-medium transition-colors"
+          className="bg-purple-600 hover:bg-purple-500 text-white px-4 py-2.5 rounded-lg font-semibold border border-purple-500 hover:shadow-lg hover:shadow-purple-500/30 transition-all flex items-center gap-2 text-sm"
         >
+          <FontAwesomeIcon icon={faPlus} />
           Create Campaign
         </button>
       </div>
 
       {/* Error Message */}
       {error && (
-        <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded">
+        <div className="bg-red-500/20 border border-red-500/30 text-red-400 px-4 py-3 rounded">
           {error}
         </div>
       )}
@@ -295,29 +308,31 @@ export default function CampaignManager({ user }) {
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Left Column - Campaigns */}
         <div className="space-y-4">
-          <h3 className="text-lg font-semibold text-gray-700">Your Campaigns</h3>
+          <h3 className="text-lg font-semibold text-purple-400 uppercase">Your Campaigns</h3>
           {campaigns.length === 0 ? (
-            <div className="text-center py-8 text-gray-500">
-              <p>No campaigns yet. Create your first campaign to get started!</p>
+            <div className="text-center py-8 bg-slate-800 rounded-lg border border-purple-500/30">
+              <p className="text-slate-400">No campaigns yet. Create your first campaign to get started!</p>
             </div>
           ) : (
             <div className="space-y-3">
               {campaigns.map((campaign) => (
                 <div
                   key={campaign.id}
-                  className={`bg-white p-4 rounded-lg shadow-md border ${
-                    selectedCampaign?.id === campaign.id ? 'border-blue-500 bg-blue-50' : 'border-gray-200'
-                  } cursor-pointer hover:shadow-lg transition-all duration-300`}
+                  className={`bg-slate-800 p-4 rounded-lg border cursor-pointer hover:shadow-lg transition-all duration-200 ${
+                    selectedCampaign?.id === campaign.id
+                      ? 'border-purple-500 shadow-lg shadow-purple-500/30'
+                      : 'border-purple-500/30 hover:shadow-purple-500/30'
+                  }`}
                   onClick={() => showCampaignDetails(campaign)}
                 >
                   <div className="flex items-center justify-between">
                     <div className="flex items-center flex-grow">
-                      <div className="w-12 h-12 bg-indigo-100 rounded-full flex items-center justify-center text-indigo-600 text-xl font-bold mr-4 flex-shrink-0">
+                      <div className="w-12 h-12 bg-purple-500/20 border-2 border-purple-500/50 rounded-full flex items-center justify-center text-purple-400 text-xl font-bold mr-4 flex-shrink-0">
                         {campaign.title ? campaign.title[0].toUpperCase() : '?'}
                       </div>
                       <div className="flex-grow">
-                        <h4 className="text-lg font-bold text-slate-800">{campaign.title || 'Unnamed Campaign'}</h4>
-                        <p className="text-slate-600 text-sm">DM: {user?.screen_name || user?.email || 'Unknown'}</p>
+                        <h4 className="text-lg font-bold text-slate-200">{campaign.title || 'Unnamed Campaign'}</h4>
+                        <p className="text-slate-400 text-sm">DM: {user?.screen_name || user?.email || 'Unknown'}</p>
                         {/* Game Status Indicator */}
                         {(() => {
                           const campaignGames = allGames.filter(game => game.campaign_id === campaign.id)
@@ -328,37 +343,38 @@ export default function CampaignManager({ user }) {
                           
                           if (activeGames.length > 0) {
                             return (
-                              <p className="text-green-600 text-sm font-medium">
-                                🎮 Active Game: {activeGames[0].name || 'Session'}
+                              <p className="text-green-400 text-sm font-medium flex items-center gap-1">
+                                <FontAwesomeIcon icon={faGamepad} className="text-xs" />
+                                Active Game: {activeGames[0].name || 'Session'}
                               </p>
                             )
                           } else if (startingGames.length > 0) {
                             return (
-                              <p className="text-yellow-600 text-sm font-medium">
-                                ⏳ Starting: {startingGames[0].name || 'Session'}
+                              <p className="text-amber-400 text-sm font-medium">
+                                Starting: {startingGames[0].name || 'Session'}
                               </p>
                             )
                           } else if (stoppingGames.length > 0) {
                             return (
-                              <p className="text-orange-600 text-sm font-medium">
-                                ⏸️ Stopping: {stoppingGames[0].name || 'Session'}
+                              <p className="text-orange-400 text-sm font-medium">
+                                Stopping: {stoppingGames[0].name || 'Session'}
                               </p>
                             )
                           } else if (inactiveGames.length > 0) {
                             return (
                               <p className="text-slate-500 text-sm">
-                                📋 {inactiveGames.length} session{inactiveGames.length !== 1 ? 's' : ''} ready
+                                {inactiveGames.length} session{inactiveGames.length !== 1 ? 's' : ''} ready
                               </p>
                             )
                           } else {
                             return (
-                              <p className="text-slate-400 text-sm">
-                                📝 No sessions configured
+                              <p className="text-slate-500 text-sm">
+                                No sessions configured
                               </p>
                             )
                           }
                         })()}
-                        <p className="text-slate-500 text-xs mt-1">
+                        <p className="text-slate-600 text-xs mt-1">
                           Created: {campaign.created_at ? new Date(campaign.created_at).toLocaleDateString() : 'Unknown'}
                         </p>
                       </div>
@@ -389,18 +405,18 @@ export default function CampaignManager({ user }) {
                                   e.stopPropagation()
                                   showCampaignDetails(campaign)
                                 }}
-                                className="bg-blue-600 hover:bg-blue-700 text-white px-3 py-1 rounded text-sm font-medium transition-colors"
+                                className="bg-purple-500/20 hover:bg-purple-500/30 text-purple-400 border border-purple-500/30 px-3 py-1.5 rounded text-sm font-medium transition-all flex items-center gap-1"
                               >
-                                Configure
+                                <FontAwesomeIcon icon={faGear} />
                               </button>
                               <button
                                 onClick={(e) => {
                                   e.stopPropagation()
                                   openCreateGameModal(campaign.id)
                                 }}
-                                className="bg-green-600 hover:bg-green-700 text-white px-3 py-1 rounded text-sm font-medium transition-colors"
+                                className="bg-green-500/20 hover:bg-green-500/30 text-green-400 border border-green-500/30 px-3 py-1.5 rounded text-sm font-medium transition-all flex items-center gap-1"
                               >
-                                Create Game
+                                <FontAwesomeIcon icon={faGamepad} />
                               </button>
                               <button
                                 onClick={(e) => {
@@ -408,9 +424,9 @@ export default function CampaignManager({ user }) {
                                   deleteCampaign(campaign.id, campaign.title)
                                 }}
                                 disabled={deletingCampaign === campaign.id}
-                                className="bg-red-600 hover:bg-red-700 text-white px-3 py-1 rounded text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                                className="bg-red-500/20 hover:bg-red-500/30 text-red-400 border border-red-500/30 px-3 py-1.5 rounded text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed transition-all flex items-center gap-1"
                               >
-                                {deletingCampaign === campaign.id ? 'Deleting...' : 'Delete'}
+                                <FontAwesomeIcon icon={faTrash} />
                               </button>
                             </>
                           )
@@ -426,87 +442,85 @@ export default function CampaignManager({ user }) {
 
         {/* Right Column - Campaign Details */}
         <div className="space-y-4">
+          <h3 className="text-lg font-semibold text-purple-400 uppercase">
+            Game Sessions
+          </h3>
           {selectedCampaign ? (
-            <>
-              <h3 className="text-lg font-semibold text-gray-700">
-                Game Sessions
-              </h3>
-              <div className="bg-white p-4 rounded-lg shadow-md border border-gray-200">
-                <div className="mb-4">
-                  <h4 className="font-medium text-gray-800">Campaign Details</h4>
-                  <p className="text-sm text-gray-600 mt-1">{selectedCampaign.description}</p>
-                </div>
-
-                <div className="space-y-3">
-                  <h5 className="font-medium text-gray-700">Game Sessions</h5>
-                  {(() => {
-                    const campaignGames = allGames.filter(game => game.campaign_id === selectedCampaign.id)
-                    return campaignGames.length === 0 ? (
-                      <p className="text-gray-500 text-sm">No game sessions yet.</p>
-                    ) : (
-                      <div className="space-y-2">
-                        {campaignGames.map((game) => (
-                        <div
-                          key={game.id}
-                          className="flex items-center justify-between p-3 bg-gray-50 rounded border"
-                        >
-                          <div>
-                            <p className="font-medium text-gray-800">{game.name || 'Game Session'}</p>
-                            <p className="text-sm text-gray-600">
-                              Status: <span className={`font-medium ${
-                                game.status === 'active' ? 'text-green-600' : 
-                                game.status === 'inactive' ? 'text-gray-600' : 
-                                'text-yellow-600'
-                              }`}>
-                                {game.status}
-                              </span>
-                            </p>
-                          </div>
-                          <div className="flex space-x-2">
-                            {/* Game session controls moved to Games tab */}
-                          </div>
-                        </div>
-                        ))}
-                      </div>
-                    )
-                  })()}
-                </div>
+            <div className="bg-slate-800 p-4 rounded-lg border border-purple-500/30 mt-2">
+              <div className="mb-4 pb-4 border-b border-slate-700">
+                <h4 className="font-medium text-purple-400">Campaign Details</h4>
+                <p className="text-sm text-slate-400 mt-1">{selectedCampaign.description}</p>
               </div>
-            </>
+
+              <div className="space-y-3">
+                <h5 className="font-medium text-slate-300">Game Sessions</h5>
+                {(() => {
+                  const campaignGames = allGames.filter(game => game.campaign_id === selectedCampaign.id)
+                  return campaignGames.length === 0 ? (
+                    <p className="text-slate-500 text-sm">No game sessions yet.</p>
+                  ) : (
+                    <div className="space-y-2">
+                      {campaignGames.map((game) => (
+                      <div
+                        key={game.id}
+                        className="flex items-center justify-between p-3 bg-slate-900 rounded border border-slate-700"
+                      >
+                        <div>
+                          <p className="font-medium text-slate-200">{game.name || 'Game Session'}</p>
+                          <p className="text-sm text-slate-500">
+                            Status: <span className={`font-medium ${
+                              game.status === 'active' ? 'text-green-400' :
+                              game.status === 'inactive' ? 'text-slate-400' :
+                              'text-amber-400'
+                            }`}>
+                              {game.status}
+                            </span>
+                          </p>
+                        </div>
+                        <div className="flex space-x-2">
+                          {/* Game session controls moved to Games tab */}
+                        </div>
+                      </div>
+                      ))}
+                    </div>
+                  )
+                })()}
+              </div>
+            </div>
           ) : (
-            <div className="flex items-center justify-center h-64 bg-gray-50 rounded-lg border-2 border-dashed border-gray-300">
-              <p className="text-gray-500">Select a campaign to view details</p>
+            <div className="flex items-center justify-center h-64 bg-slate-800 rounded-lg border-2 border-dashed border-purple-500/30 mt-2">
+              <p className="text-slate-500">Select a campaign to view details</p>
             </div>
           )}
         </div>
       </div>
 
-      {/* Campaign Creation Modal */}
+      {/* Game Creation Modal */}
       {showGameModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white p-6 rounded-lg shadow-xl max-w-md w-full mx-4">
-            <h3 className="text-lg font-semibold mb-4">Create New Game</h3>
+        <div className="fixed inset-0 bg-slate-950/90 backdrop-blur-sm flex items-center justify-center z-50">
+          <div className="bg-slate-800 border border-purple-500/30 p-6 rounded-lg shadow-2xl shadow-purple-500/20 max-w-md w-full mx-4">
+            <h3 className="text-lg font-semibold text-purple-400 mb-4">Create New Game</h3>
             <div className="space-y-4">
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
+                <label className="block text-sm font-medium text-slate-300 mb-2">
                   Game Name
                 </label>
                 <input
                   type="text"
                   value={gameName}
                   onChange={(e) => setGameName(e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-green-500"
+                  className="w-full px-3 py-2 bg-slate-700 border border-slate-600 text-slate-200 rounded-md focus:outline-none focus:ring-2 focus:ring-purple-500"
                   placeholder="Enter game name"
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
+                <label className="block text-sm font-medium text-slate-300 mb-2">
                   Number of Seats (1-8)
                 </label>
                 <select
                   value={gameMaxPlayers}
                   onChange={(e) => setGameMaxPlayers(parseInt(e.target.value))}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-green-500"
+                  className="w-full px-3 py-2 bg-slate-700 border border-slate-600 text-slate-200 rounded-md focus:outline-none focus:ring-2 focus:ring-purple-500"
                 >
                   {[1, 2, 3, 4, 5, 6, 7, 8].map(num => (
                     <option key={num} value={num}>{num} seats</option>
@@ -514,23 +528,33 @@ export default function CampaignManager({ user }) {
                 </select>
               </div>
             </div>
-            <div className="flex justify-end space-x-3 mt-6">
+            <div className="flex justify-end gap-3 mt-6">
               <button
                 onClick={() => {
                   setShowGameModal(false)
                   setGameName('')
                   setGameMaxPlayers(8)
                 }}
-                className="px-4 py-2 text-gray-600 hover:text-gray-800"
+                className="px-4 py-2 bg-slate-700 text-slate-300 border border-slate-600 rounded-lg hover:bg-slate-600 transition-colors"
               >
                 Cancel
               </button>
               <button
                 onClick={createGame}
                 disabled={!gameName.trim() || creatingGame}
-                className="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg font-medium disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                className="bg-green-600 hover:bg-green-500 text-white px-4 py-2 rounded-lg font-medium border border-green-500 hover:shadow-lg hover:shadow-green-500/30 disabled:opacity-50 disabled:cursor-not-allowed transition-all flex items-center gap-2"
               >
-                {creatingGame ? 'Creating...' : 'Create Game'}
+                {creatingGame ? (
+                  <>
+                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                    Creating...
+                  </>
+                ) : (
+                  <>
+                    <FontAwesomeIcon icon={faPlus} />
+                    Create Game
+                  </>
+                )}
               </button>
             </div>
           </div>
@@ -538,52 +562,62 @@ export default function CampaignManager({ user }) {
       )}
 
       {showCampaignModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white p-6 rounded-lg shadow-xl max-w-md w-full mx-4">
-            <h3 className="text-lg font-semibold mb-4">Create New Campaign</h3>
+        <div className="fixed inset-0 bg-slate-950/90 backdrop-blur-sm flex items-center justify-center z-50">
+          <div className="bg-slate-800 border border-purple-500/30 p-6 rounded-lg shadow-2xl shadow-purple-500/20 max-w-md w-full mx-4">
+            <h3 className="text-lg font-semibold text-purple-400 mb-4">Create New Campaign</h3>
             <div className="space-y-4">
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
+                <label className="block text-sm font-medium text-slate-300 mb-2">
                   Campaign Title
                 </label>
                 <input
                   type="text"
                   value={campaignTitle}
                   onChange={(e) => setCampaignTitle(e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="w-full px-3 py-2 bg-slate-700 border border-slate-600 text-slate-200 rounded-md focus:outline-none focus:ring-2 focus:ring-purple-500"
                   placeholder="Enter campaign title"
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
+                <label className="block text-sm font-medium text-slate-300 mb-2">
                   Description (Optional)
                 </label>
                 <textarea
                   value={campaignDescription}
                   onChange={(e) => setCampaignDescription(e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="w-full px-3 py-2 bg-slate-700 border border-slate-600 text-slate-200 rounded-md focus:outline-none focus:ring-2 focus:ring-purple-500"
                   rows="3"
                   placeholder="Enter campaign description"
                 />
               </div>
             </div>
-            <div className="flex justify-end space-x-3 mt-6">
+            <div className="flex justify-end gap-3 mt-6">
               <button
                 onClick={() => {
                   setShowCampaignModal(false)
                   setCampaignTitle('')
                   setCampaignDescription('')
                 }}
-                className="px-4 py-2 text-gray-600 hover:text-gray-800"
+                className="px-4 py-2 bg-slate-700 text-slate-300 border border-slate-600 rounded-lg hover:bg-slate-600 transition-colors"
               >
                 Cancel
               </button>
               <button
                 onClick={createCampaign}
                 disabled={!campaignTitle.trim() || creatingCampaign}
-                className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg font-medium disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                className="bg-purple-600 hover:bg-purple-500 text-white px-4 py-2 rounded-lg font-medium border border-purple-500 hover:shadow-lg hover:shadow-purple-500/30 disabled:opacity-50 disabled:cursor-not-allowed transition-all flex items-center gap-2"
               >
-                {creatingCampaign ? 'Creating...' : 'Create Campaign'}
+                {creatingCampaign ? (
+                  <>
+                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                    Creating...
+                  </>
+                ) : (
+                  <>
+                    <FontAwesomeIcon icon={faPlus} />
+                    Create Campaign
+                  </>
+                )}
               </button>
             </div>
           </div>
