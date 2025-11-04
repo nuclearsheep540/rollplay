@@ -7,6 +7,14 @@
 
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
+import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
+import {
+  faPenToSquare,
+  faTrash,
+  faLock,
+  faPlus,
+  faCopy
+} from '@fortawesome/free-solid-svg-icons'
 
 export default function CharacterManager({ user }) {
   const router = useRouter()
@@ -101,70 +109,90 @@ export default function CharacterManager({ user }) {
     if (loading) {
       return (
         <div className="flex justify-center items-center py-8">
-          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
-          <span className="ml-2 text-gray-600">Loading characters...</span>
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-purple-500"></div>
+          <span className="ml-2 text-slate-400">Loading characters...</span>
         </div>
       )
     }
 
     if (error) {
       return (
-        <div className="bg-red-50 border border-red-200 rounded-lg p-4">
-          <p className="text-red-700">{error}</p>
+        <div className="bg-red-500/20 border border-red-500/30 rounded-lg p-4">
+          <p className="text-red-400">{error}</p>
         </div>
       )
     }
 
     if (characters.length === 0) {
       return (
-        <div className="bg-slate-50 border border-slate-200 rounded-lg p-8 text-center">
-          <p className="text-slate-600 text-lg mb-4">No characters found</p>
+        <div className="bg-slate-800 border border-purple-500/30 rounded-lg p-8 text-center">
+          <p className="text-slate-300 text-lg mb-4">No characters found</p>
           <p className="text-slate-500">Create your first character to get started!</p>
         </div>
       )
     }
 
     return characters.map((char, index) => (
-      <div key={char.id || index} className="bg-white p-4 rounded-lg shadow-md border border-gray-200 flex items-center justify-between hover:shadow-lg transition-all duration-300">
-        <div className="flex items-center flex-grow">
-          <div className="w-12 h-12 bg-indigo-100 rounded-full flex items-center justify-center text-indigo-600 text-xl font-bold mr-4 flex-shrink-0">
-            {char.character_name ? char.character_name[0].toUpperCase() : '?'}
+      <div key={char.id || index} className="bg-slate-800 rounded-lg border border-purple-500/30 transition-all duration-200 flex flex-col overflow-hidden w-full max-w-[320px] min-w-[240px] mx-auto">
+        {/* Portrait Banner Area - 3:4 aspect ratio */}
+        <div className="aspect-[3/4] w-full bg-gradient-to-br from-purple-500/20 to-purple-500/5 border-b-2 border-purple-500/50 flex items-center justify-center relative">
+          <div className="w-24 h-24 bg-purple-500/30 rounded-full flex items-center justify-center border-2 border-purple-400/50">
+            <span className="text-5xl font-bold text-purple-400">
+              {char.character_name ? char.character_name[0].toUpperCase() : '?'}
+            </span>
           </div>
-          <div className="flex-grow">
-            <div className="flex items-center gap-2">
-              <h3 className="text-lg font-bold text-slate-800">{char.character_name || 'Unnamed Character'}</h3>
-              {char.active_game && (
-                <span className="px-2 py-1 bg-green-100 text-green-700 text-xs font-semibold rounded-full">
-                  🎲 In Game
-                </span>
-              )}
+          {char.active_game && (
+            <div className="absolute top-2 right-2">
+              <span className="px-2 py-1 bg-green-500/90 backdrop-blur-sm text-white text-xs font-semibold rounded-full border border-green-400 flex items-center gap-1 shadow-lg">
+                <FontAwesomeIcon icon={faLock} className="text-xs" />
+                In Game
+              </span>
             </div>
-            <p className="text-slate-600 text-sm">Level {char.level || 1} {char.character_race || 'Unknown'} {char.character_class || 'Unknown'}</p>
-            <p className="text-slate-500 text-xs mt-1">HP: {char.hp_current || 0}/{char.hp_max || 0} | AC: {char.ac || 0}</p>
-            <p className="text-slate-500 text-xs mt-1">Created: {char.created_at ? new Date(char.created_at).toLocaleDateString() : 'Unknown'}</p>
-            {char.active_game && (
-              <p className="text-xs text-green-600 mt-1 font-semibold">
-                ⚠️ Character is currently assigned to a game and cannot be used elsewhere
-              </p>
-            )}
-          </div>
+          )}
         </div>
-        <div className="flex space-x-2 flex-shrink-0">
-          <button
-            onClick={() => router.push(`/character/edit/${char.id}`)}
-            className="p-2 rounded-full bg-slate-100 text-slate-600 hover:bg-slate-200 transition-colors"
-            title="Edit Character"
-          >
-            <span className="text-lg">✎</span>
-          </button>
-          <button
-            onClick={() => handleDeleteClick(char)}
-            className="p-2 rounded-full bg-red-100 text-red-600 hover:bg-red-200 transition-colors"
-            title="Delete Character"
-            disabled={char.active_game}
-          >
-            <span className="text-lg">🗑️</span>
-          </button>
+
+        {/* Character Info - Centered */}
+        <div className="p-4 text-center flex flex-col flex-1">
+          <h3 className="text-xl font-bold text-slate-200 mb-1 truncate px-2">
+            {char.character_name || 'Unnamed Character'}
+          </h3>
+          <p className="text-sm text-slate-400 mb-2">
+            Level {char.level || 1} {char.character_race || 'Unknown'} {char.character_class || 'Unknown'}
+          </p>
+
+          {/* Stats Row - Inline with bullets */}
+          <div className="text-xs text-slate-500 mb-2">
+            <span>HP: {char.hp_current || 0}/{char.hp_max || 0}</span>
+            <span className="mx-2">•</span>
+            <span>AC: {char.ac || 0}</span>
+          </div>
+
+          <p className="text-xs text-slate-500 mb-4">
+            Created: {char.created_at ? new Date(char.created_at).toLocaleDateString() : 'Unknown'}
+          </p>
+
+          {/* Icon-Only Action Buttons */}
+          <div className="flex justify-center gap-3 mt-auto pt-3 border-t border-slate-700">
+            <button
+              onClick={() => router.push(`/character/edit/${char.id}`)}
+              className="w-10 h-10 rounded-lg bg-purple-500/20 text-purple-400 border border-purple-500/30 hover:bg-purple-500/30 hover:shadow-lg hover:shadow-purple-500/30 transition-all flex items-center justify-center"
+              title="Edit Character"
+            >
+              <FontAwesomeIcon icon={faPenToSquare} />
+            </button>
+            <button
+              onClick={() => handleDeleteClick(char)}
+              disabled={char.active_game}
+              className={`w-10 h-10 rounded-lg border flex items-center justify-center transition-all ${
+                char.active_game
+                  ? 'bg-slate-700 text-slate-500 border-slate-600 cursor-not-allowed opacity-50'
+                  : 'bg-red-500/20 text-red-400 border-red-500/30 hover:bg-red-500/30 hover:shadow-lg hover:shadow-red-500/30'
+              }`}
+              title="Delete Character"
+            >
+              <FontAwesomeIcon icon={faTrash} />
+            </button>
+          </div>
         </div>
       </div>
     ))
@@ -174,40 +202,42 @@ export default function CharacterManager({ user }) {
     <div className="space-y-6">
       {/* Header */}
       <div className="mb-8">
-        <h1 className="text-4xl font-bold text-slate-800">Your Characters</h1>
-        <p className="mt-2 text-slate-600">This is your hub for managing all your characters. From here, you can create new heroes, edit existing ones, or get them ready for the next adventure. Each row provides detailed metadata for your characters.</p>
+        <h1 className="text-4xl font-bold text-white uppercase">Your Characters</h1>
+        <p className="mt-2 text-slate-400">Manage all your characters. Create new heroes, edit existing ones, or get them ready for the next adventure.</p>
       </div>
 
       {/* Action Buttons */}
-      <div className="flex justify-end items-center mb-6 space-x-4">
-        <button className="bg-slate-300 text-slate-800 font-semibold px-5 py-3 rounded-xl shadow-md hover:bg-slate-400 transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-slate-500 focus:ring-offset-2 flex items-center">
-          <span className="text-xl mr-2">📋</span> Clone Character
+      <div className="flex justify-end items-center mb-6 gap-3">
+        <button className="bg-slate-700 text-slate-300 font-semibold px-4 py-2.5 rounded-lg border border-slate-600 hover:bg-slate-600 hover:border-slate-500 transition-all duration-200 flex items-center gap-2 text-sm">
+          <FontAwesomeIcon icon={faCopy} />
+          Clone Character
         </button>
-        <button 
+        <button
           onClick={() => router.push('/character/create')}
-          className="bg-indigo-600 text-white font-semibold px-5 py-3 rounded-xl shadow-md hover:bg-indigo-700 transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 flex items-center"
+          className="bg-purple-600 text-white font-semibold px-4 py-2.5 rounded-lg border border-purple-500 hover:bg-purple-500 hover:shadow-lg hover:shadow-purple-500/30 transition-all duration-200 flex items-center gap-2 text-sm"
         >
-          <span className="text-xl mr-2">+</span> Create New Character
+          <FontAwesomeIcon icon={faPlus} />
+          Create New Character
         </button>
       </div>
 
-      {/* Characters List */}
-      <div className="flex flex-col gap-4">
+      {/* Characters Grid */}
+      <div className="grid gap-4" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 320px))' }}>
         {renderCharacters()}
       </div>
 
       {/* Delete Confirmation Modal */}
       {showDeleteModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg shadow-xl p-6 max-w-md w-full mx-4">
-            <h3 className="text-xl font-bold text-gray-900 mb-2">Delete Character</h3>
-            <p className="text-gray-600 mb-1">
-              Are you sure you want to delete <strong>{characterToDelete?.character_name}</strong>?
+        <div className="fixed inset-0 bg-slate-950/90 backdrop-blur-sm flex items-center justify-center z-50">
+          <div className="bg-slate-800 border border-purple-500/30 rounded-lg shadow-2xl shadow-purple-500/20 p-6 max-w-md w-full mx-4">
+            <h3 className="text-xl font-bold text-purple-400 mb-2">Delete Character</h3>
+            <p className="text-slate-300 mb-1">
+              Are you sure you want to delete <strong className="text-purple-400">{characterToDelete?.character_name}</strong>?
             </p>
-            <p className="text-sm text-gray-500 mb-4">This action cannot be undone.</p>
+            <p className="text-sm text-slate-500 mb-4">This action cannot be undone.</p>
 
             {deleteError && (
-              <div className="mb-4 bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded">
+              <div className="mb-4 bg-red-500/20 border border-red-500/30 text-red-400 px-4 py-3 rounded">
                 {deleteError}
               </div>
             )}
@@ -216,22 +246,25 @@ export default function CharacterManager({ user }) {
               <button
                 onClick={handleCancelDelete}
                 disabled={deleteLoading}
-                className="px-4 py-2 bg-gray-200 text-gray-800 rounded-lg hover:bg-gray-300 transition-colors disabled:opacity-50"
+                className="px-4 py-2 bg-slate-700 text-slate-300 border border-slate-600 rounded-lg hover:bg-slate-600 transition-colors disabled:opacity-50"
               >
                 Cancel
               </button>
               <button
                 onClick={handleConfirmDelete}
                 disabled={deleteLoading}
-                className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors disabled:opacity-50 flex items-center"
+                className="px-4 py-2 bg-red-600 text-white border border-red-500 rounded-lg hover:bg-red-500 hover:shadow-lg hover:shadow-red-500/30 transition-all disabled:opacity-50 flex items-center gap-2"
               >
                 {deleteLoading ? (
                   <>
-                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
                     Deleting...
                   </>
                 ) : (
-                  'Delete'
+                  <>
+                    <FontAwesomeIcon icon={faTrash} />
+                    Delete
+                  </>
                 )}
               </button>
             </div>

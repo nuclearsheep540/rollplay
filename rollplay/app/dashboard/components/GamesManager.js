@@ -7,8 +7,22 @@
 
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
+import { createPortal } from 'react-dom'
 import GameInviteModal from './GameInviteModal'
 import CharacterSelectionModal from './CharacterSelectionModal'
+import EndGameModal from './EndGameModal'
+import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
+import {
+  faCheck,
+  faXmark,
+  faGamepad,
+  faHourglass,
+  faUserPlus,
+  faPlay,
+  faStop,
+  faTrash,
+  faRightToBracket
+} from '@fortawesome/free-solid-svg-icons'
 
 export default function GamesManager({ user }) {
   const router = useRouter()
@@ -23,6 +37,12 @@ export default function GamesManager({ user }) {
   const [startingGame, setStartingGame] = useState(null)
   const [endingGame, setEndingGame] = useState(null)
   const [deletingGame, setDeletingGame] = useState(null)
+  const [showDeleteModal, setShowDeleteModal] = useState(false)
+  const [gameToDelete, setGameToDelete] = useState(null)
+  const [deleteLoading, setDeleteLoading] = useState(false)
+  const [deleteError, setDeleteError] = useState(null)
+  const [showEndGameModal, setShowEndGameModal] = useState(false)
+  const [gameToEnd, setGameToEnd] = useState(null)
 
   useEffect(() => {
     fetchGamesAndCharacters()
@@ -206,17 +226,27 @@ export default function GamesManager({ user }) {
     }
   }
 
-  // End game session
-  const endGame = async (gameId) => {
-    if (!confirm('Are you sure you want to end this game session? All player progress will be saved.')) {
-      return
-    }
+  // Show end game modal
+  const promptEndGame = (game) => {
+    setGameToEnd(game)
+    setShowEndGameModal(true)
+  }
 
-    setEndingGame(gameId)
+  // Cancel end game
+  const cancelEndGame = () => {
+    setShowEndGameModal(false)
+    setGameToEnd(null)
+  }
+
+  // Confirm end game
+  const confirmEndGame = async () => {
+    if (!gameToEnd) return
+
+    setEndingGame(gameToEnd.id)
     setError(null)
 
     try {
-      const response = await fetch(`/api/games/${gameId}/end`, {
+      const response = await fetch(`/api/games/${gameToEnd.id}/end`, {
         method: 'POST',
         credentials: 'include'
       })
@@ -226,6 +256,8 @@ export default function GamesManager({ user }) {
         throw new Error(errorData.detail || 'Failed to end game')
       }
 
+      setShowEndGameModal(false)
+      setGameToEnd(null)
       await fetchGamesAndCharacters()
     } catch (err) {
       console.error('Error ending game:', err)
@@ -235,17 +267,29 @@ export default function GamesManager({ user }) {
     }
   }
 
-  // Delete game
-  const deleteGame = async (gameId, gameName) => {
-    if (!confirm(`Are you sure you want to delete "${gameName}"? This action cannot be undone.`)) {
-      return
-    }
+  // Show delete confirmation modal
+  const handleDeleteClick = (game) => {
+    setGameToDelete(game)
+    setShowDeleteModal(true)
+    setDeleteError(null)
+  }
 
-    setDeletingGame(gameId)
-    setError(null)
+  // Cancel delete
+  const handleCancelDelete = () => {
+    setShowDeleteModal(false)
+    setGameToDelete(null)
+    setDeleteError(null)
+  }
+
+  // Confirm delete
+  const handleConfirmDelete = async () => {
+    if (!gameToDelete) return
+
+    setDeleteLoading(true)
+    setDeleteError(null)
 
     try {
-      const response = await fetch(`/api/games/${gameId}`, {
+      const response = await fetch(`/api/games/${gameToDelete.id}`, {
         method: 'DELETE',
         credentials: 'include'
       })
@@ -255,12 +299,15 @@ export default function GamesManager({ user }) {
         throw new Error(errorData.detail || 'Failed to delete game')
       }
 
+      // Close modal and refresh
+      setShowDeleteModal(false)
+      setGameToDelete(null)
       await fetchGamesAndCharacters()
     } catch (err) {
       console.error('Error deleting game:', err)
-      setError(err.message)
+      setDeleteError(err.message)
     } finally {
-      setDeletingGame(null)
+      setDeleteLoading(false)
     }
   }
 
@@ -272,7 +319,8 @@ export default function GamesManager({ user }) {
   if (loading) {
     return (
       <div className="flex items-center justify-center py-12">
-        <div className="text-slate-600">Loading games...</div>
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-purple-500 mr-3"></div>
+        <div className="text-slate-400">Loading games...</div>
       </div>
     )
   }
@@ -286,53 +334,37 @@ export default function GamesManager({ user }) {
     return (
       <div
         key={game.id}
-        className="bg-white p-6 rounded-lg shadow border border-slate-200"
+        className="bg-slate-800 p-6 rounded-lg border border-purple-500/30 hover:shadow-lg hover:shadow-purple-500/30 transition-all"
       >
-        <div className="flex items-start justify-between mb-4">
-          <div className="flex-1">
-            <div className="flex items-center gap-3 mb-2">
-              <h2 className="text-2xl font-semibold text-slate-800">
-                {game.name}
-              </h2>
-              <span className={`px-3 py-1 rounded-full text-sm font-semibold ${
-                role === 'DM'
-                  ? 'bg-purple-100 text-purple-700'
-                  : role === 'Player'
-                  ? 'bg-blue-100 text-blue-700'
-                  : 'bg-amber-100 text-amber-700'
-              }`}>
-                {role}
-              </span>
-              <span className={`px-3 py-1 rounded-full text-sm font-semibold ${
-                game.status === 'active'
-                  ? 'bg-green-100 text-green-700'
-                  : game.status === 'starting'
-                  ? 'bg-yellow-100 text-yellow-700'
-                  : 'bg-slate-100 text-slate-700'
-              }`}>
-                {game.status}
-              </span>
-            </div>
-
-            <div className="text-sm text-slate-600 space-y-1">
-              <p>
-                <span className="font-semibold">Players:</span>{' '}
-                {game.player_count} / {game.max_players}
-              </p>
-              <p>
-                <span className="font-semibold">Created:</span>{' '}
-                {new Date(game.created_at).toLocaleDateString()}
-              </p>
-              {game.started_at && (
-                <p>
-                  <span className="font-semibold">Last played:</span>{' '}
-                  {new Date(game.started_at).toLocaleDateString()}
-                </p>
-              )}
-            </div>
+        <div className="flex items-center justify-between mb-4 gap-4 flex-wrap">
+          {/* Left side: Title and badges */}
+          <div className="flex items-center gap-3 flex-wrap">
+            <h2 className="text-2xl font-semibold text-slate-200">
+              {game.name}
+            </h2>
+            <span className={`px-3 py-1 rounded-full text-sm font-semibold border flex items-center gap-1.5 ${
+              role === 'DM'
+                ? 'bg-purple-500/20 text-purple-400 border-purple-500/30'
+                : role === 'Player'
+                ? 'bg-blue-500/20 text-blue-400 border-blue-500/30'
+                : 'bg-amber-500/20 text-amber-400 border-amber-500/30'
+            }`}>
+              <FontAwesomeIcon icon={faGamepad} className="text-xs" />
+              {role}
+            </span>
+            <span className={`px-3 py-1 rounded-full text-sm font-semibold border ${
+              game.status === 'active'
+                ? 'bg-green-500/20 text-green-400 border-green-500/30'
+                : game.status === 'starting'
+                ? 'bg-amber-500/20 text-amber-400 border-amber-500/30'
+                : 'bg-slate-700 text-slate-400 border-slate-600'
+            }`}>
+              {game.status}
+            </span>
           </div>
 
-          <div className="flex flex-col gap-2">
+          {/* Right side: Action buttons in a row */}
+          <div className="flex gap-2 flex-wrap">
             {/* Buttons for My Games (DM) */}
             {isOwner && (
               <>
@@ -341,22 +373,33 @@ export default function GamesManager({ user }) {
                     <button
                       onClick={() => startGame(game.id)}
                       disabled={startingGame === game.id}
-                      className="px-6 py-2 bg-green-600 text-white rounded hover:bg-green-700 transition-colors font-semibold disabled:opacity-50 disabled:cursor-not-allowed"
+                      className="px-3 py-1.5 bg-green-600 text-white rounded-lg border border-green-500 hover:bg-green-500 hover:shadow-lg hover:shadow-green-500/30 transition-all font-semibold text-sm disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1.5"
                     >
-                      {startingGame === game.id ? 'Starting...' : 'Start Game'}
+                      {startingGame === game.id ? (
+                        <>
+                          <div className="animate-spin rounded-full h-3 w-3 border-b-2 border-white"></div>
+                          Starting...
+                        </>
+                      ) : (
+                        <>
+                          <FontAwesomeIcon icon={faPlay} className="text-xs" />
+                          Start
+                        </>
+                      )}
                     </button>
                     <button
                       onClick={() => openInviteModal(game)}
-                      className="px-6 py-2 bg-indigo-600 text-white rounded hover:bg-indigo-700 transition-colors font-semibold"
+                      className="px-3 py-1.5 bg-purple-600 text-white rounded-lg border border-purple-500 hover:bg-purple-500 hover:shadow-lg hover:shadow-purple-500/30 transition-all font-semibold text-sm flex items-center gap-1.5"
                     >
-                      Invite Friends
+                      <FontAwesomeIcon icon={faUserPlus} className="text-xs" />
+                      Invite
                     </button>
                     <button
-                      onClick={() => deleteGame(game.id, game.name)}
-                      disabled={deletingGame === game.id}
-                      className="px-6 py-2 bg-red-600 text-white rounded hover:bg-red-700 transition-colors font-semibold disabled:opacity-50 disabled:cursor-not-allowed"
+                      onClick={() => handleDeleteClick(game)}
+                      className="px-3 py-1.5 bg-red-600 text-white rounded-lg border border-red-500 hover:bg-red-500 hover:shadow-lg hover:shadow-red-500/30 transition-all font-semibold text-sm flex items-center gap-1.5"
                     >
-                      {deletingGame === game.id ? 'Deleting...' : 'Delete Game'}
+                      <FontAwesomeIcon icon={faTrash} className="text-xs" />
+                      Delete
                     </button>
                   </>
                 )}
@@ -364,8 +407,9 @@ export default function GamesManager({ user }) {
                 {game.status === 'starting' && (
                   <button
                     disabled
-                    className="px-6 py-2 bg-yellow-600 text-white rounded font-semibold opacity-50 cursor-not-allowed"
+                    className="px-3 py-1.5 bg-amber-600 text-white rounded-lg border border-amber-500 font-semibold text-sm opacity-50 cursor-not-allowed flex items-center gap-1.5"
                   >
+                    <FontAwesomeIcon icon={faHourglass} className="animate-pulse text-xs" />
                     Starting...
                   </button>
                 )}
@@ -374,16 +418,24 @@ export default function GamesManager({ user }) {
                   <>
                     <button
                       onClick={() => enterGame(game)}
-                      className="px-6 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors font-semibold"
+                      className="px-3 py-1.5 bg-blue-600 text-white rounded-lg border border-blue-500 hover:bg-blue-500 hover:shadow-lg hover:shadow-blue-500/30 transition-all font-semibold text-sm flex items-center gap-1.5"
                     >
-                      Enter Game
+                      <FontAwesomeIcon icon={faRightToBracket} className="text-xs" />
+                      Enter
                     </button>
                     <button
-                      onClick={() => endGame(game.id)}
-                      disabled={endingGame === game.id}
-                      className="px-6 py-2 bg-orange-600 text-white rounded hover:bg-orange-700 transition-colors font-semibold disabled:opacity-50 disabled:cursor-not-allowed"
+                      onClick={() => openInviteModal(game)}
+                      className="px-3 py-1.5 bg-purple-600 text-white rounded-lg border border-purple-500 hover:bg-purple-500 hover:shadow-lg hover:shadow-purple-500/30 transition-all font-semibold text-sm flex items-center gap-1.5"
                     >
-                      {endingGame === game.id ? 'Ending...' : 'End Game'}
+                      <FontAwesomeIcon icon={faUserPlus} className="text-xs" />
+                      Invite
+                    </button>
+                    <button
+                      onClick={() => promptEndGame(game)}
+                      className="px-3 py-1.5 bg-orange-600 text-white rounded-lg border border-orange-500 hover:bg-orange-500 hover:shadow-lg hover:shadow-orange-500/30 transition-all font-semibold text-sm flex items-center gap-1.5"
+                    >
+                      <FontAwesomeIcon icon={faStop} className="text-xs" />
+                      End
                     </button>
                   </>
                 )}
@@ -391,8 +443,9 @@ export default function GamesManager({ user }) {
                 {game.status === 'stopping' && (
                   <button
                     disabled
-                    className="px-6 py-2 bg-yellow-600 text-white rounded font-semibold opacity-50 cursor-not-allowed"
+                    className="px-3 py-1.5 bg-amber-600 text-white rounded-lg border border-amber-500 font-semibold text-sm opacity-50 cursor-not-allowed flex items-center gap-1.5"
                   >
+                    <FontAwesomeIcon icon={faHourglass} className="animate-pulse text-xs" />
                     Stopping...
                   </button>
                 )}
@@ -404,14 +457,16 @@ export default function GamesManager({ user }) {
               <>
                 <button
                   onClick={() => acceptInvite(game.id)}
-                  className="px-6 py-2 bg-green-600 text-white rounded hover:bg-green-700 transition-colors font-semibold"
+                  className="px-3 py-1.5 bg-green-600 text-white rounded-lg border border-green-500 hover:bg-green-500 hover:shadow-lg hover:shadow-green-500/30 transition-all font-semibold text-sm flex items-center gap-1.5"
                 >
-                  Accept Invite
+                  <FontAwesomeIcon icon={faCheck} className="text-xs" />
+                  Accept
                 </button>
                 <button
                   onClick={() => declineInvite(game.id)}
-                  className="px-6 py-2 bg-red-600 text-white rounded hover:bg-red-700 transition-colors font-semibold"
+                  className="px-3 py-1.5 bg-red-600 text-white rounded-lg border border-red-500 hover:bg-red-500 hover:shadow-lg hover:shadow-red-500/30 transition-all font-semibold text-sm flex items-center gap-1.5"
                 >
+                  <FontAwesomeIcon icon={faXmark} className="text-xs" />
                   Decline
                 </button>
               </>
@@ -423,44 +478,44 @@ export default function GamesManager({ user }) {
                 {game.status === 'active' && (
                   <button
                     onClick={() => enterGame(game)}
-                    className="px-6 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors font-semibold"
+                    className="px-3 py-1.5 bg-blue-600 text-white rounded-lg border border-blue-500 hover:bg-blue-500 hover:shadow-lg hover:shadow-blue-500/30 transition-all font-semibold text-sm flex items-center gap-1.5"
                   >
-                    Enter Game
+                    <FontAwesomeIcon icon={faRightToBracket} className="text-xs" />
+                    Enter
                   </button>
                 )}
                 <button
                   onClick={() => leaveGame(game.id)}
-                  className="px-6 py-2 bg-red-600 text-white rounded hover:bg-red-700 transition-colors font-semibold"
+                  className="px-3 py-1.5 bg-red-600 text-white rounded-lg border border-red-500 hover:bg-red-500 hover:shadow-lg hover:shadow-red-500/30 transition-all font-semibold text-sm flex items-center gap-1.5"
                 >
-                  Leave Game
+                  <FontAwesomeIcon icon={faXmark} className="text-xs" />
+                  Leave
                 </button>
               </>
             )}
           </div>
         </div>
 
-        {/* Character Info for Joined Players */}
-        {role === 'Player' && selectedChar && (
-          <div className="mt-4 pt-4 border-t border-slate-200">
-            <p className="text-sm font-semibold text-slate-700 mb-2">
-              Your Character:
-            </p>
-            <div className="bg-indigo-50 border border-indigo-300 rounded p-3">
-              <p className="font-semibold text-indigo-900">{selectedChar.character_name}</p>
-              <p className="text-sm text-indigo-700">
-                Level {selectedChar.level} {selectedChar.character_race} {selectedChar.character_class}
-              </p>
-              {selectedChar.is_alive === false && (
-                <p className="text-xs font-semibold text-red-600 mt-1">☠ Deceased</p>
-              )}
-            </div>
-          </div>
-        )}
+        {/* Game Meta Info */}
+        <div className="text-sm text-slate-400 space-y-1 mb-4">
+          <p>
+            <span className="font-semibold text-slate-300">Players:</span>{' '}
+            {game.player_count} / {game.max_players}
+          </p>
+          <p>
+            <span className="font-semibold text-slate-300">Created:</span>{' '}
+            {new Date(game.created_at).toLocaleDateString()}
+          </p>
+          <p>
+            <span className="font-semibold text-slate-300">Last played:</span>{' '}
+            {game.started_at ? new Date(game.started_at).toLocaleDateString() : 'Never played'}
+          </p>
+        </div>
 
         {/* Character Selection Prompt for Joined Players without Character */}
         {role === 'Player' && !selectedChar && (
-          <div className="mt-4 pt-4 border-t border-slate-200">
-            <p className="text-sm text-amber-600">
+          <div className="mb-4 p-3 bg-amber-500/20 border border-amber-500/30 rounded">
+            <p className="text-sm text-amber-400">
               ⚠ You need to select a character before entering the game.
             </p>
             <button
@@ -468,7 +523,7 @@ export default function GamesManager({ user }) {
                 setSelectedGameForCharacter(game)
                 setShowCharacterModal(true)
               }}
-              className="mt-2 px-4 py-2 bg-indigo-600 text-white rounded hover:bg-indigo-700 transition-colors font-semibold text-sm"
+              className="mt-2 px-3 py-1.5 bg-purple-600 text-white rounded-lg border border-purple-500 hover:bg-purple-500 hover:shadow-lg hover:shadow-purple-500/30 transition-all font-semibold text-sm"
             >
               Select Character
             </button>
@@ -477,47 +532,71 @@ export default function GamesManager({ user }) {
 
         {/* Roster Display - Show players who have joined */}
         {game.roster && game.roster.length > 0 && (
-          <div className="mt-4 pt-4 border-t border-slate-200">
-            <h4 className="text-sm font-semibold text-slate-700 mb-2">
+          <div className="mt-4 pt-4 border-t border-slate-700">
+            <h4 className="text-sm font-semibold text-slate-300 mb-3">
               Game Roster ({game.roster.length}/{game.max_players})
             </h4>
-            <div className="space-y-2">
-              {game.roster.map((player) => (
-                <div key={player.user_id} className="flex items-center justify-between bg-slate-50 px-3 py-2 rounded">
-                  <div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
+              {game.roster.map((player) => {
+                const isCurrentUser = player.user_id === user.id
+                return (
+                  <div
+                    key={player.user_id}
+                    className={`p-3 rounded border max-w-xs ${
+                      isCurrentUser
+                        ? 'bg-purple-500/20 border-purple-500/50'
+                        : 'bg-slate-900 border-slate-700'
+                    }`}
+                  >
                     {player.character_name ? (
                       <div>
-                        <p className="text-sm font-semibold text-slate-800">
-                          {player.character_name}
-                        </p>
-                        <p className="text-xs text-slate-600">
-                          Level {player.character_level} {player.character_race} {player.character_class}
-                        </p>
-                        <p className="text-xs text-slate-500">
+                        <div className="flex items-center gap-2 mb-1">
+                          {isCurrentUser && (
+                            <span className="text-xs px-1.5 py-0.5 bg-purple-500/30 text-purple-300 rounded border border-purple-500/50 font-semibold flex-shrink-0">
+                              You
+                            </span>
+                          )}
+                          <div className="flex items-baseline gap-1.5 min-w-0">
+                            <p className="text-sm font-semibold text-slate-200 truncate">
+                              {player.character_name}
+                            </p>
+                            <p className="text-xs text-slate-400 whitespace-nowrap">
+                              Lvl {player.character_level} {player.character_race} {player.character_class}
+                            </p>
+                          </div>
+                        </div>
+                        <p className="text-xs text-slate-500 truncate">
                           Player: {player.username}
                         </p>
                       </div>
                     ) : (
                       <div>
-                        <p className="text-sm font-semibold text-slate-800">
-                          {player.username}
-                        </p>
-                        <p className="text-xs text-amber-600">
-                          ⚠ No character selected
+                        <div className="flex items-center gap-2 mb-1">
+                          {isCurrentUser && (
+                            <span className="text-xs px-1.5 py-0.5 bg-purple-500/30 text-purple-300 rounded border border-purple-500/50 font-semibold flex-shrink-0">
+                              You
+                            </span>
+                          )}
+                          <p className="text-sm font-semibold text-slate-200 truncate">
+                            {player.username}
+                          </p>
+                        </div>
+                        <p className="text-xs text-amber-400">
+                          No character selected
                         </p>
                       </div>
                     )}
                   </div>
-                </div>
-              ))}
+                )
+              })}
             </div>
           </div>
         )}
 
         {/* Game Info for DMs */}
         {role === 'DM' && game.pending_invites_count > 0 && (
-          <div className="mt-4 pt-4 border-t border-slate-200">
-            <p className="text-sm text-amber-600">
+          <div className="mt-4 pt-4 border-t border-slate-700">
+            <p className="text-sm text-amber-400">
               <span className="font-semibold">{game.pending_invites_count}</span> pending invite(s)
             </p>
           </div>
@@ -528,12 +607,13 @@ export default function GamesManager({ user }) {
 
   return (
     <div className="space-y-8">
-      <div className="flex items-center justify-between">
-        <h1 className="text-3xl font-bold text-slate-800">Games</h1>
+      <div className="mb-8">
+        <h1 className="text-4xl font-bold text-white uppercase">Games</h1>
+        <p className="mt-2 text-slate-400">Manage your active game sessions and invitations</p>
       </div>
 
       {error && (
-        <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded">
+        <div className="bg-red-500/20 border border-red-500/30 text-red-400 px-4 py-3 rounded">
           {error}
         </div>
       )}
@@ -541,15 +621,15 @@ export default function GamesManager({ user }) {
       {/* My Games Section (DM + Joined) */}
       <div className="space-y-4">
         <div className="flex items-center gap-3">
-          <h2 className="text-2xl font-semibold text-slate-800">My Games</h2>
-          <span className="px-3 py-1 bg-blue-100 text-blue-700 rounded-full text-sm font-semibold">
+          <h2 className="text-2xl font-semibold text-purple-400 uppercase">My Games</h2>
+          <span className="px-3 py-1 bg-blue-500/20 text-blue-400 border border-blue-500/30 rounded-full text-sm font-semibold">
             {myGames.length}
           </span>
         </div>
 
         {myGames.length === 0 ? (
-          <div className="bg-white p-8 rounded-lg shadow text-center border-2 border-dashed border-slate-300">
-            <p className="text-slate-600 mb-2">You haven't joined any games yet.</p>
+          <div className="bg-slate-800 p-8 rounded-lg text-center border-2 border-dashed border-purple-500/30">
+            <p className="text-slate-300 mb-2">You haven't joined any games yet.</p>
             <p className="text-sm text-slate-500">
               Create a game from the Campaign tab, or accept an invite from a friend!
             </p>
@@ -568,15 +648,15 @@ export default function GamesManager({ user }) {
       {/* Invited Games Section (Pending Invites) */}
       <div className="space-y-4">
         <div className="flex items-center gap-3">
-          <h2 className="text-2xl font-semibold text-slate-800">Invited Games</h2>
-          <span className="px-3 py-1 bg-amber-100 text-amber-700 rounded-full text-sm font-semibold">
+          <h2 className="text-2xl font-semibold text-purple-400 uppercase">Invited Games</h2>
+          <span className="px-3 py-1 bg-amber-500/20 text-amber-400 border border-amber-500/30 rounded-full text-sm font-semibold">
             {invitedGames.length}
           </span>
         </div>
 
         {invitedGames.length === 0 ? (
-          <div className="bg-white p-8 rounded-lg shadow text-center border-2 border-dashed border-slate-300">
-            <p className="text-slate-600 mb-2">You haven't been invited to any games yet.</p>
+          <div className="bg-slate-800 p-8 rounded-lg text-center border-2 border-dashed border-purple-500/30">
+            <p className="text-slate-300 mb-2">You haven't been invited to any games yet.</p>
             <p className="text-sm text-slate-500">
               Wait for a DM to invite you, or ask your friends to add you to their games!
             </p>
@@ -610,6 +690,63 @@ export default function GamesManager({ user }) {
             setSelectedGameForCharacter(null)
           }}
           onCharacterSelected={handleCharacterSelected}
+        />
+      )}
+
+      {/* Delete Game Confirmation Modal */}
+      {showDeleteModal && gameToDelete && typeof document !== 'undefined' && createPortal(
+        <div className="fixed inset-0 bg-slate-950/90 backdrop-blur-sm flex items-center justify-center z-50">
+          <div className="bg-slate-800 border border-purple-500/30 rounded-lg shadow-2xl shadow-purple-500/20 p-6 max-w-md w-full mx-4">
+            <h3 className="text-xl font-bold text-purple-400 mb-2">Delete Game Session</h3>
+            <p className="text-slate-300 mb-1">
+              Are you sure you want to delete <strong className="text-purple-400">{gameToDelete.name}</strong>?
+            </p>
+            <p className="text-sm text-slate-500 mb-4">This action cannot be undone.</p>
+
+            {deleteError && (
+              <div className="mb-4 bg-red-500/20 border border-red-500/30 text-red-400 px-4 py-3 rounded">
+                {deleteError}
+              </div>
+            )}
+
+            <div className="flex gap-3 justify-end">
+              <button
+                onClick={handleCancelDelete}
+                disabled={deleteLoading}
+                className="px-4 py-2 bg-slate-700 text-slate-300 border border-slate-600 rounded-lg hover:bg-slate-600 transition-colors disabled:opacity-50"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleConfirmDelete}
+                disabled={deleteLoading}
+                className="px-4 py-2 bg-red-600 text-white border border-red-500 rounded-lg hover:bg-red-500 hover:shadow-lg hover:shadow-red-500/30 transition-all disabled:opacity-50 flex items-center gap-2"
+              >
+                {deleteLoading ? (
+                  <>
+                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                    Deleting...
+                  </>
+                ) : (
+                  <>
+                    <FontAwesomeIcon icon={faTrash} />
+                    Delete
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
+        </div>,
+        document.body
+      )}
+
+      {/* End Game Confirmation Modal */}
+      {showEndGameModal && (
+        <EndGameModal
+          game={gameToEnd}
+          onConfirm={confirmEndGame}
+          onCancel={cancelEndGame}
+          isEnding={endingGame === gameToEnd?.id}
         />
       )}
     </div>

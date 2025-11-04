@@ -33,7 +33,9 @@ from modules.campaign.application.queries import (
 )
 from modules.campaign.domain.campaign_aggregate import CampaignAggregate
 from shared.dependencies.auth import get_current_user_from_token
+from shared.dependencies.db import get_db
 from modules.user.domain.user_aggregate import UserAggregate
+from sqlalchemy.orm import Session
 
 router = APIRouter()
 
@@ -83,7 +85,8 @@ async def create_game(
     request: CreateGameRequest,
     current_user: UserAggregate = Depends(get_current_user_from_token),
     game_repo: GameRepository = Depends(get_game_repository),
-    campaign_repo: CampaignRepository = Depends(campaign_repository)
+    campaign_repo: CampaignRepository = Depends(campaign_repository),
+    db: Session = Depends(get_db)
 ):
     """Create a new game within a campaign"""
 
@@ -95,7 +98,7 @@ async def create_game(
             host_id=current_user.id,
             max_players=request.max_players
         )
-        return _to_game_response(game)
+        return _to_game_response(game, db)
     except ValueError as e:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
 

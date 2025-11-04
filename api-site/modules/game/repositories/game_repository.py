@@ -6,7 +6,7 @@ from uuid import UUID
 from sqlalchemy.orm import Session
 from sqlalchemy import text
 
-from modules.campaign.model.game_model import Game as GameModel
+from modules.campaign.model.game_model import Game as GameModel, GameJoinedUser, game_invites
 from modules.user.model.user_model import User
 from modules.game.domain.game_aggregate import GameAggregate, GameStatus
 
@@ -106,7 +106,7 @@ class GameRepository:
         return model.id
 
     def delete(self, game_id: UUID) -> bool:
-        """Delete game"""
+        """Delete game using SQLAlchemy ORM"""
         model = (
             self.db.query(GameModel)
             .filter_by(id=game_id)
@@ -121,7 +121,19 @@ class GameRepository:
         if not game.can_be_deleted():
             raise ValueError("Cannot delete game - it must be INACTIVE")
 
-        # Delete game (cascade will handle association tables)
+        # Clear relationships to prevent ORM conflicts during delete
+        # Clear invited_users relationship (many-to-many via game_invites)
+        model.invited_users = []
+        self.db.flush()
+
+        # Explicitly delete child records using SQLAlchemy ORM to avoid relationship conflicts
+        # Delete GameJoinedUser records (prevents ORM trying to SET NULL on primary key)
+        self.db.query(GameJoinedUser).filter_by(game_id=game_id).delete(synchronize_session=False)
+
+        # Delete game_invites records (association table)
+        self.db.execute(game_invites.delete().where(game_invites.c.game_id == game_id))
+
+        # Now safe to delete the game
         self.db.delete(model)
         self.db.commit()
         return True

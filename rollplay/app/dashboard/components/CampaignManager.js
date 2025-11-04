@@ -5,9 +5,27 @@
 
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
+import { createPortal } from 'react-dom'
+import { useRouter } from 'next/navigation'
+import EndGameModal from './EndGameModal'
+import GameInviteModal from './GameInviteModal'
+import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
+import {
+  faGear,
+  faGamepad,
+  faTrash,
+  faCheck,
+  faXmark,
+  faPlus,
+  faPlay,
+  faStop,
+  faRightToBracket,
+  faUserPlus
+} from '@fortawesome/free-solid-svg-icons'
 
 export default function CampaignManager({ user }) {
+  const router = useRouter()
   const [campaigns, setCampaigns] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
@@ -23,6 +41,14 @@ export default function CampaignManager({ user }) {
   const [gameName, setGameName] = useState('')
   const [gameMaxPlayers, setGameMaxPlayers] = useState(8)
   const [selectedCampaignForGame, setSelectedCampaignForGame] = useState(null)
+  const [startingGame, setStartingGame] = useState(null)
+  const [endingGame, setEndingGame] = useState(null)
+  const [deletingGame, setDeletingGame] = useState(null)
+  const [showEndGameModal, setShowEndGameModal] = useState(false)
+  const [gameToEnd, setGameToEnd] = useState(null)
+  const [showInviteModal, setShowInviteModal] = useState(false)
+  const [selectedGameForInvite, setSelectedGameForInvite] = useState(null)
+  const gameSessionsPanelRef = useRef(null)
 
   // Fetch campaigns from API
   const fetchCampaigns = async () => {
@@ -142,7 +168,119 @@ export default function CampaignManager({ user }) {
     }
   }
 
-  // Game session controls (Start, End, Delete, Invite) moved to Games tab
+  // Start game session
+  const startGame = async (gameId) => {
+    setStartingGame(gameId)
+    setError(null)
+
+    try {
+      const response = await fetch(`/api/games/${gameId}/start`, {
+        method: 'POST',
+        credentials: 'include'
+      })
+
+      if (!response.ok) {
+        const errorData = await response.json()
+        throw new Error(errorData.detail || 'Failed to start game')
+      }
+
+      await fetchCampaigns()
+    } catch (err) {
+      console.error('Error starting game:', err)
+      setError(err.message)
+    } finally {
+      setStartingGame(null)
+    }
+  }
+
+  // Show end game confirmation modal
+  const promptEndGame = (game) => {
+    setGameToEnd(game)
+    setShowEndGameModal(true)
+  }
+
+  // End game session (after confirmation)
+  const confirmEndGame = async () => {
+    if (!gameToEnd) return
+
+    setEndingGame(gameToEnd.id)
+    setError(null)
+
+    try {
+      const response = await fetch(`/api/games/${gameToEnd.id}/end`, {
+        method: 'POST',
+        credentials: 'include'
+      })
+
+      if (!response.ok) {
+        const errorData = await response.json()
+        throw new Error(errorData.detail || 'Failed to end game')
+      }
+
+      await fetchCampaigns()
+      setShowEndGameModal(false)
+      setGameToEnd(null)
+    } catch (err) {
+      console.error('Error ending game:', err)
+      setError(err.message)
+    } finally {
+      setEndingGame(null)
+    }
+  }
+
+  // Cancel end game
+  const cancelEndGame = () => {
+    setShowEndGameModal(false)
+    setGameToEnd(null)
+  }
+
+  // Open invite modal for game
+  const openInviteModal = (game) => {
+    setSelectedGameForInvite(game)
+    setShowInviteModal(true)
+  }
+
+  // Handle successful invite
+  const handleInviteSuccess = async (updatedGame) => {
+    // Refresh campaigns to show updated invite count
+    await fetchCampaigns()
+    // Update the selected game being passed to the modal
+    setSelectedGameForInvite(updatedGame)
+  }
+
+  // Delete game
+  const deleteGame = async (gameId, gameName) => {
+    if (!confirm(`Are you sure you want to delete "${gameName}"? This action cannot be undone.`)) {
+      return
+    }
+
+    setDeletingGame(gameId)
+    setError(null)
+
+    try {
+      const response = await fetch(`/api/games/${gameId}`, {
+        method: 'DELETE',
+        credentials: 'include'
+      })
+
+      if (!response.ok) {
+        const errorData = await response.json()
+        throw new Error(errorData.detail || 'Failed to delete game')
+      }
+
+      await fetchCampaigns()
+    } catch (err) {
+      console.error('Error deleting game:', err)
+      setError(err.message)
+    } finally {
+      setDeletingGame(null)
+    }
+  }
+
+  // Enter game
+  const enterGame = (game) => {
+    router.push(`/game?room_id=${game.session_id || game.id}`)
+  }
 
   // Create a new campaign
   const createCampaign = async () => {
@@ -228,6 +366,19 @@ export default function CampaignManager({ user }) {
     setSelectedCampaign(campaign)
   }
 
+  // Scroll to game sessions panel when selectedCampaign changes
+  useEffect(() => {
+    if (selectedCampaign && gameSessionsPanelRef.current) {
+      // Small delay to ensure DOM has updated
+      setTimeout(() => {
+        gameSessionsPanelRef.current?.scrollIntoView({
+          behavior: 'smooth',
+          block: 'start'
+        })
+      }, 100)
+    }
+  }, [selectedCampaign])
+
   useEffect(() => {
     fetchCampaigns()
   }, [])
@@ -235,8 +386,8 @@ export default function CampaignManager({ user }) {
   if (loading) {
     return (
       <div className="flex items-center justify-center p-8">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
-        <span className="ml-2 text-gray-600">Loading campaigns...</span>
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-purple-500"></div>
+        <span className="ml-2 text-slate-400">Loading campaigns...</span>
       </div>
     )
   }
@@ -266,141 +417,109 @@ export default function CampaignManager({ user }) {
             #16a34a 87.5%,
             #22c55e 100%
           );
-        
+
           background-size: 400% 400%;
           animation: gradient-x 3s linear infinite;
         }
-        
+
       `}</style>
-      
+
       {/* Header */}
-      <div className="flex justify-between items-center">
-        <h2 className="text-2xl font-bold text-gray-800">Campaign Management</h2>
+      <div className="flex justify-between items-center mb-8">
+        <div>
+          <h1 className="text-4xl font-bold text-white uppercase">Campaign Management</h1>
+          <p className="mt-2 text-slate-400">Organize your adventures and game sessions</p>
+        </div>
         <button
           onClick={() => setShowCampaignModal(true)}
-          className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg font-medium transition-colors"
+          className="bg-purple-600 hover:bg-purple-500 text-white px-4 py-2.5 rounded-lg font-semibold border border-purple-500 hover:shadow-lg hover:shadow-purple-500/30 transition-all flex items-center gap-2 text-sm"
         >
+          <FontAwesomeIcon icon={faPlus} />
           Create Campaign
         </button>
       </div>
 
       {/* Error Message */}
       {error && (
-        <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded">
+        <div className="bg-red-500/20 border border-red-500/30 text-red-400 px-4 py-3 rounded">
           {error}
         </div>
       )}
 
-      {/* Campaigns List */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Left Column - Campaigns */}
-        <div className="space-y-4">
-          <h3 className="text-lg font-semibold text-gray-700">Your Campaigns</h3>
-          {campaigns.length === 0 ? (
-            <div className="text-center py-8 text-gray-500">
-              <p>No campaigns yet. Create your first campaign to get started!</p>
-            </div>
-          ) : (
-            <div className="space-y-3">
-              {campaigns.map((campaign) => (
-                <div
-                  key={campaign.id}
-                  className={`bg-white p-4 rounded-lg shadow-md border ${
-                    selectedCampaign?.id === campaign.id ? 'border-blue-500 bg-blue-50' : 'border-gray-200'
-                  } cursor-pointer hover:shadow-lg transition-all duration-300`}
-                  onClick={() => showCampaignDetails(campaign)}
-                >
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center flex-grow">
-                      <div className="w-12 h-12 bg-indigo-100 rounded-full flex items-center justify-center text-indigo-600 text-xl font-bold mr-4 flex-shrink-0">
-                        {campaign.title ? campaign.title[0].toUpperCase() : '?'}
-                      </div>
-                      <div className="flex-grow">
-                        <h4 className="text-lg font-bold text-slate-800">{campaign.title || 'Unnamed Campaign'}</h4>
-                        <p className="text-slate-600 text-sm">DM: {user?.screen_name || user?.email || 'Unknown'}</p>
-                        {/* Game Status Indicator */}
-                        {(() => {
-                          const campaignGames = allGames.filter(game => game.campaign_id === campaign.id)
-                          const activeGames = campaignGames.filter(game => game.status === 'active')
-                          const inactiveGames = campaignGames.filter(game => game.status === 'inactive')
-                          const startingGames = campaignGames.filter(game => game.status === 'starting')
-                          const stoppingGames = campaignGames.filter(game => game.status === 'stopping')
-                          
-                          if (activeGames.length > 0) {
-                            return (
-                              <p className="text-green-600 text-sm font-medium">
-                                🎮 Active Game: {activeGames[0].name || 'Session'}
-                              </p>
-                            )
-                          } else if (startingGames.length > 0) {
-                            return (
-                              <p className="text-yellow-600 text-sm font-medium">
-                                ⏳ Starting: {startingGames[0].name || 'Session'}
-                              </p>
-                            )
-                          } else if (stoppingGames.length > 0) {
-                            return (
-                              <p className="text-orange-600 text-sm font-medium">
-                                ⏸️ Stopping: {stoppingGames[0].name || 'Session'}
-                              </p>
-                            )
-                          } else if (inactiveGames.length > 0) {
-                            return (
-                              <p className="text-slate-500 text-sm">
-                                📋 {inactiveGames.length} session{inactiveGames.length !== 1 ? 's' : ''} ready
-                              </p>
-                            )
-                          } else {
-                            return (
-                              <p className="text-slate-400 text-sm">
-                                📝 No sessions configured
-                              </p>
-                            )
-                          }
-                        })()}
-                        <p className="text-slate-500 text-xs mt-1">
-                          Created: {campaign.created_at ? new Date(campaign.created_at).toLocaleDateString() : 'Unknown'}
-                        </p>
-                      </div>
-                    </div>
-                    <div className="flex-shrink-0 flex space-x-2">
-                      {/* Determine button state based on campaign games */}
-                      {(() => {
-                        // Get games for this specific campaign
-                        const campaignGames = allGames.filter(game => game.campaign_id === campaign.id)
-                        const activeGames = campaignGames.filter(game => game.status === 'active')
-                        const inactiveGames = campaignGames.filter(game => game.status === 'inactive')
-                        
-                        if (activeGames.length > 0) {
-                          return (
-                            <button
-                              disabled={true}
-                              className="animate-gradient-x text-white px-3 py-1 rounded text-sm font-medium cursor-not-allowed"
-                            >
+      {/* Campaigns List - Full Width Hero Cards */}
+      <div className="space-y-4">
+        <h3 className="text-lg font-semibold text-purple-400 uppercase">Your Campaigns</h3>
+        {campaigns.length === 0 ? (
+          <div className="text-center py-8 bg-slate-800 rounded-lg border border-purple-500/30">
+            <p className="text-slate-400">No campaigns yet. Create your first campaign to get started!</p>
+          </div>
+        ) : (
+          <div className="space-y-4">
+            {campaigns.map((campaign) => {
+              const campaignGames = allGames.filter(game => game.campaign_id === campaign.id)
+              const activeGames = campaignGames.filter(game => game.status === 'active')
+              const inactiveGames = campaignGames.filter(game => game.status === 'inactive')
+              const startingGames = campaignGames.filter(game => game.status === 'starting')
+              const stoppingGames = campaignGames.filter(game => game.status === 'stopping')
+
+              return (
+                <div key={campaign.id} className="w-full max-w-[1200px] min-w-[800px]">
+                  {/* Campaign Card */}
+                  <div
+                    className={`aspect-[16/4] w-full relative rounded-lg overflow-hidden cursor-pointer hover:shadow-lg transition-all duration-200 border-2 ${
+                      selectedCampaign?.id === campaign.id
+                        ? 'border-purple-500 shadow-lg shadow-purple-500/30'
+                        : 'border-purple-500/30 hover:shadow-purple-500/30'
+                    }`}
+                    style={campaign.hero_image ? {
+                      backgroundImage: `url(${campaign.hero_image})`,
+                      backgroundSize: 'cover',
+                      backgroundPosition: 'center'
+                    } : {
+                      background: 'linear-gradient(135deg, rgba(192, 132, 252, 0.3) 0%, rgba(233, 213, 255, 0.15) 50%)'
+                    }}
+                    onClick={() => showCampaignDetails(campaign)}
+                  >
+                    {/* Gradient Overlay */}
+                    <div className="absolute inset-0 bg-gradient-to-t from-slate-900/25 via-slate-900/15 to-slate-900/5" />
+
+                    {/* Content Overlay */}
+                    <div className="relative z-10 p-6 h-full flex flex-col justify-between">
+                      {/* Top Row - Title and Action Buttons */}
+                      <div className="flex items-start justify-between">
+                        <div>
+                          <h4 className="text-3xl font-bold text-white mb-1 drop-shadow-lg">
+                            {campaign.title || 'Unnamed Campaign'}
+                          </h4>
+                        </div>
+
+                        {/* Action Buttons - Top Right */}
+                        <div className="flex gap-2">
+                          {activeGames.length > 0 ? (
+                            <div className="px-4 py-2 bg-green-500/90 backdrop-blur-sm text-white text-sm font-semibold rounded-lg border border-green-400 animate-pulse">
                               Game In Session
-                            </button>
-                          )
-                        } else {
-                          // Always show Configure when no active games
-                          return (
+                            </div>
+                          ) : (
                             <>
                               <button
                                 onClick={(e) => {
                                   e.stopPropagation()
                                   showCampaignDetails(campaign)
                                 }}
-                                className="bg-blue-600 hover:bg-blue-700 text-white px-3 py-1 rounded text-sm font-medium transition-colors"
+                                className="w-10 h-10 bg-purple-500/80 backdrop-blur-sm hover:bg-purple-500 text-white rounded-lg transition-all flex items-center justify-center border border-purple-400/50"
+                                title="Configure Campaign"
                               >
-                                Configure
+                                <FontAwesomeIcon icon={faGear} />
                               </button>
                               <button
                                 onClick={(e) => {
                                   e.stopPropagation()
                                   openCreateGameModal(campaign.id)
                                 }}
-                                className="bg-green-600 hover:bg-green-700 text-white px-3 py-1 rounded text-sm font-medium transition-colors"
+                                className="w-10 h-10 bg-green-500/80 backdrop-blur-sm hover:bg-green-500 text-white rounded-lg transition-all flex items-center justify-center border border-green-400/50"
+                                title="Create Game"
                               >
-                                Create Game
+                                <FontAwesomeIcon icon={faGamepad} />
                               </button>
                               <button
                                 onClick={(e) => {
@@ -408,105 +527,199 @@ export default function CampaignManager({ user }) {
                                   deleteCampaign(campaign.id, campaign.title)
                                 }}
                                 disabled={deletingCampaign === campaign.id}
-                                className="bg-red-600 hover:bg-red-700 text-white px-3 py-1 rounded text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                                className="w-10 h-10 bg-red-500/80 backdrop-blur-sm hover:bg-red-500 text-white rounded-lg transition-all flex items-center justify-center border border-red-400/50 disabled:opacity-50 disabled:cursor-not-allowed"
+                                title="Delete Campaign"
                               >
-                                {deletingCampaign === campaign.id ? 'Deleting...' : 'Delete'}
+                                <FontAwesomeIcon icon={faTrash} />
                               </button>
                             </>
-                          )
-                        }
-                      })()}
+                          )}
+                        </div>
+                      </div>
+
+                      {/* Middle - Spacer */}
+                      <div className="flex-1"></div>
+
+                      {/* Bottom Row - Metadata */}
+                      <div className="text-slate-200 text-sm drop-shadow">
+                        <span>Created: {campaign.created_at ? new Date(campaign.created_at).toLocaleDateString() : 'Unknown'}</span>
+                        <span className="mx-2">•</span>
+                        <span>{campaignGames.length} session{campaignGames.length !== 1 ? 's' : ''}</span>
+                      </div>
                     </div>
                   </div>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
 
-        {/* Right Column - Campaign Details */}
-        <div className="space-y-4">
-          {selectedCampaign ? (
-            <>
-              <h3 className="text-lg font-semibold text-gray-700">
-                Game Sessions
-              </h3>
-              <div className="bg-white p-4 rounded-lg shadow-md border border-gray-200">
-                <div className="mb-4">
-                  <h4 className="font-medium text-gray-800">Campaign Details</h4>
-                  <p className="text-sm text-gray-600 mt-1">{selectedCampaign.description}</p>
-                </div>
-
-                <div className="space-y-3">
-                  <h5 className="font-medium text-gray-700">Game Sessions</h5>
-                  {(() => {
-                    const campaignGames = allGames.filter(game => game.campaign_id === selectedCampaign.id)
-                    return campaignGames.length === 0 ? (
-                      <p className="text-gray-500 text-sm">No game sessions yet.</p>
-                    ) : (
-                      <div className="space-y-2">
-                        {campaignGames.map((game) => (
-                        <div
-                          key={game.id}
-                          className="flex items-center justify-between p-3 bg-gray-50 rounded border"
+                  {/* Game Sessions Detail Panel - Appears Below Selected Campaign */}
+                  {selectedCampaign?.id === campaign.id && (
+                    <div ref={gameSessionsPanelRef} className="mt-4 ml-16 bg-slate-800 p-6 rounded-lg border border-purple-500/30">
+                      <div className="flex items-center justify-between mb-4">
+                        <h3 className="text-xl font-semibold text-purple-400">
+                          Game Sessions for "{selectedCampaign.title}"
+                        </h3>
+                        <button
+                          onClick={() => setSelectedCampaign(null)}
+                          className="text-slate-400 hover:text-slate-200 transition-colors text-sm"
                         >
-                          <div>
-                            <p className="font-medium text-gray-800">{game.name || 'Game Session'}</p>
-                            <p className="text-sm text-gray-600">
-                              Status: <span className={`font-medium ${
-                                game.status === 'active' ? 'text-green-600' : 
-                                game.status === 'inactive' ? 'text-gray-600' : 
-                                'text-yellow-600'
-                              }`}>
-                                {game.status}
-                              </span>
-                            </p>
-                          </div>
-                          <div className="flex space-x-2">
-                            {/* Game session controls moved to Games tab */}
-                          </div>
-                        </div>
-                        ))}
+                          <FontAwesomeIcon icon={faXmark} className="mr-1" />
+                          Close
+                        </button>
                       </div>
-                    )
-                  })()}
+
+                      <div className="mb-4 pb-4 border-b border-slate-700">
+                        <p className="text-sm text-slate-400">{selectedCampaign.description || 'No description provided.'}</p>
+                      </div>
+
+                      <div className="space-y-3">
+                        {campaignGames.length === 0 ? (
+                          <p className="text-slate-500 text-sm py-4 text-center">No game sessions yet.</p>
+                        ) : (
+                          <div className="space-y-2">
+                            {campaignGames.map((game) => (
+                              <div
+                                key={game.id}
+                                className="flex items-center justify-between p-4 bg-slate-900 rounded-lg border border-slate-700"
+                              >
+                                <div>
+                                  <p className="font-medium text-slate-200">{game.name || 'Game Session'}</p>
+                                  <p className="text-sm text-slate-500">
+                                    Status: <span className={`font-medium ${
+                                      game.status === 'active' ? 'text-green-400' :
+                                      game.status === 'inactive' ? 'text-slate-400' :
+                                      'text-amber-400'
+                                    }`}>
+                                      {game.status}
+                                    </span>
+                                  </p>
+                                </div>
+
+                                {/* Action Buttons */}
+                                <div className="flex gap-2">
+                                  {game.status === 'active' ? (
+                                    <>
+                                      <button
+                                        onClick={() => enterGame(game)}
+                                        className="px-3 py-1.5 bg-purple-600 hover:bg-purple-500 text-white rounded-lg border border-purple-500 hover:shadow-lg hover:shadow-purple-500/30 transition-all text-sm font-medium flex items-center gap-2"
+                                        title="Enter Game"
+                                      >
+                                        <FontAwesomeIcon icon={faRightToBracket} />
+                                        Enter
+                                      </button>
+                                      <button
+                                        onClick={() => openInviteModal(game)}
+                                        className="px-3 py-1.5 bg-blue-600 hover:bg-blue-500 text-white rounded-lg border border-blue-500 hover:shadow-lg hover:shadow-blue-500/30 transition-all text-sm font-medium flex items-center gap-2"
+                                        title="Invite Players"
+                                      >
+                                        <FontAwesomeIcon icon={faUserPlus} />
+                                        Invite
+                                      </button>
+                                      <button
+                                        onClick={() => promptEndGame(game)}
+                                        disabled={endingGame === game.id}
+                                        className="px-3 py-1.5 bg-orange-600 hover:bg-orange-500 text-white rounded-lg border border-orange-500 hover:shadow-lg hover:shadow-orange-500/30 transition-all text-sm font-medium flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                                        title="End Game"
+                                      >
+                                        {endingGame === game.id ? (
+                                          <>
+                                            <div className="animate-spin rounded-full h-3 w-3 border-b-2 border-white"></div>
+                                            Ending...
+                                          </>
+                                        ) : (
+                                          <>
+                                            <FontAwesomeIcon icon={faStop} />
+                                            End
+                                          </>
+                                        )}
+                                      </button>
+                                    </>
+                                  ) : game.status === 'inactive' ? (
+                                    <>
+                                      <button
+                                        onClick={() => startGame(game.id)}
+                                        disabled={startingGame === game.id}
+                                        className="px-3 py-1.5 bg-green-600 hover:bg-green-500 text-white rounded-lg border border-green-500 hover:shadow-lg hover:shadow-green-500/30 transition-all text-sm font-medium flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                                        title="Start Game"
+                                      >
+                                        {startingGame === game.id ? (
+                                          <>
+                                            <div className="animate-spin rounded-full h-3 w-3 border-b-2 border-white"></div>
+                                            Starting...
+                                          </>
+                                        ) : (
+                                          <>
+                                            <FontAwesomeIcon icon={faPlay} />
+                                            Start
+                                          </>
+                                        )}
+                                      </button>
+                                      <button
+                                        onClick={() => openInviteModal(game)}
+                                        className="px-3 py-1.5 bg-blue-600 hover:bg-blue-500 text-white rounded-lg border border-blue-500 hover:shadow-lg hover:shadow-blue-500/30 transition-all text-sm font-medium flex items-center gap-2"
+                                        title="Invite Players"
+                                      >
+                                        <FontAwesomeIcon icon={faUserPlus} />
+                                        Invite
+                                      </button>
+                                      <button
+                                        onClick={() => deleteGame(game.id, game.name)}
+                                        disabled={deletingGame === game.id}
+                                        className="px-3 py-1.5 bg-red-600 hover:bg-red-500 text-white rounded-lg border border-red-500 hover:shadow-lg hover:shadow-red-500/30 transition-all text-sm font-medium flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                                        title="Delete Game"
+                                      >
+                                        {deletingGame === game.id ? (
+                                          <>
+                                            <div className="animate-spin rounded-full h-3 w-3 border-b-2 border-white"></div>
+                                            Deleting...
+                                          </>
+                                        ) : (
+                                          <>
+                                            <FontAwesomeIcon icon={faTrash} />
+                                            Delete
+                                          </>
+                                        )}
+                                      </button>
+                                    </>
+                                  ) : null}
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  )}
                 </div>
-              </div>
-            </>
-          ) : (
-            <div className="flex items-center justify-center h-64 bg-gray-50 rounded-lg border-2 border-dashed border-gray-300">
-              <p className="text-gray-500">Select a campaign to view details</p>
-            </div>
-          )}
-        </div>
+              )
+            })}
+          </div>
+        )}
       </div>
 
-      {/* Campaign Creation Modal */}
-      {showGameModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white p-6 rounded-lg shadow-xl max-w-md w-full mx-4">
-            <h3 className="text-lg font-semibold mb-4">Create New Game</h3>
+      {/* Game Creation Modal */}
+      {showGameModal && typeof document !== 'undefined' && createPortal(
+        <div className="fixed inset-0 bg-slate-950/90 backdrop-blur-sm flex items-center justify-center z-50">
+          <div className="bg-slate-800 border border-purple-500/30 p-6 rounded-lg shadow-2xl shadow-purple-500/20 max-w-md w-full mx-4">
+            <h3 className="text-lg font-semibold text-purple-400 mb-4">Create New Game</h3>
             <div className="space-y-4">
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
+                <label className="block text-sm font-medium text-slate-300 mb-2">
                   Game Name
                 </label>
                 <input
                   type="text"
                   value={gameName}
                   onChange={(e) => setGameName(e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-green-500"
+                  className="w-full px-3 py-2 bg-slate-700 border border-slate-600 text-slate-200 rounded-md focus:outline-none focus:ring-2 focus:ring-purple-500"
                   placeholder="Enter game name"
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
+                <label className="block text-sm font-medium text-slate-300 mb-2">
                   Number of Seats (1-8)
                 </label>
                 <select
                   value={gameMaxPlayers}
                   onChange={(e) => setGameMaxPlayers(parseInt(e.target.value))}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-green-500"
+                  className="w-full px-3 py-2 bg-slate-700 border border-slate-600 text-slate-200 rounded-md focus:outline-none focus:ring-2 focus:ring-purple-500"
                 >
                   {[1, 2, 3, 4, 5, 6, 7, 8].map(num => (
                     <option key={num} value={num}>{num} seats</option>
@@ -514,80 +727,124 @@ export default function CampaignManager({ user }) {
                 </select>
               </div>
             </div>
-            <div className="flex justify-end space-x-3 mt-6">
+            <div className="flex justify-end gap-3 mt-6">
               <button
                 onClick={() => {
                   setShowGameModal(false)
                   setGameName('')
                   setGameMaxPlayers(8)
                 }}
-                className="px-4 py-2 text-gray-600 hover:text-gray-800"
+                className="px-4 py-2 bg-slate-700 text-slate-300 border border-slate-600 rounded-lg hover:bg-slate-600 transition-colors"
               >
                 Cancel
               </button>
               <button
                 onClick={createGame}
                 disabled={!gameName.trim() || creatingGame}
-                className="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg font-medium disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                className="bg-green-600 hover:bg-green-500 text-white px-4 py-2 rounded-lg font-medium border border-green-500 hover:shadow-lg hover:shadow-green-500/30 disabled:opacity-50 disabled:cursor-not-allowed transition-all flex items-center gap-2"
               >
-                {creatingGame ? 'Creating...' : 'Create Game'}
+                {creatingGame ? (
+                  <>
+                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                    Creating...
+                  </>
+                ) : (
+                  <>
+                    <FontAwesomeIcon icon={faPlus} />
+                    Create Game
+                  </>
+                )}
               </button>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
 
-      {showCampaignModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white p-6 rounded-lg shadow-xl max-w-md w-full mx-4">
-            <h3 className="text-lg font-semibold mb-4">Create New Campaign</h3>
+      {showCampaignModal && typeof document !== 'undefined' && createPortal(
+        <div className="fixed inset-0 bg-slate-950/90 backdrop-blur-sm flex items-center justify-center z-50">
+          <div className="bg-slate-800 border border-purple-500/30 p-6 rounded-lg shadow-2xl shadow-purple-500/20 max-w-md w-full mx-4">
+            <h3 className="text-lg font-semibold text-purple-400 mb-4">Create New Campaign</h3>
             <div className="space-y-4">
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
+                <label className="block text-sm font-medium text-slate-300 mb-2">
                   Campaign Title
                 </label>
                 <input
                   type="text"
                   value={campaignTitle}
                   onChange={(e) => setCampaignTitle(e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="w-full px-3 py-2 bg-slate-700 border border-slate-600 text-slate-200 rounded-md focus:outline-none focus:ring-2 focus:ring-purple-500"
                   placeholder="Enter campaign title"
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
+                <label className="block text-sm font-medium text-slate-300 mb-2">
                   Description (Optional)
                 </label>
                 <textarea
                   value={campaignDescription}
                   onChange={(e) => setCampaignDescription(e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="w-full px-3 py-2 bg-slate-700 border border-slate-600 text-slate-200 rounded-md focus:outline-none focus:ring-2 focus:ring-purple-500"
                   rows="3"
                   placeholder="Enter campaign description"
                 />
               </div>
             </div>
-            <div className="flex justify-end space-x-3 mt-6">
+            <div className="flex justify-end gap-3 mt-6">
               <button
                 onClick={() => {
                   setShowCampaignModal(false)
                   setCampaignTitle('')
                   setCampaignDescription('')
                 }}
-                className="px-4 py-2 text-gray-600 hover:text-gray-800"
+                className="px-4 py-2 bg-slate-700 text-slate-300 border border-slate-600 rounded-lg hover:bg-slate-600 transition-colors"
               >
                 Cancel
               </button>
               <button
                 onClick={createCampaign}
                 disabled={!campaignTitle.trim() || creatingCampaign}
-                className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg font-medium disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                className="bg-purple-600 hover:bg-purple-500 text-white px-4 py-2 rounded-lg font-medium border border-purple-500 hover:shadow-lg hover:shadow-purple-500/30 disabled:opacity-50 disabled:cursor-not-allowed transition-all flex items-center gap-2"
               >
-                {creatingCampaign ? 'Creating...' : 'Create Campaign'}
+                {creatingCampaign ? (
+                  <>
+                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                    Creating...
+                  </>
+                ) : (
+                  <>
+                    <FontAwesomeIcon icon={faPlus} />
+                    Create Campaign
+                  </>
+                )}
               </button>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
+      )}
+
+      {/* End Game Confirmation Modal */}
+      {showEndGameModal && (
+        <EndGameModal
+          game={gameToEnd}
+          onConfirm={confirmEndGame}
+          onCancel={cancelEndGame}
+          isEnding={endingGame === gameToEnd?.id}
+        />
+      )}
+
+      {/* Game Invite Modal */}
+      {showInviteModal && selectedGameForInvite && (
+        <GameInviteModal
+          game={selectedGameForInvite}
+          onClose={() => {
+            setShowInviteModal(false)
+            setSelectedGameForInvite(null)
+          }}
+          onInviteSuccess={handleInviteSuccess}
+        />
       )}
 
     </div>
