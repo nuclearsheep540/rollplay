@@ -589,39 +589,57 @@ class WebsocketEvent():
         manager.update_party_status(client_id, player_name, False)
         
         manager.remove_connection(websocket, client_id, player_name)
-        
-        # Clean up disconnected player's seat
-        current_seats = GameService.get_seat_layout(client_id)
-        
-        # Remove disconnected player from their seat (case-insensitive)
-        updated_seats = []
-        for seat in current_seats:
-            if seat.lower() == player_name.lower():
-                updated_seats.append("empty")
-            else:
-                updated_seats.append(seat)
-        
-        # Update seat layout in database
-        GameService.update_seat_layout(client_id, updated_seats)
-        
-        # Broadcast player disconnection event
-        disconnect_message = {
-            "event_type": "player_disconnected", 
-            "data": {
-                "disconnected_player": player_name
+
+        # Try to clean up disconnected player's seat (may fail if room already closed)
+        try:
+            current_seats = GameService.get_seat_layout(client_id)
+
+            # Remove disconnected player from their seat (case-insensitive)
+            updated_seats = []
+            for seat in current_seats:
+                if seat.lower() == player_name.lower():
+                    updated_seats.append("empty")
+                else:
+                    updated_seats.append(seat)
+
+            # Update seat layout in database (may fail if room was deleted)
+            GameService.update_seat_layout(client_id, updated_seats)
+
+            # Broadcast player disconnection event
+            disconnect_message = {
+                "event_type": "player_disconnected",
+                "data": {
+                    "disconnected_player": player_name
+                }
             }
-        }
-        
-        # Broadcast updated seat layout to all remaining clients
-        seat_change_message = {
-            "event_type": "seat_change",
-            "data": updated_seats
-        }
-        
-        return WebsocketEventResult(
-            broadcast_message=disconnect_message,
-            clear_prompt_message=seat_change_message  # Reuse this field for the seat update
-        )
+
+            # Broadcast updated seat layout to all remaining clients
+            seat_change_message = {
+                "event_type": "seat_change",
+                "data": updated_seats
+            }
+
+            return WebsocketEventResult(
+                broadcast_message=disconnect_message,
+                clear_prompt_message=seat_change_message  # Reuse this field for the seat update
+            )
+        except Exception as e:
+            # Room was likely already closed/deleted - this is fine, just log it
+            print(f"⚠️ Could not update seat layout for {player_name} in room {client_id}: {str(e)}")
+            print(f"ℹ️ Room may have been closed - graceful disconnect without seat update")
+
+            # Still broadcast disconnect message even if DB update fails
+            disconnect_message = {
+                "event_type": "player_disconnected",
+                "data": {
+                    "disconnected_player": player_name
+                }
+            }
+
+            return WebsocketEventResult(
+                broadcast_message=disconnect_message,
+                clear_prompt_message=None
+            )
 
     @staticmethod 
     async def role_change(websocket, data, event_data, player_name, client_id, manager):
