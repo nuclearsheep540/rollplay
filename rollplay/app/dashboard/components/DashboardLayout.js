@@ -54,9 +54,9 @@ export default function DashboardLayout({
   }
 
   return (
-    <div className="min-h-screen flex flex-col bg-slate-950 text-slate-200">
-      {/* Top Navigation Bar */}
-      <header className="bg-gray-900 border-b border-gray-800 p-4 flex justify-between items-center">
+    <div className="h-screen flex flex-col bg-slate-950 text-slate-200 overflow-hidden">
+      {/* Top Navigation Bar - Fixed */}
+      <header className="flex-shrink-0 bg-gray-900 border-b border-gray-800 p-4 flex justify-between items-center">
         <div className="text-2xl font-extrabold text-white flex items-center">
           <span>Tabletop Tavern</span>
         </div>
@@ -88,9 +88,9 @@ export default function DashboardLayout({
         </nav>
       </header>
 
-      <div className="flex flex-1">
-        {/* Sidebar Navigation */}
-        <aside className="w-64 bg-gray-900 border-r border-gray-800 p-4 flex flex-col justify-between">
+      <div className="flex flex-1 overflow-hidden">
+        {/* Sidebar Navigation - Fixed */}
+        <aside className="flex-shrink-0 w-64 bg-gray-900 border-r border-gray-800 p-4 flex flex-col justify-between overflow-y-auto">
           <div>
             <nav>
               <ul className="space-y-1">
@@ -155,8 +155,8 @@ export default function DashboardLayout({
           </div>
         </aside>
 
-        {/* Main Content Area */}
-        <main className="flex-1 p-4 sm:p-8 md:p-10">
+        {/* Main Content Area - Scrollable */}
+        <main className="flex-1 overflow-y-auto p-4 sm:p-8 md:p-10 pb-64">
           {children}
         </main>
       </div>

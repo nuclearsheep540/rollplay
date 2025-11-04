@@ -133,7 +133,12 @@ class GameAggregate:
         - Cannot invite the host
         - Cannot invite user who already has pending invite
         - Cannot invite user who already joined
+        - Cannot invite during STARTING or STOPPING transitions
         """
+        # Check game status - block during ETL transitions
+        if self.status in [GameStatus.STARTING, GameStatus.STOPPING]:
+            raise ValueError("Cannot invite users while game is starting or stopping")
+
         if user_id == self.host_id:
             raise ValueError("Cannot invite the host as a player")
 

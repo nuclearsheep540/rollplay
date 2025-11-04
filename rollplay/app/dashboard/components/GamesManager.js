@@ -7,8 +7,10 @@
 
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
+import { createPortal } from 'react-dom'
 import GameInviteModal from './GameInviteModal'
 import CharacterSelectionModal from './CharacterSelectionModal'
+import EndGameModal from './EndGameModal'
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
 import {
   faCheck,
@@ -35,6 +37,12 @@ export default function GamesManager({ user }) {
   const [startingGame, setStartingGame] = useState(null)
   const [endingGame, setEndingGame] = useState(null)
   const [deletingGame, setDeletingGame] = useState(null)
+  const [showDeleteModal, setShowDeleteModal] = useState(false)
+  const [gameToDelete, setGameToDelete] = useState(null)
+  const [deleteLoading, setDeleteLoading] = useState(false)
+  const [deleteError, setDeleteError] = useState(null)
+  const [showEndGameModal, setShowEndGameModal] = useState(false)
+  const [gameToEnd, setGameToEnd] = useState(null)
 
   useEffect(() => {
     fetchGamesAndCharacters()
@@ -218,17 +226,27 @@ export default function GamesManager({ user }) {
     }
   }
 
-  // End game session
-  const endGame = async (gameId) => {
-    if (!confirm('Are you sure you want to end this game session? All player progress will be saved.')) {
-      return
-    }
+  // Show end game modal
+  const promptEndGame = (game) => {
+    setGameToEnd(game)
+    setShowEndGameModal(true)
+  }
 
-    setEndingGame(gameId)
+  // Cancel end game
+  const cancelEndGame = () => {
+    setShowEndGameModal(false)
+    setGameToEnd(null)
+  }
+
+  // Confirm end game
+  const confirmEndGame = async () => {
+    if (!gameToEnd) return
+
+    setEndingGame(gameToEnd.id)
     setError(null)
 
     try {
-      const response = await fetch(`/api/games/${gameId}/end`, {
+      const response = await fetch(`/api/games/${gameToEnd.id}/end`, {
         method: 'POST',
         credentials: 'include'
       })
@@ -238,6 +256,8 @@ export default function GamesManager({ user }) {
         throw new Error(errorData.detail || 'Failed to end game')
       }
 
+      setShowEndGameModal(false)
+      setGameToEnd(null)
       await fetchGamesAndCharacters()
     } catch (err) {
       console.error('Error ending game:', err)
@@ -247,17 +267,29 @@ export default function GamesManager({ user }) {
     }
   }
 
-  // Delete game
-  const deleteGame = async (gameId, gameName) => {
-    if (!confirm(`Are you sure you want to delete "${gameName}"? This action cannot be undone.`)) {
-      return
-    }
+  // Show delete confirmation modal
+  const handleDeleteClick = (game) => {
+    setGameToDelete(game)
+    setShowDeleteModal(true)
+    setDeleteError(null)
+  }
 
-    setDeletingGame(gameId)
-    setError(null)
+  // Cancel delete
+  const handleCancelDelete = () => {
+    setShowDeleteModal(false)
+    setGameToDelete(null)
+    setDeleteError(null)
+  }
+
+  // Confirm delete
+  const handleConfirmDelete = async () => {
+    if (!gameToDelete) return
+
+    setDeleteLoading(true)
+    setDeleteError(null)
 
     try {
-      const response = await fetch(`/api/games/${gameId}`, {
+      const response = await fetch(`/api/games/${gameToDelete.id}`, {
         method: 'DELETE',
         credentials: 'include'
       })
@@ -267,12 +299,15 @@ export default function GamesManager({ user }) {
         throw new Error(errorData.detail || 'Failed to delete game')
       }
 
+      // Close modal and refresh
+      setShowDeleteModal(false)
+      setGameToDelete(null)
       await fetchGamesAndCharacters()
     } catch (err) {
       console.error('Error deleting game:', err)
-      setError(err.message)
+      setDeleteError(err.message)
     } finally {
-      setDeletingGame(null)
+      setDeleteLoading(false)
     }
   }
 
@@ -360,21 +395,11 @@ export default function GamesManager({ user }) {
                       Invite
                     </button>
                     <button
-                      onClick={() => deleteGame(game.id, game.name)}
-                      disabled={deletingGame === game.id}
-                      className="px-3 py-1.5 bg-red-600 text-white rounded-lg border border-red-500 hover:bg-red-500 hover:shadow-lg hover:shadow-red-500/30 transition-all font-semibold text-sm disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1.5"
+                      onClick={() => handleDeleteClick(game)}
+                      className="px-3 py-1.5 bg-red-600 text-white rounded-lg border border-red-500 hover:bg-red-500 hover:shadow-lg hover:shadow-red-500/30 transition-all font-semibold text-sm flex items-center gap-1.5"
                     >
-                      {deletingGame === game.id ? (
-                        <>
-                          <div className="animate-spin rounded-full h-3 w-3 border-b-2 border-white"></div>
-                          Deleting...
-                        </>
-                      ) : (
-                        <>
-                          <FontAwesomeIcon icon={faTrash} className="text-xs" />
-                          Delete
-                        </>
-                      )}
+                      <FontAwesomeIcon icon={faTrash} className="text-xs" />
+                      Delete
                     </button>
                   </>
                 )}
@@ -399,21 +424,18 @@ export default function GamesManager({ user }) {
                       Enter
                     </button>
                     <button
-                      onClick={() => endGame(game.id)}
-                      disabled={endingGame === game.id}
-                      className="px-3 py-1.5 bg-orange-600 text-white rounded-lg border border-orange-500 hover:bg-orange-500 hover:shadow-lg hover:shadow-orange-500/30 transition-all font-semibold text-sm disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1.5"
+                      onClick={() => openInviteModal(game)}
+                      className="px-3 py-1.5 bg-purple-600 text-white rounded-lg border border-purple-500 hover:bg-purple-500 hover:shadow-lg hover:shadow-purple-500/30 transition-all font-semibold text-sm flex items-center gap-1.5"
                     >
-                      {endingGame === game.id ? (
-                        <>
-                          <div className="animate-spin rounded-full h-3 w-3 border-b-2 border-white"></div>
-                          Ending...
-                        </>
-                      ) : (
-                        <>
-                          <FontAwesomeIcon icon={faStop} className="text-xs" />
-                          End
-                        </>
-                      )}
+                      <FontAwesomeIcon icon={faUserPlus} className="text-xs" />
+                      Invite
+                    </button>
+                    <button
+                      onClick={() => promptEndGame(game)}
+                      className="px-3 py-1.5 bg-orange-600 text-white rounded-lg border border-orange-500 hover:bg-orange-500 hover:shadow-lg hover:shadow-orange-500/30 transition-all font-semibold text-sm flex items-center gap-1.5"
+                    >
+                      <FontAwesomeIcon icon={faStop} className="text-xs" />
+                      End
                     </button>
                   </>
                 )}
@@ -668,6 +690,63 @@ export default function GamesManager({ user }) {
             setSelectedGameForCharacter(null)
           }}
           onCharacterSelected={handleCharacterSelected}
+        />
+      )}
+
+      {/* Delete Game Confirmation Modal */}
+      {showDeleteModal && gameToDelete && typeof document !== 'undefined' && createPortal(
+        <div className="fixed inset-0 bg-slate-950/90 backdrop-blur-sm flex items-center justify-center z-50">
+          <div className="bg-slate-800 border border-purple-500/30 rounded-lg shadow-2xl shadow-purple-500/20 p-6 max-w-md w-full mx-4">
+            <h3 className="text-xl font-bold text-purple-400 mb-2">Delete Game Session</h3>
+            <p className="text-slate-300 mb-1">
+              Are you sure you want to delete <strong className="text-purple-400">{gameToDelete.name}</strong>?
+            </p>
+            <p className="text-sm text-slate-500 mb-4">This action cannot be undone.</p>
+
+            {deleteError && (
+              <div className="mb-4 bg-red-500/20 border border-red-500/30 text-red-400 px-4 py-3 rounded">
+                {deleteError}
+              </div>
+            )}
+
+            <div className="flex gap-3 justify-end">
+              <button
+                onClick={handleCancelDelete}
+                disabled={deleteLoading}
+                className="px-4 py-2 bg-slate-700 text-slate-300 border border-slate-600 rounded-lg hover:bg-slate-600 transition-colors disabled:opacity-50"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleConfirmDelete}
+                disabled={deleteLoading}
+                className="px-4 py-2 bg-red-600 text-white border border-red-500 rounded-lg hover:bg-red-500 hover:shadow-lg hover:shadow-red-500/30 transition-all disabled:opacity-50 flex items-center gap-2"
+              >
+                {deleteLoading ? (
+                  <>
+                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                    Deleting...
+                  </>
+                ) : (
+                  <>
+                    <FontAwesomeIcon icon={faTrash} />
+                    Delete
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
+        </div>,
+        document.body
+      )}
+
+      {/* End Game Confirmation Modal */}
+      {showEndGameModal && (
+        <EndGameModal
+          game={gameToEnd}
+          onConfirm={confirmEndGame}
+          onCancel={cancelEndGame}
+          isEnding={endingGame === gameToEnd?.id}
         />
       )}
     </div>
