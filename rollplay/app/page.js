@@ -82,7 +82,7 @@ export default function Home() {
             }}>
               <div className="text-5xl mb-4">📧</div>
               <h3 className="text-slate-50 text-2xl font-bold mb-4" style={{textShadow: '0 1px 2px rgba(0,0,0,0.5)'}}>Sign Up</h3>
-              <p className="text-slate-300 text-lg leading-relaxed font-medium">All you need to start is an email address and you can sign up passwordless to start managing campaigns and characters</p>
+              <p className="text-slate-300 text-lg leading-relaxed font-medium">All you need is an email to get started</p>
             </div>
             
             <div className="p-12 rounded-xl text-center max-w-sm flex-1 min-w-[320px]" style={{

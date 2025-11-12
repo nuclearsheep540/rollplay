@@ -359,7 +359,7 @@ export default function GamesManager({ user }) {
                 ? 'bg-amber-500/20 text-amber-400 border-amber-500/30'
                 : 'bg-slate-700 text-slate-400 border-slate-600'
             }`}>
-              {game.status}
+              {game.status.charAt(0).toUpperCase() + game.status.slice(1)}
             </span>
           </div>
 

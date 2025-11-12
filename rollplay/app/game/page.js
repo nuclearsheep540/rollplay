@@ -6,7 +6,7 @@
 'use client'
 
 import { React, useEffect, useState, useMemo, useCallback, useRef, Suspense } from 'react'
-import { useSearchParams } from "next/navigation";
+import { useSearchParams, useRouter } from "next/navigation";
 import { getSeatColor } from '../utils/seatColors';
 
 import PlayerCard from "./components/PlayerCard";
@@ -22,7 +22,8 @@ import { useUnifiedAudio } from '../audio_management';
 import { MapDisplay, GridOverlay, useMapWebSocket } from '../map_management';
 
 function GameContent() {
-  const params = useSearchParams(); 
+  const params = useSearchParams();
+  const router = useRouter(); 
 
   const [room404, setRoom404] = useState(false)
   const [thisPlayer, setThisPlayer] = useState()
@@ -927,10 +928,6 @@ function GameContent() {
     }
   };
 
-  // Toggle campaign settings
-  const toggleCampaignSettings = () => {
-    console.log('Opening campaign settings...');
-  };
 
   // Handle clearing system messages
   const handleClearSystemMessages = async () => {
@@ -1200,15 +1197,8 @@ function GameContent() {
           <div className="campaign-title">The Curse of Strahd</div>
           <div className="location-breadcrumb">› Barovia Village › The Blood on the Vine Tavern</div>
         </div>
-        
+
         <div className="dm-controls-bar">
-          <div 
-            className="room-code" 
-            onClick={copyRoomCode}
-            title="Click to copy room code"
-          >
-            Room: {roomId}
-          </div>
           {/* Master Volume Control */}
           <div className="master-volume-control">
             <label htmlFor="master-volume" className="volume-label">
@@ -1244,24 +1234,24 @@ function GameContent() {
               </span>
             )}
           </div>
-          
+
           {/* UI Scale Toggle */}
           <div className="ui-scale-nav">
-            <button 
+            <button
               className={`scale-btn ${uiScale === 'small' ? 'active' : ''}`}
               onClick={() => setUIScale('small')}
               title="Small UI"
             >
               S
             </button>
-            <button 
+            <button
               className={`scale-btn ${uiScale === 'medium' ? 'active' : ''}`}
               onClick={() => setUIScale('medium')}
               title="Medium UI"
             >
               M
             </button>
-            <button 
+            <button
               className={`scale-btn ${uiScale === 'large' ? 'active' : ''}`}
               onClick={() => setUIScale('large')}
               title="Large UI"
@@ -1269,9 +1259,17 @@ function GameContent() {
               L
             </button>
           </div>
-          
-          <button className="control-btn">📝 Notes</button>
-          <button className="control-btn" onClick={toggleCampaignSettings}>⚙️ Campaign Settings</button>
+
+          <button
+            onClick={() => router.push('/dashboard?tab=games')}
+            className="flex items-center gap-2 px-4 py-2 bg-slate-700 hover:bg-slate-600 text-slate-200 rounded-lg border border-slate-600 transition-all text-sm"
+            title="Back to Dashboard"
+          >
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
+            </svg>
+            Back to Dashboard
+          </button>
         </div>
       </div>
 

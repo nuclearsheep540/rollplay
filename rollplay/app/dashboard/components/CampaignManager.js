@@ -361,9 +361,13 @@ export default function CampaignManager({ user }) {
     }
   }
 
-  // Show campaign details
-  const showCampaignDetails = (campaign) => {
-    setSelectedCampaign(campaign)
+  // Toggle campaign details
+  const toggleCampaignDetails = (campaign) => {
+    if (selectedCampaign?.id === campaign.id) {
+      setSelectedCampaign(null)
+    } else {
+      setSelectedCampaign(campaign)
+    }
   }
 
   // Scroll to game sessions panel when selectedCampaign changes
@@ -478,7 +482,7 @@ export default function CampaignManager({ user }) {
                     } : {
                       background: 'linear-gradient(135deg, rgba(192, 132, 252, 0.3) 0%, rgba(233, 213, 255, 0.15) 50%)'
                     }}
-                    onClick={() => showCampaignDetails(campaign)}
+                    onClick={() => toggleCampaignDetails(campaign)}
                   >
                     {/* Gradient Overlay */}
                     <div className="absolute inset-0 bg-gradient-to-t from-slate-900/25 via-slate-900/15 to-slate-900/5" />
@@ -504,7 +508,7 @@ export default function CampaignManager({ user }) {
                               <button
                                 onClick={(e) => {
                                   e.stopPropagation()
-                                  showCampaignDetails(campaign)
+                                  toggleCampaignDetails(campaign)
                                 }}
                                 className="w-10 h-10 bg-purple-500/80 backdrop-blur-sm hover:bg-purple-500 text-white rounded-lg transition-all flex items-center justify-center border border-purple-400/50"
                                 title="Configure Campaign"
@@ -519,7 +523,7 @@ export default function CampaignManager({ user }) {
                                 className="w-10 h-10 bg-green-500/80 backdrop-blur-sm hover:bg-green-500 text-white rounded-lg transition-all flex items-center justify-center border border-green-400/50"
                                 title="Create Game"
                               >
-                                <FontAwesomeIcon icon={faGamepad} />
+                                <FontAwesomeIcon icon={faPlus} />
                               </button>
                               <button
                                 onClick={(e) => {
@@ -587,7 +591,7 @@ export default function CampaignManager({ user }) {
                                       game.status === 'inactive' ? 'text-slate-400' :
                                       'text-amber-400'
                                     }`}>
-                                      {game.status}
+                                      {game.status.charAt(0).toUpperCase() + game.status.slice(1)}
                                     </span>
                                   </p>
                                 </div>

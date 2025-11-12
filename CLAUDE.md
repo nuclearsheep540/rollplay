@@ -985,41 +985,46 @@ docker exec nginx-dev ping api-game
 1. **Authentication Flow**: Frontend → api-auth (JWT/OTP) → api-site validates JWT (shared secret)
 2. **Campaign/Game Metadata**: Frontend → api-site (CRUD via DDD aggregates) → PostgreSQL
 3. **Active Game Sessions**: Frontend → api-game (WebSocket + MongoDB `active_sessions`)
+4. **Game Lifecycle**: Full game start/end flow with HTTP-based ETL (Cold ↔ Hot migration)
+5. **Game Entity**: Fully integrated into Campaign aggregate with working commands
 
-#### **❌ The Gap - Not Yet Implemented:**
-- No ETL pipeline bridging api-site ↔ api-game
-- Cannot start/end game sessions (no cold ↔ hot migration)
-- Game entity partially broken (needs integration into Campaign aggregate)
+#### **✅ HTTP-Based ETL Solution (Short-Term Implementation)**
 
-#### **🚧 Planned ETL Pipeline (Event-Driven Design):**
+**Pattern**: Direct HTTP communication between api-site and api-game for state migration
 
 **Game Start Flow (Cold → Hot)**:
 1. DM clicks "Start Game" in frontend
 2. Frontend → api-site: `POST /api/campaigns/games/{game_id}/start`
-3. api-site: Updates game status to STARTING, publishes event
-4. **ETL Service**: Receives event, gathers all game state from PostgreSQL
-5. **ETL Service**: Sends complete state payload to api-game
-6. api-game: Creates MongoDB `active_sessions` document, confirms ready
-7. **ETL Service**: Publishes "game_ready" event
-8. api-site: Updates game status to ACTIVE, frontend can now connect WebSocket
+3. api-site: Updates game status to STARTING
+4. api-site: Gathers all game state from PostgreSQL (campaign data, maps, music, etc.)
+5. **api-site → api-game HTTP**: Sends complete state payload via HTTP request
+6. api-game: Creates MongoDB `active_sessions` document with complete game state
+7. api-game: Responds with success confirmation
+8. api-site: Updates game status to ACTIVE
+9. Frontend can now connect WebSocket to active game session
 
 **Game End Flow (Hot → Cold)**:
 1. DM clicks "End Game" in frontend
 2. Frontend → api-site: `POST /api/campaigns/games/{game_id}/end`
-3. api-site: Updates game status to STOPPING, publishes event
-4. **ETL Service**: Receives event, requests final state from api-game
-5. api-game: Sends complete atomic state as payload
-6. **ETL Service**: Updates PostgreSQL with final state (players, game data)
-7. **ETL Service**: Confirms persistence complete
-8. **ETL Service**: Sends delete confirmation to api-game
+3. api-site: Updates game status to STOPPING
+4. **api-site → api-game HTTP**: Requests final game state via HTTP
+5. api-game: Sends complete atomic state as HTTP response
+6. api-site: Updates PostgreSQL with final state (players, game data, adventure log)
+7. api-site: Confirms persistence complete
+8. **api-site → api-game HTTP**: Sends delete confirmation via HTTP
 9. api-game: Deletes MongoDB `active_sessions` document
 10. api-site: Updates game status to INACTIVE
 
-**Why Event-Driven?**:
-- api-site can respond synchronously to HTTP requests
-- Frontend awaits events asynchronously for completion
-- ETL pipeline can be complex without blocking api-site
-- Clean separation of concerns
+**Why HTTP Instead of Event-Driven?**:
+- **Simpler**: No message broker (RabbitMQ/Kafka) required
+- **Synchronous**: Easier error handling and debugging
+- **Good Enough**: Works well for current scale
+- **Future Path**: Can migrate to event-driven architecture when scaling requires it
+
+**Trade-offs Accepted**:
+- Tight coupling between api-site and api-game (acceptable for monolith-like deployment)
+- Synchronous blocking calls (acceptable given current traffic patterns)
+- No retry/queue mechanism (handle failures with try-catch and rollback)
 
 ### **Key Design Decisions**
 
@@ -1030,19 +1035,20 @@ docker exec nginx-dev ping api-game
 - **Trade-off**: Accepted for performance, rely on JWT expiration
 
 #### **Service Isolation**
-**Current**: api-game and api-site completely independent
+**Current**: api-game and api-site communicate via HTTP for ETL only
 - api-game has NO knowledge of campaigns, users, site concepts
-- api-game ONLY receives/returns state payloads via ETL
-- Clean separation enables independent scaling/deployment
+- api-game ONLY receives/returns state payloads via HTTP requests
+- Clean separation maintained despite HTTP coupling
+- HTTP endpoints on api-game are ETL-specific (not exposed to frontend)
 
 #### **Game Entity Relationship**
 **Rule**: You cannot have a Game without a Campaign
 - Game is entity within Campaign aggregate (not root)
-- Game should be defined INSIDE campaign aggregate (not separate module)
-- Game entity exists exclusively to the Campaign aggregate
+- Game entity lives under `/modules/campaign/game/` as part of Campaign aggregate
+- Game entity fully integrated with working lifecycle commands
 - Game lifecycle tied to Campaign existence
-- Game metadata (INACTIVE/ACTIVE status) lives in api-site
-- **Current Issue**: Game entity defined in `/modules/campaign/game/` but needs refactoring to be properly integrated into Campaign aggregate
+- Game metadata (INACTIVE/ACTIVE status) lives in api-site PostgreSQL
+- Active game sessions live in api-game MongoDB
 
 ## Docker Services
 - **rollplay**: Next.js frontend application (single SPA, NOT split)
@@ -1063,30 +1069,26 @@ docker exec nginx-dev ping api-game
 
 ---
 
-## 🚧 Current Implementation Status - CRITICAL REFERENCE
+## ✅ Current Implementation Status - CRITICAL REFERENCE
 
-### **✅ Working Features**
+### **✅ Fully Working Features**
 - **User Authentication**: Magic link, OTP, JWT (full flow works)
 - **User Aggregate**: Complete CRUD operations
-- **Campaign Aggregate**: Full CRUD + player management
+- **Campaign Aggregate**: Full CRUD + player management + Game entity management
+- **Game Entity**: Fully integrated into Campaign aggregate with working lifecycle
+- **Game Lifecycle**: Complete start/end flow with HTTP-based ETL (Cold ↔ Hot migration)
+- **Active Game Sessions**: WebSocket connections, MongoDB state management, real-time gameplay
 - **Infrastructure**: NGINX, PostgreSQL, MongoDB, Redis, Docker
 
-### **⚠️ Partially Broken - DO NOT MODIFY**
-- **Game Entity**: Exists at `/modules/campaign/game/` but not integrated into Campaign aggregate (commands broken: CreateGame, StartGame, EndGame, DeleteGame)
-- **Block Reason**: Waiting on ETL pipeline design
-
-### **❌ Not Yet Implemented**
-- **ETL Pipeline**: No bridge between api-site ↔ api-game
-- **Game Sessions**: Cannot start/end from frontend
-- **Characters Aggregate**: Placeholder only, not tested
+### **⚠️ Minimal Implementation - Works But Basic**
+- **Characters Aggregate**: Basic CRUD exists but minimally tested
 
 ### **🔧 Local Development Expectations**
 
-**Works**: ✅ Auth, User dashboard, Campaign CRUD
-**Broken**: ❌ Game creation, Game sessions, Characters
+**Works**: ✅ Auth, User dashboard, Campaign CRUD, Game creation/start/end, Active game sessions
+**Minimal**: ⚠️ Characters (basic CRUD only)
 
-**Safe to work on**: User/Campaign features, Auth improvements, Frontend UI
-**NOT safe**: Game entity, ETL pipeline, service-to-service communication
+**Safe to work on**: All features - User/Campaign/Game features, Auth improvements, Frontend UI, Active game sessions
 
 ---
 

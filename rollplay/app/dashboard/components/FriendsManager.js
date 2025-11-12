@@ -20,11 +20,11 @@ export default function FriendsManager({ user }) {
   const [friends, setFriends] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
-  const [friendUuid, setFriendUuid] = useState('')
+  const [friendCode, setFriendCode] = useState('')
   const [sending, setSending] = useState(false)
   const [actionLoading, setActionLoading] = useState({})
   const [lookupUser, setLookupUser] = useState(null)
-  const [copiedUuid, setCopiedUuid] = useState(false)
+  const [copiedCode, setCopiedCode] = useState(false)
   const [lookupLoading, setLookupLoading] = useState(false)
   const [lookupError, setLookupError] = useState(null)
 
@@ -38,23 +38,23 @@ export default function FriendsManager({ user }) {
     return uuidRegex.test(uuid)
   }
 
-  // Copy UUID to clipboard
-  const handleCopyUuid = async () => {
+  // Copy Friend Code to clipboard
+  const handleCopyCode = async () => {
     await navigator.clipboard.writeText(user.id)
-    setCopiedUuid(true)
-    setTimeout(() => setCopiedUuid(false), 2000)
+    setCopiedCode(true)
+    setTimeout(() => setCopiedCode(false), 2000)
   }
 
-  // Lookup user by UUID when valid UUID is entered
+  // Lookup user by Friend Code when valid code is entered
   useEffect(() => {
-    const lookupUserByUuid = async () => {
-      if (!friendUuid.trim()) {
+    const lookupUserByCode = async () => {
+      if (!friendCode.trim()) {
         setLookupUser(null)
         setLookupError(null)
         return
       }
 
-      if (!isValidUUID(friendUuid.trim())) {
+      if (!isValidUUID(friendCode.trim())) {
         setLookupUser(null)
         setLookupError(null)
         return
@@ -64,7 +64,7 @@ export default function FriendsManager({ user }) {
         setLookupLoading(true)
         setLookupError(null)
 
-        const response = await fetch(`/api/users/${friendUuid.trim()}`, {
+        const response = await fetch(`/api/users/${friendCode.trim()}`, {
           credentials: 'include'
         })
 
@@ -88,9 +88,9 @@ export default function FriendsManager({ user }) {
     }
 
     // Debounce the lookup
-    const timeoutId = setTimeout(lookupUserByUuid, 500)
+    const timeoutId = setTimeout(lookupUserByCode, 500)
     return () => clearTimeout(timeoutId)
-  }, [friendUuid])
+  }, [friendCode])
 
   const fetchFriends = async () => {
     try {
@@ -121,8 +121,8 @@ export default function FriendsManager({ user }) {
   const sendFriendRequest = async (e) => {
     e.preventDefault()
 
-    if (!friendUuid.trim()) {
-      setError('Please enter a friend UUID')
+    if (!friendCode.trim()) {
+      setError('Please enter a friend code')
       return
     }
 
@@ -136,7 +136,7 @@ export default function FriendsManager({ user }) {
           'Content-Type': 'application/json',
         },
         credentials: 'include',
-        body: JSON.stringify({ friend_uuid: friendUuid.trim() })
+        body: JSON.stringify({ friend_uuid: friendCode.trim() })
       })
 
       if (!response.ok) {
@@ -144,7 +144,7 @@ export default function FriendsManager({ user }) {
         throw new Error(errorData.detail || 'Failed to send friend request')
       }
 
-      setFriendUuid('')
+      setFriendCode('')
       await fetchFriends()
     } catch (err) {
       console.error('Error sending friend request:', err)
@@ -270,14 +270,14 @@ export default function FriendsManager({ user }) {
           <div>
             <input
               type="text"
-              value={friendUuid}
-              onChange={(e) => setFriendUuid(e.target.value)}
-              placeholder="Enter friend's UUID"
+              value={friendCode}
+              onChange={(e) => setFriendCode(e.target.value)}
+              placeholder="Enter friend's unique code"
               className="w-full px-4 py-2 bg-slate-700 border border-slate-600 text-slate-200 rounded focus:outline-none focus:ring-2 focus:ring-purple-500"
               disabled={sending}
             />
             {/* Real-time lookup feedback */}
-            {friendUuid && isValidUUID(friendUuid) && (
+            {friendCode && isValidUUID(friendCode) && (
               <div className="mt-2">
                 {lookupLoading && (
                   <p className="text-sm text-slate-500 flex items-center gap-2">
@@ -322,15 +322,15 @@ export default function FriendsManager({ user }) {
         </form>
         <div className="mt-4 flex items-center gap-2">
           <p className="text-sm text-slate-400">
-            Your UUID: <code className="bg-slate-900 border border-slate-700 px-2 py-1 rounded text-xs font-mono text-purple-400">{user.id}</code>
+            Your Friend Code: <code className="bg-slate-900 border border-slate-700 px-2 py-1 rounded text-xs font-mono text-purple-400">{user.id}</code>
           </p>
           <button
-            onClick={handleCopyUuid}
+            onClick={handleCopyCode}
             className="px-3 py-0.5 bg-purple-500/20 text-purple-400 border border-purple-500/30 rounded-lg font-semibold text-sm flex items-center"
-            title="Copy UUID"
+            title="Copy Friend Code"
           >
             <FontAwesomeIcon icon={faCopy} className="text-xs" />
-            {copiedUuid ? 'Copied!' : 'Copy'}
+            {copiedCode ? 'Copied!' : 'Copy'}
           </button>
         </div>
       </div>

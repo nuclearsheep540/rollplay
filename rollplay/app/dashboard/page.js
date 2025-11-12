@@ -16,7 +16,7 @@ import ScreenNameModal from './components/ScreenNameModal'
 import { useAuth } from './hooks/useAuth'
 
 function DashboardContent() {
-  const [activeSection, setActiveSection] = useState('characters')
+  const [activeSection, setActiveSection] = useState('campaigns')
   
   // Use auth hook for all authentication-related state and logic
   const {

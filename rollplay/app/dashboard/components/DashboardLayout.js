@@ -34,7 +34,7 @@ export default function DashboardLayout({
     } else if (!tabParam) {
       // If no tab parameter, set default and update URL
       const current = new URLSearchParams(Array.from(searchParams.entries()))
-      current.set('tab', 'characters')
+      current.set('tab', 'campaigns')
       const search = current.toString()
       router.replace(`/dashboard?${search}`)
     }
@@ -96,20 +96,6 @@ export default function DashboardLayout({
               <ul className="space-y-1">
                 <li>
                   <button
-                    onClick={() => switchSection('characters')}
-                    className={`w-full flex items-center p-3 transition-all duration-200 ${
-                      activeSection === 'characters'
-                        ? 'border-l-[3px] border-purple-500 text-purple-400 font-semibold'
-                        : 'border-l-[3px] border-transparent text-slate-400 hover:bg-purple-500/5 hover:text-slate-300'
-                    }`}
-                    title="Characters"
-                  >
-                    <FontAwesomeIcon icon={faUsers} className="text-base mr-3 w-5" />
-                    <span className="font-semibold">Characters</span>
-                  </button>
-                </li>
-                <li>
-                  <button
                     onClick={() => switchSection('campaigns')}
                     className={`w-full flex items-center p-3 transition-all duration-200 ${
                       activeSection === 'campaigns'
@@ -134,6 +120,20 @@ export default function DashboardLayout({
                   >
                     <FontAwesomeIcon icon={faDiceD20} className="text-base mr-3 w-5" />
                     <span className="font-semibold">Games</span>
+                  </button>
+                </li>
+                <li>
+                  <button
+                    onClick={() => switchSection('characters')}
+                    className={`w-full flex items-center p-3 transition-all duration-200 ${
+                      activeSection === 'characters'
+                        ? 'border-l-[3px] border-purple-500 text-purple-400 font-semibold'
+                        : 'border-l-[3px] border-transparent text-slate-400 hover:bg-purple-500/5 hover:text-slate-300'
+                    }`}
+                    title="Characters"
+                  >
+                    <FontAwesomeIcon icon={faUsers} className="text-base mr-3 w-5" />
+                    <span className="font-semibold">Characters</span>
                   </button>
                 </li>
                 <li>
