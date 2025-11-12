@@ -10,6 +10,7 @@ import { createPortal } from 'react-dom'
 import { useRouter } from 'next/navigation'
 import EndGameModal from './EndGameModal'
 import GameInviteModal from './GameInviteModal'
+import InviteButton from '../../shared/components/InviteButton'
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
 import {
   faGear,
@@ -20,8 +21,7 @@ import {
   faPlus,
   faPlay,
   faStop,
-  faRightToBracket,
-  faUserPlus
+  faRightToBracket
 } from '@fortawesome/free-solid-svg-icons'
 
 export default function CampaignManager({ user }) {
@@ -518,16 +518,6 @@ export default function CampaignManager({ user }) {
                               <button
                                 onClick={(e) => {
                                   e.stopPropagation()
-                                  openCreateGameModal(campaign.id)
-                                }}
-                                className="w-10 h-10 bg-green-500/80 backdrop-blur-sm hover:bg-green-500 text-white rounded-lg transition-all flex items-center justify-center border border-green-400/50"
-                                title="Create Game"
-                              >
-                                <FontAwesomeIcon icon={faPlus} />
-                              </button>
-                              <button
-                                onClick={(e) => {
-                                  e.stopPropagation()
                                   deleteCampaign(campaign.id, campaign.title)
                                 }}
                                 disabled={deletingCampaign === campaign.id}
@@ -544,11 +534,34 @@ export default function CampaignManager({ user }) {
                       {/* Middle - Spacer */}
                       <div className="flex-1"></div>
 
-                      {/* Bottom Row - Metadata */}
-                      <div className="text-slate-200 text-sm drop-shadow">
-                        <span>Created: {campaign.created_at ? new Date(campaign.created_at).toLocaleDateString() : 'Unknown'}</span>
-                        <span className="mx-2">•</span>
-                        <span>{campaignGames.length} session{campaignGames.length !== 1 ? 's' : ''}</span>
+                      {/* Bottom Row - Create Session Button & Metadata */}
+                      <div className="flex items-center justify-between">
+                        {activeGames.length > 0 ? (
+                          <div className="text-slate-200 text-sm drop-shadow">
+                            <span>Created: {campaign.created_at ? new Date(campaign.created_at).toLocaleDateString() : 'Unknown'}</span>
+                            <span className="mx-2">•</span>
+                            <span>{campaignGames.length} session{campaignGames.length !== 1 ? 's' : ''}</span>
+                          </div>
+                        ) : (
+                          <>
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation()
+                                openCreateGameModal(campaign.id)
+                              }}
+                              className="px-6 py-3 bg-green-500/90 backdrop-blur-sm hover:bg-green-500 text-white rounded-lg transition-all flex items-center gap-2 border border-green-400/50 font-semibold text-base shadow-lg hover:shadow-green-500/30"
+                              title="Create Session"
+                            >
+                              <FontAwesomeIcon icon={faPlus} />
+                              Create Session
+                            </button>
+                            <div className="text-slate-200 text-sm drop-shadow">
+                              <span>Created: {campaign.created_at ? new Date(campaign.created_at).toLocaleDateString() : 'Unknown'}</span>
+                              <span className="mx-2">•</span>
+                              <span>{campaignGames.length} session{campaignGames.length !== 1 ? 's' : ''}</span>
+                            </div>
+                          </>
+                        )}
                       </div>
                     </div>
                   </div>
@@ -608,14 +621,7 @@ export default function CampaignManager({ user }) {
                                         <FontAwesomeIcon icon={faRightToBracket} />
                                         Enter
                                       </button>
-                                      <button
-                                        onClick={() => openInviteModal(game)}
-                                        className="px-3 py-1.5 bg-blue-600 hover:bg-blue-500 text-white rounded-lg border border-blue-500 hover:shadow-lg hover:shadow-blue-500/30 transition-all text-sm font-medium flex items-center gap-2"
-                                        title="Invite Players"
-                                      >
-                                        <FontAwesomeIcon icon={faUserPlus} />
-                                        Invite
-                                      </button>
+                                      <InviteButton onClick={() => openInviteModal(game)} />
                                       <button
                                         onClick={() => promptEndGame(game)}
                                         disabled={endingGame === game.id}
@@ -655,14 +661,7 @@ export default function CampaignManager({ user }) {
                                           </>
                                         )}
                                       </button>
-                                      <button
-                                        onClick={() => openInviteModal(game)}
-                                        className="px-3 py-1.5 bg-blue-600 hover:bg-blue-500 text-white rounded-lg border border-blue-500 hover:shadow-lg hover:shadow-blue-500/30 transition-all text-sm font-medium flex items-center gap-2"
-                                        title="Invite Players"
-                                      >
-                                        <FontAwesomeIcon icon={faUserPlus} />
-                                        Invite
-                                      </button>
+                                      <InviteButton onClick={() => openInviteModal(game)} />
                                       <button
                                         onClick={() => deleteGame(game.id, game.name)}
                                         disabled={deletingGame === game.id}

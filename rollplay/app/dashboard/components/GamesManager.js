@@ -11,13 +11,13 @@ import { createPortal } from 'react-dom'
 import GameInviteModal from './GameInviteModal'
 import CharacterSelectionModal from './CharacterSelectionModal'
 import EndGameModal from './EndGameModal'
+import InviteButton from '../../shared/components/InviteButton'
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
 import {
   faCheck,
   faXmark,
   faGamepad,
   faHourglass,
-  faUserPlus,
   faPlay,
   faStop,
   faTrash,
@@ -387,13 +387,7 @@ export default function GamesManager({ user }) {
                         </>
                       )}
                     </button>
-                    <button
-                      onClick={() => openInviteModal(game)}
-                      className="px-3 py-1.5 bg-purple-600 text-white rounded-lg border border-purple-500 hover:bg-purple-500 hover:shadow-lg hover:shadow-purple-500/30 transition-all font-semibold text-sm flex items-center gap-1.5"
-                    >
-                      <FontAwesomeIcon icon={faUserPlus} className="text-xs" />
-                      Invite
-                    </button>
+                    <InviteButton onClick={() => openInviteModal(game)} />
                     <button
                       onClick={() => handleDeleteClick(game)}
                       className="px-3 py-1.5 bg-red-600 text-white rounded-lg border border-red-500 hover:bg-red-500 hover:shadow-lg hover:shadow-red-500/30 transition-all font-semibold text-sm flex items-center gap-1.5"
@@ -423,13 +417,7 @@ export default function GamesManager({ user }) {
                       <FontAwesomeIcon icon={faRightToBracket} className="text-xs" />
                       Enter
                     </button>
-                    <button
-                      onClick={() => openInviteModal(game)}
-                      className="px-3 py-1.5 bg-purple-600 text-white rounded-lg border border-purple-500 hover:bg-purple-500 hover:shadow-lg hover:shadow-purple-500/30 transition-all font-semibold text-sm flex items-center gap-1.5"
-                    >
-                      <FontAwesomeIcon icon={faUserPlus} className="text-xs" />
-                      Invite
-                    </button>
+                    <InviteButton onClick={() => openInviteModal(game)} />
                     <button
                       onClick={() => promptEndGame(game)}
                       className="px-3 py-1.5 bg-orange-600 text-white rounded-lg border border-orange-500 hover:bg-orange-500 hover:shadow-lg hover:shadow-orange-500/30 transition-all font-semibold text-sm flex items-center gap-1.5"
@@ -498,6 +486,10 @@ export default function GamesManager({ user }) {
 
         {/* Game Meta Info */}
         <div className="text-sm text-slate-400 space-y-1 mb-4">
+          <p>
+            <span className="font-semibold text-slate-300">Dungeon Master:</span>{' '}
+            {game.host_name}
+          </p>
           <p>
             <span className="font-semibold text-slate-300">Players:</span>{' '}
             {game.player_count} / {game.max_players}

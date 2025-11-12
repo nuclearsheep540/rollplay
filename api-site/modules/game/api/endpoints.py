@@ -61,6 +61,10 @@ def _to_game_response(game: GameAggregate, db: Session) -> GameResponse:
     from modules.user.model.user_model import User
     from modules.characters.model.character_model import Character
 
+    # Fetch host/DM information
+    host_user = db.query(User).filter(User.id == game.host_id).first()
+    host_name = host_user.screen_name or host_user.email if host_user else "Unknown"
+
     # Fetch roster data with character and user information
     roster_data = []
     roster_query = db.query(
@@ -92,6 +96,7 @@ def _to_game_response(game: GameAggregate, db: Session) -> GameResponse:
         name=game.name,
         campaign_id=game.campaign_id,
         host_id=game.host_id,
+        host_name=host_name,
         status=game.status.value,
         created_at=game.created_at,
         started_at=game.started_at,

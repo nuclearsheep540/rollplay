@@ -47,6 +47,7 @@ class GameResponse(BaseModel):
     name: str
     campaign_id: UUID
     host_id: UUID
+    host_name: str  # DM/Host screen name or email
     status: str
     created_at: datetime
     started_at: Optional[datetime]
