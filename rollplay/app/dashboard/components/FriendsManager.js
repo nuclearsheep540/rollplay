@@ -326,7 +326,7 @@ export default function FriendsManager({ user }) {
           </p>
           <button
             onClick={handleCopyCode}
-            className="px-3 py-0.5 bg-purple-500/20 text-purple-400 border border-purple-500/30 rounded-lg font-semibold text-sm flex items-center"
+            className="px-3 py-0.5 bg-purple-500/20 text-purple-400 border border-purple-500/30 rounded-lg font-semibold text-sm flex items-center hover:bg-purple-500/30 hover:border-purple-500/50 transition-all"
             title="Copy Friend Code"
           >
             <FontAwesomeIcon icon={faCopy} className="text-xs" />
@@ -358,7 +358,7 @@ export default function FriendsManager({ user }) {
                 <button
                   onClick={() => removeFriend(friendship.friend_id)}
                   disabled={actionLoading[`remove-${friendship.friend_id}`]}
-                  className="px-4 py-2 bg-red-600 text-white rounded hover:bg-red-700 disabled:bg-slate-400 disabled:cursor-not-allowed transition-colors"
+                  className="px-4 py-2 bg-red-600 text-white rounded-lg border border-red-500 hover:bg-red-500 disabled:bg-slate-600 disabled:border-slate-600 disabled:cursor-not-allowed transition-all"
                 >
                   Remove
                 </button>
@@ -438,7 +438,7 @@ export default function FriendsManager({ user }) {
                 <button
                   onClick={() => removeFriend(request.recipient_id)}
                   disabled={actionLoading[`remove-${request.recipient_id}`]}
-                  className="px-4 py-2 bg-slate-600 text-white rounded hover:bg-slate-700 disabled:bg-slate-400 disabled:cursor-not-allowed transition-colors"
+                  className="px-4 py-2 bg-red-600 text-white rounded-lg border border-red-500 hover:bg-red-500 disabled:bg-slate-600 disabled:border-slate-600 disabled:cursor-not-allowed transition-all"
                 >
                   Cancel
                 </button>

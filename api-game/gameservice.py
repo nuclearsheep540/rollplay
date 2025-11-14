@@ -120,10 +120,10 @@ class GameService:
     def update_seat_layout(room_id: str, seat_layout: list):
         """Update the seat layout for a room"""
         collection = GameService._get_active_session()
-        
+
         # Lowercase all player names in the seat layout for consistency
         normalized_seat_layout = [name.lower() if name != "empty" else name for name in seat_layout]
-        
+
         # Handle ObjectId conversion like get_room does
         try:
             oid = ObjectId(oid=room_id)
@@ -131,6 +131,13 @@ class GameService:
         except Exception:
             # Fall back to string ID (for test rooms or non-ObjectId rooms)
             filter_criteria = {"_id": room_id}
+
+        # Validate: Prevent DM from taking player seats
+        room = collection.find_one(filter_criteria)
+        if room:
+            dm_name = room.get("dungeon_master", "").lower()
+            if dm_name and dm_name in normalized_seat_layout:
+                raise Exception("Dungeon Master cannot sit in party seats")
         
         print(f"🔄 Updating seat layout with filter: {filter_criteria}")
         print(f"📝 New seat layout: {normalized_seat_layout}")

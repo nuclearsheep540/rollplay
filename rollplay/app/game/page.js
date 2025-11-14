@@ -259,50 +259,30 @@ function GameContent() {
   const checkPlayerRoles = async (roomId, user) => {
     try {
       console.log(`🔍 Initial role check for user: ${user.screen_name || user.email} (ID: ${user.id}) in room: ${roomId}`);
-      
-      // Get MongoDB-based roles (host, moderator) - can change during session
+
+      // Get MongoDB-based roles (host, moderator, DM) from active game session
       const playerName = user.screen_name || user.email;
       const mongoRolesResponse = await fetch(`/api/game/${roomId}/roles?playerName=${playerName}`);
       let isHost = false;
       let isModerator = false;
-      
+      let isDMRole = false;
+
       if (mongoRolesResponse.ok) {
         const mongoRoles = await mongoRolesResponse.json();
         isHost = mongoRoles.is_host;
         isModerator = mongoRoles.is_moderator;
-        console.log('📋 MongoDB roles (dynamic):', mongoRoles);
+        isDMRole = mongoRoles.is_dm;  // Use MongoDB DM flag
+        console.log('📋 MongoDB roles:', mongoRoles);
       } else {
         console.error('❌ Failed to fetch MongoDB roles:', mongoRolesResponse.status);
       }
-      
-      // Get PostgreSQL-based DM status - static, never changes during session
-      let isDMRole = false;
-      try {
-        const dmStatusResponse = await fetch(`/api/games/${roomId}/dm-status`, {
-          method: 'GET',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          credentials: 'include'
-        });
-        
-        if (dmStatusResponse.ok) {
-          const dmStatus = await dmStatusResponse.json();
-          isDMRole = dmStatus.is_dm;
-          console.log('🎭 PostgreSQL DM status (static):', dmStatus);
-        } else {
-          console.error('❌ Failed to fetch DM status:', dmStatusResponse.status);
-        }
-      } catch (error) {
-        console.error('Error checking DM status:', error);
-      }
-      
+
       // Set roles in component state
       setIsHost(isHost);
       setIsModerator(isModerator);
       setIsDM(isDMRole);
       console.log(`✅ Initial roles set - Host: ${isHost}, Moderator: ${isModerator}, DM: ${isDMRole}`);
-      
+
     } catch (error) {
       console.error('Error checking player roles:', error);
     }
@@ -1330,12 +1310,9 @@ function GameContent() {
             );
           })}
 
-          {/* Lobby Panel - shows connected users not in party (excluding DM) */}
-          <LobbyPanel 
-            lobbyUsers={lobbyUsers.filter(user => {
-              const userName = user.player_name || user.name || "";
-              return userName !== dmSeat; // Filter out DM from lobby
-            })}
+          {/* Lobby Panel - shows all connected users not in party */}
+          <LobbyPanel
+            lobbyUsers={lobbyUsers}
           />
 
           {/* Adventure Log component */}
