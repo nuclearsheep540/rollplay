@@ -8,9 +8,9 @@
  */
 
 // Import audio event handlers from the audio management module
-import { 
-  handleRemoteAudioPlay, 
-  handleRemoteAudioResume, 
+import {
+  handleRemoteAudioPlay,
+  handleRemoteAudioResume,
   handleRemoteAudioBatch,
   createAudioSendFunctions
 } from '../../audio_management/hooks/webSocketAudioEvents';
@@ -18,6 +18,51 @@ import {
 // =====================================
 // GAME EVENT HANDLERS
 // =====================================
+
+/**
+ * Handle initial state synchronization when client connects/reconnects
+ * This ensures the client has the current room state before receiving any other events
+ */
+export const handleInitialState = (data, handlers) => {
+  console.log("📦 Received initial state:", data);
+
+  const {
+    seat_layout,
+    dungeon_master,
+    combat_active,
+    seat_colors,
+    max_players
+  } = data;
+
+  // Set DM name
+  if (handlers.setDmSeat && dungeon_master) {
+    handlers.setDmSeat(dungeon_master);
+  }
+
+  // Set combat state
+  if (handlers.setCombatActive !== undefined) {
+    handlers.setCombatActive(combat_active || false);
+  }
+
+  // Set seat colors
+  if (handlers.setSeatColors && seat_colors) {
+    handlers.setSeatColors(seat_colors);
+  }
+
+  // Convert seat layout to frontend unified structure
+  if (seat_layout && handlers.setGameSeats && handlers.getCharacterData) {
+    const seats = seat_layout.map((playerName, index) => ({
+      seatId: index,
+      playerName: playerName,
+      characterData: playerName !== "empty" ? handlers.getCharacterData(playerName) : null,
+      isActive: false
+    }));
+
+    handlers.setGameSeats(seats);
+  }
+
+  console.log("✅ Initial state applied - client synced with server");
+};
 
 export const handleSeatChange = (data, { setGameSeats, getCharacterData }) => {
   console.log("received a new message with seat change:", data);

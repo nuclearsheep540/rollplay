@@ -132,6 +132,12 @@ class GameService:
             # Fall back to string ID (for test rooms or non-ObjectId rooms)
             filter_criteria = {"_id": room_id}
 
+        # Validate: Check for duplicate players in seats
+        player_names = [name for name in normalized_seat_layout if name != "empty"]
+        if len(player_names) != len(set(player_names)):
+            duplicates = [name for name in set(player_names) if player_names.count(name) > 1]
+            raise Exception(f"Player '{duplicates[0]}' already occupies another seat")
+
         # Validate: Prevent DM from taking player seats
         room = collection.find_one(filter_criteria)
         if room:

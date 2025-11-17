@@ -24,6 +24,7 @@ import {
   handlePlayerDisplaced,
   handleSystemMessage,
   handleSessionEnded,
+  handleInitialState,
   createSendFunctions
 } from './webSocketEvent';
 import {
@@ -84,6 +85,9 @@ export const useWebSocket = (roomId, thisPlayer, gameContext) => {
 
         // Route messages to appropriate handlers
         switch (event_type) {
+          case 'initial_state':
+            handleInitialState(data, handlers);
+            break;
           case 'seat_change':
             handleSeatChange(data, handlers);
             break;

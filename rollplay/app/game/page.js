@@ -372,6 +372,17 @@ function GameContent() {
     }
   }, [currentUser, userLoading])
 
+  // Cleanup audio when component unmounts (user navigates away from game page)
+  useEffect(() => {
+    return () => {
+      console.log('🚪 Game page unmounting - cleaning up audio...');
+      if (cleanupAllAudio) {
+        cleanupAllAudio();
+      }
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   // UPDATED: Seat count management with displaced player handling
   const setSeatCount = async (newSeatCount) => {
     try {
@@ -660,7 +671,8 @@ function GameContent() {
     loadRemoteAudioBuffer,
     audioBuffersRef,
     audioContextRef,
-    setClearPendingOperationCallback
+    setClearPendingOperationCallback,
+    cleanupAllAudio
   } = useUnifiedAudio();
 
   // Ref to hold the pending operation clearing function from AudioMixerPanel

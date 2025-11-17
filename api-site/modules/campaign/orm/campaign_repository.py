@@ -40,10 +40,20 @@ class CampaignRepository:
     def get_by_member_id(self, user_id: UUID) -> List[CampaignAggregate]:
         """Get all campaigns where user is either host or player"""
         try:
-            # Get campaigns where user is host
+            from sqlalchemy import or_, cast, String
+            from sqlalchemy.dialects.postgresql import JSONB
+
+            # Get campaigns where user is host OR in player_ids array
+            # Now using JSONB type which supports @> (contains) operator properly
             models = (
                 self.db.query(CampaignModel)
-                .filter(CampaignModel.host_id == user_id)
+                .filter(
+                    or_(
+                        CampaignModel.host_id == user_id,
+                        # JSONB contains operator - checks if array contains element
+                        CampaignModel.player_ids.contains(cast([str(user_id)], JSONB))
+                    )
+                )
                 .order_by(CampaignModel.created_at.desc())
                 .all()
             )

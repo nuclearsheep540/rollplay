@@ -52,30 +52,35 @@ def upgrade():
     op.create_index('idx_friendships_new_user1', 'friendships_new', ['user1_id'])
     op.create_index('idx_friendships_new_user2', 'friendships_new', ['user2_id'])
 
-    # Step 3: Migrate PENDING records from old friendships → friend_requests
-    op.execute("""
-        INSERT INTO friend_requests (requester_id, recipient_id, created_at)
-        SELECT user_id, friend_id, created_at
-        FROM friendships
-        WHERE status = 'pending'
-    """)
+    # Step 3-5: Skip data migration if old friendships table doesn't exist
+    # (This can happen if the table was accidentally dropped)
+    conn = op.get_bind()
+    inspector = sa.inspect(conn)
+    if 'friendships' in inspector.get_table_names():
+        # Step 3: Migrate PENDING records from old friendships → friend_requests
+        op.execute("""
+            INSERT INTO friend_requests (requester_id, recipient_id, created_at)
+            SELECT user_id, friend_id, created_at
+            FROM friendships
+            WHERE status = 'pending'
+        """)
 
-    # Step 4: Migrate ACCEPTED records from old friendships → friendships_new (with canonical ordering)
-    op.execute("""
-        INSERT INTO friendships_new (user1_id, user2_id, created_at)
-        SELECT
-            LEAST(user_id, friend_id) AS user1_id,
-            GREATEST(user_id, friend_id) AS user2_id,
-            created_at
-        FROM friendships
-        WHERE status = 'accepted'
-    """)
+        # Step 4: Migrate ACCEPTED records from old friendships → friendships_new (with canonical ordering)
+        op.execute("""
+            INSERT INTO friendships_new (user1_id, user2_id, created_at)
+            SELECT
+                LEAST(user_id, friend_id) AS user1_id,
+                GREATEST(user_id, friend_id) AS user2_id,
+                created_at
+            FROM friendships
+            WHERE status = 'accepted'
+        """)
 
-    # Step 5: Drop old friendships table and indexes
-    op.drop_index('idx_friendships_status', table_name='friendships')
-    op.drop_index('idx_friendships_friend_id', table_name='friendships')
-    op.drop_index('idx_friendships_user_id', table_name='friendships')
-    op.drop_table('friendships')
+        # Step 5: Drop old friendships table and indexes
+        op.drop_index('idx_friendships_status', table_name='friendships')
+        op.drop_index('idx_friendships_friend_id', table_name='friendships')
+        op.drop_index('idx_friendships_user_id', table_name='friendships')
+        op.drop_table('friendships')
 
     # Step 6: Rename friendships_new → friendships
     op.rename_table('friendships_new', 'friendships')

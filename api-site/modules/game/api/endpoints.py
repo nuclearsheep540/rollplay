@@ -243,11 +243,12 @@ async def accept_game_invite(
     current_user: UserAggregate = Depends(get_current_user_from_token),
     game_repo: GameRepository = Depends(get_game_repository),
     user_repo: UserRepository = Depends(get_user_repository),
+    campaign_repo: CampaignRepository = Depends(campaign_repository),
     db: Session = Depends(get_db)
 ):
     """Accept game invite to join roster (character selection happens later)"""
     try:
-        command = AcceptGameInvite(game_repo, user_repo)
+        command = AcceptGameInvite(game_repo, user_repo, campaign_repo)
         game = command.execute(
             game_id=game_id,
             user_id=current_user.id

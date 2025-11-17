@@ -231,3 +231,44 @@ async def delete_campaign(
             detail=str(e)
         )
 
+
+# Player management endpoints
+@router.post("/{campaign_id}/players/{player_id}", response_model=CampaignResponse)
+async def add_player_to_campaign(
+    campaign_id: UUID,
+    player_id: UUID,
+    current_user: UserAggregate = Depends(get_current_user_from_token),
+    campaign_repo: CampaignRepository = Depends(campaign_repository)
+):
+    """Add a player to the campaign (host only)"""
+    try:
+        command = AddPlayerToCampaign(campaign_repo)
+        campaign = command.execute(
+            campaign_id=campaign_id,
+            player_id=player_id,
+            host_id=current_user.id
+        )
+        return _to_campaign_response(campaign)
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+
+
+@router.delete("/{campaign_id}/players/{player_id}", response_model=CampaignResponse)
+async def remove_player_from_campaign(
+    campaign_id: UUID,
+    player_id: UUID,
+    current_user: UserAggregate = Depends(get_current_user_from_token),
+    campaign_repo: CampaignRepository = Depends(campaign_repository)
+):
+    """Remove a player from the campaign (host only)"""
+    try:
+        command = RemovePlayerFromCampaign(campaign_repo)
+        campaign = command.execute(
+            campaign_id=campaign_id,
+            player_id=player_id,
+            host_id=current_user.id
+        )
+        return _to_campaign_response(campaign)
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+

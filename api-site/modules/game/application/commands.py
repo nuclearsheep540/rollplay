@@ -115,10 +115,12 @@ class AcceptGameInvite:
     def __init__(
         self,
         game_repository: GameRepository,
-        user_repository: UserRepository
+        user_repository: UserRepository,
+        campaign_repository=None  # Optional for backward compatibility
     ):
         self.game_repo = game_repository
         self.user_repo = user_repository
+        self.campaign_repo = campaign_repository
 
     def execute(
         self,
@@ -133,6 +135,7 @@ class AcceptGameInvite:
         Cross-aggregate validation:
         - User must exist
         - Business rules in GameAggregate
+        - Also adds user to parent campaign player_ids
         """
         # Validate user exists
         user = self.user_repo.get_by_id(user_id)
@@ -147,8 +150,19 @@ class AcceptGameInvite:
         # Business logic in aggregate (moves user from invited_users to joined_users)
         game.accept_invite(user_id)
 
-        # Persist
+        # Persist game
         self.game_repo.save(game)
+
+        # Also add user to parent campaign's player_ids (if repository provided)
+        if self.campaign_repo and game.campaign_id:
+            try:
+                campaign = self.campaign_repo.get_by_id(game.campaign_id)
+                if campaign and user_id not in campaign.player_ids:
+                    campaign.add_player(user_id)
+                    self.campaign_repo.save(campaign)
+            except ValueError as e:
+                # Log but don't fail if user is already in campaign or is host
+                print(f"Note: Could not add user to campaign: {e}")
 
         return game
 

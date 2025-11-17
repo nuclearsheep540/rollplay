@@ -5,7 +5,7 @@
 
 'use client'
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { PlaybackState, ChannelType } from '../types';
 
 /**
@@ -808,15 +808,67 @@ export const useUnifiedAudio = () => {
     }
   };
 
+  // Cleanup function to stop all audio (called on unmount)
+  const cleanupAllAudio = useCallback(() => {
+    console.log('🧹 Cleaning up all audio on unmount...');
+
+    // Stop all local audio elements
+    Object.values(localAudioElements.current).forEach(audio => {
+      if (audio) {
+        try {
+          audio.pause();
+          audio.currentTime = 0;
+        } catch (e) {
+          console.warn('Error stopping local audio:', e);
+        }
+      }
+    });
+
+    // Stop all remote audio sources
+    Object.keys(activeSourcesRef.current).forEach(trackId => {
+      try {
+        if (activeSourcesRef.current[trackId]) {
+          activeSourcesRef.current[trackId].stop();
+        }
+      } catch (e) {
+        console.warn(`Error stopping remote track ${trackId}:`, e);
+      }
+    });
+
+    // Clear all refs
+    activeSourcesRef.current = {};
+    trackTimersRef.current = {};
+    resumeOperationsRef.current = {};
+    playOperationsRef.current = {};
+
+    // Cancel all active fades
+    Object.keys(activeFades).forEach(trackId => {
+      if (activeFades[trackId]?.animationId) {
+        cancelAnimationFrame(activeFades[trackId].animationId);
+      }
+    });
+
+    // Close audio context
+    if (audioContextRef.current && audioContextRef.current.state !== 'closed') {
+      audioContextRef.current.close().then(() => {
+        console.log('✅ Audio context closed');
+      }).catch(e => {
+        console.warn('Error closing audio context:', e);
+      });
+    }
+
+    console.log('✅ All audio cleanup complete');
+  }, [activeFades]);
+
   return {
     // Audio state
     isAudioUnlocked,
     masterVolume,
     setMasterVolume,
-    
+
     // Local audio functions (for hardcoded events)
     playLocalSFX,
-    
+
     // Remote audio functions (for WebSocket events)
     remoteTrackStates,
     remoteTrackAnalysers: remoteTrackAnalysersRef.current,
@@ -829,16 +881,17 @@ export const useUnifiedAudio = () => {
     loadRemoteAudioBuffer,
     audioBuffersRef,
     audioContextRef,
-    
+
     // Fade transition functions
     activeFades,
     startFade,
     cancelFade,
-    
+
     // Pending operation management
     setClearPendingOperationCallback,
-    
+
     // Unified functions
-    unlockAudio
+    unlockAudio,
+    cleanupAllAudio
   };
 };
