@@ -126,7 +126,7 @@ export default function GamesManager({ user, refreshTrigger }) {
     return (
       <div
         key={game.id}
-        className="bg-slate-800 p-6 rounded-lg border border-purple-500/30 hover:shadow-lg hover:shadow-purple-500/30 transition-all"
+        className="bg-slate-800 p-6 rounded-lg border border-purple-500/30 transition-all"
       >
         <div className="flex items-center justify-between mb-4 gap-4 flex-wrap">
           {/* Left side: Title and badges */}
@@ -159,10 +159,10 @@ export default function GamesManager({ user, refreshTrigger }) {
           <div className="flex gap-2 flex-wrap">
             <button
               onClick={() => enterGame(game)}
-              className="px-3 py-1.5 bg-blue-600 text-white rounded-lg border border-blue-500 hover:bg-blue-500 hover:shadow-lg hover:shadow-blue-500/30 transition-all font-semibold text-sm flex items-center gap-1.5"
+              className="px-6 py-3 bg-blue-600 text-white rounded-lg border border-blue-500 hover:bg-blue-500 hover:shadow-lg hover:shadow-blue-500/30 transition-all font-semibold text-base flex items-center gap-2"
             >
-              <FontAwesomeIcon icon={faRightToBracket} className="text-xs" />
-              Enter
+              <FontAwesomeIcon icon={faRightToBracket} />
+              Enter Session
             </button>
           </div>
         </div>
@@ -197,6 +197,7 @@ export default function GamesManager({ user, refreshTrigger }) {
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
               {game.roster.map((player) => {
                 const isCurrentUser = player.user_id === user.id
+                const canSelectCharacter = isCurrentUser && !player.character_name
                 return (
                   <div
                     key={player.user_id}
@@ -204,7 +205,11 @@ export default function GamesManager({ user, refreshTrigger }) {
                       isCurrentUser
                         ? 'bg-purple-500/20 border-purple-500/50'
                         : 'bg-slate-900 border-slate-700'
-                    }`}
+                    } ${canSelectCharacter ? 'cursor-pointer hover:bg-purple-500/30' : ''}`}
+                    onClick={canSelectCharacter ? () => {
+                      setSelectedGameForCharacter(game)
+                      setShowCharacterModal(true)
+                    } : undefined}
                   >
                     {player.character_name ? (
                       <div>
@@ -240,7 +245,7 @@ export default function GamesManager({ user, refreshTrigger }) {
                           </p>
                         </div>
                         <p className="text-xs text-amber-400">
-                          No character selected
+                          {isCurrentUser ? 'Click to select character' : 'No character selected'}
                         </p>
                       </div>
                     )}

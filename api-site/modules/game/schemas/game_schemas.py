@@ -19,16 +19,6 @@ class UpdateGameRequest(BaseModel):
     name: Optional[str] = Field(None, min_length=1, max_length=100)
 
 
-class InviteUserRequest(BaseModel):
-    """Request to invite a user to a game"""
-    user_id: UUID
-
-
-class AcceptInviteRequest(BaseModel):
-    """Request to accept game invite (no character needed)"""
-    pass  # No fields needed - user just accepts invite
-
-
 class RosterPlayerResponse(BaseModel):
     """Roster player information with character details"""
     user_id: UUID
@@ -53,10 +43,8 @@ class GameResponse(BaseModel):
     started_at: Optional[datetime]
     stopped_at: Optional[datetime]
     session_id: Optional[str]
-    invited_users: List[UUID]  # Users with pending invites
-    joined_users: List[UUID]  # Users who accepted invite (roster) - kept for backward compatibility
+    joined_users: List[UUID]  # Users in game roster
     roster: List[RosterPlayerResponse]  # Enriched roster with character details
-    pending_invites_count: int  # Count of invited_users
     player_count: int  # Count of joined_users
     max_players: int
 

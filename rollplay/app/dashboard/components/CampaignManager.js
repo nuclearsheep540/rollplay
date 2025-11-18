@@ -9,7 +9,6 @@ import { useState, useEffect, useRef } from 'react'
 import { createPortal } from 'react-dom'
 import { useRouter } from 'next/navigation'
 import EndGameModal from './EndGameModal'
-import GameInviteModal from './GameInviteModal'
 import DeleteCampaignModal from './DeleteCampaignModal'
 import CampaignInviteModal from './CampaignInviteModal'
 import InviteButton from '../../shared/components/InviteButton'
@@ -50,8 +49,6 @@ export default function CampaignManager({ user, refreshTrigger }) {
   const [deletingGame, setDeletingGame] = useState(null)
   const [showEndGameModal, setShowEndGameModal] = useState(false)
   const [gameToEnd, setGameToEnd] = useState(null)
-  const [showInviteModal, setShowInviteModal] = useState(false)
-  const [selectedGameForInvite, setSelectedGameForInvite] = useState(null)
   const [showDeleteCampaignModal, setShowDeleteCampaignModal] = useState(false)
   const [campaignToDelete, setCampaignToDelete] = useState(null)
   const [showCampaignInviteModal, setShowCampaignInviteModal] = useState(false)
@@ -313,20 +310,6 @@ export default function CampaignManager({ user, refreshTrigger }) {
   const cancelEndGame = () => {
     setShowEndGameModal(false)
     setGameToEnd(null)
-  }
-
-  // Open invite modal for game
-  const openInviteModal = (game) => {
-    setSelectedGameForInvite(game)
-    setShowInviteModal(true)
-  }
-
-  // Handle successful invite
-  const handleInviteSuccess = async (updatedGame) => {
-    // Refresh campaigns to show updated invite count
-    await fetchCampaigns()
-    // Update the selected game being passed to the modal
-    setSelectedGameForInvite(updatedGame)
   }
 
   // Handle successful campaign invite
@@ -649,10 +632,10 @@ export default function CampaignManager({ user, refreshTrigger }) {
                 <div key={campaign.id} className="w-full max-w-[1200px] min-w-[800px]">
                   {/* Campaign Card */}
                   <div
-                    className={`aspect-[16/4] w-full relative rounded-lg overflow-hidden cursor-pointer hover:shadow-lg transition-all duration-200 border-2 ${
+                    className={`aspect-[16/4] w-full relative rounded-lg overflow-hidden cursor-pointer transition-all duration-200 border-2 ${
                       selectedCampaign?.id === campaign.id
-                        ? 'border-purple-500 shadow-lg shadow-purple-500/30'
-                        : 'border-purple-500/30 hover:shadow-purple-500/30'
+                        ? 'border-purple-500'
+                        : 'border-purple-500/30'
                     }`}
                     style={campaign.hero_image ? {
                       backgroundImage: `url(${campaign.hero_image})`,
@@ -1047,19 +1030,6 @@ export default function CampaignManager({ user, refreshTrigger }) {
           onConfirm={confirmDeleteCampaign}
           onCancel={cancelDeleteCampaign}
           isDeleting={deletingCampaign === campaignToDelete?.id}
-        />
-      )}
-
-      {/* Game Invite Modal */}
-      {showInviteModal && selectedGameForInvite && (
-        <GameInviteModal
-          key={`game-invite-${selectedGameForInvite.id}-${selectedGameForInvite.invited_users?.length || 0}`}
-          game={selectedGameForInvite}
-          onClose={() => {
-            setShowInviteModal(false)
-            setSelectedGameForInvite(null)
-          }}
-          onInviteSuccess={handleInviteSuccess}
         />
       )}
 

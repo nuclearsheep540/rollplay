@@ -46,14 +46,8 @@ class EmailService:
                     alt_auth_section += f"""
                         <div style="margin: 15px 0;">
                             <p style="margin: 5px 0; font-weight: bold;">Quick Code:</p>
-                            <div style="background-color: #f1f5f9; border: 2px solid #cbd5e1; border-radius: 6px; padding: 15px; text-align: center; font-family: 'Courier New', monospace; font-size: 24px; font-weight: bold; color: #1e293b; letter-spacing: 3px; margin-bottom: 10px;">
+                            <div style="background-color: #f1f5f9; border: 2px solid #cbd5e1; border-radius: 6px; padding: 15px; text-align: center; font-family: 'Courier New', monospace; font-size: 24px; font-weight: bold; color: #1e293b; letter-spacing: 3px;">
                                 {formatted_code}
-                            </div>
-                            <div style="text-align: center;">
-                                <button onclick="navigator.clipboard.writeText('{short_code}');"
-                                    style="background-color: #2563eb; border: 2px solid #1d4ed8; border-radius: 6px; padding: 10px 20px; font-size: 14px; font-weight: bold; color: #ffffff; cursor: pointer; transition: all 0.2s;">
-                                    Click to Copy Code
-                                </button>
                             </div>
                         </div>
                         """
