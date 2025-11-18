@@ -389,6 +389,80 @@ async def get_current_user_from_token(
     return user  # Returns domain aggregate, not JWT payload
 ```
 
+## Game/Session Management Architecture
+
+### **Campaign-Level Invites Only**
+
+Users are invited to CAMPAIGNS (with accept/decline flow), not to individual game sessions.
+
+**Flow:**
+1. User receives campaign invite (via Campaign tab)
+2. User accepts/declines campaign invite
+3. Upon accepting → User added to `campaign.player_ids` in PostgreSQL
+4. No game-level invite acceptance required
+
+### **Automatic Session Enrollment**
+
+When a DM creates a new game/session, all campaign members are automatically added.
+
+**Backend Implementation:**
+- `CreateGame` command (in `/api-site/modules/game/application/commands.py`)
+- Loops through `campaign.player_ids` and invites each player automatically
+- Players are added to `game.invited_user_ids` without requiring acceptance
+- Backend handles this via the auto-invite logic implemented in lines 55-62 of commands.py
+
+**User Experience:**
+- Players don't see "invited games" - they automatically have access
+- Players see sessions immediately when they become active
+- No manual game invite acceptance required
+
+### **Sessions Tab (Read-Only)**
+
+The Sessions tab is a **read-only view** for entering active gameplay sessions.
+
+**What it displays:**
+- ONLY active game sessions (`status === 'active'`)
+- User can view session info: status, role, DM, players, roster
+- User can ENTER active sessions via "Enter" button
+- Character selection modal triggers automatically if player hasn't selected a character
+
+**What it does NOT display:**
+- No game management controls (all management in Campaigns tab)
+- No invite accept/decline buttons (handled at campaign level)
+- No start/stop game controls (DM manages in Campaigns tab)
+- No delete game options (DM manages in Campaigns tab)
+- No "Leave game" options (removed)
+- No inactive games (filtered out)
+- No invited games section (concept removed from frontend)
+
+### **User Flow**
+
+1. **Campaign Invitation:**
+   - DM invites player to campaign (Campaigns tab)
+   - Player sees pending campaign invite
+   - Player accepts campaign invite
+   - Player added to `campaign.player_ids`
+
+2. **Game/Session Creation:**
+   - DM creates game session (Campaigns tab)
+   - Backend auto-adds all `campaign.player_ids` to `game.invited_user_ids`
+   - No player action required
+
+3. **Entering Active Session:**
+   - Player navigates to Sessions tab
+   - Player sees active session automatically (no acceptance needed)
+   - Player clicks "Enter" button
+   - If no character selected → Character selection modal appears
+   - Player enters live game session
+
+### **Architectural Benefits**
+
+- **Simplified UX**: One invite flow (campaign-level only)
+- **Clear separation**: Campaigns tab for management, Sessions tab for playing
+- **Reduced complexity**: No redundant game invite system
+- **Better discoverability**: Active sessions appear automatically
+- **Backend consistency**: Auto-invite logic ensures all campaign members have access
+
 ## Frontend Architecture - Functional Slice Pattern
 
 ### **Principle: Organize by Business Domain, Not Technical Layers**

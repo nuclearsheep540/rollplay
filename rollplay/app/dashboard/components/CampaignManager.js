@@ -27,7 +27,7 @@ import {
   faUserPlus
 } from '@fortawesome/free-solid-svg-icons'
 
-export default function CampaignManager({ user }) {
+export default function CampaignManager({ user, refreshTrigger }) {
   const router = useRouter()
   const [campaigns, setCampaigns] = useState([])
   const [invitedCampaigns, setInvitedCampaigns] = useState([])
@@ -59,8 +59,9 @@ export default function CampaignManager({ user }) {
   const gameSessionsPanelRef = useRef(null)
 
   // Fetch campaigns from API
-  const fetchCampaigns = async () => {
+  const fetchCampaigns = async (showLoading = true) => {
     try {
+      if (showLoading) setLoading(true)
       const response = await fetch('/api/campaigns/', {
         method: 'GET',
         headers: {
@@ -484,8 +485,9 @@ export default function CampaignManager({ user }) {
   }, [selectedCampaign])
 
   useEffect(() => {
-    fetchCampaigns()
-  }, [])
+    // Only show loading on initial fetch (refreshTrigger = 0)
+    fetchCampaigns(refreshTrigger === 0)
+  }, [refreshTrigger])
 
   if (loading) {
     return (
@@ -676,48 +678,50 @@ export default function CampaignManager({ user }) {
 
                         {/* Action Buttons - Top Right */}
                         <div className="flex gap-2">
-                          {activeGames.length > 0 ? (
+                          {/* Active game indicator */}
+                          {activeGames.length > 0 && (
                             <div className="px-4 py-2 bg-green-500/90 backdrop-blur-sm text-white text-sm font-semibold rounded-lg border border-green-400 animate-pulse">
                               Game In Session
                             </div>
-                          ) : (
-                            /* Only show action buttons if user is the host */
-                            campaign.host_id === user.id && (
-                              <>
-                                <button
-                                  onClick={(e) => {
-                                    e.stopPropagation()
-                                    setSelectedCampaignForInvite(campaign)
-                                    setShowCampaignInviteModal(true)
-                                  }}
-                                  className="w-10 h-10 bg-blue-500/80 backdrop-blur-sm hover:bg-blue-500 text-white rounded-lg transition-all flex items-center justify-center border border-blue-400/50"
-                                  title="Invite Player to Campaign"
-                                >
-                                  <FontAwesomeIcon icon={faUserPlus} />
-                                </button>
-                                <button
-                                  onClick={(e) => {
-                                    e.stopPropagation()
-                                    toggleCampaignDetails(campaign)
-                                  }}
-                                  className="w-10 h-10 bg-purple-500/80 backdrop-blur-sm hover:bg-purple-500 text-white rounded-lg transition-all flex items-center justify-center border border-purple-400/50"
-                                  title="Configure Campaign"
-                                >
-                                  <FontAwesomeIcon icon={faGear} />
-                                </button>
-                                <button
-                                  onClick={(e) => {
-                                    e.stopPropagation()
-                                    promptDeleteCampaign(campaign)
-                                  }}
-                                  disabled={deletingCampaign === campaign.id}
-                                  className="w-10 h-10 bg-red-500/80 backdrop-blur-sm hover:bg-red-500 text-white rounded-lg transition-all flex items-center justify-center border border-red-400/50 disabled:opacity-50 disabled:cursor-not-allowed"
-                                  title="Delete Campaign"
-                                >
-                                  <FontAwesomeIcon icon={faTrash} />
-                                </button>
-                              </>
-                            )
+                          )}
+
+                          {/* Always show action buttons if user is the host */}
+                          {campaign.host_id === user.id && (
+                            <>
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation()
+                                  setSelectedCampaignForInvite(campaign)
+                                  setShowCampaignInviteModal(true)
+                                }}
+                                className="w-10 h-10 bg-blue-500/80 backdrop-blur-sm hover:bg-blue-500 text-white rounded-lg transition-all flex items-center justify-center border border-blue-400/50"
+                                title="Invite Player to Campaign"
+                              >
+                                <FontAwesomeIcon icon={faUserPlus} />
+                              </button>
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation()
+                                  toggleCampaignDetails(campaign)
+                                }}
+                                disabled={activeGames.length > 0}
+                                className="w-10 h-10 bg-purple-500/80 backdrop-blur-sm hover:bg-purple-500 text-white rounded-lg transition-all flex items-center justify-center border border-purple-400/50 disabled:opacity-50 disabled:cursor-not-allowed"
+                                title={activeGames.length > 0 ? "Cannot configure campaign during active games" : "Configure Campaign"}
+                              >
+                                <FontAwesomeIcon icon={faGear} />
+                              </button>
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation()
+                                  promptDeleteCampaign(campaign)
+                                }}
+                                disabled={deletingCampaign === campaign.id || activeGames.length > 0}
+                                className="w-10 h-10 bg-red-500/80 backdrop-blur-sm hover:bg-red-500 text-white rounded-lg transition-all flex items-center justify-center border border-red-400/50 disabled:opacity-50 disabled:cursor-not-allowed"
+                                title={activeGames.length > 0 ? "Cannot delete campaign with active games" : "Delete Campaign"}
+                              >
+                                <FontAwesomeIcon icon={faTrash} />
+                              </button>
+                            </>
                           )}
                         </div>
                       </div>
@@ -818,7 +822,6 @@ export default function CampaignManager({ user }) {
                                       {/* Only show host actions if user is the campaign host */}
                                       {campaign.host_id === user.id && (
                                         <>
-                                          <InviteButton onClick={() => openInviteModal(game)} />
                                           <button
                                             onClick={() => promptEndGame(game)}
                                             disabled={endingGame === game.id}
@@ -861,7 +864,6 @@ export default function CampaignManager({ user }) {
                                           </>
                                         )}
                                       </button>
-                                      <InviteButton onClick={() => openInviteModal(game)} />
                                       <button
                                         onClick={() => deleteGame(game.id, game.name)}
                                         disabled={deletingGame === game.id}
@@ -1051,6 +1053,7 @@ export default function CampaignManager({ user }) {
       {/* Game Invite Modal */}
       {showInviteModal && selectedGameForInvite && (
         <GameInviteModal
+          key={`game-invite-${selectedGameForInvite.id}-${selectedGameForInvite.invited_users?.length || 0}`}
           game={selectedGameForInvite}
           onClose={() => {
             setShowInviteModal(false)
@@ -1063,6 +1066,7 @@ export default function CampaignManager({ user }) {
       {/* Campaign Invite Modal */}
       {showCampaignInviteModal && selectedCampaignForInvite && (
         <CampaignInviteModal
+          key={`campaign-invite-${selectedCampaignForInvite.id}-${selectedCampaignForInvite.invited_player_ids?.length || 0}`}
           campaign={selectedCampaignForInvite}
           onClose={() => {
             setShowCampaignInviteModal(false)

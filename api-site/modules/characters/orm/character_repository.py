@@ -141,3 +141,16 @@ class CharacterRepository:
         self.db.commit()
         return True
 
+    def get_by_active_game(self, game_id: UUID) -> List[CharacterAggregate]:
+        """
+        Get all characters locked to a specific game.
+
+        Used when unlocking characters after a game session ends.
+        """
+        models = (
+            self.db.query(CharacterModel)
+            .filter(CharacterModel.active_game == game_id)
+            .all()
+        )
+        return [self._model_to_aggregate(model) for model in models]
+

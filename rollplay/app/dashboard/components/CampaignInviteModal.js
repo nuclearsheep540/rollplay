@@ -149,14 +149,22 @@ export default function CampaignInviteModal({ campaign, onClose, onInviteSuccess
     await inviteUser(friendId)
   }
 
-  // Check if user is already in campaign
+  // Check if user is already in campaign or has a pending invite
   const isUserInCampaign = (userId) => {
-    return campaign.player_ids?.includes(userId) || campaign.host_id === userId
+    return campaign.player_ids?.includes(userId) ||
+           campaign.host_id === userId ||
+           campaign.invited_player_ids?.includes(userId)
   }
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-lg shadow-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+    <div
+      className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4"
+      onClick={onClose}
+    >
+      <div
+        className="bg-white rounded-lg shadow-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto"
+        onClick={(e) => e.stopPropagation()}
+      >
         {/* Header */}
         <div className="p-6 border-b border-slate-200">
           <div className="flex items-center justify-between">

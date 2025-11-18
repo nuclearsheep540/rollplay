@@ -159,7 +159,12 @@ class CampaignRepository:
         return campaign_model.id
 
     def delete(self, campaign_id: UUID) -> bool:
-        """Delete campaign"""
+        """
+        Delete campaign from database.
+
+        Note: Business rule validation (checking for active games)
+        happens at the command level, not here.
+        """
         campaign_model = (
             self.db.query(CampaignModel)
             .filter_by(id=campaign_id)
@@ -169,12 +174,7 @@ class CampaignRepository:
         if not campaign_model:
             return False
 
-        # Business rule validation through aggregate
-        campaign = self._model_to_aggregate(campaign_model)
-        if not campaign.can_be_deleted():
-            raise ValueError("Cannot delete campaign with games")
-
-        # Delete campaign
+        # Delete campaign (cascade deletes games via foreign key)
         self.db.delete(campaign_model)
         self.db.commit()
         return True

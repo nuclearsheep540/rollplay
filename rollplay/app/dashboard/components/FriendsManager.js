@@ -16,7 +16,7 @@ import {
   faCopy
 } from '@fortawesome/free-solid-svg-icons'
 
-export default function FriendsManager({ user }) {
+export default function FriendsManager({ user, refreshTrigger }) {
   const [friends, setFriends] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
@@ -29,8 +29,9 @@ export default function FriendsManager({ user }) {
   const [lookupError, setLookupError] = useState(null)
 
   useEffect(() => {
-    fetchFriends()
-  }, [])
+    // Only show loading on initial fetch (refreshTrigger = 0)
+    fetchFriends(refreshTrigger === 0)
+  }, [refreshTrigger])
 
   // Validate UUID format
   const isValidUUID = (uuid) => {
@@ -92,9 +93,9 @@ export default function FriendsManager({ user }) {
     return () => clearTimeout(timeoutId)
   }, [friendCode])
 
-  const fetchFriends = async () => {
+  const fetchFriends = async (showLoading = true) => {
     try {
-      setLoading(true)
+      if (showLoading) setLoading(true)
 
       // Single API call to get all friendships categorized
       const response = await fetch('/api/friends/', {

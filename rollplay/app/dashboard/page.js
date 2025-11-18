@@ -5,7 +5,7 @@
 
 'use client'
 
-import { useState, Suspense } from 'react'
+import { useState, useEffect, Suspense } from 'react'
 import CampaignManager from './components/CampaignManager'
 import CharacterManager from './components/CharacterManager'
 import ProfileManager from './components/ProfileManager'
@@ -17,7 +17,8 @@ import { useAuth } from './hooks/useAuth'
 
 function DashboardContent() {
   const [activeSection, setActiveSection] = useState('campaigns')
-  
+  const [refreshTrigger, setRefreshTrigger] = useState(0)
+
   // Use auth hook for all authentication-related state and logic
   const {
     user,
@@ -33,6 +34,19 @@ function DashboardContent() {
     handleLogout,
     setError
   } = useAuth()
+
+  // Poll for updates every 5 seconds for the active tab
+  useEffect(() => {
+    // Only poll for tabs that need it
+    const pollableTabs = ['campaigns', 'sessions', 'friends']
+    if (!pollableTabs.includes(activeSection)) return
+
+    const interval = setInterval(() => {
+      setRefreshTrigger(prev => prev + 1)
+    }, 5000)
+
+    return () => clearInterval(interval)
+  }, [activeSection])
 
 
 
@@ -58,21 +72,21 @@ function DashboardContent() {
       {/* Campaigns Section */}
       {activeSection === 'campaigns' && (
         <section>
-          <CampaignManager user={user} />
+          <CampaignManager user={user} refreshTrigger={refreshTrigger} />
         </section>
       )}
 
-      {/* Games Section */}
-      {activeSection === 'games' && (
+      {/* Sessions Section */}
+      {activeSection === 'sessions' && (
         <section>
-          <GamesManager user={user} />
+          <GamesManager user={user} refreshTrigger={refreshTrigger} />
         </section>
       )}
 
       {/* Friends Section */}
       {activeSection === 'friends' && (
         <section>
-          <FriendsManager user={user} />
+          <FriendsManager user={user} refreshTrigger={refreshTrigger} />
         </section>
       )}
 

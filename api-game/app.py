@@ -429,7 +429,7 @@ async def create_session(request: SessionStartRequest):
         # Use game_id as MongoDB _id
         session_id = GameService.create_room(settings, room_id=request.game_id)
 
-        logger.info(f"✅ Created session {session_id} for game {request.game_id}")
+        logger.info(f"✅ Created session {session_id} for game {request.game_id} with {len(request.joined_user_ids)} joined players")
 
         return SessionStartResponse(
             success=True,

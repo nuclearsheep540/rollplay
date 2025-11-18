@@ -3,7 +3,7 @@
 
 from sqlalchemy import Column, String, Integer, DateTime, ForeignKey, Table
 from sqlalchemy.dialects.postgresql import UUID
-from sqlalchemy.orm import relationship
+from sqlalchemy.orm import relationship, backref
 from sqlalchemy.sql import func
 import uuid
 
@@ -35,7 +35,7 @@ class GameJoinedUser(Base):
     selected_character_id = Column(UUID(as_uuid=True), ForeignKey('characters.id', ondelete='SET NULL'), nullable=True)
 
     # Relationships for easy access
-    game = relationship("Game", backref="roster_entries")
+    game = relationship("Game", backref=backref("roster_entries", passive_deletes=True))
     user = relationship("User", backref="joined_games")
     character = relationship("Character", backref="selected_for_games")
 

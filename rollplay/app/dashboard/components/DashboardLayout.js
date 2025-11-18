@@ -29,7 +29,7 @@ export default function DashboardLayout({
   // Initialize activeSection from URL parameter - run only once on mount
   useEffect(() => {
     const tabParam = searchParams.get('tab')
-    if (tabParam && ['characters', 'campaigns', 'games', 'friends', 'profile'].includes(tabParam)) {
+    if (tabParam && ['characters', 'campaigns', 'sessions', 'friends', 'profile'].includes(tabParam)) {
       setActiveSection(tabParam)
     } else if (!tabParam) {
       // If no tab parameter, set default and update URL
@@ -110,16 +110,16 @@ export default function DashboardLayout({
                 </li>
                 <li>
                   <button
-                    onClick={() => switchSection('games')}
+                    onClick={() => switchSection('sessions')}
                     className={`w-full flex items-center p-3 transition-all duration-200 ${
-                      activeSection === 'games'
+                      activeSection === 'sessions'
                         ? 'border-l-[3px] border-purple-500 text-purple-400 font-semibold'
                         : 'border-l-[3px] border-transparent text-slate-400 hover:bg-purple-500/5 hover:text-slate-300'
                     }`}
-                    title="Games"
+                    title="Sessions"
                   >
                     <FontAwesomeIcon icon={faDiceD20} className="text-base mr-3 w-5" />
-                    <span className="font-semibold">Games</span>
+                    <span className="font-semibold">Sessions</span>
                   </button>
                 </li>
                 <li>

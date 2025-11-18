@@ -52,14 +52,17 @@ class CreateGame:
         # Create game aggregate (host_id auto-inherited from campaign)
         game = GameAggregate.create(name=name, campaign_id=campaign_id, host_id=host_id, max_players=max_players)
 
-        # Automatically invite all campaign players to the new game
+        # Automatically add all campaign players to the game (bypass invite flow)
+        # Campaign players already accepted at campaign level, no need for game-level acceptance
         for player_id in campaign.player_ids:
             try:
-                game.invite_user(player_id)
-                logger.info(f"Auto-invited campaign player {player_id} to game {game.id}")
-            except ValueError as e:
-                # Log but don't fail if player is already invited or other validation issue
-                logger.warning(f"Could not auto-invite player {player_id} to game {game.id}: {e}")
+                # Add directly to joined_users (bypass invite acceptance)
+                if player_id not in game.joined_users:
+                    game.joined_users.append(player_id)
+                    logger.info(f"Auto-added campaign player {player_id} to game {game.id}")
+            except Exception as e:
+                # Log but don't fail
+                logger.warning(f"Could not auto-add player {player_id} to game {game.id}: {e}")
 
         # Save game first to get ID
         self.game_repo.save(game)
@@ -399,7 +402,8 @@ class StartGame:
         payload = {
             "game_id": str(game.id),
             "dm_username": dm_username,
-            "max_players": game.max_players  # From game aggregate
+            "max_players": game.max_players,  # From game aggregate
+            "joined_user_ids": [str(user_id) for user_id in game.joined_users]  # Campaign players
         }
 
         # 7. Call api-game (synchronous await)
@@ -455,10 +459,12 @@ class EndGame:
     def __init__(
         self,
         game_repository: GameRepository,
-        user_repository: UserRepository
+        user_repository: UserRepository,
+        character_repository
     ):
         self.game_repo = game_repository
         self.user_repo = user_repository
+        self.character_repo = character_repository
 
     async def execute(self, game_id: UUID, host_id: UUID) -> GameAggregate:
         """
@@ -536,6 +542,13 @@ class EndGame:
             self.game_repo.save(game)
             logger.info(f"✅ Game {game_id} marked INACTIVE in PostgreSQL with max_players={max_players_from_session}")
 
+            # Unlock all characters that were locked to this game
+            locked_characters = self.character_repo.get_by_active_game(game_id)
+            for character in locked_characters:
+                character.unlock_from_game()
+                self.character_repo.save(character)
+            logger.info(f"✅ Unlocked {len(locked_characters)} character(s) from game {game_id}")
+
         except Exception as pg_error:
             # PostgreSQL write failed - MongoDB session is PRESERVED
             logger.error(f"❌ PostgreSQL write failed for {game_id}: {pg_error}")
@@ -567,7 +580,7 @@ class EndGame:
             async with httpx.AsyncClient() as client:
                 response = await client.delete(
                     f"http://api-game:8081/game/session/{session_id}",
-                    params={"keep_logs": True},  # Preserve adventure logs
+                    params={"keep_logs": False},  # Delete adventure logs - no cross-session persistence
                     timeout=5.0
                 )
 

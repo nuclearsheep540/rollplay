@@ -344,6 +344,7 @@ async def end_game(
     current_user: UserAggregate = Depends(get_current_user_from_token),
     game_repo: GameRepository = Depends(get_game_repository),
     user_repo: UserRepository = Depends(get_user_repository),
+    character_repo = Depends(get_character_repository),
     db: Session = Depends(get_db)
 ):
     """
@@ -355,12 +356,13 @@ async def end_game(
     3. PHASE 1: Fetches final state from MongoDB (non-destructive)
     4. PHASE 2: Writes to PostgreSQL (fail-safe - MongoDB preserved on error)
     5. PHASE 3: Background cleanup of MongoDB session
+    6. Unlocks all characters that were locked to this game
 
     Returns game with status='inactive'.
     If PostgreSQL write fails, MongoDB session is preserved and error returned.
     """
     try:
-        command = EndGame(game_repo, user_repo)
+        command = EndGame(game_repo, user_repo, character_repo)
         game = await command.execute(game_id, current_user.id)
         return _to_game_response(game, db)
 

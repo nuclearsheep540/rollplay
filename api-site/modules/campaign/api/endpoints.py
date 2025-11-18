@@ -217,11 +217,17 @@ async def update_campaign(
 async def delete_campaign(
     campaign_id: UUID,
     current_user: UserAggregate = Depends(get_current_user_from_token),
-    campaign_repo: CampaignRepository = Depends(campaign_repository)
+    campaign_repo: CampaignRepository = Depends(campaign_repository),
+    game_repo: GameRepository = Depends(get_game_repository)
 ):
-    """Delete campaign"""
+    """
+    Delete campaign.
+
+    Only allows deletion if there are no ACTIVE game sessions.
+    INACTIVE games will be cascade-deleted with the campaign.
+    """
     try:
-        command = DeleteCampaign(campaign_repo)
+        command = DeleteCampaign(campaign_repo, game_repo)
         success = command.execute(campaign_id, current_user.id)
 
         if success:
@@ -284,11 +290,16 @@ async def remove_player_from_campaign(
 async def accept_campaign_invite(
     campaign_id: UUID,
     current_user: UserAggregate = Depends(get_current_user_from_token),
-    campaign_repo: CampaignRepository = Depends(campaign_repository)
+    campaign_repo: CampaignRepository = Depends(campaign_repository),
+    game_repo: GameRepository = Depends(get_game_repository)
 ):
-    """Accept a campaign invite (player only)"""
+    """
+    Accept a campaign invite (player only).
+
+    Automatically adds the player to any active games in the campaign.
+    """
     try:
-        command = AcceptCampaignInvite(campaign_repo)
+        command = AcceptCampaignInvite(campaign_repo, game_repo)
         campaign = command.execute(
             campaign_id=campaign_id,
             player_id=current_user.id

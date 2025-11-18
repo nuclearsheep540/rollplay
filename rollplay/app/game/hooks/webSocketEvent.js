@@ -718,7 +718,7 @@ export const handleSystemMessage = (data, {}) => {
   // Backend handles system message logging
 };
 
-export const handleSessionEnded = (data, { stopRemoteTrack, remoteTrackStates, handleRemoteAudioBatch }) => {
+export const handleSessionEnded = (data, { stopRemoteTrack, remoteTrackStates, handleRemoteAudioBatch, setSessionEndedData }) => {
   console.log("🛑 Session ended:", data);
   const { reason, message } = data;
 
@@ -751,14 +751,16 @@ export const handleSessionEnded = (data, { stopRemoteTrack, remoteTrackStates, h
     }
   }
 
-  // Show user-friendly message
-  alert(message || `This game session has ended: ${reason}`);
-
-  // Small delay to ensure audio stops and alert is dismissed
-  setTimeout(() => {
-    // Redirect to dashboard
-    window.location.href = '/dashboard';
-  }, 100);
+  // Show session ended modal with countdown
+  if (setSessionEndedData) {
+    setSessionEndedData({ message, reason });
+  } else {
+    // Fallback if modal setter not available
+    alert(message || `This game session has ended: ${reason}`);
+    setTimeout(() => {
+      window.location.href = '/dashboard';
+    }, 100);
+  }
 };
 
 // =====================================

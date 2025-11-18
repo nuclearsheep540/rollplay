@@ -97,6 +97,9 @@ function GameContent() {
   const [gridEditMode, setGridEditMode] = useState(false); // Is DM editing grid dimensions?
   const [gridConfig, setGridConfig] = useState(null); // Current grid configuration
   const [liveGridOpacity, setLiveGridOpacity] = useState(0.2); // Live grid opacity for real-time updates
+
+  // Session ended modal state
+  const [sessionEndedData, setSessionEndedData] = useState(null); // { message, reason } when session ends
   
   // Debug wrapper for setGridConfig
   const debugSetGridConfig = (config) => {
@@ -722,7 +725,10 @@ function GameContent() {
     audioContextRef,
     
     // Remote audio state (for resume functionality)
-    remoteTrackStates
+    remoteTrackStates,
+
+    // Session ended modal
+    setSessionEndedData
   };
 
   // Initialize WebSocket hook with game context (after audio functions are available)
@@ -1427,6 +1433,66 @@ function GameContent() {
         activePrompts={activePrompts}            // UPDATED: Pass active prompts array
         isDicePromptActive={isDicePromptActive}
       />
+
+      {/* Session Ended Modal with Countdown */}
+      {sessionEndedData && (
+        <SessionEndedModal
+          message={sessionEndedData.message}
+          reason={sessionEndedData.reason}
+        />
+      )}
+    </div>
+  );
+}
+
+// Session Ended Modal Component with countdown progress bar
+function SessionEndedModal({ message, reason }) {
+  const [progress, setProgress] = useState(0);
+  const redirectDelay = 5000; // 5 seconds
+
+  useEffect(() => {
+    const startTime = Date.now();
+
+    // Update progress bar
+    const interval = setInterval(() => {
+      const elapsed = Date.now() - startTime;
+      const newProgress = Math.min((elapsed / redirectDelay) * 100, 100);
+      setProgress(newProgress);
+    }, 50);
+
+    // Redirect after delay
+    const timeout = setTimeout(() => {
+      window.location.href = '/dashboard';
+    }, redirectDelay);
+
+    return () => {
+      clearInterval(interval);
+      clearTimeout(timeout);
+    };
+  }, []);
+
+  return (
+    <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50">
+      <div className="bg-slate-800 border border-slate-600 rounded-lg p-6 max-w-md w-full mx-4 shadow-xl">
+        <div className="text-center">
+          <div className="text-4xl mb-4">🎲</div>
+          <h2 className="text-xl font-bold text-white mb-2">Session Ended</h2>
+          <p className="text-slate-300 mb-4">
+            {message || `This game session has ended: ${reason}`}
+          </p>
+          <p className="text-slate-400 text-sm mb-4">
+            You will be redirected shortly
+          </p>
+
+          {/* Progress bar */}
+          <div className="w-full bg-slate-700 rounded-full h-2 overflow-hidden">
+            <div
+              className="bg-blue-500 h-full transition-all duration-50 ease-linear"
+              style={{ width: `${progress}%` }}
+            />
+          </div>
+        </div>
+      </div>
     </div>
   );
 }
