@@ -38,7 +38,7 @@ class CampaignRepository:
         return [self._model_to_aggregate(model) for model in models]
 
     def get_by_member_id(self, user_id: UUID) -> List[CampaignAggregate]:
-        """Get all campaigns where user is either host or player"""
+        """Get all campaigns where user is either host or player (accepted invites only)"""
         try:
             from sqlalchemy import or_, cast, String
             from sqlalchemy.dialects.postgresql import JSONB
@@ -76,6 +76,41 @@ class CampaignRepository:
             print(f"Error in get_by_member_id: {e}")
             return []
 
+    def get_invited_campaigns(self, user_id: UUID) -> List[CampaignAggregate]:
+        """Get all campaigns where user has a pending invite"""
+        try:
+            from sqlalchemy import cast
+            from sqlalchemy.dialects.postgresql import JSONB
+
+            # Get campaigns where user is in invited_player_ids array
+            models = (
+                self.db.query(CampaignModel)
+                .filter(
+                    # JSONB contains operator - checks if array contains element
+                    CampaignModel.invited_player_ids.contains(cast([str(user_id)], JSONB))
+                )
+                .order_by(CampaignModel.created_at.desc())
+                .all()
+            )
+
+            result = []
+            for model in models:
+                try:
+                    campaign = self._model_to_aggregate(model)
+                    if campaign:
+                        result.append(campaign)
+                except Exception as e:
+                    # Log error but continue processing other campaigns
+                    print(f"Error converting campaign {model.id} to domain: {e}")
+                    continue
+
+            return result
+
+        except Exception as e:
+            # If query fails entirely, log error and return empty list
+            print(f"Error in get_invited_campaigns: {e}")
+            return []
+
     def save(self, aggregate: CampaignAggregate) -> UUID:
         """Save campaign aggregate"""
         if aggregate.id:
@@ -95,6 +130,7 @@ class CampaignRepository:
             campaign_model.assets = aggregate.assets
             campaign_model.scenes = aggregate.scenes
             campaign_model.npc_factory = aggregate.npc_factory
+            campaign_model.invited_player_ids = [str(player_id) for player_id in aggregate.invited_player_ids]
             campaign_model.player_ids = [str(player_id) for player_id in aggregate.player_ids]
 
         else:
@@ -109,6 +145,7 @@ class CampaignRepository:
                 assets=aggregate.assets,
                 scenes=aggregate.scenes,
                 npc_factory=aggregate.npc_factory,
+                invited_player_ids=[str(player_id) for player_id in aggregate.invited_player_ids],
                 player_ids=[str(player_id) for player_id in aggregate.player_ids]
             )
             self.db.add(campaign_model)
@@ -147,6 +184,10 @@ class CampaignRepository:
         # Extract game IDs from relationship
         game_ids = [game.id for game in model.games or []]
 
+        invited_player_ids = []
+        if model.invited_player_ids:
+            invited_player_ids = [UUID(player_id) for player_id in model.invited_player_ids]
+
         player_ids = []
         if model.player_ids:
             player_ids = [UUID(player_id) for player_id in model.player_ids]
@@ -162,5 +203,6 @@ class CampaignRepository:
             scenes=model.scenes,
             npc_factory=model.npc_factory,
             game_ids=game_ids,
+            invited_player_ids=invited_player_ids,
             player_ids=player_ids
         )

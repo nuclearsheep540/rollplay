@@ -72,10 +72,15 @@ class CampaignResponse(BaseModel):
     created_at: datetime
     updated_at: datetime
     games: List[GameResponse] = []
+    invited_player_ids: List[str] = []
     player_ids: List[str] = []
     total_games: int = 0
     active_games: int = 0
+    invited_count: int = 0
     player_count: int = 0
+
+    class Config:
+        from_attributes = True  # Allow automatic conversion from aggregates
 
 
 class CampaignSummaryResponse(BaseModel):
@@ -88,3 +93,9 @@ class CampaignSummaryResponse(BaseModel):
     updated_at: datetime
     total_games: int = 0
     active_games: int = 0
+    invited_player_ids: List[str] = []
+    player_ids: List[str] = []
+    invited_count: int = 0
+
+    class Config:
+        from_attributes = True  # Allow automatic conversion from aggregates

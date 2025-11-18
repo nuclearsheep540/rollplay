@@ -39,6 +39,7 @@ class CreateGame:
         Cross-aggregate coordination:
         - Creates Game aggregate
         - Updates Campaign to include game_id
+        - Automatically invites all campaign players to the new game
         """
         # Validate campaign exists and user is host
         campaign = self.campaign_repo.get_by_id(campaign_id)
@@ -50,6 +51,15 @@ class CreateGame:
 
         # Create game aggregate (host_id auto-inherited from campaign)
         game = GameAggregate.create(name=name, campaign_id=campaign_id, host_id=host_id, max_players=max_players)
+
+        # Automatically invite all campaign players to the new game
+        for player_id in campaign.player_ids:
+            try:
+                game.invite_user(player_id)
+                logger.info(f"Auto-invited campaign player {player_id} to game {game.id}")
+            except ValueError as e:
+                # Log but don't fail if player is already invited or other validation issue
+                logger.warning(f"Could not auto-invite player {player_id} to game {game.id}: {e}")
 
         # Save game first to get ID
         self.game_repo.save(game)

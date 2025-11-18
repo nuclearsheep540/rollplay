@@ -421,9 +421,10 @@ export default function GamesManager({ user }) {
                     <button
                       onClick={() => promptEndGame(game)}
                       className="px-3 py-1.5 bg-orange-600 text-white rounded-lg border border-orange-500 hover:bg-orange-500 hover:shadow-lg hover:shadow-orange-500/30 transition-all font-semibold text-sm flex items-center gap-1.5"
+                      title="Save and Stop Game"
                     >
                       <FontAwesomeIcon icon={faStop} className="text-xs" />
-                      End
+                      Save & Stop
                     </button>
                   </>
                 )}

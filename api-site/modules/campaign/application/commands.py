@@ -74,17 +74,17 @@ class AddPlayerToCampaign:
         self.repository = repository
 
     def execute(self, campaign_id: UUID, player_id: UUID, host_id: UUID) -> CampaignAggregate:
-        """Add a player to the campaign (host only)"""
+        """Invite a player to the campaign (host only) - sends pending invite"""
         campaign = self.repository.get_by_id(campaign_id)
         if not campaign:
             raise ValueError(f"Campaign {campaign_id} not found")
 
-        # Business rule: Only host can add players
+        # Business rule: Only host can invite players
         if not campaign.is_owned_by(host_id):
-            raise ValueError("Only the host can add players to this campaign")
+            raise ValueError("Only the host can invite players to this campaign")
 
-        # Business logic in aggregate
-        campaign.add_player(player_id)
+        # Business logic in aggregate - sends invite (goes to invited_player_ids)
+        campaign.invite_player(player_id)
 
         # Save
         self.repository.save(campaign)
@@ -107,6 +107,42 @@ class RemovePlayerFromCampaign:
 
         # Business logic in aggregate
         campaign.remove_player(player_id)
+
+        # Save
+        self.repository.save(campaign)
+        return campaign
+
+
+class AcceptCampaignInvite:
+    def __init__(self, repository):
+        self.repository = repository
+
+    def execute(self, campaign_id: UUID, player_id: UUID) -> CampaignAggregate:
+        """Player accepts their campaign invite"""
+        campaign = self.repository.get_by_id(campaign_id)
+        if not campaign:
+            raise ValueError(f"Campaign {campaign_id} not found")
+
+        # Business logic in aggregate - moves from invited_player_ids to player_ids
+        campaign.accept_invite(player_id)
+
+        # Save
+        self.repository.save(campaign)
+        return campaign
+
+
+class DeclineCampaignInvite:
+    def __init__(self, repository):
+        self.repository = repository
+
+    def execute(self, campaign_id: UUID, player_id: UUID) -> CampaignAggregate:
+        """Player declines their campaign invite"""
+        campaign = self.repository.get_by_id(campaign_id)
+        if not campaign:
+            raise ValueError(f"Campaign {campaign_id} not found")
+
+        # Business logic in aggregate - removes from invited_player_ids
+        campaign.decline_invite(player_id)
 
         # Save
         self.repository.save(campaign)

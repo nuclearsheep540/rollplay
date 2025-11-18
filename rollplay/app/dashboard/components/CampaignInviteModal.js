@@ -113,10 +113,10 @@ export default function CampaignInviteModal({ campaign, onClose, onInviteSuccess
 
       if (!response.ok) {
         const errorData = await response.json()
-        throw new Error(errorData.detail || 'Failed to add player to campaign')
+        throw new Error(errorData.detail || 'Failed to invite player to campaign')
       }
 
-      // Get updated campaign data with new player_ids list
+      // Get updated campaign data with new invited_player_ids list
       const updatedCampaign = await response.json()
 
       setFriendUuid('')
@@ -221,7 +221,7 @@ export default function CampaignInviteModal({ campaign, onClose, onInviteSuccess
                 disabled={!lookupUser || inviting || isUserInCampaign(lookupUser?.id)}
                 className="w-full bg-purple-600 hover:bg-purple-700 text-white px-4 py-2 rounded-lg font-semibold disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
               >
-                {inviting ? 'Adding Player...' : 'Add Player to Campaign'}
+                {inviting ? 'Inviting Player...' : 'Invite Player to Campaign'}
               </button>
             </form>
           </div>
@@ -249,7 +249,7 @@ export default function CampaignInviteModal({ campaign, onClose, onInviteSuccess
                         disabled={inviting}
                         className="bg-purple-600 hover:bg-purple-700 text-white px-3 py-1 rounded text-sm font-semibold disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                       >
-                        {inviting ? 'Adding...' : 'Add Player'}
+                        {inviting ? 'Inviting...' : 'Invite Player'}
                       </button>
                     )}
                   </div>

@@ -24,7 +24,9 @@ from modules.campaign.application.commands import (
     UpdateCampaign,
     DeleteCampaign,
     AddPlayerToCampaign,
-    RemovePlayerFromCampaign
+    RemovePlayerFromCampaign,
+    AcceptCampaignInvite,
+    DeclineCampaignInvite
 )
 from modules.game.application.commands import CreateGame
 from modules.campaign.application.queries import (
@@ -58,9 +60,11 @@ def _to_campaign_response(campaign: CampaignAggregate) -> CampaignResponse:
         created_at=campaign.created_at,
         updated_at=campaign.updated_at,
         games=[],  # Games fetched separately via game module
-        player_ids=[str(player_id) for player_id in campaign.player_ids],
+        invited_player_ids=[str(pid) for pid in campaign.invited_player_ids],
+        player_ids=[str(pid) for pid in campaign.player_ids],
         total_games=campaign.get_total_games(),
         active_games=0,  # TODO: Query game module for active count
+        invited_count=campaign.get_invited_count(),
         player_count=campaign.get_player_count()
     )
 
@@ -76,7 +80,10 @@ def _to_campaign_summary_response(campaign: CampaignAggregate) -> CampaignSummar
         created_at=campaign.created_at,
         updated_at=campaign.updated_at,
         total_games=campaign.get_total_games(),
-        active_games=0  # TODO: Query game module for active count
+        active_games=0,  # TODO: Query game module for active count
+        invited_player_ids=[str(pid) for pid in campaign.invited_player_ids],
+        player_ids=[str(pid) for pid in campaign.player_ids],
+        invited_count=campaign.get_invited_count()
     )
 
 # Game is a parent of campaign so we'll define the POST here
@@ -267,6 +274,42 @@ async def remove_player_from_campaign(
             campaign_id=campaign_id,
             player_id=player_id,
             host_id=current_user.id
+        )
+        return _to_campaign_response(campaign)
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+
+
+@router.post("/{campaign_id}/invites/accept", response_model=CampaignResponse)
+async def accept_campaign_invite(
+    campaign_id: UUID,
+    current_user: UserAggregate = Depends(get_current_user_from_token),
+    campaign_repo: CampaignRepository = Depends(campaign_repository)
+):
+    """Accept a campaign invite (player only)"""
+    try:
+        command = AcceptCampaignInvite(campaign_repo)
+        campaign = command.execute(
+            campaign_id=campaign_id,
+            player_id=current_user.id
+        )
+        return _to_campaign_response(campaign)
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+
+
+@router.delete("/{campaign_id}/invites", response_model=CampaignResponse)
+async def decline_campaign_invite(
+    campaign_id: UUID,
+    current_user: UserAggregate = Depends(get_current_user_from_token),
+    campaign_repo: CampaignRepository = Depends(campaign_repository)
+):
+    """Decline a campaign invite (player only)"""
+    try:
+        command = DeclineCampaignInvite(campaign_repo)
+        campaign = command.execute(
+            campaign_id=campaign_id,
+            player_id=current_user.id
         )
         return _to_campaign_response(campaign)
     except ValueError as e:

@@ -30,6 +30,7 @@ import {
 export default function CampaignManager({ user }) {
   const router = useRouter()
   const [campaigns, setCampaigns] = useState([])
+  const [invitedCampaigns, setInvitedCampaigns] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
   const [creatingCampaign, setCreatingCampaign] = useState(false)
@@ -70,10 +71,40 @@ export default function CampaignManager({ user }) {
 
       if (response.ok) {
         const campaignsData = await response.json()
-        setCampaigns(campaignsData)
 
-        // Fetch games for all campaigns
-        await fetchAllGames(campaignsData)
+        // Separate campaigns into joined vs invited
+        const joined = []
+        const invited = []
+
+        console.log('📋 All campaigns data:', campaignsData)
+        console.log('👤 Current user ID:', user.id)
+
+        campaignsData.forEach(campaign => {
+          console.log(`📁 Campaign "${campaign.title}":`, {
+            invited_player_ids: campaign.invited_player_ids,
+            player_ids: campaign.player_ids,
+            host_id: campaign.host_id
+          })
+
+          // Check if user is in invited_player_ids (pending invite)
+          if (campaign.invited_player_ids && campaign.invited_player_ids.includes(user.id)) {
+            console.log(`✅ User is INVITED to "${campaign.title}"`)
+            invited.push(campaign)
+          } else {
+            // User is either host or in player_ids (joined member)
+            console.log(`✅ User is MEMBER of "${campaign.title}"`)
+            joined.push(campaign)
+          }
+        })
+
+        console.log('🎯 Joined campaigns:', joined.length)
+        console.log('📨 Invited campaigns:', invited.length)
+
+        setCampaigns(joined)
+        setInvitedCampaigns(invited)
+
+        // Fetch games for joined campaigns only
+        await fetchAllGames(joined)
       } else {
         console.error('Failed to fetch campaigns:', response.status)
         setError('Failed to load campaigns')
@@ -131,6 +162,48 @@ export default function CampaignManager({ user }) {
     setGameName('Session 1')
     setGameMaxPlayers(8)
     setShowGameModal(true)
+  }
+
+  // Accept campaign invite
+  const acceptCampaignInvite = async (campaignId) => {
+    try {
+      const response = await fetch(`/api/campaigns/${campaignId}/invites/accept`, {
+        method: 'POST',
+        credentials: 'include'
+      })
+
+      if (!response.ok) {
+        const errorData = await response.json()
+        throw new Error(errorData.detail || 'Failed to accept invite')
+      }
+
+      // Refresh campaigns to move from invited to joined
+      await fetchCampaigns()
+    } catch (err) {
+      console.error('Error accepting campaign invite:', err)
+      setError(err.message)
+    }
+  }
+
+  // Decline campaign invite
+  const declineCampaignInvite = async (campaignId) => {
+    try {
+      const response = await fetch(`/api/campaigns/${campaignId}/invites`, {
+        method: 'DELETE',
+        credentials: 'include'
+      })
+
+      if (!response.ok) {
+        const errorData = await response.json()
+        throw new Error(errorData.detail || 'Failed to decline invite')
+      }
+
+      // Refresh campaigns to remove from invited list
+      await fetchCampaigns()
+    } catch (err) {
+      console.error('Error declining campaign invite:', err)
+      setError(err.message)
+    }
   }
 
   // Create game (without starting it)
@@ -477,6 +550,83 @@ export default function CampaignManager({ user }) {
         </div>
       )}
 
+      {/* Invited Campaigns Section - Only render if there are invites */}
+      {invitedCampaigns.length > 0 && (
+        <div className="space-y-4">
+          <h3 className="text-lg font-semibold text-amber-400 uppercase">Invited Campaigns</h3>
+          <div className="space-y-4">
+            {invitedCampaigns.map((campaign) => (
+              <div key={campaign.id} className="w-full max-w-[1200px] min-w-[800px]">
+                {/* Invited Campaign Card */}
+                <div
+                  className="aspect-[16/4] w-full relative rounded-lg overflow-hidden border-2 border-amber-500/30"
+                  style={campaign.hero_image ? {
+                    backgroundImage: `url(${campaign.hero_image})`,
+                    backgroundSize: 'cover',
+                    backgroundPosition: 'center'
+                  } : {
+                    background: 'linear-gradient(135deg, rgba(251, 191, 36, 0.3) 0%, rgba(254, 243, 199, 0.15) 50%)'
+                  }}
+                >
+                  {/* Gradient Overlay */}
+                  <div className="absolute inset-0 bg-gradient-to-t from-slate-900/25 via-slate-900/15 to-slate-900/5" />
+
+                  {/* Content Overlay */}
+                  <div className="relative z-10 p-6 h-full flex flex-col justify-between">
+                    {/* Top Row - Title and Status Badge */}
+                    <div className="flex items-start justify-between">
+                      <div>
+                        <h4 className="text-3xl font-bold text-white mb-1 drop-shadow-lg">
+                          {campaign.title || 'Unnamed Campaign'}
+                        </h4>
+                        <span className="inline-block px-3 py-1 bg-amber-500/20 text-amber-400 border border-amber-500/50 rounded-full text-sm font-semibold">
+                          Pending Invite
+                        </span>
+                      </div>
+                    </div>
+
+                    {/* Bottom Row - Campaign Info and Actions */}
+                    <div className="flex items-end justify-between">
+                      {/* Campaign Description */}
+                      <div className="flex-1">
+                        {campaign.description && (
+                          <p className="text-sm text-white/90 drop-shadow-md mb-2">
+                            {campaign.description}
+                          </p>
+                        )}
+                        <p className="text-sm text-white/70 drop-shadow-md">
+                          Invited by campaign host
+                        </p>
+                      </div>
+
+                      {/* Action Buttons */}
+                      <div className="flex gap-2 ml-4">
+                        <button
+                          onClick={() => acceptCampaignInvite(campaign.id)}
+                          className="px-4 py-2 bg-green-600 hover:bg-green-500 text-white rounded-lg border border-green-500 hover:shadow-lg hover:shadow-green-500/30 transition-all text-sm font-medium flex items-center gap-2"
+                          title="Accept Invite"
+                        >
+                          <FontAwesomeIcon icon={faCheck} />
+                          Accept
+                        </button>
+                        <button
+                          onClick={() => declineCampaignInvite(campaign.id)}
+                          className="px-4 py-2 bg-red-600 hover:bg-red-500 text-white rounded-lg border border-red-500 hover:shadow-lg hover:shadow-red-500/30 transition-all text-sm font-medium flex items-center gap-2"
+                          title="Decline Invite"
+                        >
+                          <FontAwesomeIcon icon={faXmark} />
+                          Decline
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
       {/* Campaigns List - Full Width Hero Cards */}
       <div className="space-y-4">
         <h3 className="text-lg font-semibold text-purple-400 uppercase">Your Campaigns</h3>
@@ -673,17 +823,17 @@ export default function CampaignManager({ user }) {
                                             onClick={() => promptEndGame(game)}
                                             disabled={endingGame === game.id}
                                             className="px-3 py-1.5 bg-orange-600 hover:bg-orange-500 text-white rounded-lg border border-orange-500 hover:shadow-lg hover:shadow-orange-500/30 transition-all text-sm font-medium flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
-                                            title="End Game"
+                                            title="Save and Stop Game"
                                           >
                                             {endingGame === game.id ? (
                                               <>
                                                 <div className="animate-spin rounded-full h-3 w-3 border-b-2 border-white"></div>
-                                                Ending...
+                                                Saving...
                                               </>
                                             ) : (
                                               <>
                                                 <FontAwesomeIcon icon={faStop} />
-                                                End
+                                                Save & Stop
                                               </>
                                             )}
                                           </button>

@@ -27,9 +27,9 @@ export default function EndGameModal({ game, onConfirm, onCancel, isEnding }) {
       }}
     >
       <div className="bg-slate-800 border border-orange-500/30 p-6 rounded-lg shadow-2xl shadow-orange-500/20 max-w-md w-full mx-4">
-        <h3 className="text-lg font-semibold text-orange-400 mb-4">End Game Session</h3>
+        <h3 className="text-lg font-semibold text-orange-400 mb-4">Save and Stop Game Session</h3>
         <p className="text-slate-300 mb-2">
-          Are you sure you want to end <strong className="text-orange-400">"{game.name || 'this game session'}"</strong>?
+          Are you sure you want to save and stop <strong className="text-orange-400">"{game.name || 'this game session'}"</strong>?
         </p>
         <p className="text-sm text-slate-400 mb-6">All player progress will be saved and players will be disconnected.</p>
 
@@ -49,12 +49,12 @@ export default function EndGameModal({ game, onConfirm, onCancel, isEnding }) {
             {isEnding ? (
               <>
                 <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
-                Ending...
+                Saving...
               </>
             ) : (
               <>
                 <FontAwesomeIcon icon={faStop} />
-                End Game
+                Save & Stop
               </>
             )}
           </button>
