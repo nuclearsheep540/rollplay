@@ -7,10 +7,15 @@
 
 import { useState } from 'react'
 
-export default function CharacterSelectionModal({ game, characters, onClose, onCharacterSelected }) {
+export default function CharacterSelectionModal({ game, characters, onClose, onCharacterSelected, currentCharacterId = null, isActiveSession = false }) {
   const [selectedCharacterId, setSelectedCharacterId] = useState(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState(null)
+
+  // Filter out the currently selected character if swapping
+  const availableCharacters = currentCharacterId
+    ? characters.filter(char => char.id !== currentCharacterId)
+    : characters
 
   const handleSelectCharacter = async () => {
     if (!selectedCharacterId) {
@@ -22,8 +27,15 @@ export default function CharacterSelectionModal({ game, characters, onClose, onC
       setLoading(true)
       setError(null)
 
-      const response = await fetch(`/api/games/${game.id}/select-character?character_id=${selectedCharacterId}`, {
-        method: 'POST',
+      // Use different endpoint for active session character change
+      const endpoint = isActiveSession
+        ? `/api/games/${game.id}/change-character-active?new_character_id=${selectedCharacterId}`
+        : `/api/games/${game.id}/select-character?character_id=${selectedCharacterId}`
+
+      const method = isActiveSession ? 'PUT' : 'POST'
+
+      const response = await fetch(endpoint, {
+        method,
         credentials: 'include'
       })
 
@@ -71,7 +83,7 @@ export default function CharacterSelectionModal({ game, characters, onClose, onC
             </div>
           )}
 
-          {characters.length === 0 ? (
+          {availableCharacters.length === 0 ? (
             <div className="text-center py-8">
               <p className="text-slate-600 mb-4">You don't have any available characters.</p>
               <p className="text-sm text-slate-500">
@@ -81,11 +93,14 @@ export default function CharacterSelectionModal({ game, characters, onClose, onC
           ) : (
             <>
               <p className="text-sm text-slate-600 mb-4">
-                Select a character to lock to this game. Once selected, this character cannot be used in other games until you leave.
+                {isActiveSession
+                  ? 'Select a new character to use in this active session.'
+                  : 'Select a character to lock to this game. Once selected, this character cannot be used in other games until you leave.'
+                }
               </p>
 
               <div className="space-y-3">
-                {characters.map((char) => (
+                {availableCharacters.map((char) => (
                   <div
                     key={char.id}
                     onClick={() => setSelectedCharacterId(char.id)}
@@ -133,7 +148,7 @@ export default function CharacterSelectionModal({ game, characters, onClose, onC
         </div>
 
         {/* Footer */}
-        {characters.length > 0 && (
+        {availableCharacters.length > 0 && (
           <div className="sticky bottom-0 bg-slate-50 border-t border-slate-200 px-6 py-4 flex items-center justify-end gap-3">
             <button
               onClick={onClose}

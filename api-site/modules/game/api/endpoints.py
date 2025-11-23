@@ -24,6 +24,7 @@ from modules.game.application.commands import (
     DeleteGame,
     SelectCharacterForGame,
     ChangeCharacterForGame,
+    ChangeCharacterDuringSession,
     DisconnectFromSession
 )
 from modules.game.application.queries import (
@@ -333,6 +334,39 @@ async def change_character_for_game(
             game_id=game_id,
             user_id=current_user.id,
             old_character_id=old_character_id,
+            new_character_id=new_character_id
+        )
+        return {
+            "message": "Character changed successfully",
+            "new_character_id": str(character.id),
+            "new_character_name": character.character_name
+        }
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+
+
+@router.put("/{game_id}/change-character-active")
+async def change_character_during_session(
+    game_id: UUID,
+    new_character_id: UUID,
+    current_user: UserAggregate = Depends(get_current_user_from_token),
+    game_repo: GameRepository = Depends(get_game_repository),
+    character_repo: CharacterRepository = Depends(get_character_repository),
+    user_repo: UserRepository = Depends(get_user_repository)
+):
+    """
+    Change character during an active session.
+
+    Unlike change-character, this endpoint:
+    - Only works when game is ACTIVE
+    - Does not unlock the old character (accumulating locks)
+    - Syncs new character data to MongoDB via api-game
+    """
+    try:
+        command = ChangeCharacterDuringSession(game_repo, character_repo, user_repo)
+        character = await command.execute(
+            game_id=game_id,
+            user_id=current_user.id,
             new_character_id=new_character_id
         )
         return {

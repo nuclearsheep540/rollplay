@@ -25,6 +25,7 @@ import {
   handleSystemMessage,
   handleSessionEnded,
   handleInitialState,
+  handlePlayerCharacterChanged,
   createSendFunctions
 } from './webSocketEvent';
 import {
@@ -93,6 +94,9 @@ export const useWebSocket = (roomId, thisPlayer, gameContext) => {
             break;
           case 'seat_count_change':
             handleSeatCountChange(data, handlers);
+            break;
+          case 'player_character_changed':
+            handlePlayerCharacterChanged(data, handlers);
             break;
           case 'player_connected':
             handlePlayerConnected(data, handlers);

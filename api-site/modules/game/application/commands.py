@@ -612,6 +612,123 @@ class ChangeCharacterForGame:
         return new_character
 
 
+class ChangeCharacterDuringSession:
+    """User changes their character during an active session"""
+
+    def __init__(
+        self,
+        game_repository: GameRepository,
+        character_repository: CharacterRepository,
+        user_repository: UserRepository
+    ):
+        self.game_repo = game_repository
+        self.character_repo = character_repository
+        self.user_repo = user_repository
+
+    async def execute(
+        self,
+        game_id: UUID,
+        user_id: UUID,
+        new_character_id: UUID
+    ) -> CharacterAggregate:
+        """
+        Change character during an active session.
+
+        Business rules:
+        - Game must be ACTIVE
+        - User must be in joined_users (game roster)
+        - New character must be owned by user
+        - New character must not be locked to another game (can be locked to this game or free)
+
+        Note: Old character stays locked (accumulating locks approach).
+        All locked characters are unlocked at game end via EndGame command.
+        """
+        # Get game
+        game = self.game_repo.get_by_id(game_id)
+        if not game:
+            raise ValueError(f"Game {game_id} not found")
+
+        # Verify game is ACTIVE
+        if game.status != GameStatus.ACTIVE:
+            raise ValueError("Can only change character during active session")
+
+        # Verify user is in game roster
+        if not game.is_user_joined(user_id):
+            raise ValueError("User has not joined this game")
+
+        # Get user for player name
+        user = self.user_repo.get_by_id(user_id)
+        if not user:
+            raise ValueError(f"User {user_id} not found")
+
+        player_name = user.screen_name or user.email
+
+        # Get new character
+        new_character = self.character_repo.get_by_id(new_character_id)
+        if not new_character:
+            raise ValueError(f"Character {new_character_id} not found")
+
+        # Verify new character ownership
+        if not new_character.is_owned_by(user_id):
+            raise ValueError("Character not owned by user")
+
+        # Verify new character is not locked to a different game
+        if new_character.is_locked() and new_character.active_game != game_id:
+            raise ValueError(f"Character already locked to another game {new_character.active_game}")
+
+        # Lock new character to game (if not already locked to this game)
+        if not new_character.is_locked():
+            new_character.lock_to_game(game_id)
+            self.character_repo.save(new_character)
+
+        # Update game_joined_users.selected_character_id for roster display
+        from sqlalchemy import update
+        from modules.campaign.model.game_model import GameJoinedUser
+        db_session = self.game_repo.db
+        db_session.execute(
+            update(GameJoinedUser)
+            .where(GameJoinedUser.game_id == game_id)
+            .where(GameJoinedUser.user_id == user_id)
+            .values(selected_character_id=new_character_id)
+        )
+        db_session.commit()
+
+        # Call api-game to update MongoDB seat with new character data
+        character_data = {
+            "player_name": player_name,
+            "user_id": str(user_id),
+            "character_id": str(new_character.id),
+            "character_name": new_character.character_name,
+            "character_class": new_character.character_class,
+            "character_race": new_character.character_race,
+            "level": new_character.level,
+            "hp_current": new_character.hp_current,
+            "hp_max": new_character.hp_max,
+            "ac": new_character.ac
+        }
+
+        try:
+            async with httpx.AsyncClient() as client:
+                response = await client.put(
+                    f"http://api-game:8081/game/{game.session_id}/player/character",
+                    json=character_data,
+                    timeout=10.0
+                )
+
+            if response.status_code != 200:
+                logger.error(f"api-game character update failed: {response.text}")
+                # PostgreSQL is already updated, log the desync but don't rollback
+                # The player can re-enter the session to resync
+                logger.warning(f"MongoDB desync for player {player_name} in session {game.session_id}")
+
+        except httpx.RequestError as e:
+            logger.error(f"Network error updating character in api-game: {e}")
+            # Same - don't rollback PostgreSQL, just log
+
+        logger.info(f"Character changed to {new_character.character_name} for user {user_id} in game {game_id}")
+        return new_character
+
+
 class DisconnectFromSession:
     """Handle player disconnect from active session (partial ETL)"""
 

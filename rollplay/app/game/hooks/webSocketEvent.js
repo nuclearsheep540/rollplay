@@ -95,6 +95,54 @@ export const handleSeatCountChange = (data, { setGameSeats, getCharacterData }) 
   // Backend handles all logging now - no frontend log generation
 };
 
+/**
+ * Handle player character change during active session
+ * Updates the seat with new character data
+ */
+export const handlePlayerCharacterChanged = (data, { setGameSeats }) => {
+  console.log("received player character change:", data);
+  const {
+    player_name,
+    character_id,
+    character_name,
+    character_class,
+    character_race,
+    level,
+    hp_current,
+    hp_max,
+    ac
+  } = data;
+
+  // Update the seat that matches this player with new character data
+  setGameSeats(prevSeats =>
+    prevSeats.map(seat => {
+      // Handle both string and object seat formats
+      const seatPlayerName = typeof seat.playerName === 'string'
+        ? seat.playerName.toLowerCase()
+        : seat.playerName?.player_name?.toLowerCase();
+
+      if (seatPlayerName === player_name.toLowerCase()) {
+        return {
+          ...seat,
+          characterData: {
+            character_id,
+            character_name,
+            character_class,
+            character_race,
+            level,
+            hp_current,
+            hp_max,
+            ac
+          }
+        };
+      }
+      return seat;
+    })
+  );
+
+  console.log(`✅ Updated character for ${player_name} to ${character_name}`);
+};
+
 // Removed unused handleChatMessage function
 
 export const handlePlayerConnected = (data, {}) => {

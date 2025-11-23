@@ -395,20 +395,111 @@ class GameService:
     def unset_dm(room_id: str):
         """Remove the current dungeon master"""
         collection = GameService._get_active_session()
-        
+
         # Handle ObjectId conversion
         try:
             oid = ObjectId(oid=room_id)
             filter_criteria = {"_id": oid}
         except Exception:
             filter_criteria = {"_id": room_id}
-        
+
         result = collection.update_one(
             filter_criteria,
             {"$set": {"dungeon_master": ""}}
         )
-        
+
         if result.matched_count == 0:
             raise Exception(f"Room {room_id} not found")
-        
+
         return result.modified_count > 0
+
+    @staticmethod
+    def update_player_character(room_id: str, character_data: dict):
+        """
+        Update a player's character data in the seat layout.
+
+        character_data should contain:
+        - player_name: str (to identify which seat to update)
+        - user_id: str
+        - character_id: str
+        - character_name: str
+        - character_class: str
+        - character_race: str
+        - level: int
+        - hp_current: int
+        - hp_max: int
+        - ac: int
+        """
+        collection = GameService._get_active_session()
+
+        # Handle ObjectId conversion
+        try:
+            oid = ObjectId(oid=room_id)
+            filter_criteria = {"_id": oid}
+        except Exception:
+            filter_criteria = {"_id": room_id}
+
+        # Get current room
+        room = collection.find_one(filter_criteria)
+        if not room:
+            raise Exception(f"Room {room_id} not found")
+
+        seat_layout = room.get("seat_layout", [])
+        player_name = character_data.get("player_name", "").lower()
+
+        # Find and update the player's seat
+        updated = False
+        new_seat_layout = []
+
+        for seat in seat_layout:
+            # Handle both string format (legacy) and object format (new)
+            if isinstance(seat, str):
+                if seat.lower() == player_name:
+                    # Convert string to object format with character data
+                    new_seat_layout.append({
+                        "player_name": player_name,
+                        "user_id": character_data.get("user_id"),
+                        "character_id": character_data.get("character_id"),
+                        "character_name": character_data.get("character_name"),
+                        "character_class": character_data.get("character_class"),
+                        "character_race": character_data.get("character_race"),
+                        "level": character_data.get("level"),
+                        "hp_current": character_data.get("hp_current"),
+                        "hp_max": character_data.get("hp_max"),
+                        "ac": character_data.get("ac")
+                    })
+                    updated = True
+                else:
+                    new_seat_layout.append(seat)
+            elif isinstance(seat, dict):
+                if seat.get("player_name", "").lower() == player_name:
+                    # Update existing object with new character data
+                    seat.update({
+                        "user_id": character_data.get("user_id"),
+                        "character_id": character_data.get("character_id"),
+                        "character_name": character_data.get("character_name"),
+                        "character_class": character_data.get("character_class"),
+                        "character_race": character_data.get("character_race"),
+                        "level": character_data.get("level"),
+                        "hp_current": character_data.get("hp_current"),
+                        "hp_max": character_data.get("hp_max"),
+                        "ac": character_data.get("ac")
+                    })
+                    new_seat_layout.append(seat)
+                    updated = True
+                else:
+                    new_seat_layout.append(seat)
+            else:
+                new_seat_layout.append(seat)
+
+        if not updated:
+            raise Exception(f"Player {player_name} not found in seat layout")
+
+        # Update MongoDB
+        result = collection.update_one(
+            filter_criteria,
+            {"$set": {"seat_layout": new_seat_layout}}
+        )
+
+        logger.info(f"Updated character for player {player_name} in room {room_id}")
+        return True
