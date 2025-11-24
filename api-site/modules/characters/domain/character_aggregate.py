@@ -14,6 +14,8 @@ class AbilityScores:
     D&D 5e Ability Scores Value Object.
 
     Immutable, validated set of six core abilities.
+
+    Business Rule: All ability scores must be between 1 and 30.
     """
     strength: int
     dexterity: int
@@ -22,13 +24,30 @@ class AbilityScores:
     wisdom: int
     charisma: int
 
+    def __post_init__(self):
+        """Validate ability scores on creation"""
+        scores = {
+            'strength': self.strength,
+            'dexterity': self.dexterity,
+            'constitution': self.constitution,
+            'intelligence': self.intelligence,
+            'wisdom': self.wisdom,
+            'charisma': self.charisma
+        }
+        for ability, score in scores.items():
+            if not (1 <= score <= 30):
+                raise ValueError(f"{ability.capitalize()} score must be between 1 and 30 (got {score})")
+
     def update_score(self, **kwargs) -> 'AbilityScores':
         """
         Update specified ability scores, keeping others unchanged.
 
         Example:
             new_scores = scores.update_score(intelligence=9, strength=16)
+
+        Validates that all scores remain between 1 and 30.
         """
+        # Validation happens automatically in __post_init__ when replace() creates new instance
         return replace(self, **kwargs)
 
     def to_dict(self) -> Dict[str, int]:
@@ -225,7 +244,12 @@ class CharacterAggregate:
         return f"{self.character_name} (Level {self.level} {self.character_class.value})"
 
     def update_ability_scores(self, new_scores: AbilityScores) -> None:
-        """Update character's ability scores (for when user sets them via interface)"""
+        """
+        Update character's ability scores (for when user sets them via interface).
+
+        Business Rule: All ability scores validated by AbilityScores value object (1-30 range).
+        """
+        # Validation enforced by AbilityScores.__post_init__
         self.ability_scores = new_scores
         self.updated_at = datetime.now()
 

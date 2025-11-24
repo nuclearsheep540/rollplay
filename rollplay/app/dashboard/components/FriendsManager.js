@@ -306,7 +306,7 @@ export default function FriendsManager({ user, refreshTrigger }) {
           <button
             type="submit"
             disabled={sending || !lookupUser}
-            className="w-full px-6 py-2 bg-purple-600 text-white rounded-lg border border-purple-500 hover:bg-purple-500 hover:shadow-lg hover:shadow-purple-500/30 disabled:bg-slate-600 disabled:border-slate-600 disabled:cursor-not-allowed transition-all font-semibold flex items-center justify-center gap-2"
+            className="w-full px-6 py-2 bg-purple-600 text-white rounded-lg border border-purple-500 hover:bg-purple-500 disabled:bg-slate-600 disabled:border-slate-600 disabled:cursor-not-allowed transition-all font-semibold flex items-center justify-center gap-2"
           >
             {sending ? (
               <>

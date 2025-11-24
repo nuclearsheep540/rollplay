@@ -19,6 +19,7 @@ from modules.game.application.commands import (
     CreateGame,
     StartGame,
     EndGame,
+    FinishGame,
     RemovePlayerFromGame,
     UpdateGame,
     DeleteGame,
@@ -218,6 +219,7 @@ async def start_game(
     current_user: UserAggregate = Depends(get_current_user_from_token),
     game_repo: GameRepository = Depends(get_game_repository),
     user_repo: UserRepository = Depends(get_user_repository),
+    campaign_repo: CampaignRepository = Depends(campaign_repository),
     db: Session = Depends(get_db)
 ):
     """
@@ -233,7 +235,7 @@ async def start_game(
     Frontend can then redirect to /game?room_id={session_id}
     """
     try:
-        command = StartGame(game_repo, user_repo)
+        command = StartGame(game_repo, user_repo, campaign_repo)
         game = await command.execute(game_id, current_user.id)
         return _to_game_response(game, db)
 
@@ -288,6 +290,44 @@ async def end_game(
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Failed to end game"
+        )
+
+
+@router.post("/{game_id}/finish", response_model=GameResponse)
+async def finish_game(
+    game_id: UUID,
+    current_user: UserAggregate = Depends(get_current_user_from_token),
+    game_repo: GameRepository = Depends(get_game_repository),
+    user_repo: UserRepository = Depends(get_user_repository),
+    character_repo = Depends(get_character_repository),
+    db: Session = Depends(get_db)
+):
+    """
+    Finish a game session permanently (ACTIVE/INACTIVE → FINISHED).
+
+    This endpoint:
+    1. If ACTIVE: Performs full ETL (like end_game) then sets FINISHED
+    2. If INACTIVE: Sets FINISHED directly
+    3. Unlocks all characters that were locked to this game
+    4. FINISHED games cannot be resumed and are preserved in campaign history
+
+    Returns game with status='finished'.
+    """
+    try:
+        command = FinishGame(game_repo, user_repo, character_repo)
+        game = await command.execute(game_id, current_user.id)
+        return _to_game_response(game, db)
+
+    except ValueError as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(e)
+        )
+    except Exception as e:
+        logger.error(f"Unexpected error finishing game {game_id}: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to finish game"
         )
 
 

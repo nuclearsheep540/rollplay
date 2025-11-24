@@ -17,16 +17,18 @@ class GameStatus(str, Enum):
 
     We use these states to understand the game's status
 
-    INACTIVE means this game has no current active_session
+    INACTIVE means this game has no current active_session (can be resumed)
     ACTIVE means this game has an active_session
     STARTING means the ETL pipeline has started and we're waiting for an Active state
     STOPPING means the ETL pipeline has started and we're waiting for an Inactive state
+    FINISHED means this session is permanently complete (cannot be resumed, preserved in history)
     """
 
     INACTIVE = "inactive"
     ACTIVE = "active"
     STARTING = "starting"
     STOPPING = "stopping"
+    FINISHED = "finished"
 
     def __str__(self) -> str:
         return self.value
@@ -141,8 +143,8 @@ class GameAggregate:
         return self.status == GameStatus.ACTIVE
 
     def can_be_deleted(self) -> bool:
-        """Business rule: Game can only be deleted if INACTIVE"""
-        return self.status == GameStatus.INACTIVE
+        """Business rule: Game can only be deleted if INACTIVE or FINISHED"""
+        return self.status in [GameStatus.INACTIVE, GameStatus.FINISHED]
 
     def update_name(self, name: str) -> None:
         """Update game name with validation"""
@@ -191,5 +193,28 @@ class GameAggregate:
             raise ValueError("Can only mark STOPPING games as INACTIVE")
 
         self.status = GameStatus.INACTIVE
+        self.stopped_at = datetime.utcnow()
+        self.session_id = None  # Clear MongoDB session reference
+
+    def finish_session(self) -> None:
+        """
+        Finish session permanently.
+        Can only be called on INACTIVE sessions (must pause first if active).
+        Sets status to FINISHED - session cannot be resumed.
+        """
+        if self.status != GameStatus.INACTIVE:
+            raise ValueError("Can only finish INACTIVE sessions. Pause the session first.")
+
+        self.status = GameStatus.FINISHED
+
+    def mark_finished(self) -> None:
+        """
+        Mark game as FINISHED (called by ETL after successful finish from ACTIVE state).
+        Alternative flow: ACTIVE → finish_from_active() → STOPPING → mark_finished() → FINISHED
+        """
+        if self.status != GameStatus.STOPPING:
+            raise ValueError("Can only mark STOPPING games as FINISHED")
+
+        self.status = GameStatus.FINISHED
         self.stopped_at = datetime.utcnow()
         self.session_id = None  # Clear MongoDB session reference

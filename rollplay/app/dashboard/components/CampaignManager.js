@@ -8,8 +8,10 @@
 import { useState, useEffect, useRef } from 'react'
 import { createPortal } from 'react-dom'
 import { useRouter } from 'next/navigation'
-import EndGameModal from './EndGameModal'
+import PauseSessionModal from './PauseSessionModal'
+import FinishSessionModal from './FinishSessionModal'
 import DeleteCampaignModal from './DeleteCampaignModal'
+import DeleteSessionModal from './DeleteSessionModal'
 import CampaignInviteModal from './CampaignInviteModal'
 import InviteButton from '../../shared/components/InviteButton'
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
@@ -21,9 +23,11 @@ import {
   faXmark,
   faPlus,
   faPlay,
-  faStop,
+  faPause,
+  faCheckCircle,
   faRightToBracket,
-  faUserPlus
+  faUserPlus,
+  faInfoCircle
 } from '@fortawesome/free-solid-svg-icons'
 
 export default function CampaignManager({ user, refreshTrigger }) {
@@ -45,12 +49,17 @@ export default function CampaignManager({ user, refreshTrigger }) {
   const [gameMaxPlayers, setGameMaxPlayers] = useState(8)
   const [selectedCampaignForGame, setSelectedCampaignForGame] = useState(null)
   const [startingGame, setStartingGame] = useState(null)
-  const [endingGame, setEndingGame] = useState(null)
+  const [pausingGame, setPausingGame] = useState(null)
+  const [finishingGame, setFinishingGame] = useState(null)
   const [deletingGame, setDeletingGame] = useState(null)
-  const [showEndGameModal, setShowEndGameModal] = useState(false)
-  const [gameToEnd, setGameToEnd] = useState(null)
+  const [showPauseSessionModal, setShowPauseSessionModal] = useState(false)
+  const [gameToPause, setGameToPause] = useState(null)
+  const [showFinishSessionModal, setShowFinishSessionModal] = useState(false)
+  const [gameToFinish, setGameToFinish] = useState(null)
   const [showDeleteCampaignModal, setShowDeleteCampaignModal] = useState(false)
   const [campaignToDelete, setCampaignToDelete] = useState(null)
+  const [showDeleteSessionModal, setShowDeleteSessionModal] = useState(false)
+  const [sessionToDelete, setSessionToDelete] = useState(null)
   const [showCampaignInviteModal, setShowCampaignInviteModal] = useState(false)
   const [selectedCampaignForInvite, setSelectedCampaignForInvite] = useState(null)
   const gameSessionsPanelRef = useRef(null)
@@ -271,45 +280,86 @@ export default function CampaignManager({ user, refreshTrigger }) {
     }
   }
 
-  // Show end game confirmation modal
-  const promptEndGame = (game) => {
-    setGameToEnd(game)
-    setShowEndGameModal(true)
+  // Show pause session confirmation modal
+  const promptPauseSession = (game) => {
+    setGameToPause(game)
+    setShowPauseSessionModal(true)
   }
 
-  // End game session (after confirmation)
-  const confirmEndGame = async () => {
-    if (!gameToEnd) return
+  // Pause session (after confirmation)
+  const confirmPauseSession = async () => {
+    if (!gameToPause) return
 
-    setEndingGame(gameToEnd.id)
+    setPausingGame(gameToPause.id)
     setError(null)
 
     try {
-      const response = await fetch(`/api/games/${gameToEnd.id}/end`, {
+      const response = await fetch(`/api/games/${gameToPause.id}/end`, {
         method: 'POST',
         credentials: 'include'
       })
 
       if (!response.ok) {
         const errorData = await response.json()
-        throw new Error(errorData.detail || 'Failed to end game')
+        throw new Error(errorData.detail || 'Failed to pause session')
       }
 
       await fetchCampaigns()
-      setShowEndGameModal(false)
-      setGameToEnd(null)
+      setShowPauseSessionModal(false)
+      setGameToPause(null)
     } catch (err) {
-      console.error('Error ending game:', err)
+      console.error('Error pausing session:', err)
       setError(err.message)
     } finally {
-      setEndingGame(null)
+      setPausingGame(null)
     }
   }
 
-  // Cancel end game
-  const cancelEndGame = () => {
-    setShowEndGameModal(false)
-    setGameToEnd(null)
+  // Cancel pause session
+  const cancelPauseSession = () => {
+    setShowPauseSessionModal(false)
+    setGameToPause(null)
+  }
+
+  // Show finish session confirmation modal
+  const promptFinishSession = (game) => {
+    setGameToFinish(game)
+    setShowFinishSessionModal(true)
+  }
+
+  // Finish session permanently (after confirmation)
+  const confirmFinishSession = async () => {
+    if (!gameToFinish) return
+
+    setFinishingGame(gameToFinish.id)
+    setError(null)
+
+    try {
+      const response = await fetch(`/api/games/${gameToFinish.id}/finish`, {
+        method: 'POST',
+        credentials: 'include'
+      })
+
+      if (!response.ok) {
+        const errorData = await response.json()
+        throw new Error(errorData.detail || 'Failed to finish session')
+      }
+
+      await fetchCampaigns()
+      setShowFinishSessionModal(false)
+      setGameToFinish(null)
+    } catch (err) {
+      console.error('Error finishing session:', err)
+      setError(err.message)
+    } finally {
+      setFinishingGame(null)
+    }
+  }
+
+  // Cancel finish session
+  const cancelFinishSession = () => {
+    setShowFinishSessionModal(false)
+    setGameToFinish(null)
   }
 
   // Handle successful campaign invite
@@ -320,17 +370,27 @@ export default function CampaignManager({ user, refreshTrigger }) {
     setSelectedCampaignForInvite(updatedCampaign)
   }
 
-  // Delete game
-  const deleteGame = async (gameId, gameName) => {
-    if (!confirm(`Are you sure you want to delete "${gameName}"? This action cannot be undone.`)) {
-      return
-    }
+  // Open delete session modal
+  const openDeleteSessionModal = (game) => {
+    setSessionToDelete(game)
+    setShowDeleteSessionModal(true)
+  }
 
-    setDeletingGame(gameId)
+  // Close delete session modal
+  const closeDeleteSessionModal = () => {
+    setSessionToDelete(null)
+    setShowDeleteSessionModal(false)
+  }
+
+  // Delete game (called from modal)
+  const deleteGame = async () => {
+    if (!sessionToDelete) return
+
+    setDeletingGame(sessionToDelete.id)
     setError(null)
 
     try {
-      const response = await fetch(`/api/games/${gameId}`, {
+      const response = await fetch(`/api/games/${sessionToDelete.id}`, {
         method: 'DELETE',
         credentials: 'include'
       })
@@ -341,6 +401,7 @@ export default function CampaignManager({ user, refreshTrigger }) {
       }
 
       await fetchCampaigns()
+      closeDeleteSessionModal()
     } catch (err) {
       console.error('Error deleting game:', err)
       setError(err.message)
@@ -623,8 +684,12 @@ export default function CampaignManager({ user, refreshTrigger }) {
           <div className="space-y-4">
             {campaigns.map((campaign) => {
               const campaignGames = allGames.filter(game => game.campaign_id === campaign.id)
-              const activeGames = campaignGames.filter(game => game.status === 'active')
+              // Active games are STARTING, ACTIVE, or STOPPING (excludes INACTIVE and FINISHED)
+              const activeGames = campaignGames.filter(game =>
+                game.status === 'active' || game.status === 'starting' || game.status === 'stopping'
+              )
               const inactiveGames = campaignGames.filter(game => game.status === 'inactive')
+              const finishedGames = campaignGames.filter(game => game.status === 'finished')
               const startingGames = campaignGames.filter(game => game.status === 'starting')
               const stoppingGames = campaignGames.filter(game => game.status === 'stopping')
 
@@ -715,10 +780,19 @@ export default function CampaignManager({ user, refreshTrigger }) {
                       {/* Bottom Row - Create Session Button & Metadata */}
                       <div className="flex items-center justify-between">
                         {activeGames.length > 0 ? (
-                          <div className="text-slate-200 text-sm drop-shadow">
-                            <span>Created: {campaign.created_at ? new Date(campaign.created_at).toLocaleDateString() : 'Unknown'}</span>
-                            <span className="mx-2">•</span>
-                            <span>{campaignGames.length} session{campaignGames.length !== 1 ? 's' : ''}</span>
+                          <div className="space-y-2">
+                            {/* Campaign metadata */}
+                            <div className="text-slate-200 text-sm drop-shadow">
+                              <span>Created: {campaign.created_at ? new Date(campaign.created_at).toLocaleDateString() : 'Unknown'}</span>
+                              <span className="mx-2">•</span>
+                              <span>{campaignGames.length} session{campaignGames.length !== 1 ? 's' : ''}</span>
+                            </div>
+
+                            {/* Clarity message: why Create Session button is hidden */}
+                            <div className="text-amber-400/80 text-xs flex items-center gap-1">
+                              <FontAwesomeIcon icon={faInfoCircle} />
+                              <span>End active session to create another</span>
+                            </div>
                           </div>
                         ) : (
                           <>
@@ -806,20 +880,38 @@ export default function CampaignManager({ user, refreshTrigger }) {
                                       {campaign.host_id === user.id && (
                                         <>
                                           <button
-                                            onClick={() => promptEndGame(game)}
-                                            disabled={endingGame === game.id}
+                                            onClick={() => promptPauseSession(game)}
+                                            disabled={pausingGame === game.id}
                                             className="px-3 py-1.5 bg-orange-600 hover:bg-orange-500 text-white rounded-lg border border-orange-500 hover:shadow-lg hover:shadow-orange-500/30 transition-all text-sm font-medium flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
-                                            title="Save and Stop Game"
+                                            title="Pause Session"
                                           >
-                                            {endingGame === game.id ? (
+                                            {pausingGame === game.id ? (
                                               <>
                                                 <div className="animate-spin rounded-full h-3 w-3 border-b-2 border-white"></div>
-                                                Saving...
+                                                Pausing...
                                               </>
                                             ) : (
                                               <>
-                                                <FontAwesomeIcon icon={faStop} />
-                                                Save & Stop
+                                                <FontAwesomeIcon icon={faPause} />
+                                                Pause
+                                              </>
+                                            )}
+                                          </button>
+                                          <button
+                                            onClick={() => promptFinishSession(game)}
+                                            disabled={finishingGame === game.id}
+                                            className="px-3 py-1.5 bg-amber-600 hover:bg-amber-500 text-white rounded-lg border border-amber-500 hover:shadow-lg hover:shadow-amber-500/30 transition-all text-sm font-medium flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                                            title="Finish Session Permanently"
+                                          >
+                                            {finishingGame === game.id ? (
+                                              <>
+                                                <div className="animate-spin rounded-full h-3 w-3 border-b-2 border-white"></div>
+                                                Finishing...
+                                              </>
+                                            ) : (
+                                              <>
+                                                <FontAwesomeIcon icon={faCheckCircle} />
+                                                Finish
                                               </>
                                             )}
                                           </button>
@@ -831,9 +923,9 @@ export default function CampaignManager({ user, refreshTrigger }) {
                                     <>
                                       <button
                                         onClick={() => startGame(game.id)}
-                                        disabled={startingGame === game.id}
+                                        disabled={startingGame === game.id || activeGames.length > 0}
                                         className="px-3 py-1.5 bg-green-600 hover:bg-green-500 text-white rounded-lg border border-green-500 hover:shadow-lg hover:shadow-green-500/30 transition-all text-sm font-medium flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
-                                        title="Start Game"
+                                        title={activeGames.length > 0 ? "Pause or finish the active session before starting another" : "Start Game"}
                                       >
                                         {startingGame === game.id ? (
                                           <>
@@ -848,7 +940,25 @@ export default function CampaignManager({ user, refreshTrigger }) {
                                         )}
                                       </button>
                                       <button
-                                        onClick={() => deleteGame(game.id, game.name)}
+                                        onClick={() => promptFinishSession(game)}
+                                        disabled={finishingGame === game.id}
+                                        className="px-3 py-1.5 bg-amber-600 hover:bg-amber-500 text-white rounded-lg border border-amber-500 hover:shadow-lg hover:shadow-amber-500/30 transition-all text-sm font-medium flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                                        title="Finish Session Permanently"
+                                      >
+                                        {finishingGame === game.id ? (
+                                          <>
+                                            <div className="animate-spin rounded-full h-3 w-3 border-b-2 border-white"></div>
+                                            Finishing...
+                                          </>
+                                        ) : (
+                                          <>
+                                            <FontAwesomeIcon icon={faCheckCircle} />
+                                            Finish
+                                          </>
+                                        )}
+                                      </button>
+                                      <button
+                                        onClick={() => openDeleteSessionModal(game)}
                                         disabled={deletingGame === game.id}
                                         className="px-3 py-1.5 bg-red-600 hover:bg-red-500 text-white rounded-lg border border-red-500 hover:shadow-lg hover:shadow-red-500/30 transition-all text-sm font-medium flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
                                         title="Delete Game"
@@ -866,6 +976,26 @@ export default function CampaignManager({ user, refreshTrigger }) {
                                         )}
                                       </button>
                                     </>
+                                  ) : game.status === 'finished' && campaign.host_id === user.id ? (
+                                    /* Show delete button for finished sessions (host only) */
+                                    <button
+                                      onClick={() => openDeleteSessionModal(game)}
+                                      disabled={deletingGame === game.id}
+                                      className="px-3 py-1.5 bg-red-600 hover:bg-red-500 text-white rounded-lg border border-red-500 hover:shadow-lg hover:shadow-red-500/30 transition-all text-sm font-medium flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                                      title="Delete Finished Session"
+                                    >
+                                      {deletingGame === game.id ? (
+                                        <>
+                                          <div className="animate-spin rounded-full h-3 w-3 border-b-2 border-white"></div>
+                                          Deleting...
+                                        </>
+                                      ) : (
+                                        <>
+                                          <FontAwesomeIcon icon={faTrash} />
+                                          Delete
+                                        </>
+                                      )}
+                                    </button>
                                   ) : null}
                                 </div>
                               </div>
@@ -1013,13 +1143,23 @@ export default function CampaignManager({ user, refreshTrigger }) {
         document.body
       )}
 
-      {/* End Game Confirmation Modal */}
-      {showEndGameModal && (
-        <EndGameModal
-          game={gameToEnd}
-          onConfirm={confirmEndGame}
-          onCancel={cancelEndGame}
-          isEnding={endingGame === gameToEnd?.id}
+      {/* Pause Session Confirmation Modal */}
+      {showPauseSessionModal && (
+        <PauseSessionModal
+          game={gameToPause}
+          onConfirm={confirmPauseSession}
+          onCancel={cancelPauseSession}
+          isPausing={pausingGame === gameToPause?.id}
+        />
+      )}
+
+      {/* Finish Session Confirmation Modal */}
+      {showFinishSessionModal && (
+        <FinishSessionModal
+          game={gameToFinish}
+          onConfirm={confirmFinishSession}
+          onCancel={cancelFinishSession}
+          isFinishing={finishingGame === gameToFinish?.id}
         />
       )}
 
@@ -1030,6 +1170,16 @@ export default function CampaignManager({ user, refreshTrigger }) {
           onConfirm={confirmDeleteCampaign}
           onCancel={cancelDeleteCampaign}
           isDeleting={deletingCampaign === campaignToDelete?.id}
+        />
+      )}
+
+      {/* Delete Session Confirmation Modal */}
+      {showDeleteSessionModal && (
+        <DeleteSessionModal
+          session={sessionToDelete}
+          onConfirm={deleteGame}
+          onCancel={closeDeleteSessionModal}
+          isDeleting={deletingGame === sessionToDelete?.id}
         />
       )}
 

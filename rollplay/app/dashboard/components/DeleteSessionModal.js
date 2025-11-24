@@ -8,20 +8,20 @@
 import ConfirmModal from '../../shared/components/ConfirmModal'
 import { faTrash } from '@fortawesome/free-solid-svg-icons'
 
-export default function DeleteCampaignModal({ campaign, onConfirm, onCancel, isDeleting }) {
-  if (!campaign) return null
+export default function DeleteSessionModal({ session, onConfirm, onCancel, isDeleting }) {
+  if (!session) return null
 
   return (
     <ConfirmModal
-      show={!!campaign}
-      title="Delete Campaign"
+      show={!!session}
+      title="Delete Session"
       message={
         <>
-          Are you sure you want to delete <strong className="text-red-400">"{campaign.title || 'this campaign'}"</strong>?
+          Are you sure you want to delete <strong className="text-red-400">"{session.name || 'this session'}"</strong>?
         </>
       }
-      description="This action cannot be undone. All associated game sessions will also be deleted."
-      confirmText="Delete Campaign"
+      description="This action cannot be undone."
+      confirmText="Delete Session"
       onConfirm={onConfirm}
       onCancel={onCancel}
       isLoading={isDeleting}

@@ -149,11 +149,36 @@ export default function CampaignInviteModal({ campaign, onClose, onInviteSuccess
     await inviteUser(friendId)
   }
 
-  // Check if user is already in campaign or has a pending invite
-  const isUserInCampaign = (userId) => {
-    return campaign.player_ids?.includes(userId) ||
-           campaign.host_id === userId ||
-           campaign.invited_player_ids?.includes(userId)
+  // Helper functions to distinguish between different user states
+  const isUserHost = (userId) => {
+    return campaign.host_id === userId
+  }
+
+  const hasUserAccepted = (userId) => {
+    return campaign.player_ids?.includes(userId)
+  }
+
+  const hasUserPendingInvite = (userId) => {
+    return campaign.invited_player_ids?.includes(userId)
+  }
+
+  const canInviteUser = (userId) => {
+    // Can invite if: not host, not already accepted, and no pending invite
+    return !isUserHost(userId) && !hasUserAccepted(userId) && !hasUserPendingInvite(userId)
+  }
+
+  // Get appropriate message for user status
+  const getUserStatusMessage = (userId) => {
+    if (isUserHost(userId)) {
+      return "This is the campaign host"
+    }
+    if (hasUserAccepted(userId)) {
+      return "Already in campaign"
+    }
+    if (hasUserPendingInvite(userId)) {
+      return "Invite pending"
+    }
+    return null
   }
 
   return (
@@ -216,9 +241,9 @@ export default function CampaignInviteModal({ campaign, onClose, onInviteSuccess
                     <p className="text-sm text-slate-700">
                       Found: <span className="font-semibold">{lookupUser.display_name}</span>
                     </p>
-                    {isUserInCampaign(lookupUser.id) && (
+                    {getUserStatusMessage(lookupUser.id) && (
                       <p className="text-sm text-orange-600 mt-1">
-                        ⚠️ User is already in this campaign
+                        ⚠️ {getUserStatusMessage(lookupUser.id)}
                       </p>
                     )}
                   </div>
@@ -226,7 +251,7 @@ export default function CampaignInviteModal({ campaign, onClose, onInviteSuccess
               </div>
               <button
                 type="submit"
-                disabled={!lookupUser || inviting || isUserInCampaign(lookupUser?.id)}
+                disabled={!lookupUser || inviting || !canInviteUser(lookupUser?.id)}
                 className="w-full bg-purple-600 hover:bg-purple-700 text-white px-4 py-2 rounded-lg font-semibold disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
               >
                 {inviting ? 'Inviting Player...' : 'Invite Player to Campaign'}
@@ -249,8 +274,8 @@ export default function CampaignInviteModal({ campaign, onClose, onInviteSuccess
                     className="flex items-center justify-between p-3 bg-slate-50 rounded-lg hover:bg-slate-100 transition-colors"
                   >
                     <span className="text-slate-700 font-medium">{friend.friend_screen_name}</span>
-                    {isUserInCampaign(friend.friend_id) ? (
-                      <span className="text-sm text-orange-600">Already in campaign</span>
+                    {getUserStatusMessage(friend.friend_id) ? (
+                      <span className="text-sm text-orange-600">{getUserStatusMessage(friend.friend_id)}</span>
                     ) : (
                       <button
                         onClick={() => handleInviteFriend(friend.friend_id)}

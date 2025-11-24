@@ -109,7 +109,7 @@ class GameRepository:
         # Business rule validation through aggregate
         game = self._model_to_aggregate(model)
         if not game.can_be_deleted():
-            raise ValueError("Cannot delete game - it must be INACTIVE")
+            raise ValueError("Cannot delete game - it must be INACTIVE or FINISHED")
 
         # Explicitly delete child records using SQLAlchemy ORM to avoid relationship conflicts
         # Delete GameJoinedUser records (prevents ORM trying to SET NULL on primary key)

@@ -209,10 +209,12 @@ class StartGame:
     def __init__(
         self,
         game_repository: GameRepository,
-        user_repository: UserRepository
+        user_repository: UserRepository,
+        campaign_repository: CampaignRepository
     ):
         self.game_repo = game_repository
         self.user_repo = user_repository
+        self.campaign_repo = campaign_repository
 
     async def execute(self, game_id: UUID, host_id: UUID) -> GameAggregate:
         """
@@ -240,7 +242,25 @@ class StartGame:
         if game.status != GameStatus.INACTIVE:
             raise ValueError(f"Cannot start game in {game.status} status")
 
-        # 4. Set STARTING status
+        # 4. Business Rule: Only one non-inactive/non-finished session per campaign at a time
+        campaign = self.campaign_repo.get_by_id(game.campaign_id)
+        if campaign:
+            active_sessions = []
+            for game_id in campaign.game_ids:
+                existing_game = self.game_repo.get_by_id(game_id)
+                # Check for STARTING, ACTIVE, or STOPPING (exclude INACTIVE and FINISHED)
+                if existing_game and existing_game.id != game.id and existing_game.status in [
+                    GameStatus.STARTING, GameStatus.ACTIVE, GameStatus.STOPPING
+                ]:
+                    active_sessions.append(existing_game.name)
+
+            if active_sessions:
+                raise ValueError(
+                    f"Campaign already has an active session: '{active_sessions[0]}'. "
+                    f"Please pause or finish the current session before starting a new one."
+                )
+
+        # 5. Set STARTING status
         game.start_game()  # Domain method sets status = STARTING
         self.game_repo.save(game)
         logger.info(f"Game {game_id} status set to STARTING")
@@ -452,6 +472,153 @@ class EndGame:
             else:
                 logger.warning(f"⚠️ MongoDB cleanup failed for {game_id}: {response.text}")
                 logger.warning(f"Cron job will clean up session {session_id}")
+
+        except Exception as e:
+            # Cleanup failed - cron will handle it
+            logger.warning(f"⚠️ Background cleanup failed for {game_id}: {e}")
+            logger.warning(f"Cron job will clean up session {session_id}")
+
+
+class FinishGame:
+    """
+    Finish game session permanently: ACTIVE/INACTIVE → FINISHED.
+    Performs full ETL if game is ACTIVE, then marks as FINISHED.
+    FINISHED sessions cannot be resumed and are preserved in campaign history.
+    """
+
+    def __init__(
+        self,
+        game_repository: GameRepository,
+        user_repository: UserRepository,
+        character_repository: CharacterRepository
+    ):
+        self.game_repo = game_repository
+        self.user_repo = user_repository
+        self.character_repo = character_repository
+
+    async def execute(self, game_id: UUID, host_id: UUID) -> GameAggregate:
+        """
+        Finish a game session permanently.
+
+        Flow:
+        - If ACTIVE: Performs full ETL (like EndGame) then sets FINISHED
+        - If INACTIVE: Sets FINISHED directly
+
+        Game will be marked FINISHED and cannot be resumed.
+
+        Raises:
+            ValueError: If validation fails or api-game call fails
+        """
+        # 1. Load game
+        game = self.game_repo.get_by_id(game_id)
+        if not game:
+            raise ValueError("Game not found")
+
+        # 2. Validate host ownership
+        if game.host_id != host_id:
+            raise ValueError("Only the host can finish this game")
+
+        # 3. If game is INACTIVE, just mark as FINISHED
+        if game.status == GameStatus.INACTIVE:
+            game.finish_session()  # Domain method sets status = FINISHED
+            self.game_repo.save(game)
+            logger.info(f"Game {game_id} marked FINISHED (was INACTIVE)")
+            return game
+
+        # 4. If game is ACTIVE, perform ETL then mark as FINISHED
+        if game.status != GameStatus.ACTIVE:
+            raise ValueError(f"Cannot finish game in {game.status} status. Only ACTIVE or INACTIVE games can be finished.")
+
+        # 5. Set STOPPING status (ETL process starting)
+        game.stop_game()  # Domain method sets status = STOPPING
+        self.game_repo.save(game)
+        logger.info(f"Game {game_id} status set to STOPPING (finishing)")
+
+        # 6. PHASE 1: Fetch final state (MongoDB NOT deleted yet)
+        try:
+            async with httpx.AsyncClient() as client:
+                response = await client.post(
+                    "http://api-game:8081/game/session/end",
+                    params={"validate_only": True},
+                    json={"game_id": str(game_id)},
+                    timeout=10.0
+                )
+
+            if response.status_code != 200:
+                # Can't fetch state - rollback to ACTIVE
+                logger.error(f"Failed to fetch final state: {response.text}")
+                game.status = GameStatus.ACTIVE
+                self.game_repo.save(game)
+                raise ValueError(f"Cannot fetch game state: {response.text}")
+
+            final_state = response.json()["final_state"]
+            logger.info(f"✅ Fetched final state for {game_id}: {len(final_state.get('players', []))} players")
+
+            # Extract max_players from MongoDB session stats
+            max_players_from_session = final_state.get("session_stats", {}).get("max_players", game.max_players)
+            logger.info(f"📊 Session max_players: {max_players_from_session} (original: {game.max_players})")
+
+        except httpx.RequestError as e:
+            # Network error - rollback to ACTIVE
+            logger.error(f"Network error fetching state: {e}")
+            game.status = GameStatus.ACTIVE
+            self.game_repo.save(game)
+            raise ValueError(f"Cannot reach game service: {str(e)}")
+
+        # 7. PHASE 2: Write to PostgreSQL and mark as FINISHED
+        try:
+            # Capture session_id BEFORE mark_finished clears it
+            session_id_to_cleanup = game.session_id
+
+            # Update max_players from MongoDB session (if changed during session)
+            game.max_players = max_players_from_session
+
+            # Mark game FINISHED (this will clear game.session_id to None)
+            game.mark_finished()  # Sets FINISHED, stopped_at = now, session_id = None
+            self.game_repo.save(game)
+            logger.info(f"✅ Game {game_id} marked FINISHED in PostgreSQL with max_players={max_players_from_session}")
+
+            # Unlock all characters that were locked to this game
+            locked_characters = self.character_repo.get_by_active_game(game_id)
+            for character in locked_characters:
+                character.unlock_from_game()
+                self.character_repo.save(character)
+            logger.info(f"✅ Unlocked {len(locked_characters)} character(s) from game {game_id}")
+
+        except Exception as pg_error:
+            # PostgreSQL write failed - MongoDB session is PRESERVED
+            logger.error(f"❌ PostgreSQL write failed for {game_id}: {pg_error}")
+            logger.error(f"⚠️ MongoDB session {game.session_id} PRESERVED for manual retry")
+
+            # Leave game in STOPPING status so user knows there's an issue
+            raise ValueError(
+                f"Failed to save game data. Session preserved in MongoDB. "
+                f"Please try finishing the game again. Error: {str(pg_error)}"
+            )
+
+        # 8. PHASE 3: Background cleanup (fire-and-forget)
+        asyncio.create_task(self._async_cleanup(game_id, session_id_to_cleanup))
+
+        logger.info(f"✅ Game {game_id} finished successfully, cleanup scheduled")
+        return game
+
+    async def _async_cleanup(self, game_id: UUID, session_id: str):
+        """
+        Background task to delete MongoDB session.
+        Same as EndGame cleanup.
+        """
+        try:
+            async with httpx.AsyncClient() as client:
+                response = await client.delete(
+                    f"http://api-game:8081/game/session/{session_id}",
+                    params={"keep_logs": False},
+                    timeout=5.0
+                )
+
+            if response.status_code == 200:
+                logger.info(f"✅ Background cleanup successful for {game_id}")
+            else:
+                logger.warning(f"⚠️ Background cleanup failed: {response.text}")
 
         except Exception as e:
             # Cleanup failed - cron will handle it

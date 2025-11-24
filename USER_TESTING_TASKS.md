@@ -6,13 +6,14 @@
 
 ## 📊 Progress Overview
 
-- **Critical Bugs:** 0/6 completed
-- **Quick Wins:** 0/10 completed
-- **Small Features:** 0/8 completed
-- **Medium Features:** 0/7 completed
-- **Major Rethinks:** 0/4 completed
+- **Critical Bugs:** 5/7 completed (2 unsure - need regression testing)
+- **Quick Wins:** 10/10 completed ✅
+- **Small Features:** 6/8 completed
+- **Medium Features:** 2/7 completed (2 future features)
+- **Major Rethinks:** 3/4 completed (1 future feature)
 
-**Total Tasks:** 0/35 completed
+**Total Tasks:** 26/35 completed (74%)
+**Remaining Work:** 8 incomplete, 3 future features
 
 ---
 
@@ -72,7 +73,7 @@
 ---
 
 ## ⚠️ CRITICAL-2: Fix DM Not Showing in Lobby
-- [ ] **Status:** Not Started
+- [x] **Status:** COMPLETED
 - **Priority:** CRITICAL
 - **Complexity:** Medium
 - **Estimated Time:** 2-3 hours
@@ -102,7 +103,7 @@
 ---
 
 ## ⚠️ CRITICAL-3: Fix Can't See Connected Users on Refresh
-- [ ] **Status:** Not Started
+- [x] **Status:** COMPLETED
 - **Priority:** CRITICAL
 - **Complexity:** Medium
 - **Estimated Time:** 2-3 hours
@@ -136,7 +137,8 @@
 ---
 
 ## ⚠️ CRITICAL-4: Fix Users Can Re-Seat
-- [ ] **Status:** Not Started
+- [x] **Status:** COMPLETED
+- **Implementation:** Lines 136-139 in `/api-game/gameservice.py` validate duplicate players
 - **Priority:** CRITICAL
 - **Complexity:** Medium
 - **Estimated Time:** 1-2 hours
@@ -166,7 +168,7 @@
 ---
 
 ## ⚠️ CRITICAL-5: Fix Seat Not Clearing on Refresh
-- [ ] **Status:** Not Started
+- [x] **Status:** COMPLETED
 - **Priority:** CRITICAL
 - **Complexity:** Medium
 - **Estimated Time:** 1-2 hours
@@ -194,7 +196,8 @@
 ---
 
 ## ⚠️ CRITICAL-6: Prevent DM from Taking Player Seats
-- [ ] **Status:** Not Started
+- [x] **Status:** COMPLETED
+- **Implementation:** Lines 141-146 in `/api-game/gameservice.py` prevent DM from taking seats
 - **Priority:** CRITICAL
 - **Complexity:** Simple
 - **Estimated Time:** < 1 hour
@@ -223,7 +226,8 @@
 ---
 
 ## ⚠️ CRITICAL-7: Fix Name Tracking Bug (Jordy/Rob Issue)
-- [ ] **Status:** Not Started
+- [ ] **Status:** NEEDS REGRESSION TESTING
+- **Note:** May have been fixed by proxy of other changes, requires full testing to confirm
 - **Priority:** CRITICAL
 - **Complexity:** Complex
 - **Estimated Time:** 1-2 days
@@ -268,7 +272,8 @@
 ---
 
 ## 🎨 UI-1: Username Input Text Too Light
-- [ ] **Status:** Not Started
+- [x] **Status:** COMPLETED
+- **Implementation:** Added `text-slate-900` class to input in `/rollplay/app/dashboard/components/ScreenNameModal.js` line 42
 - **Complexity:** Trivial
 - **Estimated Time:** < 15 minutes
 
@@ -285,7 +290,7 @@
 ---
 
 ## 🎨 UI-2: Replace Delete Campaign Window Prompt with Modal
-- [ ] **Status:** Not Started
+- [x] **Status:** COMPLETED
 - **Complexity:** Simple
 - **Estimated Time:** 30 minutes
 
@@ -305,7 +310,7 @@
 ---
 
 ## 🎨 UI-3: Fix Game Status Capitalization
-- [ ] **Status:** Not Started
+- [x] **Status:** COMPLETED
 - **Complexity:** Trivial
 - **Estimated Time:** < 15 minutes
 
@@ -326,7 +331,7 @@
 ---
 
 ## 🎨 UI-4: Remove roomID Display
-- [ ] **Status:** Not Started
+- [x] **Status:** COMPLETED
 - **Complexity:** Trivial
 - **Estimated Time:** < 15 minutes
 
@@ -341,7 +346,7 @@
 ---
 
 ## 🎨 UI-5: Add Back Button to Game
-- [ ] **Status:** Not Started
+- [x] **Status:** COMPLETED
 - **Complexity:** Simple
 - **Estimated Time:** 30 minutes
 
@@ -357,7 +362,7 @@
 ---
 
 ## 🎨 UI-6: Landing Page Text Simplification
-- [ ] **Status:** Not Started
+- [x] **Status:** COMPLETED
 - **Complexity:** Trivial
 - **Estimated Time:** < 5 minutes
 
@@ -374,7 +379,9 @@
 ---
 
 ## 🎨 UI-7: Change Session Icon from Game Controller to Plus
-- [ ] **Status:** Not Started
+- [x] **Status:** COMPLETED
+- **Implementation:** Create Session button uses `faPlus` icon (line 736 of CampaignManager.js)
+- **Resolution:** Issue was about session creation UX, resolved by enforcing single active session per campaign
 - **Complexity:** Trivial
 - **Estimated Time:** < 5 minutes
 
@@ -391,7 +398,8 @@
 ---
 
 ## 🎨 UI-8: Fix Friends Action Buttons Hover Consistency
-- [ ] **Status:** Not Started
+- [x] **Status:** COMPLETED
+- **Implementation:** Removed `hover:shadow-lg hover:shadow-purple-500/30` from Send Friend Request button
 - **Complexity:** Simple
 - **Estimated Time:** 30 minutes
 
@@ -410,7 +418,7 @@
 ---
 
 ## 🎨 UI-9: Default Dashboard Tab to Campaigns
-- [ ] **Status:** Not Started
+- [x] **Status:** COMPLETED
 - **Complexity:** Trivial
 - **Estimated Time:** < 5 minutes
 
@@ -428,7 +436,8 @@
 ---
 
 ## 🎨 UI-10: Reorder Left Nav (Campaigns First)
-- [ ] **Status:** Not Started
+- [x] **Status:** COMPLETED
+- **Note:** Games renamed to Sessions, order now: Campaigns, Sessions, Characters, Friends
 - **Complexity:** Trivial
 - **Estimated Time:** < 5 minutes
 
@@ -450,7 +459,8 @@
 ---
 
 ## 🔧 FEATURE-1: Add DM Metadata to Games Tab
-- [ ] **Status:** Not Started
+- [x] **Status:** COMPLETED
+- **Note:** Now "Sessions Tab" (terminology changed)
 - **Complexity:** Simple
 - **Estimated Time:** 1-2 hours
 
@@ -493,7 +503,7 @@
 ---
 
 ## 🔧 FEATURE-3: Rename "Friend UUID" to "Friend Code"
-- [ ] **Status:** Not Started
+- [x] **Status:** COMPLETED
 - **Complexity:** Simple
 - **Estimated Time:** 30 minutes
 
@@ -514,7 +524,7 @@
 ---
 
 ## 🔧 FEATURE-4: Campaign Tile Toggle Expand/Collapse
-- [ ] **Status:** Not Started
+- [x] **Status:** COMPLETED
 - **Complexity:** Simple
 - **Estimated Time:** 30 minutes
 
@@ -533,13 +543,14 @@
 ---
 
 ## 🔧 FEATURE-5: Character Ability Score Backend Validation (Max 30)
-- [ ] **Status:** Not Started
+- [x] **Status:** COMPLETED
+- **Implementation:** Added `__post_init__` validation to `AbilityScores` value object, validates 1-30 range on creation and update
 - **Complexity:** Simple
 - **Estimated Time:** 30 minutes
 
 ### Current Implementation
 - **Frontend:** CharacterForm.js already has `max="30"` ✅
-- **Backend:** No validation in CharacterAggregate
+- **Backend:** No validation in CharacterAggregate `update_ability_scores()` method
 
 ### Required Changes
 - Add validation to `/api-site/modules/characters/domain/character_aggregate.py`
@@ -555,7 +566,7 @@
 ---
 
 ## 🔧 FEATURE-6: Polling for Friend/Game Invites
-- [ ] **Status:** Not Started
+- [x] **Status:** COMPLETED
 - **Complexity:** Simple
 - **Estimated Time:** 1-2 hours
 
@@ -606,7 +617,8 @@
 ---
 
 ## 🔧 FEATURE-8: Reposition Create Game Button
-- [ ] **Status:** Not Started
+- [x] **Status:** COMPLETED
+- **Note:** Now "Create Session" button (terminology changed)
 - **Complexity:** Simple
 - **Estimated Time:** 30 minutes
 
@@ -853,7 +865,7 @@
 ---
 
 ## 🎯 MEDIUM-5: Rename "End Game" to "Save & Exit" or "Pause"
-- [ ] **Status:** Not Started
+- [x] **Status:** COMPLETED
 - **Complexity:** Simple
 - **Estimated Time:** 30 minutes
 - **Issue:** Users think "End" means delete campaign
@@ -871,7 +883,7 @@
 ---
 
 ## 🎯 MEDIUM-6: Show Campaigns User Is Participating In
-- [ ] **Status:** Not Started
+- [x] **Status:** COMPLETED
 - **Complexity:** Medium
 - **Estimated Time:** 1-2 days
 - **Issue:** Players only see campaigns they own, not campaigns they're playing in
@@ -912,7 +924,8 @@
 ---
 
 ## 🎯 MEDIUM-7: Post-Game Summary / Session History
-- [ ] **Status:** Not Started
+- [ ] **Status:** FUTURE FEATURE (STRETCH GOAL)
+- **Note:** Marked as future feature, not part of current release scope
 - **Complexity:** Medium
 - **Estimated Time:** 1-2 days
 - **Feature:** DM writes post-session summary, visible as breadcrumbs in campaign
@@ -973,7 +986,8 @@
 ---
 
 ## 🏗️ MAJOR-1: Users vs Characters in Game Invites
-- [ ] **Status:** Not Started
+- [x] **Status:** COMPLETED
+- **Note:** Game → Session terminology change also applied
 - **Complexity:** Complex
 - **Estimated Time:** 5-7 days
 - **Issue:** Game must be ACTIVE for player to respond to invite (bad UX)
@@ -1050,7 +1064,8 @@
 ---
 
 ## 🏗️ MAJOR-2: Terminology Overhaul (Game → Session)
-- [ ] **Status:** Not Started
+- [x] **Status:** COMPLETED
+- **Implementation:** Full refactor complete across 100+ files
 - **Complexity:** Very Complex
 - **Estimated Time:** 10-15 days (full sprint)
 - **Issue:** Users confused by "Game" vs "Campaign" terminology
@@ -1132,7 +1147,7 @@
 ---
 
 ## 🏗️ MAJOR-3: Campaign Participation Visibility
-- [ ] **Status:** Not Started
+- [x] **Status:** COMPLETED (Duplicate of MEDIUM-6)
 - **Complexity:** Medium
 - **Estimated Time:** (Covered in MEDIUM-6)
 - **Note:** This is already detailed in MEDIUM-6 above
@@ -1140,7 +1155,8 @@
 ---
 
 ## 🏗️ MAJOR-4: Campaign History Breadcrumbs System
-- [ ] **Status:** Not Started
+- [ ] **Status:** FUTURE FEATURE (STRETCH GOAL)
+- **Note:** Part of same stretch goal as MEDIUM-7, not part of current release scope
 - **Complexity:** Complex
 - **Estimated Time:** 5-7 days
 - **Feature:** Full campaign history with session summaries, adventure log, and timeline
@@ -1321,6 +1337,63 @@ MAJOR-4 ← MEDIUM-7 (requires session summaries)
 - [ ] Point-buy system
 - [ ] Session summaries
 - [ ] Campaign history
+
+---
+
+# Session 3 Summary - Updated 2025-11-23
+
+## Completed This Session
+- **NEW FEATURE**: Mid-session character swapping
+  - Players can change characters during active sessions
+  - Real-time WebSocket broadcast of character changes
+  - Accumulating lock pattern (all locked chars unlock at game end)
+  - New endpoint: `PUT /api/games/{game_id}/change-character-active`
+  - New WebSocket event: `player_character_changed`
+
+- **BACKEND VALIDATION**: Single active session per campaign
+  - Enforces one active session per campaign (backend validation in StartGame command)
+  - Frontend clarity message when Create Session button hidden
+  - Existing "Game In Session" badge provides visual indicator
+
+- **UI IMPROVEMENTS**: Modal refactoring
+  - Created reusable `ConfirmModal` component (/rollplay/app/shared/components/ConfirmModal.js)
+  - Migrated DeleteCampaignModal to use ConfirmModal
+  - Migrated EndGameModal to use ConfirmModal
+  - Created DeleteSessionModal using ConfirmModal (replaced window.confirm)
+  - Supports 3 variants: danger (red), warning (orange), info (blue)
+
+- **BUG FIX**: Module import error in StartGame command
+  - Fixed ModuleNotFoundError preventing session starts
+  - Added CampaignRepository to StartGame dependency injection
+  - Removed problematic inline import
+
+## Overall Progress Since User Testing
+- **26/35 tasks completed (74%)**
+- **5/7 Critical Bugs** fixed (2 need regression testing)
+- **10/10 Quick Wins** done ✅ ALL COMPLETE
+- **6/8 Small Features** complete
+- **Major achievements:**
+  - Full Game → Session terminology overhaul (100+ files)
+  - Campaign-level invite system (not session-level)
+  - Users can see campaigns they're participating in
+  - Complete lobby/connection/seat system fixes
+
+## Remaining Work
+### Must Complete (8 tasks)
+1. CRITICAL-7: Name tracking bug (needs regression testing)
+2. FEATURE-2: Moderator badge display
+3. FEATURE-7: +/- increment buttons for ability scores
+4. MEDIUM-1: Multi-class support
+5. MEDIUM-2: Point-buy system
+6. MEDIUM-3: Friends UI improvements
+7. MEDIUM-4: Friendly friend codes
+8. ~~UI-7~~ ✅ COMPLETE
+9. ~~UI-8~~ ✅ COMPLETE
+
+### Future Features (3 tasks - stretch goals)
+1. MEDIUM-7: Session summaries
+2. MAJOR-4: Campaign history breadcrumbs
+3. TECH-1: Ghostery extension investigation
 
 ---
 
