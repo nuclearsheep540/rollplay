@@ -33,15 +33,16 @@ export default function FriendsManager({ user, refreshTrigger }) {
     fetchFriends(refreshTrigger === 0)
   }, [refreshTrigger])
 
-  // Validate UUID format
-  const isValidUUID = (uuid) => {
+  // Validate friend code or UUID format
+  const isValidIdentifier = (identifier) => {
     const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
-    return uuidRegex.test(uuid)
+    const friendCodeRegex = /^[a-z]+-[a-z]+$/i  // friendlywords format: word-word
+    return uuidRegex.test(identifier) || friendCodeRegex.test(identifier)
   }
 
   // Copy Friend Code to clipboard
   const handleCopyCode = async () => {
-    await navigator.clipboard.writeText(user.id)
+    await navigator.clipboard.writeText(user.friend_code)
     setCopiedCode(true)
     setTimeout(() => setCopiedCode(false), 2000)
   }
@@ -55,7 +56,7 @@ export default function FriendsManager({ user, refreshTrigger }) {
         return
       }
 
-      if (!isValidUUID(friendCode.trim())) {
+      if (!isValidIdentifier(friendCode.trim())) {
         setLookupUser(null)
         setLookupError(null)
         return
@@ -65,7 +66,7 @@ export default function FriendsManager({ user, refreshTrigger }) {
         setLookupLoading(true)
         setLookupError(null)
 
-        const response = await fetch(`/api/users/${friendCode.trim()}`, {
+        const response = await fetch(`/api/users/by-friend-code/${friendCode.trim()}`, {
           credentials: 'include'
         })
 
@@ -137,7 +138,7 @@ export default function FriendsManager({ user, refreshTrigger }) {
           'Content-Type': 'application/json',
         },
         credentials: 'include',
-        body: JSON.stringify({ friend_uuid: friendCode.trim() })
+        body: JSON.stringify({ friend_identifier: friendCode.trim() })
       })
 
       if (!response.ok) {
@@ -273,12 +274,12 @@ export default function FriendsManager({ user, refreshTrigger }) {
               type="text"
               value={friendCode}
               onChange={(e) => setFriendCode(e.target.value)}
-              placeholder="Enter friend's unique code"
+              placeholder="Enter friend code (e.g., happy-elephant)"
               className="w-full px-4 py-2 bg-slate-700 border border-slate-600 text-slate-200 rounded focus:outline-none focus:ring-2 focus:ring-purple-500"
               disabled={sending}
             />
             {/* Real-time lookup feedback */}
-            {friendCode && isValidUUID(friendCode) && (
+            {friendCode && isValidIdentifier(friendCode) && (
               <div className="mt-2">
                 {lookupLoading && (
                   <p className="text-sm text-slate-500 flex items-center gap-2">
@@ -323,7 +324,7 @@ export default function FriendsManager({ user, refreshTrigger }) {
         </form>
         <div className="mt-4 flex items-center gap-2">
           <p className="text-sm text-slate-400">
-            Your Friend Code: <code className="bg-slate-900 border border-slate-700 px-2 py-1 rounded text-xs font-mono text-purple-400">{user.id}</code>
+            Your Friend Code: <code className="bg-slate-900 border border-slate-700 px-2 py-1 rounded text-xs font-mono text-purple-400">{user.friend_code}</code>
           </p>
           <button
             onClick={handleCopyCode}

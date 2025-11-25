@@ -33,9 +33,13 @@ class SendFriendRequest:
         self.friend_request_repo = friend_request_repository
         self.user_repo = user_repository
 
-    def execute(self, user_id: UUID, friend_uuid: UUID) -> dict:
+    def execute(self, user_id: UUID, friend_identifier: str) -> dict:
         """
-        Send friend request by friend's UUID.
+        Send friend request by friend's UUID or friend code.
+
+        Args:
+            user_id: UUID of the requesting user
+            friend_identifier: Either a UUID string or friend code (e.g., "ABCD-1234")
 
         Returns dict with:
         - 'type': 'friendship' or 'friend_request'
@@ -47,14 +51,26 @@ class SendFriendRequest:
         - Cannot friend yourself
         - Cannot send duplicate request
         """
-        # Validate both users exist
+        # Validate requester exists
         user = self.user_repo.get_by_id(user_id)
         if not user:
             raise ValueError(f"User {user_id} not found")
 
-        friend = self.user_repo.get_by_id(friend_uuid)
+        # Determine if identifier is UUID or friend code and look up friend
+        try:
+            # Try parsing as UUID first
+            friend_uuid = UUID(friend_identifier)
+            friend = self.user_repo.get_by_id(friend_uuid)
+        except (ValueError, AttributeError):
+            # Not a valid UUID, try as friend code
+            friend = self.user_repo.get_by_friend_code(friend_identifier)
+            if friend:
+                friend_uuid = friend.id
+            else:
+                raise ValueError(f"Friend code '{friend_identifier}' not found")
+
         if not friend:
-            raise ValueError(f"Friend user {friend_uuid} not found")
+            raise ValueError(f"User not found")
 
         # Check if friendship already exists
         existing_friendship = self.friendship_repo.get_by_canonical_ids(user_id, friend_uuid)

@@ -102,7 +102,7 @@ async def send_friend_request(
         command = SendFriendRequest(friendship_repo, friend_request_repo, user_repo)
         result = command.execute(
             user_id=current_user.id,
-            friend_uuid=request.friend_uuid
+            friend_identifier=request.friend_identifier
         )
 
         # Check if auto-accepted (mutual request)

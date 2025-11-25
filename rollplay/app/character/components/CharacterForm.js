@@ -7,6 +7,7 @@
 
 import { useState } from 'react'
 import Combobox from '../../shared/components/Combobox'
+import NumericStepper from './NumericStepper'
 import { CHARACTER_RACES, CHARACTER_CLASSES } from '../../shared/constants/characterEnums'
 
 export default function CharacterForm({
@@ -24,12 +25,12 @@ export default function CharacterForm({
     character_class: initialData?.character_class || '',
     level: initialData?.level || 1,
     ability_scores: initialData?.ability_scores || {
-      strength: 1,
-      dexterity: 1,
-      constitution: 1,
-      intelligence: 1,
-      wisdom: 1,
-      charisma: 1
+      strength: 10,
+      dexterity: 10,
+      constitution: 10,
+      intelligence: 10,
+      wisdom: 10,
+      charisma: 10
     },
     hp_max: initialData?.hp_max || 10,
     hp_current: initialData?.hp_current || 10,
@@ -116,151 +117,84 @@ export default function CharacterForm({
         />
       </div>
 
-      {/* HP and AC */}
-
-      <label htmlFor="hp_current" className="block text-sm font-medium text-gray-700 mb-2">
-          Current HP <span className="text-red-500">*</span>
+      {/* Combat Stats: AC, Current HP, Max HP */}
+      <div>
+        <label className="block text-sm font-medium text-gray-700 mb-3">
+          Combat Stats
         </label>
-        <input
-          id="hp_current"
-          type="number"
-          min="-100"
-          max="999"
-          value={formData.hp_current}
-          onChange={(e) => handleInputChange('hp_current', parseInt(e.target.value, 10) || 1)}
-          className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
-          required
-        />
-
-      <label htmlFor="hp_max" className="block text-sm font-medium text-gray-700 mb-2">
-          Max HP <span className="text-red-500">*</span>
-        </label>
-        <input
-          id="hp_max"
-          type="number"
-          min="1"
-          max="999"
-          value={formData.hp_max}
-          onChange={(e) => handleInputChange('hp_max', parseInt(e.target.value, 10) || 1)}
-          className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
-          required
-        />
-
-      <label htmlFor="ac" className="block text-sm font-medium text-gray-700 mb-2">
-          Armor Class <span className="text-red-500">*</span>
-        </label>
-        <input
-          id="ac"
-          type="number"
-          min="1"
-          max="50"
-          value={formData.ac}
-          onChange={(e) => handleInputChange('ac', parseInt(e.target.value, 10) || 1)}
-          className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
-          required
-        />
+        <div className="flex items-center justify-center gap-8">
+          <NumericStepper
+            label="Armor Class"
+            value={formData.ac}
+            onChange={(val) => handleInputChange('ac', val)}
+            min={1}
+            max={50}
+          />
+          <NumericStepper
+            label="Current HP"
+            value={formData.hp_current}
+            onChange={(val) => handleInputChange('hp_current', val)}
+            min={-100}
+            max={999}
+          />
+          <NumericStepper
+            label="Max HP"
+            value={formData.hp_max}
+            onChange={(val) => handleInputChange('hp_max', val)}
+            min={1}
+            max={999}
+          />
+        </div>
+      </div>
 
       {/* Ability Scores */}
       <div>
         <label className="block text-sm font-medium text-gray-700 mb-3">
           Ability Scores
         </label>
-        <div className="grid grid-cols-3 gap-4">
-          {/* Strength */}
-          <div>
-            <label htmlFor="strength" className="block text-xs font-medium text-gray-600 mb-1">
-              STR
-            </label>
-            <input
-              id="strength"
-              type="number"
-              min="1"
-              max="30"
-              value={formData.ability_scores.strength}
-              onChange={(e) => handleAbilityScoreChange('strength', e.target.value)}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
-            />
-          </div>
-
-          {/* Dexterity */}
-          <div>
-            <label htmlFor="dexterity" className="block text-xs font-medium text-gray-600 mb-1">
-              DEX
-            </label>
-            <input
-              id="dexterity"
-              type="number"
-              min="1"
-              max="30"
-              value={formData.ability_scores.dexterity}
-              onChange={(e) => handleAbilityScoreChange('dexterity', e.target.value)}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
-            />
-          </div>
-
-          {/* Constitution */}
-          <div>
-            <label htmlFor="constitution" className="block text-xs font-medium text-gray-600 mb-1">
-              CON
-            </label>
-            <input
-              id="constitution"
-              type="number"
-              min="1"
-              max="30"
-              value={formData.ability_scores.constitution}
-              onChange={(e) => handleAbilityScoreChange('constitution', e.target.value)}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
-            />
-          </div>
-
-          {/* Intelligence */}
-          <div>
-            <label htmlFor="intelligence" className="block text-xs font-medium text-gray-600 mb-1">
-              INT
-            </label>
-            <input
-              id="intelligence"
-              type="number"
-              min="1"
-              max="30"
-              value={formData.ability_scores.intelligence}
-              onChange={(e) => handleAbilityScoreChange('intelligence', e.target.value)}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
-            />
-          </div>
-
-          {/* Wisdom */}
-          <div>
-            <label htmlFor="wisdom" className="block text-xs font-medium text-gray-600 mb-1">
-              WIS
-            </label>
-            <input
-              id="wisdom"
-              type="number"
-              min="1"
-              max="30"
-              value={formData.ability_scores.wisdom}
-              onChange={(e) => handleAbilityScoreChange('wisdom', e.target.value)}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
-            />
-          </div>
-
-          {/* Charisma */}
-          <div>
-            <label htmlFor="charisma" className="block text-xs font-medium text-gray-600 mb-1">
-              CHA
-            </label>
-            <input
-              id="charisma"
-              type="number"
-              min="1"
-              max="30"
-              value={formData.ability_scores.charisma}
-              onChange={(e) => handleAbilityScoreChange('charisma', e.target.value)}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
-            />
-          </div>
+        <div className="grid grid-cols-2 md:grid-cols-3 gap-6">
+          <NumericStepper
+            label="STR"
+            value={formData.ability_scores.strength}
+            onChange={(val) => handleAbilityScoreChange('strength', val)}
+            min={1}
+            max={30}
+          />
+          <NumericStepper
+            label="DEX"
+            value={formData.ability_scores.dexterity}
+            onChange={(val) => handleAbilityScoreChange('dexterity', val)}
+            min={1}
+            max={30}
+          />
+          <NumericStepper
+            label="CON"
+            value={formData.ability_scores.constitution}
+            onChange={(val) => handleAbilityScoreChange('constitution', val)}
+            min={1}
+            max={30}
+          />
+          <NumericStepper
+            label="INT"
+            value={formData.ability_scores.intelligence}
+            onChange={(val) => handleAbilityScoreChange('intelligence', val)}
+            min={1}
+            max={30}
+          />
+          <NumericStepper
+            label="WIS"
+            value={formData.ability_scores.wisdom}
+            onChange={(val) => handleAbilityScoreChange('wisdom', val)}
+            min={1}
+            max={30}
+          />
+          <NumericStepper
+            label="CHA"
+            value={formData.ability_scores.charisma}
+            onChange={(val) => handleAbilityScoreChange('charisma', val)}
+            min={1}
+            max={30}
+          />
         </div>
       </div>
 

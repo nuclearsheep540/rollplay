@@ -42,6 +42,7 @@ class UserAggregate:
     screen_name: Optional[str]
     created_at: datetime
     last_login: Optional[datetime] = None
+    friend_code: Optional[str] = None
     game_invites: Optional[List[GameInvites]] = None
 
     @classmethod

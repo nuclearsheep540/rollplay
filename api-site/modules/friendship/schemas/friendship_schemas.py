@@ -9,7 +9,7 @@ from pydantic import BaseModel, Field
 
 class SendFriendRequestRequest(BaseModel):
     """Request to send a friend request"""
-    friend_uuid: UUID = Field(..., description="UUID of the user to add as friend")
+    friend_identifier: str = Field(..., description="UUID or friend code (e.g., ABCD-1234) of the user to add as friend")
 
 
 class FriendRequestResponse(BaseModel):
