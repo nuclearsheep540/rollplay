@@ -8,7 +8,8 @@ from uuid import UUID
 from .schemas import (
     CharacterCreateRequest,
     UpdateAbilityScoresRequest,
-    CharacterResponse
+    CharacterResponse,
+    CharacterClassInfoResponse
 )
 from modules.characters.dependencies.providers import get_character_repository
 from modules.characters.orm.character_repository import CharacterRepository
@@ -18,7 +19,8 @@ from shared.dependencies.auth import get_current_user_from_token
 from modules.user.domain.user_aggregate import UserAggregate
 from modules.characters.domain.character_aggregate import (
     CharacterAggregate,
-    AbilityScores
+    AbilityScores,
+    CharacterClassInfo
 )
 
 router = APIRouter()
@@ -26,17 +28,26 @@ router = APIRouter()
 
 def _to_character_response(character: CharacterAggregate) -> CharacterResponse:
     """Helper to convert CharacterAggregate to CharacterResponse"""
+    # Convert List[CharacterClassInfo] → List[CharacterClassInfoResponse]
+    character_classes_response = [
+        CharacterClassInfoResponse(
+            character_class=class_info.character_class.value,  # Enum → string
+            level=class_info.level
+        )
+        for class_info in character.character_classes
+    ]
+
     return CharacterResponse(
         id=str(character.id),
         user_id=str(character.user_id),
         character_name=character.character_name,
-        character_class=character.character_class.value,  # Enum → string
+        character_classes=character_classes_response,  # List of classes
         character_race=character.character_race.value,    # Enum → string
-        level=character.level,
+        level=character.level,  # Total character level
         ability_scores=character.ability_scores.to_dict(),  # AbilityScores → dict
         created_at=character.created_at,
         updated_at=character.updated_at,
-        display_name=character.get_display_name(),
+        display_name=character.get_display_name(),  # Formatted with all classes
         hp_max=character.hp_max,
         hp_current=character.hp_current,
         ac=character.ac,
@@ -50,9 +61,20 @@ async def create_character(
     current_user: UserAggregate = Depends(get_current_user_from_token),
     character_repo: CharacterRepository = Depends(get_character_repository)
 ):
-    """Create a new character"""
+    """Create a new character with multi-class support"""
     try:
-        # Convert Pydantic → Domain value object
+        # Convert Pydantic → Domain value objects
+
+        # Convert character_classes list
+        character_classes = [
+            CharacterClassInfo(
+                character_class=class_req.character_class,
+                level=class_req.level
+            )
+            for class_req in request.character_classes
+        ]
+
+        # Convert ability scores
         ability_scores = None
         if request.ability_scores:
             ability_scores = AbilityScores(
@@ -68,7 +90,7 @@ async def create_character(
         character = command.execute(
             user_id=current_user.id,
             character_name=request.name,
-            character_class=request.character_class,
+            character_classes=character_classes,  # List of classes
             character_race=request.character_race,
             level=request.level,
             ability_scores=ability_scores,
@@ -145,9 +167,20 @@ async def update_character(
     current_user: UserAggregate = Depends(get_current_user_from_token),
     character_repo: CharacterRepository = Depends(get_character_repository)
 ):
-    """Update an existing character (full update)"""
+    """Update an existing character (full update) with multi-class support"""
     try:
         # Convert Pydantic → Domain value objects
+
+        # Convert character_classes list
+        character_classes = [
+            CharacterClassInfo(
+                character_class=class_req.character_class,
+                level=class_req.level
+            )
+            for class_req in request.character_classes
+        ]
+
+        # Convert ability scores
         ability_scores = None
         if request.ability_scores:
             ability_scores = AbilityScores(
@@ -167,7 +200,7 @@ async def update_character(
             character_id=character_id,
             user_id=current_user.id,
             character_name=request.name,
-            character_class=request.character_class,
+            character_classes=character_classes,  # List of classes
             character_race=request.character_race,
             level=request.level,
             ability_scores=ability_scores,

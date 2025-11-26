@@ -3,7 +3,7 @@
 
 from dataclasses import dataclass, replace
 from datetime import datetime
-from typing import Optional, Dict
+from typing import Optional, Dict, List
 from uuid import UUID
 from enum import Enum
 
@@ -35,8 +35,8 @@ class AbilityScores:
             'charisma': self.charisma
         }
         for ability, score in scores.items():
-            if not (1 <= score <= 30):
-                raise ValueError(f"{ability.capitalize()} score must be between 1 and 30 (got {score})")
+            if not (1 <= score <= 20):
+                raise ValueError(f"{ability.capitalize()} score must be between 1 and 20 (got {score})")
 
     def update_score(self, **kwargs) -> 'AbilityScores':
         """
@@ -121,6 +121,25 @@ class CharacterClass(str, Enum):
         return self.value
 
 
+@dataclass(frozen=True)
+class CharacterClassInfo:
+    """
+    Value object representing a character class with its level.
+
+    Used for multi-class support - each character can have 1-3 classes.
+    Example: Fighter (level 5), Rogue (level 3)
+    """
+    character_class: CharacterClass
+    level: int
+
+    def __post_init__(self):
+        """Validate class level"""
+        if self.level < 1:
+            raise ValueError(f"Class level must be at least 1 (got {self.level})")
+        if self.level > 20:
+            raise ValueError(f"Class level cannot exceed 20 (got {self.level})")
+
+
 @dataclass
 class CharacterAggregate:
     """
@@ -135,9 +154,9 @@ class CharacterAggregate:
     id: Optional[UUID]
     user_id: UUID
     character_name: str
-    character_class: CharacterClass
+    character_classes: List[CharacterClassInfo]  # Changed from single class to list
     character_race: CharacterRace
-    level: int
+    level: int  # Total character level (sum of all class levels)
     ability_scores: AbilityScores
     created_at: datetime
     updated_at: datetime
@@ -148,13 +167,45 @@ class CharacterAggregate:
     active_game: Optional[UUID] = None  # Game character is locked to
     is_alive: bool = True  # Character alive status (D&D death mechanics)
 
+    def __post_init__(self):
+        """Validate multi-class rules on aggregate creation/modification"""
+        self._validate_multiclass()
+
+    def _validate_multiclass(self):
+        """
+        Validate multi-class business rules.
+
+        Rules:
+        - Must have at least 1 class
+        - Cannot have more than 3 classes
+        - Sum of class levels must equal total character level
+        - No duplicate classes
+        """
+        if not self.character_classes or len(self.character_classes) == 0:
+            raise ValueError("Character must have at least one class")
+
+        if len(self.character_classes) > 3:
+            raise ValueError("Character cannot have more than 3 classes")
+
+        # Validate total class levels match character level
+        total_class_levels = sum(c.level for c in self.character_classes)
+        if total_class_levels != self.level:
+            raise ValueError(
+                f"Sum of class levels ({total_class_levels}) must equal character level ({self.level})"
+            )
+
+        # Check for duplicate classes
+        class_names = [c.character_class for c in self.character_classes]
+        if len(class_names) != len(set(class_names)):
+            raise ValueError("Character cannot have duplicate classes")
+
     @classmethod
     def create(
         cls,
         active_game: None,
         user_id: UUID,  # owner
         character_name: str,
-        character_class: CharacterClass,
+        character_classes: List[CharacterClassInfo],  # Changed from single class
         character_race: CharacterRace,
         hp_max: int,
         hp_current: int,
@@ -168,7 +219,7 @@ class CharacterAggregate:
         Business Rules:
         - Character name must be provided and valid
         - Character name max 50 characters
-        - Character class must be provided
+        - Must have at least 1 class (validated by __post_init__)
         - Character race must be provided
         - Level must be between 1 and 20
         - Must belong to a user
@@ -181,9 +232,9 @@ class CharacterAggregate:
         if len(normalized_name) > 50:
             raise ValueError("Character name too long (max 50 characters)")
 
-        # Business rule: Character class must be provided
-        if not character_class or not character_class.strip():
-            raise ValueError("Character class is required")
+        # Business rule: Character classes must be provided
+        if not character_classes or len(character_classes) == 0:
+            raise ValueError("Character must have at least one class")
 
         # Business rule: Character race must be provided
         if not character_race:
@@ -197,16 +248,23 @@ class CharacterAggregate:
         if not user_id:
             raise ValueError("Character must belong to a user")
 
-        # Default ability scores to 1 if not provided
+        # Default ability scores to 10 if not provided
         if not ability_scores:
-            ability_scores = AbilityScores.default()
+            ability_scores = AbilityScores(
+                strength=10,
+                dexterity=10,
+                constitution=10,
+                intelligence=10,
+                wisdom=10,
+                charisma=10
+            )
 
         now = datetime.now()
         return cls(
             id=None,  # Will be set by repository
             user_id=user_id,
             character_name=normalized_name,
-            character_class=character_class,
+            character_classes=character_classes,  # Now a list
             character_race=character_race,
             level=level,
             ability_scores=ability_scores,
@@ -240,8 +298,92 @@ class CharacterAggregate:
         return self.active_game is not None
 
     def get_display_name(self) -> str:
-        """Get formatted display name"""
-        return f"{self.character_name} (Level {self.level} {self.character_class.value})"
+        """Get formatted display name with all classes"""
+        if len(self.character_classes) == 1:
+            class_info = self.character_classes[0]
+            return f"{self.character_name} (Level {self.level} {class_info.character_class.value})"
+        else:
+            # Multi-class: "Name (Level 8 Fighter 5 / Rogue 3)"
+            class_parts = [f"{c.character_class.value} {c.level}" for c in self.character_classes]
+            return f"{self.character_name} (Level {self.level} {' / '.join(class_parts)})"
+
+    def get_primary_class(self) -> CharacterClass:
+        """
+        Get primary class (highest level class).
+
+        If multiple classes have the same level, returns the first one.
+        """
+        if not self.character_classes:
+            raise ValueError("Character has no classes")
+
+        primary = max(self.character_classes, key=lambda c: c.level)
+        return primary.character_class
+
+    def add_class(self, character_class: CharacterClass, class_level: int) -> None:
+        """
+        Add a new class (multi-classing).
+
+        Business Rules:
+        - Must be character level 3+ to multi-class
+        - Cannot exceed 3 classes
+        - Cannot have duplicate class
+        - Class level must be at least 1
+        - New total level (current + class_level) cannot exceed 20
+        """
+        # Business rule: Must be level 3+ to multi-class (D&D 5e standard)
+        if self.level < 3 and len(self.character_classes) >= 1:
+            raise ValueError("Character must be level 3+ to multi-class")
+
+        # Business rule: Cannot exceed 3 classes
+        if len(self.character_classes) >= 3:
+            raise ValueError("Character cannot have more than 3 classes")
+
+        # Business rule: Cannot have duplicate class
+        existing_classes = [c.character_class for c in self.character_classes]
+        if character_class in existing_classes:
+            raise ValueError(f"Character already has {character_class.value} class")
+
+        # Business rule: Class level must be valid
+        if class_level < 1:
+            raise ValueError("Class level must be at least 1")
+
+        # Business rule: Total level cannot exceed 20
+        new_total_level = self.level + class_level
+        if new_total_level > 20:
+            raise ValueError(f"Adding class would exceed max level 20 (new total: {new_total_level})")
+
+        # Add the class
+        new_class_info = CharacterClassInfo(character_class=character_class, level=class_level)
+        self.character_classes.append(new_class_info)
+        self.level = new_total_level
+        self.updated_at = datetime.now()
+
+    def remove_class(self, character_class: CharacterClass) -> None:
+        """
+        Remove a class from character.
+
+        Business Rules:
+        - Cannot remove last class (must have at least 1)
+        - Reduces total character level by removed class level
+        """
+        # Business rule: Cannot remove last class
+        if len(self.character_classes) <= 1:
+            raise ValueError("Cannot remove last class - character must have at least one class")
+
+        # Find the class to remove
+        class_to_remove = None
+        for class_info in self.character_classes:
+            if class_info.character_class == character_class:
+                class_to_remove = class_info
+                break
+
+        if not class_to_remove:
+            raise ValueError(f"Character does not have {character_class.value} class")
+
+        # Remove the class and adjust level
+        self.character_classes.remove(class_to_remove)
+        self.level -= class_to_remove.level
+        self.updated_at = datetime.now()
 
     def update_ability_scores(self, new_scores: AbilityScores) -> None:
         """
@@ -256,7 +398,7 @@ class CharacterAggregate:
     def update_character(
         self,
         character_name: Optional[str] = None,
-        character_class: Optional[CharacterClass] = None,
+        character_classes: Optional[List[CharacterClassInfo]] = None,
         character_race: Optional[CharacterRace] = None,
         level: Optional[int] = None,
         hp_max: Optional[int] = None,
@@ -271,7 +413,8 @@ class CharacterAggregate:
         Business Rules:
         - Character name must be valid and <= 50 characters
         - Level must be between 1 and 20
-        - Character class and race must be valid if provided
+        - Character classes must be validated by _validate_multiclass()
+        - Character race must be valid if provided
         """
         if character_name is not None:
             normalized_name = character_name.strip()
@@ -281,10 +424,12 @@ class CharacterAggregate:
                 raise ValueError("Character name too long (max 50 characters)")
             self.character_name = normalized_name
 
-        if character_class is not None:
-            if not character_class or not str(character_class).strip():
-                raise ValueError("Character class is required")
-            self.character_class = character_class
+        if character_classes is not None:
+            if not character_classes or len(character_classes) == 0:
+                raise ValueError("Character must have at least one class")
+            self.character_classes = character_classes
+            # Revalidate multi-class rules
+            self._validate_multiclass()
 
         if character_race is not None:
             if not character_race:
@@ -295,6 +440,8 @@ class CharacterAggregate:
             if level < 1 or level > 20:
                 raise ValueError("Character level must be between 1 and 20")
             self.level = level
+            # Revalidate that class levels still match total level
+            self._validate_multiclass()
 
         if hp_max is not None:
             self.hp_max = hp_max

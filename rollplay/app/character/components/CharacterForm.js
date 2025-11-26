@@ -8,6 +8,8 @@
 import { useState } from 'react'
 import Combobox from '../../shared/components/Combobox'
 import NumericStepper from './NumericStepper'
+import MultiClassSelector from './MultiClassSelector'
+import AbilityScoreBuilder from './AbilityScoreBuilder'
 import { CHARACTER_RACES, CHARACTER_CLASSES } from '../../shared/constants/characterEnums'
 
 export default function CharacterForm({
@@ -22,8 +24,8 @@ export default function CharacterForm({
   const [formData, setFormData] = useState({
     name: initialData?.character_name || '',
     character_race: initialData?.character_race || '',
-    character_class: initialData?.character_class || '',
-    level: initialData?.level || 1,
+    character_classes: initialData?.character_classes || [],  // Start empty - user adds first class
+    level: initialData?.level || 0,
     ability_scores: initialData?.ability_scores || {
       strength: 10,
       dexterity: 10,
@@ -44,14 +46,18 @@ export default function CharacterForm({
     }))
   }
 
-  const handleAbilityScoreChange = (ability, value) => {
-    const numValue = parseInt(value, 10) || 1
+  const handleAbilityScoresChange = (newScores) => {
     setFormData(prev => ({
       ...prev,
-      ability_scores: {
-        ...prev.ability_scores,
-        [ability]: numValue
-      }
+      ability_scores: newScores
+    }))
+  }
+
+  const handleClassesChange = (classes, totalLevel) => {
+    setFormData(prev => ({
+      ...prev,
+      character_classes: classes,
+      level: totalLevel
     }))
   }
 
@@ -60,7 +66,10 @@ export default function CharacterForm({
     await onSubmit(formData)
   }
 
-  const isFormValid = formData.name.trim() && formData.character_race && formData.character_class
+  const isFormValid = formData.name.trim() &&
+                      formData.character_race &&
+                      formData.character_classes.length > 0 &&
+                      formData.character_classes.every(c => c.character_class && c.level >= 1)
 
   return (
     <form onSubmit={handleSubmit} className="space-y-6">
@@ -90,32 +99,13 @@ export default function CharacterForm({
         required
       />
 
-      {/* Character Class */}
-      <Combobox
-        label="Character Class"
-        options={CHARACTER_CLASSES}
-        value={formData.character_class}
-        onChange={(value) => handleInputChange('character_class', value)}
-        placeholder="Select a class..."
-        required
+      {/* Character Classes (Multi-class support) */}
+      <MultiClassSelector
+        characterClasses={formData.character_classes}
+        totalLevel={formData.level}
+        onChange={handleClassesChange}
+        disabled={loading}
       />
-
-      {/* Level */}
-      <div>
-        <label htmlFor="level" className="block text-sm font-medium text-gray-700 mb-2">
-          Level <span className="text-red-500">*</span>
-        </label>
-        <input
-          id="level"
-          type="number"
-          min="1"
-          max="20"
-          value={formData.level}
-          onChange={(e) => handleInputChange('level', parseInt(e.target.value, 10) || 1)}
-          className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
-          required
-        />
-      </div>
 
       {/* Combat Stats: AC, Current HP, Max HP */}
       <div>
@@ -129,6 +119,7 @@ export default function CharacterForm({
             onChange={(val) => handleInputChange('ac', val)}
             min={1}
             max={50}
+            showModifier={false}
           />
           <NumericStepper
             label="Current HP"
@@ -136,6 +127,7 @@ export default function CharacterForm({
             onChange={(val) => handleInputChange('hp_current', val)}
             min={-100}
             max={999}
+            showModifier={false}
           />
           <NumericStepper
             label="Max HP"
@@ -143,60 +135,17 @@ export default function CharacterForm({
             onChange={(val) => handleInputChange('hp_max', val)}
             min={1}
             max={999}
+            showModifier={false}
           />
         </div>
       </div>
 
       {/* Ability Scores */}
-      <div>
-        <label className="block text-sm font-medium text-gray-700 mb-3">
-          Ability Scores
-        </label>
-        <div className="grid grid-cols-2 md:grid-cols-3 gap-6">
-          <NumericStepper
-            label="STR"
-            value={formData.ability_scores.strength}
-            onChange={(val) => handleAbilityScoreChange('strength', val)}
-            min={1}
-            max={30}
-          />
-          <NumericStepper
-            label="DEX"
-            value={formData.ability_scores.dexterity}
-            onChange={(val) => handleAbilityScoreChange('dexterity', val)}
-            min={1}
-            max={30}
-          />
-          <NumericStepper
-            label="CON"
-            value={formData.ability_scores.constitution}
-            onChange={(val) => handleAbilityScoreChange('constitution', val)}
-            min={1}
-            max={30}
-          />
-          <NumericStepper
-            label="INT"
-            value={formData.ability_scores.intelligence}
-            onChange={(val) => handleAbilityScoreChange('intelligence', val)}
-            min={1}
-            max={30}
-          />
-          <NumericStepper
-            label="WIS"
-            value={formData.ability_scores.wisdom}
-            onChange={(val) => handleAbilityScoreChange('wisdom', val)}
-            min={1}
-            max={30}
-          />
-          <NumericStepper
-            label="CHA"
-            value={formData.ability_scores.charisma}
-            onChange={(val) => handleAbilityScoreChange('charisma', val)}
-            min={1}
-            max={30}
-          />
-        </div>
-      </div>
+      <AbilityScoreBuilder
+        scores={formData.ability_scores}
+        onChange={handleAbilityScoresChange}
+        disabled={loading}
+      />
 
       {/* Validation Errors */}
       {validationErrors.length > 0 && (

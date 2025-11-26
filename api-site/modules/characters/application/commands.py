@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 
 from datetime import datetime
-from typing import Optional
+from typing import Optional, List
 from uuid import UUID
 
 from modules.characters.orm.character_repository import CharacterRepository
@@ -10,7 +10,8 @@ from modules.characters.domain.character_aggregate import (
     CharacterAggregate,
     AbilityScores,
     CharacterRace,
-    CharacterClass
+    CharacterClass,
+    CharacterClassInfo
 )
 
 
@@ -22,7 +23,7 @@ class CreateCharacter:
         self,
         user_id: UUID,
         character_name: str,
-        character_class: CharacterClass,
+        character_classes: List[CharacterClassInfo],
         character_race: CharacterRace,
         level: int = 1,
         ability_scores: Optional[AbilityScores] = None,
@@ -30,11 +31,11 @@ class CreateCharacter:
         hp_current: int = 10,
         ac: int = 10
     ) -> CharacterAggregate:
-        """Create a new character"""
+        """Create a new character with multi-class support"""
         character = CharacterAggregate.create(
             user_id=user_id,
             character_name=character_name,
-            character_class=character_class,
+            character_classes=character_classes,  # List of classes
             character_race=character_race,
             level=level,
             ability_scores=ability_scores,
@@ -86,7 +87,7 @@ class UpdateCharacter:
         character_id: UUID,
         user_id: UUID,
         character_name: str,
-        character_class: CharacterClass,
+        character_classes: List[CharacterClassInfo],
         character_race: CharacterRace,
         level: int,
         ability_scores: AbilityScores,
@@ -94,7 +95,7 @@ class UpdateCharacter:
         hp_current: int,
         ac: int,
     ) -> CharacterAggregate:
-        """Update an existing character with new values"""
+        """Update an existing character with new values (supports multi-class)"""
         # Fetch existing character
         character = self.repository.get_by_id(character_id)
         if not character:
@@ -107,7 +108,7 @@ class UpdateCharacter:
         # Update via domain method (includes business rule validation)
         character.update_character(
             character_name=character_name,
-            character_class=character_class,
+            character_classes=character_classes,  # List of classes
             character_race=character_race,
             level=level,
             hp_max=hp_max,

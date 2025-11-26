@@ -15,8 +15,9 @@ export default function NumericStepper({
   value,
   onChange,
   min = 1,
-  max = 30,
-  disabled = false
+  max = 20,
+  disabled = false,
+  showModifier = true  // Show D&D modifier (only for ability scores)
 }) {
   const handleIncrement = () => {
     if (value < max) onChange(value + 1)
@@ -64,14 +65,16 @@ export default function NumericStepper({
           −
         </button>
 
-        {/* Value Display with Modifier */}
+        {/* Value Display with optional Modifier */}
         <div className="flex flex-col items-center min-w-[70px] bg-gradient-to-b from-indigo-50 to-white border-2 border-indigo-200 rounded px-3 py-2 shadow-sm">
           <span className="text-3xl font-bold text-indigo-600 leading-none">
             {value}
           </span>
-          <span className="text-xs font-semibold text-gray-500 mt-1">
-            {formatModifier(modifier)}
-          </span>
+          {showModifier && (
+            <span className="text-xs font-semibold text-gray-500 mt-1">
+              {formatModifier(modifier)}
+            </span>
+          )}
         </div>
 
         {/* Increment Button - Large Square (Diablo 2 style) */}
