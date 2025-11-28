@@ -6,8 +6,7 @@ from uuid import UUID
 from sqlalchemy.orm import Session
 from sqlalchemy import text
 
-from modules.campaign.model.game_model import Game as GameModel, GameJoinedUser, game_invites
-from modules.user.model.user_model import User
+from modules.campaign.model.game_model import Game as GameModel, GameJoinedUser
 from modules.game.domain.game_aggregate import GameAggregate, GameStatus
 
 
@@ -64,10 +63,6 @@ class GameRepository:
             model.stopped_at = aggregate.stopped_at
             model.max_players = aggregate.max_players
 
-            # Sync invited_users relationship
-            invited_user_models = self.db.query(User).filter(User.id.in_(aggregate.invited_users)).all()
-            model.invited_users = invited_user_models
-
             # Sync joined_users (game_joined_users table)
             self._sync_joined_users(model.id, aggregate.joined_users)
 
@@ -87,11 +82,6 @@ class GameRepository:
             )
             self.db.add(model)
             self.db.flush()  # Get ID before setting relationships
-
-            # Set invited_users relationship
-            if aggregate.invited_users:
-                invited_user_models = self.db.query(User).filter(User.id.in_(aggregate.invited_users)).all()
-                model.invited_users = invited_user_models
 
             # Set joined_users (game_joined_users table)
             if aggregate.joined_users:
@@ -119,19 +109,11 @@ class GameRepository:
         # Business rule validation through aggregate
         game = self._model_to_aggregate(model)
         if not game.can_be_deleted():
-            raise ValueError("Cannot delete game - it must be INACTIVE")
-
-        # Clear relationships to prevent ORM conflicts during delete
-        # Clear invited_users relationship (many-to-many via game_invites)
-        model.invited_users = []
-        self.db.flush()
+            raise ValueError("Cannot delete game - it must be INACTIVE or FINISHED")
 
         # Explicitly delete child records using SQLAlchemy ORM to avoid relationship conflicts
         # Delete GameJoinedUser records (prevents ORM trying to SET NULL on primary key)
         self.db.query(GameJoinedUser).filter_by(game_id=game_id).delete(synchronize_session=False)
-
-        # Delete game_invites records (association table)
-        self.db.execute(game_invites.delete().where(game_invites.c.game_id == game_id))
 
         # Now safe to delete the game
         self.db.delete(model)
@@ -188,7 +170,6 @@ class GameRepository:
             started_at=model.started_at,
             stopped_at=model.stopped_at,
             session_id=model.session_id,
-            invited_users=[user.id for user in model.invited_users],
             joined_users=joined_user_ids,
             max_players=model.max_players
         )

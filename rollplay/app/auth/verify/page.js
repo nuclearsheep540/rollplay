@@ -14,26 +14,15 @@ function MagicLinkVerifyContent() {
   const [status, setStatus] = useState('verifying') // 'verifying', 'success', 'error'
   const [message, setMessage] = useState('Verifying your magic link...')
 
-  useEffect(() => {
-    const token = searchParams.get('token')
-    
-    if (!token) {
-      setStatus('error')
-      setMessage('Invalid magic link - no token provided')
-      return
-    }
-
-    verifyMagicLink(token)
-  }, [searchParams, verifyMagicLink])
-
   const verifyMagicLink = useCallback(async (token) => {
     try {
-      const response = await fetch(`/auth/verify/${token}`, {
-        method: 'GET',
+      const response = await fetch(`/api/auth/verify-otp`, {
+        method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
         credentials: 'include', // Include cookies
+        body: JSON.stringify({ token: token })
       })
 
       if (!response.ok) {
@@ -46,7 +35,7 @@ function MagicLinkVerifyContent() {
         // No need to store in localStorage - httpOnly cookie is set by backend
         setStatus('success')
         setMessage('Successfully authenticated! Redirecting to your dashboard...')
-        
+
         // Redirect to dashboard after short delay
         setTimeout(() => {
           router.push('/dashboard')
@@ -60,6 +49,18 @@ function MagicLinkVerifyContent() {
       setMessage('Invalid or expired magic link. Please request a new one.')
     }
   }, [router])
+
+  useEffect(() => {
+    const token = searchParams.get('token')
+
+    if (!token) {
+      setStatus('error')
+      setMessage('Invalid magic link - no token provided')
+      return
+    }
+
+    verifyMagicLink(token)
+  }, [searchParams, verifyMagicLink])
 
   const handleBackToLogin = () => {
     router.push('/auth/magic')

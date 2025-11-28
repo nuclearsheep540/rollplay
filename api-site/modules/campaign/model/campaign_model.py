@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 
 from sqlalchemy import Column, String, Text, DateTime, ForeignKey
-from sqlalchemy.dialects.postgresql import UUID, JSON
+from sqlalchemy.dialects.postgresql import UUID, JSON, JSONB
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 import uuid
@@ -20,7 +20,8 @@ class Campaign(Base):
     assets = Column(JSON)  # RENAMED from maps, changed to JSON for structured metadata
     scenes = Column(JSON)  # NEW - scene management config
     npc_factory = Column(JSON)  # NEW - NPC generation config
-    player_ids = Column(JSON, nullable=False, default=lambda: [])  # Array of player UUIDs
+    invited_player_ids = Column(JSONB, nullable=False, default=lambda: [])  # Array of invited player UUIDs (pending acceptance)
+    player_ids = Column(JSONB, nullable=False, default=lambda: [])  # Array of player UUIDs (accepted invites) - JSONB for better query performance
     created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)
 

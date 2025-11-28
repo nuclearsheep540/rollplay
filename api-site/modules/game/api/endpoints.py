@@ -11,8 +11,6 @@ logger = logging.getLogger(__name__)
 from modules.game.schemas.game_schemas import (
     CreateGameRequest,
     UpdateGameRequest,
-    InviteUserRequest,
-    AcceptInviteRequest,
     GameResponse,
     GameListResponse,
     RosterPlayerResponse
@@ -21,20 +19,18 @@ from modules.game.application.commands import (
     CreateGame,
     StartGame,
     EndGame,
-    InviteUserToGame,
-    AcceptGameInvite,
-    DeclineGameInvite,
+    FinishGame,
     RemovePlayerFromGame,
     UpdateGame,
     DeleteGame,
     SelectCharacterForGame,
     ChangeCharacterForGame,
+    ChangeCharacterDuringSession,
     DisconnectFromSession
 )
 from modules.game.application.queries import (
     GetGameById,
     GetGamesByCampaign,
-    GetUserPendingInvites,
     GetUserGames
 )
 from modules.game.dependencies.repositories import get_game_repository
@@ -61,6 +57,10 @@ def _to_game_response(game: GameAggregate, db: Session) -> GameResponse:
     from modules.user.model.user_model import User
     from modules.characters.model.character_model import Character
 
+    # Fetch host/DM information
+    host_user = db.query(User).filter(User.id == game.host_id).first()
+    host_name = host_user.screen_name or host_user.email if host_user else "Unknown"
+
     # Fetch roster data with character and user information
     roster_data = []
     roster_query = db.query(
@@ -76,13 +76,18 @@ def _to_game_response(game: GameAggregate, db: Session) -> GameResponse:
     ).all()
 
     for joined_user, user, character in roster_query:
+        # Format character classes for multi-class support
+        character_class_str = None
+        if character and character.character_classes:
+            character_class_str = ' / '.join([cc.character_class.value for cc in character.character_classes])
+
         roster_data.append(RosterPlayerResponse(
             user_id=user.id,
             username=user.screen_name or user.email,
             character_id=character.id if character else None,
             character_name=character.character_name if character else None,
             character_level=character.level if character else None,
-            character_class=character.character_class if character else None,
+            character_class=character_class_str,
             character_race=character.character_race if character else None,
             joined_at=joined_user.joined_at
         ))
@@ -92,15 +97,14 @@ def _to_game_response(game: GameAggregate, db: Session) -> GameResponse:
         name=game.name,
         campaign_id=game.campaign_id,
         host_id=game.host_id,
+        host_name=host_name,
         status=game.status.value,
         created_at=game.created_at,
         started_at=game.started_at,
         stopped_at=game.stopped_at,
         session_id=game.session_id,
-        invited_users=game.invited_users,
         joined_users=game.joined_users,
         roster=roster_data,
-        pending_invites_count=game.get_pending_invites_count(),
         player_count=game.get_player_count(),
         max_players=game.max_players
     )
@@ -156,22 +160,6 @@ async def get_campaign_games(
     )
 
 
-@router.get("/invites/pending", response_model=GameListResponse)
-async def get_my_pending_invites(
-    current_user: UserAggregate = Depends(get_current_user_from_token),
-    game_repo: GameRepository = Depends(get_game_repository),
-    db: Session = Depends(get_db)
-):
-    """Get all games where current user has pending invites"""
-    query = GetUserPendingInvites(game_repo)
-    games = query.execute(current_user.id)
-
-    return GameListResponse(
-        games=[_to_game_response(game, db) for game in games],
-        total=len(games)
-    )
-
-
 @router.put("/{game_id}", response_model=GameResponse)
 async def update_game(
     game_id: UUID,
@@ -208,70 +196,6 @@ async def delete_game(
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
 
 
-# === Invite Management Endpoints ===
-
-@router.post("/{game_id}/invites", response_model=GameResponse)
-async def invite_user_to_game(
-    game_id: UUID,
-    request: InviteUserRequest,
-    current_user: UserAggregate = Depends(get_current_user_from_token),
-    game_repo: GameRepository = Depends(get_game_repository),
-    user_repo: UserRepository = Depends(get_user_repository),
-    db: Session = Depends(get_db)
-):
-    """Invite a user to join the game (host only)"""
-    try:
-        command = InviteUserToGame(game_repo, user_repo)
-        game = command.execute(
-            game_id=game_id,
-            user_id=request.user_id,
-            invited_by=current_user.id
-        )
-        return _to_game_response(game, db)
-    except ValueError as e:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
-
-
-@router.post("/{game_id}/invites/accept", response_model=GameResponse)
-async def accept_game_invite(
-    game_id: UUID,
-    current_user: UserAggregate = Depends(get_current_user_from_token),
-    game_repo: GameRepository = Depends(get_game_repository),
-    user_repo: UserRepository = Depends(get_user_repository),
-    db: Session = Depends(get_db)
-):
-    """Accept game invite to join roster (character selection happens later)"""
-    try:
-        command = AcceptGameInvite(game_repo, user_repo)
-        game = command.execute(
-            game_id=game_id,
-            user_id=current_user.id
-        )
-        return _to_game_response(game, db)
-    except ValueError as e:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
-
-
-@router.delete("/{game_id}/invites", response_model=GameResponse)
-async def decline_game_invite(
-    game_id: UUID,
-    current_user: UserAggregate = Depends(get_current_user_from_token),
-    game_repo: GameRepository = Depends(get_game_repository),
-    user_repo: UserRepository = Depends(get_user_repository),
-    db: Session = Depends(get_db)
-):
-    """Decline a game invite"""
-    try:
-        command = DeclineGameInvite(game_repo, user_repo)
-        game = command.execute(
-            game_id=game_id,
-            user_id=current_user.id
-        )
-        return _to_game_response(game, db)
-    except ValueError as e:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
-
-
 @router.delete("/{game_id}/players/{user_id}", response_model=GameResponse)
 async def remove_player_from_game(
     game_id: UUID,
@@ -300,6 +224,7 @@ async def start_game(
     current_user: UserAggregate = Depends(get_current_user_from_token),
     game_repo: GameRepository = Depends(get_game_repository),
     user_repo: UserRepository = Depends(get_user_repository),
+    campaign_repo: CampaignRepository = Depends(campaign_repository),
     db: Session = Depends(get_db)
 ):
     """
@@ -315,7 +240,7 @@ async def start_game(
     Frontend can then redirect to /game?room_id={session_id}
     """
     try:
-        command = StartGame(game_repo, user_repo)
+        command = StartGame(game_repo, user_repo, campaign_repo)
         game = await command.execute(game_id, current_user.id)
         return _to_game_response(game, db)
 
@@ -338,6 +263,7 @@ async def end_game(
     current_user: UserAggregate = Depends(get_current_user_from_token),
     game_repo: GameRepository = Depends(get_game_repository),
     user_repo: UserRepository = Depends(get_user_repository),
+    character_repo = Depends(get_character_repository),
     db: Session = Depends(get_db)
 ):
     """
@@ -349,12 +275,13 @@ async def end_game(
     3. PHASE 1: Fetches final state from MongoDB (non-destructive)
     4. PHASE 2: Writes to PostgreSQL (fail-safe - MongoDB preserved on error)
     5. PHASE 3: Background cleanup of MongoDB session
+    6. Unlocks all characters that were locked to this game
 
     Returns game with status='inactive'.
     If PostgreSQL write fails, MongoDB session is preserved and error returned.
     """
     try:
-        command = EndGame(game_repo, user_repo)
+        command = EndGame(game_repo, user_repo, character_repo)
         game = await command.execute(game_id, current_user.id)
         return _to_game_response(game, db)
 
@@ -368,6 +295,44 @@ async def end_game(
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Failed to end game"
+        )
+
+
+@router.post("/{game_id}/finish", response_model=GameResponse)
+async def finish_game(
+    game_id: UUID,
+    current_user: UserAggregate = Depends(get_current_user_from_token),
+    game_repo: GameRepository = Depends(get_game_repository),
+    user_repo: UserRepository = Depends(get_user_repository),
+    character_repo = Depends(get_character_repository),
+    db: Session = Depends(get_db)
+):
+    """
+    Finish a game session permanently (ACTIVE/INACTIVE → FINISHED).
+
+    This endpoint:
+    1. If ACTIVE: Performs full ETL (like end_game) then sets FINISHED
+    2. If INACTIVE: Sets FINISHED directly
+    3. Unlocks all characters that were locked to this game
+    4. FINISHED games cannot be resumed and are preserved in campaign history
+
+    Returns game with status='finished'.
+    """
+    try:
+        command = FinishGame(game_repo, user_repo, character_repo)
+        game = await command.execute(game_id, current_user.id)
+        return _to_game_response(game, db)
+
+    except ValueError as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(e)
+        )
+    except Exception as e:
+        logger.error(f"Unexpected error finishing game {game_id}: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to finish game"
         )
 
 
@@ -425,6 +390,39 @@ async def change_character_for_game(
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
 
 
+@router.put("/{game_id}/change-character-active")
+async def change_character_during_session(
+    game_id: UUID,
+    new_character_id: UUID,
+    current_user: UserAggregate = Depends(get_current_user_from_token),
+    game_repo: GameRepository = Depends(get_game_repository),
+    character_repo: CharacterRepository = Depends(get_character_repository),
+    user_repo: UserRepository = Depends(get_user_repository)
+):
+    """
+    Change character during an active session.
+
+    Unlike change-character, this endpoint:
+    - Only works when game is ACTIVE
+    - Does not unlock the old character (accumulating locks)
+    - Syncs new character data to MongoDB via api-game
+    """
+    try:
+        command = ChangeCharacterDuringSession(game_repo, character_repo, user_repo)
+        character = await command.execute(
+            game_id=game_id,
+            user_id=current_user.id,
+            new_character_id=new_character_id
+        )
+        return {
+            "message": "Character changed successfully",
+            "new_character_id": str(character.id),
+            "new_character_name": character.character_name
+        }
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+
+
 @router.post("/{game_id}/disconnect")
 async def disconnect_from_session(
     game_id: UUID,
@@ -451,49 +449,3 @@ async def disconnect_from_session(
         }
     except ValueError as e:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
-
-
-@router.delete("/{game_id}/leave", response_model=GameResponse)
-async def leave_game(
-    game_id: UUID,
-    current_user: UserAggregate = Depends(get_current_user_from_token),
-    game_repo: GameRepository = Depends(get_game_repository),
-    character_repo: CharacterRepository = Depends(get_character_repository),
-    db: Session = Depends(get_db)
-):
-    """Leave game permanently (remove from roster, unlock character)"""
-    try:
-        # Same logic as RemovePlayerFromGame but user removes themselves
-        command = RemovePlayerFromGame(game_repo, character_repo)
-        game = command.execute(
-            game_id=game_id,
-            user_id=current_user.id,
-            removed_by=current_user.id  # User removes themselves
-        )
-        return _to_game_response(game, db)
-    except ValueError as e:
-        # If error is "Only host can remove players", provide clearer message
-        if "Only host" in str(e):
-            # Allow users to remove themselves
-            game = game_repo.get_by_id(game_id)
-            if not game:
-                raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Game not found")
-
-            if not game.is_user_joined(current_user.id):
-                raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="User is not in game roster")
-
-            # Unlock character
-            user_characters = character_repo.get_by_user_id(current_user.id)
-            for character in user_characters:
-                if character.active_game == game_id:
-                    character.unlock_from_game()
-                    character_repo.save(character)
-                    break
-
-            # Remove user
-            game.remove_user(current_user.id)
-            game_repo.save(game)
-
-            return _to_game_response(game, db)
-        else:
-            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))

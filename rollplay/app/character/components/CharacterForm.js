@@ -7,7 +7,11 @@
 
 import { useState } from 'react'
 import Combobox from '../../shared/components/Combobox'
-import { CHARACTER_RACES, CHARACTER_CLASSES } from '../../shared/constants/characterEnums'
+import NumericStepper from './NumericStepper'
+import MultiClassSelector from './MultiClassSelector'
+import AbilityScoreBuilder from './AbilityScoreBuilder'
+import OriginBonusAllocator from './OriginBonusAllocator'
+import { CHARACTER_RACES, CHARACTER_CLASSES, CHARACTER_BACKGROUNDS } from '../../shared/constants/characterEnums'
 
 export default function CharacterForm({
   mode = 'create',
@@ -21,36 +25,84 @@ export default function CharacterForm({
   const [formData, setFormData] = useState({
     name: initialData?.character_name || '',
     character_race: initialData?.character_race || '',
-    character_class: initialData?.character_class || '',
-    level: initialData?.level || 1,
+    background: initialData?.background || '',
+    character_classes: initialData?.character_classes || [],  // Start empty - user adds first class
+    level: initialData?.level || 0,
     ability_scores: initialData?.ability_scores || {
-      strength: 1,
-      dexterity: 1,
-      constitution: 1,
-      intelligence: 1,
-      wisdom: 1,
-      charisma: 1
+      strength: 10,
+      dexterity: 10,
+      constitution: 10,
+      intelligence: 10,
+      wisdom: 10,
+      charisma: 10
     },
+    origin_ability_bonuses: initialData?.origin_ability_bonuses || {},
     hp_max: initialData?.hp_max || 10,
     hp_current: initialData?.hp_current || 10,
     ac: initialData?.ac || 10,
   })
 
   const handleInputChange = (field, value) => {
+    setFormData(prev => {
+      const newData = {
+        ...prev,
+        [field]: value
+      }
+
+      // If background changes, clear origin bonuses
+      if (field === 'background' && prev.background !== value) {
+        newData.origin_ability_bonuses = {}
+      }
+
+      return newData
+    })
+  }
+
+  const handleAbilityScoresChange = (newScores) => {
     setFormData(prev => ({
       ...prev,
-      [field]: value
+      ability_scores: newScores
     }))
   }
 
-  const handleAbilityScoreChange = (ability, value) => {
-    const numValue = parseInt(value, 10) || 1
+  // Calculate display scores (base + origin bonuses)
+  const getDisplayScores = () => {
+    const display = { ...formData.ability_scores }
+    Object.entries(formData.origin_ability_bonuses).forEach(([ability, bonus]) => {
+      display[ability] = (display[ability] || 10) + bonus
+    })
+    return display
+  }
+
+  // Calculate base scores from display scores (subtract origin bonuses)
+  const getBaseScoresFromDisplay = (displayScores) => {
+    const base = { ...displayScores }
+    Object.entries(formData.origin_ability_bonuses).forEach(([ability, bonus]) => {
+      base[ability] = (base[ability] || 10) - bonus
+    })
+    return base
+  }
+
+  const handleDisplayScoresChange = (newDisplayScores) => {
+    const baseScores = getBaseScoresFromDisplay(newDisplayScores)
     setFormData(prev => ({
       ...prev,
-      ability_scores: {
-        ...prev.ability_scores,
-        [ability]: numValue
-      }
+      ability_scores: baseScores
+    }))
+  }
+
+  const handleClassesChange = (classes, totalLevel) => {
+    setFormData(prev => ({
+      ...prev,
+      character_classes: classes,
+      level: totalLevel
+    }))
+  }
+
+  const handleOriginBonusesChange = (bonuses) => {
+    setFormData(prev => ({
+      ...prev,
+      origin_ability_bonuses: bonuses
     }))
   }
 
@@ -59,7 +111,10 @@ export default function CharacterForm({
     await onSubmit(formData)
   }
 
-  const isFormValid = formData.name.trim() && formData.character_race && formData.character_class
+  const isFormValid = formData.name.trim() &&
+                      formData.character_race &&
+                      formData.character_classes.length > 0 &&
+                      formData.character_classes.every(c => c.character_class && c.level >= 1)
 
   return (
     <form onSubmit={handleSubmit} className="space-y-6">
@@ -89,180 +144,76 @@ export default function CharacterForm({
         required
       />
 
-      {/* Character Class */}
+      {/* Character Background (D&D 2024) */}
       <Combobox
-        label="Character Class"
-        options={CHARACTER_CLASSES}
-        value={formData.character_class}
-        onChange={(value) => handleInputChange('character_class', value)}
-        placeholder="Select a class..."
-        required
+        label="Character Background"
+        options={CHARACTER_BACKGROUNDS}
+        value={formData.background}
+        onChange={(value) => handleInputChange('background', value)}
+        placeholder="Select a background..."
+        helperText="D&D 2024: Choose your character's background"
       />
 
-      {/* Level */}
-      <div>
-        <label htmlFor="level" className="block text-sm font-medium text-gray-700 mb-2">
-          Level <span className="text-red-500">*</span>
-        </label>
-        <input
-          id="level"
-          type="number"
-          min="1"
-          max="20"
-          value={formData.level}
-          onChange={(e) => handleInputChange('level', parseInt(e.target.value, 10) || 1)}
-          className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
-          required
+      {/* Origin Ability Bonuses (D&D 2024) - Immediately after background */}
+      {formData.background && (
+        <OriginBonusAllocator
+          selectedBackground={formData.background}
+          baseScores={formData.ability_scores}
+          displayScores={getDisplayScores()}
+          currentBonuses={formData.origin_ability_bonuses}
+          onChange={handleOriginBonusesChange}
+          disabled={loading}
         />
-      </div>
+      )}
 
-      {/* HP and AC */}
+      {/* Character Classes (Multi-class support) */}
+      <MultiClassSelector
+        characterClasses={formData.character_classes}
+        totalLevel={formData.level}
+        onChange={handleClassesChange}
+        disabled={loading}
+      />
 
-      <label htmlFor="hp_current" className="block text-sm font-medium text-gray-700 mb-2">
-          Current HP <span className="text-red-500">*</span>
-        </label>
-        <input
-          id="hp_current"
-          type="number"
-          min="-100"
-          max="999"
-          value={formData.hp_current}
-          onChange={(e) => handleInputChange('hp_current', parseInt(e.target.value, 10) || 1)}
-          className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
-          required
-        />
-
-      <label htmlFor="hp_max" className="block text-sm font-medium text-gray-700 mb-2">
-          Max HP <span className="text-red-500">*</span>
-        </label>
-        <input
-          id="hp_max"
-          type="number"
-          min="1"
-          max="999"
-          value={formData.hp_max}
-          onChange={(e) => handleInputChange('hp_max', parseInt(e.target.value, 10) || 1)}
-          className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
-          required
-        />
-
-      <label htmlFor="ac" className="block text-sm font-medium text-gray-700 mb-2">
-          Armor Class <span className="text-red-500">*</span>
-        </label>
-        <input
-          id="ac"
-          type="number"
-          min="1"
-          max="50"
-          value={formData.ac}
-          onChange={(e) => handleInputChange('ac', parseInt(e.target.value, 10) || 1)}
-          className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
-          required
-        />
-
-      {/* Ability Scores */}
+      {/* Combat Stats: AC, Current HP, Max HP */}
       <div>
         <label className="block text-sm font-medium text-gray-700 mb-3">
-          Ability Scores
+          Combat Stats
         </label>
-        <div className="grid grid-cols-3 gap-4">
-          {/* Strength */}
-          <div>
-            <label htmlFor="strength" className="block text-xs font-medium text-gray-600 mb-1">
-              STR
-            </label>
-            <input
-              id="strength"
-              type="number"
-              min="1"
-              max="30"
-              value={formData.ability_scores.strength}
-              onChange={(e) => handleAbilityScoreChange('strength', e.target.value)}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
-            />
-          </div>
-
-          {/* Dexterity */}
-          <div>
-            <label htmlFor="dexterity" className="block text-xs font-medium text-gray-600 mb-1">
-              DEX
-            </label>
-            <input
-              id="dexterity"
-              type="number"
-              min="1"
-              max="30"
-              value={formData.ability_scores.dexterity}
-              onChange={(e) => handleAbilityScoreChange('dexterity', e.target.value)}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
-            />
-          </div>
-
-          {/* Constitution */}
-          <div>
-            <label htmlFor="constitution" className="block text-xs font-medium text-gray-600 mb-1">
-              CON
-            </label>
-            <input
-              id="constitution"
-              type="number"
-              min="1"
-              max="30"
-              value={formData.ability_scores.constitution}
-              onChange={(e) => handleAbilityScoreChange('constitution', e.target.value)}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
-            />
-          </div>
-
-          {/* Intelligence */}
-          <div>
-            <label htmlFor="intelligence" className="block text-xs font-medium text-gray-600 mb-1">
-              INT
-            </label>
-            <input
-              id="intelligence"
-              type="number"
-              min="1"
-              max="30"
-              value={formData.ability_scores.intelligence}
-              onChange={(e) => handleAbilityScoreChange('intelligence', e.target.value)}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
-            />
-          </div>
-
-          {/* Wisdom */}
-          <div>
-            <label htmlFor="wisdom" className="block text-xs font-medium text-gray-600 mb-1">
-              WIS
-            </label>
-            <input
-              id="wisdom"
-              type="number"
-              min="1"
-              max="30"
-              value={formData.ability_scores.wisdom}
-              onChange={(e) => handleAbilityScoreChange('wisdom', e.target.value)}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
-            />
-          </div>
-
-          {/* Charisma */}
-          <div>
-            <label htmlFor="charisma" className="block text-xs font-medium text-gray-600 mb-1">
-              CHA
-            </label>
-            <input
-              id="charisma"
-              type="number"
-              min="1"
-              max="30"
-              value={formData.ability_scores.charisma}
-              onChange={(e) => handleAbilityScoreChange('charisma', e.target.value)}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
-            />
-          </div>
+        <div className="flex items-center justify-center gap-8">
+          <NumericStepper
+            label="Armor Class"
+            value={formData.ac}
+            onChange={(val) => handleInputChange('ac', val)}
+            min={1}
+            max={50}
+            showModifier={false}
+          />
+          <NumericStepper
+            label="Current HP"
+            value={formData.hp_current}
+            onChange={(val) => handleInputChange('hp_current', val)}
+            min={-100}
+            max={999}
+            showModifier={false}
+          />
+          <NumericStepper
+            label="Max HP"
+            value={formData.hp_max}
+            onChange={(val) => handleInputChange('hp_max', val)}
+            min={1}
+            max={999}
+            showModifier={false}
+          />
         </div>
       </div>
+
+      {/* Ability Scores */}
+      <AbilityScoreBuilder
+        scores={getDisplayScores()}
+        onChange={handleDisplayScoresChange}
+        originBonuses={formData.origin_ability_bonuses}
+        disabled={loading}
+      />
 
       {/* Validation Errors */}
       {validationErrors.length > 0 && (

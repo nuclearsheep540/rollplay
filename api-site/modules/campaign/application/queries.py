@@ -12,8 +12,17 @@ class GetUserCampaigns:
         self.repository = repository
 
     def execute(self, user_id: UUID) -> List[CampaignAggregate]:
-        """Get all campaigns where user is a member (DM or player)"""
-        return self.repository.get_by_member_id(user_id)
+        """Get all campaigns where user is a member (DM or player) OR has a pending invite"""
+        # Get campaigns where user is a member
+        member_campaigns = self.repository.get_by_member_id(user_id)
+
+        # Get campaigns where user has pending invite
+        invited_campaigns = self.repository.get_invited_campaigns(user_id)
+
+        # Combine both lists (no duplicates since a user can't be both invited and member)
+        all_campaigns = member_campaigns + invited_campaigns
+
+        return all_campaigns
 
 
 class GetCampaignById:

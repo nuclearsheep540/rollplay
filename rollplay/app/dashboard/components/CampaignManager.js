@@ -8,8 +8,12 @@
 import { useState, useEffect, useRef } from 'react'
 import { createPortal } from 'react-dom'
 import { useRouter } from 'next/navigation'
-import EndGameModal from './EndGameModal'
-import GameInviteModal from './GameInviteModal'
+import PauseSessionModal from './PauseSessionModal'
+import FinishSessionModal from './FinishSessionModal'
+import DeleteCampaignModal from './DeleteCampaignModal'
+import DeleteSessionModal from './DeleteSessionModal'
+import CampaignInviteModal from './CampaignInviteModal'
+import InviteButton from '../../shared/components/InviteButton'
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
 import {
   faGear,
@@ -19,14 +23,17 @@ import {
   faXmark,
   faPlus,
   faPlay,
-  faStop,
+  faPause,
+  faCheckCircle,
   faRightToBracket,
-  faUserPlus
+  faUserPlus,
+  faInfoCircle
 } from '@fortawesome/free-solid-svg-icons'
 
-export default function CampaignManager({ user }) {
+export default function CampaignManager({ user, refreshTrigger }) {
   const router = useRouter()
   const [campaigns, setCampaigns] = useState([])
+  const [invitedCampaigns, setInvitedCampaigns] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
   const [creatingCampaign, setCreatingCampaign] = useState(false)
@@ -42,17 +49,25 @@ export default function CampaignManager({ user }) {
   const [gameMaxPlayers, setGameMaxPlayers] = useState(8)
   const [selectedCampaignForGame, setSelectedCampaignForGame] = useState(null)
   const [startingGame, setStartingGame] = useState(null)
-  const [endingGame, setEndingGame] = useState(null)
+  const [pausingGame, setPausingGame] = useState(null)
+  const [finishingGame, setFinishingGame] = useState(null)
   const [deletingGame, setDeletingGame] = useState(null)
-  const [showEndGameModal, setShowEndGameModal] = useState(false)
-  const [gameToEnd, setGameToEnd] = useState(null)
-  const [showInviteModal, setShowInviteModal] = useState(false)
-  const [selectedGameForInvite, setSelectedGameForInvite] = useState(null)
+  const [showPauseSessionModal, setShowPauseSessionModal] = useState(false)
+  const [gameToPause, setGameToPause] = useState(null)
+  const [showFinishSessionModal, setShowFinishSessionModal] = useState(false)
+  const [gameToFinish, setGameToFinish] = useState(null)
+  const [showDeleteCampaignModal, setShowDeleteCampaignModal] = useState(false)
+  const [campaignToDelete, setCampaignToDelete] = useState(null)
+  const [showDeleteSessionModal, setShowDeleteSessionModal] = useState(false)
+  const [sessionToDelete, setSessionToDelete] = useState(null)
+  const [showCampaignInviteModal, setShowCampaignInviteModal] = useState(false)
+  const [selectedCampaignForInvite, setSelectedCampaignForInvite] = useState(null)
   const gameSessionsPanelRef = useRef(null)
 
   // Fetch campaigns from API
-  const fetchCampaigns = async () => {
+  const fetchCampaigns = async (showLoading = true) => {
     try {
+      if (showLoading) setLoading(true)
       const response = await fetch('/api/campaigns/', {
         method: 'GET',
         headers: {
@@ -63,10 +78,40 @@ export default function CampaignManager({ user }) {
 
       if (response.ok) {
         const campaignsData = await response.json()
-        setCampaigns(campaignsData)
 
-        // Fetch games for all campaigns
-        await fetchAllGames(campaignsData)
+        // Separate campaigns into joined vs invited
+        const joined = []
+        const invited = []
+
+        console.log('📋 All campaigns data:', campaignsData)
+        console.log('👤 Current user ID:', user.id)
+
+        campaignsData.forEach(campaign => {
+          console.log(`📁 Campaign "${campaign.title}":`, {
+            invited_player_ids: campaign.invited_player_ids,
+            player_ids: campaign.player_ids,
+            host_id: campaign.host_id
+          })
+
+          // Check if user is in invited_player_ids (pending invite)
+          if (campaign.invited_player_ids && campaign.invited_player_ids.includes(user.id)) {
+            console.log(`✅ User is INVITED to "${campaign.title}"`)
+            invited.push(campaign)
+          } else {
+            // User is either host or in player_ids (joined member)
+            console.log(`✅ User is MEMBER of "${campaign.title}"`)
+            joined.push(campaign)
+          }
+        })
+
+        console.log('🎯 Joined campaigns:', joined.length)
+        console.log('📨 Invited campaigns:', invited.length)
+
+        setCampaigns(joined)
+        setInvitedCampaigns(invited)
+
+        // Fetch games for joined campaigns only
+        await fetchAllGames(joined)
       } else {
         console.error('Failed to fetch campaigns:', response.status)
         setError('Failed to load campaigns')
@@ -124,6 +169,48 @@ export default function CampaignManager({ user }) {
     setGameName('Session 1')
     setGameMaxPlayers(8)
     setShowGameModal(true)
+  }
+
+  // Accept campaign invite
+  const acceptCampaignInvite = async (campaignId) => {
+    try {
+      const response = await fetch(`/api/campaigns/${campaignId}/invites/accept`, {
+        method: 'POST',
+        credentials: 'include'
+      })
+
+      if (!response.ok) {
+        const errorData = await response.json()
+        throw new Error(errorData.detail || 'Failed to accept invite')
+      }
+
+      // Refresh campaigns to move from invited to joined
+      await fetchCampaigns()
+    } catch (err) {
+      console.error('Error accepting campaign invite:', err)
+      setError(err.message)
+    }
+  }
+
+  // Decline campaign invite
+  const declineCampaignInvite = async (campaignId) => {
+    try {
+      const response = await fetch(`/api/campaigns/${campaignId}/invites`, {
+        method: 'DELETE',
+        credentials: 'include'
+      })
+
+      if (!response.ok) {
+        const errorData = await response.json()
+        throw new Error(errorData.detail || 'Failed to decline invite')
+      }
+
+      // Refresh campaigns to remove from invited list
+      await fetchCampaigns()
+    } catch (err) {
+      console.error('Error declining campaign invite:', err)
+      setError(err.message)
+    }
   }
 
   // Create game (without starting it)
@@ -193,72 +280,117 @@ export default function CampaignManager({ user }) {
     }
   }
 
-  // Show end game confirmation modal
-  const promptEndGame = (game) => {
-    setGameToEnd(game)
-    setShowEndGameModal(true)
+  // Show pause session confirmation modal
+  const promptPauseSession = (game) => {
+    setGameToPause(game)
+    setShowPauseSessionModal(true)
   }
 
-  // End game session (after confirmation)
-  const confirmEndGame = async () => {
-    if (!gameToEnd) return
+  // Pause session (after confirmation)
+  const confirmPauseSession = async () => {
+    if (!gameToPause) return
 
-    setEndingGame(gameToEnd.id)
+    setPausingGame(gameToPause.id)
     setError(null)
 
     try {
-      const response = await fetch(`/api/games/${gameToEnd.id}/end`, {
+      const response = await fetch(`/api/games/${gameToPause.id}/end`, {
         method: 'POST',
         credentials: 'include'
       })
 
       if (!response.ok) {
         const errorData = await response.json()
-        throw new Error(errorData.detail || 'Failed to end game')
+        throw new Error(errorData.detail || 'Failed to pause session')
       }
 
       await fetchCampaigns()
-      setShowEndGameModal(false)
-      setGameToEnd(null)
+      setShowPauseSessionModal(false)
+      setGameToPause(null)
     } catch (err) {
-      console.error('Error ending game:', err)
+      console.error('Error pausing session:', err)
       setError(err.message)
     } finally {
-      setEndingGame(null)
+      setPausingGame(null)
     }
   }
 
-  // Cancel end game
-  const cancelEndGame = () => {
-    setShowEndGameModal(false)
-    setGameToEnd(null)
+  // Cancel pause session
+  const cancelPauseSession = () => {
+    setShowPauseSessionModal(false)
+    setGameToPause(null)
   }
 
-  // Open invite modal for game
-  const openInviteModal = (game) => {
-    setSelectedGameForInvite(game)
-    setShowInviteModal(true)
+  // Show finish session confirmation modal
+  const promptFinishSession = (game) => {
+    setGameToFinish(game)
+    setShowFinishSessionModal(true)
   }
 
-  // Handle successful invite
-  const handleInviteSuccess = async (updatedGame) => {
-    // Refresh campaigns to show updated invite count
-    await fetchCampaigns()
-    // Update the selected game being passed to the modal
-    setSelectedGameForInvite(updatedGame)
-  }
+  // Finish session permanently (after confirmation)
+  const confirmFinishSession = async () => {
+    if (!gameToFinish) return
 
-  // Delete game
-  const deleteGame = async (gameId, gameName) => {
-    if (!confirm(`Are you sure you want to delete "${gameName}"? This action cannot be undone.`)) {
-      return
-    }
-
-    setDeletingGame(gameId)
+    setFinishingGame(gameToFinish.id)
     setError(null)
 
     try {
-      const response = await fetch(`/api/games/${gameId}`, {
+      const response = await fetch(`/api/games/${gameToFinish.id}/finish`, {
+        method: 'POST',
+        credentials: 'include'
+      })
+
+      if (!response.ok) {
+        const errorData = await response.json()
+        throw new Error(errorData.detail || 'Failed to finish session')
+      }
+
+      await fetchCampaigns()
+      setShowFinishSessionModal(false)
+      setGameToFinish(null)
+    } catch (err) {
+      console.error('Error finishing session:', err)
+      setError(err.message)
+    } finally {
+      setFinishingGame(null)
+    }
+  }
+
+  // Cancel finish session
+  const cancelFinishSession = () => {
+    setShowFinishSessionModal(false)
+    setGameToFinish(null)
+  }
+
+  // Handle successful campaign invite
+  const handleCampaignInviteSuccess = async (updatedCampaign) => {
+    // Refresh campaigns to show updated player count
+    await fetchCampaigns()
+    // Update the selected campaign being passed to the modal
+    setSelectedCampaignForInvite(updatedCampaign)
+  }
+
+  // Open delete session modal
+  const openDeleteSessionModal = (game) => {
+    setSessionToDelete(game)
+    setShowDeleteSessionModal(true)
+  }
+
+  // Close delete session modal
+  const closeDeleteSessionModal = () => {
+    setSessionToDelete(null)
+    setShowDeleteSessionModal(false)
+  }
+
+  // Delete game (called from modal)
+  const deleteGame = async () => {
+    if (!sessionToDelete) return
+
+    setDeletingGame(sessionToDelete.id)
+    setError(null)
+
+    try {
+      const response = await fetch(`/api/games/${sessionToDelete.id}`, {
         method: 'DELETE',
         credentials: 'include'
       })
@@ -269,6 +401,7 @@ export default function CampaignManager({ user }) {
       }
 
       await fetchCampaigns()
+      closeDeleteSessionModal()
     } catch (err) {
       console.error('Error deleting game:', err)
       setError(err.message)
@@ -326,17 +459,27 @@ export default function CampaignManager({ user }) {
     }
   }
 
-  // Delete a campaign
-  const deleteCampaign = async (campaignId, campaignTitle) => {
-    if (!confirm(`Are you sure you want to delete "${campaignTitle}"? This action cannot be undone.`)) {
-      return
-    }
+  // Show delete campaign confirmation modal
+  const promptDeleteCampaign = (campaign) => {
+    setCampaignToDelete(campaign)
+    setShowDeleteCampaignModal(true)
+  }
 
-    setDeletingCampaign(campaignId)
+  // Cancel delete campaign
+  const cancelDeleteCampaign = () => {
+    setShowDeleteCampaignModal(false)
+    setCampaignToDelete(null)
+  }
+
+  // Delete a campaign (after confirmation)
+  const confirmDeleteCampaign = async () => {
+    if (!campaignToDelete) return
+
+    setDeletingCampaign(campaignToDelete.id)
     setError(null)
 
     try {
-      const response = await fetch(`/api/campaigns/${campaignId}`, {
+      const response = await fetch(`/api/campaigns/${campaignToDelete.id}`, {
         method: 'DELETE',
         headers: {
           'Content-Type': 'application/json',
@@ -346,9 +489,11 @@ export default function CampaignManager({ user }) {
 
       if (response.ok) {
         await fetchCampaigns()
-        if (selectedCampaign && selectedCampaign.id === campaignId) {
+        if (selectedCampaign && selectedCampaign.id === campaignToDelete.id) {
           setSelectedCampaign(null)
         }
+        setShowDeleteCampaignModal(false)
+        setCampaignToDelete(null)
       } else {
         const errorData = await response.json()
         throw new Error(errorData.detail || 'Failed to delete campaign')
@@ -361,9 +506,13 @@ export default function CampaignManager({ user }) {
     }
   }
 
-  // Show campaign details
-  const showCampaignDetails = (campaign) => {
-    setSelectedCampaign(campaign)
+  // Toggle campaign details
+  const toggleCampaignDetails = (campaign) => {
+    if (selectedCampaign?.id === campaign.id) {
+      setSelectedCampaign(null)
+    } else {
+      setSelectedCampaign(campaign)
+    }
   }
 
   // Scroll to game sessions panel when selectedCampaign changes
@@ -380,8 +529,9 @@ export default function CampaignManager({ user }) {
   }, [selectedCampaign])
 
   useEffect(() => {
-    fetchCampaigns()
-  }, [])
+    // Only show loading on initial fetch (refreshTrigger = 0)
+    fetchCampaigns(refreshTrigger === 0)
+  }, [refreshTrigger])
 
   if (loading) {
     return (
@@ -446,6 +596,83 @@ export default function CampaignManager({ user }) {
         </div>
       )}
 
+      {/* Invited Campaigns Section - Only render if there are invites */}
+      {invitedCampaigns.length > 0 && (
+        <div className="space-y-4">
+          <h3 className="text-lg font-semibold text-amber-400 uppercase">Invited Campaigns</h3>
+          <div className="space-y-4">
+            {invitedCampaigns.map((campaign) => (
+              <div key={campaign.id} className="w-full max-w-[1200px] min-w-[800px]">
+                {/* Invited Campaign Card */}
+                <div
+                  className="aspect-[16/4] w-full relative rounded-lg overflow-hidden border-2 border-amber-500/30"
+                  style={campaign.hero_image ? {
+                    backgroundImage: `url(${campaign.hero_image})`,
+                    backgroundSize: 'cover',
+                    backgroundPosition: 'center'
+                  } : {
+                    background: 'linear-gradient(135deg, rgba(251, 191, 36, 0.3) 0%, rgba(254, 243, 199, 0.15) 50%)'
+                  }}
+                >
+                  {/* Gradient Overlay */}
+                  <div className="absolute inset-0 bg-gradient-to-t from-slate-900/25 via-slate-900/15 to-slate-900/5" />
+
+                  {/* Content Overlay */}
+                  <div className="relative z-10 p-6 h-full flex flex-col justify-between">
+                    {/* Top Row - Title and Status Badge */}
+                    <div className="flex items-start justify-between">
+                      <div>
+                        <h4 className="text-3xl font-bold text-white mb-1 drop-shadow-lg">
+                          {campaign.title || 'Unnamed Campaign'}
+                        </h4>
+                        <span className="inline-block px-3 py-1 bg-amber-500/20 text-amber-400 border border-amber-500/50 rounded-full text-sm font-semibold">
+                          Pending Invite
+                        </span>
+                      </div>
+                    </div>
+
+                    {/* Bottom Row - Campaign Info and Actions */}
+                    <div className="flex items-end justify-between">
+                      {/* Campaign Description */}
+                      <div className="flex-1">
+                        {campaign.description && (
+                          <p className="text-sm text-white/90 drop-shadow-md mb-2">
+                            {campaign.description}
+                          </p>
+                        )}
+                        <p className="text-sm text-white/70 drop-shadow-md">
+                          Invited by campaign host
+                        </p>
+                      </div>
+
+                      {/* Action Buttons */}
+                      <div className="flex gap-2 ml-4">
+                        <button
+                          onClick={() => acceptCampaignInvite(campaign.id)}
+                          className="px-4 py-2 bg-green-600 hover:bg-green-500 text-white rounded-lg border border-green-500 hover:shadow-lg hover:shadow-green-500/30 transition-all text-sm font-medium flex items-center gap-2"
+                          title="Accept Invite"
+                        >
+                          <FontAwesomeIcon icon={faCheck} />
+                          Accept
+                        </button>
+                        <button
+                          onClick={() => declineCampaignInvite(campaign.id)}
+                          className="px-4 py-2 bg-red-600 hover:bg-red-500 text-white rounded-lg border border-red-500 hover:shadow-lg hover:shadow-red-500/30 transition-all text-sm font-medium flex items-center gap-2"
+                          title="Decline Invite"
+                        >
+                          <FontAwesomeIcon icon={faXmark} />
+                          Decline
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
       {/* Campaigns List - Full Width Hero Cards */}
       <div className="space-y-4">
         <h3 className="text-lg font-semibold text-purple-400 uppercase">Your Campaigns</h3>
@@ -457,8 +684,12 @@ export default function CampaignManager({ user }) {
           <div className="space-y-4">
             {campaigns.map((campaign) => {
               const campaignGames = allGames.filter(game => game.campaign_id === campaign.id)
-              const activeGames = campaignGames.filter(game => game.status === 'active')
+              // Active games are STARTING, ACTIVE, or STOPPING (excludes INACTIVE and FINISHED)
+              const activeGames = campaignGames.filter(game =>
+                game.status === 'active' || game.status === 'starting' || game.status === 'stopping'
+              )
               const inactiveGames = campaignGames.filter(game => game.status === 'inactive')
+              const finishedGames = campaignGames.filter(game => game.status === 'finished')
               const startingGames = campaignGames.filter(game => game.status === 'starting')
               const stoppingGames = campaignGames.filter(game => game.status === 'stopping')
 
@@ -466,10 +697,10 @@ export default function CampaignManager({ user }) {
                 <div key={campaign.id} className="w-full max-w-[1200px] min-w-[800px]">
                   {/* Campaign Card */}
                   <div
-                    className={`aspect-[16/4] w-full relative rounded-lg overflow-hidden cursor-pointer hover:shadow-lg transition-all duration-200 border-2 ${
+                    className={`aspect-[16/4] w-full relative rounded-lg overflow-hidden cursor-pointer transition-all duration-200 border-2 ${
                       selectedCampaign?.id === campaign.id
-                        ? 'border-purple-500 shadow-lg shadow-purple-500/30'
-                        : 'border-purple-500/30 hover:shadow-purple-500/30'
+                        ? 'border-purple-500'
+                        : 'border-purple-500/30'
                     }`}
                     style={campaign.hero_image ? {
                       backgroundImage: `url(${campaign.hero_image})`,
@@ -478,7 +709,7 @@ export default function CampaignManager({ user }) {
                     } : {
                       background: 'linear-gradient(135deg, rgba(192, 132, 252, 0.3) 0%, rgba(233, 213, 255, 0.15) 50%)'
                     }}
-                    onClick={() => showCampaignDetails(campaign)}
+                    onClick={() => toggleCampaignDetails(campaign)}
                   >
                     {/* Gradient Overlay */}
                     <div className="absolute inset-0 bg-gradient-to-t from-slate-900/25 via-slate-900/15 to-slate-900/5" />
@@ -495,40 +726,46 @@ export default function CampaignManager({ user }) {
 
                         {/* Action Buttons - Top Right */}
                         <div className="flex gap-2">
-                          {activeGames.length > 0 ? (
+                          {/* Active game indicator */}
+                          {activeGames.length > 0 && (
                             <div className="px-4 py-2 bg-green-500/90 backdrop-blur-sm text-white text-sm font-semibold rounded-lg border border-green-400 animate-pulse">
                               Game In Session
                             </div>
-                          ) : (
+                          )}
+
+                          {/* Always show action buttons if user is the host */}
+                          {campaign.host_id === user.id && (
                             <>
                               <button
                                 onClick={(e) => {
                                   e.stopPropagation()
-                                  showCampaignDetails(campaign)
+                                  setSelectedCampaignForInvite(campaign)
+                                  setShowCampaignInviteModal(true)
                                 }}
-                                className="w-10 h-10 bg-purple-500/80 backdrop-blur-sm hover:bg-purple-500 text-white rounded-lg transition-all flex items-center justify-center border border-purple-400/50"
-                                title="Configure Campaign"
+                                className="w-10 h-10 bg-blue-500/80 backdrop-blur-sm hover:bg-blue-500 text-white rounded-lg transition-all flex items-center justify-center border border-blue-400/50"
+                                title="Invite Player to Campaign"
+                              >
+                                <FontAwesomeIcon icon={faUserPlus} />
+                              </button>
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation()
+                                  toggleCampaignDetails(campaign)
+                                }}
+                                disabled={activeGames.length > 0}
+                                className="w-10 h-10 bg-purple-500/80 backdrop-blur-sm hover:bg-purple-500 text-white rounded-lg transition-all flex items-center justify-center border border-purple-400/50 disabled:opacity-50 disabled:cursor-not-allowed"
+                                title={activeGames.length > 0 ? "Cannot configure campaign during active games" : "Configure Campaign"}
                               >
                                 <FontAwesomeIcon icon={faGear} />
                               </button>
                               <button
                                 onClick={(e) => {
                                   e.stopPropagation()
-                                  openCreateGameModal(campaign.id)
+                                  promptDeleteCampaign(campaign)
                                 }}
-                                className="w-10 h-10 bg-green-500/80 backdrop-blur-sm hover:bg-green-500 text-white rounded-lg transition-all flex items-center justify-center border border-green-400/50"
-                                title="Create Game"
-                              >
-                                <FontAwesomeIcon icon={faGamepad} />
-                              </button>
-                              <button
-                                onClick={(e) => {
-                                  e.stopPropagation()
-                                  deleteCampaign(campaign.id, campaign.title)
-                                }}
-                                disabled={deletingCampaign === campaign.id}
+                                disabled={deletingCampaign === campaign.id || activeGames.length > 0}
                                 className="w-10 h-10 bg-red-500/80 backdrop-blur-sm hover:bg-red-500 text-white rounded-lg transition-all flex items-center justify-center border border-red-400/50 disabled:opacity-50 disabled:cursor-not-allowed"
-                                title="Delete Campaign"
+                                title={activeGames.length > 0 ? "Cannot delete campaign with active games" : "Delete Campaign"}
                               >
                                 <FontAwesomeIcon icon={faTrash} />
                               </button>
@@ -540,11 +777,46 @@ export default function CampaignManager({ user }) {
                       {/* Middle - Spacer */}
                       <div className="flex-1"></div>
 
-                      {/* Bottom Row - Metadata */}
-                      <div className="text-slate-200 text-sm drop-shadow">
-                        <span>Created: {campaign.created_at ? new Date(campaign.created_at).toLocaleDateString() : 'Unknown'}</span>
-                        <span className="mx-2">•</span>
-                        <span>{campaignGames.length} session{campaignGames.length !== 1 ? 's' : ''}</span>
+                      {/* Bottom Row - Create Session Button & Metadata */}
+                      <div className="flex items-center justify-between">
+                        {activeGames.length > 0 ? (
+                          <div className="space-y-2">
+                            {/* Campaign metadata */}
+                            <div className="text-slate-200 text-sm drop-shadow">
+                              <span>Created: {campaign.created_at ? new Date(campaign.created_at).toLocaleDateString() : 'Unknown'}</span>
+                              <span className="mx-2">•</span>
+                              <span>{campaignGames.length} session{campaignGames.length !== 1 ? 's' : ''}</span>
+                            </div>
+
+                            {/* Clarity message: why Create Session button is hidden */}
+                            <div className="text-amber-400/80 text-xs flex items-center gap-1">
+                              <FontAwesomeIcon icon={faInfoCircle} />
+                              <span>End active session to create another</span>
+                            </div>
+                          </div>
+                        ) : (
+                          <>
+                            {/* Only show Create Session button if user is the host */}
+                            {campaign.host_id === user.id && (
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation()
+                                  openCreateGameModal(campaign.id)
+                                }}
+                                className="px-6 py-3 bg-green-500/90 backdrop-blur-sm hover:bg-green-500 text-white rounded-lg transition-all flex items-center gap-2 border border-green-400/50 font-semibold text-base"
+                                title="Create Session"
+                              >
+                                <FontAwesomeIcon icon={faPlus} />
+                                Create Session
+                              </button>
+                            )}
+                            <div className="text-slate-200 text-sm drop-shadow">
+                              <span>Created: {campaign.created_at ? new Date(campaign.created_at).toLocaleDateString() : 'Unknown'}</span>
+                              <span className="mx-2">•</span>
+                              <span>{campaignGames.length} session{campaignGames.length !== 1 ? 's' : ''}</span>
+                            </div>
+                          </>
+                        )}
                       </div>
                     </div>
                   </div>
@@ -587,7 +859,7 @@ export default function CampaignManager({ user }) {
                                       game.status === 'inactive' ? 'text-slate-400' :
                                       'text-amber-400'
                                     }`}>
-                                      {game.status}
+                                      {game.status.charAt(0).toUpperCase() + game.status.slice(1)}
                                     </span>
                                   </p>
                                 </div>
@@ -604,40 +876,56 @@ export default function CampaignManager({ user }) {
                                         <FontAwesomeIcon icon={faRightToBracket} />
                                         Enter
                                       </button>
-                                      <button
-                                        onClick={() => openInviteModal(game)}
-                                        className="px-3 py-1.5 bg-blue-600 hover:bg-blue-500 text-white rounded-lg border border-blue-500 hover:shadow-lg hover:shadow-blue-500/30 transition-all text-sm font-medium flex items-center gap-2"
-                                        title="Invite Players"
-                                      >
-                                        <FontAwesomeIcon icon={faUserPlus} />
-                                        Invite
-                                      </button>
-                                      <button
-                                        onClick={() => promptEndGame(game)}
-                                        disabled={endingGame === game.id}
-                                        className="px-3 py-1.5 bg-orange-600 hover:bg-orange-500 text-white rounded-lg border border-orange-500 hover:shadow-lg hover:shadow-orange-500/30 transition-all text-sm font-medium flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
-                                        title="End Game"
-                                      >
-                                        {endingGame === game.id ? (
-                                          <>
-                                            <div className="animate-spin rounded-full h-3 w-3 border-b-2 border-white"></div>
-                                            Ending...
-                                          </>
-                                        ) : (
-                                          <>
-                                            <FontAwesomeIcon icon={faStop} />
-                                            End
-                                          </>
-                                        )}
-                                      </button>
+                                      {/* Only show host actions if user is the campaign host */}
+                                      {campaign.host_id === user.id && (
+                                        <>
+                                          <button
+                                            onClick={() => promptPauseSession(game)}
+                                            disabled={pausingGame === game.id}
+                                            className="px-3 py-1.5 bg-orange-600 hover:bg-orange-500 text-white rounded-lg border border-orange-500 hover:shadow-lg hover:shadow-orange-500/30 transition-all text-sm font-medium flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                                            title="Pause Session"
+                                          >
+                                            {pausingGame === game.id ? (
+                                              <>
+                                                <div className="animate-spin rounded-full h-3 w-3 border-b-2 border-white"></div>
+                                                Pausing...
+                                              </>
+                                            ) : (
+                                              <>
+                                                <FontAwesomeIcon icon={faPause} />
+                                                Pause
+                                              </>
+                                            )}
+                                          </button>
+                                          <button
+                                            onClick={() => promptFinishSession(game)}
+                                            disabled={finishingGame === game.id}
+                                            className="px-3 py-1.5 bg-amber-600 hover:bg-amber-500 text-white rounded-lg border border-amber-500 hover:shadow-lg hover:shadow-amber-500/30 transition-all text-sm font-medium flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                                            title="Finish Session Permanently"
+                                          >
+                                            {finishingGame === game.id ? (
+                                              <>
+                                                <div className="animate-spin rounded-full h-3 w-3 border-b-2 border-white"></div>
+                                                Finishing...
+                                              </>
+                                            ) : (
+                                              <>
+                                                <FontAwesomeIcon icon={faCheckCircle} />
+                                                Finish
+                                              </>
+                                            )}
+                                          </button>
+                                        </>
+                                      )}
                                     </>
-                                  ) : game.status === 'inactive' ? (
+                                  ) : game.status === 'inactive' && campaign.host_id === user.id ? (
+                                    /* Only show inactive game actions if user is the host */
                                     <>
                                       <button
                                         onClick={() => startGame(game.id)}
-                                        disabled={startingGame === game.id}
+                                        disabled={startingGame === game.id || activeGames.length > 0}
                                         className="px-3 py-1.5 bg-green-600 hover:bg-green-500 text-white rounded-lg border border-green-500 hover:shadow-lg hover:shadow-green-500/30 transition-all text-sm font-medium flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
-                                        title="Start Game"
+                                        title={activeGames.length > 0 ? "Pause or finish the active session before starting another" : "Start Game"}
                                       >
                                         {startingGame === game.id ? (
                                           <>
@@ -652,15 +940,25 @@ export default function CampaignManager({ user }) {
                                         )}
                                       </button>
                                       <button
-                                        onClick={() => openInviteModal(game)}
-                                        className="px-3 py-1.5 bg-blue-600 hover:bg-blue-500 text-white rounded-lg border border-blue-500 hover:shadow-lg hover:shadow-blue-500/30 transition-all text-sm font-medium flex items-center gap-2"
-                                        title="Invite Players"
+                                        onClick={() => promptFinishSession(game)}
+                                        disabled={finishingGame === game.id}
+                                        className="px-3 py-1.5 bg-amber-600 hover:bg-amber-500 text-white rounded-lg border border-amber-500 hover:shadow-lg hover:shadow-amber-500/30 transition-all text-sm font-medium flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                                        title="Finish Session Permanently"
                                       >
-                                        <FontAwesomeIcon icon={faUserPlus} />
-                                        Invite
+                                        {finishingGame === game.id ? (
+                                          <>
+                                            <div className="animate-spin rounded-full h-3 w-3 border-b-2 border-white"></div>
+                                            Finishing...
+                                          </>
+                                        ) : (
+                                          <>
+                                            <FontAwesomeIcon icon={faCheckCircle} />
+                                            Finish
+                                          </>
+                                        )}
                                       </button>
                                       <button
-                                        onClick={() => deleteGame(game.id, game.name)}
+                                        onClick={() => openDeleteSessionModal(game)}
                                         disabled={deletingGame === game.id}
                                         className="px-3 py-1.5 bg-red-600 hover:bg-red-500 text-white rounded-lg border border-red-500 hover:shadow-lg hover:shadow-red-500/30 transition-all text-sm font-medium flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
                                         title="Delete Game"
@@ -678,6 +976,26 @@ export default function CampaignManager({ user }) {
                                         )}
                                       </button>
                                     </>
+                                  ) : game.status === 'finished' && campaign.host_id === user.id ? (
+                                    /* Show delete button for finished sessions (host only) */
+                                    <button
+                                      onClick={() => openDeleteSessionModal(game)}
+                                      disabled={deletingGame === game.id}
+                                      className="px-3 py-1.5 bg-red-600 hover:bg-red-500 text-white rounded-lg border border-red-500 hover:shadow-lg hover:shadow-red-500/30 transition-all text-sm font-medium flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                                      title="Delete Finished Session"
+                                    >
+                                      {deletingGame === game.id ? (
+                                        <>
+                                          <div className="animate-spin rounded-full h-3 w-3 border-b-2 border-white"></div>
+                                          Deleting...
+                                        </>
+                                      ) : (
+                                        <>
+                                          <FontAwesomeIcon icon={faTrash} />
+                                          Delete
+                                        </>
+                                      )}
+                                    </button>
                                   ) : null}
                                 </div>
                               </div>
@@ -825,25 +1143,56 @@ export default function CampaignManager({ user }) {
         document.body
       )}
 
-      {/* End Game Confirmation Modal */}
-      {showEndGameModal && (
-        <EndGameModal
-          game={gameToEnd}
-          onConfirm={confirmEndGame}
-          onCancel={cancelEndGame}
-          isEnding={endingGame === gameToEnd?.id}
+      {/* Pause Session Confirmation Modal */}
+      {showPauseSessionModal && (
+        <PauseSessionModal
+          game={gameToPause}
+          onConfirm={confirmPauseSession}
+          onCancel={cancelPauseSession}
+          isPausing={pausingGame === gameToPause?.id}
         />
       )}
 
-      {/* Game Invite Modal */}
-      {showInviteModal && selectedGameForInvite && (
-        <GameInviteModal
-          game={selectedGameForInvite}
+      {/* Finish Session Confirmation Modal */}
+      {showFinishSessionModal && (
+        <FinishSessionModal
+          game={gameToFinish}
+          onConfirm={confirmFinishSession}
+          onCancel={cancelFinishSession}
+          isFinishing={finishingGame === gameToFinish?.id}
+        />
+      )}
+
+      {/* Delete Campaign Confirmation Modal */}
+      {showDeleteCampaignModal && (
+        <DeleteCampaignModal
+          campaign={campaignToDelete}
+          onConfirm={confirmDeleteCampaign}
+          onCancel={cancelDeleteCampaign}
+          isDeleting={deletingCampaign === campaignToDelete?.id}
+        />
+      )}
+
+      {/* Delete Session Confirmation Modal */}
+      {showDeleteSessionModal && (
+        <DeleteSessionModal
+          session={sessionToDelete}
+          onConfirm={deleteGame}
+          onCancel={closeDeleteSessionModal}
+          isDeleting={deletingGame === sessionToDelete?.id}
+        />
+      )}
+
+      {/* Campaign Invite Modal */}
+      {showCampaignInviteModal && selectedCampaignForInvite && (
+        <CampaignInviteModal
+          key={`campaign-invite-${selectedCampaignForInvite.id}-${selectedCampaignForInvite.invited_player_ids?.length || 0}`}
+          campaign={selectedCampaignForInvite}
           onClose={() => {
-            setShowInviteModal(false)
-            setSelectedGameForInvite(null)
+            setShowCampaignInviteModal(false)
+            setSelectedCampaignForInvite(null)
           }}
-          onInviteSuccess={handleInviteSuccess}
+          onInviteSuccess={handleCampaignInviteSuccess}
         />
       )}
 

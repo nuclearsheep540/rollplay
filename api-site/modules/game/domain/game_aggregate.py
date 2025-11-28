@@ -17,16 +17,18 @@ class GameStatus(str, Enum):
 
     We use these states to understand the game's status
 
-    INACTIVE means this game has no current active_session
+    INACTIVE means this game has no current active_session (can be resumed)
     ACTIVE means this game has an active_session
     STARTING means the ETL pipeline has started and we're waiting for an Active state
     STOPPING means the ETL pipeline has started and we're waiting for an Inactive state
+    FINISHED means this session is permanently complete (cannot be resumed, preserved in history)
     """
 
     INACTIVE = "inactive"
     ACTIVE = "active"
     STARTING = "starting"
     STOPPING = "stopping"
+    FINISHED = "finished"
 
     def __str__(self) -> str:
         return self.value
@@ -44,18 +46,16 @@ class GameAggregate:
     """
     Game Aggregate Root
 
-    Stores high level game state and manages invite/join workflow.
-    Game is independent from Campaign - Campaign only references Game by ID.
+    Stores high level game state. Game is independent from Campaign -
+    Campaign only references Game by ID.
 
-    Invite/Join Workflow (Updated):
-    1. DM invites User → added to invited_users (pending)
-    2. User accepts invite → moved to joined_users (roster)
-    3. User selects Character → character association tracked in game_joined_users table
-    4. User enters session → character added to active_session (MongoDB)
+    Roster Flow:
+    - Users are added to joined_users when game is created (auto-enrolled from campaign)
+    - User selects Character → character association tracked in game_joined_users table
+    - User enters session → character added to active_session (MongoDB)
 
     Key Concepts:
-    - invited_users: Users with pending invites (not yet accepted)
-    - joined_users: Users who accepted invite (game roster)
+    - joined_users: Users in game roster (auto-enrolled from campaign)
     - Character association: Tracked separately in game_joined_users table
     - Active session: Handled by api-game service (MongoDB)
     """
@@ -71,8 +71,7 @@ class GameAggregate:
         started_at: Optional[datetime] = None,  # time ETL successfully started the game
         stopped_at: Optional[datetime] = None,  # time ETL successfully stopped the game
         session_id: Optional[str] = None,  # MongoDB active_session objectID
-        invited_users: Optional[List[UUID]] = None,  # User IDs with pending invites
-        joined_users: Optional[List[UUID]] = None,  # User IDs who accepted (roster)
+        joined_users: Optional[List[UUID]] = None,  # User IDs in roster (auto-enrolled from campaign)
         max_players: int = 8,  # Seat count in active session (1-8)
     ):
         self.id = id
@@ -84,7 +83,6 @@ class GameAggregate:
         self.started_at = started_at
         self.stopped_at = stopped_at
         self.session_id = session_id
-        self.invited_users = invited_users if invited_users is not None else []
         self.joined_users = joined_users if joined_users is not None else []
         self.max_players = self._validate_max_players(max_players)
 
@@ -119,62 +117,9 @@ class GameAggregate:
             host_id=host_id,  # User ID (inherited from campaign host)
             status=GameStatus.INACTIVE,
             created_at=datetime.utcnow(),
-            invited_users=[],
             joined_users=[],
             max_players=max_players
         )
-
-    def invite_user(self, user_id: UUID) -> None:
-        """
-        Invite a user to join the game.
-        User must accept invite to join the roster.
-
-        Business Rules:
-        - Cannot invite the host
-        - Cannot invite user who already has pending invite
-        - Cannot invite user who already joined
-        - Cannot invite during STARTING or STOPPING transitions
-        """
-        # Check game status - block during ETL transitions
-        if self.status in [GameStatus.STARTING, GameStatus.STOPPING]:
-            raise ValueError("Cannot invite users while game is starting or stopping")
-
-        if user_id == self.host_id:
-            raise ValueError("Cannot invite the host as a player")
-
-        if user_id in self.invited_users:
-            raise ValueError("User already has a pending invite")
-
-        if user_id in self.joined_users:
-            raise ValueError("User has already joined this game")
-
-        self.invited_users.append(user_id)
-
-    def accept_invite(self, user_id: UUID) -> None:
-        """
-        User accepts invite to join the game roster.
-        Moves user from invited_users to joined_users.
-        Character selection happens separately.
-
-        Business Rules:
-        - User must have pending invite
-        - Game must not be full (max_players limit)
-        """
-        if user_id not in self.invited_users:
-            raise ValueError("User does not have a pending invite")
-
-        # Check if game is full
-        if len(self.joined_users) >= self.max_players:
-            raise ValueError("Game is full")
-
-        # Move user from invited to joined
-        self.invited_users.remove(user_id)
-        self.joined_users.append(user_id)
-
-    def decline_invite(self, user_id: UUID) -> None:
-        """User declines the game invite."""
-        if user_id in self.invited_users:
-            self.invited_users.remove(user_id)
 
     def remove_user(self, user_id: UUID) -> None:
         """
@@ -185,17 +130,9 @@ class GameAggregate:
         if user_id in self.joined_users:
             self.joined_users.remove(user_id)
 
-    def get_pending_invites_count(self) -> int:
-        """Get count of pending invites."""
-        return len(self.invited_users)
-
     def get_player_count(self) -> int:
-        """Get count of users who have joined the roster."""
+        """Get count of users in the roster."""
         return len(self.joined_users)
-
-    def is_user_invited(self, user_id: UUID) -> bool:
-        """Check if user has a pending invite."""
-        return user_id in self.invited_users
 
     def is_user_joined(self, user_id: UUID) -> bool:
         """Check if user has joined the game roster."""
@@ -206,8 +143,8 @@ class GameAggregate:
         return self.status == GameStatus.ACTIVE
 
     def can_be_deleted(self) -> bool:
-        """Business rule: Game can only be deleted if INACTIVE"""
-        return self.status == GameStatus.INACTIVE
+        """Business rule: Game can only be deleted if INACTIVE or FINISHED"""
+        return self.status in [GameStatus.INACTIVE, GameStatus.FINISHED]
 
     def update_name(self, name: str) -> None:
         """Update game name with validation"""
@@ -256,5 +193,28 @@ class GameAggregate:
             raise ValueError("Can only mark STOPPING games as INACTIVE")
 
         self.status = GameStatus.INACTIVE
+        self.stopped_at = datetime.utcnow()
+        self.session_id = None  # Clear MongoDB session reference
+
+    def finish_session(self) -> None:
+        """
+        Finish session permanently.
+        Can only be called on INACTIVE sessions (must pause first if active).
+        Sets status to FINISHED - session cannot be resumed.
+        """
+        if self.status != GameStatus.INACTIVE:
+            raise ValueError("Can only finish INACTIVE sessions. Pause the session first.")
+
+        self.status = GameStatus.FINISHED
+
+    def mark_finished(self) -> None:
+        """
+        Mark game as FINISHED (called by ETL after successful finish from ACTIVE state).
+        Alternative flow: ACTIVE → finish_from_active() → STOPPING → mark_finished() → FINISHED
+        """
+        if self.status != GameStatus.STOPPING:
+            raise ValueError("Can only mark STOPPING games as FINISHED")
+
+        self.status = GameStatus.FINISHED
         self.stopped_at = datetime.utcnow()
         self.session_id = None  # Clear MongoDB session reference

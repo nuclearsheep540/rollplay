@@ -30,6 +30,7 @@ class UserResponse(BaseModel):
     id: str
     email: str
     screen_name: Optional[str]
+    friend_code: Optional[str]
     created_at: datetime
     last_login: Optional[datetime]
 
@@ -43,6 +44,7 @@ class PublicUserResponse(BaseModel):
     """
     id: str
     screen_name: Optional[str]
+    friend_code: Optional[str]
     created_at: datetime
 
 

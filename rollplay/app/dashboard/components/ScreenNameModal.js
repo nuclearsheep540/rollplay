@@ -39,7 +39,7 @@ export default function ScreenNameModal({
             value={screenName}
             onChange={(e) => setScreenName(e.target.value)}
             placeholder="Enter your screen name..."
-            className="w-full px-3 py-2 border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+            className="w-full px-3 py-2 border border-slate-300 rounded-md text-slate-900 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
             disabled={updating}
             onKeyPress={handleKeyPress}
           />

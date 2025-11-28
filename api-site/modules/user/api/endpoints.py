@@ -34,6 +34,7 @@ def _to_user_response(user: UserAggregate) -> UserResponse:
         id=str(user.id),
         email=user.email,
         screen_name=user.screen_name,
+        friend_code=user.friend_code,
         created_at=user.created_at,
         last_login=user.last_login,
     )
@@ -110,6 +111,36 @@ async def get_user_by_uuid(
     return PublicUserResponse(
         id=str(user.id),
         screen_name=user.screen_name,
+        friend_code=user.friend_code,
+        created_at=user.created_at
+    )
+
+
+@router.get("/by-friend-code/{friend_code}", response_model=PublicUserResponse)
+async def get_user_by_friend_code(
+    friend_code: str,
+    current_user: UserAggregate = Depends(get_current_user_from_token),
+    user_repo: UserRepository = Depends(user_repository)
+):
+    """
+    Get public user info by friend code (case-insensitive).
+
+    Returns limited public user information without email or sensitive data.
+    Requires authentication to prevent abuse.
+    Friend code format: ABCD-1234 (8 characters: 4 letters + dash + 4 numbers)
+    """
+    user = user_repo.get_by_friend_code(friend_code)
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Friend code not found"
+        )
+
+    # Return only public information
+    return PublicUserResponse(
+        id=str(user.id),
+        screen_name=user.screen_name,
+        friend_code=user.friend_code,
         created_at=user.created_at
     )
 

@@ -16,45 +16,47 @@ import {
   faCopy
 } from '@fortawesome/free-solid-svg-icons'
 
-export default function FriendsManager({ user }) {
+export default function FriendsManager({ user, refreshTrigger }) {
   const [friends, setFriends] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
-  const [friendUuid, setFriendUuid] = useState('')
+  const [friendCode, setFriendCode] = useState('')
   const [sending, setSending] = useState(false)
   const [actionLoading, setActionLoading] = useState({})
   const [lookupUser, setLookupUser] = useState(null)
-  const [copiedUuid, setCopiedUuid] = useState(false)
+  const [copiedCode, setCopiedCode] = useState(false)
   const [lookupLoading, setLookupLoading] = useState(false)
   const [lookupError, setLookupError] = useState(null)
 
   useEffect(() => {
-    fetchFriends()
-  }, [])
+    // Only show loading on initial fetch (refreshTrigger = 0)
+    fetchFriends(refreshTrigger === 0)
+  }, [refreshTrigger])
 
-  // Validate UUID format
-  const isValidUUID = (uuid) => {
+  // Validate friend code or UUID format
+  const isValidIdentifier = (identifier) => {
     const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
-    return uuidRegex.test(uuid)
+    const friendCodeRegex = /^[a-z]+-[a-z]+$/i  // friendlywords format: word-word
+    return uuidRegex.test(identifier) || friendCodeRegex.test(identifier)
   }
 
-  // Copy UUID to clipboard
-  const handleCopyUuid = async () => {
-    await navigator.clipboard.writeText(user.id)
-    setCopiedUuid(true)
-    setTimeout(() => setCopiedUuid(false), 2000)
+  // Copy Friend Code to clipboard
+  const handleCopyCode = async () => {
+    await navigator.clipboard.writeText(user.friend_code)
+    setCopiedCode(true)
+    setTimeout(() => setCopiedCode(false), 2000)
   }
 
-  // Lookup user by UUID when valid UUID is entered
+  // Lookup user by Friend Code when valid code is entered
   useEffect(() => {
-    const lookupUserByUuid = async () => {
-      if (!friendUuid.trim()) {
+    const lookupUserByCode = async () => {
+      if (!friendCode.trim()) {
         setLookupUser(null)
         setLookupError(null)
         return
       }
 
-      if (!isValidUUID(friendUuid.trim())) {
+      if (!isValidIdentifier(friendCode.trim())) {
         setLookupUser(null)
         setLookupError(null)
         return
@@ -64,7 +66,7 @@ export default function FriendsManager({ user }) {
         setLookupLoading(true)
         setLookupError(null)
 
-        const response = await fetch(`/api/users/${friendUuid.trim()}`, {
+        const response = await fetch(`/api/users/by-friend-code/${friendCode.trim()}`, {
           credentials: 'include'
         })
 
@@ -88,13 +90,13 @@ export default function FriendsManager({ user }) {
     }
 
     // Debounce the lookup
-    const timeoutId = setTimeout(lookupUserByUuid, 500)
+    const timeoutId = setTimeout(lookupUserByCode, 500)
     return () => clearTimeout(timeoutId)
-  }, [friendUuid])
+  }, [friendCode])
 
-  const fetchFriends = async () => {
+  const fetchFriends = async (showLoading = true) => {
     try {
-      setLoading(true)
+      if (showLoading) setLoading(true)
 
       // Single API call to get all friendships categorized
       const response = await fetch('/api/friends/', {
@@ -121,8 +123,8 @@ export default function FriendsManager({ user }) {
   const sendFriendRequest = async (e) => {
     e.preventDefault()
 
-    if (!friendUuid.trim()) {
-      setError('Please enter a friend UUID')
+    if (!friendCode.trim()) {
+      setError('Please enter a friend code')
       return
     }
 
@@ -136,7 +138,7 @@ export default function FriendsManager({ user }) {
           'Content-Type': 'application/json',
         },
         credentials: 'include',
-        body: JSON.stringify({ friend_uuid: friendUuid.trim() })
+        body: JSON.stringify({ friend_identifier: friendCode.trim() })
       })
 
       if (!response.ok) {
@@ -144,7 +146,7 @@ export default function FriendsManager({ user }) {
         throw new Error(errorData.detail || 'Failed to send friend request')
       }
 
-      setFriendUuid('')
+      setFriendCode('')
       await fetchFriends()
     } catch (err) {
       console.error('Error sending friend request:', err)
@@ -270,14 +272,14 @@ export default function FriendsManager({ user }) {
           <div>
             <input
               type="text"
-              value={friendUuid}
-              onChange={(e) => setFriendUuid(e.target.value)}
-              placeholder="Enter friend's UUID"
+              value={friendCode}
+              onChange={(e) => setFriendCode(e.target.value)}
+              placeholder="Enter friend code (e.g., happy-elephant)"
               className="w-full px-4 py-2 bg-slate-700 border border-slate-600 text-slate-200 rounded focus:outline-none focus:ring-2 focus:ring-purple-500"
               disabled={sending}
             />
             {/* Real-time lookup feedback */}
-            {friendUuid && isValidUUID(friendUuid) && (
+            {friendCode && isValidIdentifier(friendCode) && (
               <div className="mt-2">
                 {lookupLoading && (
                   <p className="text-sm text-slate-500 flex items-center gap-2">
@@ -305,7 +307,7 @@ export default function FriendsManager({ user }) {
           <button
             type="submit"
             disabled={sending || !lookupUser}
-            className="w-full px-6 py-2 bg-purple-600 text-white rounded-lg border border-purple-500 hover:bg-purple-500 hover:shadow-lg hover:shadow-purple-500/30 disabled:bg-slate-600 disabled:border-slate-600 disabled:cursor-not-allowed transition-all font-semibold flex items-center justify-center gap-2"
+            className="w-full px-6 py-2 bg-purple-600 text-white rounded-lg border border-purple-500 hover:bg-purple-500 disabled:bg-slate-600 disabled:border-slate-600 disabled:cursor-not-allowed transition-all font-semibold flex items-center justify-center gap-2"
           >
             {sending ? (
               <>
@@ -322,15 +324,15 @@ export default function FriendsManager({ user }) {
         </form>
         <div className="mt-4 flex items-center gap-2">
           <p className="text-sm text-slate-400">
-            Your UUID: <code className="bg-slate-900 border border-slate-700 px-2 py-1 rounded text-xs font-mono text-purple-400">{user.id}</code>
+            Your Friend Code: <code className="bg-slate-900 border border-slate-700 px-2 py-1 rounded text-xs font-mono text-purple-400">{user.friend_code}</code>
           </p>
           <button
-            onClick={handleCopyUuid}
-            className="px-3 py-0.5 bg-purple-500/20 text-purple-400 border border-purple-500/30 rounded-lg font-semibold text-sm flex items-center"
-            title="Copy UUID"
+            onClick={handleCopyCode}
+            className="px-3 py-0.5 bg-purple-500/20 text-purple-400 border border-purple-500/30 rounded-lg font-semibold text-sm flex items-center hover:bg-purple-500/30 hover:border-purple-500/50 transition-all"
+            title="Copy Friend Code"
           >
             <FontAwesomeIcon icon={faCopy} className="text-xs" />
-            {copiedUuid ? 'Copied!' : 'Copy'}
+            {copiedCode ? 'Copied!' : 'Copy'}
           </button>
         </div>
       </div>
@@ -358,7 +360,7 @@ export default function FriendsManager({ user }) {
                 <button
                   onClick={() => removeFriend(friendship.friend_id)}
                   disabled={actionLoading[`remove-${friendship.friend_id}`]}
-                  className="px-4 py-2 bg-red-600 text-white rounded hover:bg-red-700 disabled:bg-slate-400 disabled:cursor-not-allowed transition-colors"
+                  className="px-4 py-2 bg-red-600 text-white rounded-lg border border-red-500 hover:bg-red-500 disabled:bg-slate-600 disabled:border-slate-600 disabled:cursor-not-allowed transition-all"
                 >
                   Remove
                 </button>
@@ -438,7 +440,7 @@ export default function FriendsManager({ user }) {
                 <button
                   onClick={() => removeFriend(request.recipient_id)}
                   disabled={actionLoading[`remove-${request.recipient_id}`]}
-                  className="px-4 py-2 bg-slate-600 text-white rounded hover:bg-slate-700 disabled:bg-slate-400 disabled:cursor-not-allowed transition-colors"
+                  className="px-4 py-2 bg-red-600 text-white rounded-lg border border-red-500 hover:bg-red-500 disabled:bg-slate-600 disabled:border-slate-600 disabled:cursor-not-allowed transition-all"
                 >
                   Cancel
                 </button>

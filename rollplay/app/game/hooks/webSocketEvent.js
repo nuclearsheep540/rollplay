@@ -8,9 +8,9 @@
  */
 
 // Import audio event handlers from the audio management module
-import { 
-  handleRemoteAudioPlay, 
-  handleRemoteAudioResume, 
+import {
+  handleRemoteAudioPlay,
+  handleRemoteAudioResume,
   handleRemoteAudioBatch,
   createAudioSendFunctions
 } from '../../audio_management/hooks/webSocketAudioEvents';
@@ -18,6 +18,51 @@ import {
 // =====================================
 // GAME EVENT HANDLERS
 // =====================================
+
+/**
+ * Handle initial state synchronization when client connects/reconnects
+ * This ensures the client has the current room state before receiving any other events
+ */
+export const handleInitialState = (data, handlers) => {
+  console.log("📦 Received initial state:", data);
+
+  const {
+    seat_layout,
+    dungeon_master,
+    combat_active,
+    seat_colors,
+    max_players
+  } = data;
+
+  // Set DM name
+  if (handlers.setDmSeat && dungeon_master) {
+    handlers.setDmSeat(dungeon_master);
+  }
+
+  // Set combat state
+  if (handlers.setCombatActive !== undefined) {
+    handlers.setCombatActive(combat_active || false);
+  }
+
+  // Set seat colors
+  if (handlers.setSeatColors && seat_colors) {
+    handlers.setSeatColors(seat_colors);
+  }
+
+  // Convert seat layout to frontend unified structure
+  if (seat_layout && handlers.setGameSeats && handlers.getCharacterData) {
+    const seats = seat_layout.map((playerName, index) => ({
+      seatId: index,
+      playerName: playerName,
+      characterData: playerName !== "empty" ? handlers.getCharacterData(playerName) : null,
+      isActive: false
+    }));
+
+    handlers.setGameSeats(seats);
+  }
+
+  console.log("✅ Initial state applied - client synced with server");
+};
 
 export const handleSeatChange = (data, { setGameSeats, getCharacterData }) => {
   console.log("received a new message with seat change:", data);
@@ -48,6 +93,54 @@ export const handleSeatCountChange = (data, { setGameSeats, getCharacterData }) 
   setGameSeats(updatedSeats);
   
   // Backend handles all logging now - no frontend log generation
+};
+
+/**
+ * Handle player character change during active session
+ * Updates the seat with new character data
+ */
+export const handlePlayerCharacterChanged = (data, { setGameSeats }) => {
+  console.log("received player character change:", data);
+  const {
+    player_name,
+    character_id,
+    character_name,
+    character_class,
+    character_race,
+    level,
+    hp_current,
+    hp_max,
+    ac
+  } = data;
+
+  // Update the seat that matches this player with new character data
+  setGameSeats(prevSeats =>
+    prevSeats.map(seat => {
+      // Handle both string and object seat formats
+      const seatPlayerName = typeof seat.playerName === 'string'
+        ? seat.playerName.toLowerCase()
+        : seat.playerName?.player_name?.toLowerCase();
+
+      if (seatPlayerName === player_name.toLowerCase()) {
+        return {
+          ...seat,
+          characterData: {
+            character_id,
+            character_name,
+            character_class,
+            character_race,
+            level,
+            hp_current,
+            hp_max,
+            ac
+          }
+        };
+      }
+      return seat;
+    })
+  );
+
+  console.log(`✅ Updated character for ${player_name} to ${character_name}`);
 };
 
 // Removed unused handleChatMessage function
@@ -673,7 +766,7 @@ export const handleSystemMessage = (data, {}) => {
   // Backend handles system message logging
 };
 
-export const handleSessionEnded = (data, { stopRemoteTrack, remoteTrackStates, handleRemoteAudioBatch }) => {
+export const handleSessionEnded = (data, { stopRemoteTrack, remoteTrackStates, handleRemoteAudioBatch, setSessionEndedData }) => {
   console.log("🛑 Session ended:", data);
   const { reason, message } = data;
 
@@ -706,14 +799,16 @@ export const handleSessionEnded = (data, { stopRemoteTrack, remoteTrackStates, h
     }
   }
 
-  // Show user-friendly message
-  alert(message || `This game session has ended: ${reason}`);
-
-  // Small delay to ensure audio stops and alert is dismissed
-  setTimeout(() => {
-    // Redirect to dashboard
-    window.location.href = '/dashboard';
-  }, 100);
+  // Show session ended modal with countdown
+  if (setSessionEndedData) {
+    setSessionEndedData({ message, reason });
+  } else {
+    // Fallback if modal setter not available
+    alert(message || `This game session has ended: ${reason}`);
+    setTimeout(() => {
+      window.location.href = '/dashboard';
+    }, 100);
+  }
 };
 
 // =====================================

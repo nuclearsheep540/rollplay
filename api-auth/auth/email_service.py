@@ -45,13 +45,10 @@ class EmailService:
                     formatted_code = f"{short_code[:3]} {short_code[3:]}" if len(short_code) == 6 else short_code
                     alt_auth_section += f"""
                         <div style="margin: 15px 0;">
-                            <p style="margin: 5px 0; font-weight: bold;">Quick Code (Recommended):</p>
-                            <div style="background-color: #fff; border: 2px solid #10b981; border-radius: 6px; padding: 15px; text-align: center; font-family: 'Courier New', monospace; font-size: 24px; font-weight: bold; color: #059669; letter-spacing: 3px;">
+                            <p style="margin: 5px 0; font-weight: bold;">Quick Code:</p>
+                            <div style="background-color: #f1f5f9; border: 2px solid #cbd5e1; border-radius: 6px; padding: 15px; text-align: center; font-family: 'Courier New', monospace; font-size: 24px; font-weight: bold; color: #1e293b; letter-spacing: 3px;">
                                 {formatted_code}
                             </div>
-                            <p style="color: #666; font-size: 12px; margin-top: 8px;">
-                                Enter this 6-character code on the login page
-                            </p>
                         </div>
                         """
                 

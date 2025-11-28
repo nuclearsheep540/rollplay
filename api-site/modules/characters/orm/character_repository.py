@@ -10,7 +10,8 @@ from modules.characters.domain.character_aggregate import (
     CharacterAggregate,
     AbilityScores,
     CharacterRace,
-    CharacterClass
+    CharacterClass,
+    CharacterClassInfo
 )
 
 
@@ -24,11 +25,21 @@ class CharacterRepository:
         """Helper to convert ORM model → Domain aggregate"""
         ability_scores = AbilityScores.from_dict(model.stats or {})
 
+        # Deserialize JSONB character_classes array → List[CharacterClassInfo]
+        # Format: [{"class": "Fighter", "level": 5}, {"class": "Rogue", "level": 3}]
+        character_classes = [
+            CharacterClassInfo(
+                character_class=CharacterClass(class_data['class']),
+                level=class_data['level']
+            )
+            for class_data in (model.character_classes or [])
+        ]
+
         return CharacterAggregate(
             id=model.id,
             user_id=model.user_id,
             character_name=model.character_name,
-            character_class=CharacterClass(model.character_class),
+            character_classes=character_classes,
             character_race=CharacterRace(model.character_race),
             level=model.level,
             ability_scores=ability_scores,
@@ -66,6 +77,16 @@ class CharacterRepository:
 
     def save(self, aggregate: CharacterAggregate) -> UUID:
         """Save character aggregate"""
+        # Serialize List[CharacterClassInfo] → JSONB array
+        # Format: [{"class": "Fighter", "level": 5}, {"class": "Rogue", "level": 3}]
+        character_classes_jsonb = [
+            {
+                'class': class_info.character_class.value,
+                'level': class_info.level
+            }
+            for class_info in aggregate.character_classes
+        ]
+
         if aggregate.id:
             # Update existing character
             character_model = (
@@ -78,7 +99,7 @@ class CharacterRepository:
 
             character_model.user_id = aggregate.user_id
             character_model.character_name = aggregate.character_name
-            character_model.character_class = aggregate.character_class.value
+            character_model.character_classes = character_classes_jsonb
             character_model.character_race = aggregate.character_race.value
             character_model.level = aggregate.level
             character_model.stats = aggregate.ability_scores.to_dict()
@@ -95,7 +116,7 @@ class CharacterRepository:
             character_model = CharacterModel(
                 user_id=aggregate.user_id,
                 character_name=aggregate.character_name,
-                character_class=aggregate.character_class.value,
+                character_classes=character_classes_jsonb,
                 character_race=aggregate.character_race.value,
                 level=aggregate.level,
                 stats=aggregate.ability_scores.to_dict(),
@@ -140,4 +161,17 @@ class CharacterRepository:
         character_model.is_deleted = character.is_deleted
         self.db.commit()
         return True
+
+    def get_by_active_game(self, game_id: UUID) -> List[CharacterAggregate]:
+        """
+        Get all characters locked to a specific game.
+
+        Used when unlocking characters after a game session ends.
+        """
+        models = (
+            self.db.query(CharacterModel)
+            .filter(CharacterModel.active_game == game_id)
+            .all()
+        )
+        return [self._model_to_aggregate(model) for model in models]
 

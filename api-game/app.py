@@ -429,7 +429,7 @@ async def create_session(request: SessionStartRequest):
         # Use game_id as MongoDB _id
         session_id = GameService.create_room(settings, room_id=request.game_id)
 
-        logger.info(f"✅ Created session {session_id} for game {request.game_id}")
+        logger.info(f"✅ Created session {session_id} for game {request.game_id} with {len(request.joined_user_ids)} joined players")
 
         return SessionStartResponse(
             success=True,
@@ -580,6 +580,77 @@ async def delete_session(game_id: str, keep_logs: bool = True):
 
     except Exception as e:
         logger.error(f"❌ Failed to delete session {game_id}: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.put("/game/{room_id}/player/character")
+async def update_player_character(room_id: str, character_data: dict):
+    """
+    Update a player's character data in the session.
+
+    Called by api-site when a player changes their character mid-session.
+    Updates the seat_layout to include character information.
+
+    Request:
+    {
+        "player_name": "username",
+        "user_id": "uuid",
+        "character_id": "uuid",
+        "character_name": "Aragorn",
+        "character_class": "Ranger",
+        "character_race": "Human",
+        "level": 5,
+        "hp_current": 20,
+        "hp_max": 25,
+        "ac": 15
+    }
+
+    Response:
+    {
+        "success": true,
+        "message": "Character updated"
+    }
+    """
+    try:
+        # Verify room exists
+        room = GameService.get_room(room_id)
+        if not room:
+            raise HTTPException(status_code=404, detail="Session not found")
+
+        # Update the character in seat layout
+        GameService.update_player_character(room_id, character_data)
+
+        # Broadcast character change to all clients via WebSocket
+        player_name = character_data.get("player_name", "unknown")
+        character_name = character_data.get("character_name", "unknown")
+
+        change_message = {
+            "event_type": "player_character_changed",
+            "data": {
+                "player_name": player_name,
+                "character_id": character_data.get("character_id"),
+                "character_name": character_name,
+                "character_class": character_data.get("character_class"),
+                "character_race": character_data.get("character_race"),
+                "level": character_data.get("level"),
+                "hp_current": character_data.get("hp_current"),
+                "hp_max": character_data.get("hp_max"),
+                "ac": character_data.get("ac")
+            }
+        }
+
+        await connection_manager.broadcast_to_room(room_id, change_message)
+        logger.info(f"✅ Updated character for {player_name} to {character_name} in room {room_id}")
+
+        return {
+            "success": True,
+            "message": "Character updated successfully"
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"❌ Failed to update character: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 

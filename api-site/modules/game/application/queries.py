@@ -29,23 +29,6 @@ class GetGamesByCampaign:
         return self.game_repo.get_by_campaign_id(campaign_id)
 
 
-class GetUserPendingInvites:
-    """Get all games where user has pending invite"""
-
-    def __init__(self, game_repository: GameRepository):
-        self.game_repo = game_repository
-
-    def execute(self, user_id: UUID) -> List[GameAggregate]:
-        """
-        Get all games where user is invited but hasn't joined yet.
-
-        Note: This queries all games and filters in memory.
-        For production, consider adding a database index or query.
-        """
-        all_games = self.game_repo.get_all()
-        return [game for game in all_games if game.is_user_invited(user_id)]
-
-
 class GetGamePlayers:
     """Get list of user IDs who have joined a game"""
 
@@ -62,7 +45,7 @@ class GetGamePlayers:
 
 
 class GetUserGames:
-    """Get all games where user is host, invited, or joined"""
+    """Get all games where user is host or joined"""
 
     def __init__(self, game_repository: GameRepository):
         self.game_repo = game_repository
@@ -71,8 +54,7 @@ class GetUserGames:
         """
         Get all games where user is either:
         - The host (DM)
-        - An invited player (pending invite in invited_users)
-        - A joined player (accepted invite in joined_users)
+        - A joined player (in joined_users)
         """
         all_games = self.game_repo.get_all()
         user_games = []
@@ -81,10 +63,7 @@ class GetUserGames:
             # Include if user is host
             if game.host_id == user_id:
                 user_games.append(game)
-            # Include if user has pending invite
-            elif game.is_user_invited(user_id):
-                user_games.append(game)
-            # Include if user has joined (accepted invite)
+            # Include if user has joined
             elif game.is_user_joined(user_id):
                 user_games.append(game)
 

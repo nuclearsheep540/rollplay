@@ -27,8 +27,30 @@ def register_websocket_routes(app: FastAPI):
         
         # Create room-scoped manager for this connection
         room_manager = RoomManager(manager, client_id)
-        
-        # Handle connection event and get result
+
+        # Send initial state to THIS client only (before broadcasting connection to others)
+        from gameservice import GameService
+        try:
+            room = GameService.get_room(client_id)
+            if room:
+                initial_state = {
+                    "event_type": "initial_state",
+                    "data": {
+                        "seat_layout": room.get("seat_layout", []),
+                        "dungeon_master": room.get("dungeon_master", ""),
+                        "combat_active": room.get("combat_active", False),
+                        "max_players": room.get("max_players", 8),
+                        "seat_colors": room.get("seat_colors", {})
+                    }
+                }
+                await websocket.send_json(initial_state)
+                print(f"📦 Sent initial state to {player_name}")
+            else:
+                print(f"⚠️ Room {client_id} not found, skipping initial state")
+        except Exception as e:
+            print(f"❌ Error sending initial state: {e}")
+
+        # Handle connection event and get result (broadcasts to ALL clients)
         result = await WebsocketEvent.player_connection(
             websocket=websocket,
             data={},
@@ -351,4 +373,4 @@ def register_websocket_routes(app: FastAPI):
             # Broadcast disconnect and seat change messages
             await room_manager.update_room_data(result.broadcast_message)
             if result.clear_prompt_message:  # This contains the seat change message
-                await room_manager.broadcast(result.clear_prompt_message)
+                await room_manager.update_room_data(result.clear_prompt_message)

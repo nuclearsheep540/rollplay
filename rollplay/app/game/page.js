@@ -6,7 +6,7 @@
 'use client'
 
 import { React, useEffect, useState, useMemo, useCallback, useRef, Suspense } from 'react'
-import { useSearchParams } from "next/navigation";
+import { useSearchParams, useRouter } from "next/navigation";
 import { getSeatColor } from '../utils/seatColors';
 
 import PlayerCard from "./components/PlayerCard";
@@ -22,7 +22,8 @@ import { useUnifiedAudio } from '../audio_management';
 import { MapDisplay, GridOverlay, useMapWebSocket } from '../map_management';
 
 function GameContent() {
-  const params = useSearchParams(); 
+  const params = useSearchParams();
+  const router = useRouter(); 
 
   const [room404, setRoom404] = useState(false)
   const [thisPlayer, setThisPlayer] = useState()
@@ -96,6 +97,9 @@ function GameContent() {
   const [gridEditMode, setGridEditMode] = useState(false); // Is DM editing grid dimensions?
   const [gridConfig, setGridConfig] = useState(null); // Current grid configuration
   const [liveGridOpacity, setLiveGridOpacity] = useState(0.2); // Live grid opacity for real-time updates
+
+  // Session ended modal state
+  const [sessionEndedData, setSessionEndedData] = useState(null); // { message, reason } when session ends
   
   // Debug wrapper for setGridConfig
   const debugSetGridConfig = (config) => {
@@ -258,50 +262,30 @@ function GameContent() {
   const checkPlayerRoles = async (roomId, user) => {
     try {
       console.log(`🔍 Initial role check for user: ${user.screen_name || user.email} (ID: ${user.id}) in room: ${roomId}`);
-      
-      // Get MongoDB-based roles (host, moderator) - can change during session
+
+      // Get MongoDB-based roles (host, moderator, DM) from active game session
       const playerName = user.screen_name || user.email;
       const mongoRolesResponse = await fetch(`/api/game/${roomId}/roles?playerName=${playerName}`);
       let isHost = false;
       let isModerator = false;
-      
+      let isDMRole = false;
+
       if (mongoRolesResponse.ok) {
         const mongoRoles = await mongoRolesResponse.json();
         isHost = mongoRoles.is_host;
         isModerator = mongoRoles.is_moderator;
-        console.log('📋 MongoDB roles (dynamic):', mongoRoles);
+        isDMRole = mongoRoles.is_dm;  // Use MongoDB DM flag
+        console.log('📋 MongoDB roles:', mongoRoles);
       } else {
         console.error('❌ Failed to fetch MongoDB roles:', mongoRolesResponse.status);
       }
-      
-      // Get PostgreSQL-based DM status - static, never changes during session
-      let isDMRole = false;
-      try {
-        const dmStatusResponse = await fetch(`/api/games/${roomId}/dm-status`, {
-          method: 'GET',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          credentials: 'include'
-        });
-        
-        if (dmStatusResponse.ok) {
-          const dmStatus = await dmStatusResponse.json();
-          isDMRole = dmStatus.is_dm;
-          console.log('🎭 PostgreSQL DM status (static):', dmStatus);
-        } else {
-          console.error('❌ Failed to fetch DM status:', dmStatusResponse.status);
-        }
-      } catch (error) {
-        console.error('Error checking DM status:', error);
-      }
-      
+
       // Set roles in component state
       setIsHost(isHost);
       setIsModerator(isModerator);
       setIsDM(isDMRole);
       console.log(`✅ Initial roles set - Host: ${isHost}, Moderator: ${isModerator}, DM: ${isDMRole}`);
-      
+
     } catch (error) {
       console.error('Error checking player roles:', error);
     }
@@ -390,6 +374,17 @@ function GameContent() {
       checkPlayerRoles(roomId, currentUser);
     }
   }, [currentUser, userLoading])
+
+  // Cleanup audio when component unmounts (user navigates away from game page)
+  useEffect(() => {
+    return () => {
+      console.log('🚪 Game page unmounting - cleaning up audio...');
+      if (cleanupAllAudio) {
+        cleanupAllAudio();
+      }
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // UPDATED: Seat count management with displaced player handling
   const setSeatCount = async (newSeatCount) => {
@@ -679,7 +674,8 @@ function GameContent() {
     loadRemoteAudioBuffer,
     audioBuffersRef,
     audioContextRef,
-    setClearPendingOperationCallback
+    setClearPendingOperationCallback,
+    cleanupAllAudio
   } = useUnifiedAudio();
 
   // Ref to hold the pending operation clearing function from AudioMixerPanel
@@ -729,7 +725,10 @@ function GameContent() {
     audioContextRef,
     
     // Remote audio state (for resume functionality)
-    remoteTrackStates
+    remoteTrackStates,
+
+    // Session ended modal
+    setSessionEndedData
   };
 
   // Initialize WebSocket hook with game context (after audio functions are available)
@@ -927,10 +926,6 @@ function GameContent() {
     }
   };
 
-  // Toggle campaign settings
-  const toggleCampaignSettings = () => {
-    console.log('Opening campaign settings...');
-  };
 
   // Handle clearing system messages
   const handleClearSystemMessages = async () => {
@@ -1200,15 +1195,8 @@ function GameContent() {
           <div className="campaign-title">The Curse of Strahd</div>
           <div className="location-breadcrumb">› Barovia Village › The Blood on the Vine Tavern</div>
         </div>
-        
+
         <div className="dm-controls-bar">
-          <div 
-            className="room-code" 
-            onClick={copyRoomCode}
-            title="Click to copy room code"
-          >
-            Room: {roomId}
-          </div>
           {/* Master Volume Control */}
           <div className="master-volume-control">
             <label htmlFor="master-volume" className="volume-label">
@@ -1244,24 +1232,24 @@ function GameContent() {
               </span>
             )}
           </div>
-          
+
           {/* UI Scale Toggle */}
           <div className="ui-scale-nav">
-            <button 
+            <button
               className={`scale-btn ${uiScale === 'small' ? 'active' : ''}`}
               onClick={() => setUIScale('small')}
               title="Small UI"
             >
               S
             </button>
-            <button 
+            <button
               className={`scale-btn ${uiScale === 'medium' ? 'active' : ''}`}
               onClick={() => setUIScale('medium')}
               title="Medium UI"
             >
               M
             </button>
-            <button 
+            <button
               className={`scale-btn ${uiScale === 'large' ? 'active' : ''}`}
               onClick={() => setUIScale('large')}
               title="Large UI"
@@ -1269,9 +1257,17 @@ function GameContent() {
               L
             </button>
           </div>
-          
-          <button className="control-btn">📝 Notes</button>
-          <button className="control-btn" onClick={toggleCampaignSettings}>⚙️ Campaign Settings</button>
+
+          <button
+            onClick={() => router.push('/dashboard?tab=games')}
+            className="flex items-center gap-2 px-4 py-2 bg-slate-700 hover:bg-slate-600 text-slate-200 rounded-lg border border-slate-600 transition-all text-sm"
+            title="Back to Dashboard"
+          >
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
+            </svg>
+            Back to Dashboard
+          </button>
         </div>
       </div>
 
@@ -1332,12 +1328,9 @@ function GameContent() {
             );
           })}
 
-          {/* Lobby Panel - shows connected users not in party (excluding DM) */}
-          <LobbyPanel 
-            lobbyUsers={lobbyUsers.filter(user => {
-              const userName = user.player_name || user.name || "";
-              return userName !== dmSeat; // Filter out DM from lobby
-            })}
+          {/* Lobby Panel - shows all connected users not in party */}
+          <LobbyPanel
+            lobbyUsers={lobbyUsers}
           />
 
           {/* Adventure Log component */}
@@ -1440,6 +1433,66 @@ function GameContent() {
         activePrompts={activePrompts}            // UPDATED: Pass active prompts array
         isDicePromptActive={isDicePromptActive}
       />
+
+      {/* Session Ended Modal with Countdown */}
+      {sessionEndedData && (
+        <SessionEndedModal
+          message={sessionEndedData.message}
+          reason={sessionEndedData.reason}
+        />
+      )}
+    </div>
+  );
+}
+
+// Session Ended Modal Component with countdown progress bar
+function SessionEndedModal({ message, reason }) {
+  const [progress, setProgress] = useState(0);
+  const redirectDelay = 5000; // 5 seconds
+
+  useEffect(() => {
+    const startTime = Date.now();
+
+    // Update progress bar
+    const interval = setInterval(() => {
+      const elapsed = Date.now() - startTime;
+      const newProgress = Math.min((elapsed / redirectDelay) * 100, 100);
+      setProgress(newProgress);
+    }, 50);
+
+    // Redirect after delay
+    const timeout = setTimeout(() => {
+      window.location.href = '/dashboard';
+    }, redirectDelay);
+
+    return () => {
+      clearInterval(interval);
+      clearTimeout(timeout);
+    };
+  }, []);
+
+  return (
+    <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50">
+      <div className="bg-slate-800 border border-slate-600 rounded-lg p-6 max-w-md w-full mx-4 shadow-xl">
+        <div className="text-center">
+          <div className="text-4xl mb-4">🎲</div>
+          <h2 className="text-xl font-bold text-white mb-2">Session Ended</h2>
+          <p className="text-slate-300 mb-4">
+            {message || `This game session has ended: ${reason}`}
+          </p>
+          <p className="text-slate-400 text-sm mb-4">
+            You will be redirected shortly
+          </p>
+
+          {/* Progress bar */}
+          <div className="w-full bg-slate-700 rounded-full h-2 overflow-hidden">
+            <div
+              className="bg-blue-500 h-full transition-all duration-50 ease-linear"
+              style={{ width: `${progress}%` }}
+            />
+          </div>
+        </div>
+      </div>
     </div>
   );
 }

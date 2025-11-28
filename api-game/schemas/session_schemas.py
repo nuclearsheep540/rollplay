@@ -2,6 +2,7 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 
 from pydantic import BaseModel
+from typing import List
 
 
 class SessionStartRequest(BaseModel):
@@ -9,6 +10,7 @@ class SessionStartRequest(BaseModel):
     game_id: str
     dm_username: str
     max_players: int = 8
+    joined_user_ids: List[str] = []  # List of user IDs who are already part of the game
 
 
 class SessionStartResponse(BaseModel):

@@ -31,7 +31,7 @@ export default function CreateCharacter() {
       })
 
       if (response.ok) {
-        router.push('/dashboard')
+        router.push('/dashboard?tab=characters')
       } else {
         const errorData = await response.json()
 
