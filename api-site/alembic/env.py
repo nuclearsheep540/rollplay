@@ -20,9 +20,12 @@ from shared.dependencies.db import Base
 # Import all models to ensure they're registered with SQLAlchemy
 try:
     from modules.user.model.user_model import User
+    from modules.user.model.friend_code_model import FriendCode
     from modules.characters.model.character_model import Character
     from modules.campaign.model.campaign_model import Campaign
     from modules.campaign.model.game_model import Game
+    from modules.friendship.model.friend_request_model import FriendRequestModel
+    from modules.friendship.model.friendship_model import FriendshipModel
     print("Models imported successfully")
 except ImportError as e:
     print(f"Error importing models: {e}")

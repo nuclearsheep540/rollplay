@@ -76,13 +76,18 @@ def _to_game_response(game: GameAggregate, db: Session) -> GameResponse:
     ).all()
 
     for joined_user, user, character in roster_query:
+        # Format character classes for multi-class support
+        character_class_str = None
+        if character and character.character_classes:
+            character_class_str = ' / '.join([cc.character_class.value for cc in character.character_classes])
+
         roster_data.append(RosterPlayerResponse(
             user_id=user.id,
             username=user.screen_name or user.email,
             character_id=character.id if character else None,
             character_name=character.character_name if character else None,
             character_level=character.level if character else None,
-            character_class=character.character_class if character else None,
+            character_class=character_class_str,
             character_race=character.character_race if character else None,
             joined_at=joined_user.joined_at
         ))
