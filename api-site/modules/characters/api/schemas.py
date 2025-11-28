@@ -5,7 +5,7 @@ from datetime import datetime
 from typing import Optional, Dict, List
 from pydantic import BaseModel, Field, validator
 
-from modules.characters.domain.character_aggregate import CharacterRace, CharacterClass
+from modules.characters.domain.character_aggregate import CharacterRace, CharacterClass, CharacterBackground
 
 
 # REQUEST SCHEMAS
@@ -44,6 +44,7 @@ class CharacterCreateRequest(BaseModel):
         description="Character classes (1-3 classes for multi-classing)"
     )
     character_race: CharacterRace = Field(..., description="D&D 5e character race")
+    background: Optional[CharacterBackground] = Field(None, description="D&D 2024 character background")
     level: int = Field(1, ge=1, le=20, description="Total character level (1-20)")
     hp_max: int = Field(1, ge=1, le=999, description="Character max hit points (1-999)")
     hp_current: int = Field(1, ge=-100, le=999, description="Character current hit points (-100 to 999, negative for unconscious)")
@@ -51,6 +52,10 @@ class CharacterCreateRequest(BaseModel):
     ability_scores: Optional[AbilityScoresRequest] = Field(
         None,
         description="Ability scores (defaults to 10 for all if omitted)"
+    )
+    origin_ability_bonuses: Optional[Dict[str, int]] = Field(
+        None,
+        description="D&D 2024 origin ability bonuses from background (e.g., {'strength': 2, 'constitution': 1})"
     )
 
     @validator('character_classes')
@@ -99,8 +104,10 @@ class CharacterResponse(BaseModel):
     character_name: str
     character_classes: List[CharacterClassInfoResponse]  # List of classes with levels
     character_race: str   # Enum value as string
+    background: Optional[str] = None  # D&D 2024 background (enum value as string)
     level: int  # Total character level (sum of all class levels)
     ability_scores: Dict[str, int]  # Serialized AbilityScores
+    origin_ability_bonuses: Optional[Dict[str, int]] = None  # D&D 2024 origin bonuses
     created_at: datetime
     updated_at: datetime
     display_name: str  # Formatted name with all classes (e.g., "Aragorn (Level 8 Fighter 5 / Ranger 3)")

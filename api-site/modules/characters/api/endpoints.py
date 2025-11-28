@@ -43,8 +43,10 @@ def _to_character_response(character: CharacterAggregate) -> CharacterResponse:
         character_name=character.character_name,
         character_classes=character_classes_response,  # List of classes
         character_race=character.character_race.value,    # Enum → string
+        background=character.background.value if character.background else None,  # D&D 2024
         level=character.level,  # Total character level
         ability_scores=character.ability_scores.to_dict(),  # AbilityScores → dict
+        origin_ability_bonuses=character.origin_ability_bonuses,  # D&D 2024
         created_at=character.created_at,
         updated_at=character.updated_at,
         display_name=character.get_display_name(),  # Formatted with all classes
@@ -92,8 +94,10 @@ async def create_character(
             character_name=request.name,
             character_classes=character_classes,  # List of classes
             character_race=request.character_race,
+            background=request.background,  # D&D 2024
             level=request.level,
             ability_scores=ability_scores,
+            origin_ability_bonuses=request.origin_ability_bonuses,  # D&D 2024
             hp_current=request.hp_current,
             hp_max=request.hp_max,
             ac=request.ac

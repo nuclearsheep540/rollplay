@@ -29,7 +29,13 @@ This document captures the D&D 2024 Player's Handbook rules relevant to characte
 
 ---
 
-## ✅ Background Bonuses (CONFIRMED - NEW IN 2024)
+## ✅ Backgrounds (CONFIRMED - NEW IN 2024)
+
+**What Backgrounds Provide**:
+1. **Ability Score Bonuses** (one-time at character creation)
+2. **Origin Feat** (one feat from the Origin category)
+
+### Ability Score Bonuses
 
 **Rule**: Every background provides one-time ability score increases at character creation
 
@@ -38,15 +44,46 @@ This document captures the D&D 2024 Player's Handbook rules relevant to characte
 - Increase three different scores by +1 each
 
 **Constraints**:
+- Background lists **three specific abilities** - bonuses must go to those 3
 - Applied AFTER point-buy/rolling/standard array
 - Cannot raise a score above 20
 - One-time bonus (not repeatable)
 
 **Page 38**: "After assigning your ability scores, adjust them according to your background. Your background lists three abilities; increase one of those scores by 2 and a different one by 1, or increase all three by 1."
 
-**Implementation Status**: ⚠️ NOT YET IMPLEMENTED
-- Backend: Need `origin_ability_bonus` field
-- Frontend: Need background selection + bonus UI
+### Background → Ability Mappings (Chapter 4, Pages 176-184)
+
+| Background | Ability Scores | Origin Feat |
+|------------|----------------|-------------|
+| **Acolyte** | Intelligence, Wisdom, Charisma | Magic Initiate (Cleric) |
+| **Artisan** | Strength, Dexterity, Intelligence | Crafter |
+| **Charlatan** | Dexterity, Constitution, Charisma | Skilled |
+| **Criminal** | Dexterity, Constitution, Intelligence | Alert |
+| **Entertainer** | Strength, Dexterity, Charisma | Musician |
+| **Farmer** | Strength, Constitution, Wisdom | Tough |
+| **Guard** | Strength, Intelligence, Wisdom | Alert |
+| **Guide** | Dexterity, Constitution, Wisdom | Magic Initiate (Druid) |
+| **Hermit** | Constitution, Wisdom, Charisma | Healer |
+| **Merchant** | Constitution, Intelligence, Charisma | Lucky |
+| **Noble** | Strength, Intelligence, Charisma | Skilled |
+| **Sage** | Constitution, Intelligence, Wisdom | Magic Initiate (Wizard) |
+| **Sailor** | Strength, Dexterity, Wisdom | Tavern Brawler |
+| **Scribe** | Dexterity, Intelligence, Wisdom | Skilled |
+| **Soldier** | Strength, Dexterity, Constitution | Savage Attacker |
+| **Wayfarer** | Dexterity, Wisdom, Charisma | Lucky |
+
+### Origin Feats
+
+**Rule**: Each background grants one Origin feat at Level 1
+
+**Available Origin Feats** (from Chapter 5):
+- Alert, Crafter, Healer, Lucky, Magic Initiate, Musician, Savage Attacker, Skilled, Tavern Brawler, Tough
+
+**Implementation Status**: ⚠️ PARTIALLY IMPLEMENTED
+- ✅ Backend: background and origin_ability_bonuses fields created
+- ✅ Frontend: OriginBonusAllocator component created
+- ❌ **BLOCKED**: Need background → ability mappings (which 3 abilities each background grants)
+- ❌ **NOT STARTED**: Origin feat selection system
 
 ---
 
@@ -72,25 +109,56 @@ This document captures the D&D 2024 Player's Handbook rules relevant to characte
 
 ---
 
-## ⚠️ Feats and Ability Score Increases (PARTIAL INFO)
+## ✅ Feats System (CONFIRMED - Chapter 5, Pages 198-210)
 
-**What We Know**:
-1. **Backgrounds provide feats at Level 1** (Page 36)
-2. **Feats CAN increase ability scores** - they are not separate systems (Page 42)
-3. **Class feature tables** (in Chapter 3) show when feats are granted
+### Feat Acquisition
+**Sources of Feats**:
+1. **Background**: Gives you one Origin feat at character creation (Level 1)
+2. **Class Levels**: "At certain levels, your class gives you the Ability Score Improvement feat or the choice of another feat for which you qualify"
+3. **Prerequisites**: Must meet feat prerequisites unless a feature allows you to bypass them
 
-**What We DON'T Know** (requires Chapter 3 class tables):
-- Which levels each class gets feats
-- Whether Fighter gets extra feats (2014: levels 6, 14)
-- Whether Rogue gets extra feat (2014: level 10)
-- Specific feat options available
+### Feat Categories (Pages 199-211)
+**Origin Feats** (11 total - gained from backgrounds):
+- Alert, Crafter, Healer, Lucky, Magic Initiate*, Musician, Savage Attacker, Skilled*, Tavern Brawler, Tough
 
-**Page 42**: "If you choose a feat that increases one or more of your ability scores, your ability modifier also changes if the new score is an even number."
+**General Feats** (50+ feats):
+- Most feats fall into this category
+- Prerequisite: Level 4+
+- Many include +1 ability score increase
+- Examples: Ability Score Improvement*, Actor, Athlete, Charger, Chef, Crossbow Expert, etc.
+
+**Fighting Style Feats** (9 total):
+- Prerequisite: Fighting Style Feature (class-specific)
+- Examples: Archery, Defense, Dueling, Great Weapon Fighting, Two-Weapon Fighting, etc.
+
+**Epic Boon Feats** (11 total):
+- Prerequisite: Level 19+
+- Can increase ability scores to maximum of 30 (breaking the normal 20 cap)
+- Examples: Boon of Combat Prowess, Boon of Fortitude, Boon of Speed, etc.
+
+### Key Feat Rules
+**Taking Feats**:
+- Can only take a feat once unless marked with asterisk (*) as "Repeatable"
+- Repeatable feats: Ability Score Improvement, Elemental Adept, Magic Initiate, Skilled
+
+**Ability Score Improvement Feat** (Page 202):
+- General Feat (Prerequisite: Level 4+)
+- Increase one ability score by 2, OR increase two ability scores by 1
+- Cannot increase ability score above 20 (unless Epic Boon)
+- **Repeatable**: Can take this feat more than once
+
+**Class Prerequisites**:
+- "If a prerequisite includes a class, you must have at least 1 level in that class to take the feat"
+
+### What We Still DON'T Know (Requires Chapter 3)
+- ❌ Which specific levels each class grants feats
+- ❌ Whether all classes get feats at same levels
+- ❌ Whether Fighter/Rogue get extra feats (as in 2014)
 
 **Implementation Status**: ❌ NOT IMPLEMENTED
-- Requires full class progression data from Chapter 3
-- Feat selection system needed
-- Decision: Choose feat OR ability score increase
+- Blocked on: Class progression tables from Chapter 3
+- Need: Feat selection UI at appropriate levels
+- Need: Feat prerequisite validation system
 
 ---
 

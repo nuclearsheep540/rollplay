@@ -5,7 +5,7 @@
 
 'use client'
 
-import { useState, useRef } from 'react'
+import { useState } from 'react'
 import { Combobox as HeadlessCombobox } from '@headlessui/react'
 
 /**
@@ -19,6 +19,7 @@ import { Combobox as HeadlessCombobox } from '@headlessui/react'
  * @param {Function} onChange - Callback when selection changes
  * @param {string} placeholder - Placeholder text
  * @param {string} label - Label for the input
+ * @param {string} helperText - Optional helper text below label
  * @param {boolean} required - Whether the field is required
  */
 export default function Combobox({
@@ -27,18 +28,10 @@ export default function Combobox({
   onChange,
   placeholder = 'Select an option...',
   label,
+  helperText,
   required = false
 }) {
   const [query, setQuery] = useState('')
-  const buttonRef = useRef(null)
-
-  const handleInputFocus = () => {
-    setQuery('')
-    // Trigger button click to open dropdown
-    if (buttonRef.current) {
-      buttonRef.current.click()
-    }
-  }
 
   // Filter options based on user input
   const filteredOptions =
@@ -59,34 +52,36 @@ export default function Combobox({
           {required && <span className="text-red-500 ml-1">*</span>}
         </label>
       )}
+      {helperText && (
+        <p className="text-xs text-gray-500 mb-2">{helperText}</p>
+      )}
 
       <HeadlessCombobox value={value} onChange={onChange}>
         <div className="relative">
-          <HeadlessCombobox.Input
-            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm text-gray-900"
-            displayValue={() => selectedOption?.label || ''}
-            onChange={(event) => setQuery(event.target.value)}
-            onFocus={handleInputFocus}
-            placeholder={placeholder}
-            required={required}
-          />
-
-          <HeadlessCombobox.Button ref={buttonRef} className="absolute inset-y-0 right-0 flex items-center pr-2">
-            <svg
-              className="h-5 w-5 text-gray-400"
-              viewBox="0 0 20 20"
-              fill="currentColor"
-              aria-hidden="true"
-            >
-              <path
-                fillRule="evenodd"
-                d="M10 3a.75.75 0 01.55.24l3.25 3.5a.75.75 0 11-1.1 1.02L10 4.852 7.3 7.76a.75.75 0 01-1.1-1.02l3.25-3.5A.75.75 0 0110 3zm-3.76 9.2a.75.75 0 011.06.04l2.7 2.908 2.7-2.908a.75.75 0 111.1 1.02l-3.25 3.5a.75.75 0 01-1.1 0l-3.25-3.5a.75.75 0 01.04-1.06z"
-                clipRule="evenodd"
-              />
-            </svg>
+          <HeadlessCombobox.Button as="div" className="relative cursor-pointer">
+            <HeadlessCombobox.Input
+              className="w-full px-3 py-2 pr-10 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm text-gray-900 bg-white cursor-pointer"
+              displayValue={() => selectedOption?.label || ''}
+              onChange={(event) => setQuery(event.target.value)}
+              placeholder={placeholder}
+            />
+            <span className="absolute inset-y-0 right-0 flex items-center pr-2 pointer-events-none">
+              <svg
+                className="h-5 w-5 text-gray-400"
+                viewBox="0 0 20 20"
+                fill="currentColor"
+                aria-hidden="true"
+              >
+                <path
+                  fillRule="evenodd"
+                  d="M10 3a.75.75 0 01.55.24l3.25 3.5a.75.75 0 11-1.1 1.02L10 4.852 7.3 7.76a.75.75 0 01-1.1-1.02l3.25-3.5A.75.75 0 0110 3zm-3.76 9.2a.75.75 0 011.06.04l2.7 2.908 2.7-2.908a.75.75 0 111.1 1.02l-3.25 3.5a.75.75 0 01-1.1 0l-3.25-3.5a.75.75 0 01.04-1.06z"
+                  clipRule="evenodd"
+                />
+              </svg>
+            </span>
           </HeadlessCombobox.Button>
 
-          <HeadlessCombobox.Options className="absolute z-10 mt-1 max-h-60 w-full overflow-auto rounded-md bg-white py-1 text-base shadow-lg ring-1 ring-black ring-opacity-5 focus:outline-none sm:text-sm">
+          <HeadlessCombobox.Options className="absolute z-50 mt-1 max-h-60 w-full overflow-auto rounded-md bg-white py-1 text-base shadow-lg ring-1 ring-black ring-opacity-5 focus:outline-none sm:text-sm">
             {filteredOptions.length === 0 && query !== '' ? (
               <div className="relative cursor-default select-none px-4 py-2 text-gray-700">
                 Nothing found.
@@ -96,23 +91,15 @@ export default function Combobox({
                 <HeadlessCombobox.Option
                   key={option.value}
                   value={option.value}
-                  className={({ active }) =>
-                    `relative cursor-pointer select-none py-2 pl-10 pr-4 ${
-                      active ? 'bg-indigo-600 text-white' : 'text-gray-900'
-                    }`
-                  }
+                  className="relative cursor-pointer select-none py-2 pl-10 pr-4 hover:bg-indigo-600 hover:text-white text-gray-900 data-[focus]:bg-indigo-600 data-[focus]:text-white"
                 >
-                  {({ selected, active }) => (
+                  {({ selected }) => (
                     <>
                       <span className={`block truncate ${selected ? 'font-medium' : 'font-normal'}`}>
                         {option.label}
                       </span>
                       {selected && (
-                        <span
-                          className={`absolute inset-y-0 left-0 flex items-center pl-3 ${
-                            active ? 'text-white' : 'text-indigo-600'
-                          }`}
-                        >
+                        <span className="absolute inset-y-0 left-0 flex items-center pl-3 text-indigo-600 data-[focus]:text-white">
                           <svg className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
                             <path
                               fillRule="evenodd"

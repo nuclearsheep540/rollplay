@@ -6,6 +6,7 @@
 'use client'
 
 import { useState, useEffect, Suspense } from 'react'
+import { useSearchParams } from 'next/navigation'
 import CampaignManager from './components/CampaignManager'
 import CharacterManager from './components/CharacterManager'
 import ProfileManager from './components/ProfileManager'
@@ -16,7 +17,9 @@ import ScreenNameModal from './components/ScreenNameModal'
 import { useAuth } from './hooks/useAuth'
 
 function DashboardContent() {
-  const [activeSection, setActiveSection] = useState('campaigns')
+  const searchParams = useSearchParams()
+  const tabParam = searchParams.get('tab')
+  const [activeSection, setActiveSection] = useState(tabParam || 'campaigns')
   const [refreshTrigger, setRefreshTrigger] = useState(0)
 
   // Use auth hook for all authentication-related state and logic

@@ -11,7 +11,8 @@ from modules.characters.domain.character_aggregate import (
     AbilityScores,
     CharacterRace,
     CharacterClass,
-    CharacterClassInfo
+    CharacterClassInfo,
+    CharacterBackground
 )
 
 
@@ -25,20 +26,24 @@ class CreateCharacter:
         character_name: str,
         character_classes: List[CharacterClassInfo],
         character_race: CharacterRace,
+        background: Optional[CharacterBackground] = None,
         level: int = 1,
         ability_scores: Optional[AbilityScores] = None,
+        origin_ability_bonuses: Optional[dict] = None,
         hp_max: int = 10,
         hp_current: int = 10,
         ac: int = 10
     ) -> CharacterAggregate:
-        """Create a new character with multi-class support"""
+        """Create a new character with multi-class support and D&D 2024 background bonuses"""
         character = CharacterAggregate.create(
             user_id=user_id,
             character_name=character_name,
             character_classes=character_classes,  # List of classes
             character_race=character_race,
+            background=background,  # D&D 2024
             level=level,
             ability_scores=ability_scores,
+            origin_ability_bonuses=origin_ability_bonuses,  # D&D 2024
             active_game=None,
             hp_max=hp_max,
             hp_current=hp_current,

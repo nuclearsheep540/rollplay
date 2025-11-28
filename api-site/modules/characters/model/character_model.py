@@ -20,6 +20,8 @@ class Character(Base):
     character_race = Column(String(50), nullable=False)
     level = Column(Integer, default=1, nullable=False)
     stats = Column(JSONB, nullable=False, default=lambda: {})  # Ability scores (changed from JSON to JSONB)
+    background = Column(String(50), nullable=True)  # D&D 2024: Character background
+    origin_ability_bonuses = Column(JSONB, nullable=True, default=lambda: {})  # D&D 2024: Ability bonuses from background
     created_at = Column(DateTime(timezone=True), nullable=False)
     updated_at = Column(DateTime(timezone=True), onupdate=func.now(), nullable=False)
     is_deleted = Column(Boolean, default=False, nullable=False)  # Soft delete flag

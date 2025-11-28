@@ -121,6 +121,29 @@ class CharacterClass(str, Enum):
         return self.value
 
 
+class CharacterBackground(str, Enum):
+    """D&D 2024 Player's Handbook backgrounds"""
+    ACOLYTE = "Acolyte"
+    ARTISAN = "Artisan"
+    CHARLATAN = "Charlatan"
+    CRIMINAL = "Criminal"
+    ENTERTAINER = "Entertainer"
+    FARMER = "Farmer"
+    GUARD = "Guard"
+    GUIDE = "Guide"
+    HERMIT = "Hermit"
+    MERCHANT = "Merchant"
+    NOBLE = "Noble"
+    SAGE = "Sage"
+    SAILOR = "Sailor"
+    SCRIBE = "Scribe"
+    SOLDIER = "Soldier"
+    WAYFARER = "Wayfarer"
+
+    def __str__(self) -> str:
+        return self.value
+
+
 @dataclass(frozen=True)
 class CharacterClassInfo:
     """
@@ -150,6 +173,10 @@ class CharacterAggregate:
     Locking:
     - active_game: UUID of game character is locked to (can only be in one game at a time)
     - is_alive: Whether character is alive (for D&D death mechanics)
+
+    D&D 2024 Origin:
+    - background: Character's background (provides feat + ability bonuses)
+    - origin_ability_bonuses: Dict of ability score bonuses from background (+2/+1 or +1/+1/+1)
     """
     id: Optional[UUID]
     user_id: UUID
@@ -163,13 +190,16 @@ class CharacterAggregate:
     hp_max: int
     hp_current: int
     ac: int
+    background: Optional[CharacterBackground] = None  # D&D 2024: Character background
+    origin_ability_bonuses: Dict[str, int] = None  # D&D 2024: Ability bonuses from background
     is_deleted: bool = False
     active_game: Optional[UUID] = None  # Game character is locked to
     is_alive: bool = True  # Character alive status (D&D death mechanics)
 
     def __post_init__(self):
-        """Validate multi-class rules on aggregate creation/modification"""
+        """Validate multi-class and origin bonus rules on aggregate creation/modification"""
         self._validate_multiclass()
+        self._validate_origin_bonuses()
 
     def _validate_multiclass(self):
         """
@@ -199,6 +229,48 @@ class CharacterAggregate:
         if len(class_names) != len(set(class_names)):
             raise ValueError("Character cannot have duplicate classes")
 
+    def _validate_origin_bonuses(self):
+        """
+        Validate D&D 2024 origin ability bonuses business rules.
+
+        Rules:
+        - If origin_ability_bonuses provided, must sum to exactly 3 points
+        - Valid patterns: +2/+1 (two abilities) or +1/+1/+1 (three abilities)
+        - Ability names must be valid (str, dex, con, int, wis, cha)
+        - Cannot apply bonuses that would exceed max 20 for any ability
+        - Bonuses must be positive integers
+        """
+        if not self.origin_ability_bonuses:
+            # No bonuses provided is valid (optional field)
+            return
+
+        valid_abilities = {'strength', 'dexterity', 'constitution', 'intelligence', 'wisdom', 'charisma'}
+
+        # Validate ability names
+        for ability in self.origin_ability_bonuses.keys():
+            if ability not in valid_abilities:
+                raise ValueError(f"Invalid ability name '{ability}' in origin bonuses")
+
+        # Validate bonuses are positive integers
+        for ability, bonus in self.origin_ability_bonuses.items():
+            if not isinstance(bonus, int) or bonus < 0:
+                raise ValueError(f"Origin bonus for {ability} must be a positive integer (got {bonus})")
+
+        # Validate total points
+        total_bonus = sum(self.origin_ability_bonuses.values())
+        if total_bonus != 3:
+            raise ValueError(f"Origin ability bonuses must sum to exactly 3 points (got {total_bonus})")
+
+        # Validate no ability exceeds 20 after bonuses
+        for ability, bonus in self.origin_ability_bonuses.items():
+            base_score = getattr(self.ability_scores, ability)
+            final_score = base_score + bonus
+            if final_score > 20:
+                raise ValueError(
+                    f"{ability.capitalize()} would exceed max 20 with bonus "
+                    f"(base {base_score} + {bonus} = {final_score})"
+                )
+
     @classmethod
     def create(
         cls,
@@ -212,6 +284,8 @@ class CharacterAggregate:
         ac: int,
         level: int = 1,
         ability_scores: Optional[AbilityScores] = None,
+        background: Optional[CharacterBackground] = None,  # D&D 2024
+        origin_ability_bonuses: Optional[Dict[str, int]] = None,  # D&D 2024
     ) -> 'CharacterAggregate':
         """
         Create new character with business rules validation.
@@ -270,6 +344,8 @@ class CharacterAggregate:
             ability_scores=ability_scores,
             created_at=now,
             updated_at=now,
+            background=background,  # D&D 2024
+            origin_ability_bonuses=origin_ability_bonuses or {},  # D&D 2024, default to empty dict
             is_deleted=False,
             active_game=None,  # New characters not locked to any game
             is_alive=True,  # New characters start alive
@@ -281,6 +357,24 @@ class CharacterAggregate:
     def is_owned_by(self, user_id: UUID) -> bool:
         """Check if character is owned by specific user"""
         return self.user_id == user_id
+
+    def get_final_ability_scores(self) -> Dict[str, int]:
+        """
+        Get final ability scores with origin bonuses applied.
+
+        Returns dict with base + origin bonus for each ability.
+        Example: {"strength": 17, "dexterity": 14, ...}
+        """
+        base_scores = self.ability_scores.to_dict()
+
+        if not self.origin_ability_bonuses:
+            return base_scores
+
+        final_scores = base_scores.copy()
+        for ability, bonus in self.origin_ability_bonuses.items():
+            final_scores[ability] = base_scores[ability] + bonus
+
+        return final_scores
 
     def soft_delete(self):
         """Soft delete the character"""

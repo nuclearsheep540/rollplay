@@ -27,20 +27,37 @@ import {
 export default function PointBuyCalculator({
   scores,
   onChange,
+  originBonuses = {},
   disabled = false
 }) {
-  const validation = validatePointBuy(scores)
+  // Calculate base scores (remove bonuses for validation)
+  const getBaseScores = () => {
+    const base = { ...scores }
+    Object.entries(originBonuses).forEach(([ability, bonus]) => {
+      base[ability] = (base[ability] || 10) - bonus
+    })
+    return base
+  }
+
+  const baseScores = getBaseScores()
+  const validation = validatePointBuy(baseScores)
 
   const handleScoreChange = (ability, newValue) => {
-    // Validate point-buy range (8-15)
-    if (newValue < POINT_BUY_MIN || newValue > POINT_BUY_MAX) {
+    // Calculate what the base score would be (subtract bonus)
+    const bonus = originBonuses[ability] || 0
+    const newBaseValue = newValue - bonus
+
+    // Validate point-buy range on BASE score (8-15)
+    if (newBaseValue < POINT_BUY_MIN || newBaseValue > POINT_BUY_MAX) {
       return
     }
 
     const newScores = { ...scores, [ability]: newValue }
+    const newBaseScores = getBaseScores()
+    newBaseScores[ability] = newBaseValue
 
-    // Check if new scores are within budget
-    const newValidation = validatePointBuy(newScores)
+    // Check if new BASE scores are within budget
+    const newValidation = validatePointBuy(newBaseScores)
     if (newValidation.valid) {
       onChange(newScores)
     }
@@ -48,12 +65,22 @@ export default function PointBuyCalculator({
 
   const handleReset = () => {
     const defaults = getDefaultPointBuyScores()
-    onChange(defaults)
+    // Add origin bonuses back to the reset values (we're working with display scores)
+    const displayDefaults = { ...defaults }
+    Object.entries(originBonuses).forEach(([ability, bonus]) => {
+      displayDefaults[ability] = defaults[ability] + bonus
+    })
+    onChange(displayDefaults)
   }
 
   const handleRecommended = () => {
     const recommended = getRecommendedScores()
-    onChange(recommended)
+    // Add origin bonuses back to the recommended values (we're working with display scores)
+    const displayRecommended = { ...recommended }
+    Object.entries(originBonuses).forEach(([ability, bonus]) => {
+      displayRecommended[ability] = recommended[ability] + bonus
+    })
+    onChange(displayRecommended)
   }
 
   const abilities = [
@@ -103,18 +130,22 @@ export default function PointBuyCalculator({
 
       {/* Ability scores grid */}
       <div className="grid grid-cols-2 md:grid-cols-3 gap-6">
-        {abilities.map(({ key, label }) => (
-          <NumericStepper
-            key={key}
-            label={label}
-            value={scores[key]}
-            onChange={(val) => handleScoreChange(key, val)}
-            min={POINT_BUY_MIN}
-            max={POINT_BUY_MAX}
-            disabled={disabled}
-            showModifier={true}
-          />
-        ))}
+        {abilities.map(({ key, label }) => {
+          const bonus = originBonuses[key] || 0
+          return (
+            <NumericStepper
+              key={key}
+              label={label}
+              value={scores[key]}
+              onChange={(val) => handleScoreChange(key, val)}
+              min={POINT_BUY_MIN + bonus}
+              max={POINT_BUY_MAX + bonus}
+              disabled={disabled}
+              showModifier={true}
+              hasBonus={bonus > 0}
+            />
+          )
+        })}
       </div>
 
       {/* Budget warning */}
@@ -130,11 +161,6 @@ export default function PointBuyCalculator({
           ✓ All 27 points allocated!
         </div>
       )}
-
-      {/* Info */}
-      <div className="text-xs text-gray-500 italic">
-        💡 D&D 2024 point-buy: 27 points for base scores (8-15). Background bonuses applied after.
-      </div>
     </div>
   )
 }

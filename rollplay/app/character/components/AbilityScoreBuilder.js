@@ -22,6 +22,7 @@ import { getDefaultPointBuyScores } from '../utils/pointBuyCalculations'
 export default function AbilityScoreBuilder({
   scores,
   onChange,
+  originBonuses = {},
   disabled = false
 }) {
   const [mode, setMode] = useState('manual')
@@ -29,12 +30,16 @@ export default function AbilityScoreBuilder({
   const handleModeChange = (newMode) => {
     setMode(newMode)
 
-    // When switching to point-buy, initialize with default scores if needed
+    // When switching to point-buy, always reset to default valid scores
+    // This ensures we start with a valid point-buy allocation (all 8s)
     if (newMode === 'point-buy') {
-      const hasInvalidScores = Object.values(scores).some(s => s < 8 || s > 15)
-      if (hasInvalidScores) {
-        onChange(getDefaultPointBuyScores())
-      }
+      const defaults = getDefaultPointBuyScores()
+      // Add origin bonuses back to the reset values
+      const displayDefaults = { ...defaults }
+      Object.entries(originBonuses).forEach(([ability, bonus]) => {
+        displayDefaults[ability] = defaults[ability] + bonus
+      })
+      onChange(displayDefaults)
     }
   }
 
@@ -62,6 +67,14 @@ export default function AbilityScoreBuilder({
         <label className="block text-sm font-medium text-gray-700 mb-2">
           Ability Score Entry Method
         </label>
+
+        {/* Single info banner for all modes */}
+        {Object.keys(originBonuses).length > 0 && (
+          <div className="mb-3 text-sm text-indigo-600 bg-indigo-50 p-3 rounded-lg border border-indigo-200">
+            Displayed scores include your background bonuses. Point-buy calculations and roll validations are based on your base scores only.
+          </div>
+        )}
+
         <div className="flex gap-2">
           <button
             type="button"
@@ -120,6 +133,7 @@ export default function AbilityScoreBuilder({
                   max={20}
                   disabled={disabled}
                   showModifier={true}
+                  hasBonus={originBonuses[key] > 0}
                 />
               ))}
             </div>
@@ -130,6 +144,7 @@ export default function AbilityScoreBuilder({
           <PointBuyCalculator
             scores={scores}
             onChange={onChange}
+            originBonuses={originBonuses}
             disabled={disabled}
           />
         )}
@@ -138,6 +153,7 @@ export default function AbilityScoreBuilder({
           <DiceRoller
             scores={scores}
             onChange={onChange}
+            originBonuses={originBonuses}
             disabled={disabled}
           />
         )}

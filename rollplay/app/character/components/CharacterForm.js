@@ -10,7 +10,8 @@ import Combobox from '../../shared/components/Combobox'
 import NumericStepper from './NumericStepper'
 import MultiClassSelector from './MultiClassSelector'
 import AbilityScoreBuilder from './AbilityScoreBuilder'
-import { CHARACTER_RACES, CHARACTER_CLASSES } from '../../shared/constants/characterEnums'
+import OriginBonusAllocator from './OriginBonusAllocator'
+import { CHARACTER_RACES, CHARACTER_CLASSES, CHARACTER_BACKGROUNDS } from '../../shared/constants/characterEnums'
 
 export default function CharacterForm({
   mode = 'create',
@@ -24,6 +25,7 @@ export default function CharacterForm({
   const [formData, setFormData] = useState({
     name: initialData?.character_name || '',
     character_race: initialData?.character_race || '',
+    background: initialData?.background || '',
     character_classes: initialData?.character_classes || [],  // Start empty - user adds first class
     level: initialData?.level || 0,
     ability_scores: initialData?.ability_scores || {
@@ -34,16 +36,26 @@ export default function CharacterForm({
       wisdom: 10,
       charisma: 10
     },
+    origin_ability_bonuses: initialData?.origin_ability_bonuses || {},
     hp_max: initialData?.hp_max || 10,
     hp_current: initialData?.hp_current || 10,
     ac: initialData?.ac || 10,
   })
 
   const handleInputChange = (field, value) => {
-    setFormData(prev => ({
-      ...prev,
-      [field]: value
-    }))
+    setFormData(prev => {
+      const newData = {
+        ...prev,
+        [field]: value
+      }
+
+      // If background changes, clear origin bonuses
+      if (field === 'background' && prev.background !== value) {
+        newData.origin_ability_bonuses = {}
+      }
+
+      return newData
+    })
   }
 
   const handleAbilityScoresChange = (newScores) => {
@@ -53,11 +65,44 @@ export default function CharacterForm({
     }))
   }
 
+  // Calculate display scores (base + origin bonuses)
+  const getDisplayScores = () => {
+    const display = { ...formData.ability_scores }
+    Object.entries(formData.origin_ability_bonuses).forEach(([ability, bonus]) => {
+      display[ability] = (display[ability] || 10) + bonus
+    })
+    return display
+  }
+
+  // Calculate base scores from display scores (subtract origin bonuses)
+  const getBaseScoresFromDisplay = (displayScores) => {
+    const base = { ...displayScores }
+    Object.entries(formData.origin_ability_bonuses).forEach(([ability, bonus]) => {
+      base[ability] = (base[ability] || 10) - bonus
+    })
+    return base
+  }
+
+  const handleDisplayScoresChange = (newDisplayScores) => {
+    const baseScores = getBaseScoresFromDisplay(newDisplayScores)
+    setFormData(prev => ({
+      ...prev,
+      ability_scores: baseScores
+    }))
+  }
+
   const handleClassesChange = (classes, totalLevel) => {
     setFormData(prev => ({
       ...prev,
       character_classes: classes,
       level: totalLevel
+    }))
+  }
+
+  const handleOriginBonusesChange = (bonuses) => {
+    setFormData(prev => ({
+      ...prev,
+      origin_ability_bonuses: bonuses
     }))
   }
 
@@ -98,6 +143,28 @@ export default function CharacterForm({
         placeholder="Select a race..."
         required
       />
+
+      {/* Character Background (D&D 2024) */}
+      <Combobox
+        label="Character Background"
+        options={CHARACTER_BACKGROUNDS}
+        value={formData.background}
+        onChange={(value) => handleInputChange('background', value)}
+        placeholder="Select a background..."
+        helperText="D&D 2024: Choose your character's background"
+      />
+
+      {/* Origin Ability Bonuses (D&D 2024) - Immediately after background */}
+      {formData.background && (
+        <OriginBonusAllocator
+          selectedBackground={formData.background}
+          baseScores={formData.ability_scores}
+          displayScores={getDisplayScores()}
+          currentBonuses={formData.origin_ability_bonuses}
+          onChange={handleOriginBonusesChange}
+          disabled={loading}
+        />
+      )}
 
       {/* Character Classes (Multi-class support) */}
       <MultiClassSelector
@@ -142,8 +209,9 @@ export default function CharacterForm({
 
       {/* Ability Scores */}
       <AbilityScoreBuilder
-        scores={formData.ability_scores}
-        onChange={handleAbilityScoresChange}
+        scores={getDisplayScores()}
+        onChange={handleDisplayScoresChange}
+        originBonuses={formData.origin_ability_bonuses}
         disabled={loading}
       />
 

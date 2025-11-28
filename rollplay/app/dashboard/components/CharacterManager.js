@@ -157,7 +157,9 @@ export default function CharacterManager({ user }) {
             {char.character_name || 'Unnamed Character'}
           </h3>
           <p className="text-sm text-slate-400 mb-2">
-            Level {char.level || 1} {char.character_race || 'Unknown'} {char.character_class || 'Unknown'}
+            Level {char.level || 1} {char.character_race || 'Unknown'} {char.character_classes && char.character_classes.length > 0
+              ? char.character_classes.map(c => c.character_class).join(' / ')
+              : 'Unknown'}
           </p>
 
           {/* Stats Row - Inline with bullets */}

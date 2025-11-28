@@ -26,6 +26,7 @@ import {
 export default function DiceRoller({
   scores,
   onChange,
+  originBonuses = {},
   disabled = false
 }) {
   const [rollDetails, setRollDetails] = useState(null)
@@ -33,14 +34,25 @@ export default function DiceRoller({
 
   const handleRollAll = () => {
     const result = rollAbilityScoresDetailed('4d6-drop-lowest')
-    onChange(result.scores)
+
+    // Add origin bonuses to rolled values (we're working with display scores)
+    const displayScores = { ...result.scores }
+    Object.entries(originBonuses).forEach(([ability, bonus]) => {
+      displayScores[ability] = result.scores[ability] + bonus
+    })
+
+    onChange(displayScores)
     setRollDetails(result.details)
     setRollCount(rollCount + 1)
   }
 
   const handleScoreChange = (ability, newValue) => {
-    // Allow manual adjustment within reasonable range
-    if (newValue < 1 || newValue > 18) {
+    // Calculate what the base score would be (subtract bonus)
+    const bonus = originBonuses[ability] || 0
+    const newBaseValue = newValue - bonus
+
+    // Allow manual adjustment within reasonable range (on base score)
+    if (newBaseValue < 1 || newBaseValue > 18) {
       return
     }
 
@@ -50,8 +62,18 @@ export default function DiceRoller({
     })
   }
 
-  const stats = calculateScoreStats(scores)
-  const isValid = areScoresValid(scores)
+  // Calculate stats on base scores (without bonuses) for roll validation
+  const getBaseScores = () => {
+    const base = { ...scores }
+    Object.entries(originBonuses).forEach(([ability, bonus]) => {
+      base[ability] = (base[ability] || 10) - bonus
+    })
+    return base
+  }
+
+  const baseScores = getBaseScores()
+  const stats = calculateScoreStats(baseScores)
+  const isValid = areScoresValid(baseScores)
 
   const abilities = [
     { key: 'strength', label: 'STR', shortLabel: 'Strength' },
@@ -106,6 +128,7 @@ export default function DiceRoller({
             {abilities.map(({ key, label }) => {
               const detail = rollDetails?.[key]
               const score = scores[key]
+              const bonus = originBonuses[key] || 0
 
               return (
                 <div key={key} className="space-y-2">
@@ -113,10 +136,11 @@ export default function DiceRoller({
                     label={label}
                     value={score}
                     onChange={(val) => handleScoreChange(key, val)}
-                    min={1}
-                    max={18}
+                    min={1 + bonus}
+                    max={18 + bonus}
                     disabled={disabled}
                     showModifier={true}
+                    hasBonus={bonus > 0}
                   />
 
                   {/* Roll detail */}
@@ -148,11 +172,6 @@ export default function DiceRoller({
               ✓ Great rolls! Total of {stats.total} is above average.
             </div>
           )}
-
-          {/* Info */}
-          <div className="text-xs text-gray-500 italic">
-            💡 D&D 2024: Rolled scores (3-18 range). Background bonuses applied after. Click "Reroll All" for new rolls.
-          </div>
         </>
       )}
     </div>
