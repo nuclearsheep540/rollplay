@@ -95,3 +95,4 @@ Mongo access
 `db.active_sessions.find()`
 `db.adventure_logs.find()`
 
+usermod -aG docker $USER

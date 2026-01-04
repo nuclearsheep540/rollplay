@@ -630,8 +630,9 @@ This architecture makes the frontend highly maintainable and allows different te
 #### **PostgreSQL (Primary Storage)**
 - **Location**: Primary database for aggregates
 - **Tables**: Users, Campaigns, Games, etc.
-- **Migrations**: Alembic-managed schema changes
-- **Connection**: SQLAlchemy ORM models in `orm/` directory
+- **Migrations**: Alembic-managed schema changes (automated on container startup)
+- **Connection**: SQLAlchemy ORM models in `model/` directory
+- **Auto-Migration**: api-site container automatically runs `alembic upgrade head` on startup
 
 #### **MongoDB (Hot Storage - Game Service Only)**
 - **Purpose**: **Active game session state only** during live gameplay
@@ -657,6 +658,47 @@ This architecture makes the frontend highly maintainable and allows different te
   - Event-driven service/middleware planned (possibly RabbitMQ)
   - Game creation partially broken due to incomplete lifecycle
 - **Critical Rule**: api-game and api-site are completely isolated - no direct communication
+
+#### **Automated Database Migration System**
+
+The api-site container automatically handles Alembic migrations on startup, ensuring database schema is always synchronized with application code.
+
+**How It Works:**
+1. Container startup triggers `/api-site/entrypoint.sh`
+2. Script waits for PostgreSQL to be ready (healthcheck-based dependency)
+3. Runs `alembic upgrade head` to apply pending migrations
+4. Starts FastAPI application only after successful migration
+
+**Key Features:**
+- **Zero Manual Steps**: No need to remember to run migrations
+- **Idempotent**: Safe to run repeatedly, only applies pending migrations
+- **Fail-Fast**: Container won't start if migrations fail (prevents broken states)
+- **Production-Ready**: Works identically in dev and prod environments
+
+**Database Readiness Check:**
+- PostgreSQL healthcheck runs every 5 seconds: `pg_isready -U ${POSTGRES_USER} -d rollplay`
+- api-site container waits for `service_healthy` condition via `depends_on`
+- Entrypoint script includes additional connection retry loop as safeguard
+
+**When Migrations Fail:**
+- Container logs will show Alembic error output
+- Container will restart automatically (Docker restart policy)
+- Fix migration file or database issue, then rebuild/restart container
+
+**Creating New Migrations:**
+```bash
+# Create new migration (auto-detects model changes)
+docker exec api-site-dev alembic revision --autogenerate -m "add user profile fields"
+
+# Restart container to apply new migration
+docker-compose -f docker-compose.dev.yml restart api-site
+```
+
+**Manual Migration Override (Advanced):**
+If you need to skip auto-migrations temporarily (e.g., debugging):
+1. Comment out `alembic upgrade head` in `/api-site/entrypoint.sh`
+2. Rebuild container
+3. Run migrations manually: `docker exec api-site-dev alembic upgrade head`
 
 ## Development Commands
 
@@ -699,10 +741,11 @@ uvicorn app:app --reload         # Start FastAPI server on port 8083
 ### Database Commands
 ```bash
 # Alembic Migrations (PostgreSQL)
-cd api-site
-alembic upgrade head             # Apply all migrations
-alembic revision --autogenerate -m "Description"  # Create new migration
-alembic current                  # Check current migration
+# NOTE: Migrations run automatically on api-site container startup
+# Manual migration commands (rarely needed):
+docker exec api-site-dev alembic revision --autogenerate -m "Description"  # Create new migration
+docker exec api-site-dev alembic current  # Check current migration
+docker exec api-site-dev alembic downgrade -1  # Rollback one migration (if needed)
 
 # Database Access
 docker exec postgres-dev psql -U postgres -d rollplay

@@ -42,10 +42,13 @@ services:
         build:
             context: ./api-site
             dockerfile: ../docker/dev/api-site/Dockerfile
-        ports: 
+        ports:
             - 8082:8082
         volumes:
             - ./api-site:/api
+        depends_on:
+            postgres:
+                condition: service_healthy
 
     api-auth:
         hostname: api-auth
@@ -136,6 +139,11 @@ services:
         - postgres_data:/var/lib/postgresql/data
         networks:
         - default
+        healthcheck:
+            test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d rollplay"]
+            interval: 5s
+            timeout: 5s
+            retries: 5
 
 networks:
   default:
