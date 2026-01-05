@@ -15,6 +15,9 @@ import GamesManager from './components/GamesManager'
 import DashboardLayout from './components/DashboardLayout'
 import ScreenNameModal from './components/ScreenNameModal'
 import { useAuth } from './hooks/useAuth'
+import { useEvents } from '../shared/hooks/useEvents'
+import { useToast } from '../shared/hooks/useToast'
+import { ToastContainer } from '../shared/components/ToastNotification'
 
 function DashboardContent() {
   const searchParams = useSearchParams()
@@ -38,18 +41,97 @@ function DashboardContent() {
     setError
   } = useAuth()
 
-  // Poll for updates every 5 seconds for the active tab
-  useEffect(() => {
-    // Only poll for tabs that need it
-    const pollableTabs = ['campaigns', 'sessions', 'friends']
-    if (!pollableTabs.includes(activeSection)) return
+  // Toast notifications
+  const { toasts, showToast, dismissToast } = useToast()
 
-    const interval = setInterval(() => {
+  // WebSocket event handlers for real-time updates
+  const eventHandlers = {
+    // Friend request events
+    'friend_request_received': (message) => {
       setRefreshTrigger(prev => prev + 1)
-    }, 5000)
+      if (message.show_toast) {
+        showToast({
+          type: 'info',
+          message: 'New friend request'
+        })
+      }
+    },
 
-    return () => clearInterval(interval)
-  }, [activeSection])
+    'friend_request_accepted': (message) => {
+      setRefreshTrigger(prev => prev + 1)
+      if (message.show_toast) {
+        showToast({
+          type: 'success',
+          message: 'Friend request accepted'
+        })
+      }
+    },
+
+    // Campaign invite events
+    'campaign_invite_received': (message) => {
+      setRefreshTrigger(prev => prev + 1)
+      if (message.show_toast) {
+        showToast({
+          type: 'info',
+          message: 'New campaign invite'
+        })
+      }
+    },
+
+    'campaign_invite_accepted': (message) => {
+      setRefreshTrigger(prev => prev + 1)
+      if (message.show_toast) {
+        showToast({
+          type: 'success',
+          message: 'Player joined campaign'
+        })
+      }
+    },
+
+    'campaign_player_removed': (message) => {
+      setRefreshTrigger(prev => prev + 1)
+      if (message.show_toast) {
+        showToast({
+          type: 'warning',
+          message: 'Removed from campaign'
+        })
+      }
+    },
+
+    // Game session events
+    'game_started': (message) => {
+      setRefreshTrigger(prev => prev + 1)
+      if (message.show_toast) {
+        showToast({
+          type: 'success',
+          message: 'Game session started'
+        })
+      }
+    },
+
+    'game_ended': (message) => {
+      setRefreshTrigger(prev => prev + 1)
+      if (message.show_toast) {
+        showToast({
+          type: 'info',
+          message: 'Game session ended'
+        })
+      }
+    },
+
+    'game_finished': (message) => {
+      setRefreshTrigger(prev => prev + 1)
+      if (message.show_toast) {
+        showToast({
+          type: 'success',
+          message: 'Campaign milestone completed'
+        })
+      }
+    }
+  }
+
+  // Connect to WebSocket events (replaces polling)
+  const { isConnected } = useEvents(user?.id, eventHandlers)
 
 
 
@@ -60,10 +142,12 @@ function DashboardContent() {
   }
 
   return (
-    <DashboardLayout 
-      activeSection={activeSection} 
-      setActiveSection={setActiveSection} 
+    <DashboardLayout
+      activeSection={activeSection}
+      setActiveSection={setActiveSection}
       onLogout={handleLogout}
+      user={user}
+      refreshTrigger={refreshTrigger}
     >
       {/* Characters Section */}
       {activeSection === 'characters' && (
@@ -101,7 +185,7 @@ function DashboardContent() {
       )}
 
       {/* Screen Name Setup Modal */}
-      <ScreenNameModal 
+      <ScreenNameModal
         show={showScreenNameModal}
         screenName={screenName}
         setScreenName={setScreenName}
@@ -109,6 +193,9 @@ function DashboardContent() {
         updating={updatingScreenName}
         error={error}
       />
+
+      {/* Toast Notifications */}
+      <ToastContainer toasts={toasts} onDismiss={dismissToast} />
     </DashboardLayout>
   )
 }

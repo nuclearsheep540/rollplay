@@ -1,11 +1,12 @@
 # Copyright (C) 2025 Matthew Davey
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, Request
 from pydantic import BaseModel
 from uuid import UUID
 
 from shared.dependencies.auth import get_current_user_from_token
+from shared.jwt_helper import JWTHelper
 from .schemas import (
     UserEmailRequest,
     UserResponse,
@@ -86,6 +87,37 @@ async def get_current_user(
 ):
     """Get current user info from JWT token."""
     return _to_user_response(current_user)
+
+
+@router.get("/ws-token")
+async def get_websocket_token(request: Request):
+    """
+    Get JWT token from httpOnly cookie for WebSocket authentication.
+
+    This endpoint extracts the token from the httpOnly cookie and returns it
+    so the frontend can use it for WebSocket connection. This is secure because:
+    - The httpOnly cookie is still protected from XSS attacks
+    - Only authenticated users can call this endpoint
+    - The token is only exposed momentarily for WebSocket connection
+    """
+    jwt_helper = JWTHelper()
+    token = jwt_helper.get_token_from_cookie(request)
+
+    if not token:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="No authentication token found"
+        )
+
+    # Verify the token is valid before returning it
+    email = jwt_helper.verify_auth_token(token)
+    if not email:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid or expired token"
+        )
+
+    return {"token": token}
 
 
 @router.get("/{user_uuid}", response_model=PublicUserResponse)

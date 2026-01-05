@@ -55,6 +55,19 @@ export default function ProfileManager({ user, onUserUpdate }) {
     }
   }
 
+  // Send test notification (dev only)
+  const sendTestNotification = async () => {
+    try {
+      await fetch('/api/notifications/test-notification', {
+        method: 'POST',
+        credentials: 'include'
+      })
+      console.log('Test notification sent')
+    } catch (error) {
+      console.error('Failed to send test notification:', error)
+    }
+  }
+
   if (!user) {
     return (
       <div className="flex items-center justify-center py-8">
@@ -165,6 +178,22 @@ export default function ProfileManager({ user, onUserUpdate }) {
           </div>
         </div>
       </div>
+
+      {/* Development Tools (dev only) */}
+      {process.env.NODE_ENV === 'development' && (
+        <div className="bg-yellow-50 p-6 rounded-xl border-2 border-yellow-500 max-w-2xl mx-auto">
+          <h3 className="text-lg font-semibold text-yellow-900 mb-3">Development Tools</h3>
+          <p className="text-sm text-yellow-800 mb-4">
+            These tools are only visible in development mode and help test notification features.
+          </p>
+          <button
+            onClick={sendTestNotification}
+            className="px-6 py-3 bg-yellow-600 text-white font-semibold rounded-lg hover:bg-yellow-700 transition-all hover:shadow-lg"
+          >
+            Send Test Notification
+          </button>
+        </div>
+      )}
     </div>
   )
 }

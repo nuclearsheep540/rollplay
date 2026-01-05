@@ -22,8 +22,26 @@ class Environment(Enum):
 class Settings(BaseSettings):
     """Main application configuration object"""
 
-    # Environment vars
-    environment: Environment = Environment.development
+    # Validates environment value against Environment enum, throws error if invalid
+    _env_value: str = env.get("environment", "development")
+
+    @property
+    def environment(self) -> str:
+        """Get validated environment value from Environment enum"""
+        try:
+            # Try to access the enum member by name (e.g., Environment.dev)
+            return Environment[self._env_value].value
+        except KeyError:
+            # If not found by name, try by value (e.g., Environment.development)
+            for member in Environment:
+                if member.value == self._env_value:
+                    return member.value
+            # If still not found, raise descriptive error
+            valid_values = [f"{m.name} (={m.value})" for m in Environment]
+            raise ValueError(
+                f"Invalid environment value: '{self._env_value}'. "
+                f"Valid options are: {', '.join(valid_values)}"
+            )
 
     # DB
     app_database_url: str = env.get(

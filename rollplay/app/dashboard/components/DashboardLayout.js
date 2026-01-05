@@ -16,12 +16,15 @@ import {
   faUser,
   faRightFromBracket
 } from '@fortawesome/free-solid-svg-icons'
+import NotificationBell from '../../shared/components/NotificationBell'
 
-export default function DashboardLayout({ 
-  children, 
-  activeSection, 
-  setActiveSection, 
-  onLogout 
+export default function DashboardLayout({
+  children,
+  activeSection,
+  setActiveSection,
+  onLogout,
+  user,
+  refreshTrigger
 }) {
   const router = useRouter()
   const searchParams = useSearchParams()
@@ -61,7 +64,10 @@ export default function DashboardLayout({
           <span>Tabletop Tavern</span>
         </div>
         <nav>
-          <ul className="flex space-x-4 sm:space-x-6">
+          <ul className="flex space-x-4 sm:space-x-6 items-center">
+            <li>
+              <NotificationBell userId={user?.id} refreshTrigger={refreshTrigger} />
+            </li>
             <li>
               <button
                 onClick={() => switchSection('profile')}

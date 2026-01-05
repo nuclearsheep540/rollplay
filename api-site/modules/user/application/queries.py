@@ -1,9 +1,28 @@
 # Copyright (C) 2025 Matthew Davey
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-from typing import Dict, Any
+from typing import Dict, Any, Optional
 from modules.user.orm.user_repository import UserRepository
 from modules.user.domain.user_aggregate import UserAggregate
+
+
+class GetUserByEmail:
+    """Query to retrieve user by email address"""
+
+    def __init__(self, user_repository: UserRepository):
+        self.user_repo = user_repository
+
+    def execute(self, email: str) -> Optional[UserAggregate]:
+        """
+        Get user by email.
+
+        Args:
+            email: User's email address
+
+        Returns:
+            UserAggregate if found, None otherwise
+        """
+        return self.user_repo.get_by_email(email)
 
 
 class GetUserDashboard:
