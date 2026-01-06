@@ -308,7 +308,7 @@ export default function FriendsManager({ user, refreshTrigger }) {
                       <FontAwesomeIcon icon={faUserCheck} />
                       User found: {lookupUser.screen_name || 'User #' + lookupUser.id.substring(0, 8)}
                     </p>
-                    <p className="text-xs text-green-500">ID: {lookupUser.id}</p>
+                    <p className="text-xs text-green-500 font-mono">{lookupUser.account_identifier || lookupUser.friend_code}</p>
                   </div>
                 )}
                 {!lookupLoading && lookupError && (
@@ -370,8 +370,9 @@ export default function FriendsManager({ user, refreshTrigger }) {
                 <div>
                   <p className="font-semibold text-slate-200">
                     {friendship.friend_screen_name || 'User'}
+                    <span className="text-sm text-slate-500 font-mono"> {friendship.friend_account_tag || 'No tag'}</span>
                   </p>
-                  <p className="text-sm text-slate-500 font-mono">ID: {friendship.friend_id}</p>
+                  
                 </div>
                 <button
                   onClick={() => removeFriend(friendship.friend_id)}
@@ -405,7 +406,7 @@ export default function FriendsManager({ user, refreshTrigger }) {
                   <p className="font-semibold text-slate-200">
                     {request.requester_screen_name || 'User'}
                   </p>
-                  <p className="text-sm text-slate-500 font-mono">ID: {request.requester_id}</p>
+                  <p className="text-sm text-slate-500 font-mono">{request.requester_account_tag || 'No tag'}</p>
                 </div>
                 <div className="flex gap-2">
                   <button
@@ -450,7 +451,7 @@ export default function FriendsManager({ user, refreshTrigger }) {
                   <p className="font-semibold text-slate-200">
                     {request.recipient_screen_name || 'User'}
                   </p>
-                  <p className="text-sm text-slate-500 font-mono">ID: {request.recipient_id}</p>
+                  <p className="text-sm text-slate-500 font-mono">{request.recipient_account_tag || 'No tag'}</p>
                   <p className="text-xs text-slate-500 mt-1">Waiting for response...</p>
                 </div>
                 <button

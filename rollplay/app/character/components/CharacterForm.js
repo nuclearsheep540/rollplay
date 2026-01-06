@@ -5,7 +5,7 @@
 
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import Combobox from '../../shared/components/Combobox'
 import NumericStepper from './NumericStepper'
 import MultiClassSelector from './MultiClassSelector'
@@ -41,6 +41,31 @@ export default function CharacterForm({
     hp_current: initialData?.hp_current || 10,
     ac: initialData?.ac || 10,
   })
+
+  // Update form when initialData changes (for edit mode when API data loads, or clone mode)
+  useEffect(() => {
+    if (initialData) {
+      setFormData({
+        name: initialData.character_name || '',
+        character_race: initialData.character_race || '',
+        background: initialData.background || '',
+        character_classes: initialData.character_classes || [],
+        level: initialData.level || 0,
+        ability_scores: initialData.ability_scores || {
+          strength: 10,
+          dexterity: 10,
+          constitution: 10,
+          intelligence: 10,
+          wisdom: 10,
+          charisma: 10
+        },
+        origin_ability_bonuses: initialData.origin_ability_bonuses || {},
+        hp_max: initialData.hp_max || 10,
+        hp_current: initialData.hp_current || 10,
+        ac: initialData.ac || 10,
+      })
+    }
+  }, [initialData])
 
   const handleInputChange = (field, value) => {
     setFormData(prev => {

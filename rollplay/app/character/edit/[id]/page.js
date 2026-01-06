@@ -65,7 +65,7 @@ export default function EditCharacter() {
       })
 
       if (response.ok) {
-        router.push('/dashboard')
+        router.push('/dashboard?tab=characters')
       } else {
         const errorData = await response.json()
 
@@ -84,7 +84,7 @@ export default function EditCharacter() {
   }
 
   const handleCancel = () => {
-    router.push('/dashboard')
+    router.push('/dashboard?tab=characters')
   }
 
   // Loading state while fetching character

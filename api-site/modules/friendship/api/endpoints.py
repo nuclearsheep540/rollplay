@@ -46,7 +46,7 @@ def _to_friendship_response(
     """
     Convert FriendshipAggregate to FriendshipResponse.
 
-    Computes the "other user" as friend_id and looks up their screen name.
+    Computes the "other user" as friend_id and looks up their screen name and account tag.
     """
     # Determine which user is the "friend" (the other user)
     friend_user_id = friendship.get_other_user(current_user_id)
@@ -58,6 +58,7 @@ def _to_friendship_response(
         id=friendship.id,
         friend_id=friend_user_id,
         friend_screen_name=friend_user.screen_name if friend_user else None,
+        friend_account_tag=friend_user.account_identifier if friend_user else None,
         created_at=friendship.created_at
     )
 
@@ -70,9 +71,9 @@ def _to_friend_request_response(
     """
     Convert FriendRequestAggregate to FriendRequestResponse.
 
-    Populates the appropriate screen_name field based on direction:
-    - Incoming requests: populate requester_screen_name
-    - Outgoing requests: populate recipient_screen_name
+    Populates the appropriate screen_name and account_tag fields based on direction:
+    - Incoming requests: populate requester_screen_name and requester_account_tag
+    - Outgoing requests: populate recipient_screen_name and recipient_account_tag
     """
     requester = user_repo.get_by_id(friend_request.requester_id)
     recipient = user_repo.get_by_id(friend_request.recipient_id)
@@ -82,7 +83,9 @@ def _to_friend_request_response(
         requester_id=friend_request.requester_id,
         recipient_id=friend_request.recipient_id,
         requester_screen_name=requester.screen_name if requester else None,
+        requester_account_tag=requester.account_identifier if requester else None,
         recipient_screen_name=recipient.screen_name if recipient else None,
+        recipient_account_tag=recipient.account_identifier if recipient else None,
         created_at=friend_request.created_at
     )
 

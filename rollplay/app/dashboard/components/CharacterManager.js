@@ -183,6 +183,32 @@ export default function CharacterManager({ user }) {
               <FontAwesomeIcon icon={faPenToSquare} />
             </button>
             <button
+              onClick={async () => {
+                try {
+                  const response = await fetch(`/api/characters/${char.id}/clone`, {
+                    method: 'POST',
+                    credentials: 'include'
+                  })
+
+                  if (response.ok) {
+                    const clonedCharacter = await response.json()
+                    // Redirect to edit page of the newly cloned character
+                    router.push(`/character/edit/${clonedCharacter.id}`)
+                  } else {
+                    const errorData = await response.json()
+                    console.error('Failed to clone character:', errorData.detail)
+                    // Optionally show error to user
+                  }
+                } catch (error) {
+                  console.error('Error cloning character:', error)
+                }
+              }}
+              className="w-10 h-10 rounded-lg bg-slate-600/20 text-slate-300 border border-slate-600/30 hover:bg-slate-600/30 hover:shadow-lg hover:shadow-slate-500/30 transition-all flex items-center justify-center"
+              title="Clone Character"
+            >
+              <FontAwesomeIcon icon={faCopy} />
+            </button>
+            <button
               onClick={() => handleDeleteClick(char)}
               disabled={char.active_game}
               className={`w-10 h-10 rounded-lg border flex items-center justify-center transition-all ${
@@ -210,10 +236,6 @@ export default function CharacterManager({ user }) {
 
       {/* Action Buttons */}
       <div className="flex justify-end items-center mb-6 gap-3">
-        <button className="bg-slate-700 text-slate-300 font-semibold px-4 py-2.5 rounded-lg border border-slate-600 hover:bg-slate-600 hover:border-slate-500 transition-all duration-200 flex items-center gap-2 text-sm">
-          <FontAwesomeIcon icon={faCopy} />
-          Clone Character
-        </button>
         <button
           onClick={() => router.push('/character/create')}
           className="bg-purple-600 text-white font-semibold px-4 py-2.5 rounded-lg border border-purple-500 hover:bg-purple-500 hover:shadow-lg hover:shadow-purple-500/30 transition-all duration-200 flex items-center gap-2 text-sm"
