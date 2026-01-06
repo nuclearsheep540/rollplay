@@ -40,11 +40,11 @@ class SendFriendRequest:
 
     def execute(self, user_id: UUID, friend_identifier: str) -> dict:
         """
-        Send friend request by friend's UUID or friend code.
+        Send friend request by friend's UUID, account tag, or friend code.
 
         Args:
             user_id: UUID of the requesting user
-            friend_identifier: Either a UUID string or friend code (e.g., "ABCD-1234")
+            friend_identifier: UUID string, account tag (e.g., "claude#2345"), or friend code
 
         Returns dict with:
         - 'type': 'friendship' or 'friend_request'
@@ -61,21 +61,32 @@ class SendFriendRequest:
         if not user:
             raise ValueError(f"User {user_id} not found")
 
-        # Determine if identifier is UUID or friend code and look up friend
+        # Determine identifier type and look up friend
+        friend = None
+        friend_uuid = None
+
+        # Try 1: Parse as UUID
         try:
-            # Try parsing as UUID first
             friend_uuid = UUID(friend_identifier)
             friend = self.user_repo.get_by_id(friend_uuid)
         except (ValueError, AttributeError):
-            # Not a valid UUID, try as friend code
+            pass
+
+        # Try 2: Look up by account identifier (e.g., "claude#2345")
+        if not friend and '#' in friend_identifier:
+            friend = self.user_repo.get_by_account_identifier(friend_identifier)
+            if friend:
+                friend_uuid = friend.id
+
+        # Try 3: Look up by friend code (DEPRECATED - for backward compatibility)
+        if not friend:
             friend = self.user_repo.get_by_friend_code(friend_identifier)
             if friend:
                 friend_uuid = friend.id
-            else:
-                raise ValueError(f"Friend code '{friend_identifier}' not found")
 
+        # If still not found, raise error
         if not friend:
-            raise ValueError(f"User not found")
+            raise ValueError(f"User '{friend_identifier}' not found")
 
         # Check if friendship already exists
         existing_friendship = self.friendship_repo.get_by_canonical_ids(user_id, friend_uuid)

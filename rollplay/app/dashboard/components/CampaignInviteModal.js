@@ -23,6 +23,16 @@ export default function CampaignInviteModal({ campaign, onClose, onInviteSuccess
     return uuidRegex.test(uuid)
   }
 
+  // Check if identifier is an account tag format (e.g., "claude#2345")
+  const isAccountTag = (identifier) => {
+    return /^[a-zA-Z0-9][a-zA-Z0-9_-]{2,19}#\d{4}$/.test(identifier)
+  }
+
+  // Validate identifier format: UUID or account tag
+  const isValidIdentifier = (identifier) => {
+    return isValidUUID(identifier) || isAccountTag(identifier)
+  }
+
   // Fetch friends list on mount
   useEffect(() => {
     fetchFriends()
@@ -51,16 +61,16 @@ export default function CampaignInviteModal({ campaign, onClose, onInviteSuccess
     }
   }
 
-  // Lookup user by UUID when valid UUID is entered
+  // Lookup user by UUID or account tag when valid identifier is entered
   useEffect(() => {
-    const lookupUserByUuid = async () => {
+    const lookupUserByIdentifier = async () => {
       if (!friendUuid.trim()) {
         setLookupUser(null)
         setLookupError(null)
         return
       }
 
-      if (!isValidUUID(friendUuid.trim())) {
+      if (!isValidIdentifier(friendUuid.trim())) {
         setLookupUser(null)
         setLookupError(null)
         return
@@ -70,7 +80,16 @@ export default function CampaignInviteModal({ campaign, onClose, onInviteSuccess
         setLookupLoading(true)
         setLookupError(null)
 
-        const response = await fetch(`/api/users/${friendUuid.trim()}`, {
+        // Use appropriate endpoint based on identifier type
+        const identifier = friendUuid.trim()
+        let endpoint
+        if (isAccountTag(identifier)) {
+          endpoint = `/api/users/by-account-tag/${encodeURIComponent(identifier)}`
+        } else {
+          endpoint = `/api/users/${identifier}`
+        }
+
+        const response = await fetch(endpoint, {
           credentials: 'include'
         })
 
@@ -94,7 +113,7 @@ export default function CampaignInviteModal({ campaign, onClose, onInviteSuccess
     }
 
     // Debounce the lookup
-    const timeoutId = setTimeout(lookupUserByUuid, 500)
+    const timeoutId = setTimeout(lookupUserByIdentifier, 500)
     return () => clearTimeout(timeoutId)
   }, [friendUuid])
 
@@ -218,16 +237,16 @@ export default function CampaignInviteModal({ campaign, onClose, onInviteSuccess
             </div>
           )}
 
-          {/* Invite by UUID Form */}
+          {/* Invite by Account Tag Form */}
           <div>
-            <h3 className="text-lg font-semibold text-slate-800 mb-3">Invite by Friend Code</h3>
+            <h3 className="text-lg font-semibold text-slate-800 mb-3">Invite by Account Tag</h3>
             <form onSubmit={handleInviteByUuid} className="space-y-3">
               <div>
                 <input
                   type="text"
                   value={friendUuid}
                   onChange={(e) => setFriendUuid(e.target.value)}
-                  placeholder="Enter friend code (UUID)"
+                  placeholder="Enter account tag (e.g., claude#2345)"
                   className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
                 />
                 {lookupLoading && (

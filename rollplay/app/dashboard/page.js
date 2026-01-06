@@ -14,6 +14,7 @@ import FriendsManager from './components/FriendsManager'
 import GamesManager from './components/GamesManager'
 import DashboardLayout from './components/DashboardLayout'
 import ScreenNameModal from './components/ScreenNameModal'
+import AccountNameModal from './components/AccountNameModal'
 import { useAuth } from './hooks/useAuth'
 import { useEvents } from '../shared/hooks/useEvents'
 import { useToast } from '../shared/hooks/useToast'
@@ -47,6 +48,21 @@ function DashboardContent() {
     handleLogout,
     setError
   } = useAuth()
+
+  // Check if user needs to set account name (shown before screen name modal)
+  const showAccountNameModal = user && !user.account_name
+
+  // Handle account name completion - update user state with new account info
+  const handleAccountNameComplete = (result) => {
+    if (result && user) {
+      setUser({
+        ...user,
+        account_name: result.account_name,
+        account_tag: result.account_tag,
+        account_identifier: result.account_identifier
+      })
+    }
+  }
 
   // Toast notifications
   const { toasts, showToast, dismissToast } = useToast()
@@ -234,9 +250,15 @@ function DashboardContent() {
         </section>
       )}
 
-      {/* Screen Name Setup Modal */}
+      {/* Account Name Setup Modal (shown first, before screen name) */}
+      <AccountNameModal
+        show={showAccountNameModal}
+        onComplete={handleAccountNameComplete}
+      />
+
+      {/* Screen Name Setup Modal (shown after account name is set) */}
       <ScreenNameModal
-        show={showScreenNameModal}
+        show={showScreenNameModal && !showAccountNameModal}
         screenName={screenName}
         setScreenName={setScreenName}
         onUpdate={updateScreenName}

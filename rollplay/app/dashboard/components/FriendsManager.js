@@ -33,19 +33,29 @@ export default function FriendsManager({ user, refreshTrigger }) {
     fetchFriends(refreshTrigger === 0)
   }, [refreshTrigger])
 
-  // Validate friend code or UUID format
+  // Validate identifier format: UUID, account tag (name#1234), or friend code (word-word)
   const isValidIdentifier = (identifier) => {
     const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
-    const friendCodeRegex = /^[a-z]+-[a-z]+$/i  // friendlywords format: word-word
-    return uuidRegex.test(identifier) || friendCodeRegex.test(identifier)
+    const accountTagRegex = /^[a-zA-Z0-9][a-zA-Z0-9_-]{2,19}#\d{4}$/  // account tag: name#1234
+    const friendCodeRegex = /^[a-z]+-[a-z]+$/i  // DEPRECATED: friendlywords format: word-word
+    return uuidRegex.test(identifier) || accountTagRegex.test(identifier) || friendCodeRegex.test(identifier)
   }
 
-  // Copy Friend Code to clipboard
+  // Check if identifier is an account tag format
+  const isAccountTag = (identifier) => {
+    return /^[a-zA-Z0-9][a-zA-Z0-9_-]{2,19}#\d{4}$/.test(identifier)
+  }
+
+  // Copy account tag or friend code to clipboard
   const handleCopyCode = async () => {
-    await navigator.clipboard.writeText(user.friend_code)
+    const codeToCopy = user.account_identifier || user.friend_code
+    await navigator.clipboard.writeText(codeToCopy)
     setCopiedCode(true)
     setTimeout(() => setCopiedCode(false), 2000)
   }
+
+  // Get display code (prefer account tag, fallback to friend code)
+  const displayCode = user.account_identifier || user.friend_code
 
   // Lookup user by Friend Code when valid code is entered
   useEffect(() => {
@@ -66,7 +76,13 @@ export default function FriendsManager({ user, refreshTrigger }) {
         setLookupLoading(true)
         setLookupError(null)
 
-        const response = await fetch(`/api/users/by-friend-code/${friendCode.trim()}`, {
+        // Use appropriate endpoint based on identifier type
+        const identifier = friendCode.trim()
+        const endpoint = isAccountTag(identifier)
+          ? `/api/users/by-account-tag/${encodeURIComponent(identifier)}`
+          : `/api/users/by-friend-code/${identifier}`
+
+        const response = await fetch(endpoint, {
           credentials: 'include'
         })
 
@@ -274,7 +290,7 @@ export default function FriendsManager({ user, refreshTrigger }) {
               type="text"
               value={friendCode}
               onChange={(e) => setFriendCode(e.target.value)}
-              placeholder="Enter friend code (e.g., happy-elephant)"
+              placeholder="Enter account tag (e.g., claude#2345)"
               className="w-full px-4 py-2 bg-slate-700 border border-slate-600 text-slate-200 rounded focus:outline-none focus:ring-2 focus:ring-purple-500"
               disabled={sending}
             />
@@ -324,12 +340,12 @@ export default function FriendsManager({ user, refreshTrigger }) {
         </form>
         <div className="mt-4 flex items-center gap-2">
           <p className="text-sm text-slate-400">
-            Your Friend Code: <code className="bg-slate-900 border border-slate-700 px-2 py-1 rounded text-xs font-mono text-purple-400">{user.friend_code}</code>
+            Your Account Tag: <code className="bg-slate-900 border border-slate-700 px-2 py-1 rounded text-xs font-mono text-purple-400">{displayCode}</code>
           </p>
           <button
             onClick={handleCopyCode}
             className="px-3 py-0.5 bg-purple-500/20 text-purple-400 border border-purple-500/30 rounded-lg font-semibold text-sm flex items-center hover:bg-purple-500/30 hover:border-purple-500/50 transition-all"
-            title="Copy Friend Code"
+            title="Copy Account Tag"
           >
             <FontAwesomeIcon icon={faCopy} className="text-xs" />
             {copiedCode ? 'Copied!' : 'Copy'}
