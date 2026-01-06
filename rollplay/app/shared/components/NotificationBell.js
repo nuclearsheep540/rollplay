@@ -9,8 +9,9 @@ import { useState, useEffect, useRef } from 'react'
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
 import { faBell } from '@fortawesome/free-solid-svg-icons'
 import NotificationPanel from './NotificationPanel'
+import { ToastNotification } from './ToastNotification'
 
-export default function NotificationBell({ userId, refreshTrigger }) {
+export default function NotificationBell({ userId, refreshTrigger, toasts = [], onDismissToast }) {
   const [unreadCount, setUnreadCount] = useState(0)
   const [showPanel, setShowPanel] = useState(false)
   const [notifications, setNotifications] = useState([])
@@ -71,9 +72,25 @@ export default function NotificationBell({ userId, refreshTrigger }) {
 
   return (
     <div className="relative" ref={bellRef}>
+      {/* Toast notifications - positioned to the left of the bell */}
+      {toasts.length > 0 && (
+        <div className="absolute right-full top-1/2 -translate-y-1/2 mr-3 flex flex-col items-end">
+          {toasts.map((toast) => (
+            <ToastNotification
+              key={toast.id}
+              id={toast.id}
+              type={toast.type}
+              message={toast.message}
+              duration={toast.duration}
+              onDismiss={onDismissToast}
+            />
+          ))}
+        </div>
+      )}
+
       <button
         onClick={handleBellClick}
-        className="relative p-2 text-slate-600 hover:text-slate-900 transition-colors"
+        className="flex items-center text-slate-400"
         aria-label="Notifications"
       >
         <FontAwesomeIcon icon={faBell} className="h-6 w-6" />

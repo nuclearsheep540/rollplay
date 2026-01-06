@@ -37,9 +37,9 @@ async def get_unread_notifications(
     current_user: UserAggregate = Depends(get_current_user_from_token),
     notification_repo: NotificationRepository = Depends(get_notification_repository)
 ):
-    """Get 7 most recent unread notifications"""
+    """Get 7 most recent notifications (read and unread)"""
     query = GetRecentNotifications(notification_repo)
-    notifications = query.execute(current_user.id, limit=7, unread_only=True)
+    notifications = query.execute(current_user.id, limit=7, unread_only=False)
     return [_to_notification_response(n) for n in notifications]
 
 

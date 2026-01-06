@@ -7,6 +7,10 @@
 
 import { useEffect, useRef } from 'react'
 import { useRouter } from 'next/navigation'
+import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
+import { faCheck } from '@fortawesome/free-solid-svg-icons'
+import { formatPanelMessage, getNavigationTab } from '../config/eventConfig'
+import { formatRelativeTime } from '../utils/formatTime'
 
 export default function NotificationPanel({ notifications, onNotificationClick, onMarkAllRead, onClose }) {
   const panelRef = useRef(null)
@@ -24,58 +28,19 @@ export default function NotificationPanel({ notifications, onNotificationClick, 
     return () => document.removeEventListener('mousedown', handleClickOutside)
   }, [onClose])
 
-  // Format notification message with full details
-  const formatNotificationMessage = (notification) => {
-    const { event_type, data } = notification
-
-    switch (event_type) {
-      case 'friend_request_received':
-        return `${data.requester_screen_name} sent you a friend request`
-
-      case 'friend_request_accepted':
-        return `${data.friend_screen_name} accepted your friend request`
-
-      case 'campaign_invite_received':
-        return `${data.host_screen_name} invited you to "${data.campaign_name}"`
-
-      case 'campaign_invite_accepted':
-        return `${data.player_screen_name} joined your campaign "${data.campaign_name}"`
-
-      case 'campaign_player_removed':
-        return `You were removed from campaign "${data.campaign_name}"`
-
-      case 'game_started':
-        return `${data.dm_screen_name} started game session "${data.game_name}"`
-
-      case 'game_ended':
-        return `Game session "${data.game_name}" ended`
-
-      case 'game_finished':
-        return `Campaign milestone: "${data.game_name}" completed!`
-
-      default:
-        return 'New notification'
-    }
-  }
-
-  // Navigate to relevant tab based on notification type
-  const getNavigationTab = (event_type) => {
-    if (event_type.startsWith('friend_request')) return 'friends'
-    if (event_type.startsWith('campaign')) return 'campaigns'
-    if (event_type.startsWith('game')) return 'sessions'
-    return null
-  }
-
-  const handleNotificationClick = (notification) => {
-    // Mark as read
+  // Navigate to relevant tab + mark as read
+  const handleNavigate = (notification) => {
     onNotificationClick(notification.id)
-
-    // Navigate to relevant tab
     const tab = getNavigationTab(notification.event_type)
     if (tab) {
       router.push(`/dashboard?tab=${tab}`)
-      onClose()
     }
+  }
+
+  // Mark as read only (for checkmark button)
+  const handleMarkAsRead = (e, notificationId) => {
+    e.stopPropagation()
+    onNotificationClick(notificationId)
   }
 
   return (
@@ -104,20 +69,38 @@ export default function NotificationPanel({ notifications, onNotificationClick, 
           </div>
         ) : (
           notifications.map((notification) => (
-            <button
+            <div
               key={notification.id}
-              onClick={() => handleNotificationClick(notification)}
-              className={`w-full text-left p-4 border-b border-slate-100 hover:bg-slate-50 transition-colors ${
+              className={`flex border-b border-slate-100 ${
                 !notification.read ? 'bg-blue-50' : ''
               }`}
             >
-              <p className="text-sm text-slate-900">
-                {formatNotificationMessage(notification)}
-              </p>
-              <p className="text-xs text-slate-500 mt-1">
-                {new Date(notification.created_at).toLocaleString()}
-              </p>
-            </button>
+              {/* Text content - clickable for navigation */}
+              <button
+                onClick={() => handleNavigate(notification)}
+                className="flex-1 text-left p-4 hover:bg-slate-50 transition-colors"
+              >
+                <p className="text-sm text-slate-900">
+                  {formatPanelMessage(notification)}
+                </p>
+                <p className="text-xs text-slate-500 mt-1">
+                  {formatRelativeTime(notification.created_at)}
+                </p>
+              </button>
+
+              {/* Vertical separator + Checkmark CTA - only for unread items */}
+              {!notification.read && (
+                <div className="flex items-center border-l border-slate-200">
+                  <button
+                    onClick={(e) => handleMarkAsRead(e, notification.id)}
+                    className="px-4 h-full flex items-center text-slate-400 hover:text-emerald-600 hover:bg-emerald-50 transition-colors"
+                    aria-label="Mark as read"
+                  >
+                    <FontAwesomeIcon icon={faCheck} className="h-4 w-4" />
+                  </button>
+                </div>
+              )}
+            </div>
           ))
         )}
       </div>

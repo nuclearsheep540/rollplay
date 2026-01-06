@@ -43,7 +43,7 @@ export const ToastNotification = ({ id, type = 'info', message, duration = 7000,
         shadow-xl
         backdrop-blur-sm
         mb-2
-        mr-12
+        whitespace-nowrap
         transition-all
         duration-250
         ease-in-out

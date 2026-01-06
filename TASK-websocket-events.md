@@ -1502,6 +1502,174 @@ Before starting implementation, verify these decisions are documented:
 
 ---
 
+## Phase 7: Notification Item UX Improvements (CURRENT)
+
+### Problem Statement
+
+**Current UX Issues:**
+1. Clicking a notification item marks it as read AND closes the panel - confusing and disruptive
+2. No visual distinction between "navigate to tab" and "mark as read" actions
+3. Panel closing behavior is inconsistent
+
+### Requirements
+
+**Panel Closing Behavior:**
+- ✅ Close when clicking bell icon again
+- ✅ Close when clicking outside panel
+- ❌ Do NOT close when clicking notification items
+
+**Notification Item Actions:**
+1. **Text content area** → Navigate to relevant dashboard tab + auto-mark as read
+2. **Checkmark icon (CTA)** → Mark as read only (no navigation)
+
+### Implementation Plan
+
+#### File: `/rollplay/app/shared/components/NotificationPanel.js`
+
+**Change 1: Remove `onClose()` from navigation handler**
+
+Current code (line 35-36):
+```javascript
+router.push(`/dashboard?tab=${tab}`)
+onClose()  // REMOVE THIS
+```
+
+After:
+```javascript
+router.push(`/dashboard?tab=${tab}`)
+// Panel stays open - only closes via bell click or click-outside
+```
+
+**Change 2: Restructure notification item layout**
+
+Current structure:
+```jsx
+<button onClick={handleNotificationClick}>
+  <p>{message}</p>
+  <p>{timestamp}</p>
+</button>
+```
+
+New structure:
+```jsx
+<div className="flex border-b border-slate-100 ...">
+  {/* Text content - clickable for navigation */}
+  <button onClick={handleNavigate} className="flex-1 text-left p-4">
+    <p>{message}</p>
+    <p>{timestamp}</p>
+  </button>
+
+  {/* Vertical separator + Checkmark CTA - only for unread items */}
+  {!notification.read && (
+    <div className="flex items-center border-l border-slate-200">
+      <button onClick={(e) => handleMarkAsRead(e, notification.id)} ...>
+        <FontAwesomeIcon icon={faCheck} />
+      </button>
+    </div>
+  )}
+</div>
+```
+
+**Change 3: Split handler functions**
+
+```javascript
+// Navigation + mark as read (uses existing getNavigationTab from eventConfig)
+const handleNavigate = (notification) => {
+  onNotificationClick(notification.id)  // Mark as read
+  const tab = getNavigationTab(notification.event_type)  // Reuse existing config
+  if (tab) {
+    router.push(`/dashboard?tab=${tab}`)
+    // NO onClose() - panel stays open
+  }
+}
+
+// Mark as read only (for checkmark button)
+const handleMarkAsRead = (e, notificationId) => {
+  e.stopPropagation()  // Prevent event bubbling
+  onNotificationClick(notificationId)
+}
+```
+
+### Navigation Logic (Reusing Existing Config)
+
+**Use existing `getNavigationTab()` from `eventConfig.js`:**
+```javascript
+import { formatPanelMessage, getNavigationTab } from '../config/eventConfig'
+
+// Already maps event_type → dashboard tab:
+// 'friend_request_received' → 'friends'
+// 'campaign_invite_received' → 'campaigns'
+// 'game_started' → 'sessions'
+// etc.
+```
+
+### Visual Design
+
+```
+┌──────────────────────────────────────────────────────────┐
+│ Notifications                          [Mark all read]   │
+├──────────────────────────────────────────────────────────┤
+│ User123 sent you a friend request          │     [✓]     │  <- Unread (blue bg)
+│ 1/5/2026, 10:30:45 AM                      │             │      Vertical separator
+├──────────────────────────────────────────────────────────┤
+│ Player456 joined your campaign "Epic Quest"              │  <- Read (white bg, no CTA section)
+│ 1/4/2026, 3:15:22 PM                                     │
+└──────────────────────────────────────────────────────────┘
+```
+
+**Key visual elements:**
+- Vertical separator (`border-l`) between text and CTA area
+- CTA section only renders for unread notifications
+- Entire item looks like single cohesive row, not floating buttons
+- Subtle hover states for both clickable areas
+
+### Styling Details
+
+**Notification item container:**
+```javascript
+className={`flex border-b border-slate-100 ${!notification.read ? 'bg-blue-50' : ''}`}
+```
+
+**Text content button (left side):**
+```javascript
+className="flex-1 text-left p-4 hover:bg-slate-50 transition-colors"
+```
+
+**Vertical separator + CTA section (only for unread):**
+```javascript
+{!notification.read && (
+  <div className="flex items-center border-l border-slate-200">
+    <button
+      onClick={(e) => handleMarkAsRead(e, notification.id)}
+      className="px-4 h-full flex items-center text-slate-400
+                 hover:text-emerald-600 hover:bg-emerald-50 transition-colors"
+      aria-label="Mark as read"
+    >
+      <FontAwesomeIcon icon={faCheck} className="h-4 w-4" />
+    </button>
+  </div>
+)}
+```
+
+**Result:** The `border-l` creates a clean vertical separator, and the CTA button fills the full height of the row, maintaining the single-item illusion.
+
+### Files to Modify
+
+| File | Changes |
+|------|---------|
+| `NotificationPanel.js` | Restructure item layout, split handlers, add FontAwesome import |
+
+### Testing Checklist
+
+- [ ] Click text content → Navigates to tab, marks as read, panel stays open
+- [ ] Click checkmark → Marks as read, panel stays open, checkmark disappears
+- [ ] Click bell icon → Panel toggles (closes if open)
+- [ ] Click outside panel → Panel closes
+- [ ] Read notifications have no checkmark button
+- [ ] Unread notifications have checkmark button visible
+
+---
+
 ## Next Steps
 
 1. **Security Decision**: Fix api-game WebSocket auth now or defer?

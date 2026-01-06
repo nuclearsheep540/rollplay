@@ -17,13 +17,20 @@ import ScreenNameModal from './components/ScreenNameModal'
 import { useAuth } from './hooks/useAuth'
 import { useEvents } from '../shared/hooks/useEvents'
 import { useToast } from '../shared/hooks/useToast'
-import { ToastContainer } from '../shared/components/ToastNotification'
+import { getEventConfig } from '../shared/config/eventConfig'
 
 function DashboardContent() {
   const searchParams = useSearchParams()
   const tabParam = searchParams.get('tab')
   const [activeSection, setActiveSection] = useState(tabParam || 'campaigns')
   const [refreshTrigger, setRefreshTrigger] = useState(0)
+
+  // Sync activeSection when URL tab parameter changes (e.g., from notification click)
+  useEffect(() => {
+    if (tabParam && tabParam !== activeSection) {
+      setActiveSection(tabParam)
+    }
+  }, [tabParam])
 
   // Use auth hook for all authentication-related state and logic
   const {
@@ -50,9 +57,10 @@ function DashboardContent() {
     'friend_request_received': (message) => {
       setRefreshTrigger(prev => prev + 1)
       if (message.show_toast) {
+        const config = getEventConfig('friend_request_received')
         showToast({
-          type: 'info',
-          message: 'New friend request'
+          type: config.toastType,
+          message: config.toastMessage
         })
       }
     },
@@ -60,9 +68,32 @@ function DashboardContent() {
     'friend_request_accepted': (message) => {
       setRefreshTrigger(prev => prev + 1)
       if (message.show_toast) {
+        const config = getEventConfig('friend_request_accepted')
         showToast({
-          type: 'success',
-          message: 'Friend request accepted'
+          type: config.toastType,
+          message: config.toastMessage
+        })
+      }
+    },
+
+    'friend_request_declined': (message) => {
+      setRefreshTrigger(prev => prev + 1)
+      if (message.show_toast) {
+        const config = getEventConfig('friend_request_declined')
+        showToast({
+          type: config.toastType,
+          message: config.toastMessage
+        })
+      }
+    },
+
+    'friend_removed': (message) => {
+      setRefreshTrigger(prev => prev + 1)
+      if (message.show_toast) {
+        const config = getEventConfig('friend_removed')
+        showToast({
+          type: config.toastType,
+          message: config.toastMessage
         })
       }
     },
@@ -71,9 +102,10 @@ function DashboardContent() {
     'campaign_invite_received': (message) => {
       setRefreshTrigger(prev => prev + 1)
       if (message.show_toast) {
+        const config = getEventConfig('campaign_invite_received')
         showToast({
-          type: 'info',
-          message: 'New campaign invite'
+          type: config.toastType,
+          message: config.toastMessage
         })
       }
     },
@@ -81,9 +113,21 @@ function DashboardContent() {
     'campaign_invite_accepted': (message) => {
       setRefreshTrigger(prev => prev + 1)
       if (message.show_toast) {
+        const config = getEventConfig('campaign_invite_accepted')
         showToast({
-          type: 'success',
-          message: 'Player joined campaign'
+          type: config.toastType,
+          message: config.toastMessage
+        })
+      }
+    },
+
+    'campaign_invite_declined': (message) => {
+      setRefreshTrigger(prev => prev + 1)
+      if (message.show_toast) {
+        const config = getEventConfig('campaign_invite_declined')
+        showToast({
+          type: config.toastType,
+          message: config.toastMessage
         })
       }
     },
@@ -91,9 +135,10 @@ function DashboardContent() {
     'campaign_player_removed': (message) => {
       setRefreshTrigger(prev => prev + 1)
       if (message.show_toast) {
+        const config = getEventConfig('campaign_player_removed')
         showToast({
-          type: 'warning',
-          message: 'Removed from campaign'
+          type: config.toastType,
+          message: config.toastMessage
         })
       }
     },
@@ -102,9 +147,10 @@ function DashboardContent() {
     'game_started': (message) => {
       setRefreshTrigger(prev => prev + 1)
       if (message.show_toast) {
+        const config = getEventConfig('game_started')
         showToast({
-          type: 'success',
-          message: 'Game session started'
+          type: config.toastType,
+          message: config.toastMessage
         })
       }
     },
@@ -112,9 +158,10 @@ function DashboardContent() {
     'game_ended': (message) => {
       setRefreshTrigger(prev => prev + 1)
       if (message.show_toast) {
+        const config = getEventConfig('game_ended')
         showToast({
-          type: 'info',
-          message: 'Game session ended'
+          type: config.toastType,
+          message: config.toastMessage
         })
       }
     },
@@ -122,9 +169,10 @@ function DashboardContent() {
     'game_finished': (message) => {
       setRefreshTrigger(prev => prev + 1)
       if (message.show_toast) {
+        const config = getEventConfig('game_finished')
         showToast({
-          type: 'success',
-          message: 'Campaign milestone completed'
+          type: config.toastType,
+          message: config.toastMessage
         })
       }
     }
@@ -148,6 +196,8 @@ function DashboardContent() {
       onLogout={handleLogout}
       user={user}
       refreshTrigger={refreshTrigger}
+      toasts={toasts}
+      onDismissToast={dismissToast}
     >
       {/* Characters Section */}
       {activeSection === 'characters' && (
@@ -193,9 +243,6 @@ function DashboardContent() {
         updating={updatingScreenName}
         error={error}
       />
-
-      {/* Toast Notifications */}
-      <ToastContainer toasts={toasts} onDismiss={dismissToast} />
     </DashboardLayout>
   )
 }
