@@ -243,7 +243,15 @@ class UserRepository:
                 if aggregate.account_tag is not None:
                     model.account_tag = aggregate.account_tag
             else:
-                # Create new user
+                # Create new user - pre-generate account_tag for better UX
+                # User will see their final tag (e.g., "????#2345") before choosing username
+                account_tag = None
+                if aggregate.account_tag is None:
+                    # Generate a random tag that's not tied to any account_name yet
+                    # This will be used later when user sets their account_name
+                    account_tag = f"{random.randint(0, 9999):04d}"
+                    aggregate.account_tag = account_tag
+
                 model = UserModel(
                     email=aggregate.email,
                     screen_name=aggregate.screen_name,

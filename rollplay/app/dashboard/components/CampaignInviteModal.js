@@ -25,7 +25,7 @@ export default function CampaignInviteModal({ campaign, onClose, onInviteSuccess
 
   // Check if identifier is an account tag format (e.g., "claude#2345")
   const isAccountTag = (identifier) => {
-    return /^[a-zA-Z0-9][a-zA-Z0-9_-]{2,19}#\d{4}$/.test(identifier)
+    return /^[a-zA-Z0-9][a-zA-Z0-9_-]{2,29}#\d{4}$/.test(identifier)
   }
 
   // Validate identifier format: UUID or account tag
@@ -246,7 +246,7 @@ export default function CampaignInviteModal({ campaign, onClose, onInviteSuccess
                   type="text"
                   value={friendUuid}
                   onChange={(e) => setFriendUuid(e.target.value)}
-                  placeholder="Enter account tag (e.g., claude#2345)"
+                  placeholder="Enter username including account tag (e.g., steve#2345)"
                   className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
                 />
                 {lookupLoading && (

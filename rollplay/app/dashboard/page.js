@@ -253,6 +253,7 @@ function DashboardContent() {
       {/* Account Name Setup Modal (shown first, before screen name) */}
       <AccountNameModal
         show={showAccountNameModal}
+        user={user}
         onComplete={handleAccountNameComplete}
       />
 

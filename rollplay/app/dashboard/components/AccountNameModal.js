@@ -14,13 +14,14 @@ import { useState } from 'react'
  * The modal is blocking - user cannot dismiss without setting a name.
  *
  * Account name rules:
- * - 3-20 characters
+ * - 3-30 characters
  * - Alphanumeric + dash + underscore only
  * - Must start with letter or number
  *
- * After submission, the backend generates a unique 4-digit tag.
+ * The user's account_tag is pre-assigned during account creation,
+ * so we can show the final identifier (e.g., "username#2345") immediately.
  */
-export default function AccountNameModal({ show, onComplete }) {
+export default function AccountNameModal({ show, user, onComplete }) {
   const [accountName, setAccountName] = useState('')
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState(null)
@@ -31,7 +32,7 @@ export default function AccountNameModal({ show, onComplete }) {
   // Validation regex matching backend rules
   const isValidFormat = (name) => {
     if (!name) return false
-    const regex = /^[a-zA-Z0-9][a-zA-Z0-9_-]{2,19}$/
+    const regex = /^[a-zA-Z0-9][a-zA-Z0-9_-]{2,29}$/
     return regex.test(name)
   }
 
@@ -49,7 +50,7 @@ export default function AccountNameModal({ show, onComplete }) {
     }
 
     if (!isValidFormat(accountName.trim())) {
-      setError('Account name must be 3-20 characters, start with a letter or number, and contain only letters, numbers, dashes, and underscores')
+      setError('Account name must be 3-30 characters, start with a letter or number, and contain only letters, numbers, dashes, and underscores')
       return
     }
 
@@ -144,7 +145,7 @@ export default function AccountNameModal({ show, onComplete }) {
 
         <div className="mb-4">
           <label htmlFor="accountName" className="block text-sm font-medium text-slate-700 mb-2">
-            Account Name
+            Username
           </label>
           <input
             type="text"
@@ -153,14 +154,14 @@ export default function AccountNameModal({ show, onComplete }) {
             onChange={handleInputChange}
             onKeyPress={handleKeyPress}
             placeholder="e.g: dragon_slayer420, xo_stronkMage_ox, steve"
-            maxLength={20}
+            maxLength={30}
             className="w-full px-3 py-2 border border-slate-300 rounded-md text-slate-900 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
             disabled={submitting}
             autoFocus
           />
           <div className="flex justify-between text-xs mt-1">
-            <span className={charCount < 3 || charCount > 20 ? 'text-red-500' : 'text-slate-500'}>
-              {charCount}/20 characters (min 3)
+            <span className={charCount < 3 || charCount > 30 ? 'text-red-500' : 'text-slate-500'}>
+              {charCount}/30 characters (min 3)
             </span>
             {inputValue && (
               <span className={isValid ? 'text-green-600' : 'text-red-500'}>
@@ -171,13 +172,13 @@ export default function AccountNameModal({ show, onComplete }) {
         </div>
 
         {/* Preview of what the tag will look like */}
-        {inputValue && isValid && (
+        {inputValue && isValid && user?.account_tag && (
           <div className="mb-4 p-3 bg-slate-50 border border-slate-200 rounded-md">
             <p className="text-sm text-slate-600">
-              Your account tag will be: <span className="font-mono font-semibold text-indigo-600">{inputValue}#????</span>
+              Your account tag will be: <span className="font-mono font-semibold text-indigo-600">{inputValue}#{user.account_tag}</span>
             </p>
             <p className="text-xs text-slate-500 mt-1">
-              The 4-digit number will be generated automatically
+              This is your permanent identifier
             </p>
           </div>
         )}

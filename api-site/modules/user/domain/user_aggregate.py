@@ -33,10 +33,10 @@ def utc_now():
     return datetime.now(timezone.utc)
 
 # Regex for validating account_name format
-# - 3-20 characters
+# - 3-30 characters
 # - Alphanumeric + dash + underscore only
 # - Must start with letter or number
-_ACCOUNT_NAME_REGEX = re.compile(r'^[a-zA-Z0-9][a-zA-Z0-9_-]{2,19}$')
+_ACCOUNT_NAME_REGEX = re.compile(r'^[a-zA-Z0-9][a-zA-Z0-9_-]{2,29}$')
 
 
 @dataclass
@@ -145,7 +145,7 @@ class UserAggregate:
         This is a ONE-TIME operation - once set, cannot be changed.
 
         Validation rules for account_name:
-        - 3-20 characters
+        - 3-30 characters
         - Alphanumeric + dash + underscore only
         - Must start with letter or number
         - Stored as-entered (case preserved), compared case-insensitively
@@ -168,7 +168,7 @@ class UserAggregate:
         normalized_name = account_name.strip()
         if not _ACCOUNT_NAME_REGEX.match(normalized_name):
             raise ValueError(
-                "Account name must be 3-20 characters, start with a letter or number, "
+                "Account name must be 3-30 characters, start with a letter or number, "
                 "and contain only letters, numbers, dashes, and underscores"
             )
 

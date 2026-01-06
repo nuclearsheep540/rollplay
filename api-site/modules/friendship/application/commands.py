@@ -88,6 +88,10 @@ class SendFriendRequest:
         if not friend:
             raise ValueError(f"User '{friend_identifier}' not found")
 
+        # Prevent self-friending
+        if user_id == friend_uuid:
+            raise ValueError("You cannot send a friend request to yourself")
+
         # Check if friendship already exists
         existing_friendship = self.friendship_repo.get_by_canonical_ids(user_id, friend_uuid)
         if existing_friendship:

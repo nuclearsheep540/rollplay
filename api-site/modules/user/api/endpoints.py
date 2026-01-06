@@ -225,7 +225,7 @@ async def set_account_name(
     The server will generate a unique 4-digit tag to create the full identifier.
 
     Validation rules for account_name:
-    - 3-20 characters
+    - 3-30 characters
     - Alphanumeric + dash + underscore only
     - Must start with letter or number
 
@@ -242,16 +242,18 @@ async def set_account_name(
     if not UserAggregate.validate_account_name_format(request.account_name):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Account name must be 3-20 characters, start with a letter or number, "
+            detail="Account name must be 3-30 characters, start with a letter or number, "
                    "and contain only letters, numbers, dashes, and underscores"
         )
 
     try:
-        # Generate unique tag for this account_name
-        account_tag = user_repo.generate_unique_tag(request.account_name)
+        # Use the pre-assigned tag from user creation
+        # No need to generate a new one - it was already assigned deterministically
+        if not current_user.account_tag:
+            raise ValueError("User does not have a pre-assigned account tag")
 
-        # Set account name on aggregate (validates and sets both fields)
-        current_user.set_account_name(request.account_name, account_tag)
+        # Set account name on aggregate (validates and uses pre-assigned tag)
+        current_user.set_account_name(request.account_name, current_user.account_tag)
 
         # Persist changes
         user_repo.save(current_user)

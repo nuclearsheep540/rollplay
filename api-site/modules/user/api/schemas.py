@@ -26,7 +26,7 @@ class SetAccountNameRequest(BaseModel):
     to create a unique identifier like "claude#2345".
 
     Validation rules:
-    - 3-20 characters
+    - 3-30 characters
     - Alphanumeric + dash + underscore only
     - Must start with letter or number
     """

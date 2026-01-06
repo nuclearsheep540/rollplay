@@ -20,7 +20,7 @@ depends_on = None
 
 def upgrade() -> None:
     # Add account_name column (nullable - existing users won't have one yet)
-    op.add_column('users', sa.Column('account_name', sa.String(20), nullable=True))
+    op.add_column('users', sa.Column('account_name', sa.String(30), nullable=True))
 
     # Add account_tag column (4-digit discriminator, nullable)
     op.add_column('users', sa.Column('account_tag', sa.String(4), nullable=True))

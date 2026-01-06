@@ -36,14 +36,14 @@ export default function FriendsManager({ user, refreshTrigger }) {
   // Validate identifier format: UUID, account tag (name#1234), or friend code (word-word)
   const isValidIdentifier = (identifier) => {
     const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
-    const accountTagRegex = /^[a-zA-Z0-9][a-zA-Z0-9_-]{2,19}#\d{4}$/  // account tag: name#1234
+    const accountTagRegex = /^[a-zA-Z0-9][a-zA-Z0-9_-]{2,29}#\d{4}$/  // account tag: name#1234
     const friendCodeRegex = /^[a-z]+-[a-z]+$/i  // DEPRECATED: friendlywords format: word-word
     return uuidRegex.test(identifier) || accountTagRegex.test(identifier) || friendCodeRegex.test(identifier)
   }
 
   // Check if identifier is an account tag format
   const isAccountTag = (identifier) => {
-    return /^[a-zA-Z0-9][a-zA-Z0-9_-]{2,19}#\d{4}$/.test(identifier)
+    return /^[a-zA-Z0-9][a-zA-Z0-9_-]{2,29}#\d{4}$/.test(identifier)
   }
 
   // Copy account tag or friend code to clipboard
@@ -290,7 +290,7 @@ export default function FriendsManager({ user, refreshTrigger }) {
               type="text"
               value={friendCode}
               onChange={(e) => setFriendCode(e.target.value)}
-              placeholder="Enter account tag (e.g., claude#2345)"
+              placeholder="Enter username including tag (e.g. steve#2345)"
               className="w-full px-4 py-2 bg-slate-700 border border-slate-600 text-slate-200 rounded focus:outline-none focus:ring-2 focus:ring-purple-500"
               disabled={sending}
             />
