@@ -37,6 +37,10 @@ from modules.campaign.domain.campaign_aggregate import CampaignAggregate
 from shared.dependencies.auth import get_current_user_from_token
 from shared.dependencies.db import get_db
 from modules.user.domain.user_aggregate import UserAggregate
+from modules.user.orm.user_repository import UserRepository
+from modules.user.dependencies.providers import user_repository as get_user_repository
+from modules.events.event_manager import EventManager
+from modules.events.dependencies.providers import get_event_manager
 from sqlalchemy.orm import Session
 
 router = APIRouter()
@@ -251,11 +255,13 @@ async def add_player_to_campaign(
     campaign_id: UUID,
     player_id: UUID,
     current_user: UserAggregate = Depends(get_current_user_from_token),
-    campaign_repo: CampaignRepository = Depends(campaign_repository)
+    campaign_repo: CampaignRepository = Depends(campaign_repository),
+    user_repo: UserRepository = Depends(get_user_repository),
+    event_manager: EventManager = Depends(get_event_manager)
 ):
     """Add a player to the campaign (host only)"""
     try:
-        command = AddPlayerToCampaign(campaign_repo)
+        command = AddPlayerToCampaign(campaign_repo, user_repo, event_manager)
         campaign = command.execute(
             campaign_id=campaign_id,
             player_id=player_id,
@@ -271,11 +277,13 @@ async def remove_player_from_campaign(
     campaign_id: UUID,
     player_id: UUID,
     current_user: UserAggregate = Depends(get_current_user_from_token),
-    campaign_repo: CampaignRepository = Depends(campaign_repository)
+    campaign_repo: CampaignRepository = Depends(campaign_repository),
+    user_repo: UserRepository = Depends(get_user_repository),
+    event_manager: EventManager = Depends(get_event_manager)
 ):
     """Remove a player from the campaign (host only)"""
     try:
-        command = RemovePlayerFromCampaign(campaign_repo)
+        command = RemovePlayerFromCampaign(campaign_repo, user_repo, event_manager)
         campaign = command.execute(
             campaign_id=campaign_id,
             player_id=player_id,
@@ -291,6 +299,8 @@ async def accept_campaign_invite(
     campaign_id: UUID,
     current_user: UserAggregate = Depends(get_current_user_from_token),
     campaign_repo: CampaignRepository = Depends(campaign_repository),
+    user_repo: UserRepository = Depends(get_user_repository),
+    event_manager: EventManager = Depends(get_event_manager),
     game_repo: GameRepository = Depends(get_game_repository)
 ):
     """
@@ -299,7 +309,7 @@ async def accept_campaign_invite(
     Automatically adds the player to any active games in the campaign.
     """
     try:
-        command = AcceptCampaignInvite(campaign_repo, game_repo)
+        command = AcceptCampaignInvite(campaign_repo, user_repo, event_manager, game_repo)
         campaign = command.execute(
             campaign_id=campaign_id,
             player_id=current_user.id
@@ -313,11 +323,13 @@ async def accept_campaign_invite(
 async def decline_campaign_invite(
     campaign_id: UUID,
     current_user: UserAggregate = Depends(get_current_user_from_token),
-    campaign_repo: CampaignRepository = Depends(campaign_repository)
+    campaign_repo: CampaignRepository = Depends(campaign_repository),
+    user_repo: UserRepository = Depends(get_user_repository),
+    event_manager: EventManager = Depends(get_event_manager)
 ):
     """Decline a campaign invite (player only)"""
     try:
-        command = DeclineCampaignInvite(campaign_repo)
+        command = DeclineCampaignInvite(campaign_repo, user_repo, event_manager)
         campaign = command.execute(
             campaign_id=campaign_id,
             player_id=current_user.id

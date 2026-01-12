@@ -46,11 +46,12 @@ class CampaignEvents:
         }
 
     @staticmethod
-    def campaign_invite_accepted(campaign_id: UUID, campaign_name: str, player_id: UUID, player_screen_name: str, auto_added_to_game_ids: List[UUID]) -> List[Dict[str, Any]]:
+    def campaign_invite_accepted(host_id: UUID, campaign_id: UUID, campaign_name: str, player_id: UUID, player_screen_name: str, auto_added_to_game_ids: List[UUID]) -> Dict[str, Any]:
         """
-        Event: Player accepted campaign invite (notifies DM and all players)
+        Event: Player accepted campaign invite (notifies host/DM)
 
         Args:
+            host_id: Campaign host/DM to notify
             campaign_id: Campaign ID
             campaign_name: Campaign name
             player_id: Player who accepted
@@ -58,9 +59,10 @@ class CampaignEvents:
             auto_added_to_game_ids: List of game IDs player was auto-added to
 
         Returns:
-            List of event configuration dicts (one per recipient)
+            Event configuration dict
         """
-        return [{
+        return {
+            "user_id": host_id,
             "event_type": "campaign_invite_accepted",
             "data": {
                 "campaign_id": str(campaign_id),
@@ -71,12 +73,12 @@ class CampaignEvents:
             },
             "show_toast": True,
             "save_notification": True
-        }]
+        }
 
     @staticmethod
     def campaign_invite_declined(host_id: UUID, campaign_id: UUID, campaign_name: str, player_id: UUID, player_screen_name: str) -> Dict[str, Any]:
         """
-        Event: Player declined campaign invite (notifies host)
+        Event: Player declined campaign invite (updates host's local state)
 
         Args:
             host_id: Campaign DM/host
@@ -97,8 +99,8 @@ class CampaignEvents:
                 "player_id": str(player_id),
                 "player_screen_name": player_screen_name
             },
-            "show_toast": True,
-            "save_notification": True
+            "show_toast": False,  # Silent state update, no toast notification
+            "save_notification": False  # Don't persist - just updates local state
         }
 
     @staticmethod

@@ -135,14 +135,14 @@ export default function CampaignInviteModal({ campaign, onClose, onInviteSuccess
         throw new Error(errorData.detail || 'Failed to invite player to campaign')
       }
 
-      // Get updated campaign data with new invited_player_ids list
+      // Get updated campaign data
       const updatedCampaign = await response.json()
 
       setFriendUuid('')
       setLookupUser(null)
 
       if (onInviteSuccess) {
-        // Pass updated campaign data to parent
+        // Pass updated campaign data to parent - parent will update campaign prop
         await onInviteSuccess(updatedCampaign)
       }
     } catch (err) {
@@ -216,7 +216,7 @@ export default function CampaignInviteModal({ campaign, onClose, onInviteSuccess
               <h2 className="text-2xl font-bold text-slate-800">Invite Players to Campaign</h2>
               <p className="text-sm text-slate-600 mt-1">{campaign.title}</p>
               <p className="text-xs text-slate-500 mt-1">
-                Current players: {campaign.player_ids?.length || 0}
+                Current players: {campaign.player_ids?.length || 0} | Pending invites: {campaign.invited_player_ids?.length || 0}
               </p>
             </div>
             <button
