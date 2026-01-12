@@ -9,9 +9,16 @@ from shared.config import Settings
 # Initialize settings
 settings = Settings()
 
-# Database engine and base
+# Database engine and base with connection pool settings
 connection_url = settings.APP_DATABASE_URL
-engine = create_engine(connection_url)
+engine = create_engine(
+    connection_url,
+    pool_size=10,  # Increased from default 5
+    max_overflow=20,  # Increased from default 10
+    pool_timeout=60,  # Increased from default 30
+    pool_pre_ping=True,  # Test connections before using them
+    pool_recycle=3600  # Recycle connections after 1 hour
+)
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 Base = declarative_base()
 

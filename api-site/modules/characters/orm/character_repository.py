@@ -11,7 +11,8 @@ from modules.characters.domain.character_aggregate import (
     AbilityScores,
     CharacterRace,
     CharacterClass,
-    CharacterClassInfo
+    CharacterClassInfo,
+    CharacterBackground
 )
 
 
@@ -51,6 +52,8 @@ class CharacterRepository:
             hp_max=model.hp_max,
             ac=model.ac,
             is_alive=model.is_alive,
+            background=CharacterBackground(model.background) if model.background else None,
+            origin_ability_bonuses=model.origin_ability_bonuses,
         )
 
     def get_by_id(self, character_id: UUID) -> Optional[CharacterAggregate]:
@@ -110,6 +113,8 @@ class CharacterRepository:
             character_model.hp_current = aggregate.hp_current
             character_model.ac = aggregate.ac
             character_model.is_alive = aggregate.is_alive
+            character_model.background = aggregate.background.value if aggregate.background else None
+            character_model.origin_ability_bonuses = aggregate.origin_ability_bonuses
 
         else:
             # Create new character
@@ -127,7 +132,9 @@ class CharacterRepository:
                 hp_max=aggregate.hp_max,
                 hp_current=aggregate.hp_current,
                 ac=aggregate.ac,
-                is_alive=aggregate.is_alive
+                is_alive=aggregate.is_alive,
+                background=aggregate.background.value if aggregate.background else None,
+                origin_ability_bonuses=aggregate.origin_ability_bonuses
             )
             self.db.add(character_model)
 

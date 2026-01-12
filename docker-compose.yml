@@ -56,6 +56,9 @@ services:
     ports:
       - "8082:8082"
     restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
     networks:
       - default
 
@@ -153,6 +156,11 @@ services:
     volumes:
       - postgres_data:/var/lib/postgresql/data
     restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d rollplay"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
     networks:
       - default
 

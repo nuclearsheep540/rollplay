@@ -23,7 +23,9 @@ class FriendRequestResponse(BaseModel):
     requester_id: UUID
     recipient_id: UUID
     requester_screen_name: Optional[str] = None  # For incoming requests
+    requester_account_tag: Optional[str] = None  # For incoming requests
     recipient_screen_name: Optional[str] = None  # For outgoing requests
+    recipient_account_tag: Optional[str] = None  # For outgoing requests
     created_at: datetime
 
     class Config:
@@ -39,6 +41,7 @@ class FriendshipResponse(BaseModel):
     id: UUID
     friend_id: UUID  # The OTHER user in the friendship (computed)
     friend_screen_name: Optional[str] = None
+    friend_account_tag: Optional[str] = None
     created_at: datetime
 
     class Config:

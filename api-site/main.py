@@ -16,6 +16,10 @@ from modules.campaign.api.endpoints import router as campaign_router
 from modules.characters.api.endpoints import router as characters_router
 from modules.game.api.endpoints import router as game_router
 from modules.friendship.api.endpoints import router as friendship_router
+from modules.events.api.notification_endpoints import router as notification_router
+
+# Import WebSocket endpoint
+from modules.events.api.websocket_endpoint import websocket_events_endpoint
 
 # Configure logging from settings
 settings = Settings()
@@ -50,6 +54,10 @@ app.include_router(campaign_router, prefix="/api/campaigns")
 app.include_router(characters_router, prefix="/api/characters")
 app.include_router(game_router, prefix="/api/games")
 app.include_router(friendship_router, prefix="/api/friends")
+app.include_router(notification_router, prefix="/api/notifications")
+
+# Register WebSocket endpoint
+app.add_websocket_route("/ws/events", websocket_events_endpoint)
 
 # Health check endpoint
 @app.get("/health")

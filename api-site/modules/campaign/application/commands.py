@@ -4,8 +4,12 @@
 from typing import Optional
 from uuid import UUID
 import logging
+import asyncio
 
 from modules.campaign.domain.campaign_aggregate import CampaignAggregate
+from modules.campaign.domain.campaign_events import CampaignEvents
+from modules.events.event_manager import EventManager
+from modules.user.orm.user_repository import UserRepository
 
 logger = logging.getLogger(__name__)
 
@@ -78,8 +82,10 @@ class DeleteCampaign:
 
 
 class AddPlayerToCampaign:
-    def __init__(self, repository):
+    def __init__(self, repository, user_repo: UserRepository, event_manager: EventManager):
         self.repository = repository
+        self.user_repo = user_repo
+        self.event_manager = event_manager
 
     def execute(self, campaign_id: UUID, player_id: UUID, host_id: UUID) -> CampaignAggregate:
         """Invite a player to the campaign (host only) - sends pending invite"""
@@ -96,12 +102,29 @@ class AddPlayerToCampaign:
 
         # Save
         self.repository.save(campaign)
+
+        # Broadcast notification event
+        host = self.user_repo.get_by_id(host_id)
+        asyncio.create_task(
+            self.event_manager.broadcast(
+                **CampaignEvents.campaign_invite_received(
+                    invited_player_id=player_id,
+                    campaign_id=campaign_id,
+                    campaign_name=campaign.title,
+                    host_id=host_id,
+                    host_screen_name=host.screen_name if host else "Unknown"
+                )
+            )
+        )
+
         return campaign
 
 
 class RemovePlayerFromCampaign:
-    def __init__(self, repository):
+    def __init__(self, repository, user_repo: UserRepository, event_manager: EventManager):
         self.repository = repository
+        self.user_repo = user_repo
+        self.event_manager = event_manager
 
     def execute(self, campaign_id: UUID, player_id: UUID, host_id: UUID) -> CampaignAggregate:
         """Remove a player from the campaign (host only)"""
@@ -118,12 +141,27 @@ class RemovePlayerFromCampaign:
 
         # Save
         self.repository.save(campaign)
+
+        # Broadcast notification event
+        asyncio.create_task(
+            self.event_manager.broadcast(
+                **CampaignEvents.campaign_player_removed(
+                    removed_player_id=player_id,
+                    campaign_id=campaign_id,
+                    campaign_name=campaign.title,
+                    removed_by_id=host_id
+                )
+            )
+        )
+
         return campaign
 
 
 class AcceptCampaignInvite:
-    def __init__(self, repository, game_repository=None):
+    def __init__(self, repository, user_repo: UserRepository, event_manager: EventManager, game_repository=None):
         self.repository = repository
+        self.user_repo = user_repo
+        self.event_manager = event_manager
         self.game_repository = game_repository
 
     def execute(self, campaign_id: UUID, player_id: UUID) -> CampaignAggregate:
@@ -142,7 +180,8 @@ class AcceptCampaignInvite:
         # Save
         self.repository.save(campaign)
 
-        # Add player to any active games in this campaign
+        # Add player to any active games in this campaign and track which ones
+        auto_added_to_game_ids = []
         if self.game_repository:
             from modules.game.domain.game_aggregate import GameStatus
             # Get all games for this campaign
@@ -153,14 +192,32 @@ class AcceptCampaignInvite:
                     if player_id not in game.joined_users:
                         game.joined_users.append(player_id)
                         self.game_repository.save(game)
+                        auto_added_to_game_ids.append(game_id)
                         logger.info(f"✅ Auto-added late-joining player {player_id} to active game {game_id}")
+
+        # Broadcast notification event to host
+        player = self.user_repo.get_by_id(player_id)
+        asyncio.create_task(
+            self.event_manager.broadcast(
+                **CampaignEvents.campaign_invite_accepted(
+                    host_id=campaign.host_id,
+                    campaign_id=campaign_id,
+                    campaign_name=campaign.title,
+                    player_id=player_id,
+                    player_screen_name=player.screen_name if player else "Unknown",
+                    auto_added_to_game_ids=auto_added_to_game_ids
+                )
+            )
+        )
 
         return campaign
 
 
 class DeclineCampaignInvite:
-    def __init__(self, repository):
+    def __init__(self, repository, user_repo: UserRepository, event_manager: EventManager):
         self.repository = repository
+        self.user_repo = user_repo
+        self.event_manager = event_manager
 
     def execute(self, campaign_id: UUID, player_id: UUID) -> CampaignAggregate:
         """Player declines their campaign invite"""
@@ -173,5 +230,20 @@ class DeclineCampaignInvite:
 
         # Save
         self.repository.save(campaign)
+
+        # Broadcast state update to host (no toast, but updates their local state)
+        player = self.user_repo.get_by_id(player_id)
+        asyncio.create_task(
+            self.event_manager.broadcast(
+                **CampaignEvents.campaign_invite_declined(
+                    host_id=campaign.host_id,
+                    campaign_id=campaign_id,
+                    campaign_name=campaign.title,
+                    player_id=player_id,
+                    player_screen_name=player.screen_name if player else "Unknown"
+                )
+            )
+        )
+
         return campaign
 

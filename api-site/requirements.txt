@@ -1,6 +1,7 @@
 fastapi == 0.108.0
 pydantic-settings == 2.1.0
 uvicorn == 0.25.0
+websockets == 12.0  # Required for WebSocket support
 urllib3==1.26.19 # needed for OpenSSL 1.1.1+
 psycopg2-binary==2.9.9 # PostgreSQL adapter
 sqlalchemy==2.0.25

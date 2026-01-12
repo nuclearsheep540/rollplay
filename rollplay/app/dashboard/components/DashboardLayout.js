@@ -16,12 +16,17 @@ import {
   faUser,
   faRightFromBracket
 } from '@fortawesome/free-solid-svg-icons'
+import NotificationBell from '../../shared/components/NotificationBell'
 
-export default function DashboardLayout({ 
-  children, 
-  activeSection, 
-  setActiveSection, 
-  onLogout 
+export default function DashboardLayout({
+  children,
+  activeSection,
+  setActiveSection,
+  onLogout,
+  user,
+  refreshTrigger,
+  toasts = [],
+  onDismissToast
 }) {
   const router = useRouter()
   const searchParams = useSearchParams()
@@ -60,31 +65,27 @@ export default function DashboardLayout({
         <div className="text-2xl font-extrabold text-white flex items-center">
           <span>Tabletop Tavern</span>
         </div>
-        <nav>
-          <ul className="flex space-x-4 sm:space-x-6">
-            <li>
-              <button
-                onClick={() => switchSection('profile')}
-                className={`flex items-center px-3 py-2 rounded-lg transition-all duration-200 ${
-                  activeSection === 'profile'
-                    ? 'bg-purple-500/20 text-purple-400 font-semibold'
-                    : 'text-slate-400 hover:bg-purple-500/10 hover:text-purple-300'
-                }`}
-              >
-                <FontAwesomeIcon icon={faUser} className="text-base mr-2" />
-                <span className="font-semibold hidden sm:inline">Profile</span>
-              </button>
-            </li>
-            <li>
-              <button
-                onClick={onLogout}
-                className="flex items-center px-3 py-2 rounded-lg transition-all duration-200 text-slate-400 hover:bg-red-500/10 hover:text-red-400"
-              >
-                <FontAwesomeIcon icon={faRightFromBracket} className="text-base mr-2" />
-                <span className="font-semibold hidden sm:inline">Logout</span>
-              </button>
-            </li>
-          </ul>
+        <nav className="flex items-center gap-6">
+          <NotificationBell
+            userId={user?.id}
+            refreshTrigger={refreshTrigger}
+            toasts={toasts}
+            onDismissToast={onDismissToast}
+          />
+          <button
+            onClick={() => switchSection('profile')}
+            className="text-slate-400"
+            aria-label="Profile"
+          >
+            <FontAwesomeIcon icon={faUser} className="h-6 w-6" />
+          </button>
+          <button
+            onClick={onLogout}
+            className="text-slate-400"
+            aria-label="Logout"
+          >
+            <FontAwesomeIcon icon={faRightFromBracket} className="h-6 w-6" />
+          </button>
         </nav>
       </header>
 

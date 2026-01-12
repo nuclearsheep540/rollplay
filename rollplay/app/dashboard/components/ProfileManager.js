@@ -13,13 +13,14 @@ export default function ProfileManager({ user, onUserUpdate }) {
   const [screenName, setScreenName] = useState('')
   const [updatingScreenName, setUpdatingScreenName] = useState(false)
   const [error, setError] = useState(null)
-  const [copied, setCopied] = useState(false)
+  const [copiedAccountTag, setCopiedAccountTag] = useState(false)
 
-  // Copy UUID to clipboard
-  const handleCopyUUID = async () => {
-    await navigator.clipboard.writeText(user.id)
-    setCopied(true)
-    setTimeout(() => setCopied(false), 3000)
+  // Copy account tag to clipboard
+  const handleCopyAccountTag = async () => {
+    const accountTag = user.account_identifier || user.friend_code
+    await navigator.clipboard.writeText(accountTag)
+    setCopiedAccountTag(true)
+    setTimeout(() => setCopiedAccountTag(false), 3000)
   }
 
   // Update screen name
@@ -55,6 +56,19 @@ export default function ProfileManager({ user, onUserUpdate }) {
     }
   }
 
+  // Send test notification (dev only)
+  const sendTestNotification = async () => {
+    try {
+      await fetch('/api/notifications/test-notification', {
+        method: 'POST',
+        credentials: 'include'
+      })
+      console.log('Test notification sent')
+    } catch (error) {
+      console.error('Failed to send test notification:', error)
+    }
+  }
+
   if (!user) {
     return (
       <div className="flex items-center justify-center py-8">
@@ -81,7 +95,8 @@ export default function ProfileManager({ user, onUserUpdate }) {
           </div>
           <div>
             <p className="text-3xl font-semibold text-slate-200">{user.screen_name || user.email.split('@')[0]}</p>
-            <p className="text-slate-400 mt-1">{user.email}</p>
+            <p className="text-slate-400 mt-1">{user.email}</p> 
+            <p><small className="text-slate-400 mt-1">UUID: <span className="font-mono">{user.id}</span></small></p>
           </div>
         </div>
 
@@ -99,7 +114,9 @@ export default function ProfileManager({ user, onUserUpdate }) {
           <div className="space-y-4">
             {/* Screen Name Field */}
             <div>
-              <label htmlFor="screenName" className="block text-sm font-medium text-slate-300 mb-1">Screen Name</label>
+              <label htmlFor="screenName" className="block text-sm font-medium text-slate-300 mb-1">
+                Screen Name <span className="text-slate-500">(Display Name)</span>
+              </label>
               <input
                 type="text"
                 id="screenName"
@@ -109,43 +126,33 @@ export default function ProfileManager({ user, onUserUpdate }) {
                 className="w-full px-4 py-2 bg-slate-700 border border-slate-600 text-slate-200 rounded-lg focus:ring-2 focus:ring-purple-500 focus:outline-none"
                 disabled={updatingScreenName}
               />
+              <p className="text-xs text-slate-500 mt-1">This is your display name shown to others (can be changed)</p>
             </div>
 
-            {/* Email Field (Read-only) */}
+            {/* Account Tag Field (Read-only) */}
             <div>
-              <label htmlFor="email" className="block text-sm font-medium text-slate-300 mb-1">Email Address</label>
-              <input
-                type="email"
-                id="email"
-                value={user.email}
-                className="w-full px-4 py-2 bg-slate-900 border border-slate-700 text-slate-500 rounded-lg cursor-not-allowed"
-                disabled
-                title="Email cannot be changed"
-              />
-              <p className="text-xs text-slate-500 mt-1">Email address cannot be changed</p>
-            </div>
-            {/* ID Field (Read-only) */}
-            <div>
-              <label htmlFor="email" className="block text-sm font-medium text-slate-300 mb-1">UUID</label>
+              <label htmlFor="accountTag" className="block text-sm font-medium text-slate-300 mb-1">
+                Account Tag <span className="text-slate-500">(Username)</span>
+              </label>
               <div className="flex gap-2">
                 <input
-                  type="id"
-                  id="id"
-                  value={user.id}
-                  className="flex-1 px-4 py-2 bg-slate-900 border border-slate-700 text-slate-500 font-mono rounded-lg cursor-not-allowed"
+                  type="text"
+                  id="accountTag"
+                  value={user.account_identifier || user.friend_code || 'Not set'}
+                  className="flex-1 px-4 py-2 bg-slate-900 border border-slate-700 text-slate-300 font-mono rounded-lg cursor-not-allowed"
                   disabled
-                  title="id cannot be changed"
+                  title="Account tag cannot be changed"
                 />
                 <button
-                  onClick={handleCopyUUID}
+                  onClick={handleCopyAccountTag}
                   className="w-24 px-4 py-2 bg-purple-500/20 border border-purple-500/30 rounded-lg text-purple-400 hover:bg-purple-500/30 hover:shadow-lg hover:shadow-purple-500/30 transition-all font-medium flex items-center justify-center gap-2"
-                  title="Copy to clipboard"
+                  title="Copy account tag to clipboard"
                 >
                   <FontAwesomeIcon icon={faCopy} />
-                  {copied ? 'Copied!' : 'Copy'}
+                  {copiedAccountTag ? 'Copied!' : 'Copy'}
                 </button>
               </div>
-              <p className="text-xs text-slate-500 mt-1">ID cannot be changed</p>
+              <p className="text-xs text-slate-500 mt-1">Your unique identifier for friend requests (cannot be changed)</p>
             </div>
           </div>
 
@@ -165,6 +172,22 @@ export default function ProfileManager({ user, onUserUpdate }) {
           </div>
         </div>
       </div>
+
+      {/* Development Tools (dev only) */}
+      {process.env.NODE_ENV === 'development' && (
+        <div className="bg-yellow-50 p-6 rounded-xl border-2 border-yellow-500 max-w-2xl mx-auto">
+          <h3 className="text-lg font-semibold text-yellow-900 mb-3">Development Tools</h3>
+          <p className="text-sm text-yellow-800 mb-4">
+            These tools are only visible in development mode and help test notification features.
+          </p>
+          <button
+            onClick={sendTestNotification}
+            className="px-6 py-3 bg-yellow-600 text-white font-semibold rounded-lg hover:bg-yellow-700 transition-all hover:shadow-lg"
+          >
+            Send Test Notification
+          </button>
+        </div>
+      )}
     </div>
   )
 }

@@ -533,6 +533,18 @@ export default function CampaignManager({ user, refreshTrigger }) {
     fetchCampaigns(refreshTrigger === 0)
   }, [refreshTrigger])
 
+  // Sync selectedCampaignForInvite when campaigns update (e.g., from WebSocket events)
+  useEffect(() => {
+    if (selectedCampaignForInvite) {
+      // Find the updated version of the selected campaign in the campaigns array
+      const updatedCampaign = campaigns.find(c => c.id === selectedCampaignForInvite.id)
+      if (updatedCampaign) {
+        // Update the selected campaign with fresh data
+        setSelectedCampaignForInvite(updatedCampaign)
+      }
+    }
+  }, [campaigns])
+
   if (loading) {
     return (
       <div className="flex items-center justify-center p-8">

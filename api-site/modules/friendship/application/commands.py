@@ -3,12 +3,15 @@
 
 from uuid import UUID
 import logging
+import asyncio
 
 from modules.friendship.repositories.friendship_repository import FriendshipRepository
 from modules.friendship.repositories.friend_request_repository import FriendRequestRepository
 from modules.user.orm.user_repository import UserRepository
 from modules.friendship.domain.friendship_aggregate import FriendshipAggregate
 from modules.friendship.domain.friend_request_aggregate import FriendRequestAggregate
+from modules.friendship.domain.friendship_events import FriendshipEvents
+from modules.events.event_manager import EventManager
 
 logger = logging.getLogger(__name__)
 
@@ -27,19 +30,21 @@ class SendFriendRequest:
         self,
         friendship_repository: FriendshipRepository,
         friend_request_repository: FriendRequestRepository,
-        user_repository: UserRepository
+        user_repository: UserRepository,
+        event_manager: EventManager
     ):
         self.friendship_repo = friendship_repository
         self.friend_request_repo = friend_request_repository
         self.user_repo = user_repository
+        self.event_manager = event_manager
 
     def execute(self, user_id: UUID, friend_identifier: str) -> dict:
         """
-        Send friend request by friend's UUID or friend code.
+        Send friend request by friend's UUID, account tag, or friend code.
 
         Args:
             user_id: UUID of the requesting user
-            friend_identifier: Either a UUID string or friend code (e.g., "ABCD-1234")
+            friend_identifier: UUID string, account tag (e.g., "claude#2345"), or friend code
 
         Returns dict with:
         - 'type': 'friendship' or 'friend_request'
@@ -56,21 +61,36 @@ class SendFriendRequest:
         if not user:
             raise ValueError(f"User {user_id} not found")
 
-        # Determine if identifier is UUID or friend code and look up friend
+        # Determine identifier type and look up friend
+        friend = None
+        friend_uuid = None
+
+        # Try 1: Parse as UUID
         try:
-            # Try parsing as UUID first
             friend_uuid = UUID(friend_identifier)
             friend = self.user_repo.get_by_id(friend_uuid)
         except (ValueError, AttributeError):
-            # Not a valid UUID, try as friend code
+            pass
+
+        # Try 2: Look up by account identifier (e.g., "claude#2345")
+        if not friend and '#' in friend_identifier:
+            friend = self.user_repo.get_by_account_identifier(friend_identifier)
+            if friend:
+                friend_uuid = friend.id
+
+        # Try 3: Look up by friend code (DEPRECATED - for backward compatibility)
+        if not friend:
             friend = self.user_repo.get_by_friend_code(friend_identifier)
             if friend:
                 friend_uuid = friend.id
-            else:
-                raise ValueError(f"Friend code '{friend_identifier}' not found")
 
+        # If still not found, raise error
         if not friend:
-            raise ValueError(f"User not found")
+            raise ValueError(f"User '{friend_identifier}' not found")
+
+        # Prevent self-friending
+        if user_id == friend_uuid:
+            raise ValueError("You cannot send a friend request to yourself")
 
         # Check if friendship already exists
         existing_friendship = self.friendship_repo.get_by_canonical_ids(user_id, friend_uuid)
@@ -97,6 +117,28 @@ class SendFriendRequest:
 
             logger.info(f"Instant friendship created (mutual): {user_id} and {friend_uuid}")
 
+            # Broadcast friend_request_accepted event to BOTH users (mutual acceptance)
+            asyncio.create_task(
+                self.event_manager.broadcast(
+                    **FriendshipEvents.friend_request_accepted(
+                        requester_id=user_id,
+                        friend_id=friend_uuid,
+                        friend_screen_name=friend.screen_name,
+                        friendship_id=friendship.id
+                    )
+                )
+            )
+            asyncio.create_task(
+                self.event_manager.broadcast(
+                    **FriendshipEvents.friend_request_accepted(
+                        requester_id=friend_uuid,
+                        friend_id=user_id,
+                        friend_screen_name=user.screen_name,
+                        friendship_id=friendship.id
+                    )
+                )
+            )
+
             return {
                 'type': 'friendship',
                 'data': friendship,
@@ -112,6 +154,18 @@ class SendFriendRequest:
         # Persist
         self.friend_request_repo.save(friend_request)
         logger.info(f"Friend request sent from {user_id} to {friend_uuid}")
+
+        # Broadcast friend_request_received event to recipient
+        asyncio.create_task(
+            self.event_manager.broadcast(
+                **FriendshipEvents.friend_request_received(
+                    recipient_id=friend_uuid,
+                    requester_id=user_id,
+                    requester_screen_name=user.screen_name,
+                    request_id=friend_request.id
+                )
+            )
+        )
 
         return {
             'type': 'friend_request',
@@ -130,10 +184,14 @@ class AcceptFriendRequest:
     def __init__(
         self,
         friendship_repository: FriendshipRepository,
-        friend_request_repository: FriendRequestRepository
+        friend_request_repository: FriendRequestRepository,
+        user_repository: UserRepository,
+        event_manager: EventManager
     ):
         self.friendship_repo = friendship_repository
         self.friend_request_repo = friend_request_repository
+        self.user_repo = user_repository
+        self.event_manager = event_manager
 
     def execute(self, user_id: UUID, requester_id: UUID) -> FriendshipAggregate:
         """
@@ -152,6 +210,10 @@ class AcceptFriendRequest:
         if friend_request.recipient_id != user_id:
             raise ValueError("Cannot accept a friend request you sent")
 
+        # Get both users for screen names
+        requester = self.user_repo.get_by_id(requester_id)
+        recipient = self.user_repo.get_by_id(user_id)
+
         # Delete the friend request
         self.friend_request_repo.delete(requester_id, user_id)
 
@@ -161,13 +223,28 @@ class AcceptFriendRequest:
 
         logger.info(f"Friend request accepted: {requester_id} and {user_id} are now friends")
 
+        # Broadcast friend_request_accepted event to requester
+        asyncio.create_task(
+            self.event_manager.broadcast(
+                **FriendshipEvents.friend_request_accepted(
+                    requester_id=requester_id,
+                    friend_id=user_id,
+                    friend_screen_name=recipient.screen_name,
+                    friendship_id=friendship.id
+                )
+            )
+        )
+
         return friendship
 
 
 class DeclineFriendRequest:
     """Decline an incoming friend request (delete it)"""
 
-    def __init__(self, friend_request_repository: FriendRequestRepository):
+    def __init__(
+        self,
+        friend_request_repository: FriendRequestRepository
+    ):
         self.friend_request_repo = friend_request_repository
 
     def execute(self, user_id: UUID, requester_id: UUID) -> bool:
@@ -191,14 +268,72 @@ class DeclineFriendRequest:
         success = self.friend_request_repo.delete(requester_id, user_id)
         if success:
             logger.info(f"Friend request declined: {requester_id} -> {user_id}")
+            # No notification sent - prevents harassment and maintains privacy
 
         return success
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 class RemoveFriend:
     """Remove a friend (unfriend) - deletes the friendship"""
 
-    def __init__(self, friendship_repository: FriendshipRepository):
+    def __init__(
+        self,
+        friendship_repository: FriendshipRepository
+    ):
         self.friendship_repo = friendship_repository
 
     def execute(self, user_id: UUID, friend_id: UUID) -> bool:
@@ -224,5 +359,6 @@ class RemoveFriend:
         success = self.friendship_repo.delete(user_id, friend_id)
         if success:
             logger.info(f"Friendship removed: {user_id} and {friend_id}")
+            # No event broadcast needed - user will see updated state on next refresh
 
         return success

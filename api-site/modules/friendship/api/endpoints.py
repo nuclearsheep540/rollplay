@@ -29,6 +29,8 @@ from modules.friendship.repositories.friend_request_repository import FriendRequ
 from modules.user.orm.user_repository import UserRepository
 from modules.user.dependencies.providers import user_repository as get_user_repository
 from modules.user.domain.user_aggregate import UserAggregate
+from modules.events.event_manager import EventManager
+from modules.events.dependencies.providers import get_event_manager
 from shared.dependencies.auth import get_current_user_from_token
 
 logger = logging.getLogger(__name__)
@@ -44,7 +46,7 @@ def _to_friendship_response(
     """
     Convert FriendshipAggregate to FriendshipResponse.
 
-    Computes the "other user" as friend_id and looks up their screen name.
+    Computes the "other user" as friend_id and looks up their screen name and account tag.
     """
     # Determine which user is the "friend" (the other user)
     friend_user_id = friendship.get_other_user(current_user_id)
@@ -56,6 +58,7 @@ def _to_friendship_response(
         id=friendship.id,
         friend_id=friend_user_id,
         friend_screen_name=friend_user.screen_name if friend_user else None,
+        friend_account_tag=friend_user.account_identifier if friend_user else None,
         created_at=friendship.created_at
     )
 
@@ -68,9 +71,9 @@ def _to_friend_request_response(
     """
     Convert FriendRequestAggregate to FriendRequestResponse.
 
-    Populates the appropriate screen_name field based on direction:
-    - Incoming requests: populate requester_screen_name
-    - Outgoing requests: populate recipient_screen_name
+    Populates the appropriate screen_name and account_tag fields based on direction:
+    - Incoming requests: populate requester_screen_name and requester_account_tag
+    - Outgoing requests: populate recipient_screen_name and recipient_account_tag
     """
     requester = user_repo.get_by_id(friend_request.requester_id)
     recipient = user_repo.get_by_id(friend_request.recipient_id)
@@ -80,7 +83,9 @@ def _to_friend_request_response(
         requester_id=friend_request.requester_id,
         recipient_id=friend_request.recipient_id,
         requester_screen_name=requester.screen_name if requester else None,
+        requester_account_tag=requester.account_identifier if requester else None,
         recipient_screen_name=recipient.screen_name if recipient else None,
+        recipient_account_tag=recipient.account_identifier if recipient else None,
         created_at=friend_request.created_at
     )
 
@@ -91,7 +96,8 @@ async def send_friend_request(
     current_user: UserAggregate = Depends(get_current_user_from_token),
     friendship_repo: FriendshipRepository = Depends(get_friendship_repository),
     friend_request_repo: FriendRequestRepository = Depends(get_friend_request_repository),
-    user_repo: UserRepository = Depends(get_user_repository)
+    user_repo: UserRepository = Depends(get_user_repository),
+    event_manager: EventManager = Depends(get_event_manager)
 ):
     """
     Send a friend request by UUID.
@@ -99,7 +105,7 @@ async def send_friend_request(
     If a reverse request exists (mutual interest), both users become friends instantly.
     """
     try:
-        command = SendFriendRequest(friendship_repo, friend_request_repo, user_repo)
+        command = SendFriendRequest(friendship_repo, friend_request_repo, user_repo, event_manager)
         result = command.execute(
             user_id=current_user.id,
             friend_identifier=request.friend_identifier
@@ -130,11 +136,12 @@ async def accept_friend_request(
     current_user: UserAggregate = Depends(get_current_user_from_token),
     friendship_repo: FriendshipRepository = Depends(get_friendship_repository),
     friend_request_repo: FriendRequestRepository = Depends(get_friend_request_repository),
-    user_repo: UserRepository = Depends(get_user_repository)
+    user_repo: UserRepository = Depends(get_user_repository),
+    event_manager: EventManager = Depends(get_event_manager)
 ):
     """Accept an incoming friend request"""
     try:
-        command = AcceptFriendRequest(friendship_repo, friend_request_repo)
+        command = AcceptFriendRequest(friendship_repo, friend_request_repo, user_repo, event_manager)
         friendship = command.execute(
             user_id=current_user.id,
             requester_id=friend_id

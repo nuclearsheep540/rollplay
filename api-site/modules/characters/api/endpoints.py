@@ -13,7 +13,7 @@ from .schemas import (
 )
 from modules.characters.dependencies.providers import get_character_repository
 from modules.characters.orm.character_repository import CharacterRepository
-from modules.characters.application.commands import CreateCharacter, UpdateCharacter, UpdateAbilityScores, DeleteCharacter
+from modules.characters.application.commands import CreateCharacter, UpdateCharacter, UpdateAbilityScores, DeleteCharacter, CloneCharacter
 from modules.characters.application.queries import GetCharactersByUser, GetCharacterById
 from shared.dependencies.auth import get_current_user_from_token
 from modules.user.domain.user_aggregate import UserAggregate
@@ -210,7 +210,9 @@ async def update_character(
             ability_scores=ability_scores,
             hp_max=request.hp_max,
             hp_current=request.hp_current,
-            ac=request.ac
+            ac=request.ac,
+            background=request.background,
+            origin_ability_bonuses=request.origin_ability_bonuses
         )
 
         return _to_character_response(character)
@@ -255,6 +257,25 @@ async def update_character_ability_scores(
         character = command.execute(character_id, current_user.id, new_scores)
 
         return _to_character_response(character)
+
+    except ValueError as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(e)
+        )
+
+
+@router.post("/{character_id}/clone", response_model=CharacterResponse)
+async def clone_character(
+    character_id: UUID,
+    current_user: UserAggregate = Depends(get_current_user_from_token),
+    character_repo: CharacterRepository = Depends(get_character_repository)
+):
+    """Clone an existing character - creates a new copy with '(Copy)' appended to name"""
+    try:
+        command = CloneCharacter(character_repo)
+        cloned_character = command.execute(character_id, current_user.id)
+        return _to_character_response(cloned_character)
 
     except ValueError as e:
         raise HTTPException(

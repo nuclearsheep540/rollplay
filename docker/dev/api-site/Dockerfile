@@ -19,4 +19,8 @@ RUN mkdir -p /usr/local/lib/python3.8/site-packages/friendlywords/data && \
     curl -s https://raw.githubusercontent.com/glitchdotcom/friendly-words/main/words/collections.txt \
          -o /usr/local/lib/python3.8/site-packages/friendlywords/data/collections.txt
 
+COPY entrypoint.sh /entrypoint.sh
+RUN chmod +x /entrypoint.sh
+
+ENTRYPOINT ["/entrypoint.sh"]
 CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8082", "--reload"]
