@@ -23,7 +23,7 @@ class Settings(BaseSettings):
     """Main application configuration object"""
 
     # Validates environment value against Environment enum, throws error if invalid
-    _env_value: str = env.get("environment", "development")
+    _env_value: str = env.get("ENVIRONMENT", "development")
 
     @property
     def environment(self) -> str:
@@ -43,12 +43,29 @@ class Settings(BaseSettings):
                 f"Valid options are: {', '.join(valid_values)}"
             )
 
-    # DB
-    app_database_url: str = env.get(
-        "APP_DATABASE_URL",
-        "postgresql://postgres:postgres@postgres:5432/rollplay"
-    )
-    APP_DATABASE_URL = app_database_url  # Backwards compatibility
+    # DB - Construct database URLs from individual components
+    # This ensures passwords stay in sync when rotated in .env
+    _postgres_user: str = env.get("POSTGRES_USER", "postgres")
+    _postgres_password: str = env.get("POSTGRES_PASSWORD", "postgres")
+    _app_db_user: str = "rollplay"  # Application database user (fixed)
+    _app_db_password: str = env.get("APP_DB_PASSWORD", "rollplaydev_2026")
+    _postgres_host: str = "postgres"
+    _postgres_port: str = "5432"
+    _postgres_db: str = env.get("POSTGRES_DB", "rollplay")
+
+    @property
+    def database_url(self) -> str:
+        """Superuser database connection URL (for migrations, admin tasks)"""
+        return f"postgresql://{self._postgres_user}:{self._postgres_password}@{self._postgres_host}:{self._postgres_port}/{self._postgres_db}"
+
+    @property
+    def app_database_url(self) -> str:
+        """Application database connection URL (limited privileges)"""
+        return f"postgresql://{self._app_db_user}:{self._app_db_password}@{self._postgres_host}:{self._postgres_port}/{self._postgres_db}"
+
+    # Backwards compatibility aliases
+    DATABASE_URL = property(lambda self: self.database_url)
+    APP_DATABASE_URL = property(lambda self: self.app_database_url)
 
     # JWT
     jwt_secret_key: str = env.get("JWT_SECRET_KEY", "your-secret-key")

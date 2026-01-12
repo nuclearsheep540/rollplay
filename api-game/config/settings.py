@@ -21,7 +21,7 @@ class Settings(BaseSettings):
     # APP
     APP_NAME = "rollplay_app"
     APP_VERSION = env.get("app_version")
-    environment:Environment = getattr(Environment, env.get("environment"))
+    environment:Environment = getattr(Environment, env.get("ENVIRONMENT"))
     
     # MONGODB (for active game sessions)
     MONGO_USER = env.get("MONGO_INITDB_ROOT_USERNAME")

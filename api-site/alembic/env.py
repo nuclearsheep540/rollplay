@@ -51,8 +51,14 @@ target_metadata = Base.metadata
 # ... etc.
 
 def get_url():
-    """Get database URL from environment variables"""
-    return os.getenv("APP_DATABASE_URL", "postgresql://rollplay:rollplay_secure_2025@postgres:5432/rollplay")
+    """Get database URL from environment variables - construct from components"""
+    app_db_user = "rollplay"
+    app_db_password = os.getenv("APP_DB_PASSWORD", "rollplaydev_2026")
+    postgres_host = "postgres"
+    postgres_port = "5432"
+    postgres_db = os.getenv("POSTGRES_DB", "rollplay")
+
+    return f"postgresql://{app_db_user}:{app_db_password}@{postgres_host}:{postgres_port}/{postgres_db}"
 
 def run_migrations_offline() -> None:
     """Run migrations in 'offline' mode.

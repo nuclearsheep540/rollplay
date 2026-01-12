@@ -83,6 +83,10 @@ async def root():
         "description": "Site-wide API for Tabletop Tavern"
     }
 
+@app.get("/sentry-debug")
+async def trigger_error():
+    division_by_zero = 1 / 0
+
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(app, host="0.0.0.0", port=8082)

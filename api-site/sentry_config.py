@@ -4,8 +4,6 @@
 import os
 import sentry_sdk
 from sentry_sdk.integrations.fastapi import FastApiIntegration
-from sentry_sdk.integrations.sqlalchemy import SqlAlchemyIntegration
-from sentry_sdk.integrations.redis import RedisIntegration
 
 
 def init_sentry():
@@ -52,8 +50,6 @@ def init_sentry():
         environment=os.getenv("ENVIRONMENT", "development"),
         integrations=[
             FastApiIntegration(transaction_style="endpoint"),
-            SqlAlchemyIntegration(),
-            RedisIntegration(),
         ],
         traces_sample_rate=1.0,
         before_send=before_send,
