@@ -45,13 +45,23 @@ class Settings(BaseSettings):
 
     # DB - Construct database URLs from individual components
     # This ensures passwords stay in sync when rotated in .env
-    _postgres_user: str = env.get("POSTGRES_USER", "postgres")
-    _postgres_password: str = env.get("POSTGRES_PASSWORD", "postgres")
+    _postgres_user: str = env.get("POSTGRES_USER")
+    _postgres_password: str = env.get("POSTGRES_PASSWORD")
     _app_db_user: str = "rollplay"  # Application database user (fixed)
-    _app_db_password: str = env.get("APP_DB_PASSWORD", "rollplaydev_2026")
+    _app_db_password: str = env.get("APP_DB_PASSWORD")
     _postgres_host: str = "postgres"
     _postgres_port: str = "5432"
-    _postgres_db: str = env.get("POSTGRES_DB", "rollplay")
+    _postgres_db: str = env.get("POSTGRES_DB")
+
+    # Validate required database credentials
+    if not _postgres_user:
+        raise ValueError("POSTGRES_USER environment variable is required")
+    if not _postgres_password:
+        raise ValueError("POSTGRES_PASSWORD environment variable is required")
+    if not _app_db_password:
+        raise ValueError("APP_DB_PASSWORD environment variable is required")
+    if not _postgres_db:
+        raise ValueError("POSTGRES_DB environment variable is required")
 
     @property
     def database_url(self) -> str:
@@ -68,8 +78,12 @@ class Settings(BaseSettings):
     APP_DATABASE_URL = property(lambda self: self.app_database_url)
 
     # JWT
-    jwt_secret_key: str = env.get("JWT_SECRET_KEY", "your-secret-key")
-    jwt_algorithm: str = env.get("JWT_ALGORITHM", "HS256")
+    jwt_secret_key: str = env.get("JWT_SECRET_KEY")
+    jwt_algorithm: str = env.get("JWT_ALGORITHM", "HS256")  # Algorithm can have a safe default
+
+    # Validate required JWT configuration
+    if not jwt_secret_key:
+        raise ValueError("JWT_SECRET_KEY environment variable is required")
 
     # Logging configuration for dictConfig
     LOGGING_CONFIG = {

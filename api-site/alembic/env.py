@@ -53,10 +53,15 @@ target_metadata = Base.metadata
 def get_url():
     """Get database URL from environment variables - construct from components"""
     app_db_user = "rollplay"
-    app_db_password = os.getenv("APP_DB_PASSWORD", "rollplaydev_2026")
+    app_db_password = os.getenv("APP_DB_PASSWORD")
     postgres_host = "postgres"
     postgres_port = "5432"
-    postgres_db = os.getenv("POSTGRES_DB", "rollplay")
+    postgres_db = os.getenv("POSTGRES_DB")
+
+    if not app_db_password:
+        raise ValueError("APP_DB_PASSWORD environment variable is required")
+    if not postgres_db:
+        raise ValueError("POSTGRES_DB environment variable is required")
 
     return f"postgresql://{app_db_user}:{app_db_password}@{postgres_host}:{postgres_port}/{postgres_db}"
 
