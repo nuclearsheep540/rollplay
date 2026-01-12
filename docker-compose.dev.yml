@@ -77,6 +77,11 @@ services:
         build:
             context: ./rollplay
             dockerfile: ../docker/dev/rollplay/Dockerfile
+            args:
+                - NEXT_PUBLIC_SENTRY_DSN=${SENTRY_DSN_NEXTJS}
+                - SENTRY_ORG=${SENTRY_ORG}
+                - SENTRY_PROJECT=${SENTRY_PROJECT_NEXTJS}
+                - SENTRY_AUTH_TOKEN=${SENTRY_AUTH_TOKEN}
         ports:
             - "3000:3000"
         volumes:
