@@ -12,15 +12,35 @@ RUN npm run build
 
 # --- Runner Stage ---
 FROM node:18-alpine AS runner
+
+# Install dumb-init for proper signal handling
+RUN apk add --no-cache dumb-init
+
+# Create non-root user for running the application
+RUN addgroup -g 1001 -S nodejs && \
+    adduser -S nextjs -u 1001
+
 WORKDIR /app
 
 # Set production environment variables
 ENV NODE_ENV=production
 
-# Copy built application and only the production dependencies from the builder stage
-COPY --from=builder /app ./
+# Copy built application from builder stage
+COPY --from=builder --chown=nextjs:nodejs /app/.next/standalone ./
+COPY --from=builder --chown=nextjs:nodejs /app/.next/static ./.next/static
+COPY --from=builder --chown=nextjs:nodejs /app/public ./public
+
+# Create necessary directories with correct permissions
+RUN mkdir -p /app/.next/cache && \
+    chown -R nextjs:nodejs /app/.next/cache
+
+# Switch to non-root user
+USER nextjs
 
 EXPOSE 3000
 
-# Run your production Next.js server
-CMD ["npm", "run", "start"]
+# Use dumb-init to handle signals properly
+ENTRYPOINT ["dumb-init", "--"]
+
+# Run Next.js in standalone mode (more secure, smaller footprint)
+CMD ["node", "server.js"]

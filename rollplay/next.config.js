@@ -1,5 +1,8 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
+  // Enable standalone output for smaller, more secure Docker images
+  output: 'standalone',
+
   // Most API routing is handled by NGINX reverse proxy
   // These rewrites only apply when requests come directly to Next.js (rare in our setup)
   async rewrites() {
@@ -10,7 +13,7 @@ const nextConfig = {
         destination: 'http://nginx:80/api/auth/magic-link',
       },
       {
-        source: '/auth/validate', 
+        source: '/auth/validate',
         destination: 'http://nginx:80/api/auth/validate',
       },
       {
