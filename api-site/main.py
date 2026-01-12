@@ -10,6 +10,10 @@ from shared.config import Settings
 from shared.dependencies.db import configure_mappers
 from shared.error_handlers import validation_exception_handler
 
+# Initialize Sentry for monitoring and security alerts
+from sentry_config import init_sentry
+init_sentry()
+
 # Import aggregate routers directly
 from modules.user.api.endpoints import router as user_router
 from modules.campaign.api.endpoints import router as campaign_router

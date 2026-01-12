@@ -2,6 +2,18 @@
 FROM node:18-alpine AS builder
 WORKDIR /app
 
+# Accept Sentry configuration as build args
+ARG NEXT_PUBLIC_SENTRY_DSN
+ARG SENTRY_ORG
+ARG SENTRY_PROJECT
+ARG SENTRY_AUTH_TOKEN
+
+# Make build args available as environment variables during build
+ENV NEXT_PUBLIC_SENTRY_DSN=$NEXT_PUBLIC_SENTRY_DSN
+ENV SENTRY_ORG=$SENTRY_ORG
+ENV SENTRY_PROJECT=$SENTRY_PROJECT
+ENV SENTRY_AUTH_TOKEN=$SENTRY_AUTH_TOKEN
+
 # Copy package files first for better caching
 COPY package*.json ./
 RUN npm install

@@ -84,6 +84,10 @@ services:
             - rollplay_node_modules:/app/node_modules
         environment:
             - NODE_ENV=development
+            - NEXT_PUBLIC_SENTRY_DSN=${SENTRY_DSN_NEXTJS}
+            - NEXT_PUBLIC_ENVIRONMENT=development
+            - SENTRY_ORG=${SENTRY_ORG}
+            - SENTRY_PROJECT=${SENTRY_PROJECT_NEXTJS}
 
     mongo:
         stdin_open: true

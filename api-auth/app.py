@@ -9,6 +9,10 @@ from pydantic import BaseModel
 from typing import Optional
 from datetime import datetime, timedelta
 
+# Initialize Sentry for monitoring and security alerts
+from sentry_config import init_sentry
+init_sentry()
+
 from auth.passwordless import PasswordlessAuth
 from auth.jwt_handler import JWTHandler
 from models.user import User, UserCreate, UserResponse
