@@ -10,6 +10,10 @@ from shared.config import Settings
 from shared.dependencies.db import configure_mappers
 from shared.error_handlers import validation_exception_handler
 
+# Initialize Sentry for monitoring and security alerts
+from sentry_config import init_sentry
+init_sentry()
+
 # Import aggregate routers directly
 from modules.user.api.endpoints import router as user_router
 from modules.campaign.api.endpoints import router as campaign_router
@@ -78,6 +82,10 @@ async def root():
         "version": "1.0.0",
         "description": "Site-wide API for Tabletop Tavern"
     }
+
+@app.get("/sentry-debug")
+async def trigger_error():
+    division_by_zero = 1 / 0
 
 if __name__ == "__main__":
     import uvicorn

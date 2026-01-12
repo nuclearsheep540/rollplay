@@ -15,8 +15,9 @@
     "@fortawesome/react-fontawesome": "^3.0.0",
     "@headlessui/react": "^2.2.9",
     "@melloware/coloris": "^0.25.0",
+    "@sentry/nextjs": "^8.45.0",
     "dayjs": "^1.11.19",
-    "next": "^15.2.4",
+    "next": "^15.2.6",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
     "react-markdown": "^10.1.0"

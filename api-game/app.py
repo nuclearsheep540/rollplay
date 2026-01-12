@@ -6,6 +6,10 @@ import logging
 from fastapi import HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 
+# Initialize Sentry for monitoring and security alerts
+from sentry_config import init_sentry
+init_sentry()
+
 from gameservice import GameService, GameSettings
 from adventure_log_service import AdventureLogService
 from mapservice import MapService

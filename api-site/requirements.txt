@@ -12,3 +12,4 @@ requests==2.31.0 # For inter-service communication
 httpx==0.27.0 # Async HTTP client for api-game calls
 pytest==8.0.0 # Testing framework
 friendlywords==1.1.1 # Human-readable friend code generation
+sentry-sdk[fastapi]==1.45.0

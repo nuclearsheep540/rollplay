@@ -88,6 +88,14 @@ services:
     build:
       context: ./rollplay
       dockerfile: ../docker/prod/rollplay/Dockerfile
+      args:
+        - NEXT_PUBLIC_SENTRY_DSN=${SENTRY_DSN_NEXTJS}
+        - SENTRY_ORG=${SENTRY_ORG}
+        - SENTRY_PROJECT=${SENTRY_PROJECT_NEXTJS}
+        - SENTRY_AUTH_TOKEN=${SENTRY_AUTH_TOKEN}
+    environment:
+      - NEXT_PUBLIC_SENTRY_DSN=${SENTRY_DSN_NEXTJS}
+      - NEXT_PUBLIC_ENVIRONMENT=${ENVIRONMENT}
     ports:
       - "3000:3000"
     restart: unless-stopped
