@@ -115,7 +115,7 @@ export default function FriendsManager({ user, refreshTrigger }) {
       if (showLoading) setLoading(true)
 
       // Single API call to get all friendships categorized
-      const response = await fetch('/api/friends/', {
+      const response = await fetch('/api/friendships/', {
         credentials: 'include'
       })
 
@@ -148,7 +148,7 @@ export default function FriendsManager({ user, refreshTrigger }) {
       setSending(true)
       setError(null)
 
-      const response = await fetch('/api/friends/request', {
+      const response = await fetch('/api/friendships/request', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -179,7 +179,7 @@ export default function FriendsManager({ user, refreshTrigger }) {
       setActionLoading({ ...actionLoading, [actionKey]: true })
       setError(null)
 
-      const response = await fetch(`/api/friends/${requesterId}/accept`, {
+      const response = await fetch(`/api/friendships/${requesterId}/accept`, {
         method: 'POST',
         credentials: 'include'
       })
@@ -205,7 +205,7 @@ export default function FriendsManager({ user, refreshTrigger }) {
       setActionLoading({ ...actionLoading, [actionKey]: true })
       setError(null)
 
-      const response = await fetch(`/api/friends/${requesterId}/decline`, {
+      const response = await fetch(`/api/friendships/${requesterId}/decline`, {
         method: 'DELETE',
         credentials: 'include'
       })
@@ -235,7 +235,7 @@ export default function FriendsManager({ user, refreshTrigger }) {
       setActionLoading({ ...actionLoading, [actionKey]: true })
       setError(null)
 
-      const response = await fetch(`/api/friends/${friendId}`, {
+      const response = await fetch(`/api/friendships/${friendId}`, {
         method: 'DELETE',
         credentials: 'include'
       })
@@ -257,7 +257,6 @@ export default function FriendsManager({ user, refreshTrigger }) {
   // Friends are already categorized by backend - no filtering needed!
   const acceptedFriends = friends.accepted || []
   const pendingReceived = friends.incoming_requests || []
-  const pendingSent = friends.outgoing_requests || []
 
   if (loading) {
     return (
@@ -387,15 +386,13 @@ export default function FriendsManager({ user, refreshTrigger }) {
         )}
       </div>
 
-      {/* Pending Requests (Received from others) */}
-      <div className="bg-slate-800 p-6 rounded-lg border border-purple-500/30">
-        <h2 className="text-xl font-semibold text-purple-400 mb-4">
-          Pending Requests ({pendingReceived.length})
-        </h2>
-        <p className="text-sm text-slate-400 mb-4">Friend requests you've received from other players</p>
-        {pendingReceived.length === 0 ? (
-          <p className="text-slate-500 text-sm py-4">No pending requests</p>
-        ) : (
+      {/* Friend Requests - Only show if there are requests */}
+      {pendingReceived.length > 0 && (
+        <div className="bg-slate-800 p-6 rounded-lg border border-purple-500/30">
+          <h2 className="text-xl font-semibold text-purple-400 mb-4">
+            Friend Requests ({pendingReceived.length})
+          </h2>
+          <p className="text-sm text-slate-400 mb-4">Friend requests you've received from other players</p>
           <div className="space-y-3">
             {pendingReceived.map((request) => (
               <div
@@ -429,43 +426,8 @@ export default function FriendsManager({ user, refreshTrigger }) {
               </div>
             ))}
           </div>
-        )}
-      </div>
-
-      {/* Pending Invites (Sent by you) */}
-      <div className="bg-slate-800 p-6 rounded-lg border border-purple-500/30">
-        <h2 className="text-xl font-semibold text-purple-400 mb-4">
-          Pending Invites ({pendingSent.length})
-        </h2>
-        <p className="text-sm text-slate-400 mb-4">Friend invites you've sent to other players</p>
-        {pendingSent.length === 0 ? (
-          <p className="text-slate-500 text-sm py-4">No pending invites</p>
-        ) : (
-          <div className="space-y-3">
-            {pendingSent.map((request) => (
-              <div
-                key={request.id}
-                className="flex items-center justify-between p-4 bg-slate-900 rounded border border-slate-700"
-              >
-                <div>
-                  <p className="font-semibold text-slate-200">
-                    {request.recipient_screen_name || 'User'}
-                  </p>
-                  <p className="text-sm text-slate-500 font-mono">{request.recipient_account_tag || 'No tag'}</p>
-                  <p className="text-xs text-slate-500 mt-1">Waiting for response...</p>
-                </div>
-                <button
-                  onClick={() => removeFriend(request.recipient_id)}
-                  disabled={actionLoading[`remove-${request.recipient_id}`]}
-                  className="px-4 py-2 bg-red-600 text-white rounded-lg border border-red-500 hover:bg-red-500 disabled:bg-slate-600 disabled:border-slate-600 disabled:cursor-not-allowed transition-all"
-                >
-                  Cancel
-                </button>
-              </div>
-            ))}
-          </div>
-        )}
-      </div>
+        </div>
+      )}
     </div>
   )
 }

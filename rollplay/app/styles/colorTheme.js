@@ -71,7 +71,7 @@ export const STYLES = {
 
   tabActive: {
     borderBottomColor: THEME.borderActive,
-    color: THEME.textAccent
+    color: THEME.textOnDark
   },
 
   tabInactive: {

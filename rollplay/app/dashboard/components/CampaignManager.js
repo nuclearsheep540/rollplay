@@ -126,8 +126,35 @@ export default function CampaignManager({ user, refreshTrigger }) {
         setCampaigns(joined)
         setInvitedCampaigns(invited)
 
+        // Fetch members for each joined campaign (in parallel)
+        const campaignsWithMembers = await Promise.all(
+          joined.map(async (campaign) => {
+            try {
+              const membersResponse = await fetch(`/api/campaigns/${campaign.id}/members`, {
+                method: 'GET',
+                headers: { 'Content-Type': 'application/json' },
+                credentials: 'include'
+              })
+
+              if (membersResponse.ok) {
+                const members = await membersResponse.json()
+                console.log(`📋 Fetched ${members.length} members for campaign "${campaign.title}"`)
+                return { ...campaign, members }
+              } else {
+                console.error(`Failed to fetch members for campaign ${campaign.id}:`, membersResponse.status)
+                return { ...campaign, members: [] }
+              }
+            } catch (error) {
+              console.error(`Error fetching members for campaign ${campaign.id}:`, error)
+              return { ...campaign, members: [] }
+            }
+          })
+        )
+
+        setCampaigns(campaignsWithMembers)
+
         // Fetch games for joined campaigns only
-        await fetchAllGames(joined)
+        await fetchAllGames(campaignsWithMembers)
       } else {
         console.error('Failed to fetch campaigns:', response.status)
         setError('Failed to load campaigns')
@@ -603,11 +630,23 @@ export default function CampaignManager({ user, refreshTrigger }) {
 
       {/* Invited Campaigns Section - Only render if there are invites */}
       {invitedCampaigns.length > 0 && (
-        <div className="space-y-4">
-          <h3 className="text-lg font-[family-name:var(--font-metamorphous)] text-amber-400">Invited Campaigns</h3>
+        <div
+          className="space-y-4"
+          style={{
+            paddingLeft: 'clamp(0.5rem, 2.5vw, 3.5rem)',
+            paddingRight: 'clamp(0.5rem, 2.5vw, 3.5rem)'
+          }}
+        >
+          <h3 className="text-lg font-[family-name:var(--font-metamorphous)] font-bold" style={{color: THEME.textBold}}>Invited Campaigns</h3>
           <div className="space-y-4">
             {invitedCampaigns.map((campaign) => (
-              <div key={campaign.id} className="w-full">
+              <div
+                key={campaign.id}
+                className="w-full relative"
+                style={{
+                  marginBottom: '3rem'
+                }}
+              >
                 {/* Invited Campaign Card - NO gradients, NO min-width */}
                 <div
                   className="aspect-[16/4] w-full relative rounded-sm overflow-hidden border-2"
@@ -629,29 +668,29 @@ export default function CampaignManager({ user, refreshTrigger }) {
                     {/* Top Row - Title and Status Badge */}
                     <div className="flex items-start justify-between">
                       <div>
-                        <h4 className="text-3xl font-[family-name:var(--font-metamorphous)] mb-1 drop-shadow-lg" style={{color: THEME.textAccent}}>
+                        <h4 className="text-3xl font-[family-name:var(--font-metamorphous)] mb-1 drop-shadow-lg" style={{color: THEME.textOnDark}}>
                           {campaign.title || 'Unnamed Campaign'}
                         </h4>
                         <Badge>Pending Invite</Badge>
                       </div>
                     </div>
 
-                    {/* Bottom Row - Campaign Info and Actions */}
-                    <div className="flex items-end justify-between">
+                    {/* Bottom Row - Campaign Info */}
+                    <div>
                       {/* Campaign Description */}
-                      <div className="flex-1">
+                      <div className="mb-3">
                         {campaign.description && (
                           <p className="text-sm drop-shadow-md mb-2" style={{color: THEME.textOnDark}}>
                             {campaign.description}
                           </p>
                         )}
-                        <p className="text-sm drop-shadow-md" style={{color: THEME.textSecondary}}>
-                          Invited by campaign host
+                        <p className="text-sm drop-shadow-md mb-3" style={{color: THEME.textSecondary}}>
+                          {campaign.host_screen_name ? `Invited by ${campaign.host_screen_name}` : 'Invited by campaign host'}
                         </p>
                       </div>
 
                       {/* Action Buttons */}
-                      <div className="flex gap-2 ml-4">
+                      <div className="flex gap-2">
                         <Button
                           variant="success"
                           onClick={() => acceptCampaignInvite(campaign.id)}
@@ -768,11 +807,11 @@ export default function CampaignManager({ user, refreshTrigger }) {
                         {/* Top Row - Title and Action Buttons */}
                         <div className="flex items-start justify-between">
                         <div className="flex-1 pr-4">
-                          <h4 className="text-3xl font-[family-name:var(--font-metamorphous)] mb-1 drop-shadow-lg" style={{color: THEME.textAccent}}>
+                          <h4 className="text-3xl font-[family-name:var(--font-metamorphous)] mb-1 drop-shadow-lg" style={{color: THEME.textOnDark}}>
                             {campaign.title || 'Unnamed Campaign'}
                           </h4>
                           {campaign.description && (
-                            <p className="text-sm drop-shadow-md mt-2" style={{color: THEME.textOnDark}}>
+                            <p className="text-base drop-shadow-md mt-2" style={{color: THEME.textAccent, whiteSpace: 'pre-line'}}>
                               {campaign.description}
                             </p>
                           )}
@@ -871,7 +910,7 @@ export default function CampaignManager({ user, refreshTrigger }) {
                     <div className="pb-4 sm:pb-8 md:pb-10 pt-[calc(1rem+16px)] sm:pt-[calc(2rem+16px)] md:pt-[calc(2.5rem+16px)] px-[calc(1rem+12px)] sm:px-[calc(2rem+12px)] md:px-[calc(2.5rem+12px)]">
                       <div className="flex items-center justify-between mb-4">
                         <h3 className="text-xl font-semibold font-[family-name:var(--font-metamorphous)]" style={{color: THEME.textOnDark}}>
-                          Game Sessions for "{selectedCampaign?.title || ''}"
+                          Campaign Sessions for {selectedCampaign?.title || ''}
                         </h3>
                         <button
                           onClick={() => setSelectedCampaign(null)}
@@ -883,13 +922,9 @@ export default function CampaignManager({ user, refreshTrigger }) {
                         </button>
                       </div>
 
-                      <div className="mb-4 pb-4 border-b" style={{borderBottomColor: THEME.borderSubtle}}>
-                        <p className="text-sm" style={{color: THEME.textSecondary}}>{selectedCampaign?.description || 'No description provided.'}</p>
-                      </div>
-
                       <div className="space-y-3">
-                        {/* Create Session Template - Only show if user is host and no active games */}
-                        {campaign.host_id === user.id && activeGames.length === 0 && (
+                        {/* Create Session Template - Only show if user is host and no non-finished sessions exist */}
+                        {campaign.host_id === user.id && !campaignGames.some(g => ['inactive', 'active', 'starting', 'stopping'].includes(g.status?.toLowerCase())) && (
                           <button
                             onClick={() => openModal('gameCreate', { campaign: campaign.id, name: 'Session 1', maxPlayers: 8 })}
                             className="w-full flex items-center justify-between p-4 rounded-sm border-2 border-dashed transition-all hover:border-opacity-100"
@@ -1060,6 +1095,81 @@ export default function CampaignManager({ user, refreshTrigger }) {
                             ))}
                           </div>
                         )}
+
+                        {/* Divider before campaign members */}
+                        <div className="my-6 border-t" style={{borderColor: THEME.borderSubtle}}></div>
+
+                        {/* Campaign Members Section */}
+                        <div className="mb-6">
+                          <h3 className="text-xl font-semibold font-[family-name:var(--font-metamorphous)] mb-4" style={{color: THEME.textOnDark}}>
+                            Campaign Members
+                          </h3>
+
+                          {/* Loading State */}
+                          {!campaign.members && (
+                            <div className="flex items-center justify-center py-4">
+                              <div className="animate-spin rounded-full h-5 w-5 border-b-2"
+                                   style={{borderColor: THEME.borderActive}}></div>
+                              <span className="ml-2 text-sm" style={{color: THEME.textSecondary}}>
+                                Loading members...
+                              </span>
+                            </div>
+                          )}
+
+                          {/* Empty State */}
+                          {campaign.members?.length === 0 && (
+                            <p className="text-sm py-4 text-center" style={{color: THEME.textSecondary}}>
+                              No members yet. Invite players to join your campaign.
+                            </p>
+                          )}
+
+                          {/* Members Grid - 3 columns */}
+                          {campaign.members && campaign.members.length > 0 && (
+                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+                              {campaign.members.map((member) => (
+                                <div
+                                  key={member.user_id}
+                                  className="flex flex-col p-3 rounded-sm border"
+                                  style={{
+                                    backgroundColor: THEME.bgSecondary,
+                                    borderColor: THEME.borderSubtle
+                                  }}
+                                >
+                                  {/* Username with host badge */}
+                                  <div className="flex items-center gap-2 mb-1">
+                                    <p className="font-medium" style={{color: THEME.textOnDark}}>
+                                      {member.username}
+                                    </p>
+                                    {member.is_host && (
+                                      <span
+                                        className="text-xs px-2 py-0.5 rounded-sm font-semibold"
+                                        style={{
+                                          backgroundColor: '#854d0e',
+                                          color: '#fef3c7',
+                                          borderColor: '#fbbf24',
+                                          border: '1px solid'
+                                        }}
+                                      >
+                                        DM
+                                      </span>
+                                    )}
+                                  </div>
+
+                                  {/* Character info */}
+                                  {member.character_id ? (
+                                    <p className="text-sm" style={{color: THEME.textAccent}}>
+                                      {member.character_name} - Level {member.character_level} {member.character_race} {member.character_class}
+                                    </p>
+                                  ) : (
+                                    <p className="text-sm italic" style={{color: THEME.textSecondary}}>
+                                      No character selected
+                                    </p>
+                                  )}
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                        </div>
                       </div>
                     </div>
                   </div>
@@ -1216,7 +1326,11 @@ export default function CampaignManager({ user, refreshTrigger }) {
                   }}
                   rows="3"
                   placeholder="Enter campaign description"
+                  maxLength={1000}
                 />
+                <div className="text-right text-sm mt-1" style={{color: THEME.textSecondary}}>
+                  {(modals.campaignCreate.description || '').length}/1000 characters
+                </div>
               </div>
               <div>
                 <label className="block text-sm font-medium mb-2" style={{color: THEME.textOnDark}}>

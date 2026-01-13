@@ -10,6 +10,7 @@ import { useSearchParams } from 'next/navigation'
 import CampaignManager from './components/CampaignManager'
 import CharacterManager from './components/CharacterManager'
 import DashboardLayout from './components/DashboardLayout'
+import SocialManager from './components/SocialManager'
 import FriendsWidget from './components/FriendsWidget'
 import ScreenNameModal from './components/ScreenNameModal'
 import AccountNameModal from './components/AccountNameModal'
@@ -227,8 +228,21 @@ function DashboardContent() {
         </section>
       )}
 
-      {/* Friends Widget - Fixed bottom-right widget on all tabs */}
-      <FriendsWidget user={user} refreshTrigger={refreshTrigger} />
+      {/* Social Section - Profile and Friends */}
+      {activeSection === 'social' && (
+        <section>
+          <SocialManager
+            user={user}
+            refreshTrigger={refreshTrigger}
+            onUserUpdate={setUser}
+          />
+        </section>
+      )}
+
+      {/* Friends Widget - Fixed bottom-right widget on all tabs EXCEPT Social */}
+      {activeSection !== 'social' && (
+        <FriendsWidget user={user} refreshTrigger={refreshTrigger} />
+      )}
 
       {/* Account Name Setup Modal (shown first, before screen name) */}
       <AccountNameModal

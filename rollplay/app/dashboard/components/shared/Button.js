@@ -80,7 +80,7 @@ export function Badge({ children, className = '', ...props }) {
       className={`px-3 py-1 rounded-sm text-xs font-semibold border ${className}`}
       style={{
         backgroundColor: `${THEME.bgSecondary}CC`,
-        color: THEME.textPrimary,
+        color: COLORS.smoke,
         borderColor: THEME.borderDefault
       }}
       {...props}

@@ -49,6 +49,22 @@ class CreateGame:
         if not campaign.is_owned_by(host_id):
             raise ValueError("Only campaign host can create games")
 
+        # Business Rule: Only one session (INACTIVE/STARTING/ACTIVE/STOPPING) per campaign at a time
+        existing_sessions = []
+        for game_id in campaign.game_ids:
+            existing_game = self.game_repo.get_by_id(game_id)
+            # Check for INACTIVE, STARTING, ACTIVE, or STOPPING (exclude only FINISHED)
+            if existing_game and existing_game.status in [
+                GameStatus.INACTIVE, GameStatus.STARTING, GameStatus.ACTIVE, GameStatus.STOPPING
+            ]:
+                existing_sessions.append(existing_game.name)
+
+        if existing_sessions:
+            raise ValueError(
+                f"Campaign already has a session: '{existing_sessions[0]}'. "
+                f"Please finish or delete the existing session before creating a new one."
+            )
+
         # Create game aggregate (host_id auto-inherited from campaign)
         game = GameAggregate.create(name=name, campaign_id=campaign_id, host_id=host_id, max_players=max_players)
 
@@ -242,22 +258,22 @@ class StartGame:
         if game.status != GameStatus.INACTIVE:
             raise ValueError(f"Cannot start game in {game.status} status")
 
-        # 4. Business Rule: Only one non-inactive/non-finished session per campaign at a time
+        # 4. Business Rule: Only one session (INACTIVE/STARTING/ACTIVE/STOPPING) per campaign at a time
         campaign = self.campaign_repo.get_by_id(game.campaign_id)
         if campaign:
             active_sessions = []
             for game_id in campaign.game_ids:
                 existing_game = self.game_repo.get_by_id(game_id)
-                # Check for STARTING, ACTIVE, or STOPPING (exclude INACTIVE and FINISHED)
+                # Check for INACTIVE, STARTING, ACTIVE, or STOPPING (exclude only FINISHED)
                 if existing_game and existing_game.id != game.id and existing_game.status in [
-                    GameStatus.STARTING, GameStatus.ACTIVE, GameStatus.STOPPING
+                    GameStatus.INACTIVE, GameStatus.STARTING, GameStatus.ACTIVE, GameStatus.STOPPING
                 ]:
                     active_sessions.append(existing_game.name)
 
             if active_sessions:
                 raise ValueError(
-                    f"Campaign already has an active session: '{active_sessions[0]}'. "
-                    f"Please pause or finish the current session before starting a new one."
+                    f"Campaign already has an active or paused session: '{active_sessions[0]}'. "
+                    f"Please finish or delete the existing session before starting a new one."
                 )
 
         # 5. Set STARTING status

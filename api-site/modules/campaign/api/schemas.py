@@ -10,13 +10,13 @@ from pydantic import BaseModel, Field
 
 class CampaignCreateRequest(BaseModel):
     title: str = Field(..., min_length=1, max_length=100)
-    description: Optional[str] = Field(None, max_length=500)
+    description: Optional[str] = Field(None, max_length=1000)
     hero_image: Optional[str] = Field(None, max_length=255)
 
 
 class CampaignUpdateRequest(BaseModel):
     title: Optional[str] = Field(None, min_length=1, max_length=100)
-    description: Optional[str] = Field(None, max_length=500)
+    description: Optional[str] = Field(None, max_length=1000)
     hero_image: Optional[str] = Field(None, max_length=255)
 
 
@@ -69,6 +69,7 @@ class CampaignResponse(BaseModel):
     description: Optional[str]
     hero_image: Optional[str]
     host_id: str
+    host_screen_name: Optional[str] = None
     assets: Optional[dict]
     scenes: Optional[dict]
     npc_factory: Optional[dict]
@@ -93,6 +94,7 @@ class CampaignSummaryResponse(BaseModel):
     description: Optional[str]
     hero_image: Optional[str]
     host_id: str
+    host_screen_name: Optional[str] = None
     created_at: datetime
     updated_at: datetime
     total_games: int = 0
@@ -103,3 +105,16 @@ class CampaignSummaryResponse(BaseModel):
 
     class Config:
         from_attributes = True  # Allow automatic conversion from aggregates
+
+
+class CampaignMemberResponse(BaseModel):
+    """Campaign member with character details"""
+    user_id: str
+    username: str  # screen_name or email
+    account_tag: Optional[str] = None
+    character_id: Optional[str] = None
+    character_name: Optional[str] = None
+    character_level: Optional[int] = None
+    character_class: Optional[str] = None  # Multi-class formatted
+    character_race: Optional[str] = None
+    is_host: bool = False

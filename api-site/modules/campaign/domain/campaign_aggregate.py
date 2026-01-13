@@ -46,8 +46,8 @@ class CampaignAggregate:
 
         # Business rule: Description is optional but has length limit
         normalized_description = description.strip() if description else ""
-        if len(normalized_description) > 500:
-            raise ValueError("Campaign description too long (max 500 characters)")
+        if len(normalized_description) > 1000:
+            raise ValueError("Campaign description too long (max 1000 characters)")
 
         # Business rule: Host must be specified
         if not host_id:
@@ -113,8 +113,8 @@ class CampaignAggregate:
 
         if description is not None:
             normalized_description = description.strip()
-            if len(normalized_description) > 500:
-                raise ValueError("Campaign description too long (max 500 characters)")
+            if len(normalized_description) > 1000:
+                raise ValueError("Campaign description too long (max 1000 characters)")
             self.description = normalized_description
 
         # hero_image can be set to None to clear it, or a string path

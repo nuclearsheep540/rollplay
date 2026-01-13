@@ -8,10 +8,7 @@
 import { useRouter, useSearchParams } from 'next/navigation'
 import { useEffect } from 'react'
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
-import {
-  faUser,
-  faRightFromBracket
-} from '@fortawesome/free-solid-svg-icons'
+import { faRightFromBracket } from '@fortawesome/free-solid-svg-icons'
 import NotificationBell from '../../shared/components/NotificationBell'
 import { THEME, STYLES } from '@/app/styles/colorTheme'
 
@@ -28,16 +25,17 @@ export default function DashboardLayout({
   const router = useRouter()
   const searchParams = useSearchParams()
 
-  // Tab configuration - Only Campaigns and Characters (no icons)
+  // Tab configuration - Campaigns, Characters, and Social
   const tabs = [
     { id: 'campaigns', label: 'Campaigns' },
-    { id: 'characters', label: 'Characters' }
+    { id: 'characters', label: 'Characters' },
+    { id: 'social', label: 'Social' }
   ]
 
   // Initialize activeSection from URL parameter - run only once on mount
   useEffect(() => {
     const tabParam = searchParams.get('tab')
-    if (tabParam && ['characters', 'campaigns'].includes(tabParam)) {
+    if (tabParam && ['characters', 'campaigns', 'social'].includes(tabParam)) {
       setActiveSection(tabParam)
     } else if (!tabParam) {
       // If no tab parameter, set default and update URL
@@ -77,14 +75,6 @@ export default function DashboardLayout({
             toasts={toasts}
             onDismissToast={onDismissToast}
           />
-          <button
-            onClick={() => switchSection('profile')}
-            aria-label="Profile"
-            style={{color: THEME.textSecondary}}
-            className="hover:opacity-80 transition-opacity"
-          >
-            <FontAwesomeIcon icon={faUser} className="h-6 w-6" />
-          </button>
           <button
             onClick={onLogout}
             aria-label="Logout"

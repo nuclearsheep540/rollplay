@@ -43,7 +43,7 @@ export default function CampaignInviteModal({ campaign, onClose, onInviteSuccess
   const fetchFriends = async () => {
     try {
       setLoadingFriends(true)
-      const response = await fetch('/api/friends/', {
+      const response = await fetch('/api/friendships/', {
         credentials: 'include'
       })
 
