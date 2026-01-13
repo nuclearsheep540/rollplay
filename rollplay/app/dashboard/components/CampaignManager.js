@@ -819,9 +819,12 @@ export default function CampaignManager({ user, refreshTrigger, onCampaignUpdate
                   <div
                     className="w-full relative rounded-sm overflow-visible cursor-pointer border-2"
                     style={{
-                      // When selected, allow card to grow with content; otherwise maintain 16:4 aspect ratio
+                      // When selected, allow card to grow with content but never shrink below collapsed size
+                      // Collapsed: 16:4 aspect ratio. Selected: content-driven but min 16:4 equivalent
                       aspectRatio: isSelected ? 'unset' : '16/4',
-                      minHeight: '200px',
+                      // When selected, use 25vw (100vw / 4) as min-height to match 16:4 ratio at full width
+                      // Fall back to 200px as absolute minimum
+                      minHeight: isSelected ? 'max(200px, 25vw)' : '200px',
                       backgroundImage: `url(${campaign.hero_image || '/campaign-tile-bg.png'})`,
                       backgroundSize: 'cover',
                       backgroundPosition: 'center',
@@ -839,7 +842,7 @@ export default function CampaignManager({ user, refreshTrigger, onCampaignUpdate
                         right: selectedCampaign?.id === campaign.id ? 'calc(50% - 50vw)' : '0',
                         top: 0,
                         // Use height instead of bottom - percentage tracks parent height instantly
-                        height: selectedCampaign?.id === campaign.id ? 'calc(100% + 16px)' : '100%',
+                        height: selectedCampaign?.id === campaign.id ? 'calc(100% + 8px)' : '100%',
                         backgroundImage: `url(${campaign.hero_image || '/campaign-tile-bg.png'})`,
                         backgroundSize: 'cover',
                         backgroundPosition: 'center',
@@ -877,14 +880,16 @@ export default function CampaignManager({ user, refreshTrigger, onCampaignUpdate
                       }}
                     />
 
-                    {/* Content container - never moves */}
+                    {/* Content container - drives height when selected, constrained when collapsed */}
                     <div
                       className="flex flex-col justify-between p-6"
                       style={{
-                        // When selected, allow content to grow naturally; otherwise constrain to card size
+                        // When collapsed: absolute to stay within aspect-ratio bounds
+                        // When selected: relative so content can grow the card, with min-height to fill the card
                         position: isSelected ? 'relative' : 'absolute',
                         inset: isSelected ? 'unset' : 0,
-                        minHeight: isSelected ? 'auto' : '100%',
+                        // When selected, fill at least the card's min-height so justify-between pushes metadata down
+                        minHeight: isSelected ? 'max(calc(200px - 3rem), calc(25vw - 3rem))' : 'auto',
                         zIndex: 1
                       }}
                     >
@@ -970,11 +975,11 @@ export default function CampaignManager({ user, refreshTrigger, onCampaignUpdate
                         </div>
                       </div>
 
-                      {/* Middle - Spacer */}
-                      <div className="flex-1"></div>
+                      {/* Middle - Spacer with responsive minimum gap */}
+                      <div className="flex-1" style={{ minHeight: 'max(1rem, 2vh)' }}></div>
 
                       {/* Bottom Row - Campaign Metadata */}
-                      <div className="flex items-center justify-between" style={{paddingTop: '12px'}}>
+                      <div className="flex items-center justify-between">
                         <div className="text-sm drop-shadow" style={{color: THEME.textOnDark}}>
                           <span>Created: {campaign.created_at ? new Date(campaign.created_at).toLocaleDateString() : 'Unknown'}</span>
                           <span className="mx-2">•</span>
@@ -1000,7 +1005,7 @@ export default function CampaignManager({ user, refreshTrigger, onCampaignUpdate
                       borderRadius: '0.125rem',
                       borderTopLeftRadius: '0', // No top radius to connect with campaign tile
                       borderTopRightRadius: '0',
-                      marginTop: '-16px', // Negative margin to overlap with campaign tile
+                      marginTop: '-8px', // Negative margin to overlap with campaign tile
                       // Disable transitions during window resize for instant layout updates
                       transition: isResizing ? 'none' : 'left 200ms ease-in-out, width 200ms ease-in-out, max-height 200ms ease-in-out, border-width 200ms ease-in-out',
                       pointerEvents: selectedCampaign?.id === campaign.id ? 'auto' : 'none',
