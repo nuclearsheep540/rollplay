@@ -64,8 +64,8 @@ export default function DashboardLayout({
       {/* Top Header - Fixed */}
       <header className="flex-shrink-0 border-b py-4 px-4 sm:px-8 md:px-10 flex justify-between items-center"
               style={{backgroundColor: THEME.bgSecondary, borderBottomColor: THEME.borderSubtle, fontWeight: 1000}}>
-        <div className="text-2xl flex items-center font-[family-name:var(--font-ubuntu)]"
-             style={{color: COLORS.smoke}}>
+        <div className="text-2xl flex items-center font-[family-name:var(--font-inter)]"
+             style={{color: COLORS.smoke, fontWeight: 700}}>
           <span>TABLETOP</span><span style={{color: COLORS.silver}}>TAVERN</span>
         </div>
         <nav className="flex items-center gap-8">
