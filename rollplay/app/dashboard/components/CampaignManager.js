@@ -620,7 +620,21 @@ export default function CampaignManager({ user, refreshTrigger, onCampaignUpdate
       const element = descriptionRefs.current[campaignId]
       if (element) {
         // Compare scrollHeight (full content) with clientHeight (visible after clamp)
-        truncationState[campaignId] = element.scrollHeight > element.clientHeight
+        const isContentTruncated = element.scrollHeight > element.clientHeight
+
+        // Also check if container has enough vertical space for all content
+        // If the card is already tall enough, don't mark as truncated
+        const contentContainer = element.closest('.flex.flex-col.justify-between.p-6')
+        if (contentContainer && isContentTruncated) {
+          const containerHeight = contentContainer.offsetHeight
+          const fullContentHeight = element.scrollHeight
+
+          // If container has enough space to show full content (with some padding), don't truncate
+          const hasEnoughSpace = containerHeight >= (fullContentHeight + 100) // 100px buffer for other content
+          truncationState[campaignId] = !hasEnoughSpace
+        } else {
+          truncationState[campaignId] = isContentTruncated
+        }
       }
     })
     setIsTruncated(truncationState)
@@ -883,7 +897,7 @@ export default function CampaignManager({ user, refreshTrigger, onCampaignUpdate
                             {campaign.title || 'Unnamed Campaign'}
                           </h4>
                           {campaign.description && (
-                            <div className="text-base drop-shadow-md mt-2" style={{maxWidth: 'calc(100% - 180px)'}}>
+                            <div className="text-base drop-shadow-md mt-2" style={{maxWidth: '50%'}}>
                               <p
                                 ref={(el) => {
                                   // Only attach ref when NOT expanded, so we can measure clamped height
@@ -895,11 +909,11 @@ export default function CampaignManager({ user, refreshTrigger, onCampaignUpdate
                                 style={{
                                   color: THEME.textAccent,
                                   whiteSpace: 'pre-line',
-                                  display: (isSelected && expandedDescriptions[campaign.id]) ? 'inline' : '-webkit-box',
-                                  WebkitLineClamp: (isSelected && expandedDescriptions[campaign.id]) ? 'unset' : 3,
+                                  // Show full content only if: manually expanded OR (selected AND container has space)
+                                  display: (isSelected && expandedDescriptions[campaign.id]) || (isSelected && !isTruncated[campaign.id]) ? 'inline' : '-webkit-box',
+                                  WebkitLineClamp: (isSelected && expandedDescriptions[campaign.id]) || (isSelected && !isTruncated[campaign.id]) ? 'unset' : 3,
                                   WebkitBoxOrient: 'vertical',
-                                  overflow: (isSelected && expandedDescriptions[campaign.id]) ? 'visible' : 'hidden',
-                                  textOverflow: 'ellipsis'
+                                  overflow: (isSelected && expandedDescriptions[campaign.id]) || (isSelected && !isTruncated[campaign.id]) ? 'visible' : 'hidden'
                                 }}
                               >
                                 {campaign.description}
@@ -908,7 +922,7 @@ export default function CampaignManager({ user, refreshTrigger, onCampaignUpdate
                               {isSelected && !expandedDescriptions[campaign.id] && isTruncated[campaign.id] && (
                                 <button
                                   onClick={(e) => toggleDescriptionExpanded(campaign.id, e)}
-                                  className="ml-2 underline hover:no-underline transition-all"
+                                  className="block mt-1 underline hover:no-underline transition-all"
                                   style={{color: THEME.textAccent, fontSize: '0.875rem'}}
                                 >
                                   Read More...
@@ -918,7 +932,7 @@ export default function CampaignManager({ user, refreshTrigger, onCampaignUpdate
                               {isSelected && expandedDescriptions[campaign.id] && (
                                 <button
                                   onClick={(e) => toggleDescriptionExpanded(campaign.id, e)}
-                                  className="ml-2 underline hover:no-underline transition-all"
+                                  className="block mt-1 underline hover:no-underline transition-all"
                                   style={{color: THEME.textAccent, fontSize: '0.875rem'}}
                                 >
                                   Read Less
