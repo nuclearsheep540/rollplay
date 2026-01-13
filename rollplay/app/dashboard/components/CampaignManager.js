@@ -38,6 +38,7 @@ export default function CampaignManager({ user, refreshTrigger, onCampaignUpdate
   const [error, setError] = useState(null)
   const [selectedCampaign, setSelectedCampaign] = useState(null)
   const [allGames, setAllGames] = useState([]) // Store all games from all campaigns
+  const [isResizing, setIsResizing] = useState(false) // Track window resize state
 
   // Action state tracking (not modals, but ongoing operations)
   const [startingGame, setStartingGame] = useState(null) // Track game currently being started
@@ -582,6 +583,33 @@ export default function CampaignManager({ user, refreshTrigger, onCampaignUpdate
     fetchCampaigns(refreshTrigger === 0)
   }, [refreshTrigger])
 
+  // Detect window resize and temporarily disable transitions
+  useEffect(() => {
+    let resizeTimer
+    let isActuallyResizing = false
+
+    const handleResize = () => {
+      // Only set isResizing on actual window resize, not layout changes from clicks
+      if (!isActuallyResizing) {
+        isActuallyResizing = true
+        setIsResizing(true)
+      }
+
+      clearTimeout(resizeTimer)
+      // Resume transitions 100ms after resize stops
+      resizeTimer = setTimeout(() => {
+        setIsResizing(false)
+        isActuallyResizing = false
+      }, 100)
+    }
+
+    window.addEventListener('resize', handleResize)
+    return () => {
+      window.removeEventListener('resize', handleResize)
+      clearTimeout(resizeTimer)
+    }
+  }, [])
+
   // Sync campaign invite modal when campaigns update (e.g., from WebSocket events)
   useEffect(() => {
     if (modals.campaignInvite.campaign) {
@@ -759,7 +787,8 @@ export default function CampaignManager({ user, refreshTrigger, onCampaignUpdate
         style={{
           paddingLeft: selectedCampaign ? '0' : 'clamp(0.5rem, 2.5vw, 3.5rem)',
           paddingRight: selectedCampaign ? '0' : 'clamp(0.5rem, 2.5vw, 3.5rem)',
-          transition: 'padding 100ms cubic-bezier(0.42, 0, 1, 1)'
+          // Disable padding transition during window resize for instant updates
+          transition: isResizing ? 'none' : 'padding 100ms cubic-bezier(0.42, 0, 1, 1)'
         }}
       >
         <div className="space-y-4">
@@ -797,18 +826,20 @@ export default function CampaignManager({ user, refreshTrigger, onCampaignUpdate
                       backgroundSize: 'cover',
                       backgroundPosition: 'center',
                       borderColor: selectedCampaign?.id === campaign.id ? THEME.borderActive : THEME.borderDefault,
-                      transition: 'all 200ms ease-in-out'
+                      // Disable transitions during window resize for instant layout updates
+                      transition: isResizing ? 'none' : 'border-color 200ms ease-in-out'
                     }}
                     onClick={() => toggleCampaignDetails(campaign)}
                   >
-                    {/* Expanding background layer - slightly taller to overlap drawer */}
+                    {/* Expanding background layer - extends to full viewport width when selected */}
                     <div
                       className="absolute pointer-events-none"
                       style={{
                         left: selectedCampaign?.id === campaign.id ? 'calc(50% - 50vw)' : '0',
-                        width: selectedCampaign?.id === campaign.id ? '100vw' : '100%',
-                        height: selectedCampaign?.id === campaign.id ? 'calc(100% + 16px)' : '100%', // 16px overlap when expanded
+                        right: selectedCampaign?.id === campaign.id ? 'calc(50% - 50vw)' : '0',
                         top: 0,
+                        // Use height instead of bottom - percentage tracks parent height instantly
+                        height: selectedCampaign?.id === campaign.id ? 'calc(100% + 16px)' : '100%',
                         backgroundImage: `url(${campaign.hero_image || '/campaign-tile-bg.png'})`,
                         backgroundSize: 'cover',
                         backgroundPosition: 'center',
@@ -816,9 +847,13 @@ export default function CampaignManager({ user, refreshTrigger, onCampaignUpdate
                         borderBottomLeftRadius: selectedCampaign?.id === campaign.id ? '0' : '0.125rem',
                         borderBottomRightRadius: selectedCampaign?.id === campaign.id ? '0' : '0.125rem',
                         zIndex: selectedCampaign?.id === campaign.id ? 0 : -1,
-                        transition: selectedCampaign?.id === campaign.id
-                          ? 'left 100ms cubic-bezier(0.42, 0, 1, 1), width 100ms cubic-bezier(0.42, 0, 1, 1), height 100ms cubic-bezier(0.42, 0, 1, 1), border-radius 100ms'
-                          : 'left 100ms cubic-bezier(0.42, 0, 1, 1), width 100ms cubic-bezier(0.42, 0, 1, 1), height 100ms cubic-bezier(0.42, 0, 1, 1), border-radius 100ms, z-index 0ms 100ms'
+                        // Only animate horizontal position and border-radius, NOT height
+                        // Height follows parent instantly via percentage
+                        transition: isResizing
+                          ? 'none'
+                          : selectedCampaign?.id === campaign.id
+                            ? 'left 200ms ease-in-out, right 200ms ease-in-out, border-radius 200ms ease-in-out'
+                            : 'left 200ms ease-in-out, right 200ms ease-in-out, border-radius 200ms ease-in-out, z-index 0ms 200ms'
                       }}
                     >
                       {/* Background overlay */}
@@ -966,7 +1001,8 @@ export default function CampaignManager({ user, refreshTrigger, onCampaignUpdate
                       borderTopLeftRadius: '0', // No top radius to connect with campaign tile
                       borderTopRightRadius: '0',
                       marginTop: '-16px', // Negative margin to overlap with campaign tile
-                      transition: 'left 100ms cubic-bezier(0.42, 0, 1, 1), width 100ms cubic-bezier(0.42, 0, 1, 1), max-height 100ms cubic-bezier(0.42, 0, 1, 1), border-width 100ms cubic-bezier(0.42, 0, 1, 1)',
+                      // Disable transitions during window resize for instant layout updates
+                      transition: isResizing ? 'none' : 'left 100ms cubic-bezier(0.42, 0, 1, 1), width 100ms cubic-bezier(0.42, 0, 1, 1), max-height 100ms cubic-bezier(0.42, 0, 1, 1), border-width 100ms cubic-bezier(0.42, 0, 1, 1)',
                       pointerEvents: selectedCampaign?.id === campaign.id ? 'auto' : 'none',
                       visibility: selectedCampaign?.id === campaign.id ? 'visible' : 'hidden'
                     }}
