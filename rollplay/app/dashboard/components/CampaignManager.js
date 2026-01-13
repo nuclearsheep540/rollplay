@@ -788,7 +788,7 @@ export default function CampaignManager({ user, refreshTrigger, onCampaignUpdate
           paddingLeft: selectedCampaign ? '0' : 'clamp(0.5rem, 2.5vw, 3.5rem)',
           paddingRight: selectedCampaign ? '0' : 'clamp(0.5rem, 2.5vw, 3.5rem)',
           // Disable padding transition during window resize for instant updates
-          transition: isResizing ? 'none' : 'padding 100ms cubic-bezier(0.42, 0, 1, 1)'
+          transition: isResizing ? 'none' : 'padding 200ms ease-in-out'
         }}
       >
         <div className="space-y-4">
@@ -1002,7 +1002,7 @@ export default function CampaignManager({ user, refreshTrigger, onCampaignUpdate
                       borderTopRightRadius: '0',
                       marginTop: '-16px', // Negative margin to overlap with campaign tile
                       // Disable transitions during window resize for instant layout updates
-                      transition: isResizing ? 'none' : 'left 100ms cubic-bezier(0.42, 0, 1, 1), width 100ms cubic-bezier(0.42, 0, 1, 1), max-height 100ms cubic-bezier(0.42, 0, 1, 1), border-width 100ms cubic-bezier(0.42, 0, 1, 1)',
+                      transition: isResizing ? 'none' : 'left 200ms ease-in-out, width 200ms ease-in-out, max-height 200ms ease-in-out, border-width 200ms ease-in-out',
                       pointerEvents: selectedCampaign?.id === campaign.id ? 'auto' : 'none',
                       visibility: selectedCampaign?.id === campaign.id ? 'visible' : 'hidden'
                     }}
