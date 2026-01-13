@@ -15,6 +15,8 @@ import {
   faPlus,
   faCopy
 } from '@fortawesome/free-solid-svg-icons'
+import { COLORS, THEME } from '@/app/styles/colorTheme'
+import { Button } from './shared/Button'
 
 export default function CharacterManager({ user }) {
   const router = useRouter()
@@ -109,41 +111,41 @@ export default function CharacterManager({ user }) {
     if (loading) {
       return (
         <div className="flex justify-center items-center py-8">
-          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-purple-500"></div>
-          <span className="ml-2 text-slate-400">Loading characters...</span>
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2" style={{borderColor: THEME.textAccent}}></div>
+          <span className="ml-2" style={{color: THEME.textSecondary}}>Loading characters...</span>
         </div>
       )
     }
 
     if (error) {
       return (
-        <div className="bg-red-500/20 border border-red-500/30 rounded-lg p-4">
-          <p className="text-red-400">{error}</p>
+        <div className="rounded-sm border p-4" style={{backgroundColor: '#991b1b', borderColor: '#dc2626'}}>
+          <p style={{color: '#fca5a5'}}>{error}</p>
         </div>
       )
     }
 
     if (characters.length === 0) {
       return (
-        <div className="bg-slate-800 border border-purple-500/30 rounded-lg p-8 text-center">
-          <p className="text-slate-300 text-lg mb-4">No characters found</p>
-          <p className="text-slate-500">Create your first character to get started!</p>
+        <div className="border rounded-sm p-8 text-center" style={{backgroundColor: THEME.bgPanel, borderColor: THEME.borderSubtle}}>
+          <p className="text-lg mb-4" style={{color: THEME.textPrimary}}>No characters found</p>
+          <p style={{color: THEME.textSecondary}}>Create your first character to get started!</p>
         </div>
       )
     }
 
     return characters.map((char, index) => (
-      <div key={char.id || index} className="bg-slate-800 rounded-lg border border-purple-500/30 transition-all duration-200 flex flex-col overflow-hidden w-full max-w-[320px] min-w-[240px] mx-auto">
+      <div key={char.id || index} className="rounded-sm border transition-all duration-200 flex flex-col overflow-hidden w-full max-w-[320px] min-w-[240px] mx-auto" style={{backgroundColor: THEME.bgPanel, borderColor: THEME.borderSubtle}}>
         {/* Portrait Banner Area - 3:4 aspect ratio */}
-        <div className="aspect-[3/4] w-full bg-gradient-to-br from-purple-500/20 to-purple-500/5 border-b-2 border-purple-500/50 flex items-center justify-center relative">
-          <div className="w-24 h-24 bg-purple-500/30 rounded-full flex items-center justify-center border-2 border-purple-400/50">
-            <span className="text-5xl font-bold text-purple-400">
+        <div className="aspect-[3/4] w-full border-b-2 flex items-center justify-center relative" style={{backgroundColor: `${THEME.bgSecondary}`, borderBottomColor: THEME.borderDefault}}>
+          <div className="w-24 h-24 rounded-full flex items-center justify-center border-2" style={{backgroundColor: `${THEME.textAccent}30`, borderColor: `${THEME.textAccent}80`}}>
+            <span className="text-5xl font-bold" style={{color: THEME.textAccent}}>
               {char.character_name ? char.character_name[0].toUpperCase() : '?'}
             </span>
           </div>
           {char.active_game && (
             <div className="absolute top-2 right-2">
-              <span className="px-2 py-1 bg-green-500/90 backdrop-blur-sm text-white text-xs font-semibold rounded-full border border-green-400 flex items-center gap-1 shadow-lg">
+              <span className="px-2 py-1 backdrop-blur-sm text-white text-xs font-semibold rounded-sm border flex items-center gap-1 shadow-lg" style={{backgroundColor: '#16a34a', borderColor: '#22c55e'}}>
                 <FontAwesomeIcon icon={faLock} className="text-xs" />
                 In Game
               </span>
@@ -153,31 +155,32 @@ export default function CharacterManager({ user }) {
 
         {/* Character Info - Centered */}
         <div className="p-4 text-center flex flex-col flex-1">
-          <h3 className="text-xl font-bold text-slate-200 mb-1 truncate px-2">
+          <h3 className="text-xl font-bold mb-1 truncate px-2" style={{color: THEME.textPrimary}}>
             {char.character_name || 'Unnamed Character'}
           </h3>
-          <p className="text-sm text-slate-400 mb-2">
+          <p className="text-sm mb-2" style={{color: THEME.textSecondary}}>
             Level {char.level || 1} {char.character_race || 'Unknown'} {char.character_classes && char.character_classes.length > 0
               ? char.character_classes.map(c => c.character_class).join(' / ')
               : 'Unknown'}
           </p>
 
           {/* Stats Row - Inline with bullets */}
-          <div className="text-xs text-slate-500 mb-2">
+          <div className="text-xs mb-2" style={{color: THEME.textSecondary}}>
             <span>HP: {char.hp_current || 0}/{char.hp_max || 0}</span>
             <span className="mx-2">•</span>
             <span>AC: {char.ac || 0}</span>
           </div>
 
-          <p className="text-xs text-slate-500 mb-4">
+          <p className="text-xs mb-4" style={{color: THEME.textSecondary}}>
             Created: {char.created_at ? new Date(char.created_at).toLocaleDateString() : 'Unknown'}
           </p>
 
           {/* Icon-Only Action Buttons */}
-          <div className="flex justify-center gap-3 mt-auto pt-3 border-t border-slate-700">
+          <div className="flex justify-center gap-3 mt-auto pt-3 border-t" style={{borderTopColor: THEME.borderSubtle}}>
             <button
               onClick={() => router.push(`/character/edit/${char.id}`)}
-              className="w-10 h-10 rounded-lg bg-purple-500/20 text-purple-400 border border-purple-500/30 hover:bg-purple-500/30 hover:shadow-lg hover:shadow-purple-500/30 transition-all flex items-center justify-center"
+              className="w-10 h-10 rounded-sm border transition-all flex items-center justify-center"
+              style={{backgroundColor: THEME.bgSecondary, color: THEME.textAccent, borderColor: THEME.borderActive}}
               title="Edit Character"
             >
               <FontAwesomeIcon icon={faPenToSquare} />
@@ -203,7 +206,8 @@ export default function CharacterManager({ user }) {
                   console.error('Error cloning character:', error)
                 }
               }}
-              className="w-10 h-10 rounded-lg bg-slate-600/20 text-slate-300 border border-slate-600/30 hover:bg-slate-600/30 hover:shadow-lg hover:shadow-slate-500/30 transition-all flex items-center justify-center"
+              className="w-10 h-10 rounded-sm border transition-all flex items-center justify-center"
+              style={{backgroundColor: THEME.bgSecondary, color: THEME.textPrimary, borderColor: THEME.borderDefault}}
               title="Clone Character"
             >
               <FontAwesomeIcon icon={faCopy} />
@@ -211,11 +215,12 @@ export default function CharacterManager({ user }) {
             <button
               onClick={() => handleDeleteClick(char)}
               disabled={char.active_game}
-              className={`w-10 h-10 rounded-lg border flex items-center justify-center transition-all ${
-                char.active_game
-                  ? 'bg-slate-700 text-slate-500 border-slate-600 cursor-not-allowed opacity-50'
-                  : 'bg-red-500/20 text-red-400 border-red-500/30 hover:bg-red-500/30 hover:shadow-lg hover:shadow-red-500/30'
-              }`}
+              className="w-10 h-10 rounded-sm border flex items-center justify-center transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+              style={{
+                backgroundColor: char.active_game ? THEME.bgSecondary : '#991b1b',
+                color: char.active_game ? THEME.textSecondary : '#fca5a5',
+                borderColor: char.active_game ? THEME.borderDefault : '#dc2626'
+              }}
               title="Delete Character"
             >
               <FontAwesomeIcon icon={faTrash} />
@@ -229,20 +234,19 @@ export default function CharacterManager({ user }) {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="mb-8">
-        <h1 className="text-4xl font-bold text-white uppercase">Your Characters</h1>
-        <p className="mt-2 text-slate-400">Manage all your characters. Create new heroes, edit existing ones, or get them ready for the next adventure.</p>
-      </div>
-
-      {/* Action Buttons */}
-      <div className="flex justify-end items-center mb-6 gap-3">
-        <button
+      <div className="flex justify-between items-start mb-8">
+        <div>
+          <h1 className="text-4xl font-bold font-[family-name:var(--font-metamorphous)]" style={{color: THEME.textPrimary}}>Character Management</h1>
+          <p className="mt-2" style={{color: THEME.textSecondary}}>Create and manage your adventurers</p>
+        </div>
+        <Button
+          variant="primary"
           onClick={() => router.push('/character/create')}
-          className="bg-purple-600 text-white font-semibold px-4 py-2.5 rounded-lg border border-purple-500 hover:bg-purple-500 hover:shadow-lg hover:shadow-purple-500/30 transition-all duration-200 flex items-center gap-2 text-sm"
+          size="md"
         >
-          <FontAwesomeIcon icon={faPlus} />
-          Create New Character
-        </button>
+          <FontAwesomeIcon icon={faPlus} className="mr-2" />
+          Create Character
+        </Button>
       </div>
 
       {/* Characters Grid */}
@@ -252,45 +256,45 @@ export default function CharacterManager({ user }) {
 
       {/* Delete Confirmation Modal */}
       {showDeleteModal && (
-        <div className="fixed inset-0 bg-slate-950/90 backdrop-blur-sm flex items-center justify-center z-50">
-          <div className="bg-slate-800 border border-purple-500/30 rounded-lg shadow-2xl shadow-purple-500/20 p-6 max-w-md w-full mx-4">
-            <h3 className="text-xl font-bold text-purple-400 mb-2">Delete Character</h3>
-            <p className="text-slate-300 mb-1">
-              Are you sure you want to delete <strong className="text-purple-400">{characterToDelete?.character_name}</strong>?
+        <div className="fixed inset-0 backdrop-blur-sm flex items-center justify-center z-50" style={{backgroundColor: THEME.overlayDark}}>
+          <div className="border rounded-sm shadow-2xl p-6 max-w-md w-full mx-4" style={{backgroundColor: THEME.bgSecondary, borderColor: THEME.borderDefault}}>
+            <h3 className="text-xl font-bold mb-2" style={{color: THEME.textAccent}}>Delete Character</h3>
+            <p className="mb-1" style={{color: THEME.textPrimary}}>
+              Are you sure you want to delete <strong style={{color: THEME.textAccent}}>{characterToDelete?.character_name}</strong>?
             </p>
-            <p className="text-sm text-slate-500 mb-4">This action cannot be undone.</p>
+            <p className="text-sm mb-4" style={{color: THEME.textSecondary}}>This action cannot be undone.</p>
 
             {deleteError && (
-              <div className="mb-4 bg-red-500/20 border border-red-500/30 text-red-400 px-4 py-3 rounded">
+              <div className="mb-4 border px-4 py-3 rounded-sm" style={{backgroundColor: '#991b1b', borderColor: '#dc2626', color: '#fca5a5'}}>
                 {deleteError}
               </div>
             )}
 
             <div className="flex gap-3 justify-end">
-              <button
+              <Button
+                variant="ghost"
                 onClick={handleCancelDelete}
                 disabled={deleteLoading}
-                className="px-4 py-2 bg-slate-700 text-slate-300 border border-slate-600 rounded-lg hover:bg-slate-600 transition-colors disabled:opacity-50"
               >
                 Cancel
-              </button>
-              <button
+              </Button>
+              <Button
+                variant="danger"
                 onClick={handleConfirmDelete}
                 disabled={deleteLoading}
-                className="px-4 py-2 bg-red-600 text-white border border-red-500 rounded-lg hover:bg-red-500 hover:shadow-lg hover:shadow-red-500/30 transition-all disabled:opacity-50 flex items-center gap-2"
               >
                 {deleteLoading ? (
                   <>
-                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
                     Deleting...
                   </>
                 ) : (
                   <>
-                    <FontAwesomeIcon icon={faTrash} />
+                    <FontAwesomeIcon icon={faTrash} className="mr-2" />
                     Delete
                   </>
                 )}
-              </button>
+              </Button>
             </div>
           </div>
         </div>

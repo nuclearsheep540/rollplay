@@ -9,10 +9,8 @@ import { useState, useEffect, Suspense } from 'react'
 import { useSearchParams } from 'next/navigation'
 import CampaignManager from './components/CampaignManager'
 import CharacterManager from './components/CharacterManager'
-import ProfileManager from './components/ProfileManager'
-import FriendsManager from './components/FriendsManager'
-import GamesManager from './components/GamesManager'
 import DashboardLayout from './components/DashboardLayout'
+import FriendsWidget from './components/FriendsWidget'
 import ScreenNameModal from './components/ScreenNameModal'
 import AccountNameModal from './components/AccountNameModal'
 import { useAuth } from './hooks/useAuth'
@@ -215,13 +213,6 @@ function DashboardContent() {
       toasts={toasts}
       onDismissToast={dismissToast}
     >
-      {/* Characters Section */}
-      {activeSection === 'characters' && (
-        <section>
-          <CharacterManager user={user} />
-        </section>
-      )}
-
       {/* Campaigns Section */}
       {activeSection === 'campaigns' && (
         <section>
@@ -229,26 +220,15 @@ function DashboardContent() {
         </section>
       )}
 
-      {/* Sessions Section */}
-      {activeSection === 'sessions' && (
+      {/* Characters Section */}
+      {activeSection === 'characters' && (
         <section>
-          <GamesManager user={user} refreshTrigger={refreshTrigger} />
+          <CharacterManager user={user} />
         </section>
       )}
 
-      {/* Friends Section */}
-      {activeSection === 'friends' && (
-        <section>
-          <FriendsManager user={user} refreshTrigger={refreshTrigger} />
-        </section>
-      )}
-
-      {/* Profile Section */}
-      {activeSection === 'profile' && (
-        <section>
-          <ProfileManager user={user} onUserUpdate={setUser} />
-        </section>
-      )}
+      {/* Friends Widget - Fixed bottom-right widget on all tabs */}
+      <FriendsWidget user={user} refreshTrigger={refreshTrigger} />
 
       {/* Account Name Setup Modal (shown first, before screen name) */}
       <AccountNameModal

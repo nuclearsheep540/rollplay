@@ -6,6 +6,8 @@
 'use client'
 
 import { useState, useEffect } from 'react'
+import { THEME } from '@/app/styles/colorTheme'
+import { Button } from './shared/Button'
 
 export default function CampaignInviteModal({ campaign, onClose, onInviteSuccess }) {
   const [friendUuid, setFriendUuid] = useState('')
@@ -202,26 +204,29 @@ export default function CampaignInviteModal({ campaign, onClose, onInviteSuccess
 
   return (
     <div
-      className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4"
+      className="fixed inset-0 flex items-center justify-center z-50 p-4"
+      style={{backgroundColor: THEME.overlayDark}}
       onClick={onClose}
     >
       <div
-        className="bg-white rounded-lg shadow-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto"
+        className="rounded-sm shadow-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto border"
+        style={{backgroundColor: THEME.bgSecondary, borderColor: THEME.borderDefault}}
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
-        <div className="p-6 border-b border-slate-200">
+        <div className="p-6 border-b" style={{borderBottomColor: THEME.borderSubtle}}>
           <div className="flex items-center justify-between">
             <div>
-              <h2 className="text-2xl font-bold text-slate-800">Invite Players to Campaign</h2>
-              <p className="text-sm text-slate-600 mt-1">{campaign.title}</p>
-              <p className="text-xs text-slate-500 mt-1">
+              <h2 className="text-2xl font-bold font-[family-name:var(--font-metamorphous)]" style={{color: THEME.textOnDark}}>Invite Players to Campaign</h2>
+              <p className="text-sm mt-1" style={{color: THEME.textSecondary}}>{campaign.title}</p>
+              <p className="text-xs mt-1" style={{color: THEME.textSecondary}}>
                 Current players: {campaign.player_ids?.length || 0} | Pending invites: {campaign.invited_player_ids?.length || 0}
               </p>
             </div>
             <button
               onClick={onClose}
-              className="text-slate-400 hover:text-slate-600 text-2xl font-bold"
+              className="text-2xl font-bold hover:opacity-80 transition-opacity"
+              style={{color: THEME.textSecondary}}
             >
               ×
             </button>
@@ -232,14 +237,14 @@ export default function CampaignInviteModal({ campaign, onClose, onInviteSuccess
         <div className="p-6 space-y-6">
           {/* Error Message */}
           {error && (
-            <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded">
+            <div className="border px-4 py-3 rounded-sm" style={{backgroundColor: '#7f1d1d', borderColor: '#dc2626', color: THEME.textAccent}}>
               {error}
             </div>
           )}
 
           {/* Invite by Account Tag Form */}
           <div>
-            <h3 className="text-lg font-semibold text-slate-800 mb-3">Invite by Account Tag</h3>
+            <h3 className="text-lg font-semibold mb-3" style={{color: THEME.textOnDark}}>Invite by Account Tag</h3>
             <form onSubmit={handleInviteByUuid} className="space-y-3">
               <div>
                 <input
@@ -247,62 +252,70 @@ export default function CampaignInviteModal({ campaign, onClose, onInviteSuccess
                   value={friendUuid}
                   onChange={(e) => setFriendUuid(e.target.value)}
                   placeholder="Enter username including account tag (e.g., steve#2345)"
-                  className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                  className="w-full px-4 py-2 border rounded-sm focus:ring-2 focus:outline-none"
+                  style={{
+                    backgroundColor: THEME.bgPrimary,
+                    borderColor: THEME.borderDefault,
+                    color: THEME.textPrimary
+                  }}
                 />
                 {lookupLoading && (
-                  <p className="text-sm text-slate-500 mt-2">Looking up user...</p>
+                  <p className="text-sm mt-2" style={{color: THEME.textSecondary}}>Looking up user...</p>
                 )}
                 {lookupError && (
-                  <p className="text-sm text-red-500 mt-2">{lookupError}</p>
+                  <p className="text-sm mt-2" style={{color: '#dc2626'}}>{ lookupError}</p>
                 )}
                 {lookupUser && (
-                  <div className="mt-2 p-3 bg-purple-50 border border-purple-200 rounded-lg">
-                    <p className="text-sm text-slate-700">
+                  <div className="mt-2 p-3 border rounded-sm" style={{backgroundColor: '#166534', borderColor: '#16a34a'}}>
+                    <p className="text-sm" style={{color: THEME.textAccent}}>
                       Found: <span className="font-semibold">{lookupUser.display_name}</span>
                     </p>
                     {getUserStatusMessage(lookupUser.id) && (
-                      <p className="text-sm text-orange-600 mt-1">
+                      <p className="text-sm mt-1" style={{color: '#fbbf24'}}>
                         ⚠️ {getUserStatusMessage(lookupUser.id)}
                       </p>
                     )}
                   </div>
                 )}
               </div>
-              <button
+              <Button
                 type="submit"
+                variant="primary"
                 disabled={!lookupUser || inviting || !canInviteUser(lookupUser?.id)}
-                className="w-full bg-purple-600 hover:bg-purple-700 text-white px-4 py-2 rounded-lg font-semibold disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                className="w-full"
               >
                 {inviting ? 'Inviting Player...' : 'Invite Player to Campaign'}
-              </button>
+              </Button>
             </form>
           </div>
 
           {/* Friends List */}
           <div>
-            <h3 className="text-lg font-semibold text-slate-800 mb-3">Or invite from friends</h3>
+            <h3 className="text-lg font-semibold mb-3" style={{color: THEME.textOnDark}}>Or invite from friends</h3>
             {loadingFriends ? (
-              <p className="text-sm text-slate-500">Loading friends...</p>
+              <p className="text-sm" style={{color: THEME.textSecondary}}>Loading friends...</p>
             ) : friends.length === 0 ? (
-              <p className="text-sm text-slate-500">No friends available to invite</p>
+              <p className="text-sm" style={{color: THEME.textSecondary}}>No friends available to invite</p>
             ) : (
               <div className="space-y-2 max-h-64 overflow-y-auto">
                 {friends.map((friend) => (
                   <div
                     key={friend.id}
-                    className="flex items-center justify-between p-3 bg-slate-50 rounded-lg hover:bg-slate-100 transition-colors"
+                    className="flex items-center justify-between p-3 rounded-sm border transition-colors"
+                    style={{backgroundColor: THEME.bgPanel, borderColor: THEME.borderSubtle}}
                   >
-                    <span className="text-slate-700 font-medium">{friend.friend_screen_name}</span>
+                    <span className="font-medium" style={{color: THEME.textOnDark}}>{friend.friend_screen_name}</span>
                     {getUserStatusMessage(friend.friend_id) ? (
-                      <span className="text-sm text-orange-600">{getUserStatusMessage(friend.friend_id)}</span>
+                      <span className="text-sm" style={{color: '#fbbf24'}}>{getUserStatusMessage(friend.friend_id)}</span>
                     ) : (
-                      <button
+                      <Button
+                        variant="primary"
+                        size="xs"
                         onClick={() => handleInviteFriend(friend.friend_id)}
                         disabled={inviting}
-                        className="bg-purple-600 hover:bg-purple-700 text-white px-3 py-1 rounded text-sm font-semibold disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                       >
                         {inviting ? 'Inviting...' : 'Invite Player'}
-                      </button>
+                      </Button>
                     )}
                   </div>
                 ))}
@@ -312,13 +325,14 @@ export default function CampaignInviteModal({ campaign, onClose, onInviteSuccess
         </div>
 
         {/* Footer */}
-        <div className="p-6 border-t border-slate-200 bg-slate-50">
-          <button
+        <div className="p-6 border-t" style={{backgroundColor: THEME.bgSecondary, borderTopColor: THEME.borderSubtle}}>
+          <Button
+            variant="ghost"
             onClick={onClose}
-            className="w-full bg-slate-200 hover:bg-slate-300 text-slate-700 px-4 py-2 rounded-lg font-semibold transition-colors"
+            className="w-full"
           >
             Close
-          </button>
+          </Button>
         </div>
       </div>
     </div>

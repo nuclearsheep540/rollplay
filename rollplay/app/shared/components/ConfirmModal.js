@@ -7,6 +7,8 @@
 
 import { createPortal } from 'react-dom'
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
+import { THEME } from '@/app/styles/colorTheme'
+import { Button } from '@/app/dashboard/components/shared/Button'
 
 /**
  * Reusable confirmation modal component
@@ -41,82 +43,40 @@ export default function ConfirmModal({
 }) {
   if (!show || typeof document === 'undefined') return null
 
-  // Variant-based styling
-  const variantStyles = {
-    danger: {
-      border: 'border-red-500/30',
-      shadow: 'shadow-red-500/20',
-      titleColor: 'text-red-400',
-      buttonBg: 'bg-red-600',
-      buttonBorder: 'border-red-500',
-      buttonHover: 'hover:bg-red-500'
-    },
-    warning: {
-      border: 'border-orange-500/30',
-      shadow: 'shadow-orange-500/20',
-      titleColor: 'text-orange-400',
-      buttonBg: 'bg-orange-600',
-      buttonBorder: 'border-orange-500',
-      buttonHover: 'hover:bg-orange-500 hover:shadow-lg hover:shadow-orange-500/30'
-    },
-    info: {
-      border: 'border-blue-500/30',
-      shadow: 'shadow-blue-500/20',
-      titleColor: 'text-blue-400',
-      buttonBg: 'bg-blue-600',
-      buttonBorder: 'border-blue-500',
-      buttonHover: 'hover:bg-blue-500'
-    }
-  }
-
-  const styles = variantStyles[variant] || variantStyles.danger
-
   return createPortal(
-    <div
-      className="flex items-center justify-center"
-      style={{
-        position: 'fixed',
-        top: 0,
-        left: 0,
-        width: '100vw',
-        height: '100vh',
-        backgroundColor: 'rgba(2, 6, 23, 0.9)',
-        backdropFilter: 'blur(4px)',
-        zIndex: 50
-      }}
-    >
-      <div className={`bg-slate-800 border ${styles.border} p-6 rounded-lg shadow-2xl ${styles.shadow} max-w-md w-full mx-4`}>
-        <h3 className={`text-lg font-semibold ${styles.titleColor} mb-4`}>{title}</h3>
-        <p className="text-slate-300 mb-2">{message}</p>
+    <div className="flex items-center justify-center fixed inset-0 z-50" style={{backgroundColor: THEME.overlayDark, backdropFilter: 'blur(4px)'}}>
+      <div className="border p-6 rounded-sm shadow-2xl max-w-md w-full mx-4" style={{backgroundColor: THEME.bgSecondary, borderColor: THEME.borderDefault}}>
+        <h3 className="text-lg font-semibold font-[family-name:var(--font-metamorphous)] mb-4" style={{color: THEME.textOnDark}}>{title}</h3>
+        <p className="mb-2" style={{color: THEME.textOnDark}}>{message}</p>
         {description && (
-          <p className="text-sm text-slate-400 mb-6">{description}</p>
+          <p className="text-sm mb-6" style={{color: THEME.textOnDark}}>{description}</p>
         )}
 
         <div className="flex justify-end gap-3">
-          <button
+          <Button
+            variant="ghost"
             onClick={onCancel}
             disabled={isLoading}
-            className="px-4 py-2 bg-slate-700 text-slate-300 border border-slate-600 rounded-lg hover:bg-slate-600 transition-colors disabled:opacity-50"
           >
             {cancelText}
-          </button>
-          <button
+          </Button>
+          <Button
+            variant={variant}
             onClick={onConfirm}
             disabled={isLoading}
-            className={`px-4 py-2 ${styles.buttonBg} text-white border ${styles.buttonBorder} rounded-lg ${styles.buttonHover} transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2`}
           >
             {isLoading ? (
               <>
-                <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                <div className="animate-spin rounded-full h-4 w-4 border-b-2 mr-2" style={{borderColor: THEME.textAccent}}></div>
                 {loadingText}
               </>
             ) : (
               <>
-                {icon && <FontAwesomeIcon icon={icon} />}
+                {icon && <FontAwesomeIcon icon={icon} className="mr-2" />}
                 {confirmText}
               </>
             )}
-          </button>
+          </Button>
         </div>
       </div>
     </div>,

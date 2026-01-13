@@ -6,6 +6,8 @@
 'use client'
 
 import { useState } from 'react'
+import { THEME } from '@/app/styles/colorTheme'
+import { Button } from './shared/Button'
 
 export default function CharacterSelectionModal({ game, characters, onClose, onCharacterSelected, currentCharacterId = null, isActiveSession = false }) {
   const [selectedCharacterId, setSelectedCharacterId] = useState(null)
@@ -54,19 +56,20 @@ export default function CharacterSelectionModal({ game, characters, onClose, onC
   }
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-lg shadow-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+    <div className="fixed inset-0 flex items-center justify-center z-50 p-4" style={{backgroundColor: THEME.overlayDark}}>
+      <div className="rounded-sm shadow-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto border" style={{backgroundColor: THEME.bgSecondary, borderColor: THEME.borderDefault}}>
         {/* Header */}
-        <div className="sticky top-0 bg-white border-b border-slate-200 px-6 py-4 flex items-center justify-between">
+        <div className="sticky top-0 border-b px-6 py-4 flex items-center justify-between" style={{backgroundColor: THEME.bgSecondary, borderBottomColor: THEME.borderSubtle}}>
           <div>
-            <h2 className="text-2xl font-bold text-slate-800">Select Character</h2>
-            <p className="text-sm text-slate-600 mt-1">
+            <h2 className="text-2xl font-bold font-[family-name:var(--font-metamorphous)]" style={{color: THEME.textOnDark}}>Select Character</h2>
+            <p className="text-sm mt-1" style={{color: THEME.textSecondary}}>
               Choose a character for <span className="font-semibold">{game.name}</span>
             </p>
           </div>
           <button
             onClick={onClose}
-            className="text-slate-400 hover:text-slate-600 transition-colors"
+            className="transition-colors hover:opacity-80"
+            style={{color: THEME.textSecondary}}
             disabled={loading}
           >
             <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -78,21 +81,21 @@ export default function CharacterSelectionModal({ game, characters, onClose, onC
         {/* Content */}
         <div className="p-6">
           {error && (
-            <div className="mb-4 bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded">
+            <div className="mb-4 border px-4 py-3 rounded-sm" style={{backgroundColor: '#7f1d1d', borderColor: '#dc2626', color: THEME.textAccent}}>
               {error}
             </div>
           )}
 
           {availableCharacters.length === 0 ? (
             <div className="text-center py-8">
-              <p className="text-slate-600 mb-4">You don't have any available characters.</p>
-              <p className="text-sm text-slate-500">
+              <p className="mb-4" style={{color: THEME.textOnDark}}>You don't have any available characters.</p>
+              <p className="text-sm" style={{color: THEME.textSecondary}}>
                 Create a new character or free up an existing one by leaving another game.
               </p>
             </div>
           ) : (
             <>
-              <p className="text-sm text-slate-600 mb-4">
+              <p className="text-sm mb-4" style={{color: THEME.textOnDark}}>
                 {isActiveSession
                   ? 'Select a new character to use in this active session.'
                   : 'Select a character to lock to this game. Once selected, this character cannot be used in other games until you leave.'
@@ -104,36 +107,36 @@ export default function CharacterSelectionModal({ game, characters, onClose, onC
                   <div
                     key={char.id}
                     onClick={() => setSelectedCharacterId(char.id)}
-                    className={`p-4 rounded-lg border-2 cursor-pointer transition-all ${
-                      selectedCharacterId === char.id
-                        ? 'border-indigo-500 bg-indigo-50'
-                        : 'border-slate-200 hover:border-indigo-300 hover:bg-slate-50'
-                    }`}
+                    className="p-4 rounded-sm border-2 cursor-pointer transition-all"
+                    style={{
+                      borderColor: selectedCharacterId === char.id ? THEME.borderActive : THEME.borderDefault,
+                      backgroundColor: selectedCharacterId === char.id ? THEME.bgPanel : THEME.bgSecondary
+                    }}
                   >
                     <div className="flex items-start justify-between">
                       <div className="flex-1">
                         <div className="flex items-center gap-2">
-                          <h3 className="text-lg font-semibold text-slate-800">
+                          <h3 className="text-lg font-semibold" style={{color: THEME.textOnDark}}>
                             {char.character_name}
                           </h3>
                           {char.is_alive === false && (
-                            <span className="px-2 py-1 bg-red-100 text-red-700 text-xs font-semibold rounded">
+                            <span className="px-2 py-1 text-xs font-semibold rounded-sm" style={{backgroundColor: '#7f1d1d', color: THEME.textAccent}}>
                               ☠ Deceased
                             </span>
                           )}
                         </div>
-                        <p className="text-sm text-slate-600 mt-1">
+                        <p className="text-sm mt-1" style={{color: THEME.textSecondary}}>
                           Level {char.level} {char.character_race} {char.character_class}
                         </p>
-                        <div className="flex gap-4 mt-2 text-sm text-slate-500">
+                        <div className="flex gap-4 mt-2 text-sm" style={{color: THEME.textSecondary}}>
                           <span>HP: {char.hp_current}/{char.hp_max}</span>
                           <span>AC: {char.ac}</span>
                         </div>
                       </div>
                       <div className="ml-4">
                         {selectedCharacterId === char.id && (
-                          <div className="w-6 h-6 rounded-full bg-indigo-600 flex items-center justify-center">
-                            <svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <div className="w-6 h-6 rounded-full flex items-center justify-center" style={{backgroundColor: '#166534'}}>
+                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" style={{color: THEME.textAccent}}>
                               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
                             </svg>
                           </div>
@@ -149,21 +152,21 @@ export default function CharacterSelectionModal({ game, characters, onClose, onC
 
         {/* Footer */}
         {availableCharacters.length > 0 && (
-          <div className="sticky bottom-0 bg-slate-50 border-t border-slate-200 px-6 py-4 flex items-center justify-end gap-3">
-            <button
+          <div className="sticky bottom-0 border-t px-6 py-4 flex items-center justify-end gap-3" style={{backgroundColor: THEME.bgSecondary, borderTopColor: THEME.borderSubtle}}>
+            <Button
+              variant="ghost"
               onClick={onClose}
-              className="px-6 py-2 bg-white border border-slate-300 text-slate-700 rounded hover:bg-slate-50 transition-colors font-semibold"
               disabled={loading}
             >
               Cancel
-            </button>
-            <button
+            </Button>
+            <Button
+              variant="primary"
               onClick={handleSelectCharacter}
-              className="px-6 py-2 bg-indigo-600 text-white rounded hover:bg-indigo-700 transition-colors font-semibold disabled:opacity-50 disabled:cursor-not-allowed"
               disabled={!selectedCharacterId || loading}
             >
               {loading ? 'Selecting...' : 'Select Character'}
-            </button>
+            </Button>
           </div>
         )}
       </div>
