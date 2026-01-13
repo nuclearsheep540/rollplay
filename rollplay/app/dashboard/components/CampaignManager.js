@@ -38,6 +38,8 @@ export default function CampaignManager({ user, refreshTrigger, onCampaignUpdate
   const [error, setError] = useState(null)
   const [selectedCampaign, setSelectedCampaign] = useState(null)
   const [allGames, setAllGames] = useState([]) // Store all games from all campaigns
+  const [expandedDescriptions, setExpandedDescriptions] = useState({}) // Track expanded campaign descriptions
+  const [isTruncated, setIsTruncated] = useState({}) // Track which campaign descriptions overflow
 
   // Action state tracking (not modals, but ongoing operations)
   const [startingGame, setStartingGame] = useState(null) // Track game currently being started
@@ -46,6 +48,7 @@ export default function CampaignManager({ user, refreshTrigger, onCampaignUpdate
   const [deletingGame, setDeletingGame] = useState(null) // Track game being deleted
 
   const gameSessionsPanelRef = useRef(null)
+  const descriptionRefs = useRef({}) // Store refs to description elements for overflow detection
 
   // Consolidated modal state
   const [modals, setModals] = useState({
@@ -577,6 +580,15 @@ export default function CampaignManager({ user, refreshTrigger, onCampaignUpdate
     }
   }
 
+  // Toggle description expansion
+  const toggleDescriptionExpanded = (campaignId, e) => {
+    e.stopPropagation() // Prevent campaign tile click
+    setExpandedDescriptions(prev => ({
+      ...prev,
+      [campaignId]: !prev[campaignId]
+    }))
+  }
+
   useEffect(() => {
     // Only show loading on initial fetch (refreshTrigger = 0)
     fetchCampaigns(refreshTrigger === 0)
@@ -600,6 +612,19 @@ export default function CampaignManager({ user, refreshTrigger, onCampaignUpdate
       onCampaignUpdate({ updateGames: handleGameUpdate })
     }
   }, [onCampaignUpdate])
+
+  // Detect which campaign descriptions are truncated (overflow 3 lines)
+  useEffect(() => {
+    const truncationState = {}
+    Object.keys(descriptionRefs.current).forEach(campaignId => {
+      const element = descriptionRefs.current[campaignId]
+      if (element) {
+        // Compare scrollHeight (full content) with clientHeight (visible after clamp)
+        truncationState[campaignId] = element.scrollHeight > element.clientHeight
+      }
+    })
+    setIsTruncated(truncationState)
+  }, [campaigns, selectedCampaign]) // Re-check when campaigns change or selection changes
 
   if (loading) {
     return (
@@ -788,12 +813,15 @@ export default function CampaignManager({ user, refreshTrigger, onCampaignUpdate
                 >
                   {/* Campaign Card with expanding background */}
                   <div
-                    className="aspect-[16/4] w-full relative rounded-sm overflow-visible cursor-pointer border-2"
+                    className="w-full relative rounded-sm overflow-visible cursor-pointer border-2"
                     style={{
+                      ...(!(isSelected && expandedDescriptions[campaign.id]) && { aspectRatio: '16/4' }),
+                      minHeight: '200px',
                       backgroundImage: `url(${campaign.hero_image || '/campaign-tile-bg.png'})`,
                       backgroundSize: 'cover',
                       backgroundPosition: 'center',
-                      borderColor: selectedCampaign?.id === campaign.id ? THEME.borderActive : THEME.borderDefault
+                      borderColor: selectedCampaign?.id === campaign.id ? THEME.borderActive : THEME.borderDefault,
+                      transition: 'all 200ms ease-in-out'
                     }}
                     onClick={() => toggleCampaignDetails(campaign)}
                   >
@@ -839,7 +867,15 @@ export default function CampaignManager({ user, refreshTrigger, onCampaignUpdate
                     />
 
                     {/* Content container - never moves */}
-                    <div className="absolute inset-0 flex flex-col justify-between p-6" style={{ zIndex: 1 }}>
+                    <div
+                      className="flex flex-col justify-between p-6"
+                      style={{
+                        position: isSelected && expandedDescriptions[campaign.id] ? 'relative' : 'absolute',
+                        inset: isSelected && expandedDescriptions[campaign.id] ? 'unset' : 0,
+                        minHeight: isSelected && expandedDescriptions[campaign.id] ? 'auto' : '100%',
+                        zIndex: 1
+                      }}
+                    >
                         {/* Top Row - Title and Action Buttons */}
                         <div className="flex items-start justify-between gap-4">
                         <div className="flex-1 min-w-0">
@@ -847,9 +883,48 @@ export default function CampaignManager({ user, refreshTrigger, onCampaignUpdate
                             {campaign.title || 'Unnamed Campaign'}
                           </h4>
                           {campaign.description && (
-                            <p className="text-base drop-shadow-md mt-2" style={{color: THEME.textAccent, whiteSpace: 'pre-line', maxWidth: 'calc(100% - 180px)'}}>
-                              {campaign.description}
-                            </p>
+                            <div className="text-base drop-shadow-md mt-2" style={{maxWidth: 'calc(100% - 180px)'}}>
+                              <p
+                                ref={(el) => {
+                                  // Only attach ref when NOT expanded, so we can measure clamped height
+                                  if (!expandedDescriptions[campaign.id]) {
+                                    descriptionRefs.current[campaign.id] = el
+                                  }
+                                }}
+                                className="inline"
+                                style={{
+                                  color: THEME.textAccent,
+                                  whiteSpace: 'pre-line',
+                                  display: (isSelected && expandedDescriptions[campaign.id]) ? 'inline' : '-webkit-box',
+                                  WebkitLineClamp: (isSelected && expandedDescriptions[campaign.id]) ? 'unset' : 3,
+                                  WebkitBoxOrient: 'vertical',
+                                  overflow: (isSelected && expandedDescriptions[campaign.id]) ? 'visible' : 'hidden',
+                                  textOverflow: 'ellipsis'
+                                }}
+                              >
+                                {campaign.description}
+                              </p>
+                              {/* Only show Read More when campaign IS selected (sessions drawer open) AND description is truncated */}
+                              {isSelected && !expandedDescriptions[campaign.id] && isTruncated[campaign.id] && (
+                                <button
+                                  onClick={(e) => toggleDescriptionExpanded(campaign.id, e)}
+                                  className="ml-2 underline hover:no-underline transition-all"
+                                  style={{color: THEME.textAccent, fontSize: '0.875rem'}}
+                                >
+                                  Read More...
+                                </button>
+                              )}
+                              {/* Show Read Less if description is expanded via Read More */}
+                              {isSelected && expandedDescriptions[campaign.id] && (
+                                <button
+                                  onClick={(e) => toggleDescriptionExpanded(campaign.id, e)}
+                                  className="ml-2 underline hover:no-underline transition-all"
+                                  style={{color: THEME.textAccent, fontSize: '0.875rem'}}
+                                >
+                                  Read Less
+                                </button>
+                              )}
+                            </div>
                           )}
                         </div>
 
@@ -914,7 +989,7 @@ export default function CampaignManager({ user, refreshTrigger, onCampaignUpdate
                       <div className="flex-1"></div>
 
                       {/* Bottom Row - Campaign Metadata */}
-                      <div className="flex items-center justify-between">
+                      <div className="flex items-center justify-between" style={{paddingTop: '12px'}}>
                         <div className="text-sm drop-shadow" style={{color: THEME.textOnDark}}>
                           <span>Created: {campaign.created_at ? new Date(campaign.created_at).toLocaleDateString() : 'Unknown'}</span>
                           <span className="mx-2">•</span>
