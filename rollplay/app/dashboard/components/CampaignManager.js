@@ -790,8 +790,8 @@ export default function CampaignManager({ user, refreshTrigger, onCampaignUpdate
                   <div
                     className="w-full relative rounded-sm overflow-visible cursor-pointer border-2"
                     style={{
-                      // Always maintain 16:4 aspect ratio
-                      aspectRatio: '16/4',
+                      // When selected, allow card to grow with content; otherwise maintain 16:4 aspect ratio
+                      aspectRatio: isSelected ? 'unset' : '16/4',
                       minHeight: '200px',
                       backgroundImage: `url(${campaign.hero_image || '/campaign-tile-bg.png'})`,
                       backgroundSize: 'cover',
@@ -846,9 +846,10 @@ export default function CampaignManager({ user, refreshTrigger, onCampaignUpdate
                     <div
                       className="flex flex-col justify-between p-6"
                       style={{
-                        position: 'absolute',
-                        inset: 0,
-                        minHeight: '100%',
+                        // When selected, allow content to grow naturally; otherwise constrain to card size
+                        position: isSelected ? 'relative' : 'absolute',
+                        inset: isSelected ? 'unset' : 0,
+                        minHeight: isSelected ? 'auto' : '100%',
                         zIndex: 1
                       }}
                     >
