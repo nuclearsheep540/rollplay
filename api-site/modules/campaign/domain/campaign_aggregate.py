@@ -22,6 +22,7 @@ class CampaignAggregate:
     id: Optional[UUID]
     title: str
     description: str
+    hero_image: Optional[str]
     host_id: UUID
     created_at: datetime
     updated_at: datetime
@@ -33,7 +34,7 @@ class CampaignAggregate:
     player_ids: List[UUID] = field(default_factory=list)
 
     @classmethod
-    def create(cls, title: str, description: str, host_id: UUID):
+    def create(cls, title: str, description: str, host_id: UUID, hero_image: Optional[str] = None):
         """Create new campaign with business rules validation"""
         # Business rule: Campaign title must be provided and valid
         if not title or not title.strip():
@@ -57,6 +58,7 @@ class CampaignAggregate:
             id=None,  # Will be set by repository
             title=normalized_title,
             description=normalized_description,
+            hero_image=hero_image,
             host_id=host_id,
             created_at=now,
             updated_at=now,
@@ -99,7 +101,7 @@ class CampaignAggregate:
             return True
         return False
 
-    def update_details(self, title: Optional[str] = None, description: Optional[str] = None):
+    def update_details(self, title: Optional[str] = None, description: Optional[str] = None, hero_image: str = "UNSET"):
         """Update campaign details with business rules"""
         if title is not None:
             normalized_title = title.strip()
@@ -114,6 +116,11 @@ class CampaignAggregate:
             if len(normalized_description) > 500:
                 raise ValueError("Campaign description too long (max 500 characters)")
             self.description = normalized_description
+
+        # hero_image can be set to None to clear it, or a string path
+        # Use sentinel value to distinguish "not provided" from "set to None"
+        if hero_image != "UNSET":
+            self.hero_image = hero_image if hero_image else None
 
         self.update_timestamp()
 

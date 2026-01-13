@@ -51,7 +51,7 @@ export default function CampaignManager({ user, refreshTrigger }) {
 
   // Consolidated modal state
   const [modals, setModals] = useState({
-    campaignCreate: { open: false, title: '', description: '', isCreating: false },
+    campaignCreate: { open: false, title: '', description: '', heroImage: '/campaign-tile-bg.png', isCreating: false },
     campaignDelete: { open: false, campaign: null, isDeleting: false },
     campaignInvite: { open: false, campaign: null },
     gameCreate: { open: false, campaign: null, name: 'Session 1', maxPlayers: 8, isCreating: false },
@@ -436,7 +436,8 @@ export default function CampaignManager({ user, refreshTrigger }) {
     try {
       const campaignData = {
         title: modals.campaignCreate.title.trim(),
-        description: modals.campaignCreate.description.trim() || `Campaign created on ${new Date().toLocaleDateString()}`
+        description: modals.campaignCreate.description.trim() || `Campaign created on ${new Date().toLocaleDateString()}`,
+        hero_image: modals.campaignCreate.heroImage || null
       }
 
       const response = await fetch('/api/campaigns/', {
@@ -522,19 +523,6 @@ export default function CampaignManager({ user, refreshTrigger }) {
     }
   }
 
-  // Scroll to game sessions panel when selectedCampaign changes
-  useEffect(() => {
-    if (selectedCampaign && gameSessionsPanelRef.current) {
-      // Small delay to ensure DOM has updated
-      setTimeout(() => {
-        gameSessionsPanelRef.current?.scrollIntoView({
-          behavior: 'smooth',
-          block: 'start'
-        })
-      }, 100)
-    }
-  }, [selectedCampaign])
-
   useEffect(() => {
     // Only show loading on initial fetch (refreshTrigger = 0)
     fetchCampaigns(refreshTrigger === 0)
@@ -563,7 +551,7 @@ export default function CampaignManager({ user, refreshTrigger }) {
 
   return (
     <div className="space-y-6">
-      {/* CSS for gradient animation */}
+      {/* CSS for animations */}
       <style jsx>{`
         @keyframes gradient-x {
           0%{
@@ -589,6 +577,15 @@ export default function CampaignManager({ user, refreshTrigger }) {
 
           background-size: 400% 400%;
           animation: gradient-x 3s linear infinite;
+        }
+
+        @keyframes scaleIn {
+          0% {
+            transform: translateX(-50%) scale(0.96);
+          }
+          100% {
+            transform: translateX(-50%) scale(1);
+          }
         }
 
       `}</style>
@@ -684,9 +681,18 @@ export default function CampaignManager({ user, refreshTrigger }) {
       )}
 
       {/* Campaigns List - Full Width Hero Cards */}
-      <div className="space-y-4">
+      <div
+        className="space-y-4"
+        style={{
+          paddingLeft: selectedCampaign ? '0' : 'clamp(0.5rem, 2.5vw, 2rem)',
+          paddingRight: selectedCampaign ? '0' : 'clamp(0.5rem, 2.5vw, 2rem)',
+          transition: 'padding 100ms cubic-bezier(0.42, 0, 1, 1)'
+        }}
+      >
         <div className="space-y-4">
-          {campaigns.map((campaign) => {
+          {campaigns
+            .filter((campaign) => !selectedCampaign || selectedCampaign.id === campaign.id)
+            .map((campaign) => {
               const campaignGames = allGames.filter(game => game.campaign_id === campaign.id)
               // Active games are STARTING, ACTIVE, or STOPPING (excludes INACTIVE and FINISHED)
               const activeGames = campaignGames.filter(game =>
@@ -697,49 +703,64 @@ export default function CampaignManager({ user, refreshTrigger }) {
               const startingGames = campaignGames.filter(game => game.status === 'starting')
               const stoppingGames = campaignGames.filter(game => game.status === 'stopping')
 
+              const isSelected = selectedCampaign?.id === campaign.id
+
               return (
-                <div key={campaign.id} className="w-full relative">
-                  {/* Campaign Card - stays normal width */}
+                <div
+                  key={campaign.id}
+                  className="w-full relative"
+                  style={{
+                    marginBottom: isSelected ? '0' : '2.5rem'
+                  }}
+                >
+                  {/* Campaign Card with expanding background */}
                   <div
                     className="aspect-[16/4] w-full relative rounded-sm overflow-visible cursor-pointer border-2"
                     style={{
-                      backgroundImage: campaign.hero_image ? `url(${campaign.hero_image})` : 'none',
-                      backgroundColor: campaign.hero_image ? 'transparent' : COLORS.carbon,
+                      backgroundImage: `url(${campaign.hero_image || '/campaign-tile-bg.png'})`,
                       backgroundSize: 'cover',
                       backgroundPosition: 'center',
                       borderColor: selectedCampaign?.id === campaign.id ? THEME.borderActive : THEME.borderDefault
                     }}
                     onClick={() => toggleCampaignDetails(campaign)}
                   >
-                    {/* Full-width background layer - behind content but in front of card */}
-                    {selectedCampaign?.id === campaign.id && (
-                      <div
-                        className="absolute aspect-[16/4] left-1/2 -translate-x-1/2 rounded-sm"
-                        style={{
-                          width: '100vw',
-                          top: 0,
-                          backgroundImage: campaign.hero_image ? `url(${campaign.hero_image})` : 'none',
-                          backgroundColor: campaign.hero_image ? 'transparent' : COLORS.carbon,
-                          backgroundSize: 'cover',
-                          backgroundPosition: 'center',
-                          zIndex: 0
-                        }}
-                      >
-                        {/* Background overlay */}
-                        <div
-                          className="absolute inset-0"
-                          style={{
-                            backgroundColor: campaign.hero_image ? `${COLORS.onyx}B3` : 'transparent'
-                          }}
-                        />
-                      </div>
-                    )}
-
-                    {/* Solid overlay for text readability (NO gradient) */}
+                    {/* Expanding background layer - slightly taller to overlap drawer */}
                     <div
-                      className="absolute inset-0"
+                      className="absolute pointer-events-none"
                       style={{
-                        backgroundColor: campaign.hero_image ? `${COLORS.onyx}B3` : 'transparent',
+                        left: selectedCampaign?.id === campaign.id ? 'calc(50% - 50vw)' : '0',
+                        width: selectedCampaign?.id === campaign.id ? '100vw' : '100%',
+                        height: selectedCampaign?.id === campaign.id ? 'calc(100% + 16px)' : '100%', // 16px overlap when expanded
+                        top: 0,
+                        backgroundImage: `url(${campaign.hero_image || '/campaign-tile-bg.png'})`,
+                        backgroundSize: 'cover',
+                        backgroundPosition: 'center',
+                        borderRadius: '0.125rem', // rounded-sm equivalent
+                        borderBottomLeftRadius: selectedCampaign?.id === campaign.id ? '0' : '0.125rem',
+                        borderBottomRightRadius: selectedCampaign?.id === campaign.id ? '0' : '0.125rem',
+                        zIndex: selectedCampaign?.id === campaign.id ? 0 : -1,
+                        transition: selectedCampaign?.id === campaign.id
+                          ? 'left 100ms cubic-bezier(0.42, 0, 1, 1), width 100ms cubic-bezier(0.42, 0, 1, 1), height 100ms cubic-bezier(0.42, 0, 1, 1), border-radius 100ms'
+                          : 'left 100ms cubic-bezier(0.42, 0, 1, 1), width 100ms cubic-bezier(0.42, 0, 1, 1), height 100ms cubic-bezier(0.42, 0, 1, 1), border-radius 100ms, z-index 0ms 100ms'
+                      }}
+                    >
+                      {/* Background overlay */}
+                      <div
+                        className="absolute inset-0"
+                        style={{
+                          backgroundColor: `${COLORS.onyx}B3`,
+                          borderRadius: '0.125rem',
+                          borderBottomLeftRadius: selectedCampaign?.id === campaign.id ? '0' : '0.125rem',
+                          borderBottomRightRadius: selectedCampaign?.id === campaign.id ? '0' : '0.125rem'
+                        }}
+                      />
+                    </div>
+
+                    {/* Solid overlay for text readability */}
+                    <div
+                      className="absolute inset-0 rounded-sm"
+                      style={{
+                        backgroundColor: `${COLORS.onyx}B3`,
                         zIndex: selectedCampaign?.id === campaign.id ? -1 : 0
                       }}
                     />
@@ -860,12 +881,33 @@ export default function CampaignManager({ user, refreshTrigger }) {
                     </div>
                   </div>
 
-                  {/* Game Sessions Detail Panel - Expands to full viewport width */}
-                  {selectedCampaign?.id === campaign.id && (
-                    <div ref={gameSessionsPanelRef} className="relative left-1/2 -translate-x-1/2 p-6 rounded-sm border-2" style={{backgroundColor: THEME.bgPanel, borderColor: THEME.borderSubtle, width: '100vw'}}>
+                  {/* Game Sessions Detail Panel - Expands to full viewport width, no top margin */}
+                  <div
+                    ref={gameSessionsPanelRef}
+                    className="relative"
+                    style={{
+                      left: selectedCampaign?.id === campaign.id ? 'calc(50% - 50vw)' : '0',
+                      backgroundColor: THEME.bgPanel,
+                      borderColor: THEME.borderSubtle,
+                      borderWidth: selectedCampaign?.id === campaign.id ? '2px' : '0px',
+                      borderStyle: 'solid',
+                      padding: selectedCampaign?.id === campaign.id ? '1.5rem' : '0',
+                      width: selectedCampaign?.id === campaign.id ? '100vw' : '100%',
+                      maxHeight: selectedCampaign?.id === campaign.id ? '2000px' : '0px',
+                      overflow: 'hidden',
+                      borderRadius: '0.125rem',
+                      borderTopLeftRadius: '0', // No top radius to connect with campaign tile
+                      borderTopRightRadius: '0',
+                      marginTop: '-16px', // Negative margin to overlap with campaign tile
+                      paddingTop: selectedCampaign?.id === campaign.id ? 'calc(1.5rem + 16px)' : '0', // Extra padding to account for overlap
+                      transition: 'left 100ms cubic-bezier(0.42, 0, 1, 1), width 100ms cubic-bezier(0.42, 0, 1, 1), max-height 100ms cubic-bezier(0.42, 0, 1, 1), padding 100ms cubic-bezier(0.42, 0, 1, 1), border-width 100ms cubic-bezier(0.42, 0, 1, 1)',
+                      pointerEvents: selectedCampaign?.id === campaign.id ? 'auto' : 'none',
+                      visibility: selectedCampaign?.id === campaign.id ? 'visible' : 'hidden'
+                    }}
+                  >
                       <div className="flex items-center justify-between mb-4">
                         <h3 className="text-xl font-semibold font-[family-name:var(--font-metamorphous)]" style={{color: THEME.textOnDark}}>
-                          Game Sessions for "{selectedCampaign.title}"
+                          Game Sessions for "{selectedCampaign?.title || ''}"
                         </h3>
                         <button
                           onClick={() => setSelectedCampaign(null)}
@@ -878,7 +920,7 @@ export default function CampaignManager({ user, refreshTrigger }) {
                       </div>
 
                       <div className="mb-4 pb-4 border-b" style={{borderBottomColor: THEME.borderSubtle}}>
-                        <p className="text-sm" style={{color: THEME.textSecondary}}>{selectedCampaign.description || 'No description provided.'}</p>
+                        <p className="text-sm" style={{color: THEME.textSecondary}}>{selectedCampaign?.description || 'No description provided.'}</p>
                       </div>
 
                       <div className="space-y-3">
@@ -1048,21 +1090,28 @@ export default function CampaignManager({ user, refreshTrigger }) {
                         )}
                       </div>
                     </div>
-                  )}
                 </div>
               )
             })}
 
-            {/* Create Campaign Template Tile - Hidden when campaign is expanded */}
-            {!selectedCampaign && (
-              <div className="w-full">
-                <button
-                  onClick={() => openModal('campaignCreate')}
-                  className="aspect-[16/4] w-full relative rounded-sm overflow-hidden"
-                  style={{
-                    backgroundColor: 'transparent'
-                  }}
-                >
+            {/* Create Campaign Template Tile - Fades when campaign is expanded */}
+            <div
+              className="w-full"
+              style={{
+                opacity: selectedCampaign ? 0 : 1,
+                pointerEvents: selectedCampaign ? 'none' : 'auto',
+                transition: selectedCampaign
+                  ? 'opacity 100ms cubic-bezier(0.42, 0, 1, 1)'
+                  : 'opacity 100ms cubic-bezier(0.42, 0, 1, 1) 50ms'
+              }}
+            >
+              <button
+                onClick={() => openModal('campaignCreate')}
+                className="aspect-[16/4] w-full relative rounded-sm overflow-hidden"
+                style={{
+                  backgroundColor: 'transparent'
+                }}
+              >
                   {/* Knocked-out overlay */}
                   <div
                     className="absolute inset-0 flex flex-col items-center justify-center p-6"
@@ -1080,8 +1129,7 @@ export default function CampaignManager({ user, refreshTrigger }) {
                     </h4>
                   </div>
                 </button>
-              </div>
-            )}
+            </div>
           </div>
       </div>
 
@@ -1196,6 +1244,46 @@ export default function CampaignManager({ user, refreshTrigger }) {
                   rows="3"
                   placeholder="Enter campaign description"
                 />
+              </div>
+              <div>
+                <label className="block text-sm font-medium mb-2" style={{color: THEME.textOnDark}}>
+                  Tile Background
+                </label>
+                <div className="flex gap-3">
+                  {[
+                    { value: '/campaign-tile-bg.png', label: 'Mountains' },
+                    { value: '/floating-city.png', label: 'Floating City' },
+                    { value: null, label: 'None' }
+                  ].map((option) => (
+                    <button
+                      key={option.label}
+                      type="button"
+                      onClick={() => updateModalData('campaignCreate', { heroImage: option.value })}
+                      className="flex-1 aspect-[16/9] rounded-sm border-2 overflow-hidden relative"
+                      style={{
+                        borderColor: modals.campaignCreate.heroImage === option.value ? THEME.borderActive : THEME.borderDefault,
+                        backgroundColor: option.value ? 'transparent' : COLORS.carbon
+                      }}
+                    >
+                      {option.value && (
+                        <img
+                          src={option.value}
+                          alt={option.label}
+                          className="absolute inset-0 w-full h-full object-cover"
+                        />
+                      )}
+                      <span
+                        className="absolute bottom-1 left-1 right-1 text-xs px-1 py-0.5 rounded-sm text-center"
+                        style={{
+                          backgroundColor: `${COLORS.onyx}CC`,
+                          color: THEME.textAccent
+                        }}
+                      >
+                        {option.label}
+                      </span>
+                    </button>
+                  ))}
+                </div>
               </div>
             </div>
             <div className="flex justify-end gap-3 mt-6">

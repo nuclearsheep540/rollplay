@@ -11,11 +11,13 @@ from pydantic import BaseModel, Field
 class CampaignCreateRequest(BaseModel):
     title: str = Field(..., min_length=1, max_length=100)
     description: Optional[str] = Field(None, max_length=500)
+    hero_image: Optional[str] = Field(None, max_length=255)
 
 
 class CampaignUpdateRequest(BaseModel):
     title: Optional[str] = Field(None, min_length=1, max_length=100)
     description: Optional[str] = Field(None, max_length=500)
+    hero_image: Optional[str] = Field(None, max_length=255)
 
 
 # GAME REQUEST SCHEMAS
@@ -65,6 +67,7 @@ class CampaignResponse(BaseModel):
     id: str
     title: str
     description: Optional[str]
+    hero_image: Optional[str]
     host_id: str
     assets: Optional[dict]
     scenes: Optional[dict]
@@ -88,6 +91,7 @@ class CampaignSummaryResponse(BaseModel):
     id: str
     title: str
     description: Optional[str]
+    hero_image: Optional[str]
     host_id: str
     created_at: datetime
     updated_at: datetime

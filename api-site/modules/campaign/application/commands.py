@@ -18,12 +18,13 @@ class CreateCampaign:
     def __init__(self, repository):
         self.repository = repository
 
-    def execute(self, host_id: UUID, title: str, description: str = "") -> CampaignAggregate:
+    def execute(self, host_id: UUID, title: str, description: str = "", hero_image: Optional[str] = None) -> CampaignAggregate:
         """Create a new campaign"""
         campaign = CampaignAggregate.create(
             title=title,
             description=description,
-            host_id=host_id
+            host_id=host_id,
+            hero_image=hero_image
         )
 
         self.repository.save(campaign)
@@ -39,7 +40,8 @@ class UpdateCampaign:
         campaign_id: UUID,
         host_id: UUID,
         title: Optional[str] = None,
-        description: Optional[str] = None
+        description: Optional[str] = None,
+        hero_image: Optional[str] = "UNSET"
     ) -> CampaignAggregate:
         """Update campaign details"""
         campaign = self.repository.get_by_id(campaign_id)
@@ -50,7 +52,7 @@ class UpdateCampaign:
         if not campaign.is_owned_by(host_id):
             raise ValueError("Only the host can update this campaign")
 
-        campaign.update_details(title=title, description=description)
+        campaign.update_details(title=title, description=description, hero_image=hero_image)
         self.repository.save(campaign)
         return campaign
 

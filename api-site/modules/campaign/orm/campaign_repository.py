@@ -126,6 +126,7 @@ class CampaignRepository:
             # Update campaign fields
             campaign_model.title = aggregate.title
             campaign_model.description = aggregate.description
+            campaign_model.hero_image = aggregate.hero_image
             campaign_model.updated_at = aggregate.updated_at
             campaign_model.assets = aggregate.assets
             campaign_model.scenes = aggregate.scenes
@@ -139,6 +140,7 @@ class CampaignRepository:
                 id=aggregate.id,
                 title=aggregate.title,
                 description=aggregate.description,
+                hero_image=aggregate.hero_image,
                 host_id=aggregate.host_id,
                 created_at=aggregate.created_at,
                 updated_at=aggregate.updated_at,
@@ -196,6 +198,7 @@ class CampaignRepository:
             id=model.id,
             title=model.title,
             description=model.description,
+            hero_image=model.hero_image,
             host_id=model.host_id,
             created_at=model.created_at,
             updated_at=model.updated_at,

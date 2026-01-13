@@ -57,6 +57,7 @@ def _to_campaign_response(campaign: CampaignAggregate) -> CampaignResponse:
         id=str(campaign.id),
         title=campaign.title,
         description=campaign.description,
+        hero_image=campaign.hero_image,
         host_id=str(campaign.host_id),
         assets=campaign.assets,
         scenes=campaign.scenes,
@@ -80,6 +81,7 @@ def _to_campaign_summary_response(campaign: CampaignAggregate) -> CampaignSummar
         id=str(campaign.id),
         title=campaign.title,
         description=campaign.description,
+        hero_image=campaign.hero_image,
         host_id=str(campaign.host_id),
         created_at=campaign.created_at,
         updated_at=campaign.updated_at,
@@ -127,7 +129,8 @@ async def create_campaign(
         campaign = command.execute(
             host_id=current_user.id,
             title=request.title,
-            description=request.description or ""
+            description=request.description or "",
+            hero_image=request.hero_image
         )
 
         return _to_campaign_response(campaign)
@@ -205,7 +208,8 @@ async def update_campaign(
             campaign_id=campaign_id,
             host_id=current_user.id,
             title=request.title,
-            description=request.description
+            description=request.description,
+            hero_image=request.hero_image
         )
 
         return _to_campaign_response(campaign)
