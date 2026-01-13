@@ -30,7 +30,7 @@ import {
 import { COLORS, THEME } from '@/app/styles/colorTheme'
 import { Button, Badge } from './shared/Button'
 
-export default function CampaignManager({ user, refreshTrigger }) {
+export default function CampaignManager({ user, refreshTrigger, onCampaignUpdate }) {
   const router = useRouter()
   const [campaigns, setCampaigns] = useState([])
   const [invitedCampaigns, setInvitedCampaigns] = useState([])
@@ -203,6 +203,35 @@ export default function CampaignManager({ user, refreshTrigger }) {
       setAllGames(allGamesArray)
     } catch (error) {
       console.error('Error fetching all games:', error)
+    }
+  }
+
+  // Handle targeted game updates from WebSocket events
+  const handleGameUpdate = async (campaignId) => {
+    // Only fetch games for the specific campaign
+    try {
+      const response = await fetch(`/api/games/campaign/${campaignId}`, {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        credentials: 'include'
+      })
+
+      if (response.ok) {
+        const gamesData = await response.json()
+        const updatedGames = gamesData.games || []
+
+        // Update allGames by replacing games for this campaign
+        setAllGames(prev => {
+          // Remove old games for this campaign
+          const otherGames = prev.filter(game => game.campaign_id !== campaignId)
+          // Add updated games
+          return [...otherGames, ...updatedGames]
+        })
+      }
+    } catch (error) {
+      console.error(`Error updating games for campaign ${campaignId}:`, error)
     }
   }
 
@@ -565,6 +594,13 @@ export default function CampaignManager({ user, refreshTrigger }) {
     }
   }, [campaigns])
 
+  // Expose handleGameUpdate to parent via callback
+  useEffect(() => {
+    if (onCampaignUpdate) {
+      onCampaignUpdate({ updateGames: handleGameUpdate })
+    }
+  }, [onCampaignUpdate])
+
   if (loading) {
     return (
       <div className="flex items-center justify-center p-8">
@@ -805,27 +841,31 @@ export default function CampaignManager({ user, refreshTrigger }) {
                     {/* Content container - never moves */}
                     <div className="absolute inset-0 flex flex-col justify-between p-6" style={{ zIndex: 1 }}>
                         {/* Top Row - Title and Action Buttons */}
-                        <div className="flex items-start justify-between">
-                        <div className="flex-1 pr-4">
+                        <div className="flex items-start justify-between gap-4">
+                        <div className="flex-1 min-w-0">
                           <h4 className="text-3xl font-[family-name:var(--font-metamorphous)] mb-1 drop-shadow-lg" style={{color: THEME.textOnDark}}>
                             {campaign.title || 'Unnamed Campaign'}
                           </h4>
                           {campaign.description && (
-                            <p className="text-base drop-shadow-md mt-2" style={{color: THEME.textAccent, whiteSpace: 'pre-line'}}>
+                            <p className="text-base drop-shadow-md mt-2" style={{color: THEME.textAccent, whiteSpace: 'pre-line', maxWidth: 'calc(100% - 180px)'}}>
                               {campaign.description}
                             </p>
                           )}
                         </div>
 
-                        {/* Action Buttons - Top Right */}
-                        <div className="flex gap-2">
-                          {/* Active game indicator */}
-                          {activeGames.length > 0 && (
-                            <div className="px-4 py-2 backdrop-blur-sm text-sm font-semibold rounded-sm border animate-pulse"
-                                 style={{backgroundColor: '#166534', color: THEME.textAccent, borderColor: '#16a34a'}}>
-                              Game In Session
-                            </div>
-                          )}
+                        {/* Action Buttons - Top Right (fixed width container to prevent layout shift) */}
+                        <div className="flex gap-2 flex-shrink-0" style={{minWidth: campaign.host_id === user.id ? '310px' : '160px'}}>
+                          {/* Active game indicator - always reserves space */}
+                          <div className="px-4 py-2 backdrop-blur-sm text-sm font-semibold rounded-sm border"
+                               style={{
+                                 backgroundColor: activeGames.length > 0 ? '#166534' : 'transparent',
+                                 color: activeGames.length > 0 ? THEME.textAccent : 'transparent',
+                                 borderColor: activeGames.length > 0 ? '#16a34a' : 'transparent',
+                                 animation: activeGames.length > 0 ? 'pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite' : 'none',
+                                 visibility: activeGames.length > 0 ? 'visible' : 'hidden'
+                               }}>
+                            Game In Session
+                          </div>
 
                           {/* Always show action buttons if user is the host */}
                           {campaign.host_id === user.id && (

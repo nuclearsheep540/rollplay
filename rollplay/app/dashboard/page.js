@@ -24,6 +24,7 @@ function DashboardContent() {
   const tabParam = searchParams.get('tab')
   const [activeSection, setActiveSection] = useState(tabParam || 'campaigns')
   const [refreshTrigger, setRefreshTrigger] = useState(0)
+  const [campaignUpdateHandlers, setCampaignUpdateHandlers] = useState(null)
 
   // Sync activeSection when URL tab parameter changes (e.g., from notification click)
   useEffect(() => {
@@ -65,6 +66,15 @@ function DashboardContent() {
 
   // Toast notifications
   const { toasts, showToast, dismissToast } = useToast()
+
+  // Helper function to update game state (targeted or full refresh)
+  const updateGameState = (campaignId) => {
+    if (campaignUpdateHandlers?.updateGames && campaignId) {
+      campaignUpdateHandlers.updateGames(campaignId)
+    } else {
+      setRefreshTrigger(prev => prev + 1)
+    }
+  }
 
   // WebSocket event handlers for real-time updates
   const eventHandlers = {
@@ -159,8 +169,14 @@ function DashboardContent() {
     },
 
     // Game session events
+    'game_created': (message) => {
+      // Silent state update - no toast notification
+      updateGameState(message.data?.campaign_id)
+    },
+
     'game_started': (message) => {
-      setRefreshTrigger(prev => prev + 1)
+      updateGameState(message.data?.campaign_id)
+
       if (message.show_toast) {
         const config = getEventConfig('game_started')
         showToast({
@@ -171,7 +187,8 @@ function DashboardContent() {
     },
 
     'game_ended': (message) => {
-      setRefreshTrigger(prev => prev + 1)
+      updateGameState(message.data?.campaign_id)
+
       if (message.show_toast) {
         const config = getEventConfig('game_ended')
         showToast({
@@ -182,14 +199,8 @@ function DashboardContent() {
     },
 
     'game_finished': (message) => {
-      setRefreshTrigger(prev => prev + 1)
-      if (message.show_toast) {
-        const config = getEventConfig('game_finished')
-        showToast({
-          type: config.toastType,
-          message: config.toastMessage
-        })
-      }
+      // Silent state update - no toast notification
+      updateGameState(message.data?.campaign_id)
     }
   }
 
@@ -217,7 +228,11 @@ function DashboardContent() {
       {/* Campaigns Section */}
       {activeSection === 'campaigns' && (
         <section>
-          <CampaignManager user={user} refreshTrigger={refreshTrigger} />
+          <CampaignManager
+            user={user}
+            refreshTrigger={refreshTrigger}
+            onCampaignUpdate={setCampaignUpdateHandlers}
+          />
         </section>
       )}
 

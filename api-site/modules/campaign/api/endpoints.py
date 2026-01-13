@@ -117,12 +117,13 @@ async def create_game(
     current_user: UserAggregate = Depends(get_current_user_from_token),
     game_repo: GameRepository = Depends(get_game_repository),
     campaign_repo: CampaignRepository = Depends(campaign_repository),
+    event_manager: EventManager = Depends(get_event_manager),
     db: Session = Depends(get_db)
 ):
     """Create a new game within a campaign"""
 
     try:
-        command = CreateGame(game_repo, campaign_repo)
+        command = CreateGame(game_repo, campaign_repo, event_manager)
         game = command.execute(
             name=request.name,
             campaign_id=request.campaign_id,

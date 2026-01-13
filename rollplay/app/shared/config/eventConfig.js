@@ -68,6 +68,13 @@ export const EVENT_CONFIG = {
     navigationTab: 'campaigns'
   },
 
+  'game_created': {
+    toastMessage: null,  // Silent - no toast notification
+    panelMessage: (data) => `${data.host_screen_name} created new session "${data.game_name}" in ${data.campaign_name}`,
+    toastType: 'info',
+    navigationTab: 'campaigns'
+  },
+
   'game_started': {
     toastMessage: 'Game session started',
     panelMessage: (data) => `${data.dm_screen_name} started game session "${data.game_name}"`,
@@ -76,17 +83,17 @@ export const EVENT_CONFIG = {
   },
 
   'game_ended': {
-    toastMessage: 'Game session ended',
-    panelMessage: (data) => `Game session "${data.game_name}" ended`,
+    toastMessage: null,  // Silent - no toast notification
+    panelMessage: (data) => `Game session "${data.game_name}" was paused by ${data.ended_by_screen_name}`,
     toastType: 'info',
-    navigationTab: 'sessions'
+    navigationTab: 'campaigns'
   },
 
   'game_finished': {
-    toastMessage: 'Campaign milestone completed',
+    toastMessage: null,  // Silent - no toast notification
     panelMessage: (data) => `Campaign milestone: "${data.game_name}" completed!`,
     toastType: 'success',
-    navigationTab: 'sessions'
+    navigationTab: 'campaigns'
   }
 }
 

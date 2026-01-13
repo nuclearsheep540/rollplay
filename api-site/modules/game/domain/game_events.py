@@ -18,6 +18,55 @@ class GameEvents:
     """
 
     @staticmethod
+    def game_created(
+        campaign_player_ids: List[str],
+        game_id: str,
+        game_name: str,
+        campaign_id: str,
+        campaign_name: str,
+        host_id: str,
+        host_screen_name: str
+    ) -> List[Dict[str, Any]]:
+        """
+        Event: Campaign host created a new game session (silent state update for players)
+
+        Pure state update - no toast notification, no persistent notification.
+        Only triggers frontend state refresh (game list update).
+        Recipients: All campaign members (player_ids, excludes host)
+
+        Args:
+            campaign_player_ids: List of campaign member user IDs (strings)
+            game_id: Game ID (string)
+            game_name: Game name
+            campaign_id: Campaign ID (string)
+            campaign_name: Campaign name
+            host_id: Host user ID (string)
+            host_screen_name: Host display name
+
+        Returns:
+            List of event configuration dicts (one per campaign member)
+        """
+        events = []
+
+        for player_id in campaign_player_ids:
+            events.append({
+                "user_id": UUID(player_id),
+                "event_type": "game_created",
+                "data": {
+                    "game_id": game_id,
+                    "game_name": game_name,
+                    "campaign_id": campaign_id,
+                    "campaign_name": campaign_name,
+                    "host_id": host_id,
+                    "host_screen_name": host_screen_name
+                },
+                "show_toast": False,         # No toast notification
+                "save_notification": False   # No persistent notification (state only)
+            })
+
+        return events
+
+    @staticmethod
     def game_started(campaign_player_ids: List[UUID], game_id: UUID, game_name: str, campaign_id: UUID, session_id: str, dm_id: UUID, dm_screen_name: str) -> List[Dict[str, Any]]:
         """
         Event: DM started a game session (notifies all campaign players)
@@ -53,14 +102,18 @@ class GameEvents:
         return events
 
     @staticmethod
-    def game_ended(active_participant_ids: List[UUID], game_id: UUID, game_name: str, ended_by_id: UUID, ended_by_screen_name: str) -> List[Dict[str, Any]]:
+    def game_ended(active_participant_ids: List[UUID], game_id: UUID, game_name: str, campaign_id: UUID, ended_by_id: UUID, ended_by_screen_name: str) -> List[Dict[str, Any]]:
         """
-        Event: Game session ended (notifies active participants)
+        Event: Game session ended/paused (silent state update to active participants)
+
+        Pure state update - no toast notification, no persistent notification.
+        Only triggers frontend state refresh (game list update).
 
         Args:
             active_participant_ids: List of user IDs who were in the session
             game_id: Game ID
             game_name: Game name
+            campaign_id: Campaign ID
             ended_by_id: User who ended the game (usually DM)
             ended_by_screen_name: Display name of user who ended
 
@@ -75,18 +128,22 @@ class GameEvents:
                 "data": {
                     "game_id": str(game_id),
                     "game_name": game_name,
+                    "campaign_id": str(campaign_id),
                     "ended_by_id": str(ended_by_id),
                     "ended_by_screen_name": ended_by_screen_name
                 },
-                "show_toast": True,
-                "save_notification": True  # Persist for session history
+                "show_toast": False,         # No toast notification (silent state update)
+                "save_notification": False   # No persistent notification (state only)
             })
         return events
 
     @staticmethod
     def game_finished(dm_id: UUID, participant_ids: List[UUID], game_id: UUID, game_name: str, campaign_id: UUID) -> List[Dict[str, Any]]:
         """
-        Event: Game marked as finished/completed (notifies DM and participants)
+        Event: Game marked as finished/completed (silent state update to DM and participants)
+
+        Pure state update - no toast notification, no persistent notification.
+        Only triggers frontend state refresh (game list update).
 
         Args:
             dm_id: Campaign DM user ID
@@ -110,7 +167,7 @@ class GameEvents:
                     "game_name": game_name,
                     "campaign_id": str(campaign_id)
                 },
-                "show_toast": True,  # Show toast for campaign milestone
-                "save_notification": True  # Persist for campaign history
+                "show_toast": False,         # No toast notification (silent state update)
+                "save_notification": False   # No persistent notification (state only)
             })
         return events
