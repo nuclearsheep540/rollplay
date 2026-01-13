@@ -25,10 +25,11 @@ export const THEME = {
   bgPanel: COLORS.carbon,          // Panel backgrounds (deepest dark)
 
   // Text (context-aware for light and dark backgrounds)
+  textBold: COLORS.onyx,
   textPrimary: COLORS.carbon,      // Dark text on light background
-  textSecondary: COLORS.graphite,
+  textSecondary: COLORS.silver,    // Light secondary text - works on dark backgrounds
   textAccent: COLORS.silver,  // Light accent - works on both dark panels AND as emphasis
-  textOnDark: COLORS.silver,  // Light text specifically for dark backgrounds (header, tabs, buttons)
+  textOnDark: COLORS.smoke,  // Light text specifically for dark backgrounds (header, tabs, buttons)
 
   // Borders
   borderDefault: COLORS.graphite,

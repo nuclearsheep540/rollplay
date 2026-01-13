@@ -24,10 +24,8 @@ import {
   faPlus,
   faPlay,
   faPause,
-  faCheckCircle,
   faRightToBracket,
-  faUserPlus,
-  faInfoCircle
+  faUserPlus
 } from '@fortawesome/free-solid-svg-icons'
 import { COLORS, THEME } from '@/app/styles/colorTheme'
 import { Button, Badge } from './shared/Button'
@@ -592,8 +590,8 @@ export default function CampaignManager({ user, refreshTrigger }) {
 
       {/* Header */}
       <div className="mb-8">
-        <h1 className="text-4xl font-bold font-[family-name:var(--font-metamorphous)]" style={{color: THEME.textPrimary}}>Campaign Management</h1>
-        <p className="mt-2" style={{color: THEME.textSecondary}}>Organize your adventures and game sessions</p>
+        <h1 className="text-4xl font-bold font-[family-name:var(--font-metamorphous)]" style={{color: THEME.textBold}}>Campaign Management</h1>
+        <p className="mt-2" style={{color: THEME.textPrimary}}>Organize your adventures and game sessions</p>
       </div>
 
       {/* Error Message */}
@@ -684,8 +682,8 @@ export default function CampaignManager({ user, refreshTrigger }) {
       <div
         className="space-y-4"
         style={{
-          paddingLeft: selectedCampaign ? '0' : 'clamp(0.5rem, 2.5vw, 2rem)',
-          paddingRight: selectedCampaign ? '0' : 'clamp(0.5rem, 2.5vw, 2rem)',
+          paddingLeft: selectedCampaign ? '0' : 'clamp(0.5rem, 2.5vw, 3.5rem)',
+          paddingRight: selectedCampaign ? '0' : 'clamp(0.5rem, 2.5vw, 3.5rem)',
           transition: 'padding 100ms cubic-bezier(0.42, 0, 1, 1)'
         }}
       >
@@ -710,7 +708,7 @@ export default function CampaignManager({ user, refreshTrigger }) {
                   key={campaign.id}
                   className="w-full relative"
                   style={{
-                    marginBottom: isSelected ? '0' : '2.5rem'
+                    marginBottom: isSelected ? '0' : '3rem'
                   }}
                 >
                   {/* Campaign Card with expanding background */}
@@ -836,47 +834,13 @@ export default function CampaignManager({ user, refreshTrigger }) {
                       {/* Middle - Spacer */}
                       <div className="flex-1"></div>
 
-                      {/* Bottom Row - Create Session Button & Metadata */}
+                      {/* Bottom Row - Campaign Metadata */}
                       <div className="flex items-center justify-between">
-                        {activeGames.length > 0 ? (
-                          <div className="space-y-2">
-                            {/* Campaign metadata */}
-                            <div className="text-sm drop-shadow" style={{color: THEME.textOnDark}}>
-                              <span>Created: {campaign.created_at ? new Date(campaign.created_at).toLocaleDateString() : 'Unknown'}</span>
-                              <span className="mx-2">•</span>
-                              <span>{campaignGames.length} session{campaignGames.length !== 1 ? 's' : ''}</span>
-                            </div>
-
-                            {/* Clarity message: why Create Session button is hidden */}
-                            <div className="text-xs flex items-center gap-1" style={{color: '#fbbf24'}}>
-                              <FontAwesomeIcon icon={faInfoCircle} />
-                              <span>End active session to create another</span>
-                            </div>
-                          </div>
-                        ) : (
-                          <>
-                            {/* Only show Create Session button if user is the host */}
-                            {campaign.host_id === user.id && (
-                              <button
-                                onClick={(e) => {
-                                  e.stopPropagation()
-                                  openCreateGameModal(campaign.id)
-                                }}
-                                className="px-6 py-3 backdrop-blur-sm rounded-sm transition-all flex items-center gap-2 border font-semibold text-base"
-                                style={{backgroundColor: '#166534', color: THEME.textAccent, borderColor: '#16a34a'}}
-                                title="Create Session"
-                              >
-                                <FontAwesomeIcon icon={faPlus} />
-                                Create Session
-                              </button>
-                            )}
-                            <div className="text-sm drop-shadow" style={{color: THEME.textOnDark}}>
-                              <span>Created: {campaign.created_at ? new Date(campaign.created_at).toLocaleDateString() : 'Unknown'}</span>
-                              <span className="mx-2">•</span>
-                              <span>{campaignGames.length} session{campaignGames.length !== 1 ? 's' : ''}</span>
-                            </div>
-                          </>
-                        )}
+                        <div className="text-sm drop-shadow" style={{color: THEME.textOnDark}}>
+                          <span>Created: {campaign.created_at ? new Date(campaign.created_at).toLocaleDateString() : 'Unknown'}</span>
+                          <span className="mx-2">•</span>
+                          <span>{campaignGames.length} session{campaignGames.length !== 1 ? 's' : ''}</span>
+                        </div>
                       </div>
                     </div>
                   </div>
@@ -891,7 +855,6 @@ export default function CampaignManager({ user, refreshTrigger }) {
                       borderColor: THEME.borderSubtle,
                       borderWidth: selectedCampaign?.id === campaign.id ? '2px' : '0px',
                       borderStyle: 'solid',
-                      padding: selectedCampaign?.id === campaign.id ? '1.5rem' : '0',
                       width: selectedCampaign?.id === campaign.id ? '100vw' : '100%',
                       maxHeight: selectedCampaign?.id === campaign.id ? '2000px' : '0px',
                       overflow: 'hidden',
@@ -899,12 +862,13 @@ export default function CampaignManager({ user, refreshTrigger }) {
                       borderTopLeftRadius: '0', // No top radius to connect with campaign tile
                       borderTopRightRadius: '0',
                       marginTop: '-16px', // Negative margin to overlap with campaign tile
-                      paddingTop: selectedCampaign?.id === campaign.id ? 'calc(1.5rem + 16px)' : '0', // Extra padding to account for overlap
-                      transition: 'left 100ms cubic-bezier(0.42, 0, 1, 1), width 100ms cubic-bezier(0.42, 0, 1, 1), max-height 100ms cubic-bezier(0.42, 0, 1, 1), padding 100ms cubic-bezier(0.42, 0, 1, 1), border-width 100ms cubic-bezier(0.42, 0, 1, 1)',
+                      transition: 'left 100ms cubic-bezier(0.42, 0, 1, 1), width 100ms cubic-bezier(0.42, 0, 1, 1), max-height 100ms cubic-bezier(0.42, 0, 1, 1), border-width 100ms cubic-bezier(0.42, 0, 1, 1)',
                       pointerEvents: selectedCampaign?.id === campaign.id ? 'auto' : 'none',
                       visibility: selectedCampaign?.id === campaign.id ? 'visible' : 'hidden'
                     }}
                   >
+                    {/* Content wrapper with padding - matches main container responsive padding + 12px horizontal */}
+                    <div className="pb-4 sm:pb-8 md:pb-10 pt-[calc(1rem+16px)] sm:pt-[calc(2rem+16px)] md:pt-[calc(2.5rem+16px)] px-[calc(1rem+12px)] sm:px-[calc(2rem+12px)] md:px-[calc(2.5rem+12px)]">
                       <div className="flex items-center justify-between mb-4">
                         <h3 className="text-xl font-semibold font-[family-name:var(--font-metamorphous)]" style={{color: THEME.textOnDark}}>
                           Game Sessions for "{selectedCampaign?.title || ''}"
@@ -924,9 +888,35 @@ export default function CampaignManager({ user, refreshTrigger }) {
                       </div>
 
                       <div className="space-y-3">
-                        {campaignGames.length === 0 ? (
+                        {/* Create Session Template - Only show if user is host and no active games */}
+                        {campaign.host_id === user.id && activeGames.length === 0 && (
+                          <button
+                            onClick={() => openModal('gameCreate', { campaign: campaign.id, name: 'Session 1', maxPlayers: 8 })}
+                            className="w-full flex items-center justify-between p-4 rounded-sm border-2 border-dashed transition-all hover:border-opacity-100"
+                            style={{
+                              backgroundColor: `${THEME.bgSecondary}80`,
+                              borderColor: `${THEME.borderActive}60`,
+                              opacity: 0.7
+                            }}
+                            title="Create New Session"
+                          >
+                            <div className="flex items-center gap-3">
+                              <FontAwesomeIcon icon={faPlus} className="text-2xl" style={{color: THEME.textAccent}} />
+                              <div className="text-left">
+                                <p className="font-medium" style={{color: THEME.textOnDark}}>Create New Session</p>
+                                <p className="text-sm" style={{color: THEME.textSecondary}}>
+                                  Click to add a game session
+                                </p>
+                              </div>
+                            </div>
+                          </button>
+                        )}
+
+                        {campaignGames.length === 0 && campaign.host_id !== user.id && (
                           <p className="text-sm py-4 text-center" style={{color: THEME.textSecondary}}>No game sessions yet.</p>
-                        ) : (
+                        )}
+
+                        {campaignGames.length > 0 && (
                           <div className="space-y-2">
                             {campaignGames.map((game) => (
                               <div
@@ -953,7 +943,7 @@ export default function CampaignManager({ user, refreshTrigger }) {
                                     <>
                                       <Button
                                         variant="primary"
-                                        size="sm"
+                                        size="md"
                                         onClick={() => enterGame(game)}
                                       >
                                         <FontAwesomeIcon icon={faRightToBracket} className="mr-2" />
@@ -965,8 +955,8 @@ export default function CampaignManager({ user, refreshTrigger }) {
                                           <button
                                             onClick={() => promptPauseSession(game)}
                                             disabled={pausingGame === game.id}
-                                            className="px-3 py-1.5 rounded-sm border transition-all text-sm font-medium flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
-                                            style={{backgroundColor: '#ea580c', color: THEME.textAccent, borderColor: '#f97316'}}
+                                            className="px-4 py-2 rounded-sm border transition-all text-sm font-medium flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                                            style={{backgroundColor: '#d97706', color: THEME.textPrimary, borderColor: '#fbbf24'}}
                                             title="Pause Session"
                                           >
                                             {pausingGame === game.id ? (
@@ -984,8 +974,8 @@ export default function CampaignManager({ user, refreshTrigger }) {
                                           <button
                                             onClick={() => promptFinishSession(game)}
                                             disabled={finishingGame === game.id}
-                                            className="px-3 py-1.5 rounded-sm border transition-all text-sm font-medium flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
-                                            style={{backgroundColor: '#d97706', color: THEME.textAccent, borderColor: '#fbbf24'}}
+                                            className="px-4 py-2 rounded-sm border transition-all text-sm font-medium flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                                            style={{backgroundColor: '#991b1b', color: COLORS.smoke, borderColor: '#dc2626'}}
                                             title="Finish Session Permanently"
                                           >
                                             {finishingGame === game.id ? (
@@ -995,7 +985,7 @@ export default function CampaignManager({ user, refreshTrigger }) {
                                               </>
                                             ) : (
                                               <>
-                                                <FontAwesomeIcon icon={faCheckCircle} />
+                                                <FontAwesomeIcon icon={faXmark} />
                                                 Finish
                                               </>
                                             )}
@@ -1008,7 +998,7 @@ export default function CampaignManager({ user, refreshTrigger }) {
                                     <>
                                       <Button
                                         variant="success"
-                                        size="sm"
+                                        size="md"
                                         onClick={() => startGame(game.id)}
                                         disabled={startingGame === game.id || activeGames.length > 0}
                                       >
@@ -1027,8 +1017,8 @@ export default function CampaignManager({ user, refreshTrigger }) {
                                       <button
                                         onClick={() => promptFinishSession(game)}
                                         disabled={finishingGame === game.id}
-                                        className="px-3 py-1.5 rounded-sm border transition-all text-sm font-medium flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
-                                        style={{backgroundColor: '#d97706', color: THEME.textAccent, borderColor: '#fbbf24'}}
+                                        className="px-4 py-2 rounded-sm border transition-all text-sm font-medium flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                                        style={{backgroundColor: '#991b1b', color: COLORS.smoke, borderColor: '#dc2626'}}
                                         title="Finish Session Permanently"
                                       >
                                         {finishingGame === game.id ? (
@@ -1038,35 +1028,17 @@ export default function CampaignManager({ user, refreshTrigger }) {
                                           </>
                                         ) : (
                                           <>
-                                            <FontAwesomeIcon icon={faCheckCircle} />
+                                            <FontAwesomeIcon icon={faXmark} />
                                             Finish
                                           </>
                                         )}
                                       </button>
-                                      <Button
-                                        variant="danger"
-                                        size="sm"
-                                        onClick={() => openDeleteSessionModal(game)}
-                                        disabled={deletingGame === game.id}
-                                      >
-                                        {deletingGame === game.id ? (
-                                          <>
-                                            <div className="animate-spin rounded-full h-3 w-3 border-b-2 border-white mr-2"></div>
-                                            Deleting...
-                                          </>
-                                        ) : (
-                                          <>
-                                            <FontAwesomeIcon icon={faTrash} className="mr-2" />
-                                            Delete
-                                          </>
-                                        )}
-                                      </Button>
                                     </>
                                   ) : game.status === 'finished' && campaign.host_id === user.id ? (
                                     /* Show delete button for finished sessions (host only) */
                                     <Button
                                       variant="danger"
-                                      size="sm"
+                                      size="md"
                                       onClick={() => openDeleteSessionModal(game)}
                                       disabled={deletingGame === game.id}
                                     >
@@ -1090,6 +1062,7 @@ export default function CampaignManager({ user, refreshTrigger }) {
                         )}
                       </div>
                     </div>
+                  </div>
                 </div>
               )
             })}

@@ -52,7 +52,7 @@ export default function ConfirmModal({
           <p className="text-sm mb-6" style={{color: THEME.textOnDark}}>{description}</p>
         )}
 
-        <div className="flex justify-end gap-3">
+        <div className="flex justify-center gap-3">
           <Button
             variant="ghost"
             onClick={onCancel}

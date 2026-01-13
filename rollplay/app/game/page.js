@@ -1259,7 +1259,7 @@ function GameContent() {
           </div>
 
           <button
-            onClick={() => router.push('/dashboard?tab=games')}
+            onClick={() => router.push('/dashboard')}
             className="flex items-center gap-2 px-4 py-2 bg-slate-700 hover:bg-slate-600 text-slate-200 rounded-lg border border-slate-600 transition-all text-sm"
             title="Back to Dashboard"
           >

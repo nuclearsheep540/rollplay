@@ -29,13 +29,13 @@ export function Button({
 
     danger: {
       backgroundColor: '#991b1b',
-      color: THEME.textAccent,
+      color: COLORS.smoke,
       borderColor: '#dc2626'
     },
 
     success: {
       backgroundColor: '#166534',
-      color: THEME.textAccent,
+      color: COLORS.smoke,
       borderColor: '#16a34a'
     },
 
