@@ -16,28 +16,28 @@ export const EVENT_CONFIG = {
     toastMessage: 'New friend request',
     panelMessage: (data) => `${data.requester_screen_name} sent you a friend request`,
     toastType: 'info',
-    navigationTab: 'friends'
+    navigationTab: 'account'
   },
 
   'friend_request_accepted': {
     toastMessage: 'Friend request accepted',
     panelMessage: (data) => `${data.friend_screen_name} accepted your friend request`,
     toastType: 'success',
-    navigationTab: 'friends'
+    navigationTab: 'account'
   },
 
   'friend_request_declined': {
     toastMessage: 'Friend request declined',
     panelMessage: (data) => `${data.declined_by_screen_name} declined your friend request`,
     toastType: 'info',
-    navigationTab: 'friends'
+    navigationTab: 'account'
   },
 
   'friend_removed': {
     toastMessage: 'Friend removed',
     panelMessage: (data) => `${data.removed_by_screen_name} removed you as a friend`,
     toastType: 'warning',
-    navigationTab: 'friends'
+    navigationTab: 'account'
   },
 
   'campaign_invite_received': {

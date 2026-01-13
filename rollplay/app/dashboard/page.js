@@ -243,8 +243,8 @@ function DashboardContent() {
         </section>
       )}
 
-      {/* Social Section - Profile and Friends */}
-      {activeSection === 'social' && (
+      {/* Account Section - Profile and Friends */}
+      {activeSection === 'account' && (
         <section>
           <SocialManager
             user={user}
@@ -254,8 +254,8 @@ function DashboardContent() {
         </section>
       )}
 
-      {/* Friends Widget - Fixed bottom-right widget on all tabs EXCEPT Social */}
-      {activeSection !== 'social' && (
+      {/* Friends Widget - Fixed bottom-right widget on all tabs EXCEPT Account */}
+      {activeSection !== 'account' && (
         <FriendsWidget user={user} refreshTrigger={refreshTrigger} />
       )}
 

@@ -518,7 +518,7 @@ export default function CharacterManager({ user }) {
           {/* When character IS selected: Full-width side-by-side layout */}
           {selectedCharacter && (
             <div
-              className="flex rounded-sm overflow-hidden border-2"
+              className="rounded-sm overflow-hidden border-2"
               style={{
                 position: 'relative',
                 left: 'calc(50% - 50vw)',
@@ -528,13 +528,19 @@ export default function CharacterManager({ user }) {
                 borderColor: THEME.borderSubtle
               }}
             >
-              {/* Left side: Selected character card - hero style, no padding */}
-              <div className="flex-shrink-0">
-                {renderSelectedCard()}
-              </div>
+              {/* Inner container with max-width, left-aligned */}
+              <div
+                className="flex h-full"
+                style={{ maxWidth: '1200px', minHeight: '500px' }}
+              >
+                {/* Left side: Selected character card - hero style, no padding */}
+                <div className="flex-shrink-0">
+                  {renderSelectedCard()}
+                </div>
 
-              {/* Right side: Stats panel */}
-              {renderStatsPanel()}
+                {/* Right side: Stats panel */}
+                {renderStatsPanel()}
+              </div>
             </div>
           )}
         </>
