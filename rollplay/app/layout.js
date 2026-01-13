@@ -1,13 +1,27 @@
-import { Inter, New_Rocker, Metamorphous } from 'next/font/google'
+import { Inter, New_Rocker, Metamorphous, Ubuntu, Outfit } from 'next/font/google'
 import './globals.css'
 import '@melloware/coloris/dist/coloris.css'
 
-const inter = Inter({ subsets: ['latin'] })
+const inter = Inter({ subsets: ['latin'], weight: '400', variable: '--font-inter' })
 
 const newRocker = New_Rocker({
   weight: '400',
   subsets: ['latin'],
   variable: '--font-new-rocker',
+  display: 'swap'
+})
+
+const ubuntu = Ubuntu({
+  weight: '400',
+  subsets: ['latin'],
+  variable: '--font-ubuntu',
+  display: 'swap'
+})
+
+const outfit = Outfit({
+  weight: '400',
+  subsets: ['latin'],
+  variable: '--font-outfit',
   display: 'swap'
 })
 
@@ -25,7 +39,7 @@ export const metadata = {
 
 export default function RootLayout({ children }) {
   return (
-    <html lang="en" className={`${newRocker.variable} ${metamorphous.variable}`}>
+    <html lang="en" className={`${newRocker.variable} ${metamorphous.variable} ${ubuntu.variable} ${outfit.variable} ${inter.variable}`}>
       <body className={inter.className}>{children}
       </body>
     </html>

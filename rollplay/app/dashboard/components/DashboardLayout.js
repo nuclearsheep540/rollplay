@@ -10,7 +10,7 @@ import { useEffect } from 'react'
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
 import { faRightFromBracket } from '@fortawesome/free-solid-svg-icons'
 import NotificationBell from '../../shared/components/NotificationBell'
-import { THEME, STYLES } from '@/app/styles/colorTheme'
+import { THEME, STYLES, COLORS } from '@/app/styles/colorTheme'
 
 export default function DashboardLayout({
   children,
@@ -63,10 +63,10 @@ export default function DashboardLayout({
     <div className="h-screen flex flex-col overflow-hidden" style={{backgroundColor: THEME.bgPrimary, color: THEME.textPrimary}}>
       {/* Top Header - Fixed */}
       <header className="flex-shrink-0 border-b p-4 flex justify-between items-center"
-              style={{backgroundColor: THEME.bgSecondary, borderBottomColor: THEME.borderSubtle}}>
-        <div className="text-2xl flex items-center font-[family-name:var(--font-new-rocker)]"
-             style={{color: THEME.textAccent}}>
-          <span>Tabletop Tavern</span>
+              style={{backgroundColor: THEME.bgSecondary, borderBottomColor: THEME.borderSubtle, fontWeight: 1000}}>
+        <div className="text-2xl flex items-center font-[family-name:var(--font-inter)]"
+             style={{color: COLORS.smoke}}>
+          <span>TABLETOP</span><span style={{color: COLORS.silver}}>TAVERN</span>
         </div>
         <nav className="flex items-center gap-6">
           <NotificationBell
