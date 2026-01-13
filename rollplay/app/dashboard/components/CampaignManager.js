@@ -1310,8 +1310,8 @@ export default function CampaignManager({ user, refreshTrigger, onCampaignUpdate
                   >
                     <FontAwesomeIcon
                       icon={faPlus}
-                      className="text-6xl mb-4 opacity-30"
-                      style={{color: THEME.textSecondary}}
+                      className="text-6xl mb-4 opacity-50"
+                      style={{color: COLORS.smoke}}
                     />
                     <h4 className="text-2xl font-[family-name:var(--font-metamorphous)] mb-2 opacity-50" style={{color: THEME.textPrimary}}>
                       Create New Campaign
@@ -1430,7 +1430,7 @@ export default function CampaignManager({ user, refreshTrigger, onCampaignUpdate
                     borderColor: THEME.borderDefault,
                     color: THEME.textPrimary
                   }}
-                  rows="3"
+                  rows="5"
                   placeholder="Enter campaign description"
                   maxLength={1000}
                 />
@@ -1442,18 +1442,21 @@ export default function CampaignManager({ user, refreshTrigger, onCampaignUpdate
                 <label className="block text-sm font-medium mb-2" style={{color: THEME.textOnDark}}>
                   Tile Background
                 </label>
-                <div className="flex gap-3">
+                <div className="flex flex-wrap gap-3">
                   {[
                     { value: '/campaign-tile-bg.png', label: 'Mountains' },
                     { value: '/floating-city.png', label: 'Floating City' },
+                    { value: '/barren-land.png', label: 'Barren' },
+                    { value: '/underworld.png', label: 'Underworld' },
                     { value: null, label: 'None' }
                   ].map((option) => (
                     <button
                       key={option.label}
                       type="button"
                       onClick={() => updateModalData('campaignCreate', { heroImage: option.value })}
-                      className="flex-1 aspect-[16/9] rounded-sm border-2 overflow-hidden relative"
+                      className="aspect-[16/9] rounded-sm border-2 overflow-hidden relative"
                       style={{
+                        width: 'calc(33.333% - 0.5rem)',
                         borderColor: modals.campaignCreate.heroImage === option.value ? THEME.borderActive : THEME.borderDefault,
                         backgroundColor: option.value ? 'transparent' : COLORS.carbon
                       }}
