@@ -10,6 +10,7 @@ import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
 import { faBell } from '@fortawesome/free-solid-svg-icons'
 import NotificationPanel from './NotificationPanel'
 import { ToastNotification } from './ToastNotification'
+import { THEME } from '@/app/styles/colorTheme'
 
 export default function NotificationBell({ userId, refreshTrigger, toasts = [], onDismissToast }) {
   const [unreadCount, setUnreadCount] = useState(0)
@@ -90,10 +91,11 @@ export default function NotificationBell({ userId, refreshTrigger, toasts = [], 
 
       <button
         onClick={handleBellClick}
-        className="flex items-center text-slate-400"
+        className="flex items-center hover:opacity-80 transition-opacity"
+        style={{color: THEME.textSecondary}}
         aria-label="Notifications"
       >
-        <FontAwesomeIcon icon={faBell} className="h-6 w-6" />
+        <FontAwesomeIcon icon={faBell} className="h-7 w-7" />
         {unreadCount > 0 && (
           <span className="absolute -top-1 -right-1 bg-red-500 text-white text-xs font-bold rounded-full h-5 w-5 flex items-center justify-center">
             {unreadCount > 9 ? '9+' : unreadCount}

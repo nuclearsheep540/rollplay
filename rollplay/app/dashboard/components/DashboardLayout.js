@@ -62,13 +62,13 @@ export default function DashboardLayout({
   return (
     <div className="h-screen flex flex-col overflow-hidden" style={{backgroundColor: THEME.bgPrimary, color: THEME.textPrimary}}>
       {/* Top Header - Fixed */}
-      <header className="flex-shrink-0 border-b p-4 flex justify-between items-center"
+      <header className="flex-shrink-0 border-b py-4 px-4 sm:px-8 md:px-10 flex justify-between items-center"
               style={{backgroundColor: THEME.bgSecondary, borderBottomColor: THEME.borderSubtle, fontWeight: 1000}}>
-        <div className="text-2xl flex items-center font-[family-name:var(--font-inter)]"
+        <div className="text-2xl flex items-center font-[family-name:var(--font-ubuntu)]"
              style={{color: COLORS.smoke}}>
           <span>TABLETOP</span><span style={{color: COLORS.silver}}>TAVERN</span>
         </div>
-        <nav className="flex items-center gap-6">
+        <nav className="flex items-center gap-8">
           <NotificationBell
             userId={user?.id}
             refreshTrigger={refreshTrigger}
@@ -81,7 +81,7 @@ export default function DashboardLayout({
             style={{color: THEME.textSecondary}}
             className="hover:opacity-80 transition-opacity"
           >
-            <FontAwesomeIcon icon={faRightFromBracket} className="h-6 w-6" />
+            <FontAwesomeIcon icon={faRightFromBracket} className="h-7 w-7" />
           </button>
         </nav>
       </header>
