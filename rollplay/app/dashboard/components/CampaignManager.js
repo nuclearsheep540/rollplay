@@ -615,30 +615,68 @@ export default function CampaignManager({ user, refreshTrigger, onCampaignUpdate
 
   // Detect which campaign descriptions are truncated (overflow 3 lines)
   useEffect(() => {
-    const truncationState = {}
-    Object.keys(descriptionRefs.current).forEach(campaignId => {
-      const element = descriptionRefs.current[campaignId]
-      if (element) {
-        // Compare scrollHeight (full content) with clientHeight (visible after clamp)
-        const isContentTruncated = element.scrollHeight > element.clientHeight
+    const checkTruncation = () => {
+      // Use requestAnimationFrame to ensure DOM has updated after state changes
+      requestAnimationFrame(() => {
+        const truncationState = {}
+        const newExpandedState = { ...expandedDescriptions }
 
-        // Also check if container has enough vertical space for all content
-        // If the card is already tall enough, don't mark as truncated
-        const contentContainer = element.closest('.flex.flex-col.justify-between.p-6')
-        if (contentContainer && isContentTruncated) {
-          const containerHeight = contentContainer.offsetHeight
-          const fullContentHeight = element.scrollHeight
+        Object.keys(descriptionRefs.current).forEach(campaignId => {
+          const element = descriptionRefs.current[campaignId]
+          if (element) {
+            // Get the full content height (scrollHeight gives us the true content size)
+            const fullContentHeight = element.scrollHeight
 
-          // If container has enough space to show full content (with some padding), don't truncate
-          const hasEnoughSpace = containerHeight >= (fullContentHeight + 100) // 100px buffer for other content
-          truncationState[campaignId] = !hasEnoughSpace
-        } else {
-          truncationState[campaignId] = isContentTruncated
+            // Check if content is currently visually truncated (useful for detecting when CSS clamp is active)
+            const isVisuallyTruncated = element.scrollHeight > element.clientHeight
+
+            // Always check container height to determine if we WOULD need truncation
+            const contentContainer = element.closest('.flex.flex-col.justify-between.p-6')
+            if (contentContainer) {
+              const containerHeight = contentContainer.offsetHeight
+
+              // If container has enough space to show full content (with buffer for other content), don't truncate
+              const hasEnoughSpace = containerHeight >= (fullContentHeight + 100) // 100px buffer
+
+              // Mark as truncated if container doesn't have enough space OR if content is already visually truncated
+              truncationState[campaignId] = !hasEnoughSpace || isVisuallyTruncated
+
+              // If container no longer has enough space and it was manually expanded, auto-collapse
+              if (!hasEnoughSpace && expandedDescriptions[campaignId] === true) {
+                newExpandedState[campaignId] = false
+              }
+
+              // If container NOW has enough space and it was manually collapsed, reset to undefined (auto-expand)
+              if (hasEnoughSpace && expandedDescriptions[campaignId] === false) {
+                newExpandedState[campaignId] = undefined
+              }
+            } else {
+              // Fallback: just use visual truncation detection
+              truncationState[campaignId] = isVisuallyTruncated
+            }
+          }
+        })
+
+        setIsTruncated(truncationState)
+
+        // Update expanded state if any campaigns need to be collapsed
+        if (JSON.stringify(newExpandedState) !== JSON.stringify(expandedDescriptions)) {
+          setExpandedDescriptions(newExpandedState)
         }
-      }
-    })
-    setIsTruncated(truncationState)
-  }, [campaigns, selectedCampaign]) // Re-check when campaigns change or selection changes
+      })
+    }
+
+    // Initial check
+    checkTruncation()
+
+    // Add resize listener for responsive behavior
+    window.addEventListener('resize', checkTruncation)
+
+    // Cleanup
+    return () => {
+      window.removeEventListener('resize', checkTruncation)
+    }
+  }, [campaigns, selectedCampaign, expandedDescriptions]) // Re-check when campaigns change or selection changes
 
   if (loading) {
     return (
@@ -817,6 +855,27 @@ export default function CampaignManager({ user, refreshTrigger, onCampaignUpdate
 
               const isSelected = selectedCampaign?.id === campaign.id
 
+              // Centralized truncation logic - determines whether description should show full content
+              // Returns true if we should show full content (not truncated)
+              const shouldShowFullContent = () => {
+                // If manually expanded, always show full
+                if (isSelected && expandedDescriptions[campaign.id] === true) return true
+
+                // If manually collapsed BUT container now has space for full content, auto-expand
+                if (isSelected && expandedDescriptions[campaign.id] === false && !isTruncated[campaign.id]) {
+                  return true
+                }
+
+                // If manually collapsed and content IS truncated, keep truncated
+                if (expandedDescriptions[campaign.id] === false) return false
+
+                // If undefined (no user interaction) and selected and container has space, show full
+                if (isSelected && !isTruncated[campaign.id]) return true
+
+                // Default: truncate
+                return false
+              }
+
               return (
                 <div
                   key={campaign.id}
@@ -829,7 +888,7 @@ export default function CampaignManager({ user, refreshTrigger, onCampaignUpdate
                   <div
                     className="w-full relative rounded-sm overflow-visible cursor-pointer border-2"
                     style={{
-                      ...(!(isSelected && expandedDescriptions[campaign.id]) && { aspectRatio: '16/4' }),
+                      ...(!(isSelected && shouldShowFullContent()) && { aspectRatio: '16/4' }),
                       minHeight: '200px',
                       backgroundImage: `url(${campaign.hero_image || '/campaign-tile-bg.png'})`,
                       backgroundSize: 'cover',
@@ -884,9 +943,9 @@ export default function CampaignManager({ user, refreshTrigger, onCampaignUpdate
                     <div
                       className="flex flex-col justify-between p-6"
                       style={{
-                        position: isSelected && expandedDescriptions[campaign.id] ? 'relative' : 'absolute',
-                        inset: isSelected && expandedDescriptions[campaign.id] ? 'unset' : 0,
-                        minHeight: isSelected && expandedDescriptions[campaign.id] ? 'auto' : '100%',
+                        position: isSelected && shouldShowFullContent() ? 'relative' : 'absolute',
+                        inset: isSelected && shouldShowFullContent() ? 'unset' : 0,
+                        minHeight: isSelected && shouldShowFullContent() ? 'auto' : '100%',
                         zIndex: 1
                       }}
                     >
@@ -900,26 +959,24 @@ export default function CampaignManager({ user, refreshTrigger, onCampaignUpdate
                             <div className="text-base drop-shadow-md mt-2" style={{maxWidth: '50%'}}>
                               <p
                                 ref={(el) => {
-                                  // Only attach ref when NOT expanded, so we can measure clamped height
-                                  if (!expandedDescriptions[campaign.id]) {
-                                    descriptionRefs.current[campaign.id] = el
-                                  }
+                                  // Always attach ref so we can measure at any time
+                                  descriptionRefs.current[campaign.id] = el
                                 }}
                                 className="inline"
                                 style={{
                                   color: THEME.textAccent,
                                   whiteSpace: 'pre-line',
-                                  // Show full content only if: manually expanded OR (selected AND container has space)
-                                  display: (isSelected && expandedDescriptions[campaign.id]) || (isSelected && !isTruncated[campaign.id]) ? 'inline' : '-webkit-box',
-                                  WebkitLineClamp: (isSelected && expandedDescriptions[campaign.id]) || (isSelected && !isTruncated[campaign.id]) ? 'unset' : 3,
+                                  // Use centralized logic for all truncation CSS
+                                  display: shouldShowFullContent() ? 'inline' : '-webkit-box',
+                                  WebkitLineClamp: shouldShowFullContent() ? 'unset' : 3,
                                   WebkitBoxOrient: 'vertical',
-                                  overflow: (isSelected && expandedDescriptions[campaign.id]) || (isSelected && !isTruncated[campaign.id]) ? 'visible' : 'hidden'
+                                  overflow: shouldShowFullContent() ? 'visible' : 'hidden'
                                 }}
                               >
                                 {campaign.description}
                               </p>
-                              {/* Only show Read More when campaign IS selected (sessions drawer open) AND description is truncated */}
-                              {isSelected && !expandedDescriptions[campaign.id] && isTruncated[campaign.id] && (
+                              {/* Show Read More when selected AND not showing full content AND content is truncated */}
+                              {isSelected && !shouldShowFullContent() && isTruncated[campaign.id] && (
                                 <button
                                   onClick={(e) => toggleDescriptionExpanded(campaign.id, e)}
                                   className="block mt-1 underline hover:no-underline transition-all"
@@ -928,8 +985,8 @@ export default function CampaignManager({ user, refreshTrigger, onCampaignUpdate
                                   Read More...
                                 </button>
                               )}
-                              {/* Show Read Less if description is expanded via Read More */}
-                              {isSelected && expandedDescriptions[campaign.id] && (
+                              {/* Show Read Less if description is manually expanded */}
+                              {isSelected && expandedDescriptions[campaign.id] === true && (
                                 <button
                                   onClick={(e) => toggleDescriptionExpanded(campaign.id, e)}
                                   className="block mt-1 underline hover:no-underline transition-all"
