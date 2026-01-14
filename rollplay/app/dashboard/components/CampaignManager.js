@@ -720,7 +720,8 @@ export default function CampaignManager({ user, refreshTrigger, onCampaignUpdate
                 key={campaign.id}
                 className="w-full relative"
                 style={{
-                  marginBottom: '3rem'
+                  marginBottom: '3rem',
+                  maxWidth: '1600px'
                 }}
               >
                 {/* Invited Campaign Card - NO gradients, NO min-width */}
@@ -824,7 +825,8 @@ export default function CampaignManager({ user, refreshTrigger, onCampaignUpdate
                   key={campaign.id}
                   className="w-full relative"
                   style={{
-                    marginBottom: isSelected ? '0' : '3rem'
+                    marginBottom: isSelected ? '0' : '3rem',
+                    maxWidth: isSelected ? 'none' : '1600px'
                   }}
                 >
                   {/* Campaign Card with expanding background */}
@@ -1300,7 +1302,7 @@ export default function CampaignManager({ user, refreshTrigger, onCampaignUpdate
 
             {/* Create Campaign Template Tile - Only render when no campaign is selected */}
             {!selectedCampaign && (
-              <div className="w-full">
+              <div className="w-full" style={{ maxWidth: '1600px' }}>
                 <button
                   onClick={() => openModal('campaignCreate')}
                   className="aspect-[16/4] w-full relative rounded-sm overflow-hidden"

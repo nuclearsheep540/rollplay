@@ -445,8 +445,8 @@ export default function CharacterManager({ user, onExpandedChange }) {
           backgroundImage: 'url(/heroes.png)',
           backgroundSize: 'cover',
           backgroundPosition: 'center',
-          width: 'clamp(320px, 45vw, 520px)', // Wider in expanded view
-          minWidth: 'clamp(320px, 45vw, 520px)',
+          width: 'clamp(320px, 30vw, 800px)', // Scales with viewport, larger max for wide screens
+          minWidth: 'clamp(320px, 30vw, 800px)',
           height: '100%' // Fill parent height
         }}
         onClick={() => {
