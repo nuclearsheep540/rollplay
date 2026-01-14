@@ -20,7 +20,8 @@ export default function NumericStepper({
   max = 20,
   disabled = false,
   showModifier = true,  // Show D&D modifier (only for ability scores)
-  hasBonus = false  // Highlight if this score has a background bonus
+  hasBonus = false,  // Highlight if this score has a background bonus
+  bonusAmount = 0  // The actual bonus amount to display
 }) {
   const handleIncrement = () => {
     if (value < max) onChange(value + 1)
@@ -88,6 +89,14 @@ export default function NumericStepper({
           >
             {value}
           </span>
+          {bonusAmount > 0 && (
+            <span
+              className="text-xs font-semibold mt-1"
+              style={{ color: '#4ade80' }}
+            >
+              (+{bonusAmount} bonus)
+            </span>
+          )}
           {showModifier && (
             <span
               className="text-xs font-semibold mt-1"

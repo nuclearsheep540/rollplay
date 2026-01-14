@@ -150,6 +150,7 @@ export default function DiceRoller({
                     disabled={disabled}
                     showModifier={true}
                     hasBonus={bonus > 0}
+                    bonusAmount={bonus}
                   />
 
                   {/* Roll detail */}

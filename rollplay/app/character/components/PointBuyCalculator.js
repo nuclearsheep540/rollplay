@@ -154,6 +154,7 @@ export default function PointBuyCalculator({
               disabled={disabled}
               showModifier={true}
               hasBonus={bonus > 0}
+              bonusAmount={bonus}
             />
           )
         })}

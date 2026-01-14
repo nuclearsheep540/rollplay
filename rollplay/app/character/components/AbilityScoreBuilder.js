@@ -141,6 +141,7 @@ export default function AbilityScoreBuilder({
                   disabled={disabled}
                   showModifier={true}
                   hasBonus={originBonuses[key] > 0}
+                  bonusAmount={originBonuses[key] || 0}
                 />
               ))}
             </div>
