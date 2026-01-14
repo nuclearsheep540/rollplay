@@ -48,7 +48,7 @@ export default function CampaignManager({ user, refreshTrigger, onCampaignUpdate
 
   const gameSessionsPanelRef = useRef(null)
   const campaignCardRef = useRef(null)
-  const [drawerHeight, setDrawerHeight] = useState(null) // Calculated height to fill viewport
+  const [drawerTop, setDrawerTop] = useState(null) // Distance from viewport top to drawer start
 
   // Consolidated modal state
   const [modals, setModals] = useState({
@@ -641,23 +641,40 @@ export default function CampaignManager({ user, refreshTrigger, onCampaignUpdate
     onExpandedChange?.(!!selectedCampaign)
   }, [selectedCampaign, onExpandedChange])
 
-  // Calculate drawer height to fill remaining viewport
+  // Calculate drawer top position (distance from viewport top to where drawer starts)
+  // This allows us to use CSS calc(100vh - drawerTop) for perfect viewport filling
   useEffect(() => {
-    const calculateDrawerHeight = () => {
+    const calculateDrawerTop = () => {
       if (selectedCampaign && campaignCardRef.current) {
+        // Get card's position relative to the viewport
         const cardRect = campaignCardRef.current.getBoundingClientRect()
-        const cardBottom = cardRect.bottom
-        // Drawer should fill from card bottom to viewport bottom
-        const remainingHeight = window.innerHeight - cardBottom
-        setDrawerHeight(Math.max(remainingHeight, 200)) // Minimum 200px
+        // The drawer starts at the bottom of the card
+        setDrawerTop(cardRect.bottom)
       } else {
-        setDrawerHeight(null)
+        setDrawerTop(null)
       }
     }
 
-    calculateDrawerHeight()
-    window.addEventListener('resize', calculateDrawerHeight)
-    return () => window.removeEventListener('resize', calculateDrawerHeight)
+    // Calculate immediately
+    calculateDrawerTop()
+
+    // The scroll-to-top animation uses 'smooth' behavior which takes time
+    // We need to recalculate after the scroll completes and layout settles
+    // Use multiple timeouts to catch different timing scenarios
+    const timeouts = [50, 150, 300, 500].map(delay =>
+      setTimeout(calculateDrawerTop, delay)
+    )
+
+    window.addEventListener('resize', calculateDrawerTop)
+    // Also listen for scroll events in case the user scrolls during expansion
+    const mainContainer = document.getElementById('dashboard-main')
+    mainContainer?.addEventListener('scroll', calculateDrawerTop)
+
+    return () => {
+      window.removeEventListener('resize', calculateDrawerTop)
+      mainContainer?.removeEventListener('scroll', calculateDrawerTop)
+      timeouts.forEach(clearTimeout)
+    }
   }, [selectedCampaign])
 
   // Reset expanded state on unmount
@@ -1042,8 +1059,11 @@ export default function CampaignManager({ user, refreshTrigger, onCampaignUpdate
                       borderWidth: selectedCampaign?.id === campaign.id ? '2px' : '0px',
                       borderStyle: 'solid',
                       width: selectedCampaign?.id === campaign.id ? '100vw' : '100%',
-                      // Use min-height to ensure drawer fills viewport, but can grow larger for content
-                      minHeight: selectedCampaign?.id === campaign.id && drawerHeight ? `${drawerHeight}px` : '0px',
+                      // Use calc(100vh - drawerTop) to fill exactly to viewport bottom
+                      // This approach uses the measured position for precise filling
+                      minHeight: selectedCampaign?.id === campaign.id && drawerTop !== null
+                        ? `calc(100vh - ${drawerTop}px)`
+                        : '0px',
                       maxHeight: selectedCampaign?.id === campaign.id ? 'none' : '0px',
                       overflow: 'hidden',
                       borderRadius: '0.125rem',
