@@ -4,6 +4,7 @@
 from uuid import UUID
 import logging
 import asyncio
+import time
 
 from modules.friendship.repositories.friendship_repository import FriendshipRepository
 from modules.friendship.repositories.friend_request_repository import FriendRequestRepository
@@ -362,3 +363,68 @@ class RemoveFriend:
             # No event broadcast needed - user will see updated state on next refresh
 
         return success
+
+
+class BuzzFriend:
+    """
+    Send a buzz notification to a friend.
+
+    Rate limited to prevent spam - one buzz per sender-recipient pair every N seconds.
+    """
+
+    def __init__(
+        self,
+        friendship_repository: FriendshipRepository,
+        user_repository: UserRepository,
+        event_manager: EventManager,
+        rate_limits: dict,
+        cooldown_seconds: int
+    ):
+        self.friendship_repo = friendship_repository
+        self.user_repo = user_repository
+        self.event_manager = event_manager
+        self.rate_limits = rate_limits
+        self.cooldown_seconds = cooldown_seconds
+
+    async def execute(self, user_id: UUID, friend_id: UUID) -> None:
+        """
+        Send a buzz to a friend.
+
+        Validation:
+        - Friendship must exist
+        - Must not be rate limited
+        """
+        # Check rate limit
+        rate_key = f"{user_id}:{friend_id}"
+        current_time = time.time()
+
+        if rate_key in self.rate_limits:
+            last_buzz = self.rate_limits[rate_key]
+            time_since = current_time - last_buzz
+            if time_since < self.cooldown_seconds:
+                remaining = int(self.cooldown_seconds - time_since)
+                raise ValueError(f"Please wait {remaining} seconds before buzzing again")
+
+        # Verify friendship exists
+        friendship = self.friendship_repo.get_by_canonical_ids(user_id, friend_id)
+        if not friendship:
+            raise ValueError("You can only buzz friends")
+
+        # Get sender's screen name
+        sender = self.user_repo.get_by_id(user_id)
+        if not sender:
+            raise ValueError("Sender not found")
+
+        # Update rate limit
+        self.rate_limits[rate_key] = current_time
+
+        # Broadcast buzz event
+        await self.event_manager.broadcast(
+            **FriendshipEvents.friend_buzzed(
+                recipient_id=friend_id,
+                buzzer_id=user_id,
+                buzzer_screen_name=sender.screen_name
+            )
+        )
+
+        logger.info(f"Buzz sent from {user_id} to {friend_id}")

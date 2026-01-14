@@ -25,7 +25,7 @@ const sendTestNotification = async () => {
 
 export default function SocialManager({ user, refreshTrigger, onUserUpdate }) {
   return (
-    <div className="space-y-8">
+    <div className="space-y-8 max-w-[1600px]">
       {/* Page Header */}
       <div className="mb-8">
         <h1 className="text-4xl font-bold font-[family-name:var(--font-metamorphous)]" style={{color: THEME.textBold}}>
@@ -36,17 +36,17 @@ export default function SocialManager({ user, refreshTrigger, onUserUpdate }) {
         </p>
       </div>
 
-      {/* Top Row: Profile (left) + Notification Feed (right) - aligned heights */}
+      {/* Main Layout: Left Column (Profile + Activity) | Right Column (Add Friend + Friends) */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-stretch">
-        <ProfileManager user={user} onUserUpdate={onUserUpdate} />
-        <AccountNotificationFeed userId={user?.id} refreshTrigger={refreshTrigger} />
+        {/* Left Column */}
+        <div className="space-y-6">
+          <ProfileManager user={user} onUserUpdate={onUserUpdate} />
+          <AccountNotificationFeed userId={user?.id} refreshTrigger={refreshTrigger} />
+        </div>
+
+        {/* Right Column - stretch to match left column height */}
+        <FriendsManager user={user} refreshTrigger={refreshTrigger} fillHeight />
       </div>
-
-      {/* Divider */}
-      <div className="border-t" style={{borderColor: THEME.borderSubtle}}></div>
-
-      {/* Friends Section - Full Width (has its own header) */}
-      <FriendsManager user={user} refreshTrigger={refreshTrigger} />
 
       {/* Development Tools (dev only) */}
       {process.env.NODE_ENV === 'development' && (

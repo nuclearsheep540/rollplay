@@ -68,3 +68,27 @@ class FriendshipEvents:
             "show_toast": True,
             "save_notification": True
         }
+
+    @staticmethod
+    def friend_buzzed(recipient_id: UUID, buzzer_id: UUID, buzzer_screen_name: str) -> Dict[str, Any]:
+        """
+        Event: User receives a buzz from a friend
+
+        Args:
+            recipient_id: User receiving the buzz
+            buzzer_id: User who sent the buzz
+            buzzer_screen_name: Display name of buzzer
+
+        Returns:
+            Event configuration dict
+        """
+        return {
+            "user_id": recipient_id,
+            "event_type": "friend_buzzed",
+            "data": {
+                "buzzer_id": str(buzzer_id),
+                "buzzer_screen_name": buzzer_screen_name
+            },
+            "show_toast": True,
+            "save_notification": False  # Don't persist buzz notifications
+        }

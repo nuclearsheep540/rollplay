@@ -33,7 +33,8 @@ from modules.campaign.application.commands import (
 from modules.game.application.commands import CreateGame
 from modules.campaign.application.queries import (
     GetUserCampaigns,
-    GetCampaignById
+    GetCampaignById,
+    GetUserHostedCampaigns
 )
 from modules.campaign.domain.campaign_aggregate import CampaignAggregate
 from shared.dependencies.auth import get_current_user_from_token
@@ -170,6 +171,26 @@ async def get_user_campaigns(
     """Get all campaigns where user is host"""
     try:
         query = GetUserCampaigns(campaign_repo)
+        campaigns = query.execute(current_user.id)
+
+        return [_to_campaign_summary_response(campaign, user_repo) for campaign in campaigns]
+
+    except ValueError as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(e)
+        )
+
+
+@router.get("/hosted", response_model=List[CampaignSummaryResponse])
+async def get_user_hosted_campaigns(
+    current_user: UserAggregate = Depends(get_current_user_from_token),
+    campaign_repo: CampaignRepository = Depends(campaign_repository),
+    user_repo: UserRepository = Depends(get_user_repository)
+):
+    """Get all campaigns where user is the DM/host (for friend invites)"""
+    try:
+        query = GetUserHostedCampaigns(campaign_repo)
         campaigns = query.execute(current_user.id)
 
         return [_to_campaign_summary_response(campaign, user_repo) for campaign in campaigns]

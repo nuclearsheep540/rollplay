@@ -42,6 +42,7 @@ class FriendshipResponse(BaseModel):
     friend_id: UUID  # The OTHER user in the friendship (computed)
     friend_screen_name: Optional[str] = None
     friend_account_tag: Optional[str] = None
+    is_online: bool = False  # Whether the friend is currently connected to events WebSocket
     created_at: datetime
 
     class Config:

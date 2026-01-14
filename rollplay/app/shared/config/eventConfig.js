@@ -40,6 +40,13 @@ export const EVENT_CONFIG = {
     navigationTab: 'account'
   },
 
+  'friend_buzzed': {
+    toastMessage: 'Buzz!',
+    panelMessage: (data) => `${data.buzzer_screen_name} buzzed you!`,
+    toastType: 'info',
+    navigationTab: null  // No navigation - just a fun notification
+  },
+
   'campaign_invite_received': {
     toastMessage: 'New campaign invite',
     panelMessage: (data) => `${data.host_screen_name} invited you to "${data.campaign_name}"`,

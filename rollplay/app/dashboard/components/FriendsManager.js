@@ -18,7 +18,7 @@ import {
 import { THEME, COLORS } from '@/app/styles/colorTheme'
 import { Button } from './shared/Button'
 
-export default function FriendsManager({ user, refreshTrigger }) {
+export default function FriendsManager({ user, refreshTrigger, fillHeight = false }) {
   const [friends, setFriends] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
@@ -271,15 +271,7 @@ export default function FriendsManager({ user, refreshTrigger }) {
   }
 
   return (
-    <div className="space-y-6">
-      {/* Section Header */}
-      <h2
-        className="text-2xl font-semibold font-[family-name:var(--font-metamorphous)]"
-        style={{color: THEME.textBold}}
-      >
-        Friends
-      </h2>
-
+    <div className={`flex flex-col gap-6 ${fillHeight ? 'h-full' : ''}`}>
       {/* Error Display */}
       {error && (
         <div
@@ -290,7 +282,114 @@ export default function FriendsManager({ user, refreshTrigger }) {
         </div>
       )}
 
-      {/* Friend Requests - Show above if there are any */}
+      {/* Add Friend Panel */}
+      <div
+        className="p-6 rounded-sm border"
+        style={{backgroundColor: THEME.bgPanel, borderColor: THEME.borderSubtle}}
+      >
+        <h3 className="text-sm font-semibold uppercase mb-4" style={{color: THEME.textAccent}}>
+          Add Friend
+        </h3>
+        <form onSubmit={sendFriendRequest} className="space-y-3">
+          <div>
+            <input
+              type="text"
+              value={friendCode}
+              onChange={(e) => setFriendCode(e.target.value)}
+              placeholder="Enter username (e.g. steve#2345)"
+              className="w-full px-3 py-2 rounded-sm border focus:outline-none focus:ring-2"
+              style={{
+                backgroundColor: THEME.bgSecondary,
+                borderColor: THEME.borderDefault,
+                color: THEME.textOnDark
+              }}
+              disabled={sending}
+            />
+            {/* Real-time lookup feedback */}
+            {friendCode && isValidIdentifier(friendCode) && (
+              <div className="mt-2">
+                {lookupLoading && (
+                  <p className="text-sm flex items-center gap-2" style={{color: THEME.textSecondary}}>
+                    <span className="animate-spin">⏳</span> Looking up user...
+                  </p>
+                )}
+                {!lookupLoading && lookupUser && (
+                  <div
+                    className="p-3 rounded-sm border"
+                    style={{backgroundColor: '#14532d', borderColor: '#22c55e'}}
+                  >
+                    <p className="text-sm font-semibold flex items-center gap-2" style={{color: '#86efac'}}>
+                      <FontAwesomeIcon icon={faUserCheck} />
+                      User found: {lookupUser.screen_name || 'User #' + lookupUser.id.substring(0, 8)}
+                    </p>
+                    <p className="text-xs font-mono" style={{color: '#4ade80'}}>
+                      {lookupUser.account_identifier || lookupUser.friend_code}
+                    </p>
+                  </div>
+                )}
+                {!lookupLoading && lookupError && (
+                  <p className="text-sm flex items-center gap-2" style={{color: '#fca5a5'}}>
+                    <FontAwesomeIcon icon={faUserXmark} />
+                    {lookupError}
+                  </p>
+                )}
+              </div>
+            )}
+          </div>
+          <Button
+            type="submit"
+            variant="primary"
+            className="w-full justify-center"
+            disabled={sending || !lookupUser}
+          >
+            {sending ? (
+              <>
+                <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+                Sending...
+              </>
+            ) : (
+              <>
+                <FontAwesomeIcon icon={faUserPlus} className="mr-2" />
+                {lookupUser ? `Send Request to ${lookupUser.screen_name || 'User'}` : 'Send Friend Request'}
+              </>
+            )}
+          </Button>
+        </form>
+
+        {/* Your Account Tag */}
+        <div className="mt-4 pt-4 border-t" style={{borderTopColor: THEME.borderSubtle}}>
+          <p className="text-sm mb-2" style={{color: THEME.textSecondary}}>
+            Your Account Tag:
+          </p>
+          <div className="flex items-center gap-2">
+            <code
+              className="flex-1 px-3 py-2 rounded-sm border text-sm font-mono"
+              style={{
+                backgroundColor: COLORS.onyx,
+                borderColor: THEME.borderSubtle,
+                color: THEME.textAccent
+              }}
+            >
+              {displayCode}
+            </code>
+            <button
+              onClick={handleCopyCode}
+              className="px-3 py-2 rounded-sm border font-medium text-sm flex items-center gap-1 hover:opacity-80 transition-opacity"
+              style={{
+                backgroundColor: THEME.bgSecondary,
+                borderColor: THEME.borderDefault,
+                color: THEME.textAccent
+              }}
+              title="Copy Account Tag"
+            >
+              <FontAwesomeIcon icon={faCopy} className="text-xs" />
+              {copiedCode ? 'Copied!' : 'Copy'}
+            </button>
+          </div>
+        </div>
+      </div>
+
+      {/* Friend Requests - Show if there are any */}
       {pendingReceived.length > 0 && (
         <div
           className="p-6 rounded-sm border"
@@ -338,177 +437,67 @@ export default function FriendsManager({ user, refreshTrigger }) {
         </div>
       )}
 
-      {/* Side-by-side: Add Friend (left) + Friends List (right) */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Add Friend Panel */}
-        <div
-          className="p-6 rounded-sm border h-fit"
-          style={{backgroundColor: THEME.bgPanel, borderColor: THEME.borderSubtle}}
-        >
-          <h3 className="text-sm font-semibold uppercase mb-4" style={{color: THEME.textAccent}}>
-            Add Friend
-          </h3>
-          <form onSubmit={sendFriendRequest} className="space-y-3">
-            <div>
-              <input
-                type="text"
-                value={friendCode}
-                onChange={(e) => setFriendCode(e.target.value)}
-                placeholder="Enter username (e.g. steve#2345)"
-                className="w-full px-3 py-2 rounded-sm border focus:outline-none focus:ring-2"
-                style={{
-                  backgroundColor: THEME.bgSecondary,
-                  borderColor: THEME.borderDefault,
-                  color: THEME.textOnDark
-                }}
-                disabled={sending}
-              />
-              {/* Real-time lookup feedback */}
-              {friendCode && isValidIdentifier(friendCode) && (
-                <div className="mt-2">
-                  {lookupLoading && (
-                    <p className="text-sm flex items-center gap-2" style={{color: THEME.textSecondary}}>
-                      <span className="animate-spin">⏳</span> Looking up user...
-                    </p>
-                  )}
-                  {!lookupLoading && lookupUser && (
-                    <div
-                      className="p-3 rounded-sm border"
-                      style={{backgroundColor: '#14532d', borderColor: '#22c55e'}}
-                    >
-                      <p className="text-sm font-semibold flex items-center gap-2" style={{color: '#86efac'}}>
-                        <FontAwesomeIcon icon={faUserCheck} />
-                        User found: {lookupUser.screen_name || 'User #' + lookupUser.id.substring(0, 8)}
-                      </p>
-                      <p className="text-xs font-mono" style={{color: '#4ade80'}}>
-                        {lookupUser.account_identifier || lookupUser.friend_code}
-                      </p>
-                    </div>
-                  )}
-                  {!lookupLoading && lookupError && (
-                    <p className="text-sm flex items-center gap-2" style={{color: '#fca5a5'}}>
-                      <FontAwesomeIcon icon={faUserXmark} />
-                      {lookupError}
-                    </p>
-                  )}
-                </div>
-              )}
-            </div>
-            <Button
-              type="submit"
-              variant="primary"
-              className="w-full justify-center"
-              disabled={sending || !lookupUser}
-            >
-              {sending ? (
-                <>
-                  <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
-                  Sending...
-                </>
-              ) : (
-                <>
-                  <FontAwesomeIcon icon={faUserPlus} className="mr-2" />
-                  {lookupUser ? `Send Request to ${lookupUser.screen_name || 'User'}` : 'Send Friend Request'}
-                </>
-              )}
-            </Button>
-          </form>
-
-          {/* Your Account Tag */}
-          <div className="mt-4 pt-4 border-t" style={{borderTopColor: THEME.borderSubtle}}>
-            <p className="text-sm mb-2" style={{color: THEME.textSecondary}}>
-              Your Account Tag:
+      {/* Friends List Panel */}
+      <div
+        className={`p-6 rounded-sm border flex flex-col ${fillHeight ? 'flex-1 min-h-0' : ''}`}
+        style={{backgroundColor: THEME.bgPanel, borderColor: THEME.borderSubtle}}
+      >
+        <h3 className="text-sm font-semibold uppercase mb-4" style={{color: THEME.textAccent}}>
+          Friends ({acceptedFriends.length})
+        </h3>
+        {acceptedFriends.length === 0 ? (
+          <div className="py-8 text-center flex-1 flex flex-col items-center justify-center">
+            <FontAwesomeIcon
+              icon={faUsers}
+              className="text-4xl mb-3 opacity-30"
+              style={{color: THEME.textSecondary}}
+            />
+            <p style={{color: THEME.textSecondary}}>No friends yet</p>
+            <p className="text-sm mt-1" style={{color: THEME.textSecondary}}>
+              Add some friends to get started!
             </p>
-            <div className="flex items-center gap-2">
-              <code
-                className="flex-1 px-3 py-2 rounded-sm border text-sm font-mono"
-                style={{
-                  backgroundColor: COLORS.onyx,
-                  borderColor: THEME.borderSubtle,
-                  color: THEME.textAccent
-                }}
-              >
-                {displayCode}
-              </code>
-              <button
-                onClick={handleCopyCode}
-                className="px-3 py-2 rounded-sm border font-medium text-sm flex items-center gap-1 hover:opacity-80 transition-opacity"
-                style={{
-                  backgroundColor: THEME.bgSecondary,
-                  borderColor: THEME.borderDefault,
-                  color: THEME.textAccent
-                }}
-                title="Copy Account Tag"
-              >
-                <FontAwesomeIcon icon={faCopy} className="text-xs" />
-                {copiedCode ? 'Copied!' : 'Copy'}
-              </button>
-            </div>
           </div>
-        </div>
-
-        {/* Friends List Panel */}
-        <div
-          className="p-6 rounded-sm border"
-          style={{backgroundColor: THEME.bgPanel, borderColor: THEME.borderSubtle}}
-        >
-          <h3 className="text-sm font-semibold uppercase mb-4" style={{color: THEME.textAccent}}>
-            Friends ({acceptedFriends.length})
-          </h3>
-          {acceptedFriends.length === 0 ? (
-            <div className="py-8 text-center">
-              <FontAwesomeIcon
-                icon={faUsers}
-                className="text-4xl mb-3 opacity-30"
-                style={{color: THEME.textSecondary}}
-              />
-              <p style={{color: THEME.textSecondary}}>No friends yet</p>
-              <p className="text-sm mt-1" style={{color: THEME.textSecondary}}>
-                Add some friends to get started!
-              </p>
-            </div>
-          ) : (
-            <div className="space-y-2 max-h-80 overflow-y-auto pr-2" style={{scrollbarWidth: 'thin'}}>
-              {acceptedFriends.map((friendship) => (
-                <div
-                  key={friendship.id}
-                  className="flex items-center justify-between p-3 rounded-sm border"
-                  style={{backgroundColor: THEME.bgSecondary, borderColor: THEME.borderSubtle}}
-                >
-                  <div className="flex items-center gap-3">
-                    <div
-                      className="w-10 h-10 rounded-full flex items-center justify-center text-lg font-bold border"
-                      style={{
-                        backgroundColor: `${THEME.textAccent}30`,
-                        borderColor: `${THEME.textAccent}50`,
-                        color: THEME.textAccent
-                      }}
-                    >
-                      {(friendship.friend_screen_name || 'U')[0].toUpperCase()}
-                    </div>
-                    <div>
-                      <p className="font-semibold" style={{color: THEME.textOnDark}}>
-                        {friendship.friend_screen_name || 'User'}
-                      </p>
-                      <p className="text-xs font-mono" style={{color: THEME.textSecondary}}>
-                        {friendship.friend_account_tag || 'No tag'}
-                      </p>
-                    </div>
-                  </div>
-                  <button
-                    onClick={() => removeFriend(friendship.friend_id)}
-                    disabled={actionLoading[`remove-${friendship.friend_id}`]}
-                    className="p-2 rounded-sm hover:opacity-80 transition-opacity"
-                    style={{color: THEME.textSecondary}}
-                    title="Remove friend"
+        ) : (
+          <div className={`space-y-2 overflow-y-auto pr-2 ${fillHeight ? 'flex-1' : 'max-h-80'}`} style={{scrollbarWidth: 'thin'}}>
+            {acceptedFriends.map((friendship) => (
+              <div
+                key={friendship.id}
+                className="flex items-center justify-between p-3 rounded-sm border"
+                style={{backgroundColor: THEME.bgSecondary, borderColor: THEME.borderSubtle}}
+              >
+                <div className="flex items-center gap-3">
+                  <div
+                    className="w-10 h-10 rounded-full flex items-center justify-center text-lg font-bold border"
+                    style={{
+                      backgroundColor: `${THEME.textAccent}30`,
+                      borderColor: `${THEME.textAccent}50`,
+                      color: THEME.textAccent
+                    }}
                   >
-                    <FontAwesomeIcon icon={faUserMinus} />
-                  </button>
+                    {(friendship.friend_screen_name || 'U')[0].toUpperCase()}
+                  </div>
+                  <div>
+                    <p className="font-semibold" style={{color: THEME.textOnDark}}>
+                      {friendship.friend_screen_name || 'User'}
+                    </p>
+                    <p className="text-xs font-mono" style={{color: THEME.textSecondary}}>
+                      {friendship.friend_account_tag || 'No tag'}
+                    </p>
+                  </div>
                 </div>
-              ))}
-            </div>
-          )}
-        </div>
+                <button
+                  onClick={() => removeFriend(friendship.friend_id)}
+                  disabled={actionLoading[`remove-${friendship.friend_id}`]}
+                  className="p-2 rounded-sm hover:opacity-80 transition-opacity"
+                  style={{color: THEME.textSecondary}}
+                  title="Remove friend"
+                >
+                  <FontAwesomeIcon icon={faUserMinus} />
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
     </div>
   )

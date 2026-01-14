@@ -262,8 +262,8 @@ function DashboardContent() {
         </section>
       )}
 
-      {/* Friends Widget - Fixed bottom-right widget on all tabs EXCEPT Account */}
-      {activeSection !== 'account' && (
+      {/* Friends Widget - Fixed bottom-right widget on all tabs EXCEPT Account, hidden when child is expanded */}
+      {activeSection !== 'account' && !isChildExpanded && (
         <FriendsWidget user={user} refreshTrigger={refreshTrigger} />
       )}
 

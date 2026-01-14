@@ -5,18 +5,23 @@
 
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
+import { useRouter } from 'next/navigation'
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
-import { faChevronDown, faChevronUp, faUserPlus } from '@fortawesome/free-solid-svg-icons'
+import { faChevronDown, faChevronUp, faUserPlus, faBell, faPersonCirclePlus } from '@fortawesome/free-solid-svg-icons'
 import { THEME } from '@/app/styles/colorTheme'
 import { Button } from './shared/Button'
 
 export default function FriendsWidget({ user, refreshTrigger, isStandalone = false }) {
-  const [isExpanded, setIsExpanded] = useState(isStandalone ? true : false)
+  const router = useRouter()
+  const [isExpanded, setIsExpanded] = useState(isStandalone)
   const [friends, setFriends] = useState([])
   const [friendRequests, setFriendRequests] = useState([])
   const [loading, setLoading] = useState(true)
-  const [showAddFriendModal, setShowAddFriendModal] = useState(false)
+  const [hostedCampaigns, setHostedCampaigns] = useState([])
+  const [buzzCooldowns, setBuzzCooldowns] = useState({}) // Track cooldowns per friend
+  const [inviteDropdown, setInviteDropdown] = useState(null) // Track which friend's dropdown is open
+  const dropdownRef = useRef(null)
 
   // Auto-collapse on mobile on mount (only for fixed mode)
   useEffect(() => {
@@ -48,11 +53,92 @@ export default function FriendsWidget({ user, refreshTrigger, isStandalone = fal
     }
   }
 
+  // Fetch hosted campaigns for invite dropdown
+  const fetchHostedCampaigns = async () => {
+    try {
+      const response = await fetch('/api/campaigns/hosted', {
+        method: 'GET',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include'
+      })
+
+      if (response.ok) {
+        const data = await response.json()
+        setHostedCampaigns(data || [])
+      }
+    } catch (error) {
+      console.error('Error fetching hosted campaigns:', error)
+    }
+  }
+
   useEffect(() => {
     if (user?.id) {
       fetchFriends()
+      fetchHostedCampaigns()
     }
   }, [user, refreshTrigger])
+
+  // Close dropdown when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
+        setInviteDropdown(null)
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside)
+    return () => document.removeEventListener('mousedown', handleClickOutside)
+  }, [])
+
+  const handleBuzz = async (friendId) => {
+    // Check if on cooldown
+    if (buzzCooldowns[friendId]) return
+
+    try {
+      const response = await fetch(`/api/friendships/${friendId}/buzz`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include'
+      })
+
+      if (response.ok || response.status === 204) {
+        // Set cooldown for 20 seconds
+        setBuzzCooldowns(prev => ({ ...prev, [friendId]: true }))
+        setTimeout(() => {
+          setBuzzCooldowns(prev => {
+            const updated = { ...prev }
+            delete updated[friendId]
+            return updated
+          })
+        }, 20000)
+      } else {
+        const error = await response.json()
+        console.error('Buzz error:', error.detail)
+      }
+    } catch (error) {
+      console.error('Error buzzing friend:', error)
+    }
+  }
+
+  const handleInviteToCampaign = async (friendId, campaignId) => {
+    try {
+      const response = await fetch(`/api/campaigns/${campaignId}/players/${friendId}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include'
+      })
+
+      if (response.ok) {
+        setInviteDropdown(null)
+        // Refresh campaigns to update invite state
+        fetchHostedCampaigns()
+      } else {
+        const error = await response.json()
+        console.error('Invite error:', error.detail)
+      }
+    } catch (error) {
+      console.error('Error inviting to campaign:', error)
+    }
+  }
 
   const handleAcceptRequest = async (friendshipId) => {
     try {
@@ -86,82 +172,157 @@ export default function FriendsWidget({ user, refreshTrigger, isStandalone = fal
     }
   }
 
+  // Grid class - multi-column only for standalone mode, single column for widget
+  const gridClass = isStandalone
+    ? "grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3"
+    : "flex flex-col gap-2"
+
   // Reusable content component
   const FriendsContent = () => (
-    <>
+    <div className="flex flex-col h-full">
       {loading ? (
-        <div className="p-4 text-center text-sm" style={{color: THEME.textSecondary}}>
+        <div className="p-4 text-center text-sm flex-1 flex items-center justify-center" style={{color: THEME.textSecondary}}>
           Loading...
         </div>
       ) : (
         <>
-          {/* Friends List */}
-          <div className="p-4">
-            <h3 className="text-sm font-semibold mb-3" style={{color: THEME.textOnDark}}>
-              Friends ({friends.length})
-            </h3>
-            {friends.length === 0 ? (
-              <div className="p-2 text-center text-sm" style={{color: THEME.textSecondary}}>
-                No friends yet
-              </div>
-            ) : (
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-                {friends.map(friend => (
-                  <div
-                    key={friend.id}
-                    className="flex items-center gap-2 p-3 rounded-sm border"
-                    style={{backgroundColor: THEME.bgSecondary, borderColor: THEME.borderSubtle, color: THEME.textOnDark}}
-                  >
+          {/* Scrollable content area */}
+          <div className="flex-1 overflow-y-auto">
+            {/* Friends List */}
+            <div className="p-4">
+              <h3 className="text-sm font-semibold mb-3" style={{color: THEME.textOnDark}}>
+                Friends ({friends.length})
+              </h3>
+              {friends.length === 0 ? (
+                <div className="p-2 text-center text-sm" style={{color: THEME.textSecondary}}>
+                  No friends yet
+                </div>
+              ) : (
+                <div className={gridClass}>
+                  {friends.map(friend => (
                     <div
-                      className="w-2 h-2 rounded-full flex-shrink-0"
-                      style={{backgroundColor: friend.is_online ? '#16a34a' : THEME.dimGrey}}
-                    />
-                    <span className="text-sm truncate">{friend.friend_screen_name || 'Unknown'}</span>
-                  </div>
-                ))}
+                      key={friend.id}
+                      className="flex items-center justify-between py-4 px-3 rounded-sm border"
+                      style={{backgroundColor: THEME.bgSecondary, borderColor: THEME.borderSubtle, color: THEME.textOnDark}}
+                    >
+                      <div className="flex items-center gap-2 min-w-0">
+                        <div
+                          className="w-2.5 h-2.5 rounded-full flex-shrink-0"
+                          style={{backgroundColor: friend.is_online ? '#16a34a' : '#dc2626'}}
+                        />
+                        <span className="text-sm truncate">{friend.friend_screen_name || 'Unknown'}</span>
+                      </div>
+                      <div className="flex items-center gap-2 flex-shrink-0 relative">
+                        {/* Buzz Button */}
+                        <button
+                          onClick={() => handleBuzz(friend.friend_id)}
+                          disabled={buzzCooldowns[friend.friend_id]}
+                          className="p-2 rounded-sm transition-colors"
+                          style={{
+                            backgroundColor: buzzCooldowns[friend.friend_id] ? THEME.bgTertiary : 'transparent',
+                            color: buzzCooldowns[friend.friend_id] ? THEME.textSecondary : THEME.textAccent,
+                            opacity: buzzCooldowns[friend.friend_id] ? 0.5 : 1
+                          }}
+                          title={buzzCooldowns[friend.friend_id] ? 'On cooldown' : 'Buzz friend'}
+                        >
+                          <FontAwesomeIcon icon={faBell} size="lg" />
+                        </button>
+                        {/* Invite to Campaign Button */}
+                        {hostedCampaigns.length > 0 && (
+                          <div className="relative" ref={inviteDropdown === friend.friend_id ? dropdownRef : null}>
+                            <button
+                              onClick={() => setInviteDropdown(inviteDropdown === friend.friend_id ? null : friend.friend_id)}
+                              className="p-2 rounded-sm transition-colors hover:bg-opacity-20"
+                              style={{
+                                backgroundColor: 'transparent',
+                                color: THEME.textAccent
+                              }}
+                              title="Invite to campaign"
+                            >
+                              <FontAwesomeIcon icon={faPersonCirclePlus} size="lg" />
+                            </button>
+                            {/* Campaign Dropdown */}
+                            {inviteDropdown === friend.friend_id && (
+                              <div
+                                className="absolute right-0 top-full mt-1 z-50 min-w-[180px] rounded-sm border shadow-lg"
+                                style={{backgroundColor: THEME.bgPanel, borderColor: THEME.borderDefault}}
+                              >
+                                <div className="p-2 text-xs font-semibold border-b" style={{color: THEME.textSecondary, borderColor: THEME.borderSubtle}}>
+                                  Invite to Campaign
+                                </div>
+                                {hostedCampaigns.map(campaign => {
+                                  const isAlreadyInvited = campaign.invited_player_ids?.includes(friend.friend_id)
+                                  const isAlreadyMember = campaign.player_ids?.includes(friend.friend_id)
+                                  const isDisabled = isAlreadyInvited || isAlreadyMember
+                                  return (
+                                    <button
+                                      key={campaign.id}
+                                      onClick={() => !isDisabled && handleInviteToCampaign(friend.friend_id, campaign.id)}
+                                      disabled={isDisabled}
+                                      className="w-full text-left px-3 py-2 text-sm hover:bg-opacity-50 transition-colors"
+                                      style={{
+                                        color: isDisabled ? THEME.textSecondary : THEME.textOnDark,
+                                        backgroundColor: isDisabled ? 'transparent' : 'transparent',
+                                        opacity: isDisabled ? 0.5 : 1
+                                      }}
+                                    >
+                                      {campaign.title}
+                                      {isAlreadyMember && <span className="text-xs ml-1" style={{color: THEME.textSecondary}}>(member)</span>}
+                                      {isAlreadyInvited && !isAlreadyMember && <span className="text-xs ml-1" style={{color: THEME.textSecondary}}>(invited)</span>}
+                                    </button>
+                                  )
+                                })}
+                              </div>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* Friend Requests */}
+            {friendRequests.length > 0 && (
+              <div className="border-t p-4" style={{borderTopColor: THEME.borderSubtle}}>
+                <h3 className="text-sm font-semibold mb-3" style={{color: THEME.textOnDark}}>
+                  Pending Requests ({friendRequests.length})
+                </h3>
+                <div className={gridClass}>
+                  {friendRequests.map(request => (
+                    <div key={request.id} className="p-3 rounded-sm border" style={{backgroundColor: THEME.bgSecondary, borderColor: THEME.borderSubtle}}>
+                      <p className="text-sm mb-2" style={{color: THEME.textOnDark}}>
+                        {request.requester_screen_name || 'Unknown'}
+                      </p>
+                      <div className="flex gap-2">
+                        <Button
+                          variant="success"
+                          size="xs"
+                          onClick={() => handleAcceptRequest(request.requester_id)}
+                        >
+                          Accept
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="xs"
+                          onClick={() => handleDeclineRequest(request.requester_id)}
+                        >
+                          Decline
+                        </Button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
               </div>
             )}
           </div>
 
-          {/* Friend Requests */}
-          {friendRequests.length > 0 && (
-            <div className="border-t p-4" style={{borderTopColor: THEME.borderSubtle}}>
-              <h3 className="text-sm font-semibold mb-3" style={{color: THEME.textOnDark}}>
-                Pending Requests ({friendRequests.length})
-              </h3>
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-                {friendRequests.map(request => (
-                  <div key={request.id} className="p-3 rounded-sm border" style={{backgroundColor: THEME.bgSecondary, borderColor: THEME.borderSubtle}}>
-                    <p className="text-sm mb-2" style={{color: THEME.textOnDark}}>
-                      {request.requester_screen_name || 'Unknown'}
-                    </p>
-                    <div className="flex gap-2">
-                      <Button
-                        variant="success"
-                        size="xs"
-                        onClick={() => handleAcceptRequest(request.requester_id)}
-                      >
-                        Accept
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="xs"
-                        onClick={() => handleDeclineRequest(request.requester_id)}
-                      >
-                        Decline
-                      </Button>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {/* Add Friend Button */}
-          <div className="border-t p-4" style={{borderTopColor: THEME.borderSubtle}}>
+          {/* Add Friend Button - pinned to bottom */}
+          <div className="border-t p-4 flex-shrink-0" style={{borderTopColor: THEME.borderSubtle}}>
             <Button
               variant="primary"
-              onClick={() => setShowAddFriendModal(true)}
+              onClick={() => router.push('/dashboard?tab=account')}
             >
               <FontAwesomeIcon icon={faUserPlus} className="mr-2" />
               Add Friend
@@ -169,7 +330,7 @@ export default function FriendsWidget({ user, refreshTrigger, isStandalone = fal
           </div>
         </>
       )}
-    </>
+    </div>
   )
 
   // Standalone mode - full page layout
@@ -183,7 +344,7 @@ export default function FriendsWidget({ user, refreshTrigger, isStandalone = fal
 
   // Fixed mode - bottom-right widget
   return (
-    <div className="fixed bottom-0 right-8 z-30" style={{width: '320px'}}>
+    <div className="fixed bottom-0 right-10 z-30" style={{width: '370px'}}>
       {/* Expandable Panel - appears above the tab when expanded */}
       {isExpanded && (
         <div
@@ -192,17 +353,11 @@ export default function FriendsWidget({ user, refreshTrigger, isStandalone = fal
             backgroundColor: THEME.bgPanel,
             borderColor: THEME.borderDefault,
             width: '100%',
-            maxHeight: '500px'
+            height: '500px'
           }}
         >
           {/* Content */}
-          <div className="overflow-y-auto" style={{maxHeight: '500px'}}>
-            {/* Header */}
-            <div className="p-3 border-b">
-              <span className="font-semibold text-sm font-[family-name:var(--font-metamorphous)]" style={{color: THEME.textOnDark}}>
-                Friends
-              </span>
-            </div>
+          <div className="overflow-y-auto h-full">
             <FriendsContent />
           </div>
         </div>

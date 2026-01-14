@@ -37,6 +37,17 @@ class GetCampaignById:
         return self.repository.get_by_id(campaign_id)
 
 
+class GetUserHostedCampaigns:
+    """Get campaigns where user is the DM/host"""
+
+    def __init__(self, repository):
+        self.repository = repository
+
+    def execute(self, user_id: UUID) -> List[CampaignAggregate]:
+        """Get all campaigns where user is the host (DM)"""
+        return self.repository.get_by_host_id(user_id)
+
+
 # Game-related queries moved to modules/game/application/queries.py
 # - GetCampaignGames -> GetGamesByCampaign
 # - GetGameById -> GetGameById (in game module)
