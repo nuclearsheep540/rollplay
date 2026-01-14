@@ -25,6 +25,7 @@ function DashboardContent() {
   const [activeSection, setActiveSection] = useState(tabParam || 'campaigns')
   const [refreshTrigger, setRefreshTrigger] = useState(0)
   const [campaignUpdateHandlers, setCampaignUpdateHandlers] = useState(null)
+  const [isChildExpanded, setIsChildExpanded] = useState(false)
 
   // Sync activeSection when URL tab parameter changes (e.g., from notification click)
   useEffect(() => {
@@ -32,6 +33,11 @@ function DashboardContent() {
       setActiveSection(tabParam)
     }
   }, [tabParam])
+
+  // Reset expanded state when switching tabs (components manage their own expanded state)
+  useEffect(() => {
+    setIsChildExpanded(false)
+  }, [activeSection])
 
   // Use auth hook for all authentication-related state and logic
   const {
@@ -224,22 +230,24 @@ function DashboardContent() {
       refreshTrigger={refreshTrigger}
       toasts={toasts}
       onDismissToast={dismissToast}
+      isChildExpanded={isChildExpanded}
     >
       {/* Campaigns Section */}
       {activeSection === 'campaigns' && (
-        <section>
+        <section className="flex-1 flex flex-col min-h-0">
           <CampaignManager
             user={user}
             refreshTrigger={refreshTrigger}
             onCampaignUpdate={setCampaignUpdateHandlers}
+            onExpandedChange={setIsChildExpanded}
           />
         </section>
       )}
 
       {/* Characters Section */}
       {activeSection === 'characters' && (
-        <section>
-          <CharacterManager user={user} />
+        <section className="flex-1 flex flex-col min-h-0">
+          <CharacterManager user={user} onExpandedChange={setIsChildExpanded} />
         </section>
       )}
 

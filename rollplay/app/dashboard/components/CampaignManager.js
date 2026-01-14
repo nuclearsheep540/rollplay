@@ -30,7 +30,7 @@ import {
 import { COLORS, THEME } from '@/app/styles/colorTheme'
 import { Button, Badge } from './shared/Button'
 
-export default function CampaignManager({ user, refreshTrigger, onCampaignUpdate }) {
+export default function CampaignManager({ user, refreshTrigger, onCampaignUpdate, onExpandedChange }) {
   const router = useRouter()
   const [campaigns, setCampaigns] = useState([])
   const [invitedCampaigns, setInvitedCampaigns] = useState([])
@@ -628,6 +628,18 @@ export default function CampaignManager({ user, refreshTrigger, onCampaignUpdate
       onCampaignUpdate({ updateGames: handleGameUpdate })
     }
   }, [onCampaignUpdate])
+
+  // Notify parent when expanded state changes
+  useEffect(() => {
+    onExpandedChange?.(!!selectedCampaign)
+  }, [selectedCampaign, onExpandedChange])
+
+  // Reset expanded state on unmount
+  useEffect(() => {
+    return () => {
+      onExpandedChange?.(false)
+    }
+  }, [])
 
   if (loading) {
     return (

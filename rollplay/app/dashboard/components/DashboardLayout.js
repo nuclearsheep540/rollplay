@@ -20,7 +20,8 @@ export default function DashboardLayout({
   user,
   refreshTrigger,
   toasts = [],
-  onDismissToast
+  onDismissToast,
+  isChildExpanded = false
 }) {
   const router = useRouter()
   const searchParams = useSearchParams()
@@ -103,8 +104,8 @@ export default function DashboardLayout({
         </div>
       </nav>
 
-      {/* Main Content Area - Full Width, Scrollable */}
-      <main className="flex-1 overflow-y-auto pt-4 sm:pt-8 md:pt-10 px-4 sm:px-8 md:px-10">
+      {/* Main Content Area - Flex container so children can fill remaining space */}
+      <main className={`flex-1 flex flex-col pt-4 sm:pt-8 md:pt-10 px-4 sm:px-8 md:px-10 ${isChildExpanded ? 'overflow-hidden' : 'overflow-y-auto pb-8'}`}>
         {children}
       </main>
     </div>

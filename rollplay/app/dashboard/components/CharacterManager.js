@@ -18,7 +18,7 @@ import {
 import { COLORS, THEME } from '@/app/styles/colorTheme'
 import { Button } from './shared/Button'
 
-export default function CharacterManager({ user }) {
+export default function CharacterManager({ user, onExpandedChange }) {
   const router = useRouter()
   const [characters, setCharacters] = useState([])
   const [loading, setLoading] = useState(true)
@@ -82,11 +82,24 @@ export default function CharacterManager({ user }) {
     }
   }, [])
 
+  // Notify parent when expanded state changes and cleanup on unmount
+  useEffect(() => {
+    onExpandedChange?.(!!selectedCharacter)
+  }, [selectedCharacter, onExpandedChange])
+
+  // Reset expanded state on unmount
+  useEffect(() => {
+    return () => {
+      onExpandedChange?.(false)
+    }
+  }, [])
+
   // Toggle character selection for drawer
   const toggleCharacterDetails = (character) => {
     setSelectedCharacter(prev =>
       prev?.id === character.id ? null : character
     )
+    // Parent notification handled by useEffect watching selectedCharacter
   }
 
   // Handle clone character action
@@ -242,12 +255,7 @@ export default function CharacterManager({ user }) {
       className="flex-shrink-0 rounded-sm overflow-hidden"
       style={{
         width: CARD_WIDTH,
-        aspectRatio: '9/16',
-        opacity: selectedCharacter ? 0 : 1,
-        pointerEvents: selectedCharacter ? 'none' : 'auto',
-        transition: selectedCharacter
-          ? 'opacity 100ms cubic-bezier(0.42, 0, 1, 1)'
-          : 'opacity 100ms cubic-bezier(0.42, 0, 1, 1) 50ms'
+        aspectRatio: '9/16'
       }}
     >
       <button
@@ -298,7 +306,10 @@ export default function CharacterManager({ user }) {
             {selectedCharacter.character_name}
           </h3>
           <button
-            onClick={() => setSelectedCharacter(null)}
+            onClick={() => {
+              setSelectedCharacter(null)
+              onExpandedChange?.(false)
+            }}
             className="px-3 py-1 rounded-sm border hover:opacity-80 transition-opacity"
             style={{
               color: THEME.textSecondary,
@@ -427,19 +438,23 @@ export default function CharacterManager({ user }) {
     const char = selectedCharacter
     return (
       <div
-        className="h-full flex flex-col cursor-pointer"
+        className="flex flex-col cursor-pointer"
         style={{
           backgroundImage: 'url(/heroes.png)',
           backgroundSize: 'cover',
           backgroundPosition: 'center',
-          width: CARD_WIDTH,
-          minWidth: CARD_WIDTH
+          width: 'clamp(320px, 45vw, 520px)', // Wider in expanded view
+          minWidth: 'clamp(320px, 45vw, 520px)',
+          height: '100%' // Fill parent height
         }}
-        onClick={() => setSelectedCharacter(null)}
+        onClick={() => {
+          setSelectedCharacter(null)
+          onExpandedChange?.(false)
+        }}
       >
         {/* Dark overlay for the entire card */}
         <div
-          className="h-full w-full flex flex-col relative"
+          className="flex-1 w-full flex flex-col relative"
           style={{
             backgroundColor: `${COLORS.onyx}70`
           }}
@@ -481,9 +496,9 @@ export default function CharacterManager({ user }) {
   }
 
   return (
-    <div className="space-y-6">
-      {/* Header - simplified without button (Create card at end of row) */}
-      <div className="mb-8">
+    <div className="flex flex-col h-full">
+      {/* Header - flex-shrink-0 to maintain size, reduced margin when expanded */}
+      <div className={`flex-shrink-0 ${selectedCharacter ? 'mb-4' : 'mb-8'}`}>
         <h1 className="text-4xl font-bold font-[family-name:var(--font-metamorphous)]" style={{color: THEME.textBold}}>Character Management</h1>
         <p className="mt-2" style={{color: THEME.textPrimary}}>Create and manage your adventurers</p>
       </div>
@@ -492,59 +507,53 @@ export default function CharacterManager({ user }) {
       {loading && renderLoading()}
       {!loading && error && renderError()}
 
-      {/* Character Display - switches between horizontal scroll and expanded side-by-side */}
-      {!loading && !error && (
-        <>
-          {/* When NO character selected: Horizontal scroll row */}
-          {!selectedCharacter && (
-            <div
-              className="flex gap-4 overflow-x-auto pb-4"
-              style={{
-                flexWrap: 'nowrap',
-                paddingLeft: 'clamp(0.5rem, 2.5vw, 3.5rem)',
-                paddingRight: 'clamp(0.5rem, 2.5vw, 3.5rem)',
-                scrollbarWidth: 'thin',
-                WebkitOverflowScrolling: 'touch'
-              }}
-            >
-              {/* Character Cards */}
-              {characters.map(char => renderCharacterCard(char))}
+      {/* Content area - flex-1 min-h-0 to fill remaining space */}
+      {/* Pattern: separate tile view and expanded view as siblings (like CampaignManager) */}
+      <div className="flex-1 min-h-0 relative">
+        {/* Tile scroll area - hidden when expanded */}
+        {!loading && !error && (
+          <div
+            className="flex gap-4 overflow-x-auto h-full"
+            style={{
+              paddingLeft: 'clamp(0.5rem, 2.5vw, 3.5rem)',
+              paddingRight: 'clamp(0.5rem, 2.5vw, 3.5rem)',
+              paddingBottom: '1rem',
+              scrollbarWidth: 'thin',
+              WebkitOverflowScrolling: 'touch',
+              opacity: selectedCharacter ? 0 : 1,
+              pointerEvents: selectedCharacter ? 'none' : 'auto',
+              transition: isResizing ? 'none' : 'opacity 200ms ease-in-out'
+            }}
+          >
+            {/* Character Cards */}
+            {characters.map((char) => renderCharacterCard(char))}
+            {/* Create New Character Card */}
+            {renderCreateCard()}
+          </div>
+        )}
 
-              {/* Create New Character Card - always visible */}
-              {renderCreateCard()}
-            </div>
-          )}
-
-          {/* When character IS selected: Full-width side-by-side layout */}
-          {selectedCharacter && (
-            <div
-              className="rounded-sm overflow-hidden border-2"
-              style={{
-                position: 'relative',
-                left: 'calc(50% - 50vw)',
-                width: '100vw',
-                minHeight: '500px',
-                backgroundColor: THEME.bgPanel,
-                borderColor: THEME.borderSubtle
-              }}
-            >
-              {/* Inner container with max-width, left-aligned */}
-              <div
-                className="flex h-full"
-                style={{ maxWidth: '1200px', minHeight: '500px' }}
-              >
-                {/* Left side: Selected character card - hero style, no padding */}
-                <div className="flex-shrink-0">
-                  {renderSelectedCard()}
-                </div>
-
-                {/* Right side: Stats panel */}
-                {renderStatsPanel()}
-              </div>
-            </div>
-          )}
-        </>
-      )}
+        {/* Expanded view - separate full-width overlay (like CampaignManager's drawer) */}
+        <div
+          className="absolute top-0 bottom-0 flex"
+          style={{
+            left: selectedCharacter ? 'calc(50% - 50vw)' : '0',
+            width: selectedCharacter ? '100vw' : '100%',
+            backgroundColor: THEME.bgPanel,
+            opacity: selectedCharacter ? 1 : 0,
+            pointerEvents: selectedCharacter ? 'auto' : 'none',
+            transition: isResizing
+              ? 'none'
+              : selectedCharacter
+                ? 'opacity 200ms ease-in-out, left 200ms ease-in-out, width 200ms ease-in-out'
+                : 'opacity 200ms ease-in-out 50ms, left 200ms ease-in-out, width 200ms ease-in-out'
+          }}
+        >
+          {/* Left side: Selected character hero card */}
+          {selectedCharacter && renderSelectedCard()}
+          {/* Right side: Stats panel with scrolling */}
+          {selectedCharacter && renderStatsPanel()}
+        </div>
+      </div>
 
       {/* Delete Confirmation Modal */}
       {showDeleteModal && (
