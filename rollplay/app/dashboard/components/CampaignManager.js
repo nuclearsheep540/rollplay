@@ -904,6 +904,8 @@ export default function CampaignManager({ user, refreshTrigger, onCampaignUpdate
                         inset: isSelected ? 'unset' : 0,
                         // When selected, fill at least the card's min-height so justify-between pushes metadata down
                         minHeight: isSelected ? 'max(calc(200px - 3rem), calc(25vw - 3rem))' : 'auto',
+                        // Constrain content width on wide screens when expanded
+                        maxWidth: isSelected ? '1600px' : 'none',
                         zIndex: 1
                       }}
                     >
@@ -1030,6 +1032,8 @@ export default function CampaignManager({ user, refreshTrigger, onCampaignUpdate
                   >
                     {/* Content wrapper with padding - matches main container responsive padding + 12px horizontal */}
                     <div className="pb-4 sm:pb-8 md:pb-10 pt-[calc(1rem+16px)] sm:pt-[calc(2rem+16px)] md:pt-[calc(2.5rem+16px)] px-[calc(1rem+12px)] sm:px-[calc(2rem+12px)] md:px-[calc(2.5rem+12px)]">
+                      {/* Inner content constrained to max-width for readability on wide screens */}
+                      <div style={{ maxWidth: '1600px' }}>
                       <div className="flex items-center justify-between mb-4">
                         <h3 className="text-xl font-semibold font-[family-name:var(--font-metamorphous)]" style={{color: THEME.textOnDark}}>
                           Campaign Sessions for {selectedCampaign?.title || ''}
@@ -1292,6 +1296,7 @@ export default function CampaignManager({ user, refreshTrigger, onCampaignUpdate
                             </div>
                           )}
                         </div>
+                      </div>
                       </div>
                     </div>
 
