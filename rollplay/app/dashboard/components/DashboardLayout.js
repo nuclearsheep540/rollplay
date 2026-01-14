@@ -10,7 +10,9 @@ import { useEffect } from 'react'
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
 import { faRightFromBracket } from '@fortawesome/free-solid-svg-icons'
 import NotificationBell from '../../shared/components/NotificationBell'
-import { THEME, STYLES, COLORS } from '@/app/styles/colorTheme'
+import SiteHeader from '../../shared/components/SiteHeader'
+import SubNav from '../../shared/components/SubNav'
+import { THEME } from '@/app/styles/colorTheme'
 
 export default function DashboardLayout({
   children,
@@ -62,47 +64,31 @@ export default function DashboardLayout({
 
   return (
     <div className="h-screen flex flex-col overflow-hidden" style={{backgroundColor: THEME.bgPrimary, color: THEME.textPrimary}}>
-      {/* Top Header - Fixed */}
-      <header className="flex-shrink-0 border-b py-4 px-4 sm:px-8 md:px-10 flex justify-between items-center"
-              style={{backgroundColor: THEME.bgSecondary, borderBottomColor: THEME.borderSubtle, fontWeight: 1000}}>
-        <div className="text-2xl flex items-center font-[family-name:var(--font-inter)]"
-             style={{color: COLORS.smoke, fontWeight: 700}}>
-          <span>TABLETOP</span><span style={{color: COLORS.silver}}>TAVERN</span>
-        </div>
-        <nav className="flex items-center gap-8">
-          <NotificationBell
-            userId={user?.id}
-            refreshTrigger={refreshTrigger}
-            toasts={toasts}
-            onDismissToast={onDismissToast}
-          />
-          <button
-            onClick={onLogout}
-            aria-label="Logout"
-            style={{color: THEME.textSecondary}}
-            className="hover:opacity-80 transition-opacity"
-          >
-            <FontAwesomeIcon icon={faRightFromBracket} className="h-7 w-7" />
-          </button>
-        </nav>
-      </header>
+      {/* Site Header */}
+      <SiteHeader>
+        <NotificationBell
+          userId={user?.id}
+          refreshTrigger={refreshTrigger}
+          toasts={toasts}
+          onDismissToast={onDismissToast}
+        />
+        <button
+          onClick={onLogout}
+          aria-label="Logout"
+          style={{color: THEME.textSecondary}}
+          className="hover:opacity-80 transition-opacity"
+        >
+          <FontAwesomeIcon icon={faRightFromBracket} className="h-7 w-7" />
+        </button>
+      </SiteHeader>
 
-      {/* Horizontal Tab Bar - NEW */}
-      <nav className="flex-shrink-0 border-b"
-           style={{backgroundColor: THEME.bgSecondary, borderBottomColor: THEME.borderSubtle}}>
-        <div className="flex">
-          {tabs.map(tab => (
-            <button
-              key={tab.id}
-              onClick={() => switchSection(tab.id)}
-              className="flex-1 py-4 px-6 border-b-2 transition-all duration-200 font-[family-name:var(--font-metamorphous)] text-base"
-              style={activeSection === tab.id ? STYLES.tabActive : STYLES.tabInactive}
-            >
-              {tab.label}
-            </button>
-          ))}
-        </div>
-      </nav>
+      {/* Tab Navigation */}
+      <SubNav
+        mode="tabs"
+        tabs={tabs}
+        activeTab={activeSection}
+        onTabChange={switchSection}
+      />
 
       {/* Main Content Area - Flex container so children can fill remaining space */}
       <main

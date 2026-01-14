@@ -19,6 +19,7 @@ export default function CharacterForm({
   initialData = null,
   onSubmit,
   onCancel,
+  onFormChange,
   loading = false,
   error = null,
   validationErrors = []
@@ -67,6 +68,11 @@ export default function CharacterForm({
       })
     }
   }, [initialData])
+
+  // Notify parent of form changes for live preview
+  useEffect(() => {
+    onFormChange?.(formData)
+  }, [formData, onFormChange])
 
   const handleInputChange = (field, value) => {
     setFormData(prev => {
