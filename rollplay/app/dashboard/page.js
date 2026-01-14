@@ -162,6 +162,17 @@ function DashboardContent() {
       }
     },
 
+    'campaign_invite_sent': (message) => {
+      // No state refresh needed - just confirmation toast
+      if (message.show_toast) {
+        const config = getEventConfig('campaign_invite_sent')
+        showToast({
+          type: config.toastType,
+          message: config.panelMessage(message.data)
+        })
+      }
+    },
+
     'campaign_invite_accepted': (message) => {
       setRefreshTrigger(prev => prev + 1)
       if (message.show_toast) {

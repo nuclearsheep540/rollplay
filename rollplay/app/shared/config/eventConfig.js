@@ -61,6 +61,13 @@ export const EVENT_CONFIG = {
     navigationTab: 'campaigns'
   },
 
+  'campaign_invite_sent': {
+    toastMessage: 'Invite sent!',
+    panelMessage: (data) => `You invited ${data.player_screen_name} to "${data.campaign_name}"`,
+    toastType: 'success',
+    navigationTab: null  // No navigation - just confirmation
+  },
+
   'campaign_invite_accepted': {
     toastMessage: 'Player joined campaign',
     panelMessage: (data) => `${data.player_screen_name} joined your campaign "${data.campaign_name}"`,

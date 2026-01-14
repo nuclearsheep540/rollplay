@@ -105,8 +105,17 @@ class AddPlayerToCampaign:
         # Save
         self.repository.save(campaign)
 
-        # Broadcast notification event
+        # Get user details for notifications
         host = self.user_repo.get_by_id(host_id)
+        player = self.user_repo.get_by_id(player_id)
+
+        # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+        # DUAL BROADCAST: One invite action fires TWO separate WebSocket events:
+        #   1. campaign_invite_received → sent to the INVITED PLAYER
+        #   2. campaign_invite_sent     → sent to the HOST as confirmation
+        # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+        # Broadcast 1/2: Notification to invited player
         asyncio.create_task(
             self.event_manager.broadcast(
                 **CampaignEvents.campaign_invite_received(
@@ -115,6 +124,19 @@ class AddPlayerToCampaign:
                     campaign_name=campaign.title,
                     host_id=host_id,
                     host_screen_name=host.screen_name if host else "Unknown"
+                )
+            )
+        )
+
+        # Broadcast 2/2: Confirmation to host
+        asyncio.create_task(
+            self.event_manager.broadcast(
+                **CampaignEvents.campaign_invite_sent(
+                    host_id=host_id,
+                    campaign_id=campaign_id,
+                    campaign_name=campaign.title,
+                    player_id=player_id,
+                    player_screen_name=player.screen_name if player else "Unknown"
                 )
             )
         )

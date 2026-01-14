@@ -46,6 +46,34 @@ class CampaignEvents:
         }
 
     @staticmethod
+    def campaign_invite_sent(host_id: UUID, campaign_id: UUID, campaign_name: str, player_id: UUID, player_screen_name: str) -> Dict[str, Any]:
+        """
+        Event: Confirmation to host that invite was sent
+
+        Args:
+            host_id: Campaign host/DM who sent the invite
+            campaign_id: Campaign ID
+            campaign_name: Campaign name
+            player_id: Player who was invited
+            player_screen_name: Player's display name
+
+        Returns:
+            Event configuration dict
+        """
+        return {
+            "user_id": host_id,
+            "event_type": "campaign_invite_sent",
+            "data": {
+                "campaign_id": str(campaign_id),
+                "campaign_name": campaign_name,
+                "player_id": str(player_id),
+                "player_screen_name": player_screen_name
+            },
+            "show_toast": True,
+            "save_notification": False  # Don't persist - just confirmation
+        }
+
+    @staticmethod
     def campaign_invite_accepted(host_id: UUID, campaign_id: UUID, campaign_name: str, player_id: UUID, player_screen_name: str, auto_added_to_game_ids: List[UUID]) -> Dict[str, Any]:
         """
         Event: Player accepted campaign invite (notifies host/DM)
