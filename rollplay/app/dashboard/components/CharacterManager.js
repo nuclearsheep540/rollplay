@@ -6,7 +6,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { useRouter } from 'next/navigation'
+import { useRouter, useSearchParams } from 'next/navigation'
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
 import {
   faPenToSquare,
@@ -17,9 +17,11 @@ import {
 } from '@fortawesome/free-solid-svg-icons'
 import { COLORS, THEME } from '@/app/styles/colorTheme'
 import { Button } from './shared/Button'
+import CharacterEditPanel from './CharacterEditPanel'
 
 export default function CharacterManager({ user, onExpandedChange }) {
   const router = useRouter()
+  const searchParams = useSearchParams()
   const [characters, setCharacters] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
@@ -31,6 +33,10 @@ export default function CharacterManager({ user, onExpandedChange }) {
   // Selection and resize state for horizontal scroll layout
   const [selectedCharacter, setSelectedCharacter] = useState(null)
   const [isResizing, setIsResizing] = useState(false)
+
+  // Edit mode state
+  const [isEditing, setIsEditing] = useState(false)
+  const [isCloneMode, setIsCloneMode] = useState(false)
 
   // Fetch characters from API
   const fetchCharacters = async () => {
@@ -66,6 +72,19 @@ export default function CharacterManager({ user, onExpandedChange }) {
     }
   }, [user])
 
+  // Sync edit mode from URL parameter
+  useEffect(() => {
+    const editParam = searchParams.get('edit')
+    if (editParam && characters.length > 0) {
+      const charToEdit = characters.find(c => c.id === editParam)
+      if (charToEdit) {
+        setSelectedCharacter(charToEdit)
+        setIsEditing(true)
+        setIsCloneMode(false)
+      }
+    }
+  }, [searchParams, characters])
+
   // Resize handler - disable transitions during window resize
   useEffect(() => {
     let resizeTimer
@@ -99,27 +118,58 @@ export default function CharacterManager({ user, onExpandedChange }) {
     setSelectedCharacter(prev =>
       prev?.id === character.id ? null : character
     )
+    // Exit edit mode when toggling selection
+    setIsEditing(false)
+    setIsCloneMode(false)
     // Parent notification handled by useEffect watching selectedCharacter
   }
 
-  // Handle clone character action
-  const handleClone = async (character) => {
-    try {
-      const response = await fetch(`/api/characters/${character.id}/clone`, {
-        method: 'POST',
-        credentials: 'include'
-      })
+  // Enter edit mode with URL update
+  const enterEditMode = () => {
+    if (!selectedCharacter) return
+    setIsEditing(true)
+    setIsCloneMode(false)
 
-      if (response.ok) {
-        const clonedCharacter = await response.json()
-        router.push(`/character/edit/${clonedCharacter.id}`)
-      } else {
-        const errorData = await response.json()
-        console.error('Failed to clone character:', errorData.detail)
-      }
-    } catch (error) {
-      console.error('Error cloning character:', error)
+    // Update URL with edit parameter
+    const current = new URLSearchParams(Array.from(searchParams.entries()))
+    current.set('edit', selectedCharacter.id)
+    router.push(`/dashboard?${current.toString()}`)
+  }
+
+  // Enter clone mode (edit panel in create mode)
+  const enterCloneMode = () => {
+    if (!selectedCharacter) return
+    setIsEditing(true)
+    setIsCloneMode(true)
+    // Don't add URL param for clone mode - it's not bookmarkable
+  }
+
+  // Exit edit mode and clean URL
+  const exitEditMode = () => {
+    setIsEditing(false)
+    setIsCloneMode(false)
+
+    // Remove edit parameter from URL
+    const current = new URLSearchParams(Array.from(searchParams.entries()))
+    current.delete('edit')
+    const query = current.toString()
+    router.push(`/dashboard${query ? `?${query}` : ''}`)
+  }
+
+  // Handle save from edit panel
+  const handleEditSave = (updatedCharacter) => {
+    if (isCloneMode) {
+      // Clone creates a new character - add to list and select it
+      setCharacters(prev => [...prev, updatedCharacter])
+      setSelectedCharacter(updatedCharacter)
+    } else {
+      // Edit updates existing character
+      setCharacters(prev => prev.map(c =>
+        c.id === updatedCharacter.id ? updatedCharacter : c
+      ))
+      setSelectedCharacter(updatedCharacter)
     }
+    exitEditMode()
   }
 
   // Handle delete button click - show confirmation modal
@@ -406,7 +456,7 @@ export default function CharacterManager({ user, onExpandedChange }) {
               <Button
                 variant="primary"
                 className="flex-1 justify-center"
-                onClick={() => router.push(`/character/edit/${selectedCharacter.id}`)}
+                onClick={enterEditMode}
               >
                 <FontAwesomeIcon icon={faPenToSquare} className="mr-2" />
                 Edit Character
@@ -414,7 +464,7 @@ export default function CharacterManager({ user, onExpandedChange }) {
               <Button
                 variant="primary"
                 className="flex-1 justify-center"
-                onClick={() => handleClone(selectedCharacter)}
+                onClick={enterCloneMode}
               >
                 <FontAwesomeIcon icon={faCopy} className="mr-2" />
                 Clone Character
@@ -561,8 +611,17 @@ export default function CharacterManager({ user, onExpandedChange }) {
           <div className="flex h-full" style={{ maxWidth: '1600px', width: '100%' }}>
             {/* Left side: Selected character hero card */}
             {selectedCharacter && renderSelectedCard()}
-            {/* Right side: Stats panel with scrolling */}
-            {selectedCharacter && renderStatsPanel()}
+            {/* Right side: Stats panel OR Edit panel */}
+            {selectedCharacter && (isEditing ? (
+              <CharacterEditPanel
+                character={selectedCharacter}
+                onSave={handleEditSave}
+                onCancel={exitEditMode}
+                isCloneMode={isCloneMode}
+              />
+            ) : (
+              renderStatsPanel()
+            ))}
           </div>
         </div>
       </div>
