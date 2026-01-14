@@ -4,8 +4,11 @@
    */
 
 'use client'
- 
+
 import { useRouter } from "next/navigation";
+import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
+import { faEnvelope, faDungeon, faPeopleGroup, faDiceD20 } from '@fortawesome/free-solid-svg-icons';
+import { COLORS, THEME } from './styles/colorTheme';
 
 export default function Home() {
   const router = useRouter()
@@ -13,54 +16,91 @@ export default function Home() {
 
 
   return (
-      <div style={{backgroundColor: '#1e293b', minHeight: '100vh'}}>
+      <div style={{backgroundColor: COLORS.onyx, minHeight: '100vh'}}>
         <div className="hero-container" style={{
           position: 'relative',
-          backgroundImage: 'url(/bg.jpeg)',
-          backgroundSize: 'cover',
-          backgroundPosition: 'center',
-          backgroundRepeat: 'no-repeat',
-          opacity: 0.9
+          zIndex: 1
         }}>
+          {/* Background image */}
           <div style={{
             position: 'absolute',
             top: 0,
             left: 0,
             right: 0,
             bottom: 0,
-            backdropFilter: 'blur(2px)',
-            zIndex: 1
-          }}></div>
-          <div className="hero-image"></div>
-          
+            backgroundImage: 'url(/bg2.png)',
+            backgroundSize: 'cover',
+            backgroundPosition: 'center',
+            backgroundRepeat: 'no-repeat',
+            zIndex: 0
+          }}>
+            {/* Blur overlay */}
+            <div style={{
+              position: 'absolute',
+              top: 0,
+              left: 0,
+              right: 0,
+              bottom: 0,
+              backdropFilter: 'blur(4px)'
+            }}></div>
+          </div>
+
+          {/* Dark gradient overlay (knockout) to soften the hero image */}
+          <div className="hero-image" style={{ zIndex: 0 }}></div>
+
+          {/* Gradient fade to onyx at bottom of hero */}
+          <div
+            style={{
+              position: 'absolute',
+              left: 0,
+              right: 0,
+              bottom: 0,
+              height: '350px',
+              background: `linear-gradient(to bottom, transparent 0%, ${COLORS.onyx} 100%)`,
+              pointerEvents: 'none',
+              zIndex: 1
+            }}
+          />
+
+          {/* Paper texture fade overlay at bottom of hero */}
+          <div
+            style={{
+              position: 'absolute',
+              left: 0,
+              right: 0,
+              bottom: 0,
+              height: '350px',
+              backgroundImage: 'url(/paper-tile.png)',
+              backgroundRepeat: 'repeat',
+              opacity: 0.9,
+              mixBlendMode: 'multiply',
+              WebkitMaskImage: 'linear-gradient(to bottom, transparent 0%, black 60%)',
+              maskImage: 'linear-gradient(to bottom, transparent 0%, black 60%)',
+              pointerEvents: 'none',
+              zIndex: 2
+            }}
+          />
+
           <nav className="nav-bar" style={{zIndex: 2}}>
             <div className="logo" style={{fontSize: '2.1rem'}}>TABLETOP<span>TAVERN</span></div>
           </nav>
-          
+
           <div className="hero-content" style={{transform: 'translateY(-10vh)', zIndex: 2}}>
-            <h1 style={{textShadow: '2px 2px 4px rgba(0,0,0,0.8)'}}>Your Virtual D&D Table Awaits</h1>
+            <h1 className="font-[family-name:var(--font-metamorphous)]" style={{textShadow: '2px 2px 4px rgba(0,0,0,0.8)'}}>Your Virtual D&D Table Awaits</h1>
             <p style={{textShadow: '2px 2px 4px rgba(0,0,0,0.8)'}}>Create or join virtual D&D game rooms in seconds. Connect with friends, manage campaigns, and embark on epic adventures together — no downloads required.</p>
-            
+
             <div className="cta-buttons" style={{marginTop: '2rem', display: 'flex', justifyContent: 'center'}}>
                   <button
-                    className="px-12 py-4 text-xl font-bold text-white rounded-lg shadow-lg"
+                    className="px-12 py-4 text-xl font-bold rounded-sm shadow-lg transition-opacity hover:opacity-80"
                     style={{
-                      background: 'linear-gradient(to right, #d97706, #ea580c, #c2410c, #dc2626)',
+                      backgroundColor: COLORS.smoke,
+                      color: COLORS.carbon,
                       border: 'none',
                       cursor: 'pointer',
                       position: 'relative',
-                      zIndex: 10,
-                      transition: 'background-position 400ms ease-in-out',
-                      backgroundSize: '200% 100%',
-                      backgroundPosition: '0% 0%'
+                      zIndex: 10
                     }}
                     onClick={() => router.push('/auth/magic')}
-                    onMouseEnter={(e) => {
-                      e.target.style.backgroundPosition = '100% 0%'
-                    }}
-                    onMouseLeave={(e) => {
-                      e.target.style.backgroundPosition = '0% 0%'
-                    }}
                   >
                     Get Started
                   </button>
@@ -69,72 +109,86 @@ export default function Home() {
           </div>
         </div>
         
-        <section className="how-it-works bg-white py-16 min-h-[600px] flex flex-col justify-center">
-          <h2 className="text-slate-800 text-4xl font-bold text-center mb-12" style={{textShadow: '0 2px 4px rgba(0,0,0,0.1)'}}>How It Works</h2>
-          
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-12 max-w-6xl mx-auto px-8">
-            <div className="p-8 rounded-xl text-center max-w-sm flex-1 min-w-[320px]" style={{
-              border: '2px solid transparent', 
-              backgroundImage: 'linear-gradient(#0f172a), linear-gradient(to right, #d97706, #ea580c)', 
-              backgroundOrigin: 'border-box', 
-              backgroundClip: 'padding-box, border-box',
-              boxShadow: '0 4px 12px rgba(217, 119, 6, 0.5)'
+        <section className="how-it-works py-16 flex flex-col justify-center relative" style={{ backgroundColor: COLORS.onyx, position: 'relative', zIndex: 0 }}>
+          {/* Paper texture overlay */}
+          <div
+            className="absolute inset-0 pointer-events-none"
+            style={{
+              backgroundImage: 'url(/paper-tile.png)',
+              backgroundRepeat: 'repeat',
+              opacity: 0.9,
+              mixBlendMode: 'multiply'
+            }}
+          />
+          <h2 className="text-4xl font-bold text-center mb-12 font-[family-name:var(--font-metamorphous)] relative z-10" style={{ color: THEME.textOnDark }}>How It Works</h2>
+
+          <div className="flex flex-col gap-6 max-w-sm mx-auto px-4 sm:px-8 w-full relative z-10">
+            <div className="p-6 sm:p-8 rounded-sm text-center aspect-square flex flex-col items-center justify-center" style={{
+              backgroundColor: COLORS.carbon,
+              border: `1px solid ${THEME.borderDefault}`
             }}>
-              <div className="text-5xl mb-4">📧</div>
-              <h3 className="text-slate-50 text-2xl font-bold mb-4" style={{textShadow: '0 1px 2px rgba(0,0,0,0.5)'}}>Sign Up</h3>
-              <p className="text-slate-300 text-lg leading-relaxed font-medium">All you need is an email to get started</p>
+              <div className="mb-4">
+                <FontAwesomeIcon icon={faEnvelope} className="w-10 h-10 sm:w-12 sm:h-12" style={{ color: THEME.textSecondary }} />
+              </div>
+              <h3 className="text-xl sm:text-2xl font-bold mb-3 font-[family-name:var(--font-metamorphous)]" style={{ color: THEME.textOnDark }}>Sign Up</h3>
+              <p className="text-base sm:text-lg leading-relaxed" style={{ color: THEME.textSecondary }}>All you need is an email to get started</p>
             </div>
-            
-            <div className="p-12 rounded-xl text-center max-w-sm flex-1 min-w-[320px]" style={{
-              border: '2px solid transparent', 
-              backgroundImage: 'linear-gradient(#0f172a), linear-gradient(135deg, #ea580c, #c2410c)', 
-              backgroundOrigin: 'border-box', 
-              backgroundClip: 'padding-box, border-box',
-              boxShadow: '0 4px 12px rgba(234, 88, 12, 0.5)'
+
+            <div className="p-6 sm:p-8 rounded-sm text-center aspect-square flex flex-col items-center justify-center" style={{
+              backgroundColor: COLORS.carbon,
+              border: `1px solid ${THEME.borderDefault}`
             }}>
-              <div className="text-5xl mb-4">🏰</div>
-              <h3 className="text-slate-50 text-2xl font-bold mb-4" style={{textShadow: '0 1px 2px rgba(0,0,0,0.5)'}}>Create a Campaign</h3>
-              <p className="text-slate-300 text-lg leading-relaxed font-medium">Using our intuitive tools prepare your campaign by preparing maps, sound tracks and combat encounters</p>
+              <div className="mb-4">
+                <FontAwesomeIcon icon={faDungeon} className="w-10 h-10 sm:w-12 sm:h-12" style={{ color: THEME.textSecondary }} />
+              </div>
+              <h3 className="text-xl sm:text-2xl font-bold mb-3 font-[family-name:var(--font-metamorphous)]" style={{ color: THEME.textOnDark }}>Create a Campaign</h3>
+              <p className="text-base sm:text-lg leading-relaxed" style={{ color: THEME.textSecondary }}>Using our intuitive tools prepare your campaign by interactive preparing maps, rich media, and encounters</p>
             </div>
-            
-            <div className="p-12 rounded-xl text-center max-w-sm flex-1 min-w-[320px]" style={{
-              border: '2px solid transparent', 
-              backgroundImage: 'linear-gradient(#0f172a), linear-gradient(to bottom, #c2410c, #dc2626)', 
-              backgroundOrigin: 'border-box', 
-              backgroundClip: 'padding-box, border-box',
-              boxShadow: '0 4px 12px rgba(194, 65, 12, 0.5)'
+
+            <div className="p-6 sm:p-8 rounded-sm text-center aspect-square flex flex-col items-center justify-center" style={{
+              backgroundColor: COLORS.carbon,
+              border: `1px solid ${THEME.borderDefault}`
             }}>
-              <div className="text-5xl mb-4">🗡️</div>
-              <h3 className="text-slate-50 text-2xl font-bold mb-4" style={{textShadow: '0 1px 2px rgba(0,0,0,0.5)'}}>Gather Your Party</h3>
-              <p className="text-slate-300 text-lg leading-relaxed font-medium">Invite your friends to Table-Top Tavern so they can create a character and join your campaign</p>
+              <div className="mb-4">
+                <FontAwesomeIcon icon={faPeopleGroup} className="w-10 h-10 sm:w-12 sm:h-12" style={{ color: THEME.textSecondary }} />
+              </div>
+              <h3 className="text-xl sm:text-2xl font-bold mb-3 font-[family-name:var(--font-metamorphous)]" style={{ color: THEME.textOnDark }}>Gather Your Party</h3>
+              <p className="text-base sm:text-lg leading-relaxed" style={{ color: THEME.textSecondary }}>Invite your friends to join your campaign</p>
             </div>
-            
-            <div className="p-12 rounded-xl text-center max-w-sm flex-1 min-w-[320px]" style={{
-              border: '2px solid transparent', 
-              backgroundImage: 'linear-gradient(#0f172a), linear-gradient(45deg, #dc2626, #d97706)', 
-              backgroundOrigin: 'border-box', 
-              backgroundClip: 'padding-box, border-box',
-              boxShadow: '0 4px 12px rgba(220, 38, 38, 0.5)'
+
+            <div className="p-6 sm:p-8 rounded-sm text-center aspect-square flex flex-col items-center justify-center" style={{
+              backgroundColor: COLORS.carbon,
+              border: `1px solid ${THEME.borderDefault}`
             }}>
-              <div className="text-5xl mb-4">🎉</div>
-              <h3 className="text-slate-50 text-2xl font-bold mb-4" style={{textShadow: '0 1px 2px rgba(0,0,0,0.5)'}}>Play!</h3>
-              <p className="text-slate-300 text-lg leading-relaxed font-medium">Together you can experience your D&D adventure tracking in real time, with roll prompts and live map updates and audio sharing across your party</p>
+              <div className="mb-4">
+                <FontAwesomeIcon icon={faDiceD20} className="w-10 h-10 sm:w-12 sm:h-12" style={{ color: THEME.textSecondary }} />
+              </div>
+              <h3 className="text-xl sm:text-2xl font-bold mb-3 font-[family-name:var(--font-metamorphous)]" style={{ color: THEME.textOnDark }}>Play!</h3>
+              <p className="text-base sm:text-lg leading-relaxed" style={{ color: THEME.textSecondary }}>Together you can experience your D&D adventure tracking in real time, with roll prompts and live map updates and audio sharing across your party</p>
             </div>
           </div>
         </section>
         
-        <footer style={{backgroundColor: '#0f172a', borderTop: '1px solid rgba(148, 163, 184, 0.2)'}}>
-          <div className="footer-links" style={{textAlign: 'center', padding: '2rem 0'}}>
-            <a href="#" style={{color: '#94a3b8', margin: '0 1rem', textDecoration: 'none', fontSize: '1rem', fontWeight: '500'}}>Terms of Service</a>
-            <a href="#" style={{color: '#94a3b8', margin: '0 1rem', textDecoration: 'none', fontSize: '1rem', fontWeight: '500'}}>Privacy Policy</a>
-            <a href="/patch_notes" style={{color: '#94a3b8', margin: '0 1rem', textDecoration: 'none', fontSize: '1rem', fontWeight: '500'}}>Patch Notes</a>
-            <a href="https://github.com/users/nuclearsheep540/projects/2" style={{color: '#94a3b8', margin: '0 1rem', textDecoration: 'none', fontSize: '1rem', fontWeight: '500'}}>Roadmap Kanban</a>
-
-            
-            <a href="#" style={{color: '#94a3b8', margin: '0 1rem', textDecoration: 'none', fontSize: '1rem', fontWeight: '500'}}>Help Center</a>
+        <footer className="relative" style={{ backgroundColor: COLORS.onyx, borderTop: `1px solid ${THEME.borderSubtle}` }}>
+          {/* Paper texture overlay */}
+          <div
+            className="absolute inset-0 pointer-events-none"
+            style={{
+              backgroundImage: 'url(/paper-tile.png)',
+              backgroundRepeat: 'repeat',
+              opacity: 0.9,
+              mixBlendMode: 'multiply'
+            }}
+          />
+          <div className="footer-links relative z-10" style={{textAlign: 'center', padding: '2rem 0'}}>
+            <a href="#" style={{color: THEME.textSecondary, margin: '0 1rem', textDecoration: 'none', fontSize: '1rem', fontWeight: '500'}}>Terms of Service</a>
+            <a href="#" style={{color: THEME.textSecondary, margin: '0 1rem', textDecoration: 'none', fontSize: '1rem', fontWeight: '500'}}>Privacy Policy</a>
+            <a href="/patch_notes" style={{color: THEME.textSecondary, margin: '0 1rem', textDecoration: 'none', fontSize: '1rem', fontWeight: '500'}}>Patch Notes</a>
+            <a href="https://github.com/users/nuclearsheep540/projects/2" style={{color: THEME.textSecondary, margin: '0 1rem', textDecoration: 'none', fontSize: '1rem', fontWeight: '500'}}>Roadmap Kanban</a>
+            <a href="#" style={{color: THEME.textSecondary, margin: '0 1rem', textDecoration: 'none', fontSize: '1rem', fontWeight: '500'}}>Help Center</a>
           </div>
-          <div className="px-6 py-6 auto space-y-6 overflow-hidden sm:px-6 lg:px-6">
-              <div className="copyright" style={{textAlign: 'center', color: '#64748b', fontSize: '0.9rem'}}>
+          <div className="px-6 py-6 auto space-y-6 overflow-hidden sm:px-6 lg:px-6 relative z-10">
+              <div className="copyright" style={{textAlign: 'center', color: COLORS.graphite, fontSize: '0.9rem'}}>
                 © 2025 Tabletop Tavern. <br />All rights reserved. made with &#x2764; for me and my friends.
               </div>
           </div>
