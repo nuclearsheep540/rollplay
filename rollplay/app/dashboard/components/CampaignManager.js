@@ -1031,7 +1031,7 @@ export default function CampaignManager({ user, refreshTrigger, onCampaignUpdate
                     </div>
                   </div>
 
-                  {/* Game Sessions Detail Panel - Expands to full viewport width and fills to bottom */}
+                  {/* Game Sessions Detail Panel - Expands to full viewport width */}
                   <div
                     ref={gameSessionsPanelRef}
                     className="relative"
@@ -1042,26 +1042,22 @@ export default function CampaignManager({ user, refreshTrigger, onCampaignUpdate
                       borderWidth: selectedCampaign?.id === campaign.id ? '2px' : '0px',
                       borderStyle: 'solid',
                       width: selectedCampaign?.id === campaign.id ? '100vw' : '100%',
-                      // Use calculated height to fill viewport, or 0 when collapsed
-                      height: selectedCampaign?.id === campaign.id && drawerHeight ? `${drawerHeight}px` : '0px',
+                      // Use min-height to ensure drawer fills viewport, but can grow larger for content
+                      minHeight: selectedCampaign?.id === campaign.id && drawerHeight ? `${drawerHeight}px` : '0px',
+                      maxHeight: selectedCampaign?.id === campaign.id ? 'none' : '0px',
                       overflow: 'hidden',
                       borderRadius: '0.125rem',
                       borderTopLeftRadius: '0', // No top radius to connect with campaign tile
                       borderTopRightRadius: '0',
                       // Disable transitions during window resize for instant layout updates
-                      transition: isResizing ? 'none' : 'left 200ms ease-in-out, width 200ms ease-in-out, height 200ms ease-in-out, border-width 200ms ease-in-out',
+                      transition: isResizing ? 'none' : 'left 200ms ease-in-out, width 200ms ease-in-out, min-height 200ms ease-in-out, max-height 200ms ease-in-out, border-width 200ms ease-in-out',
                       pointerEvents: selectedCampaign?.id === campaign.id ? 'auto' : 'none',
                       visibility: selectedCampaign?.id === campaign.id ? 'visible' : 'hidden'
                     }}
                   >
-                    {/* Content wrapper - fills drawer height, scrolls when content overflows */}
+                    {/* Content wrapper */}
                     <div
                       className="pt-[calc(1rem+16px)] sm:pt-[calc(2rem+16px)] md:pt-[calc(2.5rem+16px)] pb-4 sm:pb-6 md:pb-8 px-[calc(1rem+12px)] sm:px-[calc(2rem+12px)] md:px-[calc(2.5rem+12px)]"
-                      style={{
-                        height: '100%',
-                        overflowY: 'auto',
-                        overflowX: 'hidden'
-                      }}
                     >
                       {/* Inner content constrained to max-width for readability on wide screens */}
                       <div style={{ maxWidth: '1600px' }}>
