@@ -574,6 +574,11 @@ export default function CampaignManager({ user, refreshTrigger, onCampaignUpdate
     if (selectedCampaign?.id === campaign.id) {
       setSelectedCampaign(null)
     } else {
+      // Scroll to top before expanding (while overflow-y-auto is still active)
+      const mainEl = document.getElementById('dashboard-main')
+      if (mainEl) {
+        mainEl.scrollTo({ top: 0, behavior: 'smooth' })
+      }
       setSelectedCampaign(campaign)
     }
   }

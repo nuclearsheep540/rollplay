@@ -375,20 +375,27 @@ export default function CharacterManager({ user, onExpandedChange }) {
           <div className="space-y-3">
             <h4 className="text-sm font-semibold uppercase" style={{color: THEME.textAccent}}>Ability Scores</h4>
             <div className="grid grid-cols-2 gap-3">
-              {['strength', 'dexterity', 'constitution', 'intelligence', 'wisdom', 'charisma'].map(ability => (
-                <div
+              {['strength', 'dexterity', 'constitution', 'intelligence', 'wisdom', 'charisma'].map(ability => {
+                const score = selectedCharacter.ability_scores?.[ability] || 10
+                const modifier = Math.floor((score - 10) / 2)
+                const modifierStr = modifier >= 0 ? `+${modifier}` : `${modifier}`
+                return (<div
                   key={ability}
                   className="p-3 rounded-sm border text-center"
                   style={{backgroundColor: THEME.bgSecondary, borderColor: THEME.borderSubtle}}
                 >
-                  <p className="text-xl font-bold" style={{color: THEME.textOnDark}}>
-                    {selectedCharacter.ability_scores?.[ability] || 10}
+                  <p className="text-xs uppercase mb-1" style={{color: THEME.textSecondary}}>
+                    {ability}
                   </p>
-                  <p className="text-xs uppercase" style={{color: THEME.textSecondary}}>
-                    {ability.slice(0, 3)}
+                  <p className="text-xl font-bold" style={{color: THEME.textOnDark}}>
+                    {modifierStr}
+                  </p>
+                  <p className="text-sm" style={{color: THEME.textSecondary}}>
+                    {score}
                   </p>
                 </div>
-              ))}
+              )
+              })}
             </div>
           </div>
 
@@ -550,10 +557,13 @@ export default function CharacterManager({ user, onExpandedChange }) {
                 : 'opacity 200ms ease-in-out 50ms, left 200ms ease-in-out, width 200ms ease-in-out'
           }}
         >
-          {/* Left side: Selected character hero card */}
-          {selectedCharacter && renderSelectedCard()}
-          {/* Right side: Stats panel with scrolling */}
-          {selectedCharacter && renderStatsPanel()}
+          {/* Inner content constrained to max-width for consistency with campaigns */}
+          <div className="flex h-full" style={{ maxWidth: '1600px', width: '100%' }}>
+            {/* Left side: Selected character hero card */}
+            {selectedCharacter && renderSelectedCard()}
+            {/* Right side: Stats panel with scrolling */}
+            {selectedCharacter && renderStatsPanel()}
+          </div>
         </div>
       </div>
 

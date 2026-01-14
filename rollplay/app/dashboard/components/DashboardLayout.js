@@ -105,7 +105,10 @@ export default function DashboardLayout({
       </nav>
 
       {/* Main Content Area - Flex container so children can fill remaining space */}
-      <main className={`flex-1 flex flex-col pt-4 sm:pt-8 md:pt-10 px-4 sm:px-8 md:px-10 ${isChildExpanded ? 'overflow-hidden' : 'overflow-y-auto pb-8'}`}>
+      <main
+        id="dashboard-main"
+        className={`flex-1 flex flex-col pt-4 sm:pt-8 md:pt-10 px-4 sm:px-8 md:px-10 ${isChildExpanded ? 'overflow-hidden' : 'overflow-y-auto pb-8'}`}
+      >
         {children}
       </main>
     </div>
