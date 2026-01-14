@@ -183,7 +183,8 @@ export default function CharacterManager({ user, onExpandedChange }) {
   )
 
   // Card width constant - used by both character cards and create card
-  const CARD_WIDTH = 'clamp(280px, 35vw, 420px)'
+  // Min 140px, scales with viewport, max 600px for large displays
+  const CARD_WIDTH = 'clamp(140px, 25vw, 600px)'
 
   // Render character card (9:16 portrait aspect ratio for modern devices)
   const renderCharacterCard = (char) => (
@@ -513,7 +514,7 @@ export default function CharacterManager({ user, onExpandedChange }) {
         {/* Tile scroll area - hidden when expanded */}
         {!loading && !error && (
           <div
-            className="flex gap-4 overflow-x-auto h-full"
+            className="flex gap-4 overflow-x-auto h-full items-start"
             style={{
               paddingLeft: 'clamp(0.5rem, 2.5vw, 3.5rem)',
               paddingRight: 'clamp(0.5rem, 2.5vw, 3.5rem)',
