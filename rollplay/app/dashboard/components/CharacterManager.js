@@ -183,8 +183,9 @@ export default function CharacterManager({ user, onExpandedChange }) {
   )
 
   // Card width constant - used by both character cards and create card
-  // Min 140px, scales with viewport, max 600px for large displays
-  const CARD_WIDTH = 'clamp(140px, 25vw, 600px)'
+  // Based on available height (~55vh after header/tabs/title/padding) * 9/16 aspect ratio
+  // Min 140px for very small screens, max 600px for large displays
+  const CARD_WIDTH = 'clamp(140px, calc(55vh * 0.5625), 600px)'
 
   // Render character card (9:16 portrait aspect ratio for modern devices)
   const renderCharacterCard = (char) => (
