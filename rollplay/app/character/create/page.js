@@ -8,6 +8,7 @@
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import CharacterForm from '../components/CharacterForm'
+import { THEME, COLORS } from '@/app/styles/colorTheme'
 
 export default function CreateCharacter() {
   const router = useRouter()
@@ -54,13 +55,29 @@ export default function CreateCharacter() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-indigo-100 via-purple-50 to-pink-100 py-12 px-4">
+    <div
+      className="min-h-screen py-12 px-4"
+      style={{ backgroundColor: COLORS.smoke }}
+    >
       <div className="max-w-2xl mx-auto">
-        <div className="bg-white rounded-2xl shadow-xl p-8">
+        <div
+          className="rounded-sm shadow-xl p-8 border"
+          style={{
+            backgroundColor: COLORS.carbon,
+            borderColor: THEME.borderSubtle
+          }}
+        >
           {/* Header */}
           <div className="mb-8">
-            <h1 className="text-3xl font-bold text-gray-900">Create New Character</h1>
-            <p className="mt-2 text-gray-600">Fill in the details to create your new D&D character</p>
+            <h1
+              className="text-3xl font-bold font-[family-name:var(--font-metamorphous)]"
+              style={{ color: THEME.textOnDark }}
+            >
+              Create New Character
+            </h1>
+            <p className="mt-2" style={{ color: THEME.textSecondary }}>
+              Fill in the details to create your new D&D character
+            </p>
           </div>
 
           {/* Form */}
