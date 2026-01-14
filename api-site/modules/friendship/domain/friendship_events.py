@@ -92,3 +92,27 @@ class FriendshipEvents:
             "show_toast": True,
             "save_notification": False  # Don't persist buzz notifications
         }
+
+    @staticmethod
+    def buzz_sent(sender_id: UUID, recipient_id: UUID, recipient_screen_name: str) -> Dict[str, Any]:
+        """
+        Event: Confirmation to sender that their buzz was sent
+
+        Args:
+            sender_id: User who sent the buzz
+            recipient_id: User who received the buzz
+            recipient_screen_name: Display name of recipient
+
+        Returns:
+            Event configuration dict
+        """
+        return {
+            "user_id": sender_id,
+            "event_type": "buzz_sent",
+            "data": {
+                "recipient_id": str(recipient_id),
+                "recipient_screen_name": recipient_screen_name
+            },
+            "show_toast": True,
+            "save_notification": False  # Don't persist buzz notifications
+        }

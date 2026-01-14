@@ -47,6 +47,13 @@ export const EVENT_CONFIG = {
     navigationTab: null  // No navigation - just a fun notification
   },
 
+  'buzz_sent': {
+    toastMessage: 'Buzz sent!',
+    panelMessage: (data) => `You buzzed ${data.recipient_screen_name}`,
+    toastType: 'success',
+    navigationTab: null  // No navigation - just a fun notification
+  },
+
   'campaign_invite_received': {
     toastMessage: 'New campaign invite',
     panelMessage: (data) => `${data.host_screen_name} invited you to "${data.campaign_name}"`,

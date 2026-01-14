@@ -129,6 +129,27 @@ function DashboardContent() {
       }
     },
 
+    // Buzz events (fun notification, no state refresh needed)
+    'friend_buzzed': (message) => {
+      if (message.show_toast) {
+        const config = getEventConfig('friend_buzzed')
+        showToast({
+          type: config.toastType,
+          message: config.panelMessage(message.data)
+        })
+      }
+    },
+
+    'buzz_sent': (message) => {
+      if (message.show_toast) {
+        const config = getEventConfig('buzz_sent')
+        showToast({
+          type: config.toastType,
+          message: config.panelMessage(message.data)
+        })
+      }
+    },
+
     // Campaign invite events
     'campaign_invite_received': (message) => {
       setRefreshTrigger(prev => prev + 1)

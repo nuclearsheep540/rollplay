@@ -4,7 +4,6 @@
 from uuid import UUID
 import logging
 import time
-import asyncio
 from fastapi import APIRouter, Depends, HTTPException, status
 
 from modules.friendship.schemas.friendship_schemas import (
@@ -249,9 +248,9 @@ async def buzz_friend(
     """
     command = BuzzFriend(friendship_repo, user_repo, event_manager, _buzz_rate_limits, BUZZ_COOLDOWN_SECONDS)
     try:
-        asyncio.create_task(command.execute(
+        await command.execute(
             user_id=current_user.id,
             friend_id=friend_id
-        ))
+        )
     except ValueError as e:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))

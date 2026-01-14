@@ -5,7 +5,7 @@
 
 'use client'
 
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
 import { faChevronDown, faChevronUp, faUserPlus, faBell, faPersonCirclePlus } from '@fortawesome/free-solid-svg-icons'
@@ -19,9 +19,11 @@ export default function FriendsWidget({ user, refreshTrigger, isStandalone = fal
   const [friendRequests, setFriendRequests] = useState([])
   const [loading, setLoading] = useState(true)
   const [hostedCampaigns, setHostedCampaigns] = useState([])
-  const [buzzCooldowns, setBuzzCooldowns] = useState({}) // Track cooldowns per friend
+  const [buzzCooldowns, setBuzzCooldowns] = useState({}) // Track cooldown start times per friend (timestamp)
+  const [cooldownProgress, setCooldownProgress] = useState({}) // Track animation progress 0-100
   const [inviteDropdown, setInviteDropdown] = useState(null) // Track which friend's dropdown is open
   const dropdownRef = useRef(null)
+  const COOLDOWN_DURATION = 20000 // 20 seconds in ms
 
   // Auto-collapse on mobile on mount (only for fixed mode)
   useEffect(() => {
@@ -89,6 +91,40 @@ export default function FriendsWidget({ user, refreshTrigger, isStandalone = fal
     return () => document.removeEventListener('mousedown', handleClickOutside)
   }, [])
 
+  // Animate cooldown progress
+  useEffect(() => {
+    const activeCooldowns = Object.keys(buzzCooldowns)
+    if (activeCooldowns.length === 0) return
+
+    const animationFrame = requestAnimationFrame(function animate() {
+      const now = Date.now()
+      const newProgress = {}
+      let hasActive = false
+
+      activeCooldowns.forEach(friendId => {
+        const startTime = buzzCooldowns[friendId]
+        if (startTime) {
+          const elapsed = now - startTime
+          const progress = Math.min((elapsed / COOLDOWN_DURATION) * 100, 100)
+          newProgress[friendId] = progress
+          if (progress < 100) hasActive = true
+        }
+      })
+
+      setCooldownProgress(newProgress)
+
+      if (hasActive) {
+        requestAnimationFrame(animate)
+      } else {
+        // Clear completed cooldowns
+        setBuzzCooldowns({})
+        setCooldownProgress({})
+      }
+    })
+
+    return () => cancelAnimationFrame(animationFrame)
+  }, [buzzCooldowns])
+
   const handleBuzz = async (friendId) => {
     // Check if on cooldown
     if (buzzCooldowns[friendId]) return
@@ -101,15 +137,10 @@ export default function FriendsWidget({ user, refreshTrigger, isStandalone = fal
       })
 
       if (response.ok || response.status === 204) {
-        // Set cooldown for 20 seconds
-        setBuzzCooldowns(prev => ({ ...prev, [friendId]: true }))
-        setTimeout(() => {
-          setBuzzCooldowns(prev => {
-            const updated = { ...prev }
-            delete updated[friendId]
-            return updated
-          })
-        }, 20000)
+        // Set cooldown start time
+        const startTime = Date.now()
+        setBuzzCooldowns(prev => ({ ...prev, [friendId]: startTime }))
+        setCooldownProgress(prev => ({ ...prev, [friendId]: 0 }))
       } else {
         const error = await response.json()
         console.error('Buzz error:', error.detail)
@@ -213,19 +244,45 @@ export default function FriendsWidget({ user, refreshTrigger, isStandalone = fal
                         <span className="text-sm truncate">{friend.friend_screen_name || 'Unknown'}</span>
                       </div>
                       <div className="flex items-center gap-2 flex-shrink-0 relative">
-                        {/* Buzz Button */}
+                        {/* Buzz Button with Radial Cooldown */}
                         <button
                           onClick={() => handleBuzz(friend.friend_id)}
-                          disabled={buzzCooldowns[friend.friend_id]}
-                          className="p-2 rounded-sm transition-colors"
+                          disabled={!!buzzCooldowns[friend.friend_id]}
+                          className="p-2 rounded-sm transition-colors relative"
                           style={{
-                            backgroundColor: buzzCooldowns[friend.friend_id] ? THEME.bgTertiary : 'transparent',
-                            color: buzzCooldowns[friend.friend_id] ? THEME.textSecondary : THEME.textAccent,
-                            opacity: buzzCooldowns[friend.friend_id] ? 0.5 : 1
+                            backgroundColor: 'transparent',
+                            width: '36px',
+                            height: '36px'
                           }}
                           title={buzzCooldowns[friend.friend_id] ? 'On cooldown' : 'Buzz friend'}
                         >
-                          <FontAwesomeIcon icon={faBell} size="lg" />
+                          {buzzCooldowns[friend.friend_id] ? (
+                            <>
+                              {/* During cooldown: dimmed base + bright reveal */}
+                              <FontAwesomeIcon
+                                icon={faBell}
+                                size="lg"
+                                style={{ color: THEME.borderDefault, opacity: 0.3 }}
+                              />
+                              <FontAwesomeIcon
+                                icon={faBell}
+                                size="lg"
+                                className="absolute inset-0 m-auto"
+                                style={{
+                                  color: THEME.textAccent,
+                                  maskImage: `conic-gradient(from 0deg, black ${cooldownProgress[friend.friend_id] || 0}%, transparent ${cooldownProgress[friend.friend_id] || 0}%)`,
+                                  WebkitMaskImage: `conic-gradient(from 0deg, black ${cooldownProgress[friend.friend_id] || 0}%, transparent ${cooldownProgress[friend.friend_id] || 0}%)`
+                                }}
+                              />
+                            </>
+                          ) : (
+                            /* Ready state: bright icon */
+                            <FontAwesomeIcon
+                              icon={faBell}
+                              size="lg"
+                              style={{ color: THEME.textAccent }}
+                            />
+                          )}
                         </button>
                         {/* Invite to Campaign Button */}
                         {hostedCampaigns.length > 0 && (

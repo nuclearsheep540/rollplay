@@ -415,15 +415,29 @@ class BuzzFriend:
         if not sender:
             raise ValueError("Sender not found")
 
+        # Get recipient's screen name for sender confirmation
+        recipient = self.user_repo.get_by_id(friend_id)
+        if not recipient:
+            raise ValueError("Recipient not found")
+
         # Update rate limit
         self.rate_limits[rate_key] = current_time
 
-        # Broadcast buzz event
+        # Broadcast buzz event to recipient
         await self.event_manager.broadcast(
             **FriendshipEvents.friend_buzzed(
                 recipient_id=friend_id,
                 buzzer_id=user_id,
                 buzzer_screen_name=sender.screen_name
+            )
+        )
+
+        # Broadcast confirmation to sender
+        await self.event_manager.broadcast(
+            **FriendshipEvents.buzz_sent(
+                sender_id=user_id,
+                recipient_id=friend_id,
+                recipient_screen_name=recipient.screen_name
             )
         )
 
