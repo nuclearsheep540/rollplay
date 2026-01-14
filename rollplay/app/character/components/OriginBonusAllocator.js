@@ -8,6 +8,7 @@
 import { useState, useEffect } from 'react'
 import { BACKGROUND_ABILITIES } from '../../shared/constants/characterEnums'
 import Combobox from '../../shared/components/Combobox'
+import { THEME } from '@/app/styles/colorTheme'
 
 const ABILITIES = [
   { value: 'strength', label: 'Strength' },
@@ -159,12 +160,15 @@ export default function OriginBonusAllocator({
   }
 
   return (
-    <div className="space-y-4 p-4 bg-gray-50 rounded-lg border border-gray-200">
+    <div
+      className="space-y-4 p-4 rounded-sm border"
+      style={{ backgroundColor: THEME.bgSecondary, borderColor: THEME.borderSubtle }}
+    >
       <div>
-        <h3 className="text-sm font-semibold text-gray-700 mb-2">
+        <h3 className="text-sm font-semibold mb-2" style={{ color: THEME.textOnDark }}>
           Background Origin Bonuses
         </h3>
-        <p className="text-xs text-gray-500 mb-3">
+        <p className="text-xs mb-3" style={{ color: THEME.textSecondary }}>
           {selectedBackground
             ? `Choose how to allocate bonuses from your ${selectedBackground} background (D&D 2024 rules)`
             : 'Select a background to allocate origin bonuses (D&D 2024 rules)'}
@@ -180,9 +184,10 @@ export default function OriginBonusAllocator({
             checked={mode === '2_1'}
             onChange={(e) => handleModeChange(e.target.value)}
             disabled={disabled}
-            className="text-blue-600 focus:ring-blue-500"
+            className="accent-current"
+            style={{ accentColor: THEME.textAccent }}
           />
-          <span className="text-sm text-gray-700">+2 to one ability, +1 to another</span>
+          <span className="text-sm" style={{ color: THEME.textOnDark }}>+2 to one ability, +1 to another</span>
         </label>
 
         <label className="flex items-center space-x-2 cursor-pointer">
@@ -192,9 +197,10 @@ export default function OriginBonusAllocator({
             checked={mode === '1_1_1'}
             onChange={(e) => handleModeChange(e.target.value)}
             disabled={disabled}
-            className="text-blue-600 focus:ring-blue-500"
+            className="accent-current"
+            style={{ accentColor: THEME.textAccent }}
           />
-          <span className="text-sm text-gray-700">+1 to three different abilities</span>
+          <span className="text-sm" style={{ color: THEME.textOnDark }}>+1 to three different abilities</span>
         </label>
       </div>
 
@@ -246,7 +252,7 @@ export default function OriginBonusAllocator({
 
       {/* Validation Error */}
       {!validation.valid && (
-        <div className="text-xs text-red-600 mt-2">
+        <div className="text-xs mt-2" style={{ color: '#f87171' }}>
           {validation.error}
         </div>
       )}

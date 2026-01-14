@@ -7,6 +7,7 @@
 
 import { useState } from 'react'
 import { Combobox as HeadlessCombobox } from '@headlessui/react'
+import { THEME } from '@/app/styles/colorTheme'
 
 /**
  * Reusable Searchable Combobox Component
@@ -47,27 +48,33 @@ export default function Combobox({
   return (
     <div className="w-full">
       {label && (
-        <label className="block text-sm font-medium text-gray-700 mb-1">
+        <label className="block text-sm font-medium mb-1" style={{ color: THEME.textSecondary }}>
           {label}
-          {required && <span className="text-red-500 ml-1">*</span>}
+          {required && <span className="ml-1" style={{ color: '#f87171' }}>*</span>}
         </label>
       )}
       {helperText && (
-        <p className="text-xs text-gray-500 mb-2">{helperText}</p>
+        <p className="text-xs mb-2" style={{ color: THEME.textSecondary }}>{helperText}</p>
       )}
 
       <HeadlessCombobox value={value} onChange={onChange}>
         <div className="relative">
           <HeadlessCombobox.Button as="div" className="relative cursor-pointer">
             <HeadlessCombobox.Input
-              className="w-full px-3 py-2 pr-10 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm text-gray-900 bg-white cursor-pointer"
+              className="w-full px-3 py-2 pr-10 border rounded-sm focus:outline-none focus:ring-1 sm:text-sm cursor-pointer"
+              style={{
+                backgroundColor: THEME.bgSecondary,
+                borderColor: THEME.borderDefault,
+                color: THEME.textOnDark
+              }}
               displayValue={() => selectedOption?.label || ''}
               onChange={(event) => setQuery(event.target.value)}
               placeholder={placeholder}
             />
             <span className="absolute inset-y-0 right-0 flex items-center pr-2 pointer-events-none">
               <svg
-                className="h-5 w-5 text-gray-400"
+                className="h-5 w-5"
+                style={{ color: THEME.textSecondary }}
                 viewBox="0 0 20 20"
                 fill="currentColor"
                 aria-hidden="true"
@@ -81,9 +88,15 @@ export default function Combobox({
             </span>
           </HeadlessCombobox.Button>
 
-          <HeadlessCombobox.Options className="absolute z-50 mt-1 max-h-60 w-full overflow-auto rounded-md bg-white py-1 text-base shadow-lg ring-1 ring-black ring-opacity-5 focus:outline-none sm:text-sm">
+          <HeadlessCombobox.Options
+            className="absolute z-50 mt-1 max-h-60 w-full overflow-auto rounded-sm py-1 text-base shadow-lg ring-1 ring-opacity-5 focus:outline-none sm:text-sm"
+            style={{
+              backgroundColor: THEME.bgSecondary,
+              ringColor: THEME.borderDefault
+            }}
+          >
             {filteredOptions.length === 0 && query !== '' ? (
-              <div className="relative cursor-default select-none px-4 py-2 text-gray-700">
+              <div className="relative cursor-default select-none px-4 py-2" style={{ color: THEME.textSecondary }}>
                 Nothing found.
               </div>
             ) : (
@@ -91,7 +104,8 @@ export default function Combobox({
                 <HeadlessCombobox.Option
                   key={option.value}
                   value={option.value}
-                  className="relative cursor-pointer select-none py-2 pl-10 pr-4 hover:bg-indigo-600 hover:text-white text-gray-900 data-[focus]:bg-indigo-600 data-[focus]:text-white"
+                  className="relative cursor-pointer select-none py-2 pl-10 pr-4 data-[focus]:bg-[#37322F]"
+                  style={{ color: THEME.textOnDark }}
                 >
                   {({ selected }) => (
                     <>
@@ -99,7 +113,7 @@ export default function Combobox({
                         {option.label}
                       </span>
                       {selected && (
-                        <span className="absolute inset-y-0 left-0 flex items-center pl-3 text-indigo-600 data-[focus]:text-white">
+                        <span className="absolute inset-y-0 left-0 flex items-center pl-3" style={{ color: THEME.textAccent }}>
                           <svg className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
                             <path
                               fillRule="evenodd"

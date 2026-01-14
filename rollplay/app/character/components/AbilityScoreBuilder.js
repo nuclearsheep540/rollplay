@@ -10,6 +10,7 @@ import NumericStepper from './NumericStepper'
 import PointBuyCalculator from './PointBuyCalculator'
 import DiceRoller from './DiceRoller'
 import { getDefaultPointBuyScores } from '../utils/pointBuyCalculations'
+import { THEME } from '@/app/styles/colorTheme'
 
 /**
  * AbilityScoreBuilder - Unified interface for setting ability scores
@@ -64,13 +65,16 @@ export default function AbilityScoreBuilder({
     <div className="space-y-4">
       {/* Mode selector */}
       <div>
-        <label className="block text-sm font-medium text-gray-700 mb-2">
+        <label className="block text-sm font-medium mb-2" style={{ color: THEME.textSecondary }}>
           Ability Score Entry Method
         </label>
 
         {/* Single info banner for all modes */}
         {Object.keys(originBonuses).length > 0 && (
-          <div className="mb-3 text-sm text-indigo-600 bg-indigo-50 p-3 rounded-lg border border-indigo-200">
+          <div
+            className="mb-3 text-sm p-3 rounded-sm border"
+            style={{ backgroundColor: THEME.bgSecondary, borderColor: THEME.borderDefault, color: THEME.textSecondary }}
+          >
             Displayed scores include your background bonuses. Point-buy calculations and roll validations are based on your base scores only.
           </div>
         )}
@@ -80,11 +84,12 @@ export default function AbilityScoreBuilder({
             type="button"
             onClick={() => handleModeChange('manual')}
             disabled={disabled}
-            className={`flex-1 px-4 py-2 rounded-lg font-medium transition-colors ${
-              mode === 'manual'
-                ? 'bg-indigo-600 text-white'
-                : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
-            } disabled:opacity-50`}
+            className="flex-1 px-4 py-2 rounded-sm font-medium transition-colors disabled:opacity-50 border"
+            style={{
+              backgroundColor: mode === 'manual' ? THEME.borderDefault : THEME.bgSecondary,
+              borderColor: mode === 'manual' ? THEME.borderActive : THEME.borderSubtle,
+              color: mode === 'manual' ? THEME.textOnDark : THEME.textSecondary
+            }}
           >
             Manual
           </button>
@@ -92,11 +97,12 @@ export default function AbilityScoreBuilder({
             type="button"
             onClick={() => handleModeChange('point-buy')}
             disabled={disabled}
-            className={`flex-1 px-4 py-2 rounded-lg font-medium transition-colors ${
-              mode === 'point-buy'
-                ? 'bg-indigo-600 text-white'
-                : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
-            } disabled:opacity-50`}
+            className="flex-1 px-4 py-2 rounded-sm font-medium transition-colors disabled:opacity-50 border"
+            style={{
+              backgroundColor: mode === 'point-buy' ? THEME.borderDefault : THEME.bgSecondary,
+              borderColor: mode === 'point-buy' ? THEME.borderActive : THEME.borderSubtle,
+              color: mode === 'point-buy' ? THEME.textOnDark : THEME.textSecondary
+            }}
           >
             Point-Buy
           </button>
@@ -104,11 +110,12 @@ export default function AbilityScoreBuilder({
             type="button"
             onClick={() => handleModeChange('roll-dice')}
             disabled={disabled}
-            className={`flex-1 px-4 py-2 rounded-lg font-medium transition-colors ${
-              mode === 'roll-dice'
-                ? 'bg-indigo-600 text-white'
-                : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
-            } disabled:opacity-50`}
+            className="flex-1 px-4 py-2 rounded-sm font-medium transition-colors disabled:opacity-50 border"
+            style={{
+              backgroundColor: mode === 'roll-dice' ? THEME.borderDefault : THEME.bgSecondary,
+              borderColor: mode === 'roll-dice' ? THEME.borderActive : THEME.borderSubtle,
+              color: mode === 'roll-dice' ? THEME.textOnDark : THEME.textSecondary
+            }}
           >
             Roll Dice
           </button>
@@ -119,7 +126,7 @@ export default function AbilityScoreBuilder({
       <div>
         {mode === 'manual' && (
           <div className="space-y-2">
-            <div className="text-sm text-gray-600 mb-3">
+            <div className="text-sm mb-3" style={{ color: THEME.textSecondary }}>
               Manually set each ability score (1-20)
             </div>
             <div className="grid grid-cols-2 md:grid-cols-3 gap-6">

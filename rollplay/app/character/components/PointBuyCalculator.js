@@ -5,18 +5,16 @@
 
 'use client'
 
-import { useState } from 'react'
 import NumericStepper from './NumericStepper'
 import {
   validatePointBuy,
-  canIncreaseScore,
-  canDecreaseScore,
   getDefaultPointBuyScores,
   getRecommendedScores,
   POINT_BUY_BUDGET,
   POINT_BUY_MIN,
   POINT_BUY_MAX
 } from '../utils/pointBuyCalculations'
+import { THEME } from '@/app/styles/colorTheme'
 
 /**
  * PointBuyCalculator - D&D 2024 Point-Buy System
@@ -95,11 +93,14 @@ export default function PointBuyCalculator({
   return (
     <div className="space-y-4">
       {/* Header with point budget */}
-      <div className={`text-2xl font-bold ${
-        validation.overBudget ? 'text-red-600' :
-        validation.remaining === 0 ? 'text-green-600' :
-        'text-indigo-600'
-      }`}>
+      <div
+        className="text-2xl font-bold"
+        style={{
+          color: validation.overBudget ? '#f87171' :
+                 validation.remaining === 0 ? '#4ade80' :
+                 THEME.textAccent
+        }}
+      >
         {validation.pointsSpent} / {POINT_BUY_BUDGET} points
         {validation.remaining > 0 && (
           <span className="text-lg ml-2">
@@ -114,7 +115,12 @@ export default function PointBuyCalculator({
           type="button"
           onClick={handleReset}
           disabled={disabled}
-          className="px-3 py-1 text-xs bg-gray-200 text-gray-700 rounded hover:bg-gray-300 transition-colors disabled:opacity-50"
+          className="px-3 py-1 text-xs rounded-sm transition-colors disabled:opacity-50 border"
+          style={{
+            backgroundColor: THEME.bgSecondary,
+            borderColor: THEME.borderSubtle,
+            color: THEME.textSecondary
+          }}
         >
           Reset (All 8s)
         </button>
@@ -122,7 +128,12 @@ export default function PointBuyCalculator({
           type="button"
           onClick={handleRecommended}
           disabled={disabled}
-          className="px-3 py-1 text-xs bg-indigo-100 text-indigo-700 rounded hover:bg-indigo-200 transition-colors disabled:opacity-50"
+          className="px-3 py-1 text-xs rounded-sm transition-colors disabled:opacity-50 border"
+          style={{
+            backgroundColor: THEME.bgSecondary,
+            borderColor: THEME.borderDefault,
+            color: THEME.textAccent
+          }}
         >
           Recommended Build
         </button>
@@ -150,15 +161,21 @@ export default function PointBuyCalculator({
 
       {/* Budget warning */}
       {validation.overBudget && (
-        <div className="text-sm text-red-600 bg-red-50 p-3 rounded-lg border border-red-200">
-          ⚠️ Over budget! Reduce some scores to stay within 27 points.
+        <div
+          className="text-sm p-3 rounded-sm border"
+          style={{ backgroundColor: '#991b1b20', borderColor: '#dc2626', color: '#fca5a5' }}
+        >
+          Over budget! Reduce some scores to stay within 27 points.
         </div>
       )}
 
       {/* Perfect budget message */}
       {validation.remaining === 0 && (
-        <div className="text-sm text-green-600 bg-green-50 p-3 rounded-lg border border-green-200">
-          ✓ All 27 points allocated!
+        <div
+          className="text-sm p-3 rounded-sm border"
+          style={{ backgroundColor: '#16653420', borderColor: '#22c55e', color: '#4ade80' }}
+        >
+          All 27 points allocated!
         </div>
       )}
     </div>
