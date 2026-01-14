@@ -155,26 +155,13 @@ export default function CreateCharacter() {
             >
               <h3
                 className="text-lg font-bold font-[family-name:var(--font-metamorphous)] truncate"
-                style={{ color: previewData.name ? THEME.textOnDark : THEME.textSecondary }}
+                style={{ color: THEME.textSecondary }}
               >
                 {previewData.name || 'Character Name'}
               </h3>
-              <div className="mt-2 flex items-center gap-2 text-sm" style={{ color: THEME.textSecondary }}>
-                {previewData.level > 0 && (
-                  <span
-                    className="px-2 py-0.5 rounded-sm text-xs font-medium"
-                    style={{ backgroundColor: THEME.bgSecondary, color: THEME.textOnDark }}
-                  >
-                    Level {previewData.level}
-                  </span>
-                )}
-                {previewData.character_race && (
-                  <span>{previewData.character_race}</span>
-                )}
-                {!previewData.level && !previewData.character_race && (
-                  <span>Level & Race</span>
-                )}
-              </div>
+              <p className="mt-2 text-sm" style={{ color: THEME.textSecondary }}>
+                {previewData.level > 0 ? `Level ${previewData.level}` : 'Level'} {previewData.character_race || 'Race'}
+              </p>
             </div>
           </div>
 

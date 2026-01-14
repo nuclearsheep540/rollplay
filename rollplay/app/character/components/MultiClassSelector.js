@@ -6,6 +6,8 @@
 'use client'
 
 import { useState } from 'react'
+import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
+import { faTrash } from '@fortawesome/free-solid-svg-icons'
 import Combobox from '../../shared/components/Combobox'
 import NumericStepper from './NumericStepper'
 import { CHARACTER_CLASSES } from '../../shared/constants/characterEnums'
@@ -56,8 +58,6 @@ export default function MultiClassSelector({
   }
 
   const handleRemoveClass = (index) => {
-    if (characterClasses.length <= 1) return // Must have at least 1 class
-
     const updatedClasses = characterClasses.filter((_, i) => i !== index)
     const newTotal = updatedClasses.reduce((sum, c) => sum + c.level, 0)
 
@@ -75,7 +75,7 @@ export default function MultiClassSelector({
   }
 
   const canAddClass = characterClasses.length < 3 && !addingClass
-  const canRemoveClass = characterClasses.length > 1
+  const canRemoveClass = characterClasses.length > 0
 
   // Calculate max level for each class based on remaining total
   const getMaxLevelForClass = (currentLevel) => {
@@ -133,19 +133,29 @@ export default function MultiClassSelector({
               />
             </div>
 
-            {/* Remove button */}
+            {/* Remove button - with spacing from stepper */}
             {canRemoveClass && !disabled && (
-              <button
-                type="button"
-                onClick={() => handleRemoveClass(index)}
-                className="flex-shrink-0 p-2 rounded-sm transition-colors hover:opacity-80"
-                style={{ color: '#f87171' }}
-                aria-label="Remove class"
-              >
-                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                </svg>
-              </button>
+              <div className="flex-shrink-0 flex flex-col items-center gap-2 ml-4">
+                <label
+                  className="text-xs font-bold uppercase tracking-wider"
+                  style={{ color: THEME.textSecondary }}
+                >
+                  Remove
+                </label>
+                <button
+                  type="button"
+                  onClick={() => handleRemoveClass(index)}
+                  className="w-10 h-10 rounded-sm transition-colors hover:opacity-80 flex items-center justify-center border"
+                  style={{
+                    color: '#f87171',
+                    backgroundColor: THEME.bgSecondary,
+                    borderColor: THEME.borderDefault
+                  }}
+                  aria-label="Remove class"
+                >
+                  <FontAwesomeIcon icon={faTrash} className="w-4 h-4" />
+                </button>
+              </div>
             )}
           </div>
         ))}

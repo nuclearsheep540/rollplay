@@ -72,7 +72,8 @@ export default function CharacterForm({
   // Notify parent of form changes for live preview
   useEffect(() => {
     onFormChange?.(formData)
-  }, [formData, onFormChange])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [formData])
 
   const handleInputChange = (field, value) => {
     setFormData(prev => {

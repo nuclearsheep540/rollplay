@@ -5,7 +5,7 @@
 
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { BACKGROUND_ABILITIES } from '../../shared/constants/characterEnums'
 import Combobox from '../../shared/components/Combobox'
 import { THEME } from '@/app/styles/colorTheme'
@@ -42,11 +42,21 @@ export default function OriginBonusAllocator({
     third: ''
   })
 
-  // Initialize from currentBonuses if provided, or reset if empty
+  // Track if mode change was user-initiated to prevent useEffect from overriding
+  // Using ref so it doesn't trigger re-renders or cause useEffect to re-run
+  const userChangedModeRef = useRef(false)
+
+  // Initialize from currentBonuses if provided (only on external changes, not user mode switches)
   useEffect(() => {
+    // Skip if user just changed the mode - let their selection stand
+    if (userChangedModeRef.current) {
+      userChangedModeRef.current = false
+      return
+    }
+
     if (Object.keys(currentBonuses).length === 0) {
       // Reset selections when bonuses are cleared (e.g., background changed)
-      setMode('2_1')
+      // But don't change the mode - user may have just switched
       setMode2_1({ plus2: '', plus1: '' })
       setMode1_1_1({ first: '', second: '', third: '' })
       return
@@ -64,8 +74,8 @@ export default function OriginBonusAllocator({
         plus2: plus2Ability || '',
         plus1: plus1Ability || ''
       })
-    } else {
-      // Mode +1/+1/+1
+    } else if (bonusKeys.length > 0) {
+      // Mode +1/+1/+1 (only if there are actual bonuses)
       setMode('1_1_1')
       setMode1_1_1({
         first: bonusKeys[0] || '',
@@ -135,6 +145,7 @@ export default function OriginBonusAllocator({
   }, [mode, mode2_1, mode1_1_1])
 
   const handleModeChange = (newMode) => {
+    userChangedModeRef.current = true
     setMode(newMode)
     // Reset selections when switching modes
     if (newMode === '2_1') {
@@ -177,31 +188,45 @@ export default function OriginBonusAllocator({
 
       {/* Mode Selection */}
       <div className="space-y-2">
-        <label className="flex items-center space-x-2 cursor-pointer">
-          <input
-            type="radio"
-            value="2_1"
-            checked={mode === '2_1'}
-            onChange={(e) => handleModeChange(e.target.value)}
-            disabled={disabled}
-            className="accent-current"
-            style={{ accentColor: THEME.textAccent }}
-          />
+        <button
+          type="button"
+          onClick={() => !disabled && handleModeChange('2_1')}
+          disabled={disabled}
+          className="flex items-center space-x-3 cursor-pointer w-full text-left disabled:opacity-50 disabled:cursor-not-allowed"
+        >
+          <span
+            className="w-4 h-4 rounded-full border-2 flex items-center justify-center flex-shrink-0"
+            style={{ borderColor: THEME.textAccent }}
+          >
+            {mode === '2_1' && (
+              <span
+                className="w-2 h-2 rounded-full"
+                style={{ backgroundColor: THEME.textAccent }}
+              />
+            )}
+          </span>
           <span className="text-sm" style={{ color: THEME.textOnDark }}>+2 to one ability, +1 to another</span>
-        </label>
+        </button>
 
-        <label className="flex items-center space-x-2 cursor-pointer">
-          <input
-            type="radio"
-            value="1_1_1"
-            checked={mode === '1_1_1'}
-            onChange={(e) => handleModeChange(e.target.value)}
-            disabled={disabled}
-            className="accent-current"
-            style={{ accentColor: THEME.textAccent }}
-          />
+        <button
+          type="button"
+          onClick={() => !disabled && handleModeChange('1_1_1')}
+          disabled={disabled}
+          className="flex items-center space-x-3 cursor-pointer w-full text-left disabled:opacity-50 disabled:cursor-not-allowed"
+        >
+          <span
+            className="w-4 h-4 rounded-full border-2 flex items-center justify-center flex-shrink-0"
+            style={{ borderColor: THEME.textAccent }}
+          >
+            {mode === '1_1_1' && (
+              <span
+                className="w-2 h-2 rounded-full"
+                style={{ backgroundColor: THEME.textAccent }}
+              />
+            )}
+          </span>
           <span className="text-sm" style={{ color: THEME.textOnDark }}>+1 to three different abilities</span>
-        </label>
+        </button>
       </div>
 
       {/* Mode +2/+1 Selectors */}
