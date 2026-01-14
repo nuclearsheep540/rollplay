@@ -6,6 +6,8 @@ from fastapi import Depends, HTTPException, Request, status
 from shared.jwt_helper import JWTHelper
 from modules.user.dependencies.providers import user_repository
 from modules.user.orm.user_repository import UserRepository
+from modules.campaign.dependencies.providers import campaign_repository
+from modules.campaign.orm.campaign_repository import CampaignRepository
 from modules.user.application.commands import GetOrCreateUser
 from modules.user.domain.user_aggregate import UserAggregate
 
@@ -14,7 +16,8 @@ jwt_helper = JWTHelper()
 
 async def get_current_user_from_token(
     request: Request,
-    user_repo: UserRepository = Depends(user_repository)
+    user_repo: UserRepository = Depends(user_repository),
+    campaign_repo: CampaignRepository = Depends(campaign_repository)
 ) -> UserAggregate:
     """
     FastAPI dependency to get current authenticated user from JWT token.
@@ -63,7 +66,8 @@ async def get_current_user_from_token(
     try:
         print(f"🔍 DEBUG: Creating GetOrCreateUser command for email: {email}")
         # Get or create user using authenticated email via new DDD pattern
-        command = GetOrCreateUser(user_repo)
+        # Campaign repository is passed to create demo campaign for new users
+        command = GetOrCreateUser(user_repo, campaign_repo)
         print("🔍 DEBUG: Executing GetOrCreateUser command")
         user, created = command.execute(email)
         print(f"🔍 DEBUG: User command executed successfully. Created: {created}")

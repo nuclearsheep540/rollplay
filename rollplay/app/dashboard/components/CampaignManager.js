@@ -1001,6 +1001,8 @@ export default function CampaignManager({ user, refreshTrigger, onCampaignUpdate
                       borderStyle: 'solid',
                       width: selectedCampaign?.id === campaign.id ? '100vw' : '100%',
                       maxHeight: selectedCampaign?.id === campaign.id ? '2000px' : '0px',
+                      // Extend drawer to viewport bottom when selected
+                      minHeight: selectedCampaign?.id === campaign.id ? 'calc(100vh - max(200px, 25vw))' : '0px',
                       overflow: 'hidden',
                       borderRadius: '0.125rem',
                       borderTopLeftRadius: '0', // No top radius to connect with campaign tile
@@ -1278,47 +1280,41 @@ export default function CampaignManager({ user, refreshTrigger, onCampaignUpdate
                         </div>
                       </div>
                     </div>
+
                   </div>
                 </div>
               )
             })}
 
-            {/* Create Campaign Template Tile - Fades when campaign is expanded */}
-            <div
-              className="w-full"
-              style={{
-                opacity: selectedCampaign ? 0 : 1,
-                pointerEvents: selectedCampaign ? 'none' : 'auto',
-                transition: selectedCampaign
-                  ? 'opacity 100ms cubic-bezier(0.42, 0, 1, 1)'
-                  : 'opacity 100ms cubic-bezier(0.42, 0, 1, 1) 50ms'
-              }}
-            >
-              <button
-                onClick={() => openModal('campaignCreate')}
-                className="aspect-[16/4] w-full relative rounded-sm overflow-hidden"
-                style={{
-                  backgroundColor: 'transparent'
-                }}
-              >
-                  {/* Knocked-out overlay */}
-                  <div
-                    className="absolute inset-0 flex flex-col items-center justify-center p-6"
-                    style={{
-                      backgroundColor: `${THEME.bgPanel}40` // 25% opacity for knocked-out effect
-                    }}
-                  >
-                    <FontAwesomeIcon
-                      icon={faPlus}
-                      className="text-6xl mb-4 opacity-50"
-                      style={{color: COLORS.smoke}}
-                    />
-                    <h4 className="text-2xl font-[family-name:var(--font-metamorphous)] mb-2 opacity-50" style={{color: THEME.textPrimary}}>
-                      Create New Campaign
-                    </h4>
-                  </div>
-                </button>
-            </div>
+            {/* Create Campaign Template Tile - Only render when no campaign is selected */}
+            {!selectedCampaign && (
+              <div className="w-full">
+                <button
+                  onClick={() => openModal('campaignCreate')}
+                  className="aspect-[16/4] w-full relative rounded-sm overflow-hidden"
+                  style={{
+                    backgroundColor: 'transparent'
+                  }}
+                >
+                    {/* Knocked-out overlay */}
+                    <div
+                      className="absolute inset-0 flex flex-col items-center justify-center p-6"
+                      style={{
+                        backgroundColor: `${THEME.bgPanel}40` // 25% opacity for knocked-out effect
+                      }}
+                    >
+                      <FontAwesomeIcon
+                        icon={faPlus}
+                        className="text-6xl mb-4 opacity-50"
+                        style={{color: COLORS.smoke}}
+                      />
+                      <h4 className="text-2xl font-[family-name:var(--font-metamorphous)] mb-2 opacity-50" style={{color: THEME.textPrimary}}>
+                        Create New Campaign
+                      </h4>
+                    </div>
+                  </button>
+              </div>
+            )}
           </div>
       </div>
 

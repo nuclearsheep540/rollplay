@@ -104,7 +104,7 @@ export default function DashboardLayout({
       </nav>
 
       {/* Main Content Area - Full Width, Scrollable */}
-      <main className="flex-1 overflow-y-auto p-4 sm:p-8 md:p-10 pb-64">
+      <main className="flex-1 overflow-y-auto pt-4 sm:pt-8 md:pt-10 px-4 sm:px-8 md:px-10">
         {children}
       </main>
     </div>
