@@ -63,7 +63,7 @@ export default function DashboardLayout({
   }
 
   return (
-    <div className="h-screen flex flex-col overflow-hidden" style={{backgroundColor: THEME.bgPrimary, color: THEME.textPrimary}}>
+    <div className="h-screen flex flex-col" style={{backgroundColor: THEME.bgPrimary, color: THEME.textPrimary}}>
       {/* Site Header */}
       <SiteHeader>
         <NotificationBell
@@ -93,7 +93,7 @@ export default function DashboardLayout({
       {/* Main Content Area - Flex container so children can fill remaining space */}
       <main
         id="dashboard-main"
-        className={`flex-1 flex flex-col pt-4 sm:pt-8 md:pt-10 px-4 sm:px-8 md:px-10 ${isChildExpanded ? 'overflow-hidden' : 'overflow-y-auto pb-8'}`}
+        className={`flex-1 flex flex-col pt-4 sm:pt-8 md:pt-10 px-4 sm:px-8 md:px-10 overflow-y-auto overflow-x-hidden ${isChildExpanded ? '' : 'pb-8'}`}
       >
         {children}
       </main>

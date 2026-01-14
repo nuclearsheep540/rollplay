@@ -47,6 +47,8 @@ export default function CampaignManager({ user, refreshTrigger, onCampaignUpdate
   const [deletingGame, setDeletingGame] = useState(null) // Track game being deleted
 
   const gameSessionsPanelRef = useRef(null)
+  const campaignCardRef = useRef(null)
+  const [drawerHeight, setDrawerHeight] = useState(null) // Calculated height to fill viewport
 
   // Consolidated modal state
   const [modals, setModals] = useState({
@@ -639,6 +641,25 @@ export default function CampaignManager({ user, refreshTrigger, onCampaignUpdate
     onExpandedChange?.(!!selectedCampaign)
   }, [selectedCampaign, onExpandedChange])
 
+  // Calculate drawer height to fill remaining viewport
+  useEffect(() => {
+    const calculateDrawerHeight = () => {
+      if (selectedCampaign && campaignCardRef.current) {
+        const cardRect = campaignCardRef.current.getBoundingClientRect()
+        const cardBottom = cardRect.bottom
+        // Drawer should fill from card bottom to viewport bottom
+        const remainingHeight = window.innerHeight - cardBottom
+        setDrawerHeight(Math.max(remainingHeight, 200)) // Minimum 200px
+      } else {
+        setDrawerHeight(null)
+      }
+    }
+
+    calculateDrawerHeight()
+    window.addEventListener('resize', calculateDrawerHeight)
+    return () => window.removeEventListener('resize', calculateDrawerHeight)
+  }, [selectedCampaign])
+
   // Reset expanded state on unmount
   useEffect(() => {
     return () => {
@@ -836,14 +857,14 @@ export default function CampaignManager({ user, refreshTrigger, onCampaignUpdate
                 >
                   {/* Campaign Card with expanding background */}
                   <div
+                    ref={isSelected ? campaignCardRef : null}
                     className="w-full relative rounded-sm overflow-visible cursor-pointer border-2"
                     style={{
                       // When selected, allow card to grow with content but never shrink below collapsed size
-                      // Collapsed: 16:4 aspect ratio. Selected: content-driven but min 16:4 equivalent
+                      // Collapsed: 16:4 aspect ratio. Selected: use fixed height to avoid large whitespace
                       aspectRatio: isSelected ? 'unset' : '16/4',
-                      // When selected, use 25vw (100vw / 4) as min-height to match 16:4 ratio at full width
-                      // Fall back to 200px as absolute minimum
-                      minHeight: isSelected ? 'max(200px, 25vw)' : '200px',
+                      // When selected, use fixed 200px height since drawer expands below independently
+                      minHeight: '200px',
                       backgroundImage: `url(${campaign.hero_image || '/campaign-tile-bg.png'})`,
                       backgroundSize: 'cover',
                       backgroundPosition: 'center',
@@ -1010,7 +1031,7 @@ export default function CampaignManager({ user, refreshTrigger, onCampaignUpdate
                     </div>
                   </div>
 
-                  {/* Game Sessions Detail Panel - Expands to full viewport width, no top margin */}
+                  {/* Game Sessions Detail Panel - Expands to full viewport width and fills to bottom */}
                   <div
                     ref={gameSessionsPanelRef}
                     className="relative"
@@ -1021,22 +1042,27 @@ export default function CampaignManager({ user, refreshTrigger, onCampaignUpdate
                       borderWidth: selectedCampaign?.id === campaign.id ? '2px' : '0px',
                       borderStyle: 'solid',
                       width: selectedCampaign?.id === campaign.id ? '100vw' : '100%',
-                      maxHeight: selectedCampaign?.id === campaign.id ? '2000px' : '0px',
-                      // Extend drawer to viewport bottom when selected
-                      minHeight: selectedCampaign?.id === campaign.id ? 'calc(100vh - max(200px, 25vw))' : '0px',
+                      // Use calculated height to fill viewport, or 0 when collapsed
+                      height: selectedCampaign?.id === campaign.id && drawerHeight ? `${drawerHeight}px` : '0px',
                       overflow: 'hidden',
                       borderRadius: '0.125rem',
                       borderTopLeftRadius: '0', // No top radius to connect with campaign tile
                       borderTopRightRadius: '0',
-                      marginTop: '-8px', // Negative margin to overlap with campaign tile
                       // Disable transitions during window resize for instant layout updates
-                      transition: isResizing ? 'none' : 'left 200ms ease-in-out, width 200ms ease-in-out, max-height 200ms ease-in-out, border-width 200ms ease-in-out',
+                      transition: isResizing ? 'none' : 'left 200ms ease-in-out, width 200ms ease-in-out, height 200ms ease-in-out, border-width 200ms ease-in-out',
                       pointerEvents: selectedCampaign?.id === campaign.id ? 'auto' : 'none',
                       visibility: selectedCampaign?.id === campaign.id ? 'visible' : 'hidden'
                     }}
                   >
-                    {/* Content wrapper with padding - matches main container responsive padding + 12px horizontal */}
-                    <div className="pb-4 sm:pb-8 md:pb-10 pt-[calc(1rem+16px)] sm:pt-[calc(2rem+16px)] md:pt-[calc(2.5rem+16px)] px-[calc(1rem+12px)] sm:px-[calc(2rem+12px)] md:px-[calc(2.5rem+12px)]">
+                    {/* Content wrapper - fills drawer height, scrolls when content overflows */}
+                    <div
+                      className="pt-[calc(1rem+16px)] sm:pt-[calc(2rem+16px)] md:pt-[calc(2.5rem+16px)] pb-4 sm:pb-6 md:pb-8 px-[calc(1rem+12px)] sm:px-[calc(2rem+12px)] md:px-[calc(2.5rem+12px)]"
+                      style={{
+                        height: '100%',
+                        overflowY: 'auto',
+                        overflowX: 'hidden'
+                      }}
+                    >
                       {/* Inner content constrained to max-width for readability on wide screens */}
                       <div style={{ maxWidth: '1600px' }}>
                       <div className="flex items-center justify-between mb-4">
