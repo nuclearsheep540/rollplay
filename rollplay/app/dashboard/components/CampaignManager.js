@@ -861,9 +861,9 @@ export default function CampaignManager({ user, refreshTrigger, onCampaignUpdate
                     className="w-full relative rounded-sm overflow-visible cursor-pointer border-2"
                     style={{
                       // When selected, allow card to grow with content but never shrink below collapsed size
-                      // Collapsed: 16:4 aspect ratio. Selected: use fixed height to avoid large whitespace
+                      // Collapsed: 16:4 aspect ratio. Selected: unset to allow content-driven height
                       aspectRatio: isSelected ? 'unset' : '16/4',
-                      // When selected, use fixed 200px height since drawer expands below independently
+                      // Fixed 200px height when expanded since drawer handles content below
                       minHeight: '200px',
                       backgroundImage: `url(${campaign.hero_image || '/campaign-tile-bg.png'})`,
                       backgroundSize: 'cover',
@@ -942,7 +942,7 @@ export default function CampaignManager({ user, refreshTrigger, onCampaignUpdate
                             {campaign.title || 'Unnamed Campaign'}
                           </h4>
                           {campaign.description && (
-                            <div className="text-base drop-shadow-md mt-2" style={{maxWidth: '50%'}}>
+                            <div className="text-base drop-shadow-md mt-2" style={{maxWidth: '70%'}}>
                               <p
                                 style={{
                                   color: THEME.textAccent,
