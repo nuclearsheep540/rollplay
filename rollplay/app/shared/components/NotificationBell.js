@@ -73,9 +73,9 @@ export default function NotificationBell({ userId, refreshTrigger, toasts = [], 
 
   return (
     <div className="relative" ref={bellRef}>
-      {/* Toast notifications - positioned to the left of the bell */}
+      {/* Toast notifications - positioned to the left of the bell, growing leftward */}
       {toasts.length > 0 && (
-        <div className="absolute right-full top-1/2 -translate-y-1/2 mr-3 flex flex-col items-end">
+        <div className="absolute right-full top-1/2 -translate-y-1/2 mr-3 flex flex-row-reverse items-center">
           {toasts.map((toast) => (
             <ToastNotification
               key={toast.id}

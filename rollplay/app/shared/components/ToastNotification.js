@@ -32,7 +32,7 @@ export const ToastNotification = ({ id, type = 'info', message, duration = 7000,
         border
         shadow-xl
         backdrop-blur-sm
-        mb-2
+        mr-2
         whitespace-nowrap
         transition-all
         duration-250
@@ -50,11 +50,6 @@ export const ToastNotification = ({ id, type = 'info', message, duration = 7000,
         color: THEME.textOnDark
       }}
     >
-      {/* Speech bubble arrow pointing right (toward bell) */}
-      <div
-        className="absolute top-1/2 -right-2 -translate-y-1/2 w-0 h-0 border-t-8 border-t-transparent border-b-8 border-b-transparent border-l-8"
-        style={{ borderLeftColor: THEME.bgPanel }}
-      />
       {message}
     </div>
   )
@@ -62,8 +57,8 @@ export const ToastNotification = ({ id, type = 'info', message, duration = 7000,
 
 export const ToastContainer = ({ toasts, onDismiss }) => {
   return (
-    <div className="fixed top-5 right-48 z-50 flex flex-col items-end pointer-events-none max-w-xs">
-      <div className="pointer-events-auto">
+    <div className="fixed top-5 right-48 z-50 flex flex-row-reverse items-center pointer-events-none">
+      <div className="pointer-events-auto flex flex-row-reverse items-center">
         {toasts.map((toast) => (
           <ToastNotification
             key={toast.id}
