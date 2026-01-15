@@ -260,3 +260,27 @@ class CampaignEvents:
             "show_toast": True,
             "save_notification": True
         }
+
+    @staticmethod
+    def campaign_player_left_confirmation(player_id: UUID, campaign_id: UUID, campaign_name: str) -> Dict[str, Any]:
+        """
+        Event: Confirmation to player that they successfully left the campaign
+
+        Args:
+            player_id: Player who left
+            campaign_id: Campaign ID
+            campaign_name: Campaign name
+
+        Returns:
+            Event configuration dict
+        """
+        return {
+            "user_id": player_id,
+            "event_type": "campaign_player_left_confirmation",
+            "data": {
+                "campaign_id": str(campaign_id),
+                "campaign_name": campaign_name
+            },
+            "show_toast": True,
+            "save_notification": True
+        }

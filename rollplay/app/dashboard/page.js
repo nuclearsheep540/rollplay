@@ -244,6 +244,22 @@ function DashboardContent() {
       }
     },
 
+    'campaign_player_left_confirmation': (message) => {
+      // Full page refresh to cleanly reset expanded state and UI
+      // This ensures the left campaign is removed from view
+      if (message.show_toast) {
+        const config = getEventConfig('campaign_player_left_confirmation')
+        showToast({
+          type: config.toastType,
+          message: config.toastMessage
+        })
+      }
+      // Small delay to let toast show before refresh
+      setTimeout(() => {
+        window.location.reload()
+      }, 1500)
+    },
+
     'campaign_invite_canceled': (message) => {
       setRefreshTrigger(prev => prev + 1)
       if (message.show_toast) {

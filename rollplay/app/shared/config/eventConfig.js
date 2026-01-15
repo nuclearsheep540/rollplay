@@ -117,6 +117,13 @@ export const EVENT_CONFIG = {
     navigationTab: 'campaigns'
   },
 
+  'campaign_player_left_confirmation': {
+    toastMessage: 'You left the campaign',
+    panelMessage: (data) => `You left campaign "${data.campaign_name}"`,
+    toastType: 'success',
+    navigationTab: 'campaigns'
+  },
+
   'game_created': {
     toastMessage: null,  // Silent - no toast notification
     panelMessage: (data) => `${data.host_screen_name} created new session "${data.game_name}" in ${data.campaign_name}`,

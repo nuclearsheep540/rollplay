@@ -322,7 +322,13 @@ class LeaveCampaign:
         # Save
         self.repository.save(campaign)
 
-        # Broadcast notification to host that player left
+        # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+        # DUAL BROADCAST: One leave action fires TWO separate WebSocket events:
+        #   1. campaign_player_left              → sent to the HOST
+        #   2. campaign_player_left_confirmation → sent to the PLAYER
+        # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+        # Broadcast 1/2: Notification to host that player left
         asyncio.create_task(
             self.event_manager.broadcast(
                 **CampaignEvents.campaign_player_left(
@@ -331,6 +337,17 @@ class LeaveCampaign:
                     campaign_name=campaign.title,
                     player_id=player_id,
                     player_screen_name=player.screen_name if player else "Unknown"
+                )
+            )
+        )
+
+        # Broadcast 2/2: Confirmation to the player who left
+        asyncio.create_task(
+            self.event_manager.broadcast(
+                **CampaignEvents.campaign_player_left_confirmation(
+                    player_id=player_id,
+                    campaign_id=campaign_id,
+                    campaign_name=campaign.title
                 )
             )
         )
