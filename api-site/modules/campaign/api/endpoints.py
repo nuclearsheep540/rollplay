@@ -431,8 +431,9 @@ async def get_campaign_members(
                 detail="Campaign not found"
             )
 
-        # Verify user is member
-        if not campaign.is_member(current_user.id):
+        # Verify user is member or has pending invite
+        is_invited = current_user.id in campaign.invited_player_ids
+        if not campaign.is_member(current_user.id) and not is_invited:
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="Access denied - only campaign members can view member list"

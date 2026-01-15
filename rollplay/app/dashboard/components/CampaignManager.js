@@ -38,6 +38,9 @@ export default function CampaignManager({ user, refreshTrigger, onCampaignUpdate
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
   const [selectedCampaign, setSelectedCampaign] = useState(null)
+  const [selectedInvitedCampaign, setSelectedInvitedCampaign] = useState(null) // Track expanded invited campaign
+  const [invitedCampaignMembers, setInvitedCampaignMembers] = useState([]) // Members for selected invited campaign
+  const [loadingInvitedMembers, setLoadingInvitedMembers] = useState(false)
   const [allGames, setAllGames] = useState([]) // Store all games from all campaigns
   const [isResizing, setIsResizing] = useState(false) // Track window resize state
 
@@ -49,7 +52,9 @@ export default function CampaignManager({ user, refreshTrigger, onCampaignUpdate
 
   const gameSessionsPanelRef = useRef(null)
   const campaignCardRef = useRef(null)
+  const invitedCampaignCardRef = useRef(null) // Ref for invited campaign card
   const [drawerTop, setDrawerTop] = useState(null) // Distance from viewport top to drawer start
+  const [invitedDrawerTop, setInvitedDrawerTop] = useState(null) // Distance for invited campaign drawer
 
   // Consolidated modal state
   const [modals, setModals] = useState({
@@ -610,12 +615,30 @@ export default function CampaignManager({ user, refreshTrigger, onCampaignUpdate
     if (selectedCampaign?.id === campaign.id) {
       setSelectedCampaign(null)
     } else {
+      // Close any open invited campaign drawer first
+      setSelectedInvitedCampaign(null)
       // Scroll to top before expanding (while overflow-y-auto is still active)
       const mainEl = document.getElementById('dashboard-main')
       if (mainEl) {
         mainEl.scrollTo({ top: 0, behavior: 'smooth' })
       }
       setSelectedCampaign(campaign)
+    }
+  }
+
+  // Toggle invited campaign details
+  const toggleInvitedCampaignDetails = (campaign) => {
+    if (selectedInvitedCampaign?.id === campaign.id) {
+      setSelectedInvitedCampaign(null)
+    } else {
+      // Close any open regular campaign drawer first
+      setSelectedCampaign(null)
+      // Scroll to top before expanding (while overflow-y-auto is still active)
+      const mainEl = document.getElementById('dashboard-main')
+      if (mainEl) {
+        mainEl.scrollTo({ top: 0, behavior: 'smooth' })
+      }
+      setSelectedInvitedCampaign(campaign)
     }
   }
 
@@ -640,6 +663,36 @@ export default function CampaignManager({ user, refreshTrigger, onCampaignUpdate
       clearInviteCampaignId?.()
     }
   }, [inviteCampaignId, invitedCampaigns, loading])
+
+  // Fetch members when an invited campaign is expanded
+  useEffect(() => {
+    if (selectedInvitedCampaign) {
+      const fetchInvitedCampaignMembers = async () => {
+        setLoadingInvitedMembers(true)
+        try {
+          const response = await fetch(`/api/campaigns/${selectedInvitedCampaign.id}/members`, {
+            method: 'GET',
+            headers: { 'Content-Type': 'application/json' },
+            credentials: 'include'
+          })
+          if (response.ok) {
+            const members = await response.json()
+            setInvitedCampaignMembers(members)
+          } else {
+            setInvitedCampaignMembers([])
+          }
+        } catch (error) {
+          console.error('Error fetching invited campaign members:', error)
+          setInvitedCampaignMembers([])
+        } finally {
+          setLoadingInvitedMembers(false)
+        }
+      }
+      fetchInvitedCampaignMembers()
+    } else {
+      setInvitedCampaignMembers([])
+    }
+  }, [selectedInvitedCampaign])
 
   // Sync invite modal's campaign data when campaigns are updated externally (e.g., player declines)
   useEffect(() => {
@@ -702,10 +755,10 @@ export default function CampaignManager({ user, refreshTrigger, onCampaignUpdate
     }
   }, [onCampaignUpdate])
 
-  // Notify parent when expanded state changes
+  // Notify parent when expanded state changes (either drawer)
   useEffect(() => {
-    onExpandedChange?.(!!selectedCampaign)
-  }, [selectedCampaign, onExpandedChange])
+    onExpandedChange?.(!!selectedCampaign || !!selectedInvitedCampaign)
+  }, [selectedCampaign, selectedInvitedCampaign, onExpandedChange])
 
   // Calculate drawer top position (distance from viewport top to where drawer starts)
   // This allows us to use CSS calc(100vh - drawerTop) for perfect viewport filling
@@ -742,6 +795,34 @@ export default function CampaignManager({ user, refreshTrigger, onCampaignUpdate
       timeouts.forEach(clearTimeout)
     }
   }, [selectedCampaign])
+
+  // Calculate invited drawer top position
+  useEffect(() => {
+    const calculateInvitedDrawerTop = () => {
+      if (selectedInvitedCampaign && invitedCampaignCardRef.current) {
+        const cardRect = invitedCampaignCardRef.current.getBoundingClientRect()
+        setInvitedDrawerTop(cardRect.bottom)
+      } else {
+        setInvitedDrawerTop(null)
+      }
+    }
+
+    calculateInvitedDrawerTop()
+
+    const timeouts = [50, 150, 300, 500].map(delay =>
+      setTimeout(calculateInvitedDrawerTop, delay)
+    )
+
+    window.addEventListener('resize', calculateInvitedDrawerTop)
+    const mainContainer = document.getElementById('dashboard-main')
+    mainContainer?.addEventListener('scroll', calculateInvitedDrawerTop)
+
+    return () => {
+      window.removeEventListener('resize', calculateInvitedDrawerTop)
+      mainContainer?.removeEventListener('scroll', calculateInvitedDrawerTop)
+      timeouts.forEach(clearTimeout)
+    }
+  }, [selectedInvitedCampaign])
 
   // Reset expanded state on unmount
   useEffect(() => {
@@ -818,92 +899,297 @@ export default function CampaignManager({ user, refreshTrigger, onCampaignUpdate
         <div
           className="space-y-4"
           style={{
-            paddingLeft: 'clamp(0.5rem, 2.5vw, 3.5rem)',
-            paddingRight: 'clamp(0.5rem, 2.5vw, 3.5rem)'
+            paddingLeft: selectedInvitedCampaign ? '0' : 'clamp(0.5rem, 2.5vw, 3.5rem)',
+            paddingRight: selectedInvitedCampaign ? '0' : 'clamp(0.5rem, 2.5vw, 3.5rem)',
+            transition: isResizing ? 'none' : 'padding 200ms ease-in-out'
           }}
         >
-          <h3 className="text-lg font-[family-name:var(--font-metamorphous)] font-bold" style={{color: THEME.textBold}}>Invited Campaigns</h3>
+          {/* Only show header when no invited campaign is selected */}
+          {!selectedInvitedCampaign && (
+            <h3 className="text-lg font-[family-name:var(--font-metamorphous)] font-bold" style={{color: THEME.textBold}}>Invited Campaigns</h3>
+          )}
           <div className="space-y-4">
-            {invitedCampaigns.map((campaign) => (
-              <div
-                key={campaign.id}
-                className="w-full relative"
-                style={{
-                  marginBottom: '3rem',
-                  maxWidth: '1600px'
-                }}
-              >
-                {/* Invited Campaign Card - NO gradients, NO min-width */}
-                <div
-                  className="aspect-[16/4] w-full relative rounded-sm overflow-hidden border-2"
-                  style={{
-                    backgroundImage: campaign.hero_image ? `url(${campaign.hero_image})` : 'none',
-                    backgroundColor: campaign.hero_image ? 'transparent' : COLORS.carbon,
-                    backgroundSize: 'cover',
-                    backgroundPosition: 'center',
-                    borderColor: '#f59e0b' // Amber for invited campaigns
-                  }}
-                >
-                  {/* Solid overlay for text readability (NO gradient) */}
+            {invitedCampaigns
+              .filter((campaign) => !selectedInvitedCampaign || selectedInvitedCampaign.id === campaign.id)
+              .map((campaign) => {
+                const isSelected = selectedInvitedCampaign?.id === campaign.id
+
+                return (
                   <div
-                    className="absolute inset-0 flex flex-col justify-between p-6"
+                    key={campaign.id}
+                    className="w-full relative"
                     style={{
-                      backgroundColor: campaign.hero_image ? `${COLORS.onyx}B3` : 'transparent' // 70% opacity solid
+                      marginBottom: isSelected ? '0' : '3rem',
+                      maxWidth: isSelected ? 'none' : '1600px'
                     }}
                   >
-                    {/* Top Row - Title and Status Badge */}
-                    <div className="flex items-start justify-between">
-                      <div>
-                        <h4 className="text-3xl font-[family-name:var(--font-metamorphous)] mb-1 drop-shadow-lg" style={{color: THEME.textOnDark}}>
-                          {campaign.title || 'Unnamed Campaign'}
-                        </h4>
-                        <Badge>Pending Invite</Badge>
+                    {/* Invited Campaign Card - Expandable */}
+                    <div
+                      ref={isSelected ? invitedCampaignCardRef : null}
+                      className="w-full relative rounded-sm overflow-visible cursor-pointer border-2"
+                      style={{
+                        aspectRatio: isSelected ? 'unset' : '16/4',
+                        minHeight: '200px',
+                        backgroundImage: campaign.hero_image ? `url(${campaign.hero_image})` : 'none',
+                        backgroundColor: campaign.hero_image ? 'transparent' : COLORS.carbon,
+                        backgroundSize: 'cover',
+                        backgroundPosition: 'center',
+                        borderColor: isSelected ? THEME.borderActive : '#f59e0b',
+                        transition: isResizing ? 'none' : 'border-color 200ms ease-in-out'
+                      }}
+                      onClick={() => toggleInvitedCampaignDetails(campaign)}
+                    >
+                      {/* Expanding background layer */}
+                      <div
+                        className="absolute pointer-events-none"
+                        style={{
+                          left: isSelected ? 'calc(50% - 50vw)' : '0',
+                          right: isSelected ? 'calc(50% - 50vw)' : '0',
+                          top: 0,
+                          height: isSelected ? 'calc(100% + 8px)' : '100%',
+                          backgroundImage: campaign.hero_image ? `url(${campaign.hero_image})` : 'none',
+                          backgroundColor: campaign.hero_image ? 'transparent' : COLORS.carbon,
+                          backgroundSize: 'cover',
+                          backgroundPosition: 'center',
+                          borderRadius: '0.125rem',
+                          borderBottomLeftRadius: isSelected ? '0' : '0.125rem',
+                          borderBottomRightRadius: isSelected ? '0' : '0.125rem',
+                          zIndex: isSelected ? 0 : -1,
+                          transition: isResizing
+                            ? 'none'
+                            : isSelected
+                              ? 'left 200ms ease-in-out, right 200ms ease-in-out, border-radius 200ms ease-in-out'
+                              : 'left 200ms ease-in-out, right 200ms ease-in-out, border-radius 200ms ease-in-out, z-index 0ms 200ms'
+                        }}
+                      >
+                        {/* Background overlay */}
+                        <div
+                          className="absolute inset-0"
+                          style={{
+                            backgroundColor: `${COLORS.onyx}B3`,
+                            borderRadius: '0.125rem',
+                            borderBottomLeftRadius: isSelected ? '0' : '0.125rem',
+                            borderBottomRightRadius: isSelected ? '0' : '0.125rem'
+                          }}
+                        />
+                      </div>
+
+                      {/* Solid overlay for text readability */}
+                      <div
+                        className="absolute inset-0 rounded-sm"
+                        style={{
+                          backgroundColor: `${COLORS.onyx}B3`,
+                          zIndex: isSelected ? -1 : 0
+                        }}
+                      />
+
+                      {/* Content container */}
+                      <div
+                        className="flex flex-col justify-between p-6"
+                        style={{
+                          position: isSelected ? 'relative' : 'absolute',
+                          inset: isSelected ? 'unset' : 0,
+                          minHeight: isSelected ? 'max(calc(200px - 3rem), calc(25vw - 3rem))' : 'auto',
+                          maxWidth: isSelected ? '1600px' : 'none',
+                          zIndex: 1
+                        }}
+                      >
+                        {/* Top Row - Title and Status Badge */}
+                        <div className="flex items-start justify-between gap-4">
+                          <div className="flex-1 min-w-0">
+                            <h4 className="text-3xl font-[family-name:var(--font-metamorphous)] mb-1 drop-shadow-lg" style={{color: THEME.textOnDark}}>
+                              {campaign.title || 'Unnamed Campaign'}
+                            </h4>
+                            <Badge>Pending Invite</Badge>
+                            {campaign.description && (
+                              <div className="text-base drop-shadow-md mt-2" style={{maxWidth: '70%'}}>
+                                <p
+                                  style={{
+                                    color: THEME.textAccent,
+                                    whiteSpace: 'pre-line',
+                                    display: isSelected ? 'block' : '-webkit-box',
+                                    WebkitLineClamp: isSelected ? 'unset' : 3,
+                                    WebkitBoxOrient: isSelected ? 'unset' : 'vertical',
+                                    overflow: 'hidden'
+                                  }}
+                                >
+                                  {campaign.description}
+                                </p>
+                              </div>
+                            )}
+                          </div>
+
+                          {/* Action Buttons - Top Right */}
+                          <div className="flex gap-2 flex-shrink-0" onClick={(e) => e.stopPropagation()}>
+                            <Button
+                              variant="success"
+                              onClick={() => acceptCampaignInvite(campaign.id)}
+                              title="Accept Invite"
+                            >
+                              <FontAwesomeIcon icon={faCheck} className="mr-2" />
+                              Accept
+                            </Button>
+                            <Button
+                              variant="danger"
+                              onClick={() => declineCampaignInvite(campaign.id)}
+                              title="Decline Invite"
+                            >
+                              <FontAwesomeIcon icon={faXmark} className="mr-2" />
+                              Decline
+                            </Button>
+                          </div>
+                        </div>
+
+                        {/* Middle - Spacer */}
+                        <div className="flex-1" style={{ minHeight: 'max(1rem, 2vh)' }}></div>
+
+                        {/* Bottom Row - Campaign Metadata */}
+                        <div className="flex items-center justify-between">
+                          <div className="text-sm drop-shadow" style={{color: THEME.textOnDark}}>
+                            <span>{campaign.host_screen_name ? `Invited by ${campaign.host_screen_name}` : 'Invited by campaign host'}</span>
+                          </div>
+                        </div>
                       </div>
                     </div>
 
-                    {/* Bottom Row - Campaign Info */}
-                    <div>
-                      {/* Campaign Description */}
-                      <div className="mb-3">
-                        {campaign.description && (
-                          <p className="text-sm drop-shadow-md mb-2" style={{color: THEME.textOnDark}}>
-                            {campaign.description}
-                          </p>
-                        )}
-                        <p className="text-sm drop-shadow-md mb-3" style={{color: THEME.textSecondary}}>
-                          {campaign.host_screen_name ? `Invited by ${campaign.host_screen_name}` : 'Invited by campaign host'}
-                        </p>
-                      </div>
+                    {/* Invited Campaign Detail Panel - Expands to full viewport width */}
+                    <div
+                      className="relative"
+                      style={{
+                        left: isSelected ? 'calc(50% - 50vw)' : '0',
+                        backgroundColor: THEME.bgPanel,
+                        borderColor: THEME.borderSubtle,
+                        borderWidth: isSelected ? '2px' : '0px',
+                        borderStyle: 'solid',
+                        width: isSelected ? '100vw' : '100%',
+                        minHeight: isSelected && invitedDrawerTop !== null
+                          ? `calc(100vh - ${invitedDrawerTop}px)`
+                          : '0px',
+                        maxHeight: isSelected ? 'none' : '0px',
+                        overflow: 'hidden',
+                        borderRadius: '0.125rem',
+                        borderTopLeftRadius: '0',
+                        borderTopRightRadius: '0',
+                        transition: isResizing ? 'none' : 'left 200ms ease-in-out, width 200ms ease-in-out, min-height 200ms ease-in-out, max-height 200ms ease-in-out, border-width 200ms ease-in-out',
+                        pointerEvents: isSelected ? 'auto' : 'none',
+                        visibility: isSelected ? 'visible' : 'hidden'
+                      }}
+                    >
+                      {/* Content wrapper */}
+                      <div
+                        className="pt-[calc(1rem+16px)] sm:pt-[calc(2rem+16px)] md:pt-[calc(2.5rem+16px)] pb-4 sm:pb-6 md:pb-8 px-[calc(1rem+12px)] sm:px-[calc(2rem+12px)] md:px-[calc(2.5rem+12px)]"
+                      >
+                        {/* Inner content constrained to max-width */}
+                        <div style={{ maxWidth: '1600px' }}>
+                          <div className="flex items-center justify-between mb-4">
+                            <h3 className="text-xl font-semibold font-[family-name:var(--font-metamorphous)]" style={{color: THEME.textOnDark}}>
+                              Campaign Details
+                            </h3>
+                            <button
+                              onClick={() => setSelectedInvitedCampaign(null)}
+                              className="transition-colors text-sm"
+                              style={{color: THEME.textSecondary}}
+                            >
+                              <FontAwesomeIcon icon={faXmark} className="mr-1" />
+                              Close
+                            </button>
+                          </div>
 
-                      {/* Action Buttons */}
-                      <div className="flex gap-2">
-                        <Button
-                          variant="success"
-                          onClick={() => acceptCampaignInvite(campaign.id)}
-                          title="Accept Invite"
-                        >
-                          <FontAwesomeIcon icon={faCheck} className="mr-2" />
-                          Accept
-                        </Button>
-                        <Button
-                          variant="danger"
-                          onClick={() => declineCampaignInvite(campaign.id)}
-                          title="Decline Invite"
-                        >
-                          <FontAwesomeIcon icon={faXmark} className="mr-2" />
-                          Decline
-                        </Button>
+                          {/* Invitation Details & Members */}
+                          <div className="space-y-4">
+                            <div className="p-4 rounded-sm border" style={{backgroundColor: THEME.bgSecondary, borderColor: THEME.borderSubtle}}>
+                              <h4 className="font-medium mb-3" style={{color: THEME.textOnDark}}>Invitation Details</h4>
+                              <p className="mb-4" style={{color: THEME.textSecondary}}>
+                                {campaign.host_screen_name ? `You've been invited by ${campaign.host_screen_name} to join this campaign.` : 'You\'ve been invited to join this campaign.'}
+                              </p>
+
+                              {/* Current Members */}
+                              <h4 className="font-medium mb-3 mt-6" style={{color: THEME.textOnDark}}>Current Members</h4>
+                              {loadingInvitedMembers ? (
+                                <div className="flex items-center py-2">
+                                  <div className="animate-spin rounded-full h-4 w-4 border-b-2" style={{borderColor: THEME.borderActive}}></div>
+                                  <span className="ml-2 text-sm" style={{color: THEME.textSecondary}}>Loading members...</span>
+                                </div>
+                              ) : invitedCampaignMembers.length === 0 ? (
+                                <p className="text-sm" style={{color: THEME.textSecondary}}>No members yet.</p>
+                              ) : (
+                                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2">
+                                  {invitedCampaignMembers.map((member) => (
+                                    <div
+                                      key={member.user_id}
+                                      className="flex flex-col p-3 rounded-sm border"
+                                      style={{
+                                        backgroundColor: THEME.bgPanel,
+                                        borderColor: THEME.borderSubtle
+                                      }}
+                                    >
+                                      <div className="flex items-center gap-2 mb-1">
+                                        <p className="font-medium" style={{color: THEME.textOnDark}}>
+                                          {member.username}
+                                        </p>
+                                        {member.is_host && (
+                                          <span
+                                            className="text-xs px-2 py-0.5 rounded-sm font-semibold"
+                                            style={{
+                                              backgroundColor: '#854d0e',
+                                              color: '#fef3c7',
+                                              borderColor: '#fbbf24',
+                                              border: '1px solid'
+                                            }}
+                                          >
+                                            DM
+                                          </span>
+                                        )}
+                                      </div>
+                                      {member.character_id ? (
+                                        <p className="text-sm" style={{color: THEME.textAccent}}>
+                                          {member.character_name} - Level {member.character_level} {member.character_race} {member.character_class}
+                                        </p>
+                                      ) : (
+                                        <p className="text-sm italic" style={{color: THEME.textSecondary}}>
+                                          No character selected
+                                        </p>
+                                      )}
+                                    </div>
+                                  ))}
+                                </div>
+                              )}
+                            </div>
+
+                            {/* Action Buttons at bottom of drawer */}
+                            <div className="flex gap-3 pt-4">
+                              <Button
+                                variant="success"
+                                size="lg"
+                                onClick={() => acceptCampaignInvite(campaign.id)}
+                                title="Accept Invite"
+                              >
+                                <FontAwesomeIcon icon={faCheck} className="mr-2" />
+                                Accept Invitation
+                              </Button>
+                              <Button
+                                variant="danger"
+                                size="lg"
+                                onClick={() => declineCampaignInvite(campaign.id)}
+                                title="Decline Invite"
+                              >
+                                <FontAwesomeIcon icon={faXmark} className="mr-2" />
+                                Decline Invitation
+                              </Button>
+                            </div>
+                          </div>
+                        </div>
                       </div>
                     </div>
                   </div>
-                </div>
-              </div>
-            ))}
+                )
+              })}
           </div>
         </div>
       )}
 
-      {/* Campaigns List - Full Width Hero Cards */}
+      {/* Campaigns List - Full Width Hero Cards - Hide when invited campaign is expanded */}
+      {!selectedInvitedCampaign && (
       <div
         className="space-y-4"
         style={{
@@ -1461,6 +1747,7 @@ export default function CampaignManager({ user, refreshTrigger, onCampaignUpdate
             )}
           </div>
       </div>
+      )}
 
       {/* Game Creation Modal */}
       {modals.gameCreate.open && typeof document !== 'undefined' && createPortal(
