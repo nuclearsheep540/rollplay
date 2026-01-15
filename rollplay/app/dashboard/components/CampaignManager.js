@@ -26,7 +26,8 @@ import {
   faPause,
   faRightToBracket,
   faUserPlus,
-  faUserMinus
+  faUserMinus,
+  faRightFromBracket
 } from '@fortawesome/free-solid-svg-icons'
 import { COLORS, THEME } from '@/app/styles/colorTheme'
 import { Button, Badge } from './shared/Button'
@@ -61,6 +62,7 @@ export default function CampaignManager({ user, refreshTrigger, onCampaignUpdate
     campaignCreate: { open: false, title: '', description: '', heroImage: '/campaign-tile-bg.png', isCreating: false },
     campaignDelete: { open: false, campaign: null, isDeleting: false },
     campaignInvite: { open: false, campaign: null },
+    campaignLeave: { open: false, campaign: null, isLeaving: false },
     gameCreate: { open: false, campaign: null, name: 'Session 1', maxPlayers: 8, isCreating: false },
     gameDelete: { open: false, game: null, isDeleting: false },
     gamePause: { open: false, game: null, isPausing: false },
@@ -267,6 +269,9 @@ export default function CampaignManager({ user, refreshTrigger, onCampaignUpdate
         throw new Error(errorData.detail || 'Failed to accept invite')
       }
 
+      // Close the expanded drawer before refreshing
+      setSelectedInvitedCampaign(null)
+
       // Refresh campaigns to move from invited to joined
       await fetchCampaigns()
     } catch (err) {
@@ -287,6 +292,9 @@ export default function CampaignManager({ user, refreshTrigger, onCampaignUpdate
         const errorData = await response.json()
         throw new Error(errorData.detail || 'Failed to decline invite')
       }
+
+      // Close the expanded drawer before refreshing
+      setSelectedInvitedCampaign(null)
 
       // Refresh campaigns to remove from invited list
       await fetchCampaigns()
@@ -323,6 +331,37 @@ export default function CampaignManager({ user, refreshTrigger, onCampaignUpdate
       console.error('Error removing player from campaign:', err)
       setError(err.message)
       updateModalData('playerRemove', { isRemoving: false })
+    }
+  }
+
+  // Leave campaign (player only - not host)
+  const leaveCampaign = async () => {
+    if (!modals.campaignLeave.campaign) return
+
+    updateModalData('campaignLeave', { isLeaving: true })
+
+    try {
+      const response = await fetch(
+        `/api/campaigns/${modals.campaignLeave.campaign.id}/leave`,
+        {
+          method: 'POST',
+          credentials: 'include'
+        }
+      )
+
+      if (!response.ok) {
+        const errorData = await response.json()
+        throw new Error(errorData.detail || 'Failed to leave campaign')
+      }
+
+      // Close the drawer and modal, then refresh campaigns
+      setSelectedCampaign(null)
+      closeModal('campaignLeave')
+      await fetchCampaigns()
+    } catch (err) {
+      console.error('Error leaving campaign:', err)
+      setError(err.message)
+      updateModalData('campaignLeave', { isLeaving: false })
     }
   }
 
@@ -1713,6 +1752,27 @@ export default function CampaignManager({ user, refreshTrigger, onCampaignUpdate
                             </div>
                           )}
                         </div>
+
+                        {/* Leave Campaign Button - Only show for non-host members */}
+                        {campaign.host_id !== user.id && (
+                          <>
+                            <div className="my-6 border-t" style={{borderColor: THEME.borderSubtle}}></div>
+                            <div className="flex justify-start">
+                              <button
+                                onClick={() => openModal('campaignLeave', { campaign })}
+                                className="px-4 py-2 rounded-sm border transition-all text-sm font-medium flex items-center gap-2 hover:bg-red-900/50"
+                                style={{
+                                  backgroundColor: 'transparent',
+                                  color: '#dc2626',
+                                  borderColor: '#dc2626'
+                                }}
+                              >
+                                <FontAwesomeIcon icon={faRightFromBracket} />
+                                Leave Campaign
+                              </button>
+                            </div>
+                          </>
+                        )}
                       </div>
                       </div>
                     </div>
@@ -2037,6 +2097,58 @@ export default function CampaignManager({ user, refreshTrigger, onCampaignUpdate
                   <>
                     <FontAwesomeIcon icon={faUserMinus} className="mr-2" />
                     Remove Player
+                  </>
+                )}
+              </Button>
+            </div>
+          </div>
+        </div>,
+        document.body
+      )}
+
+      {/* Leave Campaign Confirmation Modal */}
+      {modals.campaignLeave.open && modals.campaignLeave.campaign && typeof document !== 'undefined' && createPortal(
+        <div
+          className="fixed inset-0 backdrop-blur-sm flex items-center justify-center z-50"
+          style={{backgroundColor: THEME.overlayDark}}
+          onClick={() => closeModal('campaignLeave')}
+        >
+          <div
+            className="p-6 rounded-sm shadow-2xl max-w-md w-full mx-4 border"
+            style={{backgroundColor: THEME.bgSecondary, borderColor: THEME.borderDefault}}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h3 className="text-lg font-semibold font-[family-name:var(--font-metamorphous)] mb-4" style={{color: THEME.textOnDark}}>
+              Leave Campaign
+            </h3>
+            <p className="mb-6" style={{color: THEME.textSecondary}}>
+              Are you sure you want to leave <span className="font-semibold" style={{color: THEME.textOnDark}}>{modals.campaignLeave.campaign?.title}</span>?
+            </p>
+            <p className="text-sm mb-6" style={{color: '#fbbf24'}}>
+              You will need to be re-invited by the host to rejoin this campaign.
+            </p>
+            <div className="flex justify-end gap-3">
+              <Button
+                variant="ghost"
+                onClick={() => closeModal('campaignLeave')}
+                disabled={modals.campaignLeave.isLeaving}
+              >
+                Cancel
+              </Button>
+              <Button
+                variant="danger"
+                onClick={leaveCampaign}
+                disabled={modals.campaignLeave.isLeaving}
+              >
+                {modals.campaignLeave.isLeaving ? (
+                  <>
+                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+                    Leaving...
+                  </>
+                ) : (
+                  <>
+                    <FontAwesomeIcon icon={faRightFromBracket} className="mr-2" />
+                    Leave Campaign
                   </>
                 )}
               </Button>

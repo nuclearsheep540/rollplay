@@ -232,6 +232,18 @@ function DashboardContent() {
       }
     },
 
+    'campaign_player_left': (message) => {
+      // Refresh to update member list when player leaves
+      setRefreshTrigger(prev => prev + 1)
+      if (message.show_toast) {
+        const config = getEventConfig('campaign_player_left')
+        showToast({
+          type: config.toastType,
+          message: config.panelMessage(message.data)
+        })
+      }
+    },
+
     'campaign_invite_canceled': (message) => {
       setRefreshTrigger(prev => prev + 1)
       if (message.show_toast) {

@@ -293,6 +293,51 @@ class DeclineCampaignInvite:
         return campaign
 
 
+class LeaveCampaign:
+    def __init__(self, repository, user_repo: UserRepository, event_manager: EventManager):
+        self.repository = repository
+        self.user_repo = user_repo
+        self.event_manager = event_manager
+
+    def execute(self, campaign_id: UUID, player_id: UUID) -> CampaignAggregate:
+        """Player voluntarily leaves a campaign they've joined"""
+        campaign = self.repository.get_by_id(campaign_id)
+        if not campaign:
+            raise ValueError(f"Campaign {campaign_id} not found")
+
+        # Business rule: Host cannot leave their own campaign
+        if campaign.is_owned_by(player_id):
+            raise ValueError("Host cannot leave their own campaign")
+
+        # Business rule: Player must be a member to leave
+        if not campaign.is_player(player_id):
+            raise ValueError("You are not a member of this campaign")
+
+        # Get player details for notification before removing
+        player = self.user_repo.get_by_id(player_id)
+
+        # Business logic in aggregate - removes from player_ids
+        campaign.remove_player(player_id)
+
+        # Save
+        self.repository.save(campaign)
+
+        # Broadcast notification to host that player left
+        asyncio.create_task(
+            self.event_manager.broadcast(
+                **CampaignEvents.campaign_player_left(
+                    host_id=campaign.host_id,
+                    campaign_id=campaign_id,
+                    campaign_name=campaign.title,
+                    player_id=player_id,
+                    player_screen_name=player.screen_name if player else "Unknown"
+                )
+            )
+        )
+
+        return campaign
+
+
 class CancelCampaignInvite:
     def __init__(self, repository, user_repo: UserRepository, event_manager: EventManager):
         self.repository = repository

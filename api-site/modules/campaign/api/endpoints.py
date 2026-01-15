@@ -29,7 +29,8 @@ from modules.campaign.application.commands import (
     RemovePlayerFromCampaign,
     AcceptCampaignInvite,
     DeclineCampaignInvite,
-    CancelCampaignInvite
+    CancelCampaignInvite,
+    LeaveCampaign
 )
 from modules.game.application.commands import CreateGame
 from modules.campaign.application.queries import (
@@ -403,6 +404,26 @@ async def cancel_campaign_invite(
             host_id=current_user.id
         )
         return _to_campaign_response(campaign)
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+
+
+@router.post("/{campaign_id}/leave")
+async def leave_campaign(
+    campaign_id: UUID,
+    current_user: UserAggregate = Depends(get_current_user_from_token),
+    campaign_repo: CampaignRepository = Depends(campaign_repository),
+    user_repo: UserRepository = Depends(get_user_repository),
+    event_manager: EventManager = Depends(get_event_manager)
+):
+    """Leave a campaign (player only - host cannot leave their own campaign)"""
+    try:
+        command = LeaveCampaign(campaign_repo, user_repo, event_manager)
+        command.execute(
+            campaign_id=campaign_id,
+            player_id=current_user.id
+        )
+        return {"message": "Successfully left the campaign"}
     except ValueError as e:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
 

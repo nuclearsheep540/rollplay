@@ -232,3 +232,31 @@ class CampaignEvents:
             "show_toast": True,
             "save_notification": False  # Don't persist - just confirmation
         }
+
+    @staticmethod
+    def campaign_player_left(host_id: UUID, campaign_id: UUID, campaign_name: str, player_id: UUID, player_screen_name: str) -> Dict[str, Any]:
+        """
+        Event: Player voluntarily left the campaign (notifies host)
+
+        Args:
+            host_id: Campaign host/DM to notify
+            campaign_id: Campaign ID
+            campaign_name: Campaign name
+            player_id: Player who left
+            player_screen_name: Player's display name
+
+        Returns:
+            Event configuration dict
+        """
+        return {
+            "user_id": host_id,
+            "event_type": "campaign_player_left",
+            "data": {
+                "campaign_id": str(campaign_id),
+                "campaign_name": campaign_name,
+                "player_id": str(player_id),
+                "player_screen_name": player_screen_name
+            },
+            "show_toast": True,
+            "save_notification": True
+        }
