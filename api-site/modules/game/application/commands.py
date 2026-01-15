@@ -7,10 +7,13 @@ import logging
 import asyncio
 from modules.game.repositories.game_repository import GameRepository
 from modules.user.orm.user_repository import UserRepository
+from modules.user.model.user_model import User
 from modules.characters.orm.character_repository import CharacterRepository
 from modules.characters.domain.character_aggregate import CharacterAggregate
 from modules.campaign.orm.campaign_repository import CampaignRepository
 from modules.game.domain.game_aggregate import GameAggregate, GameStatus
+from modules.events.event_manager import EventManager
+from modules.game.domain.game_events import GameEvents
 
 logger = logging.getLogger(__name__)
 
@@ -21,10 +24,12 @@ class CreateGame:
     def __init__(
         self,
         game_repository: GameRepository,
-        campaign_repository: CampaignRepository
+        campaign_repository: CampaignRepository,
+        event_manager: EventManager
     ):
         self.game_repo = game_repository
         self.campaign_repo = campaign_repository
+        self.event_manager = event_manager
 
     def execute(
         self,
@@ -49,6 +54,22 @@ class CreateGame:
         if not campaign.is_owned_by(host_id):
             raise ValueError("Only campaign host can create games")
 
+        # Business Rule: Only one session (INACTIVE/STARTING/ACTIVE/STOPPING) per campaign at a time
+        existing_sessions = []
+        for game_id in campaign.game_ids:
+            existing_game = self.game_repo.get_by_id(game_id)
+            # Check for INACTIVE, STARTING, ACTIVE, or STOPPING (exclude only FINISHED)
+            if existing_game and existing_game.status in [
+                GameStatus.INACTIVE, GameStatus.STARTING, GameStatus.ACTIVE, GameStatus.STOPPING
+            ]:
+                existing_sessions.append(existing_game.name)
+
+        if existing_sessions:
+            raise ValueError(
+                f"Campaign already has a session: '{existing_sessions[0]}'. "
+                f"Please finish or delete the existing session before creating a new one."
+            )
+
         # Create game aggregate (host_id auto-inherited from campaign)
         game = GameAggregate.create(name=name, campaign_id=campaign_id, host_id=host_id, max_players=max_players)
 
@@ -70,6 +91,30 @@ class CreateGame:
         # Add game reference to campaign
         campaign.add_game(game.id)
         self.campaign_repo.save(campaign)
+
+        # Broadcast game_created event to all campaign members (silent state update)
+        # Get host user for screen name
+        host_user = self.campaign_repo.db.query(User).filter(User.id == host_id).first()
+
+        # Only broadcast if there are campaign members (excludes host)
+        if campaign.player_ids:
+            events = GameEvents.game_created(
+                campaign_player_ids=[str(pid) for pid in campaign.player_ids],
+                game_id=str(game.id),
+                game_name=game.name,
+                campaign_id=str(campaign_id),
+                campaign_name=campaign.title,
+                host_id=str(host_id),
+                host_screen_name=host_user.screen_name if host_user else "Unknown"
+            )
+
+            # Broadcast to each campaign member
+            for event_config in events:
+                asyncio.create_task(
+                    self.event_manager.broadcast(**event_config)
+                )
+
+            logger.info(f"Broadcasting game_created event to {len(campaign.player_ids)} campaign members for game {game.id}")
 
         return game
 
@@ -210,11 +255,13 @@ class StartGame:
         self,
         game_repository: GameRepository,
         user_repository: UserRepository,
-        campaign_repository: CampaignRepository
+        campaign_repository: CampaignRepository,
+        event_manager: EventManager
     ):
         self.game_repo = game_repository
         self.user_repo = user_repository
         self.campaign_repo = campaign_repository
+        self.event_manager = event_manager
 
     async def execute(self, game_id: UUID, host_id: UUID) -> GameAggregate:
         """
@@ -242,22 +289,22 @@ class StartGame:
         if game.status != GameStatus.INACTIVE:
             raise ValueError(f"Cannot start game in {game.status} status")
 
-        # 4. Business Rule: Only one non-inactive/non-finished session per campaign at a time
+        # 4. Business Rule: Only one session (INACTIVE/STARTING/ACTIVE/STOPPING) per campaign at a time
         campaign = self.campaign_repo.get_by_id(game.campaign_id)
         if campaign:
             active_sessions = []
             for game_id in campaign.game_ids:
                 existing_game = self.game_repo.get_by_id(game_id)
-                # Check for STARTING, ACTIVE, or STOPPING (exclude INACTIVE and FINISHED)
+                # Check for INACTIVE, STARTING, ACTIVE, or STOPPING (exclude only FINISHED)
                 if existing_game and existing_game.id != game.id and existing_game.status in [
-                    GameStatus.STARTING, GameStatus.ACTIVE, GameStatus.STOPPING
+                    GameStatus.INACTIVE, GameStatus.STARTING, GameStatus.ACTIVE, GameStatus.STOPPING
                 ]:
                     active_sessions.append(existing_game.name)
 
             if active_sessions:
                 raise ValueError(
-                    f"Campaign already has an active session: '{active_sessions[0]}'. "
-                    f"Please pause or finish the current session before starting a new one."
+                    f"Campaign already has an active or paused session: '{active_sessions[0]}'. "
+                    f"Please finish or delete the existing session before starting a new one."
                 )
 
         # 5. Set STARTING status
@@ -312,6 +359,31 @@ class StartGame:
             self.game_repo.save(game)
 
             logger.info(f"Game {game_id} ACTIVE with session {session_id}")
+
+            # 10. Broadcast game_started event to all campaign members + DM (with notification)
+            campaign = self.campaign_repo.get_by_id(game.campaign_id)
+            if campaign:
+                # Include DM in recipient list (DM gets confirmation toast)
+                all_recipients = list(campaign.player_ids) + [campaign.host_id]
+
+                events = GameEvents.game_started(
+                    campaign_player_ids=all_recipients,
+                    game_id=game.id,
+                    game_name=game.name,
+                    campaign_id=game.campaign_id,
+                    session_id=session_id,
+                    dm_id=host_id,
+                    dm_screen_name=host_user.screen_name if host_user.screen_name else host_user.email
+                )
+
+                # Broadcast to each recipient
+                for event_config in events:
+                    asyncio.create_task(
+                        self.event_manager.broadcast(**event_config)
+                    )
+
+                logger.info(f"Broadcasting game_started event to {len(all_recipients)} recipients for game {game.id}")
+
             return game
 
         except httpx.RequestError as e:
@@ -338,11 +410,15 @@ class EndGame:
         self,
         game_repository: GameRepository,
         user_repository: UserRepository,
-        character_repository
+        character_repository,
+        campaign_repository: CampaignRepository,
+        event_manager: EventManager
     ):
         self.game_repo = game_repository
         self.user_repo = user_repository
         self.character_repo = character_repository
+        self.campaign_repo = campaign_repository
+        self.event_manager = event_manager
 
     async def execute(self, game_id: UUID, host_id: UUID) -> GameAggregate:
         """
@@ -439,7 +515,33 @@ class EndGame:
                 f"Please try ending the game again. Error: {str(pg_error)}"
             )
 
-        # 7. PHASE 3: Background cleanup (fire-and-forget)
+        # 7. Broadcast game_ended event to all campaign members (silent state update)
+        campaign = self.campaign_repo.get_by_id(game.campaign_id)
+        if campaign:
+            # Get host user for screen name
+            host_user = self.user_repo.get_by_id(host_id)
+
+            # Include DM + all campaign members as recipients
+            all_recipients = list(campaign.player_ids) + [campaign.host_id]
+
+            events = GameEvents.game_ended(
+                active_participant_ids=all_recipients,
+                game_id=game.id,
+                game_name=game.name,
+                campaign_id=game.campaign_id,
+                ended_by_id=host_id,
+                ended_by_screen_name=host_user.screen_name if host_user and host_user.screen_name else (host_user.email if host_user else "Unknown")
+            )
+
+            # Broadcast to each recipient
+            for event_config in events:
+                asyncio.create_task(
+                    self.event_manager.broadcast(**event_config)
+                )
+
+            logger.info(f"Broadcasting game_ended event to {len(all_recipients)} recipients for game {game.id}")
+
+        # 8. PHASE 3: Background cleanup (fire-and-forget)
         # This doesn't block the response - cleanup happens in background
         # Use captured session_id, not game.session_id (which is now None)
         asyncio.create_task(self._async_cleanup(game_id, session_id_to_cleanup))
@@ -490,11 +592,15 @@ class FinishGame:
         self,
         game_repository: GameRepository,
         user_repository: UserRepository,
-        character_repository: CharacterRepository
+        character_repository: CharacterRepository,
+        campaign_repository: CampaignRepository,
+        event_manager: EventManager
     ):
         self.game_repo = game_repository
         self.user_repo = user_repository
         self.character_repo = character_repository
+        self.campaign_repo = campaign_repository
+        self.event_manager = event_manager
 
     async def execute(self, game_id: UUID, host_id: UUID) -> GameAggregate:
         """
@@ -523,6 +629,29 @@ class FinishGame:
             game.finish_session()  # Domain method sets status = FINISHED
             self.game_repo.save(game)
             logger.info(f"Game {game_id} marked FINISHED (was INACTIVE)")
+
+            # Broadcast game_finished event to all campaign members (silent state update)
+            campaign = self.campaign_repo.get_by_id(game.campaign_id)
+            if campaign:
+                # All campaign members (including host)
+                all_recipients = list(campaign.player_ids) + [campaign.host_id]
+
+                events = GameEvents.game_finished(
+                    dm_id=campaign.host_id,
+                    participant_ids=campaign.player_ids,
+                    game_id=game.id,
+                    game_name=game.name,
+                    campaign_id=game.campaign_id
+                )
+
+                # Broadcast to each recipient
+                for event_config in events:
+                    asyncio.create_task(
+                        self.event_manager.broadcast(**event_config)
+                    )
+
+                logger.info(f"Broadcasting game_finished event to {len(all_recipients)} recipients for game {game.id}")
+
             return game
 
         # 4. If game is ACTIVE, perform ETL then mark as FINISHED
@@ -600,6 +729,29 @@ class FinishGame:
         asyncio.create_task(self._async_cleanup(game_id, session_id_to_cleanup))
 
         logger.info(f"✅ Game {game_id} finished successfully, cleanup scheduled")
+
+        # 9. Broadcast game_finished event to all campaign members (silent state update)
+        campaign = self.campaign_repo.get_by_id(game.campaign_id)
+        if campaign:
+            # All campaign members (including host)
+            all_recipients = list(campaign.player_ids) + [campaign.host_id]
+
+            events = GameEvents.game_finished(
+                dm_id=campaign.host_id,
+                participant_ids=campaign.player_ids,
+                game_id=game.id,
+                game_name=game.name,
+                campaign_id=game.campaign_id
+            )
+
+            # Broadcast to each recipient
+            for event_config in events:
+                asyncio.create_task(
+                    self.event_manager.broadcast(**event_config)
+                )
+
+            logger.info(f"Broadcasting game_finished event to {len(all_recipients)} recipients for game {game.id}")
+
         return game
 
     async def _async_cleanup(self, game_id: UUID, session_id: str):

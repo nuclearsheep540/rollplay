@@ -16,6 +16,7 @@ class Campaign(Base):
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     title = Column(String(100), nullable=False)  # RENAMED from name
     description = Column(Text)
+    hero_image = Column(String(255), nullable=True)  # Path to campaign tile background image
     host_id = Column(UUID(as_uuid=True), ForeignKey('users.id'), nullable=False)  # RENAMED from dm_id
     assets = Column(JSON)  # RENAMED from maps, changed to JSON for structured metadata
     scenes = Column(JSON)  # NEW - scene management config

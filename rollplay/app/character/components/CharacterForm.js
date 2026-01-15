@@ -12,12 +12,14 @@ import MultiClassSelector from './MultiClassSelector'
 import AbilityScoreBuilder from './AbilityScoreBuilder'
 import OriginBonusAllocator from './OriginBonusAllocator'
 import { CHARACTER_RACES, CHARACTER_CLASSES, CHARACTER_BACKGROUNDS } from '../../shared/constants/characterEnums'
+import { THEME } from '@/app/styles/colorTheme'
 
 export default function CharacterForm({
   mode = 'create',
   initialData = null,
   onSubmit,
   onCancel,
+  onFormChange,
   loading = false,
   error = null,
   validationErrors = []
@@ -66,6 +68,12 @@ export default function CharacterForm({
       })
     }
   }, [initialData])
+
+  // Notify parent of form changes for live preview
+  useEffect(() => {
+    onFormChange?.(formData)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [formData])
 
   const handleInputChange = (field, value) => {
     setFormData(prev => {
@@ -145,15 +153,24 @@ export default function CharacterForm({
     <form onSubmit={handleSubmit} className="space-y-6">
       {/* Character Name */}
       <div>
-        <label htmlFor="name" className="block text-sm font-medium text-gray-700 mb-2">
-          Character Name <span className="text-red-500">*</span>
+        <label
+          htmlFor="name"
+          className="block text-sm font-medium mb-2"
+          style={{ color: THEME.textSecondary }}
+        >
+          Character Name <span style={{ color: '#f87171' }}>*</span>
         </label>
         <input
           id="name"
           type="text"
           value={formData.name}
           onChange={(e) => handleInputChange('name', e.target.value)}
-          className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+          className="w-full px-4 py-2 border rounded-sm focus:ring-1 focus:outline-none"
+          style={{
+            backgroundColor: THEME.bgSecondary,
+            borderColor: THEME.borderDefault,
+            color: THEME.textOnDark
+          }}
           placeholder="Enter character name"
           required
         />
@@ -201,7 +218,7 @@ export default function CharacterForm({
 
       {/* Combat Stats: AC, Current HP, Max HP */}
       <div>
-        <label className="block text-sm font-medium text-gray-700 mb-3">
+        <label className="block text-sm font-medium mb-3" style={{ color: THEME.textSecondary }}>
           Combat Stats
         </label>
         <div className="flex items-center justify-center gap-8">
@@ -242,9 +259,12 @@ export default function CharacterForm({
 
       {/* Validation Errors */}
       {validationErrors.length > 0 && (
-        <div className="bg-red-50 border border-red-200 rounded-lg p-4">
-          <p className="text-red-700 font-medium mb-2">Validation Errors:</p>
-          <ul className="list-disc list-inside text-red-600 text-sm space-y-1">
+        <div
+          className="rounded-sm p-4 border"
+          style={{ backgroundColor: '#991b1b20', borderColor: '#dc2626' }}
+        >
+          <p className="font-medium mb-2" style={{ color: '#fca5a5' }}>Validation Errors:</p>
+          <ul className="list-disc list-inside text-sm space-y-1" style={{ color: '#f87171' }}>
             {validationErrors.map((err, idx) => (
               <li key={idx}>
                 <strong>{err.field}:</strong> {err.message}
@@ -256,8 +276,11 @@ export default function CharacterForm({
 
       {/* General Error */}
       {error && (
-        <div className="bg-red-50 border border-red-200 rounded-lg p-4">
-          <p className="text-red-700">{error}</p>
+        <div
+          className="rounded-sm p-4 border"
+          style={{ backgroundColor: '#991b1b20', borderColor: '#dc2626' }}
+        >
+          <p style={{ color: '#fca5a5' }}>{error}</p>
         </div>
       )}
 
@@ -267,14 +290,24 @@ export default function CharacterForm({
           type="button"
           onClick={onCancel}
           disabled={loading}
-          className="flex-1 px-6 py-3 bg-gray-200 text-gray-800 rounded-lg hover:bg-gray-300 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+          className="flex-1 px-6 py-3 rounded-sm transition-colors disabled:opacity-50 disabled:cursor-not-allowed border"
+          style={{
+            backgroundColor: THEME.bgSecondary,
+            borderColor: THEME.borderDefault,
+            color: THEME.textOnDark
+          }}
         >
           Cancel
         </button>
         <button
           type="submit"
           disabled={loading || !isFormValid}
-          className="flex-1 px-6 py-3 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center"
+          className="flex-1 px-6 py-3 rounded-sm transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center border"
+          style={{
+            backgroundColor: '#166534',
+            borderColor: '#22c55e',
+            color: THEME.textOnDark
+          }}
         >
           {loading ? (
             <>

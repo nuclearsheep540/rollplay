@@ -28,12 +28,18 @@ export default function NotificationPanel({ notifications, onNotificationClick, 
     return () => document.removeEventListener('mousedown', handleClickOutside)
   }, [onClose])
 
-  // Navigate to relevant tab + mark as read
+  // Navigate to relevant tab + mark as read + close panel
   const handleNavigate = (notification) => {
     onNotificationClick(notification.id)
+    onClose() // Close the panel when clicking a notification
     const tab = getNavigationTab(notification.event_type)
     if (tab) {
-      router.push(`/dashboard?tab=${tab}`)
+      // For campaign invite notifications, include campaign_id for stale invite validation
+      if (notification.event_type === 'campaign_invite_received' && notification.data?.campaign_id) {
+        router.push(`/dashboard?tab=${tab}&invite_campaign_id=${notification.data.campaign_id}`)
+      } else {
+        router.push(`/dashboard?tab=${tab}`)
+      }
     }
   }
 

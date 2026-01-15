@@ -18,12 +18,13 @@ class CreateCampaign:
     def __init__(self, repository):
         self.repository = repository
 
-    def execute(self, host_id: UUID, title: str, description: str = "") -> CampaignAggregate:
+    def execute(self, host_id: UUID, title: str, description: str = "", hero_image: Optional[str] = None) -> CampaignAggregate:
         """Create a new campaign"""
         campaign = CampaignAggregate.create(
             title=title,
             description=description,
-            host_id=host_id
+            host_id=host_id,
+            hero_image=hero_image
         )
 
         self.repository.save(campaign)
@@ -39,7 +40,8 @@ class UpdateCampaign:
         campaign_id: UUID,
         host_id: UUID,
         title: Optional[str] = None,
-        description: Optional[str] = None
+        description: Optional[str] = None,
+        hero_image: Optional[str] = "UNSET"
     ) -> CampaignAggregate:
         """Update campaign details"""
         campaign = self.repository.get_by_id(campaign_id)
@@ -50,7 +52,7 @@ class UpdateCampaign:
         if not campaign.is_owned_by(host_id):
             raise ValueError("Only the host can update this campaign")
 
-        campaign.update_details(title=title, description=description)
+        campaign.update_details(title=title, description=description, hero_image=hero_image)
         self.repository.save(campaign)
         return campaign
 
@@ -103,8 +105,17 @@ class AddPlayerToCampaign:
         # Save
         self.repository.save(campaign)
 
-        # Broadcast notification event
+        # Get user details for notifications
         host = self.user_repo.get_by_id(host_id)
+        player = self.user_repo.get_by_id(player_id)
+
+        # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+        # DUAL BROADCAST: One invite action fires TWO separate WebSocket events:
+        #   1. campaign_invite_received → sent to the INVITED PLAYER
+        #   2. campaign_invite_sent     → sent to the HOST as confirmation
+        # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+        # Broadcast 1/2: Notification to invited player
         asyncio.create_task(
             self.event_manager.broadcast(
                 **CampaignEvents.campaign_invite_received(
@@ -113,6 +124,19 @@ class AddPlayerToCampaign:
                     campaign_name=campaign.title,
                     host_id=host_id,
                     host_screen_name=host.screen_name if host else "Unknown"
+                )
+            )
+        )
+
+        # Broadcast 2/2: Confirmation to host
+        asyncio.create_task(
+            self.event_manager.broadcast(
+                **CampaignEvents.campaign_invite_sent(
+                    host_id=host_id,
+                    campaign_id=campaign_id,
+                    campaign_name=campaign.title,
+                    player_id=player_id,
+                    player_screen_name=player.screen_name if player else "Unknown"
                 )
             )
         )
@@ -136,13 +160,22 @@ class RemovePlayerFromCampaign:
         if not campaign.is_owned_by(host_id):
             raise ValueError("Only the host can remove players from this campaign")
 
+        # Get player details for notification before removing
+        player = self.user_repo.get_by_id(player_id)
+
         # Business logic in aggregate
         campaign.remove_player(player_id)
 
         # Save
         self.repository.save(campaign)
 
-        # Broadcast notification event
+        # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+        # DUAL BROADCAST: One remove action fires TWO separate WebSocket events:
+        #   1. campaign_player_removed              → sent to the PLAYER
+        #   2. campaign_player_removed_confirmation → sent to the HOST
+        # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+        # Broadcast 1/2: Notification to the removed player
         asyncio.create_task(
             self.event_manager.broadcast(
                 **CampaignEvents.campaign_player_removed(
@@ -150,6 +183,18 @@ class RemovePlayerFromCampaign:
                     campaign_id=campaign_id,
                     campaign_name=campaign.title,
                     removed_by_id=host_id
+                )
+            )
+        )
+
+        # Broadcast 2/2: Confirmation to the host
+        asyncio.create_task(
+            self.event_manager.broadcast(
+                **CampaignEvents.campaign_player_removed_confirmation(
+                    host_id=host_id,
+                    campaign_id=campaign_id,
+                    campaign_name=campaign.title,
+                    player_screen_name=player.screen_name if player else "Unknown"
                 )
             )
         )
@@ -240,6 +285,125 @@ class DeclineCampaignInvite:
                     campaign_id=campaign_id,
                     campaign_name=campaign.title,
                     player_id=player_id,
+                    player_screen_name=player.screen_name if player else "Unknown"
+                )
+            )
+        )
+
+        return campaign
+
+
+class LeaveCampaign:
+    def __init__(self, repository, user_repo: UserRepository, event_manager: EventManager):
+        self.repository = repository
+        self.user_repo = user_repo
+        self.event_manager = event_manager
+
+    def execute(self, campaign_id: UUID, player_id: UUID) -> CampaignAggregate:
+        """Player voluntarily leaves a campaign they've joined"""
+        campaign = self.repository.get_by_id(campaign_id)
+        if not campaign:
+            raise ValueError(f"Campaign {campaign_id} not found")
+
+        # Business rule: Host cannot leave their own campaign
+        if campaign.is_owned_by(player_id):
+            raise ValueError("Host cannot leave their own campaign")
+
+        # Business rule: Player must be a member to leave
+        if not campaign.is_player(player_id):
+            raise ValueError("You are not a member of this campaign")
+
+        # Get player details for notification before removing
+        player = self.user_repo.get_by_id(player_id)
+
+        # Business logic in aggregate - removes from player_ids
+        campaign.remove_player(player_id)
+
+        # Save
+        self.repository.save(campaign)
+
+        # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+        # DUAL BROADCAST: One leave action fires TWO separate WebSocket events:
+        #   1. campaign_player_left              → sent to the HOST
+        #   2. campaign_player_left_confirmation → sent to the PLAYER
+        # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+        # Broadcast 1/2: Notification to host that player left
+        asyncio.create_task(
+            self.event_manager.broadcast(
+                **CampaignEvents.campaign_player_left(
+                    host_id=campaign.host_id,
+                    campaign_id=campaign_id,
+                    campaign_name=campaign.title,
+                    player_id=player_id,
+                    player_screen_name=player.screen_name if player else "Unknown"
+                )
+            )
+        )
+
+        # Broadcast 2/2: Confirmation to the player who left
+        asyncio.create_task(
+            self.event_manager.broadcast(
+                **CampaignEvents.campaign_player_left_confirmation(
+                    player_id=player_id,
+                    campaign_id=campaign_id,
+                    campaign_name=campaign.title
+                )
+            )
+        )
+
+        return campaign
+
+
+class CancelCampaignInvite:
+    def __init__(self, repository, user_repo: UserRepository, event_manager: EventManager):
+        self.repository = repository
+        self.user_repo = user_repo
+        self.event_manager = event_manager
+
+    def execute(self, campaign_id: UUID, player_id: UUID, host_id: UUID) -> CampaignAggregate:
+        """Host cancels a pending invite before it's accepted"""
+        campaign = self.repository.get_by_id(campaign_id)
+        if not campaign:
+            raise ValueError(f"Campaign {campaign_id} not found")
+
+        # Business rule: Only host can cancel invites
+        if not campaign.is_owned_by(host_id):
+            raise ValueError("Only the host can cancel invites for this campaign")
+
+        # Get player details for notification before removing
+        player = self.user_repo.get_by_id(player_id)
+
+        # Business logic in aggregate - removes from invited_player_ids
+        campaign.cancel_invite(player_id)
+
+        # Save
+        self.repository.save(campaign)
+
+        # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+        # DUAL BROADCAST: One cancel action fires TWO separate WebSocket events:
+        #   1. campaign_invite_canceled              → sent to the PLAYER
+        #   2. campaign_invite_canceled_confirmation → sent to the HOST
+        # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+        # Broadcast 1/2: Notification to the player whose invite was canceled
+        asyncio.create_task(
+            self.event_manager.broadcast(
+                **CampaignEvents.campaign_invite_canceled(
+                    player_id=player_id,
+                    campaign_id=campaign_id,
+                    campaign_name=campaign.title
+                )
+            )
+        )
+
+        # Broadcast 2/2: Confirmation to the host
+        asyncio.create_task(
+            self.event_manager.broadcast(
+                **CampaignEvents.campaign_invite_canceled_confirmation(
+                    host_id=host_id,
+                    campaign_id=campaign_id,
+                    campaign_name=campaign.title,
                     player_screen_name=player.screen_name if player else "Unknown"
                 )
             )

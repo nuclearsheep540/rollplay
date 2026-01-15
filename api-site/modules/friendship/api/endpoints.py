@@ -3,6 +3,7 @@
 
 from uuid import UUID
 import logging
+import time
 from fastapi import APIRouter, Depends, HTTPException, status
 
 from modules.friendship.schemas.friendship_schemas import (
@@ -15,7 +16,8 @@ from modules.friendship.application.commands import (
     SendFriendRequest,
     AcceptFriendRequest,
     DeclineFriendRequest,
-    RemoveFriend
+    RemoveFriend,
+    BuzzFriend
 )
 from modules.friendship.application.queries import (
     GetAllUserFriendships
@@ -31,6 +33,7 @@ from modules.user.dependencies.providers import user_repository as get_user_repo
 from modules.user.domain.user_aggregate import UserAggregate
 from modules.events.event_manager import EventManager
 from modules.events.dependencies.providers import get_event_manager
+from modules.events.websocket_manager import event_connection_manager
 from shared.dependencies.auth import get_current_user_from_token
 
 logger = logging.getLogger(__name__)
@@ -46,7 +49,8 @@ def _to_friendship_response(
     """
     Convert FriendshipAggregate to FriendshipResponse.
 
-    Computes the "other user" as friend_id and looks up their screen name and account tag.
+    Computes the "other user" as friend_id and looks up their screen name, account tag,
+    and online status from the events WebSocket connection manager.
     """
     # Determine which user is the "friend" (the other user)
     friend_user_id = friendship.get_other_user(current_user_id)
@@ -54,11 +58,15 @@ def _to_friendship_response(
     # Look up friend's details
     friend_user = user_repo.get_by_id(friend_user_id)
 
+    # Check if friend is currently connected to events WebSocket
+    is_online = event_connection_manager.is_user_connected(str(friend_user_id))
+
     return FriendshipResponse(
         id=friendship.id,
         friend_id=friend_user_id,
         friend_screen_name=friend_user.screen_name if friend_user else None,
         friend_account_tag=friend_user.account_identifier if friend_user else None,
+        is_online=is_online,
         created_at=friendship.created_at
     )
 
@@ -217,3 +225,32 @@ async def get_friends(
         total_incoming=len(categorized['incoming_requests']),
         total_outgoing=len(categorized['outgoing_requests'])
     )
+
+
+# In-memory rate limit storage for buzz feature
+# Key: "sender_id:recipient_id" -> timestamp of last buzz
+_buzz_rate_limits = {}  # Dict[str, float]
+BUZZ_COOLDOWN_SECONDS = 20
+
+
+@router.post("/{friend_id}/buzz", status_code=status.HTTP_204_NO_CONTENT)
+async def buzz_friend(
+    friend_id: UUID,
+    current_user: UserAggregate = Depends(get_current_user_from_token),
+    friendship_repo: FriendshipRepository = Depends(get_friendship_repository),
+    user_repo: UserRepository = Depends(get_user_repository),
+    event_manager: EventManager = Depends(get_event_manager)
+):
+    """
+    Send a buzz notification to a friend.
+
+    Rate limited to once every 20 seconds per sender-recipient pair.
+    """
+    command = BuzzFriend(friendship_repo, user_repo, event_manager, _buzz_rate_limits, BUZZ_COOLDOWN_SECONDS)
+    try:
+        await command.execute(
+            user_id=current_user.id,
+            friend_id=friend_id
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))

@@ -22,6 +22,7 @@ class CampaignAggregate:
     id: Optional[UUID]
     title: str
     description: str
+    hero_image: Optional[str]
     host_id: UUID
     created_at: datetime
     updated_at: datetime
@@ -33,7 +34,7 @@ class CampaignAggregate:
     player_ids: List[UUID] = field(default_factory=list)
 
     @classmethod
-    def create(cls, title: str, description: str, host_id: UUID):
+    def create(cls, title: str, description: str, host_id: UUID, hero_image: Optional[str] = None):
         """Create new campaign with business rules validation"""
         # Business rule: Campaign title must be provided and valid
         if not title or not title.strip():
@@ -45,8 +46,8 @@ class CampaignAggregate:
 
         # Business rule: Description is optional but has length limit
         normalized_description = description.strip() if description else ""
-        if len(normalized_description) > 500:
-            raise ValueError("Campaign description too long (max 500 characters)")
+        if len(normalized_description) > 1000:
+            raise ValueError("Campaign description too long (max 1000 characters)")
 
         # Business rule: Host must be specified
         if not host_id:
@@ -57,6 +58,7 @@ class CampaignAggregate:
             id=None,  # Will be set by repository
             title=normalized_title,
             description=normalized_description,
+            hero_image=hero_image,
             host_id=host_id,
             created_at=now,
             updated_at=now,
@@ -99,7 +101,7 @@ class CampaignAggregate:
             return True
         return False
 
-    def update_details(self, title: Optional[str] = None, description: Optional[str] = None):
+    def update_details(self, title: Optional[str] = None, description: Optional[str] = None, hero_image: str = "UNSET"):
         """Update campaign details with business rules"""
         if title is not None:
             normalized_title = title.strip()
@@ -111,9 +113,14 @@ class CampaignAggregate:
 
         if description is not None:
             normalized_description = description.strip()
-            if len(normalized_description) > 500:
-                raise ValueError("Campaign description too long (max 500 characters)")
+            if len(normalized_description) > 1000:
+                raise ValueError("Campaign description too long (max 1000 characters)")
             self.description = normalized_description
+
+        # hero_image can be set to None to clear it, or a string path
+        # Use sentinel value to distinguish "not provided" from "set to None"
+        if hero_image != "UNSET":
+            self.hero_image = hero_image if hero_image else None
 
         self.update_timestamp()
 
@@ -171,6 +178,16 @@ class CampaignAggregate:
         # Business rule: User must be invited
         if user_id not in self.invited_player_ids:
             raise ValueError("User is not invited to this campaign")
+
+        # Remove from invited list
+        self.invited_player_ids.remove(user_id)
+        self.update_timestamp()
+
+    def cancel_invite(self, user_id: UUID) -> None:
+        """Host cancels a pending invite before it's accepted"""
+        # Business rule: User must have a pending invite
+        if user_id not in self.invited_player_ids:
+            raise ValueError("User does not have a pending invite to this campaign")
 
         # Remove from invited list
         self.invited_player_ids.remove(user_id)

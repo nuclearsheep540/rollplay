@@ -2,6 +2,9 @@
 // Copyright (C) 2025 Matthew Davey
 // SPDX-License-Identifier: GPL-3.0-or-later
 
+// Export dashboard color theme
+export * from './colorTheme'
+
 // Tailwind class detection (ensures all dynamic classes are included in build):
 // border-blue-400/50 border-rose-400/50 bg-blue-500/20 bg-rose-500/20
 // bg-blue-950 bg-rose-900/50 text-blue-100 text-rose-100 text-blue-400

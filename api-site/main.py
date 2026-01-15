@@ -57,7 +57,7 @@ app.include_router(user_router, prefix="/api/users")
 app.include_router(campaign_router, prefix="/api/campaigns")
 app.include_router(characters_router, prefix="/api/characters")
 app.include_router(game_router, prefix="/api/games")
-app.include_router(friendship_router, prefix="/api/friends")
+app.include_router(friendship_router, prefix="/api/friendships")
 app.include_router(notification_router, prefix="/api/notifications")
 
 # Register WebSocket endpoint

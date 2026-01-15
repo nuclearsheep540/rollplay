@@ -45,6 +45,8 @@ from modules.user.domain.user_aggregate import UserAggregate
 from modules.game.domain.game_aggregate import GameAggregate
 from shared.dependencies.auth import get_current_user_from_token
 from shared.dependencies.db import get_db
+from modules.events.event_manager import EventManager
+from modules.events.dependencies.providers import get_event_manager
 from sqlalchemy.orm import Session
 
 
@@ -225,6 +227,7 @@ async def start_game(
     game_repo: GameRepository = Depends(get_game_repository),
     user_repo: UserRepository = Depends(get_user_repository),
     campaign_repo: CampaignRepository = Depends(campaign_repository),
+    event_manager: EventManager = Depends(get_event_manager),
     db: Session = Depends(get_db)
 ):
     """
@@ -240,7 +243,7 @@ async def start_game(
     Frontend can then redirect to /game?room_id={session_id}
     """
     try:
-        command = StartGame(game_repo, user_repo, campaign_repo)
+        command = StartGame(game_repo, user_repo, campaign_repo, event_manager)
         game = await command.execute(game_id, current_user.id)
         return _to_game_response(game, db)
 
@@ -264,6 +267,8 @@ async def end_game(
     game_repo: GameRepository = Depends(get_game_repository),
     user_repo: UserRepository = Depends(get_user_repository),
     character_repo = Depends(get_character_repository),
+    campaign_repo: CampaignRepository = Depends(campaign_repository),
+    event_manager: EventManager = Depends(get_event_manager),
     db: Session = Depends(get_db)
 ):
     """
@@ -276,12 +281,13 @@ async def end_game(
     4. PHASE 2: Writes to PostgreSQL (fail-safe - MongoDB preserved on error)
     5. PHASE 3: Background cleanup of MongoDB session
     6. Unlocks all characters that were locked to this game
+    7. Broadcasts game_ended event (silent state update) to all campaign members
 
     Returns game with status='inactive'.
     If PostgreSQL write fails, MongoDB session is preserved and error returned.
     """
     try:
-        command = EndGame(game_repo, user_repo, character_repo)
+        command = EndGame(game_repo, user_repo, character_repo, campaign_repo, event_manager)
         game = await command.execute(game_id, current_user.id)
         return _to_game_response(game, db)
 
@@ -305,6 +311,8 @@ async def finish_game(
     game_repo: GameRepository = Depends(get_game_repository),
     user_repo: UserRepository = Depends(get_user_repository),
     character_repo = Depends(get_character_repository),
+    campaign_repo: CampaignRepository = Depends(campaign_repository),
+    event_manager: EventManager = Depends(get_event_manager),
     db: Session = Depends(get_db)
 ):
     """
@@ -319,7 +327,7 @@ async def finish_game(
     Returns game with status='finished'.
     """
     try:
-        command = FinishGame(game_repo, user_repo, character_repo)
+        command = FinishGame(game_repo, user_repo, character_repo, campaign_repo, event_manager)
         game = await command.execute(game_id, current_user.id)
         return _to_game_response(game, db)
 

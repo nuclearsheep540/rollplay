@@ -5,6 +5,8 @@
 
 'use client'
 
+import { THEME } from '@/app/styles/colorTheme'
+
 /**
  * NumericStepper - Diablo 2 inspired ability score control
  *
@@ -18,7 +20,8 @@ export default function NumericStepper({
   max = 20,
   disabled = false,
   showModifier = true,  // Show D&D modifier (only for ability scores)
-  hasBonus = false  // Highlight if this score has a background bonus
+  hasBonus = false,  // Highlight if this score has a background bonus
+  bonusAmount = 0  // The actual bonus amount to display
 }) {
   const handleIncrement = () => {
     if (value < max) onChange(value + 1)
@@ -39,64 +42,84 @@ export default function NumericStepper({
 
   const modifier = getModifier(value)
 
+  const isDecrementDisabled = disabled || value <= min
+  const isIncrementDisabled = disabled || value >= max
+
   return (
     <div className="flex flex-col items-center gap-2">
       {/* Label */}
-      <label className="text-xs font-bold text-gray-600 uppercase tracking-wider">
+      <label
+        className="text-xs font-bold uppercase tracking-wider"
+        style={{ color: THEME.textSecondary }}
+      >
         {label}
       </label>
 
       {/* Controls Container */}
       <div className="flex items-center gap-3">
-        {/* Decrement Button - Large Square (Diablo 2 style) */}
+        {/* Decrement Button */}
         <button
           type="button"
           onClick={handleDecrement}
-          disabled={disabled || value <= min}
-          className="w-10 h-10 bg-white hover:bg-indigo-50 active:bg-indigo-100
-                     disabled:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed
-                     border-2 border-gray-300 hover:border-indigo-500
-                     disabled:border-gray-200
-                     rounded font-bold text-gray-700 hover:text-indigo-600 text-xl
-                     transition-all duration-150
-                     flex items-center justify-center
-                     shadow-sm hover:shadow-md"
+          disabled={isDecrementDisabled}
+          className="w-10 h-10 rounded-sm font-bold text-xl transition-all duration-150 flex items-center justify-center border"
+          style={{
+            backgroundColor: THEME.bgSecondary,
+            borderColor: isDecrementDisabled ? THEME.borderSubtle : THEME.borderDefault,
+            color: isDecrementDisabled ? THEME.textSecondary : THEME.textOnDark,
+            opacity: isDecrementDisabled ? 0.5 : 1,
+            cursor: isDecrementDisabled ? 'not-allowed' : 'pointer'
+          }}
           aria-label={`Decrease ${label}`}
         >
           −
         </button>
 
         {/* Value Display with optional Modifier */}
-        <div className={`flex flex-col items-center min-w-[70px] bg-gradient-to-b rounded px-3 py-2 shadow-sm border-2 ${
-          hasBonus
-            ? 'from-green-50 to-white border-green-300'
-            : 'from-indigo-50 to-white border-indigo-200'
-        }`}>
-          <span className={`text-3xl font-bold leading-none ${
-            hasBonus ? 'text-green-600' : 'text-indigo-600'
-          }`}>
+        <div
+          className="flex flex-col items-center min-w-[70px] rounded-sm px-3 py-2 border-2"
+          style={{
+            backgroundColor: THEME.bgSecondary,
+            borderColor: hasBonus ? '#22c55e' : THEME.borderDefault
+          }}
+        >
+          <span
+            className="text-3xl font-bold leading-none"
+            style={{ color: hasBonus ? '#4ade80' : THEME.textOnDark }}
+          >
             {value}
           </span>
+          {bonusAmount > 0 && (
+            <span
+              className="text-xs font-semibold mt-1"
+              style={{ color: '#4ade80' }}
+            >
+              (+{bonusAmount} bonus)
+            </span>
+          )}
           {showModifier && (
-            <span className="text-xs font-semibold text-gray-500 mt-1">
+            <span
+              className="text-xs font-semibold mt-1"
+              style={{ color: THEME.textSecondary }}
+            >
               {formatModifier(modifier)}
             </span>
           )}
         </div>
 
-        {/* Increment Button - Large Square (Diablo 2 style) */}
+        {/* Increment Button */}
         <button
           type="button"
           onClick={handleIncrement}
-          disabled={disabled || value >= max}
-          className="w-10 h-10 bg-white hover:bg-indigo-50 active:bg-indigo-100
-                     disabled:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed
-                     border-2 border-gray-300 hover:border-indigo-500
-                     disabled:border-gray-200
-                     rounded font-bold text-gray-700 hover:text-indigo-600 text-xl
-                     transition-all duration-150
-                     flex items-center justify-center
-                     shadow-sm hover:shadow-md"
+          disabled={isIncrementDisabled}
+          className="w-10 h-10 rounded-sm font-bold text-xl transition-all duration-150 flex items-center justify-center border"
+          style={{
+            backgroundColor: THEME.bgSecondary,
+            borderColor: isIncrementDisabled ? THEME.borderSubtle : THEME.borderDefault,
+            color: isIncrementDisabled ? THEME.textSecondary : THEME.textOnDark,
+            opacity: isIncrementDisabled ? 0.5 : 1,
+            cursor: isIncrementDisabled ? 'not-allowed' : 'pointer'
+          }}
           aria-label={`Increase ${label}`}
         >
           +

@@ -12,11 +12,13 @@ import {
   faUserCheck,
   faUserXmark,
   faUserMinus,
-  faUndo,
-  faCopy
+  faCopy,
+  faUsers
 } from '@fortawesome/free-solid-svg-icons'
+import { THEME, COLORS } from '@/app/styles/colorTheme'
+import { Button } from './shared/Button'
 
-export default function FriendsManager({ user, refreshTrigger }) {
+export default function FriendsManager({ user, refreshTrigger, fillHeight = false }) {
   const [friends, setFriends] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
@@ -115,7 +117,7 @@ export default function FriendsManager({ user, refreshTrigger }) {
       if (showLoading) setLoading(true)
 
       // Single API call to get all friendships categorized
-      const response = await fetch('/api/friends/', {
+      const response = await fetch('/api/friendships/', {
         credentials: 'include'
       })
 
@@ -148,7 +150,7 @@ export default function FriendsManager({ user, refreshTrigger }) {
       setSending(true)
       setError(null)
 
-      const response = await fetch('/api/friends/request', {
+      const response = await fetch('/api/friendships/request', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -163,6 +165,7 @@ export default function FriendsManager({ user, refreshTrigger }) {
       }
 
       setFriendCode('')
+      setLookupUser(null)
       await fetchFriends()
     } catch (err) {
       console.error('Error sending friend request:', err)
@@ -179,7 +182,7 @@ export default function FriendsManager({ user, refreshTrigger }) {
       setActionLoading({ ...actionLoading, [actionKey]: true })
       setError(null)
 
-      const response = await fetch(`/api/friends/${requesterId}/accept`, {
+      const response = await fetch(`/api/friendships/${requesterId}/accept`, {
         method: 'POST',
         credentials: 'include'
       })
@@ -205,7 +208,7 @@ export default function FriendsManager({ user, refreshTrigger }) {
       setActionLoading({ ...actionLoading, [actionKey]: true })
       setError(null)
 
-      const response = await fetch(`/api/friends/${requesterId}/decline`, {
+      const response = await fetch(`/api/friendships/${requesterId}/decline`, {
         method: 'DELETE',
         credentials: 'include'
       })
@@ -235,7 +238,7 @@ export default function FriendsManager({ user, refreshTrigger }) {
       setActionLoading({ ...actionLoading, [actionKey]: true })
       setError(null)
 
-      const response = await fetch(`/api/friends/${friendId}`, {
+      const response = await fetch(`/api/friendships/${friendId}`, {
         method: 'DELETE',
         credentials: 'include'
       })
@@ -257,62 +260,75 @@ export default function FriendsManager({ user, refreshTrigger }) {
   // Friends are already categorized by backend - no filtering needed!
   const acceptedFriends = friends.accepted || []
   const pendingReceived = friends.incoming_requests || []
-  const pendingSent = friends.outgoing_requests || []
 
   if (loading) {
     return (
       <div className="flex items-center justify-center py-12">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-purple-500 mr-3"></div>
-        <div className="text-slate-400">Loading friends...</div>
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 mr-3" style={{borderColor: THEME.borderActive}}></div>
+        <span style={{color: THEME.textSecondary}}>Loading friends...</span>
       </div>
     )
   }
 
   return (
-    <div className="space-y-6">
-      <div className="mb-8">
-        <h1 className="text-4xl font-bold text-white uppercase">Friends</h1>
-        <p className="mt-2 text-slate-400">Manage your friend connections and invitations</p>
-      </div>
-
+    <div className={`flex flex-col gap-6 ${fillHeight ? 'h-full' : ''}`}>
+      {/* Error Display */}
       {error && (
-        <div className="bg-red-500/20 border border-red-500/30 text-red-400 px-4 py-3 rounded">
-          {error}
+        <div
+          className="p-3 rounded-sm border"
+          style={{backgroundColor: '#991b1b', borderColor: '#dc2626'}}
+        >
+          <p style={{color: '#fca5a5'}}>{error}</p>
         </div>
       )}
 
-      {/* Add Friend Form */}
-      <div className="bg-slate-800 p-6 rounded-lg border border-purple-500/30 max-w-xl mx-auto">
-        <h2 className="text-xl font-semibold text-purple-400 mb-4">Add Friend</h2>
+      {/* Add Friend Panel */}
+      <div
+        className="p-6 rounded-sm border"
+        style={{backgroundColor: THEME.bgPanel, borderColor: THEME.borderSubtle}}
+      >
+        <h3 className="text-sm font-semibold uppercase mb-4" style={{color: THEME.textAccent}}>
+          Add Friend
+        </h3>
         <form onSubmit={sendFriendRequest} className="space-y-3">
           <div>
             <input
               type="text"
               value={friendCode}
               onChange={(e) => setFriendCode(e.target.value)}
-              placeholder="Enter username including tag (e.g. steve#2345)"
-              className="w-full px-4 py-2 bg-slate-700 border border-slate-600 text-slate-200 rounded focus:outline-none focus:ring-2 focus:ring-purple-500"
+              placeholder="Enter username (e.g. steve#2345)"
+              className="w-full px-3 py-2 rounded-sm border focus:outline-none focus:ring-2"
+              style={{
+                backgroundColor: THEME.bgSecondary,
+                borderColor: THEME.borderDefault,
+                color: THEME.textOnDark
+              }}
               disabled={sending}
             />
             {/* Real-time lookup feedback */}
             {friendCode && isValidIdentifier(friendCode) && (
               <div className="mt-2">
                 {lookupLoading && (
-                  <p className="text-sm text-slate-500 flex items-center gap-2">
+                  <p className="text-sm flex items-center gap-2" style={{color: THEME.textSecondary}}>
                     <span className="animate-spin">⏳</span> Looking up user...
                   </p>
                 )}
                 {!lookupLoading && lookupUser && (
-                  <div className="p-3 bg-green-500/20 border border-green-500/30 rounded">
-                    <p className="text-sm text-green-400 font-semibold flex items-center gap-2">
+                  <div
+                    className="p-3 rounded-sm border"
+                    style={{backgroundColor: '#14532d', borderColor: '#22c55e'}}
+                  >
+                    <p className="text-sm font-semibold flex items-center gap-2" style={{color: '#86efac'}}>
                       <FontAwesomeIcon icon={faUserCheck} />
                       User found: {lookupUser.screen_name || 'User #' + lookupUser.id.substring(0, 8)}
                     </p>
-                    <p className="text-xs text-green-500 font-mono">{lookupUser.account_identifier || lookupUser.friend_code}</p>
+                    <p className="text-xs font-mono" style={{color: '#4ade80'}}>
+                      {lookupUser.account_identifier || lookupUser.friend_code}
+                    </p>
                   </div>
                 )}
                 {!lookupLoading && lookupError && (
-                  <p className="text-sm text-red-400 flex items-center gap-2">
+                  <p className="text-sm flex items-center gap-2" style={{color: '#fca5a5'}}>
                     <FontAwesomeIcon icon={faUserXmark} />
                     {lookupError}
                   </p>
@@ -320,146 +336,163 @@ export default function FriendsManager({ user, refreshTrigger }) {
               </div>
             )}
           </div>
-          <button
+          <Button
             type="submit"
+            variant="primary"
+            className="w-full justify-center"
             disabled={sending || !lookupUser}
-            className="w-full px-6 py-2 bg-purple-600 text-white rounded-lg border border-purple-500 hover:bg-purple-500 disabled:bg-slate-600 disabled:border-slate-600 disabled:cursor-not-allowed transition-all font-semibold flex items-center justify-center gap-2"
           >
             {sending ? (
               <>
-                <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
                 Sending...
               </>
             ) : (
               <>
-                <FontAwesomeIcon icon={faUserPlus} />
+                <FontAwesomeIcon icon={faUserPlus} className="mr-2" />
                 {lookupUser ? `Send Request to ${lookupUser.screen_name || 'User'}` : 'Send Friend Request'}
               </>
             )}
-          </button>
+          </Button>
         </form>
-        <div className="mt-4 flex items-center gap-2">
-          <p className="text-sm text-slate-400">
-            Your Account Tag: <code className="bg-slate-900 border border-slate-700 px-2 py-1 rounded text-xs font-mono text-purple-400">{displayCode}</code>
+
+        {/* Your Account Tag */}
+        <div className="mt-4 pt-4 border-t" style={{borderTopColor: THEME.borderSubtle}}>
+          <p className="text-sm mb-2" style={{color: THEME.textSecondary}}>
+            Your Account Tag:
           </p>
-          <button
-            onClick={handleCopyCode}
-            className="px-3 py-0.5 bg-purple-500/20 text-purple-400 border border-purple-500/30 rounded-lg font-semibold text-sm flex items-center hover:bg-purple-500/30 hover:border-purple-500/50 transition-all"
-            title="Copy Account Tag"
-          >
-            <FontAwesomeIcon icon={faCopy} className="text-xs" />
-            {copiedCode ? 'Copied!' : 'Copy'}
-          </button>
+          <div className="flex items-center gap-2">
+            <code
+              className="flex-1 px-3 py-2 rounded-sm border text-sm font-mono"
+              style={{
+                backgroundColor: COLORS.onyx,
+                borderColor: THEME.borderSubtle,
+                color: THEME.textAccent
+              }}
+            >
+              {displayCode}
+            </code>
+            <button
+              onClick={handleCopyCode}
+              className="px-3 py-2 rounded-sm border font-medium text-sm flex items-center gap-1 hover:opacity-80 transition-opacity"
+              style={{
+                backgroundColor: THEME.bgSecondary,
+                borderColor: THEME.borderDefault,
+                color: THEME.textAccent
+              }}
+              title="Copy Account Tag"
+            >
+              <FontAwesomeIcon icon={faCopy} className="text-xs" />
+              {copiedCode ? 'Copied!' : 'Copy'}
+            </button>
+          </div>
         </div>
       </div>
 
-      {/* Accepted Friends */}
-      <div className="bg-slate-800 p-6 rounded-lg border border-purple-500/30">
-        <h2 className="text-xl font-semibold text-purple-400 mb-4">
+      {/* Friend Requests - Show if there are any */}
+      {pendingReceived.length > 0 && (
+        <div
+          className="p-6 rounded-sm border"
+          style={{backgroundColor: THEME.bgPanel, borderColor: THEME.borderSubtle}}
+        >
+          <h3 className="text-sm font-semibold uppercase mb-4" style={{color: THEME.textAccent}}>
+            Friend Requests ({pendingReceived.length})
+          </h3>
+          <div className="space-y-2">
+            {pendingReceived.map((request) => (
+              <div
+                key={request.id}
+                className="flex items-center justify-between p-3 rounded-sm border"
+                style={{backgroundColor: THEME.bgSecondary, borderColor: THEME.borderSubtle}}
+              >
+                <div>
+                  <p className="font-semibold" style={{color: THEME.textOnDark}}>
+                    {request.requester_screen_name || 'User'}
+                  </p>
+                  <p className="text-xs font-mono" style={{color: THEME.textSecondary}}>
+                    {request.requester_account_tag || 'No tag'}
+                  </p>
+                </div>
+                <div className="flex gap-2">
+                  <Button
+                    variant="primary"
+                    onClick={() => acceptFriendRequest(request.requester_id)}
+                    disabled={actionLoading[`accept-${request.requester_id}`]}
+                  >
+                    <FontAwesomeIcon icon={faUserCheck} className="mr-1" />
+                    Accept
+                  </Button>
+                  <Button
+                    variant="danger"
+                    onClick={() => rejectFriendRequest(request.requester_id)}
+                    disabled={actionLoading[`reject-${request.requester_id}`]}
+                  >
+                    <FontAwesomeIcon icon={faUserXmark} className="mr-1" />
+                    Reject
+                  </Button>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Friends List Panel */}
+      <div
+        className={`p-6 rounded-sm border flex flex-col ${fillHeight ? 'flex-1 min-h-0' : ''}`}
+        style={{backgroundColor: THEME.bgPanel, borderColor: THEME.borderSubtle}}
+      >
+        <h3 className="text-sm font-semibold uppercase mb-4" style={{color: THEME.textAccent}}>
           Friends ({acceptedFriends.length})
-        </h2>
+        </h3>
         {acceptedFriends.length === 0 ? (
-          <p className="text-slate-400">No friends yet. Add some friends to get started!</p>
+          <div className="py-8 text-center flex-1 flex flex-col items-center justify-center">
+            <FontAwesomeIcon
+              icon={faUsers}
+              className="text-4xl mb-3 opacity-30"
+              style={{color: THEME.textSecondary}}
+            />
+            <p style={{color: THEME.textSecondary}}>No friends yet</p>
+            <p className="text-sm mt-1" style={{color: THEME.textSecondary}}>
+              Add some friends to get started!
+            </p>
+          </div>
         ) : (
-          <div className="space-y-3">
+          <div className={`space-y-2 overflow-y-auto pr-2 ${fillHeight ? 'flex-1' : 'max-h-80'}`} style={{scrollbarWidth: 'thin'}}>
             {acceptedFriends.map((friendship) => (
               <div
                 key={friendship.id}
-                className="flex items-center justify-between p-4 bg-slate-900 rounded border border-slate-700"
+                className="flex items-center justify-between p-3 rounded-sm border"
+                style={{backgroundColor: THEME.bgSecondary, borderColor: THEME.borderSubtle}}
               >
-                <div>
-                  <p className="font-semibold text-slate-200">
-                    {friendship.friend_screen_name || 'User'}
-                    <span className="text-sm text-slate-500 font-mono"> {friendship.friend_account_tag || 'No tag'}</span>
-                  </p>
-                  
+                <div className="flex items-center gap-3">
+                  <div
+                    className="w-10 h-10 rounded-full flex items-center justify-center text-lg font-bold border"
+                    style={{
+                      backgroundColor: `${THEME.textAccent}30`,
+                      borderColor: `${THEME.textAccent}50`,
+                      color: THEME.textAccent
+                    }}
+                  >
+                    {(friendship.friend_screen_name || 'U')[0].toUpperCase()}
+                  </div>
+                  <div>
+                    <p className="font-semibold" style={{color: THEME.textOnDark}}>
+                      {friendship.friend_screen_name || 'User'}
+                    </p>
+                    <p className="text-xs font-mono" style={{color: THEME.textSecondary}}>
+                      {friendship.friend_account_tag || 'No tag'}
+                    </p>
+                  </div>
                 </div>
                 <button
                   onClick={() => removeFriend(friendship.friend_id)}
                   disabled={actionLoading[`remove-${friendship.friend_id}`]}
-                  className="px-4 py-2 bg-red-600 text-white rounded-lg border border-red-500 hover:bg-red-500 disabled:bg-slate-600 disabled:border-slate-600 disabled:cursor-not-allowed transition-all"
+                  className="p-2 rounded-sm hover:opacity-80 transition-opacity"
+                  style={{color: THEME.textSecondary}}
+                  title="Remove friend"
                 >
-                  Remove
-                </button>
-              </div>
-            ))}
-          </div>
-        )}
-      </div>
-
-      {/* Pending Requests (Received from others) */}
-      <div className="bg-slate-800 p-6 rounded-lg border border-purple-500/30">
-        <h2 className="text-xl font-semibold text-purple-400 mb-4">
-          Pending Requests ({pendingReceived.length})
-        </h2>
-        <p className="text-sm text-slate-400 mb-4">Friend requests you've received from other players</p>
-        {pendingReceived.length === 0 ? (
-          <p className="text-slate-500 text-sm py-4">No pending requests</p>
-        ) : (
-          <div className="space-y-3">
-            {pendingReceived.map((request) => (
-              <div
-                key={request.id}
-                className="flex items-center justify-between p-4 bg-slate-900 rounded border border-slate-700"
-              >
-                <div>
-                  <p className="font-semibold text-slate-200">
-                    {request.requester_screen_name || 'User'}
-                  </p>
-                  <p className="text-sm text-slate-500 font-mono">{request.requester_account_tag || 'No tag'}</p>
-                </div>
-                <div className="flex gap-2">
-                  <button
-                    onClick={() => acceptFriendRequest(request.requester_id)}
-                    disabled={actionLoading[`accept-${request.requester_id}`]}
-                    className="px-4 py-2 bg-green-600 text-white rounded-lg border border-green-500 hover:bg-green-500 hover:shadow-lg hover:shadow-green-500/30 disabled:bg-slate-600 disabled:border-slate-600 disabled:cursor-not-allowed transition-all flex items-center gap-2"
-                  >
-                    <FontAwesomeIcon icon={faUserCheck} />
-                    Accept
-                  </button>
-                  <button
-                    onClick={() => rejectFriendRequest(request.requester_id)}
-                    disabled={actionLoading[`reject-${request.requester_id}`]}
-                    className="px-4 py-2 bg-red-600 text-white rounded-lg border border-red-500 hover:bg-red-500 hover:shadow-lg hover:shadow-red-500/30 disabled:bg-slate-600 disabled:border-slate-600 disabled:cursor-not-allowed transition-all flex items-center gap-2"
-                  >
-                    <FontAwesomeIcon icon={faUserXmark} />
-                    Reject
-                  </button>
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
-      </div>
-
-      {/* Pending Invites (Sent by you) */}
-      <div className="bg-slate-800 p-6 rounded-lg border border-purple-500/30">
-        <h2 className="text-xl font-semibold text-purple-400 mb-4">
-          Pending Invites ({pendingSent.length})
-        </h2>
-        <p className="text-sm text-slate-400 mb-4">Friend invites you've sent to other players</p>
-        {pendingSent.length === 0 ? (
-          <p className="text-slate-500 text-sm py-4">No pending invites</p>
-        ) : (
-          <div className="space-y-3">
-            {pendingSent.map((request) => (
-              <div
-                key={request.id}
-                className="flex items-center justify-between p-4 bg-slate-900 rounded border border-slate-700"
-              >
-                <div>
-                  <p className="font-semibold text-slate-200">
-                    {request.recipient_screen_name || 'User'}
-                  </p>
-                  <p className="text-sm text-slate-500 font-mono">{request.recipient_account_tag || 'No tag'}</p>
-                  <p className="text-xs text-slate-500 mt-1">Waiting for response...</p>
-                </div>
-                <button
-                  onClick={() => removeFriend(request.recipient_id)}
-                  disabled={actionLoading[`remove-${request.recipient_id}`]}
-                  className="px-4 py-2 bg-red-600 text-white rounded-lg border border-red-500 hover:bg-red-500 disabled:bg-slate-600 disabled:border-slate-600 disabled:cursor-not-allowed transition-all"
-                >
-                  Cancel
+                  <FontAwesomeIcon icon={faUserMinus} />
                 </button>
               </div>
             ))}

@@ -16,28 +16,42 @@ export const EVENT_CONFIG = {
     toastMessage: 'New friend request',
     panelMessage: (data) => `${data.requester_screen_name} sent you a friend request`,
     toastType: 'info',
-    navigationTab: 'friends'
+    navigationTab: 'account'
   },
 
   'friend_request_accepted': {
     toastMessage: 'Friend request accepted',
     panelMessage: (data) => `${data.friend_screen_name} accepted your friend request`,
     toastType: 'success',
-    navigationTab: 'friends'
+    navigationTab: 'account'
   },
 
   'friend_request_declined': {
     toastMessage: 'Friend request declined',
     panelMessage: (data) => `${data.declined_by_screen_name} declined your friend request`,
     toastType: 'info',
-    navigationTab: 'friends'
+    navigationTab: 'account'
   },
 
   'friend_removed': {
     toastMessage: 'Friend removed',
     panelMessage: (data) => `${data.removed_by_screen_name} removed you as a friend`,
     toastType: 'warning',
-    navigationTab: 'friends'
+    navigationTab: 'account'
+  },
+
+  'friend_buzzed': {
+    toastMessage: 'Buzz!',
+    panelMessage: (data) => `${data.buzzer_screen_name} buzzed you!`,
+    toastType: 'info',
+    navigationTab: null  // No navigation - just a fun notification
+  },
+
+  'buzz_sent': {
+    toastMessage: 'Buzz sent!',
+    panelMessage: (data) => `You buzzed ${data.recipient_screen_name}`,
+    toastType: 'success',
+    navigationTab: null  // No navigation - just a fun notification
   },
 
   'campaign_invite_received': {
@@ -45,6 +59,13 @@ export const EVENT_CONFIG = {
     panelMessage: (data) => `${data.host_screen_name} invited you to "${data.campaign_name}"`,
     toastType: 'info',
     navigationTab: 'campaigns'
+  },
+
+  'campaign_invite_sent': {
+    toastMessage: 'Invite sent!',
+    panelMessage: (data) => `You invited ${data.player_screen_name} to "${data.campaign_name}"`,
+    toastType: 'success',
+    navigationTab: null  // No navigation - just confirmation
   },
 
   'campaign_invite_accepted': {
@@ -61,10 +82,52 @@ export const EVENT_CONFIG = {
     navigationTab: 'campaigns'
   },
 
+  'campaign_invite_canceled': {
+    toastMessage: 'Campaign invite canceled',
+    panelMessage: (data) => `Your invite to "${data.campaign_name}" was canceled`,
+    toastType: 'info',
+    navigationTab: 'campaigns'
+  },
+
+  'campaign_invite_canceled_confirmation': {
+    toastMessage: 'Invite canceled',
+    panelMessage: (data) => `You canceled ${data.player_screen_name}'s invite to "${data.campaign_name}"`,
+    toastType: 'success',
+    navigationTab: null  // No navigation - just confirmation
+  },
+
   'campaign_player_removed': {
     toastMessage: 'Removed from campaign',
     panelMessage: (data) => `You were removed from campaign "${data.campaign_name}"`,
     toastType: 'warning',
+    navigationTab: 'campaigns'
+  },
+
+  'campaign_player_removed_confirmation': {
+    toastMessage: 'Player removed',
+    panelMessage: (data) => `You removed ${data.player_screen_name} from "${data.campaign_name}"`,
+    toastType: 'success',
+    navigationTab: null  // No navigation - just confirmation
+  },
+
+  'campaign_player_left': {
+    toastMessage: 'Player left campaign',
+    panelMessage: (data) => `${data.player_screen_name} left your campaign "${data.campaign_name}"`,
+    toastType: 'info',
+    navigationTab: 'campaigns'
+  },
+
+  'campaign_player_left_confirmation': {
+    toastMessage: 'You left the campaign',
+    panelMessage: (data) => `You left campaign "${data.campaign_name}"`,
+    toastType: 'success',
+    navigationTab: 'campaigns'
+  },
+
+  'game_created': {
+    toastMessage: null,  // Silent - no toast notification
+    panelMessage: (data) => `${data.host_screen_name} created new session "${data.game_name}" in ${data.campaign_name}`,
+    toastType: 'info',
     navigationTab: 'campaigns'
   },
 
@@ -76,17 +139,17 @@ export const EVENT_CONFIG = {
   },
 
   'game_ended': {
-    toastMessage: 'Game session ended',
-    panelMessage: (data) => `Game session "${data.game_name}" ended`,
+    toastMessage: null,  // Silent - no toast notification
+    panelMessage: (data) => `Game session "${data.game_name}" was paused by ${data.ended_by_screen_name}`,
     toastType: 'info',
-    navigationTab: 'sessions'
+    navigationTab: 'campaigns'
   },
 
   'game_finished': {
-    toastMessage: 'Campaign milestone completed',
+    toastMessage: null,  // Silent - no toast notification
     panelMessage: (data) => `Campaign milestone: "${data.game_name}" completed!`,
     toastType: 'success',
-    navigationTab: 'sessions'
+    navigationTab: 'campaigns'
   }
 }
 
