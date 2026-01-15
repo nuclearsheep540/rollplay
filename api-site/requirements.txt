@@ -2,14 +2,14 @@ fastapi == 0.108.0
 pydantic-settings == 2.1.0
 uvicorn == 0.25.0
 websockets == 12.0  # Required for WebSocket support
-urllib3==2.6.0
+urllib3==2.6.3
 psycopg2-binary==2.9.9 # PostgreSQL adapter
 sqlalchemy==2.0.25
 alembic==1.13.1
 PyJWT==2.8.0
 email-validator==2.1.0
-requests==2.31.0 # For inter-service communication
+requests==2.32.4 # For inter-service communication
 httpx==0.27.0 # Async HTTP client for api-game calls
 pytest==8.0.0 # Testing framework
 friendlywords==1.1.1 # Human-readable friend code generation
-sentry-sdk[fastapi]==1.45.0
+sentry-sdk[fastapi]==1.45.1
