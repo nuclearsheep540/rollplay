@@ -647,19 +647,25 @@ export default function CampaignManager({ user, refreshTrigger, onCampaignUpdate
     fetchCampaigns(refreshTrigger === 0)
   }, [refreshTrigger])
 
-  // Check for stale campaign invites (when user clicks old notification but invite was canceled)
+  // Handle invite_campaign_id from URL (notification click)
+  // - If invite exists → auto-expand it
+  // - If invite doesn't exist → show stale toast
   useEffect(() => {
     if (inviteCampaignId && !loading) {
-      // Check if the expected invite still exists
-      const inviteExists = invitedCampaigns.some(c => c.id === inviteCampaignId)
-      if (!inviteExists) {
+      // Find the invited campaign by ID
+      const invitedCampaign = invitedCampaigns.find(c => c.id === inviteCampaignId)
+
+      if (invitedCampaign) {
+        // Invite exists - auto-expand it
+        toggleInvitedCampaignDetails(invitedCampaign)
+      } else {
         // Invite was revoked - show feedback toast
         showToast?.({
           type: 'warning',
           message: 'This invite is no longer available'
         })
       }
-      // Clear the URL param after checking (regardless of result)
+      // Clear the URL param after handling (regardless of result)
       clearInviteCampaignId?.()
     }
   }, [inviteCampaignId, invitedCampaigns, loading])
