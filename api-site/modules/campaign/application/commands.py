@@ -160,13 +160,22 @@ class RemovePlayerFromCampaign:
         if not campaign.is_owned_by(host_id):
             raise ValueError("Only the host can remove players from this campaign")
 
+        # Get player details for notification before removing
+        player = self.user_repo.get_by_id(player_id)
+
         # Business logic in aggregate
         campaign.remove_player(player_id)
 
         # Save
         self.repository.save(campaign)
 
-        # Broadcast notification event
+        # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+        # DUAL BROADCAST: One remove action fires TWO separate WebSocket events:
+        #   1. campaign_player_removed              → sent to the PLAYER
+        #   2. campaign_player_removed_confirmation → sent to the HOST
+        # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+        # Broadcast 1/2: Notification to the removed player
         asyncio.create_task(
             self.event_manager.broadcast(
                 **CampaignEvents.campaign_player_removed(
@@ -174,6 +183,18 @@ class RemovePlayerFromCampaign:
                     campaign_id=campaign_id,
                     campaign_name=campaign.title,
                     removed_by_id=host_id
+                )
+            )
+        )
+
+        # Broadcast 2/2: Confirmation to the host
+        asyncio.create_task(
+            self.event_manager.broadcast(
+                **CampaignEvents.campaign_player_removed_confirmation(
+                    host_id=host_id,
+                    campaign_id=campaign_id,
+                    campaign_name=campaign.title,
+                    player_screen_name=player.screen_name if player else "Unknown"
                 )
             )
         )
@@ -264,6 +285,63 @@ class DeclineCampaignInvite:
                     campaign_id=campaign_id,
                     campaign_name=campaign.title,
                     player_id=player_id,
+                    player_screen_name=player.screen_name if player else "Unknown"
+                )
+            )
+        )
+
+        return campaign
+
+
+class CancelCampaignInvite:
+    def __init__(self, repository, user_repo: UserRepository, event_manager: EventManager):
+        self.repository = repository
+        self.user_repo = user_repo
+        self.event_manager = event_manager
+
+    def execute(self, campaign_id: UUID, player_id: UUID, host_id: UUID) -> CampaignAggregate:
+        """Host cancels a pending invite before it's accepted"""
+        campaign = self.repository.get_by_id(campaign_id)
+        if not campaign:
+            raise ValueError(f"Campaign {campaign_id} not found")
+
+        # Business rule: Only host can cancel invites
+        if not campaign.is_owned_by(host_id):
+            raise ValueError("Only the host can cancel invites for this campaign")
+
+        # Get player details for notification before removing
+        player = self.user_repo.get_by_id(player_id)
+
+        # Business logic in aggregate - removes from invited_player_ids
+        campaign.cancel_invite(player_id)
+
+        # Save
+        self.repository.save(campaign)
+
+        # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+        # DUAL BROADCAST: One cancel action fires TWO separate WebSocket events:
+        #   1. campaign_invite_canceled              → sent to the PLAYER
+        #   2. campaign_invite_canceled_confirmation → sent to the HOST
+        # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+        # Broadcast 1/2: Notification to the player whose invite was canceled
+        asyncio.create_task(
+            self.event_manager.broadcast(
+                **CampaignEvents.campaign_invite_canceled(
+                    player_id=player_id,
+                    campaign_id=campaign_id,
+                    campaign_name=campaign.title
+                )
+            )
+        )
+
+        # Broadcast 2/2: Confirmation to the host
+        asyncio.create_task(
+            self.event_manager.broadcast(
+                **CampaignEvents.campaign_invite_canceled_confirmation(
+                    host_id=host_id,
+                    campaign_id=campaign_id,
+                    campaign_name=campaign.title,
                     player_screen_name=player.screen_name if player else "Unknown"
                 )
             )

@@ -25,12 +25,13 @@ import {
   faPlay,
   faPause,
   faRightToBracket,
-  faUserPlus
+  faUserPlus,
+  faUserMinus
 } from '@fortawesome/free-solid-svg-icons'
 import { COLORS, THEME } from '@/app/styles/colorTheme'
 import { Button, Badge } from './shared/Button'
 
-export default function CampaignManager({ user, refreshTrigger, onCampaignUpdate, onExpandedChange }) {
+export default function CampaignManager({ user, refreshTrigger, onCampaignUpdate, onExpandedChange, inviteCampaignId, clearInviteCampaignId, showToast }) {
   const router = useRouter()
   const [campaigns, setCampaigns] = useState([])
   const [invitedCampaigns, setInvitedCampaigns] = useState([])
@@ -58,7 +59,8 @@ export default function CampaignManager({ user, refreshTrigger, onCampaignUpdate
     gameCreate: { open: false, campaign: null, name: 'Session 1', maxPlayers: 8, isCreating: false },
     gameDelete: { open: false, game: null, isDeleting: false },
     gamePause: { open: false, game: null, isPausing: false },
-    gameFinish: { open: false, game: null, isFinishing: false }
+    gameFinish: { open: false, game: null, isFinishing: false },
+    playerRemove: { open: false, campaign: null, member: null, isRemoving: false }
   })
 
   // Modal helper functions
@@ -286,6 +288,36 @@ export default function CampaignManager({ user, refreshTrigger, onCampaignUpdate
     } catch (err) {
       console.error('Error declining campaign invite:', err)
       setError(err.message)
+    }
+  }
+
+  // Remove player from campaign (host only)
+  const removePlayerFromCampaign = async () => {
+    if (!modals.playerRemove.campaign || !modals.playerRemove.member) return
+
+    updateModalData('playerRemove', { isRemoving: true })
+
+    try {
+      const response = await fetch(
+        `/api/campaigns/${modals.playerRemove.campaign.id}/players/${modals.playerRemove.member.user_id}`,
+        {
+          method: 'DELETE',
+          credentials: 'include'
+        }
+      )
+
+      if (!response.ok) {
+        const errorData = await response.json()
+        throw new Error(errorData.detail || 'Failed to remove player')
+      }
+
+      // Refresh campaigns to update member list
+      await fetchCampaigns()
+      closeModal('playerRemove')
+    } catch (err) {
+      console.error('Error removing player from campaign:', err)
+      setError(err.message)
+      updateModalData('playerRemove', { isRemoving: false })
     }
   }
 
@@ -589,6 +621,23 @@ export default function CampaignManager({ user, refreshTrigger, onCampaignUpdate
     // Only show loading on initial fetch (refreshTrigger = 0)
     fetchCampaigns(refreshTrigger === 0)
   }, [refreshTrigger])
+
+  // Check for stale campaign invites (when user clicks old notification but invite was canceled)
+  useEffect(() => {
+    if (inviteCampaignId && !loading) {
+      // Check if the expected invite still exists
+      const inviteExists = invitedCampaigns.some(c => c.id === inviteCampaignId)
+      if (!inviteExists) {
+        // Invite was revoked - show feedback toast
+        showToast?.({
+          type: 'warning',
+          message: 'This invite is no longer available'
+        })
+      }
+      // Clear the URL param after checking (regardless of result)
+      clearInviteCampaignId?.()
+    }
+  }, [inviteCampaignId, invitedCampaigns, loading])
 
   // Detect window resize and temporarily disable transitions
   useEffect(() => {
@@ -1302,12 +1351,24 @@ export default function CampaignManager({ user, refreshTrigger, onCampaignUpdate
                               {campaign.members.map((member) => (
                                 <div
                                   key={member.user_id}
-                                  className="flex flex-col p-3 rounded-sm border"
+                                  className="flex flex-col p-3 rounded-sm border relative"
                                   style={{
                                     backgroundColor: THEME.bgSecondary,
                                     borderColor: THEME.borderSubtle
                                   }}
                                 >
+                                  {/* Remove button - only for host viewing non-host members */}
+                                  {campaign.host_id === user.id && !member.is_host && (
+                                    <button
+                                      onClick={() => openModal('playerRemove', { campaign, member })}
+                                      className="absolute top-0 right-0 bottom-0 px-3 flex items-center rounded-r-sm hover:bg-red-900/50 transition-colors"
+                                      title="Remove player from campaign"
+                                      style={{ color: '#dc2626' }}
+                                    >
+                                      <FontAwesomeIcon icon={faUserMinus} className="h-5 w-5" />
+                                    </button>
+                                  )}
+
                                   {/* Username with host badge */}
                                   <div className="flex items-center gap-2 mb-1">
                                     <p className="font-medium" style={{color: THEME.textOnDark}}>
@@ -1622,6 +1683,58 @@ export default function CampaignManager({ user, refreshTrigger, onCampaignUpdate
           onClose={() => closeModal('campaignInvite')}
           onInviteSuccess={handleCampaignInviteSuccess}
         />
+      )}
+
+      {/* Remove Player Confirmation Modal */}
+      {modals.playerRemove.open && modals.playerRemove.member && typeof document !== 'undefined' && createPortal(
+        <div
+          className="fixed inset-0 backdrop-blur-sm flex items-center justify-center z-50"
+          style={{backgroundColor: THEME.overlayDark}}
+          onClick={() => closeModal('playerRemove')}
+        >
+          <div
+            className="p-6 rounded-sm shadow-2xl max-w-md w-full mx-4 border"
+            style={{backgroundColor: THEME.bgSecondary, borderColor: THEME.borderDefault}}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h3 className="text-lg font-semibold font-[family-name:var(--font-metamorphous)] mb-4" style={{color: THEME.textOnDark}}>
+              Remove Player
+            </h3>
+            <p className="mb-6" style={{color: THEME.textSecondary}}>
+              Are you sure you want to remove <span className="font-semibold" style={{color: THEME.textOnDark}}>{modals.playerRemove.member.username}</span> from <span className="font-semibold" style={{color: THEME.textOnDark}}>{modals.playerRemove.campaign?.title}</span>?
+            </p>
+            <p className="text-sm mb-6" style={{color: '#fbbf24'}}>
+              This player will need to be re-invited to rejoin the campaign.
+            </p>
+            <div className="flex justify-end gap-3">
+              <Button
+                variant="ghost"
+                onClick={() => closeModal('playerRemove')}
+                disabled={modals.playerRemove.isRemoving}
+              >
+                Cancel
+              </Button>
+              <Button
+                variant="danger"
+                onClick={removePlayerFromCampaign}
+                disabled={modals.playerRemove.isRemoving}
+              >
+                {modals.playerRemove.isRemoving ? (
+                  <>
+                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+                    Removing...
+                  </>
+                ) : (
+                  <>
+                    <FontAwesomeIcon icon={faUserMinus} className="mr-2" />
+                    Remove Player
+                  </>
+                )}
+              </Button>
+            </div>
+          </div>
+        </div>,
+        document.body
       )}
 
     </div>

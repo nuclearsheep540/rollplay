@@ -16,8 +16,11 @@ export default function CampaignInviteModal({ campaign, onClose, onInviteSuccess
   const [lookupLoading, setLookupLoading] = useState(false)
   const [lookupError, setLookupError] = useState(null)
   const [inviting, setInviting] = useState(false)
+  const [canceling, setCanceling] = useState(null) // Track which invite is being canceled
   const [error, setError] = useState(null)
   const [loadingFriends, setLoadingFriends] = useState(true)
+  const [pendingInvites, setPendingInvites] = useState([])
+  const [loadingPendingInvites, setLoadingPendingInvites] = useState(true)
 
   // Validate UUID format
   const isValidUUID = (uuid) => {
@@ -35,10 +38,16 @@ export default function CampaignInviteModal({ campaign, onClose, onInviteSuccess
     return isValidUUID(identifier) || isAccountTag(identifier)
   }
 
-  // Fetch friends list on mount
+  // Fetch friends list and pending invites on mount
   useEffect(() => {
     fetchFriends()
+    fetchPendingInvites()
   }, [])
+
+  // Refetch pending invites when campaign.invited_player_ids changes
+  useEffect(() => {
+    fetchPendingInvites()
+  }, [campaign.invited_player_ids])
 
   const fetchFriends = async () => {
     try {
@@ -60,6 +69,76 @@ export default function CampaignInviteModal({ campaign, onClose, onInviteSuccess
       setError('Failed to load friends list')
     } finally {
       setLoadingFriends(false)
+    }
+  }
+
+  const fetchPendingInvites = async () => {
+    // Fetch user details for each pending invite
+    if (!campaign.invited_player_ids || campaign.invited_player_ids.length === 0) {
+      setPendingInvites([])
+      setLoadingPendingInvites(false)
+      return
+    }
+
+    try {
+      setLoadingPendingInvites(true)
+      const inviteDetails = await Promise.all(
+        campaign.invited_player_ids.map(async (userId) => {
+          try {
+            const response = await fetch(`/api/users/${userId}`, {
+              credentials: 'include'
+            })
+            if (response.ok) {
+              const userData = await response.json()
+              return {
+                id: userId,
+                display_name: userData.display_name,
+                screen_name: userData.screen_name,
+                account_tag: userData.account_tag
+              }
+            }
+          } catch (err) {
+            console.error(`Error fetching user ${userId}:`, err)
+          }
+          // Return basic info if lookup fails
+          return { id: userId, display_name: 'Unknown User', screen_name: null, account_tag: null }
+        })
+      )
+      setPendingInvites(inviteDetails)
+    } catch (err) {
+      console.error('Error fetching pending invites:', err)
+    } finally {
+      setLoadingPendingInvites(false)
+    }
+  }
+
+  const cancelInvite = async (playerId) => {
+    try {
+      setCanceling(playerId)
+      setError(null)
+
+      const response = await fetch(`/api/campaigns/${campaign.id}/invites/${playerId}`, {
+        method: 'DELETE',
+        credentials: 'include'
+      })
+
+      if (!response.ok) {
+        const errorData = await response.json()
+        throw new Error(errorData.detail || 'Failed to cancel invite')
+      }
+
+      // Get updated campaign data
+      const updatedCampaign = await response.json()
+
+      if (onInviteSuccess) {
+        // Pass updated campaign data to parent
+        await onInviteSuccess(updatedCampaign)
+      }
+    } catch (err) {
+      console.error('Error canceling invite:', err)
+      setError(err.message)
+    } finally {
+      setCanceling(null)
     }
   }
 
@@ -322,6 +401,46 @@ export default function CampaignInviteModal({ campaign, onClose, onInviteSuccess
               </div>
             )}
           </div>
+
+          {/* Pending Invites Section */}
+          {pendingInvites.length > 0 && (
+            <div>
+              <h3 className="text-lg font-semibold mb-3" style={{color: THEME.textOnDark}}>Pending Invites</h3>
+              <div className="space-y-2 max-h-48 overflow-y-auto">
+                {loadingPendingInvites ? (
+                  <p className="text-sm" style={{color: THEME.textSecondary}}>Loading pending invites...</p>
+                ) : (
+                  pendingInvites.map((invite) => (
+                    <div
+                      key={invite.id}
+                      className="flex items-center justify-between p-3 rounded-sm border transition-colors"
+                      style={{backgroundColor: THEME.bgPanel, borderColor: THEME.borderSubtle}}
+                    >
+                      <div>
+                        <span className="font-medium" style={{color: THEME.textOnDark}}>
+                          {invite.screen_name || invite.display_name}
+                        </span>
+                        {invite.account_tag && (
+                          <span className="text-sm ml-2" style={{color: THEME.textSecondary}}>
+                            #{invite.account_tag}
+                          </span>
+                        )}
+                      </div>
+                      <Button
+                        variant="ghost"
+                        size="xs"
+                        onClick={() => cancelInvite(invite.id)}
+                        disabled={canceling === invite.id}
+                        style={{color: '#dc2626'}}
+                      >
+                        {canceling === invite.id ? 'Canceling...' : 'Cancel'}
+                      </Button>
+                    </div>
+                  ))
+                )}
+              </div>
+            </div>
+          )}
         </div>
 
         {/* Footer */}

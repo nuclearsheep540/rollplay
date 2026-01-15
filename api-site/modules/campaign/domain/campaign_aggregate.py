@@ -183,6 +183,16 @@ class CampaignAggregate:
         self.invited_player_ids.remove(user_id)
         self.update_timestamp()
 
+    def cancel_invite(self, user_id: UUID) -> None:
+        """Host cancels a pending invite before it's accepted"""
+        # Business rule: User must have a pending invite
+        if user_id not in self.invited_player_ids:
+            raise ValueError("User does not have a pending invite to this campaign")
+
+        # Remove from invited list
+        self.invited_player_ids.remove(user_id)
+        self.update_timestamp()
+
     def add_player(self, user_id: UUID) -> None:
         """
         Direct add player to campaign (bypasses invite flow).

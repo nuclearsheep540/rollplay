@@ -82,11 +82,32 @@ export const EVENT_CONFIG = {
     navigationTab: 'campaigns'
   },
 
+  'campaign_invite_canceled': {
+    toastMessage: 'Campaign invite canceled',
+    panelMessage: (data) => `Your invite to "${data.campaign_name}" was canceled`,
+    toastType: 'info',
+    navigationTab: 'campaigns'
+  },
+
+  'campaign_invite_canceled_confirmation': {
+    toastMessage: 'Invite canceled',
+    panelMessage: (data) => `You canceled ${data.player_screen_name}'s invite to "${data.campaign_name}"`,
+    toastType: 'success',
+    navigationTab: null  // No navigation - just confirmation
+  },
+
   'campaign_player_removed': {
     toastMessage: 'Removed from campaign',
     panelMessage: (data) => `You were removed from campaign "${data.campaign_name}"`,
     toastType: 'warning',
     navigationTab: 'campaigns'
+  },
+
+  'campaign_player_removed_confirmation': {
+    toastMessage: 'Player removed',
+    panelMessage: (data) => `You removed ${data.player_screen_name} from "${data.campaign_name}"`,
+    toastType: 'success',
+    navigationTab: null  // No navigation - just confirmation
   },
 
   'game_created': {

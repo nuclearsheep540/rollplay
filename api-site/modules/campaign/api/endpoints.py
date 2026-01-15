@@ -28,7 +28,8 @@ from modules.campaign.application.commands import (
     AddPlayerToCampaign,
     RemovePlayerFromCampaign,
     AcceptCampaignInvite,
-    DeclineCampaignInvite
+    DeclineCampaignInvite,
+    CancelCampaignInvite
 )
 from modules.game.application.commands import CreateGame
 from modules.campaign.application.queries import (
@@ -378,6 +379,28 @@ async def decline_campaign_invite(
         campaign = command.execute(
             campaign_id=campaign_id,
             player_id=current_user.id
+        )
+        return _to_campaign_response(campaign)
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+
+
+@router.delete("/{campaign_id}/invites/{player_id}", response_model=CampaignResponse)
+async def cancel_campaign_invite(
+    campaign_id: UUID,
+    player_id: UUID,
+    current_user: UserAggregate = Depends(get_current_user_from_token),
+    campaign_repo: CampaignRepository = Depends(campaign_repository),
+    user_repo: UserRepository = Depends(get_user_repository),
+    event_manager: EventManager = Depends(get_event_manager)
+):
+    """Cancel a pending campaign invite (host only)"""
+    try:
+        command = CancelCampaignInvite(campaign_repo, user_repo, event_manager)
+        campaign = command.execute(
+            campaign_id=campaign_id,
+            player_id=player_id,
+            host_id=current_user.id
         )
         return _to_campaign_response(campaign)
     except ValueError as e:

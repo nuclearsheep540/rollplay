@@ -6,7 +6,7 @@
 'use client'
 
 import { useState, useEffect, Suspense } from 'react'
-import { useSearchParams } from 'next/navigation'
+import { useSearchParams, useRouter } from 'next/navigation'
 import CampaignManager from './components/CampaignManager'
 import CharacterManager from './components/CharacterManager'
 import DashboardLayout from './components/DashboardLayout'
@@ -21,7 +21,9 @@ import { getEventConfig } from '../shared/config/eventConfig'
 
 function DashboardContent() {
   const searchParams = useSearchParams()
+  const router = useRouter()
   const tabParam = searchParams.get('tab')
+  const inviteCampaignId = searchParams.get('invite_campaign_id')
   const [activeSection, setActiveSection] = useState(tabParam || 'campaigns')
   const [refreshTrigger, setRefreshTrigger] = useState(0)
   const [campaignUpdateHandlers, setCampaignUpdateHandlers] = useState(null)
@@ -38,6 +40,14 @@ function DashboardContent() {
   useEffect(() => {
     setIsChildExpanded(false)
   }, [activeSection])
+
+  // Clear invite_campaign_id param from URL (called by CampaignManager after checking)
+  const clearInviteCampaignId = () => {
+    const current = new URLSearchParams(searchParams.toString())
+    current.delete('invite_campaign_id')
+    const newUrl = current.toString() ? `/dashboard?${current.toString()}` : '/dashboard'
+    router.replace(newUrl)
+  }
 
   // Use auth hook for all authentication-related state and logic
   const {
@@ -196,12 +206,50 @@ function DashboardContent() {
     },
 
     'campaign_player_removed': (message) => {
-      setRefreshTrigger(prev => prev + 1)
+      // Full page refresh to cleanly reset expanded state and UI
+      // This avoids the bug where expanded campaign view persists after removal
       if (message.show_toast) {
         const config = getEventConfig('campaign_player_removed')
         showToast({
           type: config.toastType,
           message: config.toastMessage
+        })
+      }
+      // Small delay to let toast show before refresh
+      setTimeout(() => {
+        window.location.reload()
+      }, 1500)
+    },
+
+    'campaign_player_removed_confirmation': (message) => {
+      // No state refresh needed - host already has updated state
+      if (message.show_toast) {
+        const config = getEventConfig('campaign_player_removed_confirmation')
+        showToast({
+          type: config.toastType,
+          message: config.panelMessage(message.data)
+        })
+      }
+    },
+
+    'campaign_invite_canceled': (message) => {
+      setRefreshTrigger(prev => prev + 1)
+      if (message.show_toast) {
+        const config = getEventConfig('campaign_invite_canceled')
+        showToast({
+          type: config.toastType,
+          message: config.toastMessage
+        })
+      }
+    },
+
+    'campaign_invite_canceled_confirmation': (message) => {
+      // No state refresh needed - host already has updated state
+      if (message.show_toast) {
+        const config = getEventConfig('campaign_invite_canceled_confirmation')
+        showToast({
+          type: config.toastType,
+          message: config.panelMessage(message.data)
         })
       }
     },
@@ -272,6 +320,9 @@ function DashboardContent() {
             refreshTrigger={refreshTrigger}
             onCampaignUpdate={setCampaignUpdateHandlers}
             onExpandedChange={setIsChildExpanded}
+            inviteCampaignId={inviteCampaignId}
+            clearInviteCampaignId={clearInviteCampaignId}
+            showToast={showToast}
           />
         </section>
       )}
