@@ -641,6 +641,21 @@ export default function CampaignManager({ user, refreshTrigger, onCampaignUpdate
     }
   }, [inviteCampaignId, invitedCampaigns, loading])
 
+  // Sync invite modal's campaign data when campaigns are updated externally (e.g., player declines)
+  useEffect(() => {
+    if (modals.campaignInvite.open && modals.campaignInvite.campaign) {
+      const updatedCampaign = campaigns.find(c => c.id === modals.campaignInvite.campaign.id)
+      if (updatedCampaign) {
+        // Only update if invited_player_ids has changed
+        const currentIds = modals.campaignInvite.campaign.invited_player_ids || []
+        const newIds = updatedCampaign.invited_player_ids || []
+        if (JSON.stringify(currentIds) !== JSON.stringify(newIds)) {
+          updateModalData('campaignInvite', { campaign: updatedCampaign })
+        }
+      }
+    }
+  }, [campaigns])
+
   // Detect window resize and temporarily disable transitions
   useEffect(() => {
     let resizeTimer

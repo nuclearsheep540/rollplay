@@ -6,6 +6,9 @@
 'use client'
 
 import { useState, useEffect } from 'react'
+import { createPortal } from 'react-dom'
+import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
+import { faUserPlus, faUserXmark } from '@fortawesome/free-solid-svg-icons'
 import { THEME } from '@/app/styles/colorTheme'
 import { Button } from './shared/Button'
 
@@ -43,6 +46,22 @@ export default function CampaignInviteModal({ campaign, onClose, onInviteSuccess
     fetchFriends()
     fetchPendingInvites()
   }, [])
+
+  // Sync pending invites when campaign.invited_player_ids changes externally (e.g., player declines)
+  // This removes invites from local state that are no longer in the campaign prop
+  // without triggering a full refetch (preserves smooth UX for host actions)
+  useEffect(() => {
+    const campaignInviteIds = campaign.invited_player_ids || []
+    setPendingInvites(prev => {
+      // Keep only invites that still exist in campaign.invited_player_ids
+      const filtered = prev.filter(invite => campaignInviteIds.includes(invite.id))
+      // Only update if something was actually removed
+      if (filtered.length !== prev.length) {
+        return filtered
+      }
+      return prev
+    })
+  }, [campaign.invited_player_ids])
 
   const fetchFriends = async () => {
     try {
@@ -284,12 +303,7 @@ export default function CampaignInviteModal({ campaign, onClose, onInviteSuccess
     return pendingInvites.some(invite => invite.id === userId)
   }
 
-  const canInviteUser = (userId) => {
-    // Can invite if: not host, not already accepted, and no pending invite
-    return !isUserHost(userId) && !hasUserAccepted(userId) && !hasUserPendingInvite(userId)
-  }
-
-  // Get appropriate message for user status
+  // Get appropriate message for user status (returns null if user can be invited)
   const getUserStatusMessage = (userId) => {
     if (isUserHost(userId)) {
       return "This is the campaign host"
@@ -303,7 +317,8 @@ export default function CampaignInviteModal({ campaign, onClose, onInviteSuccess
     return null
   }
 
-  return (
+  // Render modal to document.body via portal to ensure backdrop fills full viewport
+  return createPortal(
     <div
       className="fixed inset-0 flex items-center justify-center z-50 p-4"
       style={{backgroundColor: THEME.overlayDark}}
@@ -346,48 +361,52 @@ export default function CampaignInviteModal({ campaign, onClose, onInviteSuccess
           {/* Invite by Account Tag Form */}
           <div>
             <h3 className="text-lg font-semibold mb-3" style={{color: THEME.textOnDark}}>Invite by Account Tag</h3>
-            <form onSubmit={handleInviteByUuid} className="space-y-3">
-              <div>
-                <input
-                  type="text"
-                  value={friendUuid}
-                  onChange={(e) => setFriendUuid(e.target.value)}
-                  placeholder="Enter username including account tag (e.g., steve#2345)"
-                  className="w-full px-4 py-2 border rounded-sm focus:ring-2 focus:outline-none"
-                  style={{
-                    backgroundColor: THEME.bgPrimary,
-                    borderColor: THEME.borderDefault,
-                    color: THEME.textPrimary
-                  }}
-                />
-                {lookupLoading && (
-                  <p className="text-sm mt-2" style={{color: THEME.textSecondary}}>Looking up user...</p>
-                )}
-                {lookupError && (
-                  <p className="text-sm mt-2" style={{color: '#dc2626'}}>{ lookupError}</p>
-                )}
-                {lookupUser && (
-                  <div className="mt-2 p-3 border rounded-sm" style={{backgroundColor: '#166534', borderColor: '#16a34a'}}>
-                    <p className="text-sm" style={{color: THEME.textAccent}}>
-                      Found: <span className="font-semibold">{lookupUser.display_name}</span>
-                    </p>
-                    {getUserStatusMessage(lookupUser.id) && (
-                      <p className="text-sm mt-1" style={{color: '#fbbf24'}}>
-                        ⚠️ {getUserStatusMessage(lookupUser.id)}
-                      </p>
-                    )}
-                  </div>
-                )}
-              </div>
-              <Button
-                type="submit"
-                variant="primary"
-                disabled={!lookupUser || inviting || !canInviteUser(lookupUser?.id)}
-                className="w-full"
-              >
-                {inviting ? 'Inviting Player...' : 'Invite Player to Campaign'}
-              </Button>
-            </form>
+            <div className="space-y-3">
+              <input
+                type="text"
+                value={friendUuid}
+                onChange={(e) => setFriendUuid(e.target.value)}
+                placeholder="Enter username including account tag (e.g., steve#2345)"
+                className="w-full px-4 py-2 border rounded-sm focus:ring-2 focus:outline-none"
+                style={{
+                  backgroundColor: THEME.bgPrimary,
+                  borderColor: THEME.borderDefault,
+                  color: THEME.textPrimary
+                }}
+              />
+              {lookupLoading && (
+                <p className="text-sm" style={{color: THEME.textSecondary}}>Looking up user...</p>
+              )}
+              {lookupError && (
+                <p className="text-sm" style={{color: '#dc2626'}}>{lookupError}</p>
+              )}
+              {/* Found user row - integrated invite button */}
+              {lookupUser && (
+                <div
+                  className="flex items-stretch rounded-sm border overflow-hidden"
+                  style={{backgroundColor: THEME.bgPanel, borderColor: THEME.borderSubtle}}
+                >
+                  <span className="flex-1 flex items-center font-medium py-3 pl-4" style={{color: THEME.textOnDark}}>{lookupUser.display_name}</span>
+                  {getUserStatusMessage(lookupUser.id) ? (
+                    <span className="flex items-center text-sm px-4" style={{color: '#fbbf24'}}>{getUserStatusMessage(lookupUser.id)}</span>
+                  ) : (
+                    <button
+                      onClick={handleInviteByUuid}
+                      disabled={inviting}
+                      className="px-8 flex items-center hover:bg-green-900/50 transition-colors disabled:opacity-50"
+                      title="Invite player"
+                      style={{ color: '#22c55e' }}
+                    >
+                      {inviting ? (
+                        <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-green-500"></div>
+                      ) : (
+                        <FontAwesomeIcon icon={faUserPlus} className="h-5 w-5" />
+                      )}
+                    </button>
+                  )}
+                </div>
+              )}
+            </div>
           </div>
 
           {/* Friends List */}
@@ -402,21 +421,26 @@ export default function CampaignInviteModal({ campaign, onClose, onInviteSuccess
                 {friends.map((friend) => (
                   <div
                     key={friend.id}
-                    className="flex items-center justify-between p-3 rounded-sm border transition-colors"
+                    className="flex items-stretch rounded-sm border overflow-hidden"
                     style={{backgroundColor: THEME.bgPanel, borderColor: THEME.borderSubtle}}
                   >
-                    <span className="font-medium" style={{color: THEME.textOnDark}}>{friend.friend_screen_name}</span>
+                    <span className="flex-1 flex items-center font-medium py-3 pl-4" style={{color: THEME.textOnDark}}>{friend.friend_screen_name}</span>
                     {getUserStatusMessage(friend.friend_id) ? (
-                      <span className="text-sm" style={{color: '#fbbf24'}}>{getUserStatusMessage(friend.friend_id)}</span>
+                      <span className="flex items-center text-sm px-4" style={{color: '#fbbf24'}}>{getUserStatusMessage(friend.friend_id)}</span>
                     ) : (
-                      <Button
-                        variant="primary"
-                        size="xs"
+                      <button
                         onClick={() => handleInviteFriend(friend.friend_id)}
                         disabled={inviting}
+                        className="px-8 flex items-center hover:bg-green-900/50 transition-colors disabled:opacity-50"
+                        title="Invite player"
+                        style={{ color: '#22c55e' }}
                       >
-                        {inviting ? 'Inviting...' : 'Invite Player'}
-                      </Button>
+                        {inviting ? (
+                          <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-green-500"></div>
+                        ) : (
+                          <FontAwesomeIcon icon={faUserPlus} className="h-5 w-5" />
+                        )}
+                      </button>
                     )}
                   </div>
                 ))}
@@ -435,10 +459,10 @@ export default function CampaignInviteModal({ campaign, onClose, onInviteSuccess
                   pendingInvites.map((invite) => (
                     <div
                       key={invite.id}
-                      className="flex items-center justify-between p-3 rounded-sm border transition-colors"
+                      className="flex items-stretch rounded-sm border overflow-hidden"
                       style={{backgroundColor: THEME.bgPanel, borderColor: THEME.borderSubtle}}
                     >
-                      <div>
+                      <div className="flex-1 flex items-center py-3 pl-4">
                         <span className="font-medium" style={{color: THEME.textOnDark}}>
                           {invite.screen_name || invite.display_name}
                         </span>
@@ -448,15 +472,19 @@ export default function CampaignInviteModal({ campaign, onClose, onInviteSuccess
                           </span>
                         )}
                       </div>
-                      <Button
-                        variant="ghost"
-                        size="xs"
+                      <button
                         onClick={() => cancelInvite(invite.id)}
                         disabled={canceling === invite.id}
-                        style={{color: '#dc2626'}}
+                        className="px-8 flex items-center hover:bg-red-900/50 transition-colors disabled:opacity-50"
+                        title="Cancel invite"
+                        style={{ color: '#dc2626' }}
                       >
-                        {canceling === invite.id ? 'Canceling...' : 'Cancel'}
-                      </Button>
+                        {canceling === invite.id ? (
+                          <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-red-500"></div>
+                        ) : (
+                          <FontAwesomeIcon icon={faUserXmark} className="h-5 w-5" />
+                        )}
+                      </button>
                     </div>
                   ))
                 )}
@@ -476,6 +504,7 @@ export default function CampaignInviteModal({ campaign, onClose, onInviteSuccess
           </Button>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   )
 }
