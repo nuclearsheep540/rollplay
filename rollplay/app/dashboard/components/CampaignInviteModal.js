@@ -44,11 +44,6 @@ export default function CampaignInviteModal({ campaign, onClose, onInviteSuccess
     fetchPendingInvites()
   }, [])
 
-  // Refetch pending invites when campaign.invited_player_ids changes
-  useEffect(() => {
-    fetchPendingInvites()
-  }, [campaign.invited_player_ids])
-
   const fetchFriends = async () => {
     try {
       setLoadingFriends(true)
@@ -130,6 +125,9 @@ export default function CampaignInviteModal({ campaign, onClose, onInviteSuccess
       // Get updated campaign data
       const updatedCampaign = await response.json()
 
+      // Remove from local pending invites list (smooth update without refetch)
+      setPendingInvites(prev => prev.filter(invite => invite.id !== playerId))
+
       if (onInviteSuccess) {
         // Pass updated campaign data to parent
         await onInviteSuccess(updatedCampaign)
@@ -203,6 +201,24 @@ export default function CampaignInviteModal({ campaign, onClose, onInviteSuccess
       setInviting(true)
       setError(null)
 
+      // Lookup user details before invite (for optimistic UI update)
+      let invitedUserDetails = null
+      try {
+        const userResponse = await fetch(`/api/users/${userId}`, { credentials: 'include' })
+        if (userResponse.ok) {
+          const userData = await userResponse.json()
+          invitedUserDetails = {
+            id: userId,
+            display_name: userData.display_name,
+            screen_name: userData.screen_name,
+            account_tag: userData.account_tag
+          }
+        }
+      } catch (err) {
+        // If lookup fails, we'll still proceed with invite
+        console.warn('Could not fetch user details for optimistic update:', err)
+      }
+
       const response = await fetch(`/api/campaigns/${campaign.id}/players/${userId}`, {
         method: 'POST',
         headers: {
@@ -221,6 +237,11 @@ export default function CampaignInviteModal({ campaign, onClose, onInviteSuccess
 
       setFriendUuid('')
       setLookupUser(null)
+
+      // Optimistically add to pending invites list (smooth update without refetch)
+      if (invitedUserDetails) {
+        setPendingInvites(prev => [...prev, invitedUserDetails])
+      }
 
       if (onInviteSuccess) {
         // Pass updated campaign data to parent - parent will update campaign prop
@@ -259,7 +280,8 @@ export default function CampaignInviteModal({ campaign, onClose, onInviteSuccess
   }
 
   const hasUserPendingInvite = (userId) => {
-    return campaign.invited_player_ids?.includes(userId)
+    // Use local pendingInvites state for immediate UI updates
+    return pendingInvites.some(invite => invite.id === userId)
   }
 
   const canInviteUser = (userId) => {

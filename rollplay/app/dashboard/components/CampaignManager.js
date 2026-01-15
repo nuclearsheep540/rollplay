@@ -466,10 +466,12 @@ export default function CampaignManager({ user, refreshTrigger, onCampaignUpdate
 
   // Handle successful campaign invite
   const handleCampaignInviteSuccess = async (updatedCampaign) => {
-    // Refresh campaigns to show updated player count
-    await fetchCampaigns()
-    // Update the selected campaign being passed to the modal
-    updateModalData('campaignInvite', { campaign: updatedCampaign })
+    // Update the campaign in our local state (no full refetch needed)
+    setCampaigns(prev => prev.map(c =>
+      c.id === updatedCampaign.id ? { ...c, ...updatedCampaign } : c
+    ))
+    // Update the campaign reference in the modal
+    updateModalData('campaignInvite', { campaign: { ...modals.campaignInvite.campaign, ...updatedCampaign } })
   }
 
   // Open delete session modal
@@ -1678,7 +1680,6 @@ export default function CampaignManager({ user, refreshTrigger, onCampaignUpdate
       {/* Campaign Invite Modal */}
       {modals.campaignInvite.open && modals.campaignInvite.campaign && (
         <CampaignInviteModal
-          key={`campaign-invite-${modals.campaignInvite.campaign.id}-${modals.campaignInvite.campaign.invited_player_ids?.length || 0}`}
           campaign={modals.campaignInvite.campaign}
           onClose={() => closeModal('campaignInvite')}
           onInviteSuccess={handleCampaignInviteSuccess}
