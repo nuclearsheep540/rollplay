@@ -1,7 +1,7 @@
 # Copyright (C) 2025 Matthew Davey
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-FROM python:3.11-slim
+FROM python:3.12-slim
 
 WORKDIR /app
 
