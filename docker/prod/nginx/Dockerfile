@@ -1,8 +1,8 @@
 FROM nginx:1.28.0
 
-# Install required packages: Python3, pip, flask, and openssl to enable self-signed certificate generation.
+# Install required packages: Python3, pip, flask, waitress (prod WSGI), and openssl for self-signed cert generation.
 RUN apt-get update && apt-get install -y python3 python3-pip openssl && \
-    pip3 install --break-system-packages flask
+    pip3 install --break-system-packages flask waitress
 
 # Copy your production NGINX configuration.
 COPY nginx.conf /etc/nginx/conf.d/default.conf

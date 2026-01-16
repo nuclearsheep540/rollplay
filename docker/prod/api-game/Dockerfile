@@ -8,4 +8,4 @@ RUN pip install --upgrade pip
 RUN pip install --upgrade -r requirements.txt
 RUN pip install pyyaml
 
-CMD ["uvicorn", "app:app", "--host", "0.0.0.0", "--port", "8081", "--reload", "--log-config", "./config/log_conf.yaml"]
+CMD ["uvicorn", "app:app", "--host", "0.0.0.0", "--port", "8081", "--log-config", "./config/log_conf.yaml"]

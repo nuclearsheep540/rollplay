@@ -1,41 +1,59 @@
 # Copyright (C) 2025 Matthew Davey
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-import os
-from pydantic_settings import BaseSettings
+from enum import Enum
+
+from pydantic import Field
+from pydantic_settings import BaseSettings, SettingsConfigDict
+
+
+class Environment(str, Enum):
+    """The environment options in which the application can be configured as"""
+    production = "production"
+    prod = "production"
+    staging = "staging"
+    development = "development"
+    dev = "development"
+
 
 class Settings(BaseSettings):
-    """Application settings"""
-    
+    """
+    Application settings loaded from environment variables.
+
+    Pydantic BaseSettings automatically reads env vars matching field names.
+    Required fields (no default) will cause startup failure if not set.
+    """
+
+    model_config = SettingsConfigDict(
+        env_file='.env',
+        env_file_encoding='utf-8',
+        extra='ignore'
+    )
+
     # Environment
-    environment: str = "dev"
-    
-    # JWT Settings
-    jwt_secret_key: str = os.getenv("JWT_SECRET_KEY", "your-secret-key-change-in-production")
+    ENVIRONMENT: Environment = Field(
+        default=Environment.development,
+        description="Read from ENVIRONMENT env var, defaults to 'development' if not set"
+    )
+
+    # JWT Settings - required, no defaults for secrets
+    JWT_SECRET_KEY: str
     jwt_algorithm: str = "HS256"
     jwt_access_token_expire_minutes: int = 60 * 24 * 7  # 7 days
-    
-    # Email Settings
-    smtp_server: str = os.getenv("SMTP_SERVER", "smtp.gmail.com")
-    smtp_port: int = int(os.getenv("SMTP_PORT", "587"))
-    smtp_username: str = os.getenv("SMTP_USERNAME", "")
-    smtp_password: str = os.getenv("SMTP_PASSWORD", "")
-    from_email: str = os.getenv("FROM_EMAIL", "noreply@tabletop-tavern.com")
-    
-    # Frontend URL for magic links
-    # Development: http://localhost
-    # Production: https://tabletop-tavern.uk (must use https)
-    frontend_url: str = os.getenv("NEXT_PUBLIC_API_URL", "http://localhost")
-    
-    # Database Settings (PostgreSQL)
-    database_url: str = os.getenv("DATABASE_URL", "postgresql://user:password@localhost/rollplay")
-    
-    # Redis Settings (for production token blacklisting)
-    redis_url: str = os.getenv("REDIS_URL", "redis://localhost:6379")
-    
-    # API Settings
+
+    # Email Settings - required for production
+    SMTP_SERVER: str
+    SMTP_PORT: int
+    SMTP_USERNAME: str
+    SMTP_PASSWORD: str
+    FROM_EMAIL: str
+
+    # Frontend URL for magic links - required
+    NEXT_PUBLIC_API_URL: str
+
+    # Redis Settings - required for token blacklisting
+    REDIS_URL: str
+
+    # API Settings - safe defaults for binding
     api_host: str = "0.0.0.0"
     api_port: int = 8083
-    
-    class Config:
-        env_file = ".env"

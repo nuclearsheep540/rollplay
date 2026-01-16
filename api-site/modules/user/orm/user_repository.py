@@ -7,13 +7,9 @@ from sqlalchemy import text
 from typing import Optional
 from uuid import UUID
 import random
-import friendlywords as fw
 
 from modules.user.model.user_model import User as UserModel
 from modules.user.domain.user_aggregate import UserAggregate
-
-# Preload friendlywords word lists into memory for performance
-fw.preload()
 
 
 class UserRepository:
@@ -36,7 +32,7 @@ class UserRepository:
         if not model:
             return None
 
-        friend_code = self._ensure_friend_code(model.id)
+        friend_code = self._get_existing_friend_code(model.id)
 
         return UserAggregate(
             id=model.id,
@@ -56,7 +52,7 @@ class UserRepository:
         if not model:
             return None
 
-        friend_code = self._ensure_friend_code(model.id)
+        friend_code = self._get_existing_friend_code(model.id)
 
         return UserAggregate(
             id=model.id,
@@ -69,42 +65,14 @@ class UserRepository:
             account_tag=model.account_tag
         )
 
-    def _generate_friend_code(self) -> str:
+    def _get_existing_friend_code(self, user_id: UUID) -> Optional[str]:
         """
-        Generate human-readable friend code using friendlywords.
+        Get existing friend code for a user (DEPRECATED - no longer generates new codes).
 
-        Format: predicate-object (e.g., "happy-elephant", "brave-lion")
-        Returns lowercase for consistency and case-insensitive lookups.
+        Friend codes have been superseded by account tags. This method only
+        returns existing codes for backward compatibility.
         """
-        return fw.generate('po', separator='-').lower()
-
-    def _ensure_friend_code(self, user_id: UUID):
-        """Ensure user has a friend code, generate if missing"""
-        existing = self._get_friend_code(user_id)
-        if existing:
-            return existing
-
-        # Generate unique friend code
-        max_attempts = 10
-        for attempt in range(max_attempts):
-            friend_code = self._generate_friend_code()
-
-            # Check if code already exists
-            result = self.db.execute(
-                text("SELECT 1 FROM friend_codes WHERE friend_code = :code"),
-                {"code": friend_code}
-            ).fetchone()
-
-            if not result:
-                # Code is unique, insert it
-                self.db.execute(
-                    text("INSERT INTO friend_codes (user_id, friend_code) VALUES (:user_id, :code)"),
-                    {"user_id": user_id, "code": friend_code}
-                )
-                self.db.commit()
-                return friend_code
-
-        raise RuntimeError(f"Failed to generate unique friend code for user {user_id}")
+        return self._get_friend_code(user_id)
 
     def get_by_friend_code(self, friend_code: str) -> Optional[UserAggregate]:
         """Retrieve user by friend code (case-insensitive). DEPRECATED - use get_by_account_identifier."""
@@ -157,7 +125,7 @@ class UserRepository:
         if not model:
             return None
 
-        friend_code = self._ensure_friend_code(model.id)
+        friend_code = self._get_existing_friend_code(model.id)
 
         return UserAggregate(
             id=model.id,
@@ -270,7 +238,7 @@ class UserRepository:
                 aggregate.id = model.id
 
             # Ensure friend code exists for this user (DEPRECATED - keeping for backward compatibility)
-            friend_code = self._ensure_friend_code(model.id)
+            friend_code = self._get_existing_friend_code(model.id)
             aggregate.friend_code = friend_code
 
         except IntegrityError as e:

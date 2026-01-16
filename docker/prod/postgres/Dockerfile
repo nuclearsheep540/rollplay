@@ -7,12 +7,14 @@ RUN apt-get update && apt-get install -y gettext-base && rm -rf /var/lib/apt/lis
 ARG POSTGRES_USER
 ARG POSTGRES_PASSWORD
 ARG POSTGRES_DB
+ARG APP_DB_USER
 ARG APP_DB_PASSWORD
 
 # Export as environment variables for envsubst
 ENV POSTGRES_USER=$POSTGRES_USER
 ENV POSTGRES_PASSWORD=$POSTGRES_PASSWORD
 ENV POSTGRES_DB=$POSTGRES_DB
+ENV APP_DB_USER=$APP_DB_USER
 ENV APP_DB_PASSWORD=$APP_DB_PASSWORD
 
 # Copy and substitute env vars in the postgres init script

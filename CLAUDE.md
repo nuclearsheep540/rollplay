@@ -1275,3 +1275,5 @@ During the 3-month refactor (human time), we learned valuable lessons about over
 - Over-abstract for hypothetical future requirements
 
 **Remember**: The goal is maintainable, understandable code - not perfect adherence to patterns.
+
+- when I ask to make patch notes remember to check the rollplay/patch_notes/ directory for the naming convention and style conventions of writing. remember to keep things simple, and feature led on the bullet points

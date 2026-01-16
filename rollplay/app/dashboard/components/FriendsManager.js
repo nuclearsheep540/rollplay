@@ -35,29 +35,23 @@ export default function FriendsManager({ user, refreshTrigger, fillHeight = fals
     fetchFriends(refreshTrigger === 0)
   }, [refreshTrigger])
 
-  // Validate identifier format: UUID, account tag (name#1234), or friend code (word-word)
+  // Validate identifier format: UUID or account tag (name#1234)
   const isValidIdentifier = (identifier) => {
     const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
     const accountTagRegex = /^[a-zA-Z0-9][a-zA-Z0-9_-]{2,29}#\d{4}$/  // account tag: name#1234
-    const friendCodeRegex = /^[a-z]+-[a-z]+$/i  // DEPRECATED: friendlywords format: word-word
-    return uuidRegex.test(identifier) || accountTagRegex.test(identifier) || friendCodeRegex.test(identifier)
+    return uuidRegex.test(identifier) || accountTagRegex.test(identifier)
   }
 
-  // Check if identifier is an account tag format
-  const isAccountTag = (identifier) => {
-    return /^[a-zA-Z0-9][a-zA-Z0-9_-]{2,29}#\d{4}$/.test(identifier)
-  }
-
-  // Copy account tag or friend code to clipboard
+  // Copy account tag to clipboard
   const handleCopyCode = async () => {
-    const codeToCopy = user.account_identifier || user.friend_code
-    await navigator.clipboard.writeText(codeToCopy)
+    if (!user.account_identifier) return
+    await navigator.clipboard.writeText(user.account_identifier)
     setCopiedCode(true)
     setTimeout(() => setCopiedCode(false), 2000)
   }
 
-  // Get display code (prefer account tag, fallback to friend code)
-  const displayCode = user.account_identifier || user.friend_code
+  // Get display code (account identifier)
+  const displayCode = user.account_identifier || 'Not set'
 
   // Lookup user by Friend Code when valid code is entered
   useEffect(() => {
@@ -78,11 +72,9 @@ export default function FriendsManager({ user, refreshTrigger, fillHeight = fals
         setLookupLoading(true)
         setLookupError(null)
 
-        // Use appropriate endpoint based on identifier type
+        // Use account tag endpoint for lookups
         const identifier = friendCode.trim()
-        const endpoint = isAccountTag(identifier)
-          ? `/api/users/by-account-tag/${encodeURIComponent(identifier)}`
-          : `/api/users/by-friend-code/${identifier}`
+        const endpoint = `/api/users/by-account-tag/${encodeURIComponent(identifier)}`
 
         const response = await fetch(endpoint, {
           credentials: 'include'
@@ -323,7 +315,7 @@ export default function FriendsManager({ user, refreshTrigger, fillHeight = fals
                       User found: {lookupUser.screen_name || 'User #' + lookupUser.id.substring(0, 8)}
                     </p>
                     <p className="text-xs font-mono" style={{color: '#4ade80'}}>
-                      {lookupUser.account_identifier || lookupUser.friend_code}
+                      {lookupUser.account_identifier}
                     </p>
                   </div>
                 )}

@@ -135,6 +135,7 @@ services:
                 POSTGRES_USER: ${POSTGRES_USER}
                 POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
                 POSTGRES_DB: rollplay
+                APP_DB_USER: ${APP_DB_USER}
                 APP_DB_PASSWORD: ${APP_DB_PASSWORD}
         env_file:
             - .env

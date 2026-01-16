@@ -18,7 +18,7 @@ class JWTHandler:
     
     def __init__(self, settings):
         self.settings = settings
-        self.secret_key = settings.jwt_secret_key
+        self.secret_key = settings.JWT_SECRET_KEY
         self.algorithm = "HS256"
         self.access_token_expire_minutes = 60 * 24 * 7  # 7 days
         self.magic_token_expire_minutes = 15  # 15 minutes for magic links

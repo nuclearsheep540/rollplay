@@ -22,7 +22,7 @@ class PasswordlessAuth:
         self.settings = settings
         self.email_service = EmailService(settings)
         self.jwt_handler = JWTHandler(settings)
-        self.redis_client = RedisClient(settings.redis_url)
+        self.redis_client = RedisClient(settings.REDIS_URL)
         self.short_code_generator = ShortCodeGenerator()
         # In production, this would be a database or Redis
         self.users = {}  # email -> user_data
@@ -39,7 +39,7 @@ class PasswordlessAuth:
             magic_token = self.jwt_handler.create_magic_token(email)
             
             # Generate magic link URL for frontend page (query parameter)
-            magic_link_url = f"{self.settings.frontend_url}/auth/verify?token={magic_token}"
+            magic_link_url = f"{self.settings.NEXT_PUBLIC_API_URL}/auth/verify?token={magic_token}"
             
             # Generate short code and store it mapped to the JWT
             short_code = self.short_code_generator.generate_code()

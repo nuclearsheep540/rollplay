@@ -12,23 +12,23 @@ CREATE EXTENSION IF NOT EXISTS "pgcrypto";
 -- Create dedicated application user with full privileges (like postgres)
 DO $$
 BEGIN
-    IF NOT EXISTS (SELECT FROM pg_catalog.pg_roles WHERE rolname = 'rollplay') THEN
-        CREATE ROLE rollplay WITH LOGIN SUPERUSER CREATEDB CREATEROLE PASSWORD '${APP_DB_PASSWORD}';
+    IF NOT EXISTS (SELECT FROM pg_catalog.pg_roles WHERE rolname = '${APP_DB_USER}') THEN
+        CREATE ROLE ${APP_DB_USER} WITH LOGIN SUPERUSER CREATEDB CREATEROLE PASSWORD '${APP_DB_PASSWORD}';
     END IF;
 END
 $$;
 
 -- Grant all privileges to rollplay user (same as postgres)
-GRANT ALL PRIVILEGES ON DATABASE ${POSTGRES_DB} TO rollplay;
-GRANT ALL ON SCHEMA public TO rollplay;
+GRANT ALL PRIVILEGES ON DATABASE ${POSTGRES_DB} TO ${APP_DB_USER};
+GRANT ALL ON SCHEMA public TO ${APP_DB_USER};
 
 -- Set up default permissions for future tables (full privileges)
-ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON TABLES TO rollplay;
-ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON SEQUENCES TO rollplay;
-ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON FUNCTIONS TO rollplay;
+ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON TABLES TO ${APP_DB_USER};
+ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON SEQUENCES TO ${APP_DB_USER};
+ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON FUNCTIONS TO ${APP_DB_USER};
 
 -- postgres user already has all privileges by default
 
 -- Log completion
 \echo 'PostgreSQL initialization completed for Rollplay database';
-\echo 'Created users: postgres (admin), rollplay (applications) - both have full privileges';
+\echo 'Created users: postgres (admin), ${APP_DB_USER} (applications) - both have full privileges';
