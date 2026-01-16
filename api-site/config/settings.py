@@ -2,6 +2,7 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 
 from enum import Enum
+from typing import ClassVar
 
 from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -36,14 +37,14 @@ class Settings(BaseSettings):
         description="Read from ENVIRONMENT env var, defaults to 'development' if not set"
     )
 
-    # PostgreSQL - required, no defaults
+    # PostgreSQL
     POSTGRES_USER: str
     POSTGRES_PASSWORD: str
     POSTGRES_HOST: str
     POSTGRES_PORT: str
     POSTGRES_DB: str
 
-    # Application DB credentials
+    # Application database credentials (limited privileges)
     APP_DB_USER: str
     APP_DB_PASSWORD: str
 
@@ -65,8 +66,8 @@ class Settings(BaseSettings):
     DATABASE_URL = property(lambda self: self.database_url)
     APP_DATABASE_URL = property(lambda self: self.app_database_url)
 
-    # Logging configuration for dictConfig
-    LOGGING_CONFIG = {
+    # Logging configuration for dictConfig (ClassVar = not a settings field)
+    LOGGING_CONFIG: ClassVar[dict] = {
         "version": 1,
         "disable_existing_loggers": False,
         "formatters": {

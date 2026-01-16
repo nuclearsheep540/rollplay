@@ -42,7 +42,7 @@ class Settings(BaseSettings):
     MONGO_INITDB_ROOT_USERNAME: str
     MONGO_INITDB_ROOT_PASSWORD: str
 
-    # POSTGRESQL (for user/character/game data) - required, no defaults
+    # POSTGRESQL (for user/character/game data)
     POSTGRES_HOST: str
     POSTGRES_PORT: str
     POSTGRES_DB: str
