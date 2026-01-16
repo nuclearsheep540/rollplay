@@ -4,7 +4,7 @@
 from sqlalchemy import create_engine
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
-from shared.config import Settings
+from config.settings import Settings
 
 # Initialize settings
 settings = Settings()

@@ -14,7 +14,7 @@ from modules.user.domain.user_aggregate import UserAggregate
 from shared.dependencies.auth import get_current_user_from_token
 from modules.events.schemas.notification_schemas import NotificationResponse
 from modules.events.event_manager import EventManager
-from shared.config import Settings
+from config.settings import Settings
 
 logger = logging.getLogger(__name__)
 
@@ -78,11 +78,11 @@ async def send_test_notification(
 ):
     """Send test notification (development only)"""
     settings = Settings()
-    logger.info(f"Test notification endpoint - environment: {settings.environment}")
-    if settings.environment != "development":
+    logger.info(f"Test notification endpoint - environment: {settings.ENVIRONMENT}")
+    if settings.ENVIRONMENT != "development":
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail=f"Only available in development (current: {settings.environment})"
+            detail=f"Only available in development (current: {settings.ENVIRONMENT})"
         )
 
     # Broadcast test event

@@ -17,11 +17,11 @@ class EmailService:
     
     def __init__(self, settings):
         self.settings = settings
-        self.smtp_server = settings.smtp_server
-        self.smtp_port = settings.smtp_port
-        self.smtp_username = settings.smtp_username
-        self.smtp_password = settings.smtp_password
-        self.from_email = settings.from_email
+        self.smtp_server = settings.SMTP_SERVER
+        self.smtp_port = settings.SMTP_PORT
+        self.smtp_username = settings.SMTP_USERNAME
+        self.smtp_password = settings.SMTP_PASSWORD
+        self.from_email = settings.FROM_EMAIL
         
     async def send_magic_link_email(self, to_email: str, magic_link: str, short_code: Optional[str] = None, jwt_token: Optional[str] = None) -> dict:
         """

@@ -19,8 +19,8 @@ export default function ProfileManager({ user, onUserUpdate }) {
 
   // Copy account tag to clipboard
   const handleCopyAccountTag = async () => {
-    const accountTag = user.account_identifier || user.friend_code
-    await navigator.clipboard.writeText(accountTag)
+    if (!user.account_identifier) return
+    await navigator.clipboard.writeText(user.account_identifier)
     setCopiedAccountTag(true)
     setTimeout(() => setCopiedAccountTag(false), 3000)
   }
@@ -162,7 +162,7 @@ export default function ProfileManager({ user, onUserUpdate }) {
               <input
                 type="text"
                 id="accountTag"
-                value={user.account_identifier || user.friend_code || 'Not set'}
+                value={user.account_identifier || 'Not set'}
                 className="flex-1 px-3 py-2 rounded-sm border font-mono cursor-not-allowed"
                 style={{
                   backgroundColor: COLORS.onyx,
