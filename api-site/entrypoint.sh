@@ -7,7 +7,7 @@ set -e
 echo "Waiting for PostgreSQL to be ready..."
 
 # Construct database URL from environment variables
-export APP_DB_USER="rollplay"
+# APP_DB_USER comes from .env via docker-compose
 export POSTGRES_HOST="${POSTGRES_HOST:-postgres}"
 export POSTGRES_PORT="${POSTGRES_PORT:-5432}"
 export DB_URL="postgresql://${APP_DB_USER}:${APP_DB_PASSWORD}@${POSTGRES_HOST}:${POSTGRES_PORT}/${POSTGRES_DB}"
