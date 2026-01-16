@@ -14,5 +14,6 @@ def reload_nginx():
         return jsonify({"status": "error", "message": str(e)}), 500
 
 if __name__ == "__main__":
-    # Listen on all interfaces at port 81.
-    app.run(host='0.0.0.0', port=81)
+    # Use waitress (production WSGI server) instead of Flask dev server
+    from waitress import serve
+    serve(app, host='0.0.0.0', port=81)
