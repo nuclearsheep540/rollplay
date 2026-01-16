@@ -1,18 +1,25 @@
 from enum import Enum
 from typing import Optional
 
+from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class Environment(str, Enum):
     """The environment options in which the application can be configured as"""
     production = "production"
+    prod = "production"
     staging = "staging"
     development = "development"
+    dev = "development"
 
 
 class Settings(BaseSettings):
-    """Application settings loaded from environment variables."""
+    """
+    Application settings loaded from environment variables.
+    
+    Pydantic will load these keys from the environment for us.
+    """
 
     model_config = SettingsConfigDict(
         env_file='.env',
@@ -23,23 +30,26 @@ class Settings(BaseSettings):
     # APP
     APP_NAME: str = "rollplay_app"
     app_version: Optional[str] = None
-    ENVIRONMENT: Environment = Environment.development
+    ENVIRONMENT: Environment = Field(
+        default=Environment.development,
+        description="Read from ENVIRONMENT env var, defaults to 'development' if not set"
+    )
 
-    # MONGODB (for active game sessions)
-    MONGO_INITDB_ROOT_USERNAME: Optional[str] = None
-    MONGO_INITDB_ROOT_PASSWORD: Optional[str] = None
+    # MONGODB (for active game sessions) - required, no defaults
+    MONGO_INITDB_ROOT_USERNAME: str
+    MONGO_INITDB_ROOT_PASSWORD: str
 
-    # POSTGRESQL (for user/character/game data)
-    POSTGRES_HOST: str = "postgres"
-    POSTGRES_PORT: str = "5432"
-    POSTGRES_DB: str = "rollplay"
+    # POSTGRESQL (for user/character/game data) - required, no defaults
+    POSTGRES_HOST: str
+    POSTGRES_PORT: str
+    POSTGRES_DB: str
 
     # Application database credentials (limited privileges)
-    APP_DB_USER: str = "rollplay"
-    APP_DB_PASSWORD: Optional[str] = None
+    APP_DB_USER: str
+    APP_DB_PASSWORD: str
 
-    # LOGGING
-    logging_level: str = "DEBUG"
+    # LOGGING - optional with safe defaults
+    logging_level: str = "INFO"
     logging_email_from: Optional[str] = None
     logging_email_to: Optional[str] = None
     logging_email_subject: Optional[str] = None
