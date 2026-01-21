@@ -576,6 +576,9 @@ export default function CampaignManager({ user, refreshTrigger, onCampaignUpdate
         session_name: modals.campaignCreate.sessionName.trim() || null
       }
 
+      console.log('Creating campaign with data:', campaignData)
+      console.log('session_name value:', campaignData.session_name, 'type:', typeof campaignData.session_name)
+
       const response = await fetch('/api/campaigns/', {
         method: 'POST',
         headers: {

@@ -694,6 +694,14 @@ docker exec api-site-dev alembic revision --autogenerate -m "add user profile fi
 docker-compose -f docker-compose.dev.yml restart api-site
 ```
 
+**⚠️ IMPORTANT: When Adding New Models:**
+When creating a new SQLAlchemy model, you MUST add the import to `/api-site/alembic/env.py` so Alembic can detect it for autogenerate. Without this, `alembic revision --autogenerate` will not see the new table.
+
+```python
+# In alembic/env.py - add import for new models:
+from modules.your_module.model.your_model import YourModel
+```
+
 **Manual Migration Override (Advanced):**
 If you need to skip auto-migrations temporarily (e.g., debugging):
 1. Comment out `alembic upgrade head` in `/api-site/entrypoint.sh`

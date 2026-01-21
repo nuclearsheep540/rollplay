@@ -9,7 +9,7 @@ from pydantic import BaseModel, Field
 
 class CreateSessionRequest(BaseModel):
     """Request to create a new session"""
-    name: str = Field(..., min_length=1, max_length=100)
+    name: Optional[str] = Field(None, max_length=100)
     campaign_id: UUID
     max_players: int = Field(default=8, ge=1, le=8, description="Number of player seats (1-8)")
 
@@ -34,7 +34,7 @@ class RosterPlayerResponse(BaseModel):
 class SessionResponse(BaseModel):
     """Session aggregate response"""
     id: UUID
-    name: str
+    name: Optional[str]
     campaign_id: UUID
     host_id: UUID
     host_name: str  # DM/Host screen name or email

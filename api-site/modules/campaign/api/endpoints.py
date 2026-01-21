@@ -1,10 +1,13 @@
 # Copyright (C) 2025 Matthew Davey
 # SPDX-License-Identifier: GPL-3.0-or-later
 
+import logging
 from fastapi import APIRouter, Depends, HTTPException, status
 from typing import List
 from uuid import UUID
 from sqlalchemy.orm import Session
+
+logger = logging.getLogger(__name__)
 
 from .schemas import (
     CampaignCreateRequest,
@@ -148,6 +151,10 @@ async def create_campaign(
     event_manager: EventManager = Depends(get_event_manager)
 ):
     """Create a new campaign, optionally with an initial session"""
+    logger.info(f"=== CREATE CAMPAIGN REQUEST ===")
+    logger.info(f"Title: '{request.title}'")
+    logger.info(f"Session name received: '{request.session_name}' (type: {type(request.session_name)})")
+
     try:
         command = CreateCampaign(campaign_repo)
         campaign = command.execute(
@@ -156,16 +163,19 @@ async def create_campaign(
             description=request.description or "",
             hero_image=request.hero_image
         )
+        logger.info(f"Campaign created successfully: {campaign.id}")
 
-        # Auto-create session if session_name provided
-        if request.session_name and request.session_name.strip():
-            session_command = CreateSession(session_repo, campaign_repo, event_manager)
-            session_command.execute(
-                name=request.session_name.strip(),
-                campaign_id=campaign.id,
-                host_id=current_user.id,
-                max_players=8
-            )
+        # Always create a session with the campaign
+        session_name = request.session_name.strip() if request.session_name else None
+        logger.info(f"Creating session with name: '{session_name}'")
+        session_command = CreateSession(session_repo, campaign_repo, event_manager)
+        session = session_command.execute(
+            name=session_name,
+            campaign_id=campaign.id,
+            host_id=current_user.id,
+            max_players=8
+        )
+        logger.info(f"Session created successfully: {session.id} with name '{session.name}'")
 
         return _to_campaign_response(campaign)
 

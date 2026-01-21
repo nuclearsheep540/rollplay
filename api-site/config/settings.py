@@ -85,7 +85,7 @@ class Settings(BaseSettings):
             }
         },
         "root": {
-            "level": "DEBUG",
+            "level": "INFO",
             "handlers": ["default"]
         }
     }
