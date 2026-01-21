@@ -25,77 +25,64 @@ class JWTHelper:
     def verify_auth_token(self, token: str) -> Optional[str]:
         """
         Verify JWT access token and return email if valid
-        
+
         Args:
             token: JWT token string
-            
+
         Returns:
             Email string if token is valid, None otherwise
         """
         try:
-            print(f"🔍 DEBUG: Verifying token with secret key: {self.secret_key[:20]}...")
-            
+            logger.debug(f"Verifying token with secret key: {self.secret_key[:20]}...")
+
             # Decode token
             payload = jwt.decode(token, self.secret_key, algorithms=[self.algorithm])
-            print(f"🔍 DEBUG: Token decoded successfully. Payload keys: {list(payload.keys())}")
-            
+            logger.debug(f"Token decoded successfully. Payload keys: {list(payload.keys())}")
+
             # Check token type
             token_type = payload.get("type")
-            print(f"🔍 DEBUG: Token type: {token_type}")
+            logger.debug(f"Token type: {token_type}")
             if token_type != "access":
-                print(f"🔍 DEBUG: Invalid token type. Expected 'access', got '{token_type}'")
-                logger.warning(f"Invalid token type: {payload.get('type')}")
+                logger.debug(f"Invalid token type. Expected 'access', got '{token_type}'")
                 return None
-            
+
             # Extract email
             email = payload.get("email")
-            print(f"🔍 DEBUG: Email from token: {email}")
+            logger.debug(f"Email from token: {email}")
             if not email:
-                print("🔍 DEBUG: Token missing email field")
-                logger.warning("Token missing email")
+                logger.debug("Token missing email field")
                 return None
-                
-            print(f"🔍 DEBUG: Successfully verified token for: {email}")
-            logger.info(f"Successfully verified token for: {email}")
+
+            logger.info(f"Token verified for user: {email}")
             return email
-            
+
         except jwt.ExpiredSignatureError:
-            print("🔍 DEBUG: JWT token has expired")
-            logger.warning("JWT token has expired")
+            logger.debug("JWT token has expired")
             return None
         except jwt.InvalidTokenError as e:
-            print(f"🔍 DEBUG: Invalid JWT token error: {str(e)}")
-            logger.warning(f"Invalid JWT token: {str(e)}")
+            logger.debug(f"Invalid JWT token error: {str(e)}")
             return None
         except Exception as e:
-            print(f"🔍 DEBUG: Exception verifying JWT token: {str(e)}")
-            logger.error(f"Error verifying JWT token: {str(e)}")
+            logger.debug(f"Exception verifying JWT token: {str(e)}")
             return None
     
     def get_token_from_cookie(self, request: Request) -> Optional[str]:
         """
         Extract JWT token from auth_token cookie
-        
+
         Args:
             request: FastAPI Request object
-            
+
         Returns:
             Token string if found, None otherwise
         """
         try:
-            # Debug: Log all cookies received
-            all_cookies = request.cookies
-            logger.info(f"All cookies received: {list(all_cookies.keys())}")
-            if all_cookies:
-                for name, value in all_cookies.items():
-                    logger.info(f"Cookie '{name}': {value[:50]}..." if len(value) > 50 else f"Cookie '{name}': {value}")
-            
             token = request.cookies.get("auth_token")
             if token:
-                logger.info(f"Found auth_token cookie: {token[:50]}...")
+                logger.debug(f"Found auth_token cookie: {token[:50]}...")
             else:
-                logger.warning("No auth_token cookie found in request")
+                logger.debug("No auth_token cookie found in request")
             return token
         except Exception as e:
-            logger.error(f"Error extracting token from cookie: {str(e)}")
+            logger.debug(f"Error extracting token from cookie: {str(e)}")
             return None
