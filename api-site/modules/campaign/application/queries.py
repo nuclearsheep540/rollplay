@@ -5,6 +5,7 @@ from typing import List, Optional
 from uuid import UUID
 
 from sqlalchemy.orm import Session
+from sqlalchemy import and_
 
 from modules.campaign.domain.campaign_aggregate import CampaignAggregate
 from modules.campaign.orm.campaign_repository import CampaignRepository
@@ -72,9 +73,9 @@ class GetCampaignMembers:
         4. Format multi-class as "Fighter / Ranger"
         5. Sort: host first, then alphabetically
         """
+        # Imports here to avoid circular dependencies between modules
         from modules.user.model.user_model import User
         from modules.characters.model.character_model import Character
-        from sqlalchemy import and_
 
         campaign = self.campaign_repo.get_by_id(campaign_id)
         if not campaign:
@@ -101,7 +102,7 @@ class GetCampaignMembers:
                     )
                 )
                 .order_by(
-                    Character.active_game.is_(None).desc(),
+                    Character.active_session.is_(None).desc(),
                     Character.created_at.desc()
                 )
                 .first()

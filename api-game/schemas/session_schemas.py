@@ -6,11 +6,11 @@ from typing import List
 
 
 class SessionStartRequest(BaseModel):
-    """Request to create a new game session in MongoDB"""
-    game_id: str
+    """Request to create a new active game in MongoDB for a session"""
+    session_id: str  # PostgreSQL session ID from api-site
     dm_username: str
     max_players: int = 8
-    joined_user_ids: List[str] = []  # List of user IDs who are already part of the game
+    joined_user_ids: List[str] = []  # List of user IDs who are already part of the session
 
 
 class SessionStartResponse(BaseModel):
@@ -21,8 +21,8 @@ class SessionStartResponse(BaseModel):
 
 
 class SessionEndRequest(BaseModel):
-    """Request to end a game session"""
-    game_id: str
+    """Request to end a game and return final state for session"""
+    session_id: str  # PostgreSQL session ID from api-site
 
 
 class SessionEndResponse(BaseModel):

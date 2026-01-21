@@ -124,30 +124,30 @@ export const EVENT_CONFIG = {
     navigationTab: 'campaigns'
   },
 
-  'game_created': {
+  'session_created': {
     toastMessage: null,  // Silent - no toast notification
-    panelMessage: (data) => `${data.host_screen_name} created new session "${data.game_name}" in ${data.campaign_name}`,
+    panelMessage: (data) => `${data.host_screen_name} created new session "${data.session_name}" in ${data.campaign_name}`,
     toastType: 'info',
     navigationTab: 'campaigns'
   },
 
-  'game_started': {
-    toastMessage: 'Game session started',
-    panelMessage: (data) => `${data.dm_screen_name} started game session "${data.game_name}"`,
+  'session_started': {
+    toastMessage: 'Session started',
+    panelMessage: (data) => `${data.dm_screen_name} started session "${data.session_name}"`,
     toastType: 'success',
     navigationTab: 'sessions'
   },
 
-  'game_ended': {
+  'session_paused': {
     toastMessage: null,  // Silent - no toast notification
-    panelMessage: (data) => `Game session "${data.game_name}" was paused by ${data.ended_by_screen_name}`,
+    panelMessage: (data) => `Session "${data.session_name}" was paused by ${data.paused_by_screen_name}`,
     toastType: 'info',
     navigationTab: 'campaigns'
   },
 
-  'game_finished': {
+  'session_finished': {
     toastMessage: null,  // Silent - no toast notification
-    panelMessage: (data) => `Campaign milestone: "${data.game_name}" completed!`,
+    panelMessage: (data) => `Campaign milestone: "${data.session_name}" completed!`,
     toastType: 'success',
     navigationTab: 'campaigns'
   }

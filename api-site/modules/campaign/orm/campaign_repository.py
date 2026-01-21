@@ -4,6 +4,8 @@
 from typing import List, Optional
 from uuid import UUID
 from sqlalchemy.orm import Session
+from sqlalchemy import or_, cast
+from sqlalchemy.dialects.postgresql import JSONB
 
 from modules.campaign.model.campaign_model import Campaign as CampaignModel
 from modules.campaign.domain.campaign_aggregate import CampaignAggregate
@@ -40,9 +42,6 @@ class CampaignRepository:
     def get_by_member_id(self, user_id: UUID) -> List[CampaignAggregate]:
         """Get all campaigns where user is either host or player (accepted invites only)"""
         try:
-            from sqlalchemy import or_, cast, String
-            from sqlalchemy.dialects.postgresql import JSONB
-
             # Get campaigns where user is host OR in player_ids array
             # Now using JSONB type which supports @> (contains) operator properly
             models = (
@@ -79,9 +78,6 @@ class CampaignRepository:
     def get_invited_campaigns(self, user_id: UUID) -> List[CampaignAggregate]:
         """Get all campaigns where user has a pending invite"""
         try:
-            from sqlalchemy import cast
-            from sqlalchemy.dialects.postgresql import JSONB
-
             # Get campaigns where user is in invited_player_ids array
             models = (
                 self.db.query(CampaignModel)
@@ -183,8 +179,8 @@ class CampaignRepository:
 
     def _model_to_aggregate(self, model: CampaignModel) -> CampaignAggregate:
         """Helper to convert campaign model to aggregate"""
-        # Extract game IDs from relationship
-        game_ids = [game.id for game in model.games or []]
+        # Extract session IDs from relationship
+        session_ids = [session.id for session in model.sessions or []]
 
         invited_player_ids = []
         if model.invited_player_ids:
@@ -205,7 +201,7 @@ class CampaignRepository:
             assets=model.assets,
             scenes=model.scenes,
             npc_factory=model.npc_factory,
-            game_ids=game_ids,
+            session_ids=session_ids,
             invited_player_ids=invited_player_ids,
             player_ids=player_ids
         )

@@ -13,14 +13,14 @@ from .schemas import (
     CampaignSummaryResponse,
     CampaignMemberResponse,
 )
-from modules.game.schemas.game_schemas import (
-    CreateGameRequest, GameResponse
+from modules.session.schemas.session_schemas import (
+    CreateSessionRequest, SessionResponse
 )
-from modules.game.api.endpoints import _to_game_response
+from modules.session.api.endpoints import _to_session_response
 from modules.campaign.dependencies.providers import campaign_repository
 from modules.campaign.orm.campaign_repository import CampaignRepository
-from modules.game.dependencies.repositories import get_game_repository
-from modules.game.repositories.game_repository import GameRepository
+from modules.session.dependencies.repositories import get_session_repository
+from modules.session.repositories.session_repository import SessionRepository
 from modules.campaign.application.commands import (
     CreateCampaign,
     UpdateCampaign,
@@ -32,7 +32,7 @@ from modules.campaign.application.commands import (
     CancelCampaignInvite,
     LeaveCampaign
 )
-from modules.game.application.commands import CreateGame
+from modules.session.application.commands import CreateSession
 from modules.campaign.application.queries import (
     GetUserCampaigns,
     GetCampaignById,
@@ -55,8 +55,8 @@ router = APIRouter()
 
 def _to_campaign_response(campaign: CampaignAggregate, user_repo: UserRepository = None) -> CampaignResponse:
     """Convert CampaignAggregate to CampaignResponse"""
-    # Campaign now only stores game_ids, not full game objects
-    # Frontend should fetch games separately from /api/games/campaign/{id}
+    # Campaign now only stores session_ids, not full session objects
+    # Frontend should fetch sessions separately from /api/sessions/campaign/{id}
 
     # Look up host screen name if user_repo provided
     host_screen_name = None
@@ -77,11 +77,11 @@ def _to_campaign_response(campaign: CampaignAggregate, user_repo: UserRepository
         npc_factory=campaign.npc_factory,
         created_at=campaign.created_at,
         updated_at=campaign.updated_at,
-        games=[],  # Games fetched separately via game module
+        sessions=[],  # Sessions fetched separately via session module
         invited_player_ids=[str(pid) for pid in campaign.invited_player_ids],
         player_ids=[str(pid) for pid in campaign.player_ids],
-        total_games=campaign.get_total_games(),
-        active_games=0,  # TODO: Query game module for active count
+        total_sessions=campaign.get_total_sessions(),
+        active_sessions=0,  # TODO: Query session module for active count
         invited_count=campaign.get_invited_count(),
         player_count=campaign.get_player_count()
     )
@@ -106,34 +106,34 @@ def _to_campaign_summary_response(campaign: CampaignAggregate, user_repo: UserRe
         host_screen_name=host_screen_name,
         created_at=campaign.created_at,
         updated_at=campaign.updated_at,
-        total_games=campaign.get_total_games(),
-        active_games=0,  # TODO: Query game module for active count
+        total_sessions=campaign.get_total_sessions(),
+        active_sessions=0,  # TODO: Query session module for active count
         invited_player_ids=[str(pid) for pid in campaign.invited_player_ids],
         player_ids=[str(pid) for pid in campaign.player_ids],
         invited_count=campaign.get_invited_count()
     )
 
-# Game is a parent of campaign so we'll define the POST here
-@router.post("/games", response_model=GameResponse, status_code=status.HTTP_201_CREATED)
-async def create_game(
-    request: CreateGameRequest,
+# Session is a child of campaign so we'll define the POST here
+@router.post("/sessions", response_model=SessionResponse, status_code=status.HTTP_201_CREATED)
+async def create_session(
+    request: CreateSessionRequest,
     current_user: UserAggregate = Depends(get_current_user_from_token),
-    game_repo: GameRepository = Depends(get_game_repository),
+    session_repo: SessionRepository = Depends(get_session_repository),
     campaign_repo: CampaignRepository = Depends(campaign_repository),
     event_manager: EventManager = Depends(get_event_manager),
     db: Session = Depends(get_db)
 ):
-    """Create a new game within a campaign"""
+    """Create a new session within a campaign"""
 
     try:
-        command = CreateGame(game_repo, campaign_repo, event_manager)
-        game = command.execute(
+        command = CreateSession(session_repo, campaign_repo, event_manager)
+        session = command.execute(
             name=request.name,
             campaign_id=request.campaign_id,
             host_id=current_user.id,
             max_players=request.max_players
         )
-        return _to_game_response(game, db)
+        return _to_session_response(session, db)
     except ValueError as e:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
 
@@ -210,7 +210,7 @@ async def get_campaign(
     current_user: UserAggregate = Depends(get_current_user_from_token),
     campaign_repo: CampaignRepository = Depends(campaign_repository)
 ):
-    """Get campaign by ID with all games"""
+    """Get campaign by ID with all sessions"""
     try:
         query = GetCampaignById(campaign_repo)
         campaign = query.execute(campaign_id)
@@ -269,16 +269,16 @@ async def delete_campaign(
     campaign_id: UUID,
     current_user: UserAggregate = Depends(get_current_user_from_token),
     campaign_repo: CampaignRepository = Depends(campaign_repository),
-    game_repo: GameRepository = Depends(get_game_repository)
+    session_repo: SessionRepository = Depends(get_session_repository)
 ):
     """
     Delete campaign.
 
-    Only allows deletion if there are no ACTIVE game sessions.
-    INACTIVE games will be cascade-deleted with the campaign.
+    Only allows deletion if there are no ACTIVE sessions.
+    INACTIVE sessions will be cascade-deleted with the campaign.
     """
     try:
-        command = DeleteCampaign(campaign_repo, game_repo)
+        command = DeleteCampaign(campaign_repo, session_repo)
         success = command.execute(campaign_id, current_user.id)
 
         if success:
@@ -348,15 +348,15 @@ async def accept_campaign_invite(
     campaign_repo: CampaignRepository = Depends(campaign_repository),
     user_repo: UserRepository = Depends(get_user_repository),
     event_manager: EventManager = Depends(get_event_manager),
-    game_repo: GameRepository = Depends(get_game_repository)
+    session_repo: SessionRepository = Depends(get_session_repository)
 ):
     """
     Accept a campaign invite (player only).
 
-    Automatically adds the player to any active games in the campaign.
+    Automatically adds the player to any active sessions in the campaign.
     """
     try:
-        command = AcceptCampaignInvite(campaign_repo, user_repo, event_manager, game_repo)
+        command = AcceptCampaignInvite(campaign_repo, user_repo, event_manager, session_repo)
         campaign = command.execute(
             campaign_id=campaign_id,
             player_id=current_user.id
@@ -472,4 +472,3 @@ async def get_campaign_members(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=str(e)
         )
-

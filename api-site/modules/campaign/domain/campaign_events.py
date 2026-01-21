@@ -74,7 +74,7 @@ class CampaignEvents:
         }
 
     @staticmethod
-    def campaign_invite_accepted(host_id: UUID, campaign_id: UUID, campaign_name: str, player_id: UUID, player_screen_name: str, auto_added_to_game_ids: List[UUID]) -> Dict[str, Any]:
+    def campaign_invite_accepted(host_id: UUID, campaign_id: UUID, campaign_name: str, player_id: UUID, player_screen_name: str, auto_added_to_session_ids: List[UUID]) -> Dict[str, Any]:
         """
         Event: Player accepted campaign invite (notifies host/DM)
 
@@ -84,7 +84,7 @@ class CampaignEvents:
             campaign_name: Campaign name
             player_id: Player who accepted
             player_screen_name: Player's display name
-            auto_added_to_game_ids: List of game IDs player was auto-added to
+            auto_added_to_session_ids: List of game IDs player was auto-added to
 
         Returns:
             Event configuration dict
@@ -97,7 +97,7 @@ class CampaignEvents:
                 "campaign_name": campaign_name,
                 "player_id": str(player_id),
                 "player_screen_name": player_screen_name,
-                "auto_added_to_games": [str(gid) for gid in auto_added_to_game_ids]
+                "auto_added_to_games": [str(gid) for gid in auto_added_to_session_ids]
             },
             "show_toast": True,
             "save_notification": True

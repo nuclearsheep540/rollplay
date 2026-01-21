@@ -42,7 +42,7 @@ export default function CampaignManager({ user, refreshTrigger, onCampaignUpdate
   const [selectedInvitedCampaign, setSelectedInvitedCampaign] = useState(null) // Track expanded invited campaign
   const [invitedCampaignMembers, setInvitedCampaignMembers] = useState([]) // Members for selected invited campaign
   const [loadingInvitedMembers, setLoadingInvitedMembers] = useState(false)
-  const [allGames, setAllGames] = useState([]) // Store all games from all campaigns
+  const [allSessions, setAllSessions] = useState([]) // Store all sessions from all campaigns
   const [isResizing, setIsResizing] = useState(false) // Track window resize state
 
   // Action state tracking (not modals, but ongoing operations)
@@ -165,8 +165,8 @@ export default function CampaignManager({ user, refreshTrigger, onCampaignUpdate
 
         setCampaigns(campaignsWithMembers)
 
-        // Fetch games for joined campaigns only
-        await fetchAllGames(campaignsWithMembers)
+        // Fetch sessions for joined campaigns only
+        await fetchAllSessions(campaignsWithMembers)
       } else {
         console.error('Failed to fetch campaigns:', response.status)
         setError('Failed to load campaigns')
@@ -179,15 +179,15 @@ export default function CampaignManager({ user, refreshTrigger, onCampaignUpdate
     }
   }
 
-  // Fetch all games for all campaigns
-  const fetchAllGames = async (campaignsData) => {
+  // Fetch all sessions for all campaigns
+  const fetchAllSessions = async (campaignsData) => {
     try {
-      const allGamesArray = []
+      const allSessionsArray = []
 
-      // Fetch games for each campaign in parallel
-      const gamesPromises = campaignsData.map(async (campaign) => {
+      // Fetch sessions for each campaign in parallel
+      const sessionsPromises = campaignsData.map(async (campaign) => {
         try {
-          const response = await fetch(`/api/games/campaign/${campaign.id}`, {
+          const response = await fetch(`/api/sessions/campaign/${campaign.id}`, {
             method: 'GET',
             headers: {
               'Content-Type': 'application/json',
@@ -196,33 +196,33 @@ export default function CampaignManager({ user, refreshTrigger, onCampaignUpdate
           })
 
           if (response.ok) {
-            const gamesData = await response.json()
-            // Backend returns GameListResponse with {games: [...], total: n}
-            return gamesData.games || []
+            const sessionsData = await response.json()
+            // Backend returns SessionListResponse with {sessions: [...], total: n}
+            return sessionsData.sessions || []
           } else {
-            console.error(`Failed to fetch games for campaign ${campaign.id}:`, response.status)
+            console.error(`Failed to fetch sessions for campaign ${campaign.id}:`, response.status)
             return []
           }
         } catch (error) {
-          console.error(`Error fetching games for campaign ${campaign.id}:`, error)
+          console.error(`Error fetching sessions for campaign ${campaign.id}:`, error)
           return []
         }
       })
 
-      const gamesArrays = await Promise.all(gamesPromises)
-      // Flatten all games into single array
-      gamesArrays.forEach(games => allGamesArray.push(...games))
-      setAllGames(allGamesArray)
+      const sessionsArrays = await Promise.all(sessionsPromises)
+      // Flatten all sessions into single array
+      sessionsArrays.forEach(sessions => allSessionsArray.push(...sessions))
+      setAllSessions(allSessionsArray)
     } catch (error) {
       console.error('Error fetching all games:', error)
     }
   }
 
-  // Handle targeted game updates from WebSocket events
-  const handleGameUpdate = async (campaignId) => {
-    // Only fetch games for the specific campaign
+  // Handle targeted session updates from WebSocket events
+  const handleSessionUpdate = async (campaignId) => {
+    // Only fetch sessions for the specific campaign
     try {
-      const response = await fetch(`/api/games/campaign/${campaignId}`, {
+      const response = await fetch(`/api/sessions/campaign/${campaignId}`, {
         method: 'GET',
         headers: {
           'Content-Type': 'application/json',
@@ -231,19 +231,19 @@ export default function CampaignManager({ user, refreshTrigger, onCampaignUpdate
       })
 
       if (response.ok) {
-        const gamesData = await response.json()
-        const updatedGames = gamesData.games || []
+        const sessionsData = await response.json()
+        const updatedSessions = sessionsData.sessions || []
 
-        // Update allGames by replacing games for this campaign
-        setAllGames(prev => {
-          // Remove old games for this campaign
-          const otherGames = prev.filter(game => game.campaign_id !== campaignId)
-          // Add updated games
-          return [...otherGames, ...updatedGames]
+        // Update allSessions by replacing sessions for this campaign
+        setAllSessions(prev => {
+          // Remove old sessions for this campaign
+          const otherSessions = prev.filter(session => session.campaign_id !== campaignId)
+          // Add updated sessions
+          return [...otherSessions, ...updatedSessions]
         })
       }
     } catch (error) {
-      console.error(`Error updating games for campaign ${campaignId}:`, error)
+      console.error(`Error updating sessions for campaign ${campaignId}:`, error)
     }
   }
 
@@ -379,7 +379,7 @@ export default function CampaignManager({ user, refreshTrigger, onCampaignUpdate
         campaign_id: `${modals.gameCreate.campaign}`
       }
 
-      const response = await fetch(`/api/campaigns/games?campaign_id=${modals.gameCreate.campaign}`, {
+      const response = await fetch(`/api/campaigns/sessions?campaign_id=${modals.gameCreate.campaign}`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -413,7 +413,7 @@ export default function CampaignManager({ user, refreshTrigger, onCampaignUpdate
     setError(null)
 
     try {
-      const response = await fetch(`/api/games/${gameId}/start`, {
+      const response = await fetch(`/api/sessions/${gameId}/start`, {
         method: 'POST',
         credentials: 'include'
       })
@@ -445,7 +445,7 @@ export default function CampaignManager({ user, refreshTrigger, onCampaignUpdate
     setError(null)
 
     try {
-      const response = await fetch(`/api/games/${modals.gamePause.game.id}/end`, {
+      const response = await fetch(`/api/sessions/${modals.gamePause.game.id}/pause`, {
         method: 'POST',
         credentials: 'include'
       })
@@ -483,7 +483,7 @@ export default function CampaignManager({ user, refreshTrigger, onCampaignUpdate
     setError(null)
 
     try {
-      const response = await fetch(`/api/games/${modals.gameFinish.game.id}/finish`, {
+      const response = await fetch(`/api/sessions/${modals.gameFinish.game.id}/finish`, {
         method: 'POST',
         credentials: 'include'
       })
@@ -536,7 +536,7 @@ export default function CampaignManager({ user, refreshTrigger, onCampaignUpdate
     setError(null)
 
     try {
-      const response = await fetch(`/api/games/${modals.gameDelete.game.id}`, {
+      const response = await fetch(`/api/sessions/${modals.gameDelete.game.id}`, {
         method: 'DELETE',
         credentials: 'include'
       })
@@ -793,10 +793,10 @@ export default function CampaignManager({ user, refreshTrigger, onCampaignUpdate
     }
   }, [campaigns])
 
-  // Expose handleGameUpdate to parent via callback
+  // Expose handleSessionUpdate to parent via callback
   useEffect(() => {
     if (onCampaignUpdate) {
-      onCampaignUpdate({ updateGames: handleGameUpdate })
+      onCampaignUpdate({ updateSessions: handleSessionUpdate })
     }
   }, [onCampaignUpdate])
 
@@ -1248,15 +1248,11 @@ export default function CampaignManager({ user, refreshTrigger, onCampaignUpdate
           {campaigns
             .filter((campaign) => !selectedCampaign || selectedCampaign.id === campaign.id)
             .map((campaign) => {
-              const campaignGames = allGames.filter(game => game.campaign_id === campaign.id)
-              // Active games are STARTING, ACTIVE, or STOPPING (excludes INACTIVE and FINISHED)
-              const activeGames = campaignGames.filter(game =>
-                game.status === 'active' || game.status === 'starting' || game.status === 'stopping'
+              const campaignSessions = allSessions.filter(session => session.campaign_id === campaign.id)
+              // Active sessions are STARTING, ACTIVE, or STOPPING (excludes INACTIVE and FINISHED)
+              const activeSessions = campaignSessions.filter(session =>
+                session.status === 'active' || session.status === 'starting' || session.status === 'stopping'
               )
-              const inactiveGames = campaignGames.filter(game => game.status === 'inactive')
-              const finishedGames = campaignGames.filter(game => game.status === 'finished')
-              const startingGames = campaignGames.filter(game => game.status === 'starting')
-              const stoppingGames = campaignGames.filter(game => game.status === 'stopping')
 
               const isSelected = selectedCampaign?.id === campaign.id
 
@@ -1379,11 +1375,11 @@ export default function CampaignManager({ user, refreshTrigger, onCampaignUpdate
                           {/* Active game indicator - always reserves space */}
                           <div className="px-4 py-2 backdrop-blur-sm text-sm font-semibold rounded-sm border"
                                style={{
-                                 backgroundColor: activeGames.length > 0 ? '#166534' : 'transparent',
-                                 color: activeGames.length > 0 ? THEME.textAccent : 'transparent',
-                                 borderColor: activeGames.length > 0 ? '#16a34a' : 'transparent',
-                                 animation: activeGames.length > 0 ? 'pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite' : 'none',
-                                 visibility: activeGames.length > 0 ? 'visible' : 'hidden'
+                                 backgroundColor: activeSessions.length > 0 ? '#166534' : 'transparent',
+                                 color: activeSessions.length > 0 ? THEME.textAccent : 'transparent',
+                                 borderColor: activeSessions.length > 0 ? '#16a34a' : 'transparent',
+                                 animation: activeSessions.length > 0 ? 'pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite' : 'none',
+                                 visibility: activeSessions.length > 0 ? 'visible' : 'hidden'
                                }}>
                             Game In Session
                           </div>
@@ -1407,10 +1403,10 @@ export default function CampaignManager({ user, refreshTrigger, onCampaignUpdate
                                   e.stopPropagation()
                                   toggleCampaignDetails(campaign)
                                 }}
-                                disabled={activeGames.length > 0}
+                                disabled={activeSessions.length > 0}
                                 className="w-10 h-10 backdrop-blur-sm rounded-sm transition-all flex items-center justify-center border disabled:opacity-50 disabled:cursor-not-allowed"
                                 style={{backgroundColor: THEME.bgSecondary, color: THEME.textAccent, borderColor: THEME.borderActive}}
-                                title={activeGames.length > 0 ? "Cannot configure campaign during active games" : "Configure Campaign"}
+                                title={activeSessions.length > 0 ? "Cannot configure campaign during active games" : "Configure Campaign"}
                               >
                                 <FontAwesomeIcon icon={faGear} />
                               </button>
@@ -1419,10 +1415,10 @@ export default function CampaignManager({ user, refreshTrigger, onCampaignUpdate
                                   e.stopPropagation()
                                   promptDeleteCampaign(campaign)
                                 }}
-                                disabled={modals.campaignDelete.isDeleting || activeGames.length > 0}
+                                disabled={modals.campaignDelete.isDeleting || activeSessions.length > 0}
                                 className="w-10 h-10 backdrop-blur-sm rounded-sm transition-all flex items-center justify-center border disabled:opacity-50 disabled:cursor-not-allowed"
                                 style={{backgroundColor: '#991b1b', color: THEME.textAccent, borderColor: '#dc2626'}}
-                                title={activeGames.length > 0 ? "Cannot delete campaign with active games" : "Delete Campaign"}
+                                title={activeSessions.length > 0 ? "Cannot delete campaign with active games" : "Delete Campaign"}
                               >
                                 <FontAwesomeIcon icon={faTrash} />
                               </button>
@@ -1439,7 +1435,7 @@ export default function CampaignManager({ user, refreshTrigger, onCampaignUpdate
                         <div className="text-sm drop-shadow" style={{color: THEME.textOnDark}}>
                           <span>Created: {campaign.created_at ? new Date(campaign.created_at).toLocaleDateString() : 'Unknown'}</span>
                           <span className="mx-2">•</span>
-                          <span>{campaignGames.length} session{campaignGames.length !== 1 ? 's' : ''}</span>
+                          <span>{campaignSessions.length} session{campaignSessions.length !== 1 ? 's' : ''}</span>
                         </div>
                       </div>
                     </div>
@@ -1494,7 +1490,7 @@ export default function CampaignManager({ user, refreshTrigger, onCampaignUpdate
 
                       <div className="space-y-3">
                         {/* Create Session Template - Only show if user is host and no non-finished sessions exist */}
-                        {campaign.host_id === user.id && !campaignGames.some(g => ['inactive', 'active', 'starting', 'stopping'].includes(g.status?.toLowerCase())) && (
+                        {campaign.host_id === user.id && !campaignSessions.some(g => ['inactive', 'active', 'starting', 'stopping'].includes(g.status?.toLowerCase())) && (
                           <button
                             onClick={() => openModal('gameCreate', { campaign: campaign.id, name: 'Session 1', maxPlayers: 8 })}
                             className="w-full flex items-center justify-between p-4 rounded-sm border-2 border-dashed transition-all hover:border-opacity-100"
@@ -1517,13 +1513,13 @@ export default function CampaignManager({ user, refreshTrigger, onCampaignUpdate
                           </button>
                         )}
 
-                        {campaignGames.length === 0 && campaign.host_id !== user.id && (
+                        {campaignSessions.length === 0 && campaign.host_id !== user.id && (
                           <p className="text-sm py-4 text-center" style={{color: THEME.textSecondary}}>No game sessions yet.</p>
                         )}
 
-                        {campaignGames.length > 0 && (
+                        {campaignSessions.length > 0 && (
                           <div className="space-y-2">
-                            {campaignGames.map((game) => (
+                            {campaignSessions.map((game) => (
                               <div
                                 key={game.id}
                                 className="flex items-center justify-between p-4 rounded-sm border"
@@ -1605,7 +1601,7 @@ export default function CampaignManager({ user, refreshTrigger, onCampaignUpdate
                                         variant="success"
                                         size="md"
                                         onClick={() => startGame(game.id)}
-                                        disabled={startingGame === game.id || activeGames.length > 0}
+                                        disabled={startingGame === game.id || activeSessions.length > 0}
                                       >
                                         {startingGame === game.id ? (
                                           <>

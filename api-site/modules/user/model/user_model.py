@@ -27,7 +27,7 @@ class User(Base):
     
     # Relationships (for ORM convenience, not exposed to domain)
     campaigns = relationship("Campaign", back_populates="host")  # UPDATED from "dm"
-    games = relationship("Game", back_populates="host")  # UPDATED from "dungeon_master"
+    sessions = relationship("Session", back_populates="host")  # Renamed from "games"
     
     def __repr__(self):
         return "<User {}>".format(self.email)

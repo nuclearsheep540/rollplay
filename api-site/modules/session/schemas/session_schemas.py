@@ -7,15 +7,15 @@ from uuid import UUID
 from pydantic import BaseModel, Field
 
 
-class CreateGameRequest(BaseModel):
-    """Request to create a new game"""
+class CreateSessionRequest(BaseModel):
+    """Request to create a new session"""
     name: str = Field(..., min_length=1, max_length=100)
     campaign_id: UUID
     max_players: int = Field(default=8, ge=1, le=8, description="Number of player seats (1-8)")
 
 
-class UpdateGameRequest(BaseModel):
-    """Request to update game details"""
+class UpdateSessionRequest(BaseModel):
+    """Request to update session details"""
     name: Optional[str] = Field(None, min_length=1, max_length=100)
 
 
@@ -31,8 +31,8 @@ class RosterPlayerResponse(BaseModel):
     joined_at: datetime
 
 
-class GameResponse(BaseModel):
-    """Game aggregate response"""
+class SessionResponse(BaseModel):
+    """Session aggregate response"""
     id: UUID
     name: str
     campaign_id: UUID
@@ -42,8 +42,8 @@ class GameResponse(BaseModel):
     created_at: datetime
     started_at: Optional[datetime]
     stopped_at: Optional[datetime]
-    session_id: Optional[str]
-    joined_users: List[UUID]  # Users in game roster
+    active_game_id: Optional[str]  # MongoDB ObjectID when game is running
+    joined_users: List[UUID]  # Users in session roster
     roster: List[RosterPlayerResponse]  # Enriched roster with character details
     player_count: int  # Count of joined_users
     max_players: int
@@ -52,7 +52,7 @@ class GameResponse(BaseModel):
         from_attributes = True
 
 
-class GameListResponse(BaseModel):
-    """List of games"""
-    games: List[GameResponse]
+class SessionListResponse(BaseModel):
+    """List of sessions"""
+    sessions: List[SessionResponse]
     total: int

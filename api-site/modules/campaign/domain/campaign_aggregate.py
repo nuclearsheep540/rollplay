@@ -12,8 +12,8 @@ class CampaignAggregate:
     """
     Campaign Aggregate Root
 
-    Campaigns organize games and manage players.
-    Game is now a separate aggregate - Campaign only stores game_ids.
+    Campaigns organize sessions and manage players.
+    Session is now a separate aggregate - Campaign only stores session_ids.
 
     Player Management:
     - invited_player_ids: Users invited to campaign (pending acceptance)
@@ -29,12 +29,18 @@ class CampaignAggregate:
     assets: Optional[dict]
     scenes: Optional[dict]
     npc_factory: Optional[dict]
-    game_ids: List[UUID] = field(default_factory=list)
+    session_ids: List[UUID] = field(default_factory=list)
     invited_player_ids: List[UUID] = field(default_factory=list)
     player_ids: List[UUID] = field(default_factory=list)
 
     @classmethod
-    def create(cls, title: str, description: str, host_id: UUID, hero_image: Optional[str] = None):
+    def create(
+        cls,
+        title: str,
+        description: str,
+        host_id: UUID,
+        hero_image: Optional[str] = None
+        ):
         """Create new campaign with business rules validation"""
         # Business rule: Campaign title must be provided and valid
         if not title or not title.strip():
@@ -65,38 +71,38 @@ class CampaignAggregate:
             assets=None,
             scenes=None,
             npc_factory=None,
-            game_ids=[],
+            session_ids=[],
             invited_player_ids=[],
             player_ids=[]
         )
 
-    def add_game(self, game_id: UUID) -> None:
+    def add_session(self, session_id: UUID) -> None:
         """
-        Add a game reference to this campaign.
+        Add a session reference to this campaign.
 
-        Note: Game creation happens through GameRepository.
-        Campaign just tracks which games belong to it.
+        Note: Session creation happens through SessionRepository.
+        Campaign just tracks which sessions belong to it.
         """
-        if game_id in self.game_ids:
-            raise ValueError("Game already belongs to this campaign")
+        if session_id in self.session_ids:
+            raise ValueError("Session already belongs to this campaign")
 
-        # Business rule: Campaign can have maximum games (configurable)
-        max_games_per_campaign = 20  # Business policy
-        if len(self.game_ids) >= max_games_per_campaign:
-            raise ValueError(f"Campaign cannot exceed {max_games_per_campaign} games")
+        # Business rule: Campaign can have maximum sessions (configurable)
+        max_sessions_per_campaign = 20  # Business policy
+        if len(self.session_ids) >= max_sessions_per_campaign:
+            raise ValueError(f"Campaign cannot exceed {max_sessions_per_campaign} sessions")
 
-        self.game_ids.append(game_id)
+        self.session_ids.append(session_id)
         self.update_timestamp()
 
-    def remove_game(self, game_id: UUID) -> bool:
+    def remove_session(self, session_id: UUID) -> bool:
         """
-        Remove a game reference from this campaign.
+        Remove a session reference from this campaign.
 
-        Note: Actual game deletion happens through GameRepository.
+        Note: Actual session deletion happens through SessionRepository.
         This just removes the reference.
         """
-        if game_id in self.game_ids:
-            self.game_ids.remove(game_id)
+        if session_id in self.session_ids:
+            self.session_ids.remove(session_id)
             self.update_timestamp()
             return True
         return False
@@ -132,18 +138,18 @@ class CampaignAggregate:
         """Check if campaign is owned by specific user"""
         return self.host_id == user_id
 
-    def get_total_games(self) -> int:
-        """Get total number of games in campaign"""
-        return len(self.game_ids)
+    def get_total_sessions(self) -> int:
+        """Get total number of sessions in campaign"""
+        return len(self.session_ids)
 
     def can_be_deleted(self) -> bool:
         """
-        Business rule: Campaign can only be deleted if no games exist.
+        Business rule: Campaign can only be deleted if no sessions exist.
 
-        Note: Active game check happens in GameRepository.
-        This just ensures no game references exist.
+        Note: Active session check happens in SessionRepository.
+        This just ensures no session references exist.
         """
-        return len(self.game_ids) == 0
+        return len(self.session_ids) == 0
 
     def invite_player(self, user_id: UUID) -> None:
         """Invite a player to this campaign (pending acceptance)"""

@@ -16,42 +16,42 @@ import {
   faRightToBracket
 } from '@fortawesome/free-solid-svg-icons'
 
-export default function GamesManager({ user, refreshTrigger }) {
+export default function SessionsManager({ user, refreshTrigger }) {
   const router = useRouter()
-  const [games, setGames] = useState([])
+  const [sessions, setSessions] = useState([])
   const [characters, setCharacters] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
   const [showCharacterModal, setShowCharacterModal] = useState(false)
-  const [selectedGameForCharacter, setSelectedGameForCharacter] = useState(null)
+  const [selectedSessionForCharacter, setSelectedSessionForCharacter] = useState(null)
 
   useEffect(() => {
     // Only show loading on initial fetch (refreshTrigger = 0)
-    fetchGamesAndCharacters(refreshTrigger === 0)
+    fetchSessionsAndCharacters(refreshTrigger === 0)
   }, [refreshTrigger])
 
-  const fetchGamesAndCharacters = async (showLoading = true) => {
+  const fetchSessionsAndCharacters = async (showLoading = true) => {
     try {
       if (showLoading) setLoading(true)
 
-      // Fetch games and characters in parallel
-      const [gamesResponse, charactersResponse] = await Promise.all([
-        fetch('/api/games/my-games', { credentials: 'include' }),
+      // Fetch sessions and characters in parallel
+      const [sessionsResponse, charactersResponse] = await Promise.all([
+        fetch('/api/sessions/my-sessions', { credentials: 'include' }),
         fetch('/api/characters/', { credentials: 'include' })
       ])
 
-      if (!gamesResponse.ok || !charactersResponse.ok) {
+      if (!sessionsResponse.ok || !charactersResponse.ok) {
         throw new Error('Failed to fetch data')
       }
 
-      const gamesData = await gamesResponse.json()
+      const sessionsData = await sessionsResponse.json()
       const charactersData = await charactersResponse.json()
 
-      setGames(gamesData.games || [])
+      setSessions(sessionsData.sessions || [])
       setCharacters(charactersData || [])
       setError(null)
     } catch (err) {
-      console.error('Error fetching games:', err)
+      console.error('Error fetching sessions:', err)
       setError(err.message)
     } finally {
       setLoading(false)
@@ -59,80 +59,80 @@ export default function GamesManager({ user, refreshTrigger }) {
   }
 
   // Helper functions
-  const isUserHost = (game) => game.host_id === user.id
-  const isUserJoined = (game) => game.joined_users && game.joined_users.includes(user.id)
+  const isUserHost = (session) => session.host_id === user.id
+  const isUserJoined = (session) => session.joined_users && session.joined_users.includes(user.id)
 
-  const getUserRole = (game) => {
-    if (isUserHost(game)) return 'DM'
-    if (isUserJoined(game)) return 'Player'
+  const getUserRole = (session) => {
+    if (isUserHost(session)) return 'DM'
+    if (isUserJoined(session)) return 'Player'
     return 'Unknown'
   }
 
-  const getAvailableCharacters = (gameId) => {
-    // Return characters that are either not locked or locked to this specific game
+  const getAvailableCharacters = (sessionId) => {
+    // Return characters that are either not locked or locked to this specific session
     return characters.filter(char =>
-      !char.active_game || char.active_game === gameId
+      !char.active_session || char.active_session === sessionId
     )
   }
 
-  const getSelectedCharacter = (gameId) => {
-    // Find character locked to this game
-    return characters.find(char => char.active_game === gameId)
+  const getSelectedCharacter = (sessionId) => {
+    // Find character locked to this session
+    return characters.find(char => char.active_session === sessionId)
   }
 
   // Enter game (prompts character selection if needed)
-  const enterGame = (game) => {
-    const selectedChar = getSelectedCharacter(game.id)
+  const enterGame = (session) => {
+    const selectedChar = getSelectedCharacter(session.id)
 
-    if (!selectedChar && isUserJoined(game)) {
+    if (!selectedChar && isUserJoined(session)) {
       // User joined but hasn't selected character - show modal
-      setSelectedGameForCharacter(game)
+      setSelectedSessionForCharacter(session)
       setShowCharacterModal(true)
     } else {
-      // DM or character already selected - join directly
-      router.push(`/game?room_id=${game.session_id || game.id}`)
+      // DM or character already selected - join game directly
+      router.push(`/game?room_id=${session.active_game_id || session.id}`)
     }
   }
 
   // Handle character selection success
   const handleCharacterSelected = async () => {
     setShowCharacterModal(false)
-    setSelectedGameForCharacter(null)
+    setSelectedSessionForCharacter(null)
     // Refresh to show the selected character
-    await fetchGamesAndCharacters()
+    await fetchSessionsAndCharacters()
   }
 
 
   // Filter to show only active sessions
-  const myGames = games.filter(game =>
-    (isUserHost(game) || isUserJoined(game)) && game.status === 'active'
+  const mySessions = sessions.filter(session =>
+    (isUserHost(session) || isUserJoined(session)) && session.status === 'active'
   )
 
   if (loading) {
     return (
       <div className="flex items-center justify-center py-12">
         <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-purple-500 mr-3"></div>
-        <div className="text-slate-400">Loading games...</div>
+        <div className="text-slate-400">Loading sessions...</div>
       </div>
     )
   }
 
-  // Render game card component
-  const renderGameCard = (game, role) => {
-    const availableChars = getAvailableCharacters(game.id)
-    const selectedChar = getSelectedCharacter(game.id)
-    const isOwner = isUserHost(game)
+  // Render session card component
+  const renderSessionCard = (session, role) => {
+    const availableChars = getAvailableCharacters(session.id)
+    const selectedChar = getSelectedCharacter(session.id)
+    const isOwner = isUserHost(session)
 
     return (
       <div
-        key={game.id}
+        key={session.id}
         className="bg-slate-800 p-6 rounded-lg border border-purple-500/30 transition-all"
       >
         <div className="flex items-center justify-between mb-4 gap-4 flex-wrap">
           {/* Left side: Title and badges */}
           <div className="flex items-center gap-3 flex-wrap">
             <h2 className="text-2xl font-semibold text-slate-200">
-              {game.name}
+              {session.name}
             </h2>
             <span className={`px-3 py-1 rounded-full text-sm font-semibold border flex items-center gap-1.5 ${
               role === 'DM'
@@ -145,57 +145,57 @@ export default function GamesManager({ user, refreshTrigger }) {
               {role}
             </span>
             <span className={`px-3 py-1 rounded-full text-sm font-semibold border ${
-              game.status === 'active'
+              session.status === 'active'
                 ? 'bg-green-500/20 text-green-400 border-green-500/30'
-                : game.status === 'starting'
+                : session.status === 'starting'
                 ? 'bg-amber-500/20 text-amber-400 border-amber-500/30'
                 : 'bg-slate-700 text-slate-400 border-slate-600'
             }`}>
-              {game.status.charAt(0).toUpperCase() + game.status.slice(1)}
+              {session.status.charAt(0).toUpperCase() + session.status.slice(1)}
             </span>
           </div>
 
           {/* Right side: Enter button (read-only view) */}
           <div className="flex gap-2 flex-wrap">
             <button
-              onClick={() => enterGame(game)}
+              onClick={() => enterGame(session)}
               className="px-6 py-3 bg-blue-600 text-white rounded-lg border border-blue-500 hover:bg-blue-500 hover:shadow-lg hover:shadow-blue-500/30 transition-all font-semibold text-base flex items-center gap-2"
             >
               <FontAwesomeIcon icon={faRightToBracket} />
-              Enter Session
+              Enter Game
             </button>
           </div>
         </div>
 
-        {/* Game Meta Info */}
+        {/* Session Meta Info */}
         <div className="text-sm text-slate-400 space-y-1 mb-4">
           <p>
             <span className="font-semibold text-slate-300">Dungeon Master:</span>{' '}
-            {game.host_name}
+            {session.host_name}
           </p>
           <p>
             <span className="font-semibold text-slate-300">Players:</span>{' '}
-            {game.player_count} / {game.max_players}
+            {session.player_count} / {session.max_players}
           </p>
           <p>
             <span className="font-semibold text-slate-300">Created:</span>{' '}
-            {new Date(game.created_at).toLocaleDateString()}
+            {new Date(session.created_at).toLocaleDateString()}
           </p>
           <p>
             <span className="font-semibold text-slate-300">Last played:</span>{' '}
-            {game.started_at ? new Date(game.started_at).toLocaleDateString() : 'Never played'}
+            {session.started_at ? new Date(session.started_at).toLocaleDateString() : 'Never played'}
           </p>
         </div>
 
 
         {/* Roster Display - Show players who have joined */}
-        {game.roster && game.roster.length > 0 && (
+        {session.roster && session.roster.length > 0 && (
           <div className="mt-4 pt-4 border-t border-slate-700">
             <h4 className="text-sm font-semibold text-slate-300 mb-3">
-              Game Roster ({game.roster.length}/{game.max_players})
+              Session Roster ({session.roster.length}/{session.max_players})
             </h4>
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
-              {game.roster.map((player) => {
+              {session.roster.map((player) => {
                 const isCurrentUser = player.user_id === user.id
                 const canSelectCharacter = isCurrentUser && !player.character_name
                 return (
@@ -207,7 +207,7 @@ export default function GamesManager({ user, refreshTrigger }) {
                         : 'bg-slate-900 border-slate-700'
                     } ${canSelectCharacter ? 'cursor-pointer hover:bg-purple-500/30' : ''}`}
                     onClick={canSelectCharacter ? () => {
-                      setSelectedGameForCharacter(game)
+                      setSelectedSessionForCharacter(session)
                       setShowCharacterModal(true)
                     } : undefined}
                   >
@@ -278,11 +278,11 @@ export default function GamesManager({ user, refreshTrigger }) {
         <div className="flex items-center gap-3">
           <h2 className="text-2xl font-semibold text-purple-400 uppercase">Active Sessions</h2>
           <span className="px-3 py-1 bg-blue-500/20 text-blue-400 border border-blue-500/30 rounded-full text-sm font-semibold">
-            {myGames.length}
+            {mySessions.length}
           </span>
         </div>
 
-        {myGames.length === 0 ? (
+        {mySessions.length === 0 ? (
           <div className="bg-slate-800 p-8 rounded-lg text-center border-2 border-dashed border-purple-500/30">
             <p className="text-slate-300 mb-2">No active sessions.</p>
             <p className="text-sm text-slate-500">
@@ -291,23 +291,23 @@ export default function GamesManager({ user, refreshTrigger }) {
           </div>
         ) : (
           <div className="space-y-4">
-            {myGames.map((game) => {
+            {mySessions.map((session) => {
               // Determine role: DM if host, Player if joined
-              const role = isUserHost(game) ? 'DM' : 'Player'
-              return renderGameCard(game, role)
+              const role = isUserHost(session) ? 'DM' : 'Player'
+              return renderSessionCard(session, role)
             })}
           </div>
         )}
       </div>
 
       {/* Character Selection Modal */}
-      {showCharacterModal && selectedGameForCharacter && (
+      {showCharacterModal && selectedSessionForCharacter && (
         <CharacterSelectionModal
-          game={selectedGameForCharacter}
-          characters={getAvailableCharacters(selectedGameForCharacter.id)}
+          game={selectedSessionForCharacter}
+          characters={getAvailableCharacters(selectedSessionForCharacter.id)}
           onClose={() => {
             setShowCharacterModal(false)
-            setSelectedGameForCharacter(null)
+            setSelectedSessionForCharacter(null)
           }}
           onCharacterSelected={handleCharacterSelected}
         />

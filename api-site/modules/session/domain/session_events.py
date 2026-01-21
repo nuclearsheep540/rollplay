@@ -1,13 +1,23 @@
 # Copyright (C) 2025 Matthew Davey
 # SPDX-License-Identifier: GPL-3.0-or-later
 
+"""
+Session Events - Domain Events for Session Lifecycle
+
+Ubiquitous Language:
+- Session = The scheduled/planned play instance (managed by api-site)
+- Game = The live multiplayer experience (managed by api-game)
+
+These events notify users about session lifecycle changes.
+"""
+
 from uuid import UUID
 from typing import Dict, Any, List
 
 
-class GameEvents:
+class SessionEvents:
     """
-    Domain event configurations for game entity (within campaign aggregate).
+    Domain event configurations for session entity (within campaign aggregate).
 
     Each static method returns event configuration dict with:
     - user_id: Who should receive this event (or list for broadcast)
@@ -18,26 +28,26 @@ class GameEvents:
     """
 
     @staticmethod
-    def game_created(
+    def session_created(
         campaign_player_ids: List[str],
-        game_id: str,
-        game_name: str,
+        session_id: str,
+        session_name: str,
         campaign_id: str,
         campaign_name: str,
         host_id: str,
         host_screen_name: str
     ) -> List[Dict[str, Any]]:
         """
-        Event: Campaign host created a new game session (silent state update for players)
+        Event: Campaign host created a new session (silent state update for players)
 
         Pure state update - no toast notification, no persistent notification.
-        Only triggers frontend state refresh (game list update).
+        Only triggers frontend state refresh (session list update).
         Recipients: All campaign members (player_ids, excludes host)
 
         Args:
             campaign_player_ids: List of campaign member user IDs (strings)
-            game_id: Game ID (string)
-            game_name: Game name
+            session_id: Session ID (string)
+            session_name: Session name
             campaign_id: Campaign ID (string)
             campaign_name: Campaign name
             host_id: Host user ID (string)
@@ -51,10 +61,10 @@ class GameEvents:
         for player_id in campaign_player_ids:
             events.append({
                 "user_id": UUID(player_id),
-                "event_type": "game_created",
+                "event_type": "session_created",
                 "data": {
-                    "game_id": game_id,
-                    "game_name": game_name,
+                    "session_id": session_id,
+                    "session_name": session_name,
                     "campaign_id": campaign_id,
                     "campaign_name": campaign_name,
                     "host_id": host_id,
@@ -67,16 +77,16 @@ class GameEvents:
         return events
 
     @staticmethod
-    def game_started(campaign_player_ids: List[UUID], game_id: UUID, game_name: str, campaign_id: UUID, session_id: str, dm_id: UUID, dm_screen_name: str) -> List[Dict[str, Any]]:
+    def session_started(campaign_player_ids: List[UUID], session_id: UUID, session_name: str, campaign_id: UUID, active_game_id: str, dm_id: UUID, dm_screen_name: str) -> List[Dict[str, Any]]:
         """
-        Event: DM started a game session (notifies all campaign players)
+        Event: DM started a session (notifies all campaign players)
 
         Args:
             campaign_player_ids: List of all campaign member user IDs
-            game_id: Game ID
-            game_name: Game name
+            session_id: Session ID
+            session_name: Session name
             campaign_id: Campaign ID
-            session_id: Active session ID (MongoDB)
+            active_game_id: Active game ID in MongoDB
             dm_id: DM user ID
             dm_screen_name: DM display name
 
@@ -87,12 +97,12 @@ class GameEvents:
         for player_id in campaign_player_ids:
             events.append({
                 "user_id": player_id,
-                "event_type": "game_started",
+                "event_type": "session_started",
                 "data": {
-                    "game_id": str(game_id),
-                    "game_name": game_name,
+                    "session_id": str(session_id),
+                    "session_name": session_name,
                     "campaign_id": str(campaign_id),
-                    "session_id": session_id,
+                    "active_game_id": active_game_id,
                     "dm_id": str(dm_id),
                     "dm_screen_name": dm_screen_name
                 },
@@ -102,20 +112,20 @@ class GameEvents:
         return events
 
     @staticmethod
-    def game_ended(active_participant_ids: List[UUID], game_id: UUID, game_name: str, campaign_id: UUID, ended_by_id: UUID, ended_by_screen_name: str) -> List[Dict[str, Any]]:
+    def session_paused(active_participant_ids: List[UUID], session_id: UUID, session_name: str, campaign_id: UUID, paused_by_id: UUID, paused_by_screen_name: str) -> List[Dict[str, Any]]:
         """
-        Event: Game session ended/paused (silent state update to active participants)
+        Event: Session paused (silent state update to active participants)
 
         Pure state update - no toast notification, no persistent notification.
-        Only triggers frontend state refresh (game list update).
+        Only triggers frontend state refresh (session list update).
 
         Args:
             active_participant_ids: List of user IDs who were in the session
-            game_id: Game ID
-            game_name: Game name
+            session_id: Session ID
+            session_name: Session name
             campaign_id: Campaign ID
-            ended_by_id: User who ended the game (usually DM)
-            ended_by_screen_name: Display name of user who ended
+            paused_by_id: User who paused the session (usually DM)
+            paused_by_screen_name: Display name of user who paused
 
         Returns:
             List of event configuration dicts (one per participant)
@@ -124,13 +134,13 @@ class GameEvents:
         for participant_id in active_participant_ids:
             events.append({
                 "user_id": participant_id,
-                "event_type": "game_ended",
+                "event_type": "session_paused",
                 "data": {
-                    "game_id": str(game_id),
-                    "game_name": game_name,
+                    "session_id": str(session_id),
+                    "session_name": session_name,
                     "campaign_id": str(campaign_id),
-                    "ended_by_id": str(ended_by_id),
-                    "ended_by_screen_name": ended_by_screen_name
+                    "paused_by_id": str(paused_by_id),
+                    "paused_by_screen_name": paused_by_screen_name
                 },
                 "show_toast": False,         # No toast notification (silent state update)
                 "save_notification": False   # No persistent notification (state only)
@@ -138,18 +148,18 @@ class GameEvents:
         return events
 
     @staticmethod
-    def game_finished(dm_id: UUID, participant_ids: List[UUID], game_id: UUID, game_name: str, campaign_id: UUID) -> List[Dict[str, Any]]:
+    def session_finished(dm_id: UUID, participant_ids: List[UUID], session_id: UUID, session_name: str, campaign_id: UUID) -> List[Dict[str, Any]]:
         """
-        Event: Game marked as finished/completed (silent state update to DM and participants)
+        Event: Session marked as finished/completed (silent state update to DM and participants)
 
         Pure state update - no toast notification, no persistent notification.
-        Only triggers frontend state refresh (game list update).
+        Only triggers frontend state refresh (session list update).
 
         Args:
             dm_id: Campaign DM user ID
             participant_ids: List of player user IDs
-            game_id: Game ID
-            game_name: Game name
+            session_id: Session ID
+            session_name: Session name
             campaign_id: Campaign ID
 
         Returns:
@@ -161,10 +171,10 @@ class GameEvents:
         for recipient_id in all_recipients:
             events.append({
                 "user_id": recipient_id,
-                "event_type": "game_finished",
+                "event_type": "session_finished",
                 "data": {
-                    "game_id": str(game_id),
-                    "game_name": game_name,
+                    "session_id": str(session_id),
+                    "session_name": session_name,
                     "campaign_id": str(campaign_id)
                 },
                 "show_toast": False,         # No toast notification (silent state update)
