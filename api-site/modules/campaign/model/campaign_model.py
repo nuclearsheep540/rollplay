@@ -27,7 +27,7 @@ class Campaign(Base):
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)
 
     # Relationships
-    games = relationship("Game", back_populates="campaign", cascade="all, delete-orphan")
+    sessions = relationship("Session", back_populates="campaign", cascade="all, delete-orphan")
     host = relationship("User", back_populates="campaigns")  # RENAMED from dm
 
     def __repr__(self):

@@ -58,9 +58,9 @@ class UpdateCampaign:
 
 
 class DeleteCampaign:
-    def __init__(self, repository, game_repository=None):
+    def __init__(self, repository, session_repository=None):
         self.repository = repository
-        self.game_repository = game_repository
+        self.session_repository = session_repository
 
     def execute(self, campaign_id: UUID, host_id: UUID) -> bool:
         """Delete campaign if business rules allow"""
@@ -72,13 +72,13 @@ class DeleteCampaign:
         if not campaign.is_owned_by(host_id):
             raise ValueError("Only the host can delete this campaign")
 
-        # Business rule: Cannot delete campaign with ACTIVE games (would disrupt live sessions)
-        if self.game_repository:
-            from modules.game.domain.game_aggregate import GameStatus
-            for game_id in campaign.game_ids:
-                game = self.game_repository.get_by_id(game_id)
-                if game and game.status == GameStatus.ACTIVE:
-                    raise ValueError("Cannot delete campaign with active game sessions. Please end all active sessions first.")
+        # Business rule: Cannot delete campaign with ACTIVE sessions (would disrupt live games)
+        if self.session_repository:
+            from modules.session.domain.session_aggregate import SessionStatus
+            for session_id in campaign.session_ids:
+                session = self.session_repository.get_by_id(session_id)
+                if session and session.status == SessionStatus.ACTIVE:
+                    raise ValueError("Cannot delete campaign with active sessions. Please pause or finish all active sessions first.")
 
         return self.repository.delete(campaign_id)
 
@@ -203,17 +203,17 @@ class RemovePlayerFromCampaign:
 
 
 class AcceptCampaignInvite:
-    def __init__(self, repository, user_repo: UserRepository, event_manager: EventManager, game_repository=None):
+    def __init__(self, repository, user_repo: UserRepository, event_manager: EventManager, session_repository=None):
         self.repository = repository
         self.user_repo = user_repo
         self.event_manager = event_manager
-        self.game_repository = game_repository
+        self.session_repository = session_repository
 
     def execute(self, campaign_id: UUID, player_id: UUID) -> CampaignAggregate:
         """
         Player accepts their campaign invite.
 
-        Also automatically adds player to any active games in the campaign.
+        Also automatically adds player to any active sessions in the campaign.
         """
         campaign = self.repository.get_by_id(campaign_id)
         if not campaign:
@@ -225,20 +225,20 @@ class AcceptCampaignInvite:
         # Save
         self.repository.save(campaign)
 
-        # Add player to any active games in this campaign and track which ones
-        auto_added_to_game_ids = []
-        if self.game_repository:
-            from modules.game.domain.game_aggregate import GameStatus
-            # Get all games for this campaign
-            for game_id in campaign.game_ids:
-                game = self.game_repository.get_by_id(game_id)
-                if game and game.status == GameStatus.ACTIVE:
-                    # Add player to active game if not already joined
-                    if player_id not in game.joined_users:
-                        game.joined_users.append(player_id)
-                        self.game_repository.save(game)
-                        auto_added_to_game_ids.append(game_id)
-                        logger.info(f"✅ Auto-added late-joining player {player_id} to active game {game_id}")
+        # Add player to any active sessions in this campaign and track which ones
+        auto_added_to_session_ids = []
+        if self.session_repository:
+            from modules.session.domain.session_aggregate import SessionStatus
+            # Get all sessions for this campaign
+            for session_id in campaign.session_ids:
+                session = self.session_repository.get_by_id(session_id)
+                if session and session.status == SessionStatus.ACTIVE:
+                    # Add player to active session if not already joined
+                    if player_id not in session.joined_users:
+                        session.joined_users.append(player_id)
+                        self.session_repository.save(session)
+                        auto_added_to_session_ids.append(session_id)
+                        logger.info(f"✅ Auto-added late-joining player {player_id} to active session {session_id}")
 
         # Broadcast notification event to host
         player = self.user_repo.get_by_id(player_id)
@@ -250,7 +250,7 @@ class AcceptCampaignInvite:
                     campaign_name=campaign.title,
                     player_id=player_id,
                     player_screen_name=player.screen_name if player else "Unknown",
-                    auto_added_to_game_ids=auto_added_to_game_ids
+                    auto_added_to_session_ids=auto_added_to_session_ids
                 )
             )
         )

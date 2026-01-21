@@ -101,7 +101,7 @@ class GetCampaignMembers:
                     )
                 )
                 .order_by(
-                    Character.active_game.is_(None).desc(),
+                    Character.active_session.is_(None).desc(),
                     Character.created_at.desc()
                 )
                 .first()

@@ -54,13 +54,13 @@ class GUID(TypeDecorator):
             else:
                 return value
 from modules.user.orm.user_repository import UserRepository
-from modules.game.repositories.game_repository import GameRepository
+from modules.session.repositories.session_repository import SessionRepository
 from modules.characters.orm.character_repository import CharacterRepository
 from modules.friendship.repositories.friendship_repository import FriendshipRepository
 from modules.campaign.orm.campaign_repository import CampaignRepository
 
 from modules.user.domain.user_aggregate import UserAggregate
-from modules.game.domain.game_aggregate import GameAggregate, GameStatus
+from modules.session.domain.session_aggregate import SessionEntity, SessionStatus
 from modules.characters.domain.character_aggregate import CharacterAggregate, CharacterClass, CharacterRace, AbilityScores
 from modules.friendship.domain.friendship_aggregate import FriendshipAggregate
 from modules.campaign.domain.campaign_aggregate import CampaignAggregate
@@ -119,7 +119,7 @@ def user_repo(db_session: Session):
 @pytest.fixture
 def game_repo(db_session: Session):
     """Game repository with test database"""
-    return GameRepository(db_session)
+    return SessionRepository(db_session)
 
 
 @pytest.fixture
@@ -191,7 +191,7 @@ def create_campaign(campaign_repo: CampaignRepository):
 
 
 @pytest.fixture
-def create_game(game_repo: GameRepository):
+def create_game(game_repo: SessionRepository):
     """
     Factory fixture to create test games.
 
@@ -199,7 +199,7 @@ def create_game(game_repo: GameRepository):
         game = create_game(campaign_id=campaign.id, host_id=user.id, name="Test Game")
     """
     def _create_game(campaign_id: uuid.UUID, host_id: uuid.UUID, name: str = "Test Game", max_players: int = 6):
-        game = GameAggregate.create(
+        game = SessionEntity.create(
             name=name,
             campaign_id=campaign_id,
             host_id=host_id,

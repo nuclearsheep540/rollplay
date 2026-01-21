@@ -47,7 +47,7 @@ class CharacterRepository:
             created_at=model.created_at,
             updated_at=model.updated_at,
             is_deleted=model.is_deleted,
-            active_game=model.active_game,
+            active_game=model.active_session,
             hp_current=model.hp_current,
             hp_max=model.hp_max,
             ac=model.ac,
@@ -108,7 +108,7 @@ class CharacterRepository:
             character_model.stats = aggregate.ability_scores.to_dict()
             character_model.is_deleted = aggregate.is_deleted
             character_model.updated_at = aggregate.updated_at
-            character_model.active_game = aggregate.active_game
+            character_model.active_session = aggregate.active_game
             character_model.hp_max = aggregate.hp_max
             character_model.hp_current = aggregate.hp_current
             character_model.ac = aggregate.ac
@@ -128,7 +128,7 @@ class CharacterRepository:
                 is_deleted=aggregate.is_deleted,
                 created_at=aggregate.created_at,
                 updated_at=aggregate.updated_at,
-                active_game=aggregate.active_game,
+                active_session=aggregate.active_game,
                 hp_max=aggregate.hp_max,
                 hp_current=aggregate.hp_current,
                 ac=aggregate.ac,
@@ -169,15 +169,15 @@ class CharacterRepository:
         self.db.commit()
         return True
 
-    def get_by_active_game(self, game_id: UUID) -> List[CharacterAggregate]:
+    def get_by_active_session(self, session_id: UUID) -> List[CharacterAggregate]:
         """
-        Get all characters locked to a specific game.
+        Get all characters locked to a specific session.
 
-        Used when unlocking characters after a game session ends.
+        Used when unlocking characters after a session ends.
         """
         models = (
             self.db.query(CharacterModel)
-            .filter(CharacterModel.active_game == game_id)
+            .filter(CharacterModel.active_session == session_id)
             .all()
         )
         return [self._model_to_aggregate(model) for model in models]
