@@ -282,7 +282,49 @@ function DashboardContent() {
       }
     },
 
-    // Game session events
+    // Session events (new naming convention)
+    'session_created': (message) => {
+      // Silent state update - no toast notification
+      updateGameState(message.data?.campaign_id)
+    },
+
+    'session_started': (message) => {
+      updateGameState(message.data?.campaign_id)
+
+      if (message.show_toast) {
+        const config = getEventConfig('session_started')
+        showToast({
+          type: config.toastType,
+          message: config.toastMessage
+        })
+      }
+    },
+
+    'session_paused': (message) => {
+      updateGameState(message.data?.campaign_id)
+
+      if (message.show_toast) {
+        const config = getEventConfig('session_paused')
+        showToast({
+          type: config.toastType,
+          message: config.toastMessage
+        })
+      }
+    },
+
+    'session_finished': (message) => {
+      updateGameState(message.data?.campaign_id)
+
+      if (message.show_toast) {
+        const config = getEventConfig('session_finished')
+        showToast({
+          type: config.toastType,
+          message: config.toastMessage
+        })
+      }
+    },
+
+    // Legacy game event names (for backward compatibility)
     'game_created': (message) => {
       // Silent state update - no toast notification
       updateGameState(message.data?.campaign_id)

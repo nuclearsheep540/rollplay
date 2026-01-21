@@ -1484,7 +1484,7 @@ export default function CampaignManager({ user, refreshTrigger, onCampaignUpdate
                       <div style={{ maxWidth: '1600px' }}>
                       <div className="flex items-center justify-between mb-4">
                         <h3 className="text-xl font-semibold font-[family-name:var(--font-metamorphous)]" style={{color: THEME.textOnDark}}>
-                          Campaign Sessions for {selectedCampaign?.title || ''}
+                          Campaign Sessions
                         </h3>
                         <button
                           onClick={() => setSelectedCampaign(null)}

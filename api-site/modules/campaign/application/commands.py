@@ -89,7 +89,7 @@ class AddPlayerToCampaign:
         self.user_repo = user_repo
         self.event_manager = event_manager
 
-    def execute(self, campaign_id: UUID, player_id: UUID, host_id: UUID) -> CampaignAggregate:
+    async def execute(self, campaign_id: UUID, player_id: UUID, host_id: UUID) -> CampaignAggregate:
         """Invite a player to the campaign (host only) - sends pending invite"""
         campaign = self.repository.get_by_id(campaign_id)
         if not campaign:
@@ -116,28 +116,24 @@ class AddPlayerToCampaign:
         # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
         # Broadcast 1/2: Notification to invited player
-        asyncio.create_task(
-            self.event_manager.broadcast(
-                **CampaignEvents.campaign_invite_received(
-                    invited_player_id=player_id,
-                    campaign_id=campaign_id,
-                    campaign_name=campaign.title,
-                    host_id=host_id,
-                    host_screen_name=host.screen_name if host else "Unknown"
-                )
+        await self.event_manager.broadcast(
+            **CampaignEvents.campaign_invite_received(
+                invited_player_id=player_id,
+                campaign_id=campaign_id,
+                campaign_name=campaign.title,
+                host_id=host_id,
+                host_screen_name=host.screen_name if host else "Unknown"
             )
         )
 
         # Broadcast 2/2: Confirmation to host
-        asyncio.create_task(
-            self.event_manager.broadcast(
-                **CampaignEvents.campaign_invite_sent(
-                    host_id=host_id,
-                    campaign_id=campaign_id,
-                    campaign_name=campaign.title,
-                    player_id=player_id,
-                    player_screen_name=player.screen_name if player else "Unknown"
-                )
+        await self.event_manager.broadcast(
+            **CampaignEvents.campaign_invite_sent(
+                host_id=host_id,
+                campaign_id=campaign_id,
+                campaign_name=campaign.title,
+                player_id=player_id,
+                player_screen_name=player.screen_name if player else "Unknown"
             )
         )
 
@@ -150,7 +146,7 @@ class RemovePlayerFromCampaign:
         self.user_repo = user_repo
         self.event_manager = event_manager
 
-    def execute(self, campaign_id: UUID, player_id: UUID, host_id: UUID) -> CampaignAggregate:
+    async def execute(self, campaign_id: UUID, player_id: UUID, host_id: UUID) -> CampaignAggregate:
         """Remove a player from the campaign (host only)"""
         campaign = self.repository.get_by_id(campaign_id)
         if not campaign:
@@ -176,26 +172,22 @@ class RemovePlayerFromCampaign:
         # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
         # Broadcast 1/2: Notification to the removed player
-        asyncio.create_task(
-            self.event_manager.broadcast(
-                **CampaignEvents.campaign_player_removed(
-                    removed_player_id=player_id,
-                    campaign_id=campaign_id,
-                    campaign_name=campaign.title,
-                    removed_by_id=host_id
-                )
+        await self.event_manager.broadcast(
+            **CampaignEvents.campaign_player_removed(
+                removed_player_id=player_id,
+                campaign_id=campaign_id,
+                campaign_name=campaign.title,
+                removed_by_id=host_id
             )
         )
 
         # Broadcast 2/2: Confirmation to the host
-        asyncio.create_task(
-            self.event_manager.broadcast(
-                **CampaignEvents.campaign_player_removed_confirmation(
-                    host_id=host_id,
-                    campaign_id=campaign_id,
-                    campaign_name=campaign.title,
-                    player_screen_name=player.screen_name if player else "Unknown"
-                )
+        await self.event_manager.broadcast(
+            **CampaignEvents.campaign_player_removed_confirmation(
+                host_id=host_id,
+                campaign_id=campaign_id,
+                campaign_name=campaign.title,
+                player_screen_name=player.screen_name if player else "Unknown"
             )
         )
 
@@ -209,7 +201,7 @@ class AcceptCampaignInvite:
         self.event_manager = event_manager
         self.session_repository = session_repository
 
-    def execute(self, campaign_id: UUID, player_id: UUID) -> CampaignAggregate:
+    async def execute(self, campaign_id: UUID, player_id: UUID) -> CampaignAggregate:
         """
         Player accepts their campaign invite.
 
@@ -242,16 +234,14 @@ class AcceptCampaignInvite:
 
         # Broadcast notification event to host
         player = self.user_repo.get_by_id(player_id)
-        asyncio.create_task(
-            self.event_manager.broadcast(
-                **CampaignEvents.campaign_invite_accepted(
-                    host_id=campaign.host_id,
-                    campaign_id=campaign_id,
-                    campaign_name=campaign.title,
-                    player_id=player_id,
-                    player_screen_name=player.screen_name if player else "Unknown",
-                    auto_added_to_session_ids=auto_added_to_session_ids
-                )
+        await self.event_manager.broadcast(
+            **CampaignEvents.campaign_invite_accepted(
+                host_id=campaign.host_id,
+                campaign_id=campaign_id,
+                campaign_name=campaign.title,
+                player_id=player_id,
+                player_screen_name=player.screen_name if player else "Unknown",
+                auto_added_to_session_ids=auto_added_to_session_ids
             )
         )
 
@@ -264,7 +254,7 @@ class DeclineCampaignInvite:
         self.user_repo = user_repo
         self.event_manager = event_manager
 
-    def execute(self, campaign_id: UUID, player_id: UUID) -> CampaignAggregate:
+    async def execute(self, campaign_id: UUID, player_id: UUID) -> CampaignAggregate:
         """Player declines their campaign invite"""
         campaign = self.repository.get_by_id(campaign_id)
         if not campaign:
@@ -278,15 +268,13 @@ class DeclineCampaignInvite:
 
         # Broadcast state update to host (no toast, but updates their local state)
         player = self.user_repo.get_by_id(player_id)
-        asyncio.create_task(
-            self.event_manager.broadcast(
-                **CampaignEvents.campaign_invite_declined(
-                    host_id=campaign.host_id,
-                    campaign_id=campaign_id,
-                    campaign_name=campaign.title,
-                    player_id=player_id,
-                    player_screen_name=player.screen_name if player else "Unknown"
-                )
+        await self.event_manager.broadcast(
+            **CampaignEvents.campaign_invite_declined(
+                host_id=campaign.host_id,
+                campaign_id=campaign_id,
+                campaign_name=campaign.title,
+                player_id=player_id,
+                player_screen_name=player.screen_name if player else "Unknown"
             )
         )
 
@@ -299,7 +287,7 @@ class LeaveCampaign:
         self.user_repo = user_repo
         self.event_manager = event_manager
 
-    def execute(self, campaign_id: UUID, player_id: UUID) -> CampaignAggregate:
+    async def execute(self, campaign_id: UUID, player_id: UUID) -> CampaignAggregate:
         """Player voluntarily leaves a campaign they've joined"""
         campaign = self.repository.get_by_id(campaign_id)
         if not campaign:
@@ -329,26 +317,22 @@ class LeaveCampaign:
         # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
         # Broadcast 1/2: Notification to host that player left
-        asyncio.create_task(
-            self.event_manager.broadcast(
-                **CampaignEvents.campaign_player_left(
-                    host_id=campaign.host_id,
-                    campaign_id=campaign_id,
-                    campaign_name=campaign.title,
-                    player_id=player_id,
-                    player_screen_name=player.screen_name if player else "Unknown"
-                )
+        await self.event_manager.broadcast(
+            **CampaignEvents.campaign_player_left(
+                host_id=campaign.host_id,
+                campaign_id=campaign_id,
+                campaign_name=campaign.title,
+                player_id=player_id,
+                player_screen_name=player.screen_name if player else "Unknown"
             )
         )
 
         # Broadcast 2/2: Confirmation to the player who left
-        asyncio.create_task(
-            self.event_manager.broadcast(
-                **CampaignEvents.campaign_player_left_confirmation(
-                    player_id=player_id,
-                    campaign_id=campaign_id,
-                    campaign_name=campaign.title
-                )
+        await self.event_manager.broadcast(
+            **CampaignEvents.campaign_player_left_confirmation(
+                player_id=player_id,
+                campaign_id=campaign_id,
+                campaign_name=campaign.title
             )
         )
 
@@ -361,7 +345,7 @@ class CancelCampaignInvite:
         self.user_repo = user_repo
         self.event_manager = event_manager
 
-    def execute(self, campaign_id: UUID, player_id: UUID, host_id: UUID) -> CampaignAggregate:
+    async def execute(self, campaign_id: UUID, player_id: UUID, host_id: UUID) -> CampaignAggregate:
         """Host cancels a pending invite before it's accepted"""
         campaign = self.repository.get_by_id(campaign_id)
         if not campaign:
@@ -387,25 +371,21 @@ class CancelCampaignInvite:
         # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
         # Broadcast 1/2: Notification to the player whose invite was canceled
-        asyncio.create_task(
-            self.event_manager.broadcast(
-                **CampaignEvents.campaign_invite_canceled(
-                    player_id=player_id,
-                    campaign_id=campaign_id,
-                    campaign_name=campaign.title
-                )
+        await self.event_manager.broadcast(
+            **CampaignEvents.campaign_invite_canceled(
+                player_id=player_id,
+                campaign_id=campaign_id,
+                campaign_name=campaign.title
             )
         )
 
         # Broadcast 2/2: Confirmation to the host
-        asyncio.create_task(
-            self.event_manager.broadcast(
-                **CampaignEvents.campaign_invite_canceled_confirmation(
-                    host_id=host_id,
-                    campaign_id=campaign_id,
-                    campaign_name=campaign.title,
-                    player_screen_name=player.screen_name if player else "Unknown"
-                )
+        await self.event_manager.broadcast(
+            **CampaignEvents.campaign_invite_canceled_confirmation(
+                host_id=host_id,
+                campaign_id=campaign_id,
+                campaign_name=campaign.title,
+                player_screen_name=player.screen_name if player else "Unknown"
             )
         )
 

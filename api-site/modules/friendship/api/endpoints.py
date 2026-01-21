@@ -114,7 +114,7 @@ async def send_friend_request(
     """
     try:
         command = SendFriendRequest(friendship_repo, friend_request_repo, user_repo, event_manager)
-        result = command.execute(
+        result = await command.execute(
             user_id=current_user.id,
             friend_identifier=request.friend_identifier
         )
@@ -150,7 +150,7 @@ async def accept_friend_request(
     """Accept an incoming friend request"""
     try:
         command = AcceptFriendRequest(friendship_repo, friend_request_repo, user_repo, event_manager)
-        friendship = command.execute(
+        friendship = await command.execute(
             user_id=current_user.id,
             requester_id=friend_id
         )

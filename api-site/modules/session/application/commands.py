@@ -34,7 +34,7 @@ class CreateSession:
         self.campaign_repo = campaign_repository
         self.event_manager = event_manager
 
-    def execute(
+    async def execute(
         self,
         name: str,
         campaign_id: UUID,
@@ -113,9 +113,7 @@ class CreateSession:
 
             # Broadcast to each campaign member
             for event_config in events:
-                asyncio.create_task(
-                    self.event_manager.broadcast(**event_config)
-                )
+                await self.event_manager.broadcast(**event_config)
 
             logger.info(f"Broadcasting session_created event to {len(campaign.player_ids)} campaign members for session {session.id}")
 
@@ -381,9 +379,7 @@ class StartSession:
 
                 # Broadcast to each recipient
                 for event_config in events:
-                    asyncio.create_task(
-                        self.event_manager.broadcast(**event_config)
-                    )
+                    await self.event_manager.broadcast(**event_config)
 
                 logger.info(f"Broadcasting session_started event to {len(all_recipients)} recipients for session {session.id}")
 
@@ -538,9 +534,7 @@ class PauseSession:
 
             # Broadcast to each recipient
             for event_config in events:
-                asyncio.create_task(
-                    self.event_manager.broadcast(**event_config)
-                )
+                await self.event_manager.broadcast(**event_config)
 
             logger.info(f"Broadcasting session_paused event to {len(all_recipients)} recipients for session {session.id}")
 
@@ -649,9 +643,7 @@ class FinishSession:
 
                 # Broadcast to each recipient
                 for event_config in events:
-                    asyncio.create_task(
-                        self.event_manager.broadcast(**event_config)
-                    )
+                    await self.event_manager.broadcast(**event_config)
 
                 logger.info(f"Broadcasting session_finished event to {len(all_recipients)} recipients for session {session.id}")
 
@@ -749,9 +741,7 @@ class FinishSession:
 
             # Broadcast to each recipient
             for event_config in events:
-                asyncio.create_task(
-                    self.event_manager.broadcast(**event_config)
-                )
+                await self.event_manager.broadcast(**event_config)
 
             logger.info(f"Broadcasting session_finished event to {len(all_recipients)} recipients for session {session.id}")
 
