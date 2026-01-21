@@ -59,7 +59,7 @@ export default function CampaignManager({ user, refreshTrigger, onCampaignUpdate
 
   // Consolidated modal state
   const [modals, setModals] = useState({
-    campaignCreate: { open: false, title: '', description: '', heroImage: '/campaign-tile-bg.png', isCreating: false },
+    campaignCreate: { open: false, title: '', description: '', heroImage: '/campaign-tile-bg.png', sessionName: '', isCreating: false },
     campaignDelete: { open: false, campaign: null, isDeleting: false },
     campaignInvite: { open: false, campaign: null },
     campaignLeave: { open: false, campaign: null, isLeaving: false },
@@ -572,7 +572,8 @@ export default function CampaignManager({ user, refreshTrigger, onCampaignUpdate
       const campaignData = {
         title: modals.campaignCreate.title.trim(),
         description: modals.campaignCreate.description.trim() || `Campaign created on ${new Date().toLocaleDateString()}`,
-        hero_image: modals.campaignCreate.heroImage || null
+        hero_image: modals.campaignCreate.heroImage || null,
+        session_name: modals.campaignCreate.sessionName.trim() || null
       }
 
       const response = await fetch('/api/campaigns/', {
@@ -596,7 +597,7 @@ export default function CampaignManager({ user, refreshTrigger, onCampaignUpdate
 
       // Close modal and reset form
       closeModal('campaignCreate')
-      updateModalData('campaignCreate', { title: '', description: '' })
+      updateModalData('campaignCreate', { title: '', description: '', sessionName: '' })
     } catch (error) {
       console.error('Error creating campaign:', error)
       setError('Failed to create campaign: ' + error.message)
@@ -1434,8 +1435,12 @@ export default function CampaignManager({ user, refreshTrigger, onCampaignUpdate
                       <div className="flex items-center justify-between">
                         <div className="text-sm drop-shadow" style={{color: THEME.textOnDark}}>
                           <span>Created: {campaign.created_at ? new Date(campaign.created_at).toLocaleDateString() : 'Unknown'}</span>
-                          <span className="mx-2">•</span>
-                          <span>{campaignSessions.length} session{campaignSessions.length !== 1 ? 's' : ''}</span>
+                          {campaignSessions.length > 0 && campaignSessions[0].name && (
+                            <>
+                              <span className="mx-2">•</span>
+                              <span>{campaignSessions[0].name}</span>
+                            </>
+                          )}
                         </div>
                       </div>
                     </div>
@@ -1904,7 +1909,11 @@ export default function CampaignManager({ user, refreshTrigger, onCampaignUpdate
                     color: THEME.textPrimary
                   }}
                   placeholder="Enter campaign title"
+                  maxLength={100}
                 />
+                <div className="text-right text-sm mt-1" style={{color: THEME.textSecondary}}>
+                  {(modals.campaignCreate.title || '').length}/100 characters
+                </div>
               </div>
               <div>
                 <label className="block text-sm font-medium mb-2" style={{color: THEME.textOnDark}}>
@@ -1925,6 +1934,27 @@ export default function CampaignManager({ user, refreshTrigger, onCampaignUpdate
                 />
                 <div className="text-right text-sm mt-1" style={{color: THEME.textSecondary}}>
                   {(modals.campaignCreate.description || '').length}/1000 characters
+                </div>
+              </div>
+              <div>
+                <label className="block text-sm font-medium mb-2" style={{color: THEME.textOnDark}}>
+                  Session Name (Optional)
+                </label>
+                <input
+                  type="text"
+                  value={modals.campaignCreate.sessionName}
+                  onChange={(e) => updateModalData('campaignCreate', { sessionName: e.target.value })}
+                  className="w-full px-3 py-2 rounded-sm border focus:outline-none focus:ring-2"
+                  style={{
+                    backgroundColor: THEME.bgPrimary,
+                    borderColor: THEME.borderDefault,
+                    color: THEME.textPrimary
+                  }}
+                  placeholder="e.g. Session 1"
+                  maxLength={100}
+                />
+                <div className="text-right text-sm mt-1" style={{color: THEME.textSecondary}}>
+                  {(modals.campaignCreate.sessionName || '').length}/100 characters
                 </div>
               </div>
               <div>

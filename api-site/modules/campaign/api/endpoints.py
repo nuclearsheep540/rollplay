@@ -143,9 +143,11 @@ async def create_session(
 async def create_campaign(
     request: CampaignCreateRequest,
     current_user: UserAggregate = Depends(get_current_user_from_token),
-    campaign_repo: CampaignRepository = Depends(campaign_repository)
+    campaign_repo: CampaignRepository = Depends(campaign_repository),
+    session_repo: SessionRepository = Depends(get_session_repository),
+    event_manager: EventManager = Depends(get_event_manager)
 ):
-    """Create a new campaign"""
+    """Create a new campaign, optionally with an initial session"""
     try:
         command = CreateCampaign(campaign_repo)
         campaign = command.execute(
@@ -154,6 +156,16 @@ async def create_campaign(
             description=request.description or "",
             hero_image=request.hero_image
         )
+
+        # Auto-create session if session_name provided
+        if request.session_name and request.session_name.strip():
+            session_command = CreateSession(session_repo, campaign_repo, event_manager)
+            session_command.execute(
+                name=request.session_name.strip(),
+                campaign_id=campaign.id,
+                host_id=current_user.id,
+                max_players=8
+            )
 
         return _to_campaign_response(campaign)
 
