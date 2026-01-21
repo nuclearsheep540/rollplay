@@ -4,6 +4,8 @@
 from typing import List, Optional
 from uuid import UUID
 from sqlalchemy.orm import Session
+from sqlalchemy import or_, cast
+from sqlalchemy.dialects.postgresql import JSONB
 
 from modules.campaign.model.campaign_model import Campaign as CampaignModel
 from modules.campaign.domain.campaign_aggregate import CampaignAggregate
@@ -37,12 +39,9 @@ class CampaignRepository:
         )
         return [self._model_to_aggregate(model) for model in models]
 
-    def get_by_member_id(self, user_id: UUID) -> List[CampaignAggregate]: #TODO imports inside try block and function, check.
+    def get_by_member_id(self, user_id: UUID) -> List[CampaignAggregate]:
         """Get all campaigns where user is either host or player (accepted invites only)"""
         try:
-            from sqlalchemy import or_, cast, String
-            from sqlalchemy.dialects.postgresql import JSONB
-
             # Get campaigns where user is host OR in player_ids array
             # Now using JSONB type which supports @> (contains) operator properly
             models = (
@@ -79,9 +78,6 @@ class CampaignRepository:
     def get_invited_campaigns(self, user_id: UUID) -> List[CampaignAggregate]:
         """Get all campaigns where user has a pending invite"""
         try:
-            from sqlalchemy import cast
-            from sqlalchemy.dialects.postgresql import JSONB
-
             # Get campaigns where user is in invited_player_ids array
             models = (
                 self.db.query(CampaignModel)

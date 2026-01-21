@@ -75,9 +75,6 @@ def db_session():
     Automatically rolls back after each test for isolation.
     """
     # Monkey-patch UUID columns to use GUID for SQLite compatibility
-    from sqlalchemy.dialects.postgresql import UUID as PostgreSQL_UUID
-    from sqlalchemy import Column
-
     # Replace all UUID column types with GUID
     for table in Base.metadata.tables.values():
         for column in table.columns:

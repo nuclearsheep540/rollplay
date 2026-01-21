@@ -5,12 +5,15 @@ from uuid import UUID
 import httpx
 import logging
 import asyncio
+from sqlalchemy import update
+
 from modules.session.repositories.session_repository import SessionRepository
 from modules.user.orm.user_repository import UserRepository
 from modules.user.model.user_model import User
 from modules.characters.orm.character_repository import CharacterRepository
 from modules.characters.domain.character_aggregate import CharacterAggregate
 from modules.campaign.orm.campaign_repository import CampaignRepository
+from modules.campaign.model.session_model import SessionJoinedUser
 from modules.session.domain.session_aggregate import SessionEntity, SessionStatus
 from modules.events.event_manager import EventManager
 from modules.session.domain.session_events import SessionEvents
@@ -830,8 +833,6 @@ class SelectCharacterForSession:
         self.character_repo.save(character)
 
         # Update session_joined_users.selected_character_id for roster display
-        from sqlalchemy import update
-        from modules.campaign.model.session_model import SessionJoinedUser
         db_session = self.session_repo.db
         db_session.execute(
             update(SessionJoinedUser)
@@ -917,8 +918,6 @@ class ChangeCharacterForSession:
         self.character_repo.save(new_character)
 
         # Update session_joined_users.selected_character_id for roster display
-        from sqlalchemy import update
-        from modules.campaign.model.session_model import SessionJoinedUser
         db_session = self.session_repo.db
         db_session.execute(
             update(SessionJoinedUser)
@@ -1001,8 +1000,6 @@ class ChangeCharacterDuringGame:
             self.character_repo.save(new_character)
 
         # Update session_joined_users.selected_character_id for roster display
-        from sqlalchemy import update
-        from modules.campaign.model.session_model import SessionJoinedUser
         db_session = self.session_repo.db
         db_session.execute(
             update(SessionJoinedUser)
