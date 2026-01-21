@@ -6,6 +6,12 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 Rollplay is a virtual D&D/tabletop gaming platform called "Tabletop Tavern" that enables real-time multiplayer dice rolling and campaign management. The application supports room creation, party management, DM tools, initiative tracking, and comprehensive adventure logging.
 
+## Plan Files
+When in plan mode, write plan files to the repository working directory (e.g., `./plans/` or `./.claude-plans/`) rather than the default `~/.claude/plans/` location. This keeps plans version-controlled alongside the codebase, enabling:
+- Audit trail of "what we intended" vs "what we implemented"
+- Plan files committed with related code changes
+- Project history that includes planning decisions
+
 ## 🚨 CRITICAL ARCHITECTURAL PRINCIPLES
 
 ### **Server-Authoritative Design (Game Sessions Only)**
@@ -692,6 +698,14 @@ docker exec api-site-dev alembic revision --autogenerate -m "add user profile fi
 
 # Restart container to apply new migration
 docker-compose -f docker-compose.dev.yml restart api-site
+```
+
+**⚠️ IMPORTANT: When Adding New Models:**
+When creating a new SQLAlchemy model, you MUST add the import to `/api-site/alembic/env.py` so Alembic can detect it for autogenerate. Without this, `alembic revision --autogenerate` will not see the new table.
+
+```python
+# In alembic/env.py - add import for new models:
+from modules.your_module.model.your_model import YourModel
 ```
 
 **Manual Migration Override (Advanced):**

@@ -48,7 +48,7 @@ class Session(Base):
     __tablename__ = 'sessions'
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    name = Column(String(100), nullable=False)
+    name = Column(String(100), nullable=True)
     campaign_id = Column(UUID(as_uuid=True), ForeignKey('campaigns.id'), nullable=False)
     host_id = Column(UUID(as_uuid=True), ForeignKey('users.id'), nullable=False)
     status = Column(String(20), default='INACTIVE', nullable=False)

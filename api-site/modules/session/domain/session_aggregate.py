@@ -118,10 +118,9 @@ class SessionEntity:
         if not host_id:
             raise ValueError("Session must have a host")
 
-        normalized_name = name.strip()
-        if not name or not normalized_name:
-            raise ValueError("Session name is required")
-        if len(normalized_name) > 100:
+        # Session name is optional - normalize if provided
+        normalized_name = name.strip() if name else None
+        if normalized_name and len(normalized_name) > 100:
             raise ValueError("Session name too long (max 100 characters)")
 
         return cls(

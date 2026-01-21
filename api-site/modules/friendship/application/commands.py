@@ -39,7 +39,7 @@ class SendFriendRequest:
         self.user_repo = user_repository
         self.event_manager = event_manager
 
-    def execute(self, user_id: UUID, friend_identifier: str) -> dict:
+    async def execute(self, user_id: UUID, friend_identifier: str) -> dict:
         """
         Send friend request by friend's UUID, account tag, or friend code.
 
@@ -119,24 +119,20 @@ class SendFriendRequest:
             logger.info(f"Instant friendship created (mutual): {user_id} and {friend_uuid}")
 
             # Broadcast friend_request_accepted event to BOTH users (mutual acceptance)
-            asyncio.create_task(
-                self.event_manager.broadcast(
-                    **FriendshipEvents.friend_request_accepted(
-                        requester_id=user_id,
-                        friend_id=friend_uuid,
-                        friend_screen_name=friend.screen_name,
-                        friendship_id=friendship.id
-                    )
+            await self.event_manager.broadcast(
+                **FriendshipEvents.friend_request_accepted(
+                    requester_id=user_id,
+                    friend_id=friend_uuid,
+                    friend_screen_name=friend.screen_name,
+                    friendship_id=friendship.id
                 )
             )
-            asyncio.create_task(
-                self.event_manager.broadcast(
-                    **FriendshipEvents.friend_request_accepted(
-                        requester_id=friend_uuid,
-                        friend_id=user_id,
-                        friend_screen_name=user.screen_name,
-                        friendship_id=friendship.id
-                    )
+            await self.event_manager.broadcast(
+                **FriendshipEvents.friend_request_accepted(
+                    requester_id=friend_uuid,
+                    friend_id=user_id,
+                    friend_screen_name=user.screen_name,
+                    friendship_id=friendship.id
                 )
             )
 
@@ -157,14 +153,12 @@ class SendFriendRequest:
         logger.info(f"Friend request sent from {user_id} to {friend_uuid}")
 
         # Broadcast friend_request_received event to recipient
-        asyncio.create_task(
-            self.event_manager.broadcast(
-                **FriendshipEvents.friend_request_received(
-                    recipient_id=friend_uuid,
-                    requester_id=user_id,
-                    requester_screen_name=user.screen_name,
-                    request_id=friend_request.id
-                )
+        await self.event_manager.broadcast(
+            **FriendshipEvents.friend_request_received(
+                recipient_id=friend_uuid,
+                requester_id=user_id,
+                requester_screen_name=user.screen_name,
+                request_id=friend_request.id
             )
         )
 
@@ -194,7 +188,7 @@ class AcceptFriendRequest:
         self.user_repo = user_repository
         self.event_manager = event_manager
 
-    def execute(self, user_id: UUID, requester_id: UUID) -> FriendshipAggregate:
+    async def execute(self, user_id: UUID, requester_id: UUID) -> FriendshipAggregate:
         """
         Accept friend request.
 
@@ -225,14 +219,12 @@ class AcceptFriendRequest:
         logger.info(f"Friend request accepted: {requester_id} and {user_id} are now friends")
 
         # Broadcast friend_request_accepted event to requester
-        asyncio.create_task(
-            self.event_manager.broadcast(
-                **FriendshipEvents.friend_request_accepted(
-                    requester_id=requester_id,
-                    friend_id=user_id,
-                    friend_screen_name=recipient.screen_name,
-                    friendship_id=friendship.id
-                )
+        await self.event_manager.broadcast(
+            **FriendshipEvents.friend_request_accepted(
+                requester_id=requester_id,
+                friend_id=user_id,
+                friend_screen_name=recipient.screen_name,
+                friendship_id=friendship.id
             )
         )
 

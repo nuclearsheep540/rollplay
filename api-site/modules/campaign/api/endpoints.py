@@ -127,7 +127,7 @@ async def create_session(
 
     try:
         command = CreateSession(session_repo, campaign_repo, event_manager)
-        session = command.execute(
+        session = await command.execute(
             name=request.name,
             campaign_id=request.campaign_id,
             host_id=current_user.id,
@@ -143,9 +143,11 @@ async def create_session(
 async def create_campaign(
     request: CampaignCreateRequest,
     current_user: UserAggregate = Depends(get_current_user_from_token),
-    campaign_repo: CampaignRepository = Depends(campaign_repository)
+    campaign_repo: CampaignRepository = Depends(campaign_repository),
+    session_repo: SessionRepository = Depends(get_session_repository),
+    event_manager: EventManager = Depends(get_event_manager)
 ):
-    """Create a new campaign"""
+    """Create a new campaign, optionally with an initial session"""
     try:
         command = CreateCampaign(campaign_repo)
         campaign = command.execute(
@@ -153,6 +155,16 @@ async def create_campaign(
             title=request.title,
             description=request.description or "",
             hero_image=request.hero_image
+        )
+
+        # Always create a session with the campaign
+        session_name = request.session_name.strip() if request.session_name else None
+        session_command = CreateSession(session_repo, campaign_repo, event_manager)
+        await session_command.execute(
+            name=session_name,
+            campaign_id=campaign.id,
+            host_id=current_user.id,
+            max_players=8
         )
 
         return _to_campaign_response(campaign)
@@ -309,7 +321,7 @@ async def add_player_to_campaign(
     """Add a player to the campaign (host only)"""
     try:
         command = AddPlayerToCampaign(campaign_repo, user_repo, event_manager)
-        campaign = command.execute(
+        campaign = await command.execute(
             campaign_id=campaign_id,
             player_id=player_id,
             host_id=current_user.id
@@ -331,7 +343,7 @@ async def remove_player_from_campaign(
     """Remove a player from the campaign (host only)"""
     try:
         command = RemovePlayerFromCampaign(campaign_repo, user_repo, event_manager)
-        campaign = command.execute(
+        campaign = await command.execute(
             campaign_id=campaign_id,
             player_id=player_id,
             host_id=current_user.id
@@ -357,7 +369,7 @@ async def accept_campaign_invite(
     """
     try:
         command = AcceptCampaignInvite(campaign_repo, user_repo, event_manager, session_repo)
-        campaign = command.execute(
+        campaign = await command.execute(
             campaign_id=campaign_id,
             player_id=current_user.id
         )
@@ -377,7 +389,7 @@ async def decline_campaign_invite(
     """Decline a campaign invite (player only)"""
     try:
         command = DeclineCampaignInvite(campaign_repo, user_repo, event_manager)
-        campaign = command.execute(
+        campaign = await command.execute(
             campaign_id=campaign_id,
             player_id=current_user.id
         )
@@ -398,7 +410,7 @@ async def cancel_campaign_invite(
     """Cancel a pending campaign invite (host only)"""
     try:
         command = CancelCampaignInvite(campaign_repo, user_repo, event_manager)
-        campaign = command.execute(
+        campaign = await command.execute(
             campaign_id=campaign_id,
             player_id=player_id,
             host_id=current_user.id
@@ -419,7 +431,7 @@ async def leave_campaign(
     """Leave a campaign (player only - host cannot leave their own campaign)"""
     try:
         command = LeaveCampaign(campaign_repo, user_repo, event_manager)
-        command.execute(
+        await command.execute(
             campaign_id=campaign_id,
             player_id=current_user.id
         )
