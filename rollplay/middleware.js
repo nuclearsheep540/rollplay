@@ -4,6 +4,7 @@
  */
 
 import { NextResponse } from 'next/server'
+import { API_SITE_INTERNAL_URL, API_AUTH_INTERNAL_URL } from './app/shared/config'
 
 // Define protected routes that require authentication
 const PROTECTED_ROUTES = [
@@ -25,7 +26,7 @@ const AUTH_ROUTES = [
  */
 async function tryRefreshToken(refreshToken) {
   try {
-    const refreshResponse = await fetch(`http://api-site:8082/api/users/auth/refresh`, {
+    const refreshResponse = await fetch(`${API_SITE_INTERNAL_URL}/api/users/auth/refresh`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -92,7 +93,7 @@ export async function middleware(request) {
 
     // Validate token with backend
     try {
-      const validateResponse = await fetch(`http://api-auth:8083/auth/validate`, {
+      const validateResponse = await fetch(`${API_AUTH_INTERNAL_URL}/auth/validate`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -145,7 +146,7 @@ export async function middleware(request) {
   if (isAuthRoute && authToken) {
     // Validate token to ensure it's still valid
     try {
-      const validateResponse = await fetch(`http://api-auth:8083/auth/validate`, {
+      const validateResponse = await fetch(`${API_AUTH_INTERNAL_URL}/auth/validate`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
