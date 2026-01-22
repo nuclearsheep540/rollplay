@@ -490,7 +490,7 @@ async def update_screen_name(
     """
     try:
         command = UpdateScreenName(user_repo)
-        updated_user = command.execute(str(user_id), request.screen_name)
+        updated_user = command.execute(user_id, request.screen_name)
 
         return _to_user_response(updated_user)
 

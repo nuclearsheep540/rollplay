@@ -37,7 +37,7 @@ class UpdateScreenName:
     def __init__(self, repository: UserRepository):
         self.repository = repository
 
-    def execute(self, user_id: str, screen_name: str) -> UserAggregate:
+    def execute(self, user_id: UUID, screen_name: str) -> UserAggregate:
         """Update user screen name with business rule validation"""
         user = self.repository.get_by_id(user_id)
         if not user:
