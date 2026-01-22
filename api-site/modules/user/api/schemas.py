@@ -89,3 +89,14 @@ class UserLoginResponse(BaseModel):
     user: UserResponse
     message: str
     created: bool  # True if user was created, False if existing user logged in
+
+
+class InternalUserResolveResponse(BaseModel):
+    """
+    Internal API response for service-to-service user resolution.
+
+    Minimal contract for api-auth to get user_id for JWT token creation.
+    This endpoint is NOT exposed via NGINX - only accessible within Docker network.
+    """
+    user_id: str
+    email: str

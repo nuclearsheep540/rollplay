@@ -13,7 +13,8 @@ from .schemas import (
     UserLoginResponse,
     PublicUserResponse,
     SetAccountNameRequest,
-    AccountNameResponse
+    AccountNameResponse,
+    InternalUserResolveResponse
 )
 from modules.user.dependencies.providers import user_repository
 from modules.user.orm.user_repository import UserRepository
@@ -102,6 +103,44 @@ async def login_user(
 async def test_endpoint():
     """Test endpoint to verify container is working"""
     return {"message": "Test endpoint working", "timestamp": "now"}
+
+
+@router.post("/internal/resolve-user", response_model=InternalUserResolveResponse)
+async def resolve_user_for_auth(
+    request: UserEmailRequest,
+    user_repo: UserRepository = Depends(user_repository)
+):
+    """
+    Internal endpoint for api-auth to resolve user_id from email.
+
+    This is a service-to-service contract. NOT exposed via NGINX.
+    Only accessible within Docker network (http://api-site:8082).
+
+    Implements get-or-create pattern:
+    - If user exists, returns user_id
+    - If user doesn't exist, creates user and returns new user_id
+
+    Returns minimal data needed for JWT token creation.
+    """
+    try:
+        command = GetOrCreateUser(user_repo)
+        user, _ = command.execute(request.email)
+
+        return InternalUserResolveResponse(
+            user_id=str(user.id),
+            email=user.email
+        )
+
+    except ValueError as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Invalid request: {str(e)}"
+        )
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Internal server error during user resolution"
+        )
 
 
 @router.post("/auth/refresh")

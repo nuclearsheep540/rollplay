@@ -94,13 +94,13 @@ class PasswordlessAuth:
             if not email:
                 return None
             
-            # Get or create user from api-site (gets real PostgreSQL user_id)
-            user_data = await self._get_or_create_user(email)
+            # Resolve user_id from api-site (gets real PostgreSQL user_id)
+            user_data = await self._resolve_user_for_token(email)
 
             # Generate access and refresh tokens with real user_id
             tokens = self.jwt_handler.create_tokens(user_data)
 
-            # Return user data with tokens
+            # Return tokens (user_data is minimal - just id and email)
             result = {
                 "user": user_data,
                 "access_token": tokens["access_token"],
@@ -149,13 +149,13 @@ class PasswordlessAuth:
                 logger.info(f"JWT verification failed for {auth_method}")
                 return None
 
-            # Get or create user from api-site (gets real PostgreSQL user_id)
-            user_data = await self._get_or_create_user(email)
+            # Resolve user_id from api-site (gets real PostgreSQL user_id)
+            user_data = await self._resolve_user_for_token(email)
 
             # Generate access and refresh tokens with real user_id
             tokens = self.jwt_handler.create_tokens(user_data)
 
-            # Return user data with tokens
+            # Return tokens (user_data is minimal - just id and email)
             result = {
                 "user": user_data,
                 "access_token": tokens["access_token"],
@@ -171,40 +171,37 @@ class PasswordlessAuth:
             logger.error(f"Error verifying OTP token: {str(e)}")
             return None
     
-    async def _get_or_create_user(self, email: str) -> Dict[str, Any]:
+    async def _resolve_user_for_token(self, email: str) -> Dict[str, str]:
         """
-        Get existing user or create new one via api-site.
+        Resolve user_id from email via api-site internal endpoint.
 
-        This calls api-site's /api/users/login endpoint which uses GetOrCreateUser
-        to ensure we get the REAL user_id from PostgreSQL.
+        Calls api-site's /api/users/internal/resolve-user endpoint which:
+        - Returns existing user's ID if found
+        - Creates new user and returns ID if not found
 
-        NOTE: No caching - always fetch fresh to handle account deletion/recreation scenarios.
+        Returns minimal data needed for JWT token creation: { id, email }
+
+        NOTE: No caching - always fetch fresh to handle account deletion/recreation.
         """
         try:
             async with httpx.AsyncClient(timeout=10.0) as client:
                 response = await client.post(
-                    f"{self.api_site_url}/api/users/login",
+                    f"{self.api_site_url}/api/users/internal/resolve-user",
                     json={"email": email}
                 )
 
                 if response.status_code == 200:
-                    result = response.json()
-                    user_response = result.get("user", {})
-
-                    # Map api-site response to format expected by jwt_handler
-                    user_data = {
-                        "id": user_response.get("id"),
-                        "email": user_response.get("email"),
-                        "display_name": user_response.get("screen_name") or email.split("@")[0],
-                        "created_at": user_response.get("created_at"),
-                        "last_login": user_response.get("last_login")
+                    # Response is exactly what we need: { user_id, email }
+                    data = response.json()
+                    logger.info(f"Resolved user from api-site: {email} (id={data['user_id']})")
+                    # Map to format jwt_handler expects (id, not user_id)
+                    return {
+                        "id": data["user_id"],
+                        "email": data["email"]
                     }
-
-                    logger.info(f"Got user from api-site: {email} (id={user_data['id']})")
-                    return user_data
                 else:
-                    logger.error(f"api-site login failed for {email}: {response.status_code} - {response.text}")
-                    raise Exception(f"Failed to get/create user from api-site: {response.status_code}")
+                    logger.error(f"api-site resolve-user failed for {email}: {response.status_code} - {response.text}")
+                    raise Exception(f"Failed to resolve user from api-site: {response.status_code}")
 
         except httpx.RequestError as e:
             logger.error(f"Network error calling api-site for {email}: {str(e)}")
