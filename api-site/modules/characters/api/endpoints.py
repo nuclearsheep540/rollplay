@@ -15,8 +15,7 @@ from modules.characters.dependencies.providers import get_character_repository
 from modules.characters.orm.character_repository import CharacterRepository
 from modules.characters.application.commands import CreateCharacter, UpdateCharacter, UpdateAbilityScores, DeleteCharacter, CloneCharacter
 from modules.characters.application.queries import GetCharactersByUser, GetCharacterById
-from shared.dependencies.auth import get_current_user_from_token
-from modules.user.domain.user_aggregate import UserAggregate
+from shared.dependencies.auth import get_current_user_id
 from modules.characters.domain.character_aggregate import (
     CharacterAggregate,
     AbilityScores,
@@ -60,7 +59,7 @@ def _to_character_response(character: CharacterAggregate) -> CharacterResponse:
 @router.post("/create", response_model=CharacterResponse)
 async def create_character(
     request: CharacterCreateRequest,
-    current_user: UserAggregate = Depends(get_current_user_from_token),
+    user_id: UUID = Depends(get_current_user_id),
     character_repo: CharacterRepository = Depends(get_character_repository)
 ):
     """Create a new character with multi-class support"""
@@ -90,7 +89,7 @@ async def create_character(
 
         command = CreateCharacter(character_repo)
         character = command.execute(
-            user_id=current_user.id,
+            user_id=user_id,
             character_name=request.name,
             character_classes=character_classes,  # List of classes
             character_race=request.character_race,
@@ -114,13 +113,13 @@ async def create_character(
 
 @router.get("/", response_model=List[CharacterResponse])
 async def get_user_characters(
-    current_user: UserAggregate = Depends(get_current_user_from_token),
+    user_id: UUID = Depends(get_current_user_id),
     character_repo: CharacterRepository = Depends(get_character_repository)
 ):
     """Get all characters for the current user"""
     try:
         query = GetCharactersByUser(character_repo)
-        characters = query.execute(current_user.id)
+        characters = query.execute(user_id)
 
         return [_to_character_response(character) for character in characters]
 
@@ -134,7 +133,7 @@ async def get_user_characters(
 @router.get("/{character_id}", response_model=CharacterResponse)
 async def get_character(
     character_id: UUID,
-    current_user: UserAggregate = Depends(get_current_user_from_token),
+    user_id: UUID = Depends(get_current_user_id),
     character_repo: CharacterRepository = Depends(get_character_repository)
 ):
     """Get character by ID"""
@@ -149,7 +148,7 @@ async def get_character(
             )
 
         # Business rule: Only character owner can view details
-        if not character.is_owned_by(current_user.id):
+        if not character.is_owned_by(user_id):
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="Access denied - only character owner can view details"
@@ -168,7 +167,7 @@ async def get_character(
 async def update_character(
     character_id: UUID,
     request: CharacterCreateRequest,
-    current_user: UserAggregate = Depends(get_current_user_from_token),
+    user_id: UUID = Depends(get_current_user_id),
     character_repo: CharacterRepository = Depends(get_character_repository)
 ):
     """Update an existing character (full update) with multi-class support"""
@@ -202,7 +201,7 @@ async def update_character(
         command = UpdateCharacter(character_repo)
         character = command.execute(
             character_id=character_id,
-            user_id=current_user.id,
+            user_id=user_id,
             character_name=request.name,
             character_classes=character_classes,  # List of classes
             character_race=request.character_race,
@@ -228,7 +227,7 @@ async def update_character(
 async def update_character_ability_scores(
     character_id: UUID,
     request: UpdateAbilityScoresRequest,
-    current_user: UserAggregate = Depends(get_current_user_from_token),
+    user_id: UUID = Depends(get_current_user_id),
     character_repo: CharacterRepository = Depends(get_character_repository)
 ):
     """Update character ability scores (partial update supported)"""
@@ -254,7 +253,7 @@ async def update_character_ability_scores(
 
         # Execute command
         command = UpdateAbilityScores(character_repo)
-        character = command.execute(character_id, current_user.id, new_scores)
+        character = command.execute(character_id, user_id, new_scores)
 
         return _to_character_response(character)
 
@@ -268,13 +267,13 @@ async def update_character_ability_scores(
 @router.post("/{character_id}/clone", response_model=CharacterResponse)
 async def clone_character(
     character_id: UUID,
-    current_user: UserAggregate = Depends(get_current_user_from_token),
+    user_id: UUID = Depends(get_current_user_id),
     character_repo: CharacterRepository = Depends(get_character_repository)
 ):
     """Clone an existing character - creates a new copy with '(Copy)' appended to name"""
     try:
         command = CloneCharacter(character_repo)
-        cloned_character = command.execute(character_id, current_user.id)
+        cloned_character = command.execute(character_id, user_id)
         return _to_character_response(cloned_character)
 
     except ValueError as e:
@@ -287,13 +286,13 @@ async def clone_character(
 @router.delete("/{character_id}")
 async def delete_character(
     character_id: UUID,
-    current_user: UserAggregate = Depends(get_current_user_from_token),
+    user_id: UUID = Depends(get_current_user_id),
     character_repo: CharacterRepository = Depends(get_character_repository)
 ):
     """Delete character (soft delete)"""
     try:
         command = DeleteCharacter(character_repo)
-        success = command.execute(character_id, current_user.id)
+        success = command.execute(character_id, user_id)
 
         if success:
             return {"message": "Character deleted successfully"}

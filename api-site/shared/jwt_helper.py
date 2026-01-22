@@ -3,7 +3,7 @@
 
 import os
 import jwt
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
 from typing import Optional, Dict, Any
 from fastapi import HTTPException, Request
 import logging
@@ -65,6 +65,46 @@ class JWTHelper:
         except Exception as e:
             logger.debug(f"Exception verifying JWT token: {str(e)}")
             return None
+
+    def extract_user_id_from_token(self, token: str) -> Optional[str]:
+        """
+        Verify JWT access token and return user_id if valid.
+
+        This is a lightweight alternative to verify_auth_token that returns
+        user_id instead of email, avoiding the need for a DB lookup when
+        only the user_id is needed.
+
+        Args:
+            token: JWT token string
+
+        Returns:
+            user_id string if token is valid, None otherwise
+        """
+        try:
+            payload = jwt.decode(token, self.secret_key, algorithms=[self.algorithm])
+
+            # Check token type
+            if payload.get("type") != "access":
+                logger.debug(f"Invalid token type for user_id extraction. Expected 'access', got '{payload.get('type')}'")
+                return None
+
+            user_id = payload.get("user_id")
+            if not user_id:
+                logger.debug("Token missing user_id field")
+                return None
+
+            logger.debug(f"Extracted user_id from token: {user_id}")
+            return user_id
+
+        except jwt.ExpiredSignatureError:
+            logger.debug("JWT token has expired")
+            return None
+        except jwt.InvalidTokenError as e:
+            logger.debug(f"Invalid JWT token: {str(e)}")
+            return None
+        except Exception as e:
+            logger.debug(f"Exception extracting user_id from token: {str(e)}")
+            return None
     
     def get_token_from_cookie(self, request: Request) -> Optional[str]:
         """
@@ -86,3 +126,57 @@ class JWTHelper:
         except Exception as e:
             logger.debug(f"Error extracting token from cookie: {str(e)}")
             return None
+
+    def verify_refresh_token(self, token: str) -> Optional[Dict[str, Any]]:
+        """
+        Verify refresh token and return payload if valid.
+
+        Args:
+            token: JWT refresh token string
+
+        Returns:
+            Token payload dict if valid, None otherwise
+        """
+        try:
+            payload = jwt.decode(token, self.secret_key, algorithms=[self.algorithm])
+
+            # Check token type is refresh
+            if payload.get("type") != "refresh":
+                logger.debug(f"Invalid token type for refresh. Expected 'refresh', got '{payload.get('type')}'")
+                return None
+
+            logger.debug(f"Refresh token verified for user_id: {payload.get('user_id')}")
+            return payload
+
+        except jwt.ExpiredSignatureError:
+            logger.debug("Refresh token has expired")
+            return None
+        except jwt.InvalidTokenError as e:
+            logger.debug(f"Invalid refresh token: {str(e)}")
+            return None
+        except Exception as e:
+            logger.debug(f"Exception verifying refresh token: {str(e)}")
+            return None
+
+    def create_access_token(self, user_id: str, email: str) -> str:
+        """
+        Create a new short-lived access token.
+
+        Args:
+            user_id: User's UUID as string
+            email: User's email address
+
+        Returns:
+            JWT access token string
+        """
+        now = datetime.now(timezone.utc)
+        payload = {
+            "user_id": user_id,
+            "email": email,
+            "type": "access",
+            "exp": now + timedelta(minutes=15),
+            "iat": now
+        }
+        token = jwt.encode(payload, self.secret_key, algorithm=self.algorithm)
+        logger.debug(f"Created new access token for user: {email}")
+        return token

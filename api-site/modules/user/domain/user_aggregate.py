@@ -53,6 +53,7 @@ class UserAggregate:
     account_name: Optional[str] = None  # Immutable username (e.g., "claude")
     account_tag: Optional[str] = None  # 4-digit discriminator (e.g., "2345")
     game_invites: Optional[List[GameInvites]] = None
+    has_received_demo: bool = False  # Track if user has received their demo campaign
 
     @property
     def account_identifier(self) -> Optional[str]:

@@ -1,11 +1,11 @@
 # Copyright (C) 2025 Matthew Davey
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-from fastapi import APIRouter, Depends, HTTPException, status, Request
+from fastapi import APIRouter, Depends, HTTPException, status, Request, Response
 from pydantic import BaseModel
 from uuid import UUID
 
-from shared.dependencies.auth import get_current_user_from_token
+from shared.dependencies.auth import get_current_user_from_token, get_current_user_id
 from shared.jwt_helper import JWTHelper
 from .schemas import (
     UserEmailRequest,
@@ -17,7 +17,7 @@ from .schemas import (
 )
 from modules.user.dependencies.providers import user_repository
 from modules.user.orm.user_repository import UserRepository
-from modules.user.application.commands import GetOrCreateUser, UpdateScreenName
+from modules.user.application.commands import GetOrCreateUser, UpdateScreenName, SoftDeleteUser, HardDeleteUser
 from modules.user.application.queries import GetUserDashboard
 from modules.user.domain.user_aggregate import UserAggregate
 from modules.campaign.dependencies.providers import campaign_repository
@@ -29,6 +29,9 @@ class ScreenNameUpdateRequest(BaseModel):
 
 
 router = APIRouter()
+
+# Initialize JWT helper for refresh token operations
+jwt_helper = JWTHelper()
 
 
 def _to_user_response(user: UserAggregate) -> UserResponse:
@@ -70,6 +73,8 @@ async def login_user(
     This endpoint implements the get-or-create pattern:
     - If user exists, updates last login and returns user
     - If user doesn't exist, creates new user and returns it
+
+    Note: Demo campaigns are created lazily when user first views their campaign list.
     """
     try:
         command = GetOrCreateUser(user_repo)
@@ -99,12 +104,159 @@ async def test_endpoint():
     return {"message": "Test endpoint working", "timestamp": "now"}
 
 
+@router.post("/auth/refresh")
+async def refresh_access_token(
+    request: Request,
+    response: Response,
+    user_repo: UserRepository = Depends(user_repository)
+):
+    """
+    Exchange refresh token for new access token.
+
+    This is the ONLY endpoint that validates refresh tokens.
+    Performs DB check to ensure user still exists and is active (not soft-deleted).
+
+    Returns 401 if:
+    - No refresh token in cookies
+    - Refresh token is invalid or expired
+    - User not found or soft-deleted
+    """
+    refresh_token = request.cookies.get("refresh_token")
+    if not refresh_token:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="No refresh token"
+        )
+
+    # Validate refresh token
+    payload = jwt_helper.verify_refresh_token(refresh_token)
+    if not payload:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid or expired refresh token"
+        )
+
+    user_id = payload.get("user_id")
+    if not user_id:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid refresh token payload"
+        )
+
+    # DB CHECK: Verify user exists and is active (excludes soft-deleted by default)
+    user = user_repo.get_by_id(user_id)
+    if not user:
+        # Clear cookies - user is deleted or doesn't exist
+        response.delete_cookie("auth_token", path="/", httponly=True, secure=True, samesite="lax")
+        response.delete_cookie("refresh_token", path="/", httponly=True, secure=True, samesite="lax")
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="User not found"
+        )
+
+    # Issue new access token
+    new_access_token = jwt_helper.create_access_token(
+        user_id=str(user.id),
+        email=user.email
+    )
+
+    response.set_cookie(
+        key="auth_token",
+        value=new_access_token,
+        httponly=True,
+        secure=True,
+        samesite="lax",
+        max_age=900,  # 15 minutes
+        path="/"
+    )
+
+    return {"message": "Token refreshed"}
+
+
 @router.get("/get_current_user", response_model=UserResponse)
 async def get_current_user(
     current_user: UserAggregate = Depends(get_current_user_from_token)
 ):
     """Get current user info from JWT token."""
     return _to_user_response(current_user)
+
+
+@router.delete("/me", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_current_user(
+    response: Response,
+    user_id: UUID = Depends(get_current_user_id),
+    user_repo: UserRepository = Depends(user_repository)
+):
+    """
+    Soft delete current user's account.
+
+    This marks the account as deleted but preserves data.
+    User can no longer log in but data is retained for recovery if needed.
+    Clears the auth cookie to log the user out.
+    """
+    command = SoftDeleteUser(user_repo)
+    deleted = command.execute(user_id)
+
+    if not deleted:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="User not found"
+        )
+
+    # Clear auth cookies to log user out
+    response.delete_cookie(
+        key="auth_token",
+        path="/",
+        httponly=True,
+        secure=True,
+        samesite="lax"
+    )
+    response.delete_cookie(
+        key="refresh_token",
+        path="/",
+        httponly=True,
+        secure=True,
+        samesite="lax"
+    )
+
+
+@router.delete("/me/hard", status_code=status.HTTP_204_NO_CONTENT)
+async def hard_delete_current_user(
+    response: Response,
+    user_id: UUID = Depends(get_current_user_id),
+    user_repo: UserRepository = Depends(user_repository)
+):
+    """
+    DEVELOPMENT ONLY: Hard delete current user's account permanently.
+
+    WARNING: This is irreversible. All user data will be permanently deleted.
+    Use DELETE /me for production soft delete.
+    Clears the auth cookie to log the user out.
+    """
+    command = HardDeleteUser(user_repo)
+    deleted = command.execute(user_id)
+
+    if not deleted:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="User not found"
+        )
+
+    # Clear auth cookies to log user out
+    response.delete_cookie(
+        key="auth_token",
+        path="/",
+        httponly=True,
+        secure=True,
+        samesite="lax"
+    )
+    response.delete_cookie(
+        key="refresh_token",
+        path="/",
+        httponly=True,
+        secure=True,
+        samesite="lax"
+    )
 
 
 @router.get("/ws-token")
@@ -141,7 +293,7 @@ async def get_websocket_token(request: Request):
 @router.get("/{user_uuid}", response_model=PublicUserResponse)
 async def get_user_by_uuid(
     user_uuid: UUID,
-    current_user: UserAggregate = Depends(get_current_user_from_token),
+    _user_id: UUID = Depends(get_current_user_id),
     user_repo: UserRepository = Depends(user_repository)
 ):
     """
@@ -163,7 +315,7 @@ async def get_user_by_uuid(
 @router.get("/by-friend-code/{friend_code}", response_model=PublicUserResponse)
 async def get_user_by_friend_code(
     friend_code: str,
-    current_user: UserAggregate = Depends(get_current_user_from_token),
+    _user_id: UUID = Depends(get_current_user_id),
     user_repo: UserRepository = Depends(user_repository)
 ):
     """
@@ -186,7 +338,7 @@ async def get_user_by_friend_code(
 @router.get("/by-account-tag/{identifier}", response_model=PublicUserResponse)
 async def get_user_by_account_tag(
     identifier: str,
-    current_user: UserAggregate = Depends(get_current_user_from_token),
+    _user_id: UUID = Depends(get_current_user_id),
     user_repo: UserRepository = Depends(user_repository)
 ):
     """
@@ -279,7 +431,7 @@ async def set_account_name(
 @router.put("/screen_name", response_model=UserResponse)
 async def update_screen_name(
     request: ScreenNameUpdateRequest,
-    current_user: UserAggregate = Depends(get_current_user_from_token),
+    user_id: UUID = Depends(get_current_user_id),
     user_repo: UserRepository = Depends(user_repository)
 ):
     """
@@ -290,7 +442,7 @@ async def update_screen_name(
     """
     try:
         command = UpdateScreenName(user_repo)
-        updated_user = command.execute(str(current_user.id), request.screen_name)
+        updated_user = command.execute(str(user_id), request.screen_name)
 
         return _to_user_response(updated_user)
 

@@ -125,18 +125,29 @@ async def verify_magic_link(token: str, response: Response):
             raise HTTPException(status_code=400, detail="Invalid or expired magic link")
         
         logger.info(f"Successfully authenticated user: {auth_result['user']['email']}")
-        
-        # Set httpOnly cookie with the JWT token
+
+        # Set httpOnly cookie with the access token (short-lived)
         response.set_cookie(
             key="auth_token",
             value=auth_result["access_token"],
             httponly=True,
             secure=True,  # Use HTTPS in production
             samesite="lax",
-            max_age=86400,  # 24 hours
+            max_age=900,  # 15 minutes
             path="/"
         )
-        
+
+        # Set httpOnly cookie with the refresh token (long-lived)
+        response.set_cookie(
+            key="refresh_token",
+            value=auth_result["refresh_token"],
+            httponly=True,
+            secure=True,
+            samesite="lax",
+            max_age=604800,  # 7 days
+            path="/"
+        )
+
         return {
             "success": True,
             "user": auth_result["user"],
@@ -161,18 +172,29 @@ async def verify_otp_token(request: ValidateRequest, response: Response):
             raise HTTPException(status_code=400, detail="Invalid or expired OTP token")
         
         logger.info(f"Successfully authenticated user via OTP: {auth_result['user']['email']}")
-        
-        # Set httpOnly cookie with the JWT token
+
+        # Set httpOnly cookie with the access token (short-lived)
         response.set_cookie(
             key="auth_token",
             value=auth_result["access_token"],
             httponly=True,
             secure=True,  # Use HTTPS in production
             samesite="lax",
-            max_age=86400,  # 24 hours
+            max_age=900,  # 15 minutes
             path="/"
         )
-        
+
+        # Set httpOnly cookie with the refresh token (long-lived)
+        response.set_cookie(
+            key="refresh_token",
+            value=auth_result["refresh_token"],
+            httponly=True,
+            secure=True,
+            samesite="lax",
+            max_age=604800,  # 7 days
+            path="/"
+        )
+
         return {
             "success": True,
             "user": auth_result["user"],
@@ -217,10 +239,10 @@ async def validate_token(request: Request):
 @app.post("/auth/logout")
 async def logout(response: Response):
     """
-    Logout user by clearing httpOnly cookie
+    Logout user by clearing httpOnly cookies
     """
     try:
-        # Clear the httpOnly cookie
+        # Clear the access token cookie
         response.set_cookie(
             key="auth_token",
             value="",
@@ -230,9 +252,20 @@ async def logout(response: Response):
             max_age=0,  # Immediate expiry
             path="/"
         )
-        
+
+        # Clear the refresh token cookie
+        response.set_cookie(
+            key="refresh_token",
+            value="",
+            httponly=True,
+            secure=True,
+            samesite="lax",
+            max_age=0,  # Immediate expiry
+            path="/"
+        )
+
         logger.info("User logged out successfully")
-        
+
         return {
             "success": True,
             "message": "Logged out successfully"

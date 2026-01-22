@@ -41,9 +41,8 @@ from modules.characters.orm.character_repository import CharacterRepository
 from modules.characters.dependencies.providers import get_character_repository
 from modules.campaign.orm.campaign_repository import CampaignRepository
 from modules.campaign.dependencies.providers import campaign_repository
-from modules.user.domain.user_aggregate import UserAggregate
 from modules.session.domain.session_aggregate import SessionEntity
-from shared.dependencies.auth import get_current_user_from_token
+from shared.dependencies.auth import get_current_user_id
 from shared.dependencies.db import get_db
 from modules.events.event_manager import EventManager
 from modules.events.dependencies.providers import get_event_manager
@@ -114,13 +113,13 @@ def _to_session_response(session: SessionEntity, db: Session) -> SessionResponse
 
 @router.get("/my-sessions", response_model=SessionListResponse)
 async def get_my_sessions(
-    current_user: UserAggregate = Depends(get_current_user_from_token),
+    user_id: UUID = Depends(get_current_user_id),
     session_repo: SessionRepository = Depends(get_session_repository),
     db: Session = Depends(get_db)
 ):
     """Get all sessions where user is host or invited player"""
     query = GetUserSessions(session_repo)
-    sessions = query.execute(current_user.id)
+    sessions = query.execute(user_id)
 
     return SessionListResponse(
         sessions=[_to_session_response(session, db) for session in sessions],
@@ -131,7 +130,7 @@ async def get_my_sessions(
 @router.get("/{session_id}", response_model=SessionResponse)
 async def get_session(
     session_id: UUID,
-    current_user: UserAggregate = Depends(get_current_user_from_token),
+    user_id: UUID = Depends(get_current_user_id),
     session_repo: SessionRepository = Depends(get_session_repository),
     db: Session = Depends(get_db)
 ):
@@ -148,7 +147,7 @@ async def get_session(
 @router.get("/campaign/{campaign_id}", response_model=SessionListResponse)
 async def get_campaign_sessions(
     campaign_id: UUID,
-    current_user: UserAggregate = Depends(get_current_user_from_token),
+    user_id: UUID = Depends(get_current_user_id),
     session_repo: SessionRepository = Depends(get_session_repository),
     db: Session = Depends(get_db)
 ):
@@ -166,7 +165,7 @@ async def get_campaign_sessions(
 async def update_session(
     session_id: UUID,
     request: UpdateSessionRequest,
-    current_user: UserAggregate = Depends(get_current_user_from_token),
+    user_id: UUID = Depends(get_current_user_id),
     session_repo: SessionRepository = Depends(get_session_repository),
     db: Session = Depends(get_db)
 ):
@@ -175,7 +174,7 @@ async def update_session(
         command = UpdateSession(session_repo)
         session = command.execute(
             session_id=session_id,
-            host_id=current_user.id,
+            host_id=user_id,
             name=request.name
         )
         return _to_session_response(session, db)
@@ -186,23 +185,23 @@ async def update_session(
 @router.delete("/{session_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_session(
     session_id: UUID,
-    current_user: UserAggregate = Depends(get_current_user_from_token),
+    user_id: UUID = Depends(get_current_user_id),
     session_repo: SessionRepository = Depends(get_session_repository),
     campaign_repo: CampaignRepository = Depends(campaign_repository)
 ):
     """Delete a session (host only)"""
     try:
         command = DeleteSession(session_repo, campaign_repo)
-        command.execute(session_id=session_id, host_id=current_user.id)
+        command.execute(session_id=session_id, host_id=user_id)
     except ValueError as e:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
 
 
-@router.delete("/{session_id}/players/{user_id}", response_model=SessionResponse)
+@router.delete("/{session_id}/players/{player_id}", response_model=SessionResponse)
 async def remove_player_from_session(
     session_id: UUID,
-    user_id: UUID,
-    current_user: UserAggregate = Depends(get_current_user_from_token),
+    player_id: UUID,
+    user_id: UUID = Depends(get_current_user_id),
     session_repo: SessionRepository = Depends(get_session_repository),
     character_repo: CharacterRepository = Depends(get_character_repository),
     db: Session = Depends(get_db)
@@ -212,8 +211,8 @@ async def remove_player_from_session(
         command = RemovePlayerFromSession(session_repo, character_repo)
         session = command.execute(
             session_id=session_id,
-            user_id=user_id,
-            removed_by=current_user.id
+            user_id=player_id,
+            removed_by=user_id
         )
         return _to_session_response(session, db)
     except ValueError as e:
@@ -223,7 +222,7 @@ async def remove_player_from_session(
 @router.post("/{session_id}/start", response_model=SessionResponse)
 async def start_session(
     session_id: UUID,
-    current_user: UserAggregate = Depends(get_current_user_from_token),
+    user_id: UUID = Depends(get_current_user_id),
     session_repo: SessionRepository = Depends(get_session_repository),
     user_repo: UserRepository = Depends(get_user_repository),
     campaign_repo: CampaignRepository = Depends(campaign_repository),
@@ -244,7 +243,7 @@ async def start_session(
     """
     try:
         command = StartSession(session_repo, user_repo, campaign_repo, event_manager)
-        session = await command.execute(session_id, current_user.id)
+        session = await command.execute(session_id, user_id)
         return _to_session_response(session, db)
 
     except ValueError as e:
@@ -263,7 +262,7 @@ async def start_session(
 @router.post("/{session_id}/pause", response_model=SessionResponse)
 async def pause_session(
     session_id: UUID,
-    current_user: UserAggregate = Depends(get_current_user_from_token),
+    user_id: UUID = Depends(get_current_user_id),
     session_repo: SessionRepository = Depends(get_session_repository),
     user_repo: UserRepository = Depends(get_user_repository),
     character_repo = Depends(get_character_repository),
@@ -288,7 +287,7 @@ async def pause_session(
     """
     try:
         command = PauseSession(session_repo, user_repo, character_repo, campaign_repo, event_manager)
-        session = await command.execute(session_id, current_user.id)
+        session = await command.execute(session_id, user_id)
         return _to_session_response(session, db)
 
     except ValueError as e:
@@ -307,7 +306,7 @@ async def pause_session(
 @router.post("/{session_id}/finish", response_model=SessionResponse)
 async def finish_session(
     session_id: UUID,
-    current_user: UserAggregate = Depends(get_current_user_from_token),
+    user_id: UUID = Depends(get_current_user_id),
     session_repo: SessionRepository = Depends(get_session_repository),
     user_repo: UserRepository = Depends(get_user_repository),
     character_repo = Depends(get_character_repository),
@@ -328,7 +327,7 @@ async def finish_session(
     """
     try:
         command = FinishSession(session_repo, user_repo, character_repo, campaign_repo, event_manager)
-        session = await command.execute(session_id, current_user.id)
+        session = await command.execute(session_id, user_id)
         return _to_session_response(session, db)
 
     except ValueError as e:
@@ -350,7 +349,7 @@ async def finish_session(
 async def select_character_for_session(
     session_id: UUID,
     character_id: UUID,
-    current_user: UserAggregate = Depends(get_current_user_from_token),
+    user_id: UUID = Depends(get_current_user_id),
     session_repo: SessionRepository = Depends(get_session_repository),
     character_repo: CharacterRepository = Depends(get_character_repository)
 ):
@@ -359,7 +358,7 @@ async def select_character_for_session(
         command = SelectCharacterForSession(session_repo, character_repo)
         character = command.execute(
             session_id=session_id,
-            user_id=current_user.id,
+            user_id=user_id,
             character_id=character_id
         )
         return {
@@ -376,7 +375,7 @@ async def change_character_for_session(
     session_id: UUID,
     old_character_id: UUID,
     new_character_id: UUID,
-    current_user: UserAggregate = Depends(get_current_user_from_token),
+    user_id: UUID = Depends(get_current_user_id),
     session_repo: SessionRepository = Depends(get_session_repository),
     character_repo: CharacterRepository = Depends(get_character_repository)
 ):
@@ -385,7 +384,7 @@ async def change_character_for_session(
         command = ChangeCharacterForSession(session_repo, character_repo)
         character = command.execute(
             session_id=session_id,
-            user_id=current_user.id,
+            user_id=user_id,
             old_character_id=old_character_id,
             new_character_id=new_character_id
         )
@@ -402,7 +401,7 @@ async def change_character_for_session(
 async def change_character_during_game(
     session_id: UUID,
     new_character_id: UUID,
-    current_user: UserAggregate = Depends(get_current_user_from_token),
+    user_id: UUID = Depends(get_current_user_id),
     session_repo: SessionRepository = Depends(get_session_repository),
     character_repo: CharacterRepository = Depends(get_character_repository),
     user_repo: UserRepository = Depends(get_user_repository)
@@ -419,7 +418,7 @@ async def change_character_during_game(
         command = ChangeCharacterDuringGame(session_repo, character_repo, user_repo)
         character = await command.execute(
             session_id=session_id,
-            user_id=current_user.id,
+            user_id=user_id,
             new_character_id=new_character_id
         )
         return {
@@ -436,7 +435,7 @@ async def disconnect_from_game(
     session_id: UUID,
     character_id: UUID,
     character_state: dict,
-    current_user: UserAggregate = Depends(get_current_user_from_token),
+    user_id: UUID = Depends(get_current_user_id),
     session_repo: SessionRepository = Depends(get_session_repository),
     character_repo: CharacterRepository = Depends(get_character_repository)
 ):
@@ -445,7 +444,7 @@ async def disconnect_from_game(
         command = DisconnectFromGame(session_repo, character_repo)
         character = command.execute(
             session_id=session_id,
-            user_id=current_user.id,
+            user_id=user_id,
             character_id=character_id,
             character_state=character_state
         )

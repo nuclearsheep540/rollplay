@@ -7,7 +7,7 @@
 
 import { useState } from 'react'
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
-import { faCopy } from '@fortawesome/free-solid-svg-icons'
+import { faCopy, faTrash } from '@fortawesome/free-solid-svg-icons'
 import { THEME, COLORS } from '@/app/styles/colorTheme'
 import { Button } from './shared/Button'
 
@@ -16,6 +16,8 @@ export default function ProfileManager({ user, onUserUpdate }) {
   const [updatingScreenName, setUpdatingScreenName] = useState(false)
   const [error, setError] = useState(null)
   const [copiedAccountTag, setCopiedAccountTag] = useState(false)
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
+  const [deleting, setDeleting] = useState(false)
 
   // Copy account tag to clipboard
   const handleCopyAccountTag = async () => {
@@ -55,6 +57,33 @@ export default function ProfileManager({ user, onUserUpdate }) {
       setError('Failed to update screen name')
     } finally {
       setUpdatingScreenName(false)
+    }
+  }
+
+  // Soft delete account (production)
+  const handleDeleteAccount = async () => {
+    setDeleting(true)
+    setError(null)
+
+    try {
+      const response = await fetch('/api/users/me', {
+        method: 'DELETE',
+        credentials: 'include'
+      })
+
+      if (response.ok || response.status === 204) {
+        window.location.href = '/auth/magic'
+      } else {
+        const errorData = await response.json()
+        setError(errorData.detail || 'Failed to delete account')
+        setShowDeleteConfirm(false)
+      }
+    } catch (error) {
+      console.error('Error deleting account:', error)
+      setError('Failed to delete account')
+      setShowDeleteConfirm(false)
+    } finally {
+      setDeleting(false)
     }
   }
 
@@ -203,6 +232,63 @@ export default function ProfileManager({ user, onUserUpdate }) {
           </Button>
         </div>
       </div>
+
+      {/* Account Actions */}
+      <div className="mt-6 pt-6 border-t" style={{borderTopColor: THEME.borderSubtle}}>
+        <h3 className="text-sm font-semibold uppercase mb-4" style={{color: THEME.textSecondary}}>
+          Account Actions
+        </h3>
+
+        {!showDeleteConfirm ? (
+          <button
+            onClick={() => setShowDeleteConfirm(true)}
+            className="px-4 py-2 rounded-sm border font-medium flex items-center gap-2 hover:opacity-80 transition-opacity"
+            style={{
+              backgroundColor: 'transparent',
+              borderColor: '#ef4444',
+              color: '#ef4444'
+            }}
+          >
+            <FontAwesomeIcon icon={faTrash} />
+            Delete Account
+          </button>
+        ) : (
+          <div
+            className="p-4 rounded-sm border"
+            style={{backgroundColor: '#450a0a', borderColor: '#dc2626'}}
+          >
+            <p className="text-sm mb-3" style={{color: '#fca5a5'}}>
+              Are you sure? Your account will be deactivated and you won&apos;t be able to log in.
+            </p>
+            <div className="flex gap-2">
+              <button
+                onClick={handleDeleteAccount}
+                disabled={deleting}
+                className="px-4 py-2 rounded-sm font-medium hover:opacity-80 transition-opacity disabled:opacity-50"
+                style={{
+                  backgroundColor: '#dc2626',
+                  color: '#fff'
+                }}
+              >
+                {deleting ? 'Deleting...' : 'Yes, Delete My Account'}
+              </button>
+              <button
+                onClick={() => setShowDeleteConfirm(false)}
+                disabled={deleting}
+                className="px-4 py-2 rounded-sm border font-medium hover:opacity-80 transition-opacity"
+                style={{
+                  backgroundColor: 'transparent',
+                  borderColor: THEME.borderDefault,
+                  color: THEME.textSecondary
+                }}
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        )}
+      </div>
+
     </div>
   )
 }

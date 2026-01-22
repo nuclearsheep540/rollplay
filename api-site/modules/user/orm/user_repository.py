@@ -6,6 +6,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy import text
 from typing import Optional
 from uuid import UUID
+from datetime import datetime, timezone
 import random
 
 from modules.user.model.user_model import User as UserModel
@@ -26,9 +27,12 @@ class UserRepository:
         ).fetchone()
         return result[0] if result else None
 
-    def get_by_id(self, user_id) -> Optional[UserAggregate]:
-        """Retrieve user by UUID."""
-        model = self.db.query(UserModel).filter_by(id=user_id).first()
+    def get_by_id(self, user_id, include_deleted: bool = False) -> Optional[UserAggregate]:
+        """Retrieve user by UUID. Excludes soft-deleted users by default."""
+        query = self.db.query(UserModel).filter_by(id=user_id)
+        if not include_deleted:
+            query = query.filter(UserModel.is_deleted == False)
+        model = query.first()
         if not model:
             return None
 
@@ -42,13 +46,17 @@ class UserRepository:
             last_login=model.last_login,
             friend_code=friend_code,
             account_name=model.account_name,
-            account_tag=model.account_tag
+            account_tag=model.account_tag,
+            has_received_demo=model.has_received_demo
         )
 
-    def get_by_email(self, email: str) -> Optional[UserAggregate]:
-        """Retrieve user by email address."""
+    def get_by_email(self, email: str, include_deleted: bool = False) -> Optional[UserAggregate]:
+        """Retrieve user by email address. Excludes soft-deleted users by default."""
         normalized_email = email.lower().strip()
-        model = self.db.query(UserModel).filter_by(email=normalized_email).first()
+        query = self.db.query(UserModel).filter_by(email=normalized_email)
+        if not include_deleted:
+            query = query.filter(UserModel.is_deleted == False)
+        model = query.first()
         if not model:
             return None
 
@@ -62,7 +70,8 @@ class UserRepository:
             last_login=model.last_login,
             friend_code=friend_code,
             account_name=model.account_name,
-            account_tag=model.account_tag
+            account_tag=model.account_tag,
+            has_received_demo=model.has_received_demo
         )
 
     def _get_existing_friend_code(self, user_id: UUID) -> Optional[str]:
@@ -116,10 +125,11 @@ class UserRepository:
         if not account_name or not account_tag:
             return None
 
-        # Query with case-insensitive name match
+        # Query with case-insensitive name match, exclude deleted
         model = self.db.query(UserModel).filter(
             UserModel.account_name.ilike(account_name),
-            UserModel.account_tag == account_tag
+            UserModel.account_tag == account_tag,
+            UserModel.is_deleted == False
         ).first()
 
         if not model:
@@ -135,7 +145,8 @@ class UserRepository:
             last_login=model.last_login,
             friend_code=friend_code,
             account_name=model.account_name,
-            account_tag=model.account_tag
+            account_tag=model.account_tag,
+            has_received_demo=model.has_received_demo
         )
 
     def generate_unique_tag(self, account_name: str) -> str:
@@ -205,6 +216,7 @@ class UserRepository:
                 model.email = aggregate.email
                 model.screen_name = aggregate.screen_name
                 model.last_login = aggregate.last_login
+                model.has_received_demo = aggregate.has_received_demo
                 # Update account_name and account_tag if set on aggregate
                 if aggregate.account_name is not None:
                     model.account_name = aggregate.account_name
@@ -226,7 +238,8 @@ class UserRepository:
                     created_at=aggregate.created_at,
                     last_login=aggregate.last_login,
                     account_name=aggregate.account_name,
-                    account_tag=aggregate.account_tag
+                    account_tag=aggregate.account_tag,
+                    has_received_demo=aggregate.has_received_demo
                 )
                 self.db.add(model)
 
@@ -251,3 +264,83 @@ class UserRepository:
         except Exception as e:
             self.db.rollback()
             raise RuntimeError(f"Failed to save user: {e}")
+
+    def delete(self, user_id: UUID) -> bool:
+        """
+        Delete a user by ID with full cascade of all associated data.
+
+        This is a hard delete - use for development/testing only.
+        In production, use soft_delete instead.
+
+        Cascades deletion of:
+        - Characters owned by user
+        - Sessions hosted by user
+        - Campaigns hosted by user
+        - Friend codes (has DB cascade but explicit for clarity)
+        - Other tables with CASCADE already set: friendships, friend_requests,
+          notifications, session_joined_users
+
+        Returns:
+            True if user was deleted, False if not found
+        """
+        model = self.db.query(UserModel).filter_by(id=user_id).first()
+        if not model:
+            return False
+
+        # Delete in order of dependencies (children before parents)
+
+        # 1. Delete characters owned by user (no DB cascade)
+        self.db.execute(
+            text("DELETE FROM characters WHERE user_id = :user_id"),
+            {"user_id": user_id}
+        )
+
+        # 2. Delete sessions hosted by user (no DB cascade)
+        # Note: session_joined_users has CASCADE on session_id, so those rows
+        # will be auto-deleted when sessions are deleted
+        self.db.execute(
+            text("DELETE FROM sessions WHERE host_id = :user_id"),
+            {"user_id": user_id}
+        )
+
+        # 3. Delete campaigns hosted by user (no DB cascade)
+        self.db.execute(
+            text("DELETE FROM campaigns WHERE host_id = :user_id"),
+            {"user_id": user_id}
+        )
+
+        # 4. Delete friend code (has DB cascade but explicit for clarity)
+        self.db.execute(
+            text("DELETE FROM friend_codes WHERE user_id = :user_id"),
+            {"user_id": user_id}
+        )
+
+        # Tables with DB-level CASCADE (auto-deleted, listed for documentation):
+        # - friendships (user1_id, user2_id)
+        # - friend_requests (requester_id, recipient_id)
+        # - notifications (user_id)
+        # - session_joined_users (user_id)
+
+        # Finally delete the user
+        self.db.delete(model)
+        self.db.commit()
+        return True
+
+    def soft_delete(self, user_id: UUID) -> bool:
+        """
+        Soft delete a user by ID.
+
+        Sets is_deleted=True and deleted_at timestamp.
+        User data is preserved but user won't appear in queries.
+
+        Returns:
+            True if user was soft deleted, False if not found
+        """
+        model = self.db.query(UserModel).filter_by(id=user_id).first()
+        if not model:
+            return False
+
+        model.is_deleted = True
+        model.deleted_at = datetime.now(timezone.utc)
+        self.db.commit()
+        return True
