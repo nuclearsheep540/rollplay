@@ -20,7 +20,8 @@ class JWTHandler:
         self.settings = settings
         self.secret_key = settings.JWT_SECRET_KEY
         self.algorithm = "HS256"
-        self.access_token_expire_minutes = 60 * 24 * 7  # 7 days
+        self.access_token_expire_minutes = 15  # 15 minutes for access tokens
+        self.refresh_token_expire_days = 7  # 7 days for refresh tokens
         self.magic_token_expire_minutes = 15  # 15 minutes for magic links
         
     def create_token(self, user_data: Dict[str, Any]) -> str:
@@ -197,23 +198,35 @@ class JWTHandler:
     
     def create_refresh_token(self, user_data: Dict[str, Any]) -> str:
         """
-        Create refresh token for user (for future use)
+        Create refresh token for user - long-lived, only used to get new access tokens.
         """
         try:
             payload = {
                 "user_id": user_data["id"],
                 "email": user_data["email"],
-                "exp": datetime.utcnow() + timedelta(days=30),  # 30 days
+                "exp": datetime.utcnow() + timedelta(days=self.refresh_token_expire_days),
                 "iat": datetime.utcnow(),
                 "type": "refresh"
             }
-            
+
             token = jwt.encode(payload, self.secret_key, algorithm=self.algorithm)
-            
+
             logger.info(f"Generated refresh token for user: {user_data['email']}")
-            
+
             return token
-            
+
         except Exception as e:
             logger.error(f"Error creating refresh token: {str(e)}")
             raise
+
+    def create_tokens(self, user_data: Dict[str, Any]) -> Dict[str, str]:
+        """
+        Create both access and refresh tokens for user.
+
+        Returns:
+            Dict with 'access_token' and 'refresh_token' keys
+        """
+        return {
+            "access_token": self.create_token(user_data),
+            "refresh_token": self.create_refresh_token(user_data)
+        }

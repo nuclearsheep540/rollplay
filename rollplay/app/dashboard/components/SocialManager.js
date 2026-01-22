@@ -5,6 +5,9 @@
 
 'use client'
 
+import { useState } from 'react'
+import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
+import { faTrash } from '@fortawesome/free-solid-svg-icons'
 import { THEME, COLORS } from '@/app/styles/colorTheme'
 import ProfileManager from './ProfileManager'
 import FriendsManager from './FriendsManager'
@@ -24,6 +27,37 @@ const sendTestNotification = async () => {
 }
 
 export default function SocialManager({ user, refreshTrigger, onUserUpdate }) {
+  const [showHardDeleteConfirm, setShowHardDeleteConfirm] = useState(false)
+  const [deleting, setDeleting] = useState(false)
+  const [error, setError] = useState(null)
+
+  // Hard delete account (development only)
+  const handleHardDeleteAccount = async () => {
+    setDeleting(true)
+    setError(null)
+
+    try {
+      const response = await fetch('/api/users/me/hard', {
+        method: 'DELETE',
+        credentials: 'include'
+      })
+
+      if (response.ok || response.status === 204) {
+        window.location.href = '/auth/magic'
+      } else {
+        const errorData = await response.json()
+        setError(errorData.detail || 'Failed to delete account')
+        setShowHardDeleteConfirm(false)
+      }
+    } catch (error) {
+      console.error('Error deleting account:', error)
+      setError('Failed to delete account')
+      setShowHardDeleteConfirm(false)
+    } finally {
+      setDeleting(false)
+    }
+  }
+
   return (
     <div className="space-y-8 max-w-[1600px]">
       {/* Page Header */}
@@ -60,13 +94,74 @@ export default function SocialManager({ user, refreshTrigger, onUserUpdate }) {
           <p className="text-xs mb-3" style={{color: '#fde047'}}>
             These tools are only visible in development mode.
           </p>
-          <button
-            onClick={sendTestNotification}
-            className="px-4 py-2 rounded-sm font-semibold text-sm transition-opacity hover:opacity-80"
-            style={{backgroundColor: '#ca8a04', color: '#422006'}}
-          >
-            Send Test Notification
-          </button>
+
+          {error && (
+            <div
+              className="mb-4 p-3 rounded-sm border"
+              style={{backgroundColor: '#991b1b', borderColor: '#dc2626'}}
+            >
+              <p style={{color: '#fca5a5'}} className="text-sm">{error}</p>
+            </div>
+          )}
+
+          <div className="flex flex-wrap gap-3">
+            <button
+              onClick={sendTestNotification}
+              className="px-4 py-2 rounded-sm font-semibold text-sm transition-opacity hover:opacity-80"
+              style={{backgroundColor: '#ca8a04', color: '#422006'}}
+            >
+              Send Test Notification
+            </button>
+
+            {!showHardDeleteConfirm ? (
+              <button
+                onClick={() => setShowHardDeleteConfirm(true)}
+                className="px-4 py-2 rounded-sm border font-medium flex items-center gap-2 hover:opacity-80 transition-opacity"
+                style={{
+                  backgroundColor: 'transparent',
+                  borderColor: '#f59e0b',
+                  color: '#f59e0b'
+                }}
+              >
+                <FontAwesomeIcon icon={faTrash} />
+                Hard Delete Account
+              </button>
+            ) : (
+              <div
+                className="p-4 rounded-sm border flex-1"
+                style={{backgroundColor: '#451a03', borderColor: '#f59e0b'}}
+              >
+                <p className="text-sm mb-3" style={{color: '#fcd34d'}}>
+                  This will PERMANENTLY delete your account and ALL data. This cannot be undone!
+                </p>
+                <div className="flex gap-2">
+                  <button
+                    onClick={handleHardDeleteAccount}
+                    disabled={deleting}
+                    className="px-4 py-2 rounded-sm font-medium hover:opacity-80 transition-opacity disabled:opacity-50"
+                    style={{
+                      backgroundColor: '#f59e0b',
+                      color: '#000'
+                    }}
+                  >
+                    {deleting ? 'Deleting...' : 'Yes, Permanently Delete'}
+                  </button>
+                  <button
+                    onClick={() => setShowHardDeleteConfirm(false)}
+                    disabled={deleting}
+                    className="px-4 py-2 rounded-sm border font-medium hover:opacity-80 transition-opacity"
+                    style={{
+                      backgroundColor: 'transparent',
+                      borderColor: THEME.borderDefault,
+                      color: THEME.textSecondary
+                    }}
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
         </div>
       )}
     </div>

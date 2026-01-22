@@ -57,3 +57,6 @@ class Settings(BaseSettings):
     # API Settings - safe defaults for binding
     api_host: str = "0.0.0.0"
     api_port: int = 8083
+
+    # Internal API URLs for service-to-service communication
+    API_SITE_INTERNAL_URL: str = "http://api-site:8082"

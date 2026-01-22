@@ -7,6 +7,7 @@
 
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
+import { authFetch, authPut } from '@/app/shared/utils/authFetch'
 
 export function useAuth() {
   const router = useRouter()
@@ -25,13 +26,8 @@ export function useAuth() {
     setError(null)
 
     try {
-      const response = await fetch('/api/users/screen_name', {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        credentials: 'include',
-        body: JSON.stringify({ screen_name: screenName.trim() })
+      const response = await authPut('/api/users/screen_name', {
+        screen_name: screenName.trim()
       })
 
       if (response.ok) {
@@ -75,28 +71,29 @@ export function useAuth() {
     const checkAuthenticationAndGetUser = async () => {
       try {
         // Get or create user from api-site (this validates auth and gets user data)
-        const userResponse = await fetch('/api/users/get_current_user', {
+        // authFetch handles 401 with automatic token refresh
+        const userResponse = await authFetch('/api/users/get_current_user', {
           method: 'GET',
           headers: {
-            'Content-Type': 'application/json',
-          },
-          credentials: 'include' // Include httpOnly cookies
+            'Content-Type': 'application/json'
+          }
         })
 
         if (userResponse.ok) {
           const userData = await userResponse.json()
           setUser(userData)
-          
+
           // Check if user needs to set a screen name
           if (!userData.screen_name) {
             setShowScreenNameModal(true)
           }
-          
+
           setLoading(false)
           return
         }
 
-        // If 401, user is not authenticated
+        // If still 401 after refresh attempt, redirect to login
+        // (authFetch handles the redirect, but just in case)
         if (userResponse.status === 401) {
           router.push('/auth/magic')
           return
@@ -104,7 +101,7 @@ export function useAuth() {
 
         // Other errors
         router.push('/auth/magic')
-        
+
       } catch (error) {
         console.error('Auth/user check error:', error)
         router.push('/auth/magic')

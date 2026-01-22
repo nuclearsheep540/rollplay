@@ -30,11 +30,10 @@ from modules.friendship.repositories.friendship_repository import FriendshipRepo
 from modules.friendship.repositories.friend_request_repository import FriendRequestRepository
 from modules.user.orm.user_repository import UserRepository
 from modules.user.dependencies.providers import user_repository as get_user_repository
-from modules.user.domain.user_aggregate import UserAggregate
 from modules.events.event_manager import EventManager
 from modules.events.dependencies.providers import get_event_manager
 from modules.events.websocket_manager import event_connection_manager
-from shared.dependencies.auth import get_current_user_from_token
+from shared.dependencies.auth import get_current_user_id
 
 logger = logging.getLogger(__name__)
 
@@ -101,7 +100,7 @@ def _to_friend_request_response(
 @router.post("/request", response_model=FriendshipResponse, status_code=status.HTTP_201_CREATED)
 async def send_friend_request(
     request: SendFriendRequestRequest,
-    current_user: UserAggregate = Depends(get_current_user_from_token),
+    user_id: UUID = Depends(get_current_user_id),
     friendship_repo: FriendshipRepository = Depends(get_friendship_repository),
     friend_request_repo: FriendRequestRepository = Depends(get_friend_request_repository),
     user_repo: UserRepository = Depends(get_user_repository),
@@ -115,7 +114,7 @@ async def send_friend_request(
     try:
         command = SendFriendRequest(friendship_repo, friend_request_repo, user_repo, event_manager)
         result = await command.execute(
-            user_id=current_user.id,
+            user_id=user_id,
             friend_identifier=request.friend_identifier
         )
 
@@ -123,7 +122,7 @@ async def send_friend_request(
         if result['auto_accepted']:
             # Return friendship response
             friendship = result['data']
-            return _to_friendship_response(friendship, current_user.id, user_repo)
+            return _to_friendship_response(friendship, user_id, user_repo)
         else:
             # Return friend request as friendship response (for backward compatibility)
             # The request was sent successfully
@@ -141,7 +140,7 @@ async def send_friend_request(
 @router.post("/{friend_id}/accept", response_model=FriendshipResponse)
 async def accept_friend_request(
     friend_id: UUID,
-    current_user: UserAggregate = Depends(get_current_user_from_token),
+    user_id: UUID = Depends(get_current_user_id),
     friendship_repo: FriendshipRepository = Depends(get_friendship_repository),
     friend_request_repo: FriendRequestRepository = Depends(get_friend_request_repository),
     user_repo: UserRepository = Depends(get_user_repository),
@@ -151,10 +150,10 @@ async def accept_friend_request(
     try:
         command = AcceptFriendRequest(friendship_repo, friend_request_repo, user_repo, event_manager)
         friendship = await command.execute(
-            user_id=current_user.id,
+            user_id=user_id,
             requester_id=friend_id
         )
-        return _to_friendship_response(friendship, current_user.id, user_repo)
+        return _to_friendship_response(friendship, user_id, user_repo)
     except ValueError as e:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
 
@@ -162,14 +161,14 @@ async def accept_friend_request(
 @router.delete("/{friend_id}/decline", status_code=status.HTTP_204_NO_CONTENT)
 async def decline_friend_request(
     friend_id: UUID,
-    current_user: UserAggregate = Depends(get_current_user_from_token),
+    user_id: UUID = Depends(get_current_user_id),
     friend_request_repo: FriendRequestRepository = Depends(get_friend_request_repository)
 ):
     """Decline an incoming friend request"""
     try:
         command = DeclineFriendRequest(friend_request_repo)
         success = command.execute(
-            user_id=current_user.id,
+            user_id=user_id,
             requester_id=friend_id
         )
         if not success:
@@ -181,14 +180,14 @@ async def decline_friend_request(
 @router.delete("/{friend_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def remove_friend(
     friend_id: UUID,
-    current_user: UserAggregate = Depends(get_current_user_from_token),
+    user_id: UUID = Depends(get_current_user_id),
     friendship_repo: FriendshipRepository = Depends(get_friendship_repository)
 ):
     """Remove a friend (unfriend)"""
     try:
         command = RemoveFriend(friendship_repo)
         success = command.execute(
-            user_id=current_user.id,
+            user_id=user_id,
             friend_id=friend_id
         )
         if not success:
@@ -199,26 +198,26 @@ async def remove_friend(
 
 @router.get("/", response_model=CategorizedFriendListResponse)
 async def get_friends(
-    current_user: UserAggregate = Depends(get_current_user_from_token),
+    user_id: UUID = Depends(get_current_user_id),
     friendship_repo: FriendshipRepository = Depends(get_friendship_repository),
     friend_request_repo: FriendRequestRepository = Depends(get_friend_request_repository),
     user_repo: UserRepository = Depends(get_user_repository)
 ):
     """Get all friendships and friend requests categorized by type"""
     query = GetAllUserFriendships(friendship_repo, friend_request_repo)
-    categorized = query.execute(current_user.id)
+    categorized = query.execute(user_id)
 
     return CategorizedFriendListResponse(
         accepted=[
-            _to_friendship_response(friendship, current_user.id, user_repo)
+            _to_friendship_response(friendship, user_id, user_repo)
             for friendship in categorized['accepted']
         ],
         incoming_requests=[
-            _to_friend_request_response(request, current_user.id, user_repo)
+            _to_friend_request_response(request, user_id, user_repo)
             for request in categorized['incoming_requests']
         ],
         outgoing_requests=[
-            _to_friend_request_response(request, current_user.id, user_repo)
+            _to_friend_request_response(request, user_id, user_repo)
             for request in categorized['outgoing_requests']
         ],
         total_accepted=len(categorized['accepted']),
@@ -236,7 +235,7 @@ BUZZ_COOLDOWN_SECONDS = 20
 @router.post("/{friend_id}/buzz", status_code=status.HTTP_204_NO_CONTENT)
 async def buzz_friend(
     friend_id: UUID,
-    current_user: UserAggregate = Depends(get_current_user_from_token),
+    user_id: UUID = Depends(get_current_user_id),
     friendship_repo: FriendshipRepository = Depends(get_friendship_repository),
     user_repo: UserRepository = Depends(get_user_repository),
     event_manager: EventManager = Depends(get_event_manager)
@@ -249,7 +248,7 @@ async def buzz_friend(
     command = BuzzFriend(friendship_repo, user_repo, event_manager, _buzz_rate_limits, BUZZ_COOLDOWN_SECONDS)
     try:
         await command.execute(
-            user_id=current_user.id,
+            user_id=user_id,
             friend_id=friend_id
         )
     except ValueError as e:

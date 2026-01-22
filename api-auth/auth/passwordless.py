@@ -1,10 +1,10 @@
 # Copyright (C) 2025 Matthew Davey
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-import uuid
-from datetime import datetime
 from typing import Optional, Dict, Any
 import logging
+
+import httpx
 
 from .email_service import EmailService
 from .jwt_handler import JWTHandler
@@ -17,23 +17,24 @@ class PasswordlessAuth:
     """
     Handles passwordless authentication using magic links
     """
-    
+
     def __init__(self, settings):
         self.settings = settings
         self.email_service = EmailService(settings)
         self.jwt_handler = JWTHandler(settings)
         self.redis_client = RedisClient(settings.REDIS_URL)
         self.short_code_generator = ShortCodeGenerator()
-        # In production, this would be a database or Redis
-        self.users = {}  # email -> user_data
+        self.api_site_url = settings.API_SITE_INTERNAL_URL
+        # NOTE: No caching - always fetch fresh from api-site to handle account deletion/recreation
         
     async def send_magic_link(self, email: str) -> dict:
         """
         Generate and send a magic link to the user's email
         """
         try:
-            # Create or get user (for user creation tracking)
-            user_data = self._get_or_create_user(email)
+            # Validate user exists or will be created (optional pre-check)
+            # Note: We don't need user_data for magic link generation, just email
+            # The user will be fetched/created when the magic link is verified
             
             # Generate JWT magic link token
             magic_token = self.jwt_handler.create_magic_token(email)
@@ -93,31 +94,28 @@ class PasswordlessAuth:
             if not email:
                 return None
             
-            # Get or create user
-            user_data = self._get_or_create_user(email)
-            
-            # Update last login
-            user_data["last_login"] = datetime.utcnow().isoformat()
-            self.users[email] = user_data
-            
-            # Generate access token
-            access_token = self.jwt_handler.create_token(user_data)
-            
-            # Return user data with access token
+            # Resolve user_id from api-site (gets real PostgreSQL user_id)
+            user_data = await self._resolve_user_for_token(email)
+
+            # Generate access and refresh tokens with real user_id
+            tokens = self.jwt_handler.create_tokens(user_data)
+
+            # Return tokens (user_data is minimal - just id and email)
             result = {
                 "user": user_data,
-                "access_token": access_token,
+                "access_token": tokens["access_token"],
+                "refresh_token": tokens["refresh_token"],
                 "token_type": "bearer"
             }
-            
+
             logger.info(f"Successfully verified magic link for {email}")
-            
+
             return result
-            
+
         except Exception as e:
             logger.error(f"Error verifying magic link: {str(e)}")
             raise
-    
+
     async def verify_otp_token(self, token: str) -> Optional[Dict[str, Any]]:
         """
         Verify OTP token manually typed by the user
@@ -151,23 +149,20 @@ class PasswordlessAuth:
                 logger.info(f"JWT verification failed for {auth_method}")
                 return None
 
-            # Get or create user
-            user_data = self._get_or_create_user(email)
-            
-            # Update last login
-            user_data["last_login"] = datetime.utcnow().isoformat()
-            self.users[email] = user_data
+            # Resolve user_id from api-site (gets real PostgreSQL user_id)
+            user_data = await self._resolve_user_for_token(email)
 
-            # Generate access token
-            access_token = self.jwt_handler.create_token(user_data)
+            # Generate access and refresh tokens with real user_id
+            tokens = self.jwt_handler.create_tokens(user_data)
 
-            # Return user data with access token
+            # Return tokens (user_data is minimal - just id and email)
             result = {
                 "user": user_data,
-                "access_token": access_token,
+                "access_token": tokens["access_token"],
+                "refresh_token": tokens["refresh_token"],
                 "token_type": "bearer"
             }
-            
+
             logger.info(f"Successfully verified OTP via {auth_method} for {email}")
             
             return result
@@ -176,38 +171,39 @@ class PasswordlessAuth:
             logger.error(f"Error verifying OTP token: {str(e)}")
             return None
     
-    def _get_or_create_user(self, email: str) -> Dict[str, Any]:
+    async def _resolve_user_for_token(self, email: str) -> Dict[str, str]:
         """
-        Get existing user or create new one
+        Resolve user_id from email via api-site internal endpoint.
+
+        Calls api-site's /api/users/internal/resolve-user endpoint which:
+        - Returns existing user's ID if found
+        - Creates new user and returns ID if not found
+
+        Returns minimal data needed for JWT token creation: { id, email }
+
+        NOTE: No caching - always fetch fresh to handle account deletion/recreation.
         """
-        if email in self.users:
-            return self.users[email]
-        
-        # Create new user
-        user_data = {
-            "id": str(uuid.uuid4()),
-            "email": email,
-            "display_name": email.split("@")[0],  # Default display name
-            "created_at": datetime.utcnow().isoformat(),
-            "last_login": None
-        }
-        
-        self.users[email] = user_data
-        logger.info(f"Created new user: {email}")
-        
-        return user_data
-    
-    def get_user_by_email(self, email: str) -> Optional[Dict[str, Any]]:
-        """
-        Get user data by email
-        """
-        return self.users.get(email)
-    
-    def get_user_by_id(self, user_id: str) -> Optional[Dict[str, Any]]:
-        """
-        Get user data by ID
-        """
-        for user in self.users.values():
-            if user["id"] == user_id:
-                return user
-        return None
+        try:
+            async with httpx.AsyncClient(timeout=10.0) as client:
+                response = await client.post(
+                    f"{self.api_site_url}/api/users/internal/resolve-user",
+                    json={"email": email}
+                )
+
+                if response.status_code == 200:
+                    # Response is exactly what we need: { user_id, email }
+                    data = response.json()
+                    logger.info(f"Resolved user from api-site: {email} (id={data['user_id']})")
+                    # Map to format jwt_handler expects (id, not user_id)
+                    return {
+                        "id": data["user_id"],
+                        "email": data["email"]
+                    }
+                else:
+                    logger.error(f"api-site resolve-user failed for {email}: {response.status_code} - {response.text}")
+                    raise Exception(f"Failed to resolve user from api-site: {response.status_code}")
+
+        except httpx.RequestError as e:
+            logger.error(f"Network error calling api-site for {email}: {str(e)}")
+            raise Exception(f"Failed to connect to api-site: {str(e)}")
+

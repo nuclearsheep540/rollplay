@@ -39,7 +39,7 @@ from modules.campaign.application.queries import (
     GetUserHostedCampaigns
 )
 from modules.campaign.domain.campaign_aggregate import CampaignAggregate
-from shared.dependencies.auth import get_current_user_from_token
+from shared.dependencies.auth import get_current_user_from_token, get_current_user_id
 from shared.dependencies.db import get_db
 from modules.user.domain.user_aggregate import UserAggregate
 from modules.user.orm.user_repository import UserRepository
@@ -117,7 +117,7 @@ def _to_campaign_summary_response(campaign: CampaignAggregate, user_repo: UserRe
 @router.post("/sessions", response_model=SessionResponse, status_code=status.HTTP_201_CREATED)
 async def create_session(
     request: CreateSessionRequest,
-    current_user: UserAggregate = Depends(get_current_user_from_token),
+    user_id: UUID = Depends(get_current_user_id),
     session_repo: SessionRepository = Depends(get_session_repository),
     campaign_repo: CampaignRepository = Depends(campaign_repository),
     event_manager: EventManager = Depends(get_event_manager),
@@ -130,7 +130,7 @@ async def create_session(
         session = await command.execute(
             name=request.name,
             campaign_id=request.campaign_id,
-            host_id=current_user.id,
+            host_id=user_id,
             max_players=request.max_players
         )
         return _to_session_response(session, db)
@@ -142,7 +142,7 @@ async def create_session(
 @router.post("/", response_model=CampaignResponse)
 async def create_campaign(
     request: CampaignCreateRequest,
-    current_user: UserAggregate = Depends(get_current_user_from_token),
+    user_id: UUID = Depends(get_current_user_id),
     campaign_repo: CampaignRepository = Depends(campaign_repository),
     session_repo: SessionRepository = Depends(get_session_repository),
     event_manager: EventManager = Depends(get_event_manager)
@@ -151,7 +151,7 @@ async def create_campaign(
     try:
         command = CreateCampaign(campaign_repo)
         campaign = command.execute(
-            host_id=current_user.id,
+            host_id=user_id,
             title=request.title,
             description=request.description or "",
             hero_image=request.hero_image
@@ -163,7 +163,7 @@ async def create_campaign(
         await session_command.execute(
             name=session_name,
             campaign_id=campaign.id,
-            host_id=current_user.id,
+            host_id=user_id,
             max_players=8
         )
 
@@ -180,10 +180,45 @@ async def create_campaign(
 async def get_user_campaigns(
     current_user: UserAggregate = Depends(get_current_user_from_token),
     campaign_repo: CampaignRepository = Depends(campaign_repository),
-    user_repo: UserRepository = Depends(get_user_repository)
+    user_repo: UserRepository = Depends(get_user_repository),
+    session_repo: SessionRepository = Depends(get_session_repository),
+    event_manager: EventManager = Depends(get_event_manager)
 ):
-    """Get all campaigns where user is host"""
+    """Get all campaigns where user is host or member"""
     try:
+        # Create demo campaign for first-time users (only once per account)
+        if not current_user.has_received_demo:
+            DEMO_CAMPAIGN_TEMPLATE = {
+                "title": "Shadows of the Astral Forge",
+                "description": "The world of Elyndor has been thrown off balance after a celestial fracture split the night sky, showering the land with star-shards—ancient cosmic fragments pulsing with unstable energy. These shards have awakened long-dormant ruins, warped creatures into monstrous forms, and drawn power-hungry factions into open conflict.\n\nAt the heart of the chaos lies the Astral Forge, an ancient floating sanctum said to predate the gods themselves. Legends speak of its power to reshape reality—or unmake it entirely. Now, with star-shards acting as keys to its gates, the race is on.\n\nYour party begins as a ragtag group of outcasts, each touched by the celestial event in strange and personal ways. As you delve into crumbling temples, forge uneasy alliances, and battle eldritch horrors, you'll uncover the true nature of the shards—and the terrible cost of wielding their power.",
+                "hero_image": "/floating-city.png",
+                "session_name": "Demo Session"
+            }
+            try:
+                command = CreateCampaign(campaign_repo)
+                campaign = command.execute(
+                    host_id=current_user.id,
+                    title=DEMO_CAMPAIGN_TEMPLATE["title"],
+                    description=DEMO_CAMPAIGN_TEMPLATE["description"],
+                    hero_image=DEMO_CAMPAIGN_TEMPLATE["hero_image"]
+                )
+
+                # Always create session with campaign
+                session_command = CreateSession(session_repo, campaign_repo, event_manager)
+                await session_command.execute(
+                    name=DEMO_CAMPAIGN_TEMPLATE["session_name"],
+                    campaign_id=campaign.id,
+                    host_id=current_user.id,
+                    max_players=8
+                )
+            except Exception:
+                # Don't fail the request if demo creation fails
+                pass
+
+            # Mark user as having received demo (even if creation failed, don't retry)
+            current_user.has_received_demo = True
+            user_repo.save(current_user)
+
         query = GetUserCampaigns(campaign_repo)
         campaigns = query.execute(current_user.id)
 
@@ -198,14 +233,14 @@ async def get_user_campaigns(
 
 @router.get("/hosted", response_model=List[CampaignSummaryResponse])
 async def get_user_hosted_campaigns(
-    current_user: UserAggregate = Depends(get_current_user_from_token),
+    user_id: UUID = Depends(get_current_user_id),
     campaign_repo: CampaignRepository = Depends(campaign_repository),
     user_repo: UserRepository = Depends(get_user_repository)
 ):
     """Get all campaigns where user is the DM/host (for friend invites)"""
     try:
         query = GetUserHostedCampaigns(campaign_repo)
-        campaigns = query.execute(current_user.id)
+        campaigns = query.execute(user_id)
 
         return [_to_campaign_summary_response(campaign, user_repo) for campaign in campaigns]
 
@@ -219,7 +254,7 @@ async def get_user_hosted_campaigns(
 @router.get("/{campaign_id}", response_model=CampaignResponse)
 async def get_campaign(
     campaign_id: UUID,
-    current_user: UserAggregate = Depends(get_current_user_from_token),
+    user_id: UUID = Depends(get_current_user_id),
     campaign_repo: CampaignRepository = Depends(campaign_repository)
 ):
     """Get campaign by ID with all sessions"""
@@ -234,7 +269,7 @@ async def get_campaign(
             )
 
         # Business rule: Only host can view campaign details
-        if not campaign.is_owned_by(current_user.id):
+        if not campaign.is_owned_by(user_id):
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="Access denied - only host can view campaign details"
@@ -253,7 +288,7 @@ async def get_campaign(
 async def update_campaign(
     campaign_id: UUID,
     request: CampaignUpdateRequest,
-    current_user: UserAggregate = Depends(get_current_user_from_token),
+    user_id: UUID = Depends(get_current_user_id),
     campaign_repo: CampaignRepository = Depends(campaign_repository)
 ):
     """Update campaign details"""
@@ -261,7 +296,7 @@ async def update_campaign(
         command = UpdateCampaign(campaign_repo)
         campaign = command.execute(
             campaign_id=campaign_id,
-            host_id=current_user.id,
+            host_id=user_id,
             title=request.title,
             description=request.description,
             hero_image=request.hero_image
@@ -279,7 +314,7 @@ async def update_campaign(
 @router.delete("/{campaign_id}")
 async def delete_campaign(
     campaign_id: UUID,
-    current_user: UserAggregate = Depends(get_current_user_from_token),
+    user_id: UUID = Depends(get_current_user_id),
     campaign_repo: CampaignRepository = Depends(campaign_repository),
     session_repo: SessionRepository = Depends(get_session_repository)
 ):
@@ -291,7 +326,7 @@ async def delete_campaign(
     """
     try:
         command = DeleteCampaign(campaign_repo, session_repo)
-        success = command.execute(campaign_id, current_user.id)
+        success = command.execute(campaign_id, user_id)
 
         if success:
             return {"message": "Campaign deleted successfully"}
@@ -313,7 +348,7 @@ async def delete_campaign(
 async def add_player_to_campaign(
     campaign_id: UUID,
     player_id: UUID,
-    current_user: UserAggregate = Depends(get_current_user_from_token),
+    user_id: UUID = Depends(get_current_user_id),
     campaign_repo: CampaignRepository = Depends(campaign_repository),
     user_repo: UserRepository = Depends(get_user_repository),
     event_manager: EventManager = Depends(get_event_manager)
@@ -324,7 +359,7 @@ async def add_player_to_campaign(
         campaign = await command.execute(
             campaign_id=campaign_id,
             player_id=player_id,
-            host_id=current_user.id
+            host_id=user_id
         )
         return _to_campaign_response(campaign)
     except ValueError as e:
@@ -335,7 +370,7 @@ async def add_player_to_campaign(
 async def remove_player_from_campaign(
     campaign_id: UUID,
     player_id: UUID,
-    current_user: UserAggregate = Depends(get_current_user_from_token),
+    user_id: UUID = Depends(get_current_user_id),
     campaign_repo: CampaignRepository = Depends(campaign_repository),
     user_repo: UserRepository = Depends(get_user_repository),
     event_manager: EventManager = Depends(get_event_manager)
@@ -346,7 +381,7 @@ async def remove_player_from_campaign(
         campaign = await command.execute(
             campaign_id=campaign_id,
             player_id=player_id,
-            host_id=current_user.id
+            host_id=user_id
         )
         return _to_campaign_response(campaign)
     except ValueError as e:
@@ -356,7 +391,7 @@ async def remove_player_from_campaign(
 @router.post("/{campaign_id}/invites/accept", response_model=CampaignResponse)
 async def accept_campaign_invite(
     campaign_id: UUID,
-    current_user: UserAggregate = Depends(get_current_user_from_token),
+    user_id: UUID = Depends(get_current_user_id),
     campaign_repo: CampaignRepository = Depends(campaign_repository),
     user_repo: UserRepository = Depends(get_user_repository),
     event_manager: EventManager = Depends(get_event_manager),
@@ -371,7 +406,7 @@ async def accept_campaign_invite(
         command = AcceptCampaignInvite(campaign_repo, user_repo, event_manager, session_repo)
         campaign = await command.execute(
             campaign_id=campaign_id,
-            player_id=current_user.id
+            player_id=user_id
         )
         return _to_campaign_response(campaign)
     except ValueError as e:
@@ -381,7 +416,7 @@ async def accept_campaign_invite(
 @router.delete("/{campaign_id}/invites", response_model=CampaignResponse)
 async def decline_campaign_invite(
     campaign_id: UUID,
-    current_user: UserAggregate = Depends(get_current_user_from_token),
+    user_id: UUID = Depends(get_current_user_id),
     campaign_repo: CampaignRepository = Depends(campaign_repository),
     user_repo: UserRepository = Depends(get_user_repository),
     event_manager: EventManager = Depends(get_event_manager)
@@ -391,7 +426,7 @@ async def decline_campaign_invite(
         command = DeclineCampaignInvite(campaign_repo, user_repo, event_manager)
         campaign = await command.execute(
             campaign_id=campaign_id,
-            player_id=current_user.id
+            player_id=user_id
         )
         return _to_campaign_response(campaign)
     except ValueError as e:
@@ -402,7 +437,7 @@ async def decline_campaign_invite(
 async def cancel_campaign_invite(
     campaign_id: UUID,
     player_id: UUID,
-    current_user: UserAggregate = Depends(get_current_user_from_token),
+    user_id: UUID = Depends(get_current_user_id),
     campaign_repo: CampaignRepository = Depends(campaign_repository),
     user_repo: UserRepository = Depends(get_user_repository),
     event_manager: EventManager = Depends(get_event_manager)
@@ -413,7 +448,7 @@ async def cancel_campaign_invite(
         campaign = await command.execute(
             campaign_id=campaign_id,
             player_id=player_id,
-            host_id=current_user.id
+            host_id=user_id
         )
         return _to_campaign_response(campaign)
     except ValueError as e:
@@ -423,7 +458,7 @@ async def cancel_campaign_invite(
 @router.post("/{campaign_id}/leave")
 async def leave_campaign(
     campaign_id: UUID,
-    current_user: UserAggregate = Depends(get_current_user_from_token),
+    user_id: UUID = Depends(get_current_user_id),
     campaign_repo: CampaignRepository = Depends(campaign_repository),
     user_repo: UserRepository = Depends(get_user_repository),
     event_manager: EventManager = Depends(get_event_manager)
@@ -433,7 +468,7 @@ async def leave_campaign(
         command = LeaveCampaign(campaign_repo, user_repo, event_manager)
         await command.execute(
             campaign_id=campaign_id,
-            player_id=current_user.id
+            player_id=user_id
         )
         return {"message": "Successfully left the campaign"}
     except ValueError as e:
@@ -443,7 +478,7 @@ async def leave_campaign(
 @router.get("/{campaign_id}/members", response_model=List[CampaignMemberResponse])
 async def get_campaign_members(
     campaign_id: UUID,
-    current_user: UserAggregate = Depends(get_current_user_from_token),
+    user_id: UUID = Depends(get_current_user_id),
     campaign_repo: CampaignRepository = Depends(campaign_repository),
     db: Session = Depends(get_db)
 ):
@@ -465,8 +500,8 @@ async def get_campaign_members(
             )
 
         # Verify user is member or has pending invite
-        is_invited = current_user.id in campaign.invited_player_ids
-        if not campaign.is_member(current_user.id) and not is_invited:
+        is_invited = user_id in campaign.invited_player_ids
+        if not campaign.is_member(user_id) and not is_invited:
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="Access denied - only campaign members can view member list"

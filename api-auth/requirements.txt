@@ -11,4 +11,5 @@ python-multipart==0.0.18
 email-validator==2.1.0
 python-dotenv==1.0.0
 redis==5.0.1
+httpx==0.27.0
 sentry-sdk[fastapi]==1.45.1
