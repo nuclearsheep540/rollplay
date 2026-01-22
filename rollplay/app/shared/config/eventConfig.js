@@ -133,9 +133,12 @@ export const EVENT_CONFIG = {
 
   'session_started': {
     toastMessage: 'Session started',
-    panelMessage: (data) => `${data.dm_screen_name} started session "${data.session_name}"`,
+    panelMessage: (data, currentUserId) => {
+      const actor = currentUserId && data.dm_id === currentUserId ? 'You' : data.dm_screen_name
+      return `${actor} started the session for ${data.campaign_name}`
+    },
     toastType: 'success',
-    navigationTab: 'sessions'
+    navigationTab: 'campaigns'
   },
 
   'session_paused': {
@@ -165,14 +168,15 @@ export function getEventConfig(eventType) {
 /**
  * Format panel message for an event
  * @param {object} notification - Notification object with event_type and data
+ * @param {string} currentUserId - Current user's ID for "You" substitution
  * @returns {string} Formatted message
  */
-export function formatPanelMessage(notification) {
+export function formatPanelMessage(notification, currentUserId = null) {
   const config = EVENT_CONFIG[notification.event_type]
   if (!config) {
     return 'New notification'
   }
-  return config.panelMessage(notification.data)
+  return config.panelMessage(notification.data, currentUserId)
 }
 
 /**

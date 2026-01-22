@@ -647,7 +647,8 @@ export default function CampaignManager({ user, refreshTrigger, onCampaignUpdate
       }
     } catch (error) {
       console.error('Error deleting campaign:', error)
-      setError('Failed to delete campaign: ' + error.message)
+      setError(error.message)
+      closeModal('campaignDelete')
     } finally {
       updateModalData('campaignDelete', { isDeleting: false })
     }

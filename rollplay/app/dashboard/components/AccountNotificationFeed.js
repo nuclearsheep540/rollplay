@@ -163,7 +163,7 @@ export default function AccountNotificationFeed({ userId, refreshTrigger }) {
                 className="flex-1 text-left py-2 hover:opacity-80 transition-opacity"
               >
                 <p className="text-sm" style={{color: THEME.textOnDark}}>
-                  {formatPanelMessage(notification)}
+                  {formatPanelMessage(notification, userId)}
                 </p>
                 <p className="text-xs mt-0.5" style={{color: THEME.textSecondary}}>
                   {formatRelativeTime(notification.created_at)}

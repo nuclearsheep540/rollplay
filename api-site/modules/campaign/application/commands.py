@@ -72,13 +72,18 @@ class DeleteCampaign:
         if not campaign.is_owned_by(host_id):
             raise ValueError("Only the host can delete this campaign")
 
-        # Business rule: Cannot delete campaign with ACTIVE sessions (would disrupt live games)
+        # Business rule: Cannot delete campaign with non-FINISHED sessions
         if self.session_repository:
             from modules.session.domain.session_aggregate import SessionStatus
+            non_finished_sessions = []
             for session_id in campaign.session_ids:
                 session = self.session_repository.get_by_id(session_id)
-                if session and session.status == SessionStatus.ACTIVE:
-                    raise ValueError("Cannot delete campaign with active sessions. Please pause or finish all active sessions first.")
+                if session and session.status != SessionStatus.FINISHED:
+                    non_finished_sessions.append(session)
+
+            if non_finished_sessions:
+                count = len(non_finished_sessions)
+                raise ValueError(f"Cannot delete campaign with {count} unfinished session(s). Please finish or delete all sessions first.")
 
         return self.repository.delete(campaign_id)
 
