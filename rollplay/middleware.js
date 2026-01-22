@@ -33,16 +33,12 @@ async function tryRefreshToken(refreshToken) {
       }
     })
 
-    if (refreshResponse.ok) {
-      // Extract the new auth_token from Set-Cookie header
-      const setCookieHeader = refreshResponse.headers.get('set-cookie')
-      if (setCookieHeader) {
-        const authTokenMatch = setCookieHeader.match(/auth_token=([^;]+)/)
-        if (authTokenMatch) {
-          return authTokenMatch[1]
-        }
-      }
+    if (!refreshResponse.ok) {
+      return null
     }
+
+    const data = await refreshResponse.json()
+    return data.access_token || null
   } catch (error) {
     console.error(`Token refresh failed: ${error.message}`)
   }

@@ -209,7 +209,7 @@ async def refresh_access_token(
         path="/"
     )
 
-    return {"message": "Token refreshed"}
+    return {"message": "Token refreshed", "access_token": new_access_token}
 
 
 @router.get("/get_current_user", response_model=UserResponse)
