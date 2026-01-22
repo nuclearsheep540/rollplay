@@ -139,7 +139,7 @@ export default function AccountNameModal({ show, user, onComplete }) {
         <div className="text-center mb-6">
           <h3 className="text-2xl font-bold text-slate-800 mb-2">Create Username</h3>
           <p className="text-slate-600">
-            This is how you will be identified throughout the site.
+            Your username cannot be changed but you can choose a nickname on the next screen.
           </p>
         </div>
 

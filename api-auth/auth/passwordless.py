@@ -25,8 +25,7 @@ class PasswordlessAuth:
         self.redis_client = RedisClient(settings.REDIS_URL)
         self.short_code_generator = ShortCodeGenerator()
         self.api_site_url = settings.API_SITE_INTERNAL_URL
-        # Local cache for user data within request lifecycle (not persistent)
-        self._user_cache = {}  # email -> user_data
+        # NOTE: No caching - always fetch fresh from api-site to handle account deletion/recreation
         
     async def send_magic_link(self, email: str) -> dict:
         """
@@ -178,11 +177,9 @@ class PasswordlessAuth:
 
         This calls api-site's /api/users/login endpoint which uses GetOrCreateUser
         to ensure we get the REAL user_id from PostgreSQL.
-        """
-        # Check local cache first (for within same request)
-        if email in self._user_cache:
-            return self._user_cache[email]
 
+        NOTE: No caching - always fetch fresh to handle account deletion/recreation scenarios.
+        """
         try:
             async with httpx.AsyncClient(timeout=10.0) as client:
                 response = await client.post(
@@ -203,8 +200,6 @@ class PasswordlessAuth:
                         "last_login": user_response.get("last_login")
                     }
 
-                    # Cache for this request lifecycle
-                    self._user_cache[email] = user_data
                     logger.info(f"Got user from api-site: {email} (id={user_data['id']})")
                     return user_data
                 else:
@@ -215,19 +210,3 @@ class PasswordlessAuth:
             logger.error(f"Network error calling api-site for {email}: {str(e)}")
             raise Exception(f"Failed to connect to api-site: {str(e)}")
 
-    def get_user_by_email(self, email: str) -> Optional[Dict[str, Any]]:
-        """
-        Get user data by email from cache.
-        Note: This only returns cached data from current session.
-        """
-        return self._user_cache.get(email)
-
-    def get_user_by_id(self, user_id: str) -> Optional[Dict[str, Any]]:
-        """
-        Get user data by ID from cache.
-        Note: This only returns cached data from current session.
-        """
-        for user in self._user_cache.values():
-            if user["id"] == user_id:
-                return user
-        return None
