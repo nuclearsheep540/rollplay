@@ -8,7 +8,6 @@ from fastapi import Depends, HTTPException, Request, status
 from shared.jwt_helper import JWTHelper
 from modules.user.dependencies.providers import user_repository
 from modules.user.orm.user_repository import UserRepository
-from modules.user.application.commands import GetOrCreateUser
 from modules.user.domain.user_aggregate import UserAggregate
 
 logger = logging.getLogger(__name__)
@@ -99,24 +98,31 @@ async def get_current_user_from_token(
             detail="Authentication required - no auth token found"
         )
 
-    # Verify token and get email
-    email = jwt_helper.verify_auth_token(token)
-    if not email:
+    # Extract user_id from token (more efficient than email lookup)
+    user_id_str = jwt_helper.extract_user_id_from_token(token)
+    if not user_id_str:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid or expired authentication token"
         )
 
+    # Validate UUID format
     try:
-        # Get or create user - no campaign_repo means no demo campaign on first login
-        # Demo campaigns are created lazily when user first views their campaign list
-        command = GetOrCreateUser(user_repo)
-        user, _ = command.execute(email)
-        return user
-
-    except Exception as e:
-        logger.debug(f"Exception in user retrieval: {type(e).__name__}: {str(e)}", exc_info=True)
+        user_id = UUID(user_id_str)
+    except ValueError:
         raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Authentication error during user retrieval: {str(e)}"
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid user ID in token"
         )
+
+    # Read-only lookup - authentication should not have side effects
+    # User creation only happens during login flow (api-auth → /internal/resolve-user)
+    user = user_repo.get_by_id(user_id)
+    if not user:
+        # User not found or soft-deleted
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="User not found"
+        )
+
+    return user
