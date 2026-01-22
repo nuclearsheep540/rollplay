@@ -182,8 +182,17 @@ async def refresh_access_token(
             detail="Invalid refresh token payload"
         )
 
+    # Validate user_id is a valid UUID before querying DB
+    try:
+        user_id_uuid = UUID(user_id)
+    except (ValueError, TypeError):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid user ID in refresh token"
+        )
+
     # DB CHECK: Verify user exists and is active (excludes soft-deleted by default)
-    user = user_repo.get_by_id(user_id)
+    user = user_repo.get_by_id(user_id_uuid)
     if not user:
         # Clear cookies - user is deleted or doesn't exist
         response.delete_cookie("auth_token", path="/", httponly=True, secure=True, samesite="lax")
