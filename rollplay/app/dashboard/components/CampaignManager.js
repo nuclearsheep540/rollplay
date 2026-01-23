@@ -650,7 +650,7 @@ export default function CampaignManager({ user, refreshTrigger, onCampaignUpdate
 
       // Close modal and reset form
       closeModal('campaignCreate')
-      updateModalData('campaignCreate', { title: '', description: '', editingCampaign: null })
+      updateModalData('campaignCreate', { title: '', description: '', sessionName: '', heroImage: '/campaign-tile-bg.png', editingCampaign: null })
     } catch (error) {
       console.error('Error updating campaign:', error)
       setError('Failed to update campaign: ' + error.message)
