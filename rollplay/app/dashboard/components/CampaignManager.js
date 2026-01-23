@@ -1704,7 +1704,7 @@ export default function CampaignManager({ user, refreshTrigger, onCampaignUpdate
                         )}
 
                         {/* Campaign Members Section */}
-                        <div className="mb-6">
+                        <div className="mt-8 pt-6 border-t" style={{borderColor: THEME.borderSubtle}}>
                           <h3 className="text-xl font-semibold font-[family-name:var(--font-metamorphous)] mb-4" style={{color: THEME.textOnDark}}>
                             Campaign Members
                           </h3>
@@ -1797,12 +1797,10 @@ export default function CampaignManager({ user, refreshTrigger, onCampaignUpdate
 
                         {/* Campaign Controls Section - Only show for host */}
                         {campaign.host_id === user.id && (
-                          <>
-                            <div className="my-6 border-t" style={{borderColor: THEME.borderSubtle}}></div>
-                            <div className="mb-6">
-                              <h3 className="text-xl font-semibold font-[family-name:var(--font-metamorphous)] mb-4" style={{color: THEME.textOnDark}}>
-                                Campaign Controls
-                              </h3>
+                          <div className="mt-8 pt-6 border-t" style={{borderColor: THEME.borderSubtle}}>
+                            <h3 className="text-xl font-semibold font-[family-name:var(--font-metamorphous)] mb-4" style={{color: THEME.textOnDark}}>
+                              Campaign Controls
+                            </h3>
                               <div className="flex gap-4">
                                 <button
                                   onClick={() => {
@@ -1833,29 +1831,25 @@ export default function CampaignManager({ user, refreshTrigger, onCampaignUpdate
                                   <span className="text-sm font-medium">Delete Campaign</span>
                                 </button>
                               </div>
-                            </div>
-                          </>
+                          </div>
                         )}
 
                         {/* Leave Campaign Button - Only show for non-host members */}
                         {campaign.host_id !== user.id && (
-                          <>
-                            <div className="my-6 border-t" style={{borderColor: THEME.borderSubtle}}></div>
-                            <div className="flex justify-start">
-                              <button
-                                onClick={() => openModal('campaignLeave', { campaign })}
-                                className="px-4 py-2 rounded-sm border transition-all text-sm font-medium flex items-center gap-2 hover:bg-red-900/50"
-                                style={{
-                                  backgroundColor: 'transparent',
-                                  color: '#dc2626',
-                                  borderColor: '#dc2626'
-                                }}
-                              >
-                                <FontAwesomeIcon icon={faRightFromBracket} />
-                                Leave Campaign
-                              </button>
-                            </div>
-                          </>
+                          <div className="mt-8 pt-6 border-t" style={{borderColor: THEME.borderSubtle}}>
+                            <button
+                              onClick={() => openModal('campaignLeave', { campaign })}
+                              className="px-4 py-2 rounded-sm border transition-all text-sm font-medium flex items-center gap-2 hover:bg-red-900/50"
+                              style={{
+                                backgroundColor: 'transparent',
+                                color: '#dc2626',
+                                borderColor: '#dc2626'
+                              }}
+                            >
+                              <FontAwesomeIcon icon={faRightFromBracket} />
+                              Leave Campaign
+                            </button>
+                          </div>
                         )}
                       </div>
                       </div>
@@ -1973,12 +1967,40 @@ export default function CampaignManager({ user, refreshTrigger, onCampaignUpdate
       )}
 
       {modals.campaignCreate.open && typeof document !== 'undefined' && createPortal(
-        <div className="fixed inset-0 backdrop-blur-sm flex items-center justify-center z-50" style={{backgroundColor: THEME.overlayDark}}>
-          <div className="p-6 rounded-sm shadow-2xl max-w-md w-full mx-4 border" style={{backgroundColor: THEME.bgSecondary, borderColor: THEME.borderDefault}}>
-            <h3 className="text-lg font-semibold font-[family-name:var(--font-metamorphous)] mb-4" style={{color: THEME.textOnDark}}>
-              {modals.campaignCreate.editingCampaign ? 'Edit Campaign' : 'Create New Campaign'}
-            </h3>
-            <div className="space-y-4">
+        <div
+          className="fixed inset-0 flex items-center justify-center z-50 p-4"
+          style={{backgroundColor: THEME.overlayDark}}
+          onClick={() => {
+            closeModal('campaignCreate')
+            updateModalData('campaignCreate', { title: '', description: '', sessionName: '', editingCampaign: null })
+          }}
+        >
+          <div
+            className="rounded-sm shadow-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto border"
+            style={{backgroundColor: THEME.bgSecondary, borderColor: THEME.borderDefault}}
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Header */}
+            <div className="p-6 border-b" style={{borderBottomColor: THEME.borderSubtle}}>
+              <div className="flex items-center justify-between">
+                <h2 className="text-2xl font-bold font-[family-name:var(--font-metamorphous)]" style={{color: THEME.textOnDark}}>
+                  {modals.campaignCreate.editingCampaign ? 'Edit Campaign' : 'Create New Campaign'}
+                </h2>
+                <button
+                  onClick={() => {
+                    closeModal('campaignCreate')
+                    updateModalData('campaignCreate', { title: '', description: '', sessionName: '', editingCampaign: null })
+                  }}
+                  className="text-2xl font-bold hover:opacity-80 transition-opacity"
+                  style={{color: THEME.textSecondary}}
+                >
+                  ×
+                </button>
+              </div>
+            </div>
+
+            {/* Body */}
+            <div className="p-6 space-y-6">
               <div>
                 <label className="block text-sm font-medium mb-2" style={{color: THEME.textOnDark}}>
                   Campaign Title
@@ -2087,7 +2109,9 @@ export default function CampaignManager({ user, refreshTrigger, onCampaignUpdate
                 </div>
               </div>
             </div>
-            <div className="flex justify-end gap-3 mt-6">
+
+            {/* Footer */}
+            <div className="p-6 border-t flex justify-end gap-3" style={{borderTopColor: THEME.borderSubtle}}>
               <Button
                 variant="ghost"
                 onClick={() => {
