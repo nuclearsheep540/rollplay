@@ -32,8 +32,9 @@ class CreateCampaign:
 
 
 class UpdateCampaign:
-    def __init__(self, repository):
+    def __init__(self, repository, session_repository=None):
         self.repository = repository
+        self.session_repository = session_repository
 
     def execute(
         self,
@@ -41,9 +42,10 @@ class UpdateCampaign:
         host_id: UUID,
         title: Optional[str] = None,
         description: Optional[str] = None,
-        hero_image: Optional[str] = "UNSET"
+        hero_image: Optional[str] = "UNSET",
+        session_name: Optional[str] = None
     ) -> CampaignAggregate:
-        """Update campaign details"""
+        """Update campaign details and optionally current session name"""
         campaign = self.repository.get_by_id(campaign_id)
         if not campaign:
             raise ValueError(f"Campaign {campaign_id} not found")
@@ -54,6 +56,20 @@ class UpdateCampaign:
 
         campaign.update_details(title=title, description=description, hero_image=hero_image)
         self.repository.save(campaign)
+
+        # Update current session name if provided and session_repository available
+        if session_name is not None and self.session_repository:
+            from modules.session.domain.session_aggregate import SessionStatus
+            sessions = self.session_repository.get_by_campaign_id(campaign_id)
+            # Find current (non-finished) session
+            current_session = next(
+                (s for s in sessions if s.status != SessionStatus.FINISHED),
+                None
+            )
+            if current_session:
+                current_session.name = session_name
+                self.session_repository.save(current_session)
+
         return campaign
 
 
@@ -72,13 +88,18 @@ class DeleteCampaign:
         if not campaign.is_owned_by(host_id):
             raise ValueError("Only the host can delete this campaign")
 
-        # Business rule: Cannot delete campaign with ACTIVE sessions (would disrupt live games)
+        # Business rule: Cannot delete campaign with non-FINISHED sessions
         if self.session_repository:
             from modules.session.domain.session_aggregate import SessionStatus
+            non_finished_sessions = []
             for session_id in campaign.session_ids:
                 session = self.session_repository.get_by_id(session_id)
-                if session and session.status == SessionStatus.ACTIVE:
-                    raise ValueError("Cannot delete campaign with active sessions. Please pause or finish all active sessions first.")
+                if session and session.status != SessionStatus.FINISHED:
+                    non_finished_sessions.append(session)
+
+            if non_finished_sessions:
+                count = len(non_finished_sessions)
+                raise ValueError(f"Cannot delete campaign with {count} unfinished session(s). Please finish or delete all sessions first.")
 
         return self.repository.delete(campaign_id)
 

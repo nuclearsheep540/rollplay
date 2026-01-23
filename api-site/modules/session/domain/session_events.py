@@ -77,18 +77,19 @@ class SessionEvents:
         return events
 
     @staticmethod
-    def session_started(campaign_player_ids: List[UUID], session_id: UUID, session_name: str, campaign_id: UUID, active_game_id: str, dm_id: UUID, dm_screen_name: str) -> List[Dict[str, Any]]:
+    def session_started(campaign_player_ids: List[UUID], session_id: UUID, session_name: str, campaign_id: UUID, campaign_name: str, active_game_id: str, host_id: UUID, host_screen_name: str) -> List[Dict[str, Any]]:
         """
-        Event: DM started a session (notifies all campaign players)
+        Event: Host started a session (notifies all campaign players)
 
         Args:
             campaign_player_ids: List of all campaign member user IDs
             session_id: Session ID
             session_name: Session name
             campaign_id: Campaign ID
+            campaign_name: Campaign name
             active_game_id: Active game ID in MongoDB
-            dm_id: DM user ID
-            dm_screen_name: DM display name
+            host_id: Session host user ID
+            host_screen_name: Host display name
 
         Returns:
             List of event configuration dicts (one per player)
@@ -102,9 +103,10 @@ class SessionEvents:
                     "session_id": str(session_id),
                     "session_name": session_name,
                     "campaign_id": str(campaign_id),
+                    "campaign_name": campaign_name,
                     "active_game_id": active_game_id,
-                    "dm_id": str(dm_id),
-                    "dm_screen_name": dm_screen_name
+                    "host_id": str(host_id),
+                    "host_screen_name": host_screen_name
                 },
                 "show_toast": True,
                 "save_notification": True

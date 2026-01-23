@@ -49,7 +49,12 @@ export default function AccountNotificationFeed({ userId, refreshTrigger }) {
       // Navigate to relevant tab
       const tab = getNavigationTab(notification.event_type)
       if (tab) {
-        router.push(`/dashboard?tab=${tab}`)
+        // Build URL with optional expand_campaign_id for campaign-related notifications
+        let url = `/dashboard?tab=${tab}`
+        if (tab === 'campaigns' && notification.data?.campaign_id) {
+          url += `&expand_campaign_id=${notification.data.campaign_id}`
+        }
+        router.push(url)
       }
 
       // Refresh notifications
@@ -163,7 +168,7 @@ export default function AccountNotificationFeed({ userId, refreshTrigger }) {
                 className="flex-1 text-left py-2 hover:opacity-80 transition-opacity"
               >
                 <p className="text-sm" style={{color: THEME.textOnDark}}>
-                  {formatPanelMessage(notification)}
+                  {formatPanelMessage(notification, userId)}
                 </p>
                 <p className="text-xs mt-0.5" style={{color: THEME.textSecondary}}>
                   {formatRelativeTime(notification.created_at)}

@@ -24,6 +24,7 @@ function DashboardContent() {
   const router = useRouter()
   const tabParam = searchParams.get('tab')
   const inviteCampaignId = searchParams.get('invite_campaign_id')
+  const expandCampaignId = searchParams.get('expand_campaign_id')
   const [activeSection, setActiveSection] = useState(tabParam || 'campaigns')
   const [refreshTrigger, setRefreshTrigger] = useState(0)
   const [campaignUpdateHandlers, setCampaignUpdateHandlers] = useState(null)
@@ -45,6 +46,14 @@ function DashboardContent() {
   const clearInviteCampaignId = () => {
     const current = new URLSearchParams(searchParams.toString())
     current.delete('invite_campaign_id')
+    const newUrl = current.toString() ? `/dashboard?${current.toString()}` : '/dashboard'
+    router.replace(newUrl)
+  }
+
+  // Clear expand_campaign_id param from URL (called by CampaignManager after expanding)
+  const clearExpandCampaignId = () => {
+    const current = new URLSearchParams(searchParams.toString())
+    current.delete('expand_campaign_id')
     const newUrl = current.toString() ? `/dashboard?${current.toString()}` : '/dashboard'
     router.replace(newUrl)
   }
@@ -392,6 +401,8 @@ function DashboardContent() {
             onExpandedChange={setIsChildExpanded}
             inviteCampaignId={inviteCampaignId}
             clearInviteCampaignId={clearInviteCampaignId}
+            expandCampaignId={expandCampaignId}
+            clearExpandCampaignId={clearExpandCampaignId}
             showToast={showToast}
           />
         </section>

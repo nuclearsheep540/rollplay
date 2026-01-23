@@ -289,17 +289,19 @@ async def update_campaign(
     campaign_id: UUID,
     request: CampaignUpdateRequest,
     user_id: UUID = Depends(get_current_user_id),
-    campaign_repo: CampaignRepository = Depends(campaign_repository)
+    campaign_repo: CampaignRepository = Depends(campaign_repository),
+    session_repo: SessionRepository = Depends(get_session_repository)
 ):
-    """Update campaign details"""
+    """Update campaign details and optionally current session name"""
     try:
-        command = UpdateCampaign(campaign_repo)
+        command = UpdateCampaign(campaign_repo, session_repo)
         campaign = command.execute(
             campaign_id=campaign_id,
             host_id=user_id,
             title=request.title,
             description=request.description,
-            hero_image=request.hero_image
+            hero_image=request.hero_image,
+            session_name=request.session_name
         )
 
         return _to_campaign_response(campaign)

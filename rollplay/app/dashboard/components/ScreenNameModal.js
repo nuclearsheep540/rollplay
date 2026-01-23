@@ -25,7 +25,7 @@ export default function ScreenNameModal({
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
       <div className="bg-white rounded-lg p-6 w-full max-w-md mx-4">
         <div className="text-center mb-6">
-          <h3 className="text-2xl font-bold text-slate-800 mb-2">Welcome to Tabletop Tavern! 🎲</h3>
+          <h3 className="text-2xl font-bold text-slate-800 mb-2">Welcome to Tabletop Tavern!</h3>
           <p className="text-slate-600">To get started, please choose a screen name that other players will see.</p>
         </div>
         

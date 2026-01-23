@@ -12,7 +12,7 @@ import { faCheck } from '@fortawesome/free-solid-svg-icons'
 import { formatPanelMessage, getNavigationTab } from '../config/eventConfig'
 import { formatRelativeTime } from '../utils/formatTime'
 
-export default function NotificationPanel({ notifications, onNotificationClick, onMarkAllRead, onClose }) {
+export default function NotificationPanel({ notifications, onNotificationClick, onMarkAllRead, onClose, userId }) {
   const panelRef = useRef(null)
   const router = useRouter()
 
@@ -34,9 +34,15 @@ export default function NotificationPanel({ notifications, onNotificationClick, 
     onClose() // Close the panel when clicking a notification
     const tab = getNavigationTab(notification.event_type)
     if (tab) {
-      // For campaign invite notifications, include campaign_id for stale invite validation
-      if (notification.event_type === 'campaign_invite_received' && notification.data?.campaign_id) {
-        router.push(`/dashboard?tab=${tab}&invite_campaign_id=${notification.data.campaign_id}`)
+      // Build URL with campaign context for campaign-related notifications
+      if (tab === 'campaigns' && notification.data?.campaign_id) {
+        if (notification.event_type === 'campaign_invite_received') {
+          // Campaign invite - use invite_campaign_id for stale invite validation
+          router.push(`/dashboard?tab=${tab}&invite_campaign_id=${notification.data.campaign_id}`)
+        } else {
+          // Other campaign notifications - expand the campaign drawer
+          router.push(`/dashboard?tab=${tab}&expand_campaign_id=${notification.data.campaign_id}`)
+        }
       } else {
         router.push(`/dashboard?tab=${tab}`)
       }
@@ -87,7 +93,7 @@ export default function NotificationPanel({ notifications, onNotificationClick, 
                 className="flex-1 text-left p-4 hover:bg-slate-50 transition-colors"
               >
                 <p className="text-sm text-slate-900">
-                  {formatPanelMessage(notification)}
+                  {formatPanelMessage(notification, userId)}
                 </p>
                 <p className="text-xs text-slate-500 mt-1">
                   {formatRelativeTime(notification.created_at)}

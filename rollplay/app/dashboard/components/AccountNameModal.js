@@ -109,9 +109,9 @@ export default function AccountNameModal({ show, user, onComplete }) {
             </span>
           </div>
 
-          <div className="mb-6 p-3 bg-amber-50 border border-amber-200 rounded-md">
-            <p className="text-amber-800 text-sm">
-              <strong>Important:</strong> This is your permanent account tag. Share it with friends so they can find you! It cannot be changed.
+          <div className="mb-6 p-3 bg-emerald-50 border border-emerald-200 rounded-md">
+            <p className="text-emerald-800 text-sm">
+              Share your account tag with friends so they can find you!
             </p>
           </div>
 
@@ -137,15 +137,15 @@ export default function AccountNameModal({ show, user, onComplete }) {
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
       <div className="bg-white rounded-lg p-6 w-full max-w-md mx-4">
         <div className="text-center mb-6">
-          <h3 className="text-2xl font-bold text-slate-800 mb-2">Create Username</h3>
+          <h3 className="text-2xl font-bold text-slate-800 mb-2">Create Account Name</h3>
           <p className="text-slate-600">
-            Your username cannot be changed but you can choose a nickname on the next screen.
+            Your account name cannot be changed but you can choose a nickname on the next screen.
           </p>
         </div>
 
         <div className="mb-4">
           <label htmlFor="accountName" className="block text-sm font-medium text-slate-700 mb-2">
-            Username
+            Account Name
           </label>
           <input
             type="text"
@@ -199,12 +199,6 @@ export default function AccountNameModal({ show, user, onComplete }) {
             <p className="text-red-700 text-sm">{error}</p>
           </div>
         )}
-
-        <div className="mb-4 p-3 bg-amber-50 border border-amber-200 rounded-md">
-          <p className="text-amber-800 text-sm">
-            Your username cannot be changed after creation.
-          </p>
-        </div>
 
         <div className="flex justify-center">
           <button
