@@ -134,7 +134,10 @@ export const EVENT_CONFIG = {
   'session_started': {
     toastMessage: 'Session started',
     panelMessage: (data, currentUserId) => {
-      const actor = currentUserId && data.dm_id === currentUserId ? 'You' : data.dm_screen_name
+      // host_id/host_screen_name are canonical; dm_id/dm_screen_name kept for legacy notifications
+      const hostId = data.host_id || data.dm_id
+      const hostName = data.host_screen_name || data.dm_screen_name
+      const actor = currentUserId && hostId === currentUserId ? 'You' : hostName
       return `${actor} started the session for ${data.campaign_name}`
     },
     toastType: 'success',

@@ -43,16 +43,17 @@ class GetUserDashboard:
 
         # Calculate dashboard metrics
         total_campaigns = len(campaigns)
-        active_games = sum(len(campaign.get_active_games()) for campaign in campaigns)
-        total_games = sum(campaign.get_total_games() for campaign in campaigns)
+        total_sessions = sum(campaign.get_total_sessions() for campaign in campaigns)
+        # TODO: Query session repository for active session count
+        active_sessions = 0
 
         return {
             'user': user,
             'campaigns': campaigns,
             'metrics': {
                 'total_campaigns': total_campaigns,
-                'total_games': total_games,
-                'active_games': active_games,
+                'total_sessions': total_sessions,
+                'active_sessions': active_sessions,
                 'is_dm': total_campaigns > 0
             }
         }

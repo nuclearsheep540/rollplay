@@ -553,9 +553,9 @@ async def get_user_dashboard(
             "campaigns_summary": [
                 {
                     "id": str(campaign.id),
-                    "name": campaign.name,
-                    "total_games": campaign.get_total_games(),
-                    "active_games": 0  # TODO: Query game module for active game count
+                    "name": campaign.title,
+                    "total_sessions": campaign.get_total_sessions(),
+                    "active_sessions": 0  # TODO: Query session module for active session count
                 }
                 for campaign in dashboard_data['campaigns']
             ],

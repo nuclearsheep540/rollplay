@@ -32,7 +32,7 @@ import {
 import { COLORS, THEME } from '@/app/styles/colorTheme'
 import { Button, Badge } from './shared/Button'
 
-export default function CampaignManager({ user, refreshTrigger, onCampaignUpdate, onExpandedChange, inviteCampaignId, clearInviteCampaignId, showToast }) {
+export default function CampaignManager({ user, refreshTrigger, onCampaignUpdate, onExpandedChange, inviteCampaignId, clearInviteCampaignId, expandCampaignId, clearExpandCampaignId, showToast }) {
   const router = useRouter()
   const [campaigns, setCampaigns] = useState([])
   const [invitedCampaigns, setInvitedCampaigns] = useState([])
@@ -59,7 +59,7 @@ export default function CampaignManager({ user, refreshTrigger, onCampaignUpdate
 
   // Consolidated modal state
   const [modals, setModals] = useState({
-    campaignCreate: { open: false, title: '', description: '', heroImage: '/campaign-tile-bg.png', sessionName: '', isCreating: false },
+    campaignCreate: { open: false, title: '', description: '', heroImage: '/campaign-tile-bg.png', sessionName: '', isCreating: false, editingCampaign: null },
     campaignDelete: { open: false, campaign: null, isDeleting: false },
     campaignInvite: { open: false, campaign: null },
     campaignLeave: { open: false, campaign: null, isLeaving: false },
@@ -600,10 +600,60 @@ export default function CampaignManager({ user, refreshTrigger, onCampaignUpdate
 
       // Close modal and reset form
       closeModal('campaignCreate')
-      updateModalData('campaignCreate', { title: '', description: '', sessionName: '' })
+      updateModalData('campaignCreate', { title: '', description: '', sessionName: '', editingCampaign: null })
     } catch (error) {
       console.error('Error creating campaign:', error)
       setError('Failed to create campaign: ' + error.message)
+    } finally {
+      updateModalData('campaignCreate', { isCreating: false })
+    }
+  }
+
+  // Update an existing campaign
+  const updateCampaign = async () => {
+    const editingCampaign = modals.campaignCreate.editingCampaign
+    if (!user || !editingCampaign || !modals.campaignCreate.title.trim()) return
+
+    updateModalData('campaignCreate', { isCreating: true })
+    setError(null)
+
+    try {
+      const campaignData = {
+        title: modals.campaignCreate.title.trim(),
+        description: modals.campaignCreate.description.trim() || null,
+        hero_image: modals.campaignCreate.heroImage || null,
+        session_name: modals.campaignCreate.sessionName?.trim() || null
+      }
+
+      const response = await fetch(`/api/campaigns/${editingCampaign.id}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        credentials: 'include',
+        body: JSON.stringify(campaignData)
+      })
+
+      if (!response.ok) {
+        throw new Error('Failed to update campaign')
+      }
+
+      const updatedCampaign = await response.json()
+
+      // Refresh campaigns list
+      await fetchCampaigns()
+
+      // Update the selected campaign if it's the one we edited
+      if (selectedCampaign?.id === editingCampaign.id) {
+        setSelectedCampaign(updatedCampaign)
+      }
+
+      // Close modal and reset form
+      closeModal('campaignCreate')
+      updateModalData('campaignCreate', { title: '', description: '', editingCampaign: null })
+    } catch (error) {
+      console.error('Error updating campaign:', error)
+      setError('Failed to update campaign: ' + error.message)
     } finally {
       updateModalData('campaignCreate', { isCreating: false })
     }
@@ -713,6 +763,28 @@ export default function CampaignManager({ user, refreshTrigger, onCampaignUpdate
       clearInviteCampaignId?.()
     }
   }, [inviteCampaignId, invitedCampaigns, loading])
+
+  // Auto-expand campaign from URL param (e.g., from notification click)
+  // - If campaign exists → auto-expand it (not toggle - always open)
+  // - If campaign doesn't exist → silently ignore (may be from another user's campaign)
+  useEffect(() => {
+    if (expandCampaignId && !loading) {
+      // Find the campaign by ID
+      const campaign = campaigns.find(c => c.id === expandCampaignId)
+
+      if (campaign && selectedCampaign?.id !== campaign.id) {
+        // Campaign exists and not already expanded - open it directly (don't toggle)
+        setSelectedInvitedCampaign(null)
+        const mainEl = document.getElementById('dashboard-main')
+        if (mainEl) {
+          mainEl.scrollTo({ top: 0, behavior: 'smooth' })
+        }
+        setSelectedCampaign(campaign)
+      }
+      // Clear the URL param after handling (regardless of result)
+      clearExpandCampaignId?.()
+    }
+  }, [expandCampaignId, campaigns, loading])
 
   // Fetch members when an invited campaign is expanded
   useEffect(() => {
@@ -1127,7 +1199,7 @@ export default function CampaignManager({ user, refreshTrigger, onCampaignUpdate
                     >
                       {/* Content wrapper */}
                       <div
-                        className="pt-[calc(1rem+16px)] sm:pt-[calc(2rem+16px)] md:pt-[calc(2.5rem+16px)] pb-4 sm:pb-6 md:pb-8 px-[calc(1rem+12px)] sm:px-[calc(2rem+12px)] md:px-[calc(2.5rem+12px)]"
+                        className="pt-[calc(1rem+16px)] sm:pt-[calc(2rem+16px)] md:pt-[calc(2.5rem+16px)] pb-[calc(1rem+16px)] sm:pb-[calc(2rem+16px)] md:pb-[calc(2.5rem+16px)] px-[calc(1rem+12px)] sm:px-[calc(2rem+12px)] md:px-[calc(2.5rem+12px)]"
                       >
                         {/* Inner content constrained to max-width */}
                         <div style={{ maxWidth: '1600px' }}>
@@ -1376,7 +1448,7 @@ export default function CampaignManager({ user, refreshTrigger, onCampaignUpdate
                         </div>
 
                         {/* Action Buttons - Top Right (fixed width container to prevent layout shift) */}
-                        <div className="flex gap-2 flex-shrink-0" style={{minWidth: campaign.host_id === user.id ? '310px' : '160px'}}>
+                        <div className="flex gap-2 flex-shrink-0" style={{minWidth: '160px'}}>
                           {/* Active game indicator - always reserves space */}
                           <div className="px-4 py-2 backdrop-blur-sm text-sm font-semibold rounded-sm border"
                                style={{
@@ -1389,46 +1461,6 @@ export default function CampaignManager({ user, refreshTrigger, onCampaignUpdate
                             Game In Session
                           </div>
 
-                          {/* Always show action buttons if user is the host */}
-                          {campaign.host_id === user.id && (
-                            <>
-                              <button
-                                onClick={(e) => {
-                                  e.stopPropagation()
-                                  openModal('campaignInvite', { campaign })
-                                }}
-                                className="w-10 h-10 backdrop-blur-sm rounded-sm transition-all flex items-center justify-center border disabled:opacity-50 disabled:cursor-not-allowed"
-                                style={{backgroundColor: THEME.bgSecondary, color: THEME.textAccent, borderColor: THEME.borderActive}}
-                                title="Invite Player to Campaign"
-                              >
-                                <FontAwesomeIcon icon={faUserPlus} />
-                              </button>
-                              <button
-                                onClick={(e) => {
-                                  e.stopPropagation()
-                                  toggleCampaignDetails(campaign)
-                                }}
-                                disabled={activeSessions.length > 0}
-                                className="w-10 h-10 backdrop-blur-sm rounded-sm transition-all flex items-center justify-center border disabled:opacity-50 disabled:cursor-not-allowed"
-                                style={{backgroundColor: THEME.bgSecondary, color: THEME.textAccent, borderColor: THEME.borderActive}}
-                                title={activeSessions.length > 0 ? "Cannot configure campaign during active games" : "Configure Campaign"}
-                              >
-                                <FontAwesomeIcon icon={faGear} />
-                              </button>
-                              <button
-                                onClick={(e) => {
-                                  e.stopPropagation()
-                                  promptDeleteCampaign(campaign)
-                                }}
-                                disabled={modals.campaignDelete.isDeleting || activeSessions.length > 0}
-                                className="w-10 h-10 backdrop-blur-sm rounded-sm transition-all flex items-center justify-center border disabled:opacity-50 disabled:cursor-not-allowed"
-                                style={{backgroundColor: '#991b1b', color: THEME.textAccent, borderColor: '#dc2626'}}
-                                title={activeSessions.length > 0 ? "Cannot delete campaign with active games" : "Delete Campaign"}
-                              >
-                                <FontAwesomeIcon icon={faTrash} />
-                              </button>
-                            </>
-                          )}
                         </div>
                       </div>
 
@@ -1479,7 +1511,7 @@ export default function CampaignManager({ user, refreshTrigger, onCampaignUpdate
                   >
                     {/* Content wrapper */}
                     <div
-                      className="pt-[calc(1rem+16px)] sm:pt-[calc(2rem+16px)] md:pt-[calc(2.5rem+16px)] pb-4 sm:pb-6 md:pb-8 px-[calc(1rem+12px)] sm:px-[calc(2rem+12px)] md:px-[calc(2.5rem+12px)]"
+                      className="pt-[calc(1rem+16px)] sm:pt-[calc(2rem+16px)] md:pt-[calc(2.5rem+16px)] pb-[calc(1rem+16px)] sm:pb-[calc(2rem+16px)] md:pb-[calc(2.5rem+16px)] px-[calc(1rem+12px)] sm:px-[calc(2rem+12px)] md:px-[calc(2.5rem+12px)]"
                     >
                       {/* Inner content constrained to max-width for readability on wide screens */}
                       <div style={{ maxWidth: '1600px' }}>
@@ -1671,14 +1703,19 @@ export default function CampaignManager({ user, refreshTrigger, onCampaignUpdate
                           </div>
                         )}
 
-                        {/* Divider before campaign members */}
-                        <div className="my-6 border-t" style={{borderColor: THEME.borderSubtle}}></div>
-
                         {/* Campaign Members Section */}
                         <div className="mb-6">
                           <h3 className="text-xl font-semibold font-[family-name:var(--font-metamorphous)] mb-4" style={{color: THEME.textOnDark}}>
                             Campaign Members
                           </h3>
+                          <button
+                            onClick={() => openModal('campaignInvite', { campaign: selectedCampaign })}
+                            className="flex items-center gap-2 px-3 h-10 rounded-sm transition-all border mb-4"
+                            style={{backgroundColor: THEME.bgSecondary, color: THEME.textAccent, borderColor: THEME.borderActive}}
+                          >
+                            <FontAwesomeIcon icon={faUserPlus} className="h-4 w-4" />
+                            <span className="text-sm font-medium">Add Members</span>
+                          </button>
 
                           {/* Loading State */}
                           {!campaign.members && (
@@ -1757,6 +1794,48 @@ export default function CampaignManager({ user, refreshTrigger, onCampaignUpdate
                             </div>
                           )}
                         </div>
+
+                        {/* Campaign Controls Section - Only show for host */}
+                        {campaign.host_id === user.id && (
+                          <>
+                            <div className="my-6 border-t" style={{borderColor: THEME.borderSubtle}}></div>
+                            <div className="mb-6">
+                              <h3 className="text-xl font-semibold font-[family-name:var(--font-metamorphous)] mb-4" style={{color: THEME.textOnDark}}>
+                                Campaign Controls
+                              </h3>
+                              <div className="flex gap-4">
+                                <button
+                                  onClick={() => {
+                                    // Find current session from allSessions (status !== 'finished')
+                                    const campaignSessions = allSessions.filter(s => s.campaign_id === selectedCampaign.id)
+                                    const currentSession = campaignSessions.find(s => s.status !== 'finished')
+                                    openModal('campaignCreate', {
+                                      editingCampaign: selectedCampaign,
+                                      title: selectedCampaign.title,
+                                      description: selectedCampaign.description || '',
+                                      heroImage: selectedCampaign.hero_image || '/campaign-tile-bg.png',
+                                      sessionName: currentSession?.name || ''
+                                    })
+                                  }}
+                                  className="flex items-center gap-2 px-3 h-10 rounded-sm transition-all border"
+                                  style={{backgroundColor: THEME.bgSecondary, color: THEME.textAccent, borderColor: THEME.borderActive}}
+                                >
+                                  <FontAwesomeIcon icon={faGear} className="h-4 w-4" />
+                                  <span className="text-sm font-medium">Configure</span>
+                                </button>
+                                <button
+                                  onClick={() => promptDeleteCampaign(selectedCampaign)}
+                                  disabled={modals.campaignDelete.isDeleting}
+                                  className="flex items-center gap-2 px-3 h-10 rounded-sm transition-all border disabled:opacity-50 disabled:cursor-not-allowed"
+                                  style={{backgroundColor: '#991b1b', color: THEME.textAccent, borderColor: '#dc2626'}}
+                                >
+                                  <FontAwesomeIcon icon={faTrash} className="h-4 w-4" />
+                                  <span className="text-sm font-medium">Delete Campaign</span>
+                                </button>
+                              </div>
+                            </div>
+                          </>
+                        )}
 
                         {/* Leave Campaign Button - Only show for non-host members */}
                         {campaign.host_id !== user.id && (
@@ -1896,7 +1975,9 @@ export default function CampaignManager({ user, refreshTrigger, onCampaignUpdate
       {modals.campaignCreate.open && typeof document !== 'undefined' && createPortal(
         <div className="fixed inset-0 backdrop-blur-sm flex items-center justify-center z-50" style={{backgroundColor: THEME.overlayDark}}>
           <div className="p-6 rounded-sm shadow-2xl max-w-md w-full mx-4 border" style={{backgroundColor: THEME.bgSecondary, borderColor: THEME.borderDefault}}>
-            <h3 className="text-lg font-semibold font-[family-name:var(--font-metamorphous)] mb-4" style={{color: THEME.textOnDark}}>Create New Campaign</h3>
+            <h3 className="text-lg font-semibold font-[family-name:var(--font-metamorphous)] mb-4" style={{color: THEME.textOnDark}}>
+              {modals.campaignCreate.editingCampaign ? 'Edit Campaign' : 'Create New Campaign'}
+            </h3>
             <div className="space-y-4">
               <div>
                 <label className="block text-sm font-medium mb-2" style={{color: THEME.textOnDark}}>
@@ -1940,6 +2021,7 @@ export default function CampaignManager({ user, refreshTrigger, onCampaignUpdate
                   {(modals.campaignCreate.description || '').length}/1000 characters
                 </div>
               </div>
+              {/* Session Name - shown in both create and edit modes */}
               <div>
                 <label className="block text-sm font-medium mb-2" style={{color: THEME.textOnDark}}>
                   Session Name (Optional)
@@ -2008,24 +2090,27 @@ export default function CampaignManager({ user, refreshTrigger, onCampaignUpdate
             <div className="flex justify-end gap-3 mt-6">
               <Button
                 variant="ghost"
-                onClick={() => closeModal('campaignCreate')}
+                onClick={() => {
+                  closeModal('campaignCreate')
+                  updateModalData('campaignCreate', { title: '', description: '', sessionName: '', editingCampaign: null })
+                }}
               >
                 Cancel
               </Button>
               <Button
                 variant="primary"
-                onClick={createCampaign}
+                onClick={modals.campaignCreate.editingCampaign ? updateCampaign : createCampaign}
                 disabled={!modals.campaignCreate.title.trim() || modals.campaignCreate.isCreating}
               >
                 {modals.campaignCreate.isCreating ? (
                   <>
                     <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
-                    Creating...
+                    {modals.campaignCreate.editingCampaign ? 'Saving...' : 'Creating...'}
                   </>
                 ) : (
                   <>
-                    <FontAwesomeIcon icon={faPlus} className="mr-2" />
-                    Create Campaign
+                    <FontAwesomeIcon icon={modals.campaignCreate.editingCampaign ? faGear : faPlus} className="mr-2" />
+                    {modals.campaignCreate.editingCampaign ? 'Save Changes' : 'Create Campaign'}
                   </>
                 )}
               </Button>

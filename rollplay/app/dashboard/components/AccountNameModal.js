@@ -109,9 +109,9 @@ export default function AccountNameModal({ show, user, onComplete }) {
             </span>
           </div>
 
-          <div className="mb-6 p-3 bg-amber-50 border border-amber-200 rounded-md">
-            <p className="text-amber-800 text-sm">
-              <strong>Important:</strong> This is your permanent account tag. Share it with friends so they can find you! It cannot be changed.
+          <div className="mb-6 p-3 bg-emerald-50 border border-emerald-200 rounded-md">
+            <p className="text-emerald-800 text-sm">
+              Share your account tag with friends so they can find you!
             </p>
           </div>
 
@@ -199,12 +199,6 @@ export default function AccountNameModal({ show, user, onComplete }) {
             <p className="text-red-700 text-sm">{error}</p>
           </div>
         )}
-
-        <div className="mb-4 p-3 bg-amber-50 border border-amber-200 rounded-md">
-          <p className="text-amber-800 text-sm">
-            Your username cannot be changed after creation.
-          </p>
-        </div>
 
         <div className="flex justify-center">
           <button

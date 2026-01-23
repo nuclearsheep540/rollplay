@@ -109,6 +109,7 @@ export default function NotificationBell({ userId, refreshTrigger, toasts = [], 
           onNotificationClick={handleNotificationClick}
           onMarkAllRead={handleMarkAllRead}
           onClose={() => setShowPanel(false)}
+          userId={userId}
         />
       )}
     </div>

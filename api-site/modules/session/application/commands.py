@@ -372,10 +372,10 @@ class StartSession:
                     session_id=session.id,
                     session_name=session.name,
                     campaign_id=session.campaign_id,
-                    campaign_name=campaign.name,
+                    campaign_name=campaign.title,
                     active_game_id=active_game_id,
-                    dm_id=host_id,
-                    dm_screen_name=host_user.screen_name if host_user.screen_name else host_user.email
+                    host_id=host_id,
+                    host_screen_name=host_user.screen_name if host_user.screen_name else host_user.email
                 )
 
                 # Broadcast to each recipient

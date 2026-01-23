@@ -49,7 +49,12 @@ export default function AccountNotificationFeed({ userId, refreshTrigger }) {
       // Navigate to relevant tab
       const tab = getNavigationTab(notification.event_type)
       if (tab) {
-        router.push(`/dashboard?tab=${tab}`)
+        // Build URL with optional expand_campaign_id for campaign-related notifications
+        let url = `/dashboard?tab=${tab}`
+        if (tab === 'campaigns' && notification.data?.campaign_id) {
+          url += `&expand_campaign_id=${notification.data.campaign_id}`
+        }
+        router.push(url)
       }
 
       // Refresh notifications

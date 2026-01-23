@@ -32,8 +32,9 @@ class CreateCampaign:
 
 
 class UpdateCampaign:
-    def __init__(self, repository):
+    def __init__(self, repository, session_repository=None):
         self.repository = repository
+        self.session_repository = session_repository
 
     def execute(
         self,
@@ -41,9 +42,10 @@ class UpdateCampaign:
         host_id: UUID,
         title: Optional[str] = None,
         description: Optional[str] = None,
-        hero_image: Optional[str] = "UNSET"
+        hero_image: Optional[str] = "UNSET",
+        session_name: Optional[str] = None
     ) -> CampaignAggregate:
-        """Update campaign details"""
+        """Update campaign details and optionally current session name"""
         campaign = self.repository.get_by_id(campaign_id)
         if not campaign:
             raise ValueError(f"Campaign {campaign_id} not found")
@@ -54,6 +56,20 @@ class UpdateCampaign:
 
         campaign.update_details(title=title, description=description, hero_image=hero_image)
         self.repository.save(campaign)
+
+        # Update current session name if provided and session_repository available
+        if session_name is not None and self.session_repository:
+            from modules.session.domain.session_aggregate import SessionStatus
+            sessions = self.session_repository.get_by_campaign_id(campaign_id)
+            # Find current (non-finished) session
+            current_session = next(
+                (s for s in sessions if s.status != SessionStatus.FINISHED),
+                None
+            )
+            if current_session:
+                current_session.name = session_name
+                self.session_repository.save(current_session)
+
         return campaign
 
 
