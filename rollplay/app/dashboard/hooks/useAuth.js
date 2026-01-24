@@ -8,6 +8,7 @@
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { authFetch, authPut } from '@/app/shared/utils/authFetch'
+import { useTokenRefresh } from '@/app/shared/hooks/useTokenRefresh'
 
 export function useAuth() {
   const router = useRouter()
@@ -17,6 +18,9 @@ export function useAuth() {
   const [screenName, setScreenName] = useState('')
   const [updatingScreenName, setUpdatingScreenName] = useState(false)
   const [showScreenNameModal, setShowScreenNameModal] = useState(false)
+
+  // Proactive token refresh - only active when user is authenticated
+  useTokenRefresh(user !== null)
 
   // Update screen name
   const updateScreenName = async () => {
