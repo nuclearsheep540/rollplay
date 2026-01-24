@@ -54,9 +54,9 @@ Frontend                  api-site                    S3
    │                         ├─ Generate signed URL ───►
    │  ◄── {upload_url, key} ─┤                         │
    │                         │                         │
-   ├─────────── PUT (file) ──────────────────────────►│
+   ├─────────── PUT (file) ───────────────────────────►│
    │                         │                         │
-   ├─ POST /assets/confirm ──►                        │
+   ├─ POST /assets/confirm ──►                         │
    │     (key, campaign_id)  │                         │
    │                         ├─ Create asset record    │
    │  ◄─── {asset} ──────────┤                         │

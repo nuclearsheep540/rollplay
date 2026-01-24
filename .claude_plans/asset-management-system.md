@@ -457,15 +457,15 @@ Taking cues from **Steam** and **Spotify** - platforms that handle large content
 │              │                                              │
 │  LEFT        │  MAIN CONTENT AREA                           │
 │  SIDEBAR     │                                              │
-│              │  ┌─────┐ ┌─────┐ ┌─────┐ ┌─────┐            │
-│  Collections │  │ Map │ │ Map │ │ Map │ │ Map │            │
-│  - Goblins   │  │ Tile│ │ Tile│ │ Tile│ │ Tile│            │
-│  - Forest    │  └─────┘ └─────┘ └─────┘ └─────┘            │
+│              │  ┌─────┐ ┌─────┐ ┌─────┐ ┌─────┐             │
+│  Collections │  │ Map │ │ Map │ │ Map │ │ Map │             │
+│  - Goblins   │  │ Tile│ │ Tile│ │ Tile│ │ Tile│             │
+│  - Forest    │  └─────┘ └─────┘ └─────┘ └─────┘             │
 │  - Boss      │                                              │
-│              │  ┌─────┐ ┌─────┐ ┌─────┐ ┌─────┐            │
-│  Quick       │  │ NPC │ │ NPC │ │ NPC │ │ NPC │            │
-│  Filters     │  │ Tile│ │ Tile│ │ Tile│ │ Tile│            │
-│  - Maps      │  └─────┘ └─────┘ └─────┘ └─────┘            │
+│              │  ┌─────┐ ┌─────┐ ┌─────┐ ┌─────┐             │
+│  Quick       │  │ NPC │ │ NPC │ │ NPC │ │ NPC │             │
+│  Filters     │  │ Tile│ │ Tile│ │ Tile│ │ Tile│             │
+│  - Maps      │  └─────┘ └─────┘ └─────┘ └─────┘             │
 │  - NPCs      │                                              │
 │  - Audio     │                                              │
 │              │                                              │
