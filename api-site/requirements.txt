@@ -12,3 +12,4 @@ requests==2.32.4 # For inter-service communication
 httpx==0.27.0 # Async HTTP client for api-game calls
 pytest==8.0.0 # Testing framework
 sentry-sdk[fastapi]==1.45.1
+boto3==1.35.0  # AWS S3 SDK for asset storage

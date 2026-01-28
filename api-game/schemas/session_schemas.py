@@ -2,7 +2,16 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 
 from pydantic import BaseModel
-from typing import List
+from typing import List, Optional
+
+
+class AssetRef(BaseModel):
+    """Reference to an asset from the library (api-site PostgreSQL)"""
+    id: str
+    filename: str
+    s3_key: str
+    asset_type: str  # "map", "audio", "image"
+    s3_url: Optional[str] = None  # Presigned download URL
 
 
 class SessionStartRequest(BaseModel):
@@ -11,6 +20,7 @@ class SessionStartRequest(BaseModel):
     dm_username: str
     max_players: int = 8
     joined_user_ids: List[str] = []  # List of user IDs who are already part of the session
+    assets: List[AssetRef] = []  # Assets associated with the session's campaign
 
 
 class SessionStartResponse(BaseModel):

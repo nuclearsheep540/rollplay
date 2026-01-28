@@ -35,6 +35,25 @@ adventure_log = AdventureLogService()
 map_service = MapService()
 
 
+@app.get("/game/{room_id}/assets")
+async def get_available_assets(room_id: str):
+    """Get assets available for this game session from the campaign library"""
+    try:
+        room = GameService.get_room(room_id)
+        if not room:
+            raise HTTPException(status_code=404, detail="Session not found")
+
+        available_assets = room.get("available_assets", [])
+        logger.info(f"🎨 Returning {len(available_assets)} assets for room {room_id}")
+
+        return {"assets": available_assets}
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error getting assets for room {room_id}: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 @app.get("/game/{room_id}/logs")
 async def get_room_logs(room_id: str, limit: int = 100, skip: int = 0):
     """Get adventure logs for a room"""
@@ -419,6 +438,9 @@ async def create_session(request: SessionStartRequest):
             ]
             return colors[index] if index < len(colors) else "#3b82f6"
 
+        # Convert assets to dict format for MongoDB storage
+        available_assets = [asset.model_dump() for asset in request.assets] if request.assets else []
+
         # Create minimal session
         settings = GameSettings(
             max_players=request.max_players,
@@ -427,7 +449,8 @@ async def create_session(request: SessionStartRequest):
             created_at=datetime.utcnow(),
             moderators=[],
             dungeon_master=request.dm_username.lower(),
-            room_host=request.dm_username.lower()
+            room_host=request.dm_username.lower(),
+            available_assets=available_assets
         )
 
         # Use session_id as MongoDB _id (back-reference to PostgreSQL session)

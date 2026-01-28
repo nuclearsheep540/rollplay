@@ -27,6 +27,7 @@ try:
     from modules.friendship.model.friend_request_model import FriendRequestModel
     from modules.friendship.model.friendship_model import FriendshipModel
     from modules.events.model.notification_model import Notification
+    from modules.library.model.asset_model import MediaAsset
     print("Models imported successfully")
 except ImportError as e:
     print(f"Error importing models: {e}")

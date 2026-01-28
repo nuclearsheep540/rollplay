@@ -52,6 +52,13 @@ class Settings(BaseSettings):
     JWT_SECRET_KEY: str
     JWT_ALGORITHM: str = "HS256"
 
+    # AWS S3 Configuration
+    AWS_ACCESS_KEY_ID: str
+    AWS_SECRET_ACCESS_KEY: str
+    AWS_REGION: str = "eu-west-1"
+    S3_BUCKET_NAME: str
+    PRESIGNED_URL_EXPIRY: int = 3600  # 1 hour default
+
     @property
     def database_url(self) -> str:
         """Superuser database connection URL (for migrations, admin tasks)"""

@@ -9,6 +9,7 @@ import { useState, useEffect, Suspense } from 'react'
 import { useSearchParams, useRouter } from 'next/navigation'
 import CampaignManager from './components/CampaignManager'
 import CharacterManager from './components/CharacterManager'
+import { AssetLibraryManager } from '../asset_library'
 import DashboardLayout from './components/DashboardLayout'
 import SocialManager from './components/SocialManager'
 import FriendsWidget from './components/FriendsWidget'
@@ -412,6 +413,13 @@ function DashboardContent() {
       {activeSection === 'characters' && (
         <section className="flex-1 flex flex-col min-h-0">
           <CharacterManager user={user} onExpandedChange={setIsChildExpanded} />
+        </section>
+      )}
+
+      {/* Library Section - Asset Management */}
+      {activeSection === 'library' && (
+        <section className="flex-1 flex flex-col min-h-0">
+          <AssetLibraryManager user={user} />
         </section>
       )}
 

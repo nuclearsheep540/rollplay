@@ -15,6 +15,7 @@ from modules.characters.domain.character_aggregate import CharacterAggregate
 from modules.campaign.orm.campaign_repository import CampaignRepository
 from modules.campaign.model.session_model import SessionJoinedUser
 from modules.session.domain.session_aggregate import SessionEntity, SessionStatus
+from modules.library.repositories.asset_repository import MediaAssetRepository
 from modules.events.event_manager import EventManager
 from modules.session.domain.session_events import SessionEvents
 
@@ -257,12 +258,14 @@ class StartSession:
         session_repository: SessionRepository,
         user_repository: UserRepository,
         campaign_repository: CampaignRepository,
-        event_manager: EventManager
+        event_manager: EventManager,
+        asset_repository: MediaAssetRepository = None
     ):
         self.session_repo = session_repository
         self.user_repo = user_repository
         self.campaign_repo = campaign_repository
         self.event_manager = event_manager
+        self.asset_repo = asset_repository
 
     async def execute(self, session_id: UUID, host_id: UUID) -> SessionEntity:
         """
@@ -324,12 +327,29 @@ class StartSession:
         # Use screen_name if set, otherwise email
         dm_username = host_user.screen_name or host_user.email
 
-        # 6. Build payload for api-game
+        # 6. Fetch campaign assets for the session
+        assets = []
+        if self.asset_repo:
+            campaign_assets = self.asset_repo.get_by_campaign_id(session.campaign_id)
+            assets = [
+                {
+                    "id": str(asset.id),
+                    "filename": asset.filename,
+                    "s3_key": asset.s3_key,
+                    # Convert enum to string for api-game JSON payload
+                    "asset_type": asset.asset_type.value if hasattr(asset.asset_type, 'value') else str(asset.asset_type)
+                }
+                for asset in campaign_assets
+            ]
+            logger.info(f"Found {len(assets)} assets for campaign {session.campaign_id}")
+
+        # 7. Build payload for api-game
         payload = {
             "session_id": str(session.id),
             "dm_username": dm_username,
             "max_players": session.max_players,  # From session aggregate
-            "joined_user_ids": [str(user_id) for user_id in session.joined_users]  # Campaign players
+            "joined_user_ids": [str(user_id) for user_id in session.joined_users],  # Campaign players
+            "assets": assets  # Campaign library assets
         }
 
         # 7. Call api-game (synchronous await)

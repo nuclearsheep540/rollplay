@@ -34,6 +34,7 @@ def configure_mappers():
     from modules.campaign.model.session_model import Session
     from modules.friendship.model.friendship_model import FriendshipModel
     from modules.friendship.model.friend_request_model import FriendRequestModel
+    from modules.library.model.asset_model import MediaAsset
     # Import any other models from other aggregates
 
     # Configure the registry

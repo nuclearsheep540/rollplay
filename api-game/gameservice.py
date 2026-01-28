@@ -21,6 +21,7 @@ class GameSettings(BaseModel):
     moderators: list = []
     dungeon_master: str = ""
     room_host: str = dungeon_master
+    available_assets: list = []  # Asset refs from campaign library (maps, audio, images)
     
     def __init__(self, **data):
         # Lowercase the room_host and any names in seat_layout
