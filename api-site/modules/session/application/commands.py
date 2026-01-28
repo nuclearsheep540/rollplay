@@ -143,8 +143,8 @@ class RemovePlayerFromSession:
         """
         Remove player from session roster.
 
-        Unlocks their character and removes them from joined_users.
-        Only host can remove players.
+        Note: Character locking is at CAMPAIGN level, not session level.
+        Removing from session does NOT unlock the character from the campaign.
         """
         # Get session aggregate
         session = self.session_repo.get_by_id(session_id)
@@ -159,14 +159,7 @@ class RemovePlayerFromSession:
         if not session.has_user(user_id):
             raise ValueError("User is not in session roster")
 
-        # Find and unlock character (if any) locked to this session
-        # User's characters locked to this session
-        user_characters = self.character_repo.get_by_user_id(user_id)
-        for character in user_characters:
-            if character.active_session == session_id:
-                character.unlock_from_session()
-                self.character_repo.save(character)
-                break
+        # Note: Character stays locked to campaign (not session-level unlocking)
 
         # Business logic in aggregate - remove user from joined_users
         session.remove_user(user_id)
@@ -572,12 +565,8 @@ class PauseSession:
             self.session_repo.save(session)
             logger.info(f"✅ Session {session_id} marked INACTIVE in PostgreSQL with max_players={max_players_from_session}")
 
-            # Unlock all characters that were locked to this session
-            locked_characters = self.character_repo.get_by_active_session(session_id)
-            for character in locked_characters:
-                character.unlock_from_session()
-                self.character_repo.save(character)
-            logger.info(f"✅ Unlocked {len(locked_characters)} character(s) from session {session_id}")
+            # Note: Character locking is at CAMPAIGN level, not session level
+            # Characters stay locked to campaign until player leaves campaign or releases character
 
         except Exception as pg_error:
             # PostgreSQL write failed - MongoDB session is PRESERVED
@@ -779,12 +768,8 @@ class FinishSession:
             self.session_repo.save(session)
             logger.info(f"✅ Session {session_id} marked FINISHED in PostgreSQL with max_players={max_players_from_session}")
 
-            # Unlock all characters that were locked to this session
-            locked_characters = self.character_repo.get_by_active_session(session_id)
-            for character in locked_characters:
-                character.unlock_from_session()
-                self.character_repo.save(character)
-            logger.info(f"✅ Unlocked {len(locked_characters)} character(s) from session {session_id}")
+            # Note: Character locking is at CAMPAIGN level, not session level
+            # Characters stay locked to campaign until player leaves campaign or releases character
 
         except Exception as pg_error:
             # PostgreSQL write failed - MongoDB session is PRESERVED
@@ -849,7 +834,12 @@ class FinishSession:
 
 
 class SelectCharacterForSession:
-    """User selects a character for a joined session"""
+    """
+    DEPRECATED: Character selection is now at CAMPAIGN level.
+
+    Use SelectCharacterForCampaign command in campaign module instead.
+    This command now just updates the session roster display without locking.
+    """
 
     def __init__(
         self,
@@ -866,12 +856,10 @@ class SelectCharacterForSession:
         character_id: UUID
     ) -> CharacterAggregate:
         """
-        Select character for a session.
+        DEPRECATED: Use campaign-level character selection instead.
 
-        Business rules:
-        - User must be in joined_users (session roster)
-        - Character must be owned by user
-        - Character must not be locked to another session
+        This now only updates session roster display - no locking.
+        Character must already be locked to the campaign.
         """
         # Get session
         session = self.session_repo.get_by_id(session_id)
@@ -891,15 +879,15 @@ class SelectCharacterForSession:
         if not character.is_owned_by(user_id):
             raise ValueError("Character not owned by user")
 
-        # Verify character not locked to another session
-        if character.is_locked():
-            raise ValueError(f"Character already locked to session {character.active_session}")
+        # Character must be locked to the campaign (not session)
+        # This is a temporary compatibility layer - frontend should use campaign endpoint
+        if not character.is_locked():
+            raise ValueError("Character must be selected for the campaign first. Use campaign character selection.")
 
-        # Lock character to session
-        character.lock_to_session(session_id)
-        self.character_repo.save(character)
+        if character.active_campaign != session.campaign_id:
+            raise ValueError("Character is locked to a different campaign")
 
-        # Update session_joined_users.selected_character_id for roster display
+        # Update session_joined_users.selected_character_id for roster display only
         db_session = self.session_repo.db
         db_session.execute(
             update(SessionJoinedUser)
@@ -913,7 +901,15 @@ class SelectCharacterForSession:
 
 
 class ChangeCharacterForSession:
-    """User changes their character for a session (between play sessions)"""
+    """
+    DEPRECATED: Character changes are now at CAMPAIGN level.
+
+    To change character:
+    1. Release character from campaign (ReleaseCharacterFromCampaign) - only when no active session
+    2. Select new character for campaign (SelectCharacterForCampaign)
+
+    This command is kept for backwards compatibility but will raise an error.
+    """
 
     def __init__(
         self,
@@ -931,74 +927,30 @@ class ChangeCharacterForSession:
         new_character_id: UUID
     ) -> CharacterAggregate:
         """
-        Change character for a session.
+        DEPRECATED: Character changes are now at CAMPAIGN level.
 
-        Business rules:
-        - User must be in joined_users (session roster)
-        - Old character must be owned by user and locked to this session
-        - New character must be owned by user and not locked
-        - Old character must NOT be in active game (check via is_alive or other means)
+        To change your character:
+        1. Release your current character from the campaign (when no active session)
+        2. Select a new character for the campaign
+
+        This maintains the domain rule that characters can only be in one campaign at a time.
         """
-        # Get session
-        session = self.session_repo.get_by_id(session_id)
-        if not session:
-            raise ValueError(f"Session {session_id} not found")
-
-        # Verify user is in session roster
-        if not session.has_user(user_id):
-            raise ValueError("User has not joined this session")
-
-        # Get old character
-        old_character = self.character_repo.get_by_id(old_character_id)
-        if not old_character:
-            raise ValueError(f"Old character {old_character_id} not found")
-
-        # Verify old character ownership and lock
-        if not old_character.is_owned_by(user_id):
-            raise ValueError("Old character not owned by user")
-
-        if old_character.active_session != session_id:
-            raise ValueError("Old character not locked to this session")
-
-        # TODO: Verify old character not in active game (would need MongoDB check)
-        # For now, we'll trust the frontend to enforce this rule
-
-        # Get new character
-        new_character = self.character_repo.get_by_id(new_character_id)
-        if not new_character:
-            raise ValueError(f"New character {new_character_id} not found")
-
-        # Verify new character ownership
-        if not new_character.is_owned_by(user_id):
-            raise ValueError("New character not owned by user")
-
-        # Verify new character not locked
-        if new_character.is_locked():
-            raise ValueError(f"New character already locked to session {new_character.active_session}")
-
-        # Unlock old character
-        old_character.unlock_from_session()
-        self.character_repo.save(old_character)
-
-        # Lock new character
-        new_character.lock_to_session(session_id)
-        self.character_repo.save(new_character)
-
-        # Update session_joined_users.selected_character_id for roster display
-        db_session = self.session_repo.db
-        db_session.execute(
-            update(SessionJoinedUser)
-            .where(SessionJoinedUser.session_id == session_id)
-            .where(SessionJoinedUser.user_id == user_id)
-            .values(selected_character_id=new_character_id)
+        raise ValueError(
+            "Character changes are now at campaign level. "
+            "Release your current character from the campaign first (when no active session), "
+            "then select a new character for the campaign."
         )
-        db_session.commit()
-
-        return new_character
 
 
 class ChangeCharacterDuringGame:
-    """User changes their character during an active game"""
+    """
+    DEPRECATED: Character changes during active game are no longer supported.
+
+    Characters are locked to campaigns, not sessions. To change character:
+    1. Wait for session to end/pause
+    2. Release character from campaign (ReleaseCharacterFromCampaign)
+    3. Select new character for campaign (SelectCharacterForCampaign)
+    """
 
     def __init__(
         self,
@@ -1017,99 +969,17 @@ class ChangeCharacterDuringGame:
         new_character_id: UUID
     ) -> CharacterAggregate:
         """
-        Change character during an active game.
+        DEPRECATED: Character changes during active game are no longer supported.
 
-        Business rules:
-        - Session must be ACTIVE
-        - User must be in joined_users (session roster)
-        - New character must be owned by user
-        - New character must not be locked to another session (can be locked to this session or free)
-
-        Note: Old character stays locked (accumulating locks approach).
-        All locked characters are unlocked at session pause/finish via PauseSession/FinishSession command.
+        Characters are now locked at campaign level. You cannot change your character
+        while a session is active. Wait for the session to end, then release and
+        reselect your character at the campaign level.
         """
-        # Get session
-        session = self.session_repo.get_by_id(session_id)
-        if not session:
-            raise ValueError(f"Session {session_id} not found")
-
-        # Verify session is ACTIVE
-        if session.status != SessionStatus.ACTIVE:
-            raise ValueError("Can only change character during active game")
-
-        # Verify user is in session roster
-        if not session.has_user(user_id):
-            raise ValueError("User has not joined this session")
-
-        # Get user for player name
-        user = self.user_repo.get_by_id(user_id)
-        if not user:
-            raise ValueError(f"User {user_id} not found")
-
-        player_name = user.screen_name or user.email
-
-        # Get new character
-        new_character = self.character_repo.get_by_id(new_character_id)
-        if not new_character:
-            raise ValueError(f"Character {new_character_id} not found")
-
-        # Verify new character ownership
-        if not new_character.is_owned_by(user_id):
-            raise ValueError("Character not owned by user")
-
-        # Verify new character is not locked to a different session
-        if new_character.is_locked() and new_character.active_session != session_id:
-            raise ValueError(f"Character already locked to another session {new_character.active_session}")
-
-        # Lock new character to session (if not already locked to this session)
-        if not new_character.is_locked():
-            new_character.lock_to_session(session_id)
-            self.character_repo.save(new_character)
-
-        # Update session_joined_users.selected_character_id for roster display
-        db_session = self.session_repo.db
-        db_session.execute(
-            update(SessionJoinedUser)
-            .where(SessionJoinedUser.session_id == session_id)
-            .where(SessionJoinedUser.user_id == user_id)
-            .values(selected_character_id=new_character_id)
+        raise ValueError(
+            "Character changes during active game are no longer supported. "
+            "Wait for the session to end, then release your character from the campaign "
+            "and select a new one."
         )
-        db_session.commit()
-
-        # Call api-game to update MongoDB seat with new character data
-        character_data = {
-            "player_name": player_name,
-            "user_id": str(user_id),
-            "character_id": str(new_character.id),
-            "character_name": new_character.character_name,
-            "character_class": new_character.character_class,
-            "character_race": new_character.character_race,
-            "level": new_character.level,
-            "hp_current": new_character.hp_current,
-            "hp_max": new_character.hp_max,
-            "ac": new_character.ac
-        }
-
-        try:
-            async with httpx.AsyncClient() as client:
-                response = await client.put(
-                    f"http://api-game:8081/game/{session.active_game_id}/player/character",
-                    json=character_data,
-                    timeout=10.0
-                )
-
-            if response.status_code != 200:
-                logger.error(f"api-game character update failed: {response.text}")
-                # PostgreSQL is already updated, log the desync but don't rollback
-                # The player can re-enter the game to resync
-                logger.warning(f"MongoDB desync for player {player_name} in game {session.active_game_id}")
-
-        except httpx.RequestError as e:
-            logger.error(f"Network error updating character in api-game: {e}")
-            # Same - don't rollback PostgreSQL, just log
-
-        logger.info(f"Character changed to {new_character.character_name} for user {user_id} in session {session_id}")
-        return new_character
 
 
 class DisconnectFromGame:
@@ -1138,7 +1008,7 @@ class DisconnectFromGame:
         Business rules:
         - Session must be ACTIVE
         - Character must be owned by user
-        - Character must be locked to this session
+        - Character must be locked to the session's campaign
 
         character_state structure:
         {
@@ -1166,9 +1036,9 @@ class DisconnectFromGame:
         if not character.is_owned_by(user_id):
             raise ValueError("Character not owned by user")
 
-        # Verify character is locked to this session
-        if character.active_session != session_id:
-            raise ValueError("Character not locked to this session")
+        # Verify character is locked to this session's campaign
+        if character.active_campaign != session.campaign_id:
+            raise ValueError("Character not locked to this campaign")
 
         # Update character state from MongoDB
         if "current_hp" in character_state:

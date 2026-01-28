@@ -47,7 +47,7 @@ class CharacterRepository:
             created_at=model.created_at,
             updated_at=model.updated_at,
             is_deleted=model.is_deleted,
-            active_game=model.active_session,
+            active_campaign=model.active_campaign,
             hp_current=model.hp_current,
             hp_max=model.hp_max,
             ac=model.ac,
@@ -108,7 +108,7 @@ class CharacterRepository:
             character_model.stats = aggregate.ability_scores.to_dict()
             character_model.is_deleted = aggregate.is_deleted
             character_model.updated_at = aggregate.updated_at
-            character_model.active_session = aggregate.active_game
+            character_model.active_campaign = aggregate.active_campaign
             character_model.hp_max = aggregate.hp_max
             character_model.hp_current = aggregate.hp_current
             character_model.ac = aggregate.ac
@@ -128,7 +128,7 @@ class CharacterRepository:
                 is_deleted=aggregate.is_deleted,
                 created_at=aggregate.created_at,
                 updated_at=aggregate.updated_at,
-                active_session=aggregate.active_game,
+                active_campaign=aggregate.active_campaign,
                 hp_max=aggregate.hp_max,
                 hp_current=aggregate.hp_current,
                 ac=aggregate.ac,
@@ -161,7 +161,7 @@ class CharacterRepository:
         character = self._model_to_aggregate(character_model)
 
         if not character.can_be_deleted():
-            raise ValueError("Cannot delete character - it may be in an active game")
+            raise ValueError("Cannot delete character - it is locked to an active campaign")
 
         # Soft delete
         character.soft_delete()
@@ -169,16 +169,33 @@ class CharacterRepository:
         self.db.commit()
         return True
 
-    def get_by_active_session(self, session_id: UUID) -> List[CharacterAggregate]:
+    def get_by_active_campaign(self, campaign_id: UUID) -> List[CharacterAggregate]:
         """
-        Get all characters locked to a specific session.
+        Get all characters locked to a specific campaign.
 
-        Used when unlocking characters after a session ends.
+        Used when unlocking characters after players leave campaign.
         """
         models = (
             self.db.query(CharacterModel)
-            .filter(CharacterModel.active_session == session_id)
+            .filter(CharacterModel.active_campaign == campaign_id)
             .all()
         )
         return [self._model_to_aggregate(model) for model in models]
+
+    def get_user_character_for_campaign(self, user_id: UUID, campaign_id: UUID) -> Optional[CharacterAggregate]:
+        """
+        Get the character a user has locked to a specific campaign.
+
+        Returns None if user has no character locked to this campaign.
+        """
+        model = (
+            self.db.query(CharacterModel)
+            .filter(
+                CharacterModel.user_id == user_id,
+                CharacterModel.active_campaign == campaign_id,
+                CharacterModel.is_deleted == False
+            )
+            .first()
+        )
+        return self._model_to_aggregate(model) if model else None
 

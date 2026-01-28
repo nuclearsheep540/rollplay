@@ -69,7 +69,7 @@ class GetCampaignMembers:
         Logic:
         1. Fetch campaign (get host_id + player_ids)
         2. For each member: LEFT JOIN User LEFT JOIN Character
-        3. Character priority: available (no active_game) or most recent
+        3. Character priority: available (no active_campaign) or most recent
         4. Format multi-class as "Fighter / Ranger"
         5. Sort: host first, then alphabetically
         """
@@ -102,7 +102,7 @@ class GetCampaignMembers:
                     )
                 )
                 .order_by(
-                    Character.active_session.is_(None).desc(),
+                    Character.active_campaign.is_(None).desc(),
                     Character.created_at.desc()
                 )
                 .first()

@@ -8,16 +8,22 @@
 import { useState } from 'react'
 import { THEME } from '@/app/styles/colorTheme'
 import { Button } from './shared/Button'
+import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
+import { faPlus } from '@fortawesome/free-solid-svg-icons'
 
-export default function CharacterSelectionModal({ game, characters, onClose, onCharacterSelected, currentCharacterId = null, isActiveSession = false }) {
+export default function CharacterSelectionModal({ campaign, characters, onClose, onCharacterSelected, onCreateCharacter = null, currentCharacterId = null }) {
   const [selectedCharacterId, setSelectedCharacterId] = useState(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState(null)
 
-  // Filter out the currently selected character if swapping
-  const availableCharacters = currentCharacterId
-    ? characters.filter(char => char.id !== currentCharacterId)
-    : characters
+  // Filter out the currently selected character if swapping, and characters locked to OTHER campaigns
+  const availableCharacters = characters.filter(char => {
+    // Exclude current character if swapping
+    if (currentCharacterId && char.id === currentCharacterId) return false
+    // Exclude characters locked to a different campaign
+    if (char.active_campaign && char.active_campaign !== campaign.id) return false
+    return true
+  })
 
   const handleSelectCharacter = async () => {
     if (!selectedCharacterId) {
@@ -29,16 +35,14 @@ export default function CharacterSelectionModal({ game, characters, onClose, onC
       setLoading(true)
       setError(null)
 
-      // Use different endpoint for active session character change
-      const endpoint = isActiveSession
-        ? `/api/games/${game.id}/change-character-active?new_character_id=${selectedCharacterId}`
-        : `/api/games/${game.id}/select-character?character_id=${selectedCharacterId}`
-
-      const method = isActiveSession ? 'PUT' : 'POST'
-
-      const response = await fetch(endpoint, {
-        method,
-        credentials: 'include'
+      // Campaign-level character selection endpoint
+      const response = await fetch(`/api/campaigns/${campaign.id}/select-character`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        credentials: 'include',
+        body: JSON.stringify({ character_id: selectedCharacterId })
       })
 
       if (!response.ok) {
@@ -63,7 +67,7 @@ export default function CharacterSelectionModal({ game, characters, onClose, onC
           <div>
             <h2 className="text-2xl font-bold font-[family-name:var(--font-metamorphous)]" style={{color: THEME.textOnDark}}>Select Character</h2>
             <p className="text-sm mt-1" style={{color: THEME.textSecondary}}>
-              Choose a character for <span className="font-semibold">{game.name}</span>
+              Choose a character for <span className="font-semibold">{campaign.title}</span>
             </p>
           </div>
           <button
@@ -89,17 +93,28 @@ export default function CharacterSelectionModal({ game, characters, onClose, onC
           {availableCharacters.length === 0 ? (
             <div className="text-center py-8">
               <p className="mb-4" style={{color: THEME.textOnDark}}>You don't have any available characters.</p>
-              <p className="text-sm" style={{color: THEME.textSecondary}}>
-                Create a new character or free up an existing one by leaving another game.
+              <p className="text-sm mb-6" style={{color: THEME.textSecondary}}>
+                Create a new character or free up an existing one by leaving another campaign.
               </p>
+              {onCreateCharacter && (
+                <button
+                  onClick={onCreateCharacter}
+                  className="w-full py-8 rounded-sm border-2 border-dashed transition-all hover:opacity-80 flex items-center justify-center gap-2"
+                  style={{
+                    backgroundColor: 'transparent',
+                    color: THEME.textSecondary,
+                    borderColor: THEME.borderDefault
+                  }}
+                >
+                  <FontAwesomeIcon icon={faPlus} />
+                  Create New Character
+                </button>
+              )}
             </div>
           ) : (
             <>
               <p className="text-sm mb-4" style={{color: THEME.textOnDark}}>
-                {isActiveSession
-                  ? 'Select a new character to use in this active session.'
-                  : 'Select a character to lock to this game. Once selected, this character cannot be used in other games until you leave.'
-                }
+                Select a character to use in this campaign. Once selected, this character cannot be used in other campaigns until you release it or leave.
               </p>
 
               <div className="space-y-3">
@@ -146,6 +161,22 @@ export default function CharacterSelectionModal({ game, characters, onClose, onC
                   </div>
                 ))}
               </div>
+
+              {/* Create New Character button */}
+              {onCreateCharacter && (
+                <button
+                  onClick={onCreateCharacter}
+                  className="w-full mt-4 py-8 rounded-sm border-2 border-dashed transition-all hover:opacity-80 flex items-center justify-center gap-2"
+                  style={{
+                    backgroundColor: 'transparent',
+                    color: THEME.textSecondary,
+                    borderColor: THEME.borderDefault
+                  }}
+                >
+                  <FontAwesomeIcon icon={faPlus} />
+                  Create New Character
+                </button>
+              )}
             </>
           )}
         </div>

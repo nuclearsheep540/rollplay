@@ -3,10 +3,10 @@ import { getSeatColor } from '../../utils/seatColors'
 import ColorPicker from './ColorPicker'
 
 export default function PlayerCard({
-    seatId, 
+    seatId,
     seats,
-    thisPlayer, 
-    isSitting, 
+    thisPlayer,
+    isSitting,
     sendSeatChange,
     unlockAudio = null,
     currentTurn = null,
@@ -14,7 +14,8 @@ export default function PlayerCard({
     playerData = null,
     onColorChange = null,
     currentColor = null,
-    isDM = false // New prop to check if current player is DM
+    isDM = false, // New prop to check if current player is DM
+    isSpectator = false // Spectators cannot take seats
   }) {
   
   
@@ -30,9 +31,9 @@ export default function PlayerCard({
     
     // Check if player is already sitting somewhere
     const playerAlreadySeated = seats.some(seat => seat.playerName === thisPlayer);
-    
-    // Check if player can sit (not already seated AND not DM)
-    const canSitDown = !playerAlreadySeated && !isDM;
+
+    // Check if player can sit (not already seated AND not DM AND not spectator)
+    const canSitDown = !playerAlreadySeated && !isDM && !isSpectator;
 
     // Get the actual seat color from CSS custom property
     const getActualSeatColor = (seatIndex) => {
@@ -138,14 +139,16 @@ export default function PlayerCard({
           `}
           onClick={canSitDown ? sitSeat : null}
         >
-          <div 
+          <div
             className="text-emerald-400 font-medium text-[calc(12px*var(--ui-scale))]"
           >
-            {isDM 
+            {isDM
               ? `🪑 Seat ${seatId + 1} - DM uses DM Chair`
-              : playerAlreadySeated 
-                ? `🪑 Seat ${seatId + 1} - Leave current seat first`
-                : `🪑 Seat ${seatId + 1} - Click to Join`
+              : isSpectator
+                ? `🪑 Seat ${seatId + 1} - Select character to join`
+                : playerAlreadySeated
+                  ? `🪑 Seat ${seatId + 1} - Leave current seat first`
+                  : `🪑 Seat ${seatId + 1} - Click to Join`
             }
           </div>
         </div>

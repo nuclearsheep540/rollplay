@@ -233,7 +233,7 @@ def create_character(character_repo: CharacterRepository):
         )
 
         character = CharacterAggregate.create(
-            active_game=None,  # New characters start unlocked
+            active_campaign=None,  # New characters start unlocked
             user_id=user_id,
             character_name=name,
             character_class=character_class,

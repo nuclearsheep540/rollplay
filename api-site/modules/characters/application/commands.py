@@ -44,7 +44,7 @@ class CreateCharacter:
             level=level,
             ability_scores=ability_scores,
             origin_ability_bonuses=origin_ability_bonuses,  # D&D 2024
-            active_game=None,
+            active_campaign=None,
             hp_max=hp_max,
             hp_current=hp_current,
             ac=ac
@@ -186,7 +186,7 @@ class CloneCharacter:
             level=source_character.level,
             ability_scores=cloned_ability_scores,
             origin_ability_bonuses=cloned_origin_bonuses,
-            active_game=None,  # New character not in any game
+            active_campaign=None,  # New character not in any game
             hp_max=source_character.hp_max,
             hp_current=source_character.hp_max,  # Reset to max HP
             ac=source_character.ac

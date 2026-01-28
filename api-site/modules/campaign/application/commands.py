@@ -10,6 +10,7 @@ from modules.campaign.domain.campaign_aggregate import CampaignAggregate
 from modules.campaign.domain.campaign_events import CampaignEvents
 from modules.events.event_manager import EventManager
 from modules.user.orm.user_repository import UserRepository
+from modules.characters.orm.character_repository import CharacterRepository
 
 logger = logging.getLogger(__name__)
 
@@ -303,10 +304,11 @@ class DeclineCampaignInvite:
 
 
 class LeaveCampaign:
-    def __init__(self, repository, user_repo: UserRepository, event_manager: EventManager):
+    def __init__(self, repository, user_repo: UserRepository, event_manager: EventManager, character_repo: CharacterRepository = None):
         self.repository = repository
         self.user_repo = user_repo
         self.event_manager = event_manager
+        self.character_repo = character_repo
 
     async def execute(self, campaign_id: UUID, player_id: UUID) -> CampaignAggregate:
         """Player voluntarily leaves a campaign they've joined"""
@@ -324,6 +326,14 @@ class LeaveCampaign:
 
         # Get player details for notification before removing
         player = self.user_repo.get_by_id(player_id)
+
+        # Unlock player's character from this campaign (if they have one selected)
+        if self.character_repo:
+            character = self.character_repo.get_user_character_for_campaign(player_id, campaign_id)
+            if character:
+                character.unlock_from_campaign()
+                self.character_repo.save(character)
+                logger.info(f"Unlocked character {character.id} from campaign {campaign_id} (player leaving)")
 
         # Business logic in aggregate - removes from player_ids
         campaign.remove_player(player_id)
@@ -411,4 +421,114 @@ class CancelCampaignInvite:
         )
 
         return campaign
+
+
+class SelectCharacterForCampaign:
+    """
+    Select a character to use in a campaign. Locks character to campaign.
+
+    Domain Rule: A character can only be active in one campaign at a time.
+    """
+
+    def __init__(self, campaign_repo, character_repo: CharacterRepository):
+        self.campaign_repo = campaign_repo
+        self.character_repo = character_repo
+
+    def execute(self, campaign_id: UUID, user_id: UUID, character_id: UUID):
+        """
+        Select a character for use in this campaign.
+
+        Validates:
+        - User is a member of the campaign
+        - Character is owned by the user
+        - Character is not locked to another campaign
+
+        On success, locks the character to this campaign.
+        """
+        # Get campaign
+        campaign = self.campaign_repo.get_by_id(campaign_id)
+        if not campaign:
+            raise ValueError(f"Campaign {campaign_id} not found")
+
+        # Business rule: User must be a member of the campaign
+        if not campaign.is_member(user_id):
+            raise ValueError("You are not a member of this campaign")
+
+        # Get character
+        character = self.character_repo.get_by_id(character_id)
+        if not character:
+            raise ValueError(f"Character {character_id} not found")
+
+        # Business rule: Character must be owned by the user
+        if not character.is_owned_by(user_id):
+            raise ValueError("You do not own this character")
+
+        # Business rule: Character must not be locked to another campaign
+        if character.is_locked() and character.active_campaign != campaign_id:
+            raise ValueError(f"Character is already locked to another campaign")
+
+        # If already locked to THIS campaign, nothing to do
+        if character.active_campaign == campaign_id:
+            return character
+
+        # Lock character to campaign
+        character.lock_to_campaign(campaign_id)
+        self.character_repo.save(character)
+
+        logger.info(f"Character {character_id} locked to campaign {campaign_id} by user {user_id}")
+        return character
+
+
+class ReleaseCharacterFromCampaign:
+    """
+    Release character from campaign without leaving the campaign.
+
+    Domain Rule: Only allowed when no active session exists in the campaign.
+    Player stays as campaign member but can now use their character elsewhere.
+    """
+
+    def __init__(self, campaign_repo, character_repo: CharacterRepository, session_repo=None):
+        self.campaign_repo = campaign_repo
+        self.character_repo = character_repo
+        self.session_repo = session_repo
+
+    def execute(self, campaign_id: UUID, user_id: UUID):
+        """
+        Release the user's character from this campaign.
+
+        Validates:
+        - User is a member of the campaign
+        - User has a character selected for this campaign
+        - No active session exists in the campaign
+
+        On success, unlocks the character from this campaign.
+        """
+        # Get campaign
+        campaign = self.campaign_repo.get_by_id(campaign_id)
+        if not campaign:
+            raise ValueError(f"Campaign {campaign_id} not found")
+
+        # Business rule: User must be a member of the campaign
+        if not campaign.is_member(user_id):
+            raise ValueError("You are not a member of this campaign")
+
+        # Business rule: No active sessions
+        if self.session_repo:
+            from modules.session.domain.session_aggregate import SessionStatus
+            for session_id in campaign.session_ids:
+                session = self.session_repo.get_by_id(session_id)
+                if session and session.status == SessionStatus.ACTIVE:
+                    raise ValueError("Cannot release character while a session is active")
+
+        # Get user's character for this campaign
+        character = self.character_repo.get_user_character_for_campaign(user_id, campaign_id)
+        if not character:
+            raise ValueError("You don't have a character selected for this campaign")
+
+        # Unlock character
+        character.unlock_from_campaign()
+        self.character_repo.save(character)
+
+        logger.info(f"Character {character.id} released from campaign {campaign_id} by user {user_id}")
+        return character
 

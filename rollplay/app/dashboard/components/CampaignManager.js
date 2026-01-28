@@ -13,6 +13,7 @@ import FinishSessionModal from './FinishSessionModal'
 import DeleteCampaignModal from './DeleteCampaignModal'
 import DeleteSessionModal from './DeleteSessionModal'
 import CampaignInviteModal from './CampaignInviteModal'
+import CharacterSelectionModal from './CharacterSelectionModal'
 import InviteButton from '../../shared/components/InviteButton'
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
 import {
@@ -44,6 +45,10 @@ export default function CampaignManager({ user, refreshTrigger, onCampaignUpdate
   const [loadingInvitedMembers, setLoadingInvitedMembers] = useState(false)
   const [allSessions, setAllSessions] = useState([]) // Store all sessions from all campaigns
   const [isResizing, setIsResizing] = useState(false) // Track window resize state
+  const [characters, setCharacters] = useState([]) // User's characters for selection
+  const [showCharacterModal, setShowCharacterModal] = useState(false)
+  const [characterModalCampaign, setCharacterModalCampaign] = useState(null)
+  const [releasingCharacter, setReleasingCharacter] = useState(null) // Track campaign ID when releasing
 
   // Action state tracking (not modals, but ongoing operations)
   const [startingGame, setStartingGame] = useState(null) // Track game currently being started
@@ -736,9 +741,67 @@ export default function CampaignManager({ user, refreshTrigger, onCampaignUpdate
     }
   }
 
+  // Fetch user's characters for selection
+  const fetchCharacters = async () => {
+    try {
+      const response = await fetch('/api/characters/', { credentials: 'include' })
+      if (response.ok) {
+        const charactersData = await response.json()
+        setCharacters(charactersData || [])
+      }
+    } catch (error) {
+      console.error('Error fetching characters:', error)
+    }
+  }
+
+  // Handle character selection for a campaign
+  const handleSelectCharacter = (campaign) => {
+    setCharacterModalCampaign(campaign)
+    setShowCharacterModal(true)
+  }
+
+  // Handle character selection success
+  const handleCharacterSelected = async () => {
+    setShowCharacterModal(false)
+    setCharacterModalCampaign(null)
+    // Refresh both campaigns (to update member list) and characters
+    await Promise.all([fetchCampaigns(), fetchCharacters()])
+  }
+
+  // Handle releasing character from campaign
+  const handleReleaseCharacter = async (campaign) => {
+    try {
+      setReleasingCharacter(campaign.id)
+
+      const response = await fetch(`/api/campaigns/${campaign.id}/my-character`, {
+        method: 'DELETE',
+        credentials: 'include'
+      })
+
+      if (!response.ok) {
+        const errorData = await response.json()
+        throw new Error(errorData.detail || 'Failed to release character')
+      }
+
+      // Refresh data
+      await Promise.all([fetchCampaigns(), fetchCharacters()])
+    } catch (err) {
+      console.error('Error releasing character:', err)
+      setError(err.message)
+    } finally {
+      setReleasingCharacter(null)
+    }
+  }
+
+  // Check if campaign has an active session (used to disable release button)
+  const hasActiveSession = (campaignId) => {
+    return allSessions.some(s => s.campaign_id === campaignId && (s.status === 'active' || s.status === 'starting' || s.status === 'paused'))
+  }
+
   useEffect(() => {
     // Only show loading on initial fetch (refreshTrigger = 0)
     fetchCampaigns(refreshTrigger === 0)
+    fetchCharacters()
   }, [refreshTrigger])
 
   // Handle invite_campaign_id from URL (notification click)
@@ -1768,35 +1831,69 @@ export default function CampaignManager({ user, refreshTrigger, onCampaignUpdate
                                     </button>
                                   )}
 
-                                  {/* Username with host badge */}
+                                  {/* Username */}
                                   <div className="flex items-center gap-2 mb-1">
                                     <p className="font-medium" style={{color: THEME.textOnDark}}>
                                       {member.username}
                                     </p>
-                                    {member.is_host && (
-                                      <span
-                                        className="text-xs px-2 py-0.5 rounded-sm font-semibold"
-                                        style={{
-                                          backgroundColor: '#854d0e',
-                                          color: '#fef3c7',
-                                          borderColor: '#fbbf24',
-                                          border: '1px solid'
-                                        }}
-                                      >
-                                        DM
-                                      </span>
-                                    )}
                                   </div>
 
                                   {/* Character info */}
                                   {member.character_id ? (
-                                    <p className="text-sm" style={{color: THEME.textAccent}}>
-                                      {member.character_name} - Level {member.character_level} {member.character_race} {member.character_class}
-                                    </p>
+                                    <div>
+                                      <p className="text-sm" style={{color: THEME.textAccent}}>
+                                        {member.character_name} - Level {member.character_level} {member.character_race} {member.character_class}
+                                      </p>
+                                      {/* Release button - only for current user */}
+                                      {member.user_id === user.id && !member.is_host && (
+                                        <button
+                                          onClick={() => handleReleaseCharacter(campaign)}
+                                          disabled={releasingCharacter === campaign.id || hasActiveSession(campaign.id)}
+                                          className="mt-2 text-xs px-2 py-1 rounded-sm border transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                                          style={{
+                                            backgroundColor: 'transparent',
+                                            color: '#f59e0b',
+                                            borderColor: '#f59e0b'
+                                          }}
+                                          title={hasActiveSession(campaign.id) ? 'Cannot release while session is active' : 'Release character from campaign'}
+                                        >
+                                          {releasingCharacter === campaign.id ? 'Releasing...' : 'Release Character'}
+                                        </button>
+                                      )}
+                                    </div>
                                   ) : (
-                                    <p className="text-sm italic" style={{color: THEME.textSecondary}}>
-                                      No character selected
-                                    </p>
+                                    <div>
+                                      {member.is_host ? (
+                                        // Host/DM doesn't need a character - show Dungeon Master pill
+                                        <span
+                                          className="text-sm px-2 py-1 rounded-sm font-semibold"
+                                          style={{
+                                            backgroundColor: '#854d0e',
+                                            color: '#fef3c7',
+                                            borderColor: '#fbbf24',
+                                            border: '1px solid'
+                                          }}
+                                        >
+                                          Dungeon Master
+                                        </span>
+                                      ) : member.user_id === user.id ? (
+                                        <button
+                                          onClick={() => handleSelectCharacter(campaign)}
+                                          className="text-sm px-2 py-1 rounded-sm border transition-all hover:opacity-80 font-semibold"
+                                          style={{
+                                            backgroundColor: THEME.textOnDark,
+                                            color: THEME.textPrimary,
+                                            borderColor: THEME.textOnDark
+                                          }}
+                                        >
+                                          Select Character
+                                        </button>
+                                      ) : (
+                                        <p className="text-sm italic" style={{color: THEME.textSecondary}}>
+                                          No character selected
+                                        </p>
+                                      )}
+                                    </div>
                                   )}
                                 </div>
                               ))}
@@ -2199,6 +2296,24 @@ export default function CampaignManager({ user, refreshTrigger, onCampaignUpdate
           campaign={modals.campaignInvite.campaign}
           onClose={() => closeModal('campaignInvite')}
           onInviteSuccess={handleCampaignInviteSuccess}
+        />
+      )}
+
+      {/* Character Selection Modal */}
+      {showCharacterModal && characterModalCampaign && (
+        <CharacterSelectionModal
+          campaign={characterModalCampaign}
+          characters={characters}
+          onClose={() => {
+            setShowCharacterModal(false)
+            setCharacterModalCampaign(null)
+          }}
+          onCharacterSelected={handleCharacterSelected}
+          onCreateCharacter={() => {
+            setShowCharacterModal(false)
+            setCharacterModalCampaign(null)
+            router.push('/character/create')
+          }}
         />
       )}
 

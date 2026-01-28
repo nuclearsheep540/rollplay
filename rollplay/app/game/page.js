@@ -103,6 +103,10 @@ function GameContent() {
 
   // Campaign ID for direct api-site calls (asset library)
   const [campaignId, setCampaignId] = useState(null);
+
+  // Spectator mode - user has no character selected for this campaign
+  const [isSpectator, setIsSpectator] = useState(false);
+  const [spectatorCharacterName, setSpectatorCharacterName] = useState(null); // For display if they have a char selected
   
   // Debug wrapper for setGridConfig
   const debugSetGridConfig = (config) => {
@@ -377,6 +381,46 @@ function GameContent() {
       checkPlayerRoles(roomId, currentUser);
     }
   }, [currentUser, userLoading])
+
+  // Check spectator status when campaign ID is available
+  // DMs are never spectators even without a character
+  useEffect(() => {
+    const checkSpectatorStatus = async () => {
+      if (!campaignId || !currentUser) return;
+
+      // DM is never a spectator
+      if (isDM) {
+        setIsSpectator(false);
+        setSpectatorCharacterName(null);
+        console.log('✅ User is DM - not a spectator');
+        return;
+      }
+
+      try {
+        // Fetch user's characters
+        const response = await fetch('/api/characters/', { credentials: 'include' });
+        if (!response.ok) return;
+
+        const characters = await response.json();
+        // Check if any character is locked to this campaign
+        const selectedChar = characters.find(char => char.active_campaign === campaignId);
+
+        if (selectedChar) {
+          setIsSpectator(false);
+          setSpectatorCharacterName(selectedChar.character_name);
+          console.log(`✅ Character found for campaign: ${selectedChar.character_name}`);
+        } else {
+          setIsSpectator(true);
+          setSpectatorCharacterName(null);
+          console.log('👁️ No character selected - entering as spectator');
+        }
+      } catch (error) {
+        console.error('Error checking spectator status:', error);
+      }
+    };
+
+    checkSpectatorStatus();
+  }, [campaignId, currentUser, isDM]);
 
   // Cleanup audio when component unmounts (user navigates away from game page)
   useEffect(() => {
@@ -1275,6 +1319,44 @@ function GameContent() {
         </div>
       </div>
 
+      {/* Spectator Banner */}
+      {isSpectator && (
+        <div className="spectator-banner" style={{
+          backgroundColor: '#1e293b',
+          borderBottom: '2px solid #f59e0b',
+          padding: '12px 24px',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          gap: '16px'
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+            <span style={{ fontSize: '20px' }}>👁️</span>
+            <div>
+              <p style={{ color: '#f59e0b', fontWeight: '600', margin: 0 }}>Spectator Mode</p>
+              <p style={{ color: '#94a3b8', fontSize: '14px', margin: 0 }}>
+                You're watching this session. Select a character in your campaign to participate.
+              </p>
+            </div>
+          </div>
+          <button
+            onClick={() => router.push('/dashboard')}
+            style={{
+              backgroundColor: '#f59e0b',
+              color: '#1e293b',
+              padding: '8px 16px',
+              borderRadius: '6px',
+              fontWeight: '600',
+              fontSize: '14px',
+              border: 'none',
+              cursor: 'pointer'
+            }}
+          >
+            Go to Campaigns
+          </button>
+        </div>
+      )}
+
       {/* Main Game Area */}
       <div className="main-game-area">
         {/* GRID POSITION 1: Left Column - party-sidebar with adventure log */}
@@ -1328,6 +1410,7 @@ function GameContent() {
                 onColorChange={handlePlayerColorChange}
                 currentColor={currentColor}
                 isDM={isDM}
+                isSpectator={isSpectator}
               />
             );
           })}
@@ -1427,18 +1510,25 @@ function GameContent() {
 
       </div>
 
-      {/* UPDATED: DiceActionPanel with multiple prompts support */}
-      <DiceActionPanel
-        currentTurn={currentTurn}
-        thisPlayer={getCurrentPlayerName()}
-        currentUser={currentUser}
-        combatActive={combatActive}
-        onRollDice={handlePlayerDiceRoll}
-        onEndTurn={handleEndTurn}
-        uiScale={uiScale}
-        activePrompts={activePrompts}            // UPDATED: Pass active prompts array
-        isDicePromptActive={isDicePromptActive}
-      />
+      {/* DiceActionPanel - only show if user is sitting in a seat OR is DM */}
+      {(() => {
+        const playerName = getCurrentPlayerName();
+        const isPlayerSeated = gameSeats.some(seat => seat.playerName === playerName);
+        const canUseDice = isPlayerSeated || isDM;
+        return canUseDice && (
+          <DiceActionPanel
+            currentTurn={currentTurn}
+            thisPlayer={playerName}
+            currentUser={currentUser}
+            combatActive={combatActive}
+            onRollDice={handlePlayerDiceRoll}
+            onEndTurn={handleEndTurn}
+            uiScale={uiScale}
+            activePrompts={activePrompts}
+            isDicePromptActive={isDicePromptActive}
+          />
+        );
+      })()}
 
       {/* Session Ended Modal with Countdown */}
       {sessionEndedData && (

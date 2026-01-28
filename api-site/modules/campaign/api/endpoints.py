@@ -30,8 +30,12 @@ from modules.campaign.application.commands import (
     AcceptCampaignInvite,
     DeclineCampaignInvite,
     CancelCampaignInvite,
-    LeaveCampaign
+    LeaveCampaign,
+    SelectCharacterForCampaign,
+    ReleaseCharacterFromCampaign
 )
+from modules.characters.orm.character_repository import CharacterRepository
+from modules.characters.dependencies.providers import get_character_repository
 from modules.session.application.commands import CreateSession
 from modules.campaign.application.queries import (
     GetUserCampaigns,
@@ -463,11 +467,16 @@ async def leave_campaign(
     user_id: UUID = Depends(get_current_user_id),
     campaign_repo: CampaignRepository = Depends(campaign_repository),
     user_repo: UserRepository = Depends(get_user_repository),
-    event_manager: EventManager = Depends(get_event_manager)
+    event_manager: EventManager = Depends(get_event_manager),
+    character_repo: CharacterRepository = Depends(get_character_repository)
 ):
-    """Leave a campaign (player only - host cannot leave their own campaign)"""
+    """
+    Leave a campaign (player only - host cannot leave their own campaign).
+
+    Also unlocks any character the player had selected for this campaign.
+    """
     try:
-        command = LeaveCampaign(campaign_repo, user_repo, event_manager)
+        command = LeaveCampaign(campaign_repo, user_repo, event_manager, character_repo)
         await command.execute(
             campaign_id=campaign_id,
             player_id=user_id
@@ -521,3 +530,67 @@ async def get_campaign_members(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=str(e)
         )
+
+
+# Character selection endpoints
+@router.post("/{campaign_id}/select-character")
+async def select_character_for_campaign(
+    campaign_id: UUID,
+    character_id: UUID,
+    user_id: UUID = Depends(get_current_user_id),
+    campaign_repo: CampaignRepository = Depends(campaign_repository),
+    character_repo: CharacterRepository = Depends(get_character_repository)
+):
+    """
+    Select a character for use in this campaign.
+
+    Locks the character to this campaign - it cannot be used in other campaigns
+    until the player leaves the campaign or releases the character.
+
+    Domain Rule: A character can only be active in one campaign at a time.
+    """
+    try:
+        command = SelectCharacterForCampaign(campaign_repo, character_repo)
+        character = command.execute(
+            campaign_id=campaign_id,
+            user_id=user_id,
+            character_id=character_id
+        )
+        return {
+            "message": "Character selected for campaign",
+            "character_id": str(character.id),
+            "character_name": character.character_name
+        }
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+
+
+@router.delete("/{campaign_id}/my-character")
+async def release_character_from_campaign(
+    campaign_id: UUID,
+    user_id: UUID = Depends(get_current_user_id),
+    campaign_repo: CampaignRepository = Depends(campaign_repository),
+    character_repo: CharacterRepository = Depends(get_character_repository),
+    session_repo: SessionRepository = Depends(get_session_repository)
+):
+    """
+    Release your character from this campaign (stay as member without character).
+
+    Only allowed when no active session exists in the campaign.
+    After releasing, the character can be used in other campaigns.
+
+    Domain Rule: Cannot release character while a session is active.
+    """
+    try:
+        command = ReleaseCharacterFromCampaign(campaign_repo, character_repo, session_repo)
+        character = command.execute(
+            campaign_id=campaign_id,
+            user_id=user_id
+        )
+        return {
+            "message": "Character released from campaign",
+            "character_id": str(character.id),
+            "character_name": character.character_name
+        }
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
