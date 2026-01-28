@@ -82,14 +82,22 @@ export function Button({
   )
 }
 
-export function Badge({ children, className = '', ...props }) {
+export function Badge({ children, className = '', size = 'default', ...props }) {
+  const sizes = {
+    default: 'px-3 py-1 text-xs',
+    xs: 'px-2 py-1 text-xs',
+    sm: 'px-3 py-1.5 text-sm',
+    md: 'px-4 py-2 text-sm',
+    lg: 'px-6 py-3 text-base'
+  }
+
   return (
     <span
-      className={`px-3 py-1 rounded-sm text-xs font-semibold border ${className}`}
+      className={`rounded-sm font-semibold border ${sizes[size]} ${className}`}
       style={{
         backgroundColor: `${THEME.bgSecondary}CC`,
         color: COLORS.smoke,
-        borderColor: THEME.borderDefault
+        borderColor: COLORS.silver
       }}
       {...props}
     >

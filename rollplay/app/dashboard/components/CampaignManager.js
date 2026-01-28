@@ -1061,7 +1061,7 @@ export default function CampaignManager({ user, refreshTrigger, onCampaignUpdate
                         backgroundColor: campaign.hero_image ? 'transparent' : COLORS.carbon,
                         backgroundSize: 'cover',
                         backgroundPosition: 'center',
-                        borderColor: isSelected ? THEME.borderActive : '#f59e0b',
+                        borderColor: isSelected ? THEME.borderActive : '#16a34a',
                         transition: isResizing ? 'none' : 'border-color 200ms ease-in-out'
                       }}
                       onClick={() => toggleInvitedCampaignDetails(campaign)}
@@ -1127,7 +1127,6 @@ export default function CampaignManager({ user, refreshTrigger, onCampaignUpdate
                             <h4 className="text-3xl font-[family-name:var(--font-metamorphous)] mb-1 drop-shadow-lg" style={{color: THEME.textOnDark}}>
                               {campaign.title || 'Unnamed Campaign'}
                             </h4>
-                            <Badge>Pending Invite</Badge>
                             {campaign.description && (
                               <div className="text-base drop-shadow-md mt-2" style={{maxWidth: '70%'}}>
                                 <p
@@ -1147,7 +1146,8 @@ export default function CampaignManager({ user, refreshTrigger, onCampaignUpdate
                           </div>
 
                           {/* Action Buttons - Top Right */}
-                          <div className="flex gap-2 flex-shrink-0" onClick={(e) => e.stopPropagation()}>
+                          <div className="flex gap-2 flex-shrink-0 items-center" onClick={(e) => e.stopPropagation()}>
+                            <Badge size="md" className="mr-4">Pending Invite</Badge>
                             <Button
                               variant="success"
                               onClick={() => acceptCampaignInvite(campaign.id)}

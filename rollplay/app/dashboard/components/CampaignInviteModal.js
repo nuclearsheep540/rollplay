@@ -9,7 +9,7 @@ import { useState, useEffect } from 'react'
 import { createPortal } from 'react-dom'
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
 import { faUserPlus, faUserXmark } from '@fortawesome/free-solid-svg-icons'
-import { THEME } from '@/app/styles/colorTheme'
+import { COLORS, THEME } from '@/app/styles/colorTheme'
 import { Button } from './shared/Button'
 
 export default function CampaignInviteModal({ campaign, onClose, onInviteSuccess }) {
@@ -386,7 +386,12 @@ export default function CampaignInviteModal({ campaign, onClose, onInviteSuccess
                   className="flex items-stretch rounded-sm border overflow-hidden"
                   style={{backgroundColor: THEME.bgPanel, borderColor: THEME.borderSubtle}}
                 >
-                  <span className="flex-1 flex items-center font-medium py-3 pl-4" style={{color: THEME.textOnDark}}>{lookupUser.display_name}</span>
+                  <span className="flex-1 flex items-center gap-2 py-3 pl-4">
+                    <span className="font-medium" style={{color: COLORS.smoke}}>{lookupUser.screen_name || lookupUser.account_identifier}</span>
+                    {lookupUser.screen_name && lookupUser.account_identifier && (
+                      <span className="text-sm" style={{color: COLORS.silver}}>{lookupUser.account_identifier}</span>
+                    )}
+                  </span>
                   {getUserStatusMessage(lookupUser.id) ? (
                     <span className="flex items-center text-sm px-4" style={{color: '#fbbf24'}}>{getUserStatusMessage(lookupUser.id)}</span>
                   ) : (
@@ -424,7 +429,12 @@ export default function CampaignInviteModal({ campaign, onClose, onInviteSuccess
                     className="flex items-stretch rounded-sm border overflow-hidden"
                     style={{backgroundColor: THEME.bgPanel, borderColor: THEME.borderSubtle}}
                   >
-                    <span className="flex-1 flex items-center font-medium py-3 pl-4" style={{color: THEME.textOnDark}}>{friend.friend_screen_name}</span>
+                    <span className="flex-1 flex items-center gap-2 py-3 pl-4">
+                      <span className="font-medium" style={{color: COLORS.smoke}}>{friend.friend_screen_name || friend.friend_account_tag}</span>
+                      {friend.friend_screen_name && friend.friend_account_tag && (
+                        <span className="text-sm" style={{color: COLORS.silver}}>{friend.friend_account_tag}</span>
+                      )}
+                    </span>
                     {getUserStatusMessage(friend.friend_id) ? (
                       <span className="flex items-center text-sm px-4" style={{color: '#fbbf24'}}>{getUserStatusMessage(friend.friend_id)}</span>
                     ) : (
