@@ -380,11 +380,12 @@ async def remove_player_from_campaign(
     user_id: UUID = Depends(get_current_user_id),
     campaign_repo: CampaignRepository = Depends(campaign_repository),
     user_repo: UserRepository = Depends(get_user_repository),
-    event_manager: EventManager = Depends(get_event_manager)
+    event_manager: EventManager = Depends(get_event_manager),
+    character_repo: CharacterRepository = Depends(get_character_repository)
 ):
-    """Remove a player from the campaign (host only)"""
+    """Remove a player from the campaign (host only). Also unlocks their character."""
     try:
-        command = RemovePlayerFromCampaign(campaign_repo, user_repo, event_manager)
+        command = RemovePlayerFromCampaign(campaign_repo, user_repo, event_manager, character_repo)
         campaign = await command.execute(
             campaign_id=campaign_id,
             player_id=player_id,

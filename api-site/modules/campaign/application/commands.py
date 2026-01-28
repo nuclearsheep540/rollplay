@@ -163,10 +163,11 @@ class AddPlayerToCampaign:
 
 
 class RemovePlayerFromCampaign:
-    def __init__(self, repository, user_repo: UserRepository, event_manager: EventManager):
+    def __init__(self, repository, user_repo: UserRepository, event_manager: EventManager, character_repo: CharacterRepository = None):
         self.repository = repository
         self.user_repo = user_repo
         self.event_manager = event_manager
+        self.character_repo = character_repo
 
     async def execute(self, campaign_id: UUID, player_id: UUID, host_id: UUID) -> CampaignAggregate:
         """Remove a player from the campaign (host only)"""
@@ -180,6 +181,14 @@ class RemovePlayerFromCampaign:
 
         # Get player details for notification before removing
         player = self.user_repo.get_by_id(player_id)
+
+        # Unlock player's character from this campaign (if they have one selected)
+        if self.character_repo:
+            character = self.character_repo.get_user_character_for_campaign(player_id, campaign_id)
+            if character:
+                character.unlock_from_campaign()
+                self.character_repo.save(character)
+                logger.info(f"Unlocked character {character.id} from campaign {campaign_id} (player removed by host)")
 
         # Business logic in aggregate
         campaign.remove_player(player_id)

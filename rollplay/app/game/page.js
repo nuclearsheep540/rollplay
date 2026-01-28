@@ -581,11 +581,11 @@ function GameContent() {
         // Clear map state if no active map (atomic)
         setActiveMap(null);
       } else {
-        console.error("🗺️ Failed to fetch active map:", response.status, response.statusText);
+        console.log("🗺️ Failed to fetch active map:", response.status, response.statusText);
       }
       
     } catch (error) {
-      console.error("🗺️ Error loading active map:", error);
+      console.log("🗺️ Error loading active map:", error);
       // Don't set fallback map data - leave empty if error (atomic)
       setActiveMap(null);
     }
