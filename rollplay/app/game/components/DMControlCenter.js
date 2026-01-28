@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { 
   DM_TITLE, 
   DM_HEADER, 
@@ -67,56 +67,6 @@ const ImageDimensions = ({ activeMap }) => {
   );
 };
 
-// Component to calculate square cell ratio in real-time
-const SquareCellRatioCalculator = ({ activeMap, gridDimensions }) => {
-  const [imageDimensions, setImageDimensions] = useState(null);
-
-  useEffect(() => {
-    if (!activeMap?.file_path) return;
-
-    const img = new Image();
-    img.onload = () => {
-      setImageDimensions({
-        width: img.naturalWidth,
-        height: img.naturalHeight
-      });
-    };
-    img.src = activeMap.file_path;
-  }, [activeMap?.file_path]);
-
-  if (!imageDimensions || !gridDimensions) return null;
-
-  // Calculate current cell dimensions
-  const cellWidth = imageDimensions.width / gridDimensions.width;
-  const cellHeight = imageDimensions.height / gridDimensions.height;
-  
-  // Calculate aspect ratio
-  const cellAspectRatio = cellWidth / cellHeight;
-  const isSquare = Math.abs(cellAspectRatio - 1.0) < 0.05; // Within 5% tolerance
-  
-  // Calculate ideal dimensions for square cells
-  const idealSquareSize = Math.min(cellWidth, cellHeight);
-  const idealGridWidth = Math.round(imageDimensions.width / idealSquareSize);
-  const idealGridHeight = Math.round(imageDimensions.height / idealSquareSize);
-  
-  return (
-    <div className="mb-3 p-2 bg-gray-800 rounded border border-gray-600">
-      <div className="text-xs text-gray-300 mb-1">
-        <strong>Cell Analysis:</strong>
-      </div>
-      <div className="text-xs text-gray-400 space-y-1">
-        <div>Current: {cellWidth.toFixed(0)}×{cellHeight.toFixed(0)}px {isSquare ? '✅ Square' : '⚠️ Rectangle'}</div>
-        <div>Ratio: {cellAspectRatio.toFixed(2)}:1 {isSquare ? '' : `(${cellAspectRatio > 1 ? 'wide' : 'tall'})`}</div>
-        {!isSquare && (
-          <div className="text-yellow-400">
-            For square cells: {idealGridWidth}×{idealGridHeight} grid
-          </div>
-        )}
-      </div>
-    </div>
-  );
-};
-
 export default function DMControlCenter({
   isDM,
   promptPlayerRoll,
@@ -178,9 +128,12 @@ export default function DMControlCenter({
   const [rollPromptModalOpen, setRollPromptModalOpen] = useState(false);
   const [selectedPlayerForModal, setSelectedPlayerForModal] = useState('');
 
-  // NEW: State for grid dimensions input
-  const [gridDimensions, setGridDimensions] = useState({ width: 8, height: 12 });
+  // Grid size slider (cells on shorter image edge - always produces square cells)
+  const [gridSize, setGridSize] = useState(10);
   const [isDimensionsExpanded, setIsDimensionsExpanded] = useState(false);
+
+  // Image dimensions for auto-calculating square grid
+  const [imageDimensions, setImageDimensions] = useState(null);
 
   // Store original server opacity when entering edit mode
   const [originalServerOpacity, setOriginalServerOpacity] = useState(null);
@@ -188,17 +141,61 @@ export default function DMControlCenter({
   // State for map selection inline section
   const [isMapExpanded, setIsMapExpanded] = useState(false);
 
-  // Sync form inputs with loaded grid config (atomic approach)
+  // Load image dimensions when map changes
+  useEffect(() => {
+    if (!activeMap?.file_path) {
+      setImageDimensions(null);
+      return;
+    }
+
+    const img = new Image();
+    img.onload = () => {
+      setImageDimensions({
+        width: img.naturalWidth,
+        height: img.naturalHeight
+      });
+      console.log('📏 Loaded image dimensions:', img.naturalWidth, 'x', img.naturalHeight);
+    };
+    img.onerror = () => {
+      setImageDimensions(null);
+      console.warn('📏 Failed to load image for grid calculation');
+    };
+    img.src = activeMap.file_path;
+  }, [activeMap?.file_path]);
+
+  // Calculate grid dimensions to ensure square cells
+  const calculatedGrid = useMemo(() => {
+    if (!imageDimensions) return { width: gridSize, height: gridSize };
+
+    const { width: imgW, height: imgH } = imageDimensions;
+    const isLandscape = imgW >= imgH;
+
+    if (isLandscape) {
+      // Height is shorter edge
+      const gridHeight = gridSize;
+      const gridWidth = Math.round(gridSize * imgW / imgH);
+      return { width: gridWidth, height: gridHeight };
+    } else {
+      // Width is shorter edge
+      const gridWidth = gridSize;
+      const gridHeight = Math.round(gridSize * imgH / imgW);
+      return { width: gridWidth, height: gridHeight };
+    }
+  }, [imageDimensions, gridSize]);
+
+  // Sync slider with loaded grid config
   useEffect(() => {
     const gridConfig = activeMap?.grid_config;
-    
-    if (gridConfig) {
-      const newDimensions = {
-        width: gridConfig.grid_width || 8,
-        height: gridConfig.grid_height || 12
-      };
-      setGridDimensions(newDimensions);
-      
+
+    if (gridConfig && imageDimensions) {
+      // Calculate what gridSize would produce this config
+      const { width: imgW, height: imgH } = imageDimensions;
+      const isLandscape = imgW >= imgH;
+
+      // Extract the shorter dimension as the gridSize
+      const newSize = isLandscape ? gridConfig.grid_height : gridConfig.grid_width;
+      setGridSize(newSize || 10);
+
       // Extract opacity from grid config (try both edit and display mode)
       const editOpacity = gridConfig.colors?.edit_mode?.opacity;
       const displayOpacity = gridConfig.colors?.display_mode?.opacity;
@@ -206,22 +203,47 @@ export default function DMControlCenter({
       if (setLiveGridOpacity) {
         setLiveGridOpacity(configOpacity);
       }
-      
-      console.log('🎯 Synced form inputs with atomic map grid config:', {
-        dimensions: newDimensions,
+
+      console.log('🎯 Synced slider with atomic map grid config:', {
+        gridSize: newSize,
         opacity: configOpacity,
-        filename: activeMap.filename,
-        source: gridConfig
+        filename: activeMap.filename
       });
     } else if (!activeMap || activeMap.grid_config === null) {
       // Reset to defaults when no map or no grid config
-      setGridDimensions({ width: 8, height: 12 });
+      setGridSize(10);
       if (setLiveGridOpacity) {
         setLiveGridOpacity(0.2);
       }
-      console.log('🎯 Reset form inputs to defaults (no active map or grid config)');
+      console.log('🎯 Reset slider to defaults (no active map or grid config)');
     }
-  }, [activeMap]);
+  }, [activeMap, imageDimensions]);
+
+  // Live preview: update grid overlay when dimensions or opacity change during edit mode
+  useEffect(() => {
+    if (!isDimensionsExpanded || !handleGridChange) return;
+
+    const previewConfig = {
+      grid_width: calculatedGrid.width,
+      grid_height: calculatedGrid.height,
+      enabled: true,
+      colors: {
+        edit_mode: {
+          line_color: "#d1d5db",
+          opacity: liveGridOpacity,
+          line_width: 1
+        },
+        display_mode: {
+          line_color: "#d1d5db",
+          opacity: liveGridOpacity,
+          line_width: 1
+        }
+      }
+    };
+
+    handleGridChange(previewConfig);
+    console.log('🎯 Live preview updated:', previewConfig);
+  }, [calculatedGrid, liveGridOpacity, isDimensionsExpanded, handleGridChange]);
 
   const toggleSection = (section) => {
     setExpandedSections(prev => ({
@@ -296,11 +318,11 @@ export default function DMControlCenter({
     console.log('🎯 activeMap.filename:', activeMap.filename);
     
     const newGridConfig = createGridFromDimensions(
-      gridDimensions.width,
-      gridDimensions.height
+      calculatedGrid.width,
+      calculatedGrid.height
     );
-    
-    console.log('🎯 Created new grid config:', newGridConfig);
+
+    console.log('🎯 Created new grid config (square cells):', newGridConfig);
     
     try {
       // Send COMPLETE updated map via HTTP API (atomic)
@@ -336,7 +358,7 @@ export default function DMControlCenter({
       alert('Failed to update grid configuration. Please try again.');
     }
     
-    console.log('🎯 Applied grid dimensions:', gridDimensions, 'resulting config:', newGridConfig);
+    console.log('🎯 Applied grid dimensions:', calculatedGrid, 'resulting config:', newGridConfig);
   };
 
   if (!isDM) {
@@ -491,43 +513,31 @@ export default function DMControlCenter({
               📐 {isDimensionsExpanded ? 'Exit Grid Edit' : 'Edit Grid'}
             </button>
             
-            {/* Grid Dimensions Input (expandable) */}
+            {/* Grid Size Slider (expandable) - always produces square cells */}
             {isDimensionsExpanded && activeMap && (
               <div className="ml-4 mb-6">
-                <div className={PANEL_SUBTITLE + " mb-2"}>
-                  Grid Dimensions (cells across map)
-                </div>
-                <div className="flex gap-2 mb-3">
-                  <div className="flex-1">
-                    <label className="block text-xs text-gray-400 mb-1">Width</label>
-                    <input
-                      type="number"
-                      min="1"
-                      max="50"
-                      value={gridDimensions.width}
-                      onChange={(e) => setGridDimensions(prev => ({ 
-                        ...prev, 
-                        width: parseInt(e.target.value) || 1 
-                      }))}
-                      className="w-full px-2 py-1 bg-gray-800 border border-gray-600 rounded text-sm text-white focus:border-blue-500 focus:outline-none"
-                    />
-                  </div>
-                  <div className="flex-1">
-                    <label className="block text-xs text-gray-400 mb-1">Height</label>
-                    <input
-                      type="number"
-                      min="1"
-                      max="50"
-                      value={gridDimensions.height}
-                      onChange={(e) => setGridDimensions(prev => ({ 
-                        ...prev, 
-                        height: parseInt(e.target.value) || 1 
-                      }))}
-                      className="w-full px-2 py-1 bg-gray-800 border border-gray-600 rounded text-sm text-white focus:border-blue-500 focus:outline-none"
-                    />
+                {/* Grid Size Slider */}
+                <div className="mb-3">
+                  <label className="block text-xs text-gray-400 mb-1">
+                    Grid Size: {calculatedGrid.width}×{calculatedGrid.height} cells (square)
+                  </label>
+                  <input
+                    type="range"
+                    min="4"
+                    max="40"
+                    step="1"
+                    value={gridSize}
+                    onChange={(e) => setGridSize(parseInt(e.target.value))}
+                    className="w-full h-2 bg-gray-700 rounded-lg appearance-none cursor-pointer slider"
+                  />
+                  <div className="flex justify-between text-xs text-gray-500 mt-1">
+                    <span>Large (4)</span>
+                    <span>Medium</span>
+                    <span>Small (40)</span>
                   </div>
                 </div>
-                
+
+                {/* Grid Opacity Slider */}
                 <div className="mb-3">
                   <label className="block text-xs text-gray-400 mb-1">
                     Grid Opacity: {(liveGridOpacity * 100).toFixed(0)}%
@@ -539,14 +549,12 @@ export default function DMControlCenter({
                     step="0.1"
                     value={liveGridOpacity}
                     onChange={(e) => {
-                      // Update grid opacity in real-time during edit mode
                       const newOpacity = parseFloat(e.target.value);
                       if (setLiveGridOpacity) {
                         setLiveGridOpacity(newOpacity);
                       }
-                      // Trigger grid re-render with new opacity
                       if (setGridEditMode) {
-                        setGridEditMode(true); // Ensure edit mode stays active
+                        setGridEditMode(true);
                       }
                     }}
                     className="w-full h-2 bg-gray-700 rounded-lg appearance-none cursor-pointer slider"
@@ -557,19 +565,16 @@ export default function DMControlCenter({
                     <span>100%</span>
                   </div>
                 </div>
-                
-                {/* Square Cell Ratio Calculator */}
-                <SquareCellRatioCalculator 
-                  activeMap={activeMap}
-                  gridDimensions={gridDimensions}
-                />
-                
+
+                {/* Apply Button */}
                 <button
                   className={DM_CHILD_LAST}
                   onClick={applyGridDimensions}
                 >
-                  ✨ Apply {gridDimensions.width}×{gridDimensions.height} Grid ({(liveGridOpacity * 100).toFixed(0)}% opacity)
+                  ✨ Apply {calculatedGrid.width}×{calculatedGrid.height} Grid
                 </button>
+
+                {/* Image info */}
                 {activeMap && (
                   <div className="text-xs text-gray-400 mt-2">
                     <ImageDimensions activeMap={activeMap} />

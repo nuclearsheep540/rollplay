@@ -1347,13 +1347,14 @@ function GameContent() {
         {/* GRID POSITION 2: Center Column - map-canvas with horizontal initiative */}
         <div className="grid-area-map-canvas relative">
           {/* Map Display Background - Now properly positioned in center area */}
-          <MapDisplay 
+          <MapDisplay
             activeMap={activeMap}
             isEditMode={gridEditMode && isDM}
             onGridChange={handleGridChange}
             mapImageEditMode={gridEditMode && isDM}
             onMapImageChange={handleMapImageChange}
             liveGridOpacity={liveGridOpacity}
+            gridConfig={gridConfig}
           />
           
           {/* Horizontal Initiative Tracker overlaid on map */}
