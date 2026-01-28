@@ -5,6 +5,8 @@ from uuid import UUID
 import httpx
 import logging
 import asyncio
+import os
+from concurrent.futures import ThreadPoolExecutor
 from sqlalchemy import update
 
 from modules.session.repositories.session_repository import SessionRepository
@@ -259,13 +261,57 @@ class StartSession:
         user_repository: UserRepository,
         campaign_repository: CampaignRepository,
         event_manager: EventManager,
-        asset_repository: MediaAssetRepository = None
+        asset_repository: MediaAssetRepository = None,
+        s3_service = None  # For presigned URL generation
     ):
         self.session_repo = session_repository
         self.user_repo = user_repository
         self.campaign_repo = campaign_repository
         self.event_manager = event_manager
         self.asset_repo = asset_repository
+        self.s3_service = s3_service
+
+    async def _generate_presigned_urls_parallel(self, assets):
+        """
+        Generate presigned URLs for all assets in parallel using ThreadPoolExecutor.
+
+        URL generation is CPU-bound (HMAC-SHA256 signing), so we scale workers
+        to available CPU cores for optimal performance.
+
+        Uses the configured PRESIGNED_URL_EXPIRY from settings (via S3Service).
+
+        Args:
+            assets: List of asset objects with s3_key attribute
+
+        Returns:
+            Dict mapping s3_key -> presigned_url
+        """
+        if not self.s3_service or not assets:
+            return {}
+
+        def generate_url(s3_key):
+            try:
+                # Uses expiry from settings.PRESIGNED_URL_EXPIRY (S3Service default)
+                url = self.s3_service.generate_download_url(s3_key)
+                return (s3_key, url)
+            except Exception as e:
+                logger.warning(f"Failed to generate URL for {s3_key}: {e}")
+                return (s3_key, None)
+
+        # Scale workers to CPU count (CPU-bound crypto work)
+        # Minimum 2, maximum capped at asset count to avoid idle threads
+        cpu_count = os.cpu_count() or 2
+        max_workers = min(len(assets), cpu_count * 2)  # 2x cores for slight I/O slack
+
+        loop = asyncio.get_event_loop()
+        with ThreadPoolExecutor(max_workers=max_workers) as executor:
+            s3_keys = [asset.s3_key for asset in assets]
+            futures = [loop.run_in_executor(executor, generate_url, key) for key in s3_keys]
+            results = await asyncio.gather(*futures)
+
+        successful = {key: url for key, url in results if url is not None}
+        logger.info(f"Generated {len(successful)}/{len(assets)} presigned URLs with {max_workers} workers on {cpu_count} CPUs")
+        return successful
 
     async def execute(self, session_id: UUID, host_id: UUID) -> SessionEntity:
         """
@@ -327,21 +373,30 @@ class StartSession:
         # Use screen_name if set, otherwise email
         dm_username = host_user.screen_name or host_user.email
 
-        # 6. Fetch campaign assets for the session
+        # 6. Fetch campaign assets and generate fresh presigned URLs
         assets = []
         if self.asset_repo:
             campaign_assets = self.asset_repo.get_by_campaign_id(session.campaign_id)
+
+            # Generate presigned URLs in parallel (CPU-bound HMAC signing)
+            url_map = await self._generate_presigned_urls_parallel(campaign_assets)
+
             assets = [
                 {
                     "id": str(asset.id),
                     "filename": asset.filename,
                     "s3_key": asset.s3_key,
                     # Convert enum to string for api-game JSON payload
-                    "asset_type": asset.asset_type.value if hasattr(asset.asset_type, 'value') else str(asset.asset_type)
+                    "asset_type": asset.asset_type.value if hasattr(asset.asset_type, 'value') else str(asset.asset_type),
+                    # Fresh presigned URL (24hr expiry)
+                    "s3_url": url_map.get(asset.s3_key)
                 }
                 for asset in campaign_assets
             ]
-            logger.info(f"Found {len(assets)} assets for campaign {session.campaign_id}")
+            logger.info(f"Found {len(assets)} assets for campaign {session.campaign_id} with {len(url_map)} fresh URLs")
+
+        # TODO: REMOVE - Testing delay to see STARTING UI state
+        await asyncio.sleep(2)
 
         # 7. Build payload for api-game
         payload = {

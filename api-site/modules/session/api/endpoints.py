@@ -44,6 +44,7 @@ from modules.campaign.dependencies.providers import campaign_repository
 from modules.library.dependencies.providers import get_asset_repository
 from modules.library.repositories.asset_repository import MediaAssetRepository
 from modules.session.domain.session_aggregate import SessionEntity
+from shared.services.s3_service import S3Service, get_s3_service
 from shared.dependencies.auth import get_current_user_id
 from shared.dependencies.db import get_db
 from modules.events.event_manager import EventManager
@@ -230,6 +231,7 @@ async def start_session(
     campaign_repo: CampaignRepository = Depends(campaign_repository),
     asset_repo: MediaAssetRepository = Depends(get_asset_repository),
     event_manager: EventManager = Depends(get_event_manager),
+    s3_service: S3Service = Depends(get_s3_service),
     db: Session = Depends(get_db)
 ):
     """
@@ -239,14 +241,15 @@ async def start_session(
     1. Validates session ownership
     2. Sets session status to STARTING
     3. Fetches campaign assets from library
-    4. Calls api-game to create MongoDB active_session with assets
-    5. Sets session status to ACTIVE with active_game_id
+    4. Generates fresh presigned URLs for all assets (parallel)
+    5. Calls api-game to create MongoDB active_session with assets + URLs
+    6. Sets session status to ACTIVE with active_game_id
 
     Returns session with status='ACTIVE' and active_game_id set.
     Frontend can then redirect to /game?room_id={active_game_id}
     """
     try:
-        command = StartSession(session_repo, user_repo, campaign_repo, event_manager, asset_repo)
+        command = StartSession(session_repo, user_repo, campaign_repo, event_manager, asset_repo, s3_service)
         session = await command.execute(session_id, user_id)
         return _to_session_response(session, db)
 

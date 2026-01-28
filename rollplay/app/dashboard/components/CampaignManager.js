@@ -1571,10 +1571,11 @@ export default function CampaignManager({ user, refreshTrigger, onCampaignUpdate
                                   <p className="text-sm" style={{color: THEME.textSecondary}}>
                                     Status: <span className="font-medium" style={{
                                       color: game.status === 'active' ? '#16a34a' :
+                                             (game.status === 'starting' || startingGame === game.id) ? '#3b82f6' :
                                              game.status === 'inactive' ? THEME.textSecondary :
                                              '#fbbf24'
                                     }}>
-                                      {game.status.charAt(0).toUpperCase() + game.status.slice(1)}
+                                      {(game.status === 'starting' || startingGame === game.id) ? 'Starting' : game.status.charAt(0).toUpperCase() + game.status.slice(1)}
                                     </span>
                                   </p>
                                 </div>
@@ -1635,30 +1636,21 @@ export default function CampaignManager({ user, refreshTrigger, onCampaignUpdate
                                         </>
                                       )}
                                     </>
-                                  ) : game.status === 'inactive' && campaign.host_id === user.id ? (
-                                    /* Only show inactive game actions if user is the host */
+                                  ) : (game.status === 'starting' || game.status === 'inactive') && campaign.host_id === user.id ? (
+                                    /* Show game actions for host - disabled when starting */
                                     <>
                                       <Button
                                         variant="success"
                                         size="md"
                                         onClick={() => startGame(game.id)}
-                                        disabled={startingGame === game.id || activeSessions.length > 0}
+                                        disabled={startingGame === game.id || activeSessions.length > 0 || game.status === 'starting'}
                                       >
-                                        {startingGame === game.id ? (
-                                          <>
-                                            <div className="animate-spin rounded-full h-3 w-3 border-b-2 border-white mr-2"></div>
-                                            Starting...
-                                          </>
-                                        ) : (
-                                          <>
-                                            <FontAwesomeIcon icon={faPlay} className="mr-2" />
-                                            Start
-                                          </>
-                                        )}
+                                        <FontAwesomeIcon icon={faPlay} className="mr-2" />
+                                        Start
                                       </Button>
                                       <button
                                         onClick={() => promptFinishSession(game)}
-                                        disabled={finishingGame === game.id}
+                                        disabled={finishingGame === game.id || game.status === 'starting'}
                                         className="px-4 py-2 rounded-sm border transition-all text-sm font-medium flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
                                         style={{backgroundColor: '#991b1b', color: COLORS.smoke, borderColor: '#dc2626'}}
                                         title="Finish Session Permanently"
