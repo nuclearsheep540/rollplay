@@ -1001,6 +1001,11 @@ export default function CampaignManager({ user, refreshTrigger, onCampaignUpdate
           }
         }
 
+        @keyframes stripe-slide {
+          0% { background-position: 100% 0%; }
+          100% { background-position: 0% 0%; }
+        }
+
       `}</style>
 
       {/* Header */}
@@ -1563,9 +1568,42 @@ export default function CampaignManager({ user, refreshTrigger, onCampaignUpdate
                             {campaignSessions.map((game) => (
                               <div
                                 key={game.id}
-                                className="flex items-center justify-between p-4 rounded-sm border"
+                                className="flex items-center justify-between p-4 rounded-sm border relative overflow-hidden"
                                 style={{backgroundColor: THEME.bgSecondary, borderColor: THEME.borderSubtle}}
                               >
+                                {/* Starting animation overlay */}
+                                {(game.status === 'starting' || startingGame === game.id) && (
+                                  <div
+                                    className="absolute inset-0 pointer-events-none"
+                                    style={{
+                                      background: `linear-gradient(
+                                        -45deg,
+                                        transparent 0%,
+                                        transparent 15%,
+                                        rgba(59, 130, 246, 0.45) 15%,
+                                        rgba(59, 130, 246, 0.45) 20%,
+                                        transparent 20%,
+                                        transparent 35%,
+                                        rgba(59, 130, 246, 0.45) 35%,
+                                        rgba(59, 130, 246, 0.45) 40%,
+                                        transparent 40%,
+                                        transparent 55%,
+                                        rgba(59, 130, 246, 0.45) 55%,
+                                        rgba(59, 130, 246, 0.45) 60%,
+                                        transparent 60%,
+                                        transparent 75%,
+                                        rgba(59, 130, 246, 0.45) 75%,
+                                        rgba(59, 130, 246, 0.45) 80%,
+                                        transparent 80%,
+                                        transparent 100%
+                                      )`,
+                                      backgroundSize: '300% 300%',
+                                      animation: 'stripe-slide 1.5s linear infinite',
+                                      maskImage: 'linear-gradient(to right, black 0%, rgba(0,0,0,0.8) 15%, rgba(0,0,0,0.5) 30%, rgba(0,0,0,0.2) 45%, transparent 65%)',
+                                      WebkitMaskImage: 'linear-gradient(to right, black 0%, rgba(0,0,0,0.8) 15%, rgba(0,0,0,0.5) 30%, rgba(0,0,0,0.2) 45%, transparent 65%)',
+                                    }}
+                                  />
+                                )}
                                 <div>
                                   <p className="font-medium" style={{color: THEME.textOnDark}}>{game.name || 'Game Session'}</p>
                                   <p className="text-sm" style={{color: THEME.textSecondary}}>
@@ -1585,7 +1623,7 @@ export default function CampaignManager({ user, refreshTrigger, onCampaignUpdate
                                   {game.status === 'active' ? (
                                     <>
                                       <Button
-                                        variant="primary"
+                                        variant="success"
                                         size="md"
                                         onClick={() => enterGame(game)}
                                       >
@@ -1594,46 +1632,25 @@ export default function CampaignManager({ user, refreshTrigger, onCampaignUpdate
                                       </Button>
                                       {/* Only show host actions if user is the campaign host */}
                                       {campaign.host_id === user.id && (
-                                        <>
-                                          <button
-                                            onClick={() => promptPauseSession(game)}
-                                            disabled={pausingGame === game.id}
-                                            className="px-4 py-2 rounded-sm border transition-all text-sm font-medium flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
-                                            style={{backgroundColor: '#d97706', color: THEME.textPrimary, borderColor: '#fbbf24'}}
-                                            title="Pause Session"
-                                          >
-                                            {pausingGame === game.id ? (
-                                              <>
-                                                <div className="animate-spin rounded-full h-3 w-3 border-b-2 border-white"></div>
-                                                Pausing...
-                                              </>
-                                            ) : (
-                                              <>
-                                                <FontAwesomeIcon icon={faPause} />
-                                                Pause
-                                              </>
-                                            )}
-                                          </button>
-                                          <button
-                                            onClick={() => promptFinishSession(game)}
-                                            disabled={finishingGame === game.id}
-                                            className="px-4 py-2 rounded-sm border transition-all text-sm font-medium flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
-                                            style={{backgroundColor: '#991b1b', color: COLORS.smoke, borderColor: '#dc2626'}}
-                                            title="Finish Session Permanently"
-                                          >
-                                            {finishingGame === game.id ? (
-                                              <>
-                                                <div className="animate-spin rounded-full h-3 w-3 border-b-2 border-white"></div>
-                                                Finishing...
-                                              </>
-                                            ) : (
-                                              <>
-                                                <FontAwesomeIcon icon={faXmark} />
-                                                Finish
-                                              </>
-                                            )}
-                                          </button>
-                                        </>
+                                        <button
+                                          onClick={() => promptPauseSession(game)}
+                                          disabled={pausingGame === game.id}
+                                          className="px-4 py-2 rounded-sm border transition-all text-sm font-medium flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                                          style={{backgroundColor: COLORS.silver, color: THEME.textPrimary, borderColor: COLORS.smoke}}
+                                          title="Pause Session"
+                                        >
+                                          {pausingGame === game.id ? (
+                                            <>
+                                              <div className="animate-spin rounded-full h-3 w-3 border-b-2 border-gray-800"></div>
+                                              Pausing...
+                                            </>
+                                          ) : (
+                                            <>
+                                              <FontAwesomeIcon icon={faPause} />
+                                              Pause
+                                            </>
+                                          )}
+                                        </button>
                                       )}
                                     </>
                                   ) : (game.status === 'starting' || game.status === 'inactive') && campaign.host_id === user.id ? (
@@ -1703,7 +1720,7 @@ export default function CampaignManager({ user, refreshTrigger, onCampaignUpdate
                           <button
                             onClick={() => openModal('campaignInvite', { campaign: selectedCampaign })}
                             className="flex items-center gap-2 px-3 h-10 rounded-sm transition-all border mb-4"
-                            style={{backgroundColor: THEME.bgSecondary, color: THEME.textAccent, borderColor: THEME.borderActive}}
+                            style={{backgroundColor: THEME.bgSecondary, color: COLORS.smoke, borderColor: THEME.borderActive}}
                           >
                             <FontAwesomeIcon icon={faUserPlus} className="h-4 w-4" />
                             <span className="text-sm font-medium">Add Members</span>
@@ -1808,7 +1825,7 @@ export default function CampaignManager({ user, refreshTrigger, onCampaignUpdate
                                     })
                                   }}
                                   className="flex items-center gap-2 px-3 h-10 rounded-sm transition-all border"
-                                  style={{backgroundColor: THEME.bgSecondary, color: THEME.textAccent, borderColor: THEME.borderActive}}
+                                  style={{backgroundColor: THEME.bgSecondary, color: COLORS.smoke, borderColor: THEME.borderActive}}
                                 >
                                   <FontAwesomeIcon icon={faGear} className="h-4 w-4" />
                                   <span className="text-sm font-medium">Configure</span>
@@ -1817,7 +1834,7 @@ export default function CampaignManager({ user, refreshTrigger, onCampaignUpdate
                                   onClick={() => promptDeleteCampaign(selectedCampaign)}
                                   disabled={modals.campaignDelete.isDeleting}
                                   className="flex items-center gap-2 px-3 h-10 rounded-sm transition-all border disabled:opacity-50 disabled:cursor-not-allowed"
-                                  style={{backgroundColor: '#991b1b', color: THEME.textAccent, borderColor: '#dc2626'}}
+                                  style={{backgroundColor: '#991b1b', color: COLORS.smoke, borderColor: '#dc2626'}}
                                 >
                                   <FontAwesomeIcon icon={faTrash} className="h-4 w-4" />
                                   <span className="text-sm font-medium">Delete Campaign</span>

@@ -13,6 +13,7 @@ export function Button({
   size = 'md',
   children,
   className = '',
+  disabled = false,
   ...props
 }) {
   const variants = {
@@ -42,8 +43,14 @@ export function Button({
     ghost: {
       backgroundColor: 'transparent',
       color: THEME.textOnDark,
-      borderColor: 'transparent'
+      borderColor: COLORS.silver
     }
+  }
+
+  const disabledStyle = {
+    backgroundColor: COLORS.graphite,
+    color: COLORS.silver,
+    borderColor: COLORS.graphite
   }
 
   const sizes = {
@@ -57,14 +64,15 @@ export function Button({
 
   return (
     <button
-      className={`rounded-sm border font-medium transition-all ${sizes[size]} ${className}`}
+      className={`rounded-sm border font-medium transition-all disabled:cursor-not-allowed ${sizes[size]} ${className}`}
       style={{
-        ...variants[variant],
-        ...(isHovered && variant !== 'ghost' && {
+        ...(disabled ? disabledStyle : variants[variant]),
+        ...(isHovered && !disabled && variant !== 'ghost' && {
           borderColor: THEME.borderActive,
           color: THEME.textAccent
         })
       }}
+      disabled={disabled}
       onMouseEnter={() => setIsHovered(true)}
       onMouseLeave={() => setIsHovered(false)}
       {...props}
