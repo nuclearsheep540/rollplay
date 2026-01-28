@@ -195,6 +195,10 @@ export default function CharacterManager({ user, onExpandedChange }) {
       if (response.ok) {
         // Remove character from list
         setCharacters(characters.filter(c => c.id !== characterToDelete.id))
+        // Close the expanded drawer if the deleted character was selected
+        if (selectedCharacter?.id === characterToDelete.id) {
+          setSelectedCharacter(null)
+        }
         // Close modal
         setShowDeleteModal(false)
         setCharacterToDelete(null)

@@ -6,7 +6,7 @@
 'use client'
 
 import { useState } from 'react'
-import { useRouter } from 'next/navigation'
+import { useRouter, useSearchParams } from 'next/navigation'
 import CharacterForm from '../components/CharacterForm'
 import SiteHeader from '../../shared/components/SiteHeader'
 import SubNav from '../../shared/components/SubNav'
@@ -14,6 +14,8 @@ import { THEME, COLORS } from '@/app/styles/colorTheme'
 
 export default function CreateCharacter() {
   const router = useRouter()
+  const searchParams = useSearchParams()
+  const returnCampaignId = searchParams.get('return_campaign')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState(null)
   const [validationErrors, setValidationErrors] = useState([])
@@ -39,7 +41,18 @@ export default function CreateCharacter() {
       })
 
       if (response.ok) {
-        router.push('/dashboard?tab=characters')
+        if (returnCampaignId) {
+          // Set sessionStorage flag for modal open (ephemeral intent, not URL param)
+          try {
+            sessionStorage.setItem('openCharacterModalForCampaign', returnCampaignId)
+          } catch (e) {
+            // sessionStorage blocked - modal won't auto-open but user will still be redirected
+          }
+          // Return to campaign (modal will open via sessionStorage check)
+          router.push(`/dashboard?tab=campaigns&expand_campaign_id=${returnCampaignId}`)
+        } else {
+          router.push('/dashboard?tab=characters')
+        }
       } else {
         const errorData = await response.json()
 

@@ -12,6 +12,7 @@ from .schemas import (
     CampaignResponse,
     CampaignSummaryResponse,
     CampaignMemberResponse,
+    CharacterSelectRequest,
 )
 from modules.session.schemas.session_schemas import (
     CreateSessionRequest, SessionResponse
@@ -536,7 +537,7 @@ async def get_campaign_members(
 @router.post("/{campaign_id}/select-character")
 async def select_character_for_campaign(
     campaign_id: UUID,
-    character_id: UUID,
+    request: CharacterSelectRequest,
     user_id: UUID = Depends(get_current_user_id),
     campaign_repo: CampaignRepository = Depends(campaign_repository),
     character_repo: CharacterRepository = Depends(get_character_repository)
@@ -554,7 +555,7 @@ async def select_character_for_campaign(
         character = command.execute(
             campaign_id=campaign_id,
             user_id=user_id,
-            character_id=character_id
+            character_id=UUID(request.character_id)
         )
         return {
             "message": "Character selected for campaign",

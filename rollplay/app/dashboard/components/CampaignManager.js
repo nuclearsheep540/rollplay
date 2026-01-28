@@ -849,6 +849,25 @@ export default function CampaignManager({ user, refreshTrigger, onCampaignUpdate
     }
   }, [expandCampaignId, campaigns, loading])
 
+  // Auto-open character modal from sessionStorage (after returning from character creation)
+  // Uses sessionStorage instead of URL param to avoid race conditions and unintended reopening
+  useEffect(() => {
+    if (selectedCampaign && !loading) {
+      try {
+        const storedCampaignId = sessionStorage.getItem('openCharacterModalForCampaign')
+        if (storedCampaignId && storedCampaignId === selectedCampaign.id) {
+          // Clear immediately to prevent re-triggering
+          sessionStorage.removeItem('openCharacterModalForCampaign')
+          // Open the character modal
+          setCharacterModalCampaign(selectedCampaign)
+          setShowCharacterModal(true)
+        }
+      } catch (e) {
+        // sessionStorage blocked - gracefully degrade, user can manually open modal
+      }
+    }
+  }, [selectedCampaign, loading])
+
   // Fetch members when an invited campaign is expanded
   useEffect(() => {
     if (selectedInvitedCampaign) {
@@ -2310,9 +2329,10 @@ export default function CampaignManager({ user, refreshTrigger, onCampaignUpdate
           }}
           onCharacterSelected={handleCharacterSelected}
           onCreateCharacter={() => {
+            const campaignId = characterModalCampaign.id
             setShowCharacterModal(false)
             setCharacterModalCampaign(null)
-            router.push('/character/create')
+            router.push(`/character/create?return_campaign=${campaignId}`)
           }}
         />
       )}

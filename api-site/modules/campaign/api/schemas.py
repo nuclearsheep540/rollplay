@@ -22,6 +22,11 @@ class CampaignUpdateRequest(BaseModel):
     session_name: Optional[str] = Field(None, max_length=100)
 
 
+class CharacterSelectRequest(BaseModel):
+    """Request body for selecting a character for a campaign"""
+    character_id: str = Field(..., description="UUID of the character to select")
+
+
 class HostStatusResponse(BaseModel):
     is_host: bool
     session_id: str

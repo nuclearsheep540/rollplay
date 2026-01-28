@@ -405,7 +405,6 @@ function DashboardContent() {
             expandCampaignId={expandCampaignId}
             clearExpandCampaignId={clearExpandCampaignId}
             showToast={showToast}
-            onNavigateToCharacters={() => setActiveSection('characters')}
           />
         </section>
       )}
