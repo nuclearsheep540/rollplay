@@ -15,7 +15,7 @@ import {
 } from '../../styles/constants';
 import DicePrompt from './DMDicePrompt';
 import { AudioMixerPanel } from '../../audio_management/components';
-import MapSelectionModal from './MapSelectionModal';
+import MapSelectionSection from './MapSelectionModal';
 
 String.prototype.titleCase = function() {
   return this.replace(/\w\S*/g, (txt) =>
@@ -126,9 +126,10 @@ export default function DMControlCenter({
   handleTrackClick,
   combatActive = true,
   setCombatActive,
-  gameSeats,           
-  setSeatCount,        
-  roomId,              
+  gameSeats,
+  setSeatCount,
+  roomId,
+  campaignId = null,   // Campaign ID for direct api-site calls
   handleKickPlayer,
   handleClearSystemMessages,
   handleClearAllMessages,   // NEW: Function to clear all messages
@@ -184,8 +185,8 @@ export default function DMControlCenter({
   // Store original server opacity when entering edit mode
   const [originalServerOpacity, setOriginalServerOpacity] = useState(null);
 
-  // NEW: State for map selection modal
-  const [isMapSelectionOpen, setIsMapSelectionOpen] = useState(false);
+  // State for map selection inline section
+  const [isMapExpanded, setIsMapExpanded] = useState(false);
 
   // Sync form inputs with loaded grid config (atomic approach)
   useEffect(() => {
@@ -380,14 +381,6 @@ export default function DMControlCenter({
           onPromptRoll={handlePromptPlayerForRoll}
         />
         
-        <MapSelectionModal
-          isOpen={isMapSelectionOpen}
-          onClose={() => setIsMapSelectionOpen(false)}
-          onSelectMap={handleMapSelection}
-          roomId={roomId}
-          currentMap={activeMap}
-        />
-
       {/* UPDATED: Active Dice Prompts Status (show list of active prompts) */}
       {activePrompts.length > 0 && (
         <div className="mb-4">
@@ -439,15 +432,19 @@ export default function DMControlCenter({
         </div>
         {expandedSections.map && (
           <div>
-            <button 
-              className={DM_CHILD}
-              onClick={() => {
-                // Always open map selection modal
-                setIsMapSelectionOpen(true);
-              }}
+            <button
+              className={`${DM_CHILD} ${isMapExpanded ? ACTIVE_BACKGROUND : ''}`}
+              onClick={() => setIsMapExpanded(!isMapExpanded)}
             >
-              📁 Load Map
+              📁 {isMapExpanded ? 'Hide Maps' : 'Load Map'}
             </button>
+            <MapSelectionSection
+              isExpanded={isMapExpanded}
+              onSelectMap={handleMapSelection}
+              roomId={roomId}
+              campaignId={campaignId}
+              currentMap={activeMap}
+            />
             {activeMap && (
               <button 
                 className={`${DM_CHILD} ${ACTIVE_BACKGROUND}`}
@@ -468,16 +465,6 @@ export default function DMControlCenter({
                 🗑️ Clear Map
               </button>
             )}
-            <button 
-              className={DM_CHILD}
-              onClick={() => {
-                // Future: Implement actual file upload
-                console.log('📁 File upload not implemented yet');
-                alert('File upload will be implemented in future session');
-              }}
-            >
-              🔄 Upload New Map
-            </button>
             {/* Grid Dimensions Controls - now the main edit mode */}
             <button 
               className={`${DM_CHILD} ${isDimensionsExpanded ? ACTIVE_BACKGROUND : ''}`}

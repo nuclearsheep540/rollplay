@@ -40,7 +40,8 @@ def register_websocket_routes(app: FastAPI):
                         "dungeon_master": room.get("dungeon_master", ""),
                         "combat_active": room.get("combat_active", False),
                         "max_players": room.get("max_players", 8),
-                        "seat_colors": room.get("seat_colors", {})
+                        "seat_colors": room.get("seat_colors", {}),
+                        "campaign_id": room.get("campaign_id", "")
                     }
                 }
                 await websocket.send_json(initial_state)

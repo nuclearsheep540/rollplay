@@ -100,6 +100,9 @@ function GameContent() {
 
   // Session ended modal state
   const [sessionEndedData, setSessionEndedData] = useState(null); // { message, reason } when session ends
+
+  // Campaign ID for direct api-site calls (asset library)
+  const [campaignId, setCampaignId] = useState(null);
   
   // Debug wrapper for setGridConfig
   const debugSetGridConfig = (config) => {
@@ -699,7 +702,8 @@ function GameContent() {
     setLobbyUsers,
     setDisconnectTimeouts,
     setCurrentInitiativePromptId,
-    
+    setCampaignId,
+
     // Current state values
     gameSeats,
     thisPlayer,
@@ -707,7 +711,7 @@ function GameContent() {
     lobbyUsers,
     disconnectTimeouts,
     currentInitiativePromptId,
-    
+
     // Helper functions
     addToLog,
     getCharacterData,
@@ -1393,6 +1397,7 @@ function GameContent() {
             setCombatActive={sendCombatStateChange}
             gameSeats={gameSeats}
             roomId={roomId}
+            campaignId={campaignId}
             activePrompts={activePrompts}        // UPDATED: Pass array instead of single prompt
             unlockAudio={unlockAudio}             // NEW: Pass audio unlock function
             isAudioUnlocked={isAudioUnlocked}    // NEW: Pass audio unlock status

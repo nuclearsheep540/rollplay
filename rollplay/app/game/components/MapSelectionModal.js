@@ -2,22 +2,25 @@
 /* SPDX-License-Identifier: GPL-3.0-or-later */
 
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { DM_CHILD, DM_CHILD_LAST, PANEL_SUBTITLE } from '../../styles/constants';
+import { DM_CHILD, DM_CHILD_LAST, PANEL_SUBTITLE, ACTIVE_BACKGROUND } from '../../styles/constants';
 
 const ACCEPTED_MAP_TYPES = ['image/png', 'image/jpeg', 'image/webp'];
 const MAX_FILE_SIZE = 50 * 1024 * 1024; // 50MB
 
-export default function MapSelectionModal({
-  isOpen,
-  onClose,
+/**
+ * Inline collapsible map selection section for DM Control Center
+ * Replaces the modal with an inline expandable section
+ */
+export default function MapSelectionSection({
+  isExpanded,
   onSelectMap,
   roomId,
+  campaignId,
   currentMap
 }) {
   const [assets, setAssets] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
-  const [selectedAssetId, setSelectedAssetId] = useState(null);
 
   // Upload state
   const [showUpload, setShowUpload] = useState(false);
@@ -33,17 +36,17 @@ export default function MapSelectionModal({
   const [libraryAssets, setLibraryAssets] = useState([]);
   const [libraryLoading, setLibraryLoading] = useState(false);
   const [libraryError, setLibraryError] = useState(null);
-  const [associating, setAssociating] = useState(null); // asset id being associated
+  const [associating, setAssociating] = useState(null);
 
-  // Fetch available assets when modal opens
+  // Fetch available assets when section expands
   const fetchAssets = useCallback(async () => {
-    if (!roomId) return;
+    if (!campaignId) return;
 
     setLoading(true);
     setError(null);
 
     try {
-      const response = await fetch(`/api/game/${roomId}/assets?asset_type=map`, {
+      const response = await fetch(`/api/library/?campaign_id=${campaignId}&asset_type=map`, {
         credentials: 'include'
       });
 
@@ -52,7 +55,6 @@ export default function MapSelectionModal({
       }
 
       const data = await response.json();
-      // Filter to only map assets (in case backend doesn't filter)
       const mapAssets = (data.assets || []).filter(asset => asset.asset_type === 'map');
       setAssets(mapAssets);
     } catch (err) {
@@ -61,23 +63,21 @@ export default function MapSelectionModal({
     } finally {
       setLoading(false);
     }
-  }, [roomId]);
+  }, [campaignId]);
 
   useEffect(() => {
-    if (isOpen && roomId) {
+    if (isExpanded && campaignId) {
       fetchAssets();
     }
-  }, [isOpen, roomId, fetchAssets]);
+  }, [isExpanded, campaignId, fetchAssets]);
 
-  // Fetch user's full library (for "Add from Library" feature)
+  // Fetch user's full library
   const fetchLibrary = useCallback(async () => {
-    if (!roomId) return;
-
     setLibraryLoading(true);
     setLibraryError(null);
 
     try {
-      const response = await fetch(`/api/game/${roomId}/user-library?asset_type=map`, {
+      const response = await fetch(`/api/library/?asset_type=map`, {
         credentials: 'include'
       });
 
@@ -86,7 +86,6 @@ export default function MapSelectionModal({
       }
 
       const data = await response.json();
-      // Filter to only map assets not already in campaign
       const campaignAssetIds = new Set(assets.map(a => a.id));
       const libraryMaps = (data.assets || [])
         .filter(asset => asset.asset_type === 'map' && !campaignAssetIds.has(asset.id));
@@ -97,9 +96,8 @@ export default function MapSelectionModal({
     } finally {
       setLibraryLoading(false);
     }
-  }, [roomId, assets]);
+  }, [assets]);
 
-  // When library panel opens, fetch library assets
   useEffect(() => {
     if (showLibrary) {
       fetchLibrary();
@@ -108,14 +106,16 @@ export default function MapSelectionModal({
 
   // Associate a library asset with the campaign
   const handleAssociateAsset = async (asset) => {
-    if (!roomId || associating) return;
+    if (!campaignId || associating) return;
 
     try {
       setAssociating(asset.id);
 
-      const response = await fetch(`/api/game/${roomId}/assets/${asset.id}/associate`, {
+      const response = await fetch(`/api/library/${asset.id}/associate`, {
         method: 'POST',
-        credentials: 'include'
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({ campaign_id: campaignId })
       });
 
       if (!response.ok) {
@@ -123,10 +123,8 @@ export default function MapSelectionModal({
         throw new Error(errorData.detail || 'Failed to add to campaign');
       }
 
-      // Refresh campaign assets and library
       await fetchAssets();
       setShowLibrary(false);
-
     } catch (err) {
       console.error('Error associating asset:', err);
       setLibraryError(err.message);
@@ -138,19 +136,15 @@ export default function MapSelectionModal({
   // File validation
   const validateFile = useCallback((file) => {
     if (!file) return 'No file selected';
-
     if (file.size > MAX_FILE_SIZE) {
       return `File too large. Maximum size is ${MAX_FILE_SIZE / (1024 * 1024)}MB`;
     }
-
     if (!ACCEPTED_MAP_TYPES.includes(file.type)) {
       return 'Invalid file type. Accepted: .png, .jpg, .jpeg, .webp';
     }
-
     return null;
   }, []);
 
-  // Handle file selection
   const handleFileSelect = useCallback((file) => {
     const validationError = validateFile(file);
     if (validationError) {
@@ -162,7 +156,6 @@ export default function MapSelectionModal({
     }
   }, [validateFile]);
 
-  // Drag and drop handlers
   const handleDrag = useCallback((e) => {
     e.preventDefault();
     e.stopPropagation();
@@ -177,22 +170,19 @@ export default function MapSelectionModal({
     e.preventDefault();
     e.stopPropagation();
     setDragActive(false);
-
     if (e.dataTransfer.files && e.dataTransfer.files[0]) {
       handleFileSelect(e.dataTransfer.files[0]);
     }
   }, [handleFileSelect]);
 
-  // Upload handler
   const handleUpload = async () => {
-    if (!selectedFile || !roomId) return;
+    if (!selectedFile || !campaignId) return;
 
     try {
       setUploading(true);
       setUploadProgress(0);
       setUploadError(null);
 
-      // Step 1: Get presigned upload URL from api-game (proxies to api-site)
       const uploadUrlParams = new URLSearchParams({
         filename: selectedFile.name,
         content_type: selectedFile.type,
@@ -200,7 +190,7 @@ export default function MapSelectionModal({
       });
 
       const uploadUrlResponse = await fetch(
-        `/api/game/${roomId}/upload-url?${uploadUrlParams}`,
+        `/api/library/upload-url?${uploadUrlParams}`,
         { credentials: 'include' }
       );
 
@@ -212,13 +202,10 @@ export default function MapSelectionModal({
       const { upload_url, key } = await uploadUrlResponse.json();
       setUploadProgress(20);
 
-      // Step 2: Upload file directly to S3
       const uploadResponse = await fetch(upload_url, {
         method: 'PUT',
         body: selectedFile,
-        headers: {
-          'Content-Type': selectedFile.type
-        }
+        headers: { 'Content-Type': selectedFile.type }
       });
 
       if (!uploadResponse.ok) {
@@ -226,17 +213,15 @@ export default function MapSelectionModal({
       }
       setUploadProgress(70);
 
-      // Step 3: Confirm upload with api-game (proxies to api-site)
-      const confirmResponse = await fetch(`/api/game/${roomId}/upload-confirm`, {
+      const confirmResponse = await fetch(`/api/library/confirm`, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json'
-        },
+        headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
         body: JSON.stringify({
           key,
           asset_type: 'map',
-          file_size: selectedFile.size
+          file_size: selectedFile.size,
+          campaign_id: campaignId
         })
       });
 
@@ -246,12 +231,9 @@ export default function MapSelectionModal({
       }
 
       setUploadProgress(100);
-
-      // Reset upload state and refresh assets
       setSelectedFile(null);
       setShowUpload(false);
       await fetchAssets();
-
     } catch (err) {
       console.error('Error uploading map:', err);
       setUploadError(err.message);
@@ -261,8 +243,6 @@ export default function MapSelectionModal({
     }
   };
 
-  if (!isOpen) return null;
-
   const handleMapSelect = (asset) => {
     const mapSettings = {
       room_id: roomId,
@@ -270,334 +250,178 @@ export default function MapSelectionModal({
       filename: asset.filename,
       original_filename: asset.filename,
       file_path: asset.s3_url || asset.s3_key,
-      // DON'T send any grid config - maps start with no grid until DM sets one
       uploaded_by: "dm"
     };
-
     onSelectMap(mapSettings);
-    onClose();
   };
 
+  if (!isExpanded) return null;
+
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-      <div className="bg-gray-800 rounded-lg p-6 max-w-2xl w-full mx-4 max-h-[80vh] overflow-y-auto">
-        <div className="flex justify-between items-center mb-4">
-          <h2 className="text-xl font-bold text-white">Select Map</h2>
-          <button
-            onClick={onClose}
-            className="text-gray-400 hover:text-white text-2xl"
+    <div className="ml-4 mb-4">
+      {/* Action buttons */}
+      <div className="flex gap-2 mb-3">
+        <button
+          onClick={() => { setShowUpload(!showUpload); setShowLibrary(false); }}
+          className={`px-3 py-1.5 rounded text-xs transition-colors ${
+            showUpload ? 'bg-emerald-500 text-white' : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
+          }`}
+        >
+          📤 {showUpload ? 'Hide' : 'Upload'}
+        </button>
+        <button
+          onClick={() => { setShowLibrary(!showLibrary); setShowUpload(false); }}
+          className={`px-3 py-1.5 rounded text-xs transition-colors ${
+            showLibrary ? 'bg-sky-500 text-white' : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
+          }`}
+        >
+          📚 {showLibrary ? 'Hide' : 'Library'}
+        </button>
+      </div>
+
+      {/* Upload Section */}
+      {showUpload && (
+        <div className="mb-4 p-3 bg-gray-700/50 rounded border border-gray-600">
+          <div
+            onDragEnter={handleDrag}
+            onDragLeave={handleDrag}
+            onDragOver={handleDrag}
+            onDrop={handleDrop}
+            onClick={() => !uploading && fileInputRef.current?.click()}
+            className={`border-2 border-dashed rounded p-4 text-center cursor-pointer transition-all ${
+              dragActive ? 'border-sky-500 bg-sky-500/10'
+                : selectedFile ? 'border-emerald-500/50 bg-emerald-500/5'
+                : 'border-gray-500 hover:border-gray-400'
+            } ${uploading ? 'pointer-events-none opacity-60' : ''}`}
           >
-            ×
-          </button>
-        </div>
+            <input
+              ref={fileInputRef}
+              type="file"
+              onChange={(e) => e.target.files?.[0] && handleFileSelect(e.target.files[0])}
+              accept={ACCEPTED_MAP_TYPES.join(',')}
+              className="hidden"
+              disabled={uploading}
+            />
+            {selectedFile ? (
+              <div>
+                <p className="text-gray-200 text-sm truncate">{selectedFile.name}</p>
+                <p className="text-gray-500 text-xs">{(selectedFile.size / (1024 * 1024)).toFixed(2)} MB</p>
+              </div>
+            ) : (
+              <div>
+                <p className="text-gray-400 text-sm">Drop or click to browse</p>
+                <p className="text-gray-500 text-xs">PNG, JPG, WebP (max 50MB)</p>
+              </div>
+            )}
+          </div>
 
-        {/* Action Buttons */}
-        <div className="mb-4 flex gap-2 flex-wrap">
-          <button
-            onClick={() => { setShowUpload(!showUpload); setShowLibrary(false); }}
-            className={`px-4 py-2 rounded transition-colors flex items-center gap-2 ${
-              showUpload
-                ? 'bg-emerald-500 text-white'
-                : 'bg-emerald-600 text-white hover:bg-emerald-500'
-            }`}
-          >
-            <span>📤</span>
-            {showUpload ? 'Hide Upload' : 'Upload New Map'}
-          </button>
-          <button
-            onClick={() => { setShowLibrary(!showLibrary); setShowUpload(false); }}
-            className={`px-4 py-2 rounded transition-colors flex items-center gap-2 ${
-              showLibrary
-                ? 'bg-sky-500 text-white'
-                : 'bg-sky-600 text-white hover:bg-sky-500'
-            }`}
-          >
-            <span>📚</span>
-            {showLibrary ? 'Hide Library' : 'Add from Library'}
-          </button>
-        </div>
-
-        {/* Upload Section */}
-        {showUpload && (
-          <div className="mb-6 p-4 bg-gray-700/50 rounded-lg border border-gray-600">
-            <h3 className="text-sm font-medium text-gray-300 mb-3">Upload Map Image</h3>
-
-            {/* Drop Zone */}
-            <div
-              onDragEnter={handleDrag}
-              onDragLeave={handleDrag}
-              onDragOver={handleDrag}
-              onDrop={handleDrop}
-              onClick={() => !uploading && fileInputRef.current?.click()}
-              className={`relative border-2 border-dashed rounded-lg p-6 text-center cursor-pointer transition-all ${
-                dragActive
-                  ? 'border-sky-500 bg-sky-500/10'
-                  : selectedFile
-                    ? 'border-emerald-500/50 bg-emerald-500/5'
-                    : 'border-gray-500 hover:border-gray-400'
-              } ${uploading ? 'pointer-events-none opacity-60' : ''}`}
-            >
-              <input
-                ref={fileInputRef}
-                type="file"
-                onChange={(e) => e.target.files?.[0] && handleFileSelect(e.target.files[0])}
-                accept={ACCEPTED_MAP_TYPES.join(',')}
-                className="hidden"
-                disabled={uploading}
-              />
-
-              {selectedFile ? (
-                <div>
-                  <span className="text-2xl block mb-2">🗺️</span>
-                  <p className="text-gray-200 font-medium truncate">{selectedFile.name}</p>
-                  <p className="text-gray-500 text-sm mt-1">
-                    {(selectedFile.size / (1024 * 1024)).toFixed(2)} MB
-                  </p>
-                  {!uploading && (
-                    <p className="text-gray-500 text-xs mt-2">Click to change file</p>
-                  )}
-                </div>
-              ) : (
-                <div>
-                  <span className="text-3xl block mb-2">📁</span>
-                  <p className="text-gray-300 mb-1">Drop map image here or click to browse</p>
-                  <p className="text-gray-500 text-sm">PNG, JPG, JPEG, WebP (max 50MB)</p>
-                </div>
-              )}
+          {uploading && (
+            <div className="mt-2">
+              <div className="h-1.5 bg-gray-600 rounded-full overflow-hidden">
+                <div className="h-full bg-sky-500 transition-all" style={{ width: `${uploadProgress}%` }} />
+              </div>
             </div>
+          )}
 
-            {/* Upload Progress */}
-            {uploading && (
-              <div className="mt-3 space-y-2">
-                <div className="flex justify-between text-sm">
-                  <span className="text-gray-400">Uploading...</span>
-                  <span className="text-gray-300">{uploadProgress}%</span>
-                </div>
-                <div className="h-2 bg-gray-600 rounded-full overflow-hidden">
-                  <div
-                    className="h-full bg-sky-500 transition-all duration-300"
-                    style={{ width: `${uploadProgress}%` }}
-                  />
-                </div>
-              </div>
-            )}
+          {uploadError && (
+            <p className="mt-2 text-red-400 text-xs">{uploadError}</p>
+          )}
 
-            {/* Upload Error */}
-            {uploadError && (
-              <div className="mt-3 p-3 bg-red-500/10 border border-red-500/30 rounded-lg">
-                <p className="text-red-400 text-sm">{uploadError}</p>
-              </div>
-            )}
+          {selectedFile && !uploading && (
+            <button onClick={handleUpload} className="mt-2 w-full px-3 py-1.5 bg-sky-600 text-white text-sm rounded hover:bg-sky-500">
+              Upload
+            </button>
+          )}
+        </div>
+      )}
 
-            {/* Upload Button */}
-            {selectedFile && !uploading && (
-              <button
-                onClick={handleUpload}
-                className="mt-3 w-full px-4 py-2 bg-sky-600 text-white rounded hover:bg-sky-500 transition-colors"
-              >
-                Upload Map
-              </button>
-            )}
-          </div>
-        )}
+      {/* Library Section */}
+      {showLibrary && (
+        <div className="mb-4 p-3 bg-gray-700/50 rounded border border-gray-600">
+          <p className="text-xs text-gray-400 mb-2">Maps not linked to this campaign</p>
 
-        {/* Add from Library Section */}
-        {showLibrary && (
-          <div className="mb-6 p-4 bg-gray-700/50 rounded-lg border border-gray-600">
-            <h3 className="text-sm font-medium text-gray-300 mb-3">
-              Add from Your Library
-              <span className="text-gray-500 font-normal ml-2">
-                (maps not yet linked to this campaign)
-              </span>
-            </h3>
+          {libraryLoading && (
+            <div className="text-center py-3">
+              <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-sky-500 mx-auto"></div>
+            </div>
+          )}
 
-            {libraryLoading && (
-              <div className="text-center py-4">
-                <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-sky-500 mx-auto mb-2"></div>
-                <p className="text-gray-400 text-sm">Loading library...</p>
-              </div>
-            )}
+          {libraryError && <p className="text-red-400 text-xs">{libraryError}</p>}
 
-            {libraryError && (
-              <div className="p-3 bg-red-500/10 border border-red-500/30 rounded-lg">
-                <p className="text-red-400 text-sm">{libraryError}</p>
-              </div>
-            )}
+          {!libraryLoading && !libraryError && libraryAssets.length === 0 && (
+            <p className="text-gray-500 text-xs text-center py-2">No additional maps in library</p>
+          )}
 
-            {!libraryLoading && !libraryError && libraryAssets.length === 0 && (
-              <div className="text-center py-4">
-                <p className="text-gray-400 text-sm">
-                  No additional maps in your library.
-                </p>
-                <p className="text-gray-500 text-xs mt-1">
-                  Upload maps via the Dashboard Library tab.
-                </p>
-              </div>
-            )}
-
-            {!libraryLoading && !libraryError && libraryAssets.length > 0 && (
-              <div className="space-y-2 max-h-60 overflow-y-auto">
-                {libraryAssets.map((asset) => (
-                  <div
-                    key={asset.id}
-                    className="flex items-center gap-3 p-2 rounded-lg border border-gray-600 hover:border-gray-500 transition-colors"
-                  >
-                    {/* Thumbnail */}
-                    <div className="flex-shrink-0">
-                      {asset.s3_url ? (
-                        <img
-                          src={asset.s3_url}
-                          alt={asset.filename}
-                          className="w-12 h-12 object-cover rounded border border-gray-600"
-                          onError={(e) => {
-                            e.target.style.display = 'none';
-                            e.target.nextSibling.style.display = 'flex';
-                          }}
-                        />
-                      ) : null}
-                      <div
-                        className="w-12 h-12 bg-gray-700 rounded border border-gray-600 items-center justify-center text-gray-500 text-sm"
-                        style={{ display: asset.s3_url ? 'none' : 'flex' }}
-                      >
-                        🗺️
-                      </div>
-                    </div>
-
-                    {/* Info */}
-                    <div className="flex-1 min-w-0">
-                      <p className="text-gray-200 text-sm font-medium truncate">
-                        {asset.filename}
-                      </p>
-                      <p className="text-gray-500 text-xs">
-                        {asset.content_type || 'Map image'}
-                      </p>
-                    </div>
-
-                    {/* Add Button */}
-                    <button
-                      onClick={() => handleAssociateAsset(asset)}
-                      disabled={associating === asset.id}
-                      className={`px-3 py-1.5 rounded text-sm transition-colors flex-shrink-0 ${
-                        associating === asset.id
-                          ? 'bg-gray-600 text-gray-400 cursor-not-allowed'
-                          : 'bg-sky-600 text-white hover:bg-sky-500'
-                      }`}
-                    >
-                      {associating === asset.id ? 'Adding...' : 'Add to Campaign'}
-                    </button>
+          {!libraryLoading && !libraryError && libraryAssets.length > 0 && (
+            <div className="space-y-2 max-h-40 overflow-y-auto">
+              {libraryAssets.map((asset) => (
+                <div key={asset.id} className="flex items-center gap-2 p-2 rounded border border-gray-600 hover:border-gray-500">
+                  <div className="w-10 h-10 flex-shrink-0 bg-gray-700 rounded flex items-center justify-center overflow-hidden">
+                    {asset.s3_url ? (
+                      <img src={asset.s3_url} alt="" className="w-full h-full object-cover" />
+                    ) : (
+                      <span className="text-gray-500 text-xs">🗺️</span>
+                    )}
                   </div>
-                ))}
-              </div>
-            )}
-          </div>
-        )}
+                  <p className="flex-1 text-xs text-gray-300 truncate">{asset.filename}</p>
+                  <button
+                    onClick={() => handleAssociateAsset(asset)}
+                    disabled={associating === asset.id}
+                    className="px-2 py-1 text-xs bg-sky-600 text-white rounded hover:bg-sky-500 disabled:opacity-50"
+                  >
+                    {associating === asset.id ? '...' : 'Add'}
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
 
-        {/* Loading State */}
-        {loading && (
-          <div className="text-center py-8">
-            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500 mx-auto mb-4"></div>
-            <p className="text-gray-400">Loading maps...</p>
-          </div>
-        )}
+      {/* Loading */}
+      {loading && (
+        <div className="text-center py-4">
+          <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-sky-500 mx-auto"></div>
+        </div>
+      )}
 
-        {/* Error State */}
-        {error && (
-          <div className="text-center py-8">
-            <p className="text-red-400 mb-2">Failed to load maps</p>
-            <p className="text-gray-500 text-sm">{error}</p>
-          </div>
-        )}
+      {/* Error */}
+      {error && <p className="text-red-400 text-xs mb-2">{error}</p>}
 
-        {/* Empty State */}
-        {!loading && !error && assets.length === 0 && (
-          <div className="text-center py-8">
-            <p className="text-gray-400 mb-2">No maps available</p>
-            <p className="text-gray-500 text-sm">
-              Upload a map above or add maps to your Library in the Dashboard.
-            </p>
-          </div>
-        )}
+      {/* Empty state */}
+      {!loading && !error && assets.length === 0 && (
+        <p className="text-gray-500 text-xs">No maps available. Upload or add from library.</p>
+      )}
 
-        {/* Asset List */}
-        {!loading && !error && assets.length > 0 && (
-          <div className="space-y-4">
-            {assets.map((asset) => (
+      {/* Asset List */}
+      {!loading && !error && assets.length > 0 && (
+        <div className="space-y-2">
+          {assets.map((asset) => {
+            const isActive = currentMap?.asset_id === asset.id || currentMap?.filename === asset.filename;
+            return (
               <div
                 key={asset.id}
-                className={`border rounded-lg p-4 transition-all cursor-pointer ${
-                  selectedAssetId === asset.id
-                    ? 'border-blue-500 bg-blue-900/20'
-                    : 'border-gray-600 hover:border-gray-500'
-                } ${
-                  currentMap?.asset_id === asset.id || currentMap?.filename === asset.filename
-                    ? 'ring-2 ring-green-500 ring-opacity-50'
-                    : ''
+                onClick={() => handleMapSelect(asset)}
+                className={`flex items-center gap-2 p-2 rounded border cursor-pointer transition-all ${
+                  isActive
+                    ? 'border-green-500 bg-green-900/20'
+                    : 'border-gray-600 hover:border-sky-500 hover:bg-sky-900/10'
                 }`}
-                onClick={() => setSelectedAssetId(asset.id)}
               >
-                <div className="flex gap-4">
-                  <div className="flex-shrink-0">
-                    {asset.s3_url ? (
-                      <img
-                        src={asset.s3_url}
-                        alt={asset.filename}
-                        className="w-24 h-24 object-cover rounded border border-gray-600"
-                        onError={(e) => {
-                          e.target.style.display = 'none';
-                          e.target.nextSibling.style.display = 'flex';
-                        }}
-                      />
-                    ) : null}
-                    <div
-                      className="w-24 h-24 bg-gray-700 rounded border border-gray-600 items-center justify-center text-gray-500"
-                      style={{ display: asset.s3_url ? 'none' : 'flex' }}
-                    >
-                      🗺️
-                    </div>
-                  </div>
-                  <div className="flex-1">
-                    <h3 className="text-lg font-semibold text-white mb-1">
-                      {asset.filename}
-                      {(currentMap?.asset_id === asset.id || currentMap?.filename === asset.filename) && (
-                        <span className="ml-2 text-sm text-green-400">(Currently Active)</span>
-                      )}
-                    </h3>
-                    <p className="text-gray-400 text-sm mb-2">
-                      {asset.content_type || 'Map image'}
-                    </p>
-                    <div className="text-xs text-gray-500">
-                      No grid - DM can set grid dimensions after loading
-                    </div>
-                  </div>
+                <div className="w-10 h-10 flex-shrink-0 bg-gray-700 rounded flex items-center justify-center overflow-hidden">
+                  {asset.s3_url ? (
+                    <img src={asset.s3_url} alt="" className="w-full h-full object-cover" />
+                  ) : (
+                    <span className="text-gray-500 text-xs">🗺️</span>
+                  )}
                 </div>
-
-                {selectedAssetId === asset.id && (
-                  <div className="mt-4 pt-4 border-t border-gray-600">
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        handleMapSelect(asset);
-                      }}
-                      className={DM_CHILD_LAST}
-                    >
-                      🗺️ Load {asset.filename}
-                    </button>
-                  </div>
-                )}
+                <p className="flex-1 text-xs text-gray-200 truncate">{asset.filename}</p>
+                {isActive && <span className="text-green-400 text-xs">Active</span>}
               </div>
-            ))}
-          </div>
-        )}
-
-        <div className="mt-6 flex justify-end space-x-3">
-          <button
-            onClick={onClose}
-            className="px-4 py-2 bg-gray-600 text-white rounded hover:bg-gray-700 transition-colors"
-          >
-            Cancel
-          </button>
+            );
+          })}
         </div>
-      </div>
+      )}
     </div>
   );
 }
