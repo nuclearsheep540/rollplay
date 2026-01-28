@@ -17,10 +17,11 @@ class AssetRef(BaseModel):
 class SessionStartRequest(BaseModel):
     """Request to create a new active game in MongoDB for a session"""
     session_id: str  # PostgreSQL session ID from api-site
+    campaign_id: str  # PostgreSQL campaign ID - used for proxying asset requests to api-site
     dm_username: str
     max_players: int = 8
     joined_user_ids: List[str] = []  # List of user IDs who are already part of the session
-    assets: List[AssetRef] = []  # Assets associated with the session's campaign
+    assets: List[AssetRef] = []  # Assets associated with the session's campaign (legacy, prefer proxy)
 
 
 class SessionStartResponse(BaseModel):

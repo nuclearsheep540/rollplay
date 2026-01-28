@@ -346,10 +346,11 @@ class StartSession:
         # 7. Build payload for api-game
         payload = {
             "session_id": str(session.id),
+            "campaign_id": str(session.campaign_id),  # For api-game to proxy asset requests to api-site
             "dm_username": dm_username,
             "max_players": session.max_players,  # From session aggregate
             "joined_user_ids": [str(user_id) for user_id in session.joined_users],  # Campaign players
-            "assets": assets  # Campaign library assets
+            "assets": assets  # Campaign library assets (legacy, api-game will fetch fresh URLs on-demand)
         }
 
         # 7. Call api-game (synchronous await)

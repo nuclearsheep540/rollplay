@@ -1,7 +1,8 @@
 # Copyright (C) 2025 Matthew Davey
 # SPDX-License-Identifier: GPL-3.0-or-later
-from fastapi import FastAPI, Response
+from fastapi import FastAPI, Response, Request, Query
 import logging
+from typing import Optional
 
 from fastapi import HTTPException
 from fastapi.middleware.cors import CORSMiddleware
@@ -17,6 +18,7 @@ from message_templates import format_message, MESSAGE_TEMPLATES
 from models.log_type import LogType
 from websocket_handlers.connection_manager import manager as connection_manager
 from schemas.session_schemas import SessionStartRequest, SessionStartResponse, SessionEndRequest, SessionEndResponse
+from services.api_site_client import get_api_site_client
 from datetime import datetime
 
 logger = logging.getLogger()
@@ -36,21 +38,236 @@ map_service = MapService()
 
 
 @app.get("/game/{room_id}/assets")
-async def get_available_assets(room_id: str):
-    """Get assets available for this game session from the campaign library"""
+async def get_available_assets(
+    room_id: str,
+    request: Request,
+    asset_type: Optional[str] = Query(None, description="Filter by type: map, audio, image")
+):
+    """
+    Get assets available for this game session from the campaign library.
+
+    Proxies to api-site to get fresh presigned URLs.
+    Falls back to cached assets if api-site is unavailable.
+    """
     try:
         room = GameService.get_room(room_id)
         if not room:
             raise HTTPException(status_code=404, detail="Session not found")
 
-        available_assets = room.get("available_assets", [])
-        logger.info(f"🎨 Returning {len(available_assets)} assets for room {room_id}")
+        campaign_id = room.get("campaign_id")
+        if not campaign_id:
+            # No campaign_id - return cached assets (legacy sessions)
+            available_assets = room.get("available_assets", [])
+            logger.info(f"🎨 Returning {len(available_assets)} cached assets for room {room_id} (no campaign_id)")
+            return {"assets": available_assets, "total": len(available_assets)}
 
-        return {"assets": available_assets}
+        # Get auth token from request cookies
+        auth_token = request.cookies.get("auth_token")
+        if not auth_token:
+            # No auth token - return cached assets
+            available_assets = room.get("available_assets", [])
+            logger.warning(f"🎨 No auth token, returning {len(available_assets)} cached assets for room {room_id}")
+            return {"assets": available_assets, "total": len(available_assets)}
+
+        # Proxy to api-site for fresh presigned URLs
+        client = get_api_site_client()
+        result = await client.get_campaign_assets(campaign_id, auth_token, asset_type)
+
+        if "error" in result:
+            # api-site error - return cached assets as fallback
+            logger.warning(f"🎨 api-site error, returning cached assets: {result.get('error')}")
+            available_assets = room.get("available_assets", [])
+            return {"assets": available_assets, "total": len(available_assets)}
+
+        logger.info(f"🎨 Returning {result.get('total', 0)} assets with fresh URLs for room {room_id}")
+        return result
+
     except HTTPException:
         raise
     except Exception as e:
         logger.error(f"Error getting assets for room {room_id}: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/game/{room_id}/upload-url")
+async def get_upload_url(
+    room_id: str,
+    request: Request,
+    filename: str = Query(..., description="Original filename"),
+    content_type: str = Query(..., description="MIME type (e.g., image/png)"),
+    asset_type: str = Query(default="map", description="Asset type: map, audio, image")
+):
+    """
+    Get presigned upload URL for in-game asset upload.
+
+    Proxies to api-site to get presigned URL.
+    Uploaded assets will be saved to user's Library and associated with the campaign.
+    """
+    try:
+        room = GameService.get_room(room_id)
+        if not room:
+            raise HTTPException(status_code=404, detail="Session not found")
+
+        # Get auth token from request cookies
+        auth_token = request.cookies.get("auth_token")
+        if not auth_token:
+            raise HTTPException(status_code=401, detail="Authentication required")
+
+        # Proxy to api-site for upload URL
+        client = get_api_site_client()
+        result = await client.get_upload_url(filename, content_type, asset_type, auth_token)
+
+        if "error" in result:
+            logger.error(f"Failed to get upload URL: {result.get('error')}")
+            raise HTTPException(status_code=500, detail=result.get("error"))
+
+        logger.info(f"📤 Generated upload URL for {filename} in room {room_id}")
+        return result
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error getting upload URL for room {room_id}: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/game/{room_id}/upload-confirm")
+async def confirm_upload(
+    room_id: str,
+    request: Request,
+    body: dict
+):
+    """
+    Confirm upload and create asset record via api-site.
+
+    Request body:
+    {
+        "key": "map/user-id/uuid_filename.png",
+        "asset_type": "map",
+        "file_size": 12345  // optional
+    }
+
+    The asset will be saved to user's Library and associated with the campaign.
+    """
+    try:
+        room = GameService.get_room(room_id)
+        if not room:
+            raise HTTPException(status_code=404, detail="Session not found")
+
+        campaign_id = room.get("campaign_id")
+        if not campaign_id:
+            raise HTTPException(status_code=400, detail="Session has no campaign_id")
+
+        # Get auth token from request cookies
+        auth_token = request.cookies.get("auth_token")
+        if not auth_token:
+            raise HTTPException(status_code=401, detail="Authentication required")
+
+        key = body.get("key")
+        asset_type = body.get("asset_type", "map")
+        file_size = body.get("file_size")
+
+        if not key:
+            raise HTTPException(status_code=400, detail="key is required")
+
+        # Proxy to api-site to confirm upload
+        client = get_api_site_client()
+        result = await client.confirm_upload(key, asset_type, campaign_id, auth_token, file_size)
+
+        if "error" in result:
+            logger.error(f"Failed to confirm upload: {result.get('error')}")
+            raise HTTPException(status_code=500, detail=result.get("error"))
+
+        logger.info(f"✅ Confirmed upload for {key} in room {room_id}")
+        return result
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error confirming upload for room {room_id}: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/game/{room_id}/user-library")
+async def get_user_library(
+    room_id: str,
+    request: Request,
+    asset_type: Optional[str] = Query(None, description="Filter by type: map, audio, image")
+):
+    """
+    Get user's full asset library (not filtered by campaign).
+
+    Used for "Add from Library" feature where users can browse their
+    full library and add existing assets to the current campaign.
+    """
+    try:
+        room = GameService.get_room(room_id)
+        if not room:
+            raise HTTPException(status_code=404, detail="Session not found")
+
+        # Get auth token from request cookies
+        auth_token = request.cookies.get("auth_token")
+        if not auth_token:
+            raise HTTPException(status_code=401, detail="Authentication required")
+
+        # Proxy to api-site for user's full library
+        client = get_api_site_client()
+        result = await client.get_user_library(auth_token, asset_type)
+
+        if "error" in result:
+            logger.warning(f"📚 api-site error getting user library: {result.get('error')}")
+            return {"assets": [], "total": 0}
+
+        logger.info(f"📚 Returning {result.get('total', 0)} assets from user library for room {room_id}")
+        return result
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error getting user library for room {room_id}: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/game/{room_id}/assets/{asset_id}/associate")
+async def associate_asset_with_campaign(
+    room_id: str,
+    asset_id: str,
+    request: Request
+):
+    """
+    Associate an existing library asset with the current campaign.
+
+    Used when user selects an asset from their library to add to the campaign.
+    """
+    try:
+        room = GameService.get_room(room_id)
+        if not room:
+            raise HTTPException(status_code=404, detail="Session not found")
+
+        campaign_id = room.get("campaign_id")
+        if not campaign_id:
+            raise HTTPException(status_code=400, detail="Session has no campaign_id")
+
+        # Get auth token from request cookies
+        auth_token = request.cookies.get("auth_token")
+        if not auth_token:
+            raise HTTPException(status_code=401, detail="Authentication required")
+
+        # Proxy to api-site to associate asset
+        client = get_api_site_client()
+        result = await client.associate_asset(asset_id, campaign_id, auth_token)
+
+        if "error" in result:
+            logger.error(f"Failed to associate asset: {result.get('error')}")
+            raise HTTPException(status_code=500, detail=result.get("error"))
+
+        logger.info(f"🔗 Associated asset {asset_id} with campaign {campaign_id} in room {room_id}")
+        return result
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error associating asset for room {room_id}: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -450,7 +667,8 @@ async def create_session(request: SessionStartRequest):
             moderators=[],
             dungeon_master=request.dm_username.lower(),
             room_host=request.dm_username.lower(),
-            available_assets=available_assets
+            available_assets=available_assets,
+            campaign_id=request.campaign_id  # For proxying asset requests to api-site
         )
 
         # Use session_id as MongoDB _id (back-reference to PostgreSQL session)

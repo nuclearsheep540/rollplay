@@ -60,7 +60,7 @@ app.include_router(characters_router, prefix="/api/characters")
 app.include_router(session_router, prefix="/api/sessions")
 app.include_router(friendship_router, prefix="/api/friendships")
 app.include_router(notification_router, prefix="/api/notifications")
-app.include_router(library_router, prefix="/api/assets", tags=["assets"])
+app.include_router(library_router, prefix="/api/library", tags=["library"])
 
 # Register WebSocket endpoint
 app.add_websocket_route("/ws/events", websocket_events_endpoint)

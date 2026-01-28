@@ -28,7 +28,7 @@ export function useAssetLibrary() {
         params.append('asset_type', assetType)
       }
 
-      const url = `/api/assets/${params.toString() ? '?' + params.toString() : ''}`
+      const url = `/api/library/${params.toString() ? '?' + params.toString() : ''}`
       const response = await fetch(url, {
         method: 'GET',
         credentials: 'include'
@@ -68,7 +68,7 @@ export function useAssetLibrary() {
         asset_type: assetType
       })
 
-      const uploadUrlResponse = await fetch(`/api/assets/upload-url?${uploadUrlParams}`, {
+      const uploadUrlResponse = await fetch(`/api/library/upload-url?${uploadUrlParams}`, {
         method: 'GET',
         credentials: 'include'
       })
@@ -106,7 +106,7 @@ export function useAssetLibrary() {
         confirmBody.campaign_id = campaignId
       }
 
-      const confirmResponse = await fetch('/api/assets/confirm', {
+      const confirmResponse = await fetch('/api/library/confirm', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json'
@@ -145,7 +145,7 @@ export function useAssetLibrary() {
     try {
       setError(null)
 
-      const response = await fetch(`/api/assets/${assetId}`, {
+      const response = await fetch(`/api/library/${assetId}`, {
         method: 'DELETE',
         credentials: 'include'
       })
@@ -181,7 +181,7 @@ export function useAssetLibrary() {
         body.session_id = sessionId
       }
 
-      const response = await fetch(`/api/assets/${assetId}/associate`, {
+      const response = await fetch(`/api/library/${assetId}/associate`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json'
