@@ -4,18 +4,35 @@
 'use client'
 
 import React, { useState, useEffect, useCallback } from 'react'
+import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
+import { faPlus, faTrash } from '@fortawesome/free-solid-svg-icons'
 import { useAssetLibrary } from '../hooks/useAssetLibrary'
 import AssetGrid from './AssetGrid'
 import AssetUploadModal from './AssetUploadModal'
 import ConfirmModal from '@/app/shared/components/ConfirmModal'
-import { faTrash } from '@fortawesome/free-solid-svg-icons'
+import { COLORS, THEME } from '@/app/styles/colorTheme'
+import { Button } from '@/app/dashboard/components/shared/Button'
 
-const FILTER_TABS = [
-  { id: 'all', label: 'All' },
-  { id: 'map', label: 'Maps' },
-  { id: 'audio', label: 'Audio' },
-  { id: 'image', label: 'Images' }
+// Top-level category filters
+const CATEGORY_TABS = [
+  { id: 'media', label: 'Media' },
+  { id: 'objects', label: 'Objects' }
 ]
+
+// Sub-filters per category
+const SUB_FILTERS = {
+  media: [
+    { id: 'all', label: 'All' },
+    { id: 'map', label: 'Maps' },
+    { id: 'audio', label: 'Audio' },
+    { id: 'image', label: 'Images' }
+  ],
+  objects: [
+    { id: 'all', label: 'All' },
+    { id: 'npc', label: 'NPCs' },
+    { id: 'item', label: 'Items' }
+  ]
+}
 
 /**
  * Main container for the asset library management interface
@@ -33,20 +50,30 @@ export default function AssetLibraryManager({ user }) {
     clearError
   } = useAssetLibrary()
 
-  const [filter, setFilter] = useState('all')
+  const [category, setCategory] = useState('media')
+  const [subFilter, setSubFilter] = useState('all')
   const [uploadModalOpen, setUploadModalOpen] = useState(false)
   const [deleteModal, setDeleteModal] = useState({ open: false, asset: null, isDeleting: false })
 
   // Fetch assets on mount and when filter changes
   useEffect(() => {
-    fetchAssets(filter === 'all' ? null : filter)
-  }, [filter, fetchAssets])
+    // Only fetch media assets for now (objects will use different endpoints)
+    if (category === 'media') {
+      fetchAssets(subFilter === 'all' ? null : subFilter)
+    }
+  }, [category, subFilter, fetchAssets])
+
+  // Reset sub-filter when category changes
+  const handleCategoryChange = useCallback((newCategory) => {
+    setCategory(newCategory)
+    setSubFilter('all')
+  }, [])
 
   const handleUpload = useCallback(async (file, assetType) => {
     await uploadAsset(file, assetType)
     // Refresh with current filter
-    await fetchAssets(filter === 'all' ? null : filter)
-  }, [uploadAsset, fetchAssets, filter])
+    await fetchAssets(subFilter === 'all' ? null : subFilter)
+  }, [uploadAsset, fetchAssets, subFilter])
 
   const handleDeleteClick = useCallback((asset) => {
     setDeleteModal({ open: true, asset, isDeleting: false })
@@ -72,42 +99,67 @@ export default function AssetLibraryManager({ user }) {
   }, [deleteModal.isDeleting])
 
   // Filter assets based on selected filter (in case we fetched all)
-  const filteredAssets = filter === 'all'
+  const filteredAssets = subFilter === 'all'
     ? assets
-    : assets.filter(a => a.asset_type === filter)
+    : assets.filter(a => a.asset_type === subFilter)
 
   return (
     <div className="flex flex-col h-full">
       {/* Header */}
-      <div className="flex items-center justify-between mb-6">
+      <div className="flex items-center justify-between mb-8">
         <div>
-          <h1 className="text-2xl font-bold text-slate-200">Asset Library</h1>
-          <p className="text-slate-500 text-sm mt-1">
-            Manage your maps, audio, and images for game sessions
+          <h1
+            className="text-4xl font-bold font-[family-name:var(--font-metamorphous)]"
+            style={{ color: THEME.textBold }}
+          >
+            Asset Library
+          </h1>
+          <p className="mt-2" style={{ color: THEME.textPrimary }}>
+            Manage your media assets and domain objects for game sessions
           </p>
         </div>
-        <button
-          onClick={() => setUploadModalOpen(true)}
-          className="px-4 py-2 bg-sky-600 text-white rounded-lg hover:bg-sky-500 transition-colors flex items-center gap-2"
-        >
-          <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-          </svg>
-          Upload Asset
-        </button>
+        {category === 'media' && (
+          <Button
+            variant="primary"
+            onClick={() => setUploadModalOpen(true)}
+            className="flex items-center gap-2"
+          >
+            <FontAwesomeIcon icon={faPlus} />
+            Upload Asset
+          </Button>
+        )}
       </div>
 
-      {/* Filter Tabs */}
-      <div className="flex gap-2 mb-6">
-        {FILTER_TABS.map((tab) => (
+      {/* Category Tabs (Top Level) */}
+      <div className="flex gap-2 mb-4">
+        {CATEGORY_TABS.map((tab) => (
           <button
             key={tab.id}
-            onClick={() => setFilter(tab.id)}
-            className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${
-              filter === tab.id
-                ? 'bg-sky-500/20 text-sky-300 border border-sky-500/50'
-                : 'bg-slate-800 text-slate-400 border border-slate-700 hover:border-slate-600'
-            }`}
+            onClick={() => handleCategoryChange(tab.id)}
+            className="px-4 py-2 rounded-sm text-sm font-semibold border transition-all"
+            style={{
+              backgroundColor: category === tab.id ? THEME.bgSecondary : 'transparent',
+              color: category === tab.id ? THEME.textOnDark : COLORS.graphite,
+              borderColor: category === tab.id ? THEME.borderActive : THEME.borderDefault
+            }}
+          >
+            {tab.label}
+          </button>
+        ))}
+      </div>
+
+      {/* Sub-Filter Tabs */}
+      <div className="flex gap-2 mb-6">
+        {SUB_FILTERS[category].map((tab) => (
+          <button
+            key={tab.id}
+            onClick={() => setSubFilter(tab.id)}
+            className="px-3 py-1.5 rounded-sm text-xs font-medium border transition-all"
+            style={{
+              backgroundColor: subFilter === tab.id ? THEME.bgSecondary : 'transparent',
+              color: subFilter === tab.id ? THEME.textOnDark : COLORS.graphite,
+              borderColor: subFilter === tab.id ? THEME.borderActive : THEME.borderDefault
+            }}
           >
             {tab.label}
           </button>
@@ -116,11 +168,15 @@ export default function AssetLibraryManager({ user }) {
 
       {/* Error Message */}
       {error && (
-        <div className="mb-4 p-3 bg-red-500/10 border border-red-500/30 rounded-lg flex items-center justify-between">
-          <p className="text-red-400 text-sm">{error}</p>
+        <div
+          className="mb-4 p-3 rounded-sm border flex items-center justify-between"
+          style={{ backgroundColor: '#991b1b', borderColor: '#dc2626' }}
+        >
+          <p style={{ color: '#fca5a5' }}>{error}</p>
           <button
             onClick={clearError}
-            className="text-red-400 hover:text-red-300"
+            className="hover:opacity-80"
+            style={{ color: '#fca5a5' }}
           >
             <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
@@ -129,13 +185,26 @@ export default function AssetLibraryManager({ user }) {
         </div>
       )}
 
-      {/* Asset Grid */}
+      {/* Content Area */}
       <div className="flex-1 overflow-y-auto">
-        <AssetGrid
-          assets={filteredAssets}
-          loading={loading}
-          onDeleteAsset={handleDeleteClick}
-        />
+        {category === 'media' ? (
+          <AssetGrid
+            assets={filteredAssets}
+            loading={loading}
+            onDeleteAsset={handleDeleteClick}
+          />
+        ) : (
+          /* Objects placeholder - NPCs and Items coming soon */
+          <div className="flex flex-col items-center justify-center py-16 text-center">
+            <div className="text-6xl mb-4 opacity-30">🧙</div>
+            <h3 className="text-lg font-medium mb-2" style={{ color: THEME.textOnDark }}>
+              Domain Objects Coming Soon
+            </h3>
+            <p className="max-w-sm" style={{ color: THEME.textSecondary }}>
+              NPCs, Items, and other domain objects will be managed here in a future update.
+            </p>
+          </div>
+        )}
       </div>
 
       {/* Upload Modal */}

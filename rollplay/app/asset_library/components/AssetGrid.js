@@ -2,6 +2,7 @@
 /* SPDX-License-Identifier: GPL-3.0-or-later */
 
 import React from 'react'
+import { COLORS, THEME } from '@/app/styles/colorTheme'
 import AssetCard from './AssetCard'
 
 /**
@@ -13,11 +14,15 @@ export default function AssetGrid({ assets, loading, onDeleteAsset }) {
     return (
       <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
         {[...Array(8)].map((_, i) => (
-          <div key={i} className="bg-slate-800 border border-slate-700 rounded-lg overflow-hidden animate-pulse">
-            <div className="aspect-video bg-slate-700" />
+          <div
+            key={i}
+            className="rounded-sm border overflow-hidden animate-pulse"
+            style={{ backgroundColor: THEME.bgPanel, borderColor: THEME.borderDefault }}
+          >
+            <div className="aspect-video" style={{ backgroundColor: COLORS.onyx }} />
             <div className="p-3 space-y-2">
-              <div className="h-4 bg-slate-700 rounded w-3/4" />
-              <div className="h-3 bg-slate-700 rounded w-1/2" />
+              <div className="h-4 rounded-sm w-3/4" style={{ backgroundColor: COLORS.graphite }} />
+              <div className="h-3 rounded-sm w-1/2" style={{ backgroundColor: COLORS.graphite }} />
             </div>
           </div>
         ))}
@@ -30,8 +35,10 @@ export default function AssetGrid({ assets, loading, onDeleteAsset }) {
     return (
       <div className="flex flex-col items-center justify-center py-16 text-center">
         <div className="text-6xl mb-4 opacity-30">📁</div>
-        <h3 className="text-lg font-medium text-slate-300 mb-2">No assets yet</h3>
-        <p className="text-slate-500 max-w-sm">
+        <h3 className="text-lg font-medium mb-2" style={{ color: THEME.textOnDark }}>
+          No assets yet
+        </h3>
+        <p className="max-w-sm" style={{ color: THEME.textSecondary }}>
           Upload maps, audio, or images to use in your game sessions. Click the "Upload Asset" button above to get started.
         </p>
       </div>

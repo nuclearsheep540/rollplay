@@ -2,20 +2,20 @@
 /* SPDX-License-Identifier: GPL-3.0-or-later */
 
 import React from 'react'
+import { COLORS, THEME } from '@/app/styles/colorTheme'
 
 /**
  * Individual asset card displaying thumbnail, metadata, and actions
  */
 export default function AssetCard({ asset, onDelete }) {
   const isImage = asset.asset_type === 'map' || asset.asset_type === 'image'
-  const isAudio = asset.asset_type === 'audio'
 
-  const getTypeColor = (type) => {
+  const getTypeStyle = (type) => {
     switch (type) {
-      case 'map': return 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30'
-      case 'audio': return 'bg-purple-500/20 text-purple-400 border-purple-500/30'
-      case 'image': return 'bg-blue-500/20 text-blue-400 border-blue-500/30'
-      default: return 'bg-gray-500/20 text-gray-400 border-gray-500/30'
+      case 'map': return { backgroundColor: '#16a34a20', color: '#4ade80', borderColor: '#16a34a50' }
+      case 'audio': return { backgroundColor: '#9333ea20', color: '#c084fc', borderColor: '#9333ea50' }
+      case 'image': return { backgroundColor: '#3b82f620', color: '#60a5fa', borderColor: '#3b82f650' }
+      default: return { backgroundColor: THEME.bgSecondary, color: THEME.textSecondary, borderColor: THEME.borderDefault }
     }
   }
 
@@ -45,10 +45,21 @@ export default function AssetCard({ asset, onDelete }) {
     })
   }
 
+  const typeStyle = getTypeStyle(asset.asset_type)
+
   return (
-    <div className="bg-slate-800 border border-slate-700 rounded-lg overflow-hidden hover:border-slate-600 transition-all duration-200 group">
+    <div
+      className="rounded-sm border overflow-hidden transition-all group"
+      style={{
+        backgroundColor: THEME.bgPanel,
+        borderColor: THEME.borderDefault
+      }}
+    >
       {/* Thumbnail/Preview */}
-      <div className="relative aspect-video bg-slate-900 flex items-center justify-center">
+      <div
+        className="relative aspect-video flex items-center justify-center"
+        style={{ backgroundColor: COLORS.onyx }}
+      >
         {isImage && asset.s3_url ? (
           <img
             src={asset.s3_url}
@@ -74,7 +85,8 @@ export default function AssetCard({ asset, onDelete }) {
             e.stopPropagation()
             onDelete(asset)
           }}
-          className="absolute top-2 right-2 p-1.5 bg-red-500/80 text-white rounded opacity-0 group-hover:opacity-100 transition-opacity hover:bg-red-600"
+          className="absolute top-2 right-2 p-1.5 rounded-sm opacity-0 group-hover:opacity-100 transition-opacity"
+          style={{ backgroundColor: '#991b1b', color: COLORS.smoke }}
           title="Delete asset"
         >
           <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -83,17 +95,27 @@ export default function AssetCard({ asset, onDelete }) {
         </button>
 
         {/* Type badge */}
-        <span className={`absolute bottom-2 left-2 px-2 py-0.5 rounded text-xs font-medium border ${getTypeColor(asset.asset_type)}`}>
+        <span
+          className="absolute bottom-2 left-2 px-2 py-0.5 rounded-sm text-xs font-medium border"
+          style={typeStyle}
+        >
           {asset.asset_type}
         </span>
       </div>
 
       {/* Metadata */}
       <div className="p-3">
-        <h3 className="text-sm font-medium text-slate-200 truncate" title={asset.filename}>
+        <h3
+          className="text-sm font-medium truncate"
+          style={{ color: THEME.textOnDark }}
+          title={asset.filename}
+        >
           {asset.filename}
         </h3>
-        <div className="mt-1 flex items-center justify-between text-xs text-slate-500">
+        <div
+          className="mt-1 flex items-center justify-between text-xs"
+          style={{ color: THEME.textSecondary }}
+        >
           <span>{formatFileSize(asset.file_size)}</span>
           <span>{formatDate(asset.created_at)}</span>
         </div>
@@ -101,7 +123,7 @@ export default function AssetCard({ asset, onDelete }) {
         {/* Campaign associations */}
         {asset.campaign_ids && asset.campaign_ids.length > 0 && (
           <div className="mt-2 flex items-center gap-1">
-            <span className="text-xs text-slate-500">
+            <span className="text-xs" style={{ color: THEME.textSecondary }}>
               {asset.campaign_ids.length} campaign{asset.campaign_ids.length !== 1 ? 's' : ''}
             </span>
           </div>
