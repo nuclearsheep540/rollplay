@@ -60,7 +60,7 @@ export default function AssetLibraryManager({ user }) {
   } = useAssetLibrary()
 
   const [category, setCategory] = useState('media')
-  const [subFilter, setSubFilter] = useState('all')
+  const [subFilter, setSubFilter] = useState(['all'])
   const [uploadModalOpen, setUploadModalOpen] = useState(false)
   const [deleteModal, setDeleteModal] = useState({ open: false, asset: null, isDeleting: false })
   const [gridScale, setGridScale] = useState(() => {
@@ -79,21 +79,47 @@ export default function AssetLibraryManager({ user }) {
   useEffect(() => {
     // Only fetch media assets for now (objects will use different endpoints)
     if (category === 'media' || category === 'all') {
-      fetchAssets(subFilter === 'all' ? null : subFilter)
+      // When multi-select or 'all', fetch everything and filter client-side
+      const fetchType = subFilter.includes('all') || subFilter.length > 1
+        ? null
+        : subFilter[0]
+      fetchAssets(fetchType)
     }
   }, [category, subFilter, fetchAssets])
 
   // Reset sub-filter when category changes
   const handleCategoryChange = useCallback((newCategory) => {
     setCategory(newCategory)
-    setSubFilter('all')
+    setSubFilter(['all'])
   }, [])
+
+  const handleSubFilterChange = useCallback((filterId) => {
+    if (category === 'all') {
+      // Multi-select mode
+      if (filterId === 'all') {
+        setSubFilter(['all'])
+      } else {
+        setSubFilter(prev => {
+          const withoutAll = prev.filter(f => f !== 'all')
+          if (withoutAll.includes(filterId)) {
+            const remaining = withoutAll.filter(f => f !== filterId)
+            return remaining.length === 0 ? ['all'] : remaining
+          } else {
+            return [...withoutAll, filterId]
+          }
+        })
+      }
+    } else {
+      // Single-select mode
+      setSubFilter([filterId])
+    }
+  }, [category])
 
   const handleUpload = useCallback(async (file, assetType) => {
     await uploadAsset(file, assetType)
-    // Refresh with current filter
-    await fetchAssets(subFilter === 'all' ? null : subFilter)
-  }, [uploadAsset, fetchAssets, subFilter])
+    // Refetch all to ensure new asset appears regardless of active filters
+    await fetchAssets(null)
+  }, [uploadAsset, fetchAssets])
 
   const handleDeleteClick = useCallback((asset) => {
     setDeleteModal({ open: true, asset, isDeleting: false })
@@ -119,9 +145,9 @@ export default function AssetLibraryManager({ user }) {
   }, [deleteModal.isDeleting])
 
   // Filter assets based on selected filter (in case we fetched all)
-  const filteredAssets = subFilter === 'all'
+  const filteredAssets = subFilter.includes('all')
     ? assets
-    : assets.filter(a => a.asset_type === subFilter)
+    : assets.filter(a => subFilter.includes(a.asset_type))
 
   return (
     <div className="flex flex-col h-full">
@@ -208,12 +234,12 @@ export default function AssetLibraryManager({ user }) {
         {SUB_FILTERS[category].map((tab) => (
           <button
             key={tab.id}
-            onClick={() => setSubFilter(tab.id)}
+            onClick={() => handleSubFilterChange(tab.id)}
             className="px-4 py-2 rounded-sm text-sm font-medium border transition-all"
             style={{
-              backgroundColor: subFilter === tab.id ? THEME.bgSecondary : 'transparent',
-              color: subFilter === tab.id ? THEME.textOnDark : COLORS.graphite,
-              borderColor: subFilter === tab.id ? THEME.borderActive : THEME.borderDefault
+              backgroundColor: subFilter.includes(tab.id) ? THEME.bgSecondary : 'transparent',
+              color: subFilter.includes(tab.id) ? THEME.textOnDark : COLORS.graphite,
+              borderColor: subFilter.includes(tab.id) ? THEME.borderActive : THEME.borderDefault
             }}
           >
             {tab.label}
