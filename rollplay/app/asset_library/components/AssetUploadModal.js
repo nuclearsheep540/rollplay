@@ -96,6 +96,7 @@ export default function AssetUploadModal({
     if (e.target.files && e.target.files[0]) {
       handleFileSelect(e.target.files[0])
     }
+    e.target.value = ''
   }, [handleFileSelect])
 
   const handleSubmit = async () => {
@@ -132,6 +133,8 @@ export default function AssetUploadModal({
       } else {
         setError(null)
       }
+    } else {
+      setError(null)
     }
   }
 

@@ -166,9 +166,8 @@ export default function AssetLibraryManager({ user }) {
         </div>
       </div>
 
-      {/* Category Tabs (Top Level) + Grid Scale Slider */}
-      <div className="flex items-center justify-between mb-4">
-        {/* Left: Category Tabs */}
+      {/* Category Tabs (Top Level) */}
+      <div className="flex items-center mb-4">
         <div className="flex gap-4">
           {CATEGORY_TABS.map((tab) => (
             <button
@@ -184,36 +183,6 @@ export default function AssetLibraryManager({ user }) {
               {tab.label}
             </button>
           ))}
-        </div>
-
-        {/* Right: Grid Scale Slider */}
-        <div className="flex items-start gap-3">
-          <span className="text-xs mb-6" style={{ color: COLORS.graphite }}>Grid Size</span>
-          <div className="flex flex-col items-center m-auto">
-            <input
-              type="range"
-              min="1"
-              max="4"
-              step="1"
-              value={gridScale}
-              onChange={(e) => setGridScale(parseInt(e.target.value))}
-              className="w-24 asset-grid-slider"
-            />
-            {/* Labeled tick marks - fixed width labels for even distribution */}
-            <div className="flex justify-between w-32 mt-3">
-              {['lg', 'm', 's', 'xs'].map((label) => (
-                <span
-                  key={label}
-                  className="text-[10px]"
-                  style={{
-                    color: COLORS.graphite,
-                  }}
-                >
-                  {label}
-                </span>
-              ))}
-            </div>
-          </div>
         </div>
       </div>
 
@@ -235,30 +204,59 @@ export default function AssetLibraryManager({ user }) {
         ))}
       </div>
 
-      {/* Action Buttons */}
-      <div className="flex gap-3 mb-6">
-        <Button
-          variant="primary"
-          size="lg"
-          className="!px-4 !py-2"
-          onClick={() => setUploadModalOpen(true)}
-        >
-          <span style={{ color: COLORS.smoke }}>
-            <FontAwesomeIcon icon={faUpload} className="mr-2" />
-            Upload Asset
-          </span>
-        </Button>
-        <Button
-          variant="ghost"
-          size="lg"
-          className="!px-4 !py-2"
-          onClick={() => {}}
-        >
-          <span style={{ color: COLORS.graphite }}>
-            <FontAwesomeIcon icon={faSquarePlus} className="mr-2 text-xl" />
-            Create Object
-          </span>
-        </Button>
+      {/* Action Buttons + Grid Scale Slider */}
+      <div className="flex items-center justify-between mb-6">
+        <div className="flex gap-3">
+          <Button
+            variant="primary"
+            size="lg"
+            className="!px-4 !py-2"
+            onClick={() => setUploadModalOpen(true)}
+          >
+            <span style={{ color: COLORS.smoke }}>
+              <FontAwesomeIcon icon={faUpload} className="mr-2" />
+              Upload Asset
+            </span>
+          </Button>
+          <Button
+            variant="ghost"
+            size="lg"
+            className="!px-4 !py-2"
+            onClick={() => {}}
+          >
+            <span style={{ color: COLORS.graphite }}>
+              <FontAwesomeIcon icon={faSquarePlus} className="mr-2 text-xl" />
+              Create Object
+            </span>
+          </Button>
+        </div>
+
+        {/* Grid Scale Slider */}
+        <div className="flex items-start gap-3">
+          <span className="text-xs mb-6" style={{ color: COLORS.graphite }}>Grid Size</span>
+          <div className="flex flex-col items-center m-auto">
+            <input
+              type="range"
+              min="1"
+              max="4"
+              step="1"
+              value={gridScale}
+              onChange={(e) => setGridScale(parseInt(e.target.value))}
+              className="w-24 asset-grid-slider"
+            />
+            <div className="flex justify-between w-32 mt-3">
+              {['lg', 'm', 's', 'xs'].map((label) => (
+                <span
+                  key={label}
+                  className="text-[10px]"
+                  style={{ color: COLORS.graphite }}
+                >
+                  {label}
+                </span>
+              ))}
+            </div>
+          </div>
+        </div>
       </div>
 
       {/* Error Message */}
@@ -317,7 +315,7 @@ export default function AssetLibraryManager({ user }) {
         show={deleteModal.open}
         title="Delete Asset"
         message={`Are you sure you want to delete "${deleteModal.asset?.filename}"?`}
-        description="This will permanently remove the asset from S3 storage. This action cannot be undone."
+        description="This will permanently remove the asset. This action cannot be undone."
         confirmText="Delete"
         cancelText="Cancel"
         onConfirm={handleDeleteConfirm}
