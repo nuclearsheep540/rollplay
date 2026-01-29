@@ -54,6 +54,17 @@ export default function AssetLibraryManager({ user }) {
   const [subFilter, setSubFilter] = useState('all')
   const [uploadModalOpen, setUploadModalOpen] = useState(false)
   const [deleteModal, setDeleteModal] = useState({ open: false, asset: null, isDeleting: false })
+  const [gridScale, setGridScale] = useState(() => {
+    if (typeof window !== 'undefined') {
+      return parseInt(localStorage.getItem('assetGridScale')) || 2
+    }
+    return 2 // Default to level 2 (4 columns)
+  })
+
+  // Persist grid scale preference
+  useEffect(() => {
+    localStorage.setItem('assetGridScale', gridScale.toString())
+  }, [gridScale])
 
   // Fetch assets on mount and when filter changes
   useEffect(() => {
@@ -124,28 +135,63 @@ export default function AssetLibraryManager({ user }) {
             onClick={() => setUploadModalOpen(true)}
             className="flex items-center gap-2"
           >
-            <FontAwesomeIcon icon={faPlus} />
-            Upload Asset
+            <span style={{ color: COLORS.smoke }}>
+              <FontAwesomeIcon icon={faPlus} className="mr-2" />
+              Upload Asset
+            </span>
           </Button>
         )}
       </div>
 
-      {/* Category Tabs (Top Level) */}
-      <div className="flex gap-2 mb-4">
-        {CATEGORY_TABS.map((tab) => (
-          <button
-            key={tab.id}
-            onClick={() => handleCategoryChange(tab.id)}
-            className="px-4 py-2 rounded-sm text-sm font-semibold border transition-all"
-            style={{
-              backgroundColor: category === tab.id ? THEME.bgSecondary : 'transparent',
-              color: category === tab.id ? THEME.textOnDark : COLORS.graphite,
-              borderColor: category === tab.id ? THEME.borderActive : THEME.borderDefault
-            }}
-          >
-            {tab.label}
-          </button>
-        ))}
+      {/* Category Tabs (Top Level) + Grid Scale Slider */}
+      <div className="flex items-center justify-between mb-4">
+        {/* Left: Category Tabs */}
+        <div className="flex gap-2">
+          {CATEGORY_TABS.map((tab) => (
+            <button
+              key={tab.id}
+              onClick={() => handleCategoryChange(tab.id)}
+              className="px-4 py-2 rounded-sm text-sm font-semibold border transition-all"
+              style={{
+                backgroundColor: category === tab.id ? THEME.bgSecondary : 'transparent',
+                color: category === tab.id ? THEME.textOnDark : COLORS.graphite,
+                borderColor: category === tab.id ? THEME.borderActive : THEME.borderDefault
+              }}
+            >
+              {tab.label}
+            </button>
+          ))}
+        </div>
+
+        {/* Right: Grid Scale Slider */}
+        <div className="flex items-start gap-3">
+          <span className="text-xs mb-6" style={{ color: COLORS.graphite }}>Grid Size</span>
+          <div className="flex flex-col items-center m-auto">
+            <input
+              type="range"
+              min="1"
+              max="4"
+              step="1"
+              value={gridScale}
+              onChange={(e) => setGridScale(parseInt(e.target.value))}
+              className="w-24 asset-grid-slider"
+            />
+            {/* Labeled tick marks - fixed width labels for even distribution */}
+            <div className="flex justify-between w-32 mt-3">
+              {['lg', 'm', 's', 'xs'].map((label) => (
+                <span
+                  key={label}
+                  className="text-[10px]"
+                  style={{
+                    color: COLORS.graphite,
+                  }}
+                >
+                  {label}
+                </span>
+              ))}
+            </div>
+          </div>
+        </div>
       </div>
 
       {/* Sub-Filter Tabs */}
@@ -192,6 +238,7 @@ export default function AssetLibraryManager({ user }) {
             assets={filteredAssets}
             loading={loading}
             onDeleteAsset={handleDeleteClick}
+            columns={gridScale + 2}
           />
         ) : (
           /* Objects placeholder - NPCs and Items coming soon */

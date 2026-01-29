@@ -8,11 +8,14 @@ import AssetCard from './AssetCard'
 /**
  * Grid layout for displaying assets with loading and empty states
  */
-export default function AssetGrid({ assets, loading, onDeleteAsset }) {
+export default function AssetGrid({ assets, loading, onDeleteAsset, columns = 4 }) {
   // Loading skeleton
   if (loading) {
     return (
-      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
+      <div
+        className="grid gap-4"
+        style={{ gridTemplateColumns: `repeat(${columns}, minmax(0, 1fr))` }}
+      >
         {[...Array(8)].map((_, i) => (
           <div
             key={i}
@@ -47,7 +50,10 @@ export default function AssetGrid({ assets, loading, onDeleteAsset }) {
 
   // Asset grid
   return (
-    <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
+    <div
+      className="grid gap-4"
+      style={{ gridTemplateColumns: `repeat(${columns}, minmax(0, 1fr))` }}
+    >
       {assets.map((asset) => (
         <AssetCard
           key={asset.id}

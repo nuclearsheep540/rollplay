@@ -2,6 +2,8 @@
 /* SPDX-License-Identifier: GPL-3.0-or-later */
 
 import React, { useState, useRef, useCallback } from 'react'
+import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
+import { faMap, faFileAudio, faImage } from '@fortawesome/free-solid-svg-icons'
 import { COLORS, THEME } from '@/app/styles/colorTheme'
 import { Button } from '@/app/dashboard/components/shared/Button'
 
@@ -10,19 +12,19 @@ const ACCEPTED_TYPES = {
     mimeTypes: ['image/png', 'image/jpeg', 'image/webp'],
     extensions: '.png, .jpg, .jpeg, .webp',
     label: 'Map',
-    icon: '🗺️'
+    icon: faMap
   },
   audio: {
     mimeTypes: ['audio/mpeg', 'audio/wav', 'audio/ogg'],
     extensions: '.mp3, .wav, .ogg',
     label: 'Audio',
-    icon: '🎵'
+    icon: faFileAudio
   },
   image: {
     mimeTypes: ['image/png', 'image/jpeg', 'image/webp', 'image/gif'],
     extensions: '.png, .jpg, .jpeg, .webp, .gif',
     label: 'Image',
-    icon: '🖼️'
+    icon: faImage
   }
 }
 
@@ -186,7 +188,7 @@ export default function AssetUploadModal({
                     color: assetType === type ? THEME.textOnDark : THEME.textSecondary
                   }}
                 >
-                  <span className="text-2xl block mb-1">{config.icon}</span>
+                  <FontAwesomeIcon icon={config.icon} className="text-3xl block mx-auto mb-1" />
                   <span className="text-xs font-medium">{config.label}</span>
                 </button>
               ))}
@@ -217,7 +219,7 @@ export default function AssetUploadModal({
 
             {selectedFile ? (
               <div>
-                <span className="text-3xl block mb-2">{currentTypeConfig.icon}</span>
+                <FontAwesomeIcon icon={currentTypeConfig.icon} className="text-4xl block mx-auto mb-2" />
                 <p className="font-medium truncate" style={{ color: THEME.textOnDark }}>
                   {selectedFile.name}
                 </p>
