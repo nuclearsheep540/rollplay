@@ -5,7 +5,7 @@
 
 import React, { useState, useEffect, useCallback } from 'react'
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
-import { faPlus, faTrash } from '@fortawesome/free-solid-svg-icons'
+import { faUpload, faSquarePlus, faTrash } from '@fortawesome/free-solid-svg-icons'
 import { useAssetLibrary } from '../hooks/useAssetLibrary'
 import AssetGrid from './AssetGrid'
 import AssetUploadModal from './AssetUploadModal'
@@ -164,18 +164,6 @@ export default function AssetLibraryManager({ user }) {
             Manage your media assets and domain objects for game sessions
           </p>
         </div>
-        {category !== 'objects' && (
-          <Button
-            variant="primary"
-            onClick={() => setUploadModalOpen(true)}
-            className="flex items-center gap-2"
-          >
-            <span style={{ color: COLORS.smoke }}>
-              <FontAwesomeIcon icon={faPlus} className="mr-2" />
-              Upload Asset
-            </span>
-          </Button>
-        )}
       </div>
 
       {/* Category Tabs (Top Level) + Grid Scale Slider */}
@@ -230,7 +218,7 @@ export default function AssetLibraryManager({ user }) {
       </div>
 
       {/* Sub-Filter Tabs */}
-      <div className="flex gap-4 mb-6">
+      <div className="flex gap-4 mb-4">
         {SUB_FILTERS[category].map((tab) => (
           <button
             key={tab.id}
@@ -245,6 +233,32 @@ export default function AssetLibraryManager({ user }) {
             {tab.label}
           </button>
         ))}
+      </div>
+
+      {/* Action Buttons */}
+      <div className="flex gap-3 mb-6">
+        <Button
+          variant="primary"
+          size="lg"
+          className="!px-4 !py-2"
+          onClick={() => setUploadModalOpen(true)}
+        >
+          <span style={{ color: COLORS.smoke }}>
+            <FontAwesomeIcon icon={faUpload} className="mr-2" />
+            Upload Asset
+          </span>
+        </Button>
+        <Button
+          variant="ghost"
+          size="lg"
+          className="!px-4 !py-2"
+          onClick={() => {}}
+        >
+          <span style={{ color: COLORS.graphite }}>
+            <FontAwesomeIcon icon={faSquarePlus} className="mr-2 text-xl" />
+            Create Object
+          </span>
+        </Button>
       </div>
 
       {/* Error Message */}
