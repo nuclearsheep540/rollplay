@@ -2,6 +2,8 @@
 /* SPDX-License-Identifier: GPL-3.0-or-later */
 
 import React from 'react'
+import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
+import { faFileAudio } from '@fortawesome/free-solid-svg-icons'
 import { COLORS, THEME } from '@/app/styles/colorTheme'
 
 /**
@@ -12,9 +14,9 @@ export default function AssetCard({ asset, onDelete }) {
 
   const getTypeStyle = (type) => {
     switch (type) {
-      case 'map': return { backgroundColor: '#16a34a20', color: '#4ade80', borderColor: '#16a34a50' }
-      case 'audio': return { backgroundColor: '#9333ea20', color: '#c084fc', borderColor: '#9333ea50' }
-      case 'image': return { backgroundColor: '#3b82f620', color: '#60a5fa', borderColor: '#3b82f650' }
+      case 'map': return { backgroundColor: '#16a34a60', color: COLORS.smoke, borderColor: '#16a34aA0' }
+      case 'audio': return { backgroundColor: '#9333ea60', color: COLORS.smoke, borderColor: '#9333eaA0' }
+      case 'image': return { backgroundColor: '#3b82f660', color: COLORS.smoke, borderColor: '#3b82f6A0' }
       default: return { backgroundColor: THEME.bgSecondary, color: THEME.textSecondary, borderColor: THEME.borderDefault }
     }
   }
@@ -76,7 +78,11 @@ export default function AssetCard({ asset, onDelete }) {
         <div
           className={`${isImage && asset.s3_url ? 'hidden' : 'flex'} items-center justify-center w-full h-full`}
         >
-          <span className="text-4xl opacity-50">{getTypeIcon(asset.asset_type)}</span>
+          {asset.asset_type === 'audio' ? (
+            <FontAwesomeIcon icon={faFileAudio} className="w-1/3 h-auto opacity-50" style={{ color: THEME.textSecondary }} />
+          ) : (
+            <span className="text-4xl opacity-50">{getTypeIcon(asset.asset_type)}</span>
+          )}
         </div>
 
         {/* Delete button overlay */}
@@ -96,7 +102,7 @@ export default function AssetCard({ asset, onDelete }) {
 
         {/* Type badge */}
         <span
-          className="absolute bottom-2 left-2 px-2 py-0.5 rounded-sm text-xs font-medium border"
+          className="absolute bottom-2 left-2 px-3 py-1 rounded-sm text-sm font-medium border"
           style={typeStyle}
         >
           {asset.asset_type}
