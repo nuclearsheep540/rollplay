@@ -637,6 +637,56 @@ To be refined after POC:
 
 ---
 
+## Frontend Performance Considerations
+
+As the asset library grows, performance optimization becomes critical. Here are patterns to apply:
+
+### Filtering & Search
+
+- **useMemo for filtered/sorted lists**: Asset filtering can be expensive with large libraries. Memoize the filtered result so it only recomputes when dependencies change:
+  ```javascript
+  const filteredAssets = useMemo(
+    () => assets.filter(a => a.tags.includes(selectedTag)).sort(sortFn),
+    [assets, selectedTag, sortFn]
+  )
+  ```
+- **Debounced search input**: Avoid filtering on every keystroke. Debounce the search term (200-300ms) before triggering the filter.
+
+### Component Optimization
+
+- **React.memo on AssetCard/AssetTile**: These components render frequently in grids. Wrap with `React.memo` to prevent re-renders when sibling cards change:
+  ```javascript
+  const AssetCard = React.memo(function AssetCard({ asset, onSelect }) {
+    // Component only re-renders if asset or onSelect changes
+  })
+  ```
+- **React.memo on FilterSidebar**: The sidebar rarely needs to re-render when the main content changes.
+
+### Large Collections
+
+- **Virtualization**: For grids with 100+ assets, use virtualization (react-window or react-virtual) to only render visible items. Essential for smooth scrolling.
+- **Image lazy loading**: Only load thumbnails when they enter the viewport. Use `loading="lazy"` or Intersection Observer.
+- **Pagination or infinite scroll**: For very large libraries, don't load everything at once.
+
+### State Management
+
+- **Derived state pattern for selectedAsset**: Store `selectedAssetId`, derive the full object via useMemo. This prevents stale state issues (same pattern as the CampaignManager refactor):
+  ```javascript
+  const [selectedAssetId, setSelectedAssetId] = useState(null)
+  const selectedAsset = useMemo(
+    () => assets.find(a => a.id === selectedAssetId) || null,
+    [assets, selectedAssetId]
+  )
+  ```
+
+### When NOT to Optimize
+
+- **Skip useMemo for**: Simple operations, primitives, values that change every render anyway
+- **Skip React.memo for**: Components that almost always receive new props
+- **General rule**: Profile first, optimize what matters. Don't prematurely optimize everything.
+
+---
+
 ## Verification Plan
 
 Once implemented:
