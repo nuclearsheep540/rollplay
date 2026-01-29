@@ -16,11 +16,20 @@ import { Button } from '@/app/dashboard/components/shared/Button'
 // Top-level category filters
 const CATEGORY_TABS = [
   { id: 'media', label: 'Media' },
-  { id: 'objects', label: 'Objects' }
+  { id: 'objects', label: 'Objects' },
+  { id: 'all', label: 'All' }
 ]
 
 // Sub-filters per category
 const SUB_FILTERS = {
+  all: [
+    { id: 'all', label: 'All' },
+    { id: 'map', label: 'Maps' },
+    { id: 'audio', label: 'Audio' },
+    { id: 'image', label: 'Images' },
+    { id: 'npc', label: 'NPCs' },
+    { id: 'item', label: 'Items' }
+  ],
   media: [
     { id: 'all', label: 'All' },
     { id: 'map', label: 'Maps' },
@@ -69,7 +78,7 @@ export default function AssetLibraryManager({ user }) {
   // Fetch assets on mount and when filter changes
   useEffect(() => {
     // Only fetch media assets for now (objects will use different endpoints)
-    if (category === 'media') {
+    if (category === 'media' || category === 'all') {
       fetchAssets(subFilter === 'all' ? null : subFilter)
     }
   }, [category, subFilter, fetchAssets])
@@ -129,7 +138,7 @@ export default function AssetLibraryManager({ user }) {
             Manage your media assets and domain objects for game sessions
           </p>
         </div>
-        {category === 'media' && (
+        {category !== 'objects' && (
           <Button
             variant="primary"
             onClick={() => setUploadModalOpen(true)}
@@ -146,7 +155,7 @@ export default function AssetLibraryManager({ user }) {
       {/* Category Tabs (Top Level) + Grid Scale Slider */}
       <div className="flex items-center justify-between mb-4">
         {/* Left: Category Tabs */}
-        <div className="flex gap-3">
+        <div className="flex gap-4">
           {CATEGORY_TABS.map((tab) => (
             <button
               key={tab.id}
@@ -195,7 +204,7 @@ export default function AssetLibraryManager({ user }) {
       </div>
 
       {/* Sub-Filter Tabs */}
-      <div className="flex gap-3 mb-6">
+      <div className="flex gap-4 mb-6">
         {SUB_FILTERS[category].map((tab) => (
           <button
             key={tab.id}
@@ -233,7 +242,7 @@ export default function AssetLibraryManager({ user }) {
 
       {/* Content Area */}
       <div className="flex-1 overflow-y-auto">
-        {category === 'media' ? (
+        {category !== 'objects' ? (
           <AssetGrid
             assets={filteredAssets}
             loading={loading}
