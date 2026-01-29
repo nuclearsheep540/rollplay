@@ -329,8 +329,9 @@ export default function CampaignManager({ user, refreshTrigger, onCampaignUpdate
         throw new Error(errorData.detail || 'Failed to remove player')
       }
 
-      // Refresh campaigns to update member list
+      // Refresh campaigns to get updated state
       await fetchCampaigns()
+
       closeModal('playerRemove')
     } catch (err) {
       console.error('Error removing player from campaign:', err)
@@ -515,11 +516,10 @@ export default function CampaignManager({ user, refreshTrigger, onCampaignUpdate
 
   // Handle successful campaign invite
   const handleCampaignInviteSuccess = async (updatedCampaign) => {
-    // Update the campaign in our local state (no full refetch needed)
-    setCampaigns(prev => prev.map(c =>
-      c.id === updatedCampaign.id ? { ...c, ...updatedCampaign } : c
-    ))
-    // Update the campaign reference in the modal
+    // Refresh campaigns to get updated state (includes invited_player_ids)
+    await fetchCampaigns()
+
+    // Update the campaign reference in the modal with the response data
     updateModalData('campaignInvite', { campaign: { ...modals.campaignInvite.campaign, ...updatedCampaign } })
   }
 
@@ -948,6 +948,20 @@ export default function CampaignManager({ user, refreshTrigger, onCampaignUpdate
       if (updatedCampaign) {
         // Update the selected campaign with fresh data
         updateModalData('campaignInvite', { campaign: updatedCampaign })
+      }
+    }
+  }, [campaigns])
+
+  // Sync selectedCampaign with campaigns array when campaigns are updated
+  // This ensures selectedCampaign stays fresh after fetchCampaigns() calls
+  useEffect(() => {
+    if (selectedCampaign) {
+      const updatedCampaign = campaigns.find(c => c.id === selectedCampaign.id)
+      if (updatedCampaign) {
+        // Only update if there are meaningful changes to avoid unnecessary re-renders
+        if (JSON.stringify(selectedCampaign) !== JSON.stringify(updatedCampaign)) {
+          setSelectedCampaign(updatedCampaign)
+        }
       }
     }
   }, [campaigns])
