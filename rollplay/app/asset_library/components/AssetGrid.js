@@ -12,24 +12,7 @@ export default function AssetGrid({ assets, loading, onDeleteAsset, columns = 4 
   // Loading skeleton
   if (loading) {
     return (
-      <div
-        className="grid gap-4"
-        style={{ gridTemplateColumns: `repeat(${columns}, minmax(0, 1fr))` }}
-      >
-        {[...Array(8)].map((_, i) => (
-          <div
-            key={i}
-            className="rounded-sm border overflow-hidden animate-pulse"
-            style={{ backgroundColor: THEME.bgPanel, borderColor: THEME.borderDefault }}
-          >
-            <div className="aspect-video" style={{ backgroundColor: COLORS.onyx }} />
-            <div className="p-3 space-y-2">
-              <div className="h-4 rounded-sm w-3/4" style={{ backgroundColor: COLORS.graphite }} />
-              <div className="h-3 rounded-sm w-1/2" style={{ backgroundColor: COLORS.graphite }} />
-            </div>
-          </div>
-        ))}
-      </div>
+      null
     )
   }
 

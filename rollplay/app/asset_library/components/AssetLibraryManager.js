@@ -146,12 +146,12 @@ export default function AssetLibraryManager({ user }) {
       {/* Category Tabs (Top Level) + Grid Scale Slider */}
       <div className="flex items-center justify-between mb-4">
         {/* Left: Category Tabs */}
-        <div className="flex gap-2">
+        <div className="flex gap-3">
           {CATEGORY_TABS.map((tab) => (
             <button
               key={tab.id}
               onClick={() => handleCategoryChange(tab.id)}
-              className="px-4 py-2 rounded-sm text-sm font-semibold border transition-all"
+              className="px-5 py-2.5 rounded-sm text-sm font-semibold border transition-all"
               style={{
                 backgroundColor: category === tab.id ? THEME.bgSecondary : 'transparent',
                 color: category === tab.id ? THEME.textOnDark : COLORS.graphite,
@@ -195,12 +195,12 @@ export default function AssetLibraryManager({ user }) {
       </div>
 
       {/* Sub-Filter Tabs */}
-      <div className="flex gap-2 mb-6">
+      <div className="flex gap-3 mb-6">
         {SUB_FILTERS[category].map((tab) => (
           <button
             key={tab.id}
             onClick={() => setSubFilter(tab.id)}
-            className="px-3 py-1.5 rounded-sm text-xs font-medium border transition-all"
+            className="px-4 py-2 rounded-sm text-sm font-medium border transition-all"
             style={{
               backgroundColor: subFilter === tab.id ? THEME.bgSecondary : 'transparent',
               color: subFilter === tab.id ? THEME.textOnDark : COLORS.graphite,
