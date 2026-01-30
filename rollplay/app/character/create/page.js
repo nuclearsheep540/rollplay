@@ -5,14 +5,14 @@
 
 'use client'
 
-import { useState } from 'react'
+import { useState, Suspense } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import CharacterForm from '../components/CharacterForm'
 import SiteHeader from '../../shared/components/SiteHeader'
 import SubNav from '../../shared/components/SubNav'
 import { THEME, COLORS } from '@/app/styles/colorTheme'
 
-export default function CreateCharacter() {
+function CreateCharacterContent() {
   const router = useRouter()
   const searchParams = useSearchParams()
   const returnCampaignId = searchParams.get('return_campaign')
@@ -201,5 +201,13 @@ export default function CreateCharacter() {
         </div>
       </main>
     </div>
+  )
+}
+
+export default function CreateCharacter() {
+  return (
+    <Suspense fallback={null}>
+      <CreateCharacterContent />
+    </Suspense>
   )
 }
