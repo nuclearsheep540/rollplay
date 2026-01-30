@@ -381,7 +381,7 @@ class StartSession:
                     "s3_key": asset.s3_key,
                     # Convert enum to string for api-game JSON payload
                     "asset_type": asset.asset_type.value if hasattr(asset.asset_type, 'value') else str(asset.asset_type),
-                    # Fresh presigned URL (24hr expiry)
+                    # Fresh presigned URL
                     "s3_url": url_map.get(asset.s3_key)
                 }
                 for asset in campaign_assets
