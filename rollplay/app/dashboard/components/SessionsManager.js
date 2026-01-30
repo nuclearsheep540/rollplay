@@ -64,11 +64,6 @@ export default function SessionsManager({ user, refreshTrigger }) {
     return 'Unknown'
   }
 
-  const getSelectedCharacterForCampaign = (campaignId) => {
-    // Find character locked to this campaign
-    return characters.find(char => char.active_campaign === campaignId)
-  }
-
   // Enter game - allow entry regardless of character selection (spectator mode supported)
   const enterGame = (session) => {
     // DM or any player can enter - spectator handling happens in game page
@@ -91,7 +86,6 @@ export default function SessionsManager({ user, refreshTrigger }) {
 
   // Render session card component
   const renderSessionCard = (session, role) => {
-    const selectedChar = getSelectedCharacterForCampaign(session.campaign_id)
     const isOwner = isUserHost(session)
 
     return (
