@@ -249,7 +249,7 @@ export default function MapSelectionSection({
       asset_id: asset.id,
       filename: asset.filename,
       original_filename: asset.filename,
-      file_path: asset.s3_url || asset.s3_key,
+      file_path: asset.s3_url,
       uploaded_by: "dm"
     };
     onSelectMap(mapSettings);
@@ -398,14 +398,17 @@ export default function MapSelectionSection({
         <div className="space-y-2">
           {assets.map((asset) => {
             const isActive = currentMap?.asset_id === asset.id || currentMap?.filename === asset.filename;
+            const hasUrl = !!asset.s3_url;
             return (
               <div
                 key={asset.id}
-                onClick={() => handleMapSelect(asset)}
-                className={`flex items-center gap-2 p-2 rounded border cursor-pointer transition-all ${
-                  isActive
-                    ? 'border-green-500 bg-green-900/20'
-                    : 'border-gray-600 hover:border-sky-500 hover:bg-sky-900/10'
+                onClick={() => hasUrl && handleMapSelect(asset)}
+                className={`flex items-center gap-2 p-2 rounded border transition-all ${
+                  !hasUrl
+                    ? 'border-gray-700 opacity-50 cursor-not-allowed'
+                    : isActive
+                    ? 'border-green-500 bg-green-900/20 cursor-pointer'
+                    : 'border-gray-600 hover:border-sky-500 hover:bg-sky-900/10 cursor-pointer'
                 }`}
               >
                 <div className="w-10 h-10 flex-shrink-0 bg-gray-700 rounded flex items-center justify-center overflow-hidden">
