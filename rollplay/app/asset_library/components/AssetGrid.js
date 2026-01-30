@@ -6,10 +6,9 @@ import { COLORS, THEME } from '@/app/styles/colorTheme'
 import AssetCard from './AssetCard'
 
 /**
- * Grid layout for displaying assets with loading and empty states
+ * Grid layout for displaying assets with empty state
  */
 export default function AssetGrid({ assets, loading, onDeleteAsset, columns = 4 }) {
-  // Loading skeleton
   if (loading) {
     return (
       null
