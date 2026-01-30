@@ -106,8 +106,6 @@ function GameContent() {
 
   // Spectator mode - user has no character selected for this campaign
   const [isSpectator, setIsSpectator] = useState(false);
-  const [spectatorCharacterName, setSpectatorCharacterName] = useState(null); // For display if they have a char selected
-  
   // Debug wrapper for setGridConfig
   const debugSetGridConfig = (config) => {
     console.log('🎯 setGridConfig called with:', config);
@@ -391,7 +389,6 @@ function GameContent() {
       // DM is never a spectator
       if (isDM) {
         setIsSpectator(false);
-        setSpectatorCharacterName(null);
         console.log('✅ User is DM - not a spectator');
         return;
       }
@@ -407,11 +404,9 @@ function GameContent() {
 
         if (selectedChar) {
           setIsSpectator(false);
-          setSpectatorCharacterName(selectedChar.character_name);
           console.log(`✅ Character found for campaign: ${selectedChar.character_name}`);
         } else {
           setIsSpectator(true);
-          setSpectatorCharacterName(null);
           console.log('👁️ No character selected - entering as spectator');
         }
       } catch (error) {
