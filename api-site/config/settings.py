@@ -53,11 +53,11 @@ class Settings(BaseSettings):
     JWT_ALGORITHM: str = "HS256"
 
     # AWS S3 Configuration
-    AWS_ACCESS_KEY_ID: str
-    AWS_SECRET_ACCESS_KEY: str
-    AWS_REGION: str = "eu-west-1"
-    S3_BUCKET_NAME: str
-    PRESIGNED_URL_EXPIRY: int = 3600  # 1 hour default
+    AWS_ACCESS_KEY_ID: str = Field(..., description="AWS access key for S3 asset storage")
+    AWS_SECRET_ACCESS_KEY: str = Field(..., description="AWS secret key for S3 asset storage")
+    AWS_REGION: str = Field(default="eu-west-1", description="AWS region for S3 bucket")
+    S3_BUCKET_NAME: str = Field(..., description="S3 bucket name for asset storage")
+    PRESIGNED_URL_EXPIRY: int = Field(default=3600, description="Presigned URL expiry in seconds")
 
     @property
     def database_url(self) -> str:
