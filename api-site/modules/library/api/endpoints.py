@@ -20,6 +20,8 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 
 from modules.library.dependencies.providers import get_media_asset_repository
 from modules.library.repositories.asset_repository import MediaAssetRepository
+from modules.campaign.dependencies.providers import campaign_repository
+from modules.campaign.orm.campaign_repository import CampaignRepository
 from modules.library.domain.media_asset_type import MediaAssetType
 from modules.library.application.commands import ConfirmUpload, DeleteMediaAsset, AssociateWithCampaign
 from modules.library.application.queries import GetMediaAssetsByUser, GetMediaAssetsByCampaign
@@ -171,6 +173,7 @@ async def list_media_assets(
     asset_type: Optional[MediaAssetType] = Query(None, description="Filter by type"),
     current_user: UserAggregate = Depends(get_current_user_from_token),
     repo: MediaAssetRepository = Depends(get_media_asset_repository),
+    campaign_repo: CampaignRepository = Depends(campaign_repository),
     s3_service: S3Service = Depends(get_s3_service)
 ) -> MediaAssetListResponse:
     """
@@ -180,10 +183,11 @@ async def list_media_assets(
     """
     try:
         if campaign_id:
+            campaign = campaign_repo.get_by_id(campaign_id)
+            if not campaign or not campaign.is_member(current_user.id):
+                raise HTTPException(status_code=403, detail="Access denied - only campaign members can view campaign assets")
             query = GetMediaAssetsByCampaign(repo)
             assets = query.execute(campaign_id, asset_type)
-            # Filter to only user's assets if they're not the campaign owner
-            # (For POC, we'll return all campaign assets)
         else:
             query = GetMediaAssetsByUser(repo)
             assets = query.execute(current_user.id, asset_type)
