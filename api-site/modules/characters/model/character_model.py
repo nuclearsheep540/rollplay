@@ -25,7 +25,7 @@ class Character(Base):
     created_at = Column(DateTime(timezone=True), nullable=False)
     updated_at = Column(DateTime(timezone=True), onupdate=func.now(), nullable=False)
     is_deleted = Column(Boolean, default=False, nullable=False)  # Soft delete flag
-    active_session = Column('active_in_session_id', UUID(as_uuid=True), ForeignKey('sessions.id'), nullable=True)  # Session character is locked to
+    active_campaign = Column('active_in_campaign_id', UUID(as_uuid=True), ForeignKey('campaigns.id'), nullable=True)  # Campaign character is locked to
     hp_max = Column(Integer, default=10, nullable=False)
     hp_current = Column(Integer, default=10, nullable=False)
     ac = Column(Integer, default=10, nullable=False)

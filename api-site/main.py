@@ -21,6 +21,7 @@ from modules.characters.api.endpoints import router as characters_router
 from modules.session.api.endpoints import router as session_router
 from modules.friendship.api.endpoints import router as friendship_router
 from modules.events.api.notification_endpoints import router as notification_router
+from modules.library.api.endpoints import router as library_router
 
 # Import WebSocket endpoint
 from modules.events.api.websocket_endpoint import websocket_events_endpoint
@@ -59,6 +60,7 @@ app.include_router(characters_router, prefix="/api/characters")
 app.include_router(session_router, prefix="/api/sessions")
 app.include_router(friendship_router, prefix="/api/friendships")
 app.include_router(notification_router, prefix="/api/notifications")
+app.include_router(library_router, prefix="/api/library", tags=["library"])
 
 # Register WebSocket endpoint
 app.add_websocket_route("/ws/events", websocket_events_endpoint)

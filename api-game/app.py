@@ -1,7 +1,8 @@
 # Copyright (C) 2025 Matthew Davey
 # SPDX-License-Identifier: GPL-3.0-or-later
-from fastapi import FastAPI, Response
+from fastapi import FastAPI, Response, Request, Query
 import logging
+from typing import Optional
 
 from fastapi import HTTPException
 from fastapi.middleware.cors import CORSMiddleware
@@ -419,6 +420,9 @@ async def create_session(request: SessionStartRequest):
             ]
             return colors[index] if index < len(colors) else "#3b82f6"
 
+        # Convert assets to dict format for MongoDB storage
+        available_assets = [asset.model_dump() for asset in request.assets] if request.assets else []
+
         # Create minimal session
         settings = GameSettings(
             max_players=request.max_players,
@@ -427,7 +431,9 @@ async def create_session(request: SessionStartRequest):
             created_at=datetime.utcnow(),
             moderators=[],
             dungeon_master=request.dm_username.lower(),
-            room_host=request.dm_username.lower()
+            room_host=request.dm_username.lower(),
+            available_assets=available_assets,
+            campaign_id=request.campaign_id  # For proxying asset requests to api-site
         )
 
         # Use session_id as MongoDB _id (back-reference to PostgreSQL session)

@@ -13,6 +13,7 @@ import FinishSessionModal from './FinishSessionModal'
 import DeleteCampaignModal from './DeleteCampaignModal'
 import DeleteSessionModal from './DeleteSessionModal'
 import CampaignInviteModal from './CampaignInviteModal'
+import CharacterSelectionModal from './CharacterSelectionModal'
 import InviteButton from '../../shared/components/InviteButton'
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
 import {
@@ -44,6 +45,10 @@ export default function CampaignManager({ user, refreshTrigger, onCampaignUpdate
   const [loadingInvitedMembers, setLoadingInvitedMembers] = useState(false)
   const [allSessions, setAllSessions] = useState([]) // Store all sessions from all campaigns
   const [isResizing, setIsResizing] = useState(false) // Track window resize state
+  const [characters, setCharacters] = useState([]) // User's characters for selection
+  const [showCharacterModal, setShowCharacterModal] = useState(false)
+  const [characterModalCampaign, setCharacterModalCampaign] = useState(null)
+  const [releasingCharacter, setReleasingCharacter] = useState(null) // Track campaign ID when releasing
 
   // Action state tracking (not modals, but ongoing operations)
   const [startingGame, setStartingGame] = useState(null) // Track game currently being started
@@ -324,8 +329,9 @@ export default function CampaignManager({ user, refreshTrigger, onCampaignUpdate
         throw new Error(errorData.detail || 'Failed to remove player')
       }
 
-      // Refresh campaigns to update member list
+      // Refresh campaigns to get updated state
       await fetchCampaigns()
+
       closeModal('playerRemove')
     } catch (err) {
       console.error('Error removing player from campaign:', err)
@@ -510,11 +516,10 @@ export default function CampaignManager({ user, refreshTrigger, onCampaignUpdate
 
   // Handle successful campaign invite
   const handleCampaignInviteSuccess = async (updatedCampaign) => {
-    // Update the campaign in our local state (no full refetch needed)
-    setCampaigns(prev => prev.map(c =>
-      c.id === updatedCampaign.id ? { ...c, ...updatedCampaign } : c
-    ))
-    // Update the campaign reference in the modal
+    // Refresh campaigns to get updated state (includes invited_player_ids)
+    await fetchCampaigns()
+
+    // Update the campaign reference in the modal with the response data
     updateModalData('campaignInvite', { campaign: { ...modals.campaignInvite.campaign, ...updatedCampaign } })
   }
 
@@ -736,9 +741,67 @@ export default function CampaignManager({ user, refreshTrigger, onCampaignUpdate
     }
   }
 
+  // Fetch user's characters for selection
+  const fetchCharacters = async () => {
+    try {
+      const response = await fetch('/api/characters/', { credentials: 'include' })
+      if (response.ok) {
+        const charactersData = await response.json()
+        setCharacters(charactersData || [])
+      }
+    } catch (error) {
+      console.error('Error fetching characters:', error)
+    }
+  }
+
+  // Handle character selection for a campaign
+  const handleSelectCharacter = (campaign) => {
+    setCharacterModalCampaign(campaign)
+    setShowCharacterModal(true)
+  }
+
+  // Handle character selection success
+  const handleCharacterSelected = async () => {
+    setShowCharacterModal(false)
+    setCharacterModalCampaign(null)
+    // Refresh both campaigns (to update member list) and characters
+    await Promise.all([fetchCampaigns(), fetchCharacters()])
+  }
+
+  // Handle releasing character from campaign
+  const handleReleaseCharacter = async (campaign) => {
+    try {
+      setReleasingCharacter(campaign.id)
+
+      const response = await fetch(`/api/campaigns/${campaign.id}/my-character`, {
+        method: 'DELETE',
+        credentials: 'include'
+      })
+
+      if (!response.ok) {
+        const errorData = await response.json()
+        throw new Error(errorData.detail || 'Failed to release character')
+      }
+
+      // Refresh data
+      await Promise.all([fetchCampaigns(), fetchCharacters()])
+    } catch (err) {
+      console.error('Error releasing character:', err)
+      setError(err.message)
+    } finally {
+      setReleasingCharacter(null)
+    }
+  }
+
+  // Check if campaign has an active session (used to disable release button)
+  const hasActiveSession = (campaignId) => {
+    return allSessions.some(s => s.campaign_id === campaignId && (s.status === 'active' || s.status === 'starting' || s.status === 'paused'))
+  }
+
   useEffect(() => {
     // Only show loading on initial fetch (refreshTrigger = 0)
     fetchCampaigns(refreshTrigger === 0)
+    fetchCharacters()
   }, [refreshTrigger])
 
   // Handle invite_campaign_id from URL (notification click)
@@ -785,6 +848,25 @@ export default function CampaignManager({ user, refreshTrigger, onCampaignUpdate
       clearExpandCampaignId?.()
     }
   }, [expandCampaignId, campaigns, loading])
+
+  // Auto-open character modal from sessionStorage (after returning from character creation)
+  // Uses sessionStorage instead of URL param to avoid race conditions and unintended reopening
+  useEffect(() => {
+    if (selectedCampaign && !loading) {
+      try {
+        const storedCampaignId = sessionStorage.getItem('openCharacterModalForCampaign')
+        if (storedCampaignId && storedCampaignId === selectedCampaign.id) {
+          // Clear immediately to prevent re-triggering
+          sessionStorage.removeItem('openCharacterModalForCampaign')
+          // Open the character modal
+          setCharacterModalCampaign(selectedCampaign)
+          setShowCharacterModal(true)
+        }
+      } catch (e) {
+        // sessionStorage blocked - gracefully degrade, user can manually open modal
+      }
+    }
+  }, [selectedCampaign, loading])
 
   // Fetch members when an invited campaign is expanded
   useEffect(() => {
@@ -866,6 +948,20 @@ export default function CampaignManager({ user, refreshTrigger, onCampaignUpdate
       if (updatedCampaign) {
         // Update the selected campaign with fresh data
         updateModalData('campaignInvite', { campaign: updatedCampaign })
+      }
+    }
+  }, [campaigns])
+
+  // Sync selectedCampaign with campaigns array when campaigns are updated
+  // This ensures selectedCampaign stays fresh after fetchCampaigns() calls
+  useEffect(() => {
+    if (selectedCampaign) {
+      const updatedCampaign = campaigns.find(c => c.id === selectedCampaign.id)
+      if (updatedCampaign) {
+        // Only update if there are meaningful changes to avoid unnecessary re-renders
+        if (JSON.stringify(selectedCampaign) !== JSON.stringify(updatedCampaign)) {
+          setSelectedCampaign(updatedCampaign)
+        }
       }
     }
   }, [campaigns])
@@ -1001,6 +1097,11 @@ export default function CampaignManager({ user, refreshTrigger, onCampaignUpdate
           }
         }
 
+        @keyframes stripe-slide {
+          0% { background-position: 100% 0%; }
+          100% { background-position: 0% 0%; }
+        }
+
       `}</style>
 
       {/* Header */}
@@ -1056,7 +1157,7 @@ export default function CampaignManager({ user, refreshTrigger, onCampaignUpdate
                         backgroundColor: campaign.hero_image ? 'transparent' : COLORS.carbon,
                         backgroundSize: 'cover',
                         backgroundPosition: 'center',
-                        borderColor: isSelected ? THEME.borderActive : '#f59e0b',
+                        borderColor: isSelected ? THEME.borderActive : '#16a34a',
                         transition: isResizing ? 'none' : 'border-color 200ms ease-in-out'
                       }}
                       onClick={() => toggleInvitedCampaignDetails(campaign)}
@@ -1122,7 +1223,6 @@ export default function CampaignManager({ user, refreshTrigger, onCampaignUpdate
                             <h4 className="text-3xl font-[family-name:var(--font-metamorphous)] mb-1 drop-shadow-lg" style={{color: THEME.textOnDark}}>
                               {campaign.title || 'Unnamed Campaign'}
                             </h4>
-                            <Badge>Pending Invite</Badge>
                             {campaign.description && (
                               <div className="text-base drop-shadow-md mt-2" style={{maxWidth: '70%'}}>
                                 <p
@@ -1142,7 +1242,8 @@ export default function CampaignManager({ user, refreshTrigger, onCampaignUpdate
                           </div>
 
                           {/* Action Buttons - Top Right */}
-                          <div className="flex gap-2 flex-shrink-0" onClick={(e) => e.stopPropagation()}>
+                          <div className="flex gap-2 flex-shrink-0 items-center" onClick={(e) => e.stopPropagation()}>
+                            <Badge size="md" className="mr-4">Pending Invite</Badge>
                             <Button
                               variant="success"
                               onClick={() => acceptCampaignInvite(campaign.id)}
@@ -1563,18 +1664,52 @@ export default function CampaignManager({ user, refreshTrigger, onCampaignUpdate
                             {campaignSessions.map((game) => (
                               <div
                                 key={game.id}
-                                className="flex items-center justify-between p-4 rounded-sm border"
+                                className="flex items-center justify-between p-4 rounded-sm border relative overflow-hidden"
                                 style={{backgroundColor: THEME.bgSecondary, borderColor: THEME.borderSubtle}}
                               >
+                                {/* Starting animation overlay */}
+                                {(game.status === 'starting' || startingGame === game.id) && (
+                                  <div
+                                    className="absolute inset-0 pointer-events-none"
+                                    style={{
+                                      background: `linear-gradient(
+                                        -45deg,
+                                        transparent 0%,
+                                        transparent 15%,
+                                        rgba(59, 130, 246, 0.45) 15%,
+                                        rgba(59, 130, 246, 0.45) 20%,
+                                        transparent 20%,
+                                        transparent 35%,
+                                        rgba(59, 130, 246, 0.45) 35%,
+                                        rgba(59, 130, 246, 0.45) 40%,
+                                        transparent 40%,
+                                        transparent 55%,
+                                        rgba(59, 130, 246, 0.45) 55%,
+                                        rgba(59, 130, 246, 0.45) 60%,
+                                        transparent 60%,
+                                        transparent 75%,
+                                        rgba(59, 130, 246, 0.45) 75%,
+                                        rgba(59, 130, 246, 0.45) 80%,
+                                        transparent 80%,
+                                        transparent 100%
+                                      )`,
+                                      backgroundSize: '300% 300%',
+                                      animation: 'stripe-slide 1.5s linear infinite',
+                                      maskImage: 'linear-gradient(to right, black 0%, rgba(0,0,0,0.8) 15%, rgba(0,0,0,0.5) 30%, rgba(0,0,0,0.2) 45%, transparent 65%)',
+                                      WebkitMaskImage: 'linear-gradient(to right, black 0%, rgba(0,0,0,0.8) 15%, rgba(0,0,0,0.5) 30%, rgba(0,0,0,0.2) 45%, transparent 65%)',
+                                    }}
+                                  />
+                                )}
                                 <div>
                                   <p className="font-medium" style={{color: THEME.textOnDark}}>{game.name || 'Game Session'}</p>
                                   <p className="text-sm" style={{color: THEME.textSecondary}}>
                                     Status: <span className="font-medium" style={{
                                       color: game.status === 'active' ? '#16a34a' :
+                                             (game.status === 'starting' || startingGame === game.id) ? '#3b82f6' :
                                              game.status === 'inactive' ? THEME.textSecondary :
                                              '#fbbf24'
                                     }}>
-                                      {game.status.charAt(0).toUpperCase() + game.status.slice(1)}
+                                      {(game.status === 'starting' || startingGame === game.id) ? 'Starting' : game.status.charAt(0).toUpperCase() + game.status.slice(1)}
                                     </span>
                                   </p>
                                 </div>
@@ -1584,7 +1719,7 @@ export default function CampaignManager({ user, refreshTrigger, onCampaignUpdate
                                   {game.status === 'active' ? (
                                     <>
                                       <Button
-                                        variant="primary"
+                                        variant="success"
                                         size="md"
                                         onClick={() => enterGame(game)}
                                       >
@@ -1593,72 +1728,42 @@ export default function CampaignManager({ user, refreshTrigger, onCampaignUpdate
                                       </Button>
                                       {/* Only show host actions if user is the campaign host */}
                                       {campaign.host_id === user.id && (
-                                        <>
-                                          <button
-                                            onClick={() => promptPauseSession(game)}
-                                            disabled={pausingGame === game.id}
-                                            className="px-4 py-2 rounded-sm border transition-all text-sm font-medium flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
-                                            style={{backgroundColor: '#d97706', color: THEME.textPrimary, borderColor: '#fbbf24'}}
-                                            title="Pause Session"
-                                          >
-                                            {pausingGame === game.id ? (
-                                              <>
-                                                <div className="animate-spin rounded-full h-3 w-3 border-b-2 border-white"></div>
-                                                Pausing...
-                                              </>
-                                            ) : (
-                                              <>
-                                                <FontAwesomeIcon icon={faPause} />
-                                                Pause
-                                              </>
-                                            )}
-                                          </button>
-                                          <button
-                                            onClick={() => promptFinishSession(game)}
-                                            disabled={finishingGame === game.id}
-                                            className="px-4 py-2 rounded-sm border transition-all text-sm font-medium flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
-                                            style={{backgroundColor: '#991b1b', color: COLORS.smoke, borderColor: '#dc2626'}}
-                                            title="Finish Session Permanently"
-                                          >
-                                            {finishingGame === game.id ? (
-                                              <>
-                                                <div className="animate-spin rounded-full h-3 w-3 border-b-2 border-white"></div>
-                                                Finishing...
-                                              </>
-                                            ) : (
-                                              <>
-                                                <FontAwesomeIcon icon={faXmark} />
-                                                Finish
-                                              </>
-                                            )}
-                                          </button>
-                                        </>
+                                        <button
+                                          onClick={() => promptPauseSession(game)}
+                                          disabled={pausingGame === game.id}
+                                          className="px-4 py-2 rounded-sm border transition-all text-sm font-medium flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                                          style={{backgroundColor: COLORS.silver, color: THEME.textPrimary, borderColor: COLORS.smoke}}
+                                          title="Pause Session"
+                                        >
+                                          {pausingGame === game.id ? (
+                                            <>
+                                              <div className="animate-spin rounded-full h-3 w-3 border-b-2 border-gray-800"></div>
+                                              Pausing...
+                                            </>
+                                          ) : (
+                                            <>
+                                              <FontAwesomeIcon icon={faPause} />
+                                              Pause
+                                            </>
+                                          )}
+                                        </button>
                                       )}
                                     </>
-                                  ) : game.status === 'inactive' && campaign.host_id === user.id ? (
-                                    /* Only show inactive game actions if user is the host */
+                                  ) : (game.status === 'starting' || game.status === 'inactive') && campaign.host_id === user.id ? (
+                                    /* Show game actions for host - disabled when starting */
                                     <>
                                       <Button
                                         variant="success"
                                         size="md"
                                         onClick={() => startGame(game.id)}
-                                        disabled={startingGame === game.id || activeSessions.length > 0}
+                                        disabled={startingGame === game.id || activeSessions.length > 0 || game.status === 'starting'}
                                       >
-                                        {startingGame === game.id ? (
-                                          <>
-                                            <div className="animate-spin rounded-full h-3 w-3 border-b-2 border-white mr-2"></div>
-                                            Starting...
-                                          </>
-                                        ) : (
-                                          <>
-                                            <FontAwesomeIcon icon={faPlay} className="mr-2" />
-                                            Start
-                                          </>
-                                        )}
+                                        <FontAwesomeIcon icon={faPlay} className="mr-2" />
+                                        Start
                                       </Button>
                                       <button
                                         onClick={() => promptFinishSession(game)}
-                                        disabled={finishingGame === game.id}
+                                        disabled={finishingGame === game.id || game.status === 'starting'}
                                         className="px-4 py-2 rounded-sm border transition-all text-sm font-medium flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
                                         style={{backgroundColor: '#991b1b', color: COLORS.smoke, borderColor: '#dc2626'}}
                                         title="Finish Session Permanently"
@@ -1711,7 +1816,7 @@ export default function CampaignManager({ user, refreshTrigger, onCampaignUpdate
                           <button
                             onClick={() => openModal('campaignInvite', { campaign: selectedCampaign })}
                             className="flex items-center gap-2 px-3 h-10 rounded-sm transition-all border mb-4"
-                            style={{backgroundColor: THEME.bgSecondary, color: THEME.textAccent, borderColor: THEME.borderActive}}
+                            style={{backgroundColor: THEME.bgSecondary, color: COLORS.smoke, borderColor: THEME.borderActive}}
                           >
                             <FontAwesomeIcon icon={faUserPlus} className="h-4 w-4" />
                             <span className="text-sm font-medium">Add Members</span>
@@ -1759,35 +1864,69 @@ export default function CampaignManager({ user, refreshTrigger, onCampaignUpdate
                                     </button>
                                   )}
 
-                                  {/* Username with host badge */}
+                                  {/* Username */}
                                   <div className="flex items-center gap-2 mb-1">
                                     <p className="font-medium" style={{color: THEME.textOnDark}}>
                                       {member.username}
                                     </p>
-                                    {member.is_host && (
-                                      <span
-                                        className="text-xs px-2 py-0.5 rounded-sm font-semibold"
-                                        style={{
-                                          backgroundColor: '#854d0e',
-                                          color: '#fef3c7',
-                                          borderColor: '#fbbf24',
-                                          border: '1px solid'
-                                        }}
-                                      >
-                                        DM
-                                      </span>
-                                    )}
                                   </div>
 
                                   {/* Character info */}
                                   {member.character_id ? (
-                                    <p className="text-sm" style={{color: THEME.textAccent}}>
-                                      {member.character_name} - Level {member.character_level} {member.character_race} {member.character_class}
-                                    </p>
+                                    <div>
+                                      <p className="text-sm" style={{color: THEME.textAccent}}>
+                                        {member.character_name} - Level {member.character_level} {member.character_race} {member.character_class}
+                                      </p>
+                                      {/* Release button - only for current user */}
+                                      {member.user_id === user.id && !member.is_host && (
+                                        <button
+                                          onClick={() => handleReleaseCharacter(campaign)}
+                                          disabled={releasingCharacter === campaign.id || hasActiveSession(campaign.id)}
+                                          className="mt-2 text-xs px-2 py-1 rounded-sm border transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                                          style={{
+                                            backgroundColor: 'transparent',
+                                            color: '#f59e0b',
+                                            borderColor: '#f59e0b'
+                                          }}
+                                          title={hasActiveSession(campaign.id) ? 'Cannot release while session is active' : 'Release character from campaign'}
+                                        >
+                                          {releasingCharacter === campaign.id ? 'Releasing...' : 'Release Character'}
+                                        </button>
+                                      )}
+                                    </div>
                                   ) : (
-                                    <p className="text-sm italic" style={{color: THEME.textSecondary}}>
-                                      No character selected
-                                    </p>
+                                    <div>
+                                      {member.is_host ? (
+                                        // Host/DM doesn't need a character - show Dungeon Master pill
+                                        <span
+                                          className="text-sm px-2 py-1 rounded-sm font-semibold"
+                                          style={{
+                                            backgroundColor: '#854d0e',
+                                            color: '#fef3c7',
+                                            borderColor: '#fbbf24',
+                                            border: '1px solid'
+                                          }}
+                                        >
+                                          Dungeon Master
+                                        </span>
+                                      ) : member.user_id === user.id ? (
+                                        <button
+                                          onClick={() => handleSelectCharacter(campaign)}
+                                          className="text-sm px-2 py-1 rounded-sm border transition-all hover:opacity-80 font-semibold"
+                                          style={{
+                                            backgroundColor: THEME.textOnDark,
+                                            color: THEME.textPrimary,
+                                            borderColor: THEME.textOnDark
+                                          }}
+                                        >
+                                          Select Character
+                                        </button>
+                                      ) : (
+                                        <p className="text-sm italic" style={{color: THEME.textSecondary}}>
+                                          No character selected
+                                        </p>
+                                      )}
+                                    </div>
                                   )}
                                 </div>
                               ))}
@@ -1816,7 +1955,7 @@ export default function CampaignManager({ user, refreshTrigger, onCampaignUpdate
                                     })
                                   }}
                                   className="flex items-center gap-2 px-3 h-10 rounded-sm transition-all border"
-                                  style={{backgroundColor: THEME.bgSecondary, color: THEME.textAccent, borderColor: THEME.borderActive}}
+                                  style={{backgroundColor: THEME.bgSecondary, color: COLORS.smoke, borderColor: THEME.borderActive}}
                                 >
                                   <FontAwesomeIcon icon={faGear} className="h-4 w-4" />
                                   <span className="text-sm font-medium">Configure</span>
@@ -1825,7 +1964,7 @@ export default function CampaignManager({ user, refreshTrigger, onCampaignUpdate
                                   onClick={() => promptDeleteCampaign(selectedCampaign)}
                                   disabled={modals.campaignDelete.isDeleting}
                                   className="flex items-center gap-2 px-3 h-10 rounded-sm transition-all border disabled:opacity-50 disabled:cursor-not-allowed"
-                                  style={{backgroundColor: '#991b1b', color: THEME.textAccent, borderColor: '#dc2626'}}
+                                  style={{backgroundColor: '#991b1b', color: COLORS.smoke, borderColor: '#dc2626'}}
                                 >
                                   <FontAwesomeIcon icon={faTrash} className="h-4 w-4" />
                                   <span className="text-sm font-medium">Delete Campaign</span>
@@ -2190,6 +2329,25 @@ export default function CampaignManager({ user, refreshTrigger, onCampaignUpdate
           campaign={modals.campaignInvite.campaign}
           onClose={() => closeModal('campaignInvite')}
           onInviteSuccess={handleCampaignInviteSuccess}
+        />
+      )}
+
+      {/* Character Selection Modal */}
+      {showCharacterModal && characterModalCampaign && (
+        <CharacterSelectionModal
+          campaign={characterModalCampaign}
+          characters={characters}
+          onClose={() => {
+            setShowCharacterModal(false)
+            setCharacterModalCampaign(null)
+          }}
+          onCharacterSelected={handleCharacterSelected}
+          onCreateCharacter={() => {
+            const campaignId = characterModalCampaign.id
+            setShowCharacterModal(false)
+            setCharacterModalCampaign(null)
+            router.push(`/character/create?return_campaign=${campaignId}`)
+          }}
         />
       )}
 

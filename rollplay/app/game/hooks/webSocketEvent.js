@@ -31,12 +31,18 @@ export const handleInitialState = (data, handlers) => {
     dungeon_master,
     combat_active,
     seat_colors,
-    max_players
+    max_players,
+    campaign_id
   } = data;
 
   // Set DM name
   if (handlers.setDmSeat && dungeon_master) {
     handlers.setDmSeat(dungeon_master);
+  }
+
+  // Set campaign ID for asset library calls
+  if (handlers.setCampaignId && campaign_id) {
+    handlers.setCampaignId(campaign_id);
   }
 
   // Set combat state

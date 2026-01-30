@@ -34,14 +34,14 @@ export default function PauseSessionModal({ game, onConfirm, onCancel, isPausing
             disabled={isPausing}
             className="px-4 py-2 rounded-sm border transition-all text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed"
             style={{
-              backgroundColor: '#d97706',
-              color: COLORS.smoke,
-              borderColor: '#fbbf24'
+              backgroundColor: COLORS.silver,
+              color: THEME.textPrimary,
+              borderColor: COLORS.smoke
             }}
           >
             {isPausing ? (
               <>
-                <div className="animate-spin rounded-full h-4 w-4 border-b-2 inline-block mr-2" style={{borderColor: COLORS.smoke}}></div>
+                <div className="animate-spin rounded-full h-4 w-4 border-b-2 inline-block mr-2" style={{borderColor: THEME.textPrimary}}></div>
                 Pausing...
               </>
             ) : (

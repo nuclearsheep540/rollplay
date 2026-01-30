@@ -68,8 +68,8 @@ class GetCampaignMembers:
 
         Logic:
         1. Fetch campaign (get host_id + player_ids)
-        2. For each member: LEFT JOIN User LEFT JOIN Character
-        3. Character priority: available (no active_game) or most recent
+        2. For each member: Get user info and character LOCKED to THIS campaign
+        3. Only shows character if it's actually selected for this campaign
         4. Format multi-class as "Fighter / Ranger"
         5. Sort: host first, then alphabetically
         """
@@ -92,18 +92,15 @@ class GetCampaignMembers:
             if not user:
                 continue
 
-            # Get character (prefer available)
+            # Get character locked to THIS campaign (not just any character owned by user)
             character = (
                 self.db.query(Character)
                 .filter(
                     and_(
                         Character.user_id == member_id,
+                        Character.active_campaign == campaign_id,
                         Character.is_deleted == False
                     )
-                )
-                .order_by(
-                    Character.active_session.is_(None).desc(),
-                    Character.created_at.desc()
                 )
                 .first()
             )

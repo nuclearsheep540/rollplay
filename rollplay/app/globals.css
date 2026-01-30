@@ -928,3 +928,37 @@ input[type="range"]::-webkit-slider-thumb {
   cursor: pointer;
   border-radius: 2px;
 }
+
+/* ==========================================================================
+   ASSET LIBRARY STYLES
+   ========================================================================== */
+
+/* Grid size slider - follows mixer-fader pattern */
+.asset-grid-slider {
+  -webkit-appearance: none;
+  appearance: none;
+  background: #37322F; /* COLORS.graphite - this IS the track */
+  height: 3px;
+  outline: none;
+  border-radius: 2px;
+  cursor: pointer;
+}
+
+.asset-grid-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 12px;
+  height: 12px;
+  background: #37322F;
+  cursor: pointer;
+  border-radius: 2px;
+}
+
+.asset-grid-slider::-moz-range-thumb {
+  width: 12px;
+  height: 12px;
+  background: #37322F;
+  cursor: pointer;
+  border-radius: 2px;
+  border: none;
+}

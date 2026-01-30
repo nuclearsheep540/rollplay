@@ -100,7 +100,12 @@ function GameContent() {
 
   // Session ended modal state
   const [sessionEndedData, setSessionEndedData] = useState(null); // { message, reason } when session ends
-  
+
+  // Campaign ID for direct api-site calls (asset library)
+  const [campaignId, setCampaignId] = useState(null);
+
+  // Spectator mode - user has no character selected for this campaign
+  const [isSpectator, setIsSpectator] = useState(false);
   // Debug wrapper for setGridConfig
   const debugSetGridConfig = (config) => {
     console.log('🎯 setGridConfig called with:', config);
@@ -375,6 +380,43 @@ function GameContent() {
     }
   }, [currentUser, userLoading])
 
+  // Check spectator status when campaign ID is available
+  // DMs are never spectators even without a character
+  useEffect(() => {
+    const checkSpectatorStatus = async () => {
+      if (!campaignId || !currentUser) return;
+
+      // DM is never a spectator
+      if (isDM) {
+        setIsSpectator(false);
+        console.log('✅ User is DM - not a spectator');
+        return;
+      }
+
+      try {
+        // Fetch user's characters
+        const response = await fetch('/api/characters/', { credentials: 'include' });
+        if (!response.ok) return;
+
+        const characters = await response.json();
+        // Check if any character is locked to this campaign
+        const selectedChar = characters.find(char => char.active_campaign === campaignId);
+
+        if (selectedChar) {
+          setIsSpectator(false);
+          console.log(`✅ Character found for campaign: ${selectedChar.character_name}`);
+        } else {
+          setIsSpectator(true);
+          console.log('👁️ No character selected - entering as spectator');
+        }
+      } catch (error) {
+        console.error('Error checking spectator status:', error);
+      }
+    };
+
+    checkSpectatorStatus();
+  }, [campaignId, currentUser, isDM]);
+
   // Cleanup audio when component unmounts (user navigates away from game page)
   useEffect(() => {
     return () => {
@@ -534,11 +576,11 @@ function GameContent() {
         // Clear map state if no active map (atomic)
         setActiveMap(null);
       } else {
-        console.error("🗺️ Failed to fetch active map:", response.status, response.statusText);
+        console.log("🗺️ Failed to fetch active map:", response.status, response.statusText);
       }
       
     } catch (error) {
-      console.error("🗺️ Error loading active map:", error);
+      console.log("🗺️ Error loading active map:", error);
       // Don't set fallback map data - leave empty if error (atomic)
       setActiveMap(null);
     }
@@ -699,7 +741,8 @@ function GameContent() {
     setLobbyUsers,
     setDisconnectTimeouts,
     setCurrentInitiativePromptId,
-    
+    setCampaignId,
+
     // Current state values
     gameSeats,
     thisPlayer,
@@ -707,7 +750,7 @@ function GameContent() {
     lobbyUsers,
     disconnectTimeouts,
     currentInitiativePromptId,
-    
+
     // Helper functions
     addToLog,
     getCharacterData,
@@ -1271,6 +1314,44 @@ function GameContent() {
         </div>
       </div>
 
+      {/* Spectator Banner */}
+      {isSpectator && (
+        <div className="spectator-banner" style={{
+          backgroundColor: '#1e293b',
+          borderBottom: '2px solid #f59e0b',
+          padding: '12px 24px',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          gap: '16px'
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+            <span style={{ fontSize: '20px' }}>👁️</span>
+            <div>
+              <p style={{ color: '#f59e0b', fontWeight: '600', margin: 0 }}>Spectator Mode</p>
+              <p style={{ color: '#94a3b8', fontSize: '14px', margin: 0 }}>
+                You're watching this session. Select a character in your campaign to participate.
+              </p>
+            </div>
+          </div>
+          <button
+            onClick={() => router.push('/dashboard')}
+            style={{
+              backgroundColor: '#f59e0b',
+              color: '#1e293b',
+              padding: '8px 16px',
+              borderRadius: '6px',
+              fontWeight: '600',
+              fontSize: '14px',
+              border: 'none',
+              cursor: 'pointer'
+            }}
+          >
+            Go to Campaigns
+          </button>
+        </div>
+      )}
+
       {/* Main Game Area */}
       <div className="main-game-area">
         {/* GRID POSITION 1: Left Column - party-sidebar with adventure log */}
@@ -1324,6 +1405,7 @@ function GameContent() {
                 onColorChange={handlePlayerColorChange}
                 currentColor={currentColor}
                 isDM={isDM}
+                isSpectator={isSpectator}
               />
             );
           })}
@@ -1343,13 +1425,14 @@ function GameContent() {
         {/* GRID POSITION 2: Center Column - map-canvas with horizontal initiative */}
         <div className="grid-area-map-canvas relative">
           {/* Map Display Background - Now properly positioned in center area */}
-          <MapDisplay 
+          <MapDisplay
             activeMap={activeMap}
             isEditMode={gridEditMode && isDM}
             onGridChange={handleGridChange}
             mapImageEditMode={gridEditMode && isDM}
             onMapImageChange={handleMapImageChange}
             liveGridOpacity={liveGridOpacity}
+            gridConfig={gridConfig}
           />
           
           {/* Horizontal Initiative Tracker overlaid on map */}
@@ -1393,6 +1476,7 @@ function GameContent() {
             setCombatActive={sendCombatStateChange}
             gameSeats={gameSeats}
             roomId={roomId}
+            campaignId={campaignId}
             activePrompts={activePrompts}        // UPDATED: Pass array instead of single prompt
             unlockAudio={unlockAudio}             // NEW: Pass audio unlock function
             isAudioUnlocked={isAudioUnlocked}    // NEW: Pass audio unlock status
@@ -1421,18 +1505,25 @@ function GameContent() {
 
       </div>
 
-      {/* UPDATED: DiceActionPanel with multiple prompts support */}
-      <DiceActionPanel
-        currentTurn={currentTurn}
-        thisPlayer={getCurrentPlayerName()}
-        currentUser={currentUser}
-        combatActive={combatActive}
-        onRollDice={handlePlayerDiceRoll}
-        onEndTurn={handleEndTurn}
-        uiScale={uiScale}
-        activePrompts={activePrompts}            // UPDATED: Pass active prompts array
-        isDicePromptActive={isDicePromptActive}
-      />
+      {/* DiceActionPanel - only show if user is sitting in a seat OR is DM */}
+      {(() => {
+        const playerName = getCurrentPlayerName();
+        const isPlayerSeated = gameSeats.some(seat => seat.playerName === playerName);
+        const canUseDice = isPlayerSeated || isDM;
+        return canUseDice && (
+          <DiceActionPanel
+            currentTurn={currentTurn}
+            thisPlayer={playerName}
+            currentUser={currentUser}
+            combatActive={combatActive}
+            onRollDice={handlePlayerDiceRoll}
+            onEndTurn={handleEndTurn}
+            uiScale={uiScale}
+            activePrompts={activePrompts}
+            isDicePromptActive={isDicePromptActive}
+          />
+        );
+      })()}
 
       {/* Session Ended Modal with Countdown */}
       {sessionEndedData && (

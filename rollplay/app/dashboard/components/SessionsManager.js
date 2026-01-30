@@ -7,8 +7,6 @@
 
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
-import { createPortal } from 'react-dom'
-import CharacterSelectionModal from './CharacterSelectionModal'
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
 import {
   faGamepad,
@@ -22,8 +20,6 @@ export default function SessionsManager({ user, refreshTrigger }) {
   const [characters, setCharacters] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
-  const [showCharacterModal, setShowCharacterModal] = useState(false)
-  const [selectedSessionForCharacter, setSelectedSessionForCharacter] = useState(null)
 
   useEffect(() => {
     // Only show loading on initial fetch (refreshTrigger = 0)
@@ -68,40 +64,11 @@ export default function SessionsManager({ user, refreshTrigger }) {
     return 'Unknown'
   }
 
-  const getAvailableCharacters = (sessionId) => {
-    // Return characters that are either not locked or locked to this specific session
-    return characters.filter(char =>
-      !char.active_session || char.active_session === sessionId
-    )
-  }
-
-  const getSelectedCharacter = (sessionId) => {
-    // Find character locked to this session
-    return characters.find(char => char.active_session === sessionId)
-  }
-
-  // Enter game (prompts character selection if needed)
+  // Enter game - allow entry regardless of character selection (spectator mode supported)
   const enterGame = (session) => {
-    const selectedChar = getSelectedCharacter(session.id)
-
-    if (!selectedChar && isUserJoined(session)) {
-      // User joined but hasn't selected character - show modal
-      setSelectedSessionForCharacter(session)
-      setShowCharacterModal(true)
-    } else {
-      // DM or character already selected - join game directly
-      router.push(`/game?room_id=${session.active_game_id || session.id}`)
-    }
+    // DM or any player can enter - spectator handling happens in game page
+    router.push(`/game?room_id=${session.active_game_id || session.id}`)
   }
-
-  // Handle character selection success
-  const handleCharacterSelected = async () => {
-    setShowCharacterModal(false)
-    setSelectedSessionForCharacter(null)
-    // Refresh to show the selected character
-    await fetchSessionsAndCharacters()
-  }
-
 
   // Filter to show only active sessions
   const mySessions = sessions.filter(session =>
@@ -119,8 +86,6 @@ export default function SessionsManager({ user, refreshTrigger }) {
 
   // Render session card component
   const renderSessionCard = (session, role) => {
-    const availableChars = getAvailableCharacters(session.id)
-    const selectedChar = getSelectedCharacter(session.id)
     const isOwner = isUserHost(session)
 
     return (
@@ -197,7 +162,6 @@ export default function SessionsManager({ user, refreshTrigger }) {
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
               {session.roster.map((player) => {
                 const isCurrentUser = player.user_id === user.id
-                const canSelectCharacter = isCurrentUser && !player.character_name
                 return (
                   <div
                     key={player.user_id}
@@ -205,11 +169,7 @@ export default function SessionsManager({ user, refreshTrigger }) {
                       isCurrentUser
                         ? 'bg-purple-500/20 border-purple-500/50'
                         : 'bg-slate-900 border-slate-700'
-                    } ${canSelectCharacter ? 'cursor-pointer hover:bg-purple-500/30' : ''}`}
-                    onClick={canSelectCharacter ? () => {
-                      setSelectedSessionForCharacter(session)
-                      setShowCharacterModal(true)
-                    } : undefined}
+                    }`}
                   >
                     {player.character_name ? (
                       <div>
@@ -245,7 +205,7 @@ export default function SessionsManager({ user, refreshTrigger }) {
                           </p>
                         </div>
                         <p className="text-xs text-amber-400">
-                          {isCurrentUser ? 'Click to select character' : 'No character selected'}
+                          {isCurrentUser ? 'Spectator (select character in Campaigns)' : 'Spectator'}
                         </p>
                       </div>
                     )}
@@ -300,18 +260,6 @@ export default function SessionsManager({ user, refreshTrigger }) {
         )}
       </div>
 
-      {/* Character Selection Modal */}
-      {showCharacterModal && selectedSessionForCharacter && (
-        <CharacterSelectionModal
-          game={selectedSessionForCharacter}
-          characters={getAvailableCharacters(selectedSessionForCharacter.id)}
-          onClose={() => {
-            setShowCharacterModal(false)
-            setSelectedSessionForCharacter(null)
-          }}
-          onCharacterSelected={handleCharacterSelected}
-        />
-      )}
     </div>
   )
 }

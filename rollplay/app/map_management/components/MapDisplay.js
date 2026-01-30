@@ -8,7 +8,7 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import GridOverlay from './GridOverlay';
 
-const MapDisplay = ({ 
+const MapDisplay = ({
   activeMap = null,
   isEditMode = false,
   className = "",
@@ -18,7 +18,8 @@ const MapDisplay = ({
   mapImageEditMode = false,
   mapImageConfig = null,
   onMapImageChange = null,
-  liveGridOpacity = null
+  liveGridOpacity = null,
+  gridConfig = null // Preview grid config for edit mode
 }) => {
   const [mapLoaded, setMapLoaded] = useState(false);
   const mapImageRef = useRef(null); // Reference to the map image element
@@ -151,8 +152,8 @@ const MapDisplay = ({
         <div style={contentTransform}>
           {/* Grid overlay with default settings (atomic approach) */}
           {showGrid && (
-            <GridOverlay 
-              gridConfig={activeMap?.grid_config || null}
+            <GridOverlay
+              gridConfig={(isEditMode && gridConfig) ? gridConfig : (activeMap?.grid_config || null)}
               isEditMode={isEditMode}
               showLabels={showGridLabels}
               onGridChange={onGridChange}
@@ -283,8 +284,8 @@ const MapDisplay = ({
 
         {/* Grid overlay for active map - atomic approach - now properly coupled inside transform container */}
         {showGrid && (
-          <GridOverlay 
-            gridConfig={activeMap?.grid_config || null}
+          <GridOverlay
+            gridConfig={(isEditMode && gridConfig) ? gridConfig : (activeMap?.grid_config || null)}
             isEditMode={isEditMode}
             showLabels={showGridLabels}
             onGridChange={onGridChange}

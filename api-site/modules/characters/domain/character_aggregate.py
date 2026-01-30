@@ -171,7 +171,7 @@ class CharacterAggregate:
     Characters are created by users and represent their in-game personas.
 
     Locking:
-    - active_game: UUID of game character is locked to (can only be in one game at a time)
+    - active_campaign: UUID of campaign character is locked to (can only be in one campaign at a time)
     - is_alive: Whether character is alive (for D&D death mechanics)
 
     D&D 2024 Origin:
@@ -193,7 +193,7 @@ class CharacterAggregate:
     background: Optional[CharacterBackground] = None  # D&D 2024: Character background
     origin_ability_bonuses: Dict[str, int] = None  # D&D 2024: Ability bonuses from background
     is_deleted: bool = False
-    active_game: Optional[UUID] = None  # Game character is locked to
+    active_campaign: Optional[UUID] = None  # Campaign character is locked to
     is_alive: bool = True  # Character alive status (D&D death mechanics)
 
     def __post_init__(self):
@@ -274,7 +274,7 @@ class CharacterAggregate:
     @classmethod
     def create(
         cls,
-        active_game: None,
+        active_campaign: None,
         user_id: UUID,  # owner
         character_name: str,
         character_classes: List[CharacterClassInfo],  # Changed from single class
@@ -347,7 +347,7 @@ class CharacterAggregate:
             background=background,  # D&D 2024
             origin_ability_bonuses=origin_ability_bonuses or {},  # D&D 2024, default to empty dict
             is_deleted=False,
-            active_game=None,  # New characters not locked to any game
+            active_campaign=None,  # New characters not locked to any campaign
             is_alive=True,  # New characters start alive
             hp_max=hp_max,
             hp_current=hp_current,
@@ -382,14 +382,14 @@ class CharacterAggregate:
 
     def can_be_deleted(self) -> bool:
         """
-        Business rule: Characters cannot be deleted if locked to a game.
-        Must leave game first to unlock character before deletion.
+        Business rule: Characters cannot be deleted if locked to a campaign.
+        Must leave campaign first to unlock character before deletion.
         """
-        return self.active_game is None
+        return self.active_campaign is None
 
     def is_locked(self) -> bool:
-        """Check if character is locked to a game."""
-        return self.active_game is not None
+        """Check if character is locked to a campaign."""
+        return self.active_campaign is not None
 
     def get_display_name(self) -> str:
         """Get formatted display name with all classes"""
@@ -549,27 +549,27 @@ class CharacterAggregate:
 
         self.updated_at = datetime.now()
 
-    def lock_to_game(self, game_id: UUID) -> None:
+    def lock_to_campaign(self, campaign_id: UUID) -> None:
         """
-        Lock character to a specific game.
-        Characters can only be locked to one game at a time.
+        Lock character to a specific campaign.
+        Characters can only be locked to one campaign at a time.
 
         Business Rules:
         - Character must not already be locked
         - Dead characters can still be locked (they remain in roster)
         """
-        if self.active_game is not None:
-            raise ValueError(f"Character already locked to game {self.active_game}")
+        if self.active_campaign is not None:
+            raise ValueError(f"Character already locked to campaign {self.active_campaign}")
 
-        self.active_game = game_id
+        self.active_campaign = campaign_id
         self.updated_at = datetime.now()
 
-    def unlock_from_game(self) -> None:
+    def unlock_from_campaign(self) -> None:
         """
-        Unlock character from game.
-        Allows character to be used in another game or deleted.
+        Unlock character from campaign.
+        Allows character to be used in another campaign or deleted.
         """
-        self.active_game = None
+        self.active_campaign = None
         self.updated_at = datetime.now()
 
     def mark_dead(self) -> None:

@@ -13,6 +13,7 @@ export function Button({
   size = 'md',
   children,
   className = '',
+  disabled = false,
   ...props
 }) {
   const variants = {
@@ -42,8 +43,14 @@ export function Button({
     ghost: {
       backgroundColor: 'transparent',
       color: THEME.textOnDark,
-      borderColor: 'transparent'
+      borderColor: COLORS.silver
     }
+  }
+
+  const disabledStyle = {
+    backgroundColor: COLORS.graphite,
+    color: COLORS.silver,
+    borderColor: COLORS.graphite
   }
 
   const sizes = {
@@ -57,14 +64,15 @@ export function Button({
 
   return (
     <button
-      className={`rounded-sm border font-medium transition-all ${sizes[size]} ${className}`}
+      className={`rounded-sm border font-medium transition-all disabled:cursor-not-allowed ${sizes[size]} ${className}`}
       style={{
-        ...variants[variant],
-        ...(isHovered && variant !== 'ghost' && {
+        ...(disabled ? disabledStyle : variants[variant]),
+        ...(isHovered && !disabled && variant !== 'ghost' && {
           borderColor: THEME.borderActive,
           color: THEME.textAccent
         })
       }}
+      disabled={disabled}
       onMouseEnter={() => setIsHovered(true)}
       onMouseLeave={() => setIsHovered(false)}
       {...props}
@@ -74,14 +82,22 @@ export function Button({
   )
 }
 
-export function Badge({ children, className = '', ...props }) {
+export function Badge({ children, className = '', size = 'default', ...props }) {
+  const sizes = {
+    default: 'px-3 py-1 text-xs',
+    xs: 'px-2 py-1 text-xs',
+    sm: 'px-3 py-1.5 text-sm',
+    md: 'px-4 py-2 text-sm',
+    lg: 'px-6 py-3 text-base'
+  }
+
   return (
     <span
-      className={`px-3 py-1 rounded-sm text-xs font-semibold border ${className}`}
+      className={`rounded-sm font-semibold border ${sizes[size]} ${className}`}
       style={{
         backgroundColor: `${THEME.bgSecondary}CC`,
         color: COLORS.smoke,
-        borderColor: THEME.borderDefault
+        borderColor: COLORS.silver
       }}
       {...props}
     >

@@ -28,17 +28,18 @@ export default function DashboardLayout({
   const router = useRouter()
   const searchParams = useSearchParams()
 
-  // Tab configuration - Campaigns, Characters, and Account
+  // Tab configuration - Campaigns, Characters, Library, and Account
   const tabs = [
     { id: 'campaigns', label: 'Campaigns' },
     { id: 'characters', label: 'Characters' },
+    { id: 'library', label: 'Library' },
     { id: 'account', label: 'Account' }
   ]
 
   // Initialize activeSection from URL parameter - run only once on mount
   useEffect(() => {
     const tabParam = searchParams.get('tab')
-    if (tabParam && ['characters', 'campaigns', 'account'].includes(tabParam)) {
+    if (tabParam && ['characters', 'campaigns', 'library', 'account'].includes(tabParam)) {
       setActiveSection(tabParam)
     } else if (!tabParam) {
       // If no tab parameter, set default and update URL
