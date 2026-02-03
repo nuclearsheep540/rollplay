@@ -10,11 +10,12 @@ import { THEME } from '@/app/styles/colorTheme'
 import { Button } from './shared/Button'
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
 import { faPlus } from '@fortawesome/free-solid-svg-icons'
+import { useSelectCharacter } from '../hooks/mutations/useCharacterMutations'
 
 export default function CharacterSelectionModal({ campaign, characters, onClose, onCharacterSelected, onCreateCharacter = null, currentCharacterId = null }) {
   const [selectedCharacterId, setSelectedCharacterId] = useState(null)
-  const [loading, setLoading] = useState(false)
   const [error, setError] = useState(null)
+  const selectCharacterMutation = useSelectCharacter()
 
   // Filter out the currently selected character if swapping, and characters locked to OTHER campaigns
   const availableCharacters = characters.filter(char => {
@@ -32,30 +33,14 @@ export default function CharacterSelectionModal({ campaign, characters, onClose,
     }
 
     try {
-      setLoading(true)
       setError(null)
-
-      // Campaign-level character selection endpoint
-      const response = await fetch(`/api/campaigns/${campaign.id}/select-character`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json'
-        },
-        credentials: 'include',
-        body: JSON.stringify({ character_id: selectedCharacterId })
+      await selectCharacterMutation.mutateAsync({
+        campaignId: campaign.id,
+        characterId: selectedCharacterId,
       })
-
-      if (!response.ok) {
-        const errorData = await response.json()
-        throw new Error(errorData.detail || 'Failed to select character')
-      }
-
-      // Success - call callback
       onCharacterSelected()
     } catch (err) {
-      console.error('Error selecting character:', err)
       setError(err.message)
-      setLoading(false)
     }
   }
 
@@ -74,7 +59,7 @@ export default function CharacterSelectionModal({ campaign, characters, onClose,
             onClick={onClose}
             className="transition-colors hover:opacity-80"
             style={{color: THEME.textSecondary}}
-            disabled={loading}
+            disabled={selectCharacterMutation.isPending}
           >
             <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
@@ -187,16 +172,16 @@ export default function CharacterSelectionModal({ campaign, characters, onClose,
             <Button
               variant="ghost"
               onClick={onClose}
-              disabled={loading}
+              disabled={selectCharacterMutation.isPending}
             >
               Cancel
             </Button>
             <Button
               variant="primary"
               onClick={handleSelectCharacter}
-              disabled={!selectedCharacterId || loading}
+              disabled={!selectedCharacterId || selectCharacterMutation.isPending}
             >
-              {loading ? 'Selecting...' : 'Select Character'}
+              {selectCharacterMutation.isPending ? 'Selecting...' : 'Select Character'}
             </Button>
           </div>
         )}

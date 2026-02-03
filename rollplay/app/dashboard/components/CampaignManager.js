@@ -407,11 +407,10 @@ export default function CampaignManager({ user, onExpandedChange, inviteCampaign
     setShowCharacterModal(true)
   }
 
-  // Handle character selection success — cache invalidation handles refetch
+  // Handle character selection success — mutation in CharacterSelectionModal invalidates ['campaigns'] and ['characters']
   const handleCharacterSelected = () => {
     setShowCharacterModal(false)
     setCharacterModalCampaign(null)
-    // Mutations in CharacterSelectionModal invalidate ['campaigns'] and ['characters']
   }
 
   // Handle releasing character from campaign
