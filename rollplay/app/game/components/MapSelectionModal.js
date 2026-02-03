@@ -1,7 +1,10 @@
 /* Copyright (C) 2025 Matthew Davey */
 /* SPDX-License-Identifier: GPL-3.0-or-later */
 
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useRef, useCallback, useMemo } from 'react';
+import { useAssets } from '@/app/asset_library/hooks/useAssets';
+import { useUploadAsset } from '@/app/asset_library/hooks/useUploadAsset';
+import { useAssociateAsset } from '@/app/asset_library/hooks/useAssociateAsset';
 import { DM_CHILD, DM_CHILD_LAST, PANEL_SUBTITLE, ACTIVE_BACKGROUND } from '../../styles/constants';
 
 const ACCEPTED_MAP_TYPES = ['image/png', 'image/jpeg', 'image/webp'];
@@ -18,118 +21,56 @@ export default function MapSelectionSection({
   campaignId,
   currentMap
 }) {
-  const [assets, setAssets] = useState([]);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState(null);
-
-  // Upload state
+  // UI state
   const [showUpload, setShowUpload] = useState(false);
   const [selectedFile, setSelectedFile] = useState(null);
-  const [uploading, setUploading] = useState(false);
-  const [uploadProgress, setUploadProgress] = useState(0);
   const [uploadError, setUploadError] = useState(null);
   const [dragActive, setDragActive] = useState(false);
+  const [showLibrary, setShowLibrary] = useState(false);
   const fileInputRef = useRef(null);
 
-  // Add from Library state
-  const [showLibrary, setShowLibrary] = useState(false);
-  const [libraryAssets, setLibraryAssets] = useState([]);
-  const [libraryLoading, setLibraryLoading] = useState(false);
-  const [libraryError, setLibraryError] = useState(null);
-  const [associating, setAssociating] = useState(null);
+  // Campaign-scoped maps query — only fetches when section is expanded
+  const {
+    data: assets = [],
+    isLoading: loading,
+    error: assetsError,
+  } = useAssets({
+    assetType: 'map',
+    campaignId,
+    enabled: isExpanded && !!campaignId,
+  });
 
-  // Fetch available assets when section expands
-  const fetchAssets = useCallback(async () => {
-    if (!campaignId) return;
+  // Full library maps query — only fetches when library panel is open
+  const {
+    data: allMaps = [],
+    isLoading: libraryLoading,
+    error: libraryQueryError,
+  } = useAssets({
+    assetType: 'map',
+    enabled: showLibrary,
+  });
 
-    setLoading(true);
-    setError(null);
+  // Filter library to show only maps NOT already in this campaign
+  const libraryAssets = useMemo(() => {
+    const campaignAssetIds = new Set(assets.map(a => a.id));
+    return allMaps.filter(a => !campaignAssetIds.has(a.id));
+  }, [allMaps, assets]);
 
-    try {
-      const response = await fetch(`/api/library/?campaign_id=${campaignId}&asset_type=map`, {
-        credentials: 'include'
-      });
+  const uploadMutation = useUploadAsset();
+  const associateMutation = useAssociateAsset();
 
-      if (!response.ok) {
-        throw new Error('Failed to fetch assets');
-      }
-
-      const data = await response.json();
-      const mapAssets = (data.assets || []).filter(asset => asset.asset_type === 'map');
-      setAssets(mapAssets);
-    } catch (err) {
-      console.error('Error fetching assets:', err);
-      setError(err.message);
-    } finally {
-      setLoading(false);
-    }
-  }, [campaignId]);
-
-  useEffect(() => {
-    if (isExpanded && campaignId) {
-      fetchAssets();
-    }
-  }, [isExpanded, campaignId, fetchAssets]);
-
-  // Fetch user's full library
-  const fetchLibrary = useCallback(async () => {
-    setLibraryLoading(true);
-    setLibraryError(null);
-
-    try {
-      const response = await fetch(`/api/library/?asset_type=map`, {
-        credentials: 'include'
-      });
-
-      if (!response.ok) {
-        throw new Error('Failed to fetch library');
-      }
-
-      const data = await response.json();
-      const campaignAssetIds = new Set(assets.map(a => a.id));
-      const libraryMaps = (data.assets || [])
-        .filter(asset => asset.asset_type === 'map' && !campaignAssetIds.has(asset.id));
-      setLibraryAssets(libraryMaps);
-    } catch (err) {
-      console.error('Error fetching library:', err);
-      setLibraryError(err.message);
-    } finally {
-      setLibraryLoading(false);
-    }
-  }, [assets]);
-
-  useEffect(() => {
-    if (showLibrary) {
-      fetchLibrary();
-    }
-  }, [showLibrary, fetchLibrary]);
+  const error = assetsError?.message || null;
+  const libraryError = libraryQueryError?.message || associateMutation.error?.message || null;
 
   // Associate a library asset with the campaign
   const handleAssociateAsset = async (asset) => {
-    if (!campaignId || associating) return;
+    if (!campaignId || associateMutation.isPending) return;
 
     try {
-      setAssociating(asset.id);
-
-      const response = await fetch(`/api/library/${asset.id}/associate`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        credentials: 'include',
-        body: JSON.stringify({ campaign_id: campaignId })
-      });
-
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}));
-        throw new Error(errorData.detail || 'Failed to add to campaign');
-      }
-
-      await fetchAssets();
+      await associateMutation.mutateAsync({ assetId: asset.id, campaignId });
       setShowLibrary(false);
-    } catch (err) {
-      console.error('Error associating asset:', err);
-      setLibraryError(err.message);
-    } finally {
-      setAssociating(null);
+    } catch {
+      // Error available via associateMutation.error
     }
   };
 
@@ -179,67 +120,17 @@ export default function MapSelectionSection({
     if (!selectedFile || !campaignId) return;
 
     try {
-      setUploading(true);
-      setUploadProgress(0);
       setUploadError(null);
-
-      const uploadUrlParams = new URLSearchParams({
-        filename: selectedFile.name,
-        content_type: selectedFile.type,
-        asset_type: 'map'
+      await uploadMutation.mutateAsync({
+        file: selectedFile,
+        assetType: 'map',
+        campaignId,
       });
-
-      const uploadUrlResponse = await fetch(
-        `/api/library/upload-url?${uploadUrlParams}`,
-        { credentials: 'include' }
-      );
-
-      if (!uploadUrlResponse.ok) {
-        const errorData = await uploadUrlResponse.json().catch(() => ({}));
-        throw new Error(errorData.detail || 'Failed to get upload URL');
-      }
-
-      const { upload_url, key } = await uploadUrlResponse.json();
-      setUploadProgress(20);
-
-      const uploadResponse = await fetch(upload_url, {
-        method: 'PUT',
-        body: selectedFile,
-        headers: { 'Content-Type': selectedFile.type }
-      });
-
-      if (!uploadResponse.ok) {
-        throw new Error('Failed to upload file to S3');
-      }
-      setUploadProgress(70);
-
-      const confirmResponse = await fetch(`/api/library/confirm`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        credentials: 'include',
-        body: JSON.stringify({
-          key,
-          asset_type: 'map',
-          file_size: selectedFile.size,
-          campaign_id: campaignId
-        })
-      });
-
-      if (!confirmResponse.ok) {
-        const errorData = await confirmResponse.json().catch(() => ({}));
-        throw new Error(errorData.detail || 'Failed to confirm upload');
-      }
-
-      setUploadProgress(100);
       setSelectedFile(null);
       setShowUpload(false);
-      await fetchAssets();
+      // Cache invalidation in onSuccess handles refetch automatically
     } catch (err) {
-      console.error('Error uploading map:', err);
       setUploadError(err.message);
-    } finally {
-      setUploading(false);
-      setUploadProgress(0);
     }
   };
 
@@ -287,12 +178,12 @@ export default function MapSelectionSection({
             onDragLeave={handleDrag}
             onDragOver={handleDrag}
             onDrop={handleDrop}
-            onClick={() => !uploading && fileInputRef.current?.click()}
+            onClick={() => !uploadMutation.isPending && fileInputRef.current?.click()}
             className={`border-2 border-dashed rounded p-4 text-center cursor-pointer transition-all ${
               dragActive ? 'border-sky-500 bg-sky-500/10'
                 : selectedFile ? 'border-emerald-500/50 bg-emerald-500/5'
                 : 'border-gray-500 hover:border-gray-400'
-            } ${uploading ? 'pointer-events-none opacity-60' : ''}`}
+            } ${uploadMutation.isPending ? 'pointer-events-none opacity-60' : ''}`}
           >
             <input
               ref={fileInputRef}
@@ -300,7 +191,7 @@ export default function MapSelectionSection({
               onChange={(e) => e.target.files?.[0] && handleFileSelect(e.target.files[0])}
               accept={ACCEPTED_MAP_TYPES.join(',')}
               className="hidden"
-              disabled={uploading}
+              disabled={uploadMutation.isPending}
             />
             {selectedFile ? (
               <div>
@@ -315,10 +206,10 @@ export default function MapSelectionSection({
             )}
           </div>
 
-          {uploading && (
+          {uploadMutation.isPending && (
             <div className="mt-2">
               <div className="h-1.5 bg-gray-600 rounded-full overflow-hidden">
-                <div className="h-full bg-sky-500 transition-all" style={{ width: `${uploadProgress}%` }} />
+                <div className="h-full bg-sky-500 transition-all" style={{ width: `${uploadMutation.progress}%` }} />
               </div>
             </div>
           )}
@@ -327,7 +218,7 @@ export default function MapSelectionSection({
             <p className="mt-2 text-red-400 text-xs">{uploadError}</p>
           )}
 
-          {selectedFile && !uploading && (
+          {selectedFile && !uploadMutation.isPending && (
             <button onClick={handleUpload} className="mt-2 w-full px-3 py-1.5 bg-sky-600 text-white text-sm rounded hover:bg-sky-500">
               Upload
             </button>
@@ -366,10 +257,10 @@ export default function MapSelectionSection({
                   <p className="flex-1 text-xs text-gray-300 truncate">{asset.filename}</p>
                   <button
                     onClick={() => handleAssociateAsset(asset)}
-                    disabled={associating === asset.id}
+                    disabled={associateMutation.isPending}
                     className="px-2 py-1 text-xs bg-sky-600 text-white rounded hover:bg-sky-500 disabled:opacity-50"
                   >
-                    {associating === asset.id ? '...' : 'Add'}
+                    {associateMutation.isPending ? '...' : 'Add'}
                   </button>
                 </div>
               ))}

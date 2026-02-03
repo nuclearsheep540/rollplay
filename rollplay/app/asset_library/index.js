@@ -5,4 +5,7 @@ export { default as AssetLibraryManager } from './components/AssetLibraryManager
 export { default as AssetUploadModal } from './components/AssetUploadModal'
 export { default as AssetGrid } from './components/AssetGrid'
 export { default as AssetCard } from './components/AssetCard'
-export { useAssetLibrary } from './hooks/useAssetLibrary'
+export { useAssets } from './hooks/useAssets'
+export { useUploadAsset } from './hooks/useUploadAsset'
+export { useDeleteAsset } from './hooks/useDeleteAsset'
+export { useAssociateAsset } from './hooks/useAssociateAsset'

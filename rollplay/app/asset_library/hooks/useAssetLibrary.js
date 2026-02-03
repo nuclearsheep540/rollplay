@@ -4,8 +4,13 @@
 import { useState, useCallback } from 'react'
 
 /**
- * Hook for managing asset library operations
- * Handles fetching, uploading, and deleting media assets via the api-site backend
+ * @deprecated Use the individual TanStack Query hooks instead:
+ *   - useAssets()          from './useAssets'
+ *   - useUploadAsset()     from './useUploadAsset'
+ *   - useDeleteAsset()     from './useDeleteAsset'
+ *   - useAssociateAsset()  from './useAssociateAsset'
+ *
+ * This hook will be removed in a future cleanup pass.
  */
 export function useAssetLibrary() {
   const [assets, setAssets] = useState([])

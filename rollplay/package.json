@@ -16,6 +16,7 @@
     "@headlessui/react": "^2.2.9",
     "@melloware/coloris": "^0.25.0",
     "@sentry/nextjs": "^8.45.0",
+    "@tanstack/react-query": "^5.90.20",
     "dayjs": "^1.11.19",
     "next": "^15.2.6",
     "react": "^18.2.0",

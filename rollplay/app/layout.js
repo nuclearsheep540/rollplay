@@ -1,4 +1,5 @@
 import { Inter, New_Rocker, Metamorphous, Ubuntu, Outfit } from 'next/font/google'
+import QueryProvider from './shared/providers/QueryProvider'
 import './globals.css'
 import '@melloware/coloris/dist/coloris.css'
 
@@ -44,7 +45,10 @@ export const metadata = {
 export default function RootLayout({ children }) {
   return (
     <html lang="en" className={`${inter.variable} ${newRocker.variable} ${metamorphous.variable} ${ubuntu.variable} ${outfit.variable}`}>
-      <body className={inter.className}>{children}
+      <body className={inter.className}>
+        <QueryProvider>
+          {children}
+        </QueryProvider>
       </body>
     </html>
   )
