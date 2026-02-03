@@ -468,6 +468,8 @@ export default function CampaignManager({ user, onExpandedChange, inviteCampaign
         const storedCampaignId = sessionStorage.getItem('openCharacterModalForCampaign')
         if (storedCampaignId && storedCampaignId === selectedCampaign.id) {
           sessionStorage.removeItem('openCharacterModalForCampaign')
+          // Force fresh character data — user just created a character on /character/create
+          queryClient.invalidateQueries({ queryKey: ['characters'] })
           setCharacterModalCampaign(selectedCampaign)
           setShowCharacterModal(true)
         }
