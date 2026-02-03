@@ -299,8 +299,7 @@ export default function CampaignInviteModal({ campaign, onClose, onInviteSuccess
   }
 
   const hasUserPendingInvite = (userId) => {
-    // Use local pendingInvites state for immediate UI updates
-    return pendingInvites.some(invite => invite.id === userId)
+    return campaign.invited_player_ids?.includes(userId)
   }
 
   // Get appropriate message for user status (returns null if user can be invited)

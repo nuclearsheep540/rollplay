@@ -31,6 +31,7 @@ import {
 } from '@fortawesome/free-solid-svg-icons'
 import { COLORS, THEME } from '@/app/styles/colorTheme'
 import { Button, Badge } from './shared/Button'
+import { useQueryClient } from '@tanstack/react-query'
 import { useCampaigns } from '../hooks/useCampaigns'
 import { useInvitedCampaignMembers } from '../hooks/useInvitedCampaignMembers'
 import { useCharacters } from '../hooks/useCharacters'
@@ -40,6 +41,7 @@ import { useReleaseCharacter } from '../hooks/mutations/useCharacterMutations'
 
 export default function CampaignManager({ user, onExpandedChange, inviteCampaignId, clearInviteCampaignId, expandCampaignId, clearExpandCampaignId, showToast }) {
   const router = useRouter()
+  const queryClient = useQueryClient()
 
   // ── TanStack Query: data fetching ──
   const {
@@ -106,48 +108,37 @@ export default function CampaignManager({ user, onExpandedChange, inviteCampaign
   const [drawerTop, setDrawerTop] = useState(null)
   const [invitedDrawerTop, setInvitedDrawerTop] = useState(null)
 
-  // Consolidated modal state
-  const [modals, setModals] = useState({
-    campaignCreate: { open: false, title: '', description: '', heroImage: '/campaign-tile-bg.png', sessionName: '', editingCampaign: null },
-    campaignDelete: { open: false, campaign: null },
-    campaignInvite: { open: false, campaign: null },
-    campaignLeave: { open: false, campaign: null },
-    gameCreate: { open: false, campaign: null, name: 'Session 1', maxPlayers: 8 },
-    gameDelete: { open: false, game: null },
-    gamePause: { open: false, game: null },
-    gameFinish: { open: false, game: null },
-    playerRemove: { open: false, campaign: null, member: null }
+  // ── Individual modal target states (non-null = open) ──
+  const [deleteCampaignTarget, setDeleteCampaignTarget] = useState(null)
+  const [leaveCampaignTarget, setLeaveCampaignTarget] = useState(null)
+  const [removePlayerTarget, setRemovePlayerTarget] = useState(null)
+  const [deleteSessionTarget, setDeleteSessionTarget] = useState(null)
+  const [pauseSessionTarget, setPauseSessionTarget] = useState(null)
+  const [finishSessionTarget, setFinishSessionTarget] = useState(null)
+
+  // Invite modal — ID-only, campaign derived from query cache (no sync effect needed)
+  const [inviteModalCampaignId, setInviteModalCampaignId] = useState(null)
+  const inviteModalCampaign = useMemo(
+    () => campaigns.find(c => c.id === inviteModalCampaignId) ?? null,
+    [campaigns, inviteModalCampaignId]
+  )
+
+  // Campaign form modal
+  const [campaignFormOpen, setCampaignFormOpen] = useState(false)
+  const [campaignForm, setCampaignForm] = useState({
+    title: '', description: '', heroImage: '/campaign-tile-bg.png', sessionName: '', editingCampaign: null
   })
-
-  // Modal helper functions
-  const openModal = (modalName, data = {}) => {
-    setModals(prev => ({
-      ...prev,
-      [modalName]: { ...prev[modalName], open: true, ...data }
-    }))
+  const closeCampaignForm = () => {
+    setCampaignFormOpen(false)
+    setCampaignForm({ title: '', description: '', heroImage: '/campaign-tile-bg.png', sessionName: '', editingCampaign: null })
   }
 
-  const closeModal = (modalName) => {
-    setModals(prev => ({
-      ...prev,
-      [modalName]: { ...prev[modalName], open: false }
-    }))
-  }
-
-  const updateModalData = (modalName, data) => {
-    setModals(prev => ({
-      ...prev,
-      [modalName]: { ...prev[modalName], ...data }
-    }))
-  }
-
-  // Open game creation modal
+  // Session creation modal
+  const [createSessionCampaignId, setCreateSessionCampaignId] = useState(null)
+  const [sessionForm, setSessionForm] = useState({ name: 'Session 1', maxPlayers: 8 })
   const openCreateGameModal = (campaignId) => {
-    openModal('gameCreate', {
-      campaign: campaignId,
-      name: 'Session 1',
-      maxPlayers: 8
-    })
+    setSessionForm({ name: 'Session 1', maxPlayers: 8 })
+    setCreateSessionCampaignId(campaignId)
   }
 
   // Accept campaign invite
@@ -172,14 +163,14 @@ export default function CampaignManager({ user, onExpandedChange, inviteCampaign
 
   // Remove player from campaign (host only)
   const removePlayerFromCampaign = async () => {
-    if (!modals.playerRemove.campaign || !modals.playerRemove.member) return
+    if (!removePlayerTarget) return
 
     try {
       await removePlayerMutation.mutateAsync({
-        campaignId: modals.playerRemove.campaign.id,
-        playerId: modals.playerRemove.member.user_id,
+        campaignId: removePlayerTarget.campaign.id,
+        playerId: removePlayerTarget.member.user_id,
       })
-      closeModal('playerRemove')
+      setRemovePlayerTarget(null)
     } catch (err) {
       setError(err.message)
     }
@@ -187,12 +178,12 @@ export default function CampaignManager({ user, onExpandedChange, inviteCampaign
 
   // Leave campaign (player only - not host)
   const leaveCampaign = async () => {
-    if (!modals.campaignLeave.campaign) return
+    if (!leaveCampaignTarget) return
 
     try {
-      await leaveCampaignMutation.mutateAsync(modals.campaignLeave.campaign.id)
+      await leaveCampaignMutation.mutateAsync(leaveCampaignTarget.id)
       setSelectedCampaignId(null)
-      closeModal('campaignLeave')
+      setLeaveCampaignTarget(null)
     } catch (err) {
       setError(err.message)
     }
@@ -200,17 +191,17 @@ export default function CampaignManager({ user, onExpandedChange, inviteCampaign
 
   // Create game (without starting it)
   const createGame = async () => {
-    if (!modals.gameCreate.campaign) return
+    if (!createSessionCampaignId) return
 
     setError(null)
 
     try {
       await createSessionMutation.mutateAsync({
-        campaignId: modals.gameCreate.campaign,
-        name: modals.gameCreate.name,
-        maxPlayers: modals.gameCreate.maxPlayers,
+        campaignId: createSessionCampaignId,
+        name: sessionForm.name,
+        maxPlayers: sessionForm.maxPlayers,
       })
-      closeModal('gameCreate')
+      setCreateSessionCampaignId(null)
     } catch (err) {
       setError('Failed to create game: ' + err.message)
     }
@@ -229,18 +220,18 @@ export default function CampaignManager({ user, onExpandedChange, inviteCampaign
 
   // Show pause session confirmation modal
   const promptPauseSession = (game) => {
-    openModal('gamePause', { game })
+    setPauseSessionTarget(game)
   }
 
   // Pause session (after confirmation)
   const confirmPauseSession = async () => {
-    if (!modals.gamePause.game) return
+    if (!pauseSessionTarget) return
 
     setError(null)
 
     try {
-      await pauseSessionMutation.mutateAsync(modals.gamePause.game.id)
-      closeModal('gamePause')
+      await pauseSessionMutation.mutateAsync(pauseSessionTarget.id)
+      setPauseSessionTarget(null)
     } catch (err) {
       setError(err.message)
     }
@@ -248,23 +239,23 @@ export default function CampaignManager({ user, onExpandedChange, inviteCampaign
 
   // Cancel pause session
   const cancelPauseSession = () => {
-    closeModal('gamePause')
+    setPauseSessionTarget(null)
   }
 
   // Show finish session confirmation modal
   const promptFinishSession = (game) => {
-    openModal('gameFinish', { game })
+    setFinishSessionTarget(game)
   }
 
   // Finish session permanently (after confirmation)
   const confirmFinishSession = async () => {
-    if (!modals.gameFinish.game) return
+    if (!finishSessionTarget) return
 
     setError(null)
 
     try {
-      await finishSessionMutation.mutateAsync(modals.gameFinish.game.id)
-      closeModal('gameFinish')
+      await finishSessionMutation.mutateAsync(finishSessionTarget.id)
+      setFinishSessionTarget(null)
     } catch (err) {
       setError(err.message)
     }
@@ -272,34 +263,33 @@ export default function CampaignManager({ user, onExpandedChange, inviteCampaign
 
   // Cancel finish session
   const cancelFinishSession = () => {
-    closeModal('gameFinish')
+    setFinishSessionTarget(null)
   }
 
-  // Handle successful campaign invite — cache invalidation handles refetch
+  // Handle successful campaign invite/cancel — invalidate cache so campaign prop refreshes
   const handleCampaignInviteSuccess = async () => {
-    // Mutation in CampaignInviteModal already invalidates ['campaigns']
-    // The modal's campaign prop is now derived from query cache via selectedCampaign
+    queryClient.invalidateQueries({ queryKey: ['campaigns'] })
   }
 
   // Open delete session modal
   const openDeleteSessionModal = (game) => {
-    openModal('gameDelete', { game })
+    setDeleteSessionTarget(game)
   }
 
   // Close delete session modal
   const closeDeleteSessionModal = () => {
-    closeModal('gameDelete')
+    setDeleteSessionTarget(null)
   }
 
   // Delete game (called from modal)
   const deleteGame = async () => {
-    if (!modals.gameDelete.game) return
+    if (!deleteSessionTarget) return
 
     setError(null)
 
     try {
-      await deleteSessionMutation.mutateAsync(modals.gameDelete.game.id)
-      closeDeleteSessionModal()
+      await deleteSessionMutation.mutateAsync(deleteSessionTarget.id)
+      setDeleteSessionTarget(null)
     } catch (err) {
       setError(err.message)
     }
@@ -312,20 +302,19 @@ export default function CampaignManager({ user, onExpandedChange, inviteCampaign
 
   // Create a new campaign
   const createCampaign = async () => {
-    if (!user || !modals.campaignCreate.title.trim()) return
+    if (!user || !campaignForm.title.trim()) return
 
     setError(null)
 
     try {
       await createCampaignMutation.mutateAsync({
-        title: modals.campaignCreate.title,
-        description: modals.campaignCreate.description,
-        heroImage: modals.campaignCreate.heroImage,
-        sessionName: modals.campaignCreate.sessionName,
+        title: campaignForm.title,
+        description: campaignForm.description,
+        heroImage: campaignForm.heroImage,
+        sessionName: campaignForm.sessionName,
       })
 
-      closeModal('campaignCreate')
-      updateModalData('campaignCreate', { title: '', description: '', sessionName: '', editingCampaign: null })
+      closeCampaignForm()
     } catch (err) {
       setError('Failed to create campaign: ' + err.message)
     }
@@ -333,22 +322,20 @@ export default function CampaignManager({ user, onExpandedChange, inviteCampaign
 
   // Update an existing campaign
   const updateCampaign = async () => {
-    const editingCampaign = modals.campaignCreate.editingCampaign
-    if (!user || !editingCampaign || !modals.campaignCreate.title.trim()) return
+    if (!user || !campaignForm.editingCampaign || !campaignForm.title.trim()) return
 
     setError(null)
 
     try {
       await updateCampaignMutation.mutateAsync({
-        campaignId: editingCampaign.id,
-        title: modals.campaignCreate.title,
-        description: modals.campaignCreate.description,
-        heroImage: modals.campaignCreate.heroImage,
-        sessionName: modals.campaignCreate.sessionName,
+        campaignId: campaignForm.editingCampaign.id,
+        title: campaignForm.title,
+        description: campaignForm.description,
+        heroImage: campaignForm.heroImage,
+        sessionName: campaignForm.sessionName,
       })
 
-      closeModal('campaignCreate')
-      updateModalData('campaignCreate', { title: '', description: '', sessionName: '', heroImage: '/campaign-tile-bg.png', editingCampaign: null })
+      closeCampaignForm()
     } catch (err) {
       setError('Failed to update campaign: ' + err.message)
     }
@@ -356,29 +343,29 @@ export default function CampaignManager({ user, onExpandedChange, inviteCampaign
 
   // Show delete campaign confirmation modal
   const promptDeleteCampaign = (campaign) => {
-    openModal('campaignDelete', { campaign })
+    setDeleteCampaignTarget(campaign)
   }
 
   // Cancel delete campaign
   const cancelDeleteCampaign = () => {
-    closeModal('campaignDelete')
+    setDeleteCampaignTarget(null)
   }
 
   // Delete a campaign (after confirmation)
   const confirmDeleteCampaign = async () => {
-    if (!modals.campaignDelete.campaign) return
+    if (!deleteCampaignTarget) return
 
     setError(null)
 
     try {
-      await deleteCampaignMutation.mutateAsync(modals.campaignDelete.campaign.id)
-      if (selectedCampaignId === modals.campaignDelete.campaign.id) {
+      await deleteCampaignMutation.mutateAsync(deleteCampaignTarget.id)
+      if (selectedCampaignId === deleteCampaignTarget.id) {
         setSelectedCampaignId(null)
       }
-      closeModal('campaignDelete')
+      setDeleteCampaignTarget(null)
     } catch (err) {
       setError(err.message)
-      closeModal('campaignDelete')
+      setDeleteCampaignTarget(null)
     }
   }
 
@@ -490,20 +477,6 @@ export default function CampaignManager({ user, onExpandedChange, inviteCampaign
       }
     }
   }, [selectedCampaign, loading])
-
-  // Sync invite modal's campaign data from query cache
-  useEffect(() => {
-    if (modals.campaignInvite.open && modals.campaignInvite.campaign) {
-      const updatedCampaign = campaigns.find(c => c.id === modals.campaignInvite.campaign.id)
-      if (updatedCampaign) {
-        const currentIds = modals.campaignInvite.campaign.invited_player_ids || []
-        const newIds = updatedCampaign.invited_player_ids || []
-        if (JSON.stringify(currentIds) !== JSON.stringify(newIds)) {
-          updateModalData('campaignInvite', { campaign: updatedCampaign })
-        }
-      }
-    }
-  }, [campaigns])
 
   // Detect window resize and temporarily disable transitions
   useEffect(() => {
@@ -705,7 +678,7 @@ export default function CampaignManager({ user, onExpandedChange, inviteCampaign
                   >
                     {/* Invited Campaign Card - Expandable */}
                     <div
-                      ref={isSelected ? invitedCampaignCardRef : null}
+                      ref={invitedCampaignCardRef}
                       className="w-full relative rounded-sm overflow-visible cursor-pointer border-2"
                       style={{
                         aspectRatio: isSelected ? 'unset' : '16/4',
@@ -1002,7 +975,7 @@ export default function CampaignManager({ user, onExpandedChange, inviteCampaign
                 >
                   {/* Campaign Card with expanding background */}
                   <div
-                    ref={isSelected ? campaignCardRef : null}
+                    ref={campaignCardRef}
                     className="w-full relative rounded-sm overflow-visible cursor-pointer border-2"
                     style={{
                       // When selected, allow card to grow with content but never shrink below collapsed size
@@ -1191,7 +1164,7 @@ export default function CampaignManager({ user, onExpandedChange, inviteCampaign
                         {/* Create Session Template - Only show if user is host and no non-finished sessions exist */}
                         {campaign.host_id === user.id && !campaignSessions.some(g => ['inactive', 'active', 'starting', 'stopping'].includes(g.status?.toLowerCase())) && (
                           <button
-                            onClick={() => openModal('gameCreate', { campaign: campaign.id, name: 'Session 1', maxPlayers: 8 })}
+                            onClick={() => openCreateGameModal(campaign.id)}
                             className="w-full flex items-center justify-between p-4 rounded-sm border-2 border-dashed transition-all hover:border-opacity-100"
                             style={{
                               backgroundColor: `${THEME.bgSecondary}80`,
@@ -1371,7 +1344,7 @@ export default function CampaignManager({ user, onExpandedChange, inviteCampaign
                             Campaign Members
                           </h3>
                           <button
-                            onClick={() => openModal('campaignInvite', { campaign: selectedCampaign })}
+                            onClick={() => setInviteModalCampaignId(selectedCampaign.id)}
                             className="flex items-center gap-2 px-3 h-10 rounded-sm transition-all border mb-4"
                             style={{backgroundColor: THEME.bgSecondary, color: COLORS.smoke, borderColor: THEME.borderActive}}
                           >
@@ -1412,7 +1385,7 @@ export default function CampaignManager({ user, onExpandedChange, inviteCampaign
                                   {/* Remove button - only for host viewing non-host members */}
                                   {campaign.host_id === user.id && !member.is_host && (
                                     <button
-                                      onClick={() => openModal('playerRemove', { campaign, member })}
+                                      onClick={() => setRemovePlayerTarget({ campaign, member })}
                                       className="absolute top-0 right-0 bottom-0 px-3 flex items-center rounded-r-sm hover:bg-red-900/50 transition-colors"
                                       title="Remove player from campaign"
                                       style={{ color: '#dc2626' }}
@@ -1503,13 +1476,14 @@ export default function CampaignManager({ user, onExpandedChange, inviteCampaign
                                     // Find current session from allSessions (status !== 'finished')
                                     const campaignSessions = allSessions.filter(s => s.campaign_id === selectedCampaign.id)
                                     const currentSession = campaignSessions.find(s => s.status !== 'finished')
-                                    openModal('campaignCreate', {
+                                    setCampaignForm({
                                       editingCampaign: selectedCampaign,
                                       title: selectedCampaign.title,
                                       description: selectedCampaign.description || '',
                                       heroImage: selectedCampaign.hero_image || '/campaign-tile-bg.png',
                                       sessionName: currentSession?.name || ''
                                     })
+                                    setCampaignFormOpen(true)
                                   }}
                                   className="flex items-center gap-2 px-3 h-10 rounded-sm transition-all border"
                                   style={{backgroundColor: THEME.bgSecondary, color: COLORS.smoke, borderColor: THEME.borderActive}}
@@ -1534,7 +1508,7 @@ export default function CampaignManager({ user, onExpandedChange, inviteCampaign
                         {campaign.host_id !== user.id && (
                           <div className="mt-8 pt-6 border-t" style={{borderColor: THEME.borderSubtle}}>
                             <button
-                              onClick={() => openModal('campaignLeave', { campaign })}
+                              onClick={() => setLeaveCampaignTarget(campaign)}
                               className="px-4 py-2 rounded-sm border transition-all text-sm font-medium flex items-center gap-2 hover:bg-red-900/50"
                               style={{
                                 backgroundColor: 'transparent',
@@ -1560,7 +1534,7 @@ export default function CampaignManager({ user, onExpandedChange, inviteCampaign
             {!selectedCampaign && (
               <div className="w-full" style={{ maxWidth: '1600px' }}>
                 <button
-                  onClick={() => openModal('campaignCreate')}
+                  onClick={() => { setCampaignForm({ title: '', description: '', heroImage: '/campaign-tile-bg.png', sessionName: '', editingCampaign: null }); setCampaignFormOpen(true) }}
                   className="aspect-[16/4] w-full relative rounded-sm overflow-hidden"
                   style={{
                     backgroundColor: 'transparent'
@@ -1590,7 +1564,7 @@ export default function CampaignManager({ user, onExpandedChange, inviteCampaign
       )}
 
       {/* Game Creation Modal */}
-      {modals.gameCreate.open && typeof document !== 'undefined' && createPortal(
+      {createSessionCampaignId && typeof document !== 'undefined' && createPortal(
         <div className="fixed inset-0 backdrop-blur-sm flex items-center justify-center z-50" style={{backgroundColor: THEME.overlayDark}}>
           <div className="p-6 rounded-sm shadow-2xl max-w-md w-full mx-4 border" style={{backgroundColor: THEME.bgSecondary, borderColor: THEME.borderDefault}}>
             <h3 className="text-lg font-semibold font-[family-name:var(--font-metamorphous)] mb-4" style={{color: THEME.textOnDark}}>Create New Game</h3>
@@ -1601,8 +1575,8 @@ export default function CampaignManager({ user, onExpandedChange, inviteCampaign
                 </label>
                 <input
                   type="text"
-                  value={modals.gameCreate.name}
-                  onChange={(e) => updateModalData('gameCreate', { name: e.target.value })}
+                  value={sessionForm.name}
+                  onChange={(e) => setSessionForm(prev => ({ ...prev, name: e.target.value }))}
                   className="w-full px-3 py-2 rounded-sm border focus:outline-none focus:ring-2"
                   style={{
                     backgroundColor: THEME.bgPrimary,
@@ -1617,8 +1591,8 @@ export default function CampaignManager({ user, onExpandedChange, inviteCampaign
                   Number of Seats (1-8)
                 </label>
                 <select
-                  value={modals.gameCreate.maxPlayers}
-                  onChange={(e) => updateModalData('gameCreate', { maxPlayers: parseInt(e.target.value) })}
+                  value={sessionForm.maxPlayers}
+                  onChange={(e) => setSessionForm(prev => ({ ...prev, maxPlayers: parseInt(e.target.value) }))}
                   className="w-full px-3 py-2 rounded-sm border focus:outline-none focus:ring-2"
                   style={{
                     backgroundColor: THEME.bgPrimary,
@@ -1635,14 +1609,14 @@ export default function CampaignManager({ user, onExpandedChange, inviteCampaign
             <div className="flex justify-end gap-3 mt-6">
               <Button
                 variant="ghost"
-                onClick={() => closeModal('gameCreate')}
+                onClick={() => setCreateSessionCampaignId(null)}
               >
                 Cancel
               </Button>
               <Button
                 variant="success"
                 onClick={createGame}
-                disabled={!modals.gameCreate.name.trim() || createSessionMutation.isPending}
+                disabled={!sessionForm.name.trim() || createSessionMutation.isPending}
               >
                 {createSessionMutation.isPending ? (
                   <>
@@ -1662,14 +1636,11 @@ export default function CampaignManager({ user, onExpandedChange, inviteCampaign
         document.body
       )}
 
-      {modals.campaignCreate.open && typeof document !== 'undefined' && createPortal(
+      {campaignFormOpen && typeof document !== 'undefined' && createPortal(
         <div
           className="fixed inset-0 flex items-center justify-center z-50 p-4"
           style={{backgroundColor: THEME.overlayDark}}
-          onClick={() => {
-            closeModal('campaignCreate')
-            updateModalData('campaignCreate', { title: '', description: '', sessionName: '', editingCampaign: null })
-          }}
+          onClick={closeCampaignForm}
         >
           <div
             className="rounded-sm shadow-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto border"
@@ -1680,13 +1651,10 @@ export default function CampaignManager({ user, onExpandedChange, inviteCampaign
             <div className="p-6 border-b" style={{borderBottomColor: THEME.borderSubtle}}>
               <div className="flex items-center justify-between">
                 <h2 className="text-2xl font-bold font-[family-name:var(--font-metamorphous)]" style={{color: THEME.textOnDark}}>
-                  {modals.campaignCreate.editingCampaign ? 'Edit Campaign' : 'Create New Campaign'}
+                  {campaignForm.editingCampaign ? 'Edit Campaign' : 'Create New Campaign'}
                 </h2>
                 <button
-                  onClick={() => {
-                    closeModal('campaignCreate')
-                    updateModalData('campaignCreate', { title: '', description: '', sessionName: '', editingCampaign: null })
-                  }}
+                  onClick={closeCampaignForm}
                   className="text-2xl font-bold hover:opacity-80 transition-opacity"
                   style={{color: THEME.textSecondary}}
                 >
@@ -1703,8 +1671,8 @@ export default function CampaignManager({ user, onExpandedChange, inviteCampaign
                 </label>
                 <input
                   type="text"
-                  value={modals.campaignCreate.title}
-                  onChange={(e) => updateModalData('campaignCreate', { title: e.target.value })}
+                  value={campaignForm.title}
+                  onChange={(e) => setCampaignForm(prev => ({ ...prev, title: e.target.value }))}
                   className="w-full px-3 py-2 rounded-sm border focus:outline-none focus:ring-2"
                   style={{
                     backgroundColor: THEME.bgPrimary,
@@ -1715,7 +1683,7 @@ export default function CampaignManager({ user, onExpandedChange, inviteCampaign
                   maxLength={100}
                 />
                 <div className="text-right text-sm mt-1" style={{color: THEME.textSecondary}}>
-                  {(modals.campaignCreate.title || '').length}/100 characters
+                  {(campaignForm.title || '').length}/100 characters
                 </div>
               </div>
               <div>
@@ -1723,8 +1691,8 @@ export default function CampaignManager({ user, onExpandedChange, inviteCampaign
                   Description (Optional)
                 </label>
                 <textarea
-                  value={modals.campaignCreate.description}
-                  onChange={(e) => updateModalData('campaignCreate', { description: e.target.value })}
+                  value={campaignForm.description}
+                  onChange={(e) => setCampaignForm(prev => ({ ...prev, description: e.target.value }))}
                   className="w-full px-3 py-2 rounded-sm border focus:outline-none focus:ring-2"
                   style={{
                     backgroundColor: THEME.bgPrimary,
@@ -1736,7 +1704,7 @@ export default function CampaignManager({ user, onExpandedChange, inviteCampaign
                   maxLength={1000}
                 />
                 <div className="text-right text-sm mt-1" style={{color: THEME.textSecondary}}>
-                  {(modals.campaignCreate.description || '').length}/1000 characters
+                  {(campaignForm.description || '').length}/1000 characters
                 </div>
               </div>
               {/* Session Name - shown in both create and edit modes */}
@@ -1746,8 +1714,8 @@ export default function CampaignManager({ user, onExpandedChange, inviteCampaign
                 </label>
                 <input
                   type="text"
-                  value={modals.campaignCreate.sessionName}
-                  onChange={(e) => updateModalData('campaignCreate', { sessionName: e.target.value })}
+                  value={campaignForm.sessionName}
+                  onChange={(e) => setCampaignForm(prev => ({ ...prev, sessionName: e.target.value }))}
                   className="w-full px-3 py-2 rounded-sm border focus:outline-none focus:ring-2"
                   style={{
                     backgroundColor: THEME.bgPrimary,
@@ -1758,7 +1726,7 @@ export default function CampaignManager({ user, onExpandedChange, inviteCampaign
                   maxLength={100}
                 />
                 <div className="text-right text-sm mt-1" style={{color: THEME.textSecondary}}>
-                  {(modals.campaignCreate.sessionName || '').length}/100 characters
+                  {(campaignForm.sessionName || '').length}/100 characters
                 </div>
               </div>
               <div>
@@ -1776,11 +1744,11 @@ export default function CampaignManager({ user, onExpandedChange, inviteCampaign
                     <button
                       key={option.label}
                       type="button"
-                      onClick={() => updateModalData('campaignCreate', { heroImage: option.value })}
+                      onClick={() => setCampaignForm(prev => ({ ...prev, heroImage: option.value }))}
                       className="aspect-[16/9] rounded-sm border-2 overflow-hidden relative"
                       style={{
                         width: 'calc(33.333% - 0.5rem)',
-                        borderColor: modals.campaignCreate.heroImage === option.value ? THEME.borderActive : THEME.borderDefault,
+                        borderColor: campaignForm.heroImage === option.value ? THEME.borderActive : THEME.borderDefault,
                         backgroundColor: option.value ? 'transparent' : COLORS.carbon
                       }}
                     >
@@ -1810,27 +1778,24 @@ export default function CampaignManager({ user, onExpandedChange, inviteCampaign
             <div className="p-6 border-t flex justify-end gap-3" style={{borderTopColor: THEME.borderSubtle}}>
               <Button
                 variant="ghost"
-                onClick={() => {
-                  closeModal('campaignCreate')
-                  updateModalData('campaignCreate', { title: '', description: '', sessionName: '', editingCampaign: null })
-                }}
+                onClick={closeCampaignForm}
               >
                 Cancel
               </Button>
               <Button
                 variant="primary"
-                onClick={modals.campaignCreate.editingCampaign ? updateCampaign : createCampaign}
-                disabled={!modals.campaignCreate.title.trim() || (createCampaignMutation.isPending || updateCampaignMutation.isPending)}
+                onClick={campaignForm.editingCampaign ? updateCampaign : createCampaign}
+                disabled={!campaignForm.title.trim() || (createCampaignMutation.isPending || updateCampaignMutation.isPending)}
               >
                 {(createCampaignMutation.isPending || updateCampaignMutation.isPending) ? (
                   <>
                     <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
-                    {modals.campaignCreate.editingCampaign ? 'Saving...' : 'Creating...'}
+                    {campaignForm.editingCampaign ? 'Saving...' : 'Creating...'}
                   </>
                 ) : (
                   <>
-                    <FontAwesomeIcon icon={modals.campaignCreate.editingCampaign ? faGear : faPlus} className="mr-2" />
-                    {modals.campaignCreate.editingCampaign ? 'Save Changes' : 'Create Campaign'}
+                    <FontAwesomeIcon icon={campaignForm.editingCampaign ? faGear : faPlus} className="mr-2" />
+                    {campaignForm.editingCampaign ? 'Save Changes' : 'Create Campaign'}
                   </>
                 )}
               </Button>
@@ -1841,9 +1806,9 @@ export default function CampaignManager({ user, onExpandedChange, inviteCampaign
       )}
 
       {/* Pause Session Confirmation Modal */}
-      {modals.gamePause.open && (
+      {pauseSessionTarget && (
         <PauseSessionModal
-          game={modals.gamePause.game}
+          game={pauseSessionTarget}
           onConfirm={confirmPauseSession}
           onCancel={cancelPauseSession}
           isPausing={pauseSessionMutation.isPending}
@@ -1851,9 +1816,9 @@ export default function CampaignManager({ user, onExpandedChange, inviteCampaign
       )}
 
       {/* Finish Session Confirmation Modal */}
-      {modals.gameFinish.open && (
+      {finishSessionTarget && (
         <FinishSessionModal
-          game={modals.gameFinish.game}
+          game={finishSessionTarget}
           onConfirm={confirmFinishSession}
           onCancel={cancelFinishSession}
           isFinishing={finishSessionMutation.isPending}
@@ -1861,9 +1826,9 @@ export default function CampaignManager({ user, onExpandedChange, inviteCampaign
       )}
 
       {/* Delete Campaign Confirmation Modal */}
-      {modals.campaignDelete.open && (
+      {deleteCampaignTarget && (
         <DeleteCampaignModal
-          campaign={modals.campaignDelete.campaign}
+          campaign={deleteCampaignTarget}
           onConfirm={confirmDeleteCampaign}
           onCancel={cancelDeleteCampaign}
           isDeleting={deleteCampaignMutation.isPending}
@@ -1871,9 +1836,9 @@ export default function CampaignManager({ user, onExpandedChange, inviteCampaign
       )}
 
       {/* Delete Session Confirmation Modal */}
-      {modals.gameDelete.open && (
+      {deleteSessionTarget && (
         <DeleteSessionModal
-          session={modals.gameDelete.game}
+          session={deleteSessionTarget}
           onConfirm={deleteGame}
           onCancel={closeDeleteSessionModal}
           isDeleting={deleteSessionMutation.isPending}
@@ -1881,10 +1846,10 @@ export default function CampaignManager({ user, onExpandedChange, inviteCampaign
       )}
 
       {/* Campaign Invite Modal */}
-      {modals.campaignInvite.open && modals.campaignInvite.campaign && (
+      {inviteModalCampaign && (
         <CampaignInviteModal
-          campaign={modals.campaignInvite.campaign}
-          onClose={() => closeModal('campaignInvite')}
+          campaign={inviteModalCampaign}
+          onClose={() => setInviteModalCampaignId(null)}
           onInviteSuccess={handleCampaignInviteSuccess}
         />
       )}
@@ -1909,11 +1874,11 @@ export default function CampaignManager({ user, onExpandedChange, inviteCampaign
       )}
 
       {/* Remove Player Confirmation Modal */}
-      {modals.playerRemove.open && modals.playerRemove.member && typeof document !== 'undefined' && createPortal(
+      {removePlayerTarget && typeof document !== 'undefined' && createPortal(
         <div
           className="fixed inset-0 backdrop-blur-sm flex items-center justify-center z-50"
           style={{backgroundColor: THEME.overlayDark}}
-          onClick={() => closeModal('playerRemove')}
+          onClick={() => setRemovePlayerTarget(null)}
         >
           <div
             className="p-6 rounded-sm shadow-2xl max-w-md w-full mx-4 border"
@@ -1924,7 +1889,7 @@ export default function CampaignManager({ user, onExpandedChange, inviteCampaign
               Remove Player
             </h3>
             <p className="mb-6" style={{color: THEME.textSecondary}}>
-              Are you sure you want to remove <span className="font-semibold" style={{color: THEME.textOnDark}}>{modals.playerRemove.member.username}</span> from <span className="font-semibold" style={{color: THEME.textOnDark}}>{modals.playerRemove.campaign?.title}</span>?
+              Are you sure you want to remove <span className="font-semibold" style={{color: THEME.textOnDark}}>{removePlayerTarget.member.username}</span> from <span className="font-semibold" style={{color: THEME.textOnDark}}>{removePlayerTarget.campaign?.title}</span>?
             </p>
             <p className="text-sm mb-6" style={{color: '#fbbf24'}}>
               This player will need to be re-invited to rejoin the campaign.
@@ -1932,7 +1897,7 @@ export default function CampaignManager({ user, onExpandedChange, inviteCampaign
             <div className="flex justify-end gap-3">
               <Button
                 variant="ghost"
-                onClick={() => closeModal('playerRemove')}
+                onClick={() => setRemovePlayerTarget(null)}
                 disabled={removePlayerMutation.isPending}
               >
                 Cancel
@@ -1961,11 +1926,11 @@ export default function CampaignManager({ user, onExpandedChange, inviteCampaign
       )}
 
       {/* Leave Campaign Confirmation Modal */}
-      {modals.campaignLeave.open && modals.campaignLeave.campaign && typeof document !== 'undefined' && createPortal(
+      {leaveCampaignTarget && typeof document !== 'undefined' && createPortal(
         <div
           className="fixed inset-0 backdrop-blur-sm flex items-center justify-center z-50"
           style={{backgroundColor: THEME.overlayDark}}
-          onClick={() => closeModal('campaignLeave')}
+          onClick={() => setLeaveCampaignTarget(null)}
         >
           <div
             className="p-6 rounded-sm shadow-2xl max-w-md w-full mx-4 border"
@@ -1976,7 +1941,7 @@ export default function CampaignManager({ user, onExpandedChange, inviteCampaign
               Leave Campaign
             </h3>
             <p className="mb-6" style={{color: THEME.textSecondary}}>
-              Are you sure you want to leave <span className="font-semibold" style={{color: THEME.textOnDark}}>{modals.campaignLeave.campaign?.title}</span>?
+              Are you sure you want to leave <span className="font-semibold" style={{color: THEME.textOnDark}}>{leaveCampaignTarget?.title}</span>?
             </p>
             <p className="text-sm mb-6" style={{color: '#fbbf24'}}>
               You will need to be re-invited by the host to rejoin this campaign.
@@ -1984,7 +1949,7 @@ export default function CampaignManager({ user, onExpandedChange, inviteCampaign
             <div className="flex justify-end gap-3">
               <Button
                 variant="ghost"
-                onClick={() => closeModal('campaignLeave')}
+                onClick={() => setLeaveCampaignTarget(null)}
                 disabled={leaveCampaignMutation.isPending}
               >
                 Cancel
