@@ -28,7 +28,6 @@ function DashboardContent() {
   const inviteCampaignId = searchParams.get('invite_campaign_id')
   const expandCampaignId = searchParams.get('expand_campaign_id')
   const [activeSection, setActiveSection] = useState(tabParam || 'campaigns')
-  const [refreshTrigger, setRefreshTrigger] = useState(0)
   const [isChildExpanded, setIsChildExpanded] = useState(false)
 
   // Sync activeSection when URL tab parameter changes (e.g., from notification click)
@@ -100,7 +99,8 @@ function DashboardContent() {
   const eventHandlers = {
     // Friend request events
     'friend_request_received': (message) => {
-      setRefreshTrigger(prev => prev + 1)
+      invalidation.invalidateFriendships()
+      invalidation.invalidateNotifications()
       if (message.show_toast) {
         const config = getEventConfig('friend_request_received')
         showToast({
@@ -111,7 +111,8 @@ function DashboardContent() {
     },
 
     'friend_request_accepted': (message) => {
-      setRefreshTrigger(prev => prev + 1)
+      invalidation.invalidateFriendships()
+      invalidation.invalidateNotifications()
       if (message.show_toast) {
         const config = getEventConfig('friend_request_accepted')
         showToast({
@@ -122,7 +123,8 @@ function DashboardContent() {
     },
 
     'friend_request_declined': (message) => {
-      setRefreshTrigger(prev => prev + 1)
+      invalidation.invalidateFriendships()
+      invalidation.invalidateNotifications()
       if (message.show_toast) {
         const config = getEventConfig('friend_request_declined')
         showToast({
@@ -133,7 +135,8 @@ function DashboardContent() {
     },
 
     'friend_removed': (message) => {
-      setRefreshTrigger(prev => prev + 1)
+      invalidation.invalidateFriendships()
+      invalidation.invalidateNotifications()
       if (message.show_toast) {
         const config = getEventConfig('friend_removed')
         showToast({
@@ -349,6 +352,15 @@ function DashboardContent() {
 
     'game_finished': (message) => {
       invalidation.invalidateCampaigns()
+    },
+
+    // Character selection events (silent — cache invalidation only)
+    'campaign_character_selected': (message) => {
+      invalidation.invalidateCampaigns()
+    },
+
+    'campaign_character_released': (message) => {
+      invalidation.invalidateCampaigns()
     }
   }
 
@@ -369,7 +381,6 @@ function DashboardContent() {
       setActiveSection={setActiveSection}
       onLogout={handleLogout}
       user={user}
-      refreshTrigger={refreshTrigger}
       toasts={toasts}
       onDismissToast={dismissToast}
       isChildExpanded={isChildExpanded}
@@ -408,7 +419,6 @@ function DashboardContent() {
         <section>
           <SocialManager
             user={user}
-            refreshTrigger={refreshTrigger}
             onUserUpdate={setUser}
           />
         </section>
@@ -416,7 +426,7 @@ function DashboardContent() {
 
       {/* Friends Widget - Fixed bottom-right widget on all tabs EXCEPT Account, hidden when child is expanded */}
       {activeSection !== 'account' && !isChildExpanded && (
-        <FriendsWidget user={user} refreshTrigger={refreshTrigger} />
+        <FriendsWidget user={user} />
       )}
 
       {/* Account Name Setup Modal (shown first, before screen name) */}

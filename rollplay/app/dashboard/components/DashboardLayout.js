@@ -20,7 +20,6 @@ export default function DashboardLayout({
   setActiveSection,
   onLogout,
   user,
-  refreshTrigger,
   toasts = [],
   onDismissToast,
   isChildExpanded = false
@@ -69,7 +68,6 @@ export default function DashboardLayout({
       <SiteHeader>
         <NotificationBell
           userId={user?.id}
-          refreshTrigger={refreshTrigger}
           toasts={toasts}
           onDismissToast={onDismissToast}
         />

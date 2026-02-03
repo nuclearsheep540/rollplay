@@ -284,3 +284,87 @@ class CampaignEvents:
             "show_toast": True,
             "save_notification": True
         }
+
+    @staticmethod
+    def campaign_character_selected(
+        campaign_member_ids: List[UUID],
+        acting_user_id: UUID,
+        campaign_id: UUID,
+        campaign_name: str,
+        player_screen_name: str,
+        character_name: str
+    ) -> List[Dict[str, Any]]:
+        """
+        Event: Player selected a character for the campaign (notifies all other members)
+
+        Silent event — no toast, no persistent notification. Purely for live cache invalidation.
+
+        Args:
+            campaign_member_ids: All campaign member user IDs (players + host)
+            acting_user_id: User who selected the character (excluded from broadcast)
+            campaign_id: Campaign ID
+            campaign_name: Campaign name
+            player_screen_name: Display name of the player who selected
+            character_name: Name of the selected character
+
+        Returns:
+            List of event configuration dicts (one per recipient)
+        """
+        events = []
+        for member_id in campaign_member_ids:
+            if member_id != acting_user_id:
+                events.append({
+                    "user_id": member_id,
+                    "event_type": "campaign_character_selected",
+                    "data": {
+                        "campaign_id": str(campaign_id),
+                        "campaign_name": campaign_name,
+                        "player_screen_name": player_screen_name,
+                        "character_name": character_name
+                    },
+                    "show_toast": False,
+                    "save_notification": False
+                })
+        return events
+
+    @staticmethod
+    def campaign_character_released(
+        campaign_member_ids: List[UUID],
+        acting_user_id: UUID,
+        campaign_id: UUID,
+        campaign_name: str,
+        player_screen_name: str,
+        character_name: str
+    ) -> List[Dict[str, Any]]:
+        """
+        Event: Player released their character from the campaign (notifies all other members)
+
+        Silent event — no toast, no persistent notification. Purely for live cache invalidation.
+
+        Args:
+            campaign_member_ids: All campaign member user IDs (players + host)
+            acting_user_id: User who released the character (excluded from broadcast)
+            campaign_id: Campaign ID
+            campaign_name: Campaign name
+            player_screen_name: Display name of the player who released
+            character_name: Name of the released character
+
+        Returns:
+            List of event configuration dicts (one per recipient)
+        """
+        events = []
+        for member_id in campaign_member_ids:
+            if member_id != acting_user_id:
+                events.append({
+                    "user_id": member_id,
+                    "event_type": "campaign_character_released",
+                    "data": {
+                        "campaign_id": str(campaign_id),
+                        "campaign_name": campaign_name,
+                        "player_screen_name": player_screen_name,
+                        "character_name": character_name
+                    },
+                    "show_toast": False,
+                    "save_notification": False
+                })
+        return events

@@ -17,28 +17,31 @@ import {
 } from '@fortawesome/free-solid-svg-icons'
 import { THEME, COLORS } from '@/app/styles/colorTheme'
 import { Button } from './shared/Button'
+import { useFriendships } from '../hooks/useFriendships'
+import { useSendFriendRequest, useAcceptFriendRequest, useDeclineFriendRequest, useRemoveFriend } from '../hooks/mutations/useFriendshipMutations'
 
-export default function FriendsManager({ user, refreshTrigger, fillHeight = false }) {
-  const [friends, setFriends] = useState([])
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState(null)
+export default function FriendsManager({ user, fillHeight = false }) {
   const [friendCode, setFriendCode] = useState('')
-  const [sending, setSending] = useState(false)
   const [actionLoading, setActionLoading] = useState({})
   const [lookupUser, setLookupUser] = useState(null)
   const [copiedCode, setCopiedCode] = useState(false)
   const [lookupLoading, setLookupLoading] = useState(false)
   const [lookupError, setLookupError] = useState(null)
+  const [error, setError] = useState(null)
 
-  useEffect(() => {
-    // Only show loading on initial fetch (refreshTrigger = 0)
-    fetchFriends(refreshTrigger === 0)
-  }, [refreshTrigger])
+  // TanStack Query: friendships
+  const { data: friends = {}, isLoading: loading } = useFriendships()
+
+  // Mutation hooks
+  const sendRequestMutation = useSendFriendRequest()
+  const acceptMutation = useAcceptFriendRequest()
+  const declineMutation = useDeclineFriendRequest()
+  const removeMutation = useRemoveFriend()
 
   // Validate identifier format: UUID or account tag (name#1234)
   const isValidIdentifier = (identifier) => {
     const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
-    const accountTagRegex = /^[a-zA-Z0-9][a-zA-Z0-9_-]{2,29}#\d{4}$/  // account tag: name#1234
+    const accountTagRegex = /^[a-zA-Z0-9][a-zA-Z0-9_-]{2,29}#\d{4}$/
     return uuidRegex.test(identifier) || accountTagRegex.test(identifier)
   }
 
@@ -53,7 +56,7 @@ export default function FriendsManager({ user, refreshTrigger, fillHeight = fals
   // Get display code (account identifier)
   const displayCode = user.account_identifier || 'Not set'
 
-  // Lookup user by Friend Code when valid code is entered
+  // Lookup user by Friend Code when valid code is entered (debounced, stays local)
   useEffect(() => {
     const lookupUserByCode = async () => {
       if (!friendCode.trim()) {
@@ -72,7 +75,6 @@ export default function FriendsManager({ user, refreshTrigger, fillHeight = fals
         setLookupLoading(true)
         setLookupError(null)
 
-        // Use account tag endpoint for lookups
         const identifier = friendCode.trim()
         const endpoint = `/api/users/by-account-tag/${encodeURIComponent(identifier)}`
 
@@ -99,36 +101,9 @@ export default function FriendsManager({ user, refreshTrigger, fillHeight = fals
       }
     }
 
-    // Debounce the lookup
     const timeoutId = setTimeout(lookupUserByCode, 500)
     return () => clearTimeout(timeoutId)
   }, [friendCode])
-
-  const fetchFriends = async (showLoading = true) => {
-    try {
-      if (showLoading) setLoading(true)
-
-      // Single API call to get all friendships categorized
-      const response = await fetch('/api/friendships/', {
-        credentials: 'include'
-      })
-
-      if (!response.ok) {
-        throw new Error('Failed to fetch friends')
-      }
-
-      const data = await response.json()
-
-      // Store the categorized response directly (no merging needed!)
-      setFriends(data)
-      setError(null)
-    } catch (err) {
-      console.error('Error fetching friends:', err)
-      setError(err.message)
-    } finally {
-      setLoading(false)
-    }
-  }
 
   const sendFriendRequest = async (e) => {
     e.preventDefault()
@@ -139,31 +114,13 @@ export default function FriendsManager({ user, refreshTrigger, fillHeight = fals
     }
 
     try {
-      setSending(true)
       setError(null)
-
-      const response = await fetch('/api/friendships/request', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        credentials: 'include',
-        body: JSON.stringify({ friend_identifier: friendCode.trim() })
-      })
-
-      if (!response.ok) {
-        const errorData = await response.json()
-        throw new Error(errorData.detail || 'Failed to send friend request')
-      }
-
+      await sendRequestMutation.mutateAsync(friendCode.trim())
       setFriendCode('')
       setLookupUser(null)
-      await fetchFriends()
     } catch (err) {
       console.error('Error sending friend request:', err)
       setError(err.message)
-    } finally {
-      setSending(false)
     }
   }
 
@@ -173,18 +130,7 @@ export default function FriendsManager({ user, refreshTrigger, fillHeight = fals
     try {
       setActionLoading({ ...actionLoading, [actionKey]: true })
       setError(null)
-
-      const response = await fetch(`/api/friendships/${requesterId}/accept`, {
-        method: 'POST',
-        credentials: 'include'
-      })
-
-      if (!response.ok) {
-        const errorData = await response.json()
-        throw new Error(errorData.detail || 'Failed to accept friend request')
-      }
-
-      await fetchFriends()
+      await acceptMutation.mutateAsync(requesterId)
     } catch (err) {
       console.error('Error accepting friend request:', err)
       setError(err.message)
@@ -199,18 +145,7 @@ export default function FriendsManager({ user, refreshTrigger, fillHeight = fals
     try {
       setActionLoading({ ...actionLoading, [actionKey]: true })
       setError(null)
-
-      const response = await fetch(`/api/friendships/${requesterId}/decline`, {
-        method: 'DELETE',
-        credentials: 'include'
-      })
-
-      if (!response.ok) {
-        const errorData = await response.json()
-        throw new Error(errorData.detail || 'Failed to reject friend request')
-      }
-
-      await fetchFriends()
+      await declineMutation.mutateAsync(requesterId)
     } catch (err) {
       console.error('Error rejecting friend request:', err)
       setError(err.message)
@@ -229,18 +164,7 @@ export default function FriendsManager({ user, refreshTrigger, fillHeight = fals
     try {
       setActionLoading({ ...actionLoading, [actionKey]: true })
       setError(null)
-
-      const response = await fetch(`/api/friendships/${friendId}`, {
-        method: 'DELETE',
-        credentials: 'include'
-      })
-
-      if (!response.ok) {
-        const errorData = await response.json()
-        throw new Error(errorData.detail || 'Failed to remove friend')
-      }
-
-      await fetchFriends()
+      await removeMutation.mutateAsync(friendId)
     } catch (err) {
       console.error('Error removing friend:', err)
       setError(err.message)
@@ -249,7 +173,7 @@ export default function FriendsManager({ user, refreshTrigger, fillHeight = fals
     }
   }
 
-  // Friends are already categorized by backend - no filtering needed!
+  // Friends are already categorized by backend
   const acceptedFriends = friends.accepted || []
   const pendingReceived = friends.incoming_requests || []
 
@@ -295,7 +219,7 @@ export default function FriendsManager({ user, refreshTrigger, fillHeight = fals
                 borderColor: THEME.borderDefault,
                 color: THEME.textOnDark
               }}
-              disabled={sending}
+              disabled={sendRequestMutation.isPending}
             />
             {/* Real-time lookup feedback */}
             {friendCode && isValidIdentifier(friendCode) && (
@@ -332,9 +256,9 @@ export default function FriendsManager({ user, refreshTrigger, fillHeight = fals
             type="submit"
             variant="primary"
             className="w-full justify-center"
-            disabled={sending || !lookupUser}
+            disabled={sendRequestMutation.isPending || !lookupUser}
           >
-            {sending ? (
+            {sendRequestMutation.isPending ? (
               <>
                 <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
                 Sending...

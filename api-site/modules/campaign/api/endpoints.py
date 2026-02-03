@@ -541,7 +541,9 @@ async def select_character_for_campaign(
     request: CharacterSelectRequest,
     user_id: UUID = Depends(get_current_user_id),
     campaign_repo: CampaignRepository = Depends(campaign_repository),
-    character_repo: CharacterRepository = Depends(get_character_repository)
+    character_repo: CharacterRepository = Depends(get_character_repository),
+    user_repo: UserRepository = Depends(get_user_repository),
+    event_manager: EventManager = Depends(get_event_manager)
 ):
     """
     Select a character for use in this campaign.
@@ -552,8 +554,8 @@ async def select_character_for_campaign(
     Domain Rule: A character can only be active in one campaign at a time.
     """
     try:
-        command = SelectCharacterForCampaign(campaign_repo, character_repo)
-        character = command.execute(
+        command = SelectCharacterForCampaign(campaign_repo, character_repo, user_repo, event_manager)
+        character = await command.execute(
             campaign_id=campaign_id,
             user_id=user_id,
             character_id=UUID(request.character_id)
@@ -573,7 +575,9 @@ async def release_character_from_campaign(
     user_id: UUID = Depends(get_current_user_id),
     campaign_repo: CampaignRepository = Depends(campaign_repository),
     character_repo: CharacterRepository = Depends(get_character_repository),
-    session_repo: SessionRepository = Depends(get_session_repository)
+    session_repo: SessionRepository = Depends(get_session_repository),
+    user_repo: UserRepository = Depends(get_user_repository),
+    event_manager: EventManager = Depends(get_event_manager)
 ):
     """
     Release your character from this campaign (stay as member without character).
@@ -584,8 +588,8 @@ async def release_character_from_campaign(
     Domain Rule: Cannot release character while a session is active.
     """
     try:
-        command = ReleaseCharacterFromCampaign(campaign_repo, character_repo, session_repo)
-        character = command.execute(
+        command = ReleaseCharacterFromCampaign(campaign_repo, character_repo, session_repo, user_repo, event_manager)
+        character = await command.execute(
             campaign_id=campaign_id,
             user_id=user_id
         )
