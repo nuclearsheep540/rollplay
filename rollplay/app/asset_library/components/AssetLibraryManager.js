@@ -374,66 +374,74 @@ export default function AssetLibraryManager({ user }) {
       </div>
 
       {/* Upload Modal */}
-      <AssetUploadModal
-        isOpen={uploadModalOpen}
-        onClose={() => setUploadModalOpen(false)}
-        onUpload={handleUpload}
-        uploading={uploadMutation.isPending}
-        uploadProgress={uploadMutation.progress}
-      />
+      {uploadModalOpen && (
+        <AssetUploadModal
+          isOpen={true}
+          onClose={() => setUploadModalOpen(false)}
+          onUpload={handleUpload}
+          uploading={uploadMutation.isPending}
+          uploadProgress={uploadMutation.progress}
+        />
+      )}
 
       {/* Quick Look Modal */}
-      <AssetQuickLook
-        asset={quickLookAsset}
-        open={!!quickLookAsset}
-        onClose={() => setQuickLookAsset(null)}
-      />
+      {quickLookAsset && (
+        <AssetQuickLook
+          asset={quickLookAsset}
+          open={true}
+          onClose={() => setQuickLookAsset(null)}
+        />
+      )}
 
       {/* Rename Modal */}
-      <Modal open={!!renameTarget} onClose={handleRenameCancel} size="sm" initialFocus={renameInputRef}>
-        <div className="p-6">
-          <h2 className="text-lg font-semibold mb-4">Rename Asset</h2>
-          <FormField label="Filename" id="rename-filename" error={renameMutation.error?.message}>
-            <input
-              ref={renameInputRef}
-              id="rename-filename"
-              type="text"
-              value={renameValue}
-              onChange={(e) => setRenameValue(e.target.value)}
-              onKeyDown={(e) => e.key === 'Enter' && handleRenameSubmit()}
-              className="w-full px-3 py-2 rounded-sm border border-border bg-surface-elevated text-content-on-dark focus:outline-none focus:border-border-active"
-            />
-          </FormField>
-          <div className="flex justify-end gap-3 mt-4">
-            <Button variant="ghost" onClick={handleRenameCancel} disabled={renameMutation.isPending}>
-              Cancel
-            </Button>
-            <Button
-              variant="primary"
-              onClick={handleRenameSubmit}
-              disabled={!renameValue.trim() || renameMutation.isPending}
-            >
-              {renameMutation.isPending ? 'Renaming...' : 'Rename'}
-            </Button>
+      {renameTarget && (
+        <Modal open={true} onClose={handleRenameCancel} size="sm" initialFocus={renameInputRef}>
+          <div className="p-6">
+            <h2 className="text-lg font-semibold mb-4">Rename Asset</h2>
+            <FormField label="Filename" id="rename-filename" error={renameMutation.error?.message}>
+              <input
+                ref={renameInputRef}
+                id="rename-filename"
+                type="text"
+                value={renameValue}
+                onChange={(e) => setRenameValue(e.target.value)}
+                onKeyDown={(e) => e.key === 'Enter' && handleRenameSubmit()}
+                className="w-full px-3 py-2 rounded-sm border border-border bg-surface-elevated text-content-on-dark focus:outline-none focus:border-border-active"
+              />
+            </FormField>
+            <div className="flex justify-end gap-3 mt-4">
+              <Button variant="ghost" onClick={handleRenameCancel} disabled={renameMutation.isPending}>
+                Cancel
+              </Button>
+              <Button
+                variant="primary"
+                onClick={handleRenameSubmit}
+                disabled={!renameValue.trim() || renameMutation.isPending}
+              >
+                {renameMutation.isPending ? 'Renaming...' : 'Rename'}
+              </Button>
+            </div>
           </div>
-        </div>
-      </Modal>
+        </Modal>
+      )}
 
       {/* Delete Confirmation Modal */}
-      <ConfirmModal
-        show={!!deleteTarget}
-        title="Delete Asset"
-        message={`Are you sure you want to delete "${deleteTarget?.filename}"?`}
-        description="This will permanently remove the asset. This action cannot be undone."
-        confirmText="Delete"
-        cancelText="Cancel"
-        onConfirm={handleDeleteConfirm}
-        onCancel={handleDeleteCancel}
-        isLoading={deleteMutation.isPending}
-        loadingText="Deleting..."
-        icon={faTrash}
-        variant="danger"
-      />
+      {deleteTarget && (
+        <ConfirmModal
+          show={true}
+          title="Delete Asset"
+          message={`Are you sure you want to delete "${deleteTarget?.filename}"?`}
+          description="This will permanently remove the asset. This action cannot be undone."
+          confirmText="Delete"
+          cancelText="Cancel"
+          onConfirm={handleDeleteConfirm}
+          onCancel={handleDeleteCancel}
+          isLoading={deleteMutation.isPending}
+          loadingText="Deleting..."
+          icon={faTrash}
+          variant="danger"
+        />
+      )}
     </div>
   )
 }
