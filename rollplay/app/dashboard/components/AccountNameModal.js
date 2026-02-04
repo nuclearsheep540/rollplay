@@ -6,6 +6,7 @@
 'use client'
 
 import { useState } from 'react'
+import Modal from '@/app/shared/components/Modal'
 
 /**
  * Modal for setting the user's immutable account name.
@@ -26,8 +27,6 @@ export default function AccountNameModal({ show, user, onComplete }) {
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState(null)
   const [result, setResult] = useState(null) // { account_name, account_tag, account_identifier }
-
-  if (!show) return null
 
   // Validation regex matching backend rules
   const isValidFormat = (name) => {
@@ -92,128 +91,127 @@ export default function AccountNameModal({ show, user, onComplete }) {
     }
   }
 
-  // Show success state with generated tag
-  if (result) {
-    return (
-      <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-        <div className="bg-white rounded-lg p-6 w-full max-w-md mx-4">
-          <div className="text-center mb-6">
-            <div className="text-4xl mb-4">🎉</div>
-            <h3 className="text-2xl font-bold text-slate-800 mb-2">Account Created!</h3>
-            <p className="text-slate-600">Your unique account tag is:</p>
-          </div>
-
-          <div className="bg-slate-100 rounded-lg p-4 mb-6 text-center">
-            <span className="text-2xl font-mono font-bold text-indigo-600">
-              {result.account_identifier}
-            </span>
-          </div>
-
-          <div className="mb-6 p-3 bg-emerald-50 border border-emerald-200 rounded-md">
-            <p className="text-emerald-800 text-sm">
-              Share your account tag with friends so they can find you!
-            </p>
-          </div>
-
-          <div className="flex justify-center">
-            <button
-              onClick={handleContinue}
-              className="px-6 py-2 rounded-md font-semibold bg-indigo-600 text-white hover:bg-indigo-700 transition-colors focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2"
-            >
-              Continue to Dashboard
-            </button>
-          </div>
-        </div>
-      </div>
-    )
-  }
-
   // Input state
   const inputValue = accountName.trim()
   const isValid = isValidFormat(inputValue)
   const charCount = inputValue.length
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-      <div className="bg-white rounded-lg p-6 w-full max-w-md mx-4">
-        <div className="text-center mb-6">
-          <h3 className="text-2xl font-bold text-slate-800 mb-2">Create Account Name</h3>
-          <p className="text-slate-600">
-            Your account name cannot be changed but you can choose a nickname on the next screen.
-          </p>
-        </div>
+    <Modal open={show} onClose={() => {}} size="md">
+      <div className="p-6">
+        {/* Success state with generated tag */}
+        {result ? (
+          <>
+            <div className="text-center mb-6">
+              <div className="text-4xl mb-4">🎉</div>
+              <h3 className="text-2xl font-bold text-content-on-dark mb-2">Account Created!</h3>
+              <p className="text-content-secondary">Your unique account tag is:</p>
+            </div>
 
-        <div className="mb-4">
-          <label htmlFor="accountName" className="block text-sm font-medium text-slate-700 mb-2">
-            Account Name
-          </label>
-          <input
-            type="text"
-            id="accountName"
-            value={accountName}
-            onChange={handleInputChange}
-            onKeyPress={handleKeyPress}
-            placeholder="e.g: dragon_slayer420, xo_stronkMage_ox, steve"
-            maxLength={30}
-            className="w-full px-3 py-2 border border-slate-300 rounded-md text-slate-900 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
-            disabled={submitting}
-            autoFocus
-          />
-          <div className="flex justify-between text-xs mt-1">
-            <span className={charCount < 3 || charCount > 30 ? 'text-red-500' : 'text-slate-500'}>
-              {charCount}/30 characters (min 3)
-            </span>
-            {inputValue && (
-              <span className={isValid ? 'text-green-600' : 'text-red-500'}>
-                {isValid ? '✓ Valid format' : '✗ Invalid format'}
+            <div className="rounded-sm p-4 mb-6 text-center bg-surface-elevated">
+              <span className="text-2xl font-mono font-bold text-content-accent">
+                {result.account_identifier}
               </span>
+            </div>
+
+            <div className="mb-6 p-3 rounded-sm border bg-feedback-success/15 border-feedback-success/30">
+              <p className="text-sm text-feedback-success">
+                Share your account tag with friends so they can find you!
+              </p>
+            </div>
+
+            <div className="flex justify-center">
+              <button
+                onClick={handleContinue}
+                className="px-6 py-2 rounded-sm font-semibold transition-all bg-interactive-hover text-content-primary hover:brightness-110 focus:outline-none focus:ring-2 focus:ring-border-active"
+              >
+                Continue to Dashboard
+              </button>
+            </div>
+          </>
+        ) : (
+          <>
+            {/* Input state */}
+            <div className="text-center mb-6">
+              <h3 className="text-2xl font-bold text-content-on-dark mb-2">Create Account Name</h3>
+              <p className="text-content-secondary">
+                Your account name cannot be changed but you can choose a nickname on the next screen.
+              </p>
+            </div>
+
+            <div className="mb-4">
+              <label htmlFor="accountName" className="block text-sm font-medium text-content-secondary mb-2">
+                Account Name
+              </label>
+              <input
+                type="text"
+                id="accountName"
+                value={accountName}
+                onChange={handleInputChange}
+                onKeyPress={handleKeyPress}
+                placeholder="e.g: dragon_slayer420, xo_stronkMage_ox, steve"
+                maxLength={30}
+                className="w-full px-3 py-2 border rounded-sm focus:outline-none focus:ring-2 bg-surface-elevated border-border text-content-on-dark focus:ring-border-active focus:border-border-active"
+                disabled={submitting}
+                autoFocus
+              />
+              <div className="flex justify-between text-xs mt-1">
+                <span className={charCount < 3 || charCount > 30 ? 'text-feedback-error' : 'text-content-secondary'}>
+                  {charCount}/30 characters (min 3)
+                </span>
+                {inputValue && (
+                  <span className={isValid ? 'text-feedback-success' : 'text-feedback-error'}>
+                    {isValid ? '✓ Valid format' : '✗ Invalid format'}
+                  </span>
+                )}
+              </div>
+            </div>
+
+            {/* Preview of what the tag will look like */}
+            {inputValue && isValid && user?.account_tag && (
+              <div className="mb-4 p-3 rounded-sm border bg-surface-elevated border-border-subtle">
+                <p className="text-sm text-content-secondary">
+                  Your account tag will be: <span className="font-mono font-semibold text-content-accent">{inputValue}#{user.account_tag}</span>
+                </p>
+                <p className="text-xs text-content-secondary mt-1">
+                  This is your permanent identifier
+                </p>
+              </div>
             )}
-          </div>
-        </div>
 
-        {/* Preview of what the tag will look like */}
-        {inputValue && isValid && user?.account_tag && (
-          <div className="mb-4 p-3 bg-slate-50 border border-slate-200 rounded-md">
-            <p className="text-sm text-slate-600">
-              Your account tag will be: <span className="font-mono font-semibold text-indigo-600">{inputValue}#{user.account_tag}</span>
-            </p>
-            <p className="text-xs text-slate-500 mt-1">
-              This is your permanent identifier
-            </p>
-          </div>
+            {/* Format rules */}
+            <div className="mb-4 text-xs text-content-secondary">
+              <p className="font-medium mb-1">Allowed characters:</p>
+              <ul className="list-disc list-inside">
+                <li>Letters (a-z, A-Z)</li>
+                <li>Numbers (0-9)</li>
+                <li>Dashes (-) and underscores (_)</li>
+                <li>Must start with a letter or number</li>
+              </ul>
+            </div>
+
+            {error && (
+              <div className="mb-4 p-3 rounded-sm border bg-feedback-error/15 border-feedback-error/30">
+                <p className="text-sm text-feedback-error">{error}</p>
+              </div>
+            )}
+
+            <div className="flex justify-center">
+              <button
+                onClick={handleSubmit}
+                disabled={submitting || !isValid}
+                className={`px-6 py-2 rounded-sm font-semibold transition-all focus:outline-none focus:ring-2 focus:ring-border-active ${
+                  submitting || !isValid
+                    ? 'bg-surface-elevated text-content-secondary cursor-not-allowed'
+                    : 'bg-interactive-hover text-content-primary hover:brightness-110'
+                }`}
+              >
+                {submitting ? 'Creating...' : 'Submit Username'}
+              </button>
+            </div>
+          </>
         )}
-
-        {/* Format rules */}
-        <div className="mb-4 text-xs text-slate-500">
-          <p className="font-medium mb-1">Allowed characters:</p>
-          <ul className="list-disc list-inside">
-            <li>Letters (a-z, A-Z)</li>
-            <li>Numbers (0-9)</li>
-            <li>Dashes (-) and underscores (_)</li>
-            <li>Must start with a letter or number</li>
-          </ul>
-        </div>
-
-        {error && (
-          <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-md">
-            <p className="text-red-700 text-sm">{error}</p>
-          </div>
-        )}
-
-        <div className="flex justify-center">
-          <button
-            onClick={handleSubmit}
-            disabled={submitting || !isValid}
-            className={`px-6 py-2 rounded-md font-semibold transition-colors focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 ${
-              submitting || !isValid
-                ? 'bg-slate-200 text-slate-500 cursor-not-allowed'
-                : 'bg-indigo-600 text-white hover:bg-indigo-700'
-            }`}
-          >
-            {submitting ? 'Creating...' : 'Submit Username'}
-          </button>
-        </div>
       </div>
-    </div>
+    </Modal>
   )
 }

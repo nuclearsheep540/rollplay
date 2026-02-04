@@ -82,26 +82,5 @@ export function Button({
   )
 }
 
-export function Badge({ children, className = '', size = 'default', ...props }) {
-  const sizes = {
-    default: 'px-3 py-1 text-xs',
-    xs: 'px-2 py-1 text-xs',
-    sm: 'px-3 py-1.5 text-sm',
-    md: 'px-4 py-2 text-sm',
-    lg: 'px-6 py-3 text-base'
-  }
-
-  return (
-    <span
-      className={`rounded-sm font-semibold border ${sizes[size]} ${className}`}
-      style={{
-        backgroundColor: `${THEME.bgSecondary}CC`,
-        color: COLORS.smoke,
-        borderColor: COLORS.silver
-      }}
-      {...props}
-    >
-      {children}
-    </span>
-  )
-}
+// Badge moved to shared/components/Badge.js
+export { default as Badge } from '@/app/shared/components/Badge'

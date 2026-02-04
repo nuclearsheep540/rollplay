@@ -27,18 +27,50 @@ body {
   display: none;
 }
 
+/* ==========================================================================
+   DESIGN TOKENS — Single source of truth for all colors
+   Registered in tailwind.config.js so Tailwind variant engine
+   (hover:, focus:, data-[]:) generates utility classes for them.
+   ========================================================================== */
 :root {
-  --foreground-rgb: 0, 0, 0;
-  --background-start-rgb: 214, 219, 220;
-  --background-end-rgb: 255, 255, 255;
-}
+  /* Palette — raw color values */
+  --palette-carbon: #1F1F1F;
+  --palette-smoke: #F7F4F3;
+  --palette-onyx: #0B0A09;
+  --palette-graphite: #37322F;
+  --palette-silver: #B5ADA6;
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --foreground-rgb: 255, 255, 255;
-    --background-start-rgb: 0, 0, 0;
-    --background-end-rgb: 0, 0, 0;
-  }
+  /* Surface — backgrounds */
+  --surface-primary: #F7F4F3;      /* smoke — main page bg */
+  --surface-secondary: #1F1F1F;    /* carbon — panels */
+  --surface-panel: #1F1F1F;        /* carbon — alias */
+  --surface-elevated: #0B0A09;     /* onyx — deepest */
+
+  /* Content — text */
+  --content-primary: #1F1F1F;      /* carbon — on light bg */
+  --content-secondary: #B5ADA6;    /* silver — muted, on dark */
+  --content-on-dark: #F7F4F3;      /* smoke — on dark bg */
+  --content-bold: #0B0A09;         /* onyx — strongest */
+  --content-accent: #B5ADA6;       /* silver — accent */
+
+  /* Border */
+  --border-default: #37322F;       /* graphite */
+  --border-active: #F7F4F3;        /* smoke */
+  --border-subtle: #37322F40;      /* graphite 25% */
+
+  /* Interactive */
+  --interactive-hover: #B5ADA6;    /* silver */
+  --interactive-focus: #0B0A09;    /* onyx */
+
+  /* Overlay */
+  --overlay-dark: #1F1F1FE6;       /* carbon 90% */
+  --overlay-light: #0B0A09CC;      /* onyx 80% */
+
+  /* Feedback — status colors */
+  --feedback-success: #16a34a;
+  --feedback-error: #dc2626;
+  --feedback-warning: #d97706;
+  --feedback-info: #2563eb;
 }
 
 /* Landing Page Styles */

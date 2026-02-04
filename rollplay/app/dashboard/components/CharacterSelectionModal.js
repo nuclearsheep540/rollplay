@@ -6,10 +6,11 @@
 'use client'
 
 import { useState } from 'react'
-import { THEME } from '@/app/styles/colorTheme'
-import { Button } from './shared/Button'
+import { DialogTitle } from '@headlessui/react'
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
 import { faPlus } from '@fortawesome/free-solid-svg-icons'
+import Modal from '@/app/shared/components/Modal'
+import { Button } from './shared/Button'
 import { useSelectCharacter } from '../hooks/mutations/useCharacterMutations'
 
 export default function CharacterSelectionModal({ campaign, characters, onClose, onCharacterSelected, onCreateCharacter = null, currentCharacterId = null }) {
@@ -45,20 +46,25 @@ export default function CharacterSelectionModal({ campaign, characters, onClose,
   }
 
   return (
-    <div className="fixed inset-0 flex items-center justify-center z-50 p-4" style={{backgroundColor: THEME.overlayDark}}>
-      <div className="rounded-sm shadow-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto border" style={{backgroundColor: THEME.bgSecondary, borderColor: THEME.borderDefault}}>
+    <Modal
+      open={true}
+      onClose={selectCharacterMutation.isPending ? () => {} : onClose}
+      size="2xl"
+    >
+      <div className="max-h-[80vh] overflow-y-auto">
         {/* Header */}
-        <div className="sticky top-0 border-b px-6 py-4 flex items-center justify-between" style={{backgroundColor: THEME.bgSecondary, borderBottomColor: THEME.borderSubtle}}>
+        <div className="sticky top-0 z-10 border-b border-border-subtle px-6 py-4 flex items-center justify-between bg-surface-secondary">
           <div>
-            <h2 className="text-2xl font-bold font-[family-name:var(--font-metamorphous)]" style={{color: THEME.textOnDark}}>Select Character</h2>
-            <p className="text-sm mt-1" style={{color: THEME.textSecondary}}>
+            <DialogTitle className="text-2xl font-bold font-[family-name:var(--font-metamorphous)] text-content-on-dark">
+              Select Character
+            </DialogTitle>
+            <p className="text-sm mt-1 text-content-secondary">
               Choose a character for <span className="font-semibold">{campaign.title}</span>
             </p>
           </div>
           <button
             onClick={onClose}
-            className="transition-colors hover:opacity-80"
-            style={{color: THEME.textSecondary}}
+            className="transition-colors hover:opacity-80 text-content-secondary"
             disabled={selectCharacterMutation.isPending}
           >
             <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -70,26 +76,21 @@ export default function CharacterSelectionModal({ campaign, characters, onClose,
         {/* Content */}
         <div className="p-6">
           {error && (
-            <div className="mb-4 border px-4 py-3 rounded-sm" style={{backgroundColor: '#7f1d1d', borderColor: '#dc2626', color: THEME.textAccent}}>
+            <div className="mb-4 border px-4 py-3 rounded-sm bg-feedback-error/15 border-feedback-error text-content-accent">
               {error}
             </div>
           )}
 
           {availableCharacters.length === 0 ? (
             <div className="text-center py-8">
-              <p className="mb-4" style={{color: THEME.textOnDark}}>You don't have any available characters.</p>
-              <p className="text-sm mb-6" style={{color: THEME.textSecondary}}>
+              <p className="mb-4 text-content-on-dark">You don&apos;t have any available characters.</p>
+              <p className="text-sm mb-6 text-content-secondary">
                 Create a new character or free up an existing one by leaving another campaign.
               </p>
               {onCreateCharacter && (
                 <button
                   onClick={onCreateCharacter}
-                  className="w-full py-8 rounded-sm border-2 border-dashed transition-all hover:opacity-80 flex items-center justify-center gap-2"
-                  style={{
-                    backgroundColor: 'transparent',
-                    color: THEME.textSecondary,
-                    borderColor: THEME.borderDefault
-                  }}
+                  className="w-full py-8 rounded-sm border-2 border-dashed transition-all hover:opacity-80 flex items-center justify-center gap-2 bg-transparent text-content-secondary border-border"
                 >
                   <FontAwesomeIcon icon={faPlus} />
                   Create New Character
@@ -98,7 +99,7 @@ export default function CharacterSelectionModal({ campaign, characters, onClose,
             </div>
           ) : (
             <>
-              <p className="text-sm mb-4" style={{color: THEME.textOnDark}}>
+              <p className="text-sm mb-4 text-content-on-dark">
                 Select a character to use in this campaign. Once selected, this character cannot be used in other campaigns until you release it or leave.
               </p>
 
@@ -107,36 +108,36 @@ export default function CharacterSelectionModal({ campaign, characters, onClose,
                   <div
                     key={char.id}
                     onClick={() => setSelectedCharacterId(char.id)}
-                    className="p-4 rounded-sm border-2 cursor-pointer transition-all"
-                    style={{
-                      borderColor: selectedCharacterId === char.id ? THEME.borderActive : THEME.borderDefault,
-                      backgroundColor: selectedCharacterId === char.id ? THEME.bgPanel : THEME.bgSecondary
-                    }}
+                    className={`p-4 rounded-sm border-2 cursor-pointer transition-all ${
+                      selectedCharacterId === char.id
+                        ? 'border-border-active bg-surface-panel'
+                        : 'border-border bg-surface-secondary'
+                    }`}
                   >
                     <div className="flex items-start justify-between">
                       <div className="flex-1">
                         <div className="flex items-center gap-2">
-                          <h3 className="text-lg font-semibold" style={{color: THEME.textOnDark}}>
+                          <h3 className="text-lg font-semibold text-content-on-dark">
                             {char.character_name}
                           </h3>
                           {char.is_alive === false && (
-                            <span className="px-2 py-1 text-xs font-semibold rounded-sm" style={{backgroundColor: '#7f1d1d', color: THEME.textAccent}}>
+                            <span className="px-2 py-1 text-xs font-semibold rounded-sm bg-feedback-error/15 text-content-accent">
                               ☠ Deceased
                             </span>
                           )}
                         </div>
-                        <p className="text-sm mt-1" style={{color: THEME.textSecondary}}>
+                        <p className="text-sm mt-1 text-content-secondary">
                           Level {char.level} {char.character_race} {char.character_class}
                         </p>
-                        <div className="flex gap-4 mt-2 text-sm" style={{color: THEME.textSecondary}}>
+                        <div className="flex gap-4 mt-2 text-sm text-content-secondary">
                           <span>HP: {char.hp_current}/{char.hp_max}</span>
                           <span>AC: {char.ac}</span>
                         </div>
                       </div>
                       <div className="ml-4">
                         {selectedCharacterId === char.id && (
-                          <div className="w-6 h-6 rounded-full flex items-center justify-center" style={{backgroundColor: '#166534'}}>
-                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" style={{color: THEME.textAccent}}>
+                          <div className="w-6 h-6 rounded-full flex items-center justify-center bg-feedback-success">
+                            <svg className="w-4 h-4 text-content-on-dark" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
                             </svg>
                           </div>
@@ -151,12 +152,7 @@ export default function CharacterSelectionModal({ campaign, characters, onClose,
               {onCreateCharacter && (
                 <button
                   onClick={onCreateCharacter}
-                  className="w-full mt-4 py-8 rounded-sm border-2 border-dashed transition-all hover:opacity-80 flex items-center justify-center gap-2"
-                  style={{
-                    backgroundColor: 'transparent',
-                    color: THEME.textSecondary,
-                    borderColor: THEME.borderDefault
-                  }}
+                  className="w-full mt-4 py-8 rounded-sm border-2 border-dashed transition-all hover:opacity-80 flex items-center justify-center gap-2 bg-transparent text-content-secondary border-border"
                 >
                   <FontAwesomeIcon icon={faPlus} />
                   Create New Character
@@ -168,7 +164,7 @@ export default function CharacterSelectionModal({ campaign, characters, onClose,
 
         {/* Footer */}
         {availableCharacters.length > 0 && (
-          <div className="sticky bottom-0 border-t px-6 py-4 flex items-center justify-end gap-3" style={{backgroundColor: THEME.bgSecondary, borderTopColor: THEME.borderSubtle}}>
+          <div className="sticky bottom-0 z-10 border-t border-border-subtle px-6 py-4 flex items-center justify-end gap-3 bg-surface-secondary">
             <Button
               variant="ghost"
               onClick={onClose}
@@ -186,6 +182,6 @@ export default function CharacterSelectionModal({ campaign, characters, onClose,
           </div>
         )}
       </div>
-    </div>
+    </Modal>
   )
 }

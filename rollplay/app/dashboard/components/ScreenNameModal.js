@@ -5,16 +5,17 @@
 
 'use client'
 
-export default function ScreenNameModal({ 
-  show, 
-  screenName, 
-  setScreenName, 
-  onUpdate, 
-  updating, 
-  error 
-}) {
-  if (!show) return null
+import Modal from '@/app/shared/components/Modal'
+import FormField from '@/app/shared/components/FormField'
 
+export default function ScreenNameModal({
+  show,
+  screenName,
+  setScreenName,
+  onUpdate,
+  updating,
+  error
+}) {
   const handleKeyPress = (e) => {
     if (e.key === 'Enter' && screenName.trim()) {
       onUpdate()
@@ -22,50 +23,45 @@ export default function ScreenNameModal({
   }
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-      <div className="bg-white rounded-lg p-6 w-full max-w-md mx-4">
+    <Modal open={show} onClose={() => {}} size="md">
+      <div className="p-6">
         <div className="text-center mb-6">
-          <h3 className="text-2xl font-bold text-slate-800 mb-2">Welcome to Tabletop Tavern!</h3>
-          <p className="text-slate-600">To get started, please choose a screen name that other players will see.</p>
+          <h3 className="text-2xl font-bold text-content-on-dark mb-2">Welcome to Tabletop Tavern!</h3>
+          <p className="text-content-secondary">To get started, please choose a screen name that other players will see.</p>
         </div>
-        
-        <div className="mb-4">
-          <label htmlFor="newScreenName" className="block text-sm font-medium text-slate-700 mb-2">
-            Choose Your Screen Name
-          </label>
+
+        <FormField
+          label="Choose Your Screen Name"
+          id="newScreenName"
+          error={error}
+          helperText="You can change this later in your profile settings."
+        >
           <input
             type="text"
             id="newScreenName"
             value={screenName}
             onChange={(e) => setScreenName(e.target.value)}
             placeholder="Enter your screen name..."
-            className="w-full px-3 py-2 border border-slate-300 rounded-md text-slate-900 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+            className="w-full px-3 py-2 border rounded-sm focus:outline-none focus:ring-2 bg-surface-elevated border-border text-content-on-dark focus:ring-border-active focus:border-border-active"
             disabled={updating}
             onKeyPress={handleKeyPress}
           />
-          <p className="text-xs text-slate-500 mt-1">You can change this later in your profile settings.</p>
-        </div>
-
-        {error && (
-          <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-md">
-            <p className="text-red-700 text-sm">{error}</p>
-          </div>
-        )}
+        </FormField>
 
         <div className="flex justify-center">
           <button
             onClick={onUpdate}
             disabled={updating || !screenName.trim()}
-            className={`px-6 py-2 rounded-md font-semibold transition-colors focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 ${
+            className={`px-6 py-2 rounded-sm font-semibold transition-all focus:outline-none focus:ring-2 focus:ring-border-active ${
               updating || !screenName.trim()
-                ? 'bg-slate-200 text-slate-500 cursor-not-allowed'
-                : 'bg-indigo-600 text-white hover:bg-indigo-700'
+                ? 'bg-surface-elevated text-content-secondary cursor-not-allowed'
+                : 'bg-interactive-hover text-content-primary hover:brightness-110'
             }`}
           >
             {updating ? 'Setting up...' : 'Continue'}
           </button>
         </div>
       </div>
-    </div>
+    </Modal>
   )
 }

@@ -6,10 +6,9 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { createPortal } from 'react-dom'
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
 import { faUserPlus, faUserXmark } from '@fortawesome/free-solid-svg-icons'
-import { COLORS, THEME } from '@/app/styles/colorTheme'
+import Modal from '@/app/shared/components/Modal'
 import { Button } from './shared/Button'
 
 export default function CampaignInviteModal({ campaign, onClose, onInviteSuccess }) {
@@ -316,32 +315,22 @@ export default function CampaignInviteModal({ campaign, onClose, onInviteSuccess
     return null
   }
 
-  // Render modal to document.body via portal to ensure backdrop fills full viewport
-  return createPortal(
-    <div
-      className="fixed inset-0 flex items-center justify-center z-50 p-4"
-      style={{backgroundColor: THEME.overlayDark}}
-      onClick={onClose}
-    >
-      <div
-        className="rounded-sm shadow-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto border"
-        style={{backgroundColor: THEME.bgSecondary, borderColor: THEME.borderDefault}}
-        onClick={(e) => e.stopPropagation()}
-      >
+  return (
+    <Modal open={true} onClose={onClose} size="2xl">
+      <div className="max-h-[80vh] overflow-y-auto">
         {/* Header */}
-        <div className="p-6 border-b" style={{borderBottomColor: THEME.borderSubtle}}>
+        <div className="p-6 border-b border-border-subtle">
           <div className="flex items-center justify-between">
             <div>
-              <h2 className="text-2xl font-bold font-[family-name:var(--font-metamorphous)]" style={{color: THEME.textOnDark}}>Invite Players to Campaign</h2>
-              <p className="text-sm mt-1" style={{color: THEME.textSecondary}}>{campaign.title}</p>
-              <p className="text-xs mt-1" style={{color: THEME.textSecondary}}>
+              <h2 className="text-2xl font-bold font-[family-name:var(--font-metamorphous)] text-content-on-dark">Invite Players to Campaign</h2>
+              <p className="text-sm mt-1 text-content-secondary">{campaign.title}</p>
+              <p className="text-xs mt-1 text-content-secondary">
                 Current players: {campaign.player_ids?.length || 0} | Pending invites: {campaign.invited_player_ids?.length || 0}
               </p>
             </div>
             <button
               onClick={onClose}
-              className="text-2xl font-bold hover:opacity-80 transition-opacity"
-              style={{color: THEME.textSecondary}}
+              className="text-2xl font-bold hover:opacity-80 transition-opacity text-content-secondary"
             >
               ×
             </button>
@@ -352,57 +341,48 @@ export default function CampaignInviteModal({ campaign, onClose, onInviteSuccess
         <div className="p-6 space-y-6">
           {/* Error Message */}
           {error && (
-            <div className="border px-4 py-3 rounded-sm" style={{backgroundColor: '#7f1d1d', borderColor: '#dc2626', color: THEME.textAccent}}>
+            <div className="border px-4 py-3 rounded-sm bg-feedback-error/15 border-feedback-error text-content-accent">
               {error}
             </div>
           )}
 
           {/* Invite by Account Tag Form */}
           <div>
-            <h3 className="text-lg font-semibold mb-3" style={{color: THEME.textOnDark}}>Invite by Account Tag</h3>
+            <h3 className="text-lg font-semibold mb-3 text-content-on-dark">Invite by Account Tag</h3>
             <div className="space-y-3">
               <input
                 type="text"
                 value={friendUuid}
                 onChange={(e) => setFriendUuid(e.target.value)}
                 placeholder="Enter username including account tag (e.g., steve#2345)"
-                className="w-full px-4 py-2 border rounded-sm focus:ring-2 focus:outline-none"
-                style={{
-                  backgroundColor: THEME.bgPrimary,
-                  borderColor: THEME.borderDefault,
-                  color: THEME.textPrimary
-                }}
+                className="w-full px-4 py-2 border rounded-sm focus:ring-2 focus:outline-none bg-surface-primary border-border text-content-primary focus:ring-border-active"
               />
               {lookupLoading && (
-                <p className="text-sm" style={{color: THEME.textSecondary}}>Looking up user...</p>
+                <p className="text-sm text-content-secondary">Looking up user...</p>
               )}
               {lookupError && (
-                <p className="text-sm" style={{color: '#dc2626'}}>{lookupError}</p>
+                <p className="text-sm text-feedback-error">{lookupError}</p>
               )}
               {/* Found user row - integrated invite button */}
               {lookupUser && (
-                <div
-                  className="flex items-stretch rounded-sm border overflow-hidden"
-                  style={{backgroundColor: THEME.bgPanel, borderColor: THEME.borderSubtle}}
-                >
+                <div className="flex items-stretch rounded-sm border overflow-hidden bg-surface-panel border-border-subtle">
                   <span className="flex-1 flex items-center gap-2 py-3 pl-4">
-                    <span className="font-medium" style={{color: COLORS.smoke}}>{lookupUser.screen_name || lookupUser.account_identifier}</span>
+                    <span className="font-medium text-content-on-dark">{lookupUser.screen_name || lookupUser.account_identifier}</span>
                     {lookupUser.screen_name && lookupUser.account_identifier && (
-                      <span className="text-sm" style={{color: COLORS.silver}}>{lookupUser.account_identifier}</span>
+                      <span className="text-sm text-content-secondary">{lookupUser.account_identifier}</span>
                     )}
                   </span>
                   {getUserStatusMessage(lookupUser.id) ? (
-                    <span className="flex items-center text-sm px-4" style={{color: '#fbbf24'}}>{getUserStatusMessage(lookupUser.id)}</span>
+                    <span className="flex items-center text-sm px-4 text-feedback-warning">{getUserStatusMessage(lookupUser.id)}</span>
                   ) : (
                     <button
                       onClick={handleInviteByUuid}
                       disabled={inviting}
-                      className="px-8 flex items-center hover:bg-green-900/50 transition-colors disabled:opacity-50"
+                      className="px-8 flex items-center hover:bg-feedback-success/10 transition-colors disabled:opacity-50 text-feedback-success"
                       title="Invite player"
-                      style={{ color: '#22c55e' }}
                     >
                       {inviting ? (
-                        <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-green-500"></div>
+                        <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-feedback-success"></div>
                       ) : (
                         <FontAwesomeIcon icon={faUserPlus} className="h-5 w-5" />
                       )}
@@ -415,37 +395,35 @@ export default function CampaignInviteModal({ campaign, onClose, onInviteSuccess
 
           {/* Friends List */}
           <div>
-            <h3 className="text-lg font-semibold mb-3" style={{color: THEME.textOnDark}}>Or invite from friends</h3>
+            <h3 className="text-lg font-semibold mb-3 text-content-on-dark">Or invite from friends</h3>
             {loadingFriends ? (
-              <p className="text-sm" style={{color: THEME.textSecondary}}>Loading friends...</p>
+              <p className="text-sm text-content-secondary">Loading friends...</p>
             ) : friends.length === 0 ? (
-              <p className="text-sm" style={{color: THEME.textSecondary}}>No friends available to invite</p>
+              <p className="text-sm text-content-secondary">No friends available to invite</p>
             ) : (
               <div className="space-y-2 max-h-64 overflow-y-auto">
                 {friends.map((friend) => (
                   <div
                     key={friend.id}
-                    className="flex items-stretch rounded-sm border overflow-hidden"
-                    style={{backgroundColor: THEME.bgPanel, borderColor: THEME.borderSubtle}}
+                    className="flex items-stretch rounded-sm border overflow-hidden bg-surface-panel border-border-subtle"
                   >
                     <span className="flex-1 flex items-center gap-2 py-3 pl-4">
-                      <span className="font-medium" style={{color: COLORS.smoke}}>{friend.friend_screen_name || friend.friend_account_tag}</span>
+                      <span className="font-medium text-content-on-dark">{friend.friend_screen_name || friend.friend_account_tag}</span>
                       {friend.friend_screen_name && friend.friend_account_tag && (
-                        <span className="text-sm" style={{color: COLORS.silver}}>{friend.friend_account_tag}</span>
+                        <span className="text-sm text-content-secondary">{friend.friend_account_tag}</span>
                       )}
                     </span>
                     {getUserStatusMessage(friend.friend_id) ? (
-                      <span className="flex items-center text-sm px-4" style={{color: '#fbbf24'}}>{getUserStatusMessage(friend.friend_id)}</span>
+                      <span className="flex items-center text-sm px-4 text-feedback-warning">{getUserStatusMessage(friend.friend_id)}</span>
                     ) : (
                       <button
                         onClick={() => handleInviteFriend(friend.friend_id)}
                         disabled={inviting}
-                        className="px-8 flex items-center hover:bg-green-900/50 transition-colors disabled:opacity-50"
+                        className="px-8 flex items-center hover:bg-feedback-success/10 transition-colors disabled:opacity-50 text-feedback-success"
                         title="Invite player"
-                        style={{ color: '#22c55e' }}
                       >
                         {inviting ? (
-                          <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-green-500"></div>
+                          <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-feedback-success"></div>
                         ) : (
                           <FontAwesomeIcon icon={faUserPlus} className="h-5 w-5" />
                         )}
@@ -460,23 +438,22 @@ export default function CampaignInviteModal({ campaign, onClose, onInviteSuccess
           {/* Pending Invites Section */}
           {pendingInvites.length > 0 && (
             <div>
-              <h3 className="text-lg font-semibold mb-3" style={{color: THEME.textOnDark}}>Pending Invites</h3>
+              <h3 className="text-lg font-semibold mb-3 text-content-on-dark">Pending Invites</h3>
               <div className="space-y-2 max-h-48 overflow-y-auto">
                 {loadingPendingInvites ? (
-                  <p className="text-sm" style={{color: THEME.textSecondary}}>Loading pending invites...</p>
+                  <p className="text-sm text-content-secondary">Loading pending invites...</p>
                 ) : (
                   pendingInvites.map((invite) => (
                     <div
                       key={invite.id}
-                      className="flex items-stretch rounded-sm border overflow-hidden"
-                      style={{backgroundColor: THEME.bgPanel, borderColor: THEME.borderSubtle}}
+                      className="flex items-stretch rounded-sm border overflow-hidden bg-surface-panel border-border-subtle"
                     >
                       <div className="flex-1 flex items-center py-3 pl-4">
-                        <span className="font-medium" style={{color: THEME.textOnDark}}>
+                        <span className="font-medium text-content-on-dark">
                           {invite.screen_name || invite.display_name}
                         </span>
                         {invite.account_tag && (
-                          <span className="text-sm ml-2" style={{color: THEME.textSecondary}}>
+                          <span className="text-sm ml-2 text-content-secondary">
                             #{invite.account_tag}
                           </span>
                         )}
@@ -484,12 +461,11 @@ export default function CampaignInviteModal({ campaign, onClose, onInviteSuccess
                       <button
                         onClick={() => cancelInvite(invite.id)}
                         disabled={canceling === invite.id}
-                        className="px-8 flex items-center hover:bg-red-900/50 transition-colors disabled:opacity-50"
+                        className="px-8 flex items-center hover:bg-feedback-error/10 transition-colors disabled:opacity-50 text-feedback-error"
                         title="Cancel invite"
-                        style={{ color: '#dc2626' }}
                       >
                         {canceling === invite.id ? (
-                          <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-red-500"></div>
+                          <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-feedback-error"></div>
                         ) : (
                           <FontAwesomeIcon icon={faUserXmark} className="h-5 w-5" />
                         )}
@@ -503,7 +479,7 @@ export default function CampaignInviteModal({ campaign, onClose, onInviteSuccess
         </div>
 
         {/* Footer */}
-        <div className="p-6 border-t" style={{backgroundColor: THEME.bgSecondary, borderTopColor: THEME.borderSubtle}}>
+        <div className="p-6 border-t border-border-subtle">
           <Button
             variant="ghost"
             onClick={onClose}
@@ -513,7 +489,6 @@ export default function CampaignInviteModal({ campaign, onClose, onInviteSuccess
           </Button>
         </div>
       </div>
-    </div>,
-    document.body
+    </Modal>
   )
 }

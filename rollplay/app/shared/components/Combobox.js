@@ -104,7 +104,7 @@ export default function Combobox({
                 <HeadlessCombobox.Option
                   key={option.value}
                   value={option.value}
-                  className="relative cursor-pointer select-none py-2 pl-10 pr-4 data-[focus]:bg-[#37322F]"
+                  className="relative cursor-pointer select-none py-2 pl-10 pr-4 data-[focus]:bg-interactive-hover"
                   style={{ color: THEME.textOnDark }}
                 >
                   {({ selected }) => (
