@@ -133,6 +133,46 @@ class MediaAssetAggregate:
         # Ensure campaign association (inheritance rule)
         self.associate_with_campaign(campaign_id)
 
+    def change_type(self, new_type: "MediaAssetType") -> None:
+        """
+        Change this asset's type tag with content-type validation.
+
+        Valid transitions:
+        - image content types (png, jpeg, webp, gif) → map or image
+        - audio content types (mpeg, wav, ogg) → audio only
+
+        Args:
+            new_type: The new asset type
+
+        Raises:
+            ValueError: If the content type is incompatible with the new type
+        """
+        if isinstance(new_type, str):
+            new_type = MediaAssetType(new_type)
+
+        image_content_types = {"image/png", "image/jpeg", "image/webp", "image/gif"}
+        audio_content_types = {"audio/mpeg", "audio/wav", "audio/ogg"}
+
+        if new_type in (MediaAssetType.MAP, MediaAssetType.IMAGE) and self.content_type not in image_content_types:
+            raise ValueError(f"Cannot change to {new_type.value}: content type {self.content_type} is not an image")
+        if new_type == MediaAssetType.AUDIO and self.content_type not in audio_content_types:
+            raise ValueError(f"Cannot change to audio: content type {self.content_type} is not audio")
+
+        self.asset_type = new_type
+        self.updated_at = datetime.utcnow()
+
+    def rename(self, new_filename: str) -> None:
+        """
+        Rename this asset.
+
+        Args:
+            new_filename: The new display filename
+        """
+        if not new_filename or not new_filename.strip():
+            raise ValueError("Filename cannot be empty")
+        self.filename = new_filename.strip()
+        self.updated_at = datetime.utcnow()
+
     def is_owned_by(self, user_id: UUID) -> bool:
         """Check if asset is owned by the given user."""
         return self.user_id == user_id

@@ -34,6 +34,16 @@ class AssociateRequest(BaseModel):
     session_id: Optional[UUID] = Field(None, description="Session to associate with (optional)")
 
 
+class RenameRequest(BaseModel):
+    """Request to rename a media asset"""
+    filename: str = Field(..., min_length=1, max_length=255, description="New display filename")
+
+
+class ChangeTypeRequest(BaseModel):
+    """Request to change a media asset's type tag"""
+    asset_type: MediaAssetType = Field(..., description="New asset type (map, image, audio)")
+
+
 class MediaAssetResponse(BaseModel):
     """Response containing media asset details"""
     id: str
