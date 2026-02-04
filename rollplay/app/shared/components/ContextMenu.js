@@ -14,8 +14,9 @@ import * as RadixContextMenu from '@radix-ui/react-context-menu'
  * sub-menus, escape-to-close, and proper ARIA roles.
  *
  * @param {React.ReactNode} children - The element that triggers the context menu on right-click
- * @param {Array} items - Menu items: { label, onClick?, icon?, variant?, disabled?, subItems? }
+ * @param {Array} items - Menu items: { label, onClick?, icon?, variant?, disabled?, active?, subItems? }
  *   subItems follow the same shape for nested sub-menus.
+ *   Use active: true on disabled items to show a checkmark instead of a faded style.
  */
 export default function ContextMenu({ children, items }) {
   return (
@@ -58,12 +59,17 @@ export default function ContextMenu({ children, items }) {
                       {item.subItems.map((subItem) => (
                         <RadixContextMenu.Item
                           key={subItem.label}
-                          className="flex items-center gap-2 px-3 py-2 text-sm text-content-on-dark outline-none data-[highlighted]:bg-interactive-hover cursor-default disabled:opacity-50 disabled:pointer-events-none"
+                          className={`flex items-center gap-2 px-3 py-2 text-sm outline-none cursor-default ${
+                            subItem.active
+                              ? 'text-content-secondary pointer-events-none'
+                              : 'text-content-on-dark data-[highlighted]:bg-interactive-hover disabled:opacity-50 disabled:pointer-events-none'
+                          }`}
                           disabled={subItem.disabled}
                           onSelect={subItem.onClick}
                         >
                           {subItem.icon && <span className="w-4 text-center text-content-secondary">{subItem.icon}</span>}
-                          <span>{subItem.label}</span>
+                          <span className="flex-1">{subItem.label}</span>
+                          {subItem.active && <span className="text-xs text-content-secondary ml-2">&#x2713;</span>}
                         </RadixContextMenu.Item>
                       ))}
                     </RadixContextMenu.SubContent>

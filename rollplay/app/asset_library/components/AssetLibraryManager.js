@@ -196,6 +196,7 @@ export default function AssetLibraryManager({ user }) {
         subItems: tagOptions.map(type => ({
           label: type.charAt(0).toUpperCase() + type.slice(1),
           disabled: asset.asset_type === type,
+          active: asset.asset_type === type,
           onClick: () => changeTypeMutation.mutate({ assetId: asset.id, assetType: type }),
         })),
       })
@@ -209,6 +210,7 @@ export default function AssetLibraryManager({ user }) {
         subItems: ownedCampaigns.map(campaign => ({
           label: campaign.title,
           disabled: asset.campaign_ids?.includes(campaign.id),
+          active: asset.campaign_ids?.includes(campaign.id),
           onClick: () => associateMutation.mutate({ assetId: asset.id, campaignId: campaign.id }),
         })),
       })

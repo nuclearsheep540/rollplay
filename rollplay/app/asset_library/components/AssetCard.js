@@ -9,7 +9,7 @@ import Badge from '@/app/shared/components/Badge'
 
 const BADGE_VARIANT = {
   map: 'success',
-  audio: 'info',
+  audio: 'audio',
   image: 'info',
 }
 

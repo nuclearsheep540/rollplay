@@ -45,6 +45,7 @@ module.exports = {
           error: 'var(--feedback-error)',
           warning: 'var(--feedback-warning)',
           info: 'var(--feedback-info)',
+          audio: 'var(--feedback-audio)',
         },
       },
     },

@@ -9,6 +9,7 @@ const VARIANT_CLASSES = {
   error: 'bg-[color-mix(in_srgb,var(--feedback-error),transparent_75%)] text-feedback-error border-[color-mix(in_srgb,var(--feedback-error),black_30%)]',
   warning: 'bg-[color-mix(in_srgb,var(--feedback-warning),transparent_75%)] text-feedback-warning border-[color-mix(in_srgb,var(--feedback-warning),black_30%)]',
   info: 'bg-[color-mix(in_srgb,var(--feedback-info),transparent_75%)] text-feedback-info border-[color-mix(in_srgb,var(--feedback-info),black_30%)]',
+  audio: 'bg-[color-mix(in_srgb,var(--feedback-audio),transparent_75%)] text-feedback-audio border-[color-mix(in_srgb,var(--feedback-audio),black_30%)]',
 }
 
 const SIZE_CLASSES = {
