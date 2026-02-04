@@ -24,11 +24,12 @@ const SIZE_CLASSES = {
  *
  * @param {boolean} open - Controls visibility
  * @param {Function} onClose - Called on escape / backdrop click
- * @param {'sm'|'md'|'lg'|'xl'} size - Max-width preset (default 'md')
+ * @param {'sm'|'md'|'lg'|'xl'|'2xl'} size - Max-width preset (default 'md')
  * @param {React.Ref} initialFocus - Element to focus on open
+ * @param {string} panelClassName - Override panel classes (replaces default bg/border/text)
  * @param {React.ReactNode} children - Modal content
  */
-export default function Modal({ open, onClose, size = 'md', initialFocus, children }) {
+export default function Modal({ open, onClose, size = 'md', initialFocus, panelClassName, children }) {
   return (
     <Transition show={open} as={Fragment}>
       <Dialog onClose={onClose} initialFocus={initialFocus} className="relative z-50">
@@ -58,7 +59,10 @@ export default function Modal({ open, onClose, size = 'md', initialFocus, childr
             leaveTo="opacity-0 scale-95"
           >
             <DialogPanel
-              className={`${SIZE_CLASSES[size]} w-full bg-surface-secondary border border-border text-content-on-dark rounded-sm shadow-2xl`}
+              className={panelClassName
+                ? `${SIZE_CLASSES[size]} w-full ${panelClassName}`
+                : `${SIZE_CLASSES[size]} w-full bg-surface-secondary border border-border text-content-on-dark rounded-sm shadow-2xl`
+              }
             >
               {children}
             </DialogPanel>

@@ -16,6 +16,8 @@ import {
   faCopy
 } from '@fortawesome/free-solid-svg-icons'
 import { COLORS, THEME } from '@/app/styles/colorTheme'
+import Modal from '@/app/shared/components/Modal'
+import Spinner from '@/app/shared/components/Spinner'
 import { Button } from './shared/Button'
 import CharacterEditPanel from './CharacterEditPanel'
 import { useDeleteCharacter } from '../hooks/mutations/useCharacterMutations'
@@ -616,50 +618,48 @@ export default function CharacterManager({ user, onExpandedChange }) {
       </div>
 
       {/* Delete Confirmation Modal */}
-      {showDeleteModal && (
-        <div className="fixed inset-0 backdrop-blur-sm flex items-center justify-center z-50" style={{backgroundColor: THEME.overlayDark}}>
-          <div className="border rounded-sm shadow-2xl p-6 max-w-md w-full mx-4" style={{backgroundColor: THEME.bgSecondary, borderColor: THEME.borderDefault}}>
-            <h3 className="text-xl font-bold mb-2" style={{color: THEME.textAccent}}>Delete Character</h3>
-            <p className="mb-1" style={{color: THEME.textPrimary}}>
-              Are you sure you want to delete <strong style={{color: THEME.textAccent}}>{characterToDelete?.character_name}</strong>?
-            </p>
-            <p className="text-sm mb-4" style={{color: THEME.textSecondary}}>This action cannot be undone.</p>
+      <Modal open={showDeleteModal} onClose={deleteCharacterMutation.isPending ? () => {} : handleCancelDelete} size="md">
+        <div className="p-6">
+          <h3 className="text-xl font-bold mb-2 text-content-accent">Delete Character</h3>
+          <p className="mb-1 text-content-on-dark">
+            Are you sure you want to delete <strong className="text-content-accent">{characterToDelete?.character_name}</strong>?
+          </p>
+          <p className="text-sm mb-4 text-content-secondary">This action cannot be undone.</p>
 
-            {deleteError && (
-              <div className="mb-4 border px-4 py-3 rounded-sm" style={{backgroundColor: '#991b1b', borderColor: '#dc2626', color: '#fca5a5'}}>
-                {deleteError}
-              </div>
-            )}
-
-            <div className="flex gap-3 justify-end">
-              <Button
-                variant="ghost"
-                onClick={handleCancelDelete}
-                disabled={deleteCharacterMutation.isPending}
-              >
-                Cancel
-              </Button>
-              <Button
-                variant="danger"
-                onClick={handleConfirmDelete}
-                disabled={deleteCharacterMutation.isPending}
-              >
-                {deleteCharacterMutation.isPending ? (
-                  <>
-                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
-                    Deleting...
-                  </>
-                ) : (
-                  <>
-                    <FontAwesomeIcon icon={faTrash} className="mr-2" />
-                    Delete
-                  </>
-                )}
-              </Button>
+          {deleteError && (
+            <div className="mb-4 border px-4 py-3 rounded-sm bg-feedback-error/15 border-feedback-error text-feedback-error">
+              {deleteError}
             </div>
+          )}
+
+          <div className="flex gap-3 justify-end">
+            <Button
+              variant="ghost"
+              onClick={handleCancelDelete}
+              disabled={deleteCharacterMutation.isPending}
+            >
+              Cancel
+            </Button>
+            <Button
+              variant="danger"
+              onClick={handleConfirmDelete}
+              disabled={deleteCharacterMutation.isPending}
+            >
+              {deleteCharacterMutation.isPending ? (
+                <>
+                  <Spinner size="sm" className="border-white mr-2" />
+                  Deleting...
+                </>
+              ) : (
+                <>
+                  <FontAwesomeIcon icon={faTrash} className="mr-2" />
+                  Delete
+                </>
+              )}
+            </Button>
           </div>
         </div>
-      )}
+      </Modal>
     </div>
   )
 }

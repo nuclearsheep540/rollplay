@@ -6,8 +6,9 @@
 'use client'
 
 import { useState, useEffect, useRef, useMemo } from 'react'
-import { createPortal } from 'react-dom'
 import { useRouter } from 'next/navigation'
+import Modal from '@/app/shared/components/Modal'
+import Spinner from '@/app/shared/components/Spinner'
 import PauseSessionModal from './PauseSessionModal'
 import FinishSessionModal from './FinishSessionModal'
 import DeleteCampaignModal from './DeleteCampaignModal'
@@ -1565,246 +1566,203 @@ export default function CampaignManager({ user, onExpandedChange, inviteCampaign
       )}
 
       {/* Game Creation Modal */}
-      {createSessionCampaignId && typeof document !== 'undefined' && createPortal(
-        <div className="fixed inset-0 backdrop-blur-sm flex items-center justify-center z-50" style={{backgroundColor: THEME.overlayDark}}>
-          <div className="p-6 rounded-sm shadow-2xl max-w-md w-full mx-4 border" style={{backgroundColor: THEME.bgSecondary, borderColor: THEME.borderDefault}}>
-            <h3 className="text-lg font-semibold font-[family-name:var(--font-metamorphous)] mb-4" style={{color: THEME.textOnDark}}>Create New Game</h3>
-            <div className="space-y-4">
-              <div>
-                <label className="block text-sm font-medium mb-2" style={{color: THEME.textOnDark}}>
-                  Game Name
-                </label>
-                <input
-                  type="text"
-                  value={sessionForm.name}
-                  onChange={(e) => setSessionForm(prev => ({ ...prev, name: e.target.value }))}
-                  className="w-full px-3 py-2 rounded-sm border focus:outline-none focus:ring-2"
-                  style={{
-                    backgroundColor: THEME.bgPrimary,
-                    borderColor: THEME.borderDefault,
-                    color: THEME.textPrimary
-                  }}
-                  placeholder="Enter game name"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium mb-2" style={{color: THEME.textOnDark}}>
-                  Number of Seats (1-8)
-                </label>
-                <select
-                  value={sessionForm.maxPlayers}
-                  onChange={(e) => setSessionForm(prev => ({ ...prev, maxPlayers: parseInt(e.target.value) }))}
-                  className="w-full px-3 py-2 rounded-sm border focus:outline-none focus:ring-2"
-                  style={{
-                    backgroundColor: THEME.bgPrimary,
-                    borderColor: THEME.borderDefault,
-                    color: THEME.textPrimary
-                  }}
-                >
-                  {[1, 2, 3, 4, 5, 6, 7, 8].map(num => (
-                    <option key={num} value={num}>{num} seats</option>
-                  ))}
-                </select>
-              </div>
+      <Modal open={!!createSessionCampaignId} onClose={() => setCreateSessionCampaignId(null)} size="md">
+        <div className="p-6">
+          <h3 className="text-lg font-semibold font-[family-name:var(--font-metamorphous)] mb-4 text-content-on-dark">Create New Game</h3>
+          <div className="space-y-4">
+            <div>
+              <label className="block text-sm font-medium mb-2 text-content-on-dark">
+                Game Name
+              </label>
+              <input
+                type="text"
+                value={sessionForm.name}
+                onChange={(e) => setSessionForm(prev => ({ ...prev, name: e.target.value }))}
+                className="w-full px-3 py-2 rounded-sm border focus:outline-none focus:ring-2 bg-surface-primary border-border text-content-primary"
+                placeholder="Enter game name"
+              />
             </div>
-            <div className="flex justify-end gap-3 mt-6">
-              <Button
-                variant="ghost"
-                onClick={() => setCreateSessionCampaignId(null)}
+            <div>
+              <label className="block text-sm font-medium mb-2 text-content-on-dark">
+                Number of Seats (1-8)
+              </label>
+              <select
+                value={sessionForm.maxPlayers}
+                onChange={(e) => setSessionForm(prev => ({ ...prev, maxPlayers: parseInt(e.target.value) }))}
+                className="w-full px-3 py-2 rounded-sm border focus:outline-none focus:ring-2 bg-surface-primary border-border text-content-primary"
               >
-                Cancel
-              </Button>
-              <Button
-                variant="success"
-                onClick={createGame}
-                disabled={!sessionForm.name.trim() || createSessionMutation.isPending}
-              >
-                {createSessionMutation.isPending ? (
-                  <>
-                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
-                    Creating...
-                  </>
-                ) : (
-                  <>
-                    <FontAwesomeIcon icon={faPlus} className="mr-2" />
-                    Create Game
-                  </>
-                )}
-              </Button>
+                {[1, 2, 3, 4, 5, 6, 7, 8].map(num => (
+                  <option key={num} value={num}>{num} seats</option>
+                ))}
+              </select>
             </div>
           </div>
-        </div>,
-        document.body
-      )}
+          <div className="flex justify-end gap-3 mt-6">
+            <Button
+              variant="ghost"
+              onClick={() => setCreateSessionCampaignId(null)}
+            >
+              Cancel
+            </Button>
+            <Button
+              variant="success"
+              onClick={createGame}
+              disabled={!sessionForm.name.trim() || createSessionMutation.isPending}
+            >
+              {createSessionMutation.isPending ? (
+                <>
+                  <Spinner size="sm" className="border-white mr-2" />
+                  Creating...
+                </>
+              ) : (
+                <>
+                  <FontAwesomeIcon icon={faPlus} className="mr-2" />
+                  Create Game
+                </>
+              )}
+            </Button>
+          </div>
+        </div>
+      </Modal>
 
-      {campaignFormOpen && typeof document !== 'undefined' && createPortal(
-        <div
-          className="fixed inset-0 flex items-center justify-center z-50 p-4"
-          style={{backgroundColor: THEME.overlayDark}}
-          onClick={closeCampaignForm}
-        >
-          <div
-            className="rounded-sm shadow-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto border"
-            style={{backgroundColor: THEME.bgSecondary, borderColor: THEME.borderDefault}}
-            onClick={(e) => e.stopPropagation()}
-          >
-            {/* Header */}
-            <div className="p-6 border-b" style={{borderBottomColor: THEME.borderSubtle}}>
-              <div className="flex items-center justify-between">
-                <h2 className="text-2xl font-bold font-[family-name:var(--font-metamorphous)]" style={{color: THEME.textOnDark}}>
-                  {campaignForm.editingCampaign ? 'Edit Campaign' : 'Create New Campaign'}
-                </h2>
+      {/* Create/Edit Campaign Modal */}
+      <Modal open={campaignFormOpen} onClose={closeCampaignForm} size="2xl">
+        {/* Header */}
+        <div className="p-6 border-b border-border-subtle">
+          <div className="flex items-center justify-between">
+            <h2 className="text-2xl font-bold font-[family-name:var(--font-metamorphous)] text-content-on-dark">
+              {campaignForm.editingCampaign ? 'Edit Campaign' : 'Create New Campaign'}
+            </h2>
+            <button
+              onClick={closeCampaignForm}
+              className="text-2xl font-bold hover:opacity-80 transition-opacity text-content-secondary"
+            >
+              ×
+            </button>
+          </div>
+        </div>
+
+        {/* Body */}
+        <div className="p-6 space-y-6">
+          <div>
+            <label className="block text-sm font-medium mb-2 text-content-on-dark">
+              Campaign Title
+            </label>
+            <input
+              type="text"
+              value={campaignForm.title}
+              onChange={(e) => setCampaignForm(prev => ({ ...prev, title: e.target.value }))}
+              className="w-full px-3 py-2 rounded-sm border focus:outline-none focus:ring-2 bg-surface-primary border-border text-content-primary"
+              placeholder="Enter campaign title"
+              maxLength={100}
+            />
+            <div className="text-right text-sm mt-1 text-content-secondary">
+              {(campaignForm.title || '').length}/100 characters
+            </div>
+          </div>
+          <div>
+            <label className="block text-sm font-medium mb-2 text-content-on-dark">
+              Description (Optional)
+            </label>
+            <textarea
+              value={campaignForm.description}
+              onChange={(e) => setCampaignForm(prev => ({ ...prev, description: e.target.value }))}
+              className="w-full px-3 py-2 rounded-sm border focus:outline-none focus:ring-2 bg-surface-primary border-border text-content-primary"
+              rows="5"
+              placeholder="Enter campaign description"
+              maxLength={1000}
+            />
+            <div className="text-right text-sm mt-1 text-content-secondary">
+              {(campaignForm.description || '').length}/1000 characters
+            </div>
+          </div>
+          {/* Session Name - shown in both create and edit modes */}
+          <div>
+            <label className="block text-sm font-medium mb-2 text-content-on-dark">
+              Session Name (Optional)
+            </label>
+            <input
+              type="text"
+              value={campaignForm.sessionName}
+              onChange={(e) => setCampaignForm(prev => ({ ...prev, sessionName: e.target.value }))}
+              className="w-full px-3 py-2 rounded-sm border focus:outline-none focus:ring-2 bg-surface-primary border-border text-content-primary"
+              placeholder="e.g. Session 1"
+              maxLength={100}
+            />
+            <div className="text-right text-sm mt-1 text-content-secondary">
+              {(campaignForm.sessionName || '').length}/100 characters
+            </div>
+          </div>
+          <div>
+            <label className="block text-sm font-medium mb-2 text-content-on-dark">
+              Tile Background
+            </label>
+            <div className="flex flex-wrap gap-3">
+              {[
+                { value: '/campaign-tile-bg.png', label: 'Mountains' },
+                { value: '/floating-city.png', label: 'Floating City' },
+                { value: '/barren-land.png', label: 'Barren' },
+                { value: '/underworld.png', label: 'Underworld' },
+                { value: null, label: 'None' }
+              ].map((option) => (
                 <button
-                  onClick={closeCampaignForm}
-                  className="text-2xl font-bold hover:opacity-80 transition-opacity"
-                  style={{color: THEME.textSecondary}}
+                  key={option.label}
+                  type="button"
+                  onClick={() => setCampaignForm(prev => ({ ...prev, heroImage: option.value }))}
+                  className={`aspect-[16/9] rounded-sm border-2 overflow-hidden relative ${
+                    campaignForm.heroImage === option.value ? 'border-border-active' : 'border-border'
+                  }`}
+                  style={{
+                    width: 'calc(33.333% - 0.5rem)',
+                    backgroundColor: option.value ? 'transparent' : COLORS.carbon
+                  }}
                 >
-                  ×
+                  {option.value && (
+                    <img
+                      src={option.value}
+                      alt={option.label}
+                      className="absolute inset-0 w-full h-full object-cover"
+                    />
+                  )}
+                  <span
+                    className="absolute bottom-1 left-1 right-1 text-xs px-1 py-0.5 rounded-sm text-center text-content-accent"
+                    style={{ backgroundColor: `${COLORS.onyx}CC` }}
+                  >
+                    {option.label}
+                  </span>
                 </button>
-              </div>
-            </div>
-
-            {/* Body */}
-            <div className="p-6 space-y-6">
-              <div>
-                <label className="block text-sm font-medium mb-2" style={{color: THEME.textOnDark}}>
-                  Campaign Title
-                </label>
-                <input
-                  type="text"
-                  value={campaignForm.title}
-                  onChange={(e) => setCampaignForm(prev => ({ ...prev, title: e.target.value }))}
-                  className="w-full px-3 py-2 rounded-sm border focus:outline-none focus:ring-2"
-                  style={{
-                    backgroundColor: THEME.bgPrimary,
-                    borderColor: THEME.borderDefault,
-                    color: THEME.textPrimary
-                  }}
-                  placeholder="Enter campaign title"
-                  maxLength={100}
-                />
-                <div className="text-right text-sm mt-1" style={{color: THEME.textSecondary}}>
-                  {(campaignForm.title || '').length}/100 characters
-                </div>
-              </div>
-              <div>
-                <label className="block text-sm font-medium mb-2" style={{color: THEME.textOnDark}}>
-                  Description (Optional)
-                </label>
-                <textarea
-                  value={campaignForm.description}
-                  onChange={(e) => setCampaignForm(prev => ({ ...prev, description: e.target.value }))}
-                  className="w-full px-3 py-2 rounded-sm border focus:outline-none focus:ring-2"
-                  style={{
-                    backgroundColor: THEME.bgPrimary,
-                    borderColor: THEME.borderDefault,
-                    color: THEME.textPrimary
-                  }}
-                  rows="5"
-                  placeholder="Enter campaign description"
-                  maxLength={1000}
-                />
-                <div className="text-right text-sm mt-1" style={{color: THEME.textSecondary}}>
-                  {(campaignForm.description || '').length}/1000 characters
-                </div>
-              </div>
-              {/* Session Name - shown in both create and edit modes */}
-              <div>
-                <label className="block text-sm font-medium mb-2" style={{color: THEME.textOnDark}}>
-                  Session Name (Optional)
-                </label>
-                <input
-                  type="text"
-                  value={campaignForm.sessionName}
-                  onChange={(e) => setCampaignForm(prev => ({ ...prev, sessionName: e.target.value }))}
-                  className="w-full px-3 py-2 rounded-sm border focus:outline-none focus:ring-2"
-                  style={{
-                    backgroundColor: THEME.bgPrimary,
-                    borderColor: THEME.borderDefault,
-                    color: THEME.textPrimary
-                  }}
-                  placeholder="e.g. Session 1"
-                  maxLength={100}
-                />
-                <div className="text-right text-sm mt-1" style={{color: THEME.textSecondary}}>
-                  {(campaignForm.sessionName || '').length}/100 characters
-                </div>
-              </div>
-              <div>
-                <label className="block text-sm font-medium mb-2" style={{color: THEME.textOnDark}}>
-                  Tile Background
-                </label>
-                <div className="flex flex-wrap gap-3">
-                  {[
-                    { value: '/campaign-tile-bg.png', label: 'Mountains' },
-                    { value: '/floating-city.png', label: 'Floating City' },
-                    { value: '/barren-land.png', label: 'Barren' },
-                    { value: '/underworld.png', label: 'Underworld' },
-                    { value: null, label: 'None' }
-                  ].map((option) => (
-                    <button
-                      key={option.label}
-                      type="button"
-                      onClick={() => setCampaignForm(prev => ({ ...prev, heroImage: option.value }))}
-                      className="aspect-[16/9] rounded-sm border-2 overflow-hidden relative"
-                      style={{
-                        width: 'calc(33.333% - 0.5rem)',
-                        borderColor: campaignForm.heroImage === option.value ? THEME.borderActive : THEME.borderDefault,
-                        backgroundColor: option.value ? 'transparent' : COLORS.carbon
-                      }}
-                    >
-                      {option.value && (
-                        <img
-                          src={option.value}
-                          alt={option.label}
-                          className="absolute inset-0 w-full h-full object-cover"
-                        />
-                      )}
-                      <span
-                        className="absolute bottom-1 left-1 right-1 text-xs px-1 py-0.5 rounded-sm text-center"
-                        style={{
-                          backgroundColor: `${COLORS.onyx}CC`,
-                          color: THEME.textAccent
-                        }}
-                      >
-                        {option.label}
-                      </span>
-                    </button>
-                  ))}
-                </div>
-              </div>
-            </div>
-
-            {/* Footer */}
-            <div className="p-6 border-t flex justify-end gap-3" style={{borderTopColor: THEME.borderSubtle}}>
-              <Button
-                variant="ghost"
-                onClick={closeCampaignForm}
-              >
-                Cancel
-              </Button>
-              <Button
-                variant="primary"
-                onClick={campaignForm.editingCampaign ? updateCampaign : createCampaign}
-                disabled={!campaignForm.title.trim() || (createCampaignMutation.isPending || updateCampaignMutation.isPending)}
-              >
-                {(createCampaignMutation.isPending || updateCampaignMutation.isPending) ? (
-                  <>
-                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
-                    {campaignForm.editingCampaign ? 'Saving...' : 'Creating...'}
-                  </>
-                ) : (
-                  <>
-                    <FontAwesomeIcon icon={campaignForm.editingCampaign ? faGear : faPlus} className="mr-2" />
-                    {campaignForm.editingCampaign ? 'Save Changes' : 'Create Campaign'}
-                  </>
-                )}
-              </Button>
+              ))}
             </div>
           </div>
-        </div>,
-        document.body
-      )}
+        </div>
+
+        {/* Footer */}
+        <div className="p-6 border-t border-border-subtle flex justify-end gap-3">
+          <Button
+            variant="ghost"
+            onClick={closeCampaignForm}
+          >
+            Cancel
+          </Button>
+          <Button
+            variant="primary"
+            onClick={campaignForm.editingCampaign ? updateCampaign : createCampaign}
+            disabled={!campaignForm.title.trim() || (createCampaignMutation.isPending || updateCampaignMutation.isPending)}
+          >
+            {(createCampaignMutation.isPending || updateCampaignMutation.isPending) ? (
+              <>
+                <Spinner size="sm" className="border-white mr-2" />
+                {campaignForm.editingCampaign ? 'Saving...' : 'Creating...'}
+              </>
+            ) : (
+              <>
+                <FontAwesomeIcon icon={campaignForm.editingCampaign ? faGear : faPlus} className="mr-2" />
+                {campaignForm.editingCampaign ? 'Save Changes' : 'Create Campaign'}
+              </>
+            )}
+          </Button>
+        </div>
+      </Modal>
 
       {/* Pause Session Confirmation Modal */}
       {pauseSessionTarget && (
@@ -1875,108 +1833,86 @@ export default function CampaignManager({ user, onExpandedChange, inviteCampaign
       )}
 
       {/* Remove Player Confirmation Modal */}
-      {removePlayerTarget && typeof document !== 'undefined' && createPortal(
-        <div
-          className="fixed inset-0 backdrop-blur-sm flex items-center justify-center z-50"
-          style={{backgroundColor: THEME.overlayDark}}
-          onClick={() => setRemovePlayerTarget(null)}
-        >
-          <div
-            className="p-6 rounded-sm shadow-2xl max-w-md w-full mx-4 border"
-            style={{backgroundColor: THEME.bgSecondary, borderColor: THEME.borderDefault}}
-            onClick={(e) => e.stopPropagation()}
-          >
-            <h3 className="text-lg font-semibold font-[family-name:var(--font-metamorphous)] mb-4" style={{color: THEME.textOnDark}}>
-              Remove Player
-            </h3>
-            <p className="mb-6" style={{color: THEME.textSecondary}}>
-              Are you sure you want to remove <span className="font-semibold" style={{color: THEME.textOnDark}}>{removePlayerTarget.member.username}</span> from <span className="font-semibold" style={{color: THEME.textOnDark}}>{removePlayerTarget.campaign?.title}</span>?
-            </p>
-            <p className="text-sm mb-6" style={{color: '#fbbf24'}}>
-              This player will need to be re-invited to rejoin the campaign.
-            </p>
-            <div className="flex justify-end gap-3">
-              <Button
-                variant="ghost"
-                onClick={() => setRemovePlayerTarget(null)}
-                disabled={removePlayerMutation.isPending}
-              >
-                Cancel
-              </Button>
-              <Button
-                variant="danger"
-                onClick={removePlayerFromCampaign}
-                disabled={removePlayerMutation.isPending}
-              >
-                {removePlayerMutation.isPending ? (
-                  <>
-                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
-                    Removing...
-                  </>
-                ) : (
-                  <>
-                    <FontAwesomeIcon icon={faUserMinus} className="mr-2" />
-                    Remove Player
-                  </>
-                )}
-              </Button>
-            </div>
+      <Modal open={!!removePlayerTarget} onClose={removePlayerMutation.isPending ? () => {} : () => setRemovePlayerTarget(null)} size="md">
+        <div className="p-6">
+          <h3 className="text-lg font-semibold font-[family-name:var(--font-metamorphous)] mb-4 text-content-on-dark">
+            Remove Player
+          </h3>
+          <p className="mb-6 text-content-secondary">
+            Are you sure you want to remove <span className="font-semibold text-content-on-dark">{removePlayerTarget?.member?.username}</span> from <span className="font-semibold text-content-on-dark">{removePlayerTarget?.campaign?.title}</span>?
+          </p>
+          <p className="text-sm mb-6 text-feedback-warning">
+            This player will need to be re-invited to rejoin the campaign.
+          </p>
+          <div className="flex justify-end gap-3">
+            <Button
+              variant="ghost"
+              onClick={() => setRemovePlayerTarget(null)}
+              disabled={removePlayerMutation.isPending}
+            >
+              Cancel
+            </Button>
+            <Button
+              variant="danger"
+              onClick={removePlayerFromCampaign}
+              disabled={removePlayerMutation.isPending}
+            >
+              {removePlayerMutation.isPending ? (
+                <>
+                  <Spinner size="sm" className="border-white mr-2" />
+                  Removing...
+                </>
+              ) : (
+                <>
+                  <FontAwesomeIcon icon={faUserMinus} className="mr-2" />
+                  Remove Player
+                </>
+              )}
+            </Button>
           </div>
-        </div>,
-        document.body
-      )}
+        </div>
+      </Modal>
 
       {/* Leave Campaign Confirmation Modal */}
-      {leaveCampaignTarget && typeof document !== 'undefined' && createPortal(
-        <div
-          className="fixed inset-0 backdrop-blur-sm flex items-center justify-center z-50"
-          style={{backgroundColor: THEME.overlayDark}}
-          onClick={() => setLeaveCampaignTarget(null)}
-        >
-          <div
-            className="p-6 rounded-sm shadow-2xl max-w-md w-full mx-4 border"
-            style={{backgroundColor: THEME.bgSecondary, borderColor: THEME.borderDefault}}
-            onClick={(e) => e.stopPropagation()}
-          >
-            <h3 className="text-lg font-semibold font-[family-name:var(--font-metamorphous)] mb-4" style={{color: THEME.textOnDark}}>
-              Leave Campaign
-            </h3>
-            <p className="mb-6" style={{color: THEME.textSecondary}}>
-              Are you sure you want to leave <span className="font-semibold" style={{color: THEME.textOnDark}}>{leaveCampaignTarget?.title}</span>?
-            </p>
-            <p className="text-sm mb-6" style={{color: '#fbbf24'}}>
-              You will need to be re-invited by the host to rejoin this campaign.
-            </p>
-            <div className="flex justify-end gap-3">
-              <Button
-                variant="ghost"
-                onClick={() => setLeaveCampaignTarget(null)}
-                disabled={leaveCampaignMutation.isPending}
-              >
-                Cancel
-              </Button>
-              <Button
-                variant="danger"
-                onClick={leaveCampaign}
-                disabled={leaveCampaignMutation.isPending}
-              >
-                {leaveCampaignMutation.isPending ? (
-                  <>
-                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
-                    Leaving...
-                  </>
-                ) : (
-                  <>
-                    <FontAwesomeIcon icon={faRightFromBracket} className="mr-2" />
-                    Leave Campaign
-                  </>
-                )}
-              </Button>
-            </div>
+      <Modal open={!!leaveCampaignTarget} onClose={leaveCampaignMutation.isPending ? () => {} : () => setLeaveCampaignTarget(null)} size="md">
+        <div className="p-6">
+          <h3 className="text-lg font-semibold font-[family-name:var(--font-metamorphous)] mb-4 text-content-on-dark">
+            Leave Campaign
+          </h3>
+          <p className="mb-6 text-content-secondary">
+            Are you sure you want to leave <span className="font-semibold text-content-on-dark">{leaveCampaignTarget?.title}</span>?
+          </p>
+          <p className="text-sm mb-6 text-feedback-warning">
+            You will need to be re-invited by the host to rejoin this campaign.
+          </p>
+          <div className="flex justify-end gap-3">
+            <Button
+              variant="ghost"
+              onClick={() => setLeaveCampaignTarget(null)}
+              disabled={leaveCampaignMutation.isPending}
+            >
+              Cancel
+            </Button>
+            <Button
+              variant="danger"
+              onClick={leaveCampaign}
+              disabled={leaveCampaignMutation.isPending}
+            >
+              {leaveCampaignMutation.isPending ? (
+                <>
+                  <Spinner size="sm" className="border-white mr-2" />
+                  Leaving...
+                </>
+              ) : (
+                <>
+                  <FontAwesomeIcon icon={faRightFromBracket} className="mr-2" />
+                  Leave Campaign
+                </>
+              )}
+            </Button>
           </div>
-        </div>,
-        document.body
-      )}
+        </div>
+      </Modal>
 
     </div>
   )
