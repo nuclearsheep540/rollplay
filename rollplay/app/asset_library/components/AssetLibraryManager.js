@@ -201,11 +201,12 @@ export default function AssetLibraryManager({ user }) {
       })
     }
 
-    // Add to Campaign sub-menu (only if user has campaigns)
-    if (campaigns.length > 0) {
+    // Add to Campaign sub-menu (only campaigns the user owns)
+    const ownedCampaigns = campaigns.filter(c => c.host_id === user?.id)
+    if (ownedCampaigns.length > 0) {
       items.push({
         label: 'Add to Campaign',
-        subItems: campaigns.map(campaign => ({
+        subItems: ownedCampaigns.map(campaign => ({
           label: campaign.title,
           disabled: asset.campaign_ids?.includes(campaign.id),
           onClick: () => associateMutation.mutate({ assetId: asset.id, campaignId: campaign.id }),
