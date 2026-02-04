@@ -5,11 +5,11 @@
 
 'use client'
 
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
+import { Menu, MenuButton, MenuItems, MenuItem } from '@headlessui/react'
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
 import { faChevronDown, faChevronUp, faUserPlus, faBell, faPersonCirclePlus } from '@fortawesome/free-solid-svg-icons'
-import { THEME } from '@/app/styles/colorTheme'
 import { Button } from './shared/Button'
 import { useFriendships } from '../hooks/useFriendships'
 import { useCampaigns } from '../hooks/useCampaigns'
@@ -20,8 +20,6 @@ export default function FriendsWidget({ user, isStandalone = false }) {
   const [isExpanded, setIsExpanded] = useState(isStandalone)
   const [buzzCooldowns, setBuzzCooldowns] = useState({})
   const [cooldownProgress, setCooldownProgress] = useState({})
-  const [inviteDropdown, setInviteDropdown] = useState(null)
-  const dropdownRef = useRef(null)
   const COOLDOWN_DURATION = 20000
 
   // TanStack Query: friendships
@@ -44,17 +42,6 @@ export default function FriendsWidget({ user, isStandalone = false }) {
     if (!isStandalone && typeof window !== 'undefined' && window.innerWidth < 768) {
       setIsExpanded(false)
     }
-  }, [])
-
-  // Close dropdown when clicking outside
-  useEffect(() => {
-    const handleClickOutside = (event) => {
-      if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
-        setInviteDropdown(null)
-      }
-    }
-    document.addEventListener('mousedown', handleClickOutside)
-    return () => document.removeEventListener('mousedown', handleClickOutside)
   }, [])
 
   // Animate cooldown progress
@@ -106,7 +93,6 @@ export default function FriendsWidget({ user, isStandalone = false }) {
   const handleInviteToCampaign = async (friendId, campaignId) => {
     try {
       await inviteMutation.mutateAsync({ friendId, campaignId })
-      setInviteDropdown(null)
     } catch (error) {
       console.error('Invite error:', error.message)
     }
@@ -137,7 +123,7 @@ export default function FriendsWidget({ user, isStandalone = false }) {
   const FriendsContent = () => (
     <div className="flex flex-col h-full">
       {loading ? (
-        <div className="p-4 text-center text-sm flex-1 flex items-center justify-center" style={{color: THEME.textSecondary}}>
+        <div className="p-4 text-center text-sm flex-1 flex items-center justify-center text-content-secondary">
           Loading...
         </div>
       ) : (
@@ -146,11 +132,11 @@ export default function FriendsWidget({ user, isStandalone = false }) {
           <div className="flex-1 overflow-y-auto">
             {/* Friends List */}
             <div className="p-4">
-              <h3 className="text-sm font-semibold mb-3" style={{color: THEME.textOnDark}}>
+              <h3 className="text-sm font-semibold mb-3 text-content-on-dark">
                 Friends ({friends.length})
               </h3>
               {friends.length === 0 ? (
-                <div className="p-2 text-center text-sm" style={{color: THEME.textSecondary}}>
+                <div className="p-2 text-center text-sm text-content-secondary">
                   No friends yet
                 </div>
               ) : (
@@ -158,13 +144,11 @@ export default function FriendsWidget({ user, isStandalone = false }) {
                   {friends.map(friend => (
                     <div
                       key={friend.id}
-                      className="flex items-center justify-between py-4 px-3 rounded-sm border"
-                      style={{backgroundColor: THEME.bgSecondary, borderColor: THEME.borderSubtle, color: THEME.textOnDark}}
+                      className="flex items-center justify-between py-4 px-3 rounded-sm border bg-surface-secondary border-border-subtle text-content-on-dark"
                     >
                       <div className="flex items-center gap-2 min-w-0">
                         <div
-                          className="w-2.5 h-2.5 rounded-full flex-shrink-0"
-                          style={{backgroundColor: friend.is_online ? '#16a34a' : '#dc2626'}}
+                          className={`w-2.5 h-2.5 rounded-full flex-shrink-0 ${friend.is_online ? 'bg-feedback-success' : 'bg-feedback-error'}`}
                         />
                         <span className="text-sm truncate">{friend.friend_screen_name || 'Unknown'}</span>
                       </div>
@@ -173,12 +157,7 @@ export default function FriendsWidget({ user, isStandalone = false }) {
                         <button
                           onClick={() => handleBuzz(friend.friend_id)}
                           disabled={!!buzzCooldowns[friend.friend_id]}
-                          className="p-2 rounded-sm transition-colors relative"
-                          style={{
-                            backgroundColor: 'transparent',
-                            width: '36px',
-                            height: '36px'
-                          }}
+                          className="p-2 rounded-sm transition-colors relative w-9 h-9"
                           title={buzzCooldowns[friend.friend_id] ? 'On cooldown' : 'Buzz friend'}
                         >
                           {buzzCooldowns[friend.friend_id] ? (
@@ -187,14 +166,13 @@ export default function FriendsWidget({ user, isStandalone = false }) {
                               <FontAwesomeIcon
                                 icon={faBell}
                                 size="lg"
-                                style={{ color: THEME.borderDefault, opacity: 0.3 }}
+                                className="text-border opacity-30"
                               />
                               <FontAwesomeIcon
                                 icon={faBell}
                                 size="lg"
-                                className="absolute inset-0 m-auto"
+                                className="absolute inset-0 m-auto text-content-accent"
                                 style={{
-                                  color: THEME.textAccent,
                                   maskImage: `conic-gradient(from 0deg, black ${cooldownProgress[friend.friend_id] || 0}%, transparent ${cooldownProgress[friend.friend_id] || 0}%)`,
                                   WebkitMaskImage: `conic-gradient(from 0deg, black ${cooldownProgress[friend.friend_id] || 0}%, transparent ${cooldownProgress[friend.friend_id] || 0}%)`
                                 }}
@@ -205,58 +183,42 @@ export default function FriendsWidget({ user, isStandalone = false }) {
                             <FontAwesomeIcon
                               icon={faBell}
                               size="lg"
-                              style={{ color: THEME.textAccent }}
+                              className="text-content-accent"
                             />
                           )}
                         </button>
                         {/* Invite to Campaign Button */}
                         {hostedCampaigns.length > 0 && (
-                          <div className="relative" ref={inviteDropdown === friend.friend_id ? dropdownRef : null}>
-                            <button
-                              onClick={() => setInviteDropdown(inviteDropdown === friend.friend_id ? null : friend.friend_id)}
-                              className="p-2 rounded-sm transition-colors hover:bg-opacity-20"
-                              style={{
-                                backgroundColor: 'transparent',
-                                color: THEME.textAccent
-                              }}
+                          <Menu as="div" className="relative">
+                            <MenuButton
+                              className="p-2 rounded-sm transition-colors text-content-accent hover:opacity-80"
                               title="Invite to campaign"
                             >
                               <FontAwesomeIcon icon={faPersonCirclePlus} size="lg" />
-                            </button>
-                            {/* Campaign Dropdown */}
-                            {inviteDropdown === friend.friend_id && (
-                              <div
-                                className="absolute right-0 top-full mt-1 z-50 min-w-[180px] rounded-sm border shadow-lg"
-                                style={{backgroundColor: THEME.bgPanel, borderColor: THEME.borderDefault}}
-                              >
-                                <div className="p-2 text-xs font-semibold border-b" style={{color: THEME.textSecondary, borderColor: THEME.borderSubtle}}>
-                                  Invite to Campaign
-                                </div>
-                                {hostedCampaigns.map(campaign => {
-                                  const isAlreadyInvited = campaign.invited_player_ids?.includes(friend.friend_id)
-                                  const isAlreadyMember = campaign.player_ids?.includes(friend.friend_id)
-                                  const isDisabled = isAlreadyInvited || isAlreadyMember
-                                  return (
+                            </MenuButton>
+                            <MenuItems className="absolute right-0 top-full mt-1 z-50 min-w-[180px] rounded-sm border border-border bg-surface-panel shadow-lg focus:outline-none">
+                              <div className="p-2 text-xs font-semibold border-b border-border-subtle text-content-secondary">
+                                Invite to Campaign
+                              </div>
+                              {hostedCampaigns.map(campaign => {
+                                const isAlreadyInvited = campaign.invited_player_ids?.includes(friend.friend_id)
+                                const isAlreadyMember = campaign.player_ids?.includes(friend.friend_id)
+                                const isDisabled = isAlreadyInvited || isAlreadyMember
+                                return (
+                                  <MenuItem key={campaign.id} disabled={isDisabled}>
                                     <button
-                                      key={campaign.id}
-                                      onClick={() => !isDisabled && handleInviteToCampaign(friend.friend_id, campaign.id)}
-                                      disabled={isDisabled}
-                                      className="w-full text-left px-3 py-2 text-sm hover:bg-opacity-50 transition-colors"
-                                      style={{
-                                        color: isDisabled ? THEME.textSecondary : THEME.textOnDark,
-                                        backgroundColor: isDisabled ? 'transparent' : 'transparent',
-                                        opacity: isDisabled ? 0.5 : 1
-                                      }}
+                                      onClick={() => handleInviteToCampaign(friend.friend_id, campaign.id)}
+                                      className="w-full text-left px-3 py-2 text-sm text-content-on-dark data-[focus]:bg-interactive-hover disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                                     >
                                       {campaign.title}
-                                      {isAlreadyMember && <span className="text-xs ml-1" style={{color: THEME.textSecondary}}>(member)</span>}
-                                      {isAlreadyInvited && !isAlreadyMember && <span className="text-xs ml-1" style={{color: THEME.textSecondary}}>(invited)</span>}
+                                      {isAlreadyMember && <span className="text-xs ml-1 text-content-secondary">(member)</span>}
+                                      {isAlreadyInvited && !isAlreadyMember && <span className="text-xs ml-1 text-content-secondary">(invited)</span>}
                                     </button>
-                                  )
-                                })}
-                              </div>
-                            )}
-                          </div>
+                                  </MenuItem>
+                                )
+                              })}
+                            </MenuItems>
+                          </Menu>
                         )}
                       </div>
                     </div>
@@ -267,14 +229,14 @@ export default function FriendsWidget({ user, isStandalone = false }) {
 
             {/* Friend Requests */}
             {friendRequests.length > 0 && (
-              <div className="border-t p-4" style={{borderTopColor: THEME.borderSubtle}}>
-                <h3 className="text-sm font-semibold mb-3" style={{color: THEME.textOnDark}}>
+              <div className="border-t border-border-subtle p-4">
+                <h3 className="text-sm font-semibold mb-3 text-content-on-dark">
                   Pending Requests ({friendRequests.length})
                 </h3>
                 <div className={gridClass}>
                   {friendRequests.map(request => (
-                    <div key={request.id} className="p-3 rounded-sm border" style={{backgroundColor: THEME.bgSecondary, borderColor: THEME.borderSubtle}}>
-                      <p className="text-sm mb-2" style={{color: THEME.textOnDark}}>
+                    <div key={request.id} className="p-3 rounded-sm border bg-surface-secondary border-border-subtle">
+                      <p className="text-sm mb-2 text-content-on-dark">
                         {request.requester_screen_name || 'Unknown'}
                       </p>
                       <div className="flex gap-2">
@@ -301,7 +263,7 @@ export default function FriendsWidget({ user, isStandalone = false }) {
           </div>
 
           {/* Add Friend Button - pinned to bottom */}
-          <div className="border-t p-4 flex-shrink-0" style={{borderTopColor: THEME.borderSubtle}}>
+          <div className="border-t border-border-subtle p-4 flex-shrink-0">
             <Button
               variant="primary"
               onClick={() => router.push('/dashboard?tab=account')}
@@ -318,7 +280,7 @@ export default function FriendsWidget({ user, isStandalone = false }) {
   // Standalone mode - full page layout
   if (isStandalone) {
     return (
-      <div className="border rounded-sm" style={{backgroundColor: THEME.bgPanel, borderColor: THEME.borderDefault}}>
+      <div className="border rounded-sm bg-surface-panel border-border">
         <FriendsContent />
       </div>
     )
@@ -330,13 +292,8 @@ export default function FriendsWidget({ user, isStandalone = false }) {
       {/* Expandable Panel - appears above the tab when expanded */}
       {isExpanded && (
         <div
-          className="border-2 border-b-0 rounded-t-sm shadow-lg mb-0 transition-all duration-300 ease-in-out"
-          style={{
-            backgroundColor: THEME.bgPanel,
-            borderColor: THEME.borderDefault,
-            width: '100%',
-            height: '500px'
-          }}
+          className="border-2 border-b-0 rounded-t-sm shadow-lg mb-0 transition-all duration-300 ease-in-out bg-surface-panel border-border w-full"
+          style={{ height: '500px' }}
         >
           {/* Content */}
           <div className="overflow-y-auto h-full">
@@ -348,25 +305,17 @@ export default function FriendsWidget({ user, isStandalone = false }) {
       {/* Horizontal Bottom Tab */}
       <button
         onClick={() => setIsExpanded(!isExpanded)}
-        className="w-full border-2 border-b-0 rounded-t-sm px-6 py-4 flex items-center gap-2"
-        style={{
-          backgroundColor: THEME.bgPanel,
-          borderColor: THEME.borderDefault
-        }}
+        className="w-full border-2 border-b-0 rounded-t-sm px-6 py-4 flex items-center gap-2 bg-surface-panel border-border"
       >
         <FontAwesomeIcon
           icon={isExpanded ? faChevronDown : faChevronUp}
-          className="text-xs"
-          style={{color: THEME.textOnDark}}
+          className="text-xs text-content-on-dark"
         />
-        <span className="font-semibold text-sm font-[family-name:var(--font-metamorphous)]" style={{color: THEME.textOnDark}}>
+        <span className="font-semibold text-sm font-[family-name:var(--font-metamorphous)] text-content-on-dark">
           Friends
         </span>
         {friendRequests.length > 0 && (
-          <span
-            className="px-1.5 py-0.5 rounded-sm text-xs font-semibold"
-            style={{backgroundColor: '#dc2626', color: THEME.textAccent}}
-          >
+          <span className="px-1.5 py-0.5 rounded-sm text-xs font-semibold bg-feedback-error text-content-accent">
             {friendRequests.length}
           </span>
         )}

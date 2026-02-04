@@ -17,6 +17,7 @@ import HorizontalInitiativeTracker from './components/HorizontalInitiativeTracke
 import AdventureLog from './components/AdventureLog';
 import LobbyPanel from './components/LobbyPanel';
 import DiceActionPanel from './components/DiceActionPanel'; // NEW IMPORT
+import Modal from '@/app/shared/components/Modal';
 import { useWebSocket } from './hooks/useWebSocket';
 import { useUnifiedAudio } from '../audio_management';
 import { MapDisplay, GridOverlay, useMapWebSocket } from '../map_management';
@@ -1563,28 +1564,31 @@ function SessionEndedModal({ message, reason }) {
   }, []);
 
   return (
-    <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50">
-      <div className="bg-slate-800 border border-slate-600 rounded-lg p-6 max-w-md w-full mx-4 shadow-xl">
-        <div className="text-center">
-          <div className="text-4xl mb-4">🎲</div>
-          <h2 className="text-xl font-bold text-white mb-2">Session Ended</h2>
-          <p className="text-slate-300 mb-4">
-            {message || `This game session has ended: ${reason}`}
-          </p>
-          <p className="text-slate-400 text-sm mb-4">
-            You will be redirected shortly
-          </p>
+    <Modal
+      open={true}
+      onClose={() => {}}
+      size="md"
+      panelClassName="bg-slate-800 border border-slate-600 rounded-lg shadow-xl p-6"
+    >
+      <div className="text-center">
+        <div className="text-4xl mb-4">🎲</div>
+        <h2 className="text-xl font-bold text-white mb-2">Session Ended</h2>
+        <p className="text-slate-300 mb-4">
+          {message || `This game session has ended: ${reason}`}
+        </p>
+        <p className="text-slate-400 text-sm mb-4">
+          You will be redirected shortly
+        </p>
 
-          {/* Progress bar */}
-          <div className="w-full bg-slate-700 rounded-full h-2 overflow-hidden">
-            <div
-              className="bg-blue-500 h-full transition-all duration-50 ease-linear"
-              style={{ width: `${progress}%` }}
-            />
-          </div>
+        {/* Progress bar */}
+        <div className="w-full bg-slate-700 rounded-full h-2 overflow-hidden">
+          <div
+            className="bg-blue-500 h-full transition-all duration-50 ease-linear"
+            style={{ width: `${progress}%` }}
+          />
         </div>
       </div>
-    </div>
+    </Modal>
   );
 }
 

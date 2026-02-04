@@ -5,28 +5,20 @@
 
 'use client'
 
-import { useState, useRef } from 'react'
+import { Popover, PopoverButton, PopoverPanel } from '@headlessui/react'
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
 import { faBell } from '@fortawesome/free-solid-svg-icons'
 import NotificationPanel from './NotificationPanel'
 import { ToastNotification } from './ToastNotification'
-import { THEME } from '@/app/styles/colorTheme'
 import { useNotifications } from '@/app/dashboard/hooks/useNotifications'
 import { useMarkNotificationRead, useMarkAllNotificationsRead } from '@/app/dashboard/hooks/mutations/useNotificationMutations'
 
 export default function NotificationBell({ userId, toasts = [], onDismissToast }) {
-  const [showPanel, setShowPanel] = useState(false)
-  const bellRef = useRef(null)
-
   const { data: notifications = [] } = useNotifications(userId)
   const unreadCount = notifications.filter(n => !n.read).length
 
   const markReadMutation = useMarkNotificationRead()
   const markAllReadMutation = useMarkAllNotificationsRead()
-
-  const handleBellClick = () => {
-    setShowPanel(!showPanel)
-  }
 
   const handleNotificationClick = async (notificationId) => {
     try {
@@ -45,7 +37,7 @@ export default function NotificationBell({ userId, toasts = [], onDismissToast }
   }
 
   return (
-    <div className="relative" ref={bellRef}>
+    <div className="relative">
       {/* Toast notifications - positioned to the left of the bell, growing leftward */}
       {toasts.length > 0 && (
         <div className="absolute right-full top-1/2 -translate-y-1/2 mr-3 flex flex-row-reverse items-center">
@@ -62,29 +54,31 @@ export default function NotificationBell({ userId, toasts = [], onDismissToast }
         </div>
       )}
 
-      <button
-        onClick={handleBellClick}
-        className="flex items-center hover:opacity-80 transition-opacity"
-        style={{color: THEME.textSecondary}}
-        aria-label="Notifications"
-      >
-        <FontAwesomeIcon icon={faBell} className="h-7 w-7" />
-        {unreadCount > 0 && (
-          <span className="absolute -top-1 -right-1 bg-red-500 text-white text-xs font-bold rounded-full h-5 w-5 flex items-center justify-center">
-            {unreadCount > 9 ? '9+' : unreadCount}
-          </span>
-        )}
-      </button>
+      <Popover>
+        <PopoverButton
+          className="flex items-center text-content-secondary hover:opacity-80 transition-opacity"
+          aria-label="Notifications"
+        >
+          <FontAwesomeIcon icon={faBell} className="h-7 w-7" />
+          {unreadCount > 0 && (
+            <span className="absolute -top-1 -right-1 bg-feedback-error text-content-on-dark text-xs font-bold rounded-full h-5 w-5 flex items-center justify-center">
+              {unreadCount > 9 ? '9+' : unreadCount}
+            </span>
+          )}
+        </PopoverButton>
 
-      {showPanel && (
-        <NotificationPanel
-          notifications={notifications}
-          onNotificationClick={handleNotificationClick}
-          onMarkAllRead={handleMarkAllRead}
-          onClose={() => setShowPanel(false)}
-          userId={userId}
-        />
-      )}
+        <PopoverPanel className="absolute right-0 top-12 z-50">
+          {({ close }) => (
+            <NotificationPanel
+              notifications={notifications}
+              onNotificationClick={handleNotificationClick}
+              onMarkAllRead={handleMarkAllRead}
+              onClose={close}
+              userId={userId}
+            />
+          )}
+        </PopoverPanel>
+      </Popover>
     </div>
   )
 }

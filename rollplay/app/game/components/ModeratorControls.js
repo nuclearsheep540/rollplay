@@ -4,7 +4,8 @@
  */
 
 import React, { useState } from 'react';
-import { 
+import Modal from '@/app/shared/components/Modal';
+import {
   MODERATOR_TITLE, 
   MODERATOR_HEADER, 
   MODERATOR_SUB_HEADER, 
@@ -300,15 +301,13 @@ export default function ModeratorControls({
       </div>
 
       {/* Moderator Action Modal */}
-      {isModeratorModalOpen && (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50">
-          <div 
-            className="bg-slate-800 border border-emerald-500/30 rounded-lg shadow-2xl max-w-md w-full mx-4"
-            style={{
-              padding: 'calc(24px * var(--ui-scale))',
-              borderRadius: 'calc(12px * var(--ui-scale))',
-            }}
-          >
+      <Modal
+        open={isModeratorModalOpen}
+        onClose={() => setIsModeratorModalOpen(false)}
+        size="md"
+        panelClassName="bg-slate-800 border border-emerald-500/30 rounded-lg shadow-2xl"
+      >
+        <div style={{ padding: 'calc(24px * var(--ui-scale))' }}>
             <div className="flex items-center justify-between mb-6">
               <h3 className="text-emerald-300 font-bold">
                 {selectedAction === 'add_moderator' ? '➕ Add Moderator' : '➖ Remove Moderator'}
@@ -458,7 +457,7 @@ export default function ModeratorControls({
             </div>
 
             <div className="flex justify-end gap-3">
-              <button 
+              <button
                 className="px-4 py-2 bg-gray-600 border border-gray-500 text-gray-300 rounded transition-all duration-200 hover:bg-gray-500"
                 onClick={() => setIsModeratorModalOpen(false)}
               >
@@ -466,19 +465,16 @@ export default function ModeratorControls({
               </button>
             </div>
           </div>
-        </div>
-      )}
+      </Modal>
 
       {/* DM Action Modal */}
-      {isDMModalOpen && (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50">
-          <div 
-            className="bg-slate-800 border border-amber-500/30 rounded-lg shadow-2xl max-w-md w-full mx-4"
-            style={{
-              padding: 'calc(24px * var(--ui-scale))',
-              borderRadius: 'calc(12px * var(--ui-scale))',
-            }}
-          >
+      <Modal
+        open={isDMModalOpen}
+        onClose={() => setIsDMModalOpen(false)}
+        size="md"
+        panelClassName="bg-slate-800 border border-amber-500/30 rounded-lg shadow-2xl"
+      >
+        <div style={{ padding: 'calc(24px * var(--ui-scale))' }}>
             <div className="flex items-center justify-between mb-6">
               <h3 className="text-amber-300 font-bold">
                 👑 Set Dungeon Master
@@ -557,7 +553,7 @@ export default function ModeratorControls({
             </div>
 
             <div className="flex justify-end gap-3">
-              <button 
+              <button
                 className="px-4 py-2 bg-gray-600 border border-gray-500 text-gray-300 rounded transition-all duration-200 hover:bg-gray-500"
                 onClick={() => setIsDMModalOpen(false)}
               >
@@ -565,8 +561,7 @@ export default function ModeratorControls({
               </button>
             </div>
           </div>
-        </div>
-      )}
+      </Modal>
 
       {/* Party Management Section */}
       <div className="flex-shrink-0">
@@ -649,18 +644,16 @@ export default function ModeratorControls({
       </div>
 
       {/* Kick Player Modal */}
-      {isKickModalOpen && (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50">
-          <div 
-            className="bg-slate-800 border border-red-500/30 rounded-lg shadow-2xl max-w-md w-full mx-4"
-            style={{
-              padding: 'calc(24px * var(--ui-scale))',
-              borderRadius: 'calc(12px * var(--ui-scale))',
-            }}
-          >
+      <Modal
+        open={isKickModalOpen}
+        onClose={() => setIsKickModalOpen(false)}
+        size="md"
+        panelClassName="bg-slate-800 border border-red-500/30 rounded-lg shadow-2xl"
+      >
+        <div style={{ padding: 'calc(24px * var(--ui-scale))' }}>
             <div className="flex items-center justify-between mb-6">
               <h3 className="text-red-300 font-bold">🚫 Kick Player</h3>
-              <button 
+              <button
                 className="text-gray-400 hover:text-white transition-colors"
                 onClick={() => setIsKickModalOpen(false)}
               >
@@ -670,7 +663,7 @@ export default function ModeratorControls({
 
             <div className="mb-6">
               <p className="text-gray-300 mb-4">Select a player to remove from the game:</p>
-              
+
               {activePlayers.length > 0 ? (
                 <div className="space-y-2">
                   {activePlayers.map((player) => (
@@ -704,7 +697,7 @@ export default function ModeratorControls({
             </div>
 
             <div className="flex justify-end gap-3">
-              <button 
+              <button
                 className="px-4 py-2 bg-gray-600 border border-gray-500 text-gray-300 rounded transition-all duration-200 hover:bg-gray-500"
                 onClick={() => setIsKickModalOpen(false)}
               >
@@ -712,8 +705,7 @@ export default function ModeratorControls({
               </button>
             </div>
           </div>
-        </div>
-      )}
+      </Modal>
         </div>
       )}
     </div>

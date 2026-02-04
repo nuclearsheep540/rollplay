@@ -1,6 +1,7 @@
 'use client'
 
 import { useState } from 'react'
+import Modal from '@/app/shared/components/Modal'
 
 export default function DiceActionPanel({
   currentTurn,
@@ -248,15 +249,12 @@ export default function DiceActionPanel({
       </div>
 
       {/* Dice Roll Modal - Enhanced for prompts */}
-      {isDiceModalOpen && (
-        <div 
-          className="dice-modal-overlay fixed inset-0 bg-black/20 flex items-center justify-center z-[1000]"
-          onClick={() => setIsDiceModalOpen(false)}
-        >
-          <div 
-            className="dice-modal bg-slate-800 border-2 border-emerald-500/40 rounded-2xl p-[calc(24px*var(--ui-scale))] max-w-[calc(500px*var(--ui-scale))] w-[90%] shadow-[0_20px_60px_rgba(0,0,0,0.4)]"
-            onClick={(e) => e.stopPropagation()}
-          >
+      <Modal
+        open={isDiceModalOpen}
+        onClose={() => setIsDiceModalOpen(false)}
+        size="lg"
+        panelClassName="dice-modal bg-slate-800 border-2 border-emerald-500/40 rounded-2xl p-[calc(24px*var(--ui-scale))] shadow-[0_20px_60px_rgba(0,0,0,0.4)]"
+      >
             <div className="flex items-center justify-between mb-6">
               <h3 className="text-emerald-500 text-[calc(20px*var(--ui-scale))] font-bold m-0">
                 🎲 Roll Dice
@@ -515,9 +513,7 @@ export default function DiceActionPanel({
                 Cancel
               </button>
             </div>
-          </div>
-        </div>
-      )}
+      </Modal>
     </>
   );
 }

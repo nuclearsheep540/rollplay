@@ -23,13 +23,15 @@ from modules.library.repositories.asset_repository import MediaAssetRepository
 from modules.campaign.dependencies.providers import campaign_repository
 from modules.campaign.orm.campaign_repository import CampaignRepository
 from modules.library.domain.media_asset_type import MediaAssetType
-from modules.library.application.commands import ConfirmUpload, DeleteMediaAsset, AssociateWithCampaign
+from modules.library.application.commands import ConfirmUpload, DeleteMediaAsset, AssociateWithCampaign, RenameMediaAsset, ChangeAssetType
 from modules.library.application.queries import GetMediaAssetsByUser, GetMediaAssetsByCampaign
 from modules.library.schemas.asset_schemas import (
     UploadUrlResponse,
     ConfirmUploadRequest,
     MediaAssetResponse,
     AssociateRequest,
+    RenameRequest,
+    ChangeTypeRequest,
     MediaAssetListResponse
 )
 from modules.user.domain.user_aggregate import UserAggregate
@@ -232,6 +234,60 @@ async def associate_media_asset(
     except Exception as e:
         logger.error(f"Associate media asset error: {e}")
         raise HTTPException(status_code=500, detail="Failed to associate media asset")
+
+
+@router.patch("/{asset_id}", response_model=MediaAssetResponse)
+async def rename_media_asset(
+    asset_id: UUID,
+    request: RenameRequest,
+    current_user: UserAggregate = Depends(get_current_user_from_token),
+    repo: MediaAssetRepository = Depends(get_media_asset_repository),
+    s3_service: S3Service = Depends(get_s3_service)
+) -> MediaAssetResponse:
+    """
+    Rename a media asset's display filename.
+    """
+    try:
+        command = RenameMediaAsset(repo)
+        asset = command.execute(asset_id, current_user.id, request.filename)
+
+        logger.info(f"Renamed media asset {asset_id} to '{request.filename}'")
+
+        return _to_media_asset_response(asset, s3_service)
+
+    except ValueError as e:
+        logger.warning(f"Rename media asset failed: {e}")
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        logger.error(f"Rename media asset error: {e}")
+        raise HTTPException(status_code=500, detail="Failed to rename media asset")
+
+
+@router.put("/{asset_id}/type", response_model=MediaAssetResponse)
+async def change_asset_type(
+    asset_id: UUID,
+    request: ChangeTypeRequest,
+    current_user: UserAggregate = Depends(get_current_user_from_token),
+    repo: MediaAssetRepository = Depends(get_media_asset_repository),
+    s3_service: S3Service = Depends(get_s3_service)
+) -> MediaAssetResponse:
+    """
+    Change a media asset's type tag (e.g. map <-> image).
+    """
+    try:
+        command = ChangeAssetType(repo)
+        asset = command.execute(asset_id, current_user.id, request.asset_type)
+
+        logger.info(f"Changed media asset {asset_id} type to '{request.asset_type.value}'")
+
+        return _to_media_asset_response(asset, s3_service)
+
+    except ValueError as e:
+        logger.warning(f"Change asset type failed: {e}")
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        logger.error(f"Change asset type error: {e}")
+        raise HTTPException(status_code=500, detail="Failed to change asset type")
 
 
 @router.delete("/{asset_id}", status_code=204)

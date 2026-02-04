@@ -6,7 +6,7 @@
 'use client'
 
 import { useRouter } from 'next/navigation'
-import { THEME, STYLES, COLORS } from '@/app/styles/colorTheme'
+import TabNav from './TabNav'
 
 /**
  * SubNav - Secondary navigation bar below the site header
@@ -27,40 +27,25 @@ export default function SubNav({
   const router = useRouter()
 
   return (
-    <nav
-      className="flex-shrink-0 border-b"
-      style={{ backgroundColor: COLORS.carbon, borderBottomColor: THEME.borderSubtle }}
-    >
+    <nav className="flex-shrink-0 bg-surface-secondary">
       {mode === 'tabs' ? (
-        <div className="flex">
-          {tabs.map(tab => (
-            <button
-              key={tab.id}
-              onClick={() => onTabChange?.(tab.id)}
-              className="flex-1 py-4 px-6 border-b-2 transition-all duration-200 font-[family-name:var(--font-metamorphous)] text-base"
-              style={activeTab === tab.id ? STYLES.tabActive : STYLES.tabInactive}
-            >
-              {tab.label}
-            </button>
-          ))}
-        </div>
+        <TabNav tabs={tabs} activeTab={activeTab} onTabChange={onTabChange} />
       ) : (
-        <div className="flex items-center gap-2 py-4 px-6 border-b-2 border-transparent text-base font-[family-name:var(--font-metamorphous)]">
+        <div className="flex items-center gap-2 py-4 px-6 border-b border-border-subtle text-base font-[family-name:var(--font-metamorphous)]">
           {breadcrumbs.map((crumb, index) => {
             const isLast = index === breadcrumbs.length - 1
 
             return (
               <span key={index} className="flex items-center gap-2">
                 {index > 0 && (
-                  <span style={{ color: THEME.textSecondary }}>/</span>
+                  <span className="text-content-secondary">/</span>
                 )}
                 {isLast ? (
-                  <span style={{ color: THEME.textOnDark }}>{crumb.label}</span>
+                  <span className="text-content-on-dark">{crumb.label}</span>
                 ) : (
                   <button
                     onClick={() => router.push(crumb.href)}
-                    className="hover:opacity-80 transition-opacity"
-                    style={{ color: THEME.textSecondary }}
+                    className="text-content-secondary hover:opacity-80 transition-opacity"
                   >
                     {crumb.label}
                   </button>

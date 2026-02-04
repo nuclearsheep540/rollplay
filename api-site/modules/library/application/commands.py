@@ -114,6 +114,78 @@ class DeleteMediaAsset:
         return self.repository.delete(asset_id)
 
 
+class RenameMediaAsset:
+    """
+    Rename a media asset's display filename.
+    """
+
+    def __init__(self, repository: MediaAssetRepository):
+        self.repository = repository
+
+    def execute(self, asset_id: UUID, user_id: UUID, new_filename: str) -> MediaAssetAggregate:
+        """
+        Rename asset if owned by the user.
+
+        Args:
+            asset_id: The asset to rename
+            user_id: The requesting user's ID
+            new_filename: The new display filename
+
+        Returns:
+            Updated MediaAssetAggregate
+
+        Raises:
+            ValueError: If asset not found or not owned by user
+        """
+        asset = self.repository.get_by_id(asset_id)
+        if not asset:
+            raise ValueError(f"Media asset {asset_id} not found")
+
+        if not asset.is_owned_by(user_id):
+            raise ValueError("Cannot rename media asset owned by another user")
+
+        asset.rename(new_filename)
+        self.repository.save(asset)
+
+        return asset
+
+
+class ChangeAssetType:
+    """
+    Change a media asset's type tag (e.g. map <-> image).
+    """
+
+    def __init__(self, repository: MediaAssetRepository):
+        self.repository = repository
+
+    def execute(self, asset_id: UUID, user_id: UUID, new_type: Union[MediaAssetType, str]) -> MediaAssetAggregate:
+        """
+        Change asset type if owned by the user.
+
+        Args:
+            asset_id: The asset to change
+            user_id: The requesting user's ID
+            new_type: The new asset type
+
+        Returns:
+            Updated MediaAssetAggregate
+
+        Raises:
+            ValueError: If asset not found, not owned by user, or invalid type change
+        """
+        asset = self.repository.get_by_id(asset_id)
+        if not asset:
+            raise ValueError(f"Media asset {asset_id} not found")
+
+        if not asset.is_owned_by(user_id):
+            raise ValueError("Cannot modify media asset owned by another user")
+
+        asset.change_type(new_type)
+        self.repository.save(asset)
+
+        return asset
+
+
 class AssociateWithCampaign:
     """
     Associate a media asset with a campaign (and optionally a session).

@@ -283,10 +283,12 @@ function DashboardContent() {
     // Session events (new naming convention)
     'session_created': (message) => {
       invalidation.invalidateCampaigns()
+      invalidation.invalidateNotifications()
     },
 
     'session_started': (message) => {
       invalidation.invalidateCampaigns()
+      invalidation.invalidateNotifications()
 
       if (message.show_toast) {
         const config = getEventConfig('session_started')
@@ -299,6 +301,7 @@ function DashboardContent() {
 
     'session_paused': (message) => {
       invalidation.invalidateCampaigns()
+      invalidation.invalidateNotifications()
 
       if (message.show_toast) {
         const config = getEventConfig('session_paused')
@@ -311,6 +314,7 @@ function DashboardContent() {
 
     'session_finished': (message) => {
       invalidation.invalidateCampaigns()
+      invalidation.invalidateNotifications()
 
       if (message.show_toast) {
         const config = getEventConfig('session_finished')
@@ -357,10 +361,12 @@ function DashboardContent() {
     // Character selection events (silent — cache invalidation only)
     'campaign_character_selected': (message) => {
       invalidation.invalidateCampaigns()
+      invalidation.invalidateNotifications()
     },
 
     'campaign_character_released': (message) => {
       invalidation.invalidateCampaigns()
+      invalidation.invalidateNotifications()
     }
   }
 
