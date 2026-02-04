@@ -31,7 +31,7 @@ export default function AssetQuickLook({ asset, open, onClose }) {
   const isAudio = asset.asset_type === 'audio'
 
   return (
-    <Modal open={open} onClose={onClose} size="2xl">
+    <Modal open={open} onClose={onClose} size="7xl">
       <div className="p-6">
         {/* Header */}
         <div className="flex items-center justify-between mb-4">
@@ -55,7 +55,7 @@ export default function AssetQuickLook({ asset, open, onClose }) {
             <img
               src={asset.s3_url}
               alt={asset.filename}
-              className="w-full h-auto max-h-[70vh] object-contain"
+              className="w-full h-auto max-h-[80vh] object-contain"
             />
           ) : isAudio && asset.s3_url ? (
             <div className="flex flex-col items-center justify-center py-16 gap-6">
