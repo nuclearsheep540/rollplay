@@ -1083,15 +1083,10 @@ export default function CampaignManager({ user, onExpandedChange, inviteCampaign
                         {/* Action Buttons - Top Right (fixed width container to prevent layout shift) */}
                         <div className="flex gap-2 flex-shrink-0" style={{minWidth: '160px'}}>
                           {/* Active game indicator - always reserves space */}
-                          <div className="px-4 py-2 backdrop-blur-sm text-sm font-semibold rounded-sm border"
-                               style={{
-                                 backgroundColor: activeSessions.length > 0 ? '#166534' : 'transparent',
-                                 color: activeSessions.length > 0 ? THEME.textAccent : 'transparent',
-                                 borderColor: activeSessions.length > 0 ? '#16a34a' : 'transparent',
-                                 animation: activeSessions.length > 0 ? 'pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite' : 'none',
-                                 visibility: activeSessions.length > 0 ? 'visible' : 'hidden'
-                               }}>
-                            Game In Session
+                          <div style={{ visibility: activeSessions.length > 0 ? 'visible' : 'hidden' }}>
+                            <Badge variant="success" size="lg" pulse={activeSessions.length > 0}>
+                              Game In Session
+                            </Badge>
                           </div>
 
                         </div>

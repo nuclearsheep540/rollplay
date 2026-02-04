@@ -24,7 +24,7 @@ const TYPE_ICON = {
  *
  * Right-click for: Quick Look, Rename, Add to Campaign, Delete
  */
-export default function AssetCard({ asset, contextMenuItems }) {
+export default function AssetCard({ asset, contextMenuItems, onClick }) {
   const isImage = asset.asset_type === 'map' || asset.asset_type === 'image'
 
   const formatFileSize = (bytes) => {
@@ -46,7 +46,7 @@ export default function AssetCard({ asset, contextMenuItems }) {
 
   return (
     <ContextMenu items={contextMenuItems}>
-      <div className="rounded-sm border border-border bg-surface-panel overflow-hidden transition-all">
+      <div onClick={onClick} className="cursor-pointer rounded-sm border border-border bg-surface-panel overflow-hidden transition-all">
         {/* Thumbnail/Preview */}
         <div className="relative aspect-video flex items-center justify-center bg-surface-elevated">
           {isImage && asset.s3_url ? (

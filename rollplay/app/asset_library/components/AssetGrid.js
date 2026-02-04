@@ -7,7 +7,7 @@ import AssetCard from './AssetCard'
 /**
  * Grid layout for displaying assets with empty state
  */
-export default function AssetGrid({ assets, loading, getContextMenuItems, columns = 4 }) {
+export default function AssetGrid({ assets, loading, getContextMenuItems, onAssetClick, columns = 4 }) {
   if (loading) {
     return null
   }
@@ -38,6 +38,7 @@ export default function AssetGrid({ assets, loading, getContextMenuItems, column
           key={asset.id}
           asset={asset}
           contextMenuItems={getContextMenuItems(asset)}
+          onClick={() => onAssetClick?.(asset)}
         />
       ))}
     </div>

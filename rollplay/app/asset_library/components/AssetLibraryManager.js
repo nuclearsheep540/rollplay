@@ -357,6 +357,7 @@ export default function AssetLibraryManager({ user }) {
             assets={filteredAssets}
             loading={loading}
             getContextMenuItems={getContextMenuItems}
+            onAssetClick={(asset) => setQuickLookAsset(asset)}
             columns={gridScale + 2}
           />
         ) : (
