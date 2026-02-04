@@ -18,6 +18,7 @@ import AccountNameModal from './components/AccountNameModal'
 import { useAuth } from './hooks/useAuth'
 import { useEvents } from '../shared/hooks/useEvents'
 import { useToast } from '../shared/hooks/useToast'
+import { useEventQueryInvalidation } from './hooks/useEventQueryInvalidation'
 import { getEventConfig } from '../shared/config/eventConfig'
 
 function DashboardContent() {
@@ -27,8 +28,6 @@ function DashboardContent() {
   const inviteCampaignId = searchParams.get('invite_campaign_id')
   const expandCampaignId = searchParams.get('expand_campaign_id')
   const [activeSection, setActiveSection] = useState(tabParam || 'campaigns')
-  const [refreshTrigger, setRefreshTrigger] = useState(0)
-  const [campaignUpdateHandlers, setCampaignUpdateHandlers] = useState(null)
   const [isChildExpanded, setIsChildExpanded] = useState(false)
 
   // Sync activeSection when URL tab parameter changes (e.g., from notification click)
@@ -93,20 +92,15 @@ function DashboardContent() {
   // Toast notifications
   const { toasts, showToast, dismissToast } = useToast()
 
-  // Helper function to update game state (targeted or full refresh)
-  const updateGameState = (campaignId) => {
-    if (campaignUpdateHandlers?.updateGames && campaignId) {
-      campaignUpdateHandlers.updateGames(campaignId)
-    } else {
-      setRefreshTrigger(prev => prev + 1)
-    }
-  }
+  // TanStack Query invalidation bridge for WebSocket events
+  const invalidation = useEventQueryInvalidation()
 
   // WebSocket event handlers for real-time updates
   const eventHandlers = {
     // Friend request events
     'friend_request_received': (message) => {
-      setRefreshTrigger(prev => prev + 1)
+      invalidation.invalidateFriendships()
+      invalidation.invalidateNotifications()
       if (message.show_toast) {
         const config = getEventConfig('friend_request_received')
         showToast({
@@ -117,7 +111,8 @@ function DashboardContent() {
     },
 
     'friend_request_accepted': (message) => {
-      setRefreshTrigger(prev => prev + 1)
+      invalidation.invalidateFriendships()
+      invalidation.invalidateNotifications()
       if (message.show_toast) {
         const config = getEventConfig('friend_request_accepted')
         showToast({
@@ -128,7 +123,8 @@ function DashboardContent() {
     },
 
     'friend_request_declined': (message) => {
-      setRefreshTrigger(prev => prev + 1)
+      invalidation.invalidateFriendships()
+      invalidation.invalidateNotifications()
       if (message.show_toast) {
         const config = getEventConfig('friend_request_declined')
         showToast({
@@ -139,7 +135,8 @@ function DashboardContent() {
     },
 
     'friend_removed': (message) => {
-      setRefreshTrigger(prev => prev + 1)
+      invalidation.invalidateFriendships()
+      invalidation.invalidateNotifications()
       if (message.show_toast) {
         const config = getEventConfig('friend_removed')
         showToast({
@@ -172,7 +169,7 @@ function DashboardContent() {
 
     // Campaign invite events
     'campaign_invite_received': (message) => {
-      setRefreshTrigger(prev => prev + 1)
+      invalidation.invalidateCampaigns()
       if (message.show_toast) {
         const config = getEventConfig('campaign_invite_received')
         showToast({
@@ -194,7 +191,7 @@ function DashboardContent() {
     },
 
     'campaign_invite_accepted': (message) => {
-      setRefreshTrigger(prev => prev + 1)
+      invalidation.invalidateCampaigns()
       if (message.show_toast) {
         const config = getEventConfig('campaign_invite_accepted')
         showToast({
@@ -205,7 +202,7 @@ function DashboardContent() {
     },
 
     'campaign_invite_declined': (message) => {
-      setRefreshTrigger(prev => prev + 1)
+      invalidation.invalidateCampaigns()
       if (message.show_toast) {
         const config = getEventConfig('campaign_invite_declined')
         showToast({
@@ -216,8 +213,8 @@ function DashboardContent() {
     },
 
     'campaign_player_removed': (message) => {
-      // Full page refresh to cleanly reset expanded state and UI
-      // This avoids the bug where expanded campaign view persists after removal
+      // Invalidate campaigns — derived state handles removing stale expanded views
+      invalidation.invalidateCampaigns()
       if (message.show_toast) {
         const config = getEventConfig('campaign_player_removed')
         showToast({
@@ -225,10 +222,6 @@ function DashboardContent() {
           message: config.toastMessage
         })
       }
-      // Small delay to let toast show before refresh
-      setTimeout(() => {
-        window.location.reload()
-      }, 1500)
     },
 
     'campaign_player_removed_confirmation': (message) => {
@@ -243,8 +236,7 @@ function DashboardContent() {
     },
 
     'campaign_player_left': (message) => {
-      // Refresh to update member list when player leaves
-      setRefreshTrigger(prev => prev + 1)
+      invalidation.invalidateCampaigns()
       if (message.show_toast) {
         const config = getEventConfig('campaign_player_left')
         showToast({
@@ -255,8 +247,8 @@ function DashboardContent() {
     },
 
     'campaign_player_left_confirmation': (message) => {
-      // Full page refresh to cleanly reset expanded state and UI
-      // This ensures the left campaign is removed from view
+      // Invalidate campaigns — derived state handles removing stale expanded views
+      invalidation.invalidateCampaigns()
       if (message.show_toast) {
         const config = getEventConfig('campaign_player_left_confirmation')
         showToast({
@@ -264,14 +256,10 @@ function DashboardContent() {
           message: config.toastMessage
         })
       }
-      // Small delay to let toast show before refresh
-      setTimeout(() => {
-        window.location.reload()
-      }, 1500)
     },
 
     'campaign_invite_canceled': (message) => {
-      setRefreshTrigger(prev => prev + 1)
+      invalidation.invalidateCampaigns()
       if (message.show_toast) {
         const config = getEventConfig('campaign_invite_canceled')
         showToast({
@@ -294,12 +282,11 @@ function DashboardContent() {
 
     // Session events (new naming convention)
     'session_created': (message) => {
-      // Silent state update - no toast notification
-      updateGameState(message.data?.campaign_id)
+      invalidation.invalidateCampaigns()
     },
 
     'session_started': (message) => {
-      updateGameState(message.data?.campaign_id)
+      invalidation.invalidateCampaigns()
 
       if (message.show_toast) {
         const config = getEventConfig('session_started')
@@ -311,7 +298,7 @@ function DashboardContent() {
     },
 
     'session_paused': (message) => {
-      updateGameState(message.data?.campaign_id)
+      invalidation.invalidateCampaigns()
 
       if (message.show_toast) {
         const config = getEventConfig('session_paused')
@@ -323,7 +310,7 @@ function DashboardContent() {
     },
 
     'session_finished': (message) => {
-      updateGameState(message.data?.campaign_id)
+      invalidation.invalidateCampaigns()
 
       if (message.show_toast) {
         const config = getEventConfig('session_finished')
@@ -336,12 +323,11 @@ function DashboardContent() {
 
     // Legacy game event names (for backward compatibility)
     'game_created': (message) => {
-      // Silent state update - no toast notification
-      updateGameState(message.data?.campaign_id)
+      invalidation.invalidateCampaigns()
     },
 
     'game_started': (message) => {
-      updateGameState(message.data?.campaign_id)
+      invalidation.invalidateCampaigns()
 
       if (message.show_toast) {
         const config = getEventConfig('game_started')
@@ -353,7 +339,7 @@ function DashboardContent() {
     },
 
     'game_ended': (message) => {
-      updateGameState(message.data?.campaign_id)
+      invalidation.invalidateCampaigns()
 
       if (message.show_toast) {
         const config = getEventConfig('game_ended')
@@ -365,8 +351,16 @@ function DashboardContent() {
     },
 
     'game_finished': (message) => {
-      // Silent state update - no toast notification
-      updateGameState(message.data?.campaign_id)
+      invalidation.invalidateCampaigns()
+    },
+
+    // Character selection events (silent — cache invalidation only)
+    'campaign_character_selected': (message) => {
+      invalidation.invalidateCampaigns()
+    },
+
+    'campaign_character_released': (message) => {
+      invalidation.invalidateCampaigns()
     }
   }
 
@@ -387,7 +381,6 @@ function DashboardContent() {
       setActiveSection={setActiveSection}
       onLogout={handleLogout}
       user={user}
-      refreshTrigger={refreshTrigger}
       toasts={toasts}
       onDismissToast={dismissToast}
       isChildExpanded={isChildExpanded}
@@ -397,8 +390,6 @@ function DashboardContent() {
         <section className="flex-1 flex flex-col min-h-0">
           <CampaignManager
             user={user}
-            refreshTrigger={refreshTrigger}
-            onCampaignUpdate={setCampaignUpdateHandlers}
             onExpandedChange={setIsChildExpanded}
             inviteCampaignId={inviteCampaignId}
             clearInviteCampaignId={clearInviteCampaignId}
@@ -428,7 +419,6 @@ function DashboardContent() {
         <section>
           <SocialManager
             user={user}
-            refreshTrigger={refreshTrigger}
             onUserUpdate={setUser}
           />
         </section>
@@ -436,7 +426,7 @@ function DashboardContent() {
 
       {/* Friends Widget - Fixed bottom-right widget on all tabs EXCEPT Account, hidden when child is expanded */}
       {activeSection !== 'account' && !isChildExpanded && (
-        <FriendsWidget user={user} refreshTrigger={refreshTrigger} />
+        <FriendsWidget user={user} />
       )}
 
       {/* Account Name Setup Modal (shown first, before screen name) */}

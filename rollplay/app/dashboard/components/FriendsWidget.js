@@ -5,25 +5,39 @@
 
 'use client'
 
-import { useState, useEffect, useRef, useCallback } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
 import { faChevronDown, faChevronUp, faUserPlus, faBell, faPersonCirclePlus } from '@fortawesome/free-solid-svg-icons'
 import { THEME } from '@/app/styles/colorTheme'
 import { Button } from './shared/Button'
+import { useFriendships } from '../hooks/useFriendships'
+import { useCampaigns } from '../hooks/useCampaigns'
+import { useBuzzFriend, useInviteToCampaign, useAcceptFriendRequest, useDeclineFriendRequest } from '../hooks/mutations/useFriendshipMutations'
 
-export default function FriendsWidget({ user, refreshTrigger, isStandalone = false }) {
+export default function FriendsWidget({ user, isStandalone = false }) {
   const router = useRouter()
   const [isExpanded, setIsExpanded] = useState(isStandalone)
-  const [friends, setFriends] = useState([])
-  const [friendRequests, setFriendRequests] = useState([])
-  const [loading, setLoading] = useState(true)
-  const [hostedCampaigns, setHostedCampaigns] = useState([])
-  const [buzzCooldowns, setBuzzCooldowns] = useState({}) // Track cooldown start times per friend (timestamp)
-  const [cooldownProgress, setCooldownProgress] = useState({}) // Track animation progress 0-100
-  const [inviteDropdown, setInviteDropdown] = useState(null) // Track which friend's dropdown is open
+  const [buzzCooldowns, setBuzzCooldowns] = useState({})
+  const [cooldownProgress, setCooldownProgress] = useState({})
+  const [inviteDropdown, setInviteDropdown] = useState(null)
   const dropdownRef = useRef(null)
-  const COOLDOWN_DURATION = 20000 // 20 seconds in ms
+  const COOLDOWN_DURATION = 20000
+
+  // TanStack Query: friendships
+  const { data: friendshipData, isLoading: loading } = useFriendships({ enabled: !!user?.id })
+  const friends = friendshipData?.accepted || []
+  const friendRequests = friendshipData?.incoming_requests || []
+
+  // Derive hosted campaigns from existing campaigns query (no extra fetch needed)
+  const { data: campaignData } = useCampaigns(user?.id, { enabled: !!user?.id })
+  const hostedCampaigns = (campaignData?.campaigns || []).filter(c => c.host_id === user?.id)
+
+  // Mutation hooks
+  const buzzMutation = useBuzzFriend()
+  const inviteMutation = useInviteToCampaign()
+  const acceptMutation = useAcceptFriendRequest()
+  const declineMutation = useDeclineFriendRequest()
 
   // Auto-collapse on mobile on mount (only for fixed mode)
   useEffect(() => {
@@ -31,54 +45,6 @@ export default function FriendsWidget({ user, refreshTrigger, isStandalone = fal
       setIsExpanded(false)
     }
   }, [])
-
-  // Fetch friends and requests
-  const fetchFriends = async () => {
-    try {
-      const response = await fetch('/api/friendships/', {
-        method: 'GET',
-        headers: { 'Content-Type': 'application/json' },
-        credentials: 'include'
-      })
-
-      if (response.ok) {
-        const data = await response.json()
-
-        // Backend returns categorized response with accepted and incoming_requests
-        setFriends(data.accepted || [])
-        setFriendRequests(data.incoming_requests || [])
-      }
-    } catch (error) {
-      console.error('Error fetching friends:', error)
-    } finally {
-      setLoading(false)
-    }
-  }
-
-  // Fetch hosted campaigns for invite dropdown
-  const fetchHostedCampaigns = async () => {
-    try {
-      const response = await fetch('/api/campaigns/hosted', {
-        method: 'GET',
-        headers: { 'Content-Type': 'application/json' },
-        credentials: 'include'
-      })
-
-      if (response.ok) {
-        const data = await response.json()
-        setHostedCampaigns(data || [])
-      }
-    } catch (error) {
-      console.error('Error fetching hosted campaigns:', error)
-    }
-  }
-
-  useEffect(() => {
-    if (user?.id) {
-      fetchFriends()
-      fetchHostedCampaigns()
-    }
-  }, [user, refreshTrigger])
 
   // Close dropdown when clicking outside
   useEffect(() => {
@@ -116,7 +82,6 @@ export default function FriendsWidget({ user, refreshTrigger, isStandalone = fal
       if (hasActive) {
         requestAnimationFrame(animate)
       } else {
-        // Clear completed cooldowns
         setBuzzCooldowns({})
         setCooldownProgress({})
       }
@@ -126,62 +91,30 @@ export default function FriendsWidget({ user, refreshTrigger, isStandalone = fal
   }, [buzzCooldowns])
 
   const handleBuzz = async (friendId) => {
-    // Check if on cooldown
     if (buzzCooldowns[friendId]) return
 
     try {
-      const response = await fetch(`/api/friendships/${friendId}/buzz`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        credentials: 'include'
-      })
-
-      if (response.ok || response.status === 204) {
-        // Set cooldown start time
-        const startTime = Date.now()
-        setBuzzCooldowns(prev => ({ ...prev, [friendId]: startTime }))
-        setCooldownProgress(prev => ({ ...prev, [friendId]: 0 }))
-      } else {
-        const error = await response.json()
-        console.error('Buzz error:', error.detail)
-      }
+      await buzzMutation.mutateAsync(friendId)
+      const startTime = Date.now()
+      setBuzzCooldowns(prev => ({ ...prev, [friendId]: startTime }))
+      setCooldownProgress(prev => ({ ...prev, [friendId]: 0 }))
     } catch (error) {
-      console.error('Error buzzing friend:', error)
+      console.error('Buzz error:', error.message)
     }
   }
 
   const handleInviteToCampaign = async (friendId, campaignId) => {
     try {
-      const response = await fetch(`/api/campaigns/${campaignId}/players/${friendId}`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        credentials: 'include'
-      })
-
-      if (response.ok) {
-        setInviteDropdown(null)
-        // Refresh campaigns to update invite state
-        fetchHostedCampaigns()
-      } else {
-        const error = await response.json()
-        console.error('Invite error:', error.detail)
-      }
+      await inviteMutation.mutateAsync({ friendId, campaignId })
+      setInviteDropdown(null)
     } catch (error) {
-      console.error('Error inviting to campaign:', error)
+      console.error('Invite error:', error.message)
     }
   }
 
   const handleAcceptRequest = async (friendshipId) => {
     try {
-      const response = await fetch(`/api/friendships/${friendshipId}/accept`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        credentials: 'include'
-      })
-
-      if (response.ok) {
-        fetchFriends() // Refresh
-      }
+      await acceptMutation.mutateAsync(friendshipId)
     } catch (error) {
       console.error('Error accepting friend request:', error)
     }
@@ -189,15 +122,7 @@ export default function FriendsWidget({ user, refreshTrigger, isStandalone = fal
 
   const handleDeclineRequest = async (friendshipId) => {
     try {
-      const response = await fetch(`/api/friendships/${friendshipId}/decline`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        credentials: 'include'
-      })
-
-      if (response.ok) {
-        fetchFriends() // Refresh
-      }
+      await declineMutation.mutateAsync(friendshipId)
     } catch (error) {
       console.error('Error declining friend request:', error)
     }

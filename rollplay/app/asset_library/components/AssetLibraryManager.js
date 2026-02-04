@@ -3,10 +3,12 @@
 
 'use client'
 
-import React, { useState, useEffect, useCallback } from 'react'
+import React, { useState, useEffect, useCallback, useMemo } from 'react'
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
 import { faUpload, faSquarePlus, faTrash } from '@fortawesome/free-solid-svg-icons'
-import { useAssetLibrary } from '../hooks/useAssetLibrary'
+import { useAssets } from '../hooks/useAssets'
+import { useUploadAsset } from '../hooks/useUploadAsset'
+import { useDeleteAsset } from '../hooks/useDeleteAsset'
 import AssetGrid from './AssetGrid'
 import AssetUploadModal from './AssetUploadModal'
 import ConfirmModal from '@/app/shared/components/ConfirmModal'
@@ -47,22 +49,10 @@ const SUB_FILTERS = {
  * Main container for the asset library management interface
  */
 export default function AssetLibraryManager({ user }) {
-  const {
-    assets,
-    loading,
-    error,
-    uploading,
-    uploadProgress,
-    fetchAssets,
-    uploadAsset,
-    deleteAsset,
-    clearError
-  } = useAssetLibrary()
-
   const [category, setCategory] = useState('media')
   const [subFilter, setSubFilter] = useState(['all'])
   const [uploadModalOpen, setUploadModalOpen] = useState(false)
-  const [deleteModal, setDeleteModal] = useState({ open: false, asset: null, isDeleting: false })
+  const [deleteTarget, setDeleteTarget] = useState(null)
   const [gridScale, setGridScale] = useState(() => {
     if (typeof window !== 'undefined') {
       return parseInt(localStorage.getItem('assetGridScale')) || 2
@@ -70,22 +60,30 @@ export default function AssetLibraryManager({ user }) {
     return 2 // Default to level 2 (4 columns)
   })
 
+  // Determine query filter from sub-filter state
+  const queryAssetType = subFilter.includes('all') || subFilter.length > 1
+    ? null
+    : subFilter[0]
+
+  // TanStack Query — auto-fetches on mount and when queryAssetType changes
+  const {
+    data: assets = [],
+    isLoading: loading,
+    error: queryError,
+  } = useAssets({
+    assetType: queryAssetType,
+    enabled: category !== 'objects',
+  })
+
+  const uploadMutation = useUploadAsset()
+  const deleteMutation = useDeleteAsset()
+
+  const error = queryError?.message || deleteMutation.error?.message || null
+
   // Persist grid scale preference
   useEffect(() => {
     localStorage.setItem('assetGridScale', gridScale.toString())
   }, [gridScale])
-
-  // Fetch assets on mount and when filter changes
-  useEffect(() => {
-    // Only fetch media assets for now (objects will use different endpoints)
-    if (category === 'media' || category === 'all') {
-      // When multi-select or 'all', fetch everything and filter client-side
-      const fetchType = subFilter.includes('all') || subFilter.length > 1
-        ? null
-        : subFilter[0]
-      fetchAssets(fetchType)
-    }
-  }, [category, subFilter, fetchAssets])
 
   // Reset sub-filter when category changes
   const handleCategoryChange = useCallback((newCategory) => {
@@ -116,38 +114,36 @@ export default function AssetLibraryManager({ user }) {
   }, [category])
 
   const handleUpload = useCallback(async (file, assetType) => {
-    await uploadAsset(file, assetType)
-    // Refetch all to ensure new asset appears regardless of active filters
-    await fetchAssets(null)
-  }, [uploadAsset, fetchAssets])
+    await uploadMutation.mutateAsync({ file, assetType })
+    // Cache invalidation in onSuccess handles refetch automatically
+  }, [uploadMutation])
 
   const handleDeleteClick = useCallback((asset) => {
-    setDeleteModal({ open: true, asset, isDeleting: false })
+    setDeleteTarget(asset)
   }, [])
 
   const handleDeleteConfirm = useCallback(async () => {
-    if (!deleteModal.asset) return
-
-    setDeleteModal(prev => ({ ...prev, isDeleting: true }))
+    if (!deleteTarget) return
 
     try {
-      await deleteAsset(deleteModal.asset.id)
-      setDeleteModal({ open: false, asset: null, isDeleting: false })
-    } catch (err) {
-      setDeleteModal(prev => ({ ...prev, isDeleting: false }))
+      await deleteMutation.mutateAsync(deleteTarget.id)
+      setDeleteTarget(null)
+    } catch {
+      // Error is available via deleteMutation.error
     }
-  }, [deleteModal.asset, deleteAsset])
+  }, [deleteTarget, deleteMutation])
 
   const handleDeleteCancel = useCallback(() => {
-    if (!deleteModal.isDeleting) {
-      setDeleteModal({ open: false, asset: null, isDeleting: false })
+    if (!deleteMutation.isPending) {
+      setDeleteTarget(null)
     }
-  }, [deleteModal.isDeleting])
+  }, [deleteMutation.isPending])
 
-  // Filter assets based on selected filter (in case we fetched all)
-  const filteredAssets = subFilter.includes('all')
-    ? assets
-    : assets.filter(a => subFilter.includes(a.asset_type))
+  // Filter assets client-side when fetching all (multi-select or 'all' sub-filter)
+  const filteredAssets = useMemo(() => {
+    if (subFilter.includes('all')) return assets
+    return assets.filter(a => subFilter.includes(a.asset_type))
+  }, [assets, subFilter])
 
   return (
     <div className="flex flex-col h-full">
@@ -267,7 +263,7 @@ export default function AssetLibraryManager({ user }) {
         >
           <p style={{ color: '#fca5a5' }}>{error}</p>
           <button
-            onClick={clearError}
+            onClick={() => deleteMutation.reset()}
             className="hover:opacity-80"
             style={{ color: '#fca5a5' }}
           >
@@ -306,21 +302,21 @@ export default function AssetLibraryManager({ user }) {
         isOpen={uploadModalOpen}
         onClose={() => setUploadModalOpen(false)}
         onUpload={handleUpload}
-        uploading={uploading}
-        uploadProgress={uploadProgress}
+        uploading={uploadMutation.isPending}
+        uploadProgress={uploadMutation.progress}
       />
 
       {/* Delete Confirmation Modal */}
       <ConfirmModal
-        show={deleteModal.open}
+        show={!!deleteTarget}
         title="Delete Asset"
-        message={`Are you sure you want to delete "${deleteModal.asset?.filename}"?`}
+        message={`Are you sure you want to delete "${deleteTarget?.filename}"?`}
         description="This will permanently remove the asset. This action cannot be undone."
         confirmText="Delete"
         cancelText="Cancel"
         onConfirm={handleDeleteConfirm}
         onCancel={handleDeleteCancel}
-        isLoading={deleteModal.isDeleting}
+        isLoading={deleteMutation.isPending}
         loadingText="Deleting..."
         icon={faTrash}
         variant="danger"

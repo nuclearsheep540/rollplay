@@ -10,6 +10,7 @@ import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
 import { faSave, faTimes, faUndo } from '@fortawesome/free-solid-svg-icons'
 import { COLORS, THEME } from '@/app/styles/colorTheme'
 import { Button } from './shared/Button'
+import { useCreateCharacter, useUpdateCharacter } from '../hooks/mutations/useCharacterMutations'
 
 // Import form sub-components (these will need theme updates later)
 import MultiClassSelector from '../../character/components/MultiClassSelector'
@@ -35,8 +36,10 @@ export default function CharacterEditPanel({
 }) {
   // Initialize form data from character prop
   const [formData, setFormData] = useState(() => characterToFormData(character))
-  const [saving, setSaving] = useState(false)
   const [error, setError] = useState(null)
+  const createCharacterMutation = useCreateCharacter()
+  const updateCharacterMutation = useUpdateCharacter()
+  const saving = createCharacterMutation.isPending || updateCharacterMutation.isPending
   const [validationErrors, setValidationErrors] = useState([])
   const [isDirty, setIsDirty] = useState(false)
 
@@ -121,12 +124,10 @@ export default function CharacterEditPanel({
   }
 
   const handleSave = async () => {
-    setSaving(true)
     setError(null)
     setValidationErrors([])
 
     try {
-      // Prepare data for API
       const apiData = {
         character_name: formData.name.trim(),
         character_race: formData.character_race,
@@ -140,41 +141,22 @@ export default function CharacterEditPanel({
         ac: formData.ac
       }
 
-      // Different endpoint for clone vs edit
-      const url = isCloneMode
-        ? '/api/characters/'
-        : `/api/characters/${character.id}`
+      const updatedCharacter = isCloneMode
+        ? await createCharacterMutation.mutateAsync(apiData)
+        : await updateCharacterMutation.mutateAsync({ characterId: character.id, characterData: apiData })
 
-      const method = isCloneMode ? 'POST' : 'PUT'
-
-      const response = await fetch(url, {
-        method,
-        headers: { 'Content-Type': 'application/json' },
-        credentials: 'include',
-        body: JSON.stringify(apiData)
-      })
-
-      if (response.ok) {
-        const updatedCharacter = await response.json()
-        onSave(updatedCharacter)
+      onSave(updatedCharacter)
+    } catch (errorData) {
+      if (errorData?.detail && Array.isArray(errorData.detail)) {
+        setValidationErrors(errorData.detail.map(err => ({
+          field: err.loc?.join('.') || 'unknown',
+          message: err.msg || 'Validation error'
+        })))
+      } else if (errorData?.detail) {
+        setError(errorData.detail)
       } else {
-        const errorData = await response.json()
-
-        if (errorData.detail && Array.isArray(errorData.detail)) {
-          // Validation errors from backend
-          setValidationErrors(errorData.detail.map(err => ({
-            field: err.loc?.join('.') || 'unknown',
-            message: err.msg || 'Validation error'
-          })))
-        } else {
-          setError(errorData.detail || 'Failed to save character')
-        }
+        setError('Failed to save character. Please try again.')
       }
-    } catch (err) {
-      console.error('Error saving character:', err)
-      setError('Failed to save character. Please try again.')
-    } finally {
-      setSaving(false)
     }
   }
 

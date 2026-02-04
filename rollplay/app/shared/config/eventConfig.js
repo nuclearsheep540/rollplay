@@ -156,6 +156,20 @@ export const EVENT_CONFIG = {
     panelMessage: (data) => `Campaign milestone: "${data.session_name}" completed!`,
     toastType: 'success',
     navigationTab: 'campaigns'
+  },
+
+  'campaign_character_selected': {
+    toastMessage: null,  // Silent - cache invalidation only
+    panelMessage: (data) => `${data.player_screen_name} selected ${data.character_name} in "${data.campaign_name}"`,
+    toastType: 'info',
+    navigationTab: 'campaigns'
+  },
+
+  'campaign_character_released': {
+    toastMessage: null,  // Silent - cache invalidation only
+    panelMessage: (data) => `${data.player_screen_name} released their character in "${data.campaign_name}"`,
+    toastType: 'info',
+    navigationTab: 'campaigns'
   }
 }
 

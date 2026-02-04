@@ -18,6 +18,7 @@ import {
 import { COLORS, THEME } from '@/app/styles/colorTheme'
 import { Button } from './shared/Button'
 import CharacterEditPanel from './CharacterEditPanel'
+import { useDeleteCharacter } from '../hooks/mutations/useCharacterMutations'
 
 export default function CharacterManager({ user, onExpandedChange }) {
   const router = useRouter()
@@ -27,8 +28,8 @@ export default function CharacterManager({ user, onExpandedChange }) {
   const [error, setError] = useState(null)
   const [showDeleteModal, setShowDeleteModal] = useState(false)
   const [characterToDelete, setCharacterToDelete] = useState(null)
-  const [deleteLoading, setDeleteLoading] = useState(false)
   const [deleteError, setDeleteError] = useState(null)
+  const deleteCharacterMutation = useDeleteCharacter()
 
   // Selection and resize state for horizontal scroll layout
   const [selectedCharacter, setSelectedCharacter] = useState(null)
@@ -183,34 +184,18 @@ export default function CharacterManager({ user, onExpandedChange }) {
   const handleConfirmDelete = async () => {
     if (!characterToDelete) return
 
-    setDeleteLoading(true)
-    setDeleteError(null)
-
     try {
-      const response = await fetch(`/api/characters/${characterToDelete.id}`, {
-        method: 'DELETE',
-        credentials: 'include'
-      })
-
-      if (response.ok) {
-        // Remove character from list
-        setCharacters(characters.filter(c => c.id !== characterToDelete.id))
-        // Close the expanded drawer if the deleted character was selected
-        if (selectedCharacter?.id === characterToDelete.id) {
-          setSelectedCharacter(null)
-        }
-        // Close modal
-        setShowDeleteModal(false)
-        setCharacterToDelete(null)
-      } else {
-        const errorData = await response.json()
-        setDeleteError(errorData.detail || 'Failed to delete character')
+      setDeleteError(null)
+      await deleteCharacterMutation.mutateAsync(characterToDelete.id)
+      // Remove from local state for immediate UI feedback
+      setCharacters(characters.filter(c => c.id !== characterToDelete.id))
+      if (selectedCharacter?.id === characterToDelete.id) {
+        setSelectedCharacter(null)
       }
-    } catch (error) {
-      console.error('Error deleting character:', error)
-      setDeleteError('Failed to delete character')
-    } finally {
-      setDeleteLoading(false)
+      setShowDeleteModal(false)
+      setCharacterToDelete(null)
+    } catch (err) {
+      setDeleteError(err.message)
     }
   }
 
@@ -650,16 +635,16 @@ export default function CharacterManager({ user, onExpandedChange }) {
               <Button
                 variant="ghost"
                 onClick={handleCancelDelete}
-                disabled={deleteLoading}
+                disabled={deleteCharacterMutation.isPending}
               >
                 Cancel
               </Button>
               <Button
                 variant="danger"
                 onClick={handleConfirmDelete}
-                disabled={deleteLoading}
+                disabled={deleteCharacterMutation.isPending}
               >
-                {deleteLoading ? (
+                {deleteCharacterMutation.isPending ? (
                   <>
                     <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
                     Deleting...

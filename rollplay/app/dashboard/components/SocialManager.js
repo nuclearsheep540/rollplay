@@ -26,7 +26,7 @@ const sendTestNotification = async () => {
   }
 }
 
-export default function SocialManager({ user, refreshTrigger, onUserUpdate }) {
+export default function SocialManager({ user, onUserUpdate }) {
   const [showHardDeleteConfirm, setShowHardDeleteConfirm] = useState(false)
   const [deleting, setDeleting] = useState(false)
   const [error, setError] = useState(null)
@@ -75,11 +75,11 @@ export default function SocialManager({ user, refreshTrigger, onUserUpdate }) {
         {/* Left Column */}
         <div className="space-y-6">
           <ProfileManager user={user} onUserUpdate={onUserUpdate} />
-          <AccountNotificationFeed userId={user?.id} refreshTrigger={refreshTrigger} />
+          <AccountNotificationFeed userId={user?.id} />
         </div>
 
         {/* Right Column - stretch to match left column height */}
-        <FriendsManager user={user} refreshTrigger={refreshTrigger} fillHeight />
+        <FriendsManager user={user} fillHeight />
       </div>
 
       {/* Development Tools (dev only) */}

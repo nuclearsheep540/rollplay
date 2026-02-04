@@ -5,60 +5,35 @@
 
 'use client'
 
-import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
 import { faCheck, faBell } from '@fortawesome/free-solid-svg-icons'
 import { THEME, COLORS } from '@/app/styles/colorTheme'
 import { formatPanelMessage, getNavigationTab } from '@/app/shared/config/eventConfig'
 import { formatRelativeTime } from '@/app/shared/utils/formatTime'
+import { useNotifications } from '../hooks/useNotifications'
+import { useMarkNotificationRead, useMarkAllNotificationsRead } from '../hooks/mutations/useNotificationMutations'
 
-export default function AccountNotificationFeed({ userId, refreshTrigger }) {
+export default function AccountNotificationFeed({ userId }) {
   const router = useRouter()
-  const [notifications, setNotifications] = useState([])
-  const [loading, setLoading] = useState(true)
 
-  useEffect(() => {
-    if (!userId) return
-    fetchNotifications()
-  }, [userId, refreshTrigger])
-
-  const fetchNotifications = async () => {
-    try {
-      setLoading(true)
-      const response = await fetch('/api/notifications/unread', {
-        credentials: 'include'
-      })
-      const data = await response.json()
-      setNotifications(data)
-    } catch (error) {
-      console.error('Failed to fetch notifications:', error)
-    } finally {
-      setLoading(false)
-    }
-  }
+  const { data: notifications = [], isLoading: loading } = useNotifications(userId)
+  const markReadMutation = useMarkNotificationRead()
+  const markAllReadMutation = useMarkAllNotificationsRead()
 
   const handleNotificationClick = async (notification) => {
-    // Mark as read
     try {
-      await fetch(`/api/notifications/${notification.id}/read`, {
-        method: 'POST',
-        credentials: 'include'
-      })
+      await markReadMutation.mutateAsync(notification.id)
 
       // Navigate to relevant tab
       const tab = getNavigationTab(notification.event_type)
       if (tab) {
-        // Build URL with optional expand_campaign_id for campaign-related notifications
         let url = `/dashboard?tab=${tab}`
         if (tab === 'campaigns' && notification.data?.campaign_id) {
           url += `&expand_campaign_id=${notification.data.campaign_id}`
         }
         router.push(url)
       }
-
-      // Refresh notifications
-      await fetchNotifications()
     } catch (error) {
       console.error('Failed to mark notification as read:', error)
     }
@@ -67,11 +42,7 @@ export default function AccountNotificationFeed({ userId, refreshTrigger }) {
   const handleMarkAsRead = async (e, notificationId) => {
     e.stopPropagation()
     try {
-      await fetch(`/api/notifications/${notificationId}/read`, {
-        method: 'POST',
-        credentials: 'include'
-      })
-      await fetchNotifications()
+      await markReadMutation.mutateAsync(notificationId)
     } catch (error) {
       console.error('Failed to mark notification as read:', error)
     }
@@ -79,11 +50,7 @@ export default function AccountNotificationFeed({ userId, refreshTrigger }) {
 
   const handleMarkAllRead = async () => {
     try {
-      await fetch('/api/notifications/read-all', {
-        method: 'POST',
-        credentials: 'include'
-      })
-      await fetchNotifications()
+      await markAllReadMutation.mutateAsync()
     } catch (error) {
       console.error('Failed to mark all as read:', error)
     }

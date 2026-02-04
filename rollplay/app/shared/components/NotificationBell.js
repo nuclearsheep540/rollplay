@@ -5,53 +5,32 @@
 
 'use client'
 
-import { useState, useEffect, useRef } from 'react'
+import { useState, useRef } from 'react'
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
 import { faBell } from '@fortawesome/free-solid-svg-icons'
 import NotificationPanel from './NotificationPanel'
 import { ToastNotification } from './ToastNotification'
 import { THEME } from '@/app/styles/colorTheme'
+import { useNotifications } from '@/app/dashboard/hooks/useNotifications'
+import { useMarkNotificationRead, useMarkAllNotificationsRead } from '@/app/dashboard/hooks/mutations/useNotificationMutations'
 
-export default function NotificationBell({ userId, refreshTrigger, toasts = [], onDismissToast }) {
-  const [unreadCount, setUnreadCount] = useState(0)
+export default function NotificationBell({ userId, toasts = [], onDismissToast }) {
   const [showPanel, setShowPanel] = useState(false)
-  const [notifications, setNotifications] = useState([])
   const bellRef = useRef(null)
 
-  // Fetch unread notifications on mount, when userId changes, or when refreshTrigger changes
-  useEffect(() => {
-    if (!userId) return
+  const { data: notifications = [] } = useNotifications(userId)
+  const unreadCount = notifications.filter(n => !n.read).length
 
-    fetchNotifications()
-  }, [userId, refreshTrigger])
-
-  const fetchNotifications = async () => {
-    try {
-      const response = await fetch('/api/notifications/unread', {
-        credentials: 'include'
-      })
-      const data = await response.json()
-      setNotifications(data)
-      setUnreadCount(data.filter(n => !n.read).length)
-    } catch (error) {
-      console.error('Failed to fetch notifications:', error)
-    }
-  }
+  const markReadMutation = useMarkNotificationRead()
+  const markAllReadMutation = useMarkAllNotificationsRead()
 
   const handleBellClick = () => {
     setShowPanel(!showPanel)
   }
 
   const handleNotificationClick = async (notificationId) => {
-    // Mark as read
     try {
-      await fetch(`/api/notifications/${notificationId}/read`, {
-        method: 'POST',
-        credentials: 'include'
-      })
-
-      // Refresh notifications
-      await fetchNotifications()
+      await markReadMutation.mutateAsync(notificationId)
     } catch (error) {
       console.error('Failed to mark notification as read:', error)
     }
@@ -59,13 +38,7 @@ export default function NotificationBell({ userId, refreshTrigger, toasts = [], 
 
   const handleMarkAllRead = async () => {
     try {
-      await fetch('/api/notifications/read-all', {
-        method: 'POST',
-        credentials: 'include'
-      })
-
-      // Refresh notifications
-      await fetchNotifications()
+      await markAllReadMutation.mutateAsync()
     } catch (error) {
       console.error('Failed to mark all as read:', error)
     }

@@ -439,11 +439,13 @@ class SelectCharacterForCampaign:
     Domain Rule: A character can only be active in one campaign at a time.
     """
 
-    def __init__(self, campaign_repo, character_repo: CharacterRepository):
+    def __init__(self, campaign_repo, character_repo: CharacterRepository, user_repo: UserRepository = None, event_manager: EventManager = None):
         self.campaign_repo = campaign_repo
         self.character_repo = character_repo
+        self.user_repo = user_repo
+        self.event_manager = event_manager
 
-    def execute(self, campaign_id: UUID, user_id: UUID, character_id: UUID):
+    async def execute(self, campaign_id: UUID, user_id: UUID, character_id: UUID):
         """
         Select a character for use in this campaign.
 
@@ -485,6 +487,22 @@ class SelectCharacterForCampaign:
         self.character_repo.save(character)
 
         logger.info(f"Character {character_id} locked to campaign {campaign_id} by user {user_id}")
+
+        # Broadcast to all other campaign members
+        if self.event_manager and self.user_repo:
+            acting_user = self.user_repo.get_by_id(user_id)
+            all_members = list(campaign.player_ids) + [campaign.host_id]
+            events = CampaignEvents.campaign_character_selected(
+                campaign_member_ids=all_members,
+                acting_user_id=user_id,
+                campaign_id=campaign_id,
+                campaign_name=campaign.title,
+                player_screen_name=acting_user.screen_name if acting_user else "Unknown",
+                character_name=character.character_name
+            )
+            for event_config in events:
+                await self.event_manager.broadcast(**event_config)
+
         return character
 
 
@@ -496,12 +514,14 @@ class ReleaseCharacterFromCampaign:
     Player stays as campaign member but can now use their character elsewhere.
     """
 
-    def __init__(self, campaign_repo, character_repo: CharacterRepository, session_repo=None):
+    def __init__(self, campaign_repo, character_repo: CharacterRepository, session_repo=None, user_repo: UserRepository = None, event_manager: EventManager = None):
         self.campaign_repo = campaign_repo
         self.character_repo = character_repo
         self.session_repo = session_repo
+        self.user_repo = user_repo
+        self.event_manager = event_manager
 
-    def execute(self, campaign_id: UUID, user_id: UUID):
+    async def execute(self, campaign_id: UUID, user_id: UUID):
         """
         Release the user's character from this campaign.
 
@@ -534,10 +554,29 @@ class ReleaseCharacterFromCampaign:
         if not character:
             raise ValueError("You don't have a character selected for this campaign")
 
+        # Capture character name before unlocking
+        character_name = character.character_name
+
         # Unlock character
         character.unlock_from_campaign()
         self.character_repo.save(character)
 
         logger.info(f"Character {character.id} released from campaign {campaign_id} by user {user_id}")
+
+        # Broadcast to all other campaign members
+        if self.event_manager and self.user_repo:
+            acting_user = self.user_repo.get_by_id(user_id)
+            all_members = list(campaign.player_ids) + [campaign.host_id]
+            events = CampaignEvents.campaign_character_released(
+                campaign_member_ids=all_members,
+                acting_user_id=user_id,
+                campaign_id=campaign_id,
+                campaign_name=campaign.title,
+                player_screen_name=acting_user.screen_name if acting_user else "Unknown",
+                character_name=character_name
+            )
+            for event_config in events:
+                await self.event_manager.broadcast(**event_config)
+
         return character
 
