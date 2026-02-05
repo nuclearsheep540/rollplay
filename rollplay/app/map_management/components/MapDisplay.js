@@ -69,52 +69,40 @@ const MapDisplay = ({
   const [isDragging, setIsDragging] = useState(false);
   const [dragStart, setDragStart] = useState({ x: 0, y: 0 });
 
-  const handleMouseDown = useCallback((e) => {
-    if (isMapLocked) return; // Only allow pan when map is unlocked
-    
+  const handlePointerDown = useCallback((e) => {
+    if (isMapLocked) return;
+
     setIsDragging(true);
     setDragStart({
       x: e.clientX,
       y: e.clientY
     });
-    
+
+    e.currentTarget.setPointerCapture(e.pointerId);
     e.preventDefault();
   }, [isMapLocked]);
 
-  const handleMouseMove = useCallback((e) => {
+  const handlePointerMove = useCallback((e) => {
     if (!isDragging || isMapLocked) return;
-    
+
     const deltaX = e.clientX - dragStart.x;
     const deltaY = e.clientY - dragStart.y;
-    
+
     setViewTransform(prev => ({
       ...prev,
       x: prev.x + deltaX,
       y: prev.y + deltaY
     }));
-    
+
     setDragStart({
       x: e.clientX,
       y: e.clientY
     });
   }, [isDragging, isMapLocked, dragStart]);
 
-  const handleMouseUp = useCallback(() => {
+  const handlePointerUp = useCallback(() => {
     setIsDragging(false);
   }, []);
-
-  // Global event listeners for dragging
-  useEffect(() => {
-    if (!isDragging) return;
-
-    document.addEventListener('mousemove', handleMouseMove);
-    document.addEventListener('mouseup', handleMouseUp);
-
-    return () => {
-      document.removeEventListener('mousemove', handleMouseMove);
-      document.removeEventListener('mouseup', handleMouseUp);
-    };
-  }, [isDragging, handleMouseMove, handleMouseUp]);
 
   // Base styles for the map container
   const baseStyles = {
@@ -126,7 +114,8 @@ const MapDisplay = ({
     zIndex: 1, // Behind initiative tracker but above base background
     backgroundColor: '#1a1a2e', // Fallback background
     overflow: 'hidden', // Clip zoomed content
-    cursor: !isMapLocked ? (isDragging ? 'grabbing' : 'grab') : 'default'
+    cursor: !isMapLocked ? (isDragging ? 'grabbing' : 'grab') : 'default',
+    touchAction: 'none' // Prevent browser default touch gestures (pan/zoom)
   };
 
   // Unified transform styles for the content
@@ -147,7 +136,9 @@ const MapDisplay = ({
         className={`map-display-background ${className}`}
         style={baseStyles}
         onWheel={handleWheel}
-        onMouseDown={handleMouseDown}
+        onPointerDown={handlePointerDown}
+        onPointerMove={handlePointerMove}
+        onPointerUp={handlePointerUp}
       >
         <div style={contentTransform}>
           {/* Grid overlay with default settings (atomic approach) */}
@@ -178,7 +169,9 @@ const MapDisplay = ({
         opacity: mapLoaded ? 1 : 0.5
       }}
       onWheel={handleWheel}
-      onMouseDown={handleMouseDown}
+      onPointerDown={handlePointerDown}
+      onPointerMove={handlePointerMove}
+      onPointerUp={handlePointerUp}
     >
       {/* Loading overlay (not transformed) */}
       {!mapLoaded && (

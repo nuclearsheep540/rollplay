@@ -110,6 +110,8 @@ function GameContent() {
 
   // Spectator mode - user has no character selected for this campaign
   const [isSpectator, setIsSpectator] = useState(false);
+  const [isDrawerOpen, setIsDrawerOpen] = useState(true);
+  const [activeRightDrawer, setActiveRightDrawer] = useState(null); // null | 'dm' | 'moderator'
   const [mapImageConfig, setMapImageConfig] = useState(null); // Map image positioning/scaling
 
   // Stable callbacks for grid/map config changes — passed to DMControlCenter useEffect deps
@@ -1369,31 +1371,40 @@ function GameContent() {
         </div>
       )}
 
-      {/* Main Game Area */}
-      <div className="main-game-area">
-        {/* GRID POSITION 1: Left Column - party-sidebar with adventure log */}
-        <div className="party-sidebar">
+      {/* Party drawer — fixed-position, outside grid flow */}
+      <div
+        className="party-drawer"
+        style={{ transform: isDrawerOpen ? 'translateX(0)' : 'translateX(-100%)' }}
+      >
+        <button
+          className={`drawer-toggle-tab ${isDrawerOpen ? 'active' : ''}`}
+          onClick={() => setIsDrawerOpen(!isDrawerOpen)}
+        >
+          PARTY
+        </button>
+
+        <div className="drawer-content">
           {/* DM Section */}
-          <div 
+          <div
             className="party-header"
             style={{
-              color: '#fb7185', // Rose-400 for DM theme
-              borderBottom: '1px solid rgba(251, 113, 133, 0.3)' // Rose-400/30 border
+              color: '#fb7185',
+              borderBottom: '1px solid rgba(251, 113, 133, 0.3)'
             }}
           >
             <span>Dungeon Master</span>
           </div>
-          
-          <DMChair 
+
+          <DMChair
             dmName={dmSeat}
             isEmpty={dmSeat === ""}
           />
 
           {/* Party Section */}
-          <div 
+          <div
             className="party-header"
             style={{
-              borderBottom: '1px solid rgba(74, 222, 128, 0.3)' // Emerald-400/30 border to match party theme
+              borderBottom: '1px solid rgba(74, 222, 128, 0.3)'
             }}
           >
             <span>Party</span>
@@ -1401,11 +1412,11 @@ function GameContent() {
               {gameSeats.filter(seat => seat.playerName !== "empty").length}/{gameSeats.length} Seats
             </span>
           </div>
-          
+
           {gameSeats.filter(seat => isDM || seat.playerName !== "empty").map((seat) => {
             const isSitting = seat.playerName === getCurrentPlayerName();
             const currentColor = seatColors[seat.seatId] || getSeatColor(seat.seatId);
-            
+
             return (
               <PlayerCard
                 key={seat.seatId}
@@ -1422,21 +1433,102 @@ function GameContent() {
             );
           })}
 
-          {/* Lobby Panel - shows all connected users not in party */}
+          {/* Lobby Panel */}
           <LobbyPanel
             lobbyUsers={lobbyUsers}
           />
 
-          {/* Adventure Log component */}
-          <AdventureLog 
+          {/* Adventure Log */}
+          <AdventureLog
             rollLog={rollLog}
             playerSeatMap={playerSeatMap}
           />
         </div>
+      </div>
 
-        {/* GRID POSITION 2: Center Column - map-canvas with horizontal initiative */}
+      {/* Right drawer — fixed-position, outside grid flow */}
+      <div
+        className="right-drawer"
+        style={{ transform: activeRightDrawer ? 'translateX(0)' : 'translateX(100%)' }}
+      >
+        <button
+          className={`right-drawer-tab ${activeRightDrawer === 'moderator' ? 'active' : ''}`}
+          style={{ top: 'calc(50% - 116px)' }}
+          onClick={() => setActiveRightDrawer(prev => prev === 'moderator' ? null : 'moderator')}
+        >
+          MOD
+        </button>
+        <button
+          className={`right-drawer-tab ${activeRightDrawer === 'dm' ? 'active' : ''}`}
+          style={{ top: 'calc(50% + 4px)' }}
+          onClick={() => setActiveRightDrawer(prev => prev === 'dm' ? null : 'dm')}
+        >
+          DM
+        </button>
+
+        <div className="drawer-content">
+          {activeRightDrawer === 'moderator' && (
+            <ModeratorControls
+              isModerator={isModerator}
+              isHost={isHost}
+              isDM={isDM}
+              gameSeats={gameSeats}
+              lobbyUsers={lobbyUsers}
+              roomId={roomId}
+              thisPlayer={getCurrentPlayerName()}
+              currentUser={currentUser}
+              onRoleChange={handleRoleChange}
+              sendRoleChange={sendRoleChange}
+              setSeatCount={setSeatCount}
+              handleKickPlayer={handleKickPlayer}
+              handleClearSystemMessages={handleClearSystemMessages}
+              handleClearAllMessages={handleClearAllMessages}
+              roleChangeTrigger={roleChangeTrigger}
+            />
+          )}
+          {activeRightDrawer === 'dm' && (
+            <DMControlCenter
+              isDM={isDM}
+              promptPlayerRoll={promptPlayerRoll}
+              promptAllPlayersInitiative={promptAllPlayersInitiative}
+              currentTrack={currentTrack}
+              isPlaying={isPlaying}
+              handleTrackClick={handleTrackClick}
+              combatActive={combatActive}
+              setCombatActive={sendCombatStateChange}
+              gameSeats={gameSeats}
+              roomId={roomId}
+              campaignId={campaignId}
+              activePrompts={activePrompts}
+              unlockAudio={unlockAudio}
+              isAudioUnlocked={isAudioUnlocked}
+              remoteTrackStates={remoteTrackStates}
+              remoteTrackAnalysers={remoteTrackAnalysers}
+              playRemoteTrack={playRemoteTrack}
+              stopRemoteTrack={stopRemoteTrack}
+              sendRemoteAudioPlay={sendRemoteAudioPlay}
+              sendRemoteAudioResume={sendRemoteAudioResume}
+              sendRemoteAudioBatch={sendRemoteAudioBatch}
+              clearPendingOperation={setClearPendingOperationFn}
+              loadAssetIntoChannel={loadAssetIntoChannel}
+              clearDicePrompt={clearDicePrompt}
+              activeMap={activeMap}
+              setActiveMap={setActiveMap}
+              gridEditMode={gridEditMode}
+              setGridEditMode={setGridEditMode}
+              handleGridChange={handleGridChange}
+              liveGridOpacity={liveGridOpacity}
+              setLiveGridOpacity={setLiveGridOpacity}
+              sendMapLoad={sendMapLoad}
+              sendMapClear={sendMapClear}
+            />
+          )}
+        </div>
+      </div>
+
+      {/* Main Game Area — single column grid (map only) */}
+      <div className="main-game-area">
         <div className="grid-area-map-canvas relative">
-          {/* Map Display Background - Now properly positioned in center area */}
           <MapDisplay
             activeMap={activeMap}
             isEditMode={gridEditMode && isDM}
@@ -1446,76 +1538,14 @@ function GameContent() {
             liveGridOpacity={liveGridOpacity}
             gridConfig={gridConfig}
           />
-          
-          {/* Horizontal Initiative Tracker overlaid on map */}
-          <HorizontalInitiativeTracker 
+
+          <HorizontalInitiativeTracker
             initiativeOrder={initiativeOrder}
             handleInitiativeClick={handleInitiativeClick}
             currentTurn={currentTurn}
             combatActive={combatActive}
           />
         </div>
-
-        {/* GRID POSITION 3: Right Panel - DM Controls (Full Height) */}
-        <div className="right-panel p-4">
-          {/* Moderator Controls - shown if player is host or moderator */}
-          <ModeratorControls
-            isModerator={isModerator}
-            isHost={isHost}
-            isDM={isDM}
-            gameSeats={gameSeats}
-            lobbyUsers={lobbyUsers}
-            roomId={roomId}
-            thisPlayer={getCurrentPlayerName()}
-            currentUser={currentUser}
-            onRoleChange={handleRoleChange}
-            sendRoleChange={sendRoleChange}
-            setSeatCount={setSeatCount}
-            handleKickPlayer={handleKickPlayer}
-            handleClearSystemMessages={handleClearSystemMessages}
-            handleClearAllMessages={handleClearAllMessages}
-            roleChangeTrigger={roleChangeTrigger}
-          />
-          
-          <DMControlCenter
-            isDM={isDM}
-            promptPlayerRoll={promptPlayerRoll}
-            promptAllPlayersInitiative={promptAllPlayersInitiative}  // NEW
-            currentTrack={currentTrack}
-            isPlaying={isPlaying}
-            handleTrackClick={handleTrackClick}
-            combatActive={combatActive}
-            setCombatActive={sendCombatStateChange}
-            gameSeats={gameSeats}
-            roomId={roomId}
-            campaignId={campaignId}
-            activePrompts={activePrompts}        // UPDATED: Pass array instead of single prompt
-            unlockAudio={unlockAudio}             // NEW: Pass audio unlock function
-            isAudioUnlocked={isAudioUnlocked}    // NEW: Pass audio unlock status
-            remoteTrackStates={remoteTrackStates} // NEW: Pass remote track states
-            remoteTrackAnalysers={remoteTrackAnalysers} // NEW: Pass remote track analysers
-            playRemoteTrack={playRemoteTrack}     // NEW: Pass remote track controls (local)
-            stopRemoteTrack={stopRemoteTrack}     // NEW: Pass remote track controls (local)
-            sendRemoteAudioPlay={sendRemoteAudioPlay}     // NEW: Pass WebSocket sending functions
-            sendRemoteAudioResume={sendRemoteAudioResume} // NEW: Pass WebSocket resume function
-            sendRemoteAudioBatch={sendRemoteAudioBatch}   // NEW: Pass WebSocket batch function
-            clearPendingOperation={setClearPendingOperationFn} // NEW: Pass function to set pending operation clearer
-            loadAssetIntoChannel={loadAssetIntoChannel} // NEW: Pass asset loading for track selector
-            clearDicePrompt={clearDicePrompt}    // UPDATED: Now accepts prompt ID
-            // Map management props
-            activeMap={activeMap}
-            setActiveMap={setActiveMap}
-            gridEditMode={gridEditMode}
-            setGridEditMode={setGridEditMode}
-            handleGridChange={handleGridChange}
-            liveGridOpacity={liveGridOpacity}
-            setLiveGridOpacity={setLiveGridOpacity}
-            // WebSocket map functions
-            sendMapLoad={sendMapLoad}
-            sendMapClear={sendMapClear}
-          />
-        </div>
-
       </div>
 
       {/* DiceActionPanel - only show if user is sitting in a seat OR is DM */}

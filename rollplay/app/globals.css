@@ -477,34 +477,79 @@ body {
   color: #000;
 }
 
-/* Main Game Area Grid - UPDATED: Fixed left panel width scaling
+/* Main Game Area Grid - Single column, all panels are fixed-position drawers
    ========================================================================== */
 .main-game-area {
   flex: 1;
   display: grid;
-  grid-template-columns: calc(380px + var(--panel-width-addition)) 1fr calc(375px * var(--ui-scale));
+  grid-template-columns: 1fr;
   grid-template-rows: 1fr;
-  grid-template-areas: 
-    "party-sidebar map-canvas right-panel";
+  grid-template-areas: "map-canvas";
   min-height: 0;
   overflow: hidden;
   position: relative;
-  z-index: 10; /* Above map background */
+  z-index: 10;
 }
 
-/* Party Sidebar - UPDATED: With scaling and map transparency
+/* Party Drawer - Fixed-position slide-out panel
    ========================================================================== */
-.party-sidebar {
-  grid-area: party-sidebar;
-  background: linear-gradient(180deg, rgba(0,0,0,0.8) 0%, rgba(26,26,46,0.7) 100%);
+.party-drawer {
+  position: fixed;
+  left: 0;
+  top: calc(50px * var(--ui-scale));
+  bottom: 0;
+  width: calc(380px + var(--panel-width-addition));
+  z-index: 30;
+  transition: transform 300ms ease;
+  background: linear-gradient(90deg, rgba(0,0,0,0.8) 0%, rgba(26,26,46,0.7) 100%);
   backdrop-filter: blur(8px);
   border-right: 1px solid rgba(255, 255, 255, 0.1);
-  padding: calc(20px * var(--ui-scale)) calc(16px * var(--ui-scale));
-  overflow-y: auto;
+  overflow: visible;
   display: flex;
   flex-direction: column;
-  position: relative;
-  z-index: 15; /* Above map */
+}
+
+.drawer-content {
+  flex: 1;
+  overflow-y: auto;
+  padding: calc(20px * var(--ui-scale)) calc(16px * var(--ui-scale));
+  display: flex;
+  flex-direction: column;
+}
+
+.drawer-toggle-tab {
+  position: absolute;
+  right: -40px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 40px;
+  height: 112px;
+  background: rgba(0, 0, 0, 0.7);
+  backdrop-filter: blur(8px);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-left: none;
+  border-radius: 0 6px 6px 0;
+  color: rgba(255, 255, 255, 0.5);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 14px;
+  font-weight: 600;
+  font-family: system-ui;
+  z-index: 31;
+  transition: color 200ms, background 200ms;
+  writing-mode: vertical-rl;
+  text-orientation: mixed;
+}
+.drawer-toggle-tab:hover {
+  color: rgba(255, 255, 255, 0.8);
+}
+.drawer-toggle-tab.active {
+  color: #0B0A09;
+  background: rgba(14, 165, 233, 0.5);
+  border-color: rgba(14, 165, 233, 0.6);
+  text-shadow: 0 0 8px rgba(247, 244, 243, 0.8);
 }
 
 .party-header {
@@ -606,29 +651,57 @@ body {
   position: relative;
 }
 
-/* Right Panel Container - UPDATED: With scaling and map transparency
+/* Right Drawer - Fixed-position slide-out panel (mirrors party-drawer on right side)
    ========================================================================== */
-.right-panel {
-  grid-area: right-panel;
-  background: linear-gradient(180deg, rgba(0,0,0,0.8) 0%, rgba(26,26,46,0.7) 100%);
+.right-drawer {
+  position: fixed;
+  right: 0;
+  top: calc(50px * var(--ui-scale));
+  bottom: 0;
+  width: calc(380px + var(--panel-width-addition));
+  z-index: 30;
+  transition: transform 300ms ease;
+  background: linear-gradient(270deg, rgba(0,0,0,0.8) 0%, rgba(26,26,46,0.7) 100%);
   backdrop-filter: blur(8px);
   border-left: 1px solid rgba(255, 255, 255, 0.1);
+  overflow: visible;
   display: flex;
   flex-direction: column;
-  min-height: 0;
-  max-height: 100vh;
-  overflow-y: auto;
-  position: relative;
-  z-index: 15; /* Above map */
-  
-  /* Hide scrollbar completely */
-  scrollbar-width: none; /* Firefox */
-  -ms-overflow-style: none; /* IE and Edge */
 }
 
-/* Hide scrollbar for WebKit browsers (Chrome, Safari) */
-.right-panel::-webkit-scrollbar {
-  display: none;
+.right-drawer-tab {
+  position: absolute;
+  left: -40px;
+  width: 40px;
+  height: 112px;
+  background: rgba(0, 0, 0, 0.7);
+  backdrop-filter: blur(8px);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-right: none;
+  border-radius: 6px 0 0 6px;
+  color: rgba(255, 255, 255, 0.5);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 14px;
+  font-weight: 600;
+  font-family: system-ui;
+  z-index: 31;
+  transition: color 200ms, background 200ms;
+  writing-mode: vertical-rl;
+  text-orientation: mixed;
+}
+
+.right-drawer-tab:hover {
+  color: rgba(255, 255, 255, 0.8);
+}
+
+.right-drawer-tab.active {
+  color: #0B0A09;
+  background: rgba(14, 165, 233, 0.5);
+  border-color: rgba(14, 165, 233, 0.6);
+  text-shadow: 0 0 8px rgba(247, 244, 243, 0.8);
 }
 
 /* Custom Scrollbar for DM Control Center
@@ -724,19 +797,8 @@ body {
 @media (max-width: 1200px) {
   .main-game-area {
     grid-template-columns: 1fr;
-    grid-template-rows: auto 1fr auto;
-    grid-template-areas: 
-      "party-sidebar"
-      "map-canvas"
-      "right-panel";
-  }
-  
-  .party-sidebar {
-    max-height: calc(380px * var(--ui-scale));
-  }
-  
-  .right-panel {
-    max-height: calc(400px * var(--ui-scale));
+    grid-template-rows: 1fr;
+    grid-template-areas: "map-canvas";
   }
 }
 
@@ -764,18 +826,6 @@ body {
   .adventure-log-section .log-entry {
     border-left-width: calc(4px * var(--ui-scale));
   }
-}
-
-/* 1. UPDATE: Increase baseline width for party sidebar by 20px */
-.main-game-area {
-  flex: 1;
-  display: grid;
-  grid-template-columns: calc(380px + var(--panel-width-addition)) 1fr calc(375px * var(--ui-scale)); /* Right panel: 25% wider (300px -> 375px) */
-  grid-template-rows: 1fr;
-  grid-template-areas: 
-    "party-sidebar map-canvas right-panel";
-  min-height: 0;
-  overflow: hidden;
 }
 
 
