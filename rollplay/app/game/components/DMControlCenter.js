@@ -111,12 +111,12 @@ export default function DMControlCenter({
 }) {
   
   // State for main panel collapse
-  const [isCollapsed, setIsCollapsed] = useState(true); // Default to collapsed to encourage DM to click and unlock audio
+  const [isCollapsed, setIsCollapsed] = useState(false); // Expanded by default — audio unlocked via Enter Session overlay
 
-  // State for collapsible sections
+  // State for collapsible sections (collapsed by default, DM expands as needed)
   const [expandedSections, setExpandedSections] = useState({
-    map: true,
-    combat: true,
+    map: false,
+    combat: false,
     audio: false
   });
 

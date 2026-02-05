@@ -105,6 +105,9 @@ function GameContent() {
   // Campaign ID for direct api-site calls (asset library)
   const [campaignId, setCampaignId] = useState(null);
 
+  // Campaign metadata for overlay (fetched from api-site when campaignId is set)
+  const [campaignMeta, setCampaignMeta] = useState(null);
+
   // Spectator mode - user has no character selected for this campaign
   const [isSpectator, setIsSpectator] = useState(false);
   // Debug wrapper for setGridConfig
@@ -417,6 +420,27 @@ function GameContent() {
 
     checkSpectatorStatus();
   }, [campaignId, currentUser, isDM]);
+
+  // Fetch campaign metadata (title + hero_image) for the Enter Session overlay
+  useEffect(() => {
+    if (!campaignId) return;
+    console.log(`🎨 Fetching campaign metadata for overlay: ${campaignId}`);
+    fetch(`/api/campaigns/${campaignId}`, { credentials: 'include' })
+      .then(res => {
+        if (!res.ok) {
+          console.warn(`⚠️ Campaign metadata fetch failed: ${res.status}`);
+          return null;
+        }
+        return res.json();
+      })
+      .then(data => {
+        if (data) {
+          console.log(`✅ Campaign metadata loaded: "${data.title}"`);
+          setCampaignMeta({ title: data.title, heroImage: data.hero_image });
+        }
+      })
+      .catch(err => console.warn('⚠️ Campaign metadata fetch error:', err));
+  }, [campaignId]);
 
   // Cleanup audio when component unmounts (user navigates away from game page)
   useEffect(() => {
@@ -1390,7 +1414,7 @@ function GameContent() {
             </span>
           </div>
           
-          {gameSeats.map((seat) => {
+          {gameSeats.filter(seat => isDM || seat.playerName !== "empty").map((seat) => {
             const isSitting = seat.playerName === getCurrentPlayerName();
             const currentColor = seatColors[seat.seatId] || getSeatColor(seat.seatId);
             
@@ -1400,17 +1424,12 @@ function GameContent() {
                 seatId={seat.seatId}
                 seats={gameSeats}
                 thisPlayer={getCurrentPlayerName()}
-                currentUser={currentUser}
                 isSitting={isSitting}
-                sendSeatChange={sendSeatChange}
-                unlockAudio={unlockAudio}
                 currentTurn={currentTurn}
                 onDiceRoll={handlePlayerDiceRoll}
                 playerData={seat.characterData}
                 onColorChange={handlePlayerColorChange}
                 currentColor={currentColor}
-                isDM={isDM}
-                isSpectator={isSpectator}
               />
             );
           })}
@@ -1534,23 +1553,33 @@ function GameContent() {
       {/* Audio Gate Overlay — provides user gesture for AudioContext + auto-seats player */}
       {!isAudioUnlocked && (
         <div
-          className="fixed inset-0 z-50 bg-black/70 flex items-center justify-center backdrop-blur-sm"
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm cursor-pointer"
           onClick={handleEnterSession}
         >
           <div
-            className="bg-gray-900 border border-sky-500/30 rounded-xl p-8 text-center max-w-sm"
-            onClick={e => e.stopPropagation()}
+            className="relative rounded-sm overflow-hidden shadow-2xl shadow-black/50 select-none"
+            style={{
+              width: 'min(60vw, calc(70vh * 16 / 9))',
+              backgroundImage: `url(${campaignMeta?.heroImage || '/campaign-tile-bg.png'})`,
+              backgroundSize: 'cover',
+              backgroundPosition: 'center',
+              aspectRatio: '16 / 9',
+            }}
           >
-            <h2 className="text-xl font-bold text-white mb-2">Enter Session</h2>
-            <p className="text-gray-400 text-sm mb-4">
-              Click to join the session and enable audio
-            </p>
-            <button
-              onClick={handleEnterSession}
-              className="px-6 py-3 bg-sky-600 hover:bg-sky-500 text-white rounded-lg font-semibold transition-colors"
-            >
-              Enter Session
-            </button>
+            {/* Gradient overlays for text readability at top and bottom */}
+            <div className="absolute inset-0 bg-gradient-to-b from-black/90 via-transparent to-black/90" />
+
+            {/* Content */}
+            <div className="absolute inset-0 flex flex-col items-center justify-between py-12 px-6 text-center">
+              {campaignMeta?.title && (
+                <h2 className="text-4xl text-white font-[family-name:var(--font-metamorphous)]">
+                  {campaignMeta.title}
+                </h2>
+              )}
+              <p className="text-sm text-gray-300/80 tracking-widest uppercase">
+                Click to enter
+              </p>
+            </div>
           </div>
         </div>
       )}

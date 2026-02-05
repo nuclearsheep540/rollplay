@@ -7,33 +7,23 @@ export default function PlayerCard({
     seats,
     thisPlayer,
     isSitting,
-    sendSeatChange,
-    unlockAudio = null,
     currentTurn = null,
     onDiceRoll = null,
     playerData = null,
     onColorChange = null,
     currentColor = null,
-    isDM = false, // New prop to check if current player is DM
-    isSpectator = false // Spectators cannot take seats
   }) {
-  
-  
+
+
     useEffect(() => {
       console.log(`Seat ${seatId} updated:`, seats[seatId]);
     }, [seats[seatId]]);
-  
+
     const currentSeat = seats[seatId];
     const isOccupied = currentSeat.playerName !== "empty";
     const occupantName = currentSeat.playerName;
     const isMyTurn = currentTurn === occupantName;
     const isThisPlayerSeat = currentSeat.playerName === thisPlayer;
-    
-    // Check if player is already sitting somewhere
-    const playerAlreadySeated = seats.some(seat => seat.playerName === thisPlayer);
-
-    // Check if player can sit (not already seated AND not DM AND not spectator)
-    const canSitDown = !playerAlreadySeated && !isDM && !isSpectator;
 
     // Get the actual seat color from CSS custom property
     const getActualSeatColor = (seatIndex) => {
@@ -47,7 +37,7 @@ export default function PlayerCard({
       // Fallback to default color mapping if CSS variable not set
       const colorMap = {
         'blue': '#3b82f6',
-        'red': '#ef4444', 
+        'red': '#ef4444',
         'green': '#22c55e',
         'orange': '#f97316',
         'purple': '#a855f7',
@@ -57,113 +47,37 @@ export default function PlayerCard({
       };
       return colorMap[getSeatColor(seatIndex)] || '#3b82f6';
     };
-  
+
     // Helper function to display player names in title case
     const toTitleCase = (name) => {
       if (!name || name === "empty") return name;
       return name.charAt(0).toUpperCase() + name.slice(1).toLowerCase();
     };
 
-
-    function sitSeat() {
-      // Only allow sitting if seat is empty AND player isn't already seated
-      if (!isOccupied && !playerAlreadySeated) {
-        // Unlock audio on first user interaction
-        if (unlockAudio) {
-          unlockAudio().then(() => {
-            console.log('🔊 Audio unlocked when player sat down');
-          }).catch(err => {
-            console.warn('Audio unlock failed:', err);
-          });
-        }
-        
-        const newSeats = [...seats];
-        
-        // Sit in the new seat
-        newSeats[seatId] = {
-          ...newSeats[seatId],
-          playerName: thisPlayer,
-          characterData: getCharacterData(thisPlayer),
-          isActive: false
-        };
-        
-        sendSeatChange(newSeats);
-      }
-    }
-  
-    function leaveSeat() {
-      if (isThisPlayerSeat) {
-        const newSeats = [...seats];
-        newSeats[seatId] = {
-          ...newSeats[seatId],
-          playerName: "empty",
-          characterData: null,
-          isActive: false
-        };
-        
-        sendSeatChange(newSeats);
-      }
-    }
-  
-    function getCharacterData(playerName) {
-      const characterDatabase = {
-        'Thorin': { class: 'Dwarf Fighter', level: 3, hp: 34, maxHp: 40, statusEffects: ['Blessed', 'Shield'] },
-        'Elara': { class: 'Elf Wizard', level: 3, hp: 18, maxHp: 30, statusEffects: ['Mage Armor'] },
-        'Finn': { class: 'Halfling Rogue', level: 2, hp: 23, maxHp: 24, statusEffects: [] },
-        'Sister Meredith': { class: 'Human Cleric', level: 3, hp: 12, maxHp: 30, statusEffects: ['Concentrating'] }
-      };
-      
-      return characterDatabase[playerName] || {
-        class: 'Adventurer',
-        level: 1,
-        hp: 10,
-        maxHp: 10,
-        statusEffects: []
-      };
-    }
-  
     // Calculate HP percentage for styling
     const hpPercentage = playerData ? (playerData.hp / playerData.maxHp) * 100 : 0;
-    
-    // Render empty seat
+
+    // Render empty seat (static placeholder — seats are auto-assigned via Enter Session overlay)
     if (!isOccupied) {
       return (
-        <div 
-          className={`
-            rounded-lg border border-dashed text-center cursor-pointer transition-all duration-300
-            p-[calc(12px*var(--ui-scale))] mb-[calc(12px*var(--ui-scale))]
-            ${!canSitDown 
-              ? 'bg-emerald-500/5 border-gray-500/30 opacity-50 cursor-not-allowed' 
-              : 'bg-emerald-500/5 border-emerald-500/30 hover:bg-emerald-500/10 hover:border-emerald-500/50'
-            }
-          `}
-          onClick={canSitDown ? sitSeat : null}
-        >
-          <div
-            className="text-emerald-400 font-medium text-[calc(12px*var(--ui-scale))]"
-          >
-            {isDM
-              ? `🪑 Seat ${seatId + 1}`
-              : isSpectator
-                ? `🪑 Seat ${seatId + 1} - Select character to join`
-                : playerAlreadySeated
-                  ? `🪑 Seat ${seatId + 1} - Leave current seat first`
-                  : `🪑 Seat ${seatId + 1} - Click to Join`
-            }
+        <div className="rounded-lg border border-dashed border-gray-500/30 bg-white/5 text-center
+          p-[calc(12px*var(--ui-scale))] mb-[calc(12px*var(--ui-scale))]">
+          <div className="text-gray-500 font-medium text-[calc(12px*var(--ui-scale))]">
+            🪑 Seat {seatId + 1}
           </div>
         </div>
       );
     }
-  
+
     // Render occupied seat
     return (
-      <div 
+      <div
         className={`
           rounded-lg border transition-all duration-300 relative p-[calc(8px*var(--ui-scale))] mb-[calc(8px*var(--ui-scale))] border-l-4
-          ${isMyTurn 
-            ? 'bg-emerald-500/10 border-emerald-500/30 shadow-lg shadow-emerald-500/20' 
-            : isThisPlayerSeat 
-              ? 'bg-blue-500/10 border-blue-500/30' 
+          ${isMyTurn
+            ? 'bg-emerald-500/10 border-emerald-500/30 shadow-lg shadow-emerald-500/20'
+            : isThisPlayerSeat
+              ? 'bg-blue-500/10 border-blue-500/30'
               : 'bg-white/5 border-white/10'
           }
         `}
@@ -175,25 +89,25 @@ export default function PlayerCard({
         {isMyTurn && (
           <div className="absolute inset-0 rounded-lg border-2 border-emerald-400/50 animate-pulse pointer-events-none"></div>
         )}
-        
+
         {/* Member Header */}
-        <div 
+        <div
           className="flex items-center justify-between mb-[calc(4px*var(--ui-scale))]"
         >
-          <div 
+          <div
             className="font-semibold text-blue-400 text-[calc(16px*var(--ui-scale))]"
           >
             {toTitleCase(occupantName)}
           </div>
           <div className="flex items-center gap-[calc(8px*var(--ui-scale))]">
             {isMyTurn && (
-              <div 
+              <div
                 className="bg-emerald-500/20 text-emerald-400 px-[calc(6px*var(--ui-scale))] py-[calc(2px*var(--ui-scale))] rounded-full font-semibold uppercase tracking-wider text-[calc(9px*var(--ui-scale))]"
               >
                 🎯 Active
               </div>
             )}
-            
+
             {/* Color Picker - Only show for the player's own seat */}
             {isThisPlayerSeat && onColorChange && (
               <div className="relative">
@@ -205,60 +119,49 @@ export default function PlayerCard({
                 />
               </div>
             )}
-            
-            {/* Exit Button - Repositioned to header */}
-            {isThisPlayerSeat && (
-              <button 
-                className="bg-transparent border border-red-500/40 text-red-400 rounded transition-all duration-200 hover:bg-red-500/10 hover:border-red-500 flex items-center justify-center p-[calc(4px*var(--ui-scale))] w-[calc(24px*var(--ui-scale))] h-[calc(24px*var(--ui-scale))] text-[calc(10px*var(--ui-scale))]"
-                onClick={leaveSeat}
-                title="Leave Seat"
-              >
-                ✕
-              </button>
-            )}
           </div>
         </div>
-        
+
         {playerData ? (
           <>
             {/* Character Class & Level */}
-            <div 
+            <div
               className="text-gray-400 text-[calc(13px*var(--ui-scale))] mb-[calc(4px*var(--ui-scale))]"
             >
               {playerData.class} • Level {playerData.level}
             </div>
-            
+
             {/* HP Display */}
-            <div 
+            <div
               className="flex items-center gap-[calc(10px*var(--ui-scale))] mb-[calc(6px*var(--ui-scale))]"
             >
               {/* HP Bar Container */}
-              <div 
+              <div
                 className="flex-1 bg-white/10 rounded-full overflow-hidden relative h-[calc(6px*var(--ui-scale))]"
                 style={{
                   background: 'linear-gradient(90deg, #ef4444 0%, #ef4444 30%, #eab308 30%, #eab308 60%, #22c55e 60%, #22c55e 100%)',
                 }}
               >
                 {/* HP Fill Overlay */}
-                <div 
+                <div
                   className="absolute inset-0 bg-gray-800/80 transition-all duration-300"
-                  style={{ 
+                  style={{
                     left: `${hpPercentage}%`,
                   }}
                 ></div>
               </div>
-              
+
               {/* HP Text */}
-              <div 
+              <div
                 className="text-gray-300 font-mono flex items-baseline text-[calc(14px*var(--ui-scale))] min-w-[calc(50px*var(--ui-scale))]"
               >
-                <span 
+                <span
                   className="text-white text-[calc(13px*var(--ui-scale))]"
                 >
                   {playerData.hp}
                 </span>
                 <span className="mx-1">/</span>
-                <span 
+                <span
                   className="font-semibold text-[calc(15px*var(--ui-scale))]"
                 >
                   {playerData.maxHp}
@@ -267,7 +170,7 @@ export default function PlayerCard({
             </div>
 
             {/* Status Effects - Closer to HP */}
-            <div 
+            <div
               className="flex flex-wrap items-center gap-[calc(4px*var(--ui-scale))] mb-[calc(8px*var(--ui-scale))]"
             >
               {playerData.statusEffects && playerData.statusEffects.length > 0 ? (
@@ -289,14 +192,12 @@ export default function PlayerCard({
             </div>
           </>
         ) : (
-          <div 
+          <div
             className="text-gray-400 text-[calc(13px*var(--ui-scale))] mb-[calc(10px*var(--ui-scale))]"
           >
             Player • Seat {seatId + 1}
           </div>
         )}
-
-        {/* Removed separate seat actions section - exit button now in header */}
       </div>
     );
   }

@@ -273,11 +273,11 @@ async def get_campaign(
                 detail="Campaign not found"
             )
 
-        # Business rule: Only host can view campaign details
-        if not campaign.is_owned_by(user_id):
+        # Business rule: Only campaign members (host or players) can view details
+        if not campaign.is_member(user_id):
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
-                detail="Access denied - only host can view campaign details"
+                detail="Access denied - only campaign members can view campaign details"
             )
 
         return _to_campaign_response(campaign)

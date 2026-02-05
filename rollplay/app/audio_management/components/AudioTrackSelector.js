@@ -4,7 +4,7 @@
 import React, { useState } from 'react';
 import AudioSelectionModal from './AudioSelectionModal';
 import { ChannelType } from '../types';
-import { DM_SUB_HEADER, DM_CHILD, DM_ARROW } from '../../styles/constants';
+import { DM_CHILD } from '../../styles/constants';
 
 // Channel definitions for track selector rows
 const CHANNELS = [
@@ -28,7 +28,6 @@ export default function AudioTrackSelector({
   onAssetSelected,
   campaignId,
 }) {
-  const [isExpanded, setIsExpanded] = useState(false);
   const [activeChannel, setActiveChannel] = useState(null);
 
   const handleSelectClick = (channelId) => {
@@ -46,17 +45,7 @@ export default function AudioTrackSelector({
 
   return (
     <div className="mb-2">
-      {/* Collapsible sub-header */}
-      <button
-        onClick={() => setIsExpanded(!isExpanded)}
-        className={DM_SUB_HEADER}
-      >
-        <span className={`${DM_ARROW} ${isExpanded ? 'rotate-90' : ''}`}>▶</span>
-        Audio Tracks
-      </button>
-
-      {isExpanded && (
-        <div className="ml-4 mt-2 space-y-1">
+      <div className="mt-2 space-y-1">
           {/* BGM Section */}
           <p className="text-xs text-gray-500 uppercase tracking-wider mb-1">Music</p>
           {CHANNELS.filter(c => c.type === ChannelType.BGM).map((channel) => {
@@ -131,7 +120,6 @@ export default function AudioTrackSelector({
             );
           })}
         </div>
-      )}
     </div>
   );
 }
