@@ -70,6 +70,7 @@ class SessionRepository:
             model.started_at = aggregate.started_at
             model.stopped_at = aggregate.stopped_at
             model.max_players = aggregate.max_players
+            model.audio_config = aggregate.audio_config
 
             # Sync joined_users (session_joined_users table)
             self._sync_joined_users(model.id, aggregate.joined_users)
@@ -86,7 +87,8 @@ class SessionRepository:
                 created_at=aggregate.created_at,
                 started_at=aggregate.started_at,
                 stopped_at=aggregate.stopped_at,
-                max_players=aggregate.max_players
+                max_players=aggregate.max_players,
+                audio_config=aggregate.audio_config
             )
             self.db.add(model)
             self.db.flush()  # Get ID before setting relationships
@@ -179,5 +181,6 @@ class SessionRepository:
             stopped_at=model.stopped_at,
             active_game_id=model.active_game_id,
             joined_users=joined_user_ids,
-            max_players=model.max_players
+            max_players=model.max_players,
+            audio_config=model.audio_config
         )

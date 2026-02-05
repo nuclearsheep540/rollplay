@@ -718,6 +718,8 @@ function GameContent() {
     audioBuffersRef,
     audioContextRef,
     setClearPendingOperationCallback,
+    loadAssetIntoChannel,
+    syncAudioState,
     cleanupAllAudio
   } = useUnifiedAudio();
 
@@ -770,6 +772,12 @@ function GameContent() {
     
     // Remote audio state (for resume functionality)
     remoteTrackStates,
+
+    // Late-joiner audio sync
+    syncAudioState,
+
+    // Asset loading (for load batch operations from other clients)
+    loadAssetIntoChannel,
 
     // Session ended modal
     setSessionEndedData
@@ -1489,6 +1497,7 @@ function GameContent() {
             sendRemoteAudioResume={sendRemoteAudioResume} // NEW: Pass WebSocket resume function
             sendRemoteAudioBatch={sendRemoteAudioBatch}   // NEW: Pass WebSocket batch function
             clearPendingOperation={setClearPendingOperationFn} // NEW: Pass function to set pending operation clearer
+            loadAssetIntoChannel={loadAssetIntoChannel} // NEW: Pass asset loading for track selector
             clearDicePrompt={clearDicePrompt}    // UPDATED: Now accepts prompt ID
             // Map management props
             activeMap={activeMap}

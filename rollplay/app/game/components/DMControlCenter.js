@@ -95,6 +95,7 @@ export default function DMControlCenter({
   sendRemoteAudioResume = null, // NEW: Send remote audio resume via WebSocket
   sendRemoteAudioBatch = null,     // NEW: Send remote audio batch operations via WebSocket
   clearPendingOperation = null,  // NEW: Function to set pending operation clearer
+  loadAssetIntoChannel = null,   // Asset library: load audio into channel
   // Map management props
   activeMap = null,          // NEW: Current active map data (contains grid_config atomically)
   setActiveMap = null,       // NEW: Function to set active map
@@ -681,7 +682,7 @@ export default function DMControlCenter({
         )}
       </div>
 
-      {/* Audio Tracks Section */}
+      {/* Audio Management — track selector + mixer */}
       <AudioMixerPanel
         isExpanded={expandedSections.audio}
         onToggle={() => toggleSection('audio')}
@@ -693,6 +694,8 @@ export default function DMControlCenter({
         unlockAudio={unlockAudio}
         isAudioUnlocked={isAudioUnlocked}
         clearPendingOperation={clearPendingOperation}
+        loadAssetIntoChannel={loadAssetIntoChannel}
+        campaignId={campaignId}
       />
 
 

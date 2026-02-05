@@ -106,21 +106,21 @@ export const useUnifiedAudio = () => {
   const trackTimersRef = useRef({}); // Store timing info for each track
   const resumeOperationsRef = useRef({}); // Track active resume operations to prevent duplicates
   const playOperationsRef = useRef({}); // Track active play operations to prevent duplicates
-
+  const pendingPlayOpsRef = useRef([]); // Queue play ops when AudioContext is suspended (non-DM players)
 
   // Remote track states (for DM-controlled audio) - A/B/C/D BGM + SFX channels
+  // Channels start empty — DM loads audio from asset library via AudioTrackSelector
   const [remoteTrackStates, setRemoteTrackStates] = useState({
     // BGM Channels
-    audio_channel_A: { playbackState: PlaybackState.STOPPED, volume: 0.8, filename: 'boss.mp3', type: ChannelType.BGM, channelGroup: ChannelType.BGM, track: 'A', currentTime: 0, duration: 0, looping: true },
-    audio_channel_B: { playbackState: PlaybackState.STOPPED, volume: 0.8, filename: 'shop.mp3', type: ChannelType.BGM, channelGroup: ChannelType.BGM, track: 'B', currentTime: 0, duration: 0, looping: true },
-    audio_channel_C: { playbackState: PlaybackState.STOPPED, volume: 0.8, filename: 'storm.mp3', type: ChannelType.BGM, channelGroup: ChannelType.BGM, track: 'C', currentTime: 0, duration: 0, looping: true },
-    audio_channel_D: { playbackState: PlaybackState.STOPPED, volume: 0.8, filename: 'zelda_night_loop.mp3', type: ChannelType.BGM, channelGroup: ChannelType.BGM, track: 'D', currentTime: 0, duration: 0, looping: true },
-    // SFX Channels (unchanged)
-    audio_channel_3: { playbackState: PlaybackState.STOPPED, volume: 0.8, filename: 'sword.mp3', type: ChannelType.SFX, currentTime: 0, duration: 0, looping: false },
-    audio_channel_4: { playbackState: PlaybackState.STOPPED, volume: 0.8, filename: 'enemy_hit_cinematic.mp3', type: ChannelType.SFX, currentTime: 0, duration: 0, looping: false },
-    audio_channel_5: { playbackState: PlaybackState.STOPPED, volume: 0.8, filename: 'link_attack.mp3', type: ChannelType.SFX, currentTime: 0, duration: 0, looping: false },
-    audio_channel_6: { playbackState: PlaybackState.STOPPED, volume: 0.8, filename: 'link_fall.mp3', type: ChannelType.SFX, currentTime: 0, duration: 0, looping: false }
-
+    audio_channel_A: { playbackState: PlaybackState.STOPPED, volume: 0.8, filename: null, asset_id: null, s3_url: null, type: ChannelType.BGM, channelGroup: ChannelType.BGM, track: 'A', currentTime: 0, duration: 0, looping: true },
+    audio_channel_B: { playbackState: PlaybackState.STOPPED, volume: 0.8, filename: null, asset_id: null, s3_url: null, type: ChannelType.BGM, channelGroup: ChannelType.BGM, track: 'B', currentTime: 0, duration: 0, looping: true },
+    audio_channel_C: { playbackState: PlaybackState.STOPPED, volume: 0.8, filename: null, asset_id: null, s3_url: null, type: ChannelType.BGM, channelGroup: ChannelType.BGM, track: 'C', currentTime: 0, duration: 0, looping: true },
+    audio_channel_D: { playbackState: PlaybackState.STOPPED, volume: 0.8, filename: null, asset_id: null, s3_url: null, type: ChannelType.BGM, channelGroup: ChannelType.BGM, track: 'D', currentTime: 0, duration: 0, looping: true },
+    // SFX Channels
+    audio_channel_3: { playbackState: PlaybackState.STOPPED, volume: 0.8, filename: null, asset_id: null, s3_url: null, type: ChannelType.SFX, currentTime: 0, duration: 0, looping: false },
+    audio_channel_4: { playbackState: PlaybackState.STOPPED, volume: 0.8, filename: null, asset_id: null, s3_url: null, type: ChannelType.SFX, currentTime: 0, duration: 0, looping: false },
+    audio_channel_5: { playbackState: PlaybackState.STOPPED, volume: 0.8, filename: null, asset_id: null, s3_url: null, type: ChannelType.SFX, currentTime: 0, duration: 0, looping: false },
+    audio_channel_6: { playbackState: PlaybackState.STOPPED, volume: 0.8, filename: null, asset_id: null, s3_url: null, type: ChannelType.SFX, currentTime: 0, duration: 0, looping: false }
   });
 
   // Active fade transitions state
@@ -128,7 +128,7 @@ export const useUnifiedAudio = () => {
 
   // Initialize Web Audio API for remote tracks
   const initializeWebAudio = async () => {
-    if (!audioContextRef.current) {
+    if (!audioContextRef.current || audioContextRef.current.state === 'closed') {
       try {
         audioContextRef.current = new (window.AudioContext || window.webkitAudioContext)();
         
@@ -165,9 +165,25 @@ export const useUnifiedAudio = () => {
     return true;
   };
 
+  // Eagerly initialize AudioContext on mount (creates in 'suspended' state).
+  // This allows loadRemoteAudioBuffer to decode audio even before user interaction,
+  // fixing the bug where non-DM players can't load remote audio buffers.
+  useEffect(() => {
+    if (typeof window !== 'undefined' && !audioContextRef.current) {
+      initializeWebAudio();
+      console.log('🎵 AudioContext eagerly initialized (suspended state)');
+    }
+  }, []);
+
   // Load remote audio buffer
   const loadRemoteAudioBuffer = async (url, trackId) => {
-    if (!audioContextRef.current) return null;
+    if (!audioContextRef.current || audioContextRef.current.state === 'closed') {
+      await initializeWebAudio();
+    }
+    if (!audioContextRef.current) {
+      console.warn('⚠️ loadRemoteAudioBuffer: AudioContext is null — cannot decode audio');
+      return null;
+    }
 
     try {
       console.log(`📁 Loading remote audio buffer: ${url}`);
@@ -299,16 +315,38 @@ export const useUnifiedAudio = () => {
         `currentTime=${currentTrackState?.currentTime}`
       );
   
+      // Reinitialize if context was closed (e.g. React strict mode remount)
+      if (
+        !audioContextRef.current ||
+        audioContextRef.current.state === 'closed'
+      ) {
+        await initializeWebAudio();
+      }
+
       // Check if Web Audio context exists and is unlocked
       if (
         !audioContextRef.current ||
         audioContextRef.current.state === 'suspended'
       ) {
-        console.warn('Web Audio context not ready - cannot play remote audio');
+        console.warn('🕐 Audio context suspended — queueing play operation for unlock');
         console.log(
           '💡 User needs to interact with the page to unlock audio ' +
           '(click volume slider, sit in seat, etc.)'
         );
+        // Queue the play operation — will be drained when unlockAudio() runs
+        pendingPlayOpsRef.current.push({
+          trackId, audioFile, loop, volume, completeTrackState, skipBufferLoad
+        });
+        // Update UI state so track metadata is visible while waiting for unlock
+        setRemoteTrackStates(prev => ({
+          ...prev,
+          [trackId]: {
+            ...prev[trackId],
+            filename: audioFile,
+            asset_id: completeTrackState?.asset_id || prev[trackId]?.asset_id,
+            s3_url: completeTrackState?.s3_url || prev[trackId]?.s3_url,
+          }
+        }));
         return false;
       }
   
@@ -338,9 +376,15 @@ export const useUnifiedAudio = () => {
       }
   
       // Load (or reuse) the AudioBuffer
-      const bufferKey = `${trackId}_${audioFile}`;
+      // Use asset_id for stable cache key (S3 URLs change on each presign), fall back to filename
+      const trackState = remoteTrackStates[trackId];
+      const assetId = completeTrackState?.asset_id || trackState?.asset_id;
+      const bufferKey = `${trackId}_${assetId || audioFile}`;
       let audioBuffer = audioBuffersRef.current[bufferKey];
-      
+
+      // Resolve audio URL: prefer S3 URL from track state, fall back to /audio/ path
+      const audioUrl = completeTrackState?.s3_url || trackState?.s3_url || `/audio/${audioFile}`;
+
       if (skipBufferLoad) {
         console.log(`⚡ [${operationId}] Skipping buffer load (synchronized playback) - using pre-loaded buffer`);
         if (!audioBuffer) {
@@ -349,14 +393,14 @@ export const useUnifiedAudio = () => {
         }
       } else if (!audioBuffer) {
         console.log(
-          `📁 [${operationId}] Loading remote audio buffer: /audio/${audioFile}`
+          `📁 [${operationId}] Loading remote audio buffer: ${audioUrl}`
         );
-        audioBuffer = await loadRemoteAudioBuffer(`/audio/${audioFile}`, trackId);
+        audioBuffer = await loadRemoteAudioBuffer(audioUrl, trackId);
         if (!audioBuffer) return false;
         audioBuffersRef.current[bufferKey] = audioBuffer;
       } else {
         console.log(
-          `♻️ [${operationId}] Using cached audio buffer: /audio/${audioFile}`
+          `♻️ [${operationId}] Using cached audio buffer for ${trackId}`
         );
       }
   
@@ -752,6 +796,18 @@ export const useUnifiedAudio = () => {
       
       setIsAudioUnlocked(true);
       console.log('🔊 Unified audio system unlocked successfully');
+
+      // Drain pending play operations that were queued while context was suspended
+      const pending = pendingPlayOpsRef.current;
+      pendingPlayOpsRef.current = [];
+      if (pending.length > 0) {
+        console.log(`🔓 Draining ${pending.length} pending play operation(s)...`);
+        for (const op of pending) {
+          await playRemoteTrack(op.trackId, op.audioFile, op.loop, op.volume, null, op.completeTrackState, op.skipBufferLoad);
+        }
+        console.log('✅ All pending play operations drained');
+      }
+
       return true;
     } catch (error) {
       console.warn('Unified audio unlock failed:', error);
@@ -860,6 +916,93 @@ export const useUnifiedAudio = () => {
     console.log('✅ All audio cleanup complete');
   }, [activeFades]);
 
+  // Sync audio state from server (called on initial_state for late-joiners)
+  const syncAudioState = async (audioState) => {
+    if (!audioState || typeof audioState !== 'object') return;
+
+    console.log('🔄 Syncing audio state from server:', Object.keys(audioState));
+
+    for (const [channelId, channelState] of Object.entries(audioState)) {
+      if (!channelState || !channelState.filename) continue;
+
+      const { filename, asset_id, s3_url, volume, looping, playback_state, started_at, paused_elapsed } = channelState;
+
+      // Update track metadata in React state
+      setRemoteTrackStates(prev => ({
+        ...prev,
+        [channelId]: {
+          ...prev[channelId],
+          filename,
+          asset_id,
+          s3_url,
+          volume: volume ?? prev[channelId]?.volume ?? 0.8,
+          looping: looping ?? prev[channelId]?.looping ?? true,
+        }
+      }));
+
+      if (playback_state === 'playing' && started_at) {
+        // Load buffer and start playback at calculated offset
+        const audioUrl = s3_url || `/audio/${filename}`;
+        const buffer = await loadRemoteAudioBuffer(audioUrl, channelId);
+
+        if (buffer) {
+          // Store buffer with stable key
+          const bufferKey = `${channelId}_${asset_id || filename}`;
+          audioBuffersRef.current[bufferKey] = buffer;
+
+          // Calculate offset: elapsed time modulo track duration for looping
+          const elapsed = (Date.now() / 1000) - started_at;
+          const offset = looping ? (elapsed % buffer.duration) : Math.min(elapsed, buffer.duration);
+
+          // If non-looping track has already finished, don't play
+          if (!looping && elapsed >= buffer.duration) {
+            console.log(`⏹️ Sync: ${channelId} has already finished (non-looping)`);
+            continue;
+          }
+
+          console.log(`▶️ Sync: starting ${channelId} at offset ${offset.toFixed(1)}s (elapsed: ${elapsed.toFixed(1)}s, duration: ${buffer.duration.toFixed(1)}s)`);
+
+          // Build complete track state for playRemoteTrack
+          const completeTrackState = { channelId, filename, asset_id, s3_url, looping, volume, type: prev => prev?.[channelId]?.type };
+          await playRemoteTrack(channelId, filename, looping, volume, offset, {
+            ...channelState,
+            channelId,
+          }, true);
+        } else {
+          console.warn(`⚠️ Sync: failed to load buffer for ${channelId}`);
+        }
+      } else if (playback_state === 'paused' && paused_elapsed != null) {
+        // Show as paused with the saved position
+        setRemoteTrackStates(prev => ({
+          ...prev,
+          [channelId]: {
+            ...prev[channelId],
+            playbackState: PlaybackState.PAUSED,
+            currentTime: paused_elapsed,
+          }
+        }));
+        console.log(`⏸️ Sync: ${channelId} paused at ${paused_elapsed.toFixed(1)}s`);
+      }
+      // "stopped" channels with filename are already handled by the metadata update above
+    }
+
+    console.log('✅ Audio state sync complete');
+  };
+
+  // Load an asset from the library into a channel (DM selects via AudioTrackSelector)
+  const loadAssetIntoChannel = (channelId, asset) => {
+    setRemoteTrackStates(prev => ({
+      ...prev,
+      [channelId]: {
+        ...prev[channelId],
+        filename: asset.filename,
+        asset_id: asset.id,
+        s3_url: asset.s3_url,
+      }
+    }));
+    console.log(`🎵 Loaded asset "${asset.filename}" into channel ${channelId}`);
+  };
+
   return {
     // Audio state
     isAudioUnlocked,
@@ -889,6 +1032,12 @@ export const useUnifiedAudio = () => {
 
     // Pending operation management
     setClearPendingOperationCallback,
+
+    // Asset library integration
+    loadAssetIntoChannel,
+
+    // Late-joiner sync
+    syncAudioState,
 
     // Unified functions
     unlockAudio,

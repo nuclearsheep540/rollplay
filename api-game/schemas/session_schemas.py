@@ -22,6 +22,7 @@ class SessionStartRequest(BaseModel):
     max_players: int = 8
     joined_user_ids: List[str] = []  # List of user IDs who are already part of the session
     assets: List[AssetRef] = []  # Assets associated with the session's campaign (legacy, prefer proxy)
+    audio_config: dict = {}  # Persisted audio channel config from previous session (ETL)
 
 
 class SessionStartResponse(BaseModel):

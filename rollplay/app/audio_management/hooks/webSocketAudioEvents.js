@@ -23,14 +23,15 @@ export const handleRemoteAudioPlay = async (data, { playRemoteTrack, loadRemoteA
       try {
         // Phase 1: Load all audio buffers in parallel (but wait for ALL to complete)
         const loadPromises = tracks.map(async (track) => {
-          const { channelId, filename } = track;
-          
-          // Use the existing loadRemoteAudioBuffer function from useUnifiedAudio
-          const buffer = await loadRemoteAudioBuffer(`/audio/${filename}`, channelId);
-          
-          // Store the buffer with the same key format that playRemoteTrack expects
+          const { channelId, filename, asset_id, s3_url } = track;
+
+          // Use S3 URL if available, fall back to local /audio/ path
+          const audioUrl = s3_url || `/audio/${filename}`;
+          const buffer = await loadRemoteAudioBuffer(audioUrl, channelId);
+
+          // Store the buffer with stable key (asset_id or filename)
           if (buffer && audioBuffersRef) {
-            const expectedKey = `${channelId}_${filename}`;
+            const expectedKey = `${channelId}_${asset_id || filename}`;
             audioBuffersRef.current[expectedKey] = buffer;
           }
           return { track, buffer };
@@ -109,14 +110,15 @@ export const handleRemoteAudioResume = async (data, { resumeRemoteTrack, remoteT
 };
 
 
-export const handleRemoteAudioBatch = async (data, { 
-  playRemoteTrack, 
-  stopRemoteTrack, 
-  pauseRemoteTrack, 
-  resumeRemoteTrack, 
-  setRemoteTrackVolume, 
+export const handleRemoteAudioBatch = async (data, {
+  playRemoteTrack,
+  stopRemoteTrack,
+  pauseRemoteTrack,
+  resumeRemoteTrack,
+  setRemoteTrackVolume,
   toggleRemoteTrackLooping,
   loadRemoteAudioBuffer,
+  loadAssetIntoChannel,
   audioBuffersRef,
   audioContextRef,
   activeFades,
@@ -155,14 +157,15 @@ export const handleRemoteAudioBatch = async (data, {
       switch (operation) {
         case 'play':
           if (playRemoteTrack && loadRemoteAudioBuffer && audioBuffersRef) {
-            const { filename, looping = true, volume = 1.0, fade = false } = op;
-            
+            const { filename, looping = true, volume = 1.0, fade = false, asset_id, s3_url } = op;
+
             // For synchronized operations, buffer is pre-loaded; for single operations, load it now
             if (!syncStartTime) {
               // Single track operation - load buffer now
-              const buffer = await loadRemoteAudioBuffer(`/audio/${filename}`, trackId);
+              const audioUrl = s3_url || `/audio/${filename}`;
+              const buffer = await loadRemoteAudioBuffer(audioUrl, trackId);
               if (buffer && audioBuffersRef) {
-                const expectedKey = `${trackId}_${filename}`;
+                const expectedKey = `${trackId}_${asset_id || filename}`;
                 audioBuffersRef.current[expectedKey] = buffer;
               }
             }
@@ -224,6 +227,16 @@ export const handleRemoteAudioBatch = async (data, {
           }
           break;
           
+        case 'load':
+          if (loadAssetIntoChannel) {
+            const { filename, asset_id, s3_url } = op;
+            loadAssetIntoChannel(trackId, { filename, id: asset_id, s3_url });
+            console.log(`✅ Batch operation ${index + 1}: loaded ${trackId} (${filename})`);
+          } else {
+            console.warn(`❌ Batch operation ${index + 1}: loadAssetIntoChannel function not available`);
+          }
+          break;
+
         default:
           console.warn(`❌ Batch operation ${index + 1}: unknown operation '${operation}'`);
       }
@@ -251,12 +264,13 @@ export const handleRemoteAudioBatch = async (data, {
       // Load all play operation buffers in parallel
       const bufferLoadPromises = operations.map(async (op, index) => {
         if (op.operation === 'play' && loadRemoteAudioBuffer && audioBuffersRef) {
-          const { filename, trackId } = op;
-          
-          // Load buffer if needed
-          const buffer = await loadRemoteAudioBuffer(`/audio/${filename}`, trackId);
+          const { filename, trackId, asset_id, s3_url } = op;
+
+          // Use S3 URL if available, fall back to local /audio/ path
+          const audioUrl = s3_url || `/audio/${filename}`;
+          const buffer = await loadRemoteAudioBuffer(audioUrl, trackId);
           if (buffer && audioBuffersRef) {
-            const expectedKey = `${trackId}_${filename}`;
+            const expectedKey = `${trackId}_${asset_id || filename}`;
             audioBuffersRef.current[expectedKey] = buffer;
           }
         }

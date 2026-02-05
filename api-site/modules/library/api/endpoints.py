@@ -290,6 +290,35 @@ async def change_asset_type(
         raise HTTPException(status_code=500, detail="Failed to change asset type")
 
 
+@router.get("/{asset_id}/download-url")
+async def get_download_url(
+    asset_id: UUID,
+    current_user: UserAggregate = Depends(get_current_user_from_token),
+    repo: MediaAssetRepository = Depends(get_media_asset_repository),
+    s3_service: S3Service = Depends(get_s3_service)
+):
+    """
+    Get a fresh presigned download URL for a media asset.
+
+    Useful when a previously issued URL has expired during a long game session.
+    """
+    try:
+        asset = repo.get_by_id(asset_id)
+        if not asset:
+            raise HTTPException(status_code=404, detail="Media asset not found")
+        if not asset.is_owned_by(current_user.id):
+            raise HTTPException(status_code=403, detail="Access denied")
+
+        download_url = s3_service.generate_download_url(asset.s3_key)
+        return {"download_url": download_url}
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Get download URL error: {e}")
+        raise HTTPException(status_code=500, detail="Failed to generate download URL")
+
+
 @router.delete("/{asset_id}", status_code=204)
 async def delete_media_asset(
     asset_id: UUID,

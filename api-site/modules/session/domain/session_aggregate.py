@@ -87,6 +87,7 @@ class SessionEntity:
         active_game_id: Optional[str] = None,  # MongoDB active_session objectID (when game is running)
         joined_users: Optional[List[UUID]] = None,  # User IDs in roster (auto-enrolled from campaign)
         max_players: int = 8,  # Seat count in active game (1-8)
+        audio_config: Optional[dict] = None,  # Persisted audio channel config (tracks, volume, looping)
     ):
         self.id = id
         self.name = name
@@ -99,6 +100,7 @@ class SessionEntity:
         self.active_game_id = active_game_id
         self.joined_users = joined_users if joined_users is not None else []
         self.max_players = self._validate_max_players(max_players)
+        self.audio_config = audio_config
 
     @staticmethod
     def _validate_max_players(max_players: int) -> int:

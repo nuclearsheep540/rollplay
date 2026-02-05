@@ -166,7 +166,6 @@ const GridOverlay = ({
 
   // Don't show grid if no config provided
   if (!gridConfig) {
-    console.log('🎯 GridOverlay: No grid config provided - not rendering grid');
     return null;
   }
 

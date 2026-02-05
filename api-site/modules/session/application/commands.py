@@ -392,13 +392,30 @@ class StartSession:
         await asyncio.sleep(2)
 
         # 7. Build payload for api-game
+        # Restore audio config from previous session with fresh presigned URLs
+        audio_config_with_urls = {}
+        if session.audio_config:
+            # Build asset_id → presigned_url lookup from freshly generated URLs
+            asset_url_lookup = {a["id"]: a["s3_url"] for a in assets if a.get("s3_url")}
+
+            for channel_id, ch in session.audio_config.items():
+                audio_config_with_urls[channel_id] = {
+                    **ch,
+                    "s3_url": asset_url_lookup.get(ch.get("asset_id")),
+                    "playback_state": "stopped",
+                    "started_at": None,
+                    "paused_elapsed": None,
+                }
+            logger.info(f"🎵 Restoring audio config: {len(audio_config_with_urls)} channels from previous session")
+
         payload = {
             "session_id": str(session.id),
             "campaign_id": str(session.campaign_id),  # For api-game to proxy asset requests to api-site
             "dm_username": dm_username,
             "max_players": session.max_players,  # From session aggregate
             "joined_user_ids": [str(user_id) for user_id in session.joined_users],  # Campaign players
-            "assets": assets  # Campaign library assets (legacy, api-game will fetch fresh URLs on-demand)
+            "assets": assets,  # Campaign library assets (legacy, api-game will fetch fresh URLs on-demand)
+            "audio_config": audio_config_with_urls
         }
 
         # 7. Call api-game (synchronous await)
@@ -545,6 +562,19 @@ class PauseSession:
             max_players_from_session = final_state.get("session_stats", {}).get("max_players", session.max_players)
             logger.info(f"📊 Session max_players: {max_players_from_session} (original: {session.max_players})")
 
+            # Extract audio config (strip runtime fields, keep only track config)
+            raw_audio = final_state.get("audio_state", {})
+            audio_config = {}
+            for channel_id, ch in raw_audio.items():
+                if ch and ch.get("filename"):
+                    audio_config[channel_id] = {
+                        "filename": ch.get("filename"),
+                        "asset_id": ch.get("asset_id"),
+                        "volume": ch.get("volume", 0.8),
+                        "looping": ch.get("looping", True),
+                    }
+            logger.info(f"🎵 Extracted audio config: {len(audio_config)} channels with loaded tracks")
+
         except httpx.RequestError as e:
             # Network error - rollback to ACTIVE
             logger.error(f"Network error fetching state: {e}")
@@ -559,6 +589,9 @@ class PauseSession:
 
             # Update max_players from MongoDB session (if changed during session)
             session.max_players = max_players_from_session
+
+            # Persist audio channel config for next session start
+            session.audio_config = audio_config
 
             # Mark session INACTIVE (this will clear session.active_game_id to None)
             session.deactivate()  # Sets INACTIVE, stopped_at = now, active_game_id = None
@@ -748,6 +781,19 @@ class FinishSession:
             max_players_from_session = final_state.get("session_stats", {}).get("max_players", session.max_players)
             logger.info(f"📊 Session max_players: {max_players_from_session} (original: {session.max_players})")
 
+            # Extract audio config (strip runtime fields, keep only track config)
+            raw_audio = final_state.get("audio_state", {})
+            audio_config = {}
+            for channel_id, ch in raw_audio.items():
+                if ch and ch.get("filename"):
+                    audio_config[channel_id] = {
+                        "filename": ch.get("filename"),
+                        "asset_id": ch.get("asset_id"),
+                        "volume": ch.get("volume", 0.8),
+                        "looping": ch.get("looping", True),
+                    }
+            logger.info(f"🎵 Extracted audio config: {len(audio_config)} channels with loaded tracks")
+
         except httpx.RequestError as e:
             # Network error - rollback to ACTIVE
             logger.error(f"Network error fetching state: {e}")
@@ -762,6 +808,9 @@ class FinishSession:
 
             # Update max_players from MongoDB session (if changed during session)
             session.max_players = max_players_from_session
+
+            # Persist audio channel config (record of what was playing)
+            session.audio_config = audio_config
 
             # Mark session FINISHED (this will clear session.active_game_id to None)
             session.mark_finished()  # Sets FINISHED, stopped_at = now, active_game_id = None

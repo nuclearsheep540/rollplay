@@ -7,7 +7,7 @@ import { useQuery } from '@tanstack/react-query'
  * Query hook for fetching assets from the library.
  *
  * @param {Object} options
- * @param {string|null} options.assetType - Filter by type: 'map', 'audio', 'image', or null for all
+ * @param {string|null} options.assetType - Filter by type: 'map', 'music', 'sfx', 'image', or null for all
  * @param {string|null} options.campaignId - Filter by campaign association
  * @param {boolean} options.enabled - Whether the query should execute (default: true)
  * @returns TanStack Query result with { data: Asset[], isLoading, error, ... }

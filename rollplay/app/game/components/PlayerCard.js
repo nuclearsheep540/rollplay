@@ -143,7 +143,7 @@ export default function PlayerCard({
             className="text-emerald-400 font-medium text-[calc(12px*var(--ui-scale))]"
           >
             {isDM
-              ? `🪑 Seat ${seatId + 1} - DM uses DM Chair`
+              ? `🪑 Seat ${seatId + 1}`
               : isSpectator
                 ? `🪑 Seat ${seatId + 1} - Select character to join`
                 : playerAlreadySeated

@@ -9,13 +9,15 @@ import Badge from '@/app/shared/components/Badge'
 
 const BADGE_VARIANT = {
   map: 'success',
-  audio: 'audio',
+  music: 'audio',
+  sfx: 'audio',
   image: 'info',
 }
 
 const TYPE_ICON = {
   map: '\uD83D\uDDFA\uFE0F',
-  audio: '\uD83C\uDFB5',
+  music: '\uD83C\uDFB5',
+  sfx: '\uD83D\uDCA5',
   image: '\uD83D\uDDBC\uFE0F',
 }
 
@@ -65,7 +67,7 @@ export default function AssetCard({ asset, contextMenuItems, onClick }) {
           <div
             className={`${isImage && asset.s3_url ? 'hidden' : 'flex'} items-center justify-center w-full h-full`}
           >
-            {asset.asset_type === 'audio' ? (
+            {(asset.asset_type === 'music' || asset.asset_type === 'sfx') ? (
               <FontAwesomeIcon icon={faFileAudio} className="w-1/3 h-auto opacity-50 text-content-secondary" />
             ) : (
               <span className="text-4xl opacity-50">{TYPE_ICON[asset.asset_type] || '\uD83D\uDCC1'}</span>

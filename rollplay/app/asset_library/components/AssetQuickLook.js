@@ -10,7 +10,8 @@ import Badge from '@/app/shared/components/Badge'
 
 const BADGE_VARIANT = {
   map: 'success',
-  audio: 'audio',
+  music: 'audio',
+  sfx: 'audio',
   image: 'info',
 }
 
@@ -28,7 +29,7 @@ export default function AssetQuickLook({ asset, open, onClose }) {
   if (!asset) return null
 
   const isImage = asset.asset_type === 'map' || asset.asset_type === 'image'
-  const isAudio = asset.asset_type === 'audio'
+  const isAudio = asset.asset_type === 'music' || asset.asset_type === 'sfx'
 
   return (
     <Modal open={open} onClose={onClose} size="7xl">

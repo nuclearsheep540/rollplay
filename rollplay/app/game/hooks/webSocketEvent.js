@@ -32,7 +32,8 @@ export const handleInitialState = (data, handlers) => {
     combat_active,
     seat_colors,
     max_players,
-    campaign_id
+    campaign_id,
+    audio_state
   } = data;
 
   // Set DM name
@@ -65,6 +66,11 @@ export const handleInitialState = (data, handlers) => {
     }));
 
     handlers.setGameSeats(seats);
+  }
+
+  // Sync audio state for late-joiners (plays active tracks at correct position)
+  if (audio_state && handlers.syncAudioState) {
+    handlers.syncAudioState(audio_state);
   }
 
   console.log("✅ Initial state applied - client synced with server");

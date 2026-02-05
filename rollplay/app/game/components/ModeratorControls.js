@@ -38,9 +38,9 @@ export default function ModeratorControls({
 
   // State for collapsible sections
   const [expandedSections, setExpandedSections] = useState({
-    moderators: true,
-    dm: true,
-    party: true
+    moderators: false,
+    dm: false,
+    party: false
   });
 
   // State for modals

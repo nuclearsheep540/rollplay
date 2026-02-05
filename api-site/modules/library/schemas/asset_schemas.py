@@ -23,7 +23,7 @@ class UploadUrlResponse(BaseModel):
 class ConfirmUploadRequest(BaseModel):
     """Request to confirm an upload completed and create media asset record"""
     key: str = Field(..., description="S3 object key from upload URL response")
-    asset_type: MediaAssetType = Field(default=MediaAssetType.MAP, description="Type of asset")
+    asset_type: MediaAssetType = Field(default=MediaAssetType.MAP, description="Type of asset (map, music, sfx, image)")
     campaign_id: Optional[UUID] = Field(None, description="Campaign to associate with (optional)")
     file_size: Optional[int] = Field(None, description="File size in bytes (optional)")
 
@@ -41,7 +41,7 @@ class RenameRequest(BaseModel):
 
 class ChangeTypeRequest(BaseModel):
     """Request to change a media asset's type tag"""
-    asset_type: MediaAssetType = Field(..., description="New asset type (map, image, audio)")
+    asset_type: MediaAssetType = Field(..., description="New asset type (map, image, music, sfx)")
 
 
 class MediaAssetResponse(BaseModel):

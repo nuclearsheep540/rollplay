@@ -433,7 +433,8 @@ async def create_session(request: SessionStartRequest):
             dungeon_master=request.dm_username.lower(),
             room_host=request.dm_username.lower(),
             available_assets=available_assets,
-            campaign_id=request.campaign_id  # For proxying asset requests to api-site
+            campaign_id=request.campaign_id,  # For proxying asset requests to api-site
+            audio_state=request.audio_config if request.audio_config else {}
         )
 
         # Use session_id as MongoDB _id (back-reference to PostgreSQL session)
@@ -517,7 +518,8 @@ async def end_session(request: SessionEndRequest, validate_only: bool = False):
                 "duration_minutes": duration_minutes,
                 "total_logs": log_count,
                 "max_players": room.get("max_players", 0)
-            }
+            },
+            "audio_state": room.get("audio_state", {})
         }
 
         # If not validate_only, delete the game (deprecated flow)

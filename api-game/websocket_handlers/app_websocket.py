@@ -41,7 +41,8 @@ def register_websocket_routes(app: FastAPI):
                         "combat_active": room.get("combat_active", False),
                         "max_players": room.get("max_players", 8),
                         "seat_colors": room.get("seat_colors", {}),
-                        "campaign_id": room.get("campaign_id", "")
+                        "campaign_id": room.get("campaign_id", ""),
+                        "audio_state": room.get("audio_state", {})
                     }
                 }
                 await websocket.send_json(initial_state)

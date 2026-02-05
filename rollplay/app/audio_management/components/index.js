@@ -8,3 +8,4 @@
 
 export { default as AudioMixerPanel } from './AudioMixerPanel';
 export { default as AudioTrack } from './AudioTrack';
+export { default as AudioTrackSelector } from './AudioTrackSelector';

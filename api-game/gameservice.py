@@ -23,6 +23,7 @@ class GameSettings(BaseModel):
     room_host: str = dungeon_master
     available_assets: list = []  # Asset refs from campaign library (maps, audio, images)
     campaign_id: str = ""  # PostgreSQL campaign ID for proxying asset requests to api-site
+    audio_state: dict = {}  # Per-channel audio state for late-joiner sync
     
     def __init__(self, **data):
         # Lowercase the room_host and any names in seat_layout
@@ -505,3 +506,32 @@ class GameService:
 
         logger.info(f"Updated character for player {player_name} in room {room_id}")
         return True
+
+    @staticmethod
+    def update_audio_state(room_id: str, channel_id: str, channel_state: dict):
+        """Update a single audio channel's state in the active session (fire-and-forget)"""
+        collection = GameService._get_active_session()
+
+        try:
+            oid = ObjectId(oid=room_id)
+            filter_criteria = {"_id": oid}
+        except Exception:
+            filter_criteria = {"_id": room_id}
+
+        collection.update_one(
+            filter_criteria,
+            {"$set": {f"audio_state.{channel_id}": channel_state}}
+        )
+
+    @staticmethod
+    def get_audio_state(room_id: str) -> dict:
+        """Get current audio state from active session"""
+        collection = GameService._get_active_session()
+
+        try:
+            oid = ObjectId(oid=room_id)
+            room = collection.find_one({"_id": oid}, {"audio_state": 1})
+        except Exception:
+            room = collection.find_one({"_id": room_id}, {"audio_state": 1})
+
+        return room.get("audio_state", {}) if room else {}
