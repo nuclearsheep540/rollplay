@@ -73,7 +73,7 @@ function GameContent() {
 
   // UPDATED: State management for TabletopInterface - REMOVED HARDCODED DEFAULTS
   const [currentTurn, setCurrentTurn] = useState(null); // ❌ Removed 'Thorin' default
-  const [isDM, setIsDM] = useState(false); // Toggle for DM panel visibility
+  const [isDM, setIsDM] = useState(null); // null = unknown, false = not DM, true = DM
   const [isModerator, setIsModerator] = useState(false); // Moderator status
   const [isHost, setIsHost] = useState(false); // Host status
   const [dicePortalActive, setDicePortalActive] = useState(true);
@@ -110,7 +110,7 @@ function GameContent() {
 
   // Spectator mode - user has no character selected for this campaign
   const [isSpectator, setIsSpectator] = useState(false);
-  const [isDrawerOpen, setIsDrawerOpen] = useState(true);
+  const [isDrawerOpen, setIsDrawerOpen] = useState(false);
   const [activeRightDrawer, setActiveRightDrawer] = useState(null); // null | 'dm' | 'moderator'
   const [mapImageConfig, setMapImageConfig] = useState(null); // Map image positioning/scaling
 
@@ -377,23 +377,22 @@ function GameContent() {
   // Check spectator status when campaign ID is available
   // DMs are never spectators even without a character
   useEffect(() => {
+    // Don't decide spectator status until roles have been resolved
+    if (isDM === null || !campaignId || !currentUser) return;
+
+    // DM is never a spectator
+    if (isDM) {
+      setIsSpectator(false);
+      console.log('✅ User is DM - not a spectator');
+      return;
+    }
+
     const checkSpectatorStatus = async () => {
-      if (!campaignId || !currentUser) return;
-
-      // DM is never a spectator
-      if (isDM) {
-        setIsSpectator(false);
-        console.log('✅ User is DM - not a spectator');
-        return;
-      }
-
       try {
-        // Fetch user's characters
         const response = await fetch('/api/characters/', { credentials: 'include' });
         if (!response.ok) return;
 
         const characters = await response.json();
-        // Check if any character is locked to this campaign
         const selectedChar = characters.find(char => char.active_campaign === campaignId);
 
         if (selectedChar) {
