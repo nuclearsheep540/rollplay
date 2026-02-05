@@ -335,7 +335,9 @@ export const useUnifiedAudio = () => {
         );
         // Queue the play operation — will be drained when unlockAudio() runs
         pendingPlayOpsRef.current.push({
-          trackId, audioFile, loop, volume, completeTrackState, skipBufferLoad
+          trackId, audioFile, loop, volume, completeTrackState, skipBufferLoad,
+          resumeFromTime,
+          queuedAt: Date.now()
         });
         // Update UI state so track metadata is visible while waiting for unlock
         setRemoteTrackStates(prev => ({
@@ -803,7 +805,23 @@ export const useUnifiedAudio = () => {
       if (pending.length > 0) {
         console.log(`🔓 Draining ${pending.length} pending play operation(s)...`);
         for (const op of pending) {
-          await playRemoteTrack(op.trackId, op.audioFile, op.loop, op.volume, null, op.completeTrackState, op.skipBufferLoad);
+          // Recalculate offset to account for time spent waiting for unlock
+          let offset = op.resumeFromTime ?? null;
+          if (offset != null && op.queuedAt) {
+            const waitSeconds = (Date.now() - op.queuedAt) / 1000;
+            offset = offset + waitSeconds;
+            // Wrap for looping tracks using cached buffer duration
+            if (op.loop) {
+              const assetId = op.completeTrackState?.asset_id;
+              const bufferKey = `${op.trackId}_${assetId || op.audioFile}`;
+              const buffer = audioBuffersRef.current[bufferKey];
+              if (buffer) {
+                offset = offset % buffer.duration;
+              }
+            }
+            console.log(`🕐 Recalculated offset for ${op.trackId}: ${op.resumeFromTime?.toFixed(1)}s → ${offset.toFixed(1)}s (waited ${waitSeconds.toFixed(1)}s)`);
+          }
+          await playRemoteTrack(op.trackId, op.audioFile, op.loop, op.volume, offset, op.completeTrackState, op.skipBufferLoad);
         }
         console.log('✅ All pending play operations drained');
       }

@@ -833,28 +833,29 @@ function GameContent() {
     }
   }, [combatActive, isAudioUnlocked]);
 
-  // Fallback audio unlock on any click (for non-DM players)
-  useEffect(() => {
-    if (!isAudioUnlocked) {
-      const handleFirstClick = () => {
-        if (unlockAudio) {
-          unlockAudio().then(() => {
-            console.log('🔊 Audio unlocked on first user interaction');
-          }).catch(err => {
-            console.warn('Audio unlock failed on first click:', err);
-          });
+  // Handle "Enter Session" overlay click — unlocks audio + auto-seats player
+  const handleEnterSession = async () => {
+    // 1. Unlock audio (drains pending play ops with corrected offsets)
+    await unlockAudio();
+
+    // 2. Auto-seat if eligible (not DM, not spectator, not already seated)
+    if (!isDM && !isSpectator) {
+      const alreadySeated = gameSeats.some(s => s.playerName === thisPlayer);
+      if (!alreadySeated) {
+        const emptyIdx = gameSeats.findIndex(s => s.playerName === "empty");
+        if (emptyIdx !== -1) {
+          const newSeats = [...gameSeats];
+          newSeats[emptyIdx] = {
+            ...newSeats[emptyIdx],
+            playerName: thisPlayer,
+            characterData: getCharacterData(thisPlayer),
+            isActive: false
+          };
+          sendSeatChange(newSeats);
         }
-      };
-
-      // Add click listener to document
-      document.addEventListener('click', handleFirstClick, { once: true });
-
-      // Cleanup
-      return () => {
-        document.removeEventListener('click', handleFirstClick);
-      };
+      }
     }
-  }, [isAudioUnlocked, unlockAudio]);
+  };
 
   // Show dice portal for player rolls
   const showDicePortal = (playerName, promptType = null) => {
@@ -1278,11 +1279,6 @@ function GameContent() {
             <span className="volume-percentage">
               {Math.round(masterVolume * 100)}%
             </span>
-            {!isAudioUnlocked && (
-              <span className="text-yellow-400 text-xs ml-2">
-                👆 Touch to enable audio
-              </span>
-            )}
           </div>
 
           {/* UI Scale Toggle */}
@@ -1534,6 +1530,30 @@ function GameContent() {
           />
         );
       })()}
+
+      {/* Audio Gate Overlay — provides user gesture for AudioContext + auto-seats player */}
+      {!isAudioUnlocked && (
+        <div
+          className="fixed inset-0 z-50 bg-black/70 flex items-center justify-center backdrop-blur-sm"
+          onClick={handleEnterSession}
+        >
+          <div
+            className="bg-gray-900 border border-sky-500/30 rounded-xl p-8 text-center max-w-sm"
+            onClick={e => e.stopPropagation()}
+          >
+            <h2 className="text-xl font-bold text-white mb-2">Enter Session</h2>
+            <p className="text-gray-400 text-sm mb-4">
+              Click to join the session and enable audio
+            </p>
+            <button
+              onClick={handleEnterSession}
+              className="px-6 py-3 bg-sky-600 hover:bg-sky-500 text-white rounded-lg font-semibold transition-colors"
+            >
+              Enter Session
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Session Ended Modal with Countdown */}
       {sessionEndedData && (
