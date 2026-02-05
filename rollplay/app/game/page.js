@@ -110,28 +110,16 @@ function GameContent() {
 
   // Spectator mode - user has no character selected for this campaign
   const [isSpectator, setIsSpectator] = useState(false);
-  // Debug wrapper for setGridConfig
-  const debugSetGridConfig = (config) => {
-    console.log('🎯 setGridConfig called with:', config);
-    setGridConfig(config);
-  };
   const [mapImageConfig, setMapImageConfig] = useState(null); // Map image positioning/scaling
 
-  // Handle grid configuration changes during editing
-  const handleGridChange = (newGridConfig) => {
-    console.log('🎯 handleGridChange called with:', newGridConfig);
-    console.log('🎯 Current gridConfig before update:', gridConfig);
+  // Stable callbacks for grid/map config changes — passed to DMControlCenter useEffect deps
+  const handleGridChange = useCallback((newGridConfig) => {
     setGridConfig(newGridConfig);
-    // TODO: Save to backend when grid editing is complete
-    console.log('🎯 Grid config updated, setGridConfig called');
-  };
+  }, []);
 
-  // Handle map image configuration changes during editing
-  const handleMapImageChange = (newMapImageConfig) => {
+  const handleMapImageChange = useCallback((newMapImageConfig) => {
     setMapImageConfig(newMapImageConfig);
-    // TODO: Save to backend when map editing is complete
-    console.log('Map image config updated:', newMapImageConfig);
-  };
+  }, []);
 
   // Helper function to get character data
   const getCharacterData = (playerName) => {
