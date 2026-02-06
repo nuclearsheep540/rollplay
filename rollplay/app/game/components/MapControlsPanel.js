@@ -314,7 +314,7 @@ export default function MapControlsPanel({
   };
 
   return (
-    <div className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden flex flex-col scrollbar-thin scrollbar-track-white/5 scrollbar-thumb-purple-500/30 hover:scrollbar-thumb-purple-500/50">
+    <div className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden flex flex-col">
       <button
         className={`${DM_CHILD} ${isMapExpanded ? ACTIVE_BACKGROUND : ''}`}
         onClick={() => setIsMapExpanded(!isMapExpanded)}

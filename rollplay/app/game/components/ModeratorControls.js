@@ -173,7 +173,7 @@ export default function ModeratorControls({
   }
 
   return (
-    <div className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden flex flex-col scrollbar-thin scrollbar-track-white/5 scrollbar-thumb-purple-500/30 hover:scrollbar-thumb-purple-500/50">
+    <div className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden flex flex-col">
 
       {/* Moderator Management Section */}
       <div className="flex-shrink-0">

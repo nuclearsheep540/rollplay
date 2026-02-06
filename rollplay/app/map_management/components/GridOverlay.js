@@ -169,7 +169,6 @@ const GridOverlay = ({
     return null;
   }
 
-  console.log('🎯 GridOverlay received gridConfig:', gridConfig);
   const baseColors = isEditMode ? gridConfig.colors.edit_mode : gridConfig.colors.display_mode;
   
   // Use live grid opacity during edit mode for real-time updates
@@ -287,4 +286,4 @@ const GridOverlay = ({
   );
 };
 
-export default GridOverlay;
+export default React.memo(GridOverlay);

@@ -476,7 +476,7 @@ export default function AudioMixerPanel({
   };
 
   return (
-    <div className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden flex flex-col scrollbar-thin scrollbar-track-white/5 scrollbar-thumb-purple-500/30 hover:scrollbar-thumb-purple-500/50">
+    <div className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden flex flex-col">
 
           {/* Track Selector — load audio from asset library */}
           <AudioTrackSelector

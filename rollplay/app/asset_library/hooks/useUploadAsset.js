@@ -3,6 +3,7 @@
 
 import { useState } from 'react'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
+import { authFetch } from '@/app/shared/utils/authFetch'
 
 /**
  * Mutation hook for uploading assets via the 3-step presigned URL flow.
@@ -26,9 +27,8 @@ export function useUploadAsset() {
         asset_type: assetType,
       })
 
-      const uploadUrlResponse = await fetch(`/api/library/upload-url?${uploadUrlParams}`, {
+      const uploadUrlResponse = await authFetch(`/api/library/upload-url?${uploadUrlParams}`, {
         method: 'GET',
-        credentials: 'include',
       })
 
       if (!uploadUrlResponse.ok) {
@@ -61,10 +61,9 @@ export function useUploadAsset() {
         confirmBody.campaign_id = campaignId
       }
 
-      const confirmResponse = await fetch('/api/library/confirm', {
+      const confirmResponse = await authFetch('/api/library/confirm', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        credentials: 'include',
         body: JSON.stringify(confirmBody),
       })
 

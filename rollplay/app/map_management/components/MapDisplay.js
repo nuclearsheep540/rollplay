@@ -294,4 +294,4 @@ const MapDisplay = ({
   );
 };
 
-export default MapDisplay;
+export default React.memo(MapDisplay);

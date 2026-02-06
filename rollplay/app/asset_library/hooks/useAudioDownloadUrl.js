@@ -1,6 +1,8 @@
 /* Copyright (C) 2025 Matthew Davey */
 /* SPDX-License-Identifier: GPL-3.0-or-later */
 
+import { authFetch } from '@/app/shared/utils/authFetch'
+
 /**
  * Fetches a fresh presigned download URL for a media asset.
  * Used when a previously issued S3 URL has expired during a long game session.
@@ -9,9 +11,8 @@
  * @returns {Promise<string>} Fresh presigned download URL
  */
 export async function fetchDownloadUrl(assetId) {
-  const response = await fetch(`/api/library/${assetId}/download-url`, {
+  const response = await authFetch(`/api/library/${assetId}/download-url`, {
     method: 'GET',
-    credentials: 'include',
   })
 
   if (!response.ok) {

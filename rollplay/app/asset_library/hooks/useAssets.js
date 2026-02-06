@@ -2,6 +2,7 @@
 /* SPDX-License-Identifier: GPL-3.0-or-later */
 
 import { useQuery } from '@tanstack/react-query'
+import { authFetch } from '@/app/shared/utils/authFetch'
 
 /**
  * Query hook for fetching assets from the library.
@@ -25,9 +26,8 @@ export function useAssets({ assetType = null, campaignId = null, enabled = true 
       }
 
       const url = `/api/library/${params.toString() ? '?' + params.toString() : ''}`
-      const response = await fetch(url, {
+      const response = await authFetch(url, {
         method: 'GET',
-        credentials: 'include',
       })
 
       if (!response.ok) {
