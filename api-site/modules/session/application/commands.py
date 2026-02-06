@@ -18,6 +18,7 @@ from modules.campaign.orm.campaign_repository import CampaignRepository
 from modules.campaign.model.session_model import SessionJoinedUser
 from modules.session.domain.session_aggregate import SessionEntity, SessionStatus
 from modules.library.repositories.asset_repository import MediaAssetRepository
+from modules.library.domain.map_asset_aggregate import MapAsset
 from modules.events.event_manager import EventManager
 from modules.session.domain.session_events import SessionEvents
 
@@ -355,71 +356,92 @@ class StartSession:
         self.session_repo.save(session)
         logger.info(f"Session {session_id} status set to STARTING")
 
-        # 5. Get host user
-        host_user = self.user_repo.get_by_id(host_id)
-        if not host_user:
-            # Rollback
-            session.status = SessionStatus.INACTIVE
-            self.session_repo.save(session)
-            raise ValueError("Host user not found")
-
-        # Use screen_name if set, otherwise email
-        dm_username = host_user.screen_name or host_user.email
-
-        # 6. Fetch campaign assets and generate fresh presigned URLs
-        assets = []
-        if self.asset_repo:
-            campaign_assets = self.asset_repo.get_by_campaign_id(session.campaign_id)
-
-            # Generate presigned URLs in parallel (CPU-bound HMAC signing)
-            url_map = await self._generate_presigned_urls_parallel(campaign_assets)
-
-            assets = [
-                {
-                    "id": str(asset.id),
-                    "filename": asset.filename,
-                    "s3_key": asset.s3_key,
-                    # Convert enum to string for api-game JSON payload
-                    "asset_type": asset.asset_type.value if hasattr(asset.asset_type, 'value') else str(asset.asset_type),
-                    # Fresh presigned URL
-                    "s3_url": url_map.get(asset.s3_key)
-                }
-                for asset in campaign_assets
-            ]
-            logger.info(f"Found {len(assets)} assets for campaign {session.campaign_id} with {len(url_map)} fresh URLs")
-
-        # TODO: REMOVE - Testing delay to see STARTING UI state
-        await asyncio.sleep(2)
-
-        # 7. Build payload for api-game
-        # Restore audio config from previous session with fresh presigned URLs
-        audio_config_with_urls = {}
-        if session.audio_config:
-            # Build asset_id → presigned_url lookup from freshly generated URLs
-            asset_url_lookup = {a["id"]: a["s3_url"] for a in assets if a.get("s3_url")}
-
-            for channel_id, ch in session.audio_config.items():
-                audio_config_with_urls[channel_id] = {
-                    **ch,
-                    "s3_url": asset_url_lookup.get(ch.get("asset_id")),
-                    "playback_state": "stopped",
-                    "started_at": None,
-                    "paused_elapsed": None,
-                }
-            logger.info(f"🎵 Restoring audio config: {len(audio_config_with_urls)} channels from previous session")
-
-        payload = {
-            "session_id": str(session.id),
-            "campaign_id": str(session.campaign_id),  # For api-game to proxy asset requests to api-site
-            "dm_username": dm_username,
-            "max_players": session.max_players,  # From session aggregate
-            "joined_user_ids": [str(user_id) for user_id in session.joined_users],  # Campaign players
-            "assets": assets,  # Campaign library assets (legacy, api-game will fetch fresh URLs on-demand)
-            "audio_config": audio_config_with_urls
-        }
-
-        # 7. Call api-game (synchronous await)
+        # Wrap everything after STARTING in try/catch to ensure rollback on ANY error
         try:
+            # 6. Get host user
+            host_user = self.user_repo.get_by_id(host_id)
+            if not host_user:
+                raise ValueError("Host user not found")
+
+            # Use screen_name if set, otherwise email
+            dm_username = host_user.screen_name or host_user.email
+
+            # 7. Fetch campaign assets and generate fresh presigned URLs
+            assets = []
+            asset_url_lookup = {}
+            if self.asset_repo:
+                campaign_assets = self.asset_repo.get_by_campaign_id(session.campaign_id)
+
+                # Generate presigned URLs in parallel (CPU-bound HMAC signing)
+                url_map = await self._generate_presigned_urls_parallel(campaign_assets)
+
+                assets = [
+                    {
+                        "id": str(asset.id),
+                        "filename": asset.filename,
+                        "s3_key": asset.s3_key,
+                        # Convert enum to string for api-game JSON payload
+                        "asset_type": asset.asset_type.value if hasattr(asset.asset_type, 'value') else str(asset.asset_type),
+                        # Fresh presigned URL
+                        "s3_url": url_map.get(asset.s3_key)
+                    }
+                    for asset in campaign_assets
+                ]
+                logger.info(f"Found {len(assets)} assets for campaign {session.campaign_id} with {len(url_map)} fresh URLs")
+
+                # Build asset_id → presigned_url lookup from freshly generated URLs
+                asset_url_lookup = {a["id"]: a["s3_url"] for a in assets if a.get("s3_url")}
+
+            # 8. Build payload for api-game
+            # Restore audio config from previous session with fresh presigned URLs
+            audio_config_with_urls = {}
+            if session.audio_config:
+                for channel_id, ch in session.audio_config.items():
+                    audio_config_with_urls[channel_id] = {
+                        **ch,
+                        "s3_url": asset_url_lookup.get(ch.get("asset_id")),
+                        "playback_state": "stopped",
+                        "started_at": None,
+                        "paused_elapsed": None,
+                    }
+                logger.info(f"🎵 Restoring audio config: {len(audio_config_with_urls)} channels from previous session")
+
+            # Restore map config from previous session with fresh presigned URL
+            map_config_with_url = {}
+            if session.map_config and session.map_config.get("asset_id"):
+                map_asset_id = session.map_config["asset_id"]
+                fresh_url = asset_url_lookup.get(map_asset_id)
+
+                if fresh_url:
+                    # Fetch MapAsset from repository to get latest grid config
+                    map_asset = self.asset_repo.get_by_id(UUID(map_asset_id))
+
+                    if map_asset and isinstance(map_asset, MapAsset):
+                        map_config_with_url = {
+                            "asset_id": map_asset_id,
+                            "filename": map_asset.filename,
+                            "original_filename": map_asset.filename,
+                            "file_path": fresh_url,
+                            "grid_config": map_asset.get_grid_config() if map_asset.has_grid_config() else None
+                        }
+                        logger.info(f"🗺️ Restoring map: {map_asset.filename} with grid {map_asset.get_grid_config()}")
+                    else:
+                        logger.warning(f"🗺️ Cannot restore map: asset {map_asset_id} not found or not a MapAsset")
+                else:
+                    logger.warning(f"🗺️ Cannot restore map: asset {map_asset_id} not in campaign assets")
+
+            payload = {
+                "session_id": str(session.id),
+                "campaign_id": str(session.campaign_id),  # For api-game to proxy asset requests to api-site
+                "dm_username": dm_username,
+                "max_players": session.max_players,  # From session aggregate
+                "joined_user_ids": [str(user_id) for user_id in session.joined_users],  # Campaign players
+                "assets": assets,  # Campaign library assets (legacy, api-game will fetch fresh URLs on-demand)
+                "audio_config": audio_config_with_urls,
+                "map_config": map_config_with_url
+            }
+
+            # 9. Call api-game (synchronous await)
             async with httpx.AsyncClient() as client:
                 response = await client.post(
                     "http://api-game:8081/game/session/start",
@@ -430,24 +452,20 @@ class StartSession:
             if response.status_code != 200:
                 error_detail = response.text
                 logger.error(f"api-game error {response.status_code}: {error_detail}")
-
-                # Rollback to INACTIVE
-                session.status = SessionStatus.INACTIVE
-                self.session_repo.save(session)
                 raise ValueError(f"Failed to create game: {error_detail}")
 
-            # 8. Parse response
+            # 10. Parse response
             result = response.json()
             active_game_id = result["session_id"]  # MongoDB ObjectID
 
-            # 9. Mark ACTIVE and store active_game_id
+            # 11. Mark ACTIVE and store active_game_id
             session.activate()  # Sets ACTIVE, started_at = now
             session.active_game_id = active_game_id
             self.session_repo.save(session)
 
             logger.info(f"Session {session_id} ACTIVE with game {active_game_id}")
 
-            # 10. Broadcast session_started event to all campaign members + DM (with notification)
+            # 12. Broadcast session_started event to all campaign members + DM (with notification)
             campaign = self.campaign_repo.get_by_id(session.campaign_id)
             if campaign:
                 # Include DM in recipient list (DM gets confirmation toast)
@@ -472,14 +490,13 @@ class StartSession:
 
             return session
 
-        except httpx.RequestError as e:
-            # Network error calling api-game
-            logger.error(f"Network error calling api-game: {e}")
-
-            # Rollback to INACTIVE
-            session.status = SessionStatus.INACTIVE
+        except Exception as e:
+            # ANY error after STARTING should rollback to INACTIVE
+            logger.error(f"Unexpected error starting session {session_id}: {e}")
+            session.abort_start()  # Domain method: STARTING → INACTIVE
             self.session_repo.save(session)
-            raise ValueError(f"Cannot reach game service: {str(e)}")
+            logger.info(f"Session {session_id} rolled back to INACTIVE after error")
+            raise ValueError(f"Failed to start session: {str(e)}")
 
 
 class PauseSession:
@@ -551,8 +568,6 @@ class PauseSession:
             if response.status_code != 200:
                 # Can't fetch state - rollback to ACTIVE
                 logger.error(f"Failed to fetch final state: {response.text}")
-                session.status = SessionStatus.ACTIVE
-                self.session_repo.save(session)
                 raise ValueError(f"Cannot fetch game state: {response.text}")
 
             final_state = response.json()["final_state"]
@@ -575,12 +590,20 @@ class PauseSession:
                     }
             logger.info(f"🎵 Extracted audio config: {len(audio_config)} channels with loaded tracks")
 
-        except httpx.RequestError as e:
-            # Network error - rollback to ACTIVE
-            logger.error(f"Network error fetching state: {e}")
-            session.status = SessionStatus.ACTIVE
+            # Extract map config (just asset_id - grid config lives on the asset)
+            raw_map = final_state.get("map_state", {})
+            map_config = {}
+            if raw_map and raw_map.get("asset_id"):
+                map_config = {"asset_id": raw_map.get("asset_id")}
+            logger.info(f"🗺️ Extracted map config: {'has map' if map_config else 'no active map'}")
+
+        except Exception as e:
+            # ANY error during state fetch - rollback to ACTIVE
+            logger.error(f"Error fetching state for session {session_id}: {e}")
+            session.abort_stop()  # Domain method: STOPPING → ACTIVE
             self.session_repo.save(session)
-            raise ValueError(f"Cannot reach game service: {str(e)}")
+            logger.info(f"Session {session_id} rolled back to ACTIVE after error")
+            raise ValueError(f"Cannot pause session: {str(e)}")
 
         # 6. PHASE 2: Write to PostgreSQL (with implicit transaction via repository)
         try:
@@ -592,6 +615,9 @@ class PauseSession:
 
             # Persist audio channel config for next session start
             session.audio_config = audio_config
+
+            # Persist active map config for next session start
+            session.map_config = map_config
 
             # Mark session INACTIVE (this will clear session.active_game_id to None)
             session.deactivate()  # Sets INACTIVE, stopped_at = now, active_game_id = None
@@ -770,8 +796,6 @@ class FinishSession:
             if response.status_code != 200:
                 # Can't fetch state - rollback to ACTIVE
                 logger.error(f"Failed to fetch final state: {response.text}")
-                session.status = SessionStatus.ACTIVE
-                self.session_repo.save(session)
                 raise ValueError(f"Cannot fetch game state: {response.text}")
 
             final_state = response.json()["final_state"]
@@ -794,12 +818,20 @@ class FinishSession:
                     }
             logger.info(f"🎵 Extracted audio config: {len(audio_config)} channels with loaded tracks")
 
-        except httpx.RequestError as e:
-            # Network error - rollback to ACTIVE
-            logger.error(f"Network error fetching state: {e}")
-            session.status = SessionStatus.ACTIVE
+            # Extract map config (just asset_id - grid config lives on the asset)
+            raw_map = final_state.get("map_state", {})
+            map_config = {}
+            if raw_map and raw_map.get("asset_id"):
+                map_config = {"asset_id": raw_map.get("asset_id")}
+            logger.info(f"🗺️ Extracted map config: {'has map' if map_config else 'no active map'}")
+
+        except Exception as e:
+            # ANY error during state fetch - rollback to ACTIVE
+            logger.error(f"Error fetching state for session {session_id}: {e}")
+            session.abort_stop()  # Domain method: STOPPING → ACTIVE
             self.session_repo.save(session)
-            raise ValueError(f"Cannot reach game service: {str(e)}")
+            logger.info(f"Session {session_id} rolled back to ACTIVE after error")
+            raise ValueError(f"Cannot finish session: {str(e)}")
 
         # 7. PHASE 2: Write to PostgreSQL and mark as FINISHED
         try:
@@ -811,6 +843,9 @@ class FinishSession:
 
             # Persist audio channel config (record of what was playing)
             session.audio_config = audio_config
+
+            # Persist active map config (record of what was displayed)
+            session.map_config = map_config
 
             # Mark session FINISHED (this will clear session.active_game_id to None)
             session.mark_finished()  # Sets FINISHED, stopped_at = now, active_game_id = None

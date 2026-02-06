@@ -69,6 +69,20 @@ class MediaAssetListResponse(BaseModel):
     total: int
 
 
+class UpdateGridConfigRequest(BaseModel):
+    """Request to update map grid configuration"""
+    grid_width: Optional[int] = Field(None, ge=1, le=100, description="Grid width in cells")
+    grid_height: Optional[int] = Field(None, ge=1, le=100, description="Grid height in cells")
+    grid_opacity: Optional[float] = Field(None, ge=0.0, le=1.0, description="Grid overlay opacity")
+
+
+class MapAssetResponse(MediaAssetResponse):
+    """Response containing map asset details with grid config"""
+    grid_width: Optional[int] = None
+    grid_height: Optional[int] = None
+    grid_opacity: Optional[float] = None
+
+
 # Aliases for backwards compatibility
 AssetResponse = MediaAssetResponse
 AssetListResponse = MediaAssetListResponse

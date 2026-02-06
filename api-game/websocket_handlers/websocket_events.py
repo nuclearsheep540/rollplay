@@ -1015,6 +1015,7 @@ class WebsocketEvent():
             # Create MapSettings with existing grid config or None
             map_settings = MapSettings(
                 room_id=room_id,
+                asset_id=map_data.get("asset_id"),  # PostgreSQL MediaAsset ID for ETL restoration
                 filename=map_data.get("filename", "unknown.jpg"),
                 original_filename=map_data.get("original_filename", map_data.get("filename", "unknown.jpg")),
                 file_path=map_data.get("file_path", ""),

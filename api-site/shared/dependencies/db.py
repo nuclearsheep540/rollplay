@@ -35,7 +35,8 @@ def configure_mappers():
     from modules.friendship.model.friendship_model import FriendshipModel
     from modules.friendship.model.friend_request_model import FriendRequestModel
     from modules.library.model.asset_model import MediaAsset
-    # Import any other models from other aggregates
+    from modules.library.model.map_asset_model import MapAssetModel
+    from modules.library.model.audio_asset_models import MusicAssetModel, SfxAssetModel, ImageAssetModel
 
     # Configure the registry
     Base.registry.configure()

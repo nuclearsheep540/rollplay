@@ -11,7 +11,9 @@ from sqlalchemy.orm import Session as DbSession
 from sqlalchemy import any_
 
 from modules.library.model.asset_model import MediaAsset as MediaAssetModel
+from modules.library.model.map_asset_model import MapAssetModel
 from modules.library.domain.asset_aggregate import MediaAssetAggregate
+from modules.library.domain.map_asset_aggregate import MapAsset
 from modules.library.domain.media_asset_type import MediaAssetType
 
 
@@ -86,7 +88,7 @@ class MediaAssetRepository:
 
         return self._model_to_aggregate(model)
 
-    def save(self, aggregate: MediaAssetAggregate) -> UUID:
+    def save(self, aggregate: Union[MediaAssetAggregate, MapAsset]) -> UUID:
         """Save media asset aggregate (create or update)"""
         existing = (
             self.db.query(MediaAssetModel)
@@ -95,7 +97,7 @@ class MediaAssetRepository:
         )
 
         if existing:
-            # Update existing
+            # Update existing base fields
             existing.filename = aggregate.filename
             existing.s3_key = aggregate.s3_key
             existing.content_type = aggregate.content_type
@@ -103,19 +105,41 @@ class MediaAssetRepository:
             existing.file_size = aggregate.file_size
             existing.campaign_ids = aggregate.campaign_ids
             existing.session_ids = aggregate.session_ids
+
+            # Update map-specific fields if MapAsset
+            if isinstance(aggregate, MapAsset) and isinstance(existing, MapAssetModel):
+                existing.grid_width = aggregate.grid_width
+                existing.grid_height = aggregate.grid_height
+                existing.grid_opacity = aggregate.grid_opacity
         else:
-            # Create new
-            model = MediaAssetModel(
-                id=aggregate.id,
-                user_id=aggregate.user_id,
-                filename=aggregate.filename,
-                s3_key=aggregate.s3_key,
-                content_type=aggregate.content_type,
-                asset_type=aggregate.asset_type,
-                file_size=aggregate.file_size,
-                campaign_ids=aggregate.campaign_ids,
-                session_ids=aggregate.session_ids
-            )
+            # Create new - determine which model to use
+            if isinstance(aggregate, MapAsset):
+                model = MapAssetModel(
+                    id=aggregate.id,
+                    user_id=aggregate.user_id,
+                    filename=aggregate.filename,
+                    s3_key=aggregate.s3_key,
+                    content_type=aggregate.content_type,
+                    asset_type=aggregate.asset_type,
+                    file_size=aggregate.file_size,
+                    campaign_ids=aggregate.campaign_ids,
+                    session_ids=aggregate.session_ids,
+                    grid_width=aggregate.grid_width,
+                    grid_height=aggregate.grid_height,
+                    grid_opacity=aggregate.grid_opacity
+                )
+            else:
+                model = MediaAssetModel(
+                    id=aggregate.id,
+                    user_id=aggregate.user_id,
+                    filename=aggregate.filename,
+                    s3_key=aggregate.s3_key,
+                    content_type=aggregate.content_type,
+                    asset_type=aggregate.asset_type,
+                    file_size=aggregate.file_size,
+                    campaign_ids=aggregate.campaign_ids,
+                    session_ids=aggregate.session_ids
+                )
             self.db.add(model)
 
         self.db.commit()
@@ -135,9 +159,10 @@ class MediaAssetRepository:
         self.db.commit()
         return True
 
-    def _model_to_aggregate(self, model: MediaAssetModel) -> MediaAssetAggregate:
-        """Convert ORM model to domain aggregate"""
-        return MediaAssetAggregate(
+    def _model_to_aggregate(self, model: MediaAssetModel) -> Union[MediaAssetAggregate, MapAsset]:
+        """Convert ORM model to domain aggregate (polymorphic)"""
+        # Build base aggregate fields
+        base = MediaAssetAggregate(
             id=model.id,
             user_id=model.user_id,
             filename=model.filename,
@@ -150,3 +175,14 @@ class MediaAssetRepository:
             created_at=model.created_at,
             updated_at=model.updated_at
         )
+
+        # If it's a MapAssetModel, promote to MapAsset with grid fields
+        if isinstance(model, MapAssetModel):
+            return MapAsset.from_base(
+                base,
+                grid_width=model.grid_width,
+                grid_height=model.grid_height,
+                grid_opacity=model.grid_opacity
+            )
+
+        return base

@@ -314,17 +314,17 @@ export default function DMControlCenter({
       console.error('🎯 Cannot apply grid - no active map');
       return;
     }
-    
+
     console.log('🎯 Applying grid dimensions via HTTP API - activeMap:', activeMap);
     console.log('🎯 activeMap.filename:', activeMap.filename);
-    
+
     const newGridConfig = createGridFromDimensions(
       calculatedGrid.width,
       calculatedGrid.height
     );
 
     console.log('🎯 Created new grid config (square cells):', newGridConfig);
-    
+
     try {
       // Send COMPLETE updated map via HTTP API (atomic)
       // Remove MongoDB _id field to avoid immutable field error
@@ -333,7 +333,7 @@ export default function DMControlCenter({
         ...mapWithoutId,
         grid_config: newGridConfig
       };
-      
+
       const response = await fetch(`/api/game/${roomId}/map`, {
         method: 'PUT',
         headers: {
@@ -344,11 +344,38 @@ export default function DMControlCenter({
           updated_by: 'dm'
         })
       });
-      
+
       if (response.ok) {
         const result = await response.json();
         console.log('🎯 ✅ Grid config updated successfully via HTTP API:', result);
         // The backend will broadcast the update via WebSocket to all clients
+
+        // Also persist grid config to MapAsset in PostgreSQL for cross-session reuse
+        if (activeMap.asset_id) {
+          try {
+            const assetResponse = await fetch(`/api/library/assets/${activeMap.asset_id}/grid`, {
+              method: 'PATCH',
+              headers: {
+                'Content-Type': 'application/json',
+              },
+              credentials: 'include',
+              body: JSON.stringify({
+                grid_width: calculatedGrid.width,
+                grid_height: calculatedGrid.height,
+                grid_opacity: liveGridOpacity
+              })
+            });
+
+            if (assetResponse.ok) {
+              console.log('🎯 ✅ Grid config persisted to MapAsset in PostgreSQL');
+            } else {
+              console.warn('🎯 ⚠️ Failed to persist grid config to MapAsset:', await assetResponse.text());
+            }
+          } catch (assetError) {
+            console.warn('🎯 ⚠️ Error persisting grid config to MapAsset:', assetError);
+            // Non-fatal - session update succeeded, just couldn't persist to asset
+          }
+        }
       } else {
         const error = await response.text();
         console.error('🎯 ❌ Failed to update grid config via HTTP API:', error);
@@ -358,7 +385,7 @@ export default function DMControlCenter({
       console.error('🎯 ❌ Error updating grid config via HTTP API:', error);
       alert('Failed to update grid configuration. Please try again.');
     }
-    
+
     console.log('🎯 Applied grid dimensions:', calculatedGrid, 'resulting config:', newGridConfig);
   };
 

@@ -13,7 +13,7 @@ init_sentry()
 
 from gameservice import GameService, GameSettings
 from adventure_log_service import AdventureLogService
-from mapservice import MapService
+from mapservice import MapService, MapSettings
 from message_templates import format_message, MESSAGE_TEMPLATES
 from models.log_type import LogType
 from websocket_handlers.connection_manager import manager as connection_manager
@@ -442,6 +442,25 @@ async def create_session(request: SessionStartRequest):
 
         logger.info(f"✅ Created game {game_id} for session {request.session_id} with {len(request.joined_user_ids)} joined players")
 
+        # Restore map from previous session if available
+        if request.map_config and request.map_config.get("filename"):
+            try:
+                restored_map = MapSettings(
+                    room_id=request.session_id,
+                    asset_id=request.map_config.get("asset_id"),
+                    filename=request.map_config["filename"],
+                    original_filename=request.map_config.get("original_filename", request.map_config["filename"]),
+                    file_path=request.map_config.get("file_path", ""),
+                    grid_config=request.map_config.get("grid_config"),
+                    map_image_config=request.map_config.get("map_image_config"),
+                    uploaded_by="system",
+                    active=True
+                )
+                map_service.set_active_map(request.session_id, restored_map)
+                logger.info(f"🗺️ Restored map '{request.map_config['filename']}' for session {request.session_id}")
+            except Exception as e:
+                logger.warning(f"🗺️ Map restoration failed (non-fatal): {e}")
+
         return SessionStartResponse(
             success=True,
             session_id=game_id,  # Return MongoDB document ID as session_id for api-site
@@ -511,6 +530,18 @@ async def end_session(request: SessionEndRequest, validate_only: bool = False):
         # Get adventure log count
         log_count = adventure_log.get_room_log_count(request.session_id)
 
+        # Get active map state for ETL
+        active_map = map_service.get_active_map(request.session_id)
+        map_state = {}
+        if active_map:
+            map_state = {
+                "asset_id": active_map.get("asset_id"),
+                "filename": active_map.get("filename"),
+                "original_filename": active_map.get("original_filename"),
+                "grid_config": active_map.get("grid_config"),
+                "map_image_config": active_map.get("map_image_config")
+            }
+
         # Build final state
         final_state = {
             "players": players,
@@ -519,7 +550,8 @@ async def end_session(request: SessionEndRequest, validate_only: bool = False):
                 "total_logs": log_count,
                 "max_players": room.get("max_players", 0)
             },
-            "audio_state": room.get("audio_state", {})
+            "audio_state": room.get("audio_state", {}),
+            "map_state": map_state
         }
 
         # If not validate_only, delete the game (deprecated flow)

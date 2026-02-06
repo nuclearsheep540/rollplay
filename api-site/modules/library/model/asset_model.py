@@ -61,5 +61,12 @@ class MediaAsset(Base):
     # Relationships
     owner = relationship("User", backref="media_assets")
 
+    # Polymorphic inheritance - asset_type determines which subclass to load
+    # 'map' -> MapAssetModel (with grid fields), others -> base MediaAsset
+    # Note: No polymorphic_identity on base class - SQLAlchemy uses base for unregistered identities
+    __mapper_args__ = {
+        'polymorphic_on': asset_type,
+    }
+
     def __repr__(self):
         return f"<MediaAsset(id={self.id}, filename='{self.filename}', type='{self.asset_type.value}')>"
