@@ -392,6 +392,9 @@ class StartSession:
                 # Build asset_id → presigned_url lookup from freshly generated URLs
                 asset_url_lookup = {a["id"]: a["s3_url"] for a in assets if a.get("s3_url")}
 
+            # UX delay: Show "Starting" animation to users
+            await asyncio.sleep(2)
+
             # 8. Build payload for api-game
             # Restore audio config from previous session with fresh presigned URLs
             audio_config_with_urls = {}
@@ -413,20 +416,23 @@ class StartSession:
                 fresh_url = asset_url_lookup.get(map_asset_id)
 
                 if fresh_url:
-                    # Fetch MapAsset from repository to get latest grid config
+                    # Fetch asset from repository to get filename
                     map_asset = self.asset_repo.get_by_id(UUID(map_asset_id))
 
-                    if map_asset and isinstance(map_asset, MapAsset):
+                    if map_asset:
+                        # Use stored grid_config from session (persisted during pause/finish)
+                        # TODO: Once MapAsset domain is implemented, prefer MapAsset.get_grid_config()
+                        stored_grid_config = session.map_config.get("grid_config")
                         map_config_with_url = {
                             "asset_id": map_asset_id,
                             "filename": map_asset.filename,
                             "original_filename": map_asset.filename,
                             "file_path": fresh_url,
-                            "grid_config": map_asset.get_grid_config() if map_asset.has_grid_config() else None
+                            "grid_config": stored_grid_config
                         }
-                        logger.info(f"🗺️ Restoring map: {map_asset.filename} with grid {map_asset.get_grid_config()}")
+                        logger.info(f"🗺️ Restoring map: {map_asset.filename} with grid {stored_grid_config}")
                     else:
-                        logger.warning(f"🗺️ Cannot restore map: asset {map_asset_id} not found or not a MapAsset")
+                        logger.warning(f"🗺️ Cannot restore map: asset {map_asset_id} not found")
                 else:
                     logger.warning(f"🗺️ Cannot restore map: asset {map_asset_id} not in campaign assets")
 
@@ -590,12 +596,15 @@ class PauseSession:
                     }
             logger.info(f"🎵 Extracted audio config: {len(audio_config)} channels with loaded tracks")
 
-            # Extract map config (just asset_id - grid config lives on the asset)
+            # Extract map config (asset_id + grid_config for session persistence)
             raw_map = final_state.get("map_state", {})
             map_config = {}
             if raw_map and raw_map.get("asset_id"):
-                map_config = {"asset_id": raw_map.get("asset_id")}
-            logger.info(f"🗺️ Extracted map config: {'has map' if map_config else 'no active map'}")
+                map_config = {
+                    "asset_id": raw_map.get("asset_id"),
+                    "grid_config": raw_map.get("grid_config")  # Preserve grid config for next session
+                }
+            logger.info(f"🗺️ Extracted map config: {'has map' if map_config else 'no active map'}, grid: {map_config.get('grid_config') if map_config else None}")
 
         except Exception as e:
             # ANY error during state fetch - rollback to ACTIVE
@@ -818,12 +827,15 @@ class FinishSession:
                     }
             logger.info(f"🎵 Extracted audio config: {len(audio_config)} channels with loaded tracks")
 
-            # Extract map config (just asset_id - grid config lives on the asset)
+            # Extract map config (asset_id + grid_config for session persistence)
             raw_map = final_state.get("map_state", {})
             map_config = {}
             if raw_map and raw_map.get("asset_id"):
-                map_config = {"asset_id": raw_map.get("asset_id")}
-            logger.info(f"🗺️ Extracted map config: {'has map' if map_config else 'no active map'}")
+                map_config = {
+                    "asset_id": raw_map.get("asset_id"),
+                    "grid_config": raw_map.get("grid_config")  # Preserve grid config for next session
+                }
+            logger.info(f"🗺️ Extracted map config: {'has map' if map_config else 'no active map'}, grid: {map_config.get('grid_config') if map_config else None}")
 
         except Exception as e:
             # ANY error during state fetch - rollback to ACTIVE
