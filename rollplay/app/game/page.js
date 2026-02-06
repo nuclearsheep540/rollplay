@@ -444,6 +444,14 @@ function GameContent() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // Auto-exit grid edit mode when navigating away from Map tab
+  useEffect(() => {
+    if (activeRightDrawer !== 'map' && gridEditMode) {
+      console.log('📐 Auto-exiting grid edit mode (navigated away from Map tab)');
+      setGridEditMode(false);
+    }
+  }, [activeRightDrawer, gridEditMode]);
+
   // UPDATED: Seat count management with displaced player handling
   const setSeatCount = async (newSeatCount) => {
     try {

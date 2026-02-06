@@ -3,8 +3,6 @@
 
 import React, { useState, useEffect, useMemo } from 'react';
 import {
-  DM_TITLE,
-  DM_HEADER,
   DM_CHILD,
   DM_CHILD_LAST,
   DM_ARROW,
@@ -71,7 +69,7 @@ export default function MapControlsPanel({
 }) {
   // Grid size slider (cells on shorter image edge - always produces square cells)
   const [gridSize, setGridSize] = useState(10);
-  const [isDimensionsExpanded, setIsDimensionsExpanded] = useState(false);
+  const [isDimensionsExpanded, setIsDimensionsExpanded] = useState(true);
 
   // Image dimensions for auto-calculating square grid
   const [imageDimensions, setImageDimensions] = useState(null);
@@ -80,7 +78,7 @@ export default function MapControlsPanel({
   const [originalServerOpacity, setOriginalServerOpacity] = useState(null);
 
   // State for map selection inline section
-  const [isMapExpanded, setIsMapExpanded] = useState(false);
+  const [isMapExpanded, setIsMapExpanded] = useState(true);
 
   // Load image dimensions when map changes
   useEffect(() => {
@@ -185,6 +183,19 @@ export default function MapControlsPanel({
     handleGridChange(previewConfig);
     console.log('🎯 Live preview updated:', previewConfig);
   }, [calculatedGrid, liveGridOpacity, isDimensionsExpanded, handleGridChange]);
+
+  // Sync local state when parent's gridEditMode changes externally (e.g., tab navigation)
+  useEffect(() => {
+    if (!gridEditMode && isDimensionsExpanded) {
+      setIsDimensionsExpanded(false);
+      // Also restore original opacity if it was stored
+      if (originalServerOpacity !== null && setLiveGridOpacity) {
+        setLiveGridOpacity(originalServerOpacity);
+        setOriginalServerOpacity(null);
+      }
+      console.log('📐 Grid edit mode synced from parent (exited externally)');
+    }
+  }, [gridEditMode]);
 
   // Create grid configuration from dimensions (pure dimensional grid)
   const createGridFromDimensions = (gridWidth, gridHeight) => {
@@ -303,18 +314,16 @@ export default function MapControlsPanel({
   };
 
   return (
-    <div>
-      <div className={DM_TITLE}>
-        🗺️ Map Controls
-      </div>
-
-      <div className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden flex flex-col scrollbar-thin scrollbar-track-white/5 scrollbar-thumb-purple-500/30 hover:scrollbar-thumb-purple-500/50">
-        <button
-          className={`${DM_CHILD} ${isMapExpanded ? ACTIVE_BACKGROUND : ''}`}
-          onClick={() => setIsMapExpanded(!isMapExpanded)}
-        >
-          📁 {isMapExpanded ? 'Hide Maps' : 'Load Map'}
-        </button>
+    <div className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden flex flex-col scrollbar-thin scrollbar-track-white/5 scrollbar-thumb-purple-500/30 hover:scrollbar-thumb-purple-500/50">
+      <button
+        className={`${DM_CHILD} ${isMapExpanded ? ACTIVE_BACKGROUND : ''}`}
+        onClick={() => setIsMapExpanded(!isMapExpanded)}
+      >
+        <span className={`${DM_ARROW} transform transition-transform ${isMapExpanded ? 'rotate-180' : ''}`}>
+          ▼
+        </span>
+        📁 {isMapExpanded ? 'Hide Maps' : 'Load Map'}
+      </button>
         <MapSelectionSection
           isExpanded={isMapExpanded}
           onSelectMap={handleMapSelection}
@@ -360,6 +369,9 @@ export default function MapControlsPanel({
           }}
           disabled={!activeMap}
         >
+          <span className={`${DM_ARROW} transform transition-transform ${isDimensionsExpanded ? 'rotate-180' : ''}`}>
+            ▼
+          </span>
           📐 {isDimensionsExpanded ? 'Exit Grid Edit' : 'Edit Grid'}
         </button>
 
@@ -428,7 +440,6 @@ export default function MapControlsPanel({
             )}
           </div>
         )}
-      </div>
     </div>
   );
 }

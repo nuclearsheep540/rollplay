@@ -547,8 +547,8 @@ body {
 }
 .drawer-toggle-tab.active {
   color: var(--content-primary);
-  background: rgba(181, 173, 166, 0.9);
-  border-color: var(--surface-primary);
+  background: rgba(247, 244, 243, 0.9);  /* smoke at 90% opacity */
+  border-color: rgba(181, 173, 166, 1);   /* silver */
   text-shadow: none;
 }
 
@@ -699,8 +699,8 @@ body {
 
 .right-drawer-tab.active {
   color: var(--content-primary);
-  background: rgba(181, 173, 166, 0.9);  /* silver at 90% opacity */
-  border-color: var(--surface-primary);   /* smoke */
+  background: rgba(247, 244, 243, 0.9);  /* smoke at 90% opacity */
+  border-color: rgba(181, 173, 166, 1);   /* silver */
   text-shadow: none;
 }
 

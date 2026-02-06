@@ -3,9 +3,9 @@
 
 import React, { useState } from 'react';
 import {
-  DM_TITLE,
   DM_CHILD,
   DM_CHILD_LAST,
+  DM_ARROW,
   COMBAT_TOGGLE_ACTIVE,
   COMBAT_TOGGLE_INACTIVE,
   ACTIVE_BACKGROUND,
@@ -28,8 +28,8 @@ export default function CombatControlsPanel({
   clearDicePrompt,
 }) {
   // State for dice roll prompts
-  const [selectedPlayerForPrompt, setSelectedPlayerForPrompt] = useState('');
-  const [isPlayerSelectExpanded, setIsPlayerSelectExpanded] = useState(false);
+  const [selectedPlayerForPrompt, setSelectedPlayerForPrompt] = useState('general');
+  const [isPlayerSelectExpanded, setIsPlayerSelectExpanded] = useState(true);
   const [rollPromptModalOpen, setRollPromptModalOpen] = useState(false);
   const [selectedPlayerForModal, setSelectedPlayerForModal] = useState('');
 
@@ -46,12 +46,7 @@ export default function CombatControlsPanel({
   const activePlayers = gameSeats?.filter(seat => seat.playerName !== "empty") || [];
 
   return (
-    <div>
-      <div className={DM_TITLE}>
-        ⚔️ Combat
-      </div>
-
-      <div className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden flex flex-col scrollbar-thin scrollbar-track-white/5 scrollbar-thumb-purple-500/30 hover:scrollbar-thumb-purple-500/50">
+    <div className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden flex flex-col scrollbar-thin scrollbar-track-white/5 scrollbar-thumb-purple-500/30 hover:scrollbar-thumb-purple-500/50">
         <DicePrompt
           isOpen={rollPromptModalOpen}
           onClose={() => setRollPromptModalOpen(false)}
@@ -139,7 +134,10 @@ export default function CombatControlsPanel({
               setSelectedPlayerForPrompt('general');
             }}
           >
-            🎲 Prompt Player Roll {isPlayerSelectExpanded && selectedPlayerForPrompt === 'general'}
+            <span className={`${DM_ARROW} transform transition-transform ${isPlayerSelectExpanded && selectedPlayerForPrompt === 'general' ? 'rotate-180' : ''}`}>
+              ▼
+            </span>
+            🎲 Prompt Player Roll
           </button>
 
           {/* Player Selection (inline expansion) */}
@@ -169,7 +167,6 @@ export default function CombatControlsPanel({
             </div>
           )}
         </div>
-      </div>
     </div>
   );
 }
