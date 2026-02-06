@@ -546,10 +546,10 @@ body {
   color: rgba(255, 255, 255, 0.8);
 }
 .drawer-toggle-tab.active {
-  color: #0B0A09;
-  background: rgba(14, 165, 233, 0.5);
-  border-color: rgba(14, 165, 233, 0.6);
-  text-shadow: 0 0 8px rgba(247, 244, 243, 0.8);
+  color: var(--content-primary);
+  background: rgba(181, 173, 166, 0.9);
+  border-color: var(--surface-primary);
+  text-shadow: none;
 }
 
 .party-header {
@@ -698,10 +698,10 @@ body {
 }
 
 .right-drawer-tab.active {
-  color: #0B0A09;
-  background: rgba(14, 165, 233, 0.5);
-  border-color: rgba(14, 165, 233, 0.6);
-  text-shadow: 0 0 8px rgba(247, 244, 243, 0.8);
+  color: var(--content-primary);
+  background: rgba(181, 173, 166, 0.9);  /* silver at 90% opacity */
+  border-color: var(--surface-primary);   /* smoke */
+  text-shadow: none;
 }
 
 /* Custom Scrollbar for DM Control Center

@@ -6,14 +6,12 @@
 import React, { useState } from 'react';
 import Modal from '@/app/shared/components/Modal';
 import {
-  MODERATOR_TITLE, 
-  MODERATOR_HEADER, 
-  MODERATOR_SUB_HEADER, 
+  MODERATOR_TITLE,
+  MODERATOR_HEADER,
   MODERATOR_CHILD,
   MODERATOR_CHILD_LAST,
   MODERATOR_ARROW,
-  MODERATOR_SUBTITLE,
-  MODERATOR_LABEL
+  MODERATOR_LABEL,
 } from '../../styles/constants';
 
 export default function ModeratorControls({
@@ -33,9 +31,6 @@ export default function ModeratorControls({
   roleChangeTrigger // Timestamp or counter that changes when any role change occurs
 }) {
   
-  // State for main panel collapse
-  const [isCollapsed, setIsCollapsed] = useState(false);
-
   // State for collapsible sections
   const [expandedSections, setExpandedSections] = useState({
     moderators: false,
@@ -180,23 +175,11 @@ export default function ModeratorControls({
 
   return (
     <div>
-      {/* Collapsible Header */}
-      <div 
-        className={MODERATOR_TITLE}
-        onClick={() => setIsCollapsed(!isCollapsed)}
-      >
-        <div>
-          ⚖️ Moderator Controls
-          <div className={MODERATOR_SUBTITLE} />
-        </div>
-        <div className={`${MODERATOR_ARROW} ${isCollapsed ? 'rotate-180' : ''}`}>
-          ▼
-        </div>
+      <div className={MODERATOR_TITLE}>
+        ⚖️ Moderator
       </div>
 
-      {/* Collapsible Content */}
-      {!isCollapsed && (
-        <div>
+      <div className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden flex flex-col scrollbar-thin scrollbar-track-white/5 scrollbar-thumb-purple-500/30 hover:scrollbar-thumb-purple-500/50">
 
       {/* Moderator Management Section */}
       <div className="flex-shrink-0">
@@ -706,8 +689,7 @@ export default function ModeratorControls({
             </div>
           </div>
       </Modal>
-        </div>
-      )}
+      </div>
     </div>
   );
 }

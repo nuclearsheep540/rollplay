@@ -10,8 +10,7 @@ import AudioTrack from './AudioTrack';
 import AudioTrackSelector from './AudioTrackSelector';
 import { PlaybackState, ChannelType } from '../types';
 import {
-  DM_HEADER,
-  DM_ARROW,
+  DM_TITLE,
   DM_CHILD,
   PANEL_CHILD,
 } from '../../styles/constants';
@@ -478,14 +477,12 @@ export default function AudioMixerPanel({
   };
 
   return (
-    <div className="flex-shrink-0">
-      <div className={DM_HEADER} onClick={onToggle}>
-        🎵 Audio Management
-        <span className={`${DM_ARROW} ${isExpanded ? 'rotate-180' : ''}`}>▼</span>
+    <div>
+      <div className={DM_TITLE}>
+        🎵 Audio
       </div>
 
-      {isExpanded && (
-        <>
+      <div className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden flex flex-col scrollbar-thin scrollbar-track-white/5 scrollbar-thumb-purple-500/30 hover:scrollbar-thumb-purple-500/50">
 
           {/* Track Selector — load audio from asset library */}
           <AudioTrackSelector
@@ -826,8 +823,7 @@ export default function AudioMixerPanel({
               })}
             </>
           )}
-        </>
-      )}
+      </div>
     </div>
   );
 }

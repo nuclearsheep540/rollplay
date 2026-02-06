@@ -11,8 +11,10 @@ import { getSeatColor } from '../utils/seatColors';
 
 import PlayerCard from "./components/PlayerCard";
 import DMChair from "./components/DMChair";
-import DMControlCenter from './components/DMControlCenter';
+import MapControlsPanel from './components/MapControlsPanel';
+import CombatControlsPanel from './components/CombatControlsPanel';
 import ModeratorControls from './components/ModeratorControls';
+import { AudioMixerPanel } from '../audio_management/components';
 import HorizontalInitiativeTracker from './components/HorizontalInitiativeTracker';
 import AdventureLog from './components/AdventureLog';
 import LobbyPanel from './components/LobbyPanel';
@@ -1446,84 +1448,107 @@ function GameContent() {
       </div>
 
       {/* Right drawer — fixed-position, outside grid flow */}
-      <div
-        className="right-drawer"
-        style={{ transform: activeRightDrawer ? 'translateX(0)' : 'translateX(100%)' }}
-      >
-        <button
-          className={`right-drawer-tab ${activeRightDrawer === 'moderator' ? 'active' : ''}`}
-          style={{ top: 'calc(50% - 116px)' }}
-          onClick={() => setActiveRightDrawer(prev => prev === 'moderator' ? null : 'moderator')}
-        >
-          MOD
-        </button>
-        <button
-          className={`right-drawer-tab ${activeRightDrawer === 'dm' ? 'active' : ''}`}
-          style={{ top: 'calc(50% + 4px)' }}
-          onClick={() => setActiveRightDrawer(prev => prev === 'dm' ? null : 'dm')}
-        >
-          DM
-        </button>
+      {(() => {
+        // Tab configuration - reusable pattern for role-based visibility
+        const RIGHT_DRAWER_TABS = [
+          { id: 'moderator', label: 'MOD', dmOnly: false },
+          { id: 'map', label: 'MAP', dmOnly: true },
+          { id: 'combat', label: 'COMBAT', dmOnly: true },
+          { id: 'audio', label: 'AUDIO', dmOnly: true },
+        ];
 
-        <div className="drawer-content">
-          {activeRightDrawer === 'moderator' && (
-            <ModeratorControls
-              isModerator={isModerator}
-              isHost={isHost}
-              isDM={isDM}
-              gameSeats={gameSeats}
-              lobbyUsers={lobbyUsers}
-              roomId={roomId}
-              thisPlayer={getCurrentPlayerName()}
-              currentUser={currentUser}
-              onRoleChange={handleRoleChange}
-              sendRoleChange={sendRoleChange}
-              setSeatCount={setSeatCount}
-              handleKickPlayer={handleKickPlayer}
-              handleClearSystemMessages={handleClearSystemMessages}
-              handleClearAllMessages={handleClearAllMessages}
-              roleChangeTrigger={roleChangeTrigger}
-            />
-          )}
-          {activeRightDrawer === 'dm' && (
-            <DMControlCenter
-              isDM={isDM}
-              promptPlayerRoll={promptPlayerRoll}
-              promptAllPlayersInitiative={promptAllPlayersInitiative}
-              currentTrack={currentTrack}
-              isPlaying={isPlaying}
-              handleTrackClick={handleTrackClick}
-              combatActive={combatActive}
-              setCombatActive={sendCombatStateChange}
-              gameSeats={gameSeats}
-              roomId={roomId}
-              campaignId={campaignId}
-              activePrompts={activePrompts}
-              unlockAudio={unlockAudio}
-              isAudioUnlocked={isAudioUnlocked}
-              remoteTrackStates={remoteTrackStates}
-              remoteTrackAnalysers={remoteTrackAnalysers}
-              playRemoteTrack={playRemoteTrack}
-              stopRemoteTrack={stopRemoteTrack}
-              sendRemoteAudioPlay={sendRemoteAudioPlay}
-              sendRemoteAudioResume={sendRemoteAudioResume}
-              sendRemoteAudioBatch={sendRemoteAudioBatch}
-              clearPendingOperation={setClearPendingOperationFn}
-              loadAssetIntoChannel={loadAssetIntoChannel}
-              clearDicePrompt={clearDicePrompt}
-              activeMap={activeMap}
-              setActiveMap={setActiveMap}
-              gridEditMode={gridEditMode}
-              setGridEditMode={setGridEditMode}
-              handleGridChange={handleGridChange}
-              liveGridOpacity={liveGridOpacity}
-              setLiveGridOpacity={setLiveGridOpacity}
-              sendMapLoad={sendMapLoad}
-              sendMapClear={sendMapClear}
-            />
-          )}
-        </div>
-      </div>
+        const visibleTabs = RIGHT_DRAWER_TABS.filter(tab => !tab.dmOnly || isDM);
+
+        return (
+          <div
+            className="right-drawer"
+            style={{ transform: activeRightDrawer ? 'translateX(0)' : 'translateX(100%)' }}
+          >
+            {/* Dynamic drawer tabs - filtered by role */}
+            {visibleTabs.map((tab, index) => {
+              const tabHeight = 120; // 112px tab + 8px gap
+              const totalHeight = visibleTabs.length * tabHeight;
+              const startOffset = totalHeight / 2;
+              const topPosition = `calc(50% - ${startOffset - (index * tabHeight)}px)`;
+
+              return (
+                <button
+                  key={tab.id}
+                  className={`right-drawer-tab ${activeRightDrawer === tab.id ? 'active' : ''}`}
+                  style={{ top: topPosition }}
+                  onClick={() => setActiveRightDrawer(prev => prev === tab.id ? null : tab.id)}
+                >
+                  {tab.label}
+                </button>
+              );
+            })}
+
+            <div className="drawer-content">
+              {activeRightDrawer === 'moderator' && (
+                <ModeratorControls
+                  isModerator={isModerator}
+                  isHost={isHost}
+                  isDM={isDM}
+                  gameSeats={gameSeats}
+                  lobbyUsers={lobbyUsers}
+                  roomId={roomId}
+                  thisPlayer={getCurrentPlayerName()}
+                  currentUser={currentUser}
+                  onRoleChange={handleRoleChange}
+                  sendRoleChange={sendRoleChange}
+                  setSeatCount={setSeatCount}
+                  handleKickPlayer={handleKickPlayer}
+                  handleClearSystemMessages={handleClearSystemMessages}
+                  handleClearAllMessages={handleClearAllMessages}
+                  roleChangeTrigger={roleChangeTrigger}
+                />
+              )}
+              {activeRightDrawer === 'map' && isDM && (
+                <MapControlsPanel
+                  roomId={roomId}
+                  campaignId={campaignId}
+                  activeMap={activeMap}
+                  setActiveMap={setActiveMap}
+                  gridEditMode={gridEditMode}
+                  setGridEditMode={setGridEditMode}
+                  handleGridChange={handleGridChange}
+                  liveGridOpacity={liveGridOpacity}
+                  setLiveGridOpacity={setLiveGridOpacity}
+                  sendMapLoad={sendMapLoad}
+                  sendMapClear={sendMapClear}
+                />
+              )}
+              {activeRightDrawer === 'combat' && isDM && (
+                <CombatControlsPanel
+                  promptPlayerRoll={promptPlayerRoll}
+                  promptAllPlayersInitiative={promptAllPlayersInitiative}
+                  combatActive={combatActive}
+                  setCombatActive={sendCombatStateChange}
+                  gameSeats={gameSeats}
+                  activePrompts={activePrompts}
+                  clearDicePrompt={clearDicePrompt}
+                />
+              )}
+              {activeRightDrawer === 'audio' && isDM && (
+                <AudioMixerPanel
+                  isExpanded={true}
+                  onToggle={() => {}}
+                  remoteTrackStates={remoteTrackStates}
+                  remoteTrackAnalysers={remoteTrackAnalysers}
+                  sendRemoteAudioPlay={sendRemoteAudioPlay}
+                  sendRemoteAudioResume={sendRemoteAudioResume}
+                  sendRemoteAudioBatch={sendRemoteAudioBatch}
+                  unlockAudio={unlockAudio}
+                  isAudioUnlocked={isAudioUnlocked}
+                  clearPendingOperation={setClearPendingOperationFn}
+                  loadAssetIntoChannel={loadAssetIntoChannel}
+                  campaignId={campaignId}
+                />
+              )}
+            </div>
+          </div>
+        );
+      })()}
 
       {/* Main Game Area — single column grid (map only) */}
       <div className="main-game-area">

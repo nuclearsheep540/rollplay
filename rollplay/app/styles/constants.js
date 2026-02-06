@@ -109,7 +109,7 @@ export const ACTIVE_BACKGROUND = ACTIVE_BG;
 // =============================================================================
 
 // DM aliases
-export const DM_TITLE = `${PANEL_TITLE} bg-none mt-6`;
+export const DM_TITLE = `${PANEL_TITLE} bg-none`;
 export const DM_HEADER = `${PANEL_HEADER} bg-rose-500/20 border-rose-400/50`;
 export const DM_SUB_HEADER = `${PANEL_SUB_HEADER} text-rose-400 border-rose-400/50`;
 export const DM_CHILD = `${PANEL_CHILD} bg-rose-900/50 text-rose-100 border-rose-400/50`;
