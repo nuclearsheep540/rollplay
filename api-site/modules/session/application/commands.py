@@ -407,7 +407,7 @@ class StartSession:
                         "started_at": None,
                         "paused_elapsed": None,
                     }
-                logger.info(f"🎵 Restoring audio config: {len(audio_config_with_urls)} channels from previous session")
+                logger.info(f"Restoring audio config: {len(audio_config_with_urls)} channels from previous session")
 
             # Restore map config from previous session with fresh presigned URL
             map_config_with_url = {}
@@ -430,11 +430,11 @@ class StartSession:
                             "file_path": fresh_url,
                             "grid_config": stored_grid_config
                         }
-                        logger.info(f"🗺️ Restoring map: {map_asset.filename} with grid {stored_grid_config}")
+                        logger.info(f"Restoring map: {map_asset.filename} with grid {stored_grid_config}")
                     else:
-                        logger.warning(f"🗺️ Cannot restore map: asset {map_asset_id} not found")
+                        logger.warning(f"Cannot restore map: asset {map_asset_id} not found")
                 else:
-                    logger.warning(f"🗺️ Cannot restore map: asset {map_asset_id} not in campaign assets")
+                    logger.warning(f"Cannot restore map: asset {map_asset_id} not in campaign assets")
 
             payload = {
                 "session_id": str(session.id),
@@ -577,11 +577,11 @@ class PauseSession:
                 raise ValueError(f"Cannot fetch game state: {response.text}")
 
             final_state = response.json()["final_state"]
-            logger.info(f"✅ Fetched final state for {session_id}: {len(final_state.get('players', []))} players")
+            logger.info(f"Fetched final state for {session_id}: {len(final_state.get('players', []))} players")
 
             # Extract max_players from MongoDB session stats
             max_players_from_session = final_state.get("session_stats", {}).get("max_players", session.max_players)
-            logger.info(f"📊 Session max_players: {max_players_from_session} (original: {session.max_players})")
+            logger.info(f"Session max_players: {max_players_from_session} (original: {session.max_players})")
 
             # Extract audio config (strip runtime fields, keep only track config)
             raw_audio = final_state.get("audio_state", {})
@@ -594,7 +594,7 @@ class PauseSession:
                         "volume": ch.get("volume", 0.8),
                         "looping": ch.get("looping", True),
                     }
-            logger.info(f"🎵 Extracted audio config: {len(audio_config)} channels with loaded tracks")
+            logger.info(f"Extracted audio config: {len(audio_config)} channels with loaded tracks")
 
             # Extract map config (asset_id + grid_config for session persistence)
             raw_map = final_state.get("map_state", {})
@@ -604,7 +604,7 @@ class PauseSession:
                     "asset_id": raw_map.get("asset_id"),
                     "grid_config": raw_map.get("grid_config")  # Preserve grid config for next session
                 }
-            logger.info(f"🗺️ Extracted map config: {'has map' if map_config else 'no active map'}, grid: {map_config.get('grid_config') if map_config else None}")
+            logger.info(f"Extracted map config: {'has map' if map_config else 'no active map'}, grid: {map_config.get('grid_config') if map_config else None}")
 
         except Exception as e:
             # ANY error during state fetch - rollback to ACTIVE
@@ -631,15 +631,15 @@ class PauseSession:
             # Mark session INACTIVE (this will clear session.active_game_id to None)
             session.deactivate()  # Sets INACTIVE, stopped_at = now, active_game_id = None
             self.session_repo.save(session)
-            logger.info(f"✅ Session {session_id} marked INACTIVE in PostgreSQL with max_players={max_players_from_session}")
+            logger.info(f"Session {session_id} marked INACTIVE in PostgreSQL with max_players={max_players_from_session}")
 
             # Note: Character locking is at CAMPAIGN level, not session level
             # Characters stay locked to campaign until player leaves campaign or releases character
 
         except Exception as pg_error:
             # PostgreSQL write failed - MongoDB session is PRESERVED
-            logger.error(f"❌ PostgreSQL write failed for {session_id}: {pg_error}")
-            logger.error(f"⚠️ MongoDB session {session.active_game_id} PRESERVED for manual retry")
+            logger.error(f"PostgreSQL write failed for {session_id}: {pg_error}")
+            logger.error(f"MongoDB session {session.active_game_id} PRESERVED for manual retry")
 
             # Leave session in STOPPING status so user knows there's an issue
             # They can retry the pause session operation
@@ -677,7 +677,7 @@ class PauseSession:
         # Use captured active_game_id, not session.active_game_id (which is now None)
         asyncio.create_task(self._async_cleanup(session_id, active_game_id_to_cleanup))
 
-        logger.info(f"✅ Session {session_id} paused successfully, cleanup scheduled")
+        logger.info(f"Session {session_id} paused successfully, cleanup scheduled")
         return session
 
     async def _async_cleanup(self, session_id: UUID, active_game_id: str):
@@ -701,14 +701,14 @@ class PauseSession:
                 if session:
                     session.active_game_id = None
                     self.session_repo.save(session)
-                    logger.info(f"✅ Background cleanup complete for {session_id}")
+                    logger.info(f"Background cleanup complete for {session_id}")
             else:
-                logger.warning(f"⚠️ MongoDB cleanup failed for {session_id}: {response.text}")
+                logger.warning(f"MongoDB cleanup failed for {session_id}: {response.text}")
                 logger.warning(f"Cron job will clean up game {active_game_id}")
 
         except Exception as e:
             # Cleanup failed - cron will handle it
-            logger.warning(f"⚠️ Background cleanup failed for {session_id}: {e}")
+            logger.warning(f"Background cleanup failed for {session_id}: {e}")
             logger.warning(f"Cron job will clean up game {active_game_id}")
 
 
@@ -808,11 +808,11 @@ class FinishSession:
                 raise ValueError(f"Cannot fetch game state: {response.text}")
 
             final_state = response.json()["final_state"]
-            logger.info(f"✅ Fetched final state for {session_id}: {len(final_state.get('players', []))} players")
+            logger.info(f"Fetched final state for {session_id}: {len(final_state.get('players', []))} players")
 
             # Extract max_players from MongoDB session stats
             max_players_from_session = final_state.get("session_stats", {}).get("max_players", session.max_players)
-            logger.info(f"📊 Session max_players: {max_players_from_session} (original: {session.max_players})")
+            logger.info(f"Session max_players: {max_players_from_session} (original: {session.max_players})")
 
             # Extract audio config (strip runtime fields, keep only track config)
             raw_audio = final_state.get("audio_state", {})
@@ -825,7 +825,7 @@ class FinishSession:
                         "volume": ch.get("volume", 0.8),
                         "looping": ch.get("looping", True),
                     }
-            logger.info(f"🎵 Extracted audio config: {len(audio_config)} channels with loaded tracks")
+            logger.info(f"Extracted audio config: {len(audio_config)} channels with loaded tracks")
 
             # Extract map config (asset_id + grid_config for session persistence)
             raw_map = final_state.get("map_state", {})
@@ -835,7 +835,7 @@ class FinishSession:
                     "asset_id": raw_map.get("asset_id"),
                     "grid_config": raw_map.get("grid_config")  # Preserve grid config for next session
                 }
-            logger.info(f"🗺️ Extracted map config: {'has map' if map_config else 'no active map'}, grid: {map_config.get('grid_config') if map_config else None}")
+            logger.info(f"Extracted map config: {'has map' if map_config else 'no active map'}, grid: {map_config.get('grid_config') if map_config else None}")
 
         except Exception as e:
             # ANY error during state fetch - rollback to ACTIVE
@@ -862,15 +862,15 @@ class FinishSession:
             # Mark session FINISHED (this will clear session.active_game_id to None)
             session.mark_finished()  # Sets FINISHED, stopped_at = now, active_game_id = None
             self.session_repo.save(session)
-            logger.info(f"✅ Session {session_id} marked FINISHED in PostgreSQL with max_players={max_players_from_session}")
+            logger.info(f"Session {session_id} marked FINISHED in PostgreSQL with max_players={max_players_from_session}")
 
             # Note: Character locking is at CAMPAIGN level, not session level
             # Characters stay locked to campaign until player leaves campaign or releases character
 
         except Exception as pg_error:
             # PostgreSQL write failed - MongoDB session is PRESERVED
-            logger.error(f"❌ PostgreSQL write failed for {session_id}: {pg_error}")
-            logger.error(f"⚠️ MongoDB session {session.active_game_id} PRESERVED for manual retry")
+            logger.error(f"PostgreSQL write failed for {session_id}: {pg_error}")
+            logger.error(f"MongoDB session {session.active_game_id} PRESERVED for manual retry")
 
             # Leave session in STOPPING status so user knows there's an issue
             raise ValueError(
@@ -881,7 +881,7 @@ class FinishSession:
         # 8. PHASE 3: Background cleanup (fire-and-forget)
         asyncio.create_task(self._async_cleanup(session_id, active_game_id_to_cleanup))
 
-        logger.info(f"✅ Session {session_id} finished successfully, cleanup scheduled")
+        logger.info(f"Session {session_id} finished successfully, cleanup scheduled")
 
         # 9. Broadcast session_finished event to all campaign members (silent state update)
         campaign = self.campaign_repo.get_by_id(session.campaign_id)
@@ -919,13 +919,13 @@ class FinishSession:
                 )
 
             if response.status_code == 200:
-                logger.info(f"✅ Background cleanup successful for {session_id}")
+                logger.info(f"Background cleanup successful for {session_id}")
             else:
-                logger.warning(f"⚠️ Background cleanup failed: {response.text}")
+                logger.warning(f"Background cleanup failed: {response.text}")
 
         except Exception as e:
             # Cleanup failed - cron will handle it
-            logger.warning(f"⚠️ Background cleanup failed for {session_id}: {e}")
+            logger.warning(f"Background cleanup failed for {session_id}: {e}")
             logger.warning(f"Cron job will clean up game {active_game_id}")
 
 
