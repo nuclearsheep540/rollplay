@@ -12,11 +12,11 @@ import {
 } from '../../styles/constants';
 import DicePrompt from './DMDicePrompt';
 
-String.prototype.titleCase = function() {
-  return this.replace(/\w\S*/g, (txt) =>
+// Local helper for title case (avoids prototype mutation)
+const titleCase = (str) =>
+  str.replace(/\w\S*/g, (txt) =>
     txt.charAt(0).toUpperCase() + txt.substr(1).toLowerCase()
   );
-};
 
 export default function CombatControlsPanel({
   promptPlayerRoll,
@@ -77,7 +77,7 @@ export default function CombatControlsPanel({
                   <div className="flex items-center justify-between">
                     <div>
                       <div>
-                        {prompt.player.titleCase()} • {prompt.rollType}
+                        {titleCase(prompt.player)} • {prompt.rollType}
                       </div>
                     </div>
                     <button
@@ -153,7 +153,7 @@ export default function CombatControlsPanel({
                       setRollPromptModalOpen(true);
                     }}
                   >
-                    {player.playerName.titleCase()}
+                    {titleCase(player.playerName)}
                     {player.characterData && (
                       <span> • {player.characterData.class}</span>
                     )}
