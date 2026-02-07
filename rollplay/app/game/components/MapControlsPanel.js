@@ -433,11 +433,9 @@ export default function MapControlsPanel({
               ✨ Apply {calculatedGrid.width}×{calculatedGrid.height} Grid
             </button>
 
-            {activeMap && (
-              <div className="text-xs text-gray-400 mt-2">
-                <ImageDimensions activeMap={activeMap} />
-              </div>
-            )}
+            <div className="text-xs text-gray-400 mt-2">
+              <ImageDimensions activeMap={activeMap} />
+            </div>
           </div>
         )}
     </div>
