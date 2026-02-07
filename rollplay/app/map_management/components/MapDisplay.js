@@ -100,8 +100,28 @@ const MapDisplay = ({
     });
   }, [isDragging, isMapLocked, dragStart]);
 
-  const handlePointerUp = useCallback(() => {
+  const handlePointerUp = useCallback((e) => {
     setIsDragging(false);
+    // Release pointer capture if we have it
+    if (e?.currentTarget && e?.pointerId !== undefined) {
+      try {
+        e.currentTarget.releasePointerCapture(e.pointerId);
+      } catch {
+        // Ignore if capture was already released
+      }
+    }
+  }, []);
+
+  // Handle pointer cancel (OS gesture, lost capture, etc.)
+  const handlePointerCancel = useCallback((e) => {
+    setIsDragging(false);
+    if (e?.currentTarget && e?.pointerId !== undefined) {
+      try {
+        e.currentTarget.releasePointerCapture(e.pointerId);
+      } catch {
+        // Ignore if capture was already released
+      }
+    }
   }, []);
 
   // Base styles for the map container
@@ -139,6 +159,7 @@ const MapDisplay = ({
         onPointerDown={handlePointerDown}
         onPointerMove={handlePointerMove}
         onPointerUp={handlePointerUp}
+        onPointerCancel={handlePointerCancel}
       >
         <div style={contentTransform}>
           {/* Grid overlay with default settings (atomic approach) */}
@@ -172,6 +193,7 @@ const MapDisplay = ({
       onPointerDown={handlePointerDown}
       onPointerMove={handlePointerMove}
       onPointerUp={handlePointerUp}
+      onPointerCancel={handlePointerCancel}
     >
       {/* Loading overlay (not transformed) */}
       {!mapLoaded && (
