@@ -149,7 +149,7 @@ export default function MapSelectionSection({
   if (!isExpanded) return null;
 
   return (
-    <div className="ml-4 mb-4">
+    <div className="mt-2 p-3 bg-gray-800/50 rounded border border-gray-600">
       {/* Action buttons */}
       <div className="flex gap-2 mb-3">
         <button
@@ -158,7 +158,7 @@ export default function MapSelectionSection({
             showUpload ? 'bg-emerald-500 text-white' : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
           }`}
         >
-          📤 {showUpload ? 'Hide' : 'Upload'}
+          Upload
         </button>
         <button
           onClick={() => { setShowLibrary(!showLibrary); setShowUpload(false); }}
@@ -166,7 +166,7 @@ export default function MapSelectionSection({
             showLibrary ? 'bg-sky-500 text-white' : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
           }`}
         >
-          📚 {showLibrary ? 'Hide' : 'Library'}
+          Library
         </button>
       </div>
 
