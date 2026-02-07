@@ -21,15 +21,13 @@ depends_on = None
 
 
 def upgrade() -> None:
-    # Add new enum values (PostgreSQL cannot remove enum values, so 'audio' stays)
-    op.execute("ALTER TYPE media_asset_type ADD VALUE IF NOT EXISTS 'music'")
-    op.execute("ALTER TYPE media_asset_type ADD VALUE IF NOT EXISTS 'sfx'")
+    # Add new enum values using autocommit block (PostgreSQL requires commit before enum values can be used)
+    # This is the proper Alembic pattern - avoids raw COMMIT which breaks offline mode
+    with op.get_context().autocommit_block():
+        op.execute("ALTER TYPE media_asset_type ADD VALUE IF NOT EXISTS 'music'")
+        op.execute("ALTER TYPE media_asset_type ADD VALUE IF NOT EXISTS 'sfx'")
 
-    # IMPORTANT: COMMIT the transaction so the new enum values are visible
-    # PostgreSQL requires enum additions to be committed before they can be used in UPDATE
-    op.execute("COMMIT")
-
-    # Migrate existing audio assets to music
+    # Migrate existing audio assets to music (runs in normal transaction after enum values are committed)
     op.execute("UPDATE media_assets SET asset_type = 'music' WHERE asset_type = 'audio'")
 
 
