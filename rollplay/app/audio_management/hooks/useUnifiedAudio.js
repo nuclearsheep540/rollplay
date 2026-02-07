@@ -990,8 +990,6 @@ export const useUnifiedAudio = () => {
 
           console.log(`▶️ Sync: starting ${channelId} at offset ${offset.toFixed(1)}s (elapsed: ${elapsed.toFixed(1)}s, duration: ${buffer.duration.toFixed(1)}s)`);
 
-          // Build complete track state for playRemoteTrack
-          const completeTrackState = { channelId, filename, asset_id, s3_url, looping, volume, type: prev => prev?.[channelId]?.type };
           await playRemoteTrack(channelId, filename, looping, volume, offset, {
             ...channelState,
             channelId,
