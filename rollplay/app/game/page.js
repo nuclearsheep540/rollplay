@@ -862,7 +862,7 @@ function GameContent() {
     await unlockAudio();
 
     // 2. Auto-seat if eligible (not DM, not spectator, not already seated)
-    if (!isDM && !isSpectator) {
+    if (isDM === false && !isSpectator) {
       const alreadySeated = gameSeats.some(s => s.playerName === thisPlayer);
       if (!alreadySeated) {
         const emptyIdx = gameSeats.findIndex(s => s.playerName === "empty");
