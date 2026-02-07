@@ -440,7 +440,10 @@ export const useUnifiedAudio = () => {
         `resumeFromPause=${resumeFromPause}, startOffset=${startOffset}` +
         `${syncStartTime ? `, syncStartTime=${syncStartTime}` : ''}`
       );
-  
+
+      // DEBUG: Log exact values passed to Web Audio API
+      console.log(`🔊 SOURCE.START DEBUG: offset=${startOffset}, resumeFromTime=${resumeFromTime}, resumeFromPause=${resumeFromPause}`);
+
       // Start playback (synchronized if syncStartTime provided)
       if (syncStartTime) {
         source.start(syncStartTime, startOffset);
@@ -486,6 +489,10 @@ export const useUnifiedAudio = () => {
       // Set up our time‐update loop
       const startTime = audioContextRef.current.currentTime;
       const pausedTime = resumeFromPause ? startOffset : 0;
+
+      // DEBUG: Log timer setup to compare with source.start offset
+      console.log(`⏱️ TIMER SETUP: startOffset=${startOffset}, pausedTime=${pausedTime}, resumeFromPause=${resumeFromPause}`);
+
       trackTimersRef.current[trackId] = {
         startTime,
         pausedTime,
@@ -869,7 +876,10 @@ export const useUnifiedAudio = () => {
           
           const { filename, currentTime, looping, volume } = trackState;
           console.log(`🔄 Resuming ${trackId} from ${currentTime}s`);
-          
+
+          // DEBUG: Log exactly what we're passing to playRemoteTrack
+          console.log(`📤 RESUME: calling playRemoteTrack with currentTime=${currentTime} for ${trackId}`);
+
           // Call playRemoteTrack with the explicit resume time
           playRemoteTrack(trackId, filename, looping, volume, currentTime).then(resolve);
           
@@ -990,16 +1000,34 @@ export const useUnifiedAudio = () => {
           console.warn(`⚠️ Sync: failed to load buffer for ${channelId}`);
         }
       } else if (playback_state === 'paused' && paused_elapsed != null) {
-        // Show as paused with the saved position
+        // Load buffer to get duration for normalizing paused position
+        const audioUrl = s3_url || `/audio/${filename}`;
+        const buffer = await loadRemoteAudioBuffer(audioUrl, channelId);
+
+        // For looping tracks, normalize paused_elapsed within buffer duration
+        // (server stores raw elapsed time which can exceed buffer length after multiple loops)
+        let normalizedTime = paused_elapsed;
+        if (buffer && looping && buffer.duration > 0 && paused_elapsed > buffer.duration) {
+          normalizedTime = paused_elapsed % buffer.duration;
+          console.log(`🔄 Sync: wrapped paused position ${paused_elapsed.toFixed(1)}s → ${normalizedTime.toFixed(1)}s (buffer: ${buffer.duration.toFixed(1)}s)`);
+        }
+
+        // Cache buffer for future resume
+        if (buffer) {
+          const bufferKey = `${channelId}_${asset_id || filename}`;
+          audioBuffersRef.current[bufferKey] = buffer;
+        }
+
         setRemoteTrackStates(prev => ({
           ...prev,
           [channelId]: {
             ...prev[channelId],
             playbackState: PlaybackState.PAUSED,
-            currentTime: paused_elapsed,
+            currentTime: normalizedTime,
+            duration: buffer?.duration,
           }
         }));
-        console.log(`⏸️ Sync: ${channelId} paused at ${paused_elapsed.toFixed(1)}s`);
+        console.log(`⏸️ Sync: ${channelId} paused at ${normalizedTime.toFixed(1)}s`);
       }
       // "stopped" channels with filename are already handled by the metadata update above
     }
