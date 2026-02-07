@@ -2,6 +2,7 @@
 /* SPDX-License-Identifier: GPL-3.0-or-later */
 
 import { useMutation, useQueryClient } from '@tanstack/react-query'
+import { authFetch } from '@/app/shared/utils/authFetch'
 
 /**
  * Mutation hook for renaming a media asset.
@@ -13,10 +14,9 @@ export function useRenameAsset() {
 
   return useMutation({
     mutationFn: async ({ assetId, filename }) => {
-      const response = await fetch(`/api/library/${assetId}`, {
+      const response = await authFetch(`/api/library/${assetId}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        credentials: 'include',
         body: JSON.stringify({ filename }),
       })
 

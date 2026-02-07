@@ -7,10 +7,9 @@
 
 import React, { useState, useEffect, useCallback } from 'react';
 import AudioTrack from './AudioTrack';
+import AudioTrackSelector from './AudioTrackSelector';
 import { PlaybackState, ChannelType } from '../types';
 import {
-  DM_HEADER,
-  DM_ARROW,
   DM_CHILD,
   PANEL_CHILD,
 } from '../../styles/constants';
@@ -23,12 +22,32 @@ export default function AudioMixerPanel({
   remoteTrackAnalysers = {},
   unlockAudio = null,
   isAudioUnlocked = false,
-  clearPendingOperation = null
+  clearPendingOperation = null,
+  loadAssetIntoChannel = null,
+  campaignId = null,
 }) {
   
   // Track pending audio operations to disable buttons
   const [pendingOperations, setPendingOperations] = useState(new Set());
   
+  // Wrap loadAssetIntoChannel to also persist to server via WebSocket
+  const handleAssetSelected = useCallback((channelId, asset) => {
+    // Load locally into audio state
+    if (loadAssetIntoChannel) {
+      loadAssetIntoChannel(channelId, asset);
+    }
+    // Broadcast + persist to MongoDB via batch operation
+    if (sendRemoteAudioBatch) {
+      sendRemoteAudioBatch([{
+        trackId: channelId,
+        operation: 'load',
+        filename: asset.filename,
+        asset_id: asset.id,
+        s3_url: asset.s3_url,
+      }]);
+    }
+  }, [loadAssetIntoChannel, sendRemoteAudioBatch]);
+
   // Cue system state
   const [currentCue, setCurrentCue] = useState(null); // { tracksToStart: [], tracksToStop: [], cueId: string }
   const [trackFadeStates, setTrackFadeStates] = useState({}); // Per-track fade configuration { trackId: boolean }
@@ -135,6 +154,8 @@ export default function AudioMixerPanel({
           trackId: channel.channelId,
           operation: 'play',
           filename: track.filename,
+          asset_id: track.asset_id,
+          s3_url: track.s3_url,
           looping: track.looping ?? (track.type !== 'sfx'),
           volume: track.volume,
           type: track.type,
@@ -238,6 +259,8 @@ export default function AudioMixerPanel({
         trackId,
         operation: 'play',
         filename: track.filename,
+        asset_id: track.asset_id,
+        s3_url: track.s3_url,
         looping: track.looping ?? (track.type !== 'sfx'),
         volume: track.volume,
         type: track.type,
@@ -392,6 +415,8 @@ export default function AudioMixerPanel({
         trackId: channel.channelId,
         operation: 'play',
         filename: trackState.filename,
+        asset_id: trackState.asset_id,
+        s3_url: trackState.s3_url,
         looping: trackState.looping,
         volume: trackState.volume,
         type: trackState.type,
@@ -451,14 +476,29 @@ export default function AudioMixerPanel({
   };
 
   return (
-    <div className="flex-shrink-0">
-      <div className={DM_HEADER} onClick={onToggle}>
-        🎵 Audio Management
-        <span className={`${DM_ARROW} ${isExpanded ? 'rotate-180' : ''}`}>▼</span>
-      </div>
+    <div className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden flex flex-col">
 
-      {isExpanded && (
-        <>
+          {/* Preset Section */}
+          <div className={DM_CHILD}>
+            <div className="flex items-center gap-3">
+              <span className="text-white font-medium">Preset:</span>
+
+              <select
+                value="Default"
+                disabled
+                className={`${DM_CHILD} bg-slate-800 text-gray-100 cursor-not-allowed`}
+              >
+                <option value="Default">Default</option>
+              </select>
+            </div>
+          </div>
+
+          {/* Track Selector — load audio from asset library */}
+          <AudioTrackSelector
+            remoteTrackStates={remoteTrackStates}
+            onAssetSelected={handleAssetSelected}
+            campaignId={campaignId}
+          />
 
           {/* DJ Cue System - Show when multiple BGM channels are available */}
           {bgmChannels.length > 1 && (
@@ -678,21 +718,6 @@ export default function AudioMixerPanel({
               </div>
           )}
 
-          {/* Preset Section */}
-          <div className={DM_CHILD}>
-            <div className="flex items-center gap-3">
-              <span className="text-white font-medium">Preset:</span>
-
-              <select
-                value="Default"
-                disabled
-                className={`${DM_CHILD} bg-slate-800 text-gray-100 cursor-not-allowed`}
-              >
-                <option value="Default">Default</option>
-              </select>
-            </div>
-          </div>
-
           {/* BGM Channels */}
           {bgmChannels.length > 0 && (
             <>
@@ -763,7 +788,7 @@ export default function AudioMixerPanel({
                       type: channel.type,
                       label: channel.label,
                       analyserNode: remoteTrackAnalysers[channel.channelId],
-                      track: "SFX"
+                      track: channel.track
                     }}
                     pendingOperations={pendingOps}
                     trackState={
@@ -792,8 +817,6 @@ export default function AudioMixerPanel({
               })}
             </>
           )}
-        </>
-      )}
     </div>
   );
 }

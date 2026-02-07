@@ -12,7 +12,7 @@ Note: The 'active_game_id' field stores the MongoDB ObjectID when a game is runn
 """
 
 from sqlalchemy import Column, String, Integer, DateTime, ForeignKey
-from sqlalchemy.dialects.postgresql import UUID
+from sqlalchemy.dialects.postgresql import UUID, JSONB
 from sqlalchemy.orm import relationship, backref
 from sqlalchemy.sql import func
 import uuid
@@ -57,6 +57,8 @@ class Session(Base):
     stopped_at = Column(DateTime(timezone=True))
     active_game_id = Column(String(100))  # MongoDB active_session objectID (when game is running)
     max_players = Column(Integer, default=8, nullable=False)  # Seat count in active game (1-8)
+    audio_config = Column(JSONB, nullable=True, server_default='{}')  # Persisted audio channel config from ETL
+    map_config = Column(JSONB, nullable=True, server_default='{}')  # Persisted active map config from ETL (just asset_id)
 
     # Relationships
     campaign = relationship("Campaign", back_populates="sessions")

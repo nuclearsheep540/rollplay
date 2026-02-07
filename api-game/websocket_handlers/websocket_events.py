@@ -9,6 +9,7 @@ from message_templates import format_message, MESSAGE_TEMPLATES
 from adventure_log_service import AdventureLogService
 from models.log_type import LogType
 from mapservice import MapService, MapSettings
+from gameservice import GameService
 
 
 adventure_log = AdventureLogService()
@@ -521,8 +522,6 @@ class WebsocketEvent():
     @staticmethod
     async def color_change(websocket, data, event_data, player_name, client_id, manager):
         """Handle player color changes"""
-        from gameservice import GameService
-        
         player_changing = event_data.get("player")
         seat_index = event_data.get("seat_index")
         new_color = event_data.get("new_color")
@@ -572,8 +571,6 @@ class WebsocketEvent():
     @staticmethod
     async def player_disconnect(websocket, data, event_data, player_name, client_id, manager):
         """Handle player disconnect event"""
-        from gameservice import GameService
-        
         # Log player disconnection to database
         log_message = format_message(MESSAGE_TEMPLATES["player_disconnected"], player=player_name)
         
@@ -641,11 +638,9 @@ class WebsocketEvent():
                 clear_prompt_message=None
             )
 
-    @staticmethod 
+    @staticmethod
     async def role_change(websocket, data, event_data, player_name, client_id, manager):
         """Handle role changes (moderator/DM assignments)"""
-        from gameservice import GameService
-        
         action = event_data.get("action")  # 'add_moderator', 'remove_moderator', 'set_dm', 'unset_dm'
         target_player = event_data.get("target_player")
         
@@ -732,6 +727,26 @@ class WebsocketEvent():
             print(f"🎵 Remote audio play: {triggered_by} playing {track_type} - {audio_file} (loop: {loop}, volume: {volume})")
         
         
+        # Fire-and-forget: persist play state to MongoDB
+        try:
+            for track in tracks:
+                channel_id = track.get("channelId")
+                if channel_id:
+                    channel_state = {
+                        "filename": track.get("filename"),
+                        "asset_id": track.get("asset_id"),
+                        "s3_url": track.get("s3_url"),
+                        "volume": track.get("volume", 0.8),
+                        "looping": track.get("looping", True),
+                        "playback_state": "playing",
+                        "started_at": time.time(),
+                        "paused_elapsed": None,
+                    }
+                    GameService.update_audio_state(client_id, channel_id, channel_state)
+            print(f"🎵 Audio play state persisted for {len(tracks)} track(s)")
+        except Exception as e:
+            print(f"⚠️ Failed to persist audio play state: {e}")
+
         # Broadcast audio play command to all clients
         audio_play_message = {
             "event_type": "remote_audio_play",
@@ -742,7 +757,7 @@ class WebsocketEvent():
                 **(event_data if len(tracks) == 1 and not event_data.get("tracks") else {})
             }
         }
-        
+
         return WebsocketEventResult(broadcast_message=audio_play_message)
 
     @staticmethod
@@ -797,27 +812,27 @@ class WebsocketEvent():
         print(f"🎛️ Backend received batch audio operations from {triggered_by}: {len(operations)} operations")
         
         # Validate all operations
-        valid_operations = ["play", "stop", "pause", "resume", "volume", "loop"]
+        valid_operations = ["play", "stop", "pause", "resume", "volume", "loop", "load"]
         for i, op in enumerate(operations):
             if not isinstance(op, dict):
                 print(f"❌ Invalid operation {i}: must be an object")
                 return WebsocketEventResult(broadcast_message={})
-            
+
             track_id = op.get("trackId")
             operation = op.get("operation")
-            
+
             if not track_id or not operation:
                 print(f"❌ Invalid operation {i}: missing trackId or operation")
                 return WebsocketEventResult(broadcast_message={})
-            
+
             if operation not in valid_operations:
                 print(f"❌ Invalid operation {i}: operation '{operation}' not supported")
                 return WebsocketEventResult(broadcast_message={})
-            
+
             # Validate operation-specific required parameters
-            if operation == "play":
+            if operation == "play" or operation == "load":
                 if not op.get("filename"):
-                    print(f"❌ Invalid play operation {i}: missing filename")
+                    print(f"❌ Invalid {operation} operation {i}: missing filename")
                     return WebsocketEventResult(broadcast_message={})
             elif operation == "volume":
                 if "volume" not in op:
@@ -850,11 +865,96 @@ class WebsocketEvent():
                 looping = op.get("looping", True)
                 loop_text = "enable" if looping else "disable"
                 operation_summaries.append(f"{loop_text} {track_id} looping")
-        
+            elif operation == "load":
+                filename = op.get("filename", "unknown")
+                operation_summaries.append(f"load {track_id} ({filename})")
+
         log_message = f"🎛️ {triggered_by} executed batch audio operations: {', '.join(operation_summaries)}"
         print(log_message)
-        
-        
+
+        # Fire-and-forget: persist audio state to MongoDB for late-joiner sync
+        try:
+            # Always pre-fetch current audio state — multiple operations need it for read-modify-write
+            current_audio_state = GameService.get_audio_state(client_id)
+
+            for op in operations:
+                track_id = op.get("trackId")
+                operation = op.get("operation")
+
+                if operation == "play":
+                    channel_state = {
+                        "filename": op.get("filename"),
+                        "asset_id": op.get("asset_id"),
+                        "s3_url": op.get("s3_url"),
+                        "volume": op.get("volume", 0.8),
+                        "looping": op.get("looping", True),
+                        "playback_state": "playing",
+                        "started_at": time.time(),
+                        "paused_elapsed": None,
+                    }
+                    GameService.update_audio_state(client_id, track_id, channel_state)
+
+                elif operation == "stop":
+                    # Stop playback but keep track loaded in channel
+                    ch = current_audio_state.get(track_id, {})
+                    channel_state = {
+                        **ch,
+                        "playback_state": "stopped",
+                        "started_at": None,
+                        "paused_elapsed": None,
+                    }
+                    GameService.update_audio_state(client_id, track_id, channel_state)
+
+                elif operation == "pause":
+                    ch = current_audio_state.get(track_id, {})
+                    started_at = ch.get("started_at")
+                    paused_elapsed = (time.time() - started_at) if started_at else 0
+                    channel_state = {
+                        **ch,
+                        "playback_state": "paused",
+                        "paused_elapsed": paused_elapsed,
+                    }
+                    GameService.update_audio_state(client_id, track_id, channel_state)
+
+                elif operation == "resume":
+                    ch = current_audio_state.get(track_id, {})
+                    paused_elapsed = ch.get("paused_elapsed", 0)
+                    channel_state = {
+                        **ch,
+                        "playback_state": "playing",
+                        "started_at": time.time() - paused_elapsed,
+                        "paused_elapsed": None,
+                    }
+                    GameService.update_audio_state(client_id, track_id, channel_state)
+
+                elif operation == "volume":
+                    ch = current_audio_state.get(track_id, {}) if current_audio_state else {}
+                    channel_state = {**ch, "volume": op.get("volume")}
+                    GameService.update_audio_state(client_id, track_id, channel_state)
+
+                elif operation == "loop":
+                    ch = current_audio_state.get(track_id, {}) if current_audio_state else {}
+                    channel_state = {**ch, "looping": op.get("looping")}
+                    GameService.update_audio_state(client_id, track_id, channel_state)
+
+                elif operation == "load":
+                    channel_state = {
+                        "filename": op.get("filename"),
+                        "asset_id": op.get("asset_id"),
+                        "s3_url": op.get("s3_url"),
+                        "volume": op.get("volume", 0.8),
+                        "looping": op.get("looping", True),
+                        "playback_state": "stopped",
+                        "started_at": None,
+                        "paused_elapsed": None,
+                    }
+                    GameService.update_audio_state(client_id, track_id, channel_state)
+
+            print(f"🎵 Audio state persisted to MongoDB for {len(operations)} operations")
+        except Exception as e:
+            # Fire-and-forget — don't block the broadcast on DB errors
+            print(f"⚠️ Failed to persist audio state to MongoDB: {e}")
+
         # Broadcast batch audio command to all clients
         batch_audio_message = {
             "event_type": "remote_audio_batch",
@@ -905,6 +1005,7 @@ class WebsocketEvent():
             # Create MapSettings with existing grid config or None
             map_settings = MapSettings(
                 room_id=room_id,
+                asset_id=map_data.get("asset_id"),  # PostgreSQL MediaAsset ID for ETL restoration
                 filename=map_data.get("filename", "unknown.jpg"),
                 original_filename=map_data.get("original_filename", map_data.get("filename", "unknown.jpg")),
                 file_path=map_data.get("file_path", ""),

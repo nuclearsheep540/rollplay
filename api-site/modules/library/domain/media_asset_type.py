@@ -21,5 +21,6 @@ class MediaAssetType(str, Enum):
     Maps to PostgreSQL enum type 'media_asset_type'.
     """
     MAP = "map"
-    AUDIO = "audio"
+    MUSIC = "music"
+    SFX = "sfx"
     IMAGE = "image"

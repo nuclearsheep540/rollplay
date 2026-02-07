@@ -4,7 +4,7 @@
 """
 MediaAsset Aggregate - Domain model for S3-backed media files
 
-Represents a media asset (map, audio, image) in the DM's library.
+Represents a media asset (map, music, sfx, image) in the DM's library.
 Media assets are owned by users and can be associated with campaigns/sessions.
 
 This is distinct from domain objects (NPCs, Items) which have business logic
@@ -139,7 +139,7 @@ class MediaAssetAggregate:
 
         Valid transitions:
         - image content types (png, jpeg, webp, gif) → map or image
-        - audio content types (mpeg, wav, ogg) → audio only
+        - audio content types (mpeg, wav, ogg) → music or sfx
 
         Args:
             new_type: The new asset type
@@ -155,8 +155,8 @@ class MediaAssetAggregate:
 
         if new_type in (MediaAssetType.MAP, MediaAssetType.IMAGE) and self.content_type not in image_content_types:
             raise ValueError(f"Cannot change to {new_type.value}: content type {self.content_type} is not an image")
-        if new_type == MediaAssetType.AUDIO and self.content_type not in audio_content_types:
-            raise ValueError(f"Cannot change to audio: content type {self.content_type} is not audio")
+        if new_type in (MediaAssetType.MUSIC, MediaAssetType.SFX) and self.content_type not in audio_content_types:
+            raise ValueError(f"Cannot change to {new_type.value}: content type {self.content_type} is not audio")
 
         self.asset_type = new_type
         self.updated_at = datetime.utcnow()

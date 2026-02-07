@@ -13,8 +13,9 @@ CONFIG = get_settings()
 
 class MapSettings(BaseModel):
     """Map configuration for a room"""
-    
+
     room_id: str
+    asset_id: Optional[str] = None  # PostgreSQL MediaAsset ID for ETL restoration
     filename: str  # This is our unique identifier
     original_filename: str
     file_path: str

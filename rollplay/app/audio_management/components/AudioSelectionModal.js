@@ -5,23 +5,23 @@ import React, { useState, useRef, useCallback, useMemo } from 'react';
 import { useAssets } from '@/app/asset_library/hooks/useAssets';
 import { useUploadAsset } from '@/app/asset_library/hooks/useUploadAsset';
 import { useAssociateAsset } from '@/app/asset_library/hooks/useAssociateAsset';
-import { DM_CHILD, DM_CHILD_LAST, PANEL_SUBTITLE, ACTIVE_BACKGROUND } from '../../styles/constants';
+import { ChannelType } from '../types';
 
-const ACCEPTED_MAP_TYPES = ['image/png', 'image/jpeg', 'image/webp'];
+const ACCEPTED_AUDIO_TYPES = ['audio/mpeg', 'audio/wav', 'audio/ogg'];
 const MAX_FILE_SIZE = 50 * 1024 * 1024; // 50MB
 
 /**
- * Inline collapsible map selection section for DM Control Center
- * Replaces the modal with an inline expandable section
+ * Inline audio selection section for a single channel.
+ * Follows the MapSelectionSection pattern with Upload + Library sub-sections.
  */
-export default function MapSelectionSection({
-  isExpanded,
-  onSelectMap,
-  roomId,
+export default function AudioSelectionModal({
+  isOpen,
+  onClose,
+  onSelectAsset,
+  channelId,
+  channelType,
   campaignId,
-  currentMap
 }) {
-  // UI state
   const [showUpload, setShowUpload] = useState(false);
   const [selectedFile, setSelectedFile] = useState(null);
   const [uploadError, setUploadError] = useState(null);
@@ -29,43 +29,43 @@ export default function MapSelectionSection({
   const [showLibrary, setShowLibrary] = useState(false);
   const fileInputRef = useRef(null);
 
-  // Campaign-scoped maps query — only fetches when section is expanded
+  // Map channel type to asset type
+  const assetType = channelType === ChannelType.BGM ? 'music' : 'sfx';
+
+  // Campaign-scoped audio query
   const {
-    data: assets = [],
-    isLoading: loading,
-    error: assetsError,
+    data: campaignAssets = [],
+    isLoading: campaignLoading,
+    error: campaignError,
   } = useAssets({
-    assetType: 'map',
+    assetType,
     campaignId,
-    enabled: isExpanded && !!campaignId,
+    enabled: isOpen && !!campaignId,
   });
 
-  // Full library maps query — only fetches when library panel is open
+  // Full library query — only when library panel is open
   const {
-    data: allMaps = [],
+    data: allAssets = [],
     isLoading: libraryLoading,
     error: libraryQueryError,
   } = useAssets({
-    assetType: 'map',
+    assetType,
     enabled: showLibrary,
   });
 
-  // Filter library to show only maps NOT already in this campaign
+  // Filter library to exclude assets already in campaign
   const libraryAssets = useMemo(() => {
-    const campaignAssetIds = new Set(assets.map(a => a.id));
-    return allMaps.filter(a => !campaignAssetIds.has(a.id));
-  }, [allMaps, assets]);
+    const campaignAssetIds = new Set(campaignAssets.map(a => a.id));
+    return allAssets.filter(a => !campaignAssetIds.has(a.id));
+  }, [allAssets, campaignAssets]);
 
   const uploadMutation = useUploadAsset();
   const associateMutation = useAssociateAsset();
 
-  const error = assetsError?.message || null;
   const libraryError = libraryQueryError?.message || associateMutation.error?.message || null;
 
-  // Associate a library asset with the campaign
   const handleAssociateAsset = async (asset) => {
     if (!campaignId || associateMutation.isPending) return;
-
     try {
       await associateMutation.mutateAsync({ assetId: asset.id, campaignId });
       setShowLibrary(false);
@@ -74,14 +74,13 @@ export default function MapSelectionSection({
     }
   };
 
-  // File validation
   const validateFile = useCallback((file) => {
     if (!file) return 'No file selected';
     if (file.size > MAX_FILE_SIZE) {
       return `File too large. Maximum size is ${MAX_FILE_SIZE / (1024 * 1024)}MB`;
     }
-    if (!ACCEPTED_MAP_TYPES.includes(file.type)) {
-      return 'Invalid file type. Accepted: .png, .jpg, .jpeg, .webp';
+    if (!ACCEPTED_AUDIO_TYPES.includes(file.type)) {
+      return 'Invalid file type. Accepted: .mp3, .wav, .ogg';
     }
     return null;
   }, []);
@@ -121,32 +120,29 @@ export default function MapSelectionSection({
 
     try {
       setUploadError(null);
-      await uploadMutation.mutateAsync({
+      const result = await uploadMutation.mutateAsync({
         file: selectedFile,
-        assetType: 'map',
+        assetType,
         campaignId,
       });
       setSelectedFile(null);
       setShowUpload(false);
-      // Cache invalidation in onSuccess handles refetch automatically
+      // Auto-select the uploaded asset for this channel
+      if (result) {
+        onSelectAsset(channelId, result);
+        onClose();
+      }
     } catch (err) {
       setUploadError(err.message);
     }
   };
 
-  const handleMapSelect = (asset) => {
-    const mapSettings = {
-      room_id: roomId,
-      asset_id: asset.id,
-      filename: asset.filename,
-      original_filename: asset.filename,
-      file_path: asset.s3_url,
-      uploaded_by: "dm"
-    };
-    onSelectMap(mapSettings);
+  const handleAssetSelect = (asset) => {
+    onSelectAsset(channelId, asset);
+    onClose();
   };
 
-  if (!isExpanded) return null;
+  if (!isOpen) return null;
 
   return (
     <div className="mt-2 p-3 bg-gray-800/50 rounded border border-gray-600">
@@ -168,11 +164,17 @@ export default function MapSelectionSection({
         >
           Library
         </button>
+        <button
+          onClick={onClose}
+          className="ml-auto px-2 py-1 text-xs text-gray-400 hover:text-gray-200"
+        >
+          Cancel
+        </button>
       </div>
 
       {/* Upload Section */}
       {showUpload && (
-        <div className="mb-4 p-3 bg-gray-700/50 rounded border border-gray-600">
+        <div className="mb-3 p-3 bg-gray-700/50 rounded border border-gray-600">
           <div
             onDragEnter={handleDrag}
             onDragLeave={handleDrag}
@@ -189,7 +191,7 @@ export default function MapSelectionSection({
               ref={fileInputRef}
               type="file"
               onChange={(e) => e.target.files?.[0] && handleFileSelect(e.target.files[0])}
-              accept={ACCEPTED_MAP_TYPES.join(',')}
+              accept={ACCEPTED_AUDIO_TYPES.join(',')}
               className="hidden"
               disabled={uploadMutation.isPending}
             />
@@ -201,7 +203,7 @@ export default function MapSelectionSection({
             ) : (
               <div>
                 <p className="text-gray-400 text-sm">Drop or click to browse</p>
-                <p className="text-gray-500 text-xs">PNG, JPG, WebP (max 50MB)</p>
+                <p className="text-gray-500 text-xs">MP3, WAV, OGG (max 50MB)</p>
               </div>
             )}
           </div>
@@ -228,8 +230,10 @@ export default function MapSelectionSection({
 
       {/* Library Section */}
       {showLibrary && (
-        <div className="mb-4 p-3 bg-gray-700/50 rounded border border-gray-600">
-          <p className="text-xs text-gray-400 mb-2">Maps not linked to this campaign</p>
+        <div className="mb-3 p-3 bg-gray-700/50 rounded border border-gray-600">
+          <p className="text-xs text-gray-400 mb-2">
+            {assetType === 'music' ? 'Music' : 'Sound effects'} not linked to this campaign
+          </p>
 
           {libraryLoading && (
             <div className="text-center py-3">
@@ -240,20 +244,16 @@ export default function MapSelectionSection({
           {libraryError && <p className="text-red-400 text-xs">{libraryError}</p>}
 
           {!libraryLoading && !libraryError && libraryAssets.length === 0 && (
-            <p className="text-gray-500 text-xs text-center py-2">No additional maps in library</p>
+            <p className="text-gray-500 text-xs text-center py-2">No additional {assetType} assets in library</p>
           )}
 
           {!libraryLoading && !libraryError && libraryAssets.length > 0 && (
             <div className="space-y-2 max-h-40 overflow-y-auto">
               {libraryAssets.map((asset) => (
                 <div key={asset.id} className="flex items-center gap-2 p-2 rounded border border-gray-600 hover:border-gray-500">
-                  <div className="w-10 h-10 flex-shrink-0 bg-gray-700 rounded flex items-center justify-center overflow-hidden">
-                    {asset.s3_url ? (
-                      <img src={asset.s3_url} alt="" className="w-full h-full object-cover" />
-                    ) : (
-                      <span className="text-gray-500 text-xs">🗺️</span>
-                    )}
-                  </div>
+                  <span className="text-gray-400 text-sm flex-shrink-0">
+                    {assetType === 'music' ? '🎵' : '🔊'}
+                  </span>
                   <p className="flex-1 text-xs text-gray-300 truncate">{asset.filename}</p>
                   <button
                     onClick={() => handleAssociateAsset(asset)}
@@ -269,51 +269,35 @@ export default function MapSelectionSection({
         </div>
       )}
 
-      {/* Loading */}
-      {loading && (
-        <div className="text-center py-4">
+      {/* Campaign Assets — select for this channel */}
+      {campaignLoading && (
+        <div className="text-center py-3">
           <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-sky-500 mx-auto"></div>
         </div>
       )}
 
-      {/* Error */}
-      {error && <p className="text-red-400 text-xs mb-2">{error}</p>}
+      {campaignError && <p className="text-red-400 text-xs mb-2">{campaignError.message}</p>}
 
-      {/* Empty state */}
-      {!loading && !error && assets.length === 0 && (
-        <p className="text-gray-500 text-xs">No maps available. Upload or add from library.</p>
+      {!campaignLoading && !campaignError?.message && campaignAssets.length === 0 && (
+        <p className="text-gray-500 text-xs">No {assetType} assets in campaign. Upload or add from library.</p>
       )}
 
-      {/* Asset List */}
-      {!loading && !error && assets.length > 0 && (
-        <div className="space-y-2">
-          {assets.map((asset) => {
-            const isActive = currentMap?.asset_id === asset.id || currentMap?.filename === asset.filename;
-            const hasUrl = !!asset.s3_url;
-            return (
-              <div
-                key={asset.id}
-                onClick={() => hasUrl && handleMapSelect(asset)}
-                className={`flex items-center gap-2 p-2 rounded border transition-all ${
-                  !hasUrl
-                    ? 'border-gray-700 opacity-50 cursor-not-allowed'
-                    : isActive
-                    ? 'border-green-500 bg-green-900/20 cursor-pointer'
-                    : 'border-gray-600 hover:border-sky-500 hover:bg-sky-900/10 cursor-pointer'
-                }`}
-              >
-                <div className="w-10 h-10 flex-shrink-0 bg-gray-700 rounded flex items-center justify-center overflow-hidden">
-                  {asset.s3_url ? (
-                    <img src={asset.s3_url} alt="" className="w-full h-full object-cover" />
-                  ) : (
-                    <span className="text-gray-500 text-xs">🗺️</span>
-                  )}
-                </div>
-                <p className="flex-1 text-xs text-gray-200 truncate">{asset.filename}</p>
-                {isActive && <span className="text-green-400 text-xs">Active</span>}
-              </div>
-            );
-          })}
+      {!campaignLoading && !campaignError?.message && campaignAssets.length > 0 && (
+        <div className="space-y-1">
+          <p className="text-xs text-gray-400 mb-1">Campaign {assetType === 'music' ? 'music' : 'sound effects'}</p>
+          {campaignAssets.map((asset) => (
+            <div
+              key={asset.id}
+              onClick={() => handleAssetSelect(asset)}
+              className="flex items-center gap-2 p-2 rounded border border-gray-600 hover:border-sky-500 hover:bg-sky-900/10 cursor-pointer"
+            >
+              <span className="text-gray-400 text-sm flex-shrink-0">
+                {assetType === 'music' ? '🎵' : '🔊'}
+              </span>
+              <p className="flex-1 text-xs text-gray-200 truncate">{asset.filename}</p>
+              <span className="text-xs text-gray-500">Select</span>
+            </div>
+          ))}
         </div>
       )}
     </div>

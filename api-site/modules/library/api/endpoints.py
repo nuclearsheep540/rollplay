@@ -23,15 +23,18 @@ from modules.library.repositories.asset_repository import MediaAssetRepository
 from modules.campaign.dependencies.providers import campaign_repository
 from modules.campaign.orm.campaign_repository import CampaignRepository
 from modules.library.domain.media_asset_type import MediaAssetType
-from modules.library.application.commands import ConfirmUpload, DeleteMediaAsset, AssociateWithCampaign, RenameMediaAsset, ChangeAssetType
+from modules.library.application.commands import ConfirmUpload, DeleteMediaAsset, AssociateWithCampaign, RenameMediaAsset, ChangeAssetType, UpdateGridConfig
+from modules.library.domain.map_asset_aggregate import MapAsset
 from modules.library.application.queries import GetMediaAssetsByUser, GetMediaAssetsByCampaign
 from modules.library.schemas.asset_schemas import (
     UploadUrlResponse,
     ConfirmUploadRequest,
     MediaAssetResponse,
+    MapAssetResponse,
     AssociateRequest,
     RenameRequest,
     ChangeTypeRequest,
+    UpdateGridConfigRequest,
     MediaAssetListResponse
 )
 from modules.user.domain.user_aggregate import UserAggregate
@@ -54,6 +57,26 @@ def _to_media_asset_response(asset, s3_service: S3Service = None) -> MediaAssetR
 
     # Convert enum to string for JSON response
     asset_type_value = asset.asset_type.value if hasattr(asset.asset_type, 'value') else str(asset.asset_type)
+
+    # If it's a MapAsset, return MapAssetResponse with grid fields
+    if isinstance(asset, MapAsset):
+        return MapAssetResponse(
+            id=str(asset.id),
+            user_id=str(asset.user_id),
+            filename=asset.filename,
+            s3_key=asset.s3_key,
+            s3_url=s3_url,
+            content_type=asset.content_type,
+            asset_type=asset_type_value,
+            file_size=asset.file_size,
+            campaign_ids=[str(cid) for cid in asset.campaign_ids],
+            session_ids=[str(sid) for sid in asset.session_ids],
+            created_at=asset.created_at,
+            updated_at=asset.updated_at,
+            grid_width=asset.grid_width,
+            grid_height=asset.grid_height,
+            grid_opacity=asset.grid_opacity
+        )
 
     return MediaAssetResponse(
         id=str(asset.id),
@@ -288,6 +311,71 @@ async def change_asset_type(
     except Exception as e:
         logger.error(f"Change asset type error: {e}")
         raise HTTPException(status_code=500, detail="Failed to change asset type")
+
+
+@router.patch("/{asset_id}/grid", response_model=MapAssetResponse)
+async def update_grid_config(
+    asset_id: UUID,
+    request: UpdateGridConfigRequest,
+    current_user: UserAggregate = Depends(get_current_user_from_token),
+    repo: MediaAssetRepository = Depends(get_media_asset_repository),
+    s3_service: S3Service = Depends(get_s3_service)
+) -> MapAssetResponse:
+    """
+    Update grid configuration for a map asset.
+
+    Grid config is stored on the asset itself, making it reusable
+    across all campaigns/sessions that use this map.
+    """
+    try:
+        command = UpdateGridConfig(repo)
+        asset = command.execute(
+            asset_id=asset_id,
+            user_id=current_user.id,
+            grid_width=request.grid_width,
+            grid_height=request.grid_height,
+            grid_opacity=request.grid_opacity
+        )
+
+        logger.info(f"Updated grid config for map {asset_id}: {asset.get_grid_config()}")
+
+        return _to_media_asset_response(asset, s3_service)
+
+    except ValueError as e:
+        logger.warning(f"Update grid config failed: {e}")
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        logger.error(f"Update grid config error: {e}")
+        raise HTTPException(status_code=500, detail="Failed to update grid configuration")
+
+
+@router.get("/{asset_id}/download-url")
+async def get_download_url(
+    asset_id: UUID,
+    current_user: UserAggregate = Depends(get_current_user_from_token),
+    repo: MediaAssetRepository = Depends(get_media_asset_repository),
+    s3_service: S3Service = Depends(get_s3_service)
+):
+    """
+    Get a fresh presigned download URL for a media asset.
+
+    Useful when a previously issued URL has expired during a long game session.
+    """
+    try:
+        asset = repo.get_by_id(asset_id)
+        if not asset:
+            raise HTTPException(status_code=404, detail="Media asset not found")
+        if not asset.is_owned_by(current_user.id):
+            raise HTTPException(status_code=403, detail="Access denied")
+
+        download_url = s3_service.generate_download_url(asset.s3_key)
+        return {"download_url": download_url}
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Get download URL error: {e}")
+        raise HTTPException(status_code=500, detail="Failed to generate download URL")
 
 
 @router.delete("/{asset_id}", status_code=204)

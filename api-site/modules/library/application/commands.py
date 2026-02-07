@@ -9,6 +9,7 @@ from typing import Optional, Union
 from uuid import UUID
 
 from modules.library.domain.asset_aggregate import MediaAssetAggregate
+from modules.library.domain.map_asset_aggregate import MapAsset
 from modules.library.domain.media_asset_type import MediaAssetType
 from modules.library.repositories.asset_repository import MediaAssetRepository
 from shared.services.s3_service import S3Service
@@ -60,16 +61,30 @@ class ConfirmUpload:
         if not self.s3_service.object_exists(s3_key):
             raise ValueError(f"Object {s3_key} not found in S3")
 
-        # Create the aggregate
-        asset = MediaAssetAggregate.create(
-            user_id=user_id,
-            filename=filename,
-            s3_key=s3_key,
-            content_type=content_type,
-            asset_type=asset_type,
-            file_size=file_size,
-            campaign_id=campaign_id
-        )
+        # Convert string to enum if needed
+        if isinstance(asset_type, str):
+            asset_type = MediaAssetType(asset_type)
+
+        # Create the appropriate aggregate based on type
+        if asset_type == MediaAssetType.MAP:
+            asset = MapAsset.create(
+                user_id=user_id,
+                filename=filename,
+                s3_key=s3_key,
+                content_type=content_type,
+                file_size=file_size,
+                campaign_id=campaign_id
+            )
+        else:
+            asset = MediaAssetAggregate.create(
+                user_id=user_id,
+                filename=filename,
+                s3_key=s3_key,
+                content_type=content_type,
+                asset_type=asset_type,
+                file_size=file_size,
+                campaign_id=campaign_id
+            )
 
         # Persist
         self.repository.save(asset)
@@ -230,4 +245,59 @@ class AssociateWithCampaign:
 
         self.repository.save(asset)
 
+        return asset
+
+
+class UpdateGridConfig:
+    """
+    Update grid configuration for a map asset.
+
+    Grid config is stored on the asset itself, making it reusable
+    across all campaigns/sessions that use this map.
+    """
+
+    def __init__(self, repository: MediaAssetRepository):
+        self.repository = repository
+
+    def execute(
+        self,
+        asset_id: UUID,
+        user_id: UUID,
+        grid_width: Optional[int] = None,
+        grid_height: Optional[int] = None,
+        grid_opacity: Optional[float] = None
+    ) -> MapAsset:
+        """
+        Update grid configuration for a map asset.
+
+        Args:
+            asset_id: The map asset to update
+            user_id: The requesting user's ID
+            grid_width: Grid width in cells (1-100)
+            grid_height: Grid height in cells (1-100)
+            grid_opacity: Grid overlay opacity (0.0-1.0)
+
+        Returns:
+            Updated MapAsset
+
+        Raises:
+            ValueError: If asset not found, not owned, or not a map
+        """
+        asset = self.repository.get_by_id(asset_id)
+        if not asset:
+            raise ValueError(f"Media asset {asset_id} not found")
+
+        if not asset.is_owned_by(user_id):
+            raise ValueError("Cannot modify media asset owned by another user")
+
+        if not isinstance(asset, MapAsset):
+            raise ValueError("Grid configuration only applies to map assets")
+
+        asset.update_grid_config(
+            grid_width=grid_width,
+            grid_height=grid_height,
+            grid_opacity=grid_opacity
+        )
+
+        self.repository.save(asset)
         return asset

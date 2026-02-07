@@ -2,6 +2,7 @@
 /* SPDX-License-Identifier: GPL-3.0-or-later */
 
 import { useMutation, useQueryClient } from '@tanstack/react-query'
+import { authFetch } from '@/app/shared/utils/authFetch'
 
 /**
  * Mutation hook for deleting an asset.
@@ -13,9 +14,8 @@ export function useDeleteAsset() {
 
   return useMutation({
     mutationFn: async (assetId) => {
-      const response = await fetch(`/api/library/${assetId}`, {
+      const response = await authFetch(`/api/library/${assetId}`, {
         method: 'DELETE',
-        credentials: 'include',
       })
 
       if (!response.ok && response.status !== 204) {

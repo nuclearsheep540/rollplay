@@ -33,7 +33,8 @@ const SUB_FILTERS = {
   all: [
     { id: 'all', label: 'All' },
     { id: 'map', label: 'Maps' },
-    { id: 'audio', label: 'Audio' },
+    { id: 'music', label: 'Music' },
+    { id: 'sfx', label: 'SFX' },
     { id: 'image', label: 'Images' },
     { id: 'npc', label: 'NPCs' },
     { id: 'item', label: 'Items' }
@@ -41,7 +42,8 @@ const SUB_FILTERS = {
   media: [
     { id: 'all', label: 'All' },
     { id: 'map', label: 'Maps' },
-    { id: 'audio', label: 'Audio' },
+    { id: 'music', label: 'Music' },
+    { id: 'sfx', label: 'SFX' },
     { id: 'image', label: 'Images' }
   ],
   objects: [
@@ -188,6 +190,7 @@ export default function AssetLibraryManager({ user }) {
 
     // Change Tag sub-menu (only for assets with valid alternative types)
     const isImageContent = asset.content_type?.startsWith('image/')
+    const isAudioContent = asset.content_type?.startsWith('audio/')
     if (isImageContent) {
       const tagOptions = ['map', 'image']
       items.push({
@@ -195,6 +198,18 @@ export default function AssetLibraryManager({ user }) {
         icon: <FontAwesomeIcon icon={faTag} className="text-xs" />,
         subItems: tagOptions.map(type => ({
           label: type.charAt(0).toUpperCase() + type.slice(1),
+          disabled: asset.asset_type === type,
+          active: asset.asset_type === type,
+          onClick: () => changeTypeMutation.mutate({ assetId: asset.id, assetType: type }),
+        })),
+      })
+    } else if (isAudioContent) {
+      const tagOptions = ['music', 'sfx']
+      items.push({
+        label: 'Change Tag',
+        icon: <FontAwesomeIcon icon={faTag} className="text-xs" />,
+        subItems: tagOptions.map(type => ({
+          label: type.toUpperCase(),
           disabled: asset.asset_type === type,
           active: asset.asset_type === type,
           onClick: () => changeTypeMutation.mutate({ assetId: asset.id, assetType: type }),

@@ -28,6 +28,8 @@ try:
     from modules.friendship.model.friendship_model import FriendshipModel
     from modules.events.model.notification_model import Notification
     from modules.library.model.asset_model import MediaAsset
+    from modules.library.model.map_asset_model import MapAssetModel
+    from modules.library.model.audio_asset_models import MusicAssetModel, SfxAssetModel, ImageAssetModel
     print("Models imported successfully")
 except ImportError as e:
     print(f"Error importing models: {e}")

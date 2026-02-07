@@ -23,7 +23,7 @@ class UploadUrlResponse(BaseModel):
 class ConfirmUploadRequest(BaseModel):
     """Request to confirm an upload completed and create media asset record"""
     key: str = Field(..., description="S3 object key from upload URL response")
-    asset_type: MediaAssetType = Field(default=MediaAssetType.MAP, description="Type of asset")
+    asset_type: MediaAssetType = Field(default=MediaAssetType.MAP, description="Type of asset (map, music, sfx, image)")
     campaign_id: Optional[UUID] = Field(None, description="Campaign to associate with (optional)")
     file_size: Optional[int] = Field(None, description="File size in bytes (optional)")
 
@@ -41,7 +41,7 @@ class RenameRequest(BaseModel):
 
 class ChangeTypeRequest(BaseModel):
     """Request to change a media asset's type tag"""
-    asset_type: MediaAssetType = Field(..., description="New asset type (map, image, audio)")
+    asset_type: MediaAssetType = Field(..., description="New asset type (map, image, music, sfx)")
 
 
 class MediaAssetResponse(BaseModel):
@@ -67,6 +67,20 @@ class MediaAssetListResponse(BaseModel):
     """Response containing list of media assets"""
     assets: List[MediaAssetResponse]
     total: int
+
+
+class UpdateGridConfigRequest(BaseModel):
+    """Request to update map grid configuration"""
+    grid_width: Optional[int] = Field(None, ge=1, le=100, description="Grid width in cells")
+    grid_height: Optional[int] = Field(None, ge=1, le=100, description="Grid height in cells")
+    grid_opacity: Optional[float] = Field(None, ge=0.0, le=1.0, description="Grid overlay opacity")
+
+
+class MapAssetResponse(MediaAssetResponse):
+    """Response containing map asset details with grid config"""
+    grid_width: Optional[int] = None
+    grid_height: Optional[int] = None
+    grid_opacity: Optional[float] = None
 
 
 # Aliases for backwards compatibility

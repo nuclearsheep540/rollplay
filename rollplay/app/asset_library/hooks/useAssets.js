@@ -2,12 +2,13 @@
 /* SPDX-License-Identifier: GPL-3.0-or-later */
 
 import { useQuery } from '@tanstack/react-query'
+import { authFetch } from '@/app/shared/utils/authFetch'
 
 /**
  * Query hook for fetching assets from the library.
  *
  * @param {Object} options
- * @param {string|null} options.assetType - Filter by type: 'map', 'audio', 'image', or null for all
+ * @param {string|null} options.assetType - Filter by type: 'map', 'music', 'sfx', 'image', or null for all
  * @param {string|null} options.campaignId - Filter by campaign association
  * @param {boolean} options.enabled - Whether the query should execute (default: true)
  * @returns TanStack Query result with { data: Asset[], isLoading, error, ... }
@@ -25,9 +26,8 @@ export function useAssets({ assetType = null, campaignId = null, enabled = true 
       }
 
       const url = `/api/library/${params.toString() ? '?' + params.toString() : ''}`
-      const response = await fetch(url, {
+      const response = await authFetch(url, {
         method: 'GET',
-        credentials: 'include',
       })
 
       if (!response.ok) {

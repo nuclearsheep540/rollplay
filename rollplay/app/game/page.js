@@ -11,8 +11,10 @@ import { getSeatColor } from '../utils/seatColors';
 
 import PlayerCard from "./components/PlayerCard";
 import DMChair from "./components/DMChair";
-import DMControlCenter from './components/DMControlCenter';
+import MapControlsPanel from './components/MapControlsPanel';
+import CombatControlsPanel from './components/CombatControlsPanel';
 import ModeratorControls from './components/ModeratorControls';
+import { AudioMixerPanel } from '../audio_management/components';
 import HorizontalInitiativeTracker from './components/HorizontalInitiativeTracker';
 import AdventureLog from './components/AdventureLog';
 import LobbyPanel from './components/LobbyPanel';
@@ -73,7 +75,7 @@ function GameContent() {
 
   // UPDATED: State management for TabletopInterface - REMOVED HARDCODED DEFAULTS
   const [currentTurn, setCurrentTurn] = useState(null); // ❌ Removed 'Thorin' default
-  const [isDM, setIsDM] = useState(false); // Toggle for DM panel visibility
+  const [isDM, setIsDM] = useState(null); // null = unknown, false = not DM, true = DM
   const [isModerator, setIsModerator] = useState(false); // Moderator status
   const [isHost, setIsHost] = useState(false); // Host status
   const [dicePortalActive, setDicePortalActive] = useState(true);
@@ -105,30 +107,23 @@ function GameContent() {
   // Campaign ID for direct api-site calls (asset library)
   const [campaignId, setCampaignId] = useState(null);
 
+  // Campaign metadata for overlay (fetched from api-site when campaignId is set)
+  const [campaignMeta, setCampaignMeta] = useState(null);
+
   // Spectator mode - user has no character selected for this campaign
   const [isSpectator, setIsSpectator] = useState(false);
-  // Debug wrapper for setGridConfig
-  const debugSetGridConfig = (config) => {
-    console.log('🎯 setGridConfig called with:', config);
-    setGridConfig(config);
-  };
+  const [isDrawerOpen, setIsDrawerOpen] = useState(true);
+  const [activeRightDrawer, setActiveRightDrawer] = useState(null); // null | 'dm' | 'moderator'
   const [mapImageConfig, setMapImageConfig] = useState(null); // Map image positioning/scaling
 
-  // Handle grid configuration changes during editing
-  const handleGridChange = (newGridConfig) => {
-    console.log('🎯 handleGridChange called with:', newGridConfig);
-    console.log('🎯 Current gridConfig before update:', gridConfig);
+  // Stable callbacks for grid/map config changes — passed to DMControlCenter useEffect deps
+  const handleGridChange = useCallback((newGridConfig) => {
     setGridConfig(newGridConfig);
-    // TODO: Save to backend when grid editing is complete
-    console.log('🎯 Grid config updated, setGridConfig called');
-  };
+  }, []);
 
-  // Handle map image configuration changes during editing
-  const handleMapImageChange = (newMapImageConfig) => {
+  const handleMapImageChange = useCallback((newMapImageConfig) => {
     setMapImageConfig(newMapImageConfig);
-    // TODO: Save to backend when map editing is complete
-    console.log('Map image config updated:', newMapImageConfig);
-  };
+  }, []);
 
   // Helper function to get character data
   const getCharacterData = (playerName) => {
@@ -384,23 +379,22 @@ function GameContent() {
   // Check spectator status when campaign ID is available
   // DMs are never spectators even without a character
   useEffect(() => {
+    // Don't decide spectator status until roles have been resolved
+    if (isDM === null || !campaignId || !currentUser) return;
+
+    // DM is never a spectator
+    if (isDM) {
+      setIsSpectator(false);
+      console.log('✅ User is DM - not a spectator');
+      return;
+    }
+
     const checkSpectatorStatus = async () => {
-      if (!campaignId || !currentUser) return;
-
-      // DM is never a spectator
-      if (isDM) {
-        setIsSpectator(false);
-        console.log('✅ User is DM - not a spectator');
-        return;
-      }
-
       try {
-        // Fetch user's characters
         const response = await fetch('/api/characters/', { credentials: 'include' });
         if (!response.ok) return;
 
         const characters = await response.json();
-        // Check if any character is locked to this campaign
         const selectedChar = characters.find(char => char.active_campaign === campaignId);
 
         if (selectedChar) {
@@ -418,6 +412,27 @@ function GameContent() {
     checkSpectatorStatus();
   }, [campaignId, currentUser, isDM]);
 
+  // Fetch campaign metadata (title + hero_image) for the Enter Session overlay
+  useEffect(() => {
+    if (!campaignId) return;
+    console.log(`🎨 Fetching campaign metadata for overlay: ${campaignId}`);
+    fetch(`/api/campaigns/${campaignId}`, { credentials: 'include' })
+      .then(res => {
+        if (!res.ok) {
+          console.warn(`⚠️ Campaign metadata fetch failed: ${res.status}`);
+          return null;
+        }
+        return res.json();
+      })
+      .then(data => {
+        if (data) {
+          console.log(`✅ Campaign metadata loaded: "${data.title}"`);
+          setCampaignMeta({ title: data.title, heroImage: data.hero_image });
+        }
+      })
+      .catch(err => console.warn('⚠️ Campaign metadata fetch error:', err));
+  }, [campaignId]);
+
   // Cleanup audio when component unmounts (user navigates away from game page)
   useEffect(() => {
     return () => {
@@ -428,6 +443,14 @@ function GameContent() {
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // Auto-exit grid edit mode when navigating away from Map tab
+  useEffect(() => {
+    if (activeRightDrawer !== 'map' && gridEditMode) {
+      console.log('📐 Auto-exiting grid edit mode (navigated away from Map tab)');
+      setGridEditMode(false);
+    }
+  }, [activeRightDrawer, gridEditMode]);
 
   // UPDATED: Seat count management with displaced player handling
   const setSeatCount = async (newSeatCount) => {
@@ -718,6 +741,8 @@ function GameContent() {
     audioBuffersRef,
     audioContextRef,
     setClearPendingOperationCallback,
+    loadAssetIntoChannel,
+    syncAudioState,
     cleanupAllAudio
   } = useUnifiedAudio();
 
@@ -770,6 +795,12 @@ function GameContent() {
     
     // Remote audio state (for resume functionality)
     remoteTrackStates,
+
+    // Late-joiner audio sync
+    syncAudioState,
+
+    // Asset loading (for load batch operations from other clients)
+    loadAssetIntoChannel,
 
     // Session ended modal
     setSessionEndedData
@@ -825,28 +856,29 @@ function GameContent() {
     }
   }, [combatActive, isAudioUnlocked]);
 
-  // Fallback audio unlock on any click (for non-DM players)
-  useEffect(() => {
-    if (!isAudioUnlocked) {
-      const handleFirstClick = () => {
-        if (unlockAudio) {
-          unlockAudio().then(() => {
-            console.log('🔊 Audio unlocked on first user interaction');
-          }).catch(err => {
-            console.warn('Audio unlock failed on first click:', err);
-          });
+  // Handle "Enter Session" overlay click — unlocks audio + auto-seats player
+  const handleEnterSession = async () => {
+    // 1. Unlock audio (drains pending play ops with corrected offsets)
+    await unlockAudio();
+
+    // 2. Auto-seat if eligible (not DM, not spectator, not already seated)
+    if (isDM === false && !isSpectator) {
+      const alreadySeated = gameSeats.some(s => s.playerName === thisPlayer);
+      if (!alreadySeated) {
+        const emptyIdx = gameSeats.findIndex(s => s.playerName === "empty");
+        if (emptyIdx !== -1) {
+          const newSeats = [...gameSeats];
+          newSeats[emptyIdx] = {
+            ...newSeats[emptyIdx],
+            playerName: thisPlayer,
+            characterData: getCharacterData(thisPlayer),
+            isActive: false
+          };
+          sendSeatChange(newSeats);
         }
-      };
-
-      // Add click listener to document
-      document.addEventListener('click', handleFirstClick, { once: true });
-
-      // Cleanup
-      return () => {
-        document.removeEventListener('click', handleFirstClick);
-      };
+      }
     }
-  }, [isAudioUnlocked, unlockAudio]);
+  };
 
   // Show dice portal for player rolls
   const showDicePortal = (playerName, promptType = null) => {
@@ -1270,11 +1302,6 @@ function GameContent() {
             <span className="volume-percentage">
               {Math.round(masterVolume * 100)}%
             </span>
-            {!isAudioUnlocked && (
-              <span className="text-yellow-400 text-xs ml-2">
-                👆 Touch to enable audio
-              </span>
-            )}
           </div>
 
           {/* UI Scale Toggle */}
@@ -1353,31 +1380,40 @@ function GameContent() {
         </div>
       )}
 
-      {/* Main Game Area */}
-      <div className="main-game-area">
-        {/* GRID POSITION 1: Left Column - party-sidebar with adventure log */}
-        <div className="party-sidebar">
+      {/* Party drawer — fixed-position, outside grid flow */}
+      <div
+        className="party-drawer"
+        style={{ transform: isDrawerOpen ? 'translateX(0)' : 'translateX(-100%)' }}
+      >
+        <button
+          className={`drawer-toggle-tab ${isDrawerOpen ? 'active' : ''}`}
+          onClick={() => setIsDrawerOpen(!isDrawerOpen)}
+        >
+          PARTY
+        </button>
+
+        <div className="drawer-content">
           {/* DM Section */}
-          <div 
+          <div
             className="party-header"
             style={{
-              color: '#fb7185', // Rose-400 for DM theme
-              borderBottom: '1px solid rgba(251, 113, 133, 0.3)' // Rose-400/30 border
+              color: '#fb7185',
+              borderBottom: '1px solid rgba(251, 113, 133, 0.3)'
             }}
           >
             <span>Dungeon Master</span>
           </div>
-          
-          <DMChair 
+
+          <DMChair
             dmName={dmSeat}
             isEmpty={dmSeat === ""}
           />
 
           {/* Party Section */}
-          <div 
+          <div
             className="party-header"
             style={{
-              borderBottom: '1px solid rgba(74, 222, 128, 0.3)' // Emerald-400/30 border to match party theme
+              borderBottom: '1px solid rgba(74, 222, 128, 0.3)'
             }}
           >
             <span>Party</span>
@@ -1385,47 +1421,146 @@ function GameContent() {
               {gameSeats.filter(seat => seat.playerName !== "empty").length}/{gameSeats.length} Seats
             </span>
           </div>
-          
-          {gameSeats.map((seat) => {
+
+          {gameSeats.filter(seat => isDM || seat.playerName !== "empty").map((seat) => {
             const isSitting = seat.playerName === getCurrentPlayerName();
             const currentColor = seatColors[seat.seatId] || getSeatColor(seat.seatId);
-            
+
             return (
               <PlayerCard
                 key={seat.seatId}
                 seatId={seat.seatId}
                 seats={gameSeats}
                 thisPlayer={getCurrentPlayerName()}
-                currentUser={currentUser}
                 isSitting={isSitting}
-                sendSeatChange={sendSeatChange}
-                unlockAudio={unlockAudio}
                 currentTurn={currentTurn}
                 onDiceRoll={handlePlayerDiceRoll}
                 playerData={seat.characterData}
                 onColorChange={handlePlayerColorChange}
                 currentColor={currentColor}
-                isDM={isDM}
-                isSpectator={isSpectator}
               />
             );
           })}
 
-          {/* Lobby Panel - shows all connected users not in party */}
+          {/* Lobby Panel */}
           <LobbyPanel
             lobbyUsers={lobbyUsers}
           />
 
-          {/* Adventure Log component */}
-          <AdventureLog 
+          {/* Adventure Log */}
+          <AdventureLog
             rollLog={rollLog}
             playerSeatMap={playerSeatMap}
           />
         </div>
+      </div>
 
-        {/* GRID POSITION 2: Center Column - map-canvas with horizontal initiative */}
+      {/* Right drawer — fixed-position, outside grid flow */}
+      {(() => {
+        // Tab configuration - reusable pattern for role-based visibility
+        const RIGHT_DRAWER_TABS = [
+          { id: 'moderator', label: 'MOD', dmOnly: false },
+          { id: 'map', label: 'MAP', dmOnly: true },
+          { id: 'combat', label: 'COMBAT', dmOnly: true },
+          { id: 'audio', label: 'AUDIO', dmOnly: true },
+        ];
+
+        const visibleTabs = RIGHT_DRAWER_TABS.filter(tab => !tab.dmOnly || isDM);
+
+        return (
+          <div
+            className="right-drawer"
+            style={{ transform: activeRightDrawer ? 'translateX(0)' : 'translateX(100%)' }}
+          >
+            {/* Dynamic drawer tabs - filtered by role */}
+            {visibleTabs.map((tab, index) => {
+              const tabHeight = 120; // 112px tab + 8px gap
+              const totalHeight = visibleTabs.length * tabHeight;
+              const startOffset = totalHeight / 2;
+              const topPosition = `calc(50% - ${startOffset - (index * tabHeight)}px)`;
+
+              return (
+                <button
+                  key={tab.id}
+                  className={`right-drawer-tab ${activeRightDrawer === tab.id ? 'active' : ''}`}
+                  style={{ top: topPosition }}
+                  onClick={() => setActiveRightDrawer(prev => prev === tab.id ? null : tab.id)}
+                >
+                  {tab.label}
+                </button>
+              );
+            })}
+
+            <div className="drawer-content">
+              {activeRightDrawer === 'moderator' && (
+                <ModeratorControls
+                  isModerator={isModerator}
+                  isHost={isHost}
+                  isDM={isDM}
+                  gameSeats={gameSeats}
+                  lobbyUsers={lobbyUsers}
+                  roomId={roomId}
+                  thisPlayer={getCurrentPlayerName()}
+                  currentUser={currentUser}
+                  onRoleChange={handleRoleChange}
+                  sendRoleChange={sendRoleChange}
+                  setSeatCount={setSeatCount}
+                  handleKickPlayer={handleKickPlayer}
+                  handleClearSystemMessages={handleClearSystemMessages}
+                  handleClearAllMessages={handleClearAllMessages}
+                  roleChangeTrigger={roleChangeTrigger}
+                />
+              )}
+              {activeRightDrawer === 'map' && isDM && (
+                <MapControlsPanel
+                  roomId={roomId}
+                  campaignId={campaignId}
+                  activeMap={activeMap}
+                  setActiveMap={setActiveMap}
+                  gridEditMode={gridEditMode}
+                  setGridEditMode={setGridEditMode}
+                  handleGridChange={handleGridChange}
+                  liveGridOpacity={liveGridOpacity}
+                  setLiveGridOpacity={setLiveGridOpacity}
+                  sendMapLoad={sendMapLoad}
+                  sendMapClear={sendMapClear}
+                />
+              )}
+              {activeRightDrawer === 'combat' && isDM && (
+                <CombatControlsPanel
+                  promptPlayerRoll={promptPlayerRoll}
+                  promptAllPlayersInitiative={promptAllPlayersInitiative}
+                  combatActive={combatActive}
+                  setCombatActive={sendCombatStateChange}
+                  gameSeats={gameSeats}
+                  activePrompts={activePrompts}
+                  clearDicePrompt={clearDicePrompt}
+                />
+              )}
+              {activeRightDrawer === 'audio' && isDM && (
+                <AudioMixerPanel
+                  isExpanded={true}
+                  onToggle={() => {}}
+                  remoteTrackStates={remoteTrackStates}
+                  remoteTrackAnalysers={remoteTrackAnalysers}
+                  sendRemoteAudioPlay={sendRemoteAudioPlay}
+                  sendRemoteAudioResume={sendRemoteAudioResume}
+                  sendRemoteAudioBatch={sendRemoteAudioBatch}
+                  unlockAudio={unlockAudio}
+                  isAudioUnlocked={isAudioUnlocked}
+                  clearPendingOperation={setClearPendingOperationFn}
+                  loadAssetIntoChannel={loadAssetIntoChannel}
+                  campaignId={campaignId}
+                />
+              )}
+            </div>
+          </div>
+        );
+      })()}
+
+      {/* Main Game Area — single column grid (map only) */}
+      <div className="main-game-area">
         <div className="grid-area-map-canvas relative">
-          {/* Map Display Background - Now properly positioned in center area */}
           <MapDisplay
             activeMap={activeMap}
             isEditMode={gridEditMode && isDM}
@@ -1435,75 +1570,14 @@ function GameContent() {
             liveGridOpacity={liveGridOpacity}
             gridConfig={gridConfig}
           />
-          
-          {/* Horizontal Initiative Tracker overlaid on map */}
-          <HorizontalInitiativeTracker 
+
+          <HorizontalInitiativeTracker
             initiativeOrder={initiativeOrder}
             handleInitiativeClick={handleInitiativeClick}
             currentTurn={currentTurn}
             combatActive={combatActive}
           />
         </div>
-
-        {/* GRID POSITION 3: Right Panel - DM Controls (Full Height) */}
-        <div className="right-panel p-4">
-          {/* Moderator Controls - shown if player is host or moderator */}
-          <ModeratorControls
-            isModerator={isModerator}
-            isHost={isHost}
-            isDM={isDM}
-            gameSeats={gameSeats}
-            lobbyUsers={lobbyUsers}
-            roomId={roomId}
-            thisPlayer={getCurrentPlayerName()}
-            currentUser={currentUser}
-            onRoleChange={handleRoleChange}
-            sendRoleChange={sendRoleChange}
-            setSeatCount={setSeatCount}
-            handleKickPlayer={handleKickPlayer}
-            handleClearSystemMessages={handleClearSystemMessages}
-            handleClearAllMessages={handleClearAllMessages}
-            roleChangeTrigger={roleChangeTrigger}
-          />
-          
-          <DMControlCenter
-            isDM={isDM}
-            promptPlayerRoll={promptPlayerRoll}
-            promptAllPlayersInitiative={promptAllPlayersInitiative}  // NEW
-            currentTrack={currentTrack}
-            isPlaying={isPlaying}
-            handleTrackClick={handleTrackClick}
-            combatActive={combatActive}
-            setCombatActive={sendCombatStateChange}
-            gameSeats={gameSeats}
-            roomId={roomId}
-            campaignId={campaignId}
-            activePrompts={activePrompts}        // UPDATED: Pass array instead of single prompt
-            unlockAudio={unlockAudio}             // NEW: Pass audio unlock function
-            isAudioUnlocked={isAudioUnlocked}    // NEW: Pass audio unlock status
-            remoteTrackStates={remoteTrackStates} // NEW: Pass remote track states
-            remoteTrackAnalysers={remoteTrackAnalysers} // NEW: Pass remote track analysers
-            playRemoteTrack={playRemoteTrack}     // NEW: Pass remote track controls (local)
-            stopRemoteTrack={stopRemoteTrack}     // NEW: Pass remote track controls (local)
-            sendRemoteAudioPlay={sendRemoteAudioPlay}     // NEW: Pass WebSocket sending functions
-            sendRemoteAudioResume={sendRemoteAudioResume} // NEW: Pass WebSocket resume function
-            sendRemoteAudioBatch={sendRemoteAudioBatch}   // NEW: Pass WebSocket batch function
-            clearPendingOperation={setClearPendingOperationFn} // NEW: Pass function to set pending operation clearer
-            clearDicePrompt={clearDicePrompt}    // UPDATED: Now accepts prompt ID
-            // Map management props
-            activeMap={activeMap}
-            setActiveMap={setActiveMap}
-            gridEditMode={gridEditMode}
-            setGridEditMode={setGridEditMode}
-            handleGridChange={handleGridChange}
-            liveGridOpacity={liveGridOpacity}
-            setLiveGridOpacity={setLiveGridOpacity}
-            // WebSocket map functions
-            sendMapLoad={sendMapLoad}
-            sendMapClear={sendMapClear}
-          />
-        </div>
-
       </div>
 
       {/* DiceActionPanel - only show if user is sitting in a seat OR is DM */}
@@ -1525,6 +1599,40 @@ function GameContent() {
           />
         );
       })()}
+
+      {/* Audio Gate Overlay — provides user gesture for AudioContext + auto-seats player */}
+      {!isAudioUnlocked && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm cursor-pointer"
+          onClick={handleEnterSession}
+        >
+          <div
+            className="relative rounded-sm overflow-hidden shadow-2xl shadow-black/50 select-none"
+            style={{
+              width: 'min(60vw, calc(70vh * 16 / 9))',
+              backgroundImage: `url(${campaignMeta?.heroImage || '/campaign-tile-bg.png'})`,
+              backgroundSize: 'cover',
+              backgroundPosition: 'center',
+              aspectRatio: '16 / 9',
+            }}
+          >
+            {/* Gradient overlays for text readability at top and bottom */}
+            <div className="absolute inset-0 bg-gradient-to-b from-black/90 via-transparent to-black/90" />
+
+            {/* Content */}
+            <div className="absolute inset-0 flex flex-col items-center justify-between py-12 px-6 text-center">
+              {campaignMeta?.title && (
+                <h2 className="text-4xl text-white font-[family-name:var(--font-metamorphous)]">
+                  {campaignMeta.title}
+                </h2>
+              )}
+              <p className="text-sm text-gray-300/80 tracking-widest uppercase">
+                Click to enter
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Session Ended Modal with Countdown */}
       {sessionEndedData && (

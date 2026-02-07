@@ -5,7 +5,7 @@
 
 import React, { useState, useRef, useCallback } from 'react'
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
-import { faMap, faFileAudio, faImage } from '@fortawesome/free-solid-svg-icons'
+import { faMap, faMusic, faBolt, faImage } from '@fortawesome/free-solid-svg-icons'
 import Modal from '@/app/shared/components/Modal'
 import { Button } from '@/app/dashboard/components/shared/Button'
 
@@ -16,11 +16,17 @@ const ACCEPTED_TYPES = {
     label: 'Map',
     icon: faMap
   },
-  audio: {
+  music: {
     mimeTypes: ['audio/mpeg', 'audio/wav', 'audio/ogg'],
     extensions: '.mp3, .wav, .ogg',
-    label: 'Audio',
-    icon: faFileAudio
+    label: 'Music',
+    icon: faMusic
+  },
+  sfx: {
+    mimeTypes: ['audio/mpeg', 'audio/wav', 'audio/ogg'],
+    extensions: '.mp3, .wav, .ogg',
+    label: 'SFX',
+    icon: faBolt
   },
   image: {
     mimeTypes: ['image/png', 'image/jpeg', 'image/webp', 'image/gif'],
@@ -168,7 +174,7 @@ export default function AssetUploadModal({
           <label className="block text-sm font-medium mb-2 text-content-on-dark">
             Asset Type
           </label>
-          <div className="grid grid-cols-3 gap-2">
+          <div className="grid grid-cols-4 gap-2">
             {Object.entries(ACCEPTED_TYPES).map(([type, config]) => (
               <button
                 key={type}

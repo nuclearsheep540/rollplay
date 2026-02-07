@@ -2,6 +2,7 @@
 /* SPDX-License-Identifier: GPL-3.0-or-later */
 
 import { useMutation, useQueryClient } from '@tanstack/react-query'
+import { authFetch } from '@/app/shared/utils/authFetch'
 
 /**
  * Mutation hook for associating an asset with a campaign.
@@ -18,10 +19,9 @@ export function useAssociateAsset() {
         body.session_id = sessionId
       }
 
-      const response = await fetch(`/api/library/${assetId}/associate`, {
+      const response = await authFetch(`/api/library/${assetId}/associate`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        credentials: 'include',
         body: JSON.stringify(body),
       })
 

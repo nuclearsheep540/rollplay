@@ -2,6 +2,7 @@
 /* SPDX-License-Identifier: GPL-3.0-or-later */
 
 import { useMutation, useQueryClient } from '@tanstack/react-query'
+import { authFetch } from '@/app/shared/utils/authFetch'
 
 /**
  * Mutation hook for changing a media asset's type tag.
@@ -13,10 +14,9 @@ export function useChangeAssetType() {
 
   return useMutation({
     mutationFn: async ({ assetId, assetType }) => {
-      const response = await fetch(`/api/library/${assetId}/type`, {
+      const response = await authFetch(`/api/library/${assetId}/type`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        credentials: 'include',
         body: JSON.stringify({ asset_type: assetType }),
       })
 

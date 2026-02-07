@@ -87,6 +87,8 @@ class SessionEntity:
         active_game_id: Optional[str] = None,  # MongoDB active_session objectID (when game is running)
         joined_users: Optional[List[UUID]] = None,  # User IDs in roster (auto-enrolled from campaign)
         max_players: int = 8,  # Seat count in active game (1-8)
+        audio_config: Optional[dict] = None,  # Persisted audio channel config (tracks, volume, looping)
+        map_config: Optional[dict] = None,  # Persisted active map config (just asset_id for ETL restoration)
     ):
         self.id = id
         self.name = name
@@ -99,6 +101,8 @@ class SessionEntity:
         self.active_game_id = active_game_id
         self.joined_users = joined_users if joined_users is not None else []
         self.max_players = self._validate_max_players(max_players)
+        self.audio_config = audio_config
+        self.map_config = map_config
 
     @staticmethod
     def _validate_max_players(max_players: int) -> int:
@@ -248,3 +252,29 @@ class SessionEntity:
         self.status = SessionStatus.FINISHED
         self.stopped_at = datetime.utcnow()
         self.active_game_id = None  # Clear MongoDB game reference
+
+    # --- Error Recovery Methods ---
+
+    def abort_start(self) -> None:
+        """
+        Abort a failed start process. Reverts STARTING → INACTIVE.
+
+        Called when an error occurs after setting STARTING but before ACTIVE.
+        This prevents sessions from getting stuck in STARTING state.
+        """
+        if self.status != SessionStatus.STARTING:
+            raise ValueError("Can only abort_start sessions that are STARTING")
+
+        self.status = SessionStatus.INACTIVE
+
+    def abort_stop(self) -> None:
+        """
+        Abort a failed stop/pause process. Reverts STOPPING → ACTIVE.
+
+        Called when an error occurs after setting STOPPING but before INACTIVE/FINISHED.
+        This prevents sessions from getting stuck in STOPPING state.
+        """
+        if self.status != SessionStatus.STOPPING:
+            raise ValueError("Can only abort_stop sessions that are STOPPING")
+
+        self.status = SessionStatus.ACTIVE
