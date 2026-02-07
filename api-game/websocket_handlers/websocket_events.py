@@ -9,6 +9,7 @@ from message_templates import format_message, MESSAGE_TEMPLATES
 from adventure_log_service import AdventureLogService
 from models.log_type import LogType
 from mapservice import MapService, MapSettings
+from gameservice import GameService
 
 
 adventure_log = AdventureLogService()
@@ -521,8 +522,6 @@ class WebsocketEvent():
     @staticmethod
     async def color_change(websocket, data, event_data, player_name, client_id, manager):
         """Handle player color changes"""
-        from gameservice import GameService
-        
         player_changing = event_data.get("player")
         seat_index = event_data.get("seat_index")
         new_color = event_data.get("new_color")
@@ -572,8 +571,6 @@ class WebsocketEvent():
     @staticmethod
     async def player_disconnect(websocket, data, event_data, player_name, client_id, manager):
         """Handle player disconnect event"""
-        from gameservice import GameService
-        
         # Log player disconnection to database
         log_message = format_message(MESSAGE_TEMPLATES["player_disconnected"], player=player_name)
         
@@ -641,11 +638,9 @@ class WebsocketEvent():
                 clear_prompt_message=None
             )
 
-    @staticmethod 
+    @staticmethod
     async def role_change(websocket, data, event_data, player_name, client_id, manager):
         """Handle role changes (moderator/DM assignments)"""
-        from gameservice import GameService
-        
         action = event_data.get("action")  # 'add_moderator', 'remove_moderator', 'set_dm', 'unset_dm'
         target_player = event_data.get("target_player")
         
@@ -733,9 +728,7 @@ class WebsocketEvent():
         
         
         # Fire-and-forget: persist play state to MongoDB
-        import time
         try:
-            from gameservice import GameService
             for track in tracks:
                 channel_id = track.get("channelId")
                 if channel_id:
@@ -880,10 +873,7 @@ class WebsocketEvent():
         print(log_message)
 
         # Fire-and-forget: persist audio state to MongoDB for late-joiner sync
-        import time
         try:
-            from gameservice import GameService
-
             # Always pre-fetch current audio state — multiple operations need it for read-modify-write
             current_audio_state = GameService.get_audio_state(client_id)
 

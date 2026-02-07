@@ -67,10 +67,10 @@ async def get_active_map(room_id: str):
         active_map = map_service.get_active_map(room_id)
         
         if active_map:
-            logger.info(f"🌐 HTTP endpoint returning active map for room {room_id}: {active_map.get('filename')} with grid_config: {active_map.get('grid_config')}")
+            logger.info(f"HTTP endpoint returning active map for room {room_id}: {active_map.get('filename')} with grid_config: {active_map.get('grid_config')}")
             return {"active_map": active_map}
         else:
-            logger.info(f"🌐 HTTP endpoint: No active map found for room {room_id}")
+            logger.info(f"HTTP endpoint: No active map found for room {room_id}")
             raise HTTPException(status_code=404, detail="No active map found for this room")
             
     except Exception as e:
@@ -90,7 +90,7 @@ async def update_map(room_id: str, request: dict):
         filename = updated_map.get("filename")
         
         # Replace entire map in database (atomic)
-        logger.info(f"🌐 HTTP: Updating complete map for room {room_id}, filename {filename} by {updated_by}")
+        logger.info(f"HTTP: Updating complete map for room {room_id}, filename {filename} by {updated_by}")
         success = map_service.update_complete_map(room_id, updated_map)
         
         if success:
@@ -112,10 +112,10 @@ async def update_map(room_id: str, request: dict):
                 # Broadcast to all connected clients in this room
                 await connection_manager.update_room_data(room_id, map_update_message)
                 
-                logger.info(f"🌐 HTTP: Complete map updated and broadcasted for room {room_id}")
+                logger.info(f"HTTP: Complete map updated and broadcasted for room {room_id}")
                 return {"success": True, "updated_map": updated_map_result}
             else:
-                logger.warning(f"🌐 HTTP: Map updated but could not retrieve updated map")
+                logger.warning(f"HTTP: Map updated but could not retrieve updated map")
                 return {"success": True, "message": "Map updated but could not retrieve updated map"}
         else:
             raise HTTPException(status_code=404, detail="No active map found or no changes made")
@@ -145,7 +145,7 @@ async def update_seat_count(room_id: str, request: dict):
             player_name = displaced_player.get("playerName")
             if player_name:
                 try:
-                    print(f"🚪 Moving {player_name} from seat {displaced_player.get('seatId')} to lobby")
+                    logger.info(f"Moving {player_name} from seat {displaced_player.get('seatId')} to lobby")
                     
                     # Update player's party status in ConnectionManager
                     await connection_manager.remove_player_from_party(room_id, player_name)
@@ -172,7 +172,7 @@ async def update_seat_count(room_id: str, request: dict):
                     )
                     
                 except Exception as e:
-                    print(f"❌ Error handling displaced player {player_name}: {str(e)}")
+                    logger.error(f"Error handling displaced player {player_name}: {str(e)}")
                     # Continue processing other players even if one fails
         
         # Get current seat layout from database after displacement
@@ -203,9 +203,9 @@ async def update_seat_count(room_id: str, request: dict):
                 }
             }
             await connection_manager.update_room_data(room_id, seat_change_message)
-            print(f"✅ Seat count updated successfully to {max_players}, displaced {len(displaced_players)} players")
+            logger.info(f"Seat count updated successfully to {max_players}, displaced {len(displaced_players)} players")
         except Exception as e:
-            print(f"❌ Error broadcasting seat count change: {str(e)}")
+            logger.warning(f"Error broadcasting seat count change: {str(e)}")
             # Don't fail the entire operation if broadcast fails
         
         return {
@@ -440,7 +440,7 @@ async def create_session(request: SessionStartRequest):
         # Use session_id as MongoDB _id (back-reference to PostgreSQL session)
         game_id = GameService.create_room(settings, room_id=request.session_id)
 
-        logger.info(f"✅ Created game {game_id} for session {request.session_id} with {len(request.joined_user_ids)} joined players")
+        logger.info(f"Created game {game_id} for session {request.session_id} with {len(request.joined_user_ids)} joined players")
 
         # Restore map from previous session if available
         if request.map_config and request.map_config.get("filename"):
@@ -457,9 +457,9 @@ async def create_session(request: SessionStartRequest):
                     active=True
                 )
                 map_service.set_active_map(request.session_id, restored_map)
-                logger.info(f"🗺️ Restored map '{request.map_config['filename']}' for session {request.session_id}")
+                logger.info(f"Restored map '{request.map_config['filename']}' for session {request.session_id}")
             except Exception as e:
-                logger.warning(f"🗺️ Map restoration failed (non-fatal): {e}")
+                logger.warning(f"Map restoration failed (non-fatal): {e}")
 
         return SessionStartResponse(
             success=True,
@@ -470,7 +470,7 @@ async def create_session(request: SessionStartRequest):
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"❌ Failed to create session: {e}")
+        logger.error(f"Failed to create session: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -556,10 +556,10 @@ async def end_session(request: SessionEndRequest, validate_only: bool = False):
 
         # If not validate_only, delete the game (deprecated flow)
         if not validate_only:
-            logger.warning(f"⚠️ Using deprecated delete flow for session {request.session_id}")
+            logger.warning(f"Using deprecated delete flow for session {request.session_id}")
             GameService.delete_room(request.session_id)
 
-        logger.info(f"✅ Returned final state for session {request.session_id} (validate_only={validate_only})")
+        logger.info(f"Returned final state for session {request.session_id} (validate_only={validate_only})")
 
         return SessionEndResponse(
             success=True,
@@ -570,7 +570,7 @@ async def end_session(request: SessionEndRequest, validate_only: bool = False):
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"❌ Failed to end session: {e}")
+        logger.error(f"Failed to end session: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -596,14 +596,14 @@ async def delete_session(game_id: str, keep_logs: bool = True):
         room = GameService.get_room(game_id)
         if not room:
             # Already deleted - return success
-            logger.info(f"✅ Session {game_id} already deleted")
+            logger.info(f"Session {game_id} already deleted")
             return {
                 "success": True,
                 "message": "Session already deleted"
             }
 
         # Gracefully disconnect all WebSocket clients before deletion
-        logger.info(f"🔌 Closing WebSocket connections for room {game_id}")
+        logger.info(f"Closing WebSocket connections for room {game_id}")
         await connection_manager.close_room_connections(game_id, reason="Session ended")
 
         # Delete active_session from MongoDB
@@ -611,11 +611,11 @@ async def delete_session(game_id: str, keep_logs: bool = True):
 
         # Optionally delete logs and maps
         if not keep_logs:
-            logger.info(f"🗑️ Deleting logs and maps for {game_id}")
+            logger.info(f"Deleting logs and maps for {game_id}")
             adventure_log.delete_room_logs(game_id)
             map_service.clear_active_map(game_id)
 
-        logger.info(f"✅ Deleted session {game_id} (keep_logs={keep_logs})")
+        logger.info(f"Deleted session {game_id} (keep_logs={keep_logs})")
 
         return {
             "success": True,
@@ -623,7 +623,7 @@ async def delete_session(game_id: str, keep_logs: bool = True):
         }
 
     except Exception as e:
-        logger.error(f"❌ Failed to delete session {game_id}: {e}")
+        logger.error(f"Failed to delete session {game_id}: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -684,7 +684,7 @@ async def update_player_character(room_id: str, character_data: dict):
         }
 
         await connection_manager.broadcast_to_room(room_id, change_message)
-        logger.info(f"✅ Updated character for {player_name} to {character_name} in room {room_id}")
+        logger.info(f"Updated character for {player_name} to {character_name} in room {room_id}")
 
         return {
             "success": True,
@@ -694,7 +694,7 @@ async def update_player_character(room_id: str, character_data: dict):
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"❌ Failed to update character: {e}")
+        logger.error(f"Failed to update character: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -702,38 +702,38 @@ async def update_player_character(room_id: str, character_data: dict):
 async def update_seat_layout(room_id: str, request: dict):
     """Update the seat layout for a game room"""
     try:
-        print(f"🔄 Received seat layout update request for room {room_id}")
-        print(f"📝 Request data: {request}")
-        
+        logger.debug(f"Received seat layout update request for room {room_id}")
+        logger.debug(f"Request data: {request}")
+
         check_room = GameService.get_room(id=room_id)
         if not check_room:
-            print(f"❌ Room {room_id} not found")
+            logger.error(f"Room {room_id} not found")
             raise HTTPException(status_code=404, detail=f"Room {room_id} not found")
-            
+
         seat_layout = request.get("seat_layout")
         updated_by = request.get("updated_by")
-        
-        print(f"👤 Updated by: {updated_by}")
-        print(f"🪑 New seat layout: {seat_layout}")
+
+        logger.debug(f"Updated by: {updated_by}")
+        logger.debug(f"New seat layout: {seat_layout}")
         
         # Validate seat layout
         if not isinstance(seat_layout, list):
-            print(f"❌ Invalid seat layout type: {type(seat_layout)}")
+            logger.error(f"Invalid seat layout type: {type(seat_layout)}")
             raise HTTPException(status_code=400, detail="Seat layout must be an array")
-        
+
         # Get current max_players to validate layout length
         current_max = check_room.get("max_players", 4)
         if len(seat_layout) > current_max:
-            print(f"❌ Seat layout too long: {len(seat_layout)} > {current_max}")
+            logger.error(f"Seat layout too long: {len(seat_layout)} > {current_max}")
             raise HTTPException(
                 status_code=400, 
                 detail=f"Seat layout cannot exceed {current_max} seats"
             )
         
         # Update MongoDB record
-        print(f"💾 Calling GameService.update_seat_layout({room_id}, {seat_layout})")
+        logger.debug(f"Calling GameService.update_seat_layout({room_id}, {seat_layout})")
         GameService.update_seat_layout(room_id, seat_layout)
-        print(f"✅ Successfully saved seat layout to database")
+        logger.info(f"Successfully saved seat layout to database")
         
         # Log the change (only if there are actual players)
         non_empty_seats = [seat for seat in seat_layout if seat != "empty"]
@@ -741,8 +741,8 @@ async def update_seat_layout(room_id: str, request: dict):
             player_list = ", ".join(non_empty_seats)
             
             log_message = format_message(MESSAGE_TEMPLATES["party_updated"], players=", ".join(non_empty_seats))
-            
-            print(f"📜 Adding adventure log: {log_message}")
+
+            logger.debug(f"Adding adventure log: {log_message}")
             adventure_log.add_log_entry(
                 room_id=room_id,
                 message=log_message,
@@ -756,15 +756,13 @@ async def update_seat_layout(room_id: str, request: dict):
             "seat_layout": seat_layout,
             "updated_by": updated_by
         }
-        print(f"✅ Returning response: {response_data}")
+        logger.debug(f"Returning response: {response_data}")
         return response_data
-        
+
     except HTTPException:
         raise  # Re-raise HTTP exceptions
     except Exception as e:
-        error_msg = f"❌ Unexpected error in update_seat_layout: {str(e)}"
-        print(error_msg)
-        logger.error(error_msg)
+        logger.error(f"Unexpected error in update_seat_layout: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
     
 @app.delete("/game/{room_id}/logs/system")
@@ -776,13 +774,13 @@ async def clear_system_messages(room_id: str, request: dict):
             raise HTTPException(status_code=404, detail=f"Room {room_id} not found")
         
         cleared_by = request.get("cleared_by", "Unknown")
-        
-        print(f"🧹 Clearing system messages for room {room_id} by {cleared_by}")
-        
+
+        logger.info(f"Clearing system messages for room {room_id} by {cleared_by}")
+
         # Clear system messages from the database
         deleted_count = adventure_log.clear_system_messages(room_id)
-        
-        print(f"✅ Cleared {deleted_count} system messages")
+
+        logger.info(f"Cleared {deleted_count} system messages")
         
         # Add a log entry about the clearing action
         log_message = format_message(MESSAGE_TEMPLATES["messages_cleared"], player=cleared_by, count=deleted_count)
@@ -802,7 +800,7 @@ async def clear_system_messages(room_id: str, request: dict):
         }
         
     except Exception as e:
-        print(f"❌ Error clearing system messages: {str(e)}")
+        logger.error(f"Error clearing system messages: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.put("/game/{room_id}/colors")
@@ -852,13 +850,13 @@ async def clear_all_messages(room_id: str, request: dict):
             raise HTTPException(status_code=404, detail=f"Room {room_id} not found")
         
         cleared_by = request.get("cleared_by", "Unknown")
-        
-        print(f"🧹 Clearing all messages for room {room_id} by {cleared_by}")
-        
+
+        logger.info(f"Clearing all messages for room {room_id} by {cleared_by}")
+
         # Clear all messages from the database
         deleted_count = adventure_log.clear_all_messages(room_id)
-        
-        print(f"✅ Cleared {deleted_count} total messages")
+
+        logger.info(f"Cleared {deleted_count} total messages")
         
         # Add a log entry about the clearing action
         log_message = format_message(MESSAGE_TEMPLATES["messages_cleared"], player=cleared_by, count=deleted_count)
@@ -878,7 +876,7 @@ async def clear_all_messages(room_id: str, request: dict):
         }
         
     except Exception as e:
-        print(f"❌ Error clearing all messages: {str(e)}")
+        logger.error(f"Error clearing all messages: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
 
 

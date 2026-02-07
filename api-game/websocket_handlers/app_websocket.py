@@ -1,8 +1,11 @@
 # Copyright (C) 2025 Matthew Davey
 # SPDX-License-Identifier: GPL-3.0-or-later
+import logging
 from datetime import datetime
 from fastapi import FastAPI, WebSocket
 from starlette.websockets import WebSocketDisconnect
+
+logger = logging.getLogger(__name__)
 
 from .connection_manager import manager, RoomManager
 from .websocket_events import WebsocketEvent
@@ -46,11 +49,11 @@ def register_websocket_routes(app: FastAPI):
                     }
                 }
                 await websocket.send_json(initial_state)
-                print(f"📦 Sent initial state to {player_name}")
+                logger.debug(f"Sent initial state to {player_name}")
             else:
-                print(f"⚠️ Room {client_id} not found, skipping initial state")
+                logger.warning(f"Room {client_id} not found, skipping initial state")
         except Exception as e:
-            print(f"❌ Error sending initial state: {e}")
+            logger.error(f"Error sending initial state: {e}")
 
         # Handle connection event and get result (broadcasts to ALL clients)
         result = await WebsocketEvent.player_connection(
@@ -69,7 +72,7 @@ def register_websocket_routes(app: FastAPI):
                 event_type = data.get("event_type")
                 event_data = data.get("data")
                 
-                print(f"📨 WebSocket received: {event_type} from {player_name}")
+                logger.debug(f"WebSocket received: {event_type} from {player_name}")
                 
                 # Initialize variables for post-processing
                 broadcast_message = None
@@ -114,7 +117,7 @@ def register_websocket_routes(app: FastAPI):
 
                 elif event_type == "initiative_prompt_all":
                     if not event_data.get("players", []):
-                        print("⚡ No players provided for initiative prompt")
+                        logger.warning("No players provided for initiative prompt")
                         continue
 
                     result = await WebsocketEvent.initiative_prompt_all(
@@ -290,9 +293,9 @@ def register_websocket_routes(app: FastAPI):
                             manager=manager
                         )
                         broadcast_message = result.broadcast_message
-                        print(f"🗺️ Map load result broadcast_message: {broadcast_message}")
+                        logger.debug(f"Map load result broadcast_message: {broadcast_message}")
                     except Exception as e:
-                        print(f"❌ Exception in map_load handler: {e}")
+                        logger.error(f"Exception in map_load handler: {e}")
                         broadcast_message = {"event_type": "error", "data": f"Map load failed: {str(e)}"}
 
                 elif event_type == "map_clear":
@@ -334,7 +337,7 @@ def register_websocket_routes(app: FastAPI):
 
                 else:
                     # Unknown event type - log and ignore
-                    print(f"⚠️ Unknown WebSocket event type: {event_type}")
+                    logger.warning(f"Unknown WebSocket event type: {event_type}")
                     continue
                 
                 # Broadcast the main message
