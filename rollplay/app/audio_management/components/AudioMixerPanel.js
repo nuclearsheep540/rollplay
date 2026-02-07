@@ -478,6 +478,21 @@ export default function AudioMixerPanel({
   return (
     <div className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden flex flex-col">
 
+          {/* Preset Section */}
+          <div className={DM_CHILD}>
+            <div className="flex items-center gap-3">
+              <span className="text-white font-medium">Preset:</span>
+
+              <select
+                value="Default"
+                disabled
+                className={`${DM_CHILD} bg-slate-800 text-gray-100 cursor-not-allowed`}
+              >
+                <option value="Default">Default</option>
+              </select>
+            </div>
+          </div>
+
           {/* Track Selector — load audio from asset library */}
           <AudioTrackSelector
             remoteTrackStates={remoteTrackStates}
@@ -702,21 +717,6 @@ export default function AudioMixerPanel({
               </div>
               </div>
           )}
-
-          {/* Preset Section */}
-          <div className={DM_CHILD}>
-            <div className="flex items-center gap-3">
-              <span className="text-white font-medium">Preset:</span>
-
-              <select
-                value="Default"
-                disabled
-                className={`${DM_CHILD} bg-slate-800 text-gray-100 cursor-not-allowed`}
-              >
-                <option value="Default">Default</option>
-              </select>
-            </div>
-          </div>
 
           {/* BGM Channels */}
           {bgmChannels.length > 0 && (

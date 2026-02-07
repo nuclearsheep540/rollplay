@@ -117,10 +117,10 @@ export const useUnifiedAudio = () => {
     audio_channel_C: { playbackState: PlaybackState.STOPPED, volume: 0.8, filename: null, asset_id: null, s3_url: null, type: ChannelType.BGM, channelGroup: ChannelType.BGM, track: 'C', currentTime: 0, duration: 0, looping: true },
     audio_channel_D: { playbackState: PlaybackState.STOPPED, volume: 0.8, filename: null, asset_id: null, s3_url: null, type: ChannelType.BGM, channelGroup: ChannelType.BGM, track: 'D', currentTime: 0, duration: 0, looping: true },
     // SFX Channels
-    audio_channel_3: { playbackState: PlaybackState.STOPPED, volume: 0.8, filename: null, asset_id: null, s3_url: null, type: ChannelType.SFX, currentTime: 0, duration: 0, looping: false },
-    audio_channel_4: { playbackState: PlaybackState.STOPPED, volume: 0.8, filename: null, asset_id: null, s3_url: null, type: ChannelType.SFX, currentTime: 0, duration: 0, looping: false },
-    audio_channel_5: { playbackState: PlaybackState.STOPPED, volume: 0.8, filename: null, asset_id: null, s3_url: null, type: ChannelType.SFX, currentTime: 0, duration: 0, looping: false },
-    audio_channel_6: { playbackState: PlaybackState.STOPPED, volume: 0.8, filename: null, asset_id: null, s3_url: null, type: ChannelType.SFX, currentTime: 0, duration: 0, looping: false }
+    audio_channel_3: { playbackState: PlaybackState.STOPPED, volume: 0.8, filename: null, asset_id: null, s3_url: null, type: ChannelType.SFX, channelGroup: ChannelType.SFX, track: '1', currentTime: 0, duration: 0, looping: false },
+    audio_channel_4: { playbackState: PlaybackState.STOPPED, volume: 0.8, filename: null, asset_id: null, s3_url: null, type: ChannelType.SFX, channelGroup: ChannelType.SFX, track: '2', currentTime: 0, duration: 0, looping: false },
+    audio_channel_5: { playbackState: PlaybackState.STOPPED, volume: 0.8, filename: null, asset_id: null, s3_url: null, type: ChannelType.SFX, channelGroup: ChannelType.SFX, track: '3', currentTime: 0, duration: 0, looping: false },
+    audio_channel_6: { playbackState: PlaybackState.STOPPED, volume: 0.8, filename: null, asset_id: null, s3_url: null, type: ChannelType.SFX, channelGroup: ChannelType.SFX, track: '4', currentTime: 0, duration: 0, looping: false }
   });
 
   // Active fade transitions state
