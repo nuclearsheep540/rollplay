@@ -175,7 +175,7 @@ export default function AudioTrack({
       <div className={`${isLast ? DM_CHILD_LAST : DM_CHILD} ${isDisabled ? 'opacity-40 pointer-events-none' : ''} flex-1`}>
         {/* Header */}
         <div className="flex justify-between items-center mb-2">
-          <div className={`font-mono text-sm ${filename ? 'text-white' : 'text-gray-500 italic'}`}>
+          <div className={`font-mono text-sm truncate min-w-0 w-0 flex-grow mr-2 ${filename ? 'text-white' : 'text-gray-500 italic'}`}>
             {filename || label || trackId}
           </div>
           {filename && (
