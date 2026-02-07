@@ -278,7 +278,7 @@ export default function MapControlsPanel({
         // Also persist grid config to MapAsset in PostgreSQL for cross-session reuse
         if (activeMap.asset_id) {
           try {
-            const assetResponse = await fetch(`/api/library/assets/${activeMap.asset_id}/grid`, {
+            const assetResponse = await fetch(`/api/library/${activeMap.asset_id}/grid`, {
               method: 'PATCH',
               headers: {
                 'Content-Type': 'application/json',
