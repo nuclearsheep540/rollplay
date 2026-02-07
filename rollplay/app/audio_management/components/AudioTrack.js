@@ -188,7 +188,22 @@ export default function AudioTrack({
         {/* Transport - only show when file is loaded */}
         {filename && (
           <div className="flex gap-2 items-center mb-3">
-            {playbackState === PlaybackState.PLAYING ? (
+            {/* Play button - shown when stopped, or for SFX when playing (to restart) */}
+            {(playbackState === PlaybackState.STOPPED || (type === 'sfx' && playbackState === PlaybackState.PLAYING)) && (
+              <button
+                className={`bg-green-600 hover:bg-green-700 text-white px-3 py-1 rounded text-xs flex items-center gap-1 ${
+                  pendingOperations.play ? 'opacity-50 cursor-not-allowed' : ''
+                }`}
+                onClick={onPlay}
+                disabled={pendingOperations.play}
+                title="Play from beginning"
+              >
+                ▶ {type === 'sfx' ? 'PLAY' : (pendingOperations.play ? 'PLAYING...' : 'PLAY')}
+              </button>
+            )}
+
+            {/* Pause button - shown when playing BGM only (SFX cannot be paused) */}
+            {playbackState === PlaybackState.PLAYING && type !== 'sfx' && (
               <button
                 className={`bg-orange-600 hover:bg-orange-700 text-white px-3 py-1 rounded text-xs flex items-center gap-1 ${
                   pendingOperations.pause ? 'opacity-50 cursor-not-allowed' : ''
@@ -198,7 +213,10 @@ export default function AudioTrack({
               >
                 ⏸ {pendingOperations.pause ? 'PAUSING...' : 'PAUSE'}
               </button>
-            ) : playbackState === PlaybackState.PAUSED ? (
+            )}
+
+            {/* Resume button - shown when paused */}
+            {playbackState === PlaybackState.PAUSED && (
               <button
                 className={`bg-blue-600 hover:bg-blue-700 text-white px-3 py-1 rounded text-xs flex items-center gap-1 ${
                   pendingOperations.play ? 'opacity-50 cursor-not-allowed' : ''
@@ -208,17 +226,6 @@ export default function AudioTrack({
                 title="Resume from paused position"
               >
                 ▶ {pendingOperations.play ? 'RESUMING...' : 'RESUME'}
-              </button>
-            ) : (
-              <button
-                className={`bg-green-600 hover:bg-green-700 text-white px-3 py-1 rounded text-xs flex items-center gap-1 ${
-                  pendingOperations.play ? 'opacity-50 cursor-not-allowed' : ''
-                }`}
-                onClick={onPlay}
-                disabled={pendingOperations.play}
-                title="Play from beginning"
-              >
-                ▶ {pendingOperations.play ? 'PLAYING...' : 'PLAY'}
               </button>
             )}
             <button
