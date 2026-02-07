@@ -158,139 +158,146 @@ export default function AudioTrack({
 
   return (
     <div key={trackId} className='flex'>
-      {filename && (
+      {/* Channel label - always visible */}
+      {track && (
         <div className="flex-none w-[18px] mr-2 flex">
-          {track && (
           <div className={`text-center text-xs px-1 rounded-sm font-bold w-full flex items-center justify-center ${AUDIO_INDICATOR_BASE} ${
-            syncMode 
-              ? (isRouted ? AUDIO_INDICATOR_SYNCED : AUDIO_INDICATOR_UNSYNCED)
-              : AUDIO_INDICATOR_NORMAL
+            filename
+              ? (syncMode
+                  ? (isRouted ? AUDIO_INDICATOR_SYNCED : AUDIO_INDICATOR_UNSYNCED)
+                  : AUDIO_INDICATOR_NORMAL)
+              : 'bg-gray-700/50 text-gray-500'
           } ${isLast ? 'mb-4' : ''}`} style={{ writingMode: 'vertical-rl' }}>
             {track}
           </div>
-        )}
         </div>
       )}
       <div className={`${isLast ? DM_CHILD_LAST : DM_CHILD} ${isDisabled ? 'opacity-40 pointer-events-none' : ''} flex-1`}>
         {/* Header */}
         <div className="flex justify-between items-center mb-2">
-          <div className="text-white font-mono text-sm">
+          <div className={`font-mono text-sm ${filename ? 'text-white' : 'text-gray-500 italic'}`}>
             {filename || label || trackId}
           </div>
-          <div className="text-gray-400 font-mono text-sm">
-            {formatTime(currentTime)} / {formatTime(duration)}
-          </div>
+          {filename && (
+            <div className="text-gray-400 font-mono text-sm">
+              {formatTime(currentTime)} / {formatTime(duration)}
+            </div>
+          )}
         </div>
 
-        {/* Transport */}
-        <div className="flex gap-2 items-center mb-3">
-          {playbackState === PlaybackState.PLAYING ? (
-            <button
-              className={`bg-orange-600 hover:bg-orange-700 text-white px-3 py-1 rounded text-xs flex items-center gap-1 ${
-                pendingOperations.pause ? 'opacity-50 cursor-not-allowed' : ''
-              }`}
-              onClick={onPause}
-              disabled={pendingOperations.pause}
-            >
-              ⏸ {pendingOperations.pause ? 'PAUSING...' : 'PAUSE'}
-            </button>
-          ) : playbackState === PlaybackState.PAUSED ? (
-            <button
-              className={`bg-blue-600 hover:bg-blue-700 text-white px-3 py-1 rounded text-xs flex items-center gap-1 ${
-                pendingOperations.play ? 'opacity-50 cursor-not-allowed' : ''
-              }`}
-              onClick={onPlay}
-              disabled={pendingOperations.play}
-              title="Resume from paused position"
-            >
-              ▶ {pendingOperations.play ? 'RESUMING...' : 'RESUME'}
-            </button>
-          ) : (
-            <button
-              className={`bg-green-600 hover:bg-green-700 text-white px-3 py-1 rounded text-xs flex items-center gap-1 ${
-                pendingOperations.play ? 'opacity-50 cursor-not-allowed' : ''
-              }`}
-              onClick={onPlay}
-              disabled={pendingOperations.play}
-              title="Play from beginning"
-            >
-              ▶ {pendingOperations.play ? 'PLAYING...' : 'PLAY'}
-            </button>
-          )}
-          <button
-            className={`bg-red-600 hover:bg-red-700 text-white px-3 py-1 rounded text-xs flex items-center gap-1 ${
-              pendingOperations.stop ? 'opacity-50 cursor-not-allowed' : ''
-            }`}
-            onClick={onStop}
-            disabled={pendingOperations.stop}
-          >
-            ⏹ {pendingOperations.stop ? 'STOPPING...' : 'STOP'}
-          </button>
-          {type !== 'sfx' && (
-            <button
-              className={`p-0 rounded ml-2 transition-all duration-200 flex items-center ${
-                pendingOperations.loop 
-                  ? 'opacity-50 cursor-not-allowed bg-gray-500'
-                  : looping
-                    ? 'bg-blue-600 hover:bg-blue-700'
-                    : 'bg-gray-600 hover:bg-gray-700'
-              }`}
-              onClick={() =>
-                onLoopToggle && onLoopToggle(trackId, !looping)
-              }
-              disabled={pendingOperations.loop}
-              title={pendingOperations.loop ? 'Updating loop setting...' : (looping ? 'Disable looping' : 'Enable looping')}
-            >
-              <img 
-                src="/ico/loop.png" 
-                alt="Loop" 
-                className={`w-6 h-6 filter brightness-0 invert ${
-                  pendingOperations.loop 
-                    ? 'opacity-30' 
-                    : looping 
-                      ? 'opacity-100' 
-                      : 'opacity-60'
+        {/* Transport - only show when file is loaded */}
+        {filename && (
+          <div className="flex gap-2 items-center mb-3">
+            {playbackState === PlaybackState.PLAYING ? (
+              <button
+                className={`bg-orange-600 hover:bg-orange-700 text-white px-3 py-1 rounded text-xs flex items-center gap-1 ${
+                  pendingOperations.pause ? 'opacity-50 cursor-not-allowed' : ''
                 }`}
-              />
+                onClick={onPause}
+                disabled={pendingOperations.pause}
+              >
+                ⏸ {pendingOperations.pause ? 'PAUSING...' : 'PAUSE'}
+              </button>
+            ) : playbackState === PlaybackState.PAUSED ? (
+              <button
+                className={`bg-blue-600 hover:bg-blue-700 text-white px-3 py-1 rounded text-xs flex items-center gap-1 ${
+                  pendingOperations.play ? 'opacity-50 cursor-not-allowed' : ''
+                }`}
+                onClick={onPlay}
+                disabled={pendingOperations.play}
+                title="Resume from paused position"
+              >
+                ▶ {pendingOperations.play ? 'RESUMING...' : 'RESUME'}
+              </button>
+            ) : (
+              <button
+                className={`bg-green-600 hover:bg-green-700 text-white px-3 py-1 rounded text-xs flex items-center gap-1 ${
+                  pendingOperations.play ? 'opacity-50 cursor-not-allowed' : ''
+                }`}
+                onClick={onPlay}
+                disabled={pendingOperations.play}
+                title="Play from beginning"
+              >
+                ▶ {pendingOperations.play ? 'PLAYING...' : 'PLAY'}
+              </button>
+            )}
+            <button
+              className={`bg-red-600 hover:bg-red-700 text-white px-3 py-1 rounded text-xs flex items-center gap-1 ${
+                pendingOperations.stop ? 'opacity-50 cursor-not-allowed' : ''
+              }`}
+              onClick={onStop}
+              disabled={pendingOperations.stop}
+            >
+              ⏹ {pendingOperations.stop ? 'STOPPING...' : 'STOP'}
             </button>
-          )}
-        </div>
-
-        {/* Level Slider w/ Analyser-driven fill */}
-        <div className="flex items-center gap-1">
-          <span className="mt-3 font-mono">dB</span>
-          <div className="flex-1 font-mono">
-            <datalist id="markers">
-              <option value="15" label="-48" />
-              <option value="30" label="-36" />
-              <option value="40" label="-24" />
-              <option value="50" label="-12" />
-              <option value="60" label="-3" />
-              <option value="70" label="-0" className='mr-12' />
-              <option value="130" label="+3" />
-            </datalist>
-
-            <input
-              ref={sliderRef}
-              type="range"
-              min="0.0"
-              max="1.3"
-              step="0.05"
-              value={volume}
-              onChange={(e) =>
-                handleVolumeChange(parseFloat(e.target.value))
-              }
-              onMouseUp={(e) =>
-                handleVolumeRelease(parseFloat(e.target.value))
-              }
-              onTouchEnd={(e) =>
-                handleVolumeRelease(parseFloat(e.target.value))
-              }
-              className="slider bg-slate-800"
-              list="markers"
-            />
+            {type !== 'sfx' && (
+              <button
+                className={`p-0 rounded ml-2 transition-all duration-200 flex items-center ${
+                  pendingOperations.loop
+                    ? 'opacity-50 cursor-not-allowed bg-gray-500'
+                    : looping
+                      ? 'bg-blue-600 hover:bg-blue-700'
+                      : 'bg-gray-600 hover:bg-gray-700'
+                }`}
+                onClick={() =>
+                  onLoopToggle && onLoopToggle(trackId, !looping)
+                }
+                disabled={pendingOperations.loop}
+                title={pendingOperations.loop ? 'Updating loop setting...' : (looping ? 'Disable looping' : 'Enable looping')}
+              >
+                <img
+                  src="/ico/loop.png"
+                  alt="Loop"
+                  className={`w-6 h-6 filter brightness-0 invert ${
+                    pendingOperations.loop
+                      ? 'opacity-30'
+                      : looping
+                        ? 'opacity-100'
+                        : 'opacity-60'
+                  }`}
+                />
+              </button>
+            )}
           </div>
-        </div>
+        )}
+
+        {/* Level Slider w/ Analyser-driven fill - only show when file is loaded */}
+        {filename && (
+          <div className="flex items-center gap-1">
+            <span className="mt-3 font-mono">dB</span>
+            <div className="flex-1 font-mono">
+              <datalist id="markers">
+                <option value="15" label="-48" />
+                <option value="30" label="-36" />
+                <option value="40" label="-24" />
+                <option value="50" label="-12" />
+                <option value="60" label="-3" />
+                <option value="70" label="-0" className='mr-12' />
+                <option value="130" label="+3" />
+              </datalist>
+
+              <input
+                ref={sliderRef}
+                type="range"
+                min="0.0"
+                max="1.3"
+                step="0.05"
+                value={volume}
+                onChange={(e) =>
+                  handleVolumeChange(parseFloat(e.target.value))
+                }
+                onMouseUp={(e) =>
+                  handleVolumeRelease(parseFloat(e.target.value))
+                }
+                onTouchEnd={(e) =>
+                  handleVolumeRelease(parseFloat(e.target.value))
+                }
+                className="slider bg-slate-800"
+                list="markers"
+              />
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );

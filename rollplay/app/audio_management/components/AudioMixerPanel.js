@@ -788,7 +788,7 @@ export default function AudioMixerPanel({
                       type: channel.type,
                       label: channel.label,
                       analyserNode: remoteTrackAnalysers[channel.channelId],
-                      track: "SFX"
+                      track: channel.track
                     }}
                     pendingOperations={pendingOps}
                     trackState={
