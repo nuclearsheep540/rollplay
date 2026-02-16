@@ -12,7 +12,7 @@ from .schemas import (
     CharacterClassInfoResponse
 )
 from modules.characters.dependencies.providers import get_character_repository
-from modules.characters.orm.character_repository import CharacterRepository
+from modules.characters.repositories.character_repository import CharacterRepository
 from modules.characters.application.commands import CreateCharacter, UpdateCharacter, UpdateAbilityScores, DeleteCharacter, CloneCharacter
 from modules.characters.application.queries import GetCharactersByUser, GetCharacterById
 from shared.dependencies.auth import get_current_user_id

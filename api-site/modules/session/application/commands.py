@@ -10,11 +10,11 @@ from concurrent.futures import ThreadPoolExecutor
 from sqlalchemy import update
 
 from modules.session.repositories.session_repository import SessionRepository
-from modules.user.orm.user_repository import UserRepository
+from modules.user.repositories.user_repository import UserRepository
 from modules.user.model.user_model import User
-from modules.characters.orm.character_repository import CharacterRepository
+from modules.characters.repositories.character_repository import CharacterRepository
 from modules.characters.domain.character_aggregate import CharacterAggregate
-from modules.campaign.orm.campaign_repository import CampaignRepository
+from modules.campaign.repositories.campaign_repository import CampaignRepository
 from modules.campaign.model.session_model import SessionJoinedUser
 from modules.session.domain.session_aggregate import SessionEntity, SessionStatus
 from modules.library.repositories.asset_repository import MediaAssetRepository

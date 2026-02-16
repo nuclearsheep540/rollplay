@@ -6,7 +6,7 @@ import logging
 import time
 from fastapi import APIRouter, Depends, HTTPException, status
 
-from modules.friendship.schemas.friendship_schemas import (
+from .schemas import (
     SendFriendRequestRequest,
     FriendRequestResponse,
     FriendshipResponse,
@@ -22,13 +22,13 @@ from modules.friendship.application.commands import (
 from modules.friendship.application.queries import (
     GetAllUserFriendships
 )
-from modules.friendship.dependencies.repositories import (
+from modules.friendship.dependencies.providers import (
     get_friendship_repository,
     get_friend_request_repository
 )
 from modules.friendship.repositories.friendship_repository import FriendshipRepository
 from modules.friendship.repositories.friend_request_repository import FriendRequestRepository
-from modules.user.orm.user_repository import UserRepository
+from modules.user.repositories.user_repository import UserRepository
 from modules.user.dependencies.providers import user_repository as get_user_repository
 from modules.events.event_manager import EventManager
 from modules.events.dependencies.providers import get_event_manager

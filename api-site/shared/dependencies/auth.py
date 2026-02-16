@@ -7,7 +7,7 @@ from fastapi import Depends, HTTPException, Request, status
 
 from shared.jwt_helper import JWTHelper
 from modules.user.dependencies.providers import user_repository
-from modules.user.orm.user_repository import UserRepository
+from modules.user.repositories.user_repository import UserRepository
 from modules.user.domain.user_aggregate import UserAggregate
 
 logger = logging.getLogger(__name__)

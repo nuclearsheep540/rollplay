@@ -9,7 +9,7 @@ from datetime import datetime
 from modules.events.websocket_manager import event_connection_manager
 from shared.jwt_helper import JWTHelper
 from shared.dependencies.db import get_db
-from modules.user.orm.user_repository import UserRepository
+from modules.user.repositories.user_repository import UserRepository
 from modules.user.application.queries import GetUserByEmail
 
 logger = logging.getLogger(__name__)

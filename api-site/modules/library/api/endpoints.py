@@ -21,12 +21,12 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from modules.library.dependencies.providers import get_media_asset_repository
 from modules.library.repositories.asset_repository import MediaAssetRepository
 from modules.campaign.dependencies.providers import campaign_repository
-from modules.campaign.orm.campaign_repository import CampaignRepository
+from modules.campaign.repositories.campaign_repository import CampaignRepository
 from modules.library.domain.media_asset_type import MediaAssetType
 from modules.library.application.commands import ConfirmUpload, DeleteMediaAsset, AssociateWithCampaign, RenameMediaAsset, ChangeAssetType, UpdateGridConfig
 from modules.library.domain.map_asset_aggregate import MapAsset
 from modules.library.application.queries import GetMediaAssetsByUser, GetMediaAssetsByCampaign
-from modules.library.schemas.asset_schemas import (
+from .schemas import (
     UploadUrlResponse,
     ConfirmUploadRequest,
     MediaAssetResponse,

@@ -8,7 +8,7 @@ import time
 
 from modules.friendship.repositories.friendship_repository import FriendshipRepository
 from modules.friendship.repositories.friend_request_repository import FriendRequestRepository
-from modules.user.orm.user_repository import UserRepository
+from modules.user.repositories.user_repository import UserRepository
 from modules.friendship.domain.friendship_aggregate import FriendshipAggregate
 from modules.friendship.domain.friend_request_aggregate import FriendRequestAggregate
 from modules.friendship.domain.friendship_events import FriendshipEvents

@@ -56,13 +56,16 @@ api-site/
 │   └── env.py                     # Must import all models for autogenerate
 ├── modules/
 │   ├── user/
-│   │   ├── api/endpoints.py
+│   │   ├── api/
+│   │   │   ├── endpoints.py
+│   │   │   └── schemas.py
 │   │   ├── application/
 │   │   │   ├── commands.py        # GetOrCreateUser, UpdateUserLogin
 │   │   │   └── queries.py        # GetUserById, GetUserByEmail
 │   │   ├── domain/user_aggregate.py
 │   │   ├── model/user_model.py
-│   │   └── dependencies/
+│   │   ├── repositories/user_repository.py
+│   │   └── dependencies/providers.py
 │   ├── campaign/
 │   │   ├── api/
 │   │   │   ├── endpoints.py
@@ -76,20 +79,24 @@ api-site/
 │   │   ├── model/
 │   │   │   ├── campaign_model.py
 │   │   │   └── session_model.py
-│   │   ├── orm/campaign_repository.py
-│   │   └── dependencies/
+│   │   ├── repositories/campaign_repository.py
+│   │   └── dependencies/providers.py
 │   ├── session/                   # Game session lifecycle (start/pause/finish)
-│   │   ├── api/endpoints.py
+│   │   ├── api/
+│   │   │   ├── endpoints.py
+│   │   │   └── schemas.py
 │   │   ├── application/
 │   │   │   ├── commands.py        # CreateSession, StartSession, PauseSession, FinishSession
 │   │   │   └── queries.py
 │   │   ├── domain/
 │   │   │   ├── session_aggregate.py
 │   │   │   └── session_events.py
-│   │   ├── schemas/session_schemas.py
-│   │   └── repositories/session_repository.py
+│   │   ├── repositories/session_repository.py
+│   │   └── dependencies/providers.py
 │   ├── library/                   # Asset management (maps, music, SFX, images)
-│   │   ├── api/endpoints.py
+│   │   ├── api/
+│   │   │   ├── endpoints.py
+│   │   │   └── schemas.py
 │   │   ├── application/
 │   │   │   ├── commands.py        # ConfirmUpload, Delete, Associate, Rename, ChangeType
 │   │   │   └── queries.py
@@ -101,10 +108,12 @@ api-site/
 │   │   │   ├── asset_model.py
 │   │   │   ├── audio_asset_models.py
 │   │   │   └── map_asset_model.py
-│   │   ├── schemas/asset_schemas.py
-│   │   └── repositories/asset_repository.py
+│   │   ├── repositories/asset_repository.py
+│   │   └── dependencies/providers.py
 │   ├── friendship/                # Friend requests and friendships
-│   │   ├── api/endpoints.py
+│   │   ├── api/
+│   │   │   ├── endpoints.py
+│   │   │   └── schemas.py
 │   │   ├── application/
 │   │   │   ├── commands.py
 │   │   │   └── queries.py
@@ -115,11 +124,13 @@ api-site/
 │   │   ├── model/
 │   │   │   ├── friendship_model.py
 │   │   │   └── friend_request_model.py
-│   │   └── repositories/
-│   │       ├── friendship_repository.py
-│   │       └── friend_request_repository.py
+│   │   ├── repositories/
+│   │   │   ├── friendship_repository.py
+│   │   │   └── friend_request_repository.py
+│   │   └── dependencies/providers.py
 │   ├── events/                    # Notifications and WebSocket event system
 │   │   ├── api/
+│   │   │   ├── schemas.py
 │   │   │   ├── websocket_endpoint.py
 │   │   │   └── notification_endpoints.py
 │   │   ├── application/
@@ -128,16 +139,20 @@ api-site/
 │   │   ├── domain/notification_aggregate.py
 │   │   ├── model/notification_model.py
 │   │   ├── repositories/notification_repository.py
+│   │   ├── dependencies/providers.py
 │   │   ├── event_manager.py
 │   │   └── websocket_manager.py
 │   └── characters/                # Basic CRUD (minimal implementation)
-│       ├── api/endpoints.py
+│       ├── api/
+│       │   ├── endpoints.py
+│       │   └── schemas.py
 │       ├── application/
 │       │   ├── commands.py
 │       │   └── queries.py
 │       ├── domain/character_aggregate.py
 │       ├── model/character_model.py
-│       └── repositories/
+│       ├── repositories/character_repository.py
+│       └── dependencies/providers.py
 ├── shared/
 │   ├── jwt_helper.py
 │   ├── error_handlers.py

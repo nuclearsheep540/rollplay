@@ -12,7 +12,7 @@ from modules.events.domain.event_config import EventConfig
 from modules.events.repositories.notification_repository import NotificationRepository
 from modules.events.dependencies.providers import get_notification_repository, get_event_manager
 from shared.dependencies.auth import get_current_user_id
-from modules.events.schemas.notification_schemas import NotificationResponse
+from .schemas import NotificationResponse
 from modules.events.event_manager import EventManager
 from config.settings import Settings
 

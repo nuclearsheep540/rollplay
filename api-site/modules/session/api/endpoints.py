@@ -8,7 +8,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 
 logger = logging.getLogger(__name__)
 
-from modules.session.schemas.session_schemas import (
+from .schemas import (
     CreateSessionRequest,
     UpdateSessionRequest,
     SessionResponse,
@@ -31,13 +31,13 @@ from modules.session.application.queries import (
     GetSessionsByCampaign,
     GetUserSessions
 )
-from modules.session.dependencies.repositories import get_session_repository
+from modules.session.dependencies.providers import get_session_repository
 from modules.session.repositories.session_repository import SessionRepository
-from modules.user.orm.user_repository import UserRepository
+from modules.user.repositories.user_repository import UserRepository
 from modules.user.dependencies.providers import user_repository as get_user_repository
-from modules.characters.orm.character_repository import CharacterRepository
+from modules.characters.repositories.character_repository import CharacterRepository
 from modules.characters.dependencies.providers import get_character_repository
-from modules.campaign.orm.campaign_repository import CampaignRepository
+from modules.campaign.repositories.campaign_repository import CampaignRepository
 from modules.campaign.dependencies.providers import campaign_repository
 from modules.library.dependencies.providers import get_asset_repository
 from modules.library.repositories.asset_repository import MediaAssetRepository

@@ -5,7 +5,7 @@ from datetime import datetime
 from typing import Optional, List, Dict
 from uuid import UUID
 
-from modules.characters.orm.character_repository import CharacterRepository
+from modules.characters.repositories.character_repository import CharacterRepository
 from modules.characters.domain.character_aggregate import (
     CharacterAggregate,
     AbilityScores,

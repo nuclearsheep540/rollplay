@@ -9,8 +9,8 @@ import asyncio
 from modules.campaign.domain.campaign_aggregate import CampaignAggregate
 from modules.campaign.domain.campaign_events import CampaignEvents
 from modules.events.event_manager import EventManager
-from modules.user.orm.user_repository import UserRepository
-from modules.characters.orm.character_repository import CharacterRepository
+from modules.user.repositories.user_repository import UserRepository
+from modules.characters.repositories.character_repository import CharacterRepository
 
 logger = logging.getLogger(__name__)
 

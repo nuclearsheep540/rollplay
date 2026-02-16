@@ -53,11 +53,11 @@ class GUID(TypeDecorator):
                 return uuid.UUID(value)
             else:
                 return value
-from modules.user.orm.user_repository import UserRepository
+from modules.user.repositories.user_repository import UserRepository
 from modules.session.repositories.session_repository import SessionRepository
-from modules.characters.orm.character_repository import CharacterRepository
+from modules.characters.repositories.character_repository import CharacterRepository
 from modules.friendship.repositories.friendship_repository import FriendshipRepository
-from modules.campaign.orm.campaign_repository import CampaignRepository
+from modules.campaign.repositories.campaign_repository import CampaignRepository
 
 from modules.user.domain.user_aggregate import UserAggregate
 from modules.session.domain.session_aggregate import SessionEntity, SessionStatus
