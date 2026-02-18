@@ -262,10 +262,33 @@ Used for all accessible interactive components in `app/shared/components/`:
 - **TabNav** — TabGroup with arrow key navigation
 - **Combobox** — Searchable select with real-time filtering
 
+### Authenticated Fetch (`authFetch`)
+**All authenticated API calls MUST use `authFetch`** from `app/shared/utils/authFetch.js`, never plain `fetch`.
+
+`authFetch` wraps `fetch` with automatic 401 → token refresh → retry logic. Without it, expired access tokens cause silent failures with no recovery path. When creating any new hook, component, or utility that calls our backend from an authenticated context, always verify it uses `authFetch`.
+
+**Correct:**
+```javascript
+import { authFetch } from '@/app/shared/utils/authFetch'
+const response = await authFetch('/api/campaigns/', { method: 'GET', credentials: 'include' })
+```
+
+**Incorrect:**
+```javascript
+const response = await fetch('/api/campaigns/', { method: 'GET', credentials: 'include' })
+```
+
+**Exceptions** (plain `fetch` is correct here):
+- The token refresh endpoint itself (`/api/users/auth/refresh`) — using `authFetch` would cause infinite recursion
+- Auth/login pages (magic link, OTP) — user isn't authenticated yet
+- Public endpoints (patch notes) — no auth required
+- Direct S3 uploads (`PUT` to presigned URL) — not our backend
+
 ### TanStack Query (`@tanstack/react-query`)
 Centralized data fetching and caching via `app/shared/providers/QueryProvider.js`:
 - Defaults: 30s stale time, 5min garbage collection, 1 retry
 - Pattern: one hook per query/mutation, query key invalidation for cache updates
+- **All `queryFn` and `mutationFn` functions must use `authFetch`**, not plain `fetch`
 - Used across: dashboard (campaigns, characters, friends, notifications) and asset library
 
 ### Asset Library Framework (`app/asset_library/`)
