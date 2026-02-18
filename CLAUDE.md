@@ -492,6 +492,29 @@ All new source files must include GPL-3.0 license headers:
 - JS: `/* Copyright (C) 2025 Matthew Davey */` and `/* SPDX-License-Identifier: GPL-3.0-or-later */`
 - Python: `# Copyright (C) 2025 Matthew Davey` and `# SPDX-License-Identifier: GPL-3.0-or-later`
 
+### UUID Handling — Keep UUIDs as UUIDs
+**All internal Python code (aggregates, commands, queries, events, repositories) must pass UUIDs as `UUID` objects, never pre-stringified.** Only stringify at serialization boundaries.
+
+**Stringify at these boundaries:**
+- `EventConfig.data` dicts (must be JSON-serializable)
+- HTTP response payloads / JSON bodies
+- ETL payloads sent to api-game
+
+**Never stringify for:**
+- Method parameters between commands, aggregates, events, and repositories
+- `EventConfig.user_id` (expects `UUID`)
+- Repository queries
+
+```python
+# Correct: UUID in, stringify only in the data dict
+def session_created(campaign_player_ids: List[UUID], session_id: UUID, ...) -> List[EventConfig]:
+    EventConfig(user_id=player_id, data={"session_id": str(session_id), ...})
+
+# Wrong: caller stringifies, method wraps back to UUID
+events = SessionEvents.session_created(campaign_player_ids=[str(pid) for pid in campaign.player_ids], ...)
+# ... then inside: user_id=UUID(player_id)  # pointless round-trip
+```
+
 ### Anti-Patterns (Removed During Refactor)
 - No separate `adapters/` layer — repositories handle ORM translation directly
 - No separate `mappers.py` — repositories call `Aggregate.from_persistence()` directly

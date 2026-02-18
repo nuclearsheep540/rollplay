@@ -106,12 +106,12 @@ class CreateSession:
         # Only broadcast if there are campaign members (excludes host)
         if campaign.player_ids:
             events = SessionEvents.session_created(
-                campaign_player_ids=[str(pid) for pid in campaign.player_ids],
-                session_id=str(session.id),
+                campaign_player_ids=campaign.player_ids,
+                session_id=session.id,
                 session_name=session.name,
-                campaign_id=str(campaign_id),
+                campaign_id=campaign_id,
                 campaign_name=campaign.title,
-                host_id=str(host_id),
+                host_id=host_id,
                 host_screen_name=host_user.screen_name if host_user else "Unknown"
             )
 
