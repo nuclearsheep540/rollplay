@@ -13,6 +13,7 @@ import { getSeatColor } from '../utils/seatColors';
 import PlayerCard from "./components/PlayerCard";
 import DMChair from "./components/DMChair";
 import MapControlsPanel from './components/MapControlsPanel';
+import ImageControlsPanel from './components/ImageControlsPanel';
 import CombatControlsPanel from './components/CombatControlsPanel';
 import ModeratorControls from './components/ModeratorControls';
 import { AudioMixerPanel } from '../audio_management/components';
@@ -23,7 +24,16 @@ import DiceActionPanel from './components/DiceActionPanel'; // NEW IMPORT
 import Modal from '@/app/shared/components/Modal';
 import { useWebSocket } from './hooks/useWebSocket';
 import { useUnifiedAudio } from '../audio_management';
-import { MapDisplay, GridOverlay, useMapWebSocket } from '../map_management';
+import { MapDisplay, GridOverlay, useMapWebSocket, ImageDisplay, useImageWebSocket } from '../map_management';
+
+// Tab configuration for right drawer - static, role filtering applied at render time
+const RIGHT_DRAWER_TABS = [
+  { id: 'moderator', label: 'MOD', dmOnly: false },
+  { id: 'map', label: 'MAP', dmOnly: true },
+  { id: 'image', label: 'IMAGE', dmOnly: true },
+  { id: 'combat', label: 'COMBAT', dmOnly: true },
+  { id: 'audio', label: 'AUDIO', dmOnly: true },
+];
 
 function GameContent() {
   const params = useSearchParams();
@@ -101,6 +111,10 @@ function GameContent() {
   const [gridEditMode, setGridEditMode] = useState(false); // Is DM editing grid dimensions?
   const [gridConfig, setGridConfig] = useState(null); // Current grid configuration
   const [liveGridOpacity, setLiveGridOpacity] = useState(0.2); // Live grid opacity for real-time updates
+
+  // Image system state
+  const [activeImage, setActiveImage] = useState(null); // Current active image data
+  const [activeDisplay, setActiveDisplay] = useState(null); // "map" | "image" | null
 
   // Session ended modal state
   const [sessionEndedData, setSessionEndedData] = useState(null); // { message, reason } when session ends
@@ -258,6 +272,9 @@ function GameContent() {
     
     // Load active map for this room
     await loadActiveMap(roomId);
+
+    // Load active image and display state for this room
+    await loadActiveImage(roomId);
   }
   
   // Check player roles on initial page load - single source of truth
@@ -611,6 +628,37 @@ function GameContent() {
     }
   };
 
+  // Load active image and display state for the room
+  const loadActiveImage = async (roomId) => {
+    try {
+      console.log("🖼️ Loading active image from database...");
+
+      const response = await fetch(`/api/game/${roomId}/active-image`);
+
+      if (response.ok) {
+        const data = await response.json();
+
+        if (data.active_image) {
+          setActiveImage(data.active_image);
+          console.log(`🖼️ Loaded active image: ${data.active_image.original_filename || data.active_image.filename}`);
+        } else {
+          setActiveImage(null);
+          console.log("🖼️ No active image found for room");
+        }
+
+        if (data.active_display) {
+          setActiveDisplay(data.active_display);
+          console.log(`🖼️ Active display: ${data.active_display}`);
+        }
+      } else {
+        console.log("🖼️ Failed to fetch active image:", response.status);
+      }
+    } catch (error) {
+      console.log("🖼️ Error loading active image:", error);
+      setActiveImage(null);
+    }
+  };
+
   // UPDATED: Handle player kick
   const handleKickPlayer = async (playerToKick, disconnected) => {
     try {
@@ -825,12 +873,21 @@ function GameContent() {
     sendRoleChange,
     sendRemoteAudioPlay,
     sendRemoteAudioResume,
-    sendRemoteAudioBatch
+    sendRemoteAudioBatch,
+    registerHandler
   } = useWebSocket(roomId, thisPlayer, gameContext);
 
   // Map management WebSocket hook (atomic approach)
+  // Wrap setActiveMap to also update activeDisplay when a map is loaded
+  const setActiveMapWithDisplay = useCallback((mapData) => {
+    setActiveMap(mapData);
+    if (mapData) {
+      setActiveDisplay('map');
+    }
+  }, []);
+
   const mapContext = {
-    setActiveMap,
+    setActiveMap: setActiveMapWithDisplay,
     activeMap // All map data including grid_config handled atomically
     // No separate setGridConfig or setMapImageConfig - everything goes through setActiveMap
   };
@@ -840,15 +897,23 @@ function GameContent() {
     sendMapClear,
     sendMapConfigUpdate,
     sendMapRequest,
-    handleMapLoad,
-    handleMapClear,
-    handleMapConfigUpdate
-  } = useMapWebSocket(webSocket, isConnected, roomId, thisPlayer, mapContext);
+  } = useMapWebSocket(webSocket, isConnected, roomId, thisPlayer, mapContext, registerHandler);
 
-  // Map handlers are managed by useMapWebSocket hook - no additional event listeners needed
+  // Image management WebSocket hook
+  const imageContext = {
+    setActiveImage,
+    activeImage,
+    setActiveDisplay
+  };
 
-  // WebSocket map requests are handled via user actions (load/clear/update)
-  // Initial map loading is handled by HTTP fetch in onLoad function
+  const {
+    sendImageLoad,
+    sendImageClear,
+    sendImageRequest,
+  } = useImageWebSocket(webSocket, isConnected, roomId, thisPlayer, imageContext, registerHandler);
+
+  // Map/Image handlers are managed by their respective WebSocket hooks
+  // Initial loading is handled by HTTP fetch in onLoad function
 
   // Listen for combat state changes and play audio
   useEffect(() => {
@@ -1458,14 +1523,6 @@ function GameContent() {
 
       {/* Right drawer — fixed-position, outside grid flow */}
       {(() => {
-        // Tab configuration - reusable pattern for role-based visibility
-        const RIGHT_DRAWER_TABS = [
-          { id: 'moderator', label: 'MOD', dmOnly: false },
-          { id: 'map', label: 'MAP', dmOnly: true },
-          { id: 'combat', label: 'COMBAT', dmOnly: true },
-          { id: 'audio', label: 'AUDIO', dmOnly: true },
-        ];
-
         const visibleTabs = RIGHT_DRAWER_TABS.filter(tab => !tab.dmOnly || isDM);
 
         return (
@@ -1527,6 +1584,16 @@ function GameContent() {
                   sendMapClear={sendMapClear}
                 />
               )}
+              {activeRightDrawer === 'image' && isDM && (
+                <ImageControlsPanel
+                  roomId={roomId}
+                  campaignId={campaignId}
+                  activeImage={activeImage}
+                  setActiveImage={setActiveImage}
+                  sendImageLoad={sendImageLoad}
+                  sendImageClear={sendImageClear}
+                />
+              )}
               {activeRightDrawer === 'combat' && isDM && (
                 <CombatControlsPanel
                   promptPlayerRoll={promptPlayerRoll}
@@ -1559,18 +1626,28 @@ function GameContent() {
         );
       })()}
 
-      {/* Main Game Area — single column grid (map only) */}
+      {/* Main Game Area — conditional display: map or image */}
       <div className="main-game-area">
         <div className="grid-area-map-canvas relative">
-          <MapDisplay
-            activeMap={activeMap}
-            isEditMode={gridEditMode && isDM}
-            onGridChange={handleGridChange}
-            mapImageEditMode={gridEditMode && isDM}
-            onMapImageChange={handleMapImageChange}
-            liveGridOpacity={liveGridOpacity}
-            gridConfig={gridConfig}
-          />
+          {/* Map display — visible when activeDisplay is "map" or null (default) */}
+          {activeDisplay !== 'image' && (
+            <MapDisplay
+              activeMap={activeMap}
+              isEditMode={gridEditMode && isDM}
+              onGridChange={handleGridChange}
+              mapImageEditMode={gridEditMode && isDM}
+              onMapImageChange={handleMapImageChange}
+              liveGridOpacity={liveGridOpacity}
+              gridConfig={gridConfig}
+            />
+          )}
+
+          {/* Image display — visible when activeDisplay is "image" */}
+          {activeDisplay === 'image' && (
+            <ImageDisplay
+              activeImage={activeImage}
+            />
+          )}
 
           <HorizontalInitiativeTracker
             initiativeOrder={initiativeOrder}

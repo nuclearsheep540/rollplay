@@ -89,6 +89,8 @@ class SessionEntity:
         max_players: int = 8,  # Seat count in active game (1-8)
         audio_config: Optional[dict] = None,  # Persisted audio channel config (tracks, volume, looping)
         map_config: Optional[dict] = None,  # Persisted active map config (just asset_id for ETL restoration)
+        image_config: Optional[dict] = None,  # Persisted active image config (asset_id for ETL restoration)
+        active_display: Optional[str] = None,  # Which display was active: "map", "image", or None
     ):
         self.id = id
         self.name = name
@@ -103,6 +105,8 @@ class SessionEntity:
         self.max_players = self._validate_max_players(max_players)
         self.audio_config = audio_config
         self.map_config = map_config
+        self.image_config = image_config
+        self.active_display = active_display
 
     @staticmethod
     def _validate_max_players(max_players: int) -> int:

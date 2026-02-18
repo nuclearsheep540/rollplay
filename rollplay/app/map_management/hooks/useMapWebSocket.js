@@ -3,13 +3,18 @@
 
 'use client'
 
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useCallback } from 'react';
 
 /**
  * Map Management WebSocket Hook
- * Handles WebSocket events and sending functions specific to map functionality
+ *
+ * Handles map-related WebSocket events (map_load, map_clear, map_config_update)
+ * and provides send functions for map operations.
+ *
+ * Uses the central handler registry from useWebSocket — all messages are parsed
+ * once by useWebSocket, which dispatches to handlers registered here.
  */
-export const useMapWebSocket = (webSocket, isConnected, roomId, thisPlayer, mapContext) => {
+export const useMapWebSocket = (webSocket, isConnected, roomId, thisPlayer, mapContext, registerHandler) => {
   const eventHandlersRef = useRef(null);
 
   // Update event handlers ref when mapContext changes
@@ -22,55 +27,49 @@ export const useMapWebSocket = (webSocket, isConnected, roomId, thisPlayer, mapC
     }
   }, [mapContext, thisPlayer]);
 
-  // Map event handlers
-  const handleMapLoad = (data) => {
+  // Map event handlers — useCallback with [] deps is safe because
+  // these only read from eventHandlersRef.current at call time
+  const handleMapLoad = useCallback((data) => {
     console.log("🗺️ Map loaded (atomic):", data);
     const { map, loaded_by } = data;
     const handlers = eventHandlersRef.current;
-    
+
     if (map && handlers && handlers.setActiveMap) {
-      // Atomic map loading - set the complete map object
-      // The map contains ALL its properties: grid_config, map_image_config, etc.
       handlers.setActiveMap(map);
       console.log(`🗺️ Map "${map.original_filename}" loaded atomically by ${loaded_by}`);
       console.log(`🗺️ Map includes grid_config: ${!!map.grid_config}, map_image_config: ${!!map.map_image_config}`);
     } else {
       console.warn("🗺️ Cannot load map - missing map data or setActiveMap handler");
     }
-  };
+  }, []);
 
-  const handleMapClear = (data) => {
+  const handleMapClear = useCallback((data) => {
     console.log("🗺️ Map cleared (atomic):", data);
     const { cleared_by } = data;
     const handlers = eventHandlersRef.current;
-    
+
     if (handlers && handlers.setActiveMap) {
-      // Atomic map clearing - clear the complete map object
-      // This automatically clears ALL map properties including grid_config, map_image_config
       handlers.setActiveMap(null);
       console.log(`🗺️ Map cleared atomically by ${cleared_by}`);
     } else {
       console.warn("🗺️ Cannot clear map - missing setActiveMap handler");
     }
-  };
+  }, []);
 
-  const handleMapConfigUpdate = (data) => {
+  const handleMapConfigUpdate = useCallback((data) => {
     console.log("🗺️ Map config updated (atomic):", data);
     const { filename, grid_config, map_image_config, updated_by } = data;
     const handlers = eventHandlersRef.current;
-    
+
     if (handlers && handlers.setActiveMap) {
-      // Atomic map config update - update the complete map object
-      // Get current active map and update its config properties
       const currentMap = handlers.activeMap;
       if (currentMap && currentMap.filename === filename) {
         const updatedMap = {
           ...currentMap,
-          // Update only the provided config properties
           ...(grid_config !== undefined && { grid_config }),
           ...(map_image_config !== undefined && { map_image_config })
         };
-        
+
         handlers.setActiveMap(updatedMap);
         console.log(`🗺️ Map ${filename} config updated atomically by ${updated_by}`);
         console.log(`🗺️ Updated grid_config: ${!!updatedMap.grid_config}, map_image_config: ${!!updatedMap.map_image_config}`);
@@ -80,52 +79,21 @@ export const useMapWebSocket = (webSocket, isConnected, roomId, thisPlayer, mapC
     } else {
       console.warn("🗺️ Cannot update map config - missing setActiveMap handler or activeMap");
     }
-  };
+  }, []);
 
-  // Register event handlers with main WebSocket
+  // Register handlers with the central WebSocket router
+  // Replaces the old addEventListener pattern — messages are parsed once by useWebSocket
   useEffect(() => {
-    if (!webSocket || !isConnected) return;
+    if (!registerHandler) return;
 
-    const handleMessage = (event) => {
-      try {
-        const message = JSON.parse(event.data);
-        const { event_type, data } = message;
+    const cleanups = [
+      registerHandler('map_load', handleMapLoad),
+      registerHandler('map_clear', handleMapClear),
+      registerHandler('map_config_update', handleMapConfigUpdate),
+    ];
 
-        // Check for valid event structure
-        if (!event_type) {
-          console.warn('Map WebSocket message missing event_type:', message);
-          return;
-        }
-
-        // Only handle map-related events
-        switch (event_type) {
-          case 'map_load':
-            handleMapLoad(data);
-            break;
-          case 'map_clear':
-            handleMapClear(data);
-            break;
-          case 'map_config_update':
-            handleMapConfigUpdate(data);
-            break;
-          // map_request is handled server-side, no client handling needed
-          default:
-            // Ignore non-map events
-            break;
-        }
-      } catch (error) {
-        console.error('Error processing map WebSocket message:', error);
-      }
-    };
-
-    webSocket.addEventListener('message', handleMessage);
-
-    return () => {
-      if (webSocket) {
-        webSocket.removeEventListener('message', handleMessage);
-      }
-    };
-  }, [webSocket, isConnected]);
+    return () => cleanups.forEach(fn => fn());
+  }, [registerHandler, handleMapLoad, handleMapClear, handleMapConfigUpdate]);
 
   // Map send functions
   const sendMapLoad = (mapData) => {
@@ -140,7 +108,7 @@ export const useMapWebSocket = (webSocket, isConnected, roomId, thisPlayer, mapC
         map_data: mapData
       }
     };
-    
+
     console.log('🗺️ Sending map load:', mapData);
     console.log('🗺️ Full message being sent:', message);
     webSocket.send(JSON.stringify(message));
@@ -186,7 +154,7 @@ export const useMapWebSocket = (webSocket, isConnected, roomId, thisPlayer, mapC
       event_type: 'map_request',
       data: {}
     };
-    
+
     console.log('🗺️ Sending map request');
     console.log('🗺️ Full request message being sent:', message);
     webSocket.send(JSON.stringify(message));
@@ -197,9 +165,5 @@ export const useMapWebSocket = (webSocket, isConnected, roomId, thisPlayer, mapC
     sendMapClear,
     sendMapConfigUpdate,
     sendMapRequest,
-    // Export handlers for main WebSocket hook to use
-    handleMapLoad,
-    handleMapClear,
-    handleMapConfigUpdate
   };
 };

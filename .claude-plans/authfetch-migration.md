@@ -86,8 +86,8 @@ No logic changes, no refactoring — just swap the fetch function.
 | `audio_management/hooks/useUnifiedAudio.js` | Audio buffer fetch | Fetches binary from S3, not our API |
 | `audio_management/hooks/useWebAudio.js` | Audio buffer fetch | Fetches binary from S3, not our API |
 | `dashboard/hooks/useAuth.js:58` | `POST /auth/logout` | Goes to api-auth, not api-site; user is logging out |
-| `shared/hooks/useEvents.js` | `POST /api/users/ws-token` | Needs investigation — may need authFetch |
-| `dashboard/components/FriendsManager.js` | friend request endpoint | Needs investigation — verify if still used or dead code |
+| `shared/hooks/useEvents.js` | `POST /api/users/ws-token` | **Resolved**: Needs authFetch — authenticated call for WebSocket token; fails silently on token expiry during reconnect |
+| `dashboard/components/FriendsManager.js` | user lookup by account tag | **Resolved**: Needs authFetch — not dead code, active component with one plain fetch for `/api/users/by-account-tag/` lookup |
 
 ---
 

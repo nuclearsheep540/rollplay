@@ -335,6 +335,49 @@ def register_websocket_routes(app: FastAPI):
                     else:
                         continue  # Skip broadcasting for direct client responses
 
+                # Image management events
+                elif event_type == "image_load":
+                    try:
+                        result = await WebsocketEvent.image_load(
+                            websocket=websocket,
+                            data=data,
+                            event_data=event_data,
+                            player_name=player_name,
+                            client_id=client_id,
+                            manager=manager
+                        )
+                        broadcast_message = result.broadcast_message
+                        logger.debug(f"Image load result broadcast_message: {broadcast_message}")
+                    except Exception as e:
+                        logger.error(f"Exception in image_load handler: {e}")
+                        broadcast_message = {"event_type": "error", "data": f"Image load failed: {str(e)}"}
+
+                elif event_type == "image_clear":
+                    result = await WebsocketEvent.image_clear(
+                        websocket=websocket,
+                        data=data,
+                        event_data=event_data,
+                        player_name=player_name,
+                        client_id=client_id,
+                        manager=manager
+                    )
+                    broadcast_message = result.broadcast_message
+
+                elif event_type == "image_request":
+                    result = await WebsocketEvent.image_request(
+                        websocket=websocket,
+                        data=data,
+                        event_data=event_data,
+                        player_name=player_name,
+                        client_id=client_id,
+                        manager=manager
+                    )
+                    # image_request sends directly to client, no broadcast needed
+                    if result.broadcast_message:
+                        broadcast_message = result.broadcast_message
+                    else:
+                        continue  # Skip broadcasting for direct client responses
+
                 else:
                     # Unknown event type - log and ignore
                     logger.warning(f"Unknown WebSocket event type: {event_type}")

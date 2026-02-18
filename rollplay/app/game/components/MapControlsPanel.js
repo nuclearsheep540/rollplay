@@ -70,7 +70,7 @@ export default function MapControlsPanel({
 }) {
   // Grid size slider (cells on shorter image edge - always produces square cells)
   const [gridSize, setGridSize] = useState(10);
-  const [isDimensionsExpanded, setIsDimensionsExpanded] = useState(true);
+  const [isDimensionsExpanded, setIsDimensionsExpanded] = useState(false);
 
   // Image dimensions for auto-calculating square grid
   const [imageDimensions, setImageDimensions] = useState(null);

@@ -59,6 +59,8 @@ class Session(Base):
     max_players = Column(Integer, default=8, nullable=False)  # Seat count in active game (1-8)
     audio_config = Column(JSONB, nullable=True, server_default='{}')  # Persisted audio channel config from ETL
     map_config = Column(JSONB, nullable=True, server_default='{}')  # Persisted active map config from ETL (just asset_id)
+    image_config = Column(JSONB, nullable=True, server_default='{}')  # Persisted active image config from ETL
+    active_display = Column(String(10), nullable=True)  # Which display was active: "map", "image", or null
 
     # Relationships
     campaign = relationship("Campaign", back_populates="sessions")

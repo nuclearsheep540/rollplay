@@ -436,6 +436,28 @@ class StartSession:
                 else:
                     logger.warning(f"Cannot restore map: asset {map_asset_id} not in campaign assets")
 
+            # Restore image config from previous session with fresh presigned URL
+            image_config_with_url = {}
+            if session.image_config and session.image_config.get("asset_id"):
+                image_asset_id = session.image_config["asset_id"]
+                fresh_url = asset_url_lookup.get(image_asset_id)
+
+                if fresh_url:
+                    image_asset = self.asset_repo.get_by_id(UUID(image_asset_id))
+
+                    if image_asset:
+                        image_config_with_url = {
+                            "asset_id": image_asset_id,
+                            "filename": image_asset.filename,
+                            "original_filename": image_asset.filename,
+                            "file_path": fresh_url,
+                        }
+                        logger.info(f"Restoring image: {image_asset.filename}")
+                    else:
+                        logger.warning(f"Cannot restore image: asset {image_asset_id} not found")
+                else:
+                    logger.warning(f"Cannot restore image: asset {image_asset_id} not in campaign assets")
+
             payload = {
                 "session_id": str(session.id),
                 "campaign_id": str(session.campaign_id),  # For api-game to proxy asset requests to api-site
@@ -444,7 +466,9 @@ class StartSession:
                 "joined_user_ids": [str(user_id) for user_id in session.joined_users],  # Campaign players
                 "assets": assets,  # Campaign library assets (legacy, api-game will fetch fresh URLs on-demand)
                 "audio_config": audio_config_with_urls,
-                "map_config": map_config_with_url
+                "map_config": map_config_with_url,
+                "image_config": image_config_with_url,
+                "active_display": session.active_display
             }
 
             # 9. Call api-game (synchronous await)
@@ -606,6 +630,19 @@ class PauseSession:
                 }
             logger.info(f"Extracted map config: {'has map' if map_config else 'no active map'}, grid: {map_config.get('grid_config') if map_config else None}")
 
+            # Extract image config (asset_id for session persistence)
+            raw_image = final_state.get("image_state", {})
+            image_config = {}
+            if raw_image and raw_image.get("asset_id"):
+                image_config = {
+                    "asset_id": raw_image.get("asset_id"),
+                }
+            logger.info(f"Extracted image config: {'has image' if image_config else 'no active image'}")
+
+            # Extract active_display
+            active_display = final_state.get("active_display")
+            logger.info(f"Extracted active_display: {active_display}")
+
         except Exception as e:
             # ANY error during state fetch - rollback to ACTIVE
             logger.error(f"Error fetching state for session {session_id}: {e}")
@@ -627,6 +664,12 @@ class PauseSession:
 
             # Persist active map config for next session start
             session.map_config = map_config
+
+            # Persist active image config for next session start
+            session.image_config = image_config
+
+            # Persist which display was active
+            session.active_display = active_display
 
             # Mark session INACTIVE (this will clear session.active_game_id to None)
             session.deactivate()  # Sets INACTIVE, stopped_at = now, active_game_id = None
@@ -837,6 +880,19 @@ class FinishSession:
                 }
             logger.info(f"Extracted map config: {'has map' if map_config else 'no active map'}, grid: {map_config.get('grid_config') if map_config else None}")
 
+            # Extract image config (asset_id for session persistence)
+            raw_image = final_state.get("image_state", {})
+            image_config = {}
+            if raw_image and raw_image.get("asset_id"):
+                image_config = {
+                    "asset_id": raw_image.get("asset_id"),
+                }
+            logger.info(f"Extracted image config: {'has image' if image_config else 'no active image'}")
+
+            # Extract active_display
+            active_display = final_state.get("active_display")
+            logger.info(f"Extracted active_display: {active_display}")
+
         except Exception as e:
             # ANY error during state fetch - rollback to ACTIVE
             logger.error(f"Error fetching state for session {session_id}: {e}")
@@ -858,6 +914,12 @@ class FinishSession:
 
             # Persist active map config (record of what was displayed)
             session.map_config = map_config
+
+            # Persist active image config (record of what was displayed)
+            session.image_config = image_config
+
+            # Persist which display was active
+            session.active_display = active_display
 
             # Mark session FINISHED (this will clear session.active_game_id to None)
             session.mark_finished()  # Sets FINISHED, stopped_at = now, active_game_id = None

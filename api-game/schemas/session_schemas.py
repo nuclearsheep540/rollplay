@@ -24,6 +24,8 @@ class SessionStartRequest(BaseModel):
     assets: List[AssetRef] = []  # Assets associated with the session's campaign (legacy, prefer proxy)
     audio_config: dict = {}  # Persisted audio channel config from previous session (ETL)
     map_config: dict = {}  # Persisted active map config from previous session (ETL)
+    image_config: dict = {}  # Persisted active image config from previous session (ETL)
+    active_display: Optional[str] = None  # Which display type was active ("map", "image", or null)
 
 
 class SessionStartResponse(BaseModel):

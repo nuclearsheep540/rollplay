@@ -14,6 +14,7 @@ init_sentry()
 from gameservice import GameService, GameSettings
 from adventure_log_service import AdventureLogService
 from mapservice import MapService, MapSettings
+from imageservice import ImageService, ImageSettings
 from message_templates import format_message, MESSAGE_TEMPLATES
 from models.log_type import LogType
 from websocket_handlers.connection_manager import manager as connection_manager
@@ -34,6 +35,7 @@ app.add_middleware(
 
 adventure_log = AdventureLogService()
 map_service = MapService()
+image_service = ImageService()
 
 
 @app.get("/game/{room_id}/logs")
@@ -75,6 +77,24 @@ async def get_active_map(room_id: str):
             
     except Exception as e:
         logger.error(f"Error getting active map for room {room_id}: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/game/{room_id}/active-image")
+async def get_active_image(room_id: str):
+    """Get the currently active image for a room"""
+    try:
+        active_image = image_service.get_active_image(room_id)
+        active_display = image_service.get_active_display(room_id)
+
+        if active_image:
+            logger.info(f"HTTP endpoint returning active image for room {room_id}: {active_image.get('filename')}")
+            return {"active_image": active_image, "active_display": active_display}
+        else:
+            logger.info(f"HTTP endpoint: No active image found for room {room_id}")
+            return {"active_image": None, "active_display": active_display}
+
+    except Exception as e:
+        logger.error(f"Error getting active image for room {room_id}: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.put("/game/{room_id}/map")
@@ -461,6 +481,31 @@ async def create_session(request: SessionStartRequest):
             except Exception as e:
                 logger.warning(f"Map restoration failed (non-fatal): {e}")
 
+        # Restore image from previous session if available
+        if request.image_config and request.image_config.get("filename"):
+            try:
+                restored_image = ImageSettings(
+                    room_id=request.session_id,
+                    asset_id=request.image_config.get("asset_id"),
+                    filename=request.image_config["filename"],
+                    original_filename=request.image_config.get("original_filename", request.image_config["filename"]),
+                    file_path=request.image_config.get("file_path", ""),
+                    loaded_by="system",
+                    active=True
+                )
+                image_service.set_active_image(request.session_id, restored_image)
+                logger.info(f"Restored image '{request.image_config['filename']}' for session {request.session_id}")
+            except Exception as e:
+                logger.warning(f"Image restoration failed (non-fatal): {e}")
+
+        # Restore active_display from previous session
+        if request.active_display:
+            try:
+                image_service._set_active_display(request.session_id, request.active_display)
+                logger.info(f"Restored active_display '{request.active_display}' for session {request.session_id}")
+            except Exception as e:
+                logger.warning(f"active_display restoration failed (non-fatal): {e}")
+
         return SessionStartResponse(
             success=True,
             session_id=game_id,  # Return MongoDB document ID as session_id for api-site
@@ -542,6 +587,19 @@ async def end_session(request: SessionEndRequest, validate_only: bool = False):
                 "map_image_config": active_map.get("map_image_config")
             }
 
+        # Get active image state for ETL
+        active_image = image_service.get_active_image(request.session_id)
+        image_state = {}
+        if active_image:
+            image_state = {
+                "asset_id": active_image.get("asset_id"),
+                "filename": active_image.get("filename"),
+                "original_filename": active_image.get("original_filename"),
+            }
+
+        # Get active_display from game session
+        active_display = image_service.get_active_display(request.session_id)
+
         # Build final state
         final_state = {
             "players": players,
@@ -551,7 +609,9 @@ async def end_session(request: SessionEndRequest, validate_only: bool = False):
                 "max_players": room.get("max_players", 0)
             },
             "audio_state": room.get("audio_state", {}),
-            "map_state": map_state
+            "map_state": map_state,
+            "image_state": image_state,
+            "active_display": active_display
         }
 
         # If not validate_only, delete the game (deprecated flow)
@@ -611,9 +671,10 @@ async def delete_session(game_id: str, keep_logs: bool = True):
 
         # Optionally delete logs and maps
         if not keep_logs:
-            logger.info(f"Deleting logs and maps for {game_id}")
+            logger.info(f"Deleting logs, maps, and images for {game_id}")
             adventure_log.delete_room_logs(game_id)
             map_service.clear_active_map(game_id)
+            image_service.clear_active_image(game_id)
 
         logger.info(f"Deleted session {game_id} (keep_logs={keep_logs})")
 
