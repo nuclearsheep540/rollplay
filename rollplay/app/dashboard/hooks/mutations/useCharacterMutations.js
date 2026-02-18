@@ -2,6 +2,7 @@
 /* SPDX-License-Identifier: GPL-3.0-or-later */
 
 import { useMutation, useQueryClient } from '@tanstack/react-query'
+import { authFetch } from '@/app/shared/utils/authFetch'
 
 /**
  * Mutation hook for selecting a character for a campaign.
@@ -12,7 +13,7 @@ export function useSelectCharacter() {
 
   return useMutation({
     mutationFn: async ({ campaignId, characterId }) => {
-      const response = await fetch(`/api/campaigns/${campaignId}/select-character`, {
+      const response = await authFetch(`/api/campaigns/${campaignId}/select-character`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
@@ -42,7 +43,7 @@ export function useReleaseCharacter() {
 
   return useMutation({
     mutationFn: async (campaignId) => {
-      const response = await fetch(`/api/campaigns/${campaignId}/my-character`, {
+      const response = await authFetch(`/api/campaigns/${campaignId}/my-character`, {
         method: 'DELETE',
         credentials: 'include',
       })
@@ -70,7 +71,7 @@ export function useCreateCharacter() {
 
   return useMutation({
     mutationFn: async (characterData) => {
-      const response = await fetch('/api/characters/', {
+      const response = await authFetch('/api/characters/', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
@@ -100,7 +101,7 @@ export function useUpdateCharacter() {
 
   return useMutation({
     mutationFn: async ({ characterId, characterData }) => {
-      const response = await fetch(`/api/characters/${characterId}`, {
+      const response = await authFetch(`/api/characters/${characterId}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
@@ -130,7 +131,7 @@ export function useDeleteCharacter() {
 
   return useMutation({
     mutationFn: async (characterId) => {
-      const response = await fetch(`/api/characters/${characterId}`, {
+      const response = await authFetch(`/api/characters/${characterId}`, {
         method: 'DELETE',
         credentials: 'include',
       })

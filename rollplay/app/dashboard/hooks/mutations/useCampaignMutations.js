@@ -2,6 +2,7 @@
 /* SPDX-License-Identifier: GPL-3.0-or-later */
 
 import { useMutation, useQueryClient } from '@tanstack/react-query'
+import { authFetch } from '@/app/shared/utils/authFetch'
 
 /**
  * Mutation hook for creating a campaign.
@@ -19,7 +20,7 @@ export function useCreateCampaign() {
         session_name: sessionName?.trim() || null,
       }
 
-      const response = await fetch('/api/campaigns/', {
+      const response = await authFetch('/api/campaigns/', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
@@ -55,7 +56,7 @@ export function useUpdateCampaign() {
         session_name: sessionName?.trim() || null,
       }
 
-      const response = await fetch(`/api/campaigns/${campaignId}`, {
+      const response = await authFetch(`/api/campaigns/${campaignId}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
@@ -84,7 +85,7 @@ export function useDeleteCampaign() {
 
   return useMutation({
     mutationFn: async (campaignId) => {
-      const response = await fetch(`/api/campaigns/${campaignId}`, {
+      const response = await authFetch(`/api/campaigns/${campaignId}`, {
         method: 'DELETE',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
@@ -112,7 +113,7 @@ export function useAcceptInvite() {
 
   return useMutation({
     mutationFn: async (campaignId) => {
-      const response = await fetch(`/api/campaigns/${campaignId}/invites/accept`, {
+      const response = await authFetch(`/api/campaigns/${campaignId}/invites/accept`, {
         method: 'POST',
         credentials: 'include',
       })
@@ -139,7 +140,7 @@ export function useDeclineInvite() {
 
   return useMutation({
     mutationFn: async (campaignId) => {
-      const response = await fetch(`/api/campaigns/${campaignId}/invites`, {
+      const response = await authFetch(`/api/campaigns/${campaignId}/invites`, {
         method: 'DELETE',
         credentials: 'include',
       })
@@ -166,7 +167,7 @@ export function useLeaveCampaign() {
 
   return useMutation({
     mutationFn: async (campaignId) => {
-      const response = await fetch(`/api/campaigns/${campaignId}/leave`, {
+      const response = await authFetch(`/api/campaigns/${campaignId}/leave`, {
         method: 'POST',
         credentials: 'include',
       })
@@ -193,7 +194,7 @@ export function useRemovePlayer() {
 
   return useMutation({
     mutationFn: async ({ campaignId, playerId }) => {
-      const response = await fetch(
+      const response = await authFetch(
         `/api/campaigns/${campaignId}/players/${playerId}`,
         {
           method: 'DELETE',

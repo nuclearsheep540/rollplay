@@ -2,6 +2,7 @@
 /* SPDX-License-Identifier: GPL-3.0-or-later */
 
 import { useMutation, useQueryClient } from '@tanstack/react-query'
+import { authFetch } from '@/app/shared/utils/authFetch'
 
 /**
  * Mutation hook for creating a game session.
@@ -18,7 +19,7 @@ export function useCreateSession() {
         campaign_id: `${campaignId}`,
       }
 
-      const response = await fetch(
+      const response = await authFetch(
         `/api/campaigns/sessions?campaign_id=${campaignId}`,
         {
           method: 'POST',
@@ -50,7 +51,7 @@ export function useStartSession() {
 
   return useMutation({
     mutationFn: async (sessionId) => {
-      const response = await fetch(`/api/sessions/${sessionId}/start`, {
+      const response = await authFetch(`/api/sessions/${sessionId}/start`, {
         method: 'POST',
         credentials: 'include',
       })
@@ -77,7 +78,7 @@ export function usePauseSession() {
 
   return useMutation({
     mutationFn: async (sessionId) => {
-      const response = await fetch(`/api/sessions/${sessionId}/pause`, {
+      const response = await authFetch(`/api/sessions/${sessionId}/pause`, {
         method: 'POST',
         credentials: 'include',
       })
@@ -104,7 +105,7 @@ export function useFinishSession() {
 
   return useMutation({
     mutationFn: async (sessionId) => {
-      const response = await fetch(`/api/sessions/${sessionId}/finish`, {
+      const response = await authFetch(`/api/sessions/${sessionId}/finish`, {
         method: 'POST',
         credentials: 'include',
       })
@@ -131,7 +132,7 @@ export function useDeleteSession() {
 
   return useMutation({
     mutationFn: async (sessionId) => {
-      const response = await fetch(`/api/sessions/${sessionId}`, {
+      const response = await authFetch(`/api/sessions/${sessionId}`, {
         method: 'DELETE',
         credentials: 'include',
       })

@@ -6,6 +6,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
+import { authFetch } from '@/app/shared/utils/authFetch'
 import { useRouter, useParams } from 'next/navigation'
 import CharacterForm from '../../components/CharacterForm'
 
@@ -24,7 +25,7 @@ export default function EditCharacter() {
   useEffect(() => {
     const fetchCharacter = async () => {
       try {
-        const response = await fetch(`/api/characters/${characterId}`, {
+        const response = await authFetch(`/api/characters/${characterId}`, {
           method: 'GET',
           credentials: 'include'
         })
@@ -55,7 +56,7 @@ export default function EditCharacter() {
     setValidationErrors([])
 
     try {
-      const response = await fetch(`/api/characters/${characterId}`, {
+      const response = await authFetch(`/api/characters/${characterId}`, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',

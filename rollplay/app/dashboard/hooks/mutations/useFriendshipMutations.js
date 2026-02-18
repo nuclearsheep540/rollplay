@@ -2,6 +2,7 @@
 /* SPDX-License-Identifier: GPL-3.0-or-later */
 
 import { useMutation, useQueryClient } from '@tanstack/react-query'
+import { authFetch } from '@/app/shared/utils/authFetch'
 
 /**
  * Mutation hook for buzzing a friend.
@@ -12,7 +13,7 @@ import { useMutation, useQueryClient } from '@tanstack/react-query'
 export function useBuzzFriend() {
   return useMutation({
     mutationFn: async (friendId) => {
-      const response = await fetch(`/api/friendships/${friendId}/buzz`, {
+      const response = await authFetch(`/api/friendships/${friendId}/buzz`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
@@ -37,7 +38,7 @@ export function useInviteToCampaign() {
 
   return useMutation({
     mutationFn: async ({ friendId, campaignId }) => {
-      const response = await fetch(`/api/campaigns/${campaignId}/players/${friendId}`, {
+      const response = await authFetch(`/api/campaigns/${campaignId}/players/${friendId}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
@@ -65,7 +66,7 @@ export function useAcceptFriendRequest() {
 
   return useMutation({
     mutationFn: async (requesterId) => {
-      const response = await fetch(`/api/friendships/${requesterId}/accept`, {
+      const response = await authFetch(`/api/friendships/${requesterId}/accept`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
@@ -96,7 +97,7 @@ export function useDeclineFriendRequest() {
 
   return useMutation({
     mutationFn: async (requesterId) => {
-      const response = await fetch(`/api/friendships/${requesterId}/decline`, {
+      const response = await authFetch(`/api/friendships/${requesterId}/decline`, {
         method: 'DELETE',
         credentials: 'include',
       })
@@ -124,7 +125,7 @@ export function useSendFriendRequest() {
 
   return useMutation({
     mutationFn: async (friendIdentifier) => {
-      const response = await fetch('/api/friendships/request', {
+      const response = await authFetch('/api/friendships/request', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
@@ -153,7 +154,7 @@ export function useRemoveFriend() {
 
   return useMutation({
     mutationFn: async (friendId) => {
-      const response = await fetch(`/api/friendships/${friendId}`, {
+      const response = await authFetch(`/api/friendships/${friendId}`, {
         method: 'DELETE',
         credentials: 'include',
       })

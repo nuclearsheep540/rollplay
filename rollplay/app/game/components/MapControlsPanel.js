@@ -2,6 +2,7 @@
 /* SPDX-License-Identifier: GPL-3.0-or-later */
 
 import React, { useState, useEffect, useMemo } from 'react';
+import { authFetch } from '@/app/shared/utils/authFetch';
 import {
   DM_CHILD,
   DM_CHILD_LAST,
@@ -278,7 +279,7 @@ export default function MapControlsPanel({
         // Also persist grid config to MapAsset in PostgreSQL for cross-session reuse
         if (activeMap.asset_id) {
           try {
-            const assetResponse = await fetch(`/api/library/${activeMap.asset_id}/grid`, {
+            const assetResponse = await authFetch(`/api/library/${activeMap.asset_id}/grid`, {
               method: 'PATCH',
               headers: {
                 'Content-Type': 'application/json',

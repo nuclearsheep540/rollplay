@@ -6,6 +6,7 @@
 'use client'
 
 import { useState } from 'react'
+import { authFetch } from '@/app/shared/utils/authFetch'
 import Modal from '@/app/shared/components/Modal'
 
 /**
@@ -57,7 +58,7 @@ export default function AccountNameModal({ show, user, onComplete }) {
     setError(null)
 
     try {
-      const response = await fetch('/api/users/me/account-name', {
+      const response = await authFetch('/api/users/me/account-name', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',

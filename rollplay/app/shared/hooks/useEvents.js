@@ -4,6 +4,7 @@
 'use client'
 
 import { useEffect, useRef, useState } from 'react'
+import { authFetch } from '@/app/shared/utils/authFetch'
 
 export const useEvents = (userId, handlers) => {
   const [isConnected, setIsConnected] = useState(false)
@@ -15,7 +16,7 @@ export const useEvents = (userId, handlers) => {
   const getAuthToken = async () => {
     try {
       // Fetch token from backend endpoint (extracts from httpOnly cookie)
-      const response = await fetch('/api/users/ws-token', {
+      const response = await authFetch('/api/users/ws-token', {
         credentials: 'include'
       })
 

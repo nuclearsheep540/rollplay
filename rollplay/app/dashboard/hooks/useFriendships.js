@@ -2,6 +2,7 @@
 /* SPDX-License-Identifier: GPL-3.0-or-later */
 
 import { useQuery } from '@tanstack/react-query'
+import { authFetch } from '@/app/shared/utils/authFetch'
 
 /**
  * Query hook for fetching friendships (accepted friends + incoming requests).
@@ -18,7 +19,7 @@ export function useFriendships({ enabled = true } = {}) {
   return useQuery({
     queryKey: ['friendships'],
     queryFn: async () => {
-      const response = await fetch('/api/friendships/', {
+      const response = await authFetch('/api/friendships/', {
         method: 'GET',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',

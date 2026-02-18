@@ -2,6 +2,7 @@
 /* SPDX-License-Identifier: GPL-3.0-or-later */
 
 import { useMutation, useQueryClient } from '@tanstack/react-query'
+import { authFetch } from '@/app/shared/utils/authFetch'
 
 /**
  * Mutation hook for marking a single notification as read.
@@ -12,7 +13,7 @@ export function useMarkNotificationRead() {
 
   return useMutation({
     mutationFn: async (notificationId) => {
-      const response = await fetch(`/api/notifications/${notificationId}/read`, {
+      const response = await authFetch(`/api/notifications/${notificationId}/read`, {
         method: 'POST',
         credentials: 'include',
       })
@@ -38,7 +39,7 @@ export function useMarkAllNotificationsRead() {
 
   return useMutation({
     mutationFn: async () => {
-      const response = await fetch('/api/notifications/read-all', {
+      const response = await authFetch('/api/notifications/read-all', {
         method: 'POST',
         credentials: 'include',
       })

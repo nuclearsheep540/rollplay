@@ -6,6 +6,7 @@
 'use client'
 
 import { useState, Suspense } from 'react'
+import { authFetch } from '@/app/shared/utils/authFetch'
 import { useRouter, useSearchParams } from 'next/navigation'
 import CharacterForm from '../components/CharacterForm'
 import SiteHeader from '../../shared/components/SiteHeader'
@@ -31,7 +32,7 @@ function CreateCharacterContent() {
     setValidationErrors([])
 
     try {
-      const response = await fetch('/api/characters/create', {
+      const response = await authFetch('/api/characters/create', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

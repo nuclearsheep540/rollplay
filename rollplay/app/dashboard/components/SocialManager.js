@@ -6,6 +6,7 @@
 'use client'
 
 import { useState } from 'react'
+import { authFetch } from '@/app/shared/utils/authFetch'
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
 import { faTrash } from '@fortawesome/free-solid-svg-icons'
 import { THEME, COLORS } from '@/app/styles/colorTheme'
@@ -16,7 +17,7 @@ import AccountNotificationFeed from './AccountNotificationFeed'
 // Send test notification (dev only)
 const sendTestNotification = async () => {
   try {
-    await fetch('/api/notifications/test-notification', {
+    await authFetch('/api/notifications/test-notification', {
       method: 'POST',
       credentials: 'include'
     })
@@ -37,7 +38,7 @@ export default function SocialManager({ user, onUserUpdate }) {
     setError(null)
 
     try {
-      const response = await fetch('/api/users/me/hard', {
+      const response = await authFetch('/api/users/me/hard', {
         method: 'DELETE',
         credentials: 'include'
       })

@@ -2,6 +2,7 @@
 /* SPDX-License-Identifier: GPL-3.0-or-later */
 
 import { useQuery } from '@tanstack/react-query'
+import { authFetch } from '@/app/shared/utils/authFetch'
 
 /**
  * Query hook for fetching members of an invited campaign.
@@ -17,7 +18,7 @@ export function useInvitedCampaignMembers(campaignId) {
   return useQuery({
     queryKey: ['campaigns', campaignId, 'members'],
     queryFn: async () => {
-      const response = await fetch(`/api/campaigns/${campaignId}/members`, {
+      const response = await authFetch(`/api/campaigns/${campaignId}/members`, {
         method: 'GET',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
