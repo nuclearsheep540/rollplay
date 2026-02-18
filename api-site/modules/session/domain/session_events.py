@@ -12,15 +12,16 @@ These events notify users about session lifecycle changes.
 """
 
 from uuid import UUID
-from typing import Dict, Any, List
+from typing import List
+from modules.events.domain.event_config import EventConfig
 
 
 class SessionEvents:
     """
     Domain event configurations for session entity (within campaign aggregate).
 
-    Each static method returns event configuration dict with:
-    - user_id: Who should receive this event (or list for broadcast)
+    Each static method returns EventConfig (or List[EventConfig]) with:
+    - user_id: Who should receive this event
     - event_type: Type identifier for frontend routing
     - data: Event payload
     - show_toast: Whether frontend should display toast notification
@@ -29,14 +30,14 @@ class SessionEvents:
 
     @staticmethod
     def session_created(
-        campaign_player_ids: List[str],
-        session_id: str,
+        campaign_player_ids: List[UUID],
+        session_id: UUID,
         session_name: str,
-        campaign_id: str,
+        campaign_id: UUID,
         campaign_name: str,
-        host_id: str,
+        host_id: UUID,
         host_screen_name: str
-    ) -> List[Dict[str, Any]]:
+    ) -> List[EventConfig]:
         """
         Event: Campaign host created a new session (silent state update for players)
 
@@ -45,39 +46,39 @@ class SessionEvents:
         Recipients: All campaign members (player_ids, excludes host)
 
         Args:
-            campaign_player_ids: List of campaign member user IDs (strings)
-            session_id: Session ID (string)
+            campaign_player_ids: List of campaign member user IDs
+            session_id: Session ID
             session_name: Session name
-            campaign_id: Campaign ID (string)
+            campaign_id: Campaign ID
             campaign_name: Campaign name
-            host_id: Host user ID (string)
+            host_id: Host user ID
             host_screen_name: Host display name
 
         Returns:
-            List of event configuration dicts (one per campaign member)
+            List[EventConfig] (one per campaign member)
         """
         events = []
 
         for player_id in campaign_player_ids:
-            events.append({
-                "user_id": UUID(player_id),
-                "event_type": "session_created",
-                "data": {
-                    "session_id": session_id,
+            events.append(EventConfig(
+                user_id=player_id,
+                event_type="session_created",
+                data={
+                    "session_id": str(session_id),
                     "session_name": session_name,
-                    "campaign_id": campaign_id,
+                    "campaign_id": str(campaign_id),
                     "campaign_name": campaign_name,
-                    "host_id": host_id,
+                    "host_id": str(host_id),
                     "host_screen_name": host_screen_name
                 },
-                "show_toast": False,         # No toast notification
-                "save_notification": False   # No persistent notification (state only)
-            })
+                show_toast=False,         # No toast notification
+                save_notification=False   # No persistent notification (state only)
+            ))
 
         return events
 
     @staticmethod
-    def session_started(campaign_player_ids: List[UUID], session_id: UUID, session_name: str, campaign_id: UUID, campaign_name: str, active_game_id: str, host_id: UUID, host_screen_name: str) -> List[Dict[str, Any]]:
+    def session_started(campaign_player_ids: List[UUID], session_id: UUID, session_name: str, campaign_id: UUID, campaign_name: str, active_game_id: str, host_id: UUID, host_screen_name: str) -> List[EventConfig]:
         """
         Event: Host started a session (notifies all campaign players)
 
@@ -92,14 +93,14 @@ class SessionEvents:
             host_screen_name: Host display name
 
         Returns:
-            List of event configuration dicts (one per player)
+            List[EventConfig] (one per player)
         """
         events = []
         for player_id in campaign_player_ids:
-            events.append({
-                "user_id": player_id,
-                "event_type": "session_started",
-                "data": {
+            events.append(EventConfig(
+                user_id=player_id,
+                event_type="session_started",
+                data={
                     "session_id": str(session_id),
                     "session_name": session_name,
                     "campaign_id": str(campaign_id),
@@ -108,13 +109,13 @@ class SessionEvents:
                     "host_id": str(host_id),
                     "host_screen_name": host_screen_name
                 },
-                "show_toast": True,
-                "save_notification": True
-            })
+                show_toast=True,
+                save_notification=True
+            ))
         return events
 
     @staticmethod
-    def session_paused(active_participant_ids: List[UUID], session_id: UUID, session_name: str, campaign_id: UUID, paused_by_id: UUID, paused_by_screen_name: str) -> List[Dict[str, Any]]:
+    def session_paused(active_participant_ids: List[UUID], session_id: UUID, session_name: str, campaign_id: UUID, paused_by_id: UUID, paused_by_screen_name: str) -> List[EventConfig]:
         """
         Event: Session paused (silent state update to active participants)
 
@@ -130,27 +131,27 @@ class SessionEvents:
             paused_by_screen_name: Display name of user who paused
 
         Returns:
-            List of event configuration dicts (one per participant)
+            List[EventConfig] (one per participant)
         """
         events = []
         for participant_id in active_participant_ids:
-            events.append({
-                "user_id": participant_id,
-                "event_type": "session_paused",
-                "data": {
+            events.append(EventConfig(
+                user_id=participant_id,
+                event_type="session_paused",
+                data={
                     "session_id": str(session_id),
                     "session_name": session_name,
                     "campaign_id": str(campaign_id),
                     "paused_by_id": str(paused_by_id),
                     "paused_by_screen_name": paused_by_screen_name
                 },
-                "show_toast": False,         # No toast notification (silent state update)
-                "save_notification": False   # No persistent notification (state only)
-            })
+                show_toast=False,         # No toast notification (silent state update)
+                save_notification=False   # No persistent notification (state only)
+            ))
         return events
 
     @staticmethod
-    def session_finished(dm_id: UUID, participant_ids: List[UUID], session_id: UUID, session_name: str, campaign_id: UUID) -> List[Dict[str, Any]]:
+    def session_finished(dm_id: UUID, participant_ids: List[UUID], session_id: UUID, session_name: str, campaign_id: UUID) -> List[EventConfig]:
         """
         Event: Session marked as finished/completed (silent state update to DM and participants)
 
@@ -165,21 +166,21 @@ class SessionEvents:
             campaign_id: Campaign ID
 
         Returns:
-            List of event configuration dicts (DM + all participants)
+            List[EventConfig] (DM + all participants)
         """
         events = []
         all_recipients = [dm_id] + participant_ids
 
         for recipient_id in all_recipients:
-            events.append({
-                "user_id": recipient_id,
-                "event_type": "session_finished",
-                "data": {
+            events.append(EventConfig(
+                user_id=recipient_id,
+                event_type="session_finished",
+                data={
                     "session_id": str(session_id),
                     "session_name": session_name,
                     "campaign_id": str(campaign_id)
                 },
-                "show_toast": False,         # No toast notification (silent state update)
-                "save_notification": False   # No persistent notification (state only)
-            })
+                show_toast=False,         # No toast notification (silent state update)
+                save_notification=False   # No persistent notification (state only)
+            ))
         return events

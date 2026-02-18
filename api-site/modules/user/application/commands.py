@@ -3,7 +3,7 @@
 
 from typing import Tuple
 from uuid import UUID
-from modules.user.orm.user_repository import UserRepository
+from modules.user.repositories.user_repository import UserRepository
 from modules.user.domain.user_aggregate import UserAggregate
 
 

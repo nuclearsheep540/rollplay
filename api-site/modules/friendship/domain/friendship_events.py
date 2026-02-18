@@ -4,6 +4,8 @@
 from uuid import UUID
 from typing import Dict, Any
 
+from modules.events.domain.event_config import EventConfig
+
 
 class FriendshipEvents:
     """
@@ -18,7 +20,7 @@ class FriendshipEvents:
     """
 
     @staticmethod
-    def friend_request_received(recipient_id: UUID, requester_id: UUID, requester_screen_name: str, request_id: UUID) -> Dict[str, Any]:
+    def friend_request_received(recipient_id: UUID, requester_id: UUID, requester_screen_name: str, request_id: UUID) -> EventConfig:
         """
         Event: User receives a new friend request
 
@@ -31,20 +33,20 @@ class FriendshipEvents:
         Returns:
             Event configuration dict
         """
-        return {
-            "user_id": recipient_id,
-            "event_type": "friend_request_received",
-            "data": {
+        return EventConfig(
+            user_id=recipient_id,
+            event_type="friend_request_received",
+            data={
                 "request_id": str(request_id),
                 "requester_id": str(requester_id),
                 "requester_screen_name": requester_screen_name
             },
-            "show_toast": True,
-            "save_notification": True
-        }
+            show_toast=True,
+            save_notification=True
+        )
 
     @staticmethod
-    def friend_request_accepted(requester_id: UUID, friend_id: UUID, friend_screen_name: str, friendship_id: UUID) -> Dict[str, Any]:
+    def friend_request_accepted(requester_id: UUID, friend_id: UUID, friend_screen_name: str, friendship_id: UUID) -> EventConfig:
         """
         Event: User's friend request was accepted
 
@@ -57,20 +59,20 @@ class FriendshipEvents:
         Returns:
             Event configuration dict
         """
-        return {
-            "user_id": requester_id,
-            "event_type": "friend_request_accepted",
-            "data": {
+        return EventConfig(
+            user_id=requester_id,
+            event_type="friend_request_accepted",
+            data={
                 "friend_id": str(friend_id),
                 "friend_screen_name": friend_screen_name,
                 "friendship_id": str(friendship_id)
             },
-            "show_toast": True,
-            "save_notification": True
-        }
+            show_toast=True,
+            save_notification=True
+        )
 
     @staticmethod
-    def friend_buzzed(recipient_id: UUID, buzzer_id: UUID, buzzer_screen_name: str) -> Dict[str, Any]:
+    def friend_buzzed(recipient_id: UUID, buzzer_id: UUID, buzzer_screen_name: str) -> EventConfig:
         """
         Event: User receives a buzz from a friend
 
@@ -82,19 +84,19 @@ class FriendshipEvents:
         Returns:
             Event configuration dict
         """
-        return {
-            "user_id": recipient_id,
-            "event_type": "friend_buzzed",
-            "data": {
+        return EventConfig(
+            user_id=recipient_id,
+            event_type="friend_buzzed",
+            data={
                 "buzzer_id": str(buzzer_id),
                 "buzzer_screen_name": buzzer_screen_name
             },
-            "show_toast": True,
-            "save_notification": False  # Don't persist buzz notifications
-        }
+            show_toast=True,
+            save_notification=False  # Don't persist buzz notifications
+        )
 
     @staticmethod
-    def buzz_sent(sender_id: UUID, recipient_id: UUID, recipient_screen_name: str) -> Dict[str, Any]:
+    def buzz_sent(sender_id: UUID, recipient_id: UUID, recipient_screen_name: str) -> EventConfig:
         """
         Event: Confirmation to sender that their buzz was sent
 
@@ -106,13 +108,13 @@ class FriendshipEvents:
         Returns:
             Event configuration dict
         """
-        return {
-            "user_id": sender_id,
-            "event_type": "buzz_sent",
-            "data": {
+        return EventConfig(
+            user_id=sender_id,
+            event_type="buzz_sent",
+            data={
                 "recipient_id": str(recipient_id),
                 "recipient_screen_name": recipient_screen_name
             },
-            "show_toast": True,
-            "save_notification": False  # Don't persist buzz notifications
-        }
+            show_toast=True,
+            save_notification=False  # Don't persist buzz notifications
+        )

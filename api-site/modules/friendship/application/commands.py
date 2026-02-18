@@ -8,7 +8,7 @@ import time
 
 from modules.friendship.repositories.friendship_repository import FriendshipRepository
 from modules.friendship.repositories.friend_request_repository import FriendRequestRepository
-from modules.user.orm.user_repository import UserRepository
+from modules.user.repositories.user_repository import UserRepository
 from modules.friendship.domain.friendship_aggregate import FriendshipAggregate
 from modules.friendship.domain.friend_request_aggregate import FriendRequestAggregate
 from modules.friendship.domain.friendship_events import FriendshipEvents
@@ -120,7 +120,7 @@ class SendFriendRequest:
 
             # Broadcast friend_request_accepted event to BOTH users (mutual acceptance)
             await self.event_manager.broadcast(
-                **FriendshipEvents.friend_request_accepted(
+                FriendshipEvents.friend_request_accepted(
                     requester_id=user_id,
                     friend_id=friend_uuid,
                     friend_screen_name=friend.screen_name,
@@ -128,7 +128,7 @@ class SendFriendRequest:
                 )
             )
             await self.event_manager.broadcast(
-                **FriendshipEvents.friend_request_accepted(
+                FriendshipEvents.friend_request_accepted(
                     requester_id=friend_uuid,
                     friend_id=user_id,
                     friend_screen_name=user.screen_name,
@@ -154,7 +154,7 @@ class SendFriendRequest:
 
         # Broadcast friend_request_received event to recipient
         await self.event_manager.broadcast(
-            **FriendshipEvents.friend_request_received(
+            FriendshipEvents.friend_request_received(
                 recipient_id=friend_uuid,
                 requester_id=user_id,
                 requester_screen_name=user.screen_name,
@@ -220,7 +220,7 @@ class AcceptFriendRequest:
 
         # Broadcast friend_request_accepted event to requester
         await self.event_manager.broadcast(
-            **FriendshipEvents.friend_request_accepted(
+            FriendshipEvents.friend_request_accepted(
                 requester_id=requester_id,
                 friend_id=user_id,
                 friend_screen_name=recipient.screen_name,
@@ -417,7 +417,7 @@ class BuzzFriend:
 
         # Broadcast buzz event to recipient
         await self.event_manager.broadcast(
-            **FriendshipEvents.friend_buzzed(
+            FriendshipEvents.friend_buzzed(
                 recipient_id=friend_id,
                 buzzer_id=user_id,
                 buzzer_screen_name=sender.screen_name
@@ -426,7 +426,7 @@ class BuzzFriend:
 
         # Broadcast confirmation to sender
         await self.event_manager.broadcast(
-            **FriendshipEvents.buzz_sent(
+            FriendshipEvents.buzz_sent(
                 sender_id=user_id,
                 recipient_id=friend_id,
                 recipient_screen_name=recipient.screen_name

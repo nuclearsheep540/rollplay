@@ -4,6 +4,8 @@
 from uuid import UUID
 from typing import Dict, Any, List
 
+from modules.events.domain.event_config import EventConfig
+
 
 class CampaignEvents:
     """
@@ -18,7 +20,7 @@ class CampaignEvents:
     """
 
     @staticmethod
-    def campaign_invite_received(invited_player_id: UUID, campaign_id: UUID, campaign_name: str, host_id: UUID, host_screen_name: str) -> Dict[str, Any]:
+    def campaign_invite_received(invited_player_id: UUID, campaign_id: UUID, campaign_name: str, host_id: UUID, host_screen_name: str) -> EventConfig:
         """
         Event: User receives a campaign invitation
 
@@ -32,21 +34,21 @@ class CampaignEvents:
         Returns:
             Event configuration dict
         """
-        return {
-            "user_id": invited_player_id,
-            "event_type": "campaign_invite_received",
-            "data": {
+        return EventConfig(
+            user_id=invited_player_id,
+            event_type="campaign_invite_received",
+            data={
                 "campaign_id": str(campaign_id),
                 "campaign_name": campaign_name,
                 "host_id": str(host_id),
                 "host_screen_name": host_screen_name
             },
-            "show_toast": True,
-            "save_notification": True
-        }
+            show_toast=True,
+            save_notification=True
+        )
 
     @staticmethod
-    def campaign_invite_sent(host_id: UUID, campaign_id: UUID, campaign_name: str, player_id: UUID, player_screen_name: str) -> Dict[str, Any]:
+    def campaign_invite_sent(host_id: UUID, campaign_id: UUID, campaign_name: str, player_id: UUID, player_screen_name: str) -> EventConfig:
         """
         Event: Confirmation to host that invite was sent
 
@@ -60,21 +62,21 @@ class CampaignEvents:
         Returns:
             Event configuration dict
         """
-        return {
-            "user_id": host_id,
-            "event_type": "campaign_invite_sent",
-            "data": {
+        return EventConfig(
+            user_id=host_id,
+            event_type="campaign_invite_sent",
+            data={
                 "campaign_id": str(campaign_id),
                 "campaign_name": campaign_name,
                 "player_id": str(player_id),
                 "player_screen_name": player_screen_name
             },
-            "show_toast": True,
-            "save_notification": False  # Don't persist - just confirmation
-        }
+            show_toast=True,
+            save_notification=False  # Don't persist - just confirmation
+        )
 
     @staticmethod
-    def campaign_invite_accepted(host_id: UUID, campaign_id: UUID, campaign_name: str, player_id: UUID, player_screen_name: str, auto_added_to_session_ids: List[UUID]) -> Dict[str, Any]:
+    def campaign_invite_accepted(host_id: UUID, campaign_id: UUID, campaign_name: str, player_id: UUID, player_screen_name: str, auto_added_to_session_ids: List[UUID]) -> EventConfig:
         """
         Event: Player accepted campaign invite (notifies host/DM)
 
@@ -89,22 +91,22 @@ class CampaignEvents:
         Returns:
             Event configuration dict
         """
-        return {
-            "user_id": host_id,
-            "event_type": "campaign_invite_accepted",
-            "data": {
+        return EventConfig(
+            user_id=host_id,
+            event_type="campaign_invite_accepted",
+            data={
                 "campaign_id": str(campaign_id),
                 "campaign_name": campaign_name,
                 "player_id": str(player_id),
                 "player_screen_name": player_screen_name,
                 "auto_added_to_games": [str(gid) for gid in auto_added_to_session_ids]
             },
-            "show_toast": True,
-            "save_notification": True
-        }
+            show_toast=True,
+            save_notification=True
+        )
 
     @staticmethod
-    def campaign_invite_declined(host_id: UUID, campaign_id: UUID, campaign_name: str, player_id: UUID, player_screen_name: str) -> Dict[str, Any]:
+    def campaign_invite_declined(host_id: UUID, campaign_id: UUID, campaign_name: str, player_id: UUID, player_screen_name: str) -> EventConfig:
         """
         Event: Player declined campaign invite (updates host's local state)
 
@@ -118,21 +120,21 @@ class CampaignEvents:
         Returns:
             Event configuration dict
         """
-        return {
-            "user_id": host_id,
-            "event_type": "campaign_invite_declined",
-            "data": {
+        return EventConfig(
+            user_id=host_id,
+            event_type="campaign_invite_declined",
+            data={
                 "campaign_id": str(campaign_id),
                 "campaign_name": campaign_name,
                 "player_id": str(player_id),
                 "player_screen_name": player_screen_name
             },
-            "show_toast": False,  # Silent state update, no toast notification
-            "save_notification": False  # Don't persist - just updates local state
-        }
+            show_toast=False,  # Silent state update, no toast notification
+            save_notification=False  # Don't persist - just updates local state
+        )
 
     @staticmethod
-    def campaign_invite_canceled(player_id: UUID, campaign_id: UUID, campaign_name: str) -> Dict[str, Any]:
+    def campaign_invite_canceled(player_id: UUID, campaign_id: UUID, campaign_name: str) -> EventConfig:
         """
         Event: Host canceled a pending invite (notifies the player)
 
@@ -144,19 +146,19 @@ class CampaignEvents:
         Returns:
             Event configuration dict
         """
-        return {
-            "user_id": player_id,
-            "event_type": "campaign_invite_canceled",
-            "data": {
+        return EventConfig(
+            user_id=player_id,
+            event_type="campaign_invite_canceled",
+            data={
                 "campaign_id": str(campaign_id),
                 "campaign_name": campaign_name
             },
-            "show_toast": True,
-            "save_notification": False  # Don't persist - just removes from their list
-        }
+            show_toast=True,
+            save_notification=False  # Don't persist - just removes from their list
+        )
 
     @staticmethod
-    def campaign_invite_canceled_confirmation(host_id: UUID, campaign_id: UUID, campaign_name: str, player_screen_name: str) -> Dict[str, Any]:
+    def campaign_invite_canceled_confirmation(host_id: UUID, campaign_id: UUID, campaign_name: str, player_screen_name: str) -> EventConfig:
         """
         Event: Confirmation to host that invite was canceled
 
@@ -169,20 +171,20 @@ class CampaignEvents:
         Returns:
             Event configuration dict
         """
-        return {
-            "user_id": host_id,
-            "event_type": "campaign_invite_canceled_confirmation",
-            "data": {
+        return EventConfig(
+            user_id=host_id,
+            event_type="campaign_invite_canceled_confirmation",
+            data={
                 "campaign_id": str(campaign_id),
                 "campaign_name": campaign_name,
                 "player_screen_name": player_screen_name
             },
-            "show_toast": True,
-            "save_notification": False  # Don't persist - just confirmation
-        }
+            show_toast=True,
+            save_notification=False  # Don't persist - just confirmation
+        )
 
     @staticmethod
-    def campaign_player_removed(removed_player_id: UUID, campaign_id: UUID, campaign_name: str, removed_by_id: UUID) -> Dict[str, Any]:
+    def campaign_player_removed(removed_player_id: UUID, campaign_id: UUID, campaign_name: str, removed_by_id: UUID) -> EventConfig:
         """
         Event: Player was removed from campaign (notifies the player)
 
@@ -195,20 +197,20 @@ class CampaignEvents:
         Returns:
             Event configuration dict
         """
-        return {
-            "user_id": removed_player_id,
-            "event_type": "campaign_player_removed",
-            "data": {
+        return EventConfig(
+            user_id=removed_player_id,
+            event_type="campaign_player_removed",
+            data={
                 "campaign_id": str(campaign_id),
                 "campaign_name": campaign_name,
                 "removed_by_id": str(removed_by_id)
             },
-            "show_toast": True,
-            "save_notification": True
-        }
+            show_toast=True,
+            save_notification=True
+        )
 
     @staticmethod
-    def campaign_player_removed_confirmation(host_id: UUID, campaign_id: UUID, campaign_name: str, player_screen_name: str) -> Dict[str, Any]:
+    def campaign_player_removed_confirmation(host_id: UUID, campaign_id: UUID, campaign_name: str, player_screen_name: str) -> EventConfig:
         """
         Event: Confirmation to host that player was removed
 
@@ -221,20 +223,20 @@ class CampaignEvents:
         Returns:
             Event configuration dict
         """
-        return {
-            "user_id": host_id,
-            "event_type": "campaign_player_removed_confirmation",
-            "data": {
+        return EventConfig(
+            user_id=host_id,
+            event_type="campaign_player_removed_confirmation",
+            data={
                 "campaign_id": str(campaign_id),
                 "campaign_name": campaign_name,
                 "player_screen_name": player_screen_name
             },
-            "show_toast": True,
-            "save_notification": False  # Don't persist - just confirmation
-        }
+            show_toast=True,
+            save_notification=False  # Don't persist - just confirmation
+        )
 
     @staticmethod
-    def campaign_player_left(host_id: UUID, campaign_id: UUID, campaign_name: str, player_id: UUID, player_screen_name: str) -> Dict[str, Any]:
+    def campaign_player_left(host_id: UUID, campaign_id: UUID, campaign_name: str, player_id: UUID, player_screen_name: str) -> EventConfig:
         """
         Event: Player voluntarily left the campaign (notifies host)
 
@@ -248,21 +250,21 @@ class CampaignEvents:
         Returns:
             Event configuration dict
         """
-        return {
-            "user_id": host_id,
-            "event_type": "campaign_player_left",
-            "data": {
+        return EventConfig(
+            user_id=host_id,
+            event_type="campaign_player_left",
+            data={
                 "campaign_id": str(campaign_id),
                 "campaign_name": campaign_name,
                 "player_id": str(player_id),
                 "player_screen_name": player_screen_name
             },
-            "show_toast": True,
-            "save_notification": True
-        }
+            show_toast=True,
+            save_notification=True
+        )
 
     @staticmethod
-    def campaign_player_left_confirmation(player_id: UUID, campaign_id: UUID, campaign_name: str) -> Dict[str, Any]:
+    def campaign_player_left_confirmation(player_id: UUID, campaign_id: UUID, campaign_name: str) -> EventConfig:
         """
         Event: Confirmation to player that they successfully left the campaign
 
@@ -274,16 +276,16 @@ class CampaignEvents:
         Returns:
             Event configuration dict
         """
-        return {
-            "user_id": player_id,
-            "event_type": "campaign_player_left_confirmation",
-            "data": {
+        return EventConfig(
+            user_id=player_id,
+            event_type="campaign_player_left_confirmation",
+            data={
                 "campaign_id": str(campaign_id),
                 "campaign_name": campaign_name
             },
-            "show_toast": True,
-            "save_notification": True
-        }
+            show_toast=True,
+            save_notification=True
+        )
 
     @staticmethod
     def campaign_character_selected(
@@ -293,7 +295,7 @@ class CampaignEvents:
         campaign_name: str,
         player_screen_name: str,
         character_name: str
-    ) -> List[Dict[str, Any]]:
+    ) -> List[EventConfig]:
         """
         Event: Player selected a character for the campaign (notifies all other members)
 
@@ -313,18 +315,18 @@ class CampaignEvents:
         events = []
         for member_id in campaign_member_ids:
             if member_id != acting_user_id:
-                events.append({
-                    "user_id": member_id,
-                    "event_type": "campaign_character_selected",
-                    "data": {
+                events.append(EventConfig(
+                    user_id=member_id,
+                    event_type="campaign_character_selected",
+                    data={
                         "campaign_id": str(campaign_id),
                         "campaign_name": campaign_name,
                         "player_screen_name": player_screen_name,
                         "character_name": character_name
                     },
-                    "show_toast": False,
-                    "save_notification": False
-                })
+                    show_toast=False,
+                    save_notification=False
+                ))
         return events
 
     @staticmethod
@@ -335,7 +337,7 @@ class CampaignEvents:
         campaign_name: str,
         player_screen_name: str,
         character_name: str
-    ) -> List[Dict[str, Any]]:
+    ) -> List[EventConfig]:
         """
         Event: Player released their character from the campaign (notifies all other members)
 
@@ -355,16 +357,16 @@ class CampaignEvents:
         events = []
         for member_id in campaign_member_ids:
             if member_id != acting_user_id:
-                events.append({
-                    "user_id": member_id,
-                    "event_type": "campaign_character_released",
-                    "data": {
+                events.append(EventConfig(
+                    user_id=member_id,
+                    event_type="campaign_character_released",
+                    data={
                         "campaign_id": str(campaign_id),
                         "campaign_name": campaign_name,
                         "player_screen_name": player_screen_name,
                         "character_name": character_name
                     },
-                    "show_toast": False,
-                    "save_notification": False
-                })
+                    show_toast=False,
+                    save_notification=False
+                ))
         return events

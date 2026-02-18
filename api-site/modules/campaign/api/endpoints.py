@@ -14,13 +14,13 @@ from .schemas import (
     CampaignMemberResponse,
     CharacterSelectRequest,
 )
-from modules.session.schemas.session_schemas import (
+from modules.session.api.schemas import (
     CreateSessionRequest, SessionResponse
 )
 from modules.session.api.endpoints import _to_session_response
 from modules.campaign.dependencies.providers import campaign_repository
-from modules.campaign.orm.campaign_repository import CampaignRepository
-from modules.session.dependencies.repositories import get_session_repository
+from modules.campaign.repositories.campaign_repository import CampaignRepository
+from modules.session.dependencies.providers import get_session_repository
 from modules.session.repositories.session_repository import SessionRepository
 from modules.campaign.application.commands import (
     CreateCampaign,
@@ -35,7 +35,7 @@ from modules.campaign.application.commands import (
     SelectCharacterForCampaign,
     ReleaseCharacterFromCampaign
 )
-from modules.characters.orm.character_repository import CharacterRepository
+from modules.characters.repositories.character_repository import CharacterRepository
 from modules.characters.dependencies.providers import get_character_repository
 from modules.session.application.commands import CreateSession
 from modules.campaign.application.queries import (
@@ -47,7 +47,7 @@ from modules.campaign.domain.campaign_aggregate import CampaignAggregate
 from shared.dependencies.auth import get_current_user_from_token, get_current_user_id
 from shared.dependencies.db import get_db
 from modules.user.domain.user_aggregate import UserAggregate
-from modules.user.orm.user_repository import UserRepository
+from modules.user.repositories.user_repository import UserRepository
 from modules.user.dependencies.providers import user_repository as get_user_repository
 from modules.events.event_manager import EventManager
 from modules.events.dependencies.providers import get_event_manager

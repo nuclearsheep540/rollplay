@@ -4,7 +4,7 @@
 from fastapi import Depends
 from sqlalchemy.orm import Session
 from shared.dependencies.db import get_db
-from modules.characters.orm.character_repository import CharacterRepository
+from modules.characters.repositories.character_repository import CharacterRepository
 
 
 def get_character_repository(db: Session = Depends(get_db)) -> CharacterRepository:

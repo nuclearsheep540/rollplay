@@ -17,12 +17,12 @@ from .schemas import (
     InternalUserResolveResponse
 )
 from modules.user.dependencies.providers import user_repository
-from modules.user.orm.user_repository import UserRepository
+from modules.user.repositories.user_repository import UserRepository
 from modules.user.application.commands import GetOrCreateUser, UpdateScreenName, SoftDeleteUser, HardDeleteUser
 from modules.user.application.queries import GetUserDashboard
 from modules.user.domain.user_aggregate import UserAggregate
 from modules.campaign.dependencies.providers import campaign_repository
-from modules.campaign.orm.campaign_repository import CampaignRepository
+from modules.campaign.repositories.campaign_repository import CampaignRepository
 
 
 class ScreenNameUpdateRequest(BaseModel):

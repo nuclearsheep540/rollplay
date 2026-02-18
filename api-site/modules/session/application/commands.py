@@ -10,11 +10,11 @@ from concurrent.futures import ThreadPoolExecutor
 from sqlalchemy import update
 
 from modules.session.repositories.session_repository import SessionRepository
-from modules.user.orm.user_repository import UserRepository
+from modules.user.repositories.user_repository import UserRepository
 from modules.user.model.user_model import User
-from modules.characters.orm.character_repository import CharacterRepository
+from modules.characters.repositories.character_repository import CharacterRepository
 from modules.characters.domain.character_aggregate import CharacterAggregate
-from modules.campaign.orm.campaign_repository import CampaignRepository
+from modules.campaign.repositories.campaign_repository import CampaignRepository
 from modules.campaign.model.session_model import SessionJoinedUser
 from modules.session.domain.session_aggregate import SessionEntity, SessionStatus
 from modules.library.repositories.asset_repository import MediaAssetRepository
@@ -106,18 +106,18 @@ class CreateSession:
         # Only broadcast if there are campaign members (excludes host)
         if campaign.player_ids:
             events = SessionEvents.session_created(
-                campaign_player_ids=[str(pid) for pid in campaign.player_ids],
-                session_id=str(session.id),
+                campaign_player_ids=campaign.player_ids,
+                session_id=session.id,
                 session_name=session.name,
-                campaign_id=str(campaign_id),
+                campaign_id=campaign_id,
                 campaign_name=campaign.title,
-                host_id=str(host_id),
+                host_id=host_id,
                 host_screen_name=host_user.screen_name if host_user else "Unknown"
             )
 
             # Broadcast to each campaign member
             for event_config in events:
-                await self.event_manager.broadcast(**event_config)
+                await self.event_manager.broadcast(event_config)
 
             logger.info(f"Broadcasting session_created event to {len(campaign.player_ids)} campaign members for session {session.id}")
 
@@ -490,7 +490,7 @@ class StartSession:
 
                 # Broadcast to each recipient
                 for event_config in events:
-                    await self.event_manager.broadcast(**event_config)
+                    await self.event_manager.broadcast(event_config)
 
                 logger.info(f"Broadcasting session_started event to {len(all_recipients)} recipients for session {session.id}")
 
@@ -668,7 +668,7 @@ class PauseSession:
 
             # Broadcast to each recipient
             for event_config in events:
-                await self.event_manager.broadcast(**event_config)
+                await self.event_manager.broadcast(event_config)
 
             logger.info(f"Broadcasting session_paused event to {len(all_recipients)} recipients for session {session.id}")
 
@@ -777,7 +777,7 @@ class FinishSession:
 
                 # Broadcast to each recipient
                 for event_config in events:
-                    await self.event_manager.broadcast(**event_config)
+                    await self.event_manager.broadcast(event_config)
 
                 logger.info(f"Broadcasting session_finished event to {len(all_recipients)} recipients for session {session.id}")
 
@@ -899,7 +899,7 @@ class FinishSession:
 
             # Broadcast to each recipient
             for event_config in events:
-                await self.event_manager.broadcast(**event_config)
+                await self.event_manager.broadcast(event_config)
 
             logger.info(f"Broadcasting session_finished event to {len(all_recipients)} recipients for session {session.id}")
 
@@ -994,88 +994,6 @@ class SelectCharacterForSession:
         db_session.commit()
 
         return character
-
-
-class ChangeCharacterForSession:
-    """
-    DEPRECATED: Character changes are now at CAMPAIGN level.
-
-    To change character:
-    1. Release character from campaign (ReleaseCharacterFromCampaign) - only when no active session
-    2. Select new character for campaign (SelectCharacterForCampaign)
-
-    This command is kept for backwards compatibility but will raise an error.
-    """
-
-    def __init__(
-        self,
-        session_repository: SessionRepository,
-        character_repository: CharacterRepository
-    ):
-        self.session_repo = session_repository
-        self.character_repo = character_repository
-
-    def execute(
-        self,
-        session_id: UUID,
-        user_id: UUID,
-        old_character_id: UUID,
-        new_character_id: UUID
-    ) -> CharacterAggregate:
-        """
-        DEPRECATED: Character changes are now at CAMPAIGN level.
-
-        To change your character:
-        1. Release your current character from the campaign (when no active session)
-        2. Select a new character for the campaign
-
-        This maintains the domain rule that characters can only be in one campaign at a time.
-        """
-        raise ValueError(
-            "Character changes are now at campaign level. "
-            "Release your current character from the campaign first (when no active session), "
-            "then select a new character for the campaign."
-        )
-
-
-class ChangeCharacterDuringGame:
-    """
-    DEPRECATED: Character changes during active game are no longer supported.
-
-    Characters are locked to campaigns, not sessions. To change character:
-    1. Wait for session to end/pause
-    2. Release character from campaign (ReleaseCharacterFromCampaign)
-    3. Select new character for campaign (SelectCharacterForCampaign)
-    """
-
-    def __init__(
-        self,
-        session_repository: SessionRepository,
-        character_repository: CharacterRepository,
-        user_repository: UserRepository
-    ):
-        self.session_repo = session_repository
-        self.character_repo = character_repository
-        self.user_repo = user_repository
-
-    async def execute(
-        self,
-        session_id: UUID,
-        user_id: UUID,
-        new_character_id: UUID
-    ) -> CharacterAggregate:
-        """
-        DEPRECATED: Character changes during active game are no longer supported.
-
-        Characters are now locked at campaign level. You cannot change your character
-        while a session is active. Wait for the session to end, then release and
-        reselect your character at the campaign level.
-        """
-        raise ValueError(
-            "Character changes during active game are no longer supported. "
-            "Wait for the session to end, then release your character from the campaign "
-            "and select a new one."
-        )
 
 
 class DisconnectFromGame:

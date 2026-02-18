@@ -8,10 +8,11 @@ import logging
 
 from modules.events.application.queries import GetRecentNotifications
 from modules.events.application.commands import MarkNotificationAsRead, MarkAllNotificationsAsRead
+from modules.events.domain.event_config import EventConfig
 from modules.events.repositories.notification_repository import NotificationRepository
 from modules.events.dependencies.providers import get_notification_repository, get_event_manager
 from shared.dependencies.auth import get_current_user_id
-from modules.events.schemas.notification_schemas import NotificationResponse
+from .schemas import NotificationResponse
 from modules.events.event_manager import EventManager
 from config.settings import Settings
 
@@ -85,7 +86,7 @@ async def send_test_notification(
         )
 
     # Broadcast test event
-    await event_manager.broadcast(
+    await event_manager.broadcast(EventConfig(
         user_id=user_id,
         event_type="friend_request_received",
         data={
@@ -95,6 +96,6 @@ async def send_test_notification(
         },
         show_toast=True,
         save_notification=True
-    )
+    ))
 
     return {"success": True, "message": "Test notification sent"}

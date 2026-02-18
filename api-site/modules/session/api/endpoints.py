@@ -8,7 +8,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 
 logger = logging.getLogger(__name__)
 
-from modules.session.schemas.session_schemas import (
+from .schemas import (
     CreateSessionRequest,
     UpdateSessionRequest,
     SessionResponse,
@@ -24,8 +24,6 @@ from modules.session.application.commands import (
     UpdateSession,
     DeleteSession,
     SelectCharacterForSession,
-    ChangeCharacterForSession,
-    ChangeCharacterDuringGame,
     DisconnectFromGame
 )
 from modules.session.application.queries import (
@@ -33,13 +31,13 @@ from modules.session.application.queries import (
     GetSessionsByCampaign,
     GetUserSessions
 )
-from modules.session.dependencies.repositories import get_session_repository
+from modules.session.dependencies.providers import get_session_repository
 from modules.session.repositories.session_repository import SessionRepository
-from modules.user.orm.user_repository import UserRepository
+from modules.user.repositories.user_repository import UserRepository
 from modules.user.dependencies.providers import user_repository as get_user_repository
-from modules.characters.orm.character_repository import CharacterRepository
+from modules.characters.repositories.character_repository import CharacterRepository
 from modules.characters.dependencies.providers import get_character_repository
-from modules.campaign.orm.campaign_repository import CampaignRepository
+from modules.campaign.repositories.campaign_repository import CampaignRepository
 from modules.campaign.dependencies.providers import campaign_repository
 from modules.library.dependencies.providers import get_asset_repository
 from modules.library.repositories.asset_repository import MediaAssetRepository
@@ -372,66 +370,6 @@ async def select_character_for_session(
             "message": "Character selected successfully",
             "character_id": str(character.id),
             "character_name": character.character_name
-        }
-    except ValueError as e:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
-
-
-@router.put("/{session_id}/change-character")
-async def change_character_for_session(
-    session_id: UUID,
-    old_character_id: UUID,
-    new_character_id: UUID,
-    user_id: UUID = Depends(get_current_user_id),
-    session_repo: SessionRepository = Depends(get_session_repository),
-    character_repo: CharacterRepository = Depends(get_character_repository)
-):
-    """Change character for a session (between play sessions)"""
-    try:
-        command = ChangeCharacterForSession(session_repo, character_repo)
-        character = command.execute(
-            session_id=session_id,
-            user_id=user_id,
-            old_character_id=old_character_id,
-            new_character_id=new_character_id
-        )
-        return {
-            "message": "Character changed successfully",
-            "new_character_id": str(character.id),
-            "new_character_name": character.character_name
-        }
-    except ValueError as e:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
-
-
-@router.put("/{session_id}/change-character-active")
-async def change_character_during_game(
-    session_id: UUID,
-    new_character_id: UUID,
-    user_id: UUID = Depends(get_current_user_id),
-    session_repo: SessionRepository = Depends(get_session_repository),
-    character_repo: CharacterRepository = Depends(get_character_repository),
-    user_repo: UserRepository = Depends(get_user_repository)
-):
-    """
-    Change character during an active game.
-
-    Unlike change-character, this endpoint:
-    - Only works when session is ACTIVE
-    - Does not unlock the old character (accumulating locks)
-    - Syncs new character data to MongoDB via api-game
-    """
-    try:
-        command = ChangeCharacterDuringGame(session_repo, character_repo, user_repo)
-        character = await command.execute(
-            session_id=session_id,
-            user_id=user_id,
-            new_character_id=new_character_id
-        )
-        return {
-            "message": "Character changed successfully",
-            "new_character_id": str(character.id),
-            "new_character_name": character.character_name
         }
     except ValueError as e:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))

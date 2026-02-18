@@ -22,8 +22,7 @@ from uuid import UUID
 from modules.session.application.commands import (
     CreateSession,
     SelectCharacterForSession,
-    RemovePlayerFromSession,
-    ChangeCharacterForSession
+    RemovePlayerFromSession
 )
 
 
@@ -317,79 +316,6 @@ class TestCharacterSessionJoining:
             user_id=player.id
         ).first()
         assert roster_entry is None
-
-    def test_can_change_character_when_session_inactive(
-        self,
-        create_user,
-        create_campaign,
-        create_character,
-        user_repo,
-        game_repo,
-        campaign_repo,
-        character_repo,
-        db_session
-    ):
-        """
-        GIVEN: Player in session with Character A selected (session INACTIVE)
-        WHEN: Player changes to Character B
-        THEN: Character A is unlocked
-        AND: Character B is locked to session
-        AND: session_joined_users.selected_character_id updated
-        """
-        # GIVEN: DM and player
-        dm = create_user("dm@example.com")
-        player = create_user("player@example.com")
-
-        # GIVEN: Campaign with player
-        campaign = create_campaign(host_id=dm.id)
-        campaign.add_player(player.id)
-        campaign_repo.save(campaign)
-
-        # GIVEN: Session created (player auto-enrolled)
-        from modules.events.event_manager import EventManager
-        event_manager = EventManager()
-        create_session = CreateSession(game_repo, campaign_repo, event_manager)
-        session = create_session.execute(
-            name="Test Session",
-            campaign_id=campaign.id,
-            host_id=dm.id,
-            max_players=6
-        )
-
-        # GIVEN: Two characters
-        char_a = create_character(user_id=player.id, name="Character A")
-        char_b = create_character(user_id=player.id, name="Character B")
-
-        # GIVEN: Character A selected
-        select = SelectCharacterForSession(game_repo, character_repo)
-        select.execute(session_id=session.id, user_id=player.id, character_id=char_a.id)
-
-        # WHEN: Player changes to Character B
-        change = ChangeCharacterForSession(game_repo, character_repo)
-        change.execute(
-            session_id=session.id,
-            user_id=player.id,
-            old_character_id=char_a.id,
-            new_character_id=char_b.id
-        )
-
-        # THEN: Character A unlocked
-        refreshed_a = character_repo.get_by_id(char_a.id)
-        assert refreshed_a.active_session is None
-        assert not refreshed_a.is_locked()
-
-        # THEN: Character B locked
-        refreshed_b = character_repo.get_by_id(char_b.id)
-        assert refreshed_b.active_session == session.id
-        assert refreshed_b.is_locked()
-
-        # THEN: session_joined_users updated
-        from modules.campaign.model.session_model import SessionJoinedUser
-        roster_entry = db_session.query(SessionJoinedUser).filter_by(
-            session_id=session.id,
-            user_id=player.id
-        ).first()
-        assert roster_entry.selected_character_id == char_b.id
 
     def test_user_auto_enrolled_without_selecting_character(
         self,

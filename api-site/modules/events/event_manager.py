@@ -6,6 +6,7 @@ from uuid import UUID
 from datetime import datetime
 import logging
 
+from modules.events.domain.event_config import EventConfig
 from modules.events.websocket_manager import EventConnectionManager
 from modules.events.repositories.notification_repository import NotificationRepository
 
@@ -30,44 +31,33 @@ class EventManager:
         self.websocket_manager = websocket_manager
         self.notification_repo = notification_repository
 
-    async def broadcast(
-        self,
-        user_id: UUID,
-        event_type: str,
-        data: Dict[str, Any],
-        show_toast: bool,
-        save_notification: bool
-    ):
+    async def broadcast(self, event: EventConfig):
         """
         Broadcast event to user via WebSocket and optionally persist.
 
         Args:
-            user_id: UUID of user to notify
-            event_type: Type of event (e.g., 'friend_request_received')
-            data: Event payload data
-            show_toast: Whether frontend should show toast notification
-            save_notification: Whether to persist notification to database
+            event: EventConfig domain object defining recipient, payload, and behavior
         """
-        user_id_str = str(user_id)
+        user_id_str = str(event.user_id)
 
         message = {
-            "event_type": event_type,
-            "data": data,
-            "show_toast": show_toast,
+            "event_type": event.event_type,
+            "data": event.data,
+            "show_toast": event.show_toast,
             "timestamp": datetime.utcnow().isoformat()
         }
 
         if self.websocket_manager.is_user_connected(user_id_str):
             await self.websocket_manager.send_to_user(user_id_str, message)
-            logger.info(f"Event '{event_type}' sent to user {user_id_str} via WebSocket")
+            logger.info(f"Event '{event.event_type}' sent to user {user_id_str} via WebSocket")
         else:
-            logger.debug(f"User {user_id_str} not connected, event '{event_type}' not sent via WebSocket")
+            logger.debug(f"User {user_id_str} not connected, event '{event.event_type}' not sent via WebSocket")
 
-        if save_notification:
+        if event.save_notification:
             from modules.events.application.commands import CreateNotification
             command = CreateNotification(self.notification_repo)
-            notification = command.execute(user_id, event_type, data)
-            logger.info(f"Notification '{event_type}' persisted for user {user_id_str} (id: {notification.id})")
+            notification = command.execute(event.user_id, event.event_type, event.data)
+            logger.info(f"Notification '{event.event_type}' persisted for user {user_id_str} (id: {notification.id})")
 
 
 class EventManagerSingleton:

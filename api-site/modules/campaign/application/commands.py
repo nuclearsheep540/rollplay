@@ -9,8 +9,8 @@ import asyncio
 from modules.campaign.domain.campaign_aggregate import CampaignAggregate
 from modules.campaign.domain.campaign_events import CampaignEvents
 from modules.events.event_manager import EventManager
-from modules.user.orm.user_repository import UserRepository
-from modules.characters.orm.character_repository import CharacterRepository
+from modules.user.repositories.user_repository import UserRepository
+from modules.characters.repositories.character_repository import CharacterRepository
 
 logger = logging.getLogger(__name__)
 
@@ -139,7 +139,7 @@ class AddPlayerToCampaign:
 
         # Broadcast 1/2: Notification to invited player
         await self.event_manager.broadcast(
-            **CampaignEvents.campaign_invite_received(
+            CampaignEvents.campaign_invite_received(
                 invited_player_id=player_id,
                 campaign_id=campaign_id,
                 campaign_name=campaign.title,
@@ -150,7 +150,7 @@ class AddPlayerToCampaign:
 
         # Broadcast 2/2: Confirmation to host
         await self.event_manager.broadcast(
-            **CampaignEvents.campaign_invite_sent(
+            CampaignEvents.campaign_invite_sent(
                 host_id=host_id,
                 campaign_id=campaign_id,
                 campaign_name=campaign.title,
@@ -204,7 +204,7 @@ class RemovePlayerFromCampaign:
 
         # Broadcast 1/2: Notification to the removed player
         await self.event_manager.broadcast(
-            **CampaignEvents.campaign_player_removed(
+            CampaignEvents.campaign_player_removed(
                 removed_player_id=player_id,
                 campaign_id=campaign_id,
                 campaign_name=campaign.title,
@@ -214,7 +214,7 @@ class RemovePlayerFromCampaign:
 
         # Broadcast 2/2: Confirmation to the host
         await self.event_manager.broadcast(
-            **CampaignEvents.campaign_player_removed_confirmation(
+            CampaignEvents.campaign_player_removed_confirmation(
                 host_id=host_id,
                 campaign_id=campaign_id,
                 campaign_name=campaign.title,
@@ -266,7 +266,7 @@ class AcceptCampaignInvite:
         # Broadcast notification event to host
         player = self.user_repo.get_by_id(player_id)
         await self.event_manager.broadcast(
-            **CampaignEvents.campaign_invite_accepted(
+            CampaignEvents.campaign_invite_accepted(
                 host_id=campaign.host_id,
                 campaign_id=campaign_id,
                 campaign_name=campaign.title,
@@ -300,7 +300,7 @@ class DeclineCampaignInvite:
         # Broadcast state update to host (no toast, but updates their local state)
         player = self.user_repo.get_by_id(player_id)
         await self.event_manager.broadcast(
-            **CampaignEvents.campaign_invite_declined(
+            CampaignEvents.campaign_invite_declined(
                 host_id=campaign.host_id,
                 campaign_id=campaign_id,
                 campaign_name=campaign.title,
@@ -358,7 +358,7 @@ class LeaveCampaign:
 
         # Broadcast 1/2: Notification to host that player left
         await self.event_manager.broadcast(
-            **CampaignEvents.campaign_player_left(
+            CampaignEvents.campaign_player_left(
                 host_id=campaign.host_id,
                 campaign_id=campaign_id,
                 campaign_name=campaign.title,
@@ -369,7 +369,7 @@ class LeaveCampaign:
 
         # Broadcast 2/2: Confirmation to the player who left
         await self.event_manager.broadcast(
-            **CampaignEvents.campaign_player_left_confirmation(
+            CampaignEvents.campaign_player_left_confirmation(
                 player_id=player_id,
                 campaign_id=campaign_id,
                 campaign_name=campaign.title
@@ -412,7 +412,7 @@ class CancelCampaignInvite:
 
         # Broadcast 1/2: Notification to the player whose invite was canceled
         await self.event_manager.broadcast(
-            **CampaignEvents.campaign_invite_canceled(
+            CampaignEvents.campaign_invite_canceled(
                 player_id=player_id,
                 campaign_id=campaign_id,
                 campaign_name=campaign.title
@@ -421,7 +421,7 @@ class CancelCampaignInvite:
 
         # Broadcast 2/2: Confirmation to the host
         await self.event_manager.broadcast(
-            **CampaignEvents.campaign_invite_canceled_confirmation(
+            CampaignEvents.campaign_invite_canceled_confirmation(
                 host_id=host_id,
                 campaign_id=campaign_id,
                 campaign_name=campaign.title,
@@ -501,7 +501,7 @@ class SelectCharacterForCampaign:
                 character_name=character.character_name
             )
             for event_config in events:
-                await self.event_manager.broadcast(**event_config)
+                await self.event_manager.broadcast(event_config)
 
         return character
 
@@ -576,7 +576,7 @@ class ReleaseCharacterFromCampaign:
                 character_name=character_name
             )
             for event_config in events:
-                await self.event_manager.broadcast(**event_config)
+                await self.event_manager.broadcast(event_config)
 
         return character
 
