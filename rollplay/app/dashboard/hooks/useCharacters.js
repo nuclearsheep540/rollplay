@@ -2,6 +2,7 @@
 /* SPDX-License-Identifier: GPL-3.0-or-later */
 
 import { useQuery } from '@tanstack/react-query'
+import { authFetch } from '@/app/shared/utils/authFetch'
 
 /**
  * Query hook for fetching the current user's characters.
@@ -16,7 +17,7 @@ export function useCharacters({ enabled = true } = {}) {
   return useQuery({
     queryKey: ['characters'],
     queryFn: async () => {
-      const response = await fetch('/api/characters/', {
+      const response = await authFetch('/api/characters/', {
         credentials: 'include',
       })
 

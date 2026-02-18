@@ -6,6 +6,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
+import { authFetch } from '@/app/shared/utils/authFetch'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
 import {
@@ -45,7 +46,7 @@ export default function CharacterManager({ user, onExpandedChange }) {
   const fetchCharacters = async () => {
     try {
       setLoading(true)
-      const response = await fetch('/api/characters/', {
+      const response = await authFetch('/api/characters/', {
         method: 'GET',
         headers: {
           'Content-Type': 'application/json',

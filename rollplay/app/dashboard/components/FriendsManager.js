@@ -6,6 +6,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
+import { authFetch } from '@/app/shared/utils/authFetch'
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
 import {
   faUserPlus,
@@ -78,7 +79,7 @@ export default function FriendsManager({ user, fillHeight = false }) {
         const identifier = friendCode.trim()
         const endpoint = `/api/users/by-account-tag/${encodeURIComponent(identifier)}`
 
-        const response = await fetch(endpoint, {
+        const response = await authFetch(endpoint, {
           credentials: 'include'
         })
 

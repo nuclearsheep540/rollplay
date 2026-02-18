@@ -6,6 +6,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
+import { authFetch } from '@/app/shared/utils/authFetch'
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
 import { faUserPlus, faUserXmark } from '@fortawesome/free-solid-svg-icons'
 import Modal from '@/app/shared/components/Modal'
@@ -65,7 +66,7 @@ export default function CampaignInviteModal({ campaign, onClose, onInviteSuccess
   const fetchFriends = async () => {
     try {
       setLoadingFriends(true)
-      const response = await fetch('/api/friendships/', {
+      const response = await authFetch('/api/friendships/', {
         credentials: 'include'
       })
 
@@ -98,7 +99,7 @@ export default function CampaignInviteModal({ campaign, onClose, onInviteSuccess
       const inviteDetails = await Promise.all(
         campaign.invited_player_ids.map(async (userId) => {
           try {
-            const response = await fetch(`/api/users/${userId}`, {
+            const response = await authFetch(`/api/users/${userId}`, {
               credentials: 'include'
             })
             if (response.ok) {
@@ -130,7 +131,7 @@ export default function CampaignInviteModal({ campaign, onClose, onInviteSuccess
       setCanceling(playerId)
       setError(null)
 
-      const response = await fetch(`/api/campaigns/${campaign.id}/invites/${playerId}`, {
+      const response = await authFetch(`/api/campaigns/${campaign.id}/invites/${playerId}`, {
         method: 'DELETE',
         credentials: 'include'
       })
@@ -186,7 +187,7 @@ export default function CampaignInviteModal({ campaign, onClose, onInviteSuccess
           endpoint = `/api/users/${identifier}`
         }
 
-        const response = await fetch(endpoint, {
+        const response = await authFetch(endpoint, {
           credentials: 'include'
         })
 
@@ -222,7 +223,7 @@ export default function CampaignInviteModal({ campaign, onClose, onInviteSuccess
       // Lookup user details before invite (for optimistic UI update)
       let invitedUserDetails = null
       try {
-        const userResponse = await fetch(`/api/users/${userId}`, { credentials: 'include' })
+        const userResponse = await authFetch(`/api/users/${userId}`, { credentials: 'include' })
         if (userResponse.ok) {
           const userData = await userResponse.json()
           invitedUserDetails = {
@@ -237,7 +238,7 @@ export default function CampaignInviteModal({ campaign, onClose, onInviteSuccess
         console.warn('Could not fetch user details for optimistic update:', err)
       }
 
-      const response = await fetch(`/api/campaigns/${campaign.id}/players/${userId}`, {
+      const response = await authFetch(`/api/campaigns/${campaign.id}/players/${userId}`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

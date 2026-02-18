@@ -6,6 +6,7 @@
 'use client'
 
 import { useState } from 'react'
+import { authFetch } from '@/app/shared/utils/authFetch'
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
 import { faCopy, faTrash } from '@fortawesome/free-solid-svg-icons'
 import { THEME, COLORS } from '@/app/styles/colorTheme'
@@ -35,7 +36,7 @@ export default function ProfileManager({ user, onUserUpdate }) {
     setError(null)
 
     try {
-      const response = await fetch('/api/users/screen_name', {
+      const response = await authFetch('/api/users/screen_name', {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
@@ -66,7 +67,7 @@ export default function ProfileManager({ user, onUserUpdate }) {
     setError(null)
 
     try {
-      const response = await fetch('/api/users/me', {
+      const response = await authFetch('/api/users/me', {
         method: 'DELETE',
         credentials: 'include'
       })

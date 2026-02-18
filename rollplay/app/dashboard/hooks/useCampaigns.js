@@ -2,6 +2,7 @@
 /* SPDX-License-Identifier: GPL-3.0-or-later */
 
 import { useQuery } from '@tanstack/react-query'
+import { authFetch } from '@/app/shared/utils/authFetch'
 
 /**
  * Query hook for fetching campaigns with members and sessions.
@@ -21,7 +22,7 @@ export function useCampaigns(userId, { enabled = true } = {}) {
     queryKey: ['campaigns'],
     queryFn: async () => {
       // 1. Fetch all campaigns for this user
-      const response = await fetch('/api/campaigns/', {
+      const response = await authFetch('/api/campaigns/', {
         method: 'GET',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
@@ -49,7 +50,7 @@ export function useCampaigns(userId, { enabled = true } = {}) {
       const campaignsWithMembers = await Promise.all(
         joined.map(async (campaign) => {
           try {
-            const membersResponse = await fetch(
+            const membersResponse = await authFetch(
               `/api/campaigns/${campaign.id}/members`,
               {
                 method: 'GET',
@@ -73,7 +74,7 @@ export function useCampaigns(userId, { enabled = true } = {}) {
       const campaignsWithSessions = await Promise.all(
         campaignsWithMembers.map(async (campaign) => {
           try {
-            const sessionsResponse = await fetch(
+            const sessionsResponse = await authFetch(
               `/api/sessions/campaign/${campaign.id}`,
               {
                 method: 'GET',

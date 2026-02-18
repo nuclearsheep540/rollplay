@@ -6,6 +6,7 @@
 'use client'
 
 import { React, useEffect, useState, useMemo, useCallback, useRef, Suspense } from 'react'
+import { authFetch } from '@/app/shared/utils/authFetch'
 import { useSearchParams, useRouter } from "next/navigation";
 import { getSeatColor } from '../utils/seatColors';
 
@@ -321,7 +322,7 @@ function GameContent() {
     const fetchCurrentUser = async () => {
       try {
         setUserLoading(true);
-        const response = await fetch('/api/users/get_current_user', {
+        const response = await authFetch('/api/users/get_current_user', {
           method: 'GET',
           credentials: 'include'
         });
@@ -391,7 +392,7 @@ function GameContent() {
 
     const checkSpectatorStatus = async () => {
       try {
-        const response = await fetch('/api/characters/', { credentials: 'include' });
+        const response = await authFetch('/api/characters/', { credentials: 'include' });
         if (!response.ok) return;
 
         const characters = await response.json();
@@ -416,7 +417,7 @@ function GameContent() {
   useEffect(() => {
     if (!campaignId) return;
     console.log(`🎨 Fetching campaign metadata for overlay: ${campaignId}`);
-    fetch(`/api/campaigns/${campaignId}`, { credentials: 'include' })
+    authFetch(`/api/campaigns/${campaignId}`, { credentials: 'include' })
       .then(res => {
         if (!res.ok) {
           console.warn(`⚠️ Campaign metadata fetch failed: ${res.status}`);

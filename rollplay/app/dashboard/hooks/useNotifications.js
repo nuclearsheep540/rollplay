@@ -2,6 +2,7 @@
 /* SPDX-License-Identifier: GPL-3.0-or-later */
 
 import { useQuery } from '@tanstack/react-query'
+import { authFetch } from '@/app/shared/utils/authFetch'
 
 /**
  * Query hook for fetching unread notifications.
@@ -17,7 +18,7 @@ export function useNotifications(userId) {
   return useQuery({
     queryKey: ['notifications', 'unread'],
     queryFn: async () => {
-      const response = await fetch('/api/notifications/unread', {
+      const response = await authFetch('/api/notifications/unread', {
         credentials: 'include',
       })
 

@@ -6,6 +6,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
+import { authFetch } from '@/app/shared/utils/authFetch'
 import { useRouter } from 'next/navigation'
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
 import {
@@ -32,8 +33,8 @@ export default function SessionsManager({ user, refreshTrigger }) {
 
       // Fetch sessions and characters in parallel
       const [sessionsResponse, charactersResponse] = await Promise.all([
-        fetch('/api/sessions/my-sessions', { credentials: 'include' }),
-        fetch('/api/characters/', { credentials: 'include' })
+        authFetch('/api/sessions/my-sessions', { credentials: 'include' }),
+        authFetch('/api/characters/', { credentials: 'include' })
       ])
 
       if (!sessionsResponse.ok || !charactersResponse.ok) {
