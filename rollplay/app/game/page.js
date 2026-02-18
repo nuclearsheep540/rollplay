@@ -35,6 +35,20 @@ const RIGHT_DRAWER_TABS = [
   { id: 'audio', label: 'AUDIO', dmOnly: true },
 ];
 
+// Helper function to get character data — module scope (pure, no component state deps)
+const getCharacterData = (playerName) => {
+  const characterDatabase = {
+    'Thorin': { class: 'Dwarf Fighter', level: 3, hp: 34, maxHp: 40 }
+  };
+
+  return characterDatabase[playerName] || {
+    class: 'Adventurer',
+    level: 1,
+    hp: 10,
+    maxHp: 10
+  };
+};
+
 function GameContent() {
   const params = useSearchParams();
   const router = useRouter(); 
@@ -125,6 +139,9 @@ function GameContent() {
   // Campaign metadata for overlay (fetched from api-site when campaignId is set)
   const [campaignMeta, setCampaignMeta] = useState(null);
 
+  // Ref for sendSeatChange — breaks circular dep: handleRoleChange → sendSeatChange → useWebSocket → gameContext → handleRoleChange
+  const sendSeatChangeRef = useRef(null);
+
   // Spectator mode - user has no character selected for this campaign
   const [isSpectator, setIsSpectator] = useState(false);
   const [isDrawerOpen, setIsDrawerOpen] = useState(true);
@@ -140,19 +157,7 @@ function GameContent() {
     setMapImageConfig(newMapImageConfig);
   }, []);
 
-  // Helper function to get character data
-  const getCharacterData = (playerName) => {
-    const characterDatabase = {
-      'Thorin': { class: 'Dwarf Fighter', level: 3, hp: 34, maxHp: 40 }
-    };
-    
-    return characterDatabase[playerName] || {
-      class: 'Adventurer',
-      level: 1,
-      hp: 10,
-      maxHp: 10
-    };
-  };
+
 
 
   // Copy room code to clipboard
@@ -312,14 +317,14 @@ function GameContent() {
 
   // Refresh dynamic roles (host/moderator) after WebSocket events
   // DM status is static and never changes during session
-  const refreshDynamicRoles = async (roomId, user) => {
+  const refreshDynamicRoles = useCallback(async (roomId, user) => {
     try {
       console.log(`🔄 Refreshing dynamic roles for user: ${user.screen_name || user.email}`);
-      
+
       // Only fetch MongoDB-based roles (host, moderator) - DM status is static
       const playerName = user.screen_name || user.email;
       const mongoRolesResponse = await fetch(`/api/game/${roomId}/roles?playerName=${playerName}`);
-      
+
       if (mongoRolesResponse.ok) {
         const mongoRoles = await mongoRolesResponse.json();
         setIsHost(mongoRoles.is_host);
@@ -328,11 +333,11 @@ function GameContent() {
       } else {
         console.error('❌ Failed to refresh dynamic roles:', mongoRolesResponse.status);
       }
-      
+
     } catch (error) {
       console.error('Error refreshing dynamic roles:', error);
     }
-  };
+  }, []);
 
   // Fetch current user data once on page load
   useEffect(() => {
@@ -691,10 +696,10 @@ function GameContent() {
     }
   };
 
-  const addToLog = (message, type, playerName = null, promptId = null) => {
+  const addToLog = useCallback((message, type, playerName = null, promptId = null) => {
     const now = new Date();
     const timestamp = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-    
+
     const newEntry = {
       id: Date.now(),
       message,
@@ -702,28 +707,28 @@ function GameContent() {
       timestamp,
       player_name: playerName
     };
-    
+
     // Add prompt_id if provided
     if (promptId) {
       newEntry.prompt_id = promptId;
     }
-    
+
     setRollLog(prev => [...prev, newEntry]);
-  };
+  }, []);
 
   // Handle role changes from ModeratorControls and WebSocket events
-  const handleRoleChange = async (action, playerName) => {
+  const handleRoleChange = useCallback(async (action, playerName) => {
     console.log(`Role change: ${action} for ${playerName}`);
-    
+
     // Update DM seat based on the action
     if (action === 'set_dm') {
       setDmSeat(playerName);
-      
+
       // Business logic: If new DM is sitting in a party seat, remove them from it
       const playerSeatIndex = gameSeats.findIndex(seat => seat.playerName === playerName);
       if (playerSeatIndex !== -1) {
         console.log(`🎭 Removing ${playerName} from party seat ${playerSeatIndex} as they become DM`);
-        
+
         // Create updated seats with the DM removed from party
         const newSeats = [...gameSeats];
         newSeats[playerSeatIndex] = {
@@ -732,34 +737,34 @@ function GameContent() {
           characterData: null,
           isActive: false
         };
-        
+
         // Update local state and broadcast seat change
         setGameSeats(newSeats);
-        sendSeatChange(newSeats);
+        sendSeatChangeRef.current?.(newSeats);
       }
     } else if (action === 'unset_dm') {
       setDmSeat("");
     }
-    
+
     // Refresh dynamic roles (host/moderator) for current user
     // DM status is static and doesn't change during session
     if (roomId && currentUser) {
       await refreshDynamicRoles(roomId, currentUser);
     }
-    
+
     // Trigger refresh of ModeratorControls room data for all users
     setRoleChangeTrigger(Date.now());
-    
+
     // Role changes are now broadcasted via WebSocket to all connected users
-  };
+  }, [gameSeats, roomId, currentUser, refreshDynamicRoles]);
 
   // Create a setter function for playerSeatMap updates
-  const setPlayerSeatMap = (updaterFunction) => {
+  const setPlayerSeatMap = useCallback((updaterFunction) => {
     // This is a derived state update - we need to update seatColors instead
     // The updaterFunction expects the current playerSeatMap and returns the new one
     const currentMap = playerSeatMap;
     const newMap = updaterFunction(currentMap);
-    
+
     // Extract seat colors from the updated map
     const newSeatColors = {};
     Object.values(newMap).forEach(playerData => {
@@ -767,9 +772,9 @@ function GameContent() {
         newSeatColors[playerData.seatIndex] = playerData.seatColor;
       }
     });
-    
+
     setSeatColors(newSeatColors);
-  };
+  }, [playerSeatMap]);
 
   // Initialize unified audio system (local + remote) FIRST
   const {
@@ -805,8 +810,10 @@ function GameContent() {
   }, [setClearPendingOperationCallback]);
 
   // Create game context object for WebSocket handlers (after audio functions are defined)
-  const gameContext = {
-    // State setters
+  // Memoized to prevent useWebSocket's ref-update effect from re-running on every render.
+  // State setters, refs, and module-scope functions are stable and omitted from deps.
+  const gameContext = useMemo(() => ({
+    // State setters (stable — React guarantees identity)
     setGameSeats,
     setCombatActive,
     setRollLog,
@@ -830,7 +837,7 @@ function GameContent() {
     addToLog,
     getCharacterData,
     handleRoleChange,
-    
+
     // Remote audio functions (for WebSocket events)
     playRemoteTrack,
     resumeRemoteTrack,
@@ -841,7 +848,7 @@ function GameContent() {
     loadRemoteAudioBuffer,
     audioBuffersRef,
     audioContextRef,
-    
+
     // Remote audio state (for resume functionality)
     remoteTrackStates,
 
@@ -853,7 +860,15 @@ function GameContent() {
 
     // Session ended modal
     setSessionEndedData
-  };
+  }), [
+    gameSeats, thisPlayer, currentUser, lobbyUsers,
+    disconnectTimeouts, currentInitiativePromptId, remoteTrackStates,
+    addToLog, handleRoleChange, setPlayerSeatMap,
+    playRemoteTrack, resumeRemoteTrack, pauseRemoteTrack, stopRemoteTrack,
+    setRemoteTrackVolume, toggleRemoteTrackLooping, loadRemoteAudioBuffer,
+    syncAudioState, loadAssetIntoChannel,
+    audioBuffersRef, audioContextRef
+  ]);
 
   // Initialize WebSocket hook with game context (after audio functions are available)
   const {
@@ -876,6 +891,9 @@ function GameContent() {
     sendRemoteAudioBatch,
     registerHandler
   } = useWebSocket(roomId, thisPlayer, gameContext);
+
+  // Sync ref so handleRoleChange can call sendSeatChange without circular dep
+  sendSeatChangeRef.current = sendSeatChange;
 
   // Map management WebSocket hook (atomic approach)
   // Wrap setActiveMap to also update activeDisplay when a map is loaded
