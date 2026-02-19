@@ -27,14 +27,16 @@ from modules.session.repositories.session_repository import SessionRepository
 from modules.library.domain.media_asset_type import MediaAssetType
 from modules.library.application.commands import ConfirmUpload, DeleteMediaAsset, AssociateWithCampaign, RenameMediaAsset, ChangeAssetType, UpdateGridConfig, UpdateAudioConfig, AssetInUseError
 from modules.library.domain.map_asset_aggregate import MapAsset
-from modules.library.domain.audio_asset_aggregate import AudioAsset
+from modules.library.domain.music_asset_aggregate import MusicAsset
+from modules.library.domain.sfx_asset_aggregate import SfxAsset
 from modules.library.application.queries import GetMediaAssetsByUser, GetMediaAssetsByCampaign
 from .schemas import (
     UploadUrlResponse,
     ConfirmUploadRequest,
     MediaAssetResponse,
     MapAssetResponse,
-    AudioAssetResponse,
+    MusicAssetResponse,
+    SfxAssetResponse,
     AssociateRequest,
     RenameRequest,
     ChangeTypeRequest,
@@ -83,9 +85,29 @@ def _to_media_asset_response(asset, s3_service: S3Service = None) -> MediaAssetR
             grid_opacity=asset.grid_opacity
         )
 
-    # If it's an AudioAsset, return AudioAssetResponse with audio fields
-    if isinstance(asset, AudioAsset):
-        return AudioAssetResponse(
+    # If it's a MusicAsset, return MusicAssetResponse with audio fields
+    if isinstance(asset, MusicAsset):
+        return MusicAssetResponse(
+            id=str(asset.id),
+            user_id=str(asset.user_id),
+            filename=asset.filename,
+            s3_key=asset.s3_key,
+            s3_url=s3_url,
+            content_type=asset.content_type,
+            asset_type=asset_type_value,
+            file_size=asset.file_size,
+            campaign_ids=[str(cid) for cid in asset.campaign_ids],
+            session_ids=[str(sid) for sid in asset.session_ids],
+            created_at=asset.created_at,
+            updated_at=asset.updated_at,
+            duration_seconds=asset.duration_seconds,
+            default_volume=asset.default_volume,
+            default_looping=asset.default_looping
+        )
+
+    # If it's a SfxAsset, return SfxAssetResponse with audio fields
+    if isinstance(asset, SfxAsset):
+        return SfxAssetResponse(
             id=str(asset.id),
             user_id=str(asset.user_id),
             filename=asset.filename,
@@ -398,7 +420,7 @@ async def update_grid_config(
         raise HTTPException(status_code=500, detail="Failed to update grid configuration")
 
 
-@router.patch("/{asset_id}/audio-config", response_model=AudioAssetResponse)
+@router.patch("/{asset_id}/audio-config", response_model=MediaAssetResponse)
 async def update_audio_config(
     asset_id: UUID,
     request: UpdateAudioConfigRequest,
@@ -406,7 +428,7 @@ async def update_audio_config(
     repo: MediaAssetRepository = Depends(get_media_asset_repository),
     session_repo: SessionRepository = Depends(get_session_repository),
     s3_service: S3Service = Depends(get_s3_service)
-) -> AudioAssetResponse:
+) -> MediaAssetResponse:
     """
     Update audio configuration for a music or SFX asset.
 

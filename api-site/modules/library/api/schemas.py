@@ -83,8 +83,15 @@ class MapAssetResponse(MediaAssetResponse):
     grid_opacity: Optional[float] = None
 
 
-class AudioAssetResponse(MediaAssetResponse):
-    """Response containing audio asset details with playback config"""
+class MusicAssetResponse(MediaAssetResponse):
+    """Response containing music asset details with playback config"""
+    duration_seconds: Optional[float] = None
+    default_volume: Optional[float] = None
+    default_looping: Optional[bool] = None
+
+
+class SfxAssetResponse(MediaAssetResponse):
+    """Response containing SFX asset details with playback config"""
     duration_seconds: Optional[float] = None
     default_volume: Optional[float] = None
     default_looping: Optional[bool] = None

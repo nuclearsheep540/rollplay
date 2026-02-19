@@ -29,6 +29,7 @@ export default function AudioMixerPanel({
   // SFX Soundboard
   sfxSlots = [],
   loadSfxSlot = null,
+  clearSfxSlot = null,
 }) {
   
   // Track pending audio operations to disable buttons
@@ -371,6 +372,14 @@ export default function AudioMixerPanel({
       s3_url: asset.s3_url,
     }]);
   }, [loadSfxSlot, sendRemoteAudioBatch]);
+
+  const handleSfxClear = useCallback((slotIndex) => {
+    if (clearSfxSlot) clearSfxSlot(slotIndex);
+    sendRemoteAudioBatch?.([{
+      trackId: `sfx_slot_${slotIndex}`,
+      operation: 'clear',
+    }]);
+  }, [clearSfxSlot, sendRemoteAudioBatch]);
 
   // Dynamically generate BGM channels from remoteTrackStates
   const bgmChannels = Object.keys(remoteTrackStates).map(channelId => {
@@ -800,6 +809,7 @@ export default function AudioMixerPanel({
             onTrigger={handleSfxTrigger}
             onVolumeChange={handleSfxVolumeChange}
             onAssetSelected={handleSfxAssetSelected}
+            onClear={handleSfxClear}
             campaignId={campaignId}
             isAudioUnlocked={isAudioUnlocked}
             unlockAudio={unlockAudio}

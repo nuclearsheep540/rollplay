@@ -12,10 +12,14 @@ from sqlalchemy import any_
 
 from modules.library.model.asset_model import MediaAsset as MediaAssetModel
 from modules.library.model.map_asset_model import MapAssetModel
-from modules.library.model.audio_asset_models import AudioAssetModel, MusicAssetModel, SfxAssetModel
+from modules.library.model.music_asset_model import MusicAssetModel
+from modules.library.model.sfx_asset_model import SfxAssetModel
+from modules.library.model.image_asset_model import ImageAssetModel
 from modules.library.domain.asset_aggregate import MediaAssetAggregate
 from modules.library.domain.map_asset_aggregate import MapAsset
-from modules.library.domain.audio_asset_aggregate import AudioAsset
+from modules.library.domain.music_asset_aggregate import MusicAsset
+from modules.library.domain.sfx_asset_aggregate import SfxAsset
+from modules.library.domain.image_asset_aggregate import ImageAsset
 from modules.library.domain.media_asset_type import MediaAssetType
 
 
@@ -90,7 +94,7 @@ class MediaAssetRepository:
 
         return self._model_to_aggregate(model)
 
-    def save(self, aggregate: Union[MediaAssetAggregate, MapAsset, AudioAsset]) -> UUID:
+    def save(self, aggregate: Union[MediaAssetAggregate, MapAsset, MusicAsset, SfxAsset, ImageAsset]) -> UUID:
         """Save media asset aggregate (create or update)"""
         existing = (
             self.db.query(MediaAssetModel)
@@ -114,8 +118,14 @@ class MediaAssetRepository:
                 existing.grid_height = aggregate.grid_height
                 existing.grid_opacity = aggregate.grid_opacity
 
-            # Update audio-specific fields if AudioAsset
-            if isinstance(aggregate, AudioAsset) and isinstance(existing, AudioAssetModel):
+            # Update music-specific fields if MusicAsset
+            if isinstance(aggregate, MusicAsset) and isinstance(existing, MusicAssetModel):
+                existing.duration_seconds = aggregate.duration_seconds
+                existing.default_volume = aggregate.default_volume
+                existing.default_looping = aggregate.default_looping
+
+            # Update sfx-specific fields if SfxAsset
+            if isinstance(aggregate, SfxAsset) and isinstance(existing, SfxAssetModel):
                 existing.duration_seconds = aggregate.duration_seconds
                 existing.default_volume = aggregate.default_volume
                 existing.default_looping = aggregate.default_looping
@@ -136,10 +146,8 @@ class MediaAssetRepository:
                     grid_height=aggregate.grid_height,
                     grid_opacity=aggregate.grid_opacity
                 )
-            elif isinstance(aggregate, AudioAsset):
-                # Select correct subclass model based on asset_type
-                ModelClass = MusicAssetModel if aggregate.asset_type == MediaAssetType.MUSIC else SfxAssetModel
-                model = ModelClass(
+            elif isinstance(aggregate, MusicAsset):
+                model = MusicAssetModel(
                     id=aggregate.id,
                     user_id=aggregate.user_id,
                     filename=aggregate.filename,
@@ -152,6 +160,33 @@ class MediaAssetRepository:
                     duration_seconds=aggregate.duration_seconds,
                     default_volume=aggregate.default_volume,
                     default_looping=aggregate.default_looping
+                )
+            elif isinstance(aggregate, SfxAsset):
+                model = SfxAssetModel(
+                    id=aggregate.id,
+                    user_id=aggregate.user_id,
+                    filename=aggregate.filename,
+                    s3_key=aggregate.s3_key,
+                    content_type=aggregate.content_type,
+                    asset_type=aggregate.asset_type,
+                    file_size=aggregate.file_size,
+                    campaign_ids=aggregate.campaign_ids,
+                    session_ids=aggregate.session_ids,
+                    duration_seconds=aggregate.duration_seconds,
+                    default_volume=aggregate.default_volume,
+                    default_looping=aggregate.default_looping
+                )
+            elif isinstance(aggregate, ImageAsset):
+                model = ImageAssetModel(
+                    id=aggregate.id,
+                    user_id=aggregate.user_id,
+                    filename=aggregate.filename,
+                    s3_key=aggregate.s3_key,
+                    content_type=aggregate.content_type,
+                    asset_type=aggregate.asset_type,
+                    file_size=aggregate.file_size,
+                    campaign_ids=aggregate.campaign_ids,
+                    session_ids=aggregate.session_ids
                 )
             else:
                 model = MediaAssetModel(
@@ -184,7 +219,7 @@ class MediaAssetRepository:
         self.db.commit()
         return True
 
-    def _model_to_aggregate(self, model: MediaAssetModel) -> Union[MediaAssetAggregate, MapAsset, AudioAsset]:
+    def _model_to_aggregate(self, model: MediaAssetModel) -> Union[MediaAssetAggregate, MapAsset, MusicAsset, SfxAsset, ImageAsset]:
         """Convert ORM model to domain aggregate (polymorphic)"""
         # Build base aggregate fields
         base = MediaAssetAggregate(
@@ -210,13 +245,26 @@ class MediaAssetRepository:
                 grid_opacity=model.grid_opacity
             )
 
-        # If it's an AudioAssetModel, promote to AudioAsset with audio fields
-        if isinstance(model, AudioAssetModel):
-            return AudioAsset.from_base(
+        # If it's a MusicAssetModel, promote to MusicAsset with audio fields
+        if isinstance(model, MusicAssetModel):
+            return MusicAsset.from_base(
                 base,
                 duration_seconds=model.duration_seconds,
                 default_volume=model.default_volume,
                 default_looping=model.default_looping
             )
+
+        # If it's a SfxAssetModel, promote to SfxAsset with audio fields
+        if isinstance(model, SfxAssetModel):
+            return SfxAsset.from_base(
+                base,
+                duration_seconds=model.duration_seconds,
+                default_volume=model.default_volume,
+                default_looping=model.default_looping
+            )
+
+        # If it's an ImageAssetModel, promote to ImageAsset
+        if isinstance(model, ImageAssetModel):
+            return ImageAsset.from_base(base)
 
         return base

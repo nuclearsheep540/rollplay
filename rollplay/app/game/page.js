@@ -803,6 +803,7 @@ function GameContent() {
     stopSfxSlot,
     setSfxSlotVolume,
     loadSfxSlot,
+    clearSfxSlot,
     cleanupAllAudio
   } = useUnifiedAudio();
 
@@ -869,6 +870,7 @@ function GameContent() {
     stopSfxSlot,
     setSfxSlotVolume,
     loadSfxSlot,
+    clearSfxSlot,
     sfxSlots,
 
     // Session ended modal
@@ -880,7 +882,7 @@ function GameContent() {
     playRemoteTrack, resumeRemoteTrack, pauseRemoteTrack, stopRemoteTrack,
     setRemoteTrackVolume, toggleRemoteTrackLooping, loadRemoteAudioBuffer,
     syncAudioState, loadAssetIntoChannel,
-    playSfxSlot, stopSfxSlot, setSfxSlotVolume, loadSfxSlot, sfxSlots,
+    playSfxSlot, stopSfxSlot, setSfxSlotVolume, loadSfxSlot, clearSfxSlot, sfxSlots,
     audioBuffersRef, audioContextRef
   ]);
 
@@ -1653,6 +1655,7 @@ function GameContent() {
                   campaignId={campaignId}
                   sfxSlots={sfxSlots}
                   loadSfxSlot={loadSfxSlot}
+                  clearSfxSlot={clearSfxSlot}
                 />
               )}
             </div>

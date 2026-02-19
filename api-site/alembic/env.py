@@ -29,7 +29,9 @@ try:
     from modules.events.model.notification_model import Notification
     from modules.library.model.asset_model import MediaAsset
     from modules.library.model.map_asset_model import MapAssetModel
-    from modules.library.model.audio_asset_models import AudioAssetModel, MusicAssetModel, SfxAssetModel, ImageAssetModel
+    from modules.library.model.music_asset_model import MusicAssetModel
+    from modules.library.model.sfx_asset_model import SfxAssetModel
+    from modules.library.model.image_asset_model import ImageAssetModel
     print("Models imported successfully")
 except ImportError as e:
     print(f"Error importing models: {e}")

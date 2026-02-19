@@ -1208,6 +1208,33 @@ export const useUnifiedAudio = () => {
     setSfxSlots(prev => prev.map((s, i) => i === slotIndex ? { ...s, volume } : s));
   };
 
+  // Clear a soundboard slot — stop playback, reset state, drop cached buffer
+  const clearSfxSlot = (slotIndex) => {
+    const trackId = `sfx_slot_${slotIndex}`;
+
+    // Stop any playing source
+    if (sfxSlotSourcesRef.current[trackId]) {
+      try { sfxSlotSourcesRef.current[trackId].stop(); } catch (_) {}
+      delete sfxSlotSourcesRef.current[trackId];
+    }
+
+    // Drop cached buffer for this slot (keys are `sfx_slot_N_assetId`)
+    Object.keys(sfxSlotBuffersRef.current).forEach(key => {
+      if (key.startsWith(`${trackId}_`)) {
+        delete sfxSlotBuffersRef.current[key];
+      }
+    });
+
+    // Reset slot state
+    setSfxSlots(prev => prev.map((s, i) =>
+      i === slotIndex
+        ? { ...s, asset_id: null, filename: null, s3_url: null, isPlaying: false }
+        : s
+    ));
+
+    console.log(`🗑️ Cleared SFX slot ${slotIndex}`);
+  };
+
   return {
     // Audio state
     isAudioUnlocked,
@@ -1250,6 +1277,7 @@ export const useUnifiedAudio = () => {
     stopSfxSlot,
     setSfxSlotVolume,
     loadSfxSlot,
+    clearSfxSlot,
 
     // Unified functions
     unlockAudio,

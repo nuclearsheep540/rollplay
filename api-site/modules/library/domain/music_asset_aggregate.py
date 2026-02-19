@@ -2,15 +2,14 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 
 """
-AudioAsset Aggregate - Domain model for audio assets with playback configuration
+MusicAsset Aggregate - Domain model for music (BGM) assets with playback configuration
 
 Extends MediaAssetAggregate with audio-specific fields (duration, volume, looping).
-MUSIC and SFX assets share this aggregate — differentiated by asset_type.
 """
 
 from dataclasses import dataclass
 from datetime import datetime
-from typing import List, Optional, Union
+from typing import Optional
 from uuid import UUID, uuid4
 
 from modules.library.domain.asset_aggregate import MediaAssetAggregate
@@ -18,15 +17,13 @@ from modules.library.domain.media_asset_type import MediaAssetType
 
 
 @dataclass
-class AudioAsset(MediaAssetAggregate):
+class MusicAsset(MediaAssetAggregate):
     """
-    AudioAsset domain aggregate.
+    MusicAsset domain aggregate.
 
     Extends MediaAssetAggregate with audio playback configuration fields.
     These are asset-level defaults that persist across sessions — when a DM
     loads this track into a game, these values are used as starting config.
-
-    Used for both MUSIC (BGM) and SFX asset types.
     """
     duration_seconds: Optional[float] = None
     default_volume: Optional[float] = None
@@ -39,30 +36,20 @@ class AudioAsset(MediaAssetAggregate):
         filename: str,
         s3_key: str,
         content_type: str,
-        asset_type: Union[MediaAssetType, str] = MediaAssetType.MUSIC,
         file_size: Optional[int] = None,
         campaign_id: Optional[UUID] = None,
         duration_seconds: Optional[float] = None,
         default_volume: Optional[float] = None,
         default_looping: Optional[bool] = None
-    ) -> "AudioAsset":
+    ) -> "MusicAsset":
         """
-        Factory method to create a new audio asset.
+        Factory method to create a new music asset.
 
-        Validates content_type is audio and asset_type is MUSIC or SFX.
+        Forces asset_type to MUSIC. Validates content_type is audio.
         """
-        # Convert string to enum if needed
-        if isinstance(asset_type, str):
-            asset_type = MediaAssetType(asset_type)
-
-        # Validate asset type
-        if asset_type not in (MediaAssetType.MUSIC, MediaAssetType.SFX):
-            raise ValueError(f"AudioAsset must be MUSIC or SFX type, got {asset_type.value}")
-
-        # Validate content type for audio
         valid_audio_types = {"audio/mpeg", "audio/wav", "audio/ogg"}
         if content_type not in valid_audio_types:
-            raise ValueError(f"Invalid content_type for audio: {content_type}")
+            raise ValueError(f"Invalid content_type for music: {content_type}")
 
         campaign_ids = [campaign_id] if campaign_id else []
 
@@ -72,7 +59,7 @@ class AudioAsset(MediaAssetAggregate):
             filename=filename,
             s3_key=s3_key,
             content_type=content_type,
-            asset_type=asset_type,
+            asset_type=MediaAssetType.MUSIC,
             file_size=file_size,
             campaign_ids=campaign_ids,
             session_ids=[],
@@ -90,9 +77,9 @@ class AudioAsset(MediaAssetAggregate):
         duration_seconds: Optional[float] = None,
         default_volume: Optional[float] = None,
         default_looping: Optional[bool] = None
-    ) -> "AudioAsset":
+    ) -> "MusicAsset":
         """
-        Promote a base MediaAssetAggregate to AudioAsset.
+        Promote a base MediaAssetAggregate to MusicAsset.
 
         Used when repository loads from joined tables.
         """

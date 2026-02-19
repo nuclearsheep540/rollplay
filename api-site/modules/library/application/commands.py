@@ -10,7 +10,9 @@ from uuid import UUID
 
 from modules.library.domain.asset_aggregate import MediaAssetAggregate
 from modules.library.domain.map_asset_aggregate import MapAsset
-from modules.library.domain.audio_asset_aggregate import AudioAsset
+from modules.library.domain.music_asset_aggregate import MusicAsset
+from modules.library.domain.sfx_asset_aggregate import SfxAsset
+from modules.library.domain.image_asset_aggregate import ImageAsset
 from modules.library.domain.media_asset_type import MediaAssetType
 from modules.library.repositories.asset_repository import MediaAssetRepository
 from modules.session.repositories.session_repository import SessionRepository
@@ -95,13 +97,30 @@ class ConfirmUpload:
                 file_size=file_size,
                 campaign_id=campaign_id
             )
-        elif asset_type in (MediaAssetType.MUSIC, MediaAssetType.SFX):
-            asset = AudioAsset.create(
+        elif asset_type == MediaAssetType.MUSIC:
+            asset = MusicAsset.create(
                 user_id=user_id,
                 filename=filename,
                 s3_key=s3_key,
                 content_type=content_type,
-                asset_type=asset_type,
+                file_size=file_size,
+                campaign_id=campaign_id
+            )
+        elif asset_type == MediaAssetType.SFX:
+            asset = SfxAsset.create(
+                user_id=user_id,
+                filename=filename,
+                s3_key=s3_key,
+                content_type=content_type,
+                file_size=file_size,
+                campaign_id=campaign_id
+            )
+        elif asset_type == MediaAssetType.IMAGE:
+            asset = ImageAsset.create(
+                user_id=user_id,
+                filename=filename,
+                s3_key=s3_key,
+                content_type=content_type,
                 file_size=file_size,
                 campaign_id=campaign_id
             )
@@ -389,7 +408,7 @@ class UpdateAudioConfig:
         duration_seconds: Optional[float] = None,
         default_volume: Optional[float] = None,
         default_looping: Optional[bool] = None
-    ) -> AudioAsset:
+    ) -> Union[MusicAsset, SfxAsset]:
         """
         Update audio configuration for an audio asset.
 
@@ -401,7 +420,7 @@ class UpdateAudioConfig:
             default_looping: Default loop behavior
 
         Returns:
-            Updated AudioAsset
+            Updated MusicAsset or SfxAsset
 
         Raises:
             ValueError: If asset not found, not owned, or not an audio asset
@@ -414,7 +433,7 @@ class UpdateAudioConfig:
         if not asset.is_owned_by(user_id):
             raise ValueError("Cannot modify media asset owned by another user")
 
-        if not isinstance(asset, AudioAsset):
+        if not isinstance(asset, (MusicAsset, SfxAsset)):
             raise ValueError("Audio configuration only applies to music and SFX assets")
 
         if self.session_repository:

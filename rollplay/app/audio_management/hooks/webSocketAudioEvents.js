@@ -128,6 +128,7 @@ export const handleRemoteAudioBatch = async (data, {
   stopSfxSlot,
   setSfxSlotVolume,
   loadSfxSlot,
+  clearSfxSlot,
 }) => {
   console.log("🎛️ Remote audio batch command received:", data);
   const { operations, triggered_by, fade_duration } = data;
@@ -174,6 +175,9 @@ export const handleRemoteAudioBatch = async (data, {
             break;
           case 'load':
             if (loadSfxSlot) await loadSfxSlot(slotIndex, { id: op.asset_id, filename: op.filename, s3_url: op.s3_url });
+            break;
+          case 'clear':
+            if (clearSfxSlot) clearSfxSlot(slotIndex);
             break;
           default:
             console.warn(`❌ Unknown SFX slot operation: ${operation}`);
@@ -267,6 +271,12 @@ export const handleRemoteAudioBatch = async (data, {
           } else {
             console.warn(`❌ Batch operation ${index + 1}: loadAssetIntoChannel function not available`);
           }
+          break;
+
+        case 'clear':
+          if (stopRemoteTrack) stopRemoteTrack(trackId);
+          if (loadAssetIntoChannel) loadAssetIntoChannel(trackId, { id: null, filename: null, s3_url: null });
+          console.log(`✅ Batch operation ${index + 1}: cleared ${trackId}`);
           break;
 
         default:

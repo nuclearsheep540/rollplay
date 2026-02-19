@@ -814,7 +814,7 @@ class WebsocketEvent():
         print(f"🎛️ Backend received batch audio operations from {triggered_by}: {len(operations)} operations")
         
         # Validate all operations
-        valid_operations = ["play", "stop", "pause", "resume", "volume", "loop", "load"]
+        valid_operations = ["play", "stop", "pause", "resume", "volume", "loop", "load", "clear"]
         for i, op in enumerate(operations):
             if not isinstance(op, dict):
                 print(f"❌ Invalid operation {i}: must be an object")
@@ -870,6 +870,8 @@ class WebsocketEvent():
             elif operation == "load":
                 filename = op.get("filename", "unknown")
                 operation_summaries.append(f"load {track_id} ({filename})")
+            elif operation == "clear":
+                operation_summaries.append(f"clear {track_id}")
 
         log_message = f"🎛️ {triggered_by} executed batch audio operations: {', '.join(operation_summaries)}"
         print(log_message)
@@ -946,6 +948,19 @@ class WebsocketEvent():
                         "s3_url": op.get("s3_url"),
                         "volume": op.get("volume", 0.8),
                         "looping": op.get("looping", True),
+                        "playback_state": "stopped",
+                        "started_at": None,
+                        "paused_elapsed": None,
+                    }
+                    GameService.update_audio_state(client_id, track_id, channel_state)
+
+                elif operation == "clear":
+                    channel_state = {
+                        "filename": None,
+                        "asset_id": None,
+                        "s3_url": None,
+                        "volume": op.get("volume", 0.8),
+                        "looping": False,
                         "playback_state": "stopped",
                         "started_at": None,
                         "paused_elapsed": None,
