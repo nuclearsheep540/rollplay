@@ -30,6 +30,7 @@ export default function AudioMixerPanel({
   sfxSlots = [],
   loadSfxSlot = null,
   clearSfxSlot = null,
+  setSfxSlotVolume = null,
 }) {
   
   // Track pending audio operations to disable buttons
@@ -808,6 +809,7 @@ export default function AudioMixerPanel({
             sfxSlots={sfxSlots}
             onTrigger={handleSfxTrigger}
             onVolumeChange={handleSfxVolumeChange}
+            onVolumeChangeLocal={setSfxSlotVolume}
             onAssetSelected={handleSfxAssetSelected}
             onClear={handleSfxClear}
             campaignId={campaignId}

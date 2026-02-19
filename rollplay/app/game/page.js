@@ -1656,6 +1656,7 @@ function GameContent() {
                   sfxSlots={sfxSlots}
                   loadSfxSlot={loadSfxSlot}
                   clearSfxSlot={clearSfxSlot}
+                  setSfxSlotVolume={setSfxSlotVolume}
                 />
               )}
             </div>

@@ -288,7 +288,7 @@ export default function AudioTrack({
                 type="range"
                 min="0.0"
                 max="1.3"
-                step="0.05"
+                step="0.01"
                 value={volume}
                 onChange={(e) =>
                   handleVolumeChange(parseFloat(e.target.value))

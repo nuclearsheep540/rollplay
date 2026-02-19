@@ -5,7 +5,7 @@
  * SPDX-License-Identifier: GPL-3.0-or-later
  */
 
-import React, { useState, useRef, useCallback, useMemo } from 'react';
+import React, { useState, useRef, useCallback, useMemo, memo } from 'react';
 import { Popover, PopoverButton, PopoverPanel, PopoverGroup } from '@headlessui/react';
 import { useAssets } from '@/app/asset_library/hooks/useAssets';
 import { useUploadAsset } from '@/app/asset_library/hooks/useUploadAsset';
@@ -17,10 +17,50 @@ const MAX_FILE_SIZE = 50 * 1024 * 1024; // 50MB
 
 const stripExtension = (filename) => filename?.replace(/\.[^.]+$/, '') || '';
 
+const SfxVolumeSlider = memo(function SfxVolumeSlider({ volume, onChange, onRelease }) {
+  const [localVol, setLocalVol] = useState(volume);
+  const dragging = useRef(false);
+
+  const handleChange = (e) => {
+    const v = parseFloat(e.target.value);
+    dragging.current = true;
+    setLocalVol(v);
+    onChange(v);
+  };
+
+  const handleRelease = (e) => {
+    const v = parseFloat(e.target.value);
+    dragging.current = false;
+    setLocalVol(v);
+    onRelease(v);
+  };
+
+  // Sync from parent when not dragging
+  const displayVol = dragging.current ? localVol : volume;
+
+  return (
+    <div className="w-full mt-2 pt-2 border-t border-gray-600/50">
+      <input
+        type="range"
+        min="0"
+        max="1"
+        step="0.01"
+        value={displayVol}
+        onChange={handleChange}
+        onMouseUp={handleRelease}
+        onTouchEnd={handleRelease}
+        className="w-full h-1 accent-emerald-500 cursor-pointer"
+        title={`Volume: ${Math.round(displayVol * 100)}%`}
+      />
+    </div>
+  );
+});
+
 export default function SfxSoundboard({
   sfxSlots = [],
   onTrigger,
   onVolumeChange,
+  onVolumeChangeLocal,
   onAssetSelected,
   onClear,
   campaignId,
@@ -68,13 +108,23 @@ export default function SfxSoundboard({
   };
 
   const handleVolumeChange = useCallback((slotIndex, volume) => {
+    onVolumeChangeLocal?.(slotIndex, volume);
+
     if (volumeDebounceTimers.current[slotIndex]) {
       clearTimeout(volumeDebounceTimers.current[slotIndex]);
     }
     volumeDebounceTimers.current[slotIndex] = setTimeout(() => {
       onVolumeChange?.(slotIndex, volume);
       delete volumeDebounceTimers.current[slotIndex];
-    }, 300);
+    }, 500);
+  }, [onVolumeChange, onVolumeChangeLocal]);
+
+  const handleVolumeRelease = useCallback((slotIndex, volume) => {
+    if (volumeDebounceTimers.current[slotIndex]) {
+      clearTimeout(volumeDebounceTimers.current[slotIndex]);
+      delete volumeDebounceTimers.current[slotIndex];
+    }
+    onVolumeChange?.(slotIndex, volume);
   }, [onVolumeChange]);
 
   const handleFileChange = async (e) => {
@@ -290,15 +340,10 @@ export default function SfxSoundboard({
 
               {/* Volume slider */}
               {hasAsset && (
-                <input
-                  type="range"
-                  min="0"
-                  max="1"
-                  step="0.05"
-                  value={slot.volume}
-                  onChange={(e) => handleVolumeChange(index, parseFloat(e.target.value))}
-                  className="w-full h-1 mt-1 accent-emerald-500 cursor-pointer"
-                  title={`Volume: ${Math.round(slot.volume * 100)}%`}
+                <SfxVolumeSlider
+                  volume={slot.volume}
+                  onChange={(v) => handleVolumeChange(index, v)}
+                  onRelease={(v) => handleVolumeRelease(index, v)}
                 />
               )}
             </div>
