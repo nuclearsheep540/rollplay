@@ -108,20 +108,38 @@ export const useUnifiedAudio = () => {
   const playOperationsRef = useRef({}); // Track active play operations to prevent duplicates
   const pendingPlayOpsRef = useRef([]); // Queue play ops when AudioContext is suspended (non-DM players)
 
-  // Remote track states (for DM-controlled audio) - A/B/C/D BGM + SFX channels
+  // Remote track states (for DM-controlled BGM audio)
   // Channels start empty — DM loads audio from asset library via AudioTrackSelector
+  // SFX is handled separately by the lightweight soundboard system below
   const [remoteTrackStates, setRemoteTrackStates] = useState({
-    // BGM Channels
     audio_channel_A: { playbackState: PlaybackState.STOPPED, volume: 0.8, filename: null, asset_id: null, s3_url: null, type: ChannelType.BGM, channelGroup: ChannelType.BGM, track: 'A', currentTime: 0, duration: 0, looping: true },
     audio_channel_B: { playbackState: PlaybackState.STOPPED, volume: 0.8, filename: null, asset_id: null, s3_url: null, type: ChannelType.BGM, channelGroup: ChannelType.BGM, track: 'B', currentTime: 0, duration: 0, looping: true },
     audio_channel_C: { playbackState: PlaybackState.STOPPED, volume: 0.8, filename: null, asset_id: null, s3_url: null, type: ChannelType.BGM, channelGroup: ChannelType.BGM, track: 'C', currentTime: 0, duration: 0, looping: true },
     audio_channel_D: { playbackState: PlaybackState.STOPPED, volume: 0.8, filename: null, asset_id: null, s3_url: null, type: ChannelType.BGM, channelGroup: ChannelType.BGM, track: 'D', currentTime: 0, duration: 0, looping: true },
-    // SFX Channels
-    audio_channel_3: { playbackState: PlaybackState.STOPPED, volume: 0.8, filename: null, asset_id: null, s3_url: null, type: ChannelType.SFX, channelGroup: ChannelType.SFX, track: '1', currentTime: 0, duration: 0, looping: false },
-    audio_channel_4: { playbackState: PlaybackState.STOPPED, volume: 0.8, filename: null, asset_id: null, s3_url: null, type: ChannelType.SFX, channelGroup: ChannelType.SFX, track: '2', currentTime: 0, duration: 0, looping: false },
-    audio_channel_5: { playbackState: PlaybackState.STOPPED, volume: 0.8, filename: null, asset_id: null, s3_url: null, type: ChannelType.SFX, channelGroup: ChannelType.SFX, track: '3', currentTime: 0, duration: 0, looping: false },
-    audio_channel_6: { playbackState: PlaybackState.STOPPED, volume: 0.8, filename: null, asset_id: null, s3_url: null, type: ChannelType.SFX, channelGroup: ChannelType.SFX, track: '4', currentTime: 0, duration: 0, looping: false }
   });
+
+  // =====================================
+  // SFX SOUNDBOARD (Lightweight fire-and-forget)
+  // =====================================
+  // Shares AudioContext + MasterGain with BGM, but uses a simpler path:
+  // BufferSource → SlotGainNode → MasterGainNode → destination
+  // No AnalyserNodes, no RAF time tracking, no pause/resume state machine.
+  const SFX_SLOT_COUNT = 9;
+  const sfxSlotGainsRef = useRef({});
+  const sfxSlotSourcesRef = useRef({});
+  const sfxSlotBuffersRef = useRef({});
+
+  const [sfxSlots, setSfxSlots] = useState(() =>
+    Array.from({ length: SFX_SLOT_COUNT }, (_, i) => ({
+      slotIndex: i,
+      trackId: `sfx_slot_${i}`,
+      asset_id: null,
+      filename: null,
+      s3_url: null,
+      volume: 0.8,
+      isPlaying: false,
+    }))
+  );
 
   // Active fade transitions state
   const [activeFades, setActiveFades] = useState({}); // { trackId: { type, startTime, duration, startGain, targetGain, operation, animationId } }
@@ -155,7 +173,15 @@ export const useUnifiedAudio = () => {
           remoteTrackAnalysersRef.current[trackId] = analyserNode;
         });
 
-        console.log('🎵 Web Audio API initialized for remote tracks');
+        // Create lightweight gain nodes for SFX soundboard slots (no analysers)
+        for (let i = 0; i < SFX_SLOT_COUNT; i++) {
+          const slotGain = audioContextRef.current.createGain();
+          slotGain.connect(masterGainRef.current);
+          slotGain.gain.value = 0.8;
+          sfxSlotGainsRef.current[`sfx_slot_${i}`] = slotGain;
+        }
+
+        console.log('🎵 Web Audio API initialized for remote tracks + SFX soundboard');
         return true;
       } catch (error) {
         console.warn('Web Audio API initialization failed:', error);
@@ -919,11 +945,23 @@ export const useUnifiedAudio = () => {
       }
     });
 
+    // Stop all SFX soundboard sources
+    Object.keys(sfxSlotSourcesRef.current).forEach(trackId => {
+      try {
+        if (sfxSlotSourcesRef.current[trackId]) {
+          sfxSlotSourcesRef.current[trackId].stop();
+        }
+      } catch (e) {
+        console.warn(`Error stopping SFX slot ${trackId}:`, e);
+      }
+    });
+
     // Clear all refs
     activeSourcesRef.current = {};
     trackTimersRef.current = {};
     resumeOperationsRef.current = {};
     playOperationsRef.current = {};
+    sfxSlotSourcesRef.current = {};
 
     // Cancel all active fades
     Object.keys(activeFades).forEach(trackId => {
@@ -952,6 +990,32 @@ export const useUnifiedAudio = () => {
 
     for (const [channelId, channelState] of Object.entries(audioState)) {
       if (!channelState || !channelState.filename) continue;
+
+      // SFX soundboard slots — restore loaded asset only (no playback sync for one-shots)
+      if (channelId.startsWith('sfx_slot_')) {
+        const slotIndex = parseInt(channelId.replace('sfx_slot_', ''), 10);
+        if (isNaN(slotIndex) || slotIndex < 0 || slotIndex >= SFX_SLOT_COUNT) continue;
+
+        setSfxSlots(prev => prev.map((s, i) =>
+          i === slotIndex ? {
+            ...s,
+            asset_id: channelState.asset_id,
+            filename: channelState.filename,
+            s3_url: channelState.s3_url,
+            volume: channelState.volume ?? 0.8,
+          } : s
+        ));
+
+        // Pre-load buffer for instant playback
+        if (channelState.s3_url) {
+          const buffer = await loadRemoteAudioBuffer(channelState.s3_url, channelId);
+          if (buffer) {
+            sfxSlotBuffersRef.current[`${channelId}_${channelState.asset_id || channelState.filename}`] = buffer;
+          }
+        }
+        console.log(`🔊 Sync: restored SFX slot ${slotIndex} — ${channelState.filename}`);
+        continue;
+      }
 
       const { filename, asset_id, s3_url, volume, looping, playback_state, started_at, paused_elapsed } = channelState;
 
@@ -1047,6 +1111,103 @@ export const useUnifiedAudio = () => {
     console.log(`🎵 Loaded asset "${asset.filename}" into channel ${channelId}`);
   };
 
+  // =====================================
+  // SFX SOUNDBOARD FUNCTIONS
+  // =====================================
+
+  // Load an asset into a soundboard slot and pre-fetch its buffer
+  const loadSfxSlot = async (slotIndex, asset) => {
+    setSfxSlots(prev => prev.map((s, i) =>
+      i === slotIndex ? { ...s, asset_id: asset.id, filename: asset.filename, s3_url: asset.s3_url } : s
+    ));
+    console.log(`🔊 Loaded SFX "${asset.filename}" into slot ${slotIndex}`);
+
+    // Pre-fetch buffer for instant trigger response
+    if (asset.s3_url) {
+      const trackId = `sfx_slot_${slotIndex}`;
+      const buffer = await loadRemoteAudioBuffer(asset.s3_url, trackId);
+      if (buffer) {
+        sfxSlotBuffersRef.current[`${trackId}_${asset.id || asset.filename}`] = buffer;
+        console.log(`✅ Pre-loaded SFX buffer for slot ${slotIndex}`);
+      }
+    }
+  };
+
+  // Fire-and-forget SFX playback
+  const playSfxSlot = async (slotIndex) => {
+    const slot = sfxSlots[slotIndex];
+    if (!slot?.s3_url || !audioContextRef.current) return false;
+
+    // If context is suspended, drop silently — one-shot SFX would be stale by unlock time
+    if (audioContextRef.current.state === 'suspended') {
+      console.warn(`🔇 SFX slot ${slotIndex} dropped — AudioContext suspended`);
+      return false;
+    }
+
+    const trackId = `sfx_slot_${slotIndex}`;
+
+    // Re-trigger: stop any currently playing source on this slot
+    if (sfxSlotSourcesRef.current[trackId]) {
+      try { sfxSlotSourcesRef.current[trackId].stop(); } catch (_) {}
+      delete sfxSlotSourcesRef.current[trackId];
+    }
+
+    // Load or reuse buffer (keyed by asset_id for stable caching)
+    const bufferKey = `${trackId}_${slot.asset_id || slot.filename}`;
+    let buffer = sfxSlotBuffersRef.current[bufferKey];
+    if (!buffer) {
+      buffer = await loadRemoteAudioBuffer(slot.s3_url, trackId);
+      if (!buffer) return false;
+      sfxSlotBuffersRef.current[bufferKey] = buffer;
+    }
+
+    // Ensure slot gain node exists
+    if (!sfxSlotGainsRef.current[trackId]) {
+      console.warn(`⚠️ SFX gain node missing for ${trackId} — reinitializing`);
+      const slotGain = audioContextRef.current.createGain();
+      slotGain.connect(masterGainRef.current);
+      slotGain.gain.value = slot.volume;
+      sfxSlotGainsRef.current[trackId] = slotGain;
+    }
+
+    // Create source, connect to slot gain, play
+    const source = audioContextRef.current.createBufferSource();
+    source.buffer = buffer;
+    source.loop = false;
+    source.connect(sfxSlotGainsRef.current[trackId]);
+    source.start(0);
+    sfxSlotSourcesRef.current[trackId] = source;
+
+    // Mark as playing, auto-clear when done
+    setSfxSlots(prev => prev.map((s, i) => i === slotIndex ? { ...s, isPlaying: true } : s));
+    source.onended = () => {
+      delete sfxSlotSourcesRef.current[trackId];
+      setSfxSlots(prev => prev.map((s, i) => i === slotIndex ? { ...s, isPlaying: false } : s));
+    };
+
+    console.log(`🔊 Playing SFX slot ${slotIndex}: ${slot.filename}`);
+    return true;
+  };
+
+  // Immediate stop for a soundboard slot
+  const stopSfxSlot = (slotIndex) => {
+    const trackId = `sfx_slot_${slotIndex}`;
+    if (sfxSlotSourcesRef.current[trackId]) {
+      try { sfxSlotSourcesRef.current[trackId].stop(); } catch (_) {}
+      delete sfxSlotSourcesRef.current[trackId];
+    }
+    setSfxSlots(prev => prev.map((s, i) => i === slotIndex ? { ...s, isPlaying: false } : s));
+  };
+
+  // Per-slot volume control
+  const setSfxSlotVolume = (slotIndex, volume) => {
+    const trackId = `sfx_slot_${slotIndex}`;
+    if (sfxSlotGainsRef.current[trackId]) {
+      sfxSlotGainsRef.current[trackId].gain.value = volume;
+    }
+    setSfxSlots(prev => prev.map((s, i) => i === slotIndex ? { ...s, volume } : s));
+  };
+
   return {
     // Audio state
     isAudioUnlocked,
@@ -1082,6 +1243,13 @@ export const useUnifiedAudio = () => {
 
     // Late-joiner sync
     syncAudioState,
+
+    // SFX Soundboard
+    sfxSlots,
+    playSfxSlot,
+    stopSfxSlot,
+    setSfxSlotVolume,
+    loadSfxSlot,
 
     // Unified functions
     unlockAudio,

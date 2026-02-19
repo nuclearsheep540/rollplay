@@ -195,7 +195,7 @@ export const handlePlayerDisconnectedLobby = (data, { setLobbyUsers, setDisconne
   // The backend will send a lobby_update when user is actually removed
 };
 
-export const handlePlayerKicked = (data, { thisPlayer, stopRemoteTrack, remoteTrackStates, handleRemoteAudioBatch }) => {
+export const handlePlayerKicked = (data, { thisPlayer, stopRemoteTrack, remoteTrackStates, handleRemoteAudioBatch, sfxSlots, stopSfxSlot }) => {
   console.log("received player kick:", data);
   const { kicked_player } = data;
   // Backend handles kick logging
@@ -203,34 +203,38 @@ export const handlePlayerKicked = (data, { thisPlayer, stopRemoteTrack, remoteTr
   // If this player was kicked, stop all audio and redirect
   if (kicked_player === thisPlayer) {
     console.log("🚪 Player was kicked - stopping all audio before redirect");
-    
-    // Stop all currently active audio tracks using batch operations
+
+    // Stop all currently active BGM tracks using batch operations
     if (remoteTrackStates && Object.keys(remoteTrackStates).length > 0) {
       if (handleRemoteAudioBatch) {
-        // Use batch operations for better performance
         const stopOperations = Object.keys(remoteTrackStates).map(trackId => ({
           trackId: trackId,
           operation: 'stop'
         }));
-        
+
         console.log(`🛑 Batch stopping ${stopOperations.length} audio tracks`);
         handleRemoteAudioBatch(
           { operations: stopOperations, triggered_by: 'player_kicked' },
           { stopRemoteTrack }
         );
       } else if (stopRemoteTrack) {
-        // Fallback to individual stops if batch handler not available
         Object.keys(remoteTrackStates).forEach(trackId => {
           try {
             stopRemoteTrack(trackId);
-            console.log(`🛑 Stopped audio track: ${trackId}`);
           } catch (error) {
             console.warn(`Failed to stop track ${trackId}:`, error);
           }
         });
       }
     }
-    
+
+    // Stop all active SFX soundboard slots
+    if (sfxSlots && stopSfxSlot) {
+      sfxSlots.forEach((slot, i) => {
+        if (slot.isPlaying) stopSfxSlot(i);
+      });
+    }
+
     // Small delay to ensure audio stops before redirect
     setTimeout(() => {
       window.history.replaceState(null, '', '/');
@@ -778,16 +782,15 @@ export const handleSystemMessage = (data, {}) => {
   // Backend handles system message logging
 };
 
-export const handleSessionEnded = (data, { stopRemoteTrack, remoteTrackStates, handleRemoteAudioBatch, setSessionEndedData }) => {
+export const handleSessionEnded = (data, { stopRemoteTrack, remoteTrackStates, handleRemoteAudioBatch, setSessionEndedData, sfxSlots, stopSfxSlot }) => {
   console.log("🛑 Session ended:", data);
   const { reason, message } = data;
 
   console.log(`🚪 Game session ended: ${message || reason}`);
 
-  // Stop all currently active audio tracks using batch operations
+  // Stop all currently active BGM tracks using batch operations
   if (remoteTrackStates && Object.keys(remoteTrackStates).length > 0) {
     if (handleRemoteAudioBatch) {
-      // Use batch operations for better performance
       const stopOperations = Object.keys(remoteTrackStates).map(trackId => ({
         trackId: trackId,
         operation: 'stop'
@@ -799,11 +802,9 @@ export const handleSessionEnded = (data, { stopRemoteTrack, remoteTrackStates, h
         { stopRemoteTrack }
       );
     } else if (stopRemoteTrack) {
-      // Fallback to individual stops if batch handler not available
       Object.keys(remoteTrackStates).forEach(trackId => {
         try {
           stopRemoteTrack(trackId);
-          console.log(`🛑 Stopped audio track: ${trackId}`);
         } catch (error) {
           console.warn(`Failed to stop track ${trackId}:`, error);
         }
@@ -811,11 +812,17 @@ export const handleSessionEnded = (data, { stopRemoteTrack, remoteTrackStates, h
     }
   }
 
+  // Stop all active SFX soundboard slots
+  if (sfxSlots && stopSfxSlot) {
+    sfxSlots.forEach((slot, i) => {
+      if (slot.isPlaying) stopSfxSlot(i);
+    });
+  }
+
   // Show session ended modal with countdown
   if (setSessionEndedData) {
     setSessionEndedData({ message, reason });
   } else {
-    // Fallback if modal setter not available
     alert(message || `This game session has ended: ${reason}`);
     setTimeout(() => {
       window.location.href = '/dashboard';

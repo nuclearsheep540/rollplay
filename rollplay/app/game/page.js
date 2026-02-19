@@ -797,6 +797,12 @@ function GameContent() {
     setClearPendingOperationCallback,
     loadAssetIntoChannel,
     syncAudioState,
+    // SFX Soundboard
+    sfxSlots,
+    playSfxSlot,
+    stopSfxSlot,
+    setSfxSlotVolume,
+    loadSfxSlot,
     cleanupAllAudio
   } = useUnifiedAudio();
 
@@ -858,6 +864,13 @@ function GameContent() {
     // Asset loading (for load batch operations from other clients)
     loadAssetIntoChannel,
 
+    // SFX Soundboard (for batch operations from other clients)
+    playSfxSlot,
+    stopSfxSlot,
+    setSfxSlotVolume,
+    loadSfxSlot,
+    sfxSlots,
+
     // Session ended modal
     setSessionEndedData
   }), [
@@ -867,6 +880,7 @@ function GameContent() {
     playRemoteTrack, resumeRemoteTrack, pauseRemoteTrack, stopRemoteTrack,
     setRemoteTrackVolume, toggleRemoteTrackLooping, loadRemoteAudioBuffer,
     syncAudioState, loadAssetIntoChannel,
+    playSfxSlot, stopSfxSlot, setSfxSlotVolume, loadSfxSlot, sfxSlots,
     audioBuffersRef, audioContextRef
   ]);
 
@@ -1637,6 +1651,8 @@ function GameContent() {
                   clearPendingOperation={setClearPendingOperationFn}
                   loadAssetIntoChannel={loadAssetIntoChannel}
                   campaignId={campaignId}
+                  sfxSlots={sfxSlots}
+                  loadSfxSlot={loadSfxSlot}
                 />
               )}
             </div>

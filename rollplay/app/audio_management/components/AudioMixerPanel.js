@@ -8,6 +8,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import AudioTrack from './AudioTrack';
 import AudioTrackSelector from './AudioTrackSelector';
+import SfxSoundboard from './SfxSoundboard';
 import { PlaybackState, ChannelType } from '../types';
 import {
   DM_CHILD,
@@ -25,6 +26,9 @@ export default function AudioMixerPanel({
   clearPendingOperation = null,
   loadAssetIntoChannel = null,
   campaignId = null,
+  // SFX Soundboard
+  sfxSlots = [],
+  loadSfxSlot = null,
 }) {
   
   // Track pending audio operations to disable buttons
@@ -281,10 +285,10 @@ export default function AudioMixerPanel({
   };
 
 
-  // Stop all tracks function using batch operation
+  // Stop all BGM tracks using batch operation
   const stopAllTracks = () => {
-    const allTrackIds = channels.filter((channel)=> channel.type === ChannelType.BGM).map(channel => channel.channelId);
-    console.log(`🛑 Stopping all tracks:`, allTrackIds);
+    const allTrackIds = Object.keys(remoteTrackStates);
+    console.log(`🛑 Stopping all BGM tracks:`, allTrackIds);
     
     // Create batch operations to stop all tracks
     const stopOperations = allTrackIds.map(trackId => ({
@@ -328,35 +332,55 @@ export default function AudioMixerPanel({
     }];
     sendRemoteAudioBatch?.(loopOperation);
   };
-  // Dynamically generate channels from remoteTrackStates
-  const channels = Object.keys(remoteTrackStates).map(channelId => {
-    const trackState = remoteTrackStates[channelId];
-    const { type, channelGroup, track } = trackState;
-    
-    // Generate appropriate label based on channel properties
-    let label;
-    if (channelGroup && track) {
-      label = `${channelGroup.charAt(0).toUpperCase() + channelGroup.slice(1)} Track ${track}`;
-    } else if (type === 'sfx') {
-      // Extract number from channelId for SFX labeling
-      const channelNum = channelId.replace('audio_channel_', '');
-      label = `SFX Channel ${channelNum}`;
-    } else {
-      label = `${type.charAt(0).toUpperCase() + type.slice(1)} Channel`;
-    }
-    
-    return {
-      channelId,
-      type,
-      channelGroup,
-      track,
-      label
-    };
-  });
 
-  // Organize channels by type for UI organization
-  const bgmChannels = channels.filter(ch => ch.type === ChannelType.BGM);
-  const sfxChannels = channels.filter(ch => ch.type === ChannelType.SFX);
+  // SFX Soundboard handlers
+  const handleSfxTrigger = async (slotIndex) => {
+    if (!isAudioUnlocked) {
+      const unlocked = await unlockAudio();
+      if (!unlocked) return;
+    }
+    const slot = sfxSlots[slotIndex];
+    if (!slot?.filename) return;
+
+    sendRemoteAudioBatch?.([{
+      trackId: `sfx_slot_${slotIndex}`,
+      operation: 'play',
+      filename: slot.filename,
+      asset_id: slot.asset_id,
+      s3_url: slot.s3_url,
+      volume: slot.volume,
+      looping: false,
+    }]);
+  };
+
+  const handleSfxVolumeChange = (slotIndex, volume) => {
+    sendRemoteAudioBatch?.([{
+      trackId: `sfx_slot_${slotIndex}`,
+      operation: 'volume',
+      volume,
+    }]);
+  };
+
+  const handleSfxAssetSelected = useCallback((slotIndex, asset) => {
+    if (loadSfxSlot) loadSfxSlot(slotIndex, asset);
+    sendRemoteAudioBatch?.([{
+      trackId: `sfx_slot_${slotIndex}`,
+      operation: 'load',
+      filename: asset.filename,
+      asset_id: asset.id,
+      s3_url: asset.s3_url,
+    }]);
+  }, [loadSfxSlot, sendRemoteAudioBatch]);
+
+  // Dynamically generate BGM channels from remoteTrackStates
+  const bgmChannels = Object.keys(remoteTrackStates).map(channelId => {
+    const trackState = remoteTrackStates[channelId];
+    const { channelGroup, track } = trackState;
+    const label = channelGroup && track
+      ? `${channelGroup.charAt(0).toUpperCase() + channelGroup.slice(1)} Track ${track}`
+      : 'BGM Channel';
+    return { channelId, type: ChannelType.BGM, channelGroup, track, label };
+  });
 
 
   // Simplified play handler using centralized sync logic
@@ -769,54 +793,17 @@ export default function AudioMixerPanel({
             </>
           )}
 
-          {/* Sound Effects Channels */}
-          {sfxChannels.length > 0 && (
-            <>
-              <div className="text-white font-bold mt-6">Sound Effects</div>
-              {sfxChannels.map((channel, idx) => {
-                const pendingOps = {
-                  play: pendingOperations.has(`play_${channel.channelId}`),
-                  pause: pendingOperations.has(`pause_${channel.channelId}`),
-                  stop: pendingOperations.has(`stop_${channel.channelId}`),
-                  loop: pendingOperations.has(`loop_${channel.channelId}`)
-                };
-                return (
-                  <AudioTrack
-                    key={channel.channelId}
-                    config={{
-                      trackId: channel.channelId,
-                      type: channel.type,
-                      label: channel.label,
-                      analyserNode: remoteTrackAnalysers[channel.channelId],
-                      track: channel.track
-                    }}
-                    pendingOperations={pendingOps}
-                    trackState={
-                      remoteTrackStates[channel.channelId] || {
-                        playbackState: PlaybackState.STOPPED,
-                        volume: 1.0,
-                        filename: null,
-                        currentTime: 0,
-                        duration: 0,
-                        looping: false
-                      }
-                    }
-                  onPlay={() => handlePlay(channel)}
-                  onPause={() => handlePause(channel)}
-                  onStop={() => handleStop(channel)}
-                  onVolumeChange={(v) =>
-                    handleVolumeChange(channel.channelId, v)
-                  }
-                  onVolumeChangeDebounced={(v) =>
-                    handleVolumeChange(channel.channelId, v)
-                  }
-                  onLoopToggle={() => {}}
-                  isLast={idx === sfxChannels.length - 1}
-                />
-                );
-              })}
-            </>
-          )}
+          {/* SFX Soundboard */}
+          <div className="text-white font-bold mt-6">Sound Effects</div>
+          <SfxSoundboard
+            sfxSlots={sfxSlots}
+            onTrigger={handleSfxTrigger}
+            onVolumeChange={handleSfxVolumeChange}
+            onAssetSelected={handleSfxAssetSelected}
+            campaignId={campaignId}
+            isAudioUnlocked={isAudioUnlocked}
+            unlockAudio={unlockAudio}
+          />
     </div>
   );
 }

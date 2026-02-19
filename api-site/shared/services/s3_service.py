@@ -102,15 +102,15 @@ class S3Service:
             logger.error(f"Failed to generate download URL: {e}")
             raise
 
-    def delete_object(self, key: str) -> bool:
+    def delete_object(self, key: str) -> None:
         """
         Delete an object from S3.
 
         Args:
             key: The S3 object key to delete
 
-        Returns:
-            True if deletion succeeded, False otherwise
+        Raises:
+            ClientError: If S3 deletion fails
         """
         try:
             self.client.delete_object(
@@ -118,10 +118,9 @@ class S3Service:
                 Key=key
             )
             logger.info(f"Deleted object: {key}")
-            return True
         except ClientError as e:
             logger.error(f"Failed to delete object {key}: {e}")
-            return False
+            raise
 
     def object_exists(self, key: str) -> bool:
         """

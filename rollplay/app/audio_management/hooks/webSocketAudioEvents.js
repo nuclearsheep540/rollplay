@@ -122,7 +122,12 @@ export const handleRemoteAudioBatch = async (data, {
   audioBuffersRef,
   audioContextRef,
   activeFades,
-  cancelFade
+  cancelFade,
+  // SFX Soundboard (lightweight path)
+  playSfxSlot,
+  stopSfxSlot,
+  setSfxSlotVolume,
+  loadSfxSlot,
 }) => {
   console.log("🎛️ Remote audio batch command received:", data);
   const { operations, triggered_by, fade_duration } = data;
@@ -152,7 +157,34 @@ export const handleRemoteAudioBatch = async (data, {
   // Process all operations in parallel using Promise.all()
   const processOperation = async (op, index, syncStartTime = null) => {
     const { trackId, operation } = op;
-    
+
+    // Route SFX soundboard slot operations to lightweight handlers
+    if (trackId.startsWith('sfx_slot_')) {
+      const slotIndex = parseInt(trackId.replace('sfx_slot_', ''), 10);
+      try {
+        switch (operation) {
+          case 'play':
+            if (playSfxSlot) await playSfxSlot(slotIndex);
+            break;
+          case 'stop':
+            if (stopSfxSlot) stopSfxSlot(slotIndex);
+            break;
+          case 'volume':
+            if (setSfxSlotVolume) setSfxSlotVolume(slotIndex, op.volume);
+            break;
+          case 'load':
+            if (loadSfxSlot) await loadSfxSlot(slotIndex, { id: op.asset_id, filename: op.filename, s3_url: op.s3_url });
+            break;
+          default:
+            console.warn(`❌ Unknown SFX slot operation: ${operation}`);
+        }
+        console.log(`✅ SFX slot ${slotIndex} ${operation} complete`);
+      } catch (error) {
+        console.error(`❌ SFX slot ${slotIndex} ${operation} failed:`, error);
+      }
+      return; // Skip normal BGM channel processing
+    }
+
     try {
       switch (operation) {
         case 'play':

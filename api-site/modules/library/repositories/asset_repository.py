@@ -12,8 +12,10 @@ from sqlalchemy import any_
 
 from modules.library.model.asset_model import MediaAsset as MediaAssetModel
 from modules.library.model.map_asset_model import MapAssetModel
+from modules.library.model.audio_asset_models import AudioAssetModel, MusicAssetModel, SfxAssetModel
 from modules.library.domain.asset_aggregate import MediaAssetAggregate
 from modules.library.domain.map_asset_aggregate import MapAsset
+from modules.library.domain.audio_asset_aggregate import AudioAsset
 from modules.library.domain.media_asset_type import MediaAssetType
 
 
@@ -88,7 +90,7 @@ class MediaAssetRepository:
 
         return self._model_to_aggregate(model)
 
-    def save(self, aggregate: Union[MediaAssetAggregate, MapAsset]) -> UUID:
+    def save(self, aggregate: Union[MediaAssetAggregate, MapAsset, AudioAsset]) -> UUID:
         """Save media asset aggregate (create or update)"""
         existing = (
             self.db.query(MediaAssetModel)
@@ -111,6 +113,12 @@ class MediaAssetRepository:
                 existing.grid_width = aggregate.grid_width
                 existing.grid_height = aggregate.grid_height
                 existing.grid_opacity = aggregate.grid_opacity
+
+            # Update audio-specific fields if AudioAsset
+            if isinstance(aggregate, AudioAsset) and isinstance(existing, AudioAssetModel):
+                existing.duration_seconds = aggregate.duration_seconds
+                existing.default_volume = aggregate.default_volume
+                existing.default_looping = aggregate.default_looping
         else:
             # Create new - determine which model to use
             if isinstance(aggregate, MapAsset):
@@ -127,6 +135,23 @@ class MediaAssetRepository:
                     grid_width=aggregate.grid_width,
                     grid_height=aggregate.grid_height,
                     grid_opacity=aggregate.grid_opacity
+                )
+            elif isinstance(aggregate, AudioAsset):
+                # Select correct subclass model based on asset_type
+                ModelClass = MusicAssetModel if aggregate.asset_type == MediaAssetType.MUSIC else SfxAssetModel
+                model = ModelClass(
+                    id=aggregate.id,
+                    user_id=aggregate.user_id,
+                    filename=aggregate.filename,
+                    s3_key=aggregate.s3_key,
+                    content_type=aggregate.content_type,
+                    asset_type=aggregate.asset_type,
+                    file_size=aggregate.file_size,
+                    campaign_ids=aggregate.campaign_ids,
+                    session_ids=aggregate.session_ids,
+                    duration_seconds=aggregate.duration_seconds,
+                    default_volume=aggregate.default_volume,
+                    default_looping=aggregate.default_looping
                 )
             else:
                 model = MediaAssetModel(
@@ -159,7 +184,7 @@ class MediaAssetRepository:
         self.db.commit()
         return True
 
-    def _model_to_aggregate(self, model: MediaAssetModel) -> Union[MediaAssetAggregate, MapAsset]:
+    def _model_to_aggregate(self, model: MediaAssetModel) -> Union[MediaAssetAggregate, MapAsset, AudioAsset]:
         """Convert ORM model to domain aggregate (polymorphic)"""
         # Build base aggregate fields
         base = MediaAssetAggregate(
@@ -183,6 +208,15 @@ class MediaAssetRepository:
                 grid_width=model.grid_width,
                 grid_height=model.grid_height,
                 grid_opacity=model.grid_opacity
+            )
+
+        # If it's an AudioAssetModel, promote to AudioAsset with audio fields
+        if isinstance(model, AudioAssetModel):
+            return AudioAsset.from_base(
+                base,
+                duration_seconds=model.duration_seconds,
+                default_volume=model.default_volume,
+                default_looping=model.default_looping
             )
 
         return base

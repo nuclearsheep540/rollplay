@@ -172,6 +172,39 @@ class SessionEntity:
         """Business rule: Session can only be deleted if INACTIVE or FINISHED"""
         return self.status in [SessionStatus.INACTIVE, SessionStatus.FINISHED]
 
+    # --- Asset Reference Management ---
+
+    def remove_asset_references(self, asset_id_str: str) -> bool:
+        """Remove all references to a deleted asset from session configs.
+        Returns True if any references were removed."""
+        changed = False
+
+        # Audio config: remove channels referencing this asset
+        if self.audio_config:
+            channels_to_remove = [
+                ch_id for ch_id, ch in self.audio_config.items()
+                if ch.get("asset_id") == asset_id_str
+            ]
+            for ch_id in channels_to_remove:
+                del self.audio_config[ch_id]
+                changed = True
+
+        # Map config: clear if it references this asset
+        if self.map_config and self.map_config.get("asset_id") == asset_id_str:
+            self.map_config = {}
+            if self.active_display == "map":
+                self.active_display = None
+            changed = True
+
+        # Image config: clear if it references this asset
+        if self.image_config and self.image_config.get("asset_id") == asset_id_str:
+            self.image_config = {}
+            if self.active_display == "image":
+                self.active_display = None
+            changed = True
+
+        return changed
+
     # --- Session Lifecycle Methods ---
 
     def update_name(self, name: str) -> None:
