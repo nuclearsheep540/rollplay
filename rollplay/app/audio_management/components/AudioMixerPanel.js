@@ -5,7 +5,7 @@
  * SPDX-License-Identifier: GPL-3.0-or-later
  */
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import AudioTrack from './AudioTrack';
 import AudioTrackSelector from './AudioTrackSelector';
 import SfxSoundboard from './SfxSoundboard';
@@ -55,10 +55,26 @@ export default function AudioMixerPanel({
   }, [loadAssetIntoChannel, sendRemoteAudioBatch]);
 
   // Cue system state
-  const [currentCue, setCurrentCue] = useState(null); // { tracksToStart: [], tracksToStop: [], cueId: string }
+  const [currentCue, setCurrentCue] = useState(null); // { targetTracks: [channelId, ...] }
   const [trackFadeStates, setTrackFadeStates] = useState({}); // Per-track fade configuration { trackId: boolean }
   const [fadeDuration, setFadeDuration] = useState(1000); // Global fade duration in ms
-  
+
+  // Effective cue: when null, mirrors PGM (currently playing tracks)
+  const pgmTargetTracks = useMemo(() =>
+    Object.keys(remoteTrackStates).filter(id => remoteTrackStates[id]?.playbackState === PlaybackState.PLAYING),
+    [remoteTrackStates]
+  );
+  const effectiveCueTargets = currentCue?.targetTracks ?? pgmTargetTracks;
+
+  // Auto-reset cue once PGM catches up to the intended state
+  useEffect(() => {
+    if (!currentCue?.targetTracks) return;
+    const cue = currentCue.targetTracks;
+    if (cue.length === pgmTargetTracks.length && cue.every(id => pgmTargetTracks.includes(id))) {
+      setCurrentCue(null);
+    }
+  }, [currentCue, pgmTargetTracks]);
+
   // Helper to add pending operation
   const addPendingOperation = (operation) => {
     setPendingOperations(prev => new Set(prev).add(operation));
@@ -213,8 +229,7 @@ export default function AudioMixerPanel({
       console.log(`⚠️ Keeping current tracks playing due to crossfade error`);
     }
     
-    // Clear the cue after execution
-    setCurrentCue(null);
+    // Keep cue as-is — optimistic render until PGM catches up
   }, [currentCue, remoteTrackStates, sendRemoteAudioBatch]);
 
 
@@ -282,8 +297,7 @@ export default function AudioMixerPanel({
       sendRemoteAudioBatch?.(batchOperations, fadeDuration);
     }
     
-    // Clear the cue
-    setCurrentCue(null);
+    // Keep cue as-is — optimistic render until PGM catches up
   };
 
 
@@ -557,31 +571,22 @@ export default function AudioMixerPanel({
                       <div 
                         key={`pfl-${channel.channelId}`}
                         className={`w-10 h-8 rounded text-center text-xs transition-all duration-200 cursor-pointer flex items-center justify-center border ${
-                          currentCue?.targetTracks?.includes?.(channel.channelId) 
-                            ? 'bg-green-600 text-white border-green-500' 
+                          effectiveCueTargets.includes(channel.channelId)
+                            ? 'bg-green-600 text-white border-green-500'
                             : 'bg-gray-600 hover:bg-gray-500 text-gray-300 border-gray-500'
                         }`}
                         onClick={() => {
                           setCurrentCue(prev => {
-                            const currentTargets = prev?.targetTracks || [];
+                            // Initialize from PGM when cue hasn't been touched
+                            const currentTargets = prev?.targetTracks ?? pgmTargetTracks;
                             const channelId = channel.channelId;
-                            
-                            // Toggle selection
-                            if (Array.isArray(currentTargets)) {
-                              const isSelected = currentTargets.includes(channelId);
-                              return {
-                                ...prev,
-                                targetTracks: isSelected 
-                                  ? currentTargets.filter(id => id !== channelId)
-                                  : [...currentTargets, channelId]
-                              };
-                            } else {
-                              // Convert to array format
-                              return {
-                                ...prev,
-                                targetTracks: [channelId]
-                              };
-                            }
+                            const isSelected = currentTargets.includes(channelId);
+                            return {
+                              ...prev,
+                              targetTracks: isSelected
+                                ? currentTargets.filter(id => id !== channelId)
+                                : [...currentTargets, channelId]
+                            };
                           });
                         }}
                       >
@@ -640,7 +645,7 @@ export default function AudioMixerPanel({
                     {bgmChannels.map((channel) => {
                       const trackState = remoteTrackStates[channel.channelId];
                       const isCurrentlyPlaying = trackState?.playbackState === 'playing';
-                      const isSelectedInPFL = currentCue?.targetTracks?.includes?.(channel.channelId);
+                      const isSelectedInPFL = effectiveCueTargets.includes(channel.channelId);
                       
                       // Calculate what will change (no hooks here)
                       let changeType = null;
@@ -697,8 +702,8 @@ export default function AudioMixerPanel({
               <div className="flex items-center justify-center gap-4 mt-4">
                 <button
                   className={`px-6 py-2 rounded text-sm font-bold transition-all duration-200 ${
-                    currentCue?.targetTracks?.length > 0 
-                      ? 'bg-red-600 hover:bg-red-700 text-white' 
+                    currentCue !== null
+                      ? 'bg-red-600 hover:bg-red-700 text-white'
                       : 'bg-gray-600 text-gray-400 cursor-not-allowed'
                   }`}
                   onClick={() => {
@@ -730,12 +735,7 @@ export default function AudioMixerPanel({
                       executeCrossfade();
                     }
                   }}
-                  disabled={
-                    !currentCue?.targetTracks?.length && 
-                    !Object.keys(remoteTrackStates).some(trackId => 
-                      remoteTrackStates[trackId]?.playbackState === PlaybackState.PLAYING
-                    )
-                  }
+                  disabled={currentCue === null}
                   title={`Execute transition (${currentCue?.targetTracks?.some(trackId => trackFadeStates[trackId]) ? 'some tracks will fade' : 'all tracks will cut'})`}
                 >
                   CUT
