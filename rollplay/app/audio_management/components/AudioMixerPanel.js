@@ -5,7 +5,7 @@
  * SPDX-License-Identifier: GPL-3.0-or-later
  */
 
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import AudioTrack from './AudioTrack';
 import AudioTrackSelector from './AudioTrackSelector';
 import SfxSoundboard from './SfxSoundboard';
@@ -58,6 +58,23 @@ export default function AudioMixerPanel({
   const [currentCue, setCurrentCue] = useState(null); // { targetTracks: [channelId, ...] }
   const [trackFadeStates, setTrackFadeStates] = useState({}); // Per-track fade configuration { trackId: boolean }
   const [fadeDuration, setFadeDuration] = useState(1000); // Global fade duration in ms
+  const fadeRepeatRef = useRef(null);
+
+  const startFadeRepeat = useCallback((delta) => {
+    setFadeDuration(prev => Math.min(10000, Math.max(100, prev + delta)));
+    const timeout = setTimeout(() => {
+      fadeRepeatRef.current = setInterval(() => {
+        setFadeDuration(prev => Math.min(10000, Math.max(100, prev + delta)));
+      }, 75);
+    }, 400);
+    fadeRepeatRef.current = timeout;
+  }, []);
+
+  const stopFadeRepeat = useCallback(() => {
+    clearTimeout(fadeRepeatRef.current);
+    clearInterval(fadeRepeatRef.current);
+    fadeRepeatRef.current = null;
+  }, []);
 
   // Effective cue: when null, mirrors PGM (currently playing tracks)
   const pgmTargetTracks = useMemo(() =>
@@ -644,38 +661,30 @@ export default function AudioMixerPanel({
                   <div className="flex flex-col gap-1 items-center">
                     {bgmChannels.map((channel) => {
                       const trackState = remoteTrackStates[channel.channelId];
-                      const isCurrentlyPlaying = trackState?.playbackState === 'playing';
+                      const hasAudio = !!trackState?.filename;
                       const isSelectedInPFL = effectiveCueTargets.includes(channel.channelId);
-                      
-                      // Calculate what will change (no hooks here)
-                      let changeType = null;
-                      let displayText = '-';
-                      
-                      if (isSelectedInPFL && !isCurrentlyPlaying) {
-                        // Track will start playing (coming in)
-                        changeType = 'start';
-                        displayText = channel.channelId.replace('audio_channel_', '');
-                      } else if (!isSelectedInPFL && isCurrentlyPlaying) {
-                        // Track will stop playing (going out)  
-                        changeType = 'stop';
-                        displayText = channel.channelId.replace('audio_channel_', '');
-                      }
-                      
+                      const channelLabel = channel.channelId.replace('audio_channel_', '');
+
+                      // Preview shows resulting PGM state after CUT
+                      let previewState = 'empty'; // no audio loaded
+                      if (hasAudio && isSelectedInPFL) previewState = 'play';
+                      else if (hasAudio && !isSelectedInPFL) previewState = 'stop';
+
                       return (
-                        <div 
+                        <div
                           key={`preview-${channel.channelId}`}
                           className={`w-10 h-8 rounded text-center text-xs transition-all duration-200 flex items-center justify-center border ${
-                            changeType === 'start' ? 'bg-green-500 text-white border-green-400' :
-                            changeType === 'stop' ? 'bg-red-500 text-white border-red-400' :
+                            previewState === 'play' ? 'bg-green-500 text-white border-green-400' :
+                            previewState === 'stop' ? 'bg-red-500 text-white border-red-400' :
                             'bg-gray-600 text-gray-300 border-gray-500'
                           }`}
                           title={
-                            changeType === 'start' ? `${displayText} will start playing` :
-                            changeType === 'stop' ? `${displayText} will stop playing` :
-                            'No change'
+                            previewState === 'play' ? `${channelLabel} will be playing` :
+                            previewState === 'stop' ? `${channelLabel} will be stopped` :
+                            'No audio loaded'
                           }
                         >
-                          {displayText}
+                          {hasAudio ? channelLabel : '-'}
                         </div>
                       );
                     })}
@@ -683,71 +692,98 @@ export default function AudioMixerPanel({
                 </div>
               </div>
 
-              {/* Fade Duration Control */}
-              <div className="flex items-center justify-center gap-2 mt-3 mb-2">
-                <label className="text-white text-sm font-medium">Fade Duration:</label>
-                <input
-                  type="number"
-                  min="100"
-                  max="10000"
-                  step="100"
-                  value={fadeDuration}
-                  onChange={(e) => setFadeDuration(Number(e.target.value))}
-                  className={`${DM_CHILD} w-20 text-center`}
-                />
-                <span className="text-white text-sm">ms</span>
-              </div>
+              {/* Fade control + action buttons — side by side */}
+              <div className="flex items-stretch gap-4 mt-3 mb-2">
+                {/* Fade duration (left) */}
+                <div className="flex flex-col items-center gap-1.5 flex-1">
+                  <span className="text-white text-sm font-medium">Fade</span>
+                  <div className="flex items-center gap-2">
+                    <button
+                      onMouseDown={() => startFadeRepeat(-100)}
+                      onMouseUp={stopFadeRepeat}
+                      onMouseLeave={stopFadeRepeat}
+                      onTouchStart={() => startFadeRepeat(-100)}
+                      onTouchEnd={stopFadeRepeat}
+                      className="px-4 py-1.5 text-base font-bold bg-gray-700 text-gray-300 rounded border border-gray-500 hover:bg-gray-500 transition-colors select-none"
+                    >
+                      −
+                    </button>
+                    <span className="px-4 py-1.5 text-base font-bold text-white bg-gray-700 border border-gray-500 rounded min-w-[4.5rem] text-center">
+                      {(fadeDuration / 1000).toFixed(1)}s
+                    </span>
+                    <button
+                      onMouseDown={() => startFadeRepeat(100)}
+                      onMouseUp={stopFadeRepeat}
+                      onMouseLeave={stopFadeRepeat}
+                      onTouchStart={() => startFadeRepeat(100)}
+                      onTouchEnd={stopFadeRepeat}
+                      className="px-4 py-1.5 text-base font-bold bg-gray-700 text-gray-300 rounded border border-gray-500 hover:bg-gray-500 transition-colors select-none"
+                    >
+                      +
+                    </button>
+                  </div>
+                  <div className="flex items-center gap-1.5 w-full">
+                    <span className="text-xs text-gray-400">0.1</span>
+                    <div
+                      className="flex-1 h-2 bg-gray-700 rounded-full overflow-hidden cursor-pointer"
+                      onClick={(e) => {
+                        const rect = e.currentTarget.getBoundingClientRect();
+                        const ratio = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
+                        const ms = Math.round((100 + ratio * 9900) / 100) * 100;
+                        setFadeDuration(Math.max(100, Math.min(10000, ms)));
+                      }}
+                    >
+                      <div
+                        className="h-full bg-blue-500/60 rounded-full transition-all duration-100 pointer-events-none"
+                        style={{ width: `${((fadeDuration - 100) / 9900) * 100}%` }}
+                      />
+                    </div>
+                    <span className="text-xs text-gray-400">10s</span>
+                  </div>
+                </div>
 
-              {/* Cut and Stop All Buttons */}
-              <div className="flex items-center justify-center gap-4 mt-4">
-                <button
-                  className={`px-6 py-2 rounded text-sm font-bold transition-all duration-200 ${
-                    currentCue !== null
-                      ? 'bg-red-600 hover:bg-red-700 text-white'
-                      : 'bg-gray-600 text-gray-400 cursor-not-allowed'
-                  }`}
-                  onClick={() => {
-                    console.log(`🎚️ CUT button clicked. currentCue:`, currentCue);
-                    
-                    // Calculate tracks that will be affected by this operation
-                    const targetTracks = currentCue?.targetTracks || [];
-                    
-                    const tracksToStart = targetTracks.filter(trackId => 
-                      remoteTrackStates[trackId]?.playbackState !== PlaybackState.PLAYING
-                    );
-                    
-                    const tracksToStop = Object.keys(remoteTrackStates).filter(trackId => {
-                      const track = remoteTrackStates[trackId];
-                      return track.playbackState === PlaybackState.PLAYING && 
-                             !targetTracks.includes(trackId);
-                    });
-                    
-                    // Check if any tracks that will be affected are armed for fade
-                    const allAffectedTracks = [...tracksToStart, ...tracksToStop];
-                    const hasFadeTracks = allAffectedTracks.some(trackId => trackFadeStates[trackId]);
+                {/* Divider */}
+                <div className="w-px bg-gray-600/50" />
 
-                    
-                    if (hasFadeTracks) {
-                      console.log(`🌊 Calling executeFade()`);
-                      executeFade();
-                    } else {
-                      console.log(`✂️ Calling executeCrossfade()`);
-                      executeCrossfade();
-                    }
-                  }}
-                  disabled={currentCue === null}
-                  title={`Execute transition (${currentCue?.targetTracks?.some(trackId => trackFadeStates[trackId]) ? 'some tracks will fade' : 'all tracks will cut'})`}
-                >
-                  CUT
-                </button>
-                
-                <button
-                  className="px-6 py-2 rounded text-sm font-bold transition-all duration-200 bg-red-600 hover:bg-red-700 text-white"
-                  onClick={stopAllTracks}
-                  title="Stop all playing tracks immediately"
-                >
-                  STOP ALL
-                </button>
+                {/* Action buttons (right) */}
+                <div className="flex flex-col gap-2 justify-center">
+                  <button
+                    className={`w-24 py-2 rounded text-sm font-bold transition-all duration-200 ${
+                      currentCue !== null
+                        ? 'bg-red-600 hover:bg-red-700 text-white'
+                        : 'bg-gray-600 text-gray-400 cursor-not-allowed'
+                    }`}
+                    onClick={() => {
+                      const targetTracks = currentCue?.targetTracks || [];
+                      const tracksToStart = targetTracks.filter(trackId =>
+                        remoteTrackStates[trackId]?.playbackState !== PlaybackState.PLAYING
+                      );
+                      const tracksToStop = Object.keys(remoteTrackStates).filter(trackId => {
+                        const track = remoteTrackStates[trackId];
+                        return track.playbackState === PlaybackState.PLAYING &&
+                               !targetTracks.includes(trackId);
+                      });
+                      const allAffectedTracks = [...tracksToStart, ...tracksToStop];
+                      const hasFadeTracks = allAffectedTracks.some(trackId => trackFadeStates[trackId]);
+                      if (hasFadeTracks) {
+                        executeFade();
+                      } else {
+                        executeCrossfade();
+                      }
+                    }}
+                    disabled={currentCue === null}
+                    title={`Execute transition (${currentCue?.targetTracks?.some(trackId => trackFadeStates[trackId]) ? 'some tracks will fade' : 'all tracks will cut'})`}
+                  >
+                    CUT
+                  </button>
+                  <button
+                    className="w-24 py-2 rounded text-sm font-bold transition-all duration-200 bg-red-600 hover:bg-red-700 text-white"
+                    onClick={stopAllTracks}
+                    title="Stop all playing tracks immediately"
+                  >
+                    STOP ALL
+                  </button>
+                </div>
               </div>
               </div>
           )}
