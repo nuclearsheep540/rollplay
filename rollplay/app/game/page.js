@@ -13,6 +13,7 @@ import { getSeatColor } from '../utils/seatColors';
 import PlayerCard from "./components/PlayerCard";
 import DMChair from "./components/DMChair";
 import MapControlsPanel from './components/MapControlsPanel';
+import ImageControlsPanel from './components/ImageControlsPanel';
 import CombatControlsPanel from './components/CombatControlsPanel';
 import ModeratorControls from './components/ModeratorControls';
 import { AudioMixerPanel } from '../audio_management/components';
@@ -23,7 +24,30 @@ import DiceActionPanel from './components/DiceActionPanel'; // NEW IMPORT
 import Modal from '@/app/shared/components/Modal';
 import { useWebSocket } from './hooks/useWebSocket';
 import { useUnifiedAudio } from '../audio_management';
-import { MapDisplay, GridOverlay, useMapWebSocket } from '../map_management';
+import { MapDisplay, GridOverlay, useMapWebSocket, ImageDisplay, useImageWebSocket } from '../map_management';
+
+// Tab configuration for right drawer - static, role filtering applied at render time
+const RIGHT_DRAWER_TABS = [
+  { id: 'moderator', label: 'MOD', dmOnly: false },
+  { id: 'map', label: 'MAP', dmOnly: true },
+  { id: 'image', label: 'IMAGE', dmOnly: true },
+  { id: 'combat', label: 'COMBAT', dmOnly: true },
+  { id: 'audio', label: 'AUDIO', dmOnly: true },
+];
+
+// Helper function to get character data — module scope (pure, no component state deps)
+const getCharacterData = (playerName) => {
+  const characterDatabase = {
+    'Thorin': { class: 'Dwarf Fighter', level: 3, hp: 34, maxHp: 40 }
+  };
+
+  return characterDatabase[playerName] || {
+    class: 'Adventurer',
+    level: 1,
+    hp: 10,
+    maxHp: 10
+  };
+};
 
 function GameContent() {
   const params = useSearchParams();
@@ -102,6 +126,10 @@ function GameContent() {
   const [gridConfig, setGridConfig] = useState(null); // Current grid configuration
   const [liveGridOpacity, setLiveGridOpacity] = useState(0.2); // Live grid opacity for real-time updates
 
+  // Image system state
+  const [activeImage, setActiveImage] = useState(null); // Current active image data
+  const [activeDisplay, setActiveDisplay] = useState(null); // "map" | "image" | null
+
   // Session ended modal state
   const [sessionEndedData, setSessionEndedData] = useState(null); // { message, reason } when session ends
 
@@ -110,6 +138,9 @@ function GameContent() {
 
   // Campaign metadata for overlay (fetched from api-site when campaignId is set)
   const [campaignMeta, setCampaignMeta] = useState(null);
+
+  // Ref for sendSeatChange — breaks circular dep: handleRoleChange → sendSeatChange → useWebSocket → gameContext → handleRoleChange
+  const sendSeatChangeRef = useRef(null);
 
   // Spectator mode - user has no character selected for this campaign
   const [isSpectator, setIsSpectator] = useState(false);
@@ -126,19 +157,7 @@ function GameContent() {
     setMapImageConfig(newMapImageConfig);
   }, []);
 
-  // Helper function to get character data
-  const getCharacterData = (playerName) => {
-    const characterDatabase = {
-      'Thorin': { class: 'Dwarf Fighter', level: 3, hp: 34, maxHp: 40 }
-    };
-    
-    return characterDatabase[playerName] || {
-      class: 'Adventurer',
-      level: 1,
-      hp: 10,
-      maxHp: 10
-    };
-  };
+
 
 
   // Copy room code to clipboard
@@ -258,6 +277,9 @@ function GameContent() {
     
     // Load active map for this room
     await loadActiveMap(roomId);
+
+    // Load active image and display state for this room
+    await loadActiveImage(roomId);
   }
   
   // Check player roles on initial page load - single source of truth
@@ -295,14 +317,14 @@ function GameContent() {
 
   // Refresh dynamic roles (host/moderator) after WebSocket events
   // DM status is static and never changes during session
-  const refreshDynamicRoles = async (roomId, user) => {
+  const refreshDynamicRoles = useCallback(async (roomId, user) => {
     try {
       console.log(`🔄 Refreshing dynamic roles for user: ${user.screen_name || user.email}`);
-      
+
       // Only fetch MongoDB-based roles (host, moderator) - DM status is static
       const playerName = user.screen_name || user.email;
       const mongoRolesResponse = await fetch(`/api/game/${roomId}/roles?playerName=${playerName}`);
-      
+
       if (mongoRolesResponse.ok) {
         const mongoRoles = await mongoRolesResponse.json();
         setIsHost(mongoRoles.is_host);
@@ -311,11 +333,11 @@ function GameContent() {
       } else {
         console.error('❌ Failed to refresh dynamic roles:', mongoRolesResponse.status);
       }
-      
+
     } catch (error) {
       console.error('Error refreshing dynamic roles:', error);
     }
-  };
+  }, []);
 
   // Fetch current user data once on page load
   useEffect(() => {
@@ -611,6 +633,37 @@ function GameContent() {
     }
   };
 
+  // Load active image and display state for the room
+  const loadActiveImage = async (roomId) => {
+    try {
+      console.log("🖼️ Loading active image from database...");
+
+      const response = await fetch(`/api/game/${roomId}/active-image`);
+
+      if (response.ok) {
+        const data = await response.json();
+
+        if (data.active_image) {
+          setActiveImage(data.active_image);
+          console.log(`🖼️ Loaded active image: ${data.active_image.original_filename || data.active_image.filename}`);
+        } else {
+          setActiveImage(null);
+          console.log("🖼️ No active image found for room");
+        }
+
+        if (data.active_display) {
+          setActiveDisplay(data.active_display);
+          console.log(`🖼️ Active display: ${data.active_display}`);
+        }
+      } else {
+        console.log("🖼️ Failed to fetch active image:", response.status);
+      }
+    } catch (error) {
+      console.log("🖼️ Error loading active image:", error);
+      setActiveImage(null);
+    }
+  };
+
   // UPDATED: Handle player kick
   const handleKickPlayer = async (playerToKick, disconnected) => {
     try {
@@ -643,10 +696,10 @@ function GameContent() {
     }
   };
 
-  const addToLog = (message, type, playerName = null, promptId = null) => {
+  const addToLog = useCallback((message, type, playerName = null, promptId = null) => {
     const now = new Date();
     const timestamp = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-    
+
     const newEntry = {
       id: Date.now(),
       message,
@@ -654,28 +707,28 @@ function GameContent() {
       timestamp,
       player_name: playerName
     };
-    
+
     // Add prompt_id if provided
     if (promptId) {
       newEntry.prompt_id = promptId;
     }
-    
+
     setRollLog(prev => [...prev, newEntry]);
-  };
+  }, []);
 
   // Handle role changes from ModeratorControls and WebSocket events
-  const handleRoleChange = async (action, playerName) => {
+  const handleRoleChange = useCallback(async (action, playerName) => {
     console.log(`Role change: ${action} for ${playerName}`);
-    
+
     // Update DM seat based on the action
     if (action === 'set_dm') {
       setDmSeat(playerName);
-      
+
       // Business logic: If new DM is sitting in a party seat, remove them from it
       const playerSeatIndex = gameSeats.findIndex(seat => seat.playerName === playerName);
       if (playerSeatIndex !== -1) {
         console.log(`🎭 Removing ${playerName} from party seat ${playerSeatIndex} as they become DM`);
-        
+
         // Create updated seats with the DM removed from party
         const newSeats = [...gameSeats];
         newSeats[playerSeatIndex] = {
@@ -684,34 +737,34 @@ function GameContent() {
           characterData: null,
           isActive: false
         };
-        
+
         // Update local state and broadcast seat change
         setGameSeats(newSeats);
-        sendSeatChange(newSeats);
+        sendSeatChangeRef.current?.(newSeats);
       }
     } else if (action === 'unset_dm') {
       setDmSeat("");
     }
-    
+
     // Refresh dynamic roles (host/moderator) for current user
     // DM status is static and doesn't change during session
     if (roomId && currentUser) {
       await refreshDynamicRoles(roomId, currentUser);
     }
-    
+
     // Trigger refresh of ModeratorControls room data for all users
     setRoleChangeTrigger(Date.now());
-    
+
     // Role changes are now broadcasted via WebSocket to all connected users
-  };
+  }, [gameSeats, roomId, currentUser, refreshDynamicRoles]);
 
   // Create a setter function for playerSeatMap updates
-  const setPlayerSeatMap = (updaterFunction) => {
+  const setPlayerSeatMap = useCallback((updaterFunction) => {
     // This is a derived state update - we need to update seatColors instead
     // The updaterFunction expects the current playerSeatMap and returns the new one
     const currentMap = playerSeatMap;
     const newMap = updaterFunction(currentMap);
-    
+
     // Extract seat colors from the updated map
     const newSeatColors = {};
     Object.values(newMap).forEach(playerData => {
@@ -719,9 +772,9 @@ function GameContent() {
         newSeatColors[playerData.seatIndex] = playerData.seatColor;
       }
     });
-    
+
     setSeatColors(newSeatColors);
-  };
+  }, [playerSeatMap]);
 
   // Initialize unified audio system (local + remote) FIRST
   const {
@@ -757,8 +810,10 @@ function GameContent() {
   }, [setClearPendingOperationCallback]);
 
   // Create game context object for WebSocket handlers (after audio functions are defined)
-  const gameContext = {
-    // State setters
+  // Memoized to prevent useWebSocket's ref-update effect from re-running on every render.
+  // State setters, refs, and module-scope functions are stable and omitted from deps.
+  const gameContext = useMemo(() => ({
+    // State setters (stable — React guarantees identity)
     setGameSeats,
     setCombatActive,
     setRollLog,
@@ -782,7 +837,7 @@ function GameContent() {
     addToLog,
     getCharacterData,
     handleRoleChange,
-    
+
     // Remote audio functions (for WebSocket events)
     playRemoteTrack,
     resumeRemoteTrack,
@@ -793,7 +848,7 @@ function GameContent() {
     loadRemoteAudioBuffer,
     audioBuffersRef,
     audioContextRef,
-    
+
     // Remote audio state (for resume functionality)
     remoteTrackStates,
 
@@ -805,7 +860,15 @@ function GameContent() {
 
     // Session ended modal
     setSessionEndedData
-  };
+  }), [
+    gameSeats, thisPlayer, currentUser, lobbyUsers,
+    disconnectTimeouts, currentInitiativePromptId, remoteTrackStates,
+    addToLog, handleRoleChange, setPlayerSeatMap,
+    playRemoteTrack, resumeRemoteTrack, pauseRemoteTrack, stopRemoteTrack,
+    setRemoteTrackVolume, toggleRemoteTrackLooping, loadRemoteAudioBuffer,
+    syncAudioState, loadAssetIntoChannel,
+    audioBuffersRef, audioContextRef
+  ]);
 
   // Initialize WebSocket hook with game context (after audio functions are available)
   const {
@@ -825,12 +888,24 @@ function GameContent() {
     sendRoleChange,
     sendRemoteAudioPlay,
     sendRemoteAudioResume,
-    sendRemoteAudioBatch
+    sendRemoteAudioBatch,
+    registerHandler
   } = useWebSocket(roomId, thisPlayer, gameContext);
 
+  // Sync ref so handleRoleChange can call sendSeatChange without circular dep
+  sendSeatChangeRef.current = sendSeatChange;
+
   // Map management WebSocket hook (atomic approach)
+  // Wrap setActiveMap to also update activeDisplay when a map is loaded
+  const setActiveMapWithDisplay = useCallback((mapData) => {
+    setActiveMap(mapData);
+    if (mapData) {
+      setActiveDisplay('map');
+    }
+  }, []);
+
   const mapContext = {
-    setActiveMap,
+    setActiveMap: setActiveMapWithDisplay,
     activeMap // All map data including grid_config handled atomically
     // No separate setGridConfig or setMapImageConfig - everything goes through setActiveMap
   };
@@ -840,15 +915,23 @@ function GameContent() {
     sendMapClear,
     sendMapConfigUpdate,
     sendMapRequest,
-    handleMapLoad,
-    handleMapClear,
-    handleMapConfigUpdate
-  } = useMapWebSocket(webSocket, isConnected, roomId, thisPlayer, mapContext);
+  } = useMapWebSocket(webSocket, isConnected, roomId, thisPlayer, mapContext, registerHandler);
 
-  // Map handlers are managed by useMapWebSocket hook - no additional event listeners needed
+  // Image management WebSocket hook
+  const imageContext = {
+    setActiveImage,
+    activeImage,
+    setActiveDisplay
+  };
 
-  // WebSocket map requests are handled via user actions (load/clear/update)
-  // Initial map loading is handled by HTTP fetch in onLoad function
+  const {
+    sendImageLoad,
+    sendImageClear,
+    sendImageRequest,
+  } = useImageWebSocket(webSocket, isConnected, roomId, thisPlayer, imageContext, registerHandler);
+
+  // Map/Image handlers are managed by their respective WebSocket hooks
+  // Initial loading is handled by HTTP fetch in onLoad function
 
   // Listen for combat state changes and play audio
   useEffect(() => {
@@ -1458,14 +1541,6 @@ function GameContent() {
 
       {/* Right drawer — fixed-position, outside grid flow */}
       {(() => {
-        // Tab configuration - reusable pattern for role-based visibility
-        const RIGHT_DRAWER_TABS = [
-          { id: 'moderator', label: 'MOD', dmOnly: false },
-          { id: 'map', label: 'MAP', dmOnly: true },
-          { id: 'combat', label: 'COMBAT', dmOnly: true },
-          { id: 'audio', label: 'AUDIO', dmOnly: true },
-        ];
-
         const visibleTabs = RIGHT_DRAWER_TABS.filter(tab => !tab.dmOnly || isDM);
 
         return (
@@ -1527,6 +1602,16 @@ function GameContent() {
                   sendMapClear={sendMapClear}
                 />
               )}
+              {activeRightDrawer === 'image' && isDM && (
+                <ImageControlsPanel
+                  roomId={roomId}
+                  campaignId={campaignId}
+                  activeImage={activeImage}
+                  setActiveImage={setActiveImage}
+                  sendImageLoad={sendImageLoad}
+                  sendImageClear={sendImageClear}
+                />
+              )}
               {activeRightDrawer === 'combat' && isDM && (
                 <CombatControlsPanel
                   promptPlayerRoll={promptPlayerRoll}
@@ -1559,18 +1644,28 @@ function GameContent() {
         );
       })()}
 
-      {/* Main Game Area — single column grid (map only) */}
+      {/* Main Game Area — conditional display: map or image */}
       <div className="main-game-area">
         <div className="grid-area-map-canvas relative">
-          <MapDisplay
-            activeMap={activeMap}
-            isEditMode={gridEditMode && isDM}
-            onGridChange={handleGridChange}
-            mapImageEditMode={gridEditMode && isDM}
-            onMapImageChange={handleMapImageChange}
-            liveGridOpacity={liveGridOpacity}
-            gridConfig={gridConfig}
-          />
+          {/* Map display — visible when activeDisplay is "map" or null (default) */}
+          {activeDisplay !== 'image' && (
+            <MapDisplay
+              activeMap={activeMap}
+              isEditMode={gridEditMode && isDM}
+              onGridChange={handleGridChange}
+              mapImageEditMode={gridEditMode && isDM}
+              onMapImageChange={handleMapImageChange}
+              liveGridOpacity={liveGridOpacity}
+              gridConfig={gridConfig}
+            />
+          )}
+
+          {/* Image display — visible when activeDisplay is "image" */}
+          {activeDisplay === 'image' && (
+            <ImageDisplay
+              activeImage={activeImage}
+            />
+          )}
 
           <HorizontalInitiativeTracker
             initiativeOrder={initiativeOrder}

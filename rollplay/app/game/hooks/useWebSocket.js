@@ -3,7 +3,7 @@
 
 'use client'
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import {
   handleSeatChange,
   handlePlayerConnected,
@@ -38,6 +38,16 @@ export const useWebSocket = (roomId, thisPlayer, gameContext) => {
   const [webSocket, setWebSocket] = useState(null);
   const [isConnected, setIsConnected] = useState(false);
   const eventHandlersRef = useRef(null);
+
+  // Handler registry for domain hooks (map, image, audio, etc.)
+  // Domain hooks register handlers here instead of adding their own message listeners.
+  // This ensures every WebSocket message is parsed exactly once.
+  const messageRouterRef = useRef(new Map());
+
+  const registerHandler = useCallback((eventType, handlerFn) => {
+    messageRouterRef.current.set(eventType, handlerFn);
+    return () => messageRouterRef.current.delete(eventType);
+  }, []);
 
   // Initialize WebSocket connection
   useEffect(() => {
@@ -84,7 +94,14 @@ export const useWebSocket = (roomId, thisPlayer, gameContext) => {
           return;
         }
 
-        // Route messages to appropriate handlers
+        // Dispatch to registered domain handlers (map, image, audio, etc.)
+        const registeredHandler = messageRouterRef.current.get(event_type);
+        if (registeredHandler) {
+          registeredHandler(data);
+          return;
+        }
+
+        // Core game events
         switch (event_type) {
           case 'initial_state':
             handleInitialState(data, handlers);
@@ -162,10 +179,7 @@ export const useWebSocket = (roomId, thisPlayer, gameContext) => {
             console.error('WebSocket error received:', data);
             break;
           default:
-            // Map events are handled by useMapWebSocket hook
-            if (event_type && !event_type.startsWith('map_')) {
-              console.warn(`Unknown WebSocket event type: ${event_type}`);
-            }
+            console.warn(`Unknown WebSocket event type: ${event_type}`);
         }
       } catch (error) {
         console.error('Error processing WebSocket message:', error);
@@ -198,6 +212,7 @@ export const useWebSocket = (roomId, thisPlayer, gameContext) => {
   return {
     webSocket,
     isConnected,
+    registerHandler,
     ...sendFunctions
   };
 };

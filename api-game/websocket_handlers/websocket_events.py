@@ -9,11 +9,13 @@ from message_templates import format_message, MESSAGE_TEMPLATES
 from adventure_log_service import AdventureLogService
 from models.log_type import LogType
 from mapservice import MapService, MapSettings
+from imageservice import ImageService, ImageSettings
 from gameservice import GameService
 
 
 adventure_log = AdventureLogService()
 map_service = MapService()
+image_service = ImageService()
 
 
 class WebsocketEventResult:
@@ -1182,3 +1184,153 @@ class WebsocketEvent():
         except Exception as e:
             print(f"❌ Error requesting map for room {room_id}: {e}")
             return WebsocketEventResult(broadcast_message={"error": f"Failed to request map: {str(e)}"})
+
+    # ─── Image Events ───────────────────────────────────────────────
+
+    @staticmethod
+    async def image_load(websocket, data, event_data, player_name, client_id, manager):
+        """Load/set active image for the room"""
+        print(f"🖼️ Image load handler called for room {client_id} by {player_name}")
+
+        room_id = client_id
+        image_data = event_data.get("image_data")
+
+        if not room_id or not image_data:
+            print(f"❌ Invalid image load request: missing room_id or image_data")
+            return WebsocketEventResult(broadcast_message={
+                "event_type": "error",
+                "data": {"error": "Invalid image load request"}
+            })
+
+        try:
+            image_settings = ImageSettings(
+                room_id=room_id,
+                asset_id=image_data.get("asset_id"),
+                filename=image_data.get("filename", "unknown.jpg"),
+                original_filename=image_data.get("original_filename", image_data.get("filename", "unknown.jpg")),
+                file_path=image_data.get("file_path", ""),
+                loaded_by=player_name,
+                active=True
+            )
+
+            success = image_service.set_active_image(room_id, image_settings)
+
+            if success:
+                saved_image = image_service.get_active_image(room_id)
+
+                if saved_image:
+                    log_message = f"🖼️ {player_name.title()} loaded image: {image_settings.original_filename}"
+                    adventure_log.add_log_entry(room_id, log_message, LogType.SYSTEM, player_name)
+
+                    active_display = image_service.get_active_display(room_id)
+
+                    broadcast_message = {
+                        "event_type": "image_load",
+                        "data": {
+                            "image": saved_image,
+                            "active_display": active_display,
+                            "loaded_by": player_name
+                        }
+                    }
+                else:
+                    print(f"❌ Failed to retrieve saved image after setting active")
+                    return WebsocketEventResult(broadcast_message={
+                        "event_type": "error",
+                        "data": {"error": "Failed to retrieve saved image"}
+                    })
+
+                print(f"🖼️ Image loaded for room {room_id}: {image_settings.filename}")
+                return WebsocketEventResult(broadcast_message=broadcast_message)
+            else:
+                print(f"❌ Failed to save image to database for room {room_id}")
+                return WebsocketEventResult(broadcast_message={
+                    "event_type": "error",
+                    "data": {"error": "Failed to save image"}
+                })
+
+        except Exception as e:
+            print(f"❌ Error loading image for room {room_id}: {e}")
+            return WebsocketEventResult(broadcast_message={
+                "event_type": "error",
+                "data": {"error": f"Failed to load image: {str(e)}"}
+            })
+
+    @staticmethod
+    async def image_clear(websocket, data, event_data, player_name, client_id, manager):
+        """Clear the active image for the room"""
+        room_id = client_id
+
+        if not room_id:
+            print(f"❌ Invalid image clear request: missing room_id")
+            return WebsocketEventResult(broadcast_message={"error": "Invalid image clear request"})
+
+        try:
+            success = image_service.clear_active_image(room_id)
+
+            if success:
+                log_message = f"🖼️ {player_name.title()} cleared the active image"
+                adventure_log.add_log_entry(room_id, log_message, LogType.SYSTEM, player_name)
+
+                active_display = image_service.get_active_display(room_id)
+
+                broadcast_message = {
+                    "event_type": "image_clear",
+                    "data": {
+                        "active_display": active_display,
+                        "cleared_by": player_name
+                    }
+                }
+
+                print(f"🖼️ Image cleared for room {room_id}")
+                return WebsocketEventResult(broadcast_message=broadcast_message)
+            else:
+                print(f"❌ Failed to clear image from database for room {room_id}")
+                return WebsocketEventResult(broadcast_message={"error": "Failed to clear image"})
+
+        except Exception as e:
+            print(f"❌ Error clearing image for room {room_id}: {e}")
+            return WebsocketEventResult(broadcast_message={"error": f"Failed to clear image: {str(e)}"})
+
+    @staticmethod
+    async def image_request(websocket, data, event_data, player_name, client_id, manager):
+        """Request current active image (for new players joining)"""
+        room_id = client_id
+
+        if not room_id:
+            print(f"❌ Invalid image request: missing room_id")
+            return WebsocketEventResult(broadcast_message={"error": "Invalid image request"})
+
+        try:
+            active_image = image_service.get_active_image(room_id)
+            active_display = image_service.get_active_display(room_id)
+
+            if active_image:
+                response_message = {
+                    "event_type": "image_load",
+                    "data": {
+                        "image": active_image,
+                        "active_display": active_display,
+                        "loaded_by": active_image.get("loaded_by", "unknown")
+                    }
+                }
+
+                print(f"🖼️ Sent current image to {player_name} in room {room_id}")
+                await websocket.send_json(response_message)
+                return WebsocketEventResult(broadcast_message=None)
+            else:
+                # No active image — send display state so client knows what's active
+                display_state_message = {
+                    "event_type": "image_clear",
+                    "data": {
+                        "active_display": active_display,
+                        "cleared_by": "system"
+                    }
+                }
+
+                print(f"🖼️ No active image found for room {room_id}")
+                await websocket.send_json(display_state_message)
+                return WebsocketEventResult(broadcast_message=None)
+
+        except Exception as e:
+            print(f"❌ Error requesting image for room {room_id}: {e}")
+            return WebsocketEventResult(broadcast_message={"error": f"Failed to request image: {str(e)}"})

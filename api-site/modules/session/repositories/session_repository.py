@@ -72,6 +72,8 @@ class SessionRepository:
             model.max_players = aggregate.max_players
             model.audio_config = aggregate.audio_config
             model.map_config = aggregate.map_config
+            model.image_config = aggregate.image_config
+            model.active_display = aggregate.active_display
 
             # Sync joined_users (session_joined_users table)
             self._sync_joined_users(model.id, aggregate.joined_users)
@@ -90,7 +92,9 @@ class SessionRepository:
                 stopped_at=aggregate.stopped_at,
                 max_players=aggregate.max_players,
                 audio_config=aggregate.audio_config,
-                map_config=aggregate.map_config
+                map_config=aggregate.map_config,
+                image_config=aggregate.image_config,
+                active_display=aggregate.active_display
             )
             self.db.add(model)
             self.db.flush()  # Get ID before setting relationships
@@ -185,5 +189,7 @@ class SessionRepository:
             joined_users=joined_user_ids,
             max_players=model.max_players,
             audio_config=model.audio_config,
-            map_config=model.map_config
+            map_config=model.map_config,
+            image_config=model.image_config,
+            active_display=model.active_display
         )

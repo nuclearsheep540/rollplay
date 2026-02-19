@@ -75,9 +75,12 @@ class MapService:
                 upsert=True
             )
             
+            # Update active_display on the game session document
+            self._set_active_display(room_id, "map")
+
             logger.info(f"Set active map for room {room_id}: {map_settings.filename}")
             return True
-            
+
         except Exception as e:
             logger.error(f"Failed to set active map for room {room_id}: {e}")
             return False
@@ -256,3 +259,23 @@ class MapService:
         except Exception as e:
             logger.error(f"Failed to get maps for room {room_id}: {e}")
             return []
+
+    def _set_active_display(self, room_id: str, display_type: str):
+        """Update the active_display field on the game session document"""
+        try:
+            from gameservice import GameService
+            collection = GameService._get_active_session()
+
+            try:
+                oid = ObjectId(oid=room_id)
+                filter_criteria = {"_id": oid}
+            except Exception:
+                filter_criteria = {"_id": room_id}
+
+            collection.update_one(
+                filter_criteria,
+                {"$set": {"active_display": display_type}}
+            )
+            logger.info(f"🗺️ Set active_display to '{display_type}' for room {room_id}")
+        except Exception as e:
+            logger.error(f"Failed to set active_display for room {room_id}: {e}")
