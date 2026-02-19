@@ -797,6 +797,7 @@ function GameContent() {
     setClearPendingOperationCallback,
     loadAssetIntoChannel,
     syncAudioState,
+    activeFades,
     // SFX Soundboard
     sfxSlots,
     playSfxSlot,
@@ -1657,6 +1658,7 @@ function GameContent() {
                   loadSfxSlot={loadSfxSlot}
                   clearSfxSlot={clearSfxSlot}
                   setSfxSlotVolume={setSfxSlotVolume}
+                  activeFades={activeFades}
                 />
               )}
             </div>

@@ -5,7 +5,7 @@
  * SPDX-License-Identifier: GPL-3.0-or-later
  */
 
-import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, useRef, memo } from 'react';
 import AudioTrack from './AudioTrack';
 import AudioTrackSelector from './AudioTrackSelector';
 import SfxSoundboard from './SfxSoundboard';
@@ -14,6 +14,58 @@ import {
   DM_CHILD,
   PANEL_CHILD,
 } from '../../styles/constants';
+
+const FADE_ANIMATION_THRESHOLD = 1000; // ms — don't animate progress for fades shorter than this
+
+const FadeProgressButton = memo(function FadeProgressButton({ isFadeArmed, fadeInfo, onToggle, label, title }) {
+  const [progress, setProgress] = useState(0);
+  const rafRef = useRef(null);
+
+  const showProgress = fadeInfo && fadeInfo.duration >= FADE_ANIMATION_THRESHOLD;
+
+  useEffect(() => {
+    if (!showProgress) {
+      setProgress(0);
+      return;
+    }
+
+    const animate = () => {
+      const elapsed = performance.now() - fadeInfo.startTime;
+      const p = Math.min(elapsed / fadeInfo.duration, 1.0);
+      setProgress(p);
+      if (p < 1.0) {
+        rafRef.current = requestAnimationFrame(animate);
+      }
+    };
+    rafRef.current = requestAnimationFrame(animate);
+
+    return () => {
+      if (rafRef.current) cancelAnimationFrame(rafRef.current);
+    };
+  }, [showProgress, fadeInfo]);
+
+  return (
+    <button
+      className={`relative w-full h-8 text-xs font-bold rounded transition-colors border overflow-hidden ${
+        showProgress
+          ? 'bg-gray-700 text-white border-yellow-500'
+          : isFadeArmed
+            ? 'bg-yellow-600 text-white border-yellow-500 hover:bg-yellow-700'
+            : 'bg-gray-600 text-gray-300 border-gray-500 hover:bg-gray-500'
+      }`}
+      onClick={onToggle}
+      title={title}
+    >
+      {showProgress && (
+        <div
+          className="absolute inset-0 bg-yellow-600 origin-left"
+          style={{ width: `${progress * 100}%` }}
+        />
+      )}
+      <span className="relative z-10">{label}</span>
+    </button>
+  );
+});
 
 export default function AudioMixerPanel({
   isExpanded,
@@ -31,6 +83,7 @@ export default function AudioMixerPanel({
   loadSfxSlot = null,
   clearSfxSlot = null,
   setSfxSlotVolume = null,
+  activeFades = {},
 }) {
   
   // Track pending audio operations to disable buttons
@@ -78,7 +131,10 @@ export default function AudioMixerPanel({
 
   // Effective cue: when null, mirrors PGM (currently playing tracks)
   const pgmTargetTracks = useMemo(() =>
-    Object.keys(remoteTrackStates).filter(id => remoteTrackStates[id]?.playbackState === PlaybackState.PLAYING),
+    Object.keys(remoteTrackStates).filter(id => {
+      const state = remoteTrackStates[id]?.playbackState;
+      return state === PlaybackState.PLAYING || state === PlaybackState.TRANSITIONING;
+    }),
     [remoteTrackStates]
   );
   const effectiveCueTargets = currentCue?.targetTracks ?? pgmTargetTracks;
@@ -168,15 +224,17 @@ export default function AudioMixerPanel({
     
     // Get tracks that need to start and stop
     const tracksToStart = currentBgmChannels.filter(channel => {
-      const isCurrentlyPlaying = remoteTrackStates[channel.channelId]?.playbackState === 'playing';
+      const state = remoteTrackStates[channel.channelId]?.playbackState;
+      const isActive = state === PlaybackState.PLAYING || state === PlaybackState.TRANSITIONING;
       const isSelectedInPFL = currentCue.targetTracks.includes(channel.channelId);
-      return isSelectedInPFL && !isCurrentlyPlaying; // Will start
+      return isSelectedInPFL && !isActive; // Will start
     });
-    
+
     const tracksToStop = currentBgmChannels.filter(channel => {
-      const isCurrentlyPlaying = remoteTrackStates[channel.channelId]?.playbackState === 'playing';
+      const state = remoteTrackStates[channel.channelId]?.playbackState;
+      const isActive = state === PlaybackState.PLAYING || state === PlaybackState.TRANSITIONING;
       const isSelectedInPFL = currentCue.targetTracks.includes(channel.channelId);
-      return !isSelectedInPFL && isCurrentlyPlaying; // Will stop
+      return !isSelectedInPFL && isActive; // Will stop
     });
     
     console.log(`🎚️ Tracks to start:`, tracksToStart.map(t => t.channelId));
@@ -584,14 +642,17 @@ export default function AudioMixerPanel({
                   {/* PFL Column - Channel selection */}
                   <div className="flex flex-col gap-1 items-center">
                     {/* BGM channels */}
-                    {bgmChannels.map((channel) => (
-                      <div 
+                    {bgmChannels.map((channel) => {
+                      const isLongTransition = remoteTrackStates[channel.channelId]?.playbackState === PlaybackState.TRANSITIONING
+                        && activeFades[channel.channelId]?.duration >= FADE_ANIMATION_THRESHOLD;
+                      return (
+                      <div
                         key={`pfl-${channel.channelId}`}
                         className={`w-10 h-8 rounded text-center text-xs transition-all duration-200 cursor-pointer flex items-center justify-center border ${
                           effectiveCueTargets.includes(channel.channelId)
-                            ? 'bg-green-600 text-white border-green-500'
+                            ? 'bg-blue-600 text-white border-blue-500'
                             : 'bg-gray-600 hover:bg-gray-500 text-gray-300 border-gray-500'
-                        }`}
+                        } ${isLongTransition ? 'animate-pulse' : ''}`}
                         onClick={() => {
                           setCurrentCue(prev => {
                             // Initialize from PGM when cue hasn't been touched
@@ -609,7 +670,8 @@ export default function AudioMixerPanel({
                       >
                         {channel.channelId.replace('audio_channel_', '')}
                       </div>
-                    ))}
+                      );
+                    })}
                   </div>
 
                   {/* Transition Controls */}
@@ -618,23 +680,19 @@ export default function AudioMixerPanel({
                     {bgmChannels.map((channel) => {
                       const isFadeArmed = trackFadeStates[channel.channelId] || false;
                       return (
-                        <button 
+                        <FadeProgressButton
                           key={`fade-config-${channel.channelId}`}
-                          className={`w-full h-8 text-xs font-bold rounded transition-all duration-200 border ${
-                            isFadeArmed 
-                              ? 'bg-blue-600 text-white border-blue-500 hover:bg-blue-700' 
-                              : 'bg-gray-600 text-gray-300 border-gray-500 hover:bg-gray-500'
-                          }`}
-                          onClick={() => {
+                          isFadeArmed={isFadeArmed}
+                          fadeInfo={activeFades[channel.channelId]}
+                          onToggle={() => {
                             setTrackFadeStates(prev => ({
                               ...prev,
                               [channel.channelId]: !isFadeArmed
                             }));
                           }}
+                          label="FADE"
                           title={`${isFadeArmed ? 'Armed for fade' : 'Armed for cut'} - ${channel.label}`}
-                        >
-                          FADE
-                        </button>
+                        />
                       );
                     })}
                   </div>
@@ -643,13 +701,16 @@ export default function AudioMixerPanel({
                   <div className="flex flex-col gap-1 items-center">
                     {/* All BGM channels */}
                     {bgmChannels.map((channel) => {
-                      const isPlaying = remoteTrackStates[channel.channelId]?.playbackState === 'playing';
+                      const pgmState = remoteTrackStates[channel.channelId]?.playbackState;
+                      const isPlaying = pgmState === PlaybackState.PLAYING || pgmState === PlaybackState.TRANSITIONING;
+                      const isLongTransition = pgmState === PlaybackState.TRANSITIONING
+                        && activeFades[channel.channelId]?.duration >= FADE_ANIMATION_THRESHOLD;
                       return (
-                        <div 
+                        <div
                           key={`pgm-${channel.channelId}`}
                           className={`w-10 h-8 rounded text-center text-xs transition-all duration-200 flex items-center justify-center border ${
                             isPlaying ? 'bg-green-600 text-white border-green-500' : 'bg-gray-600 text-gray-300 border-gray-500'
-                          }`}
+                          } ${isLongTransition ? 'animate-pulse' : ''}`}
                         >
                           {channel.channelId.replace('audio_channel_', '')}
                         </div>

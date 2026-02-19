@@ -142,7 +142,8 @@ export const useUnifiedAudio = () => {
   );
 
   // Active fade transitions state
-  const [activeFades, setActiveFades] = useState({}); // { trackId: { type, startTime, duration, startGain, targetGain, operation, animationId } }
+  const [activeFades, setActiveFades] = useState({}); // { trackId: { type, startTime, duration, startGain, targetGain, operation } }
+  const activeFadeRafsRef = useRef({}); // { [trackId]: animationId } — rAF IDs stored outside state to avoid per-frame re-renders
 
   // Initialize Web Audio API for remote tracks
   const initializeWebAudio = async () => {
@@ -233,82 +234,88 @@ export const useUnifiedAudio = () => {
   // Start a fade transition for a track
   const startFade = (trackId, type, duration, startGain, targetGain, operation) => {
     // Cancel any existing fade for this track
-    if (activeFades[trackId]) {
-      cancelAnimationFrame(activeFades[trackId].animationId);
+    if (activeFadeRafsRef.current[trackId]) {
+      cancelAnimationFrame(activeFadeRafsRef.current[trackId]);
+      delete activeFadeRafsRef.current[trackId];
     }
-    
+
     const startTime = performance.now();
-    const fadeConfig = {
-      type, // 'in' or 'out'
-      startTime,
-      duration,
-      startGain,
-      targetGain,
-      operation,
-      animationId: null
-    };
-    
+
     console.log(`🌊 Starting ${type} fade for ${trackId}: ${startGain} → ${targetGain} over ${duration}ms`);
-    
-    // Start the animation loop
+
+    // Set state ONCE at fade start — this is the only state update until fade ends
+    setActiveFades(prev => ({
+      ...prev,
+      [trackId]: { type, startTime, duration, startGain, targetGain, operation }
+    }));
+
+    // Mark track as transitioning
+    setRemoteTrackStates(prev => ({
+      ...prev,
+      [trackId]: { ...prev[trackId], playbackState: PlaybackState.TRANSITIONING }
+    }));
+
+    // Animation loop — only touches the gain node and the ref, NOT React state
     const animate = (currentTime) => {
       const elapsed = currentTime - startTime;
       const progress = Math.min(elapsed / duration, 1.0);
-      
+
       // Calculate current gain using linear interpolation
       const currentGain = startGain + (targetGain - startGain) * progress;
-      
+
       // Apply gain if track's gain node exists
       if (remoteTrackGainsRef.current[trackId]) {
         remoteTrackGainsRef.current[trackId].gain.value = currentGain;
       }
-      
+
       if (progress < 1.0) {
-        // Continue animation
-        const animationId = requestAnimationFrame(animate);
-        setActiveFades(prev => ({
-          ...prev,
-          [trackId]: { ...fadeConfig, animationId }
-        }));
+        // Continue animation — store rAF ID in ref, not state
+        activeFadeRafsRef.current[trackId] = requestAnimationFrame(animate);
       } else {
         // Fade complete
         console.log(`✅ Fade ${type} complete for ${trackId}`);
-        
-        // Remove from active fades
+        delete activeFadeRafsRef.current[trackId];
+
+        // Remove from active fades — second and final state update
         setActiveFades(prev => {
           const newFades = { ...prev };
           delete newFades[trackId];
           return newFades;
         });
-        
-        // If fade out completed, stop the track
+
+        // Set final playback state
         if (type === 'out') {
           setTimeout(() => {
             stopRemoteTrack(trackId);
           }, 50); // Small delay to ensure fade is visually complete
+        } else if (type === 'in') {
+          setRemoteTrackStates(prev => ({
+            ...prev,
+            [trackId]: { ...prev[trackId], playbackState: PlaybackState.PLAYING }
+          }));
         }
       }
     };
-    
-    // Start the animation
-    const animationId = requestAnimationFrame(animate);
-    setActiveFades(prev => ({
-      ...prev,
-      [trackId]: { ...fadeConfig, animationId }
-    }));
+
+    // Start the animation — store rAF ID in ref
+    activeFadeRafsRef.current[trackId] = requestAnimationFrame(animate);
   };
   
   // Cancel an active fade (for interruptions)
   const cancelFade = (trackId) => {
-    if (activeFades[trackId]) {
-      cancelAnimationFrame(activeFades[trackId].animationId);
-      setActiveFades(prev => {
-        const newFades = { ...prev };
-        delete newFades[trackId];
-        return newFades;
-      });
-      console.log(`🚫 Cancelled fade for ${trackId}`);
+    // Cancel the rAF from the ref
+    if (activeFadeRafsRef.current[trackId]) {
+      cancelAnimationFrame(activeFadeRafsRef.current[trackId]);
+      delete activeFadeRafsRef.current[trackId];
     }
+    // Remove from state (if entry exists)
+    setActiveFades(prev => {
+      if (!prev[trackId]) return prev; // no-op if already removed
+      const newFades = { ...prev };
+      delete newFades[trackId];
+      return newFades;
+    });
+    console.log(`🚫 Cancelled fade for ${trackId}`);
   };
 
   // Play remote track (triggered by WebSocket events)
