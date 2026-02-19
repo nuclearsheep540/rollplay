@@ -40,7 +40,7 @@ export const useImageWebSocket = (webSocket, isConnected, roomId, thisPlayer, im
         handlers.setActiveImage(image);
         console.log(`🖼️ Image "${image.original_filename}" loaded by ${loaded_by}`);
       }
-      if (handlers.setActiveDisplay && active_display) {
+      if (handlers.setActiveDisplay && active_display !== undefined) {
         handlers.setActiveDisplay(active_display);
         console.log(`🖼️ Active display set to "${active_display}"`);
       }
