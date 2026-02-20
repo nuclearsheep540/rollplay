@@ -12,11 +12,13 @@ const CHANNELS = [
   { id: 'audio_channel_B', label: 'Track B', type: ChannelType.BGM },
   { id: 'audio_channel_C', label: 'Track C', type: ChannelType.BGM },
   { id: 'audio_channel_D', label: 'Track D', type: ChannelType.BGM },
+  { id: 'audio_channel_E', label: 'Track E', type: ChannelType.BGM },
+  { id: 'audio_channel_F', label: 'Track F', type: ChannelType.BGM },
 ];
 
 /**
  * Audio track selector sub-section inside Audio Management.
- * Shows 4 BGM channel rows with loaded filename and select button.
+ * Shows 6 BGM channel rows with loaded filename and select button.
  * SFX is managed separately by the SfxSoundboard component.
  */
 export default function AudioTrackSelector({
