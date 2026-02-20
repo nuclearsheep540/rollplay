@@ -5,7 +5,7 @@
  * SPDX-License-Identifier: GPL-3.0-or-later
  */
 
-import React, { useState, useRef, useCallback, useMemo, memo } from 'react';
+import React, { useState, useRef, useEffect, useCallback, useMemo, memo } from 'react';
 import { Popover, PopoverButton, PopoverPanel, PopoverGroup } from '@headlessui/react';
 import { useAssets } from '@/app/asset_library/hooks/useAssets';
 import { useUploadAsset } from '@/app/asset_library/hooks/useUploadAsset';
@@ -20,6 +20,10 @@ const stripExtension = (filename) => filename?.replace(/\.[^.]+$/, '') || '';
 const SfxVolumeSlider = memo(function SfxVolumeSlider({ volume, onChange, onRelease }) {
   const [localVol, setLocalVol] = useState(volume);
   const dragging = useRef(false);
+
+  useEffect(() => {
+    if (!dragging.current) setLocalVol(volume);
+  }, [volume]);
 
   const handleChange = (e) => {
     const v = parseFloat(e.target.value);
