@@ -798,6 +798,7 @@ function GameContent() {
     loadAssetIntoChannel,
     syncAudioState,
     activeFades,
+    cancelFade,
     // SFX Soundboard
     sfxSlots,
     playSfxSlot,
@@ -860,6 +861,10 @@ function GameContent() {
     // Remote audio state (for resume functionality)
     remoteTrackStates,
 
+    // Fade state (for WebSocket batch cancel logic)
+    activeFades,
+    cancelFade,
+
     // Late-joiner audio sync
     syncAudioState,
 
@@ -882,7 +887,7 @@ function GameContent() {
     addToLog, handleRoleChange, setPlayerSeatMap,
     playRemoteTrack, resumeRemoteTrack, pauseRemoteTrack, stopRemoteTrack,
     setRemoteTrackVolume, toggleRemoteTrackLooping, loadRemoteAudioBuffer,
-    syncAudioState, loadAssetIntoChannel,
+    activeFades, cancelFade, syncAudioState, loadAssetIntoChannel,
     playSfxSlot, stopSfxSlot, setSfxSlotVolume, loadSfxSlot, clearSfxSlot, sfxSlots,
     audioBuffersRef, audioContextRef
   ]);
