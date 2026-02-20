@@ -13,7 +13,7 @@ Provides REST endpoints for media asset management:
 """
 
 import logging
-from typing import Optional
+from typing import Optional, Union
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query
@@ -420,7 +420,7 @@ async def update_grid_config(
         raise HTTPException(status_code=500, detail="Failed to update grid configuration")
 
 
-@router.patch("/{asset_id}/audio-config", response_model=MediaAssetResponse)
+@router.patch("/{asset_id}/audio-config", response_model=Union[MusicAssetResponse, SfxAssetResponse])
 async def update_audio_config(
     asset_id: UUID,
     request: UpdateAudioConfigRequest,
