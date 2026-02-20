@@ -797,6 +797,15 @@ function GameContent() {
     setClearPendingOperationCallback,
     loadAssetIntoChannel,
     syncAudioState,
+    activeFades,
+    cancelFade,
+    // SFX Soundboard
+    sfxSlots,
+    playSfxSlot,
+    stopSfxSlot,
+    setSfxSlotVolume,
+    loadSfxSlot,
+    clearSfxSlot,
     cleanupAllAudio
   } = useUnifiedAudio();
 
@@ -852,11 +861,23 @@ function GameContent() {
     // Remote audio state (for resume functionality)
     remoteTrackStates,
 
+    // Fade state (for WebSocket batch cancel logic)
+    activeFades,
+    cancelFade,
+
     // Late-joiner audio sync
     syncAudioState,
 
     // Asset loading (for load batch operations from other clients)
     loadAssetIntoChannel,
+
+    // SFX Soundboard (for batch operations from other clients)
+    playSfxSlot,
+    stopSfxSlot,
+    setSfxSlotVolume,
+    loadSfxSlot,
+    clearSfxSlot,
+    sfxSlots,
 
     // Session ended modal
     setSessionEndedData
@@ -866,7 +887,8 @@ function GameContent() {
     addToLog, handleRoleChange, setPlayerSeatMap,
     playRemoteTrack, resumeRemoteTrack, pauseRemoteTrack, stopRemoteTrack,
     setRemoteTrackVolume, toggleRemoteTrackLooping, loadRemoteAudioBuffer,
-    syncAudioState, loadAssetIntoChannel,
+    activeFades, cancelFade, syncAudioState, loadAssetIntoChannel,
+    playSfxSlot, stopSfxSlot, setSfxSlotVolume, loadSfxSlot, clearSfxSlot, sfxSlots,
     audioBuffersRef, audioContextRef
   ]);
 
@@ -1637,6 +1659,12 @@ function GameContent() {
                   clearPendingOperation={setClearPendingOperationFn}
                   loadAssetIntoChannel={loadAssetIntoChannel}
                   campaignId={campaignId}
+                  sfxSlots={sfxSlots}
+                  loadSfxSlot={loadSfxSlot}
+                  clearSfxSlot={clearSfxSlot}
+                  setSfxSlotVolume={setSfxSlotVolume}
+                  setRemoteTrackVolume={setRemoteTrackVolume}
+                  activeFades={activeFades}
                 />
               )}
             </div>

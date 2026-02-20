@@ -13,7 +13,7 @@ Provides REST endpoints for media asset management:
 """
 
 import logging
-from typing import Optional
+from typing import Optional, Union
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query
@@ -22,19 +22,26 @@ from modules.library.dependencies.providers import get_media_asset_repository
 from modules.library.repositories.asset_repository import MediaAssetRepository
 from modules.campaign.dependencies.providers import campaign_repository
 from modules.campaign.repositories.campaign_repository import CampaignRepository
+from modules.session.dependencies.providers import get_session_repository
+from modules.session.repositories.session_repository import SessionRepository
 from modules.library.domain.media_asset_type import MediaAssetType
-from modules.library.application.commands import ConfirmUpload, DeleteMediaAsset, AssociateWithCampaign, RenameMediaAsset, ChangeAssetType, UpdateGridConfig
+from modules.library.application.commands import ConfirmUpload, DeleteMediaAsset, AssociateWithCampaign, RenameMediaAsset, ChangeAssetType, UpdateGridConfig, UpdateAudioConfig, AssetInUseError
 from modules.library.domain.map_asset_aggregate import MapAsset
+from modules.library.domain.music_asset_aggregate import MusicAsset
+from modules.library.domain.sfx_asset_aggregate import SfxAsset
 from modules.library.application.queries import GetMediaAssetsByUser, GetMediaAssetsByCampaign
 from .schemas import (
     UploadUrlResponse,
     ConfirmUploadRequest,
     MediaAssetResponse,
     MapAssetResponse,
+    MusicAssetResponse,
+    SfxAssetResponse,
     AssociateRequest,
     RenameRequest,
     ChangeTypeRequest,
     UpdateGridConfigRequest,
+    UpdateAudioConfigRequest,
     MediaAssetListResponse
 )
 from modules.user.domain.user_aggregate import UserAggregate
@@ -76,6 +83,46 @@ def _to_media_asset_response(asset, s3_service: S3Service = None) -> MediaAssetR
             grid_width=asset.grid_width,
             grid_height=asset.grid_height,
             grid_opacity=asset.grid_opacity
+        )
+
+    # If it's a MusicAsset, return MusicAssetResponse with audio fields
+    if isinstance(asset, MusicAsset):
+        return MusicAssetResponse(
+            id=str(asset.id),
+            user_id=str(asset.user_id),
+            filename=asset.filename,
+            s3_key=asset.s3_key,
+            s3_url=s3_url,
+            content_type=asset.content_type,
+            asset_type=asset_type_value,
+            file_size=asset.file_size,
+            campaign_ids=[str(cid) for cid in asset.campaign_ids],
+            session_ids=[str(sid) for sid in asset.session_ids],
+            created_at=asset.created_at,
+            updated_at=asset.updated_at,
+            duration_seconds=asset.duration_seconds,
+            default_volume=asset.default_volume,
+            default_looping=asset.default_looping
+        )
+
+    # If it's a SfxAsset, return SfxAssetResponse with audio fields
+    if isinstance(asset, SfxAsset):
+        return SfxAssetResponse(
+            id=str(asset.id),
+            user_id=str(asset.user_id),
+            filename=asset.filename,
+            s3_key=asset.s3_key,
+            s3_url=s3_url,
+            content_type=asset.content_type,
+            asset_type=asset_type_value,
+            file_size=asset.file_size,
+            campaign_ids=[str(cid) for cid in asset.campaign_ids],
+            session_ids=[str(sid) for sid in asset.session_ids],
+            created_at=asset.created_at,
+            updated_at=asset.updated_at,
+            duration_seconds=asset.duration_seconds,
+            default_volume=asset.default_volume,
+            default_looping=asset.default_looping
         )
 
     return MediaAssetResponse(
@@ -233,13 +280,14 @@ async def associate_media_asset(
     request: AssociateRequest,
     current_user: UserAggregate = Depends(get_current_user_from_token),
     repo: MediaAssetRepository = Depends(get_media_asset_repository),
+    session_repo: SessionRepository = Depends(get_session_repository),
     s3_service: S3Service = Depends(get_s3_service)
 ) -> MediaAssetResponse:
     """
     Associate a media asset with a campaign (and optionally a session).
     """
     try:
-        command = AssociateWithCampaign(repo)
+        command = AssociateWithCampaign(repo, session_repo)
         asset = command.execute(
             asset_id=asset_id,
             campaign_id=request.campaign_id,
@@ -251,9 +299,14 @@ async def associate_media_asset(
 
         return _to_media_asset_response(asset, s3_service)
 
+    except AssetInUseError as e:
+        logger.warning(f"Associate media asset blocked (in-use): {e}")
+        raise HTTPException(status_code=409, detail=str(e))
     except ValueError as e:
         logger.warning(f"Associate media asset failed: {e}")
         raise HTTPException(status_code=400, detail=str(e))
+    except HTTPException:
+        raise
     except Exception as e:
         logger.error(f"Associate media asset error: {e}")
         raise HTTPException(status_code=500, detail="Failed to associate media asset")
@@ -265,22 +318,28 @@ async def rename_media_asset(
     request: RenameRequest,
     current_user: UserAggregate = Depends(get_current_user_from_token),
     repo: MediaAssetRepository = Depends(get_media_asset_repository),
+    session_repo: SessionRepository = Depends(get_session_repository),
     s3_service: S3Service = Depends(get_s3_service)
 ) -> MediaAssetResponse:
     """
     Rename a media asset's display filename.
     """
     try:
-        command = RenameMediaAsset(repo)
+        command = RenameMediaAsset(repo, session_repo)
         asset = command.execute(asset_id, current_user.id, request.filename)
 
         logger.info(f"Renamed media asset {asset_id} to '{request.filename}'")
 
         return _to_media_asset_response(asset, s3_service)
 
+    except AssetInUseError as e:
+        logger.warning(f"Rename media asset blocked (in-use): {e}")
+        raise HTTPException(status_code=409, detail=str(e))
     except ValueError as e:
         logger.warning(f"Rename media asset failed: {e}")
         raise HTTPException(status_code=400, detail=str(e))
+    except HTTPException:
+        raise
     except Exception as e:
         logger.error(f"Rename media asset error: {e}")
         raise HTTPException(status_code=500, detail="Failed to rename media asset")
@@ -292,22 +351,28 @@ async def change_asset_type(
     request: ChangeTypeRequest,
     current_user: UserAggregate = Depends(get_current_user_from_token),
     repo: MediaAssetRepository = Depends(get_media_asset_repository),
+    session_repo: SessionRepository = Depends(get_session_repository),
     s3_service: S3Service = Depends(get_s3_service)
 ) -> MediaAssetResponse:
     """
     Change a media asset's type tag (e.g. map <-> image).
     """
     try:
-        command = ChangeAssetType(repo)
+        command = ChangeAssetType(repo, session_repo)
         asset = command.execute(asset_id, current_user.id, request.asset_type)
 
         logger.info(f"Changed media asset {asset_id} type to '{request.asset_type.value}'")
 
         return _to_media_asset_response(asset, s3_service)
 
+    except AssetInUseError as e:
+        logger.warning(f"Change asset type blocked (in-use): {e}")
+        raise HTTPException(status_code=409, detail=str(e))
     except ValueError as e:
         logger.warning(f"Change asset type failed: {e}")
         raise HTTPException(status_code=400, detail=str(e))
+    except HTTPException:
+        raise
     except Exception as e:
         logger.error(f"Change asset type error: {e}")
         raise HTTPException(status_code=500, detail="Failed to change asset type")
@@ -319,6 +384,7 @@ async def update_grid_config(
     request: UpdateGridConfigRequest,
     current_user: UserAggregate = Depends(get_current_user_from_token),
     repo: MediaAssetRepository = Depends(get_media_asset_repository),
+    session_repo: SessionRepository = Depends(get_session_repository),
     s3_service: S3Service = Depends(get_s3_service)
 ) -> MapAssetResponse:
     """
@@ -328,7 +394,7 @@ async def update_grid_config(
     across all campaigns/sessions that use this map.
     """
     try:
-        command = UpdateGridConfig(repo)
+        command = UpdateGridConfig(repo, session_repo)
         asset = command.execute(
             asset_id=asset_id,
             user_id=current_user.id,
@@ -341,12 +407,59 @@ async def update_grid_config(
 
         return _to_media_asset_response(asset, s3_service)
 
+    except AssetInUseError as e:
+        logger.warning(f"Update grid config blocked (in-use): {e}")
+        raise HTTPException(status_code=409, detail=str(e))
     except ValueError as e:
         logger.warning(f"Update grid config failed: {e}")
         raise HTTPException(status_code=400, detail=str(e))
+    except HTTPException:
+        raise
     except Exception as e:
         logger.error(f"Update grid config error: {e}")
         raise HTTPException(status_code=500, detail="Failed to update grid configuration")
+
+
+@router.patch("/{asset_id}/audio-config", response_model=Union[MusicAssetResponse, SfxAssetResponse])
+async def update_audio_config(
+    asset_id: UUID,
+    request: UpdateAudioConfigRequest,
+    current_user: UserAggregate = Depends(get_current_user_from_token),
+    repo: MediaAssetRepository = Depends(get_media_asset_repository),
+    session_repo: SessionRepository = Depends(get_session_repository),
+    s3_service: S3Service = Depends(get_s3_service)
+) -> MediaAssetResponse:
+    """
+    Update audio configuration for a music or SFX asset.
+
+    Audio config is stored on the asset itself, making it reusable
+    across all campaigns/sessions that use this audio track.
+    """
+    try:
+        command = UpdateAudioConfig(repo, session_repo)
+        asset = command.execute(
+            asset_id=asset_id,
+            user_id=current_user.id,
+            duration_seconds=request.duration_seconds,
+            default_volume=request.default_volume,
+            default_looping=request.default_looping
+        )
+
+        logger.info(f"Updated audio config for asset {asset_id}: {asset.get_audio_config()}")
+
+        return _to_media_asset_response(asset, s3_service)
+
+    except AssetInUseError as e:
+        logger.warning(f"Update audio config blocked (in-use): {e}")
+        raise HTTPException(status_code=409, detail=str(e))
+    except ValueError as e:
+        logger.warning(f"Update audio config failed: {e}")
+        raise HTTPException(status_code=400, detail=str(e))
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Update audio config error: {e}")
+        raise HTTPException(status_code=500, detail="Failed to update audio configuration")
 
 
 @router.get("/{asset_id}/download-url")
@@ -383,13 +496,14 @@ async def delete_media_asset(
     asset_id: UUID,
     current_user: UserAggregate = Depends(get_current_user_from_token),
     repo: MediaAssetRepository = Depends(get_media_asset_repository),
+    session_repo: SessionRepository = Depends(get_session_repository),
     s3_service: S3Service = Depends(get_s3_service)
 ) -> None:
     """
     Delete a media asset from S3 and the database.
     """
     try:
-        command = DeleteMediaAsset(repo, s3_service)
+        command = DeleteMediaAsset(repo, s3_service, session_repo)
         deleted = command.execute(asset_id, current_user.id)
 
         if not deleted:
@@ -397,6 +511,9 @@ async def delete_media_asset(
 
         logger.info(f"Deleted media asset {asset_id} for user {current_user.id}")
 
+    except AssetInUseError as e:
+        logger.warning(f"Delete media asset blocked (in-use): {e}")
+        raise HTTPException(status_code=409, detail=str(e))
     except ValueError as e:
         logger.warning(f"Delete media asset failed: {e}")
         raise HTTPException(status_code=403, detail=str(e))

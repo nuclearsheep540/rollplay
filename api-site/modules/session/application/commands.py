@@ -19,6 +19,8 @@ from modules.campaign.model.session_model import SessionJoinedUser
 from modules.session.domain.session_aggregate import SessionEntity, SessionStatus
 from modules.library.repositories.asset_repository import MediaAssetRepository
 from modules.library.domain.map_asset_aggregate import MapAsset
+from modules.library.domain.music_asset_aggregate import MusicAsset
+from modules.library.domain.sfx_asset_aggregate import SfxAsset
 from modules.events.event_manager import EventManager
 from modules.session.domain.session_events import SessionEvents
 
@@ -392,6 +394,13 @@ class StartSession:
                 # Build asset_id → presigned_url lookup from freshly generated URLs
                 asset_url_lookup = {a["id"]: a["s3_url"] for a in assets if a.get("s3_url")}
 
+                # Build asset_id → default_volume lookup (volume lives on the asset, not the channel)
+                asset_volume_lookup = {
+                    str(a.id): a.default_volume
+                    for a in campaign_assets
+                    if hasattr(a, 'default_volume') and a.default_volume is not None
+                }
+
             # UX delay: Show "Starting" animation to users
             await asyncio.sleep(2)
 
@@ -400,9 +409,13 @@ class StartSession:
             audio_config_with_urls = {}
             if session.audio_config:
                 for channel_id, ch in session.audio_config.items():
+                    # Volume lives on the asset — use current asset default_volume, fall back to JSONB snapshot
+                    asset_id = ch.get("asset_id")
+                    volume = asset_volume_lookup.get(asset_id, ch.get("volume", 0.8)) if self.asset_repo else ch.get("volume", 0.8)
                     audio_config_with_urls[channel_id] = {
                         **ch,
-                        "s3_url": asset_url_lookup.get(ch.get("asset_id")),
+                        "s3_url": asset_url_lookup.get(asset_id),
+                        "volume": volume,
                         "playback_state": "stopped",
                         "started_at": None,
                         "paused_elapsed": None,
@@ -545,13 +558,15 @@ class PauseSession:
         user_repository: UserRepository,
         character_repository,
         campaign_repository: CampaignRepository,
-        event_manager: EventManager
+        event_manager: EventManager,
+        asset_repository: MediaAssetRepository = None
     ):
         self.session_repo = session_repository
         self.user_repo = user_repository
         self.character_repo = character_repository
         self.campaign_repo = campaign_repository
         self.event_manager = event_manager
+        self.asset_repo = asset_repository
 
     async def execute(self, session_id: UUID, host_id: UUID) -> SessionEntity:
         """
@@ -609,6 +624,25 @@ class PauseSession:
 
             # Extract audio config (strip runtime fields, keep only track config)
             raw_audio = final_state.get("audio_state", {})
+
+            # Collect per-asset volumes: accumulator (swapped-out tracks) + currently loaded channels
+            asset_volumes = raw_audio.pop("_asset_volumes", {})
+            for channel_id, ch in raw_audio.items():
+                if ch and ch.get("asset_id") and ch.get("volume") is not None:
+                    asset_volumes[ch["asset_id"]] = ch["volume"]
+
+            # Sync per-asset volumes back to PostgreSQL (ETL: hot → cold)
+            if self.asset_repo and asset_volumes:
+                for asset_id_str, volume in asset_volumes.items():
+                    try:
+                        asset = self.asset_repo.get_by_id(UUID(asset_id_str))
+                        if asset and isinstance(asset, (MusicAsset, SfxAsset)):
+                            asset.update_audio_config(default_volume=volume)
+                            self.asset_repo.save(asset)
+                    except Exception as e:
+                        logger.warning(f"Failed to sync volume for asset {asset_id_str}: {e}")
+                logger.info(f"Synced {len(asset_volumes)} asset volumes to PostgreSQL")
+
             audio_config = {}
             for channel_id, ch in raw_audio.items():
                 if ch and ch.get("filename"):
@@ -768,13 +802,15 @@ class FinishSession:
         user_repository: UserRepository,
         character_repository: CharacterRepository,
         campaign_repository: CampaignRepository,
-        event_manager: EventManager
+        event_manager: EventManager,
+        asset_repository: MediaAssetRepository = None
     ):
         self.session_repo = session_repository
         self.user_repo = user_repository
         self.character_repo = character_repository
         self.campaign_repo = campaign_repository
         self.event_manager = event_manager
+        self.asset_repo = asset_repository
 
     async def execute(self, session_id: UUID, host_id: UUID) -> SessionEntity:
         """
@@ -859,6 +895,25 @@ class FinishSession:
 
             # Extract audio config (strip runtime fields, keep only track config)
             raw_audio = final_state.get("audio_state", {})
+
+            # Collect per-asset volumes: accumulator (swapped-out tracks) + currently loaded channels
+            asset_volumes = raw_audio.pop("_asset_volumes", {})
+            for channel_id, ch in raw_audio.items():
+                if ch and ch.get("asset_id") and ch.get("volume") is not None:
+                    asset_volumes[ch["asset_id"]] = ch["volume"]
+
+            # Sync per-asset volumes back to PostgreSQL (ETL: hot → cold)
+            if self.asset_repo and asset_volumes:
+                for asset_id_str, volume in asset_volumes.items():
+                    try:
+                        asset = self.asset_repo.get_by_id(UUID(asset_id_str))
+                        if asset and isinstance(asset, (MusicAsset, SfxAsset)):
+                            asset.update_audio_config(default_volume=volume)
+                            self.asset_repo.save(asset)
+                    except Exception as e:
+                        logger.warning(f"Failed to sync volume for asset {asset_id_str}: {e}")
+                logger.info(f"Synced {len(asset_volumes)} asset volumes to PostgreSQL")
+
             audio_config = {}
             for channel_id, ch in raw_audio.items():
                 if ch and ch.get("filename"):

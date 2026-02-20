@@ -8,7 +8,8 @@
 export const PlaybackState = {
   STOPPED: 'stopped',
   PLAYING: 'playing',
-  PAUSED: 'paused'
+  PAUSED: 'paused',
+  TRANSITIONING: 'transitioning'
 };
 
 export const ChannelType = {

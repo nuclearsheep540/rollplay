@@ -83,6 +83,27 @@ class MapAssetResponse(MediaAssetResponse):
     grid_opacity: Optional[float] = None
 
 
+class MusicAssetResponse(MediaAssetResponse):
+    """Response containing music asset details with playback config"""
+    duration_seconds: Optional[float] = None
+    default_volume: Optional[float] = None
+    default_looping: Optional[bool] = None
+
+
+class SfxAssetResponse(MediaAssetResponse):
+    """Response containing SFX asset details with playback config"""
+    duration_seconds: Optional[float] = None
+    default_volume: Optional[float] = None
+    default_looping: Optional[bool] = None
+
+
+class UpdateAudioConfigRequest(BaseModel):
+    """Request to update audio playback configuration"""
+    duration_seconds: Optional[float] = Field(None, ge=0, description="Track duration in seconds")
+    default_volume: Optional[float] = Field(None, ge=0.0, le=1.3, description="Default playback volume")
+    default_looping: Optional[bool] = Field(None, description="Default loop behavior")
+
+
 # Aliases for backwards compatibility
 AssetResponse = MediaAssetResponse
 AssetListResponse = MediaAssetListResponse

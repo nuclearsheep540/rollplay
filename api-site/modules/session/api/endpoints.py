@@ -273,6 +273,7 @@ async def pause_session(
     character_repo = Depends(get_character_repository),
     campaign_repo: CampaignRepository = Depends(campaign_repository),
     event_manager: EventManager = Depends(get_event_manager),
+    asset_repo: MediaAssetRepository = Depends(get_asset_repository),
     db: Session = Depends(get_db)
 ):
     """
@@ -291,7 +292,7 @@ async def pause_session(
     If PostgreSQL write fails, MongoDB session is preserved and error returned.
     """
     try:
-        command = PauseSession(session_repo, user_repo, character_repo, campaign_repo, event_manager)
+        command = PauseSession(session_repo, user_repo, character_repo, campaign_repo, event_manager, asset_repo)
         session = await command.execute(session_id, user_id)
         return _to_session_response(session, db)
 
@@ -317,6 +318,7 @@ async def finish_session(
     character_repo = Depends(get_character_repository),
     campaign_repo: CampaignRepository = Depends(campaign_repository),
     event_manager: EventManager = Depends(get_event_manager),
+    asset_repo: MediaAssetRepository = Depends(get_asset_repository),
     db: Session = Depends(get_db)
 ):
     """
@@ -331,7 +333,7 @@ async def finish_session(
     Returns session with status='finished'.
     """
     try:
-        command = FinishSession(session_repo, user_repo, character_repo, campaign_repo, event_manager)
+        command = FinishSession(session_repo, user_repo, character_repo, campaign_repo, event_manager, asset_repo)
         session = await command.execute(session_id, user_id)
         return _to_session_response(session, db)
 
