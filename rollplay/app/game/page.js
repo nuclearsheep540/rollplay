@@ -799,6 +799,9 @@ function GameContent() {
     syncAudioState,
     activeFades,
     cancelFade,
+    // Channel effects
+    channelEffects,
+    applyChannelEffects,
     // SFX Soundboard
     sfxSlots,
     playSfxSlot,
@@ -871,6 +874,9 @@ function GameContent() {
     // Asset loading (for load batch operations from other clients)
     loadAssetIntoChannel,
 
+    // Channel effects (for effects batch operations from other clients)
+    applyChannelEffects,
+
     // SFX Soundboard (for batch operations from other clients)
     playSfxSlot,
     stopSfxSlot,
@@ -887,7 +893,7 @@ function GameContent() {
     addToLog, handleRoleChange, setPlayerSeatMap,
     playRemoteTrack, resumeRemoteTrack, pauseRemoteTrack, stopRemoteTrack,
     setRemoteTrackVolume, toggleRemoteTrackLooping, loadRemoteAudioBuffer,
-    activeFades, cancelFade, syncAudioState, loadAssetIntoChannel,
+    activeFades, cancelFade, syncAudioState, loadAssetIntoChannel, applyChannelEffects,
     playSfxSlot, stopSfxSlot, setSfxSlotVolume, loadSfxSlot, clearSfxSlot, sfxSlots,
     audioBuffersRef, audioContextRef
   ]);
@@ -1665,6 +1671,8 @@ function GameContent() {
                   setSfxSlotVolume={setSfxSlotVolume}
                   setRemoteTrackVolume={setRemoteTrackVolume}
                   activeFades={activeFades}
+                  channelEffects={channelEffects}
+                  applyChannelEffects={applyChannelEffects}
                 />
               )}
             </div>

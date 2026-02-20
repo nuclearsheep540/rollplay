@@ -129,6 +129,8 @@ export const handleRemoteAudioBatch = async (data, {
   setSfxSlotVolume,
   loadSfxSlot,
   clearSfxSlot,
+  // Channel effects
+  applyChannelEffects,
 }) => {
   console.log("🎛️ Remote audio batch command received:", data);
   const { operations, triggered_by, fade_duration } = data;
@@ -277,6 +279,13 @@ export const handleRemoteAudioBatch = async (data, {
           if (stopRemoteTrack) stopRemoteTrack(trackId);
           if (loadAssetIntoChannel) loadAssetIntoChannel(trackId, { id: null, filename: null, s3_url: null });
           console.log(`✅ Batch operation ${index + 1}: cleared ${trackId}`);
+          break;
+
+        case 'effects':
+          if (applyChannelEffects) {
+            applyChannelEffects(trackId, op.effects);
+            console.log(`✅ Batch operation ${index + 1}: applied effects to ${trackId}`);
+          }
           break;
 
         default:

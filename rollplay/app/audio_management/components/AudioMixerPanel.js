@@ -9,7 +9,8 @@ import React, { useState, useEffect, useCallback, useMemo, useRef, memo } from '
 import AudioTrack from './AudioTrack';
 import AudioTrackSelector from './AudioTrackSelector';
 import SfxSoundboard from './SfxSoundboard';
-import { PlaybackState, ChannelType } from '../types';
+import ChannelEffects from './ChannelEffects';
+import { PlaybackState, ChannelType, DEFAULT_EFFECTS } from '../types';
 import {
   DM_CHILD,
   PANEL_CHILD,
@@ -85,6 +86,9 @@ export default function AudioMixerPanel({
   setSfxSlotVolume = null,
   setRemoteTrackVolume = null,
   activeFades = {},
+  // Channel effects (HPF, LPF, Reverb)
+  channelEffects = {},
+  applyChannelEffects = null,
 }) {
   
 
@@ -439,6 +443,32 @@ export default function AudioMixerPanel({
     }];
     sendRemoteAudioBatch?.(loopOperation);
   };
+
+  // Channel effects toggle handler
+  const handleEffectToggle = useCallback((trackId, effectType) => {
+    const currentEffects = channelEffects[trackId] || DEFAULT_EFFECTS;
+    const currentEffect = currentEffects[effectType] || {};
+
+    const updatedEffects = {
+      ...currentEffects,
+      [effectType]: {
+        ...currentEffect,
+        enabled: !currentEffect.enabled,
+      },
+    };
+
+    // Apply locally
+    if (applyChannelEffects) {
+      applyChannelEffects(trackId, updatedEffects);
+    }
+
+    // Broadcast to all clients
+    sendRemoteAudioBatch?.([{
+      trackId,
+      operation: 'effects',
+      effects: updatedEffects,
+    }]);
+  }, [channelEffects, applyChannelEffects, sendRemoteAudioBatch]);
 
   // SFX Soundboard handlers
   const handleSfxTrigger = async (slotIndex) => {
@@ -877,40 +907,47 @@ export default function AudioMixerPanel({
                   loop: pendingOperations.has(`loop_${channel.channelId}`)
                 };
                 return (
-                  <AudioTrack
-                    key={channel.channelId}
-                    config={{
-                      trackId: channel.channelId,
-                      type: channel.type,
-                      label: channel.label,
-                      analyserNode: remoteTrackAnalysers[channel.channelId],
-                      track: channel.track
-                    }}
-                    pendingOperations={pendingOps}
-                    trackState={
-                      remoteTrackStates[channel.channelId] || {
-                        playbackState: PlaybackState.STOPPED,
-                        volume: 1.0,
-                        filename: null,
-                        currentTime: 0,
-                        duration: 0,
-                        looping: true
+                  <React.Fragment key={channel.channelId}>
+                    <AudioTrack
+                      config={{
+                        trackId: channel.channelId,
+                        type: channel.type,
+                        label: channel.label,
+                        analyserNode: remoteTrackAnalysers[channel.channelId],
+                        track: channel.track
+                      }}
+                      pendingOperations={pendingOps}
+                      trackState={
+                        remoteTrackStates[channel.channelId] || {
+                          playbackState: PlaybackState.STOPPED,
+                          volume: 1.0,
+                          filename: null,
+                          currentTime: 0,
+                          duration: 0,
+                          looping: true
+                        }
                       }
-                    }
-                    onPlay={() => handlePlay(channel)}
-                    onPause={() => handlePause(channel)}
-                    onStop={() => handleStop(channel)}
-                    onVolumeChange={(v) =>
-                      setRemoteTrackVolume?.(channel.channelId, v)
-                    }
-                    onVolumeChangeDebounced={(v) =>
-                      handleVolumeChange(channel.channelId, v)
-                    }
-                    onLoopToggle={(id, loop) =>
-                      handleLoopToggle(id, loop)
-                    }
-                    isLast={false}
-                  />
+                      onPlay={() => handlePlay(channel)}
+                      onPause={() => handlePause(channel)}
+                      onStop={() => handleStop(channel)}
+                      onVolumeChange={(v) =>
+                        setRemoteTrackVolume?.(channel.channelId, v)
+                      }
+                      onVolumeChangeDebounced={(v) =>
+                        handleVolumeChange(channel.channelId, v)
+                      }
+                      onLoopToggle={(id, loop) =>
+                        handleLoopToggle(id, loop)
+                      }
+                      isLast={false}
+                    />
+                    <ChannelEffects
+                      trackId={channel.channelId}
+                      effects={channelEffects[channel.channelId]}
+                      onToggleEffect={handleEffectToggle}
+                      disabled={!remoteTrackStates[channel.channelId]?.filename}
+                    />
+                  </React.Fragment>
                 );
               })}
             </>

@@ -814,7 +814,7 @@ class WebsocketEvent():
         print(f"🎛️ Backend received batch audio operations from {triggered_by}: {len(operations)} operations")
         
         # Validate all operations
-        valid_operations = ["play", "stop", "pause", "resume", "volume", "loop", "load", "clear"]
+        valid_operations = ["play", "stop", "pause", "resume", "volume", "loop", "load", "clear", "effects"]
         for i, op in enumerate(operations):
             if not isinstance(op, dict):
                 print(f"❌ Invalid operation {i}: must be an object")
@@ -844,6 +844,10 @@ class WebsocketEvent():
                 if "looping" not in op:
                     print(f"❌ Invalid loop operation {i}: missing looping parameter")
                     return WebsocketEventResult(broadcast_message={})
+            elif operation == "effects":
+                if not op.get("effects") or not isinstance(op.get("effects"), dict):
+                    print(f"❌ Invalid effects operation {i}: missing or invalid effects object")
+                    return WebsocketEventResult(broadcast_message={})
         
         # Create log message describing the batch operation
         operation_summaries = []
@@ -872,6 +876,10 @@ class WebsocketEvent():
                 operation_summaries.append(f"load {track_id} ({filename})")
             elif operation == "clear":
                 operation_summaries.append(f"clear {track_id}")
+            elif operation == "effects":
+                effects = op.get("effects", {})
+                enabled_effects = [k for k, v in effects.items() if isinstance(v, dict) and v.get("enabled")]
+                operation_summaries.append(f"effects on {track_id}: {', '.join(enabled_effects) or 'all off'}")
 
         log_message = f"🎛️ {triggered_by} executed batch audio operations: {', '.join(operation_summaries)}"
         print(log_message)
@@ -974,6 +982,11 @@ class WebsocketEvent():
 
                     # Update op so the broadcast carries the resolved volume
                     op["volume"] = resolved_volume
+
+                elif operation == "effects":
+                    ch = current_audio_state.get(track_id, {})
+                    channel_state = {**ch, "effects": op.get("effects", {})}
+                    GameService.update_audio_state(client_id, track_id, channel_state)
 
                 elif operation == "clear":
                     # Save outgoing asset's volume before clearing
