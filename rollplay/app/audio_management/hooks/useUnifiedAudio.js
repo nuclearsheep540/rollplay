@@ -1108,22 +1108,46 @@ export const useUnifiedAudio = () => {
 
   // Load an asset from the library into a channel (DM selects via AudioTrackSelector)
   // Volume travels with the audio file — use the asset's default_volume
+  // System-level guarantee: if the asset changes (including to null for clear),
+  // stop the current audio source so no orphaned playback continues.
   const loadAssetIntoChannel = (channelId, asset) => {
     const volume = asset.default_volume ?? 0.8;
-    if (remoteTrackGainsRef.current[channelId]) {
-      remoteTrackGainsRef.current[channelId].gain.value = volume;
-    }
-    setRemoteTrackStates(prev => ({
-      ...prev,
-      [channelId]: {
-        ...prev[channelId],
-        filename: asset.filename,
-        asset_id: asset.id,
-        s3_url: asset.s3_url,
-        volume,
+
+    setRemoteTrackStates(prev => {
+      const prevAssetId = prev[channelId]?.asset_id;
+      const newAssetId = asset.id ?? null;
+
+      // Stop currently playing source when the asset changes
+      if (prevAssetId !== newAssetId) {
+        if (activeSourcesRef.current[channelId]) {
+          try { activeSourcesRef.current[channelId].stop(); } catch (_) {}
+          delete activeSourcesRef.current[channelId];
+        }
+        delete trackTimersRef.current[channelId];
+        cancelFade(channelId);
       }
-    }));
-    console.log(`🎵 Loaded asset "${asset.filename}" into channel ${channelId} (volume: ${volume})`);
+
+      if (remoteTrackGainsRef.current[channelId]) {
+        remoteTrackGainsRef.current[channelId].gain.value = volume;
+      }
+
+      return {
+        ...prev,
+        [channelId]: {
+          ...prev[channelId],
+          filename: asset.filename,
+          asset_id: newAssetId,
+          s3_url: asset.s3_url,
+          volume,
+          // Reset playback state when asset changes
+          ...(prevAssetId !== newAssetId ? {
+            playbackState: PlaybackState.STOPPED,
+            currentTime: 0,
+            duration: 0,
+          } : {}),
+        }
+      };
+    });
   };
 
   // =====================================

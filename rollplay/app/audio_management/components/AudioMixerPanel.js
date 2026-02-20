@@ -111,6 +111,23 @@ export default function AudioMixerPanel({
     }
   }, [loadAssetIntoChannel, sendRemoteAudioBatch]);
 
+  // Clear a BGM channel — stop audio and reset asset to empty
+  const handleBgmClear = useCallback((channelId) => {
+    if (loadAssetIntoChannel) {
+      loadAssetIntoChannel(channelId, { id: null, filename: null, s3_url: null });
+    }
+    sendRemoteAudioBatch?.([{ trackId: channelId, operation: 'clear' }]);
+  }, [loadAssetIntoChannel, sendRemoteAudioBatch]);
+
+  // Collect asset IDs currently loaded in any BGM channel (for filtering the selection modal)
+  const loadedAssetIds = useMemo(() => {
+    const ids = new Set();
+    Object.values(remoteTrackStates).forEach(state => {
+      if (state?.asset_id) ids.add(state.asset_id);
+    });
+    return ids;
+  }, [remoteTrackStates]);
+
   // Cue system state
   const [currentCue, setCurrentCue] = useState(null); // { targetTracks: [channelId, ...] }
   const [trackFadeStates, setTrackFadeStates] = useState({}); // Per-track fade configuration { trackId: boolean }
@@ -617,6 +634,8 @@ export default function AudioMixerPanel({
           <AudioTrackSelector
             remoteTrackStates={remoteTrackStates}
             onAssetSelected={handleAssetSelected}
+            onClear={handleBgmClear}
+            loadedAssetIds={loadedAssetIds}
             campaignId={campaignId}
           />
 

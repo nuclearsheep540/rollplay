@@ -21,6 +21,7 @@ export default function AudioSelectionModal({
   channelId,
   channelType,
   campaignId,
+  excludeAssetIds = new Set(),
 }) {
   const [showUpload, setShowUpload] = useState(false);
   const [selectedFile, setSelectedFile] = useState(null);
@@ -53,11 +54,16 @@ export default function AudioSelectionModal({
     enabled: showLibrary,
   });
 
-  // Filter library to exclude assets already in campaign
+  // Filter out assets already loaded in other BGM channels
+  const availableCampaignAssets = useMemo(() => {
+    return campaignAssets.filter(a => !excludeAssetIds.has(a.id));
+  }, [campaignAssets, excludeAssetIds]);
+
+  // Filter library to exclude assets already in campaign or loaded in channels
   const libraryAssets = useMemo(() => {
     const campaignAssetIds = new Set(campaignAssets.map(a => a.id));
-    return allAssets.filter(a => !campaignAssetIds.has(a.id));
-  }, [allAssets, campaignAssets]);
+    return allAssets.filter(a => !campaignAssetIds.has(a.id) && !excludeAssetIds.has(a.id));
+  }, [allAssets, campaignAssets, excludeAssetIds]);
 
   const uploadMutation = useUploadAsset();
   const associateMutation = useAssociateAsset();
@@ -278,14 +284,18 @@ export default function AudioSelectionModal({
 
       {campaignError && <p className="text-red-400 text-xs mb-2">{campaignError.message}</p>}
 
-      {!campaignLoading && !campaignError?.message && campaignAssets.length === 0 && (
-        <p className="text-gray-500 text-xs">No {assetType} assets in campaign. Upload or add from library.</p>
+      {!campaignLoading && !campaignError?.message && availableCampaignAssets.length === 0 && (
+        <p className="text-gray-500 text-xs">
+          {campaignAssets.length > 0
+            ? 'All tracks are loaded in other channels.'
+            : `No ${assetType} assets in campaign. Upload or add from library.`}
+        </p>
       )}
 
-      {!campaignLoading && !campaignError?.message && campaignAssets.length > 0 && (
+      {!campaignLoading && !campaignError?.message && availableCampaignAssets.length > 0 && (
         <div className="space-y-1">
           <p className="text-xs text-gray-400 mb-1">Campaign {assetType === 'music' ? 'music' : 'sound effects'}</p>
-          {campaignAssets.map((asset) => (
+          {availableCampaignAssets.map((asset) => (
             <div
               key={asset.id}
               onClick={() => handleAssetSelect(asset)}
