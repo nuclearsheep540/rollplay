@@ -83,6 +83,7 @@ export default function AudioMixerPanel({
   loadSfxSlot = null,
   clearSfxSlot = null,
   setSfxSlotVolume = null,
+  setRemoteTrackVolume = null,
   activeFades = {},
 }) {
   
@@ -881,7 +882,7 @@ export default function AudioMixerPanel({
                     onPause={() => handlePause(channel)}
                     onStop={() => handleStop(channel)}
                     onVolumeChange={(v) =>
-                      handleVolumeChange(channel.channelId, v)
+                      setRemoteTrackVolume?.(channel.channelId, v)
                     }
                     onVolumeChangeDebounced={(v) =>
                       handleVolumeChange(channel.channelId, v)

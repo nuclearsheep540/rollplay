@@ -1663,6 +1663,7 @@ function GameContent() {
                   loadSfxSlot={loadSfxSlot}
                   clearSfxSlot={clearSfxSlot}
                   setSfxSlotVolume={setSfxSlotVolume}
+                  setRemoteTrackVolume={setRemoteTrackVolume}
                   activeFades={activeFades}
                 />
               )}
