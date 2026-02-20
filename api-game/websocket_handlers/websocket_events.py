@@ -952,7 +952,8 @@ class WebsocketEvent():
 
                     # Resolve incoming volume: session memory first, then batch op, then default
                     new_asset_id = op.get("asset_id")
-                    resolved_volume = asset_volumes.get(new_asset_id, op.get("volume")) or 0.8
+                    raw_volume = asset_volumes.get(new_asset_id, op.get("volume"))
+                    resolved_volume = raw_volume if raw_volume is not None else 0.8
 
                     # Track the resolved volume for the new asset too
                     if new_asset_id:
