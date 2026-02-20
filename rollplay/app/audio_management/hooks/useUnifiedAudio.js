@@ -1107,7 +1107,12 @@ export const useUnifiedAudio = () => {
   };
 
   // Load an asset from the library into a channel (DM selects via AudioTrackSelector)
+  // Volume travels with the audio file — use the asset's default_volume
   const loadAssetIntoChannel = (channelId, asset) => {
+    const volume = asset.default_volume ?? 0.8;
+    if (remoteTrackGainsRef.current[channelId]) {
+      remoteTrackGainsRef.current[channelId].gain.value = volume;
+    }
     setRemoteTrackStates(prev => ({
       ...prev,
       [channelId]: {
@@ -1115,9 +1120,10 @@ export const useUnifiedAudio = () => {
         filename: asset.filename,
         asset_id: asset.id,
         s3_url: asset.s3_url,
+        volume,
       }
     }));
-    console.log(`🎵 Loaded asset "${asset.filename}" into channel ${channelId}`);
+    console.log(`🎵 Loaded asset "${asset.filename}" into channel ${channelId} (volume: ${volume})`);
   };
 
   // =====================================
@@ -1125,15 +1131,20 @@ export const useUnifiedAudio = () => {
   // =====================================
 
   // Load an asset into a soundboard slot and pre-fetch its buffer
+  // Volume travels with the audio file — use the asset's default_volume
   const loadSfxSlot = async (slotIndex, asset) => {
+    const volume = asset.default_volume ?? 0.8;
+    const trackId = `sfx_slot_${slotIndex}`;
+    if (sfxSlotGainsRef.current[trackId]) {
+      sfxSlotGainsRef.current[trackId].gain.value = volume;
+    }
     setSfxSlots(prev => prev.map((s, i) =>
-      i === slotIndex ? { ...s, asset_id: asset.id, filename: asset.filename, s3_url: asset.s3_url } : s
+      i === slotIndex ? { ...s, asset_id: asset.id, filename: asset.filename, s3_url: asset.s3_url, volume } : s
     ));
-    console.log(`🔊 Loaded SFX "${asset.filename}" into slot ${slotIndex}`);
+    console.log(`🔊 Loaded SFX "${asset.filename}" into slot ${slotIndex} (volume: ${volume})`);
 
     // Pre-fetch buffer for instant trigger response
     if (asset.s3_url) {
-      const trackId = `sfx_slot_${slotIndex}`;
       const buffer = await loadRemoteAudioBuffer(asset.s3_url, trackId);
       if (buffer) {
         sfxSlotBuffersRef.current[`${trackId}_${asset.id || asset.filename}`] = buffer;

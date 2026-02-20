@@ -174,7 +174,7 @@ export const handleRemoteAudioBatch = async (data, {
             if (setSfxSlotVolume) setSfxSlotVolume(slotIndex, op.volume);
             break;
           case 'load':
-            if (loadSfxSlot) await loadSfxSlot(slotIndex, { id: op.asset_id, filename: op.filename, s3_url: op.s3_url });
+            if (loadSfxSlot) await loadSfxSlot(slotIndex, { id: op.asset_id, filename: op.filename, s3_url: op.s3_url, default_volume: op.volume });
             break;
           case 'clear':
             if (clearSfxSlot) clearSfxSlot(slotIndex);
@@ -265,9 +265,9 @@ export const handleRemoteAudioBatch = async (data, {
           
         case 'load':
           if (loadAssetIntoChannel) {
-            const { filename, asset_id, s3_url } = op;
-            loadAssetIntoChannel(trackId, { filename, id: asset_id, s3_url });
-            console.log(`✅ Batch operation ${index + 1}: loaded ${trackId} (${filename})`);
+            const { filename, asset_id, s3_url, volume } = op;
+            loadAssetIntoChannel(trackId, { filename, id: asset_id, s3_url, default_volume: volume });
+            console.log(`✅ Batch operation ${index + 1}: loaded ${trackId} (${filename}, volume: ${volume})`);
           } else {
             console.warn(`❌ Batch operation ${index + 1}: loadAssetIntoChannel function not available`);
           }

@@ -942,19 +942,48 @@ class WebsocketEvent():
                     GameService.update_audio_state(client_id, track_id, channel_state)
 
                 elif operation == "load":
+                    # Save outgoing asset's volume to accumulator
+                    old_ch = current_audio_state.get(track_id, {})
+                    old_asset_id = old_ch.get("asset_id")
+                    old_volume = old_ch.get("volume")
+                    asset_volumes = current_audio_state.get("_asset_volumes", {})
+                    if old_asset_id and old_volume is not None:
+                        asset_volumes[old_asset_id] = old_volume
+
+                    # Resolve incoming volume: session memory first, then batch op, then default
+                    new_asset_id = op.get("asset_id")
+                    resolved_volume = asset_volumes.get(new_asset_id, op.get("volume")) or 0.8
+
+                    # Track the resolved volume for the new asset too
+                    if new_asset_id:
+                        asset_volumes[new_asset_id] = resolved_volume
+
                     channel_state = {
                         "filename": op.get("filename"),
-                        "asset_id": op.get("asset_id"),
+                        "asset_id": new_asset_id,
                         "s3_url": op.get("s3_url"),
-                        "volume": op.get("volume", 0.8),
-                        "looping": op.get("looping", True),
+                        "volume": resolved_volume,
+                        "looping": op.get("looping") if op.get("looping") is not None else True,
                         "playback_state": "stopped",
                         "started_at": None,
                         "paused_elapsed": None,
                     }
                     GameService.update_audio_state(client_id, track_id, channel_state)
+                    GameService.update_audio_state(client_id, "_asset_volumes", asset_volumes)
+
+                    # Update op so the broadcast carries the resolved volume
+                    op["volume"] = resolved_volume
 
                 elif operation == "clear":
+                    # Save outgoing asset's volume before clearing
+                    old_ch = current_audio_state.get(track_id, {})
+                    old_asset_id = old_ch.get("asset_id")
+                    old_volume = old_ch.get("volume")
+                    if old_asset_id and old_volume is not None:
+                        asset_volumes = current_audio_state.get("_asset_volumes", {})
+                        asset_volumes[old_asset_id] = old_volume
+                        GameService.update_audio_state(client_id, "_asset_volumes", asset_volumes)
+
                     channel_state = {
                         "filename": None,
                         "asset_id": None,

@@ -86,6 +86,8 @@ export default function AudioMixerPanel({
   activeFades = {},
 }) {
   
+
+
   // Track pending audio operations to disable buttons
   const [pendingOperations, setPendingOperations] = useState(new Set());
   
@@ -103,6 +105,7 @@ export default function AudioMixerPanel({
         filename: asset.filename,
         asset_id: asset.id,
         s3_url: asset.s3_url,
+        volume: asset.default_volume ?? 0.8,
       }]);
     }
   }, [loadAssetIntoChannel, sendRemoteAudioBatch]);
@@ -391,14 +394,9 @@ export default function AudioMixerPanel({
     sendRemoteAudioBatch?.(stopOperations);
   };
 
-  // Volume change handler using batch operation
+  // Volume change handler — WebSocket only, asset persistence handled by ETL on session pause/finish
   const handleVolumeChange = (channelId, volume) => {
-    const volumeOperation = [{
-      trackId: channelId,
-      operation: 'volume',
-      volume
-    }];
-    sendRemoteAudioBatch?.(volumeOperation);
+    sendRemoteAudioBatch?.([{ trackId: channelId, operation: 'volume', volume }]);
   };
 
   // Handle loop toggle with WebSocket broadcast (server-authoritative)
@@ -444,12 +442,9 @@ export default function AudioMixerPanel({
     }]);
   };
 
+  // SFX volume — WebSocket only, asset persistence handled by ETL on session pause/finish
   const handleSfxVolumeChange = (slotIndex, volume) => {
-    sendRemoteAudioBatch?.([{
-      trackId: `sfx_slot_${slotIndex}`,
-      operation: 'volume',
-      volume,
-    }]);
+    sendRemoteAudioBatch?.([{ trackId: `sfx_slot_${slotIndex}`, operation: 'volume', volume }]);
   };
 
   const handleSfxAssetSelected = useCallback((slotIndex, asset) => {
@@ -460,6 +455,7 @@ export default function AudioMixerPanel({
       filename: asset.filename,
       asset_id: asset.id,
       s3_url: asset.s3_url,
+      volume: asset.default_volume ?? 0.8,
     }]);
   }, [loadSfxSlot, sendRemoteAudioBatch]);
 
