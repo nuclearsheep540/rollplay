@@ -180,8 +180,8 @@ class MusicAsset(MediaAssetAggregate):
     def build_effects_for_game(self) -> dict:
         """Build the effects shape expected by api-game/MongoDB.
 
-        Translates asset-level effect toggles into the runtime structure.
-        V1 hardcodes frequency/mix/preset params; only enabled flags come from the domain.
+        Returns enabled-only flags. Effect parameters (frequency, mix, preset)
+        are app-defined constants on the frontend — never stored in the database.
         Returns empty dict if no effects have been configured.
         """
         if (self.effect_hpf_enabled is None
@@ -189,9 +189,9 @@ class MusicAsset(MediaAssetAggregate):
                 and self.effect_reverb_enabled is None):
             return {}
         return {
-            "hpf": {"enabled": self.effect_hpf_enabled or False, "frequency": 200, "mix": 0.5},
-            "lpf": {"enabled": self.effect_lpf_enabled or False, "frequency": 8000, "mix": 0.8},
-            "reverb": {"enabled": self.effect_reverb_enabled or False, "preset": "hall", "mix": 0.3},
+            "hpf": self.effect_hpf_enabled or False,
+            "lpf": self.effect_lpf_enabled or False,
+            "reverb": self.effect_reverb_enabled or False,
         }
 
     def build_channel_state_for_game(self, s3_url: str) -> dict:

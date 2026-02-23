@@ -181,11 +181,16 @@ export const useUnifiedAudio = () => {
   const channelEffectNodesRef = useRef({});
   // Cached reverb impulse response AudioBuffers (shared across channels, keyed by preset name)
   const impulseResponseBuffersRef = useRef({});
-  // Per-channel effects state — V2-compatible shape with hardcoded params for V1
+  // Per-channel effects state — slim enabled-only flags: { hpf: false, lpf: false, reverb: false }
+  // Parameters (frequency, mix, preset) live in DEFAULT_EFFECTS — single source of truth.
   const [channelEffects, setChannelEffects] = useState(() => {
     const effects = {};
     ['A', 'B', 'C', 'D', 'E', 'F'].forEach(ch => {
-      effects[`audio_channel_${ch}`] = JSON.parse(JSON.stringify(DEFAULT_EFFECTS));
+      effects[`audio_channel_${ch}`] = {
+        hpf: DEFAULT_EFFECTS.hpf.enabled,
+        lpf: DEFAULT_EFFECTS.lpf.enabled,
+        reverb: DEFAULT_EFFECTS.reverb.enabled,
+      };
     });
     return effects;
   });
@@ -1052,8 +1057,9 @@ export const useUnifiedAudio = () => {
     }
   };
 
-  // Apply effects parameters to a BGM channel's Web Audio nodes and update React state.
-  // Accepts full V2-compatible effects object; V1 callers only toggle 'enabled' with hardcoded params.
+  // Apply effects to a BGM channel's Web Audio nodes and update React state.
+  // Accepts slim enabled-only flags: { hpf: true/false, lpf: true/false, reverb: true/false }
+  // Parameters (frequency, mix, preset) come from DEFAULT_EFFECTS — single source of truth.
   const applyChannelEffects = useCallback((trackId, effects) => {
     const chain = channelEffectNodesRef.current[trackId];
     if (!chain) return;
@@ -1066,7 +1072,8 @@ export const useUnifiedAudio = () => {
 
     // HPF
     if (effects.hpf !== undefined) {
-      const { enabled, frequency, mix } = effects.hpf;
+      const enabled = typeof effects.hpf === 'boolean' ? effects.hpf : !!effects.hpf;
+      const { frequency, mix } = DEFAULT_EFFECTS.hpf;
       chain.hpf.filterNode.frequency.setValueAtTime(frequency, now);
       chain.hpf.dryGain.gain.linearRampToValueAtTime(enabled ? (1 - mix) : 1.0, now + RAMP_TIME);
       chain.hpf.wetGain.gain.linearRampToValueAtTime(enabled ? mix : 0.0, now + RAMP_TIME);
@@ -1074,7 +1081,8 @@ export const useUnifiedAudio = () => {
 
     // LPF
     if (effects.lpf !== undefined) {
-      const { enabled, frequency, mix } = effects.lpf;
+      const enabled = typeof effects.lpf === 'boolean' ? effects.lpf : !!effects.lpf;
+      const { frequency, mix } = DEFAULT_EFFECTS.lpf;
       chain.lpf.filterNode.frequency.setValueAtTime(frequency, now);
       chain.lpf.dryGain.gain.linearRampToValueAtTime(enabled ? (1 - mix) : 1.0, now + RAMP_TIME);
       chain.lpf.wetGain.gain.linearRampToValueAtTime(enabled ? mix : 0.0, now + RAMP_TIME);
@@ -1082,7 +1090,8 @@ export const useUnifiedAudio = () => {
 
     // Reverb
     if (effects.reverb !== undefined) {
-      const { enabled, preset, mix } = effects.reverb;
+      const enabled = typeof effects.reverb === 'boolean' ? effects.reverb : !!effects.reverb;
+      const { preset, mix } = DEFAULT_EFFECTS.reverb;
 
       // Generate and cache IR buffer for the requested preset
       if (enabled && preset && REVERB_PRESETS[preset]) {
@@ -1097,7 +1106,7 @@ export const useUnifiedAudio = () => {
       chain.reverb.wetGain.gain.linearRampToValueAtTime(enabled ? mix : 0.0, now + RAMP_TIME);
     }
 
-    // Update React state
+    // Update React state — store slim flags only
     setChannelEffects(prev => ({
       ...prev,
       [trackId]: { ...prev[trackId], ...effects },
@@ -1344,19 +1353,25 @@ export const useUnifiedAudio = () => {
       };
     });
 
-    // Apply effects: prefer complete effects object (from backend broadcast with restored config),
-    // fall back to asset-level defaults (for DM's local load before broadcast arrives)
+    // Apply effects — slim flags from backend or asset-level defaults.
+    // applyChannelEffects merges flags with DEFAULT_EFFECTS for parameters.
     if (asset.effects && typeof asset.effects === 'object') {
+      // Backend broadcast carries slim flags: { hpf: true, lpf: false, reverb: true }
       applyChannelEffects(channelId, asset.effects);
     } else if (asset.effect_hpf_enabled !== undefined || asset.effect_lpf_enabled !== undefined || asset.effect_reverb_enabled !== undefined) {
-      const effects = {
-        hpf: { ...DEFAULT_EFFECTS.hpf, enabled: asset.effect_hpf_enabled || false },
-        lpf: { ...DEFAULT_EFFECTS.lpf, enabled: asset.effect_lpf_enabled || false },
-        reverb: { ...DEFAULT_EFFECTS.reverb, enabled: asset.effect_reverb_enabled || false },
-      };
-      applyChannelEffects(channelId, effects);
+      // DM's local load — asset has individual enabled flags from PostgreSQL
+      applyChannelEffects(channelId, {
+        hpf: asset.effect_hpf_enabled || false,
+        lpf: asset.effect_lpf_enabled || false,
+        reverb: asset.effect_reverb_enabled || false,
+      });
     } else {
-      applyChannelEffects(channelId, JSON.parse(JSON.stringify(DEFAULT_EFFECTS)));
+      // No effects data — apply all-off defaults
+      applyChannelEffects(channelId, {
+        hpf: false,
+        lpf: false,
+        reverb: false,
+      });
     }
   };
 

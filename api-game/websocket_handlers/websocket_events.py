@@ -845,7 +845,7 @@ class WebsocketEvent():
                     print(f"❌ Invalid loop operation {i}: missing looping parameter")
                     return WebsocketEventResult(broadcast_message={})
             elif operation == "effects":
-                if not op.get("effects") or not isinstance(op.get("effects"), dict):
+                if not isinstance(op.get("effects"), dict):
                     print(f"❌ Invalid effects operation {i}: missing or invalid effects object")
                     return WebsocketEventResult(broadcast_message={})
         
@@ -878,7 +878,7 @@ class WebsocketEvent():
                 operation_summaries.append(f"clear {track_id}")
             elif operation == "effects":
                 effects = op.get("effects", {})
-                enabled_effects = [k for k, v in effects.items() if isinstance(v, dict) and v.get("enabled")]
+                enabled_effects = [k for k, v in effects.items() if v is True]
                 operation_summaries.append(f"effects on {track_id}: {', '.join(enabled_effects) or 'all off'}")
             elif operation == "mute":
                 muted = op.get("muted", False)

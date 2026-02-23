@@ -15,7 +15,7 @@ export default function ChannelEffects({ trackId, effects, onToggleEffect, disab
   return (
     <div className="flex gap-1 pl-7 mb-1">
       {EFFECT_TYPES.map(({ key, label, title }) => {
-        const isEnabled = effects?.[key]?.enabled || false;
+        const isEnabled = !!effects?.[key];
         return (
           <button
             key={key}

@@ -115,9 +115,9 @@ export default function AudioMixerPanel({
     if (sendRemoteAudioBatch) {
       const effects = (asset.effect_hpf_enabled !== undefined || asset.effect_lpf_enabled !== undefined || asset.effect_reverb_enabled !== undefined)
         ? {
-            hpf: { ...DEFAULT_EFFECTS.hpf, enabled: asset.effect_hpf_enabled || false },
-            lpf: { ...DEFAULT_EFFECTS.lpf, enabled: asset.effect_lpf_enabled || false },
-            reverb: { ...DEFAULT_EFFECTS.reverb, enabled: asset.effect_reverb_enabled || false },
+            hpf: asset.effect_hpf_enabled || false,
+            lpf: asset.effect_lpf_enabled || false,
+            reverb: asset.effect_reverb_enabled || false,
           }
         : {};
 
@@ -464,24 +464,27 @@ export default function AudioMixerPanel({
   };
 
   // Channel effects toggle handler
+  // Effects shape is slim: { hpf: true/false, lpf: true/false, reverb: true/false }
+  // Parameters (frequency, mix, preset) are app-defined in DEFAULT_EFFECTS — never stored in DB.
   const handleEffectToggle = useCallback((trackId, effectType) => {
-    const currentEffects = channelEffects[trackId] || DEFAULT_EFFECTS;
-    const currentEffect = currentEffects[effectType] || {};
+    const currentEffects = channelEffects[trackId] || {
+      hpf: DEFAULT_EFFECTS.hpf.enabled,
+      lpf: DEFAULT_EFFECTS.lpf.enabled,
+      reverb: DEFAULT_EFFECTS.reverb.enabled,
+    };
+    const newEnabled = !currentEffects[effectType];
 
     const updatedEffects = {
       ...currentEffects,
-      [effectType]: {
-        ...currentEffect,
-        enabled: !currentEffect.enabled,
-      },
+      [effectType]: newEnabled,
     };
 
-    // Apply locally
+    // Apply locally (applyChannelEffects merges flags with DEFAULT_EFFECTS internally)
     if (applyChannelEffects) {
       applyChannelEffects(trackId, updatedEffects);
     }
 
-    // Broadcast to all clients
+    // Broadcast slim flags to all clients
     sendRemoteAudioBatch?.([{
       trackId,
       operation: 'effects',

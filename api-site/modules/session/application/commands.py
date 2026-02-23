@@ -636,9 +636,10 @@ class PauseSession:
                                 config_kwargs["default_looping"] = cfg["looping"]
                             effects = cfg.get("effects", {})
                             if effects and isinstance(asset, MusicAsset):
-                                config_kwargs["effect_hpf_enabled"] = effects.get("hpf", {}).get("enabled")
-                                config_kwargs["effect_lpf_enabled"] = effects.get("lpf", {}).get("enabled")
-                                config_kwargs["effect_reverb_enabled"] = effects.get("reverb", {}).get("enabled")
+                                # Slim shape: { hpf: True, lpf: False, reverb: True }
+                                config_kwargs["effect_hpf_enabled"] = bool(effects.get("hpf", False))
+                                config_kwargs["effect_lpf_enabled"] = bool(effects.get("lpf", False))
+                                config_kwargs["effect_reverb_enabled"] = bool(effects.get("reverb", False))
                             if config_kwargs:
                                 asset.update_audio_config(**config_kwargs)
                                 self.asset_repo.save(asset)
@@ -938,9 +939,10 @@ class FinishSession:
                                 config_kwargs["default_looping"] = cfg["looping"]
                             effects = cfg.get("effects", {})
                             if effects and isinstance(asset, MusicAsset):
-                                config_kwargs["effect_hpf_enabled"] = effects.get("hpf", {}).get("enabled")
-                                config_kwargs["effect_lpf_enabled"] = effects.get("lpf", {}).get("enabled")
-                                config_kwargs["effect_reverb_enabled"] = effects.get("reverb", {}).get("enabled")
+                                # Slim shape: { hpf: True, lpf: False, reverb: True }
+                                config_kwargs["effect_hpf_enabled"] = bool(effects.get("hpf", False))
+                                config_kwargs["effect_lpf_enabled"] = bool(effects.get("lpf", False))
+                                config_kwargs["effect_reverb_enabled"] = bool(effects.get("reverb", False))
                             if config_kwargs:
                                 asset.update_audio_config(**config_kwargs)
                                 self.asset_repo.save(asset)
