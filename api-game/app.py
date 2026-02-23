@@ -454,7 +454,8 @@ async def create_session(request: SessionStartRequest):
             room_host=request.dm_username.lower(),
             available_assets=available_assets,
             campaign_id=request.campaign_id,  # For proxying asset requests to api-site
-            audio_state=request.audio_config if request.audio_config else {}
+            audio_state=request.audio_config if request.audio_config else {},
+            audio_track_config=request.audio_track_config if request.audio_track_config else {}
         )
 
         # Use session_id as MongoDB _id (back-reference to PostgreSQL session)
@@ -609,6 +610,7 @@ async def end_session(request: SessionEndRequest, validate_only: bool = False):
                 "max_players": room.get("max_players", 0)
             },
             "audio_state": room.get("audio_state", {}),
+            "audio_track_config": room.get("audio_track_config", {}),
             "map_state": map_state,
             "image_state": image_state,
             "active_display": active_display

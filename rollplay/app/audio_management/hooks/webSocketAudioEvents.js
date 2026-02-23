@@ -267,9 +267,9 @@ export const handleRemoteAudioBatch = async (data, {
           
         case 'load':
           if (loadAssetIntoChannel) {
-            const { filename, asset_id, s3_url, volume } = op;
-            loadAssetIntoChannel(trackId, { filename, id: asset_id, s3_url, default_volume: volume });
-            console.log(`✅ Batch operation ${index + 1}: loaded ${trackId} (${filename}, volume: ${volume})`);
+            const { filename, asset_id, s3_url, volume, effects, looping } = op;
+            loadAssetIntoChannel(trackId, { filename, id: asset_id, s3_url, default_volume: volume, effects, default_looping: looping });
+            console.log(`✅ Batch operation ${index + 1}: loaded ${trackId} (${filename}, volume: ${volume}, effects: ${effects ? 'restored' : 'defaults'})`);
           } else {
             console.warn(`❌ Batch operation ${index + 1}: loadAssetIntoChannel function not available`);
           }
