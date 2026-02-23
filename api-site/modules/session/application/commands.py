@@ -401,6 +401,20 @@ class StartSession:
                     if hasattr(a, 'default_volume') and a.default_volume is not None
                 }
 
+                # Build asset_id → effects lookup (effects live on the MusicAsset, hydrated with V1 hardcoded params)
+                asset_effects_lookup = {}
+                for a in campaign_assets:
+                    if hasattr(a, 'effect_hpf_enabled') and (
+                        a.effect_hpf_enabled is not None
+                        or a.effect_lpf_enabled is not None
+                        or a.effect_reverb_enabled is not None
+                    ):
+                        asset_effects_lookup[str(a.id)] = {
+                            "hpf": {"enabled": a.effect_hpf_enabled or False, "frequency": 200, "mix": 0.5},
+                            "lpf": {"enabled": a.effect_lpf_enabled or False, "frequency": 8000, "mix": 0.8},
+                            "reverb": {"enabled": a.effect_reverb_enabled or False, "preset": "hall", "mix": 0.3},
+                        }
+
             # UX delay: Show "Starting" animation to users
             await asyncio.sleep(2)
 
@@ -412,7 +426,9 @@ class StartSession:
                     # Volume lives on the asset — use current asset default_volume, fall back to JSONB snapshot
                     asset_id = ch.get("asset_id")
                     volume = asset_volume_lookup.get(asset_id, ch.get("volume", 0.8)) if self.asset_repo else ch.get("volume", 0.8)
-                    audio_config_with_urls[channel_id] = {
+                    # Effects live on the MusicAsset — restore from PostgreSQL if available
+                    effects = asset_effects_lookup.get(asset_id, {}) if self.asset_repo else {}
+                    restored_channel = {
                         **ch,
                         "s3_url": asset_url_lookup.get(asset_id),
                         "volume": volume,
@@ -420,6 +436,9 @@ class StartSession:
                         "started_at": None,
                         "paused_elapsed": None,
                     }
+                    if effects:
+                        restored_channel["effects"] = effects
+                    audio_config_with_urls[channel_id] = restored_channel
                 logger.info(f"Restoring audio config: {len(audio_config_with_urls)} channels from previous session")
 
             # Restore map config from previous session with fresh presigned URL
@@ -631,17 +650,34 @@ class PauseSession:
                 if ch and ch.get("asset_id") and ch.get("volume") is not None:
                     asset_volumes[ch["asset_id"]] = ch["volume"]
 
-            # Sync per-asset volumes back to PostgreSQL (ETL: hot → cold)
-            if self.asset_repo and asset_volumes:
-                for asset_id_str, volume in asset_volumes.items():
+            # Collect per-channel effects for syncing back to assets
+            asset_effects = {}
+            for channel_id, ch in raw_audio.items():
+                if ch and ch.get("asset_id") and ch.get("effects"):
+                    asset_effects[ch["asset_id"]] = ch["effects"]
+
+            # Sync per-asset volumes and effects back to PostgreSQL (ETL: hot → cold)
+            if self.asset_repo and (asset_volumes or asset_effects):
+                synced_assets = set()
+                for asset_id_str in set(list(asset_volumes.keys()) + list(asset_effects.keys())):
                     try:
                         asset = self.asset_repo.get_by_id(UUID(asset_id_str))
                         if asset and isinstance(asset, (MusicAsset, SfxAsset)):
-                            asset.update_audio_config(default_volume=volume)
+                            config_kwargs = {}
+                            if asset_id_str in asset_volumes:
+                                config_kwargs["default_volume"] = asset_volumes[asset_id_str]
+                            # Effects only apply to MusicAsset
+                            effects = asset_effects.get(asset_id_str, {})
+                            if effects and isinstance(asset, MusicAsset):
+                                config_kwargs["effect_hpf_enabled"] = effects.get("hpf", {}).get("enabled")
+                                config_kwargs["effect_lpf_enabled"] = effects.get("lpf", {}).get("enabled")
+                                config_kwargs["effect_reverb_enabled"] = effects.get("reverb", {}).get("enabled")
+                            asset.update_audio_config(**config_kwargs)
                             self.asset_repo.save(asset)
+                            synced_assets.add(asset_id_str)
                     except Exception as e:
-                        logger.warning(f"Failed to sync volume for asset {asset_id_str}: {e}")
-                logger.info(f"Synced {len(asset_volumes)} asset volumes to PostgreSQL")
+                        logger.warning(f"Failed to sync audio config for asset {asset_id_str}: {e}")
+                logger.info(f"Synced {len(synced_assets)} asset audio configs to PostgreSQL (volumes + effects)")
 
             audio_config = {}
             for channel_id, ch in raw_audio.items():
@@ -902,17 +938,34 @@ class FinishSession:
                 if ch and ch.get("asset_id") and ch.get("volume") is not None:
                     asset_volumes[ch["asset_id"]] = ch["volume"]
 
-            # Sync per-asset volumes back to PostgreSQL (ETL: hot → cold)
-            if self.asset_repo and asset_volumes:
-                for asset_id_str, volume in asset_volumes.items():
+            # Collect per-channel effects for syncing back to assets
+            asset_effects = {}
+            for channel_id, ch in raw_audio.items():
+                if ch and ch.get("asset_id") and ch.get("effects"):
+                    asset_effects[ch["asset_id"]] = ch["effects"]
+
+            # Sync per-asset volumes and effects back to PostgreSQL (ETL: hot → cold)
+            if self.asset_repo and (asset_volumes or asset_effects):
+                synced_assets = set()
+                for asset_id_str in set(list(asset_volumes.keys()) + list(asset_effects.keys())):
                     try:
                         asset = self.asset_repo.get_by_id(UUID(asset_id_str))
                         if asset and isinstance(asset, (MusicAsset, SfxAsset)):
-                            asset.update_audio_config(default_volume=volume)
+                            config_kwargs = {}
+                            if asset_id_str in asset_volumes:
+                                config_kwargs["default_volume"] = asset_volumes[asset_id_str]
+                            # Effects only apply to MusicAsset
+                            effects = asset_effects.get(asset_id_str, {})
+                            if effects and isinstance(asset, MusicAsset):
+                                config_kwargs["effect_hpf_enabled"] = effects.get("hpf", {}).get("enabled")
+                                config_kwargs["effect_lpf_enabled"] = effects.get("lpf", {}).get("enabled")
+                                config_kwargs["effect_reverb_enabled"] = effects.get("reverb", {}).get("enabled")
+                            asset.update_audio_config(**config_kwargs)
                             self.asset_repo.save(asset)
+                            synced_assets.add(asset_id_str)
                     except Exception as e:
-                        logger.warning(f"Failed to sync volume for asset {asset_id_str}: {e}")
-                logger.info(f"Synced {len(asset_volumes)} asset volumes to PostgreSQL")
+                        logger.warning(f"Failed to sync audio config for asset {asset_id_str}: {e}")
+                logger.info(f"Synced {len(synced_assets)} asset audio configs to PostgreSQL (volumes + effects)")
 
             audio_config = {}
             for channel_id, ch in raw_audio.items():

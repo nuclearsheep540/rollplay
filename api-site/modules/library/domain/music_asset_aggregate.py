@@ -29,6 +29,11 @@ class MusicAsset(MediaAssetAggregate):
     default_volume: Optional[float] = None
     default_looping: Optional[bool] = None
 
+    # Audio effects — asset-level defaults (V1: on/off toggles, V2 adds frequency/mix/preset)
+    effect_hpf_enabled: Optional[bool] = None
+    effect_lpf_enabled: Optional[bool] = None
+    effect_reverb_enabled: Optional[bool] = None
+
     @classmethod
     def create(
         cls,
@@ -40,7 +45,10 @@ class MusicAsset(MediaAssetAggregate):
         campaign_id: Optional[UUID] = None,
         duration_seconds: Optional[float] = None,
         default_volume: Optional[float] = None,
-        default_looping: Optional[bool] = None
+        default_looping: Optional[bool] = None,
+        effect_hpf_enabled: Optional[bool] = None,
+        effect_lpf_enabled: Optional[bool] = None,
+        effect_reverb_enabled: Optional[bool] = None
     ) -> "MusicAsset":
         """
         Factory method to create a new music asset.
@@ -67,7 +75,10 @@ class MusicAsset(MediaAssetAggregate):
             updated_at=None,
             duration_seconds=duration_seconds,
             default_volume=default_volume,
-            default_looping=default_looping
+            default_looping=default_looping,
+            effect_hpf_enabled=effect_hpf_enabled,
+            effect_lpf_enabled=effect_lpf_enabled,
+            effect_reverb_enabled=effect_reverb_enabled
         )
 
     @classmethod
@@ -76,7 +87,10 @@ class MusicAsset(MediaAssetAggregate):
         base: MediaAssetAggregate,
         duration_seconds: Optional[float] = None,
         default_volume: Optional[float] = None,
-        default_looping: Optional[bool] = None
+        default_looping: Optional[bool] = None,
+        effect_hpf_enabled: Optional[bool] = None,
+        effect_lpf_enabled: Optional[bool] = None,
+        effect_reverb_enabled: Optional[bool] = None
     ) -> "MusicAsset":
         """
         Promote a base MediaAssetAggregate to MusicAsset.
@@ -97,14 +111,20 @@ class MusicAsset(MediaAssetAggregate):
             updated_at=base.updated_at,
             duration_seconds=duration_seconds,
             default_volume=default_volume,
-            default_looping=default_looping
+            default_looping=default_looping,
+            effect_hpf_enabled=effect_hpf_enabled,
+            effect_lpf_enabled=effect_lpf_enabled,
+            effect_reverb_enabled=effect_reverb_enabled
         )
 
     def update_audio_config(
         self,
         duration_seconds: Optional[float] = None,
         default_volume: Optional[float] = None,
-        default_looping: Optional[bool] = None
+        default_looping: Optional[bool] = None,
+        effect_hpf_enabled: Optional[bool] = None,
+        effect_lpf_enabled: Optional[bool] = None,
+        effect_reverb_enabled: Optional[bool] = None
     ) -> None:
         """
         Update audio configuration.
@@ -124,6 +144,15 @@ class MusicAsset(MediaAssetAggregate):
         if default_looping is not None:
             self.default_looping = default_looping
 
+        if effect_hpf_enabled is not None:
+            self.effect_hpf_enabled = effect_hpf_enabled
+
+        if effect_lpf_enabled is not None:
+            self.effect_lpf_enabled = effect_lpf_enabled
+
+        if effect_reverb_enabled is not None:
+            self.effect_reverb_enabled = effect_reverb_enabled
+
         self.updated_at = datetime.utcnow()
 
     def has_audio_config(self) -> bool:
@@ -132,6 +161,9 @@ class MusicAsset(MediaAssetAggregate):
             self.duration_seconds is not None
             or self.default_volume is not None
             or self.default_looping is not None
+            or self.effect_hpf_enabled is not None
+            or self.effect_lpf_enabled is not None
+            or self.effect_reverb_enabled is not None
         )
 
     def get_audio_config(self) -> dict:
@@ -139,5 +171,8 @@ class MusicAsset(MediaAssetAggregate):
         return {
             "duration_seconds": self.duration_seconds,
             "default_volume": self.default_volume,
-            "default_looping": self.default_looping
+            "default_looping": self.default_looping,
+            "effect_hpf_enabled": self.effect_hpf_enabled,
+            "effect_lpf_enabled": self.effect_lpf_enabled,
+            "effect_reverb_enabled": self.effect_reverb_enabled,
         }

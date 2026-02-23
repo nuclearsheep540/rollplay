@@ -36,6 +36,11 @@ class MusicAssetModel(MediaAsset):
     default_volume = Column(Float, nullable=True)
     default_looping = Column(Boolean, nullable=True)
 
+    # Audio effects — asset-level defaults (V1: on/off toggles, V2 adds frequency/mix/preset)
+    effect_hpf_enabled = Column(Boolean, nullable=True)
+    effect_lpf_enabled = Column(Boolean, nullable=True)
+    effect_reverb_enabled = Column(Boolean, nullable=True)
+
     __mapper_args__ = {
         'polymorphic_identity': MediaAssetType.MUSIC,
     }

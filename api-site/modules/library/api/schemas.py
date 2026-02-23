@@ -88,6 +88,9 @@ class MusicAssetResponse(MediaAssetResponse):
     duration_seconds: Optional[float] = None
     default_volume: Optional[float] = None
     default_looping: Optional[bool] = None
+    effect_hpf_enabled: Optional[bool] = None
+    effect_lpf_enabled: Optional[bool] = None
+    effect_reverb_enabled: Optional[bool] = None
 
 
 class SfxAssetResponse(MediaAssetResponse):
@@ -102,6 +105,9 @@ class UpdateAudioConfigRequest(BaseModel):
     duration_seconds: Optional[float] = Field(None, ge=0, description="Track duration in seconds")
     default_volume: Optional[float] = Field(None, ge=0.0, le=1.3, description="Default playback volume")
     default_looping: Optional[bool] = Field(None, description="Default loop behavior")
+    effect_hpf_enabled: Optional[bool] = Field(None, description="High-pass filter enabled")
+    effect_lpf_enabled: Optional[bool] = Field(None, description="Low-pass filter enabled")
+    effect_reverb_enabled: Optional[bool] = Field(None, description="Reverb enabled")
 
 
 # Aliases for backwards compatibility

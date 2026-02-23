@@ -123,6 +123,9 @@ class MediaAssetRepository:
                 existing.duration_seconds = aggregate.duration_seconds
                 existing.default_volume = aggregate.default_volume
                 existing.default_looping = aggregate.default_looping
+                existing.effect_hpf_enabled = aggregate.effect_hpf_enabled
+                existing.effect_lpf_enabled = aggregate.effect_lpf_enabled
+                existing.effect_reverb_enabled = aggregate.effect_reverb_enabled
 
             # Update sfx-specific fields if SfxAsset
             if isinstance(aggregate, SfxAsset) and isinstance(existing, SfxAssetModel):
@@ -159,7 +162,10 @@ class MediaAssetRepository:
                     session_ids=aggregate.session_ids,
                     duration_seconds=aggregate.duration_seconds,
                     default_volume=aggregate.default_volume,
-                    default_looping=aggregate.default_looping
+                    default_looping=aggregate.default_looping,
+                    effect_hpf_enabled=aggregate.effect_hpf_enabled,
+                    effect_lpf_enabled=aggregate.effect_lpf_enabled,
+                    effect_reverb_enabled=aggregate.effect_reverb_enabled
                 )
             elif isinstance(aggregate, SfxAsset):
                 model = SfxAssetModel(
@@ -251,7 +257,10 @@ class MediaAssetRepository:
                 base,
                 duration_seconds=model.duration_seconds,
                 default_volume=model.default_volume,
-                default_looping=model.default_looping
+                default_looping=model.default_looping,
+                effect_hpf_enabled=model.effect_hpf_enabled,
+                effect_lpf_enabled=model.effect_lpf_enabled,
+                effect_reverb_enabled=model.effect_reverb_enabled
             )
 
         # If it's a SfxAssetModel, promote to SfxAsset with audio fields

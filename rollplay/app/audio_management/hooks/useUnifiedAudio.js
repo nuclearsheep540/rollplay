@@ -1260,7 +1260,7 @@ export const useUnifiedAudio = () => {
   };
 
   // Load an asset from the library into a channel (DM selects via AudioTrackSelector)
-  // Volume travels with the audio file — use the asset's default_volume
+  // Volume and effects travel with the audio file — use asset defaults
   // System-level guarantee: if the asset changes (including to null for clear),
   // stop the current audio source so no orphaned playback continues.
   const loadAssetIntoChannel = (channelId, asset) => {
@@ -1301,6 +1301,19 @@ export const useUnifiedAudio = () => {
         }
       };
     });
+
+    // Apply asset-level effect defaults (V1: on/off toggles with hardcoded params)
+    if (asset.effect_hpf_enabled !== undefined || asset.effect_lpf_enabled !== undefined || asset.effect_reverb_enabled !== undefined) {
+      const effects = {
+        hpf: { ...DEFAULT_EFFECTS.hpf, enabled: asset.effect_hpf_enabled || false },
+        lpf: { ...DEFAULT_EFFECTS.lpf, enabled: asset.effect_lpf_enabled || false },
+        reverb: { ...DEFAULT_EFFECTS.reverb, enabled: asset.effect_reverb_enabled || false },
+      };
+      applyChannelEffects(channelId, effects);
+    } else {
+      // No effects saved on asset — reset to defaults (all off)
+      applyChannelEffects(channelId, JSON.parse(JSON.stringify(DEFAULT_EFFECTS)));
+    }
   };
 
   // =====================================

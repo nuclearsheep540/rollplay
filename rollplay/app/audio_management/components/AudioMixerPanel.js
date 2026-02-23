@@ -98,20 +98,37 @@ export default function AudioMixerPanel({
   
   // Wrap loadAssetIntoChannel to also persist to server via WebSocket
   const handleAssetSelected = useCallback((channelId, asset) => {
-    // Load locally into audio state
+    // Load locally into audio state (applies effects via loadAssetIntoChannel)
     if (loadAssetIntoChannel) {
       loadAssetIntoChannel(channelId, asset);
     }
     // Broadcast + persist to MongoDB via batch operation
     if (sendRemoteAudioBatch) {
-      sendRemoteAudioBatch([{
+      const loadOp = {
         trackId: channelId,
         operation: 'load',
         filename: asset.filename,
         asset_id: asset.id,
         s3_url: asset.s3_url,
         volume: asset.default_volume ?? 0.8,
-      }]);
+      };
+
+      const ops = [loadOp];
+
+      // Include asset-level effects so other clients also apply them
+      if (asset.effect_hpf_enabled !== undefined || asset.effect_lpf_enabled !== undefined || asset.effect_reverb_enabled !== undefined) {
+        ops.push({
+          trackId: channelId,
+          operation: 'effects',
+          effects: {
+            hpf: { ...DEFAULT_EFFECTS.hpf, enabled: asset.effect_hpf_enabled || false },
+            lpf: { ...DEFAULT_EFFECTS.lpf, enabled: asset.effect_lpf_enabled || false },
+            reverb: { ...DEFAULT_EFFECTS.reverb, enabled: asset.effect_reverb_enabled || false },
+          },
+        });
+      }
+
+      sendRemoteAudioBatch(ops);
     }
   }, [loadAssetIntoChannel, sendRemoteAudioBatch]);
 
