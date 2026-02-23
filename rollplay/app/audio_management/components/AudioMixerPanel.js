@@ -134,13 +134,20 @@ export default function AudioMixerPanel({
     }
   }, [loadAssetIntoChannel, sendRemoteAudioBatch]);
 
-  // Clear a BGM channel — stop audio and reset asset to empty
+  // Clear a BGM channel — stop audio, reset asset, effects, mute/solo
   const handleBgmClear = useCallback((channelId) => {
     if (loadAssetIntoChannel) {
       loadAssetIntoChannel(channelId, { id: null, filename: null, s3_url: null });
     }
+    // Reset effects to all-off
+    if (applyChannelEffects) {
+      applyChannelEffects(channelId, { hpf: false, lpf: false, reverb: false });
+    }
+    // Reset mute/solo
+    if (setChannelMuted) setChannelMuted(channelId, false);
+    if (setChannelSoloed) setChannelSoloed(channelId, false);
     sendRemoteAudioBatch?.([{ trackId: channelId, operation: 'clear' }]);
-  }, [loadAssetIntoChannel, sendRemoteAudioBatch]);
+  }, [loadAssetIntoChannel, applyChannelEffects, setChannelMuted, setChannelSoloed, sendRemoteAudioBatch]);
 
   // Collect asset IDs currently loaded in any BGM channel (for filtering the selection modal)
   const loadedAssetIds = useMemo(() => {

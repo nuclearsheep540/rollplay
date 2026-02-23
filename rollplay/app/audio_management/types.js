@@ -20,9 +20,9 @@ export const ChannelType = {
 // V1 hardcoded effect parameters — V2 replaces these with user-configurable values
 // from music_assets (asset defaults) and SceneAudioChannel (scene overrides)
 export const DEFAULT_EFFECTS = {
-  hpf: { enabled: false, frequency: 2000, mix: 0.6 },
-  lpf: { enabled: false, frequency: 400, mix: 0.6 },
-  reverb: { enabled: false, preset: 'room', mix: 0.5 },
+  hpf: { enabled: false, frequency: 1000, mix: 0.7 },
+  lpf: { enabled: false, frequency: 500, mix: 0.7 },
+  reverb: { enabled: false, preset: 'room', mix: 0.6 },
 };
 
 // Reverb IR presets — generated at runtime from { duration, decay } configs

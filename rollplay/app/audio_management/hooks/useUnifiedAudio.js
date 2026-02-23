@@ -1061,6 +1061,13 @@ export const useUnifiedAudio = () => {
   // Accepts slim enabled-only flags: { hpf: true/false, lpf: true/false, reverb: true/false }
   // Parameters (frequency, mix, preset) come from DEFAULT_EFFECTS — single source of truth.
   const applyChannelEffects = useCallback((trackId, effects) => {
+    // Always update React state so UI toggles reflect correct values immediately,
+    // even if Web Audio chains aren't ready yet (e.g. during initial sync)
+    setChannelEffects(prev => ({
+      ...prev,
+      [trackId]: { ...prev[trackId], ...effects },
+    }));
+
     const chain = channelEffectNodesRef.current[trackId];
     if (!chain) return;
 
@@ -1105,12 +1112,6 @@ export const useUnifiedAudio = () => {
       chain.reverb.dryGain.gain.linearRampToValueAtTime(enabled ? (1 - mix) : 1.0, now + RAMP_TIME);
       chain.reverb.wetGain.gain.linearRampToValueAtTime(enabled ? mix : 0.0, now + RAMP_TIME);
     }
-
-    // Update React state — store slim flags only
-    setChannelEffects(prev => ({
-      ...prev,
-      [trackId]: { ...prev[trackId], ...effects },
-    }));
   }, []);
 
   // Cleanup function to stop all audio (called on unmount)

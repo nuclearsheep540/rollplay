@@ -281,6 +281,9 @@ export const handleRemoteAudioBatch = async (data, {
         case 'clear':
           if (stopRemoteTrack) stopRemoteTrack(trackId);
           if (loadAssetIntoChannel) loadAssetIntoChannel(trackId, { id: null, filename: null, s3_url: null });
+          if (applyChannelEffects) applyChannelEffects(trackId, { hpf: false, lpf: false, reverb: false });
+          if (setChannelMuted) setChannelMuted(trackId, false);
+          if (setChannelSoloed) setChannelSoloed(trackId, false);
           console.log(`✅ Batch operation ${index + 1}: cleared ${trackId}`);
           break;
 

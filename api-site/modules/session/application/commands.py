@@ -407,6 +407,7 @@ class StartSession:
                     if not asset or not isinstance(asset, MusicAsset):
                         logger.warning(f"Cannot restore channel {channel_id}: asset {asset_id} not in campaign")
                         continue
+                    logger.info(f"DEBUG ETL cold→hot: {channel_id} → asset={asset_id}, pg_effects=({asset.effect_hpf_enabled}, {asset.effect_lpf_enabled}, {asset.effect_reverb_enabled}), build_effects={asset.build_effects_for_game()}")
                     audio_config_for_game[channel_id] = asset.build_channel_state_for_game(url_map.get(asset.s3_key))
                 logger.info(f"Restoring audio config: {len(audio_config_for_game)} channels from domain aggregates")
 
@@ -605,6 +606,11 @@ class PauseSession:
             raw_audio = final_state.get("audio_state", {})
             raw_track_config = final_state.get("audio_track_config", {})
 
+            # DEBUG: Log raw effects from MongoDB for each channel
+            for channel_id, ch in raw_audio.items():
+                if ch and ch.get("asset_id"):
+                    logger.info(f"DEBUG ETL hot→cold: {channel_id} → asset={ch.get('asset_id')}, effects={ch.get('effects', 'MISSING_KEY')}, all_keys={list(ch.keys())}")
+
             # Collect per-asset volumes and effects from BOTH active channels AND stashed track configs
             asset_configs = {}
             for channel_id, ch in raw_audio.items():
@@ -640,6 +646,7 @@ class PauseSession:
                                 config_kwargs["effect_hpf_enabled"] = bool(effects.get("hpf", False))
                                 config_kwargs["effect_lpf_enabled"] = bool(effects.get("lpf", False))
                                 config_kwargs["effect_reverb_enabled"] = bool(effects.get("reverb", False))
+                            logger.info(f"DEBUG ETL sync: asset={asset_id_str}, effects_from_mongo={effects}, config_kwargs={config_kwargs}")
                             if config_kwargs:
                                 asset.update_audio_config(**config_kwargs)
                                 self.asset_repo.save(asset)

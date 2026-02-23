@@ -900,7 +900,9 @@ class WebsocketEvent():
                 operation = op.get("operation")
 
                 if operation == "play":
+                    ch = current_audio_state.get(track_id, {})
                     channel_state = {
+                        **ch,
                         "filename": op.get("filename"),
                         "asset_id": op.get("asset_id"),
                         "s3_url": op.get("s3_url"),
