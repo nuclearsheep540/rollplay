@@ -142,6 +142,48 @@ class MapAsset(MediaAssetAggregate):
             "grid_opacity": self.grid_opacity
         }
 
+    def build_grid_config_for_game(self) -> dict | None:
+        """Build the full grid_config shape expected by api-game/MongoDB.
+
+        Translates domain fields into the runtime structure the frontend renders.
+        Display defaults (line_color, line_width) are presentation constants owned
+        by the frontend — they're reconstructed here to satisfy the boundary contract.
+        Returns None if no grid has been configured.
+        """
+        if not self.has_grid_config():
+            return None
+        opacity = self.grid_opacity if self.grid_opacity is not None else 0.3
+        return {
+            "grid_width": self.grid_width,
+            "grid_height": self.grid_height,
+            "enabled": True,
+            "colors": {
+                "edit_mode": {"line_color": "#d1d5db", "opacity": opacity, "line_width": 1},
+                "display_mode": {"line_color": "#d1d5db", "opacity": opacity, "line_width": 1},
+            },
+        }
+
+    def update_grid_config_from_game(self, game_grid_config: dict) -> None:
+        """Update domain fields from the api-game/MongoDB grid_config shape.
+
+        The inverse of build_grid_config_for_game(). Extracts domain-owned fields
+        (width, height, opacity) from the runtime structure. Opacity lives at
+        colors.display_mode.opacity in the game shape, not as a top-level field.
+        """
+        if not game_grid_config:
+            return
+        grid_width = game_grid_config.get("grid_width")
+        grid_height = game_grid_config.get("grid_height")
+        # Opacity is nested in the colors structure in the game shape
+        grid_opacity = (
+            game_grid_config.get("colors", {}).get("display_mode", {}).get("opacity")
+        )
+        self.update_grid_config(
+            grid_width=grid_width,
+            grid_height=grid_height,
+            grid_opacity=grid_opacity,
+        )
+
     def clear_grid_config(self) -> None:
         """Clear grid configuration (reset to unconfigured state)."""
         self.grid_width = None

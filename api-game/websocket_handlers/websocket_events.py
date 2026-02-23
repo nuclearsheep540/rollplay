@@ -814,7 +814,7 @@ class WebsocketEvent():
         print(f"🎛️ Backend received batch audio operations from {triggered_by}: {len(operations)} operations")
         
         # Validate all operations
-        valid_operations = ["play", "stop", "pause", "resume", "volume", "loop", "load", "clear", "effects"]
+        valid_operations = ["play", "stop", "pause", "resume", "volume", "loop", "load", "clear", "effects", "mute", "solo"]
         for i, op in enumerate(operations):
             if not isinstance(op, dict):
                 print(f"❌ Invalid operation {i}: must be an object")
@@ -880,6 +880,12 @@ class WebsocketEvent():
                 effects = op.get("effects", {})
                 enabled_effects = [k for k, v in effects.items() if isinstance(v, dict) and v.get("enabled")]
                 operation_summaries.append(f"effects on {track_id}: {', '.join(enabled_effects) or 'all off'}")
+            elif operation == "mute":
+                muted = op.get("muted", False)
+                operation_summaries.append(f"{'mute' if muted else 'unmute'} {track_id}")
+            elif operation == "solo":
+                soloed = op.get("soloed", False)
+                operation_summaries.append(f"{'solo' if soloed else 'unsolo'} {track_id}")
 
         log_message = f"🎛️ {triggered_by} executed batch audio operations: {', '.join(operation_summaries)}"
         print(log_message)
@@ -992,6 +998,10 @@ class WebsocketEvent():
                             "paused_elapsed": None,
                         }
 
+                    # Preserve channel-level mute/solo (not asset-level — survives track swaps)
+                    channel_state["muted"] = old_ch.get("muted", False)
+                    channel_state["soloed"] = old_ch.get("soloed", False)
+
                     GameService.update_audio_state(client_id, track_id, channel_state)
 
                     # 4. Remove saved config (it's now active in a channel)
@@ -1007,6 +1017,16 @@ class WebsocketEvent():
                 elif operation == "effects":
                     ch = current_audio_state.get(track_id, {})
                     channel_state = {**ch, "effects": op.get("effects", {})}
+                    GameService.update_audio_state(client_id, track_id, channel_state)
+
+                elif operation == "mute":
+                    ch = current_audio_state.get(track_id, {})
+                    channel_state = {**ch, "muted": op.get("muted", False)}
+                    GameService.update_audio_state(client_id, track_id, channel_state)
+
+                elif operation == "solo":
+                    ch = current_audio_state.get(track_id, {})
+                    channel_state = {**ch, "soloed": op.get("soloed", False)}
                     GameService.update_audio_state(client_id, track_id, channel_state)
 
                 elif operation == "clear":

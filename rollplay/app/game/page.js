@@ -809,7 +809,12 @@ function GameContent() {
     setSfxSlotVolume,
     loadSfxSlot,
     clearSfxSlot,
-    cleanupAllAudio
+    cleanupAllAudio,
+    // Channel mute/solo
+    mutedChannels,
+    soloedChannels,
+    setChannelMuted,
+    setChannelSoloed,
   } = useUnifiedAudio();
 
   // Ref to hold the pending operation clearing function from AudioMixerPanel
@@ -836,6 +841,8 @@ function GameContent() {
     setDisconnectTimeouts,
     setCurrentInitiativePromptId,
     setCampaignId,
+    setChannelMuted,
+    setChannelSoloed,
 
     // Current state values
     gameSeats,
@@ -895,7 +902,8 @@ function GameContent() {
     setRemoteTrackVolume, toggleRemoteTrackLooping, loadRemoteAudioBuffer,
     activeFades, cancelFade, syncAudioState, loadAssetIntoChannel, applyChannelEffects,
     playSfxSlot, stopSfxSlot, setSfxSlotVolume, loadSfxSlot, clearSfxSlot, sfxSlots,
-    audioBuffersRef, audioContextRef
+    audioBuffersRef, audioContextRef,
+    setChannelMuted, setChannelSoloed
   ]);
 
   // Initialize WebSocket hook with game context (after audio functions are available)
@@ -1673,6 +1681,10 @@ function GameContent() {
                   activeFades={activeFades}
                   channelEffects={channelEffects}
                   applyChannelEffects={applyChannelEffects}
+                  mutedChannels={mutedChannels}
+                  soloedChannels={soloedChannels}
+                  setChannelMuted={setChannelMuted}
+                  setChannelSoloed={setChannelSoloed}
                 />
               )}
             </div>

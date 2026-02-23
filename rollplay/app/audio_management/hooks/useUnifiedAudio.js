@@ -100,6 +100,7 @@ export const useUnifiedAudio = () => {
   const audioContextRef = useRef(null);
   const masterGainRef = useRef(null);
   const remoteTrackGainsRef = useRef({});
+  const remoteTrackMuteGainsRef = useRef({});
   const remoteTrackAnalysersRef = useRef({});
   const audioBuffersRef = useRef({});
   const activeSourcesRef = useRef({});
@@ -142,6 +143,34 @@ export const useUnifiedAudio = () => {
       isPlaying: false,
     }))
   );
+
+  // Per-channel mute/solo state (channel-level, not asset-level — survives track swaps)
+  const [mutedChannels, setMutedChannels] = useState({});   // { audio_channel_A: true, ... }
+  const [soloedChannels, setSoloedChannels] = useState({}); // { audio_channel_B: true, ... }
+
+  const setChannelMuted = useCallback((channelId, muted) => {
+    setMutedChannels(prev => ({ ...prev, [channelId]: muted }));
+  }, []);
+
+  const setChannelSoloed = useCallback((channelId, soloed) => {
+    setSoloedChannels(prev => ({ ...prev, [channelId]: soloed }));
+  }, []);
+
+  // Recompute muteGainNode values whenever mute/solo state changes
+  useEffect(() => {
+    const anySoloed = Object.values(soloedChannels).some(Boolean);
+    for (const [trackId, muteGain] of Object.entries(remoteTrackMuteGainsRef.current)) {
+      const isMuted = mutedChannels[trackId] || false;
+      const isSoloed = soloedChannels[trackId] || false;
+      let gain;
+      if (anySoloed) {
+        gain = isSoloed ? 1.0 : 0.0; // Solo overrides mute
+      } else {
+        gain = isMuted ? 0.0 : 1.0;
+      }
+      muteGain.gain.setValueAtTime(gain, muteGain.context.currentTime);
+    }
+  }, [mutedChannels, soloedChannels]);
 
   // Active fade transitions state
   const [activeFades, setActiveFades] = useState({}); // { trackId: { type, startTime, duration, startGain, targetGain, operation } }
@@ -220,9 +249,13 @@ export const useUnifiedAudio = () => {
           analyserNode.fftSize = 256;
           analyserNode.smoothingTimeConstant = 0.9;
 
-          // Connect: gain → analyser → master
-          gainNode.connect(analyserNode);
+          // Connect: gain → muteGain → analyser → master
+          const muteGainNode = ctx.createGain();
+          muteGainNode.gain.value = 1.0; // default: unmuted
+          gainNode.connect(muteGainNode);
+          muteGainNode.connect(analyserNode);
           analyserNode.connect(masterGainRef.current);
+          remoteTrackMuteGainsRef.current[trackId] = muteGainNode;
 
           gainNode.gain.value = remoteTrackStates[trackId]?.volume || 1.0;
           remoteTrackGainsRef.current[trackId] = gainNode;
@@ -1194,6 +1227,14 @@ export const useUnifiedAudio = () => {
         applyChannelEffects(channelId, channelState.effects);
       }
 
+      // Restore mute/solo state if present (channel-level, from MongoDB)
+      if (channelState.muted) {
+        setMutedChannels(prev => ({ ...prev, [channelId]: true }));
+      }
+      if (channelState.soloed) {
+        setSoloedChannels(prev => ({ ...prev, [channelId]: true }));
+      }
+
       if (playback_state === 'playing' && started_at) {
         // Load buffer and start playback at calculated offset
         const audioUrl = s3_url || `/audio/${filename}`;
@@ -1484,6 +1525,12 @@ export const useUnifiedAudio = () => {
     // Channel effects (HPF, LPF, Reverb)
     channelEffects,
     applyChannelEffects,
+
+    // Channel mute/solo (channel-level, not asset-level)
+    mutedChannels,
+    soloedChannels,
+    setChannelMuted,
+    setChannelSoloed,
 
     // Late-joiner sync
     syncAudioState,

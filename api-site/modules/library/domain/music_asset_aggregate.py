@@ -176,3 +176,38 @@ class MusicAsset(MediaAssetAggregate):
             "effect_lpf_enabled": self.effect_lpf_enabled,
             "effect_reverb_enabled": self.effect_reverb_enabled,
         }
+
+    def build_effects_for_game(self) -> dict:
+        """Build the effects shape expected by api-game/MongoDB.
+
+        Translates asset-level effect toggles into the runtime structure.
+        V1 hardcodes frequency/mix/preset params; only enabled flags come from the domain.
+        Returns empty dict if no effects have been configured.
+        """
+        if (self.effect_hpf_enabled is None
+                and self.effect_lpf_enabled is None
+                and self.effect_reverb_enabled is None):
+            return {}
+        return {
+            "hpf": {"enabled": self.effect_hpf_enabled or False, "frequency": 200, "mix": 0.5},
+            "lpf": {"enabled": self.effect_lpf_enabled or False, "frequency": 8000, "mix": 0.8},
+            "reverb": {"enabled": self.effect_reverb_enabled or False, "preset": "hall", "mix": 0.3},
+        }
+
+    def build_channel_state_for_game(self, s3_url: str) -> dict:
+        """Build the MongoDB audio channel state from domain fields.
+
+        Constructs the complete channel state shape that api-game expects,
+        translating asset-level defaults into the runtime boundary contract.
+        """
+        return {
+            "asset_id": str(self.id),
+            "filename": self.filename,
+            "s3_url": s3_url,
+            "volume": self.default_volume or 0.8,
+            "looping": self.default_looping if self.default_looping is not None else True,
+            "effects": self.build_effects_for_game(),
+            "playback_state": "stopped",
+            "started_at": None,
+            "paused_elapsed": None,
+        }

@@ -89,6 +89,11 @@ export default function AudioMixerPanel({
   // Channel effects (HPF, LPF, Reverb)
   channelEffects = {},
   applyChannelEffects = null,
+  // Channel mute/solo
+  mutedChannels = {},
+  soloedChannels = {},
+  setChannelMuted = null,
+  setChannelSoloed = null,
 }) {
   
 
@@ -483,6 +488,27 @@ export default function AudioMixerPanel({
       effects: updatedEffects,
     }]);
   }, [channelEffects, applyChannelEffects, sendRemoteAudioBatch]);
+
+  // Channel mute/solo handlers — toggle locally + broadcast via WebSocket
+  const handleMuteToggle = useCallback((channelId) => {
+    const newMuted = !mutedChannels[channelId];
+    if (setChannelMuted) setChannelMuted(channelId, newMuted);
+    sendRemoteAudioBatch?.([{
+      trackId: channelId,
+      operation: 'mute',
+      muted: newMuted,
+    }]);
+  }, [mutedChannels, sendRemoteAudioBatch, setChannelMuted]);
+
+  const handleSoloToggle = useCallback((channelId) => {
+    const newSoloed = !soloedChannels[channelId];
+    if (setChannelSoloed) setChannelSoloed(channelId, newSoloed);
+    sendRemoteAudioBatch?.([{
+      trackId: channelId,
+      operation: 'solo',
+      soloed: newSoloed,
+    }]);
+  }, [soloedChannels, sendRemoteAudioBatch, setChannelSoloed]);
 
   // SFX Soundboard handlers
   const handleSfxTrigger = async (slotIndex) => {
@@ -953,6 +979,10 @@ export default function AudioMixerPanel({
                       onLoopToggle={(id, loop) =>
                         handleLoopToggle(id, loop)
                       }
+                      isMuted={mutedChannels[channel.channelId] || false}
+                      isSoloed={soloedChannels[channel.channelId] || false}
+                      onMuteToggle={() => handleMuteToggle(channel.channelId)}
+                      onSoloToggle={() => handleSoloToggle(channel.channelId)}
                       isLast={false}
                     />
                     <ChannelEffects

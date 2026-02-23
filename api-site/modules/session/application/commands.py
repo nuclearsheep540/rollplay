@@ -370,7 +370,6 @@ class StartSession:
 
             # 7. Fetch campaign assets and generate fresh presigned URLs
             assets = []
-            asset_url_lookup = {}
             if self.asset_repo:
                 campaign_assets = self.asset_repo.get_by_campaign_id(session.campaign_id)
 
@@ -391,99 +390,54 @@ class StartSession:
                 ]
                 logger.info(f"Found {len(assets)} assets for campaign {session.campaign_id} with {len(url_map)} fresh URLs")
 
-                # Build asset_id → presigned_url lookup from freshly generated URLs
-                asset_url_lookup = {a["id"]: a["s3_url"] for a in assets if a.get("s3_url")}
-
-                # Build asset_id → default_volume lookup (volume lives on the asset, not the channel)
-                asset_volume_lookup = {
-                    str(a.id): a.default_volume
-                    for a in campaign_assets
-                    if hasattr(a, 'default_volume') and a.default_volume is not None
-                }
-
-                # Build asset_id → effects lookup (effects live on the MusicAsset, hydrated with V1 hardcoded params)
-                asset_effects_lookup = {}
-                for a in campaign_assets:
-                    if hasattr(a, 'effect_hpf_enabled') and (
-                        a.effect_hpf_enabled is not None
-                        or a.effect_lpf_enabled is not None
-                        or a.effect_reverb_enabled is not None
-                    ):
-                        asset_effects_lookup[str(a.id)] = {
-                            "hpf": {"enabled": a.effect_hpf_enabled or False, "frequency": 200, "mix": 0.5},
-                            "lpf": {"enabled": a.effect_lpf_enabled or False, "frequency": 8000, "mix": 0.8},
-                            "reverb": {"enabled": a.effect_reverb_enabled or False, "preset": "hall", "mix": 0.3},
-                        }
+                # Build asset_id → asset aggregate lookup (single source of truth for warm-up)
+                asset_lookup = {str(a.id): a for a in campaign_assets}
 
             # UX delay: Show "Starting" animation to users
             await asyncio.sleep(2)
 
-            # 8. Build payload for api-game
-            # Restore audio config from previous session with fresh presigned URLs
-            audio_config_with_urls = {}
-            restored_track_config = {}
-            if session.audio_config:
-                # Extract stashed track configs (inactive tracks from previous session)
-                restored_track_config = session.audio_config.pop("_track_config", {})
-
+            # 8. Build payload for api-game — restore session state from domain aggregates
+            audio_config_for_game = {}
+            if session.audio_config and self.asset_repo:
                 for channel_id, ch in session.audio_config.items():
-                    # Volume lives on the asset — use current asset default_volume, fall back to JSONB snapshot
                     asset_id = ch.get("asset_id")
-                    volume = asset_volume_lookup.get(asset_id, ch.get("volume", 0.8)) if self.asset_repo else ch.get("volume", 0.8)
-                    # Effects: prefer JSONB snapshot (session-level state), fall back to PostgreSQL asset defaults
-                    effects = ch.get("effects", {})
-                    if not effects:
-                        effects = asset_effects_lookup.get(asset_id, {}) if self.asset_repo else {}
-                    restored_channel = {
-                        **ch,
-                        "s3_url": asset_url_lookup.get(asset_id),
-                        "volume": volume,
-                        "effects": effects,
-                        "playback_state": "stopped",
-                        "started_at": None,
-                        "paused_elapsed": None,
-                    }
-                    audio_config_with_urls[channel_id] = restored_channel
-                logger.info(f"Restoring audio config: {len(audio_config_with_urls)} channels, {len(restored_track_config)} stashed track configs")
+                    if not asset_id:
+                        continue
+                    asset = asset_lookup.get(asset_id)
+                    if not asset or not isinstance(asset, MusicAsset):
+                        logger.warning(f"Cannot restore channel {channel_id}: asset {asset_id} not in campaign")
+                        continue
+                    audio_config_for_game[channel_id] = asset.build_channel_state_for_game(url_map.get(asset.s3_key))
+                logger.info(f"Restoring audio config: {len(audio_config_for_game)} channels from domain aggregates")
 
-            # Restore map config from previous session with fresh presigned URL
-            map_config_with_url = {}
-            if session.map_config and session.map_config.get("asset_id"):
+            map_config_for_game = {}
+            if session.map_config and session.map_config.get("asset_id") and self.asset_repo:
                 map_asset_id = session.map_config["asset_id"]
-                fresh_url = asset_url_lookup.get(map_asset_id)
-
-                if fresh_url:
-                    # Fetch asset from repository to get filename
-                    map_asset = self.asset_repo.get_by_id(UUID(map_asset_id))
-
-                    if map_asset:
-                        # Use stored grid_config from session (persisted during pause/finish)
-                        # TODO: Once MapAsset domain is implemented, prefer MapAsset.get_grid_config()
-                        stored_grid_config = session.map_config.get("grid_config")
-                        map_config_with_url = {
+                map_asset = asset_lookup.get(map_asset_id)
+                if map_asset:
+                    fresh_url = url_map.get(map_asset.s3_key)
+                    if fresh_url:
+                        map_config_for_game = {
                             "asset_id": map_asset_id,
                             "filename": map_asset.filename,
                             "original_filename": map_asset.filename,
                             "file_path": fresh_url,
-                            "grid_config": stored_grid_config
+                            "grid_config": map_asset.build_grid_config_for_game() if isinstance(map_asset, MapAsset) else None,
                         }
-                        logger.info(f"Restoring map: {map_asset.filename} with grid {stored_grid_config}")
+                        logger.info(f"Restoring map: {map_asset.filename} with grid config")
                     else:
-                        logger.warning(f"Cannot restore map: asset {map_asset_id} not found")
+                        logger.warning(f"Cannot restore map: asset {map_asset_id} has no presigned URL")
                 else:
-                    logger.warning(f"Cannot restore map: asset {map_asset_id} not in campaign assets")
+                    logger.warning(f"Cannot restore map: asset {map_asset_id} not in campaign")
 
-            # Restore image config from previous session with fresh presigned URL
-            image_config_with_url = {}
-            if session.image_config and session.image_config.get("asset_id"):
+            image_config_for_game = {}
+            if session.image_config and session.image_config.get("asset_id") and self.asset_repo:
                 image_asset_id = session.image_config["asset_id"]
-                fresh_url = asset_url_lookup.get(image_asset_id)
-
-                if fresh_url:
-                    image_asset = self.asset_repo.get_by_id(UUID(image_asset_id))
-
-                    if image_asset:
-                        image_config_with_url = {
+                image_asset = asset_lookup.get(image_asset_id)
+                if image_asset:
+                    fresh_url = url_map.get(image_asset.s3_key)
+                    if fresh_url:
+                        image_config_for_game = {
                             "asset_id": image_asset_id,
                             "filename": image_asset.filename,
                             "original_filename": image_asset.filename,
@@ -491,9 +445,9 @@ class StartSession:
                         }
                         logger.info(f"Restoring image: {image_asset.filename}")
                     else:
-                        logger.warning(f"Cannot restore image: asset {image_asset_id} not found")
+                        logger.warning(f"Cannot restore image: asset {image_asset_id} has no presigned URL")
                 else:
-                    logger.warning(f"Cannot restore image: asset {image_asset_id} not in campaign assets")
+                    logger.warning(f"Cannot restore image: asset {image_asset_id} not in campaign")
 
             payload = {
                 "session_id": str(session.id),
@@ -502,10 +456,10 @@ class StartSession:
                 "max_players": session.max_players,  # From session aggregate
                 "joined_user_ids": [str(user_id) for user_id in session.joined_users],  # Campaign players
                 "assets": assets,  # Campaign library assets (legacy, api-game will fetch fresh URLs on-demand)
-                "audio_config": audio_config_with_urls,
-                "audio_track_config": restored_track_config,
-                "map_config": map_config_with_url,
-                "image_config": image_config_with_url,
+                "audio_config": audio_config_for_game,
+                "audio_track_config": {},  # Starts empty each session; populated by in-session track swaps
+                "map_config": map_config_for_game,
+                "image_config": image_config_for_game,
                 "active_display": session.active_display
             }
 
@@ -657,12 +611,14 @@ class PauseSession:
                 if ch and ch.get("asset_id"):
                     asset_configs[ch["asset_id"]] = {
                         "volume": ch.get("volume"),
+                        "looping": ch.get("looping"),
                         "effects": ch.get("effects", {}),
                     }
             for asset_id_str, tc in raw_track_config.items():
                 if asset_id_str not in asset_configs:
                     asset_configs[asset_id_str] = {
                         "volume": tc.get("volume"),
+                        "looping": tc.get("looping"),
                         "effects": tc.get("effects", {}),
                     }
 
@@ -676,6 +632,8 @@ class PauseSession:
                             config_kwargs = {}
                             if cfg.get("volume") is not None:
                                 config_kwargs["default_volume"] = cfg["volume"]
+                            if cfg.get("looping") is not None:
+                                config_kwargs["default_looping"] = cfg["looping"]
                             effects = cfg.get("effects", {})
                             if effects and isinstance(asset, MusicAsset):
                                 config_kwargs["effect_hpf_enabled"] = effects.get("hpf", {}).get("enabled")
@@ -687,32 +645,34 @@ class PauseSession:
                                 synced_assets.add(asset_id_str)
                     except Exception as e:
                         logger.warning(f"Failed to sync audio config for asset {asset_id_str}: {e}")
-                logger.info(f"Synced {len(synced_assets)} asset audio configs to PostgreSQL (volumes + effects)")
+                logger.info(f"Synced {len(synced_assets)} asset audio configs to PostgreSQL (volume, looping, effects)")
 
+            # Thin JSONB: store only channel → asset_id references (all config synced back to assets above)
             audio_config = {}
             for channel_id, ch in raw_audio.items():
-                if ch and ch.get("filename"):
-                    audio_config[channel_id] = {
-                        "filename": ch.get("filename"),
-                        "asset_id": ch.get("asset_id"),
-                        "volume": ch.get("volume", 0.8),
-                        "looping": ch.get("looping", True),
-                        "effects": ch.get("effects", {}),
-                    }
-            # Stash inactive track configs for session resume
-            if raw_track_config:
-                audio_config["_track_config"] = raw_track_config
-            logger.info(f"Extracted audio config: {len(audio_config)} channels, {len(raw_track_config)} stashed track configs")
+                if ch and ch.get("asset_id"):
+                    audio_config[channel_id] = {"asset_id": ch["asset_id"]}
+            logger.info(f"Extracted audio config: {len(audio_config)} channel references")
 
-            # Extract map config (asset_id + grid_config for session persistence)
+            # Extract map config — sync grid_config back to MapAsset, store only asset_id reference
             raw_map = final_state.get("map_state", {})
             map_config = {}
             if raw_map and raw_map.get("asset_id"):
-                map_config = {
-                    "asset_id": raw_map.get("asset_id"),
-                    "grid_config": raw_map.get("grid_config")  # Preserve grid config for next session
-                }
-            logger.info(f"Extracted map config: {'has map' if map_config else 'no active map'}, grid: {map_config.get('grid_config') if map_config else None}")
+                map_asset_id = raw_map["asset_id"]
+                map_config = {"asset_id": map_asset_id}
+
+                # Sync grid config back to MapAsset (ETL: hot → cold)
+                game_grid_config = raw_map.get("grid_config")
+                if game_grid_config and self.asset_repo:
+                    try:
+                        map_asset = self.asset_repo.get_by_id(UUID(map_asset_id))
+                        if map_asset and isinstance(map_asset, MapAsset):
+                            map_asset.update_grid_config_from_game(game_grid_config)
+                            self.asset_repo.save(map_asset)
+                            logger.info(f"Synced grid config back to MapAsset {map_asset_id}")
+                    except Exception as e:
+                        logger.warning(f"Failed to sync grid config for map {map_asset_id}: {e}")
+            logger.info(f"Extracted map config: {'has map' if map_config else 'no active map'}")
 
             # Extract image config (asset_id for session persistence)
             raw_image = final_state.get("image_state", {})
@@ -953,12 +913,14 @@ class FinishSession:
                 if ch and ch.get("asset_id"):
                     asset_configs[ch["asset_id"]] = {
                         "volume": ch.get("volume"),
+                        "looping": ch.get("looping"),
                         "effects": ch.get("effects", {}),
                     }
             for asset_id_str, tc in raw_track_config.items():
                 if asset_id_str not in asset_configs:
                     asset_configs[asset_id_str] = {
                         "volume": tc.get("volume"),
+                        "looping": tc.get("looping"),
                         "effects": tc.get("effects", {}),
                     }
 
@@ -972,6 +934,8 @@ class FinishSession:
                             config_kwargs = {}
                             if cfg.get("volume") is not None:
                                 config_kwargs["default_volume"] = cfg["volume"]
+                            if cfg.get("looping") is not None:
+                                config_kwargs["default_looping"] = cfg["looping"]
                             effects = cfg.get("effects", {})
                             if effects and isinstance(asset, MusicAsset):
                                 config_kwargs["effect_hpf_enabled"] = effects.get("hpf", {}).get("enabled")
@@ -983,32 +947,34 @@ class FinishSession:
                                 synced_assets.add(asset_id_str)
                     except Exception as e:
                         logger.warning(f"Failed to sync audio config for asset {asset_id_str}: {e}")
-                logger.info(f"Synced {len(synced_assets)} asset audio configs to PostgreSQL (volumes + effects)")
+                logger.info(f"Synced {len(synced_assets)} asset audio configs to PostgreSQL (volume, looping, effects)")
 
+            # Thin JSONB: store only channel → asset_id references (all config synced back to assets above)
             audio_config = {}
             for channel_id, ch in raw_audio.items():
-                if ch and ch.get("filename"):
-                    audio_config[channel_id] = {
-                        "filename": ch.get("filename"),
-                        "asset_id": ch.get("asset_id"),
-                        "volume": ch.get("volume", 0.8),
-                        "looping": ch.get("looping", True),
-                        "effects": ch.get("effects", {}),
-                    }
-            # Stash inactive track configs for session resume
-            if raw_track_config:
-                audio_config["_track_config"] = raw_track_config
-            logger.info(f"Extracted audio config: {len(audio_config)} channels, {len(raw_track_config)} stashed track configs")
+                if ch and ch.get("asset_id"):
+                    audio_config[channel_id] = {"asset_id": ch["asset_id"]}
+            logger.info(f"Extracted audio config: {len(audio_config)} channel references")
 
-            # Extract map config (asset_id + grid_config for session persistence)
+            # Extract map config — sync grid_config back to MapAsset, store only asset_id reference
             raw_map = final_state.get("map_state", {})
             map_config = {}
             if raw_map and raw_map.get("asset_id"):
-                map_config = {
-                    "asset_id": raw_map.get("asset_id"),
-                    "grid_config": raw_map.get("grid_config")  # Preserve grid config for next session
-                }
-            logger.info(f"Extracted map config: {'has map' if map_config else 'no active map'}, grid: {map_config.get('grid_config') if map_config else None}")
+                map_asset_id = raw_map["asset_id"]
+                map_config = {"asset_id": map_asset_id}
+
+                # Sync grid config back to MapAsset (ETL: hot → cold)
+                game_grid_config = raw_map.get("grid_config")
+                if game_grid_config and self.asset_repo:
+                    try:
+                        map_asset = self.asset_repo.get_by_id(UUID(map_asset_id))
+                        if map_asset and isinstance(map_asset, MapAsset):
+                            map_asset.update_grid_config_from_game(game_grid_config)
+                            self.asset_repo.save(map_asset)
+                            logger.info(f"Synced grid config back to MapAsset {map_asset_id}")
+                    except Exception as e:
+                        logger.warning(f"Failed to sync grid config for map {map_asset_id}: {e}")
+            logger.info(f"Extracted map config: {'has map' if map_config else 'no active map'}")
 
             # Extract image config (asset_id for session persistence)
             raw_image = final_state.get("image_state", {})
