@@ -39,6 +39,10 @@ export default function AudioTrack({
   onVolumeChange,
   onVolumeChangeDebounced,
   onLoopToggle,
+  isMuted = false,
+  isSoloed = false,
+  onMuteToggle,
+  onSoloToggle,
   syncMode = false,
   pendingOperations = { play: false, pause: false, stop: false, loop: false },
   isLast = false
@@ -264,6 +268,25 @@ export default function AudioTrack({
                   }`}
                 />
               </button>
+            )}
+            {/* Solo/Mute — channel-level controls */}
+            {type !== 'sfx' && (
+              <>
+                <button
+                  className={`px-2 py-0.5 rounded text-xs font-bold transition-colors ${
+                    isSoloed ? 'bg-yellow-500 text-black' : 'bg-gray-600 text-gray-400 hover:bg-gray-500'
+                  }`}
+                  onClick={onSoloToggle}
+                  title={isSoloed ? 'Unsolo' : 'Solo'}
+                >S</button>
+                <button
+                  className={`px-2 py-0.5 rounded text-xs font-bold transition-colors ${
+                    isMuted ? 'bg-red-600 text-white' : 'bg-gray-600 text-gray-400 hover:bg-gray-500'
+                  }`}
+                  onClick={onMuteToggle}
+                  title={isMuted ? 'Unmute' : 'Mute'}
+                >M</button>
+              </>
             )}
           </div>
         )}

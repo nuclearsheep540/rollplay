@@ -814,7 +814,7 @@ class WebsocketEvent():
         print(f"🎛️ Backend received batch audio operations from {triggered_by}: {len(operations)} operations")
         
         # Validate all operations
-        valid_operations = ["play", "stop", "pause", "resume", "volume", "loop", "load", "clear"]
+        valid_operations = ["play", "stop", "pause", "resume", "volume", "loop", "load", "clear", "effects", "mute", "solo"]
         for i, op in enumerate(operations):
             if not isinstance(op, dict):
                 print(f"❌ Invalid operation {i}: must be an object")
@@ -844,6 +844,10 @@ class WebsocketEvent():
                 if "looping" not in op:
                     print(f"❌ Invalid loop operation {i}: missing looping parameter")
                     return WebsocketEventResult(broadcast_message={})
+            elif operation == "effects":
+                if not isinstance(op.get("effects"), dict):
+                    print(f"❌ Invalid effects operation {i}: missing or invalid effects object")
+                    return WebsocketEventResult(broadcast_message={})
         
         # Create log message describing the batch operation
         operation_summaries = []
@@ -872,6 +876,16 @@ class WebsocketEvent():
                 operation_summaries.append(f"load {track_id} ({filename})")
             elif operation == "clear":
                 operation_summaries.append(f"clear {track_id}")
+            elif operation == "effects":
+                effects = op.get("effects", {})
+                enabled_effects = [k for k, v in effects.items() if v is True]
+                operation_summaries.append(f"effects on {track_id}: {', '.join(enabled_effects) or 'all off'}")
+            elif operation == "mute":
+                muted = op.get("muted", False)
+                operation_summaries.append(f"{'mute' if muted else 'unmute'} {track_id}")
+            elif operation == "solo":
+                soloed = op.get("soloed", False)
+                operation_summaries.append(f"{'solo' if soloed else 'unsolo'} {track_id}")
 
         log_message = f"🎛️ {triggered_by} executed batch audio operations: {', '.join(operation_summaries)}"
         print(log_message)
@@ -886,7 +900,9 @@ class WebsocketEvent():
                 operation = op.get("operation")
 
                 if operation == "play":
+                    ch = current_audio_state.get(track_id, {})
                     channel_state = {
+                        **ch,
                         "filename": op.get("filename"),
                         "asset_id": op.get("asset_id"),
                         "s3_url": op.get("s3_url"),
@@ -942,48 +958,91 @@ class WebsocketEvent():
                     GameService.update_audio_state(client_id, track_id, channel_state)
 
                 elif operation == "load":
-                    # Save outgoing asset's volume to accumulator
+                    # 1. Save outgoing track's full config to audio_track_config
                     old_ch = current_audio_state.get(track_id, {})
                     old_asset_id = old_ch.get("asset_id")
-                    old_volume = old_ch.get("volume")
-                    asset_volumes = current_audio_state.get("_asset_volumes", {})
-                    if old_asset_id and old_volume is not None:
-                        asset_volumes[old_asset_id] = old_volume
+                    if old_asset_id:
+                        track_config = {
+                            "volume": old_ch.get("volume"),
+                            "looping": old_ch.get("looping"),
+                            "effects": old_ch.get("effects", {}),
+                            "paused_elapsed": old_ch.get("paused_elapsed"),
+                        }
+                        GameService.save_track_config(client_id, old_asset_id, track_config)
 
-                    # Resolve incoming volume: session memory first, then batch op, then default
+                    # 2. Check for saved config for incoming track
                     new_asset_id = op.get("asset_id")
-                    raw_volume = asset_volumes.get(new_asset_id, op.get("volume"))
-                    resolved_volume = raw_volume if raw_volume is not None else 0.8
+                    saved_config = GameService.get_track_config(client_id, new_asset_id) if new_asset_id else None
 
-                    # Track the resolved volume for the new asset too
-                    if new_asset_id:
-                        asset_volumes[new_asset_id] = resolved_volume
+                    # 3. Build channel state — restore from saved config or use provided defaults
+                    if saved_config:
+                        channel_state = {
+                            "filename": op.get("filename"),
+                            "asset_id": new_asset_id,
+                            "s3_url": op.get("s3_url"),
+                            "volume": saved_config.get("volume", op.get("volume", 0.8)),
+                            "looping": saved_config.get("looping", op.get("looping")),
+                            "effects": saved_config.get("effects", {}),
+                            "playback_state": "stopped",
+                            "started_at": None,
+                            "paused_elapsed": saved_config.get("paused_elapsed"),
+                        }
+                    else:
+                        channel_state = {
+                            "filename": op.get("filename"),
+                            "asset_id": new_asset_id,
+                            "s3_url": op.get("s3_url"),
+                            "volume": op.get("volume", 0.8),
+                            "looping": op.get("looping") if op.get("looping") is not None else True,
+                            "effects": op.get("effects", {}),
+                            "playback_state": "stopped",
+                            "started_at": None,
+                            "paused_elapsed": None,
+                        }
 
-                    channel_state = {
-                        "filename": op.get("filename"),
-                        "asset_id": new_asset_id,
-                        "s3_url": op.get("s3_url"),
-                        "volume": resolved_volume,
-                        "looping": op.get("looping") if op.get("looping") is not None else True,
-                        "playback_state": "stopped",
-                        "started_at": None,
-                        "paused_elapsed": None,
-                    }
+                    # Preserve channel-level mute/solo (not asset-level — survives track swaps)
+                    channel_state["muted"] = old_ch.get("muted", False)
+                    channel_state["soloed"] = old_ch.get("soloed", False)
+
                     GameService.update_audio_state(client_id, track_id, channel_state)
-                    GameService.update_audio_state(client_id, "_asset_volumes", asset_volumes)
 
-                    # Update op so the broadcast carries the resolved volume
-                    op["volume"] = resolved_volume
+                    # 4. Remove saved config (it's now active in a channel)
+                    if new_asset_id and saved_config:
+                        GameService.remove_track_config(client_id, new_asset_id)
+
+                    # Update op so the broadcast carries the resolved config
+                    op["volume"] = channel_state["volume"]
+                    op["looping"] = channel_state["looping"]
+                    op["effects"] = channel_state["effects"]
+                    op["paused_elapsed"] = channel_state["paused_elapsed"]
+
+                elif operation == "effects":
+                    ch = current_audio_state.get(track_id, {})
+                    channel_state = {**ch, "effects": op.get("effects", {})}
+                    GameService.update_audio_state(client_id, track_id, channel_state)
+
+                elif operation == "mute":
+                    ch = current_audio_state.get(track_id, {})
+                    channel_state = {**ch, "muted": op.get("muted", False)}
+                    GameService.update_audio_state(client_id, track_id, channel_state)
+
+                elif operation == "solo":
+                    ch = current_audio_state.get(track_id, {})
+                    channel_state = {**ch, "soloed": op.get("soloed", False)}
+                    GameService.update_audio_state(client_id, track_id, channel_state)
 
                 elif operation == "clear":
-                    # Save outgoing asset's volume before clearing
+                    # Save outgoing track's full config before clearing
                     old_ch = current_audio_state.get(track_id, {})
                     old_asset_id = old_ch.get("asset_id")
-                    old_volume = old_ch.get("volume")
-                    if old_asset_id and old_volume is not None:
-                        asset_volumes = current_audio_state.get("_asset_volumes", {})
-                        asset_volumes[old_asset_id] = old_volume
-                        GameService.update_audio_state(client_id, "_asset_volumes", asset_volumes)
+                    if old_asset_id:
+                        track_config = {
+                            "volume": old_ch.get("volume"),
+                            "looping": old_ch.get("looping"),
+                            "effects": old_ch.get("effects", {}),
+                            "paused_elapsed": old_ch.get("paused_elapsed"),
+                        }
+                        GameService.save_track_config(client_id, old_asset_id, track_config)
 
                     channel_state = {
                         "filename": None,

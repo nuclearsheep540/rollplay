@@ -24,6 +24,8 @@ const CHANNELS = [
 export default function AudioTrackSelector({
   remoteTrackStates,
   onAssetSelected,
+  onClear,
+  loadedAssetIds,
   campaignId,
 }) {
   const [activeChannel, setActiveChannel] = useState(null);
@@ -57,6 +59,15 @@ export default function AudioTrackSelector({
                   <span className={`flex-1 text-xs truncate ${filename ? 'text-gray-200' : 'text-gray-600'}`}>
                     {filename || 'Empty'}
                   </span>
+                  {filename && (
+                    <button
+                      onClick={() => onClear?.(channel.id)}
+                      className="px-2 py-1 text-xs rounded transition-colors bg-gray-700 text-gray-300 hover:bg-red-700 hover:text-white"
+                      title="Clear this channel"
+                    >
+                      Clear
+                    </button>
+                  )}
                   <button
                     onClick={() => handleSelectClick(channel.id)}
                     className={`px-2 py-1 text-xs rounded transition-colors ${
@@ -74,6 +85,7 @@ export default function AudioTrackSelector({
                     channelId={channel.id}
                     channelType={channel.type}
                     campaignId={campaignId}
+                    excludeAssetIds={loadedAssetIds}
                   />
                 )}
               </div>

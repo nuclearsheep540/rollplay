@@ -9,7 +9,8 @@ import React, { useState, useEffect, useCallback, useMemo, useRef, memo } from '
 import AudioTrack from './AudioTrack';
 import AudioTrackSelector from './AudioTrackSelector';
 import SfxSoundboard from './SfxSoundboard';
-import { PlaybackState, ChannelType } from '../types';
+import ChannelEffects from './ChannelEffects';
+import { PlaybackState, ChannelType, DEFAULT_EFFECTS } from '../types';
 import {
   DM_CHILD,
   PANEL_CHILD,
@@ -85,6 +86,14 @@ export default function AudioMixerPanel({
   setSfxSlotVolume = null,
   setRemoteTrackVolume = null,
   activeFades = {},
+  // Channel effects (HPF, LPF, Reverb)
+  channelEffects = {},
+  applyChannelEffects = null,
+  // Channel mute/solo
+  mutedChannels = {},
+  soloedChannels = {},
+  setChannelMuted = null,
+  setChannelSoloed = null,
 }) {
   
 
@@ -93,13 +102,25 @@ export default function AudioMixerPanel({
   const [pendingOperations, setPendingOperations] = useState(new Set());
   
   // Wrap loadAssetIntoChannel to also persist to server via WebSocket
+  // Backend handles config restoration: if this track was previously used in the session,
+  // saved config (volume, effects, looping) is restored from audio_track_config in MongoDB.
+  // Asset defaults are sent as fallback for first-time loads.
   const handleAssetSelected = useCallback((channelId, asset) => {
-    // Load locally into audio state
+    // Load locally into audio state (applies asset defaults for immediate responsiveness;
+    // backend broadcast will correct with restored config if available)
     if (loadAssetIntoChannel) {
       loadAssetIntoChannel(channelId, asset);
     }
-    // Broadcast + persist to MongoDB via batch operation
+    // Single load operation — backend decides whether to use these defaults or restore saved config
     if (sendRemoteAudioBatch) {
+      const effects = (asset.effect_hpf_enabled !== undefined || asset.effect_lpf_enabled !== undefined || asset.effect_reverb_enabled !== undefined)
+        ? {
+            hpf: asset.effect_hpf_enabled || false,
+            lpf: asset.effect_lpf_enabled || false,
+            reverb: asset.effect_reverb_enabled || false,
+          }
+        : {};
+
       sendRemoteAudioBatch([{
         trackId: channelId,
         operation: 'load',
@@ -107,9 +128,35 @@ export default function AudioMixerPanel({
         asset_id: asset.id,
         s3_url: asset.s3_url,
         volume: asset.default_volume ?? 0.8,
+        looping: asset.default_looping ?? true,
+        effects,
       }]);
     }
   }, [loadAssetIntoChannel, sendRemoteAudioBatch]);
+
+  // Clear a BGM channel — stop audio, reset asset, effects, mute/solo
+  const handleBgmClear = useCallback((channelId) => {
+    if (loadAssetIntoChannel) {
+      loadAssetIntoChannel(channelId, { id: null, filename: null, s3_url: null });
+    }
+    // Reset effects to all-off
+    if (applyChannelEffects) {
+      applyChannelEffects(channelId, { hpf: false, lpf: false, reverb: false });
+    }
+    // Reset mute/solo
+    if (setChannelMuted) setChannelMuted(channelId, false);
+    if (setChannelSoloed) setChannelSoloed(channelId, false);
+    sendRemoteAudioBatch?.([{ trackId: channelId, operation: 'clear' }]);
+  }, [loadAssetIntoChannel, applyChannelEffects, setChannelMuted, setChannelSoloed, sendRemoteAudioBatch]);
+
+  // Collect asset IDs currently loaded in any BGM channel (for filtering the selection modal)
+  const loadedAssetIds = useMemo(() => {
+    const ids = new Set();
+    Object.values(remoteTrackStates).forEach(state => {
+      if (state?.asset_id) ids.add(state.asset_id);
+    });
+    return ids;
+  }, [remoteTrackStates]);
 
   // Cue system state
   const [currentCue, setCurrentCue] = useState(null); // { targetTracks: [channelId, ...] }
@@ -423,6 +470,56 @@ export default function AudioMixerPanel({
     sendRemoteAudioBatch?.(loopOperation);
   };
 
+  // Channel effects toggle handler
+  // Effects shape is slim: { hpf: true/false, lpf: true/false, reverb: true/false }
+  // Parameters (frequency, mix, preset) are app-defined in DEFAULT_EFFECTS — never stored in DB.
+  const handleEffectToggle = useCallback((trackId, effectType) => {
+    const currentEffects = channelEffects[trackId] || {
+      hpf: DEFAULT_EFFECTS.hpf.enabled,
+      lpf: DEFAULT_EFFECTS.lpf.enabled,
+      reverb: DEFAULT_EFFECTS.reverb.enabled,
+    };
+    const newEnabled = !currentEffects[effectType];
+
+    const updatedEffects = {
+      ...currentEffects,
+      [effectType]: newEnabled,
+    };
+
+    // Apply locally (applyChannelEffects merges flags with DEFAULT_EFFECTS internally)
+    if (applyChannelEffects) {
+      applyChannelEffects(trackId, updatedEffects);
+    }
+
+    // Broadcast slim flags to all clients
+    sendRemoteAudioBatch?.([{
+      trackId,
+      operation: 'effects',
+      effects: updatedEffects,
+    }]);
+  }, [channelEffects, applyChannelEffects, sendRemoteAudioBatch]);
+
+  // Channel mute/solo handlers — toggle locally + broadcast via WebSocket
+  const handleMuteToggle = useCallback((channelId) => {
+    const newMuted = !mutedChannels[channelId];
+    if (setChannelMuted) setChannelMuted(channelId, newMuted);
+    sendRemoteAudioBatch?.([{
+      trackId: channelId,
+      operation: 'mute',
+      muted: newMuted,
+    }]);
+  }, [mutedChannels, sendRemoteAudioBatch, setChannelMuted]);
+
+  const handleSoloToggle = useCallback((channelId) => {
+    const newSoloed = !soloedChannels[channelId];
+    if (setChannelSoloed) setChannelSoloed(channelId, newSoloed);
+    sendRemoteAudioBatch?.([{
+      trackId: channelId,
+      operation: 'solo',
+      soloed: newSoloed,
+    }]);
+  }, [soloedChannels, sendRemoteAudioBatch, setChannelSoloed]);
+
   // SFX Soundboard handlers
   const handleSfxTrigger = async (slotIndex) => {
     if (!isAudioUnlocked) {
@@ -617,6 +714,8 @@ export default function AudioMixerPanel({
           <AudioTrackSelector
             remoteTrackStates={remoteTrackStates}
             onAssetSelected={handleAssetSelected}
+            onClear={handleBgmClear}
+            loadedAssetIds={loadedAssetIds}
             campaignId={campaignId}
           />
 
@@ -858,40 +957,51 @@ export default function AudioMixerPanel({
                   loop: pendingOperations.has(`loop_${channel.channelId}`)
                 };
                 return (
-                  <AudioTrack
-                    key={channel.channelId}
-                    config={{
-                      trackId: channel.channelId,
-                      type: channel.type,
-                      label: channel.label,
-                      analyserNode: remoteTrackAnalysers[channel.channelId],
-                      track: channel.track
-                    }}
-                    pendingOperations={pendingOps}
-                    trackState={
-                      remoteTrackStates[channel.channelId] || {
-                        playbackState: PlaybackState.STOPPED,
-                        volume: 1.0,
-                        filename: null,
-                        currentTime: 0,
-                        duration: 0,
-                        looping: true
+                  <React.Fragment key={channel.channelId}>
+                    <AudioTrack
+                      config={{
+                        trackId: channel.channelId,
+                        type: channel.type,
+                        label: channel.label,
+                        analyserNode: remoteTrackAnalysers[channel.channelId],
+                        track: channel.track
+                      }}
+                      pendingOperations={pendingOps}
+                      trackState={
+                        remoteTrackStates[channel.channelId] || {
+                          playbackState: PlaybackState.STOPPED,
+                          volume: 1.0,
+                          filename: null,
+                          currentTime: 0,
+                          duration: 0,
+                          looping: true
+                        }
                       }
-                    }
-                    onPlay={() => handlePlay(channel)}
-                    onPause={() => handlePause(channel)}
-                    onStop={() => handleStop(channel)}
-                    onVolumeChange={(v) =>
-                      setRemoteTrackVolume?.(channel.channelId, v)
-                    }
-                    onVolumeChangeDebounced={(v) =>
-                      handleVolumeChange(channel.channelId, v)
-                    }
-                    onLoopToggle={(id, loop) =>
-                      handleLoopToggle(id, loop)
-                    }
-                    isLast={false}
-                  />
+                      onPlay={() => handlePlay(channel)}
+                      onPause={() => handlePause(channel)}
+                      onStop={() => handleStop(channel)}
+                      onVolumeChange={(v) =>
+                        setRemoteTrackVolume?.(channel.channelId, v)
+                      }
+                      onVolumeChangeDebounced={(v) =>
+                        handleVolumeChange(channel.channelId, v)
+                      }
+                      onLoopToggle={(id, loop) =>
+                        handleLoopToggle(id, loop)
+                      }
+                      isMuted={mutedChannels[channel.channelId] || false}
+                      isSoloed={soloedChannels[channel.channelId] || false}
+                      onMuteToggle={() => handleMuteToggle(channel.channelId)}
+                      onSoloToggle={() => handleSoloToggle(channel.channelId)}
+                      isLast={false}
+                    />
+                    <ChannelEffects
+                      trackId={channel.channelId}
+                      effects={channelEffects[channel.channelId]}
+                      onToggleEffect={handleEffectToggle}
+                      disabled={!remoteTrackStates[channel.channelId]?.filename}
+                    />
+                  </React.Fragment>
                 );
               })}
             </>

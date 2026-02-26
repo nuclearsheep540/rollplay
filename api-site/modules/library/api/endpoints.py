@@ -102,7 +102,10 @@ def _to_media_asset_response(asset, s3_service: S3Service = None) -> MediaAssetR
             updated_at=asset.updated_at,
             duration_seconds=asset.duration_seconds,
             default_volume=asset.default_volume,
-            default_looping=asset.default_looping
+            default_looping=asset.default_looping,
+            effect_hpf_enabled=asset.effect_hpf_enabled,
+            effect_lpf_enabled=asset.effect_lpf_enabled,
+            effect_reverb_enabled=asset.effect_reverb_enabled
         )
 
     # If it's a SfxAsset, return SfxAssetResponse with audio fields
@@ -442,7 +445,10 @@ async def update_audio_config(
             user_id=current_user.id,
             duration_seconds=request.duration_seconds,
             default_volume=request.default_volume,
-            default_looping=request.default_looping
+            default_looping=request.default_looping,
+            effect_hpf_enabled=request.effect_hpf_enabled,
+            effect_lpf_enabled=request.effect_lpf_enabled,
+            effect_reverb_enabled=request.effect_reverb_enabled
         )
 
         logger.info(f"Updated audio config for asset {asset_id}: {asset.get_audio_config()}")

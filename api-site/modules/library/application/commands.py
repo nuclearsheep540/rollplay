@@ -407,7 +407,10 @@ class UpdateAudioConfig:
         user_id: UUID,
         duration_seconds: Optional[float] = None,
         default_volume: Optional[float] = None,
-        default_looping: Optional[bool] = None
+        default_looping: Optional[bool] = None,
+        effect_hpf_enabled: Optional[bool] = None,
+        effect_lpf_enabled: Optional[bool] = None,
+        effect_reverb_enabled: Optional[bool] = None
     ) -> Union[MusicAsset, SfxAsset]:
         """
         Update audio configuration for an audio asset.
@@ -418,6 +421,9 @@ class UpdateAudioConfig:
             duration_seconds: Track duration in seconds (>= 0)
             default_volume: Default playback volume (0.0-1.3)
             default_looping: Default loop behavior
+            effect_hpf_enabled: High-pass filter enabled (MusicAsset only)
+            effect_lpf_enabled: Low-pass filter enabled (MusicAsset only)
+            effect_reverb_enabled: Reverb enabled (MusicAsset only)
 
         Returns:
             Updated MusicAsset or SfxAsset
@@ -439,11 +445,20 @@ class UpdateAudioConfig:
         if self.session_repository:
             check_asset_in_active_session(asset.campaign_ids, self.session_repository)
 
-        asset.update_audio_config(
+        # Build kwargs — effects only apply to MusicAsset
+        config_kwargs = dict(
             duration_seconds=duration_seconds,
             default_volume=default_volume,
-            default_looping=default_looping
+            default_looping=default_looping,
         )
+        if isinstance(asset, MusicAsset):
+            config_kwargs.update(
+                effect_hpf_enabled=effect_hpf_enabled,
+                effect_lpf_enabled=effect_lpf_enabled,
+                effect_reverb_enabled=effect_reverb_enabled,
+            )
+
+        asset.update_audio_config(**config_kwargs)
 
         self.repository.save(asset)
         return asset

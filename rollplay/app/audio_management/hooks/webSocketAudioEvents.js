@@ -129,6 +129,11 @@ export const handleRemoteAudioBatch = async (data, {
   setSfxSlotVolume,
   loadSfxSlot,
   clearSfxSlot,
+  // Channel effects
+  applyChannelEffects,
+  // Channel mute/solo
+  setChannelMuted,
+  setChannelSoloed,
 }) => {
   console.log("🎛️ Remote audio batch command received:", data);
   const { operations, triggered_by, fade_duration } = data;
@@ -265,9 +270,9 @@ export const handleRemoteAudioBatch = async (data, {
           
         case 'load':
           if (loadAssetIntoChannel) {
-            const { filename, asset_id, s3_url, volume } = op;
-            loadAssetIntoChannel(trackId, { filename, id: asset_id, s3_url, default_volume: volume });
-            console.log(`✅ Batch operation ${index + 1}: loaded ${trackId} (${filename}, volume: ${volume})`);
+            const { filename, asset_id, s3_url, volume, effects, looping } = op;
+            loadAssetIntoChannel(trackId, { filename, id: asset_id, s3_url, default_volume: volume, effects, default_looping: looping });
+            console.log(`✅ Batch operation ${index + 1}: loaded ${trackId} (${filename}, volume: ${volume}, effects: ${effects ? 'restored' : 'defaults'})`);
           } else {
             console.warn(`❌ Batch operation ${index + 1}: loadAssetIntoChannel function not available`);
           }
@@ -276,7 +281,31 @@ export const handleRemoteAudioBatch = async (data, {
         case 'clear':
           if (stopRemoteTrack) stopRemoteTrack(trackId);
           if (loadAssetIntoChannel) loadAssetIntoChannel(trackId, { id: null, filename: null, s3_url: null });
+          if (applyChannelEffects) applyChannelEffects(trackId, { hpf: false, lpf: false, reverb: false });
+          if (setChannelMuted) setChannelMuted(trackId, false);
+          if (setChannelSoloed) setChannelSoloed(trackId, false);
           console.log(`✅ Batch operation ${index + 1}: cleared ${trackId}`);
+          break;
+
+        case 'effects':
+          if (applyChannelEffects) {
+            applyChannelEffects(trackId, op.effects);
+            console.log(`✅ Batch operation ${index + 1}: applied effects to ${trackId}`);
+          }
+          break;
+
+        case 'mute':
+          if (setChannelMuted) {
+            setChannelMuted(trackId, op.muted);
+            console.log(`✅ Batch operation ${index + 1}: ${op.muted ? 'muted' : 'unmuted'} ${trackId}`);
+          }
+          break;
+
+        case 'solo':
+          if (setChannelSoloed) {
+            setChannelSoloed(trackId, op.soloed);
+            console.log(`✅ Batch operation ${index + 1}: ${op.soloed ? 'soloed' : 'unsoloed'} ${trackId}`);
+          }
           break;
 
         default:

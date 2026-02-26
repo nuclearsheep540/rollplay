@@ -799,6 +799,9 @@ function GameContent() {
     syncAudioState,
     activeFades,
     cancelFade,
+    // Channel effects
+    channelEffects,
+    applyChannelEffects,
     // SFX Soundboard
     sfxSlots,
     playSfxSlot,
@@ -806,7 +809,12 @@ function GameContent() {
     setSfxSlotVolume,
     loadSfxSlot,
     clearSfxSlot,
-    cleanupAllAudio
+    cleanupAllAudio,
+    // Channel mute/solo
+    mutedChannels,
+    soloedChannels,
+    setChannelMuted,
+    setChannelSoloed,
   } = useUnifiedAudio();
 
   // Ref to hold the pending operation clearing function from AudioMixerPanel
@@ -833,6 +841,8 @@ function GameContent() {
     setDisconnectTimeouts,
     setCurrentInitiativePromptId,
     setCampaignId,
+    setChannelMuted,
+    setChannelSoloed,
 
     // Current state values
     gameSeats,
@@ -871,6 +881,9 @@ function GameContent() {
     // Asset loading (for load batch operations from other clients)
     loadAssetIntoChannel,
 
+    // Channel effects (for effects batch operations from other clients)
+    applyChannelEffects,
+
     // SFX Soundboard (for batch operations from other clients)
     playSfxSlot,
     stopSfxSlot,
@@ -887,9 +900,10 @@ function GameContent() {
     addToLog, handleRoleChange, setPlayerSeatMap,
     playRemoteTrack, resumeRemoteTrack, pauseRemoteTrack, stopRemoteTrack,
     setRemoteTrackVolume, toggleRemoteTrackLooping, loadRemoteAudioBuffer,
-    activeFades, cancelFade, syncAudioState, loadAssetIntoChannel,
+    activeFades, cancelFade, syncAudioState, loadAssetIntoChannel, applyChannelEffects,
     playSfxSlot, stopSfxSlot, setSfxSlotVolume, loadSfxSlot, clearSfxSlot, sfxSlots,
-    audioBuffersRef, audioContextRef
+    audioBuffersRef, audioContextRef,
+    setChannelMuted, setChannelSoloed
   ]);
 
   // Initialize WebSocket hook with game context (after audio functions are available)
@@ -1665,6 +1679,12 @@ function GameContent() {
                   setSfxSlotVolume={setSfxSlotVolume}
                   setRemoteTrackVolume={setRemoteTrackVolume}
                   activeFades={activeFades}
+                  channelEffects={channelEffects}
+                  applyChannelEffects={applyChannelEffects}
+                  mutedChannels={mutedChannels}
+                  soloedChannels={soloedChannels}
+                  setChannelMuted={setChannelMuted}
+                  setChannelSoloed={setChannelSoloed}
                 />
               )}
             </div>

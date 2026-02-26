@@ -24,6 +24,7 @@ class GameSettings(BaseModel):
     available_assets: list = []  # Asset refs from campaign library (maps, audio, images)
     campaign_id: str = ""  # PostgreSQL campaign ID for proxying asset requests to api-site
     audio_state: dict = {}  # Per-channel audio state for late-joiner sync
+    audio_track_config: dict = {}  # Per-track config stash (survives channel swaps within a session)
     
     def __init__(self, **data):
         # Lowercase the room_host and any names in seat_layout
@@ -535,3 +536,51 @@ class GameService:
             room = collection.find_one({"_id": room_id}, {"audio_state": 1})
 
         return room.get("audio_state", {}) if room else {}
+
+    @staticmethod
+    def save_track_config(room_id: str, asset_id: str, config: dict):
+        """Stash a track's config when swapped out of a channel (survives channel swaps)"""
+        collection = GameService._get_active_session()
+
+        try:
+            oid = ObjectId(oid=room_id)
+            filter_criteria = {"_id": oid}
+        except Exception:
+            filter_criteria = {"_id": room_id}
+
+        collection.update_one(
+            filter_criteria,
+            {"$set": {f"audio_track_config.{asset_id}": config}}
+        )
+
+    @staticmethod
+    def get_track_config(room_id: str, asset_id: str):
+        """Retrieve a stashed track config (returns None if never loaded)"""
+        collection = GameService._get_active_session()
+
+        try:
+            oid = ObjectId(oid=room_id)
+            filter_criteria = {"_id": oid}
+        except Exception:
+            filter_criteria = {"_id": room_id}
+
+        session = collection.find_one(filter_criteria, {f"audio_track_config.{asset_id}": 1})
+        if session:
+            return session.get("audio_track_config", {}).get(asset_id)
+        return None
+
+    @staticmethod
+    def remove_track_config(room_id: str, asset_id: str):
+        """Remove stashed config when track is loaded back into a channel"""
+        collection = GameService._get_active_session()
+
+        try:
+            oid = ObjectId(oid=room_id)
+            filter_criteria = {"_id": oid}
+        except Exception:
+            filter_criteria = {"_id": room_id}
+
+        collection.update_one(
+            filter_criteria,
+            {"$unset": {f"audio_track_config.{asset_id}": ""}}
+        )
