@@ -237,48 +237,53 @@ When V2 adds Tier 1 (asset defaults) and Tier 2 (scene overrides), the live game
 
 ### Web Audio Node Graph
 
-**Current** (per channel):
+**Pre-F3** (per channel):
 ```
 BufferSource → GainNode → AnalyserNode → MasterGainNode → destination
 ```
 
-**New** (per channel):
+**Post-F3** (per channel):
 ```
-BufferSource → [HPF stage] → [LPF stage] → [Reverb stage] → GainNode → AnalyserNode → MasterGain → destination
+BufferSource → [HPF stage] → [LPF stage] → [Reverb stage] → GainNode → MuteGainNode → AnalyserNode → MasterGain → destination
 ```
 
 Each effect stage uses parallel dry/wet routing:
 ```
-input ──→ dryGain (1 - mix) ──┐
-                                ├──→ output (summed by Web Audio)
-input ──→ effectNode → wetGain ─┘
+inputGain ──→ dryGain (1-mix) ──┐
+                                 ├──→ outputGain
+inputGain ──→ effectNode → wetGain ─┘
 ```
 
 ### Web Audio Nodes Used
 - **HPF**: `BiquadFilterNode` with `type: 'highpass'`, controllable `frequency` cutoff
 - **LPF**: `BiquadFilterNode` with `type: 'lowpass'`, controllable `frequency` cutoff
-- **Reverb**: `ConvolverNode` loaded with an impulse response (IR) buffer
-  - Ship 2-3 built-in IR presets (small room, large hall, cathedral)
-  - IR files stored as static assets in `/public/audio/impulse-responses/`
+- **Reverb**: `ConvolverNode` with algorithmically generated impulse responses
+  - 3 built-in presets: room (0.6s), hall (1.0s), cathedral (3.0s)
+  - Generated at runtime via `createImpulseResponse()` (exponentially decaying white noise)
+  - Cached in `impulseResponseBuffersRef`, shared across channels
 
 ### Syncing
 - Effects state is per-channel, sent via `remote_audio_batch` with a new `effects` operation
 - All players apply the same effects (effects are server-authoritative)
 - Effects state persisted in MongoDB audio channels
 - ETL: Effects state included in existing `audio_config` JSONB on session pause/resume (extends per-channel config with `effects` key)
+- PostgreSQL: `effect_hpf_enabled`, `effect_lpf_enabled`, `effect_reverb_enabled` Boolean columns on `music_assets` (Tier 1 asset defaults)
 
 ### Frontend
 
 **New: `audio_management/components/ChannelEffects.js`**
-- Expandable effects panel per BGM channel
-- Three knobs/sliders per effect: enable toggle, parameter (frequency/preset), wet/dry mix
-- Compact UI that doesn't bloat the mixer panel
+- Three toggle buttons per BGM channel: HPF, LPF, RVB
+- Rose-coloured when enabled, grey when disabled
+- Disabled state when no audio file loaded in channel
+- Props: `trackId`, `effects`, `onToggleEffect`, `disabled`
 
 **Modified: `audio_management/hooks/useUnifiedAudio.js`**
 - Rework `initializeWebAudio()` to create effects chain per channel
-- New refs: `remoteTrackHpfRef`, `remoteTrackLpfRef`, `remoteTrackReverbRef`, `remoteTrackDryGainRef`, `remoteTrackWetGainRef` (per effect stage)
-- New functions: `setChannelEffects(trackId, effectType, params)`
-- Reconnect node graph when effects are enabled/disabled
+- Single nested ref: `channelEffectNodesRef.current[trackId] = { hpf: {...}, lpf: {...}, reverb: {...} }`
+- `createEffectStage()` helper for parallel dry/wet routing
+- `applyChannelEffects(trackId, effects)` — updates gains with 20ms ramp, lazy-loads IR
+- Always-created nodes with bypass via gains (no dynamic connect/disconnect)
+- SFX channels have no effect nodes — fallback path connects directly to gain node
 
 **Modified: `audio_management/hooks/webSocketAudioEvents.js`**
 - Handle new `effects` operation in batch events
@@ -288,12 +293,119 @@ input ──→ effectNode → wetGain ─┘
 
 | File | Action |
 |------|--------|
-| `rollplay/app/audio_management/components/ChannelEffects.js` | **Create** — effects UI per channel |
-| `rollplay/app/audio_management/hooks/useUnifiedAudio.js` | Modify — effects node graph |
+| `rollplay/app/audio_management/components/ChannelEffects.js` | **Create** — effects toggle UI per channel |
+| `rollplay/app/audio_management/hooks/useUnifiedAudio.js` | Modify — effects node graph, applyChannelEffects |
 | `rollplay/app/audio_management/hooks/webSocketAudioEvents.js` | Modify — effects sync |
-| `rollplay/app/audio_management/components/AudioMixerPanel.js` | Modify — integrate ChannelEffects |
-| `rollplay/app/audio_management/components/AudioTrack.js` | Modify — effects toggle UI per track |
-| `public/audio/impulse-responses/` | **Create** — IR preset files |
+| `rollplay/app/audio_management/components/AudioMixerPanel.js` | Modify — integrate ChannelEffects, handleEffectToggle |
+| `rollplay/app/audio_management/types.js` | Modify — DEFAULT_EFFECTS, REVERB_PRESETS constants |
+| `rollplay/app/game/page.js` | Modify — thread channelEffects + applyChannelEffects |
+| `api-game/websocket_handlers/websocket_events.py` | Modify — effects operation in remote_audio_batch |
+| `api-site/modules/library/model/music_asset_model.py` | Modify — effect_*_enabled columns |
+| `api-site/modules/library/domain/music_asset_aggregate.py` | Modify — build_effects_for_game(), update_audio_config() |
+| `api-site/alembic/versions/37b44a754c71_*.py` | **Create** — migration for effect toggle columns |
+
+### Feature 3a: Implementation Detail — Toggle-Only Effects (V1 Scoping Decision)
+
+> *This section was refined during implementation. The original plan specified full parameter controls (frequency sliders, wet/dry mix, reverb preset selector). During development, these were scoped down to toggle-only for V1, with the Web Audio engine built to support full parameters for V2.*
+
+**V1 constraint:** The UI only toggles effects on/off. All effect parameters are hardcoded in `DEFAULT_EFFECTS`:
+
+```javascript
+// rollplay/app/audio_management/types.js
+export const DEFAULT_EFFECTS = {
+  hpf: { enabled: false, frequency: 1000, mix: 0.7 },
+  lpf: { enabled: false, frequency: 500, mix: 0.7 },
+  reverb: { enabled: false, preset: 'room', mix: 0.6 },
+};
+
+export const REVERB_PRESETS = {
+  room: { duration: 0.6, decay: 3.0 },
+  hall: { duration: 1.0, decay: 1.0 },
+  cathedral: { duration: 3.0, decay: 1.5 },
+};
+```
+
+**MongoDB effects shape (slim V1 flags):**
+```javascript
+// What's stored in MongoDB per-channel during V1
+effects: { hpf: true, lpf: false, reverb: false }
+```
+
+The frontend reconstitutes full parameters from `DEFAULT_EFFECTS` at apply time. When V2 adds parameter controls, the MongoDB shape expands back to the nested object format and the frontend reads params from storage instead of constants.
+
+**Architecture decisions:**
+- **Always-created nodes with bypass via gains** — all effect nodes created at init time. Toggling uses gain value changes (dry=1/wet=0 when off, dry=1-mix/wet=mix when on) with `linearRampToValueAtTime` to avoid clicks. No dynamic connect/disconnect.
+- **Single nested ref** — `channelEffectNodesRef.current['audio_channel_A'] = { hpf: { filterNode, dryGain, wetGain, inputGain, outputGain }, lpf: {...}, reverb: { convolverNode, ... } }`
+- **IR loading — lazy with caching** — impulse response buffers generated on first reverb enable, cached in `impulseResponseBuffersRef`, shared across channels.
+- **SFX — no effects** — SFX slots have no entry in `channelEffectNodesRef`. The fallback path in `playRemoteTrack` connects directly to the gain node.
+
+**State flow:**
+1. DM clicks HPF toggle on Channel A
+2. `handleEffectToggle('audio_channel_A', 'hpf')` in AudioMixerPanel
+3. Local: `applyChannelEffects()` → updates Web Audio gains + React state
+4. Remote: `sendRemoteAudioBatch([{ trackId, operation: 'effects', effects }])`
+5. Backend: validates, persists to MongoDB, broadcasts
+6. All clients: `handleRemoteAudioBatch` → `applyChannelEffects()` on each client
+
+**Late-joiner:** `syncAudioState()` reads `channelState.effects` from MongoDB → `applyChannelEffects()` per channel
+
+**Session pause/resume:** Effects state travels with `audio_state` dict in MongoDB → PostgreSQL `audio_config` JSONB → back to MongoDB on resume. Additionally, effect toggle booleans are synced to `music_assets` columns (asset-level Tier 1 defaults) during ETL.
+
+### Feature 3b: BGM Channel Mute/Solo (Scope Addition)
+
+> *This feature was not in the original V1 plan. It emerged during F3 development as a natural extension of the effects chain architecture — once per-channel gain nodes existed, mute/solo was a minimal addition with high DM value.*
+
+**What:** Per-channel Mute and Solo controls for the BGM mixer. State is channel-level (survives track swaps), broadcast to all players via WebSocket, persisted in MongoDB for late-joiner sync, and survives session pause/resume via existing audio_config ETL.
+
+**Updated audio chain:**
+```
+Source → [HPF] → [LPF] → [Reverb] → GainNode → MuteGainNode → AnalyserNode → MasterGain → Destination
+                                      (volume)   (solo/mute)
+```
+
+`MuteGainNode` is a simple GainNode with value 0 or 1. It gates audio for both mute and solo. Meters reflect what the audience hears (silent when muted/not-soloed).
+
+**Behaviour:**
+- **Mute (M):** Toggle per channel. Muted channel's `muteGainNode.gain = 0`. Channel keeps playing (stays in sync). Meter goes silent.
+- **Solo (S):** Toggle per channel. When ANY channel is soloed, all non-soloed channels get `muteGainNode.gain = 0`.
+- **Solo overrides Mute:** If a channel is both Soloed and Muted, it plays (Solo wins).
+- **Channel-level state:** Mute/solo is per-channel, not per-track. Swapping the track in a channel preserves mute/solo. The `load` batch operation explicitly carries over `muted`/`soloed` from the old channel state.
+- **Broadcast:** All mute/solo changes go via WebSocket → api-game → MongoDB → broadcast to all clients.
+- **Late-join:** MongoDB stores `muted`/`soloed` flags per channel. `syncAudioState` restores them.
+- **Pause/Resume:** Mute/solo flags survive automatically — they're part of the MongoDB audio state that gets saved to `session.audio_config` JSONB during pause and restored during resume.
+
+**Key files:**
+
+| File | Change |
+|------|--------|
+| `rollplay/app/audio_management/hooks/useUnifiedAudio.js` | `remoteTrackMuteGainsRef`, mute/solo state + `useEffect` recomputation, sync restore |
+| `rollplay/app/audio_management/components/AudioTrack.js` | Solo (S, yellow) and Mute (M, red) toggle buttons |
+| `rollplay/app/audio_management/components/AudioMixerPanel.js` | `handleMuteToggle`, `handleSoloToggle`, thread props to AudioTrack |
+| `rollplay/app/audio_management/hooks/webSocketAudioEvents.js` | Handle `mute`/`solo` batch operations, reset on `clear` |
+| `rollplay/app/game/page.js` | Thread mute/solo state + setters to panel and gameContext |
+| `api-game/websocket_handlers/websocket_events.py` | Accept `mute`/`solo` operations, MongoDB persistence |
+
+### Feature 3c: Audio Track Config Stash (Scope Addition)
+
+> *This feature was not in the original V1 plan. It emerged to solve a UX problem: swapping a track out of a channel lost its configured effects and volume. The stash preserves per-track config across channel swaps within a session.*
+
+**What:** A `audio_track_config` dict in MongoDB keyed by `asset_id` that saves per-track settings (volume, looping, effects) when a track is swapped out of a channel. When that asset is loaded back into any channel, its saved config is restored.
+
+**Behaviour:**
+- On `load` operation: save outgoing track's config to stash, restore incoming track's saved config (if exists)
+- On `clear` operation: save outgoing track's config to stash before clearing
+- Mute/solo is explicitly excluded from the stash (channel-level, not track-level)
+- Stash survives session pause/resume via ETL (`audio_track_config` included in hot→cold extraction)
+
+**Key files:**
+
+| File | Change |
+|------|--------|
+| `api-game/gameservice.py` | `save_track_config()`, `get_track_config()`, `remove_track_config()` |
+| `api-game/websocket_handlers/websocket_events.py` | Stash/restore logic in `load` and `clear` operations |
+| `api-game/app.py` | Include `audio_track_config` in ETL payloads (create_session, end_session) |
+| `api-game/schemas/session_schemas.py` | `audio_track_config` field on request/response schemas |
+| `api-site/modules/session/application/commands.py` | Persist/restore `audio_track_config` in StartSession, PauseSession, FinishSession |
 
 ---
 
