@@ -6,7 +6,7 @@ Catalogue of code smells, architectural inconsistencies, and patterns that contr
 
 ---
 
-## Session Module
+## api-site: Session Module
 
 ### 1. `_to_session_response` — endpoint doing query-layer work
 
@@ -36,42 +36,308 @@ Catalogue of code smells, architectural inconsistencies, and patterns that contr
 
 ---
 
-## ETL Boundary (api-site → api-game)
+### 3. `GetUserSessions` loads all sessions into memory
 
-### 3. api-site builds raw dicts for ETL payloads
+**Location:** [queries.py:47-70](api-site/modules/session/application/queries.py#L47-L70)
 
-**Location:** [commands.py:453-465](api-site/modules/session/application/commands.py#L453-L465)
+**Smell:** `GetUserSessions.execute()` calls `self.session_repo.get_all()` then filters in Python. This loads every session in the database into memory to check if the user is host or participant.
 
-**Smell:** The `StartSession` command builds the api-game payload as a raw `dict` literal — no Pydantic model, no validation, no type safety. Fields are hand-assembled with string keys and manual `str()` conversions.
+**Why it matters:** O(n) over all sessions for every user query. Fine with 10 sessions, problematic at scale. The filtering should be a SQL query, not Python iteration.
 
-**Why it matters:** If a field is misspelled, missing, or the wrong type, it silently passes through `httpx.post(json=payload)` and api-game receives garbage. This is the exact gap shared contracts are designed to close.
+**What "fixed" looks like:** Repository method `get_by_user_id(user_id)` with a SQL query that joins `sessions` with `session_joined_users` and filters by `host_id = user_id OR user_id IN (joined_users)`.
 
-**What "fixed" looks like:** PR 3 of shared-contracts-acl — `StartSession` constructs a `SessionStartPayload` (contract type) instead of a raw dict. Pydantic validates at construction time, before the HTTP call.
-
-**Blocked by:** shared-contracts-acl PR 1 (package exists) then PR 3 (api-site integration).
+**Blocked by:** Nothing — independent cleanup.
 
 ---
 
-### 4. api-game's session schema types nested data as `dict`
+### 4. SessionEntity uses `dict` for warehoused state
 
-**Location:** [session_schemas.py:25-29](api-game/schemas/session_schemas.py#L25-L29)
+**Location:** [session_aggregate.py:90-93](api-site/modules/session/domain/session_aggregate.py#L90-L93)
 
-**Smell:** `SessionStartRequest` has `audio_config: dict = {}`, `map_config: dict = {}`, `image_config: dict = {}`. Pydantic validates the envelope (session_id is a string, max_players is an int) but everything interesting is typed as "it's a dict, whatever."
+**Smell:** `audio_config: Optional[dict]`, `map_config: Optional[dict]`, `image_config: Optional[dict]` — the domain aggregate holds untyped dicts for the state it warehouses from api-game.
 
-**Why it matters:** api-game accepts structurally invalid nested data without complaint. The data goes straight into MongoDB unvalidated. If api-site sends malformed audio config, it's stored and broadcast to all clients.
+**Why it matters:** The aggregate's `remove_asset_references()` method (line 177-206) uses raw `.get()` chains on these dicts to find and remove asset references. There's no structural guarantee about what's in these dicts.
 
-**What "fixed" looks like:** PR 2 of shared-contracts-acl — `SessionStartRequest` imports contract types (`Dict[str, AudioChannelState]`, `Optional[MapConfig]`, etc.). Pydantic rejects malformed nested data at the HTTP boundary.
+**Contracts impact:** After shared contracts, these could be typed as `Optional[Dict[str, AudioChannelState]]` etc. — but since api-site warehouses (not owns) this data, JSONB storage is still correct. The typing just gives us structural confidence when reading/writing.
 
-**Blocked by:** shared-contracts-acl PR 1 (package exists) then PR 2 (api-game ACL).
+**Blocked by:** shared-contracts-acl PR 1 (define types) then PR 3 (type the aggregate fields).
 
 ---
 
-## Patterns to Watch For
+### 5. Read endpoints authenticate but don't authorize
 
-As we find more, add them here. Good candidates:
+**Locations:**
+- [endpoints.py:131-145](api-site/modules/session/api/endpoints.py#L131-L145) (`get_session`)
+- [endpoints.py:148-162](api-site/modules/session/api/endpoints.py#L148-L162) (`get_campaign_sessions`)
 
-- [ ] Endpoints that take `db: Session` directly instead of going through queries
-- [ ] Manual dict construction where Pydantic models should be used
-- [ ] Response schemas that return more data than any consumer needs
-- [ ] Business logic in API layer that belongs in application/domain layer
-- [ ] Raw `.get()` chains on untyped dicts (especially in api-game)
+**Smell:** Both endpoints inject `user_id` via `Depends(get_current_user_id)` but never use it. The dependency ensures the request is authenticated (valid JWT), but no authorization check verifies the user is the host or a member of the session/campaign. Any authenticated user can fetch any session by ID.
+
+**Why it matters:** Access control gap. A user in Campaign A could fetch session details for Campaign B if they know the session UUID. The `user_id` is there as an auth guard but should also be used for authorization.
+
+**What "fixed" looks like:** `get_session` checks `user is host or user in joined_users`. `get_campaign_sessions` checks `user is host or user in campaign.player_ids`. Return 403 if unauthorized.
+
+**Blocked by:** Nothing — independent fix.
+
+---
+
+### 6. StartSession command is ~270 lines of procedural code
+
+**Location:** [commands.py:248-522](api-site/modules/session/application/commands.py#L248-L522)
+
+**Smell:** `StartSession.execute()` does everything in one method: validation, campaign lookup, session conflict check, host user lookup, asset fetching, parallel URL generation, audio config restoration, map config restoration, image config restoration, payload construction, HTTP call, response parsing, status update, event broadcasting, and error recovery.
+
+**Why it matters:** Difficult to test individual steps, hard to read, and mixes concerns (asset restoration is a different responsibility from payload construction). The audio/map/image restoration blocks (lines 400-451) are structurally identical — fetch asset, check existence, build dict — begging for extraction.
+
+**What "fixed" looks like:** Extract restoration logic into domain methods or a dedicated ETL builder. The command orchestrates; it doesn't build dicts field-by-field.
+
+**Blocked by:** Shared contracts make this easier — once contract types exist, the restoration becomes `asset.build_channel_state_for_game(url)` returning a typed object instead of manual dict construction.
+
+---
+
+### 7. PauseSession duplicates StartSession's structure
+
+**Location:** [commands.py:525-776](api-site/modules/session/application/commands.py#L525-L776) and [commands.py:808-1095](api-site/modules/session/application/commands.py#L808-L1095) (FinishSession)
+
+**Smell:** PauseSession and FinishSession are near-identical ~250-line methods. Both do: validate ownership → set STOPPING → fetch final state from api-game → extract audio/map/image state → sync back to PostgreSQL → deactivate/finish → broadcast events → background cleanup. The ETL extraction logic (lines 606-696 in PauseSession) is copy-pasted into FinishSession.
+
+**Why it matters:** Bug fixes or ETL changes need to be applied in two places. If one gets updated and the other doesn't, hot→cold ETL behaves differently for pause vs finish.
+
+**What "fixed" looks like:** Extract the shared ETL logic (fetch final state, extract and sync configs, cleanup) into a shared method or class. PauseSession and FinishSession call it, differing only in the final status transition.
+
+**Blocked by:** Nothing — independent refactor.
+
+---
+
+## api-site: Library Module (ETL Methods)
+
+### 8. `build_*_for_game()` methods return raw dicts
+
+**Locations:**
+- [music_asset_aggregate.py:180-213](api-site/modules/library/domain/music_asset_aggregate.py#L180-L213) (`build_effects_for_game`, `build_channel_state_for_game`)
+- [map_asset_aggregate.py:145-164](api-site/modules/library/domain/map_asset_aggregate.py#L145-L164) (`build_grid_config_for_game`)
+
+**Smell:** These methods return `dict` with string keys. No type safety on the return value, no validation that the dict matches what api-game expects.
+
+**Why it matters:** If you add a field to the contract but forget to update the builder, or misspell a key, it silently produces wrong data. The shape is only validated when api-game receives it (if at all — see #4 above).
+
+**What "fixed" looks like:** PR 3 of shared-contracts-acl — these methods return contract types (`AudioChannelState`, `GridConfig`, etc.) instead of dicts.
+
+---
+
+### 9. Duplicate constraint validation between aggregates and schemas
+
+**Locations:**
+- [music_asset_aggregate.py:140](api-site/modules/library/domain/music_asset_aggregate.py#L140): `if not 0.0 <= default_volume <= 1.3`
+- [sfx_asset_aggregate.py:120](api-site/modules/library/domain/sfx_asset_aggregate.py#L120): `if not 0.0 <= default_volume <= 1.3`
+- [schemas.py:106](api-site/modules/library/api/schemas.py#L106): `Field(None, ge=0.0, le=1.3)`
+- [map_asset_aggregate.py:117-128](api-site/modules/library/domain/map_asset_aggregate.py#L117-L128): grid width/height 1-100, opacity 0.0-1.0
+- [schemas.py:74-76](api-site/modules/library/api/schemas.py#L74-L76): same constraints on `UpdateGridConfigRequest`
+
+**Smell:** The same business constraint (volume range, grid bounds) is defined in both the domain aggregate AND the API schema. Change one, forget the other, constraints silently diverge.
+
+**Why it matters:** This is the single-responsibility problem we discussed. When contracts arrive, the constraint should exist in ONE place (the contract), and both the aggregate and API schema should delegate to it.
+
+**What "fixed" looks like:** Aggregates compose contract types as value objects. The contract carries the constraint, aggregates enforce domain rules (permissions, workflow).
+
+**Blocked by:** shared-contracts-acl PR 1 + PR 3.
+
+---
+
+### 10. Hardcoded presentation defaults in domain aggregates
+
+**Locations:**
+- [music_asset_aggregate.py:207](api-site/modules/library/domain/music_asset_aggregate.py#L207): `"volume": self.default_volume or 0.8`
+- [music_asset_aggregate.py:208](api-site/modules/library/domain/music_asset_aggregate.py#L208): `"looping": ... if ... is not None else True`
+- [map_asset_aggregate.py:155-163](api-site/modules/library/domain/map_asset_aggregate.py#L155-L163): `"line_color": "#d1d5db"`, `"opacity": opacity`, `"line_width": 1`
+
+**Smell:** Domain aggregates embed presentation defaults (grid line colors, default volume values) that belong to the frontend or a shared constant. The aggregate shouldn't know that the default grid line color is `#d1d5db`.
+
+**Why it matters:** When the contract defines `volume: float = Field(default=0.8)`, the aggregate's `or 0.8` fallback becomes redundant. These should be in one place.
+
+**Blocked by:** shared-contracts-acl PR 1 (defaults in contract) then PR 3 (remove from aggregates).
+
+---
+
+## api-game: Service Layer
+
+### 11. ObjectId conversion repeated 17 times
+
+**Location:** [gameservice.py](api-game/gameservice.py) — lines 65, 90, 132, 181, 214, 233, 266, 332, 357, 382, 404, 440, 516, 532, 545, 561, 573
+
+**Smell:** Every GameService method that queries MongoDB repeats the same try/except pattern:
+```python
+try:
+    oid = ObjectId(oid=room_id)
+    filter_criteria = {"_id": oid}
+except Exception:
+    filter_criteria = {"_id": room_id}
+```
+
+**What "fixed" looks like:** Extract to `_room_filter(room_id)` static method — called from 17 places, defined once. Already noted in shared-contracts-acl PR 2.
+
+**Blocked by:** Nothing — independent cleanup, planned for PR 2.
+
+---
+
+### 12. Seat color palette duplicated
+
+**Locations:**
+- [app.py:430-440](api-game/app.py#L430-L440) — list format inside `create_session`
+- [gameservice.py:276-287](api-game/gameservice.py#L276-L287) — dict format inside `get_seat_colors`
+
+**Smell:** Same 8 colors defined in two places in different data structures.
+
+**What "fixed" looks like:** Module-level constant `DEFAULT_SEAT_COLORS`, referenced by both.
+
+**Blocked by:** Nothing — independent cleanup.
+
+---
+
+### 13. GameSettings uses `dict` for all nested state
+
+**Location:** [gameservice.py:14-27](api-game/gameservice.py#L14-L27)
+
+**Smell:** `audio_state: dict = {}`, `audio_track_config: dict = {}`, `available_assets: list = []` — no typed structure for the most important data in the game session.
+
+**Why it matters:** This is the receiving end of the ETL pipeline. Whatever api-site sends gets stored here with zero structural validation.
+
+**What "fixed" looks like:** PR 2 of shared-contracts-acl — `audio_state: Dict[str, AudioChannelState] = {}` etc.
+
+---
+
+### 14. MapSettings and ImageSettings duplicate shared shapes
+
+**Locations:**
+- [mapservice.py:14-31](api-game/mapservice.py#L14-L31) — `MapSettings` Pydantic model
+- [imageservice.py:15-30](api-game/imageservice.py#L15-L30) — `ImageSettings` Pydantic model
+
+**Smell:** Both define overlapping fields (`room_id`, `asset_id`, `filename`, `original_filename`, `file_path`) with identical `.lower()` normalization. These are local definitions of shapes that should come from shared contracts.
+
+**What "fixed" looks like:** Import `MapConfig` and `ImageConfig` from contracts. Local settings add only runtime fields (`room_id`, `uploaded_by`, `active`).
+
+**Blocked by:** shared-contracts-acl PR 2.
+
+---
+
+## api-game: WebSocket Handlers
+
+### 15. 149 raw `.get()` chains with no type safety
+
+**Location:** [websocket_events.py](api-game/websocket_handlers/websocket_events.py) — throughout
+
+**Smell:** Every WebSocket handler extracts data from `event_data` using `.get()` with varied defaults. No Pydantic schemas for incoming WebSocket payloads.
+
+**Examples:**
+- `roll_data.get("player", "Unknown")` — no type validation
+- `event_data.get("volume", 1.0)` vs `track.get("volume", 0.8)` — inconsistent defaults
+- `op.get("trackId")` — no validation that it's a string
+
+**Why it matters:** Silent failures, inconsistent defaults, impossible to know what shape the frontend should send without reading each handler.
+
+**What "fixed" looks like:** Pydantic schemas for each WebSocket event type. Validate at handler entry, operate on typed objects.
+
+**Blocked by:** Partially addressed by shared-contracts-acl PR 2 (audio events). Full fix would need WebSocket event schemas (separate effort).
+
+---
+
+### 16. Inconsistent volume defaults
+
+**Locations:**
+- [websocket_events.py:715](api-game/websocket_handlers/websocket_events.py#L715): `volume = event_data.get('volume', 1.0)`
+- [websocket_events.py:741](api-game/websocket_handlers/websocket_events.py#L741): `'volume': track.get('volume', 0.8)`
+- [websocket_events.py:868](api-game/websocket_handlers/websocket_events.py#L868): `volume = op.get('volume', 1.0)`
+
+**Smell:** Two different defaults (0.8 vs 1.0) for the same concept. One is a track default, the other appears to be a per-event override — but there's no documentation or constant distinguishing them.
+
+**What "fixed" looks like:** Single `DEFAULT_VOLUME` constant from contracts: `AudioChannelState.model_fields['volume'].default` → `0.8`.
+
+---
+
+### 17. Silent failure on invalid WebSocket messages
+
+**Location:** [websocket_events.py:702-832](api-game/websocket_handlers/websocket_events.py#L702-L832)
+
+**Smell:** Invalid WebSocket messages return `WebsocketEventResult(broadcast_message={})` — an empty broadcast. The client gets no error feedback, the server logs a print statement. No structured error response.
+
+**Why it matters:** Debugging live game issues is difficult when invalid messages are silently swallowed. The DM has no idea why their action didn't work.
+
+**What "fixed" looks like:** Return a structured error message to the sender (not broadcast) with what was wrong. Log with proper logger, not `print()`.
+
+**Blocked by:** Nothing — independent improvement.
+
+---
+
+### 18. Character action endpoints return raw dicts with no response_model
+
+**Locations:**
+- [endpoints.py:357-379](api-site/modules/session/api/endpoints.py#L357-L379) (`select_character_for_session`)
+- [endpoints.py:382-407](api-site/modules/session/api/endpoints.py#L382-L407) (`disconnect_from_game`)
+
+**Smell:** Both endpoints return hand-built dicts (`{"message": ..., "character_id": ...}`) with no `response_model` on the decorator. FastAPI doesn't validate or filter the response, and the response shape is only knowable by reading the code.
+
+**Why it matters:** The responses echo back data the frontend already has (it sent the character_id, it sent the character_state). These are mutation endpoints — in CQRS, commands don't return query data.
+
+**What "fixed" looks like:** Return `204 No Content` with no body. The command succeeded — that's all the caller needs to know. If the frontend needs fresh state, it re-queries through the read path.
+
+**Blocked by:** Nothing — independent cleanup.
+
+---
+
+## Terminology
+
+### 19. "Partial ETL" is vague
+
+**Locations:**
+- [endpoints.py:390](api-site/modules/session/api/endpoints.py#L390)
+- [commands.py:1167, 1187, 1236, 1239](api-site/modules/session/application/commands.py#L1167)
+
+**Smell:** The disconnect flow uses "partial ETL" in docstrings and log messages. This doesn't specify what's being transferred — it's actually character-level ETL (syncing a single character's HP/alive state from MongoDB to PostgreSQL on disconnect). If other partial ETL patterns emerge, the term becomes ambiguous.
+
+**What "fixed" looks like:** Replace "partial ETL" with "character-level ETL" in all 5 references. Establish consistent terminology: "session ETL" for full pause/finish, "character ETL" for per-player disconnect.
+
+**Blocked by:** Nothing — terminology cleanup.
+
+---
+
+## Cross-Cutting
+
+### 20. `_set_active_display` duplicated across services
+
+**Locations:**
+- [mapservice.py:263-281](api-game/mapservice.py#L263-L281)
+- [imageservice.py:151-169](api-game/imageservice.py#L151-L169)
+
+**Smell:** Both MapService and ImageService have identical `_set_active_display` methods that import GameService, do the ObjectId conversion dance, and update the same MongoDB field. Tight coupling + code duplication.
+
+**What "fixed" looks like:** Move `set_active_display` to GameService (it owns the session document). MapService and ImageService call `GameService.set_active_display()`.
+
+**Blocked by:** Nothing — independent refactor.
+
+---
+
+## Summary: What Blocks Shared Contracts?
+
+Items that should ideally be cleaned up **before** or **alongside** shared contracts work:
+
+| Item | Effort | Pre-req for contracts? | Why |
+|------|--------|----------------------|-----|
+| #11 ObjectId helper | Small | Nice-to-have (PR 2) | Reduces PR 2 diff noise |
+| #12 Color palette constant | Tiny | No | Independent |
+| #9 Duplicate constraints | — | Fixed BY contracts | Contracts eliminate the duplication |
+| #10 Hardcoded defaults | — | Fixed BY contracts | Contract defaults replace inline fallbacks |
+| #8 Raw dict returns | — | Fixed BY contracts PR 3 | Builder methods return contract types |
+
+Items that are independent cleanup (do anytime):
+
+| Item | Effort | Notes |
+|------|--------|-------|
+| #1 `_to_session_response` | Medium | Move enrichment to queries |
+| #2 Over-returning | Medium | Needs frontend changes |
+| #3 `GetUserSessions` | Small | SQL query instead of Python filter |
+| #5 Auth without authorization | Small | Add user membership checks |
+| #6 StartSession size | Medium | Extract restoration helpers |
+| #7 Pause/Finish duplication | Medium | Extract shared ETL method |
+| #17 Silent WebSocket failures | Small | Return error to sender |
+| #18 Raw dict returns on char endpoints | Small | Return 204 No Content |
+| #19 "Partial ETL" terminology | Tiny | Rename to "character-level ETL" |
+| #20 `_set_active_display` dup | Small | Move to GameService |

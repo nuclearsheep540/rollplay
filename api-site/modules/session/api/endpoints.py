@@ -111,6 +111,7 @@ def _to_session_response(session: SessionEntity, db: Session) -> SessionResponse
         max_players=session.max_players
     )
 
+# === Session CRUD ===
 
 @router.get("/my-sessions", response_model=SessionListResponse)
 async def get_my_sessions(
@@ -219,6 +220,7 @@ async def remove_player_from_session(
     except ValueError as e:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
 
+# === Session State Actions ===
 
 @router.post("/{session_id}/start", response_model=SessionResponse)
 async def start_session(
@@ -349,8 +351,7 @@ async def finish_session(
             detail="Failed to finish session"
         )
 
-
-# === Character Selection Endpoints ===
+# === Character Actions ===
 
 @router.post("/{session_id}/select-character")
 async def select_character_for_session(
