@@ -126,53 +126,6 @@ class CreateSession:
         return session
 
 
-class RemovePlayerFromSession:
-    """Host removes a player from the session roster"""
-
-    def __init__(
-        self,
-        session_repository: SessionRepository,
-        character_repository: CharacterRepository
-    ):
-        self.session_repo = session_repository
-        self.character_repo = character_repository
-
-    def execute(
-        self,
-        session_id: UUID,
-        user_id: UUID,
-        removed_by: UUID
-    ) -> SessionEntity:
-        """
-        Remove player from session roster.
-
-        Note: Character locking is at CAMPAIGN level, not session level.
-        Removing from session does NOT unlock the character from the campaign.
-        """
-        # Get session aggregate
-        session = self.session_repo.get_by_id(session_id)
-        if not session:
-            raise ValueError(f"Session {session_id} not found")
-
-        # Verify remover is host
-        if session.host_id != removed_by:
-            raise ValueError("Only host can remove players")
-
-        # Verify user is in joined roster
-        if not session.has_user(user_id):
-            raise ValueError("User is not in session roster")
-
-        # Note: Character stays locked to campaign (not session-level unlocking)
-
-        # Business logic in aggregate - remove user from joined_users
-        session.remove_user(user_id)
-
-        # Persist
-        self.session_repo.save(session)
-
-        return session
-
-
 class UpdateSession:
     """Update session details"""
 
@@ -1094,6 +1047,53 @@ class FinishSession:
             # Cleanup failed - cron will handle it
             logger.warning(f"Background cleanup failed for {session_id}: {e}")
             logger.warning(f"Cron job will clean up game {active_game_id}")
+
+
+class RemovePlayerFromSession:
+    """Host removes a player from the session roster"""
+
+    def __init__(
+        self,
+        session_repository: SessionRepository,
+        character_repository: CharacterRepository
+    ):
+        self.session_repo = session_repository
+        self.character_repo = character_repository
+
+    def execute(
+        self,
+        session_id: UUID,
+        user_id: UUID,
+        removed_by: UUID
+    ) -> SessionEntity:
+        """
+        Remove player from session roster.
+
+        Note: Character locking is at CAMPAIGN level, not session level.
+        Removing from session does NOT unlock the character from the campaign.
+        """
+        # Get session aggregate
+        session = self.session_repo.get_by_id(session_id)
+        if not session:
+            raise ValueError(f"Session {session_id} not found")
+
+        # Verify remover is host
+        if session.host_id != removed_by:
+            raise ValueError("Only host can remove players")
+
+        # Verify user is in joined roster
+        if not session.has_user(user_id):
+            raise ValueError("User is not in session roster")
+
+        # Note: Character stays locked to campaign (not session-level unlocking)
+
+        # Business logic in aggregate - remove user from joined_users
+        session.remove_user(user_id)
+
+        # Persist
+        self.session_repo.save(session)
+
+        return session
 
 
 class SelectCharacterForSession:

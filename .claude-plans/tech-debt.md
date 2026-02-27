@@ -137,7 +137,7 @@ Catalogue of code smells, architectural inconsistencies, and patterns that contr
 
 **Why it matters:** This is the single-responsibility problem we discussed. When contracts arrive, the constraint should exist in ONE place (the contract), and both the aggregate and API schema should delegate to it.
 
-**What "fixed" looks like:** Aggregates compose contract types as value objects. The contract carries the constraint, aggregates enforce domain rules (permissions, workflow).
+**What "fixed" looks like:** The contract defines the constraint once (`volume: Field(ge=0.0, le=1.3)`). The aggregate's builder methods (`build_channel_state_for_game()`) produce contract types — Pydantic validates at construction time, so the aggregate no longer needs its own manual range check for boundary output. The API schema can reference the same constraint or delegate to the contract type. The aggregate's own internal fields (`default_volume`) may keep their own validation as a domain concern — but the boundary duplication between API schema and aggregate is eliminated.
 
 **Blocked by:** shared-contracts-acl PR 1 + PR 3.
 

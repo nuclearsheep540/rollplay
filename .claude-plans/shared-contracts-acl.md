@@ -923,43 +923,72 @@ The shared contract doesn't dictate storage. It ensures structural trust at the 
 
 **Key takeaway:** Shared contracts define what the data looks like. Storage strategy (relational vs JSONB) and domain ownership (who has business logic) are separate decisions made per service, per data type.
 
-### 8. Contracts as shared domain value objects, not just wire format
+### 8. Contracts as boundary schemas — domain value objects stay in aggregates
 
-**Evolution:** Through discussion, the role of shared contracts shifted from "boundary schemas" to something stronger: **shared domain value objects** that are the single source of truth for data shapes and universal constraints.
+**Evolution:** Through discussion, the relationship between contracts and aggregates was clarified. Contracts are **boundary schemas** — the single source of truth for data shapes crossing the ETL boundary. They are NOT internal value objects that aggregates compose. Aggregates keep their own value objects for domain modeling.
 
-**The problem with "just schemas":** If contracts only define wire format, then both the contract (`AudioChannelState.volume: Field(ge=0.0, le=1.3)`) and the aggregate (`if not 0.0 <= default_volume <= 1.3: raise ValueError`) define the same business rule. That's a single-responsibility violation — change one, forget the other, and constraints silently diverge.
+**The constraint deduplication problem:** If contracts define `AudioChannelState.volume: Field(ge=0.0, le=1.3)` and the aggregate also validates `if not 0.0 <= default_volume <= 1.3: raise ValueError`, the same rule exists in two places. But these serve different purposes:
 
-**The solution — aggregates compose contract types:**
+- **Contract constraint** — enforces the universal invariant at the boundary (Pydantic rejects invalid data at construction time). This is the cross-service guarantee.
+- **Aggregate constraint** — enforces domain rules against the aggregate's own internal fields (`default_volume` on a `MusicAssetAggregate`). This is domain self-consistency.
+
+When the aggregate produces a contract type at the ETL boundary (e.g., `build_channel_state_for_game()` returns an `AudioChannelState`), Pydantic validates at construction time — so the boundary constraint catches any drift. The aggregate's own validation is a separate concern: it protects the aggregate's internal state, not the wire format.
+
+**Where domain value objects live:**
+
+Audio channel configuration is a domain concept — the aggregate already has behavior around it (`remove_asset_references()` inspects audio_config structure, the ETL needs to understand its shape, there are real invariants). Today it's modeled as `Optional[dict]` (untyped JSONB), but it warrants a proper value object:
 
 ```python
-# Contract defines the WHAT (shape + universal constraints)
+# Domain value object — lives in session/domain/ (or library/domain/)
+# Models cold-storage shape, enforces domain invariants, used by aggregate internally
+class AudioChannelConfig:
+    asset_id: str
+    filename: str
+    volume: float   # 0.0–1.3
+    looping: bool
+
+# Shared contract — lives in contracts/ package
+# Models the hot (MongoDB) shape for ETL boundary, includes runtime fields
 class AudioChannelState(BaseModel):
+    asset_id: Optional[str] = None
+    filename: Optional[str] = None
     volume: float = Field(default=0.8, ge=0.0, le=1.3)
-
-# Aggregate defines the WHO/WHEN/HOW (domain rules + lifecycle)
-class MusicAssetAggregate:
-    channel_config: AudioChannelState  # shape defined once, in contracts
-
-    def update_volume(self, volume: float, user_id: UUID):
-        if user_id != self.owner_id:
-            raise PermissionError("Only asset owner can change volume")
-        self.channel_config = self.channel_config.model_copy(
-            update={"volume": volume}  # Pydantic validates constraints
-        )
+    looping: bool = True
+    playback_state: Literal["playing", "paused", "stopped"] = "stopped"
+    started_at: Optional[float] = None
+    # ... runtime fields that only exist during active gameplay
 ```
 
-**What this means:**
-- Contracts own **shape + universal invariants** (volume range, valid playback states, grid bounds) — defined once, enforced everywhere
-- Aggregates own **domain rules** (permissions, workflow, lifecycle) — who can change what, under what conditions
-- Aggregates no longer duplicate field definitions — they compose contract types as their internal value objects
-- `build_channel_state_for_game()` becomes trivial — the aggregate already holds an `AudioChannelState`, nothing to translate
+These describe **different lifecycle stages** of the same concept. The cold-storage value object doesn't have `playback_state` or `started_at` — those are runtime fields that only exist in MongoDB during an active game. The contract captures the *hot* shape; the value object captures the *cold* shape.
 
-**Constraint placement test:**
+**The aggregate produces contracts at the boundary, but holds value objects internally:**
+
+```python
+class SessionEntity:
+    audio_config: Optional[Dict[str, AudioChannelConfig]] = None  # domain VO
+
+    def build_audio_for_game(self) -> Dict[str, AudioChannelState]:
+        """Produce contract types at the ETL boundary."""
+        return {
+            ch_id: AudioChannelState(
+                asset_id=ch.asset_id,
+                filename=ch.filename,
+                volume=ch.volume,
+                looping=ch.looping,
+                # runtime fields default to stopped/None
+            )
+            for ch_id, ch in self.audio_config.items()
+        }
+```
+
+**Constraint placement test** (unchanged):
 - "Volume must be between 0.0 and 1.3" → **Contract** (universal, same rule everywhere)
 - "Only the campaign host can edit scene audio" → **Aggregate** (domain rule, service-specific)
 - "Only music assets can have effects" → **Aggregate** (domain rule, asset-type-specific)
 
-**Impact on PR scope:** PR 1 schemas remain unchanged — the contract types are the same Pydantic models regardless of whether consumers treat them as wire schemas or domain value objects. The shift affects PR 3 (api-site integration), where aggregates would compose contract types rather than just returning them from builder methods. This is a stronger integration than the plan originally described, but results in less code overall (no duplicated field definitions or validation).
+**Impact on PR scope:** PR 1 schemas remain unchanged. PR 3 (api-site integration) has two layers: (1) aggregates use contract types as return types for ETL builder methods, and (2) aggregates may introduce internal value objects to replace untyped `dict` fields. Layer 2 is optional for P1 — the `dict` → value object migration can happen incrementally alongside or after the contracts work.
+
+**JSONB vs relational storage:** The value objects are stored as JSONB today and that's fine for now. Data is session-scoped, doesn't need cross-session queries, and the shape is stable. Moving to relational storage (own table with FK to assets) is a scene-builder-v2 concern. The value object makes that migration easier when the time comes — you already have the typed structure, you just change the persistence layer.
 
 ### 9. The real picture — same domain, different execution modes
 
@@ -972,20 +1001,23 @@ Same domain objects (audio channels, map configs, grid settings). Same business 
 
 **How we got here:** api-game started as a dumb runtime pipe — receive state from api-site, store it in MongoDB, broadcast changes, trust everything blindly. But as features evolve (Workshop letting DMs edit the same objects in api-site that api-game operates on during live games), api-game needs to understand the domain too. It can no longer blindly trust incoming data.
 
-**What shared contracts actually are:** A **Shared Kernel** (DDD pattern) — the explicitly managed subset of domain model that both services agree to share. This is the correct DDD pattern when two services operate on the same domain concepts but are deployed separately. The anti-pattern would be pretending they have different domains and maintaining two parallel models that must stay in sync manually.
+**What shared contracts are:** We use **shared contracts** with a **conformist governance model** — api-site defines the schemas and invariants, api-game conforms to them. The contracts are boundary schemas (Pydantic models) that describe the shape and validation rules for data crossing the ETL boundary. They are NOT domain value objects extracted from aggregates — they're interface types for data that doesn't belong to any single aggregate (e.g., `AudioChannelState` is produced by api-game during gameplay, warehoused by api-site between sessions, and restored back to api-game on session start).
 
-**The Shared Kernel contains:**
-- Domain value objects (AudioChannelState, MapConfig, GridConfig, etc.)
-- Universal invariants (volume range, grid bounds, valid playback states)
+**Why not Shared Kernel?** Shared Kernel (DDD pattern) implies co-ownership — both sides negotiate and evolve the types together. That doesn't match our governance: api-site is the authority on invariants (volume range, grid bounds, valid playback states). api-game can write values within those constraints but cannot redefine them. If api-game needs a constraint changed, that's a conversation with the domain — the contract changes, api-game doesn't bypass it.
+
+**The contracts package contains:**
+- Boundary schemas (AudioChannelState, MapConfig, GridConfig, etc.)
+- Universal invariants via `Field()` constraints (volume range, grid bounds, valid playback states)
 - ETL envelope types (SessionStartPayload, SessionEndFinalState)
 
 **Each service still owns independently:**
 - Domain rules and permissions (who can change what)
+- Aggregate value objects and business logic (stay in their aggregate slices)
 - Storage strategy (PostgreSQL relational, MongoDB documents, JSONB warehousing)
 - API contracts with their own consumers (api-site → frontend, api-game → WebSocket clients)
 - Service-specific workflow (CRUD lifecycle vs real-time broadcast lifecycle)
 
-**Why this isn't an anti-pattern:** Shared types across bounded contexts IS an anti-pattern — but that's for contexts with genuinely different domain models (e.g., "Customer" in billing vs shipping). When two services share the same domain and the same business rules, a Shared Kernel is the correct pattern. Volume is volume. Grid config is grid config. Defining it twice and hoping they match is the actual anti-pattern.
+**Why this isn't an anti-pattern:** Shared types across bounded contexts IS an anti-pattern — but that's for contexts with genuinely different domain models (e.g., "Customer" in billing vs shipping). When two services operate on the same data shapes with the same invariants, a shared contracts package with clear governance is the correct approach. Volume is volume. Grid config is grid config. Defining it twice and hoping they match is the actual anti-pattern.
 
 ### 10. Considered and rejected: OpenAPI / frontend-only validation
 
@@ -1001,8 +1033,14 @@ Same domain objects (audio channels, map configs, grid settings). Same business 
 
 **Decision:** Stick with Pydantic contracts as the single source. Backend validation stays (server-authoritative). Frontend schema consumption is available for free if/when we want it, but isn't a priority for this work.
 
-### 11. Shared contracts vs DTOs
+### 11. Shared contracts vs DTOs vs Value Objects
 
-**Concern:** How do shared contracts differ from Data Transfer Objects (DTOs)? Could DTOs achieve the same thing?
+**Concern:** How do shared contracts differ from DTOs and aggregate value objects?
 
-**Resolution:** Traditional DTOs are deliberately dumb — plain data carriers with no validation, no constraints, no business logic. Their job is purely structural: "here's the shape of data moving between layers." Our contracts are stronger: they carry universal invariants (`volume: Field(ge=0.0, le=1.3)`) which is validation, not just structure. In DDD terms, they're closer to Value Objects than DTOs — they define shape AND what constitutes valid data, but delegate domain behaviour (permissions, workflow, lifecycle) to the aggregates that compose them.
+**Resolution:**
+
+- **DTOs** — deliberately dumb data carriers with no validation. Their job is purely structural: "here's the shape of data moving between layers." Our contracts are stronger: they carry universal invariants via `Field()` constraints, not just structure.
+- **Aggregate value objects** — types owned by an aggregate, encoding domain meaning within one service. They live inside an aggregate slice and contain domain logic. Our contracts are NOT value objects — they don't live in any aggregate and contain zero logic.
+- **Shared contracts** — boundary schemas that define the shape and validation rules for data crossing the ETL boundary between services. They are Pydantic models with `Field()` constraints. No methods, no business logic. Aggregates compose them (as type hints and return types) but the contracts themselves are purely declarative.
+
+Aggregate value objects stay in their aggregate slices. Shared contracts live in `shared_contracts/`. These are complementary, not overlapping — the aggregate uses its own value objects for internal domain logic, and imports contract types for boundary data shapes.
