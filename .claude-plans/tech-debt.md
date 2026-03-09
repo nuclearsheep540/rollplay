@@ -94,7 +94,7 @@ Catalogue of code smells, architectural inconsistencies, and patterns that contr
 
 ---
 
-### 7. PauseSession duplicates StartSession's structure
+### ~~7. PauseSession duplicates StartSession's structure~~ ✅ DONE
 
 **Location:** [commands.py:525-776](api-site/modules/session/application/commands.py#L525-L776) and [commands.py:808-1095](api-site/modules/session/application/commands.py#L808-L1095) (FinishSession)
 
@@ -104,7 +104,7 @@ Catalogue of code smells, architectural inconsistencies, and patterns that contr
 
 **What "fixed" looks like:** Extract the shared ETL logic (fetch final state, extract and sync configs, cleanup) into a shared method or class. PauseSession and FinishSession call it, differing only in the final status transition.
 
-**Blocked by:** Nothing — independent refactor.
+**Resolution:** Extracted three module-level helpers: `_ExtractedGameState` dataclass, `_extract_and_sync_game_state()` async function (handles HTTP fetch, asset sync, config extraction, rollback on failure), and `_async_cleanup_game()` async function (background MongoDB deletion). Both PauseSession and FinishSession now call these shared helpers, differing only in status transitions (`deactivate()` vs `mark_finished()`) and event broadcasts (`session_paused` vs `session_finished`). FinishSession retains its INACTIVE→FINISHED shortcut branch.
 
 ---
 
@@ -336,7 +336,7 @@ Items that are independent cleanup (do anytime):
 | ~~#3 `GetUserSessions`~~ | ~~Small~~ | ✅ Done (`72cc2bf`) |
 | ~~#5 Auth without authorization~~ | ~~Small~~ | ✅ Done (inline 403 checks) |
 | #6 StartSession size | Medium | Extract restoration helpers |
-| #7 Pause/Finish duplication | Medium | Extract shared ETL method |
+| ~~#7 Pause/Finish duplication~~ | ~~Medium~~ | ✅ Done (shared ETL helpers) |
 | ~~#17 Silent WebSocket failures~~ | ~~Small~~ | ✅ Done (structured errors to sender) |
 | ~~#18 Raw dict returns on char endpoints~~ | ~~Small~~ | ✅ Done (204 No Content) |
 | ~~#19 "Partial ETL" terminology~~ | ~~Tiny~~ | ✅ Done (renamed to "character-level ETL") |

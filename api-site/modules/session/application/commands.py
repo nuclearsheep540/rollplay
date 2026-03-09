@@ -2,6 +2,7 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 
 from typing import Optional
+from dataclasses import dataclass
 from uuid import UUID
 import httpx
 import logging
@@ -476,6 +477,179 @@ class StartSession:
             raise ValueError(f"Failed to start session: {str(e)}")
 
 
+# === Shared ETL helpers for PauseSession and FinishSession ===
+
+@dataclass
+class _ExtractedGameState:
+    """State extracted from MongoDB during session ETL (hot → cold)"""
+    max_players: int
+    audio_config: dict
+    map_config: dict
+    image_config: dict
+    active_display: Optional[str]
+
+
+async def _extract_and_sync_game_state(
+    session_id: UUID,
+    session: SessionEntity,
+    asset_repo: MediaAssetRepository,
+    session_repo: SessionRepository
+) -> _ExtractedGameState:
+    """
+    PHASE 1 of session ETL: fetch final state from MongoDB and sync asset configs to PostgreSQL.
+
+    1. Fetches final state from api-game (non-destructive, validate_only=True)
+    2. Syncs per-asset volumes/effects back to PostgreSQL asset records
+    3. Extracts thin config references for session cold storage
+
+    On failure, rolls session back to ACTIVE via abort_stop() and raises ValueError.
+    """
+    try:
+        async with httpx.AsyncClient() as client:
+            response = await client.post(
+                "http://api-game:8081/game/session/end",
+                params={"validate_only": True},
+                json={"session_id": str(session_id)},
+                timeout=10.0
+            )
+
+        if response.status_code != 200:
+            logger.error(f"Failed to fetch final state: {response.text}")
+            raise ValueError(f"Cannot fetch game state: {response.text}")
+
+        final_state = response.json()["final_state"]
+        logger.info(f"Fetched final state for {session_id}: {len(final_state.get('players', []))} players")
+
+        # Extract max_players from MongoDB session stats
+        max_players = final_state.get("session_stats", {}).get("max_players", session.max_players)
+        logger.info(f"Session max_players: {max_players} (original: {session.max_players})")
+
+        # Extract audio config (strip runtime fields, keep only track config)
+        raw_audio = final_state.get("audio_state", {})
+        raw_track_config = final_state.get("audio_track_config", {})
+
+        # Collect per-asset volumes and effects from BOTH active channels AND stashed track configs
+        asset_configs = {}
+        for channel_id, ch in raw_audio.items():
+            if ch and ch.get("asset_id"):
+                asset_configs[ch["asset_id"]] = {
+                    "volume": ch.get("volume"),
+                    "looping": ch.get("looping"),
+                    "effects": ch.get("effects", {}),
+                }
+        for asset_id_str, tc in raw_track_config.items():
+            if asset_id_str not in asset_configs:
+                asset_configs[asset_id_str] = {
+                    "volume": tc.get("volume"),
+                    "looping": tc.get("looping"),
+                    "effects": tc.get("effects", {}),
+                }
+
+        # Sync per-asset volumes and effects back to PostgreSQL (ETL: hot → cold)
+        if asset_repo and asset_configs:
+            synced_assets = set()
+            for asset_id_str, cfg in asset_configs.items():
+                try:
+                    asset = asset_repo.get_by_id(UUID(asset_id_str))
+                    if asset and isinstance(asset, (MusicAsset, SfxAsset)):
+                        config_kwargs = {}
+                        if cfg.get("volume") is not None:
+                            config_kwargs["default_volume"] = cfg["volume"]
+                        if cfg.get("looping") is not None:
+                            config_kwargs["default_looping"] = cfg["looping"]
+                        effects = cfg.get("effects", {})
+                        if effects and isinstance(asset, MusicAsset):
+                            config_kwargs["effect_hpf_enabled"] = bool(effects.get("hpf", False))
+                            config_kwargs["effect_lpf_enabled"] = bool(effects.get("lpf", False))
+                            config_kwargs["effect_reverb_enabled"] = bool(effects.get("reverb", False))
+                        if config_kwargs:
+                            asset.update_audio_config(**config_kwargs)
+                            asset_repo.save(asset)
+                            synced_assets.add(asset_id_str)
+                except Exception as e:
+                    logger.warning(f"Failed to sync audio config for asset {asset_id_str}: {e}")
+            logger.info(f"Synced {len(synced_assets)} asset audio configs to PostgreSQL (volume, looping, effects)")
+
+        # Thin JSONB: store only channel → asset_id references (all config synced back to assets above)
+        audio_config = {}
+        for channel_id, ch in raw_audio.items():
+            if ch and ch.get("asset_id"):
+                audio_config[channel_id] = {"asset_id": ch["asset_id"]}
+        logger.info(f"Extracted audio config: {len(audio_config)} channel references")
+
+        # Extract map config — sync grid_config back to MapAsset, store only asset_id reference
+        raw_map = final_state.get("map_state", {})
+        map_config = {}
+        if raw_map and raw_map.get("asset_id"):
+            map_asset_id = raw_map["asset_id"]
+            map_config = {"asset_id": map_asset_id}
+
+            # Sync grid config back to MapAsset (ETL: hot → cold)
+            game_grid_config = raw_map.get("grid_config")
+            if game_grid_config and asset_repo:
+                try:
+                    map_asset = asset_repo.get_by_id(UUID(map_asset_id))
+                    if map_asset and isinstance(map_asset, MapAsset):
+                        map_asset.update_grid_config_from_game(game_grid_config)
+                        asset_repo.save(map_asset)
+                        logger.info(f"Synced grid config back to MapAsset {map_asset_id}")
+                except Exception as e:
+                    logger.warning(f"Failed to sync grid config for map {map_asset_id}: {e}")
+        logger.info(f"Extracted map config: {'has map' if map_config else 'no active map'}")
+
+        # Extract image config (asset_id for session persistence)
+        raw_image = final_state.get("image_state", {})
+        image_config = {}
+        if raw_image and raw_image.get("asset_id"):
+            image_config = {"asset_id": raw_image.get("asset_id")}
+        logger.info(f"Extracted image config: {'has image' if image_config else 'no active image'}")
+
+        # Extract active_display
+        active_display = final_state.get("active_display")
+        logger.info(f"Extracted active_display: {active_display}")
+
+        return _ExtractedGameState(
+            max_players=max_players,
+            audio_config=audio_config,
+            map_config=map_config,
+            image_config=image_config,
+            active_display=active_display,
+        )
+
+    except Exception as e:
+        # ANY error during state fetch - rollback to ACTIVE
+        logger.error(f"Error fetching state for session {session_id}: {e}")
+        session.abort_stop()  # Domain method: STOPPING → ACTIVE
+        session_repo.save(session)
+        logger.info(f"Session {session_id} rolled back to ACTIVE after error")
+        raise ValueError(f"Cannot complete session operation: {str(e)}")
+
+
+async def _async_cleanup_game(active_game_id: str, session_id: UUID):
+    """
+    Background task to delete MongoDB session (fire-and-forget).
+
+    If this fails, the hourly cron job will clean up orphaned sessions.
+    """
+    try:
+        async with httpx.AsyncClient() as client:
+            response = await client.delete(
+                f"http://api-game:8081/game/session/{active_game_id}",
+                params={"keep_logs": False},
+                timeout=5.0
+            )
+
+        if response.status_code == 200:
+            logger.info(f"Background cleanup successful for session {session_id}")
+        else:
+            logger.warning(f"MongoDB cleanup failed for {session_id}: {response.text}")
+            logger.warning(f"Cron job will clean up game {active_game_id}")
+
+    except Exception as e:
+        logger.warning(f"Background cleanup failed for {session_id}: {e}")
+        logger.warning(f"Cron job will clean up game {active_game_id}")
+
+
 class PauseSession:
     """
     Pause session: ACTIVE → STOPPING → INACTIVE (three-phase fail-safe).
@@ -506,13 +680,6 @@ class PauseSession:
         """
         Pause a session using fail-safe three-phase pattern.
 
-        Flow:
-        1. Validates session ownership and status
-        2. Sets session status to STOPPING
-        3. PHASE 1: Fetch final state from MongoDB (validate_only=True, non-destructive)
-        4. PHASE 2: Write to PostgreSQL (with transaction, fail-safe)
-        5. PHASE 3: Background cleanup of MongoDB session (fire-and-forget)
-
         Raises:
             ValueError: If validation fails or api-game call fails
         """
@@ -520,190 +687,47 @@ class PauseSession:
         session = self.session_repo.get_by_id(session_id)
         if not session:
             raise ValueError("Session not found")
-
-        # 2. Validate host ownership
         if session.host_id != host_id:
             raise ValueError("Only the host can pause this session")
-
-        # 3. Validate session status
         if session.status != SessionStatus.ACTIVE:
             raise ValueError(f"Cannot pause session in {session.status} status")
 
-        # 4. Set STOPPING status
-        session.pause()  # Domain method sets status = STOPPING
+        # 2. Set STOPPING status
+        session.pause()
         self.session_repo.save(session)
         logger.info(f"Session {session_id} status set to STOPPING")
 
-        # 5. PHASE 1: Fetch final state (MongoDB NOT deleted yet)
+        # 3. PHASE 1: Extract and sync game state from MongoDB
+        extracted = await _extract_and_sync_game_state(
+            session_id, session, self.asset_repo, self.session_repo
+        )
+
+        # 4. PHASE 2: Write to PostgreSQL
         try:
-            async with httpx.AsyncClient() as client:
-                response = await client.post(
-                    "http://api-game:8081/game/session/end",
-                    params={"validate_only": True},
-                    json={"session_id": str(session_id)},
-                    timeout=10.0
-                )
-
-            if response.status_code != 200:
-                # Can't fetch state - rollback to ACTIVE
-                logger.error(f"Failed to fetch final state: {response.text}")
-                raise ValueError(f"Cannot fetch game state: {response.text}")
-
-            final_state = response.json()["final_state"]
-            logger.info(f"Fetched final state for {session_id}: {len(final_state.get('players', []))} players")
-
-            # Extract max_players from MongoDB session stats
-            max_players_from_session = final_state.get("session_stats", {}).get("max_players", session.max_players)
-            logger.info(f"Session max_players: {max_players_from_session} (original: {session.max_players})")
-
-            # Extract audio config (strip runtime fields, keep only track config)
-            raw_audio = final_state.get("audio_state", {})
-            raw_track_config = final_state.get("audio_track_config", {})
-
-            # DEBUG: Log raw effects from MongoDB for each channel
-            for channel_id, ch in raw_audio.items():
-                if ch and ch.get("asset_id"):
-                    logger.info(f"DEBUG ETL hot→cold: {channel_id} → asset={ch.get('asset_id')}, effects={ch.get('effects', 'MISSING_KEY')}, all_keys={list(ch.keys())}")
-
-            # Collect per-asset volumes and effects from BOTH active channels AND stashed track configs
-            asset_configs = {}
-            for channel_id, ch in raw_audio.items():
-                if ch and ch.get("asset_id"):
-                    asset_configs[ch["asset_id"]] = {
-                        "volume": ch.get("volume"),
-                        "looping": ch.get("looping"),
-                        "effects": ch.get("effects", {}),
-                    }
-            for asset_id_str, tc in raw_track_config.items():
-                if asset_id_str not in asset_configs:
-                    asset_configs[asset_id_str] = {
-                        "volume": tc.get("volume"),
-                        "looping": tc.get("looping"),
-                        "effects": tc.get("effects", {}),
-                    }
-
-            # Sync per-asset volumes and effects back to PostgreSQL (ETL: hot → cold)
-            if self.asset_repo and asset_configs:
-                synced_assets = set()
-                for asset_id_str, cfg in asset_configs.items():
-                    try:
-                        asset = self.asset_repo.get_by_id(UUID(asset_id_str))
-                        if asset and isinstance(asset, (MusicAsset, SfxAsset)):
-                            config_kwargs = {}
-                            if cfg.get("volume") is not None:
-                                config_kwargs["default_volume"] = cfg["volume"]
-                            if cfg.get("looping") is not None:
-                                config_kwargs["default_looping"] = cfg["looping"]
-                            effects = cfg.get("effects", {})
-                            if effects and isinstance(asset, MusicAsset):
-                                # Slim shape: { hpf: True, lpf: False, reverb: True }
-                                config_kwargs["effect_hpf_enabled"] = bool(effects.get("hpf", False))
-                                config_kwargs["effect_lpf_enabled"] = bool(effects.get("lpf", False))
-                                config_kwargs["effect_reverb_enabled"] = bool(effects.get("reverb", False))
-                            logger.info(f"DEBUG ETL sync: asset={asset_id_str}, effects_from_mongo={effects}, config_kwargs={config_kwargs}")
-                            if config_kwargs:
-                                asset.update_audio_config(**config_kwargs)
-                                self.asset_repo.save(asset)
-                                synced_assets.add(asset_id_str)
-                    except Exception as e:
-                        logger.warning(f"Failed to sync audio config for asset {asset_id_str}: {e}")
-                logger.info(f"Synced {len(synced_assets)} asset audio configs to PostgreSQL (volume, looping, effects)")
-
-            # Thin JSONB: store only channel → asset_id references (all config synced back to assets above)
-            audio_config = {}
-            for channel_id, ch in raw_audio.items():
-                if ch and ch.get("asset_id"):
-                    audio_config[channel_id] = {"asset_id": ch["asset_id"]}
-            logger.info(f"Extracted audio config: {len(audio_config)} channel references")
-
-            # Extract map config — sync grid_config back to MapAsset, store only asset_id reference
-            raw_map = final_state.get("map_state", {})
-            map_config = {}
-            if raw_map and raw_map.get("asset_id"):
-                map_asset_id = raw_map["asset_id"]
-                map_config = {"asset_id": map_asset_id}
-
-                # Sync grid config back to MapAsset (ETL: hot → cold)
-                game_grid_config = raw_map.get("grid_config")
-                if game_grid_config and self.asset_repo:
-                    try:
-                        map_asset = self.asset_repo.get_by_id(UUID(map_asset_id))
-                        if map_asset and isinstance(map_asset, MapAsset):
-                            map_asset.update_grid_config_from_game(game_grid_config)
-                            self.asset_repo.save(map_asset)
-                            logger.info(f"Synced grid config back to MapAsset {map_asset_id}")
-                    except Exception as e:
-                        logger.warning(f"Failed to sync grid config for map {map_asset_id}: {e}")
-            logger.info(f"Extracted map config: {'has map' if map_config else 'no active map'}")
-
-            # Extract image config (asset_id for session persistence)
-            raw_image = final_state.get("image_state", {})
-            image_config = {}
-            if raw_image and raw_image.get("asset_id"):
-                image_config = {
-                    "asset_id": raw_image.get("asset_id"),
-                }
-            logger.info(f"Extracted image config: {'has image' if image_config else 'no active image'}")
-
-            # Extract active_display
-            active_display = final_state.get("active_display")
-            logger.info(f"Extracted active_display: {active_display}")
-
-        except Exception as e:
-            # ANY error during state fetch - rollback to ACTIVE
-            logger.error(f"Error fetching state for session {session_id}: {e}")
-            session.abort_stop()  # Domain method: STOPPING → ACTIVE
-            self.session_repo.save(session)
-            logger.info(f"Session {session_id} rolled back to ACTIVE after error")
-            raise ValueError(f"Cannot pause session: {str(e)}")
-
-        # 6. PHASE 2: Write to PostgreSQL (with implicit transaction via repository)
-        try:
-            # Capture active_game_id BEFORE deactivate clears it
             active_game_id_to_cleanup = session.active_game_id
 
-            # Update max_players from MongoDB session (if changed during session)
-            session.max_players = max_players_from_session
+            session.max_players = extracted.max_players
+            session.audio_config = extracted.audio_config
+            session.map_config = extracted.map_config
+            session.image_config = extracted.image_config
+            session.active_display = extracted.active_display
 
-            # Persist audio channel config for next session start
-            session.audio_config = audio_config
-
-            # Persist active map config for next session start
-            session.map_config = map_config
-
-            # Persist active image config for next session start
-            session.image_config = image_config
-
-            # Persist which display was active
-            session.active_display = active_display
-
-            # Mark session INACTIVE (this will clear session.active_game_id to None)
             session.deactivate()  # Sets INACTIVE, stopped_at = now, active_game_id = None
             self.session_repo.save(session)
-            logger.info(f"Session {session_id} marked INACTIVE in PostgreSQL with max_players={max_players_from_session}")
-
-            # Note: Character locking is at CAMPAIGN level, not session level
-            # Characters stay locked to campaign until player leaves campaign or releases character
+            logger.info(f"Session {session_id} marked INACTIVE in PostgreSQL")
 
         except Exception as pg_error:
-            # PostgreSQL write failed - MongoDB session is PRESERVED
             logger.error(f"PostgreSQL write failed for {session_id}: {pg_error}")
             logger.error(f"MongoDB session {session.active_game_id} PRESERVED for manual retry")
-
-            # Leave session in STOPPING status so user knows there's an issue
-            # They can retry the pause session operation
             raise ValueError(
                 f"Failed to save session data. Game preserved in MongoDB. "
                 f"Please try pausing the session again. Error: {str(pg_error)}"
             )
 
-        # 7. Broadcast session_paused event to all campaign members (silent state update)
+        # 5. Broadcast session_paused event
         campaign = self.campaign_repo.get_by_id(session.campaign_id)
         if campaign:
-            # Get host user for screen name
             host_user = self.user_repo.get_by_id(host_id)
-
-            # Include DM + all campaign members as recipients
             all_recipients = list(campaign.player_ids) + [campaign.host_id]
 
             events = SessionEvents.session_paused(
@@ -714,51 +738,15 @@ class PauseSession:
                 paused_by_id=host_id,
                 paused_by_screen_name=host_user.screen_name if host_user and host_user.screen_name else (host_user.email if host_user else "Unknown")
             )
-
-            # Broadcast to each recipient
             for event_config in events:
                 await self.event_manager.broadcast(event_config)
-
             logger.info(f"Broadcasting session_paused event to {len(all_recipients)} recipients for session {session.id}")
 
-        # 8. PHASE 3: Background cleanup (fire-and-forget)
-        # This doesn't block the response - cleanup happens in background
-        # Use captured active_game_id, not session.active_game_id (which is now None)
-        asyncio.create_task(self._async_cleanup(session_id, active_game_id_to_cleanup))
+        # 6. PHASE 3: Background cleanup (fire-and-forget)
+        asyncio.create_task(_async_cleanup_game(active_game_id_to_cleanup, session_id))
 
         logger.info(f"Session {session_id} paused successfully, cleanup scheduled")
         return session
-
-    async def _async_cleanup(self, session_id: UUID, active_game_id: str):
-        """
-        Background task to delete MongoDB session.
-
-        Doesn't block the response. If this fails, the hourly cron job
-        will clean up orphaned sessions (sessions with status=INACTIVE and active_game_id set).
-        """
-        try:
-            async with httpx.AsyncClient() as client:
-                response = await client.delete(
-                    f"http://api-game:8081/game/session/{active_game_id}",
-                    params={"keep_logs": False},  # Delete adventure logs - no cross-session persistence
-                    timeout=5.0
-                )
-
-            if response.status_code == 200:
-                # Success - clear active_game_id from PostgreSQL
-                session = self.session_repo.get_by_id(session_id)
-                if session:
-                    session.active_game_id = None
-                    self.session_repo.save(session)
-                    logger.info(f"Background cleanup complete for {session_id}")
-            else:
-                logger.warning(f"MongoDB cleanup failed for {session_id}: {response.text}")
-                logger.warning(f"Cron job will clean up game {active_game_id}")
-
-        except Exception as e:
-            # Cleanup failed - cron will handle it
-            logger.warning(f"Background cleanup failed for {session_id}: {e}")
-            logger.warning(f"Cron job will clean up game {active_game_id}")
 
 
 class FinishSession:
@@ -843,171 +831,36 @@ class FinishSession:
         self.session_repo.save(session)
         logger.info(f"Session {session_id} status set to STOPPING (finishing)")
 
-        # 6. PHASE 1: Fetch final state (MongoDB NOT deleted yet)
-        try:
-            async with httpx.AsyncClient() as client:
-                response = await client.post(
-                    "http://api-game:8081/game/session/end",
-                    params={"validate_only": True},
-                    json={"session_id": str(session_id)},
-                    timeout=10.0
-                )
-
-            if response.status_code != 200:
-                # Can't fetch state - rollback to ACTIVE
-                logger.error(f"Failed to fetch final state: {response.text}")
-                raise ValueError(f"Cannot fetch game state: {response.text}")
-
-            final_state = response.json()["final_state"]
-            logger.info(f"Fetched final state for {session_id}: {len(final_state.get('players', []))} players")
-
-            # Extract max_players from MongoDB session stats
-            max_players_from_session = final_state.get("session_stats", {}).get("max_players", session.max_players)
-            logger.info(f"Session max_players: {max_players_from_session} (original: {session.max_players})")
-
-            # Extract audio config (strip runtime fields, keep only track config)
-            raw_audio = final_state.get("audio_state", {})
-            raw_track_config = final_state.get("audio_track_config", {})
-
-            # Collect per-asset volumes and effects from BOTH active channels AND stashed track configs
-            asset_configs = {}
-            for channel_id, ch in raw_audio.items():
-                if ch and ch.get("asset_id"):
-                    asset_configs[ch["asset_id"]] = {
-                        "volume": ch.get("volume"),
-                        "looping": ch.get("looping"),
-                        "effects": ch.get("effects", {}),
-                    }
-            for asset_id_str, tc in raw_track_config.items():
-                if asset_id_str not in asset_configs:
-                    asset_configs[asset_id_str] = {
-                        "volume": tc.get("volume"),
-                        "looping": tc.get("looping"),
-                        "effects": tc.get("effects", {}),
-                    }
-
-            # Sync per-asset volumes and effects back to PostgreSQL (ETL: hot → cold)
-            if self.asset_repo and asset_configs:
-                synced_assets = set()
-                for asset_id_str, cfg in asset_configs.items():
-                    try:
-                        asset = self.asset_repo.get_by_id(UUID(asset_id_str))
-                        if asset and isinstance(asset, (MusicAsset, SfxAsset)):
-                            config_kwargs = {}
-                            if cfg.get("volume") is not None:
-                                config_kwargs["default_volume"] = cfg["volume"]
-                            if cfg.get("looping") is not None:
-                                config_kwargs["default_looping"] = cfg["looping"]
-                            effects = cfg.get("effects", {})
-                            if effects and isinstance(asset, MusicAsset):
-                                # Slim shape: { hpf: True, lpf: False, reverb: True }
-                                config_kwargs["effect_hpf_enabled"] = bool(effects.get("hpf", False))
-                                config_kwargs["effect_lpf_enabled"] = bool(effects.get("lpf", False))
-                                config_kwargs["effect_reverb_enabled"] = bool(effects.get("reverb", False))
-                            if config_kwargs:
-                                asset.update_audio_config(**config_kwargs)
-                                self.asset_repo.save(asset)
-                                synced_assets.add(asset_id_str)
-                    except Exception as e:
-                        logger.warning(f"Failed to sync audio config for asset {asset_id_str}: {e}")
-                logger.info(f"Synced {len(synced_assets)} asset audio configs to PostgreSQL (volume, looping, effects)")
-
-            # Thin JSONB: store only channel → asset_id references (all config synced back to assets above)
-            audio_config = {}
-            for channel_id, ch in raw_audio.items():
-                if ch and ch.get("asset_id"):
-                    audio_config[channel_id] = {"asset_id": ch["asset_id"]}
-            logger.info(f"Extracted audio config: {len(audio_config)} channel references")
-
-            # Extract map config — sync grid_config back to MapAsset, store only asset_id reference
-            raw_map = final_state.get("map_state", {})
-            map_config = {}
-            if raw_map and raw_map.get("asset_id"):
-                map_asset_id = raw_map["asset_id"]
-                map_config = {"asset_id": map_asset_id}
-
-                # Sync grid config back to MapAsset (ETL: hot → cold)
-                game_grid_config = raw_map.get("grid_config")
-                if game_grid_config and self.asset_repo:
-                    try:
-                        map_asset = self.asset_repo.get_by_id(UUID(map_asset_id))
-                        if map_asset and isinstance(map_asset, MapAsset):
-                            map_asset.update_grid_config_from_game(game_grid_config)
-                            self.asset_repo.save(map_asset)
-                            logger.info(f"Synced grid config back to MapAsset {map_asset_id}")
-                    except Exception as e:
-                        logger.warning(f"Failed to sync grid config for map {map_asset_id}: {e}")
-            logger.info(f"Extracted map config: {'has map' if map_config else 'no active map'}")
-
-            # Extract image config (asset_id for session persistence)
-            raw_image = final_state.get("image_state", {})
-            image_config = {}
-            if raw_image and raw_image.get("asset_id"):
-                image_config = {
-                    "asset_id": raw_image.get("asset_id"),
-                }
-            logger.info(f"Extracted image config: {'has image' if image_config else 'no active image'}")
-
-            # Extract active_display
-            active_display = final_state.get("active_display")
-            logger.info(f"Extracted active_display: {active_display}")
-
-        except Exception as e:
-            # ANY error during state fetch - rollback to ACTIVE
-            logger.error(f"Error fetching state for session {session_id}: {e}")
-            session.abort_stop()  # Domain method: STOPPING → ACTIVE
-            self.session_repo.save(session)
-            logger.info(f"Session {session_id} rolled back to ACTIVE after error")
-            raise ValueError(f"Cannot finish session: {str(e)}")
+        # 6. PHASE 1: Extract and sync game state from MongoDB
+        extracted = await _extract_and_sync_game_state(
+            session_id, session, self.asset_repo, self.session_repo
+        )
 
         # 7. PHASE 2: Write to PostgreSQL and mark as FINISHED
         try:
-            # Capture active_game_id BEFORE mark_finished clears it
             active_game_id_to_cleanup = session.active_game_id
 
-            # Update max_players from MongoDB session (if changed during session)
-            session.max_players = max_players_from_session
+            session.max_players = extracted.max_players
+            session.audio_config = extracted.audio_config
+            session.map_config = extracted.map_config
+            session.image_config = extracted.image_config
+            session.active_display = extracted.active_display
 
-            # Persist audio channel config (record of what was playing)
-            session.audio_config = audio_config
-
-            # Persist active map config (record of what was displayed)
-            session.map_config = map_config
-
-            # Persist active image config (record of what was displayed)
-            session.image_config = image_config
-
-            # Persist which display was active
-            session.active_display = active_display
-
-            # Mark session FINISHED (this will clear session.active_game_id to None)
             session.mark_finished()  # Sets FINISHED, stopped_at = now, active_game_id = None
             self.session_repo.save(session)
-            logger.info(f"Session {session_id} marked FINISHED in PostgreSQL with max_players={max_players_from_session}")
-
-            # Note: Character locking is at CAMPAIGN level, not session level
-            # Characters stay locked to campaign until player leaves campaign or releases character
+            logger.info(f"Session {session_id} marked FINISHED in PostgreSQL")
 
         except Exception as pg_error:
-            # PostgreSQL write failed - MongoDB session is PRESERVED
             logger.error(f"PostgreSQL write failed for {session_id}: {pg_error}")
             logger.error(f"MongoDB session {session.active_game_id} PRESERVED for manual retry")
-
-            # Leave session in STOPPING status so user knows there's an issue
             raise ValueError(
                 f"Failed to save session data. Game preserved in MongoDB. "
                 f"Please try finishing the session again. Error: {str(pg_error)}"
             )
 
-        # 8. PHASE 3: Background cleanup (fire-and-forget)
-        asyncio.create_task(self._async_cleanup(session_id, active_game_id_to_cleanup))
-
-        logger.info(f"Session {session_id} finished successfully, cleanup scheduled")
-
-        # 9. Broadcast session_finished event to all campaign members (silent state update)
+        # 8. Broadcast session_finished event to all campaign members (silent state update)
         campaign = self.campaign_repo.get_by_id(session.campaign_id)
         if campaign:
-            # All campaign members (including host)
             all_recipients = list(campaign.player_ids) + [campaign.host_id]
 
             events = SessionEvents.session_finished(
@@ -1017,37 +870,15 @@ class FinishSession:
                 session_name=session.name,
                 campaign_id=session.campaign_id
             )
-
-            # Broadcast to each recipient
             for event_config in events:
                 await self.event_manager.broadcast(event_config)
-
             logger.info(f"Broadcasting session_finished event to {len(all_recipients)} recipients for session {session.id}")
 
+        # 9. PHASE 3: Background cleanup (fire-and-forget)
+        asyncio.create_task(_async_cleanup_game(active_game_id_to_cleanup, session_id))
+
+        logger.info(f"Session {session_id} finished successfully, cleanup scheduled")
         return session
-
-    async def _async_cleanup(self, session_id: UUID, active_game_id: str):
-        """
-        Background task to delete MongoDB session.
-        Same as PauseSession cleanup.
-        """
-        try:
-            async with httpx.AsyncClient() as client:
-                response = await client.delete(
-                    f"http://api-game:8081/game/session/{active_game_id}",
-                    params={"keep_logs": False},
-                    timeout=5.0
-                )
-
-            if response.status_code == 200:
-                logger.info(f"Background cleanup successful for {session_id}")
-            else:
-                logger.warning(f"Background cleanup failed: {response.text}")
-
-        except Exception as e:
-            # Cleanup failed - cron will handle it
-            logger.warning(f"Background cleanup failed for {session_id}: {e}")
-            logger.warning(f"Cron job will clean up game {active_game_id}")
 
 
 class RemovePlayerFromSession:
