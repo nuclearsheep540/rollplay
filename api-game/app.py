@@ -502,7 +502,7 @@ async def create_session(request: SessionStartRequest):
         # Restore active_display from previous session
         if request.active_display:
             try:
-                image_service._set_active_display(request.session_id, request.active_display)
+                GameService.set_active_display(request.session_id, request.active_display)
                 logger.info(f"Restored active_display '{request.active_display}' for session {request.session_id}")
             except Exception as e:
                 logger.warning(f"active_display restoration failed (non-fatal): {e}")
