@@ -1,0 +1,18 @@
+# Frontend (not needed by Python services)
+rollplay/
+.next/
+node_modules/
+
+# Git
+.git/
+
+# Plans and docs
+.claude-plans/
+.claude-debriefs/
+*.md
+
+# IDE and tooling
+.claude/
+.vscode/
+__pycache__/
+*.pyc

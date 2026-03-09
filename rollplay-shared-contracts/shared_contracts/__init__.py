@@ -1,0 +1,36 @@
+# Copyright (C) 2025 Matthew Davey
+# SPDX-License-Identifier: GPL-3.0-or-later
+
+"""Shared boundary schemas between Rollplay services."""
+
+from .audio import AudioChannelState, AudioEffects, AudioTrackConfig
+from .assets import AssetRef
+from .display import ActiveDisplayType
+from .image import ImageConfig
+from .map import GridColorMode, GridConfig, MapConfig
+from .session import (
+    PlayerState,
+    SessionEndFinalState,
+    SessionEndResponse,
+    SessionStartPayload,
+    SessionStartResponse,
+    SessionStats,
+)
+
+__all__ = [
+    "AudioChannelState",
+    "AudioEffects",
+    "AudioTrackConfig",
+    "AssetRef",
+    "ActiveDisplayType",
+    "GridColorMode",
+    "GridConfig",
+    "ImageConfig",
+    "MapConfig",
+    "PlayerState",
+    "SessionEndFinalState",
+    "SessionEndResponse",
+    "SessionStartPayload",
+    "SessionStartResponse",
+    "SessionStats",
+]

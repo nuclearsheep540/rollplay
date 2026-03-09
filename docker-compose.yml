@@ -33,8 +33,8 @@ services:
     container_name: "api-game"
     image: ghcr.io/nuclearsheep540/rollplay/api-game:${api_game_version}
     build:
-      context: ./api-game
-      dockerfile: ../docker/prod/api-game/Dockerfile
+      context: .
+      dockerfile: docker/prod/api-game/Dockerfile
     ports:
       - "8081:8081"
     restart: unless-stopped
@@ -51,8 +51,8 @@ services:
     container_name: "api-site"
     image: ghcr.io/nuclearsheep540/rollplay/api-site:${api_site_version}
     build:
-      context: ./api-site
-      dockerfile: ../docker/prod/api-site/Dockerfile
+      context: .
+      dockerfile: docker/prod/api-site/Dockerfile
     ports:
       - "8082:8082"
     restart: unless-stopped
