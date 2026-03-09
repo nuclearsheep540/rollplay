@@ -1,0 +1,32 @@
+name: API Site Tests
+
+on:
+  pull_request:
+    paths:
+      - 'api-site/**'
+      - 'rollplay-shared-contracts/**'
+  push:
+    branches: [main]
+    paths:
+      - 'api-site/**'
+      - 'rollplay-shared-contracts/**'
+
+jobs:
+  test-api-site:
+    name: Run api-site tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install shared contracts
+        run: pip install ./rollplay-shared-contracts
+
+      - name: Install api-site dependencies
+        run: pip install -r api-site/requirements.txt
+
+      - name: Run tests
+        run: cd api-site && python -m pytest -v
