@@ -1,6 +1,7 @@
 # Copyright (C) 2025 Matthew Davey
 # SPDX-License-Identifier: GPL-3.0-or-later
 
+from typing import Optional
 from uuid import UUID
 import httpx
 import logging
@@ -136,7 +137,7 @@ class UpdateSession:
         self,
         session_id: UUID,
         host_id: UUID,
-        name: str = None
+        name: Optional[str] = None
     ) -> SessionEntity:
         """Update session details (only host can update)"""
         session = self.session_repo.get_by_id(session_id)
