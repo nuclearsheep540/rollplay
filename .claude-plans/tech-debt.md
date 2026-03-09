@@ -179,7 +179,7 @@ except Exception:
 
 ---
 
-### 12. Seat color palette duplicated
+### ~~12. Seat color palette duplicated~~ ✅ DONE
 
 **Locations:**
 - [app.py:430-440](api-game/app.py#L430-L440) — list format inside `create_session`
@@ -189,7 +189,7 @@ except Exception:
 
 **What "fixed" looks like:** Module-level constant `DEFAULT_SEAT_COLORS`, referenced by both.
 
-**Blocked by:** Nothing — independent cleanup.
+**Resolution:** Added `DEFAULT_SEAT_COLORS` list constant to `gameservice.py`. Both `get_seat_colors()` and `app.py`'s `get_default_color()` now reference the constant instead of inline color lists.
 
 ---
 
@@ -322,7 +322,7 @@ Items that should ideally be cleaned up **before** or **alongside** shared contr
 | Item | Effort | Pre-req for contracts? | Why |
 |------|--------|----------------------|-----|
 | ~~#11 ObjectId helper~~ | ~~Small~~ | ✅ Done (`room_filter()`) | ~~Reduces PR 2 diff noise~~ |
-| #12 Color palette constant | Tiny | No | Independent |
+| ~~#12 Color palette constant~~ | ~~Tiny~~ | ✅ Done (`DEFAULT_SEAT_COLORS`) | ~~Independent~~ |
 | #9 Duplicate constraints | — | Fixed BY contracts | Contracts eliminate the duplication |
 | #10 Hardcoded defaults | — | Fixed BY contracts | Contract defaults replace inline fallbacks |
 | #8 Raw dict returns | — | Fixed BY contracts PR 3 | Builder methods return contract types |

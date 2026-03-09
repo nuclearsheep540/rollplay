@@ -11,6 +11,17 @@ from datetime import datetime
 logger = logging.getLogger()
 CONFIG = get_settings()
 
+DEFAULT_SEAT_COLORS = [
+    "#3b82f6",  # blue
+    "#ef4444",  # red
+    "#22c55e",  # green
+    "#f97316",  # orange
+    "#a855f7",  # purple
+    "#06b6d4",  # cyan
+    "#ec4899",  # pink
+    "#65a30d",  # lime
+]
+
 class GameSettings(BaseModel):
     "Basic settings for a game lobby"
 
@@ -236,19 +247,8 @@ class GameService:
         if room and "seat_colors" in room:
             return room["seat_colors"]
         else:
-            # Return default colors based on seat indices (0-7)
-            default_colors = {
-                "0": "#3b82f6",  # blue
-                "1": "#ef4444",  # red
-                "2": "#22c55e",  # green
-                "3": "#f97316",  # orange
-                "4": "#a855f7",  # purple
-                "5": "#06b6d4",  # cyan
-                "6": "#ec4899",  # pink
-                "7": "#65a30d",  # lime
-            }
             max_players = room.get("max_players", 8) if room else 8
-            return {str(i): default_colors.get(str(i), "#3b82f6") for i in range(max_players)}
+            return {str(i): DEFAULT_SEAT_COLORS[i] if i < len(DEFAULT_SEAT_COLORS) else DEFAULT_SEAT_COLORS[0] for i in range(max_players)}
 
     @staticmethod
     def is_host(room_id: str, player_name: str) -> bool:
