@@ -11,13 +11,13 @@ RUN apt-get update && apt-get install -y \
     curl \
     && rm -rf /var/lib/apt/lists/*
 
-# Install shared contracts package
-COPY rollplay-shared-contracts /rollplay-shared-contracts
-RUN pip install /rollplay-shared-contracts
-
-# Copy requirements first for better caching
+# Copy requirements first for better caching (changes least often)
 COPY api-site/requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
+
+# Install shared contracts package (changes more often than requirements)
+COPY rollplay-shared-contracts /rollplay-shared-contracts
+RUN pip install /rollplay-shared-contracts
 
 # Copy source code
 COPY api-site/ .
