@@ -29,4 +29,16 @@ jobs:
         run: pip install -r api-site/requirements.txt
 
       - name: Run tests
+        env:
+          POSTGRES_USER: test
+          POSTGRES_PASSWORD: test
+          POSTGRES_HOST: localhost
+          POSTGRES_PORT: "5432"
+          POSTGRES_DB: test
+          APP_DB_USER: test
+          APP_DB_PASSWORD: test
+          JWT_SECRET_KEY: test-secret
+          AWS_ACCESS_KEY_ID: test
+          AWS_SECRET_ACCESS_KEY: test
+          S3_BUCKET_NAME: test-bucket
         run: cd api-site && python -m pytest -v
