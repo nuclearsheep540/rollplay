@@ -72,6 +72,8 @@ async def get_session(
     session = query.execute(session_id)
     if not session:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Session not found")
+    if session.host_id != user_id and user_id not in session.joined_users:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not authorized to view this session")
     return session
 
 
@@ -79,9 +81,13 @@ async def get_session(
 async def get_campaign_sessions(
     campaign_id: UUID,
     user_id: UUID = Depends(get_current_user_id),
-    session_repo: SessionRepository = Depends(get_session_repository)
+    session_repo: SessionRepository = Depends(get_session_repository),
+    campaign_repo: CampaignRepository = Depends(campaign_repository)
 ):
     """Get all sessions for a campaign"""
+    campaign = campaign_repo.get_by_id(campaign_id)
+    if not campaign or not campaign.is_member(user_id):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not authorized to view this campaign's sessions")
     query = GetSessionsByCampaign(session_repo)
     sessions = query.execute(campaign_id)
     return SessionListResponse(sessions=sessions, total=len(sessions))
