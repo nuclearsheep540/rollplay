@@ -93,7 +93,7 @@ class SessionEntity:
         active_display: Optional[str] = None,  # Which display was active: "map", "image", or None
     ):
         self.id = id
-        self.name = name
+        self.name = name if name else "Session 1"
         self.campaign_id = campaign_id
         self.host_id = host_id
         self.status = status
@@ -126,8 +126,8 @@ class SessionEntity:
         if not host_id:
             raise ValueError("Session must have a host")
 
-        # Session name is optional - normalize if provided
-        normalized_name = name.strip() if name else None
+        # Session name defaults to "Session 1" if not provided
+        normalized_name = name.strip() if name else "Session 1"
         if normalized_name and len(normalized_name) > 100:
             raise ValueError("Session name too long (max 100 characters)")
 
@@ -230,12 +230,13 @@ class SessionEntity:
 
         self.status = SessionStatus.STARTING
 
-    def activate(self) -> None:
-        """Mark session as ACTIVE (called by ETL after successful start)"""
+    def activate(self, active_game_id: str) -> None:
+        """Mark session as ACTIVE with its MongoDB game ID (called after successful start)"""
         if self.status != SessionStatus.STARTING:
             raise ValueError("Can only activate STARTING sessions")
 
         self.status = SessionStatus.ACTIVE
+        self.active_game_id = active_game_id
         self.started_at = datetime.utcnow()
 
     def pause(self) -> None:

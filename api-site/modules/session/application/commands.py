@@ -436,9 +436,8 @@ class StartSession:
             result = response.json()
             active_game_id = result["session_id"]  # MongoDB ObjectID
 
-            # 11. Mark ACTIVE and store active_game_id
-            session.activate()  # Sets ACTIVE, started_at = now
-            session.active_game_id = active_game_id
+            # 11. Mark ACTIVE with the MongoDB game ID
+            session.activate(active_game_id)
             self.session_repo.save(session)
 
             logger.info(f"Session {session_id} ACTIVE with game {active_game_id}")
