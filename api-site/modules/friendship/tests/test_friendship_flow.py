@@ -12,6 +12,7 @@ Covers:
 5. Deleting friendships
 """
 
+import asyncio
 import pytest
 
 from modules.friendship.application.commands import (
@@ -22,6 +23,11 @@ from modules.friendship.application.commands import (
 from modules.friendship.application.queries import GetUserFriends
 
 
+def run_async(coro):
+    """Run an async coroutine synchronously in tests."""
+    return asyncio.get_event_loop().run_until_complete(coro)
+
+
 class TestFriendshipFlow:
     """Tests for friendship management"""
 
@@ -30,7 +36,8 @@ class TestFriendshipFlow:
         create_user,
         friendship_repo,
         friend_request_repo,
-        user_repo
+        user_repo,
+        mock_event_manager
     ):
         """
         GIVEN: User A and User B exist
@@ -43,12 +50,12 @@ class TestFriendshipFlow:
         user_b = create_user("userb@example.com", "UserB")
 
         # WHEN: User A sends request
-        send_cmd = SendFriendRequest(friendship_repo, friend_request_repo, user_repo)
-        send_cmd.execute(user_id=user_a.id, friend_uuid=user_b.id)
+        send_cmd = SendFriendRequest(friendship_repo, friend_request_repo, user_repo, mock_event_manager)
+        run_async(send_cmd.execute(user_id=user_a.id, friend_identifier=str(user_b.id)))
 
         # WHEN: User B accepts
-        accept_cmd = AcceptFriendRequest(friendship_repo, friend_request_repo)
-        friendship = accept_cmd.execute(user_id=user_b.id, requester_id=user_a.id)
+        accept_cmd = AcceptFriendRequest(friendship_repo, friend_request_repo, user_repo, mock_event_manager)
+        friendship = run_async(accept_cmd.execute(user_id=user_b.id, requester_id=user_a.id))
 
         # THEN: Friendship exists
         assert friendship is not None
@@ -74,7 +81,8 @@ class TestFriendshipFlow:
         create_user,
         friendship_repo,
         friend_request_repo,
-        user_repo
+        user_repo,
+        mock_event_manager
     ):
         """
         GIVEN: User A exists
@@ -85,18 +93,19 @@ class TestFriendshipFlow:
         user = create_user("user@example.com")
 
         # WHEN: Trying to friend self
-        send_cmd = SendFriendRequest(friendship_repo, friend_request_repo, user_repo)
+        send_cmd = SendFriendRequest(friendship_repo, friend_request_repo, user_repo, mock_event_manager)
 
         # THEN: Raises error
         with pytest.raises(ValueError):
-            send_cmd.execute(user_id=user.id, friend_uuid=user.id)
+            run_async(send_cmd.execute(user_id=user.id, friend_identifier=str(user.id)))
 
     def test_friendship_canonical_ordering(
         self,
         create_user,
         friendship_repo,
         friend_request_repo,
-        user_repo
+        user_repo,
+        mock_event_manager
     ):
         """
         GIVEN: User A (UUID < User B UUID)
@@ -113,11 +122,11 @@ class TestFriendshipFlow:
             user_a, user_b = user_b, user_a
 
         # WHEN: User A sends request, User B accepts
-        send_cmd = SendFriendRequest(friendship_repo, friend_request_repo, user_repo)
-        send_cmd.execute(user_id=user_a.id, friend_uuid=user_b.id)
+        send_cmd = SendFriendRequest(friendship_repo, friend_request_repo, user_repo, mock_event_manager)
+        run_async(send_cmd.execute(user_id=user_a.id, friend_identifier=str(user_b.id)))
 
-        accept_cmd = AcceptFriendRequest(friendship_repo, friend_request_repo)
-        friendship1 = accept_cmd.execute(user_id=user_b.id, requester_id=user_a.id)
+        accept_cmd = AcceptFriendRequest(friendship_repo, friend_request_repo, user_repo, mock_event_manager)
+        friendship1 = run_async(accept_cmd.execute(user_id=user_b.id, requester_id=user_a.id))
 
         # THEN: Stored with canonical order
         assert friendship1.user1_id == user_a.id
@@ -126,7 +135,7 @@ class TestFriendshipFlow:
         # WHEN: Trying to create reverse friendship
         # THEN: Should raise error (already friends)
         with pytest.raises(ValueError, match="already friends"):
-            send_cmd.execute(user_id=user_b.id, friend_uuid=user_a.id)
+            run_async(send_cmd.execute(user_id=user_b.id, friend_identifier=str(user_a.id)))
 
     def test_can_get_user_friendships(
         self,
