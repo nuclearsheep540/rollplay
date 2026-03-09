@@ -160,7 +160,7 @@ Catalogue of code smells, architectural inconsistencies, and patterns that contr
 
 ## api-game: Service Layer
 
-### 11. ObjectId conversion repeated 17 times
+### ~~11. ObjectId conversion repeated 17 times~~ ✅ DONE
 
 **Location:** [gameservice.py](api-game/gameservice.py) — lines 65, 90, 132, 181, 214, 233, 266, 332, 357, 382, 404, 440, 516, 532, 545, 561, 573
 
@@ -175,7 +175,7 @@ except Exception:
 
 **What "fixed" looks like:** Extract to `_room_filter(room_id)` static method — called from 17 places, defined once. Already noted in shared-contracts-acl PR 2.
 
-**Blocked by:** Nothing — independent cleanup, planned for PR 2.
+**Resolution:** Added `GameService.room_filter()` static method. All 18 instances (including 2 nested variants in `get_room` and `delete_room`) replaced with calls to the helper.
 
 ---
 
@@ -321,7 +321,7 @@ Items that should ideally be cleaned up **before** or **alongside** shared contr
 
 | Item | Effort | Pre-req for contracts? | Why |
 |------|--------|----------------------|-----|
-| #11 ObjectId helper | Small | Nice-to-have (PR 2) | Reduces PR 2 diff noise |
+| ~~#11 ObjectId helper~~ | ~~Small~~ | ✅ Done (`room_filter()`) | ~~Reduces PR 2 diff noise~~ |
 | #12 Color palette constant | Tiny | No | Independent |
 | #9 Duplicate constraints | — | Fixed BY contracts | Contracts eliminate the duplication |
 | #10 Hardcoded defaults | — | Fixed BY contracts | Contract defaults replace inline fallbacks |
