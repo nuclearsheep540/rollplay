@@ -1,7 +1,10 @@
 # Copyright (C) 2025 Matthew Davey
 # SPDX-License-Identifier: GPL-3.0-or-later
 import time
+import logging
 from typing import Optional, Dict, Any
+
+logger = logging.getLogger(__name__)
 
 from fastapi import WebSocket
 from .connection_manager import ConnectionManager
@@ -20,13 +23,21 @@ image_service = ImageService()
 
 class WebsocketEventResult:
     """Result object for WebSocket event handlers"""
-    
-    def __init__(self, broadcast_message: Dict[str, Any], 
+
+    def __init__(self, broadcast_message: Dict[str, Any],
                  log_removal_message: Optional[Dict[str, Any]] = None,
                  clear_prompt_message: Optional[Dict[str, Any]] = None):
         self.broadcast_message = broadcast_message
         self.log_removal_message = log_removal_message
         self.clear_prompt_message = clear_prompt_message
+
+    @staticmethod
+    def error(message: str) -> 'WebsocketEventResult':
+        """Create an error result that gets sent back to the sender only"""
+        logger.warning(message)
+        return WebsocketEventResult(
+            broadcast_message={"event_type": "error", "data": {"detail": message}}
+        )
 
 
 
@@ -647,8 +658,7 @@ class WebsocketEvent():
         target_player = event_data.get("target_player")
         
         if not action or not target_player:
-            print(f"❌ Invalid role change request: action={action}, target_player={target_player}")
-            return WebsocketEventResult(broadcast_message={})
+            return WebsocketEventResult.error(f"Invalid role change request: action={action}, target_player={target_player}")
         
         print(f"🎭 Role change: {action} for {target_player} by {player_name}")
         
@@ -694,14 +704,12 @@ class WebsocketEvent():
         if tracks:
             # Multiple tracks for synchronized playback
             if not isinstance(tracks, list) or len(tracks) == 0:
-                print(f"❌ Invalid remote audio play request: tracks must be a non-empty array")
-                return WebsocketEventResult(broadcast_message={})
+                return WebsocketEventResult.error("Invalid remote audio play request: tracks must be a non-empty array")
             
             # Validate all tracks
             for track in tracks:
                 if not track.get("channelId") or not track.get("filename"):
-                    print(f"❌ Invalid track in synchronized play request: {track}")
-                    return WebsocketEventResult(broadcast_message={})
+                    return WebsocketEventResult.error(f"Invalid track in synchronized play request: missing channelId or filename")
             
             # Create log message for synchronized playback
             track_descriptions = [f"{track['channelId']} ({track['filename']})" for track in tracks]
@@ -715,8 +723,7 @@ class WebsocketEvent():
             volume = event_data.get("volume", 1.0)
             
             if not track_type or not audio_file:
-                print(f"❌ Invalid remote audio play request: track_type={track_type}, audio_file={audio_file}")
-                return WebsocketEventResult(broadcast_message={})
+                return WebsocketEventResult.error(f"Invalid remote audio play request: track_type={track_type}, audio_file={audio_file}")
             
             # Convert single track to tracks array format
             tracks = [{
@@ -778,8 +785,7 @@ class WebsocketEvent():
         else:
             # Legacy single track resume
             if not track_type:
-                print(f"❌ Invalid remote audio resume request: no track_type or tracks provided")
-                return WebsocketEventResult(broadcast_message={})
+                return WebsocketEventResult.error("Invalid remote audio resume request: no track_type or tracks provided")
             
             # Convert single track to tracks array format for consistency
             tracks = [{"channelId": track_type}]
@@ -808,8 +814,7 @@ class WebsocketEvent():
         fade_duration = event_data.get("fade_duration")  # Optional fade duration for transitions
         
         if not operations or not isinstance(operations, list) or len(operations) == 0:
-            print(f"❌ Invalid batch audio request: operations must be a non-empty array")
-            return WebsocketEventResult(broadcast_message={})
+            return WebsocketEventResult.error("Invalid batch audio request: operations must be a non-empty array")
         
         print(f"🎛️ Backend received batch audio operations from {triggered_by}: {len(operations)} operations")
         
@@ -817,37 +822,30 @@ class WebsocketEvent():
         valid_operations = ["play", "stop", "pause", "resume", "volume", "loop", "load", "clear", "effects", "mute", "solo"]
         for i, op in enumerate(operations):
             if not isinstance(op, dict):
-                print(f"❌ Invalid operation {i}: must be an object")
-                return WebsocketEventResult(broadcast_message={})
+                return WebsocketEventResult.error(f"Invalid batch audio operation {i}: must be an object")
 
             track_id = op.get("trackId")
             operation = op.get("operation")
 
             if not track_id or not operation:
-                print(f"❌ Invalid operation {i}: missing trackId or operation")
-                return WebsocketEventResult(broadcast_message={})
+                return WebsocketEventResult.error(f"Invalid batch audio operation {i}: missing trackId or operation")
 
             if operation not in valid_operations:
-                print(f"❌ Invalid operation {i}: operation '{operation}' not supported")
-                return WebsocketEventResult(broadcast_message={})
+                return WebsocketEventResult.error(f"Invalid batch audio operation {i}: operation '{operation}' not supported")
 
             # Validate operation-specific required parameters
             if operation == "play" or operation == "load":
                 if not op.get("filename"):
-                    print(f"❌ Invalid {operation} operation {i}: missing filename")
-                    return WebsocketEventResult(broadcast_message={})
+                    return WebsocketEventResult.error(f"Invalid batch audio {operation} operation {i}: missing filename")
             elif operation == "volume":
                 if "volume" not in op:
-                    print(f"❌ Invalid volume operation {i}: missing volume parameter")
-                    return WebsocketEventResult(broadcast_message={})
+                    return WebsocketEventResult.error(f"Invalid batch audio volume operation {i}: missing volume parameter")
             elif operation == "loop":
                 if "looping" not in op:
-                    print(f"❌ Invalid loop operation {i}: missing looping parameter")
-                    return WebsocketEventResult(broadcast_message={})
+                    return WebsocketEventResult.error(f"Invalid batch audio loop operation {i}: missing looping parameter")
             elif operation == "effects":
                 if not isinstance(op.get("effects"), dict):
-                    print(f"❌ Invalid effects operation {i}: missing or invalid effects object")
-                    return WebsocketEventResult(broadcast_message={})
+                    return WebsocketEventResult.error(f"Invalid batch audio effects operation {i}: missing or invalid effects object")
         
         # Create log message describing the batch operation
         operation_summaries = []

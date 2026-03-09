@@ -383,6 +383,11 @@ def register_websocket_routes(app: FastAPI):
                     logger.warning(f"Unknown WebSocket event type: {event_type}")
                     continue
                 
+                # Send errors back to sender only, don't broadcast
+                if broadcast_message and broadcast_message.get("event_type") == "error":
+                    await websocket.send_json(broadcast_message)
+                    continue
+
                 # Broadcast the main message
                 await room_manager.update_room_data(broadcast_message)
                 

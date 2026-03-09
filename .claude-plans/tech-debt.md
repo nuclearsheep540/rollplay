@@ -253,7 +253,7 @@ except Exception:
 
 ---
 
-### 17. Silent failure on invalid WebSocket messages
+### ~~17. Silent failure on invalid WebSocket messages~~ ✅ DONE
 
 **Location:** [websocket_events.py:702-832](api-game/websocket_handlers/websocket_events.py#L702-L832)
 
@@ -263,7 +263,7 @@ except Exception:
 
 **What "fixed" looks like:** Return a structured error message to the sender (not broadcast) with what was wrong. Log with proper logger, not `print()`.
 
-**Blocked by:** Nothing — independent improvement.
+**Resolution:** Added `WebsocketEventResult.error()` static factory method that logs via `logger.warning` and returns `{"event_type": "error", "data": {"detail": message}}`. All `print` + empty broadcast patterns replaced. Centralized error check in `app_websocket.py` sends error messages to the sender only (not broadcast) and skips further processing.
 
 ---
 
@@ -285,7 +285,7 @@ except Exception:
 
 ## Terminology
 
-### 19. "Partial ETL" is vague
+### ~~19. "Partial ETL" is vague~~ ✅ DONE
 
 **Locations:**
 - [endpoints.py:390](api-site/modules/session/api/endpoints.py#L390)
@@ -295,13 +295,13 @@ except Exception:
 
 **What "fixed" looks like:** Replace "partial ETL" with "character-level ETL" in all 5 references. Establish consistent terminology: "session ETL" for full pause/finish, "character ETL" for per-player disconnect.
 
-**Blocked by:** Nothing — terminology cleanup.
+**Resolution:** All 4 references in `commands.py` renamed from "partial ETL" to "character-level ETL". The `endpoints.py` docstring was already updated in the #2/#18 work.
 
 ---
 
 ## Cross-Cutting
 
-### 20. `_set_active_display` duplicated across services
+### ~~20. `_set_active_display` duplicated across services~~ ✅ DONE
 
 **Locations:**
 - [mapservice.py:263-281](api-game/mapservice.py#L263-L281)
@@ -311,7 +311,7 @@ except Exception:
 
 **What "fixed" looks like:** Move `set_active_display` to GameService (it owns the session document). MapService and ImageService call `GameService.set_active_display()`.
 
-**Blocked by:** Nothing — independent refactor.
+**Resolution:** Added `GameService.set_active_display()` static method. Removed duplicate methods from MapService and ImageService. All callers (MapService, ImageService, app.py) updated to use `GameService.set_active_display()`.
 
 ---
 
@@ -337,7 +337,7 @@ Items that are independent cleanup (do anytime):
 | ~~#5 Auth without authorization~~ | ~~Small~~ | ✅ Done (inline 403 checks) |
 | #6 StartSession size | Medium | Extract restoration helpers |
 | #7 Pause/Finish duplication | Medium | Extract shared ETL method |
-| #17 Silent WebSocket failures | Small | Return error to sender |
+| ~~#17 Silent WebSocket failures~~ | ~~Small~~ | ✅ Done (structured errors to sender) |
 | ~~#18 Raw dict returns on char endpoints~~ | ~~Small~~ | ✅ Done (204 No Content) |
-| #19 "Partial ETL" terminology | Tiny | Rename to "character-level ETL" |
-| #20 `_set_active_display` dup | Small | Move to GameService |
+| ~~#19 "Partial ETL" terminology~~ | ~~Tiny~~ | ✅ Done (renamed to "character-level ETL") |
+| ~~#20 `_set_active_display` dup~~ | ~~Small~~ | ✅ Done (moved to GameService) |
