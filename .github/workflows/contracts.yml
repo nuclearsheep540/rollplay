@@ -1,0 +1,44 @@
+name: Contract Tests
+
+on:
+  pull_request:
+    paths:
+      - 'rollplay-shared-contracts/**'
+  push:
+    branches: [main]
+    paths:
+      - 'rollplay-shared-contracts/**'
+
+jobs:
+  coverage-check:
+    name: Contract coverage check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check all contract modules have test imports
+        run: |
+          for module in $(find rollplay-shared-contracts/shared_contracts -name '*.py' ! -name '__init__.py' -exec basename {} .py \;); do
+            if ! grep -q "from shared_contracts.${module} import" rollplay-shared-contracts/tests/test_contracts.py; then
+              echo "ERROR: No import for shared_contracts.${module} in test_contracts.py"
+              exit 1
+            fi
+          done
+          echo "All contract modules have test imports."
+
+  test-contracts:
+    name: Run contract tests
+    needs: coverage-check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install contracts package (non-editable)
+        run: pip install ./rollplay-shared-contracts[test]
+
+      - name: Run contract tests
+        run: cd rollplay-shared-contracts && python -m pytest tests/ -v

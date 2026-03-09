@@ -7,16 +7,47 @@ Shared pytest fixtures for testing.
 Provides database setup, repositories, and factory functions for creating test data.
 """
 
+import os
+
+# Set dummy env vars before any imports that trigger pydantic-settings Settings()
+_test_env = {
+    "POSTGRES_USER": "test",
+    "POSTGRES_PASSWORD": "test",
+    "POSTGRES_HOST": "localhost",
+    "POSTGRES_PORT": "5432",
+    "POSTGRES_DB": "test",
+    "APP_DB_USER": "test",
+    "APP_DB_PASSWORD": "test",
+    "JWT_SECRET_KEY": "test-secret",
+    "AWS_ACCESS_KEY_ID": "test",
+    "AWS_SECRET_ACCESS_KEY": "test",
+    "S3_BUCKET_NAME": "test-bucket",
+}
+for _key, _value in _test_env.items():
+    os.environ.setdefault(_key, _value)
+
 import pytest
 from sqlalchemy import create_engine, event
 from sqlalchemy.orm import sessionmaker, Session
 from sqlalchemy.pool import StaticPool
 from sqlalchemy.types import TypeDecorator, CHAR
-from sqlalchemy.dialects.postgresql import UUID as PostgreSQL_UUID
+from sqlalchemy.dialects.postgresql import UUID as PostgreSQL_UUID, JSONB, ARRAY as PostgreSQL_ARRAY
+from sqlalchemy.types import JSON
 import uuid
 from datetime import datetime, timezone
 
 from shared.dependencies.db import Base
+from modules.user.model.friend_code_model import FriendCode  # noqa: F401
+from modules.user.repositories.user_repository import UserRepository
+from modules.session.repositories.session_repository import SessionRepository
+from modules.characters.repositories.character_repository import CharacterRepository
+from modules.friendship.repositories.friendship_repository import FriendshipRepository
+from modules.campaign.repositories.campaign_repository import CampaignRepository
+from modules.user.domain.user_aggregate import UserAggregate
+from modules.session.domain.session_aggregate import SessionEntity, SessionStatus
+from modules.characters.domain.character_aggregate import CharacterAggregate, CharacterClass, CharacterClassInfo, CharacterRace, AbilityScores
+from modules.friendship.domain.friendship_aggregate import FriendshipAggregate
+from modules.campaign.domain.campaign_aggregate import CampaignAggregate
 
 
 # SQLite-compatible UUID type
@@ -53,17 +84,6 @@ class GUID(TypeDecorator):
                 return uuid.UUID(value)
             else:
                 return value
-from modules.user.repositories.user_repository import UserRepository
-from modules.session.repositories.session_repository import SessionRepository
-from modules.characters.repositories.character_repository import CharacterRepository
-from modules.friendship.repositories.friendship_repository import FriendshipRepository
-from modules.campaign.repositories.campaign_repository import CampaignRepository
-
-from modules.user.domain.user_aggregate import UserAggregate
-from modules.session.domain.session_aggregate import SessionEntity, SessionStatus
-from modules.characters.domain.character_aggregate import CharacterAggregate, CharacterClass, CharacterRace, AbilityScores
-from modules.friendship.domain.friendship_aggregate import FriendshipAggregate
-from modules.campaign.domain.campaign_aggregate import CampaignAggregate
 
 
 @pytest.fixture(scope="function")
@@ -80,6 +100,10 @@ def db_session():
         for column in table.columns:
             if isinstance(column.type, PostgreSQL_UUID):
                 column.type = GUID()
+            elif isinstance(column.type, JSONB):
+                column.type = JSON()
+            elif isinstance(column.type, PostgreSQL_ARRAY):
+                column.type = JSON()
 
     # Register UUID adapters for SQLite
     import sqlite3
@@ -236,9 +260,8 @@ def create_character(character_repo: CharacterRepository):
             active_campaign=None,  # New characters start unlocked
             user_id=user_id,
             character_name=name,
-            character_class=character_class,
+            character_classes=[CharacterClassInfo(character_class=character_class, level=level)],
             character_race=character_race,
-            level=level,
             ability_scores=abilities,
             hp_max=10,
             hp_current=10,
@@ -251,7 +274,16 @@ def create_character(character_repo: CharacterRepository):
 
 
 @pytest.fixture
-def create_friendship(friendship_repo: FriendshipRepository, friend_request_repo, user_repo):
+def mock_event_manager():
+    """No-op event manager for unit tests (no WebSocket/notifications needed)."""
+    from unittest.mock import AsyncMock, MagicMock
+    manager = MagicMock()
+    manager.broadcast = AsyncMock()
+    return manager
+
+
+@pytest.fixture
+def create_friendship(friendship_repo: FriendshipRepository, friend_request_repo, user_repo, mock_event_manager):
     """
     Factory fixture to create test friendships.
 
@@ -261,15 +293,20 @@ def create_friendship(friendship_repo: FriendshipRepository, friend_request_repo
         friendship = create_friendship(user_a_id=user1.id, user_b_id=user2.id)
     """
     def _create_friendship(user_a_id: uuid.UUID, user_b_id: uuid.UUID):
+        import asyncio
         from modules.friendship.application.commands import SendFriendRequest, AcceptFriendRequest
 
         # User A sends request to User B
-        send_cmd = SendFriendRequest(friendship_repo, friend_request_repo, user_repo)
-        send_cmd.execute(user_id=user_a_id, friend_uuid=user_b_id)
+        send_cmd = SendFriendRequest(friendship_repo, friend_request_repo, user_repo, mock_event_manager)
+        asyncio.get_event_loop().run_until_complete(
+            send_cmd.execute(user_id=user_a_id, friend_identifier=str(user_b_id))
+        )
 
         # User B accepts the request
-        accept_cmd = AcceptFriendRequest(friendship_repo, friend_request_repo)
-        friendship = accept_cmd.execute(user_id=user_b_id, requester_id=user_a_id)
+        accept_cmd = AcceptFriendRequest(friendship_repo, friend_request_repo, user_repo, mock_event_manager)
+        friendship = asyncio.get_event_loop().run_until_complete(
+            accept_cmd.execute(user_id=user_b_id, requester_id=user_a_id)
+        )
 
         return friendship
 

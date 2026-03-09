@@ -25,12 +25,13 @@ services:
             - .env
         container_name: "api-game-dev"
         build:
-            context: ./api-game
-            dockerfile: ../docker/dev/api-game/Dockerfile
-        ports: 
+            context: .
+            dockerfile: docker/dev/api-game/Dockerfile
+        ports:
             - 8081:8081
         volumes:
             - ./api-game:/api
+            - ./rollplay-shared-contracts:/rollplay-shared-contracts
     
     api-site:
         hostname: api-site
@@ -40,12 +41,13 @@ services:
             - .env
         container_name: "api-site-dev"
         build:
-            context: ./api-site
-            dockerfile: ../docker/dev/api-site/Dockerfile
+            context: .
+            dockerfile: docker/dev/api-site/Dockerfile
         ports:
             - 8082:8082
         volumes:
             - ./api-site:/api
+            - ./rollplay-shared-contracts:/rollplay-shared-contracts
         depends_on:
             postgres:
                 condition: service_healthy

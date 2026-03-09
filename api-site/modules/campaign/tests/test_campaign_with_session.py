@@ -224,7 +224,7 @@ class TestSessionCreatedWithoutName:
         """
         GIVEN: session_name is None (user left field empty)
         WHEN: SessionEntity.create is called
-        THEN: Session is created successfully with name=None
+        THEN: Session is created successfully with default name "Session 1"
         """
         from modules.session.domain.session_aggregate import SessionEntity
 
@@ -236,13 +236,13 @@ class TestSessionCreatedWithoutName:
         )
 
         assert session is not None
-        assert session.name is None
+        assert session.name == "Session 1"
 
     def test_campaign_creation_without_session_name_still_creates_session(self):
         """
         GIVEN: Campaign create request with session_name=None
         WHEN: create_campaign endpoint is called
-        THEN: A session is still created (with name=None)
+        THEN: A session is still created (with default name "Session 1")
         """
         from modules.session.domain.session_aggregate import SessionEntity
 
@@ -265,4 +265,4 @@ class TestSessionCreatedWithoutName:
         assert session.campaign_id == campaign_id
         assert session.host_id == host_id
         assert session.max_players == 8
-        assert session.name is None
+        assert session.name == "Session 1"
