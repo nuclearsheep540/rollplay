@@ -584,3 +584,20 @@ class GameService:
             filter_criteria,
             {"$unset": {f"audio_track_config.{asset_id}": ""}}
         )
+
+    @staticmethod
+    def set_active_display(room_id: str, display_type):
+        """Update the active_display field on the game session document"""
+        collection = GameService._get_active_session()
+
+        try:
+            oid = ObjectId(oid=room_id)
+            filter_criteria = {"_id": oid}
+        except Exception:
+            filter_criteria = {"_id": room_id}
+
+        collection.update_one(
+            filter_criteria,
+            {"$set": {"active_display": display_type}}
+        )
+        logger.info(f"Set active_display to '{display_type}' for room {room_id}")
