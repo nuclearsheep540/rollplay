@@ -27,7 +27,7 @@ from modules.session.application.commands import (
 from modules.session.application.queries import (
     GetSessionById,
     GetSessionsByCampaign,
-    GetUserSessions
+    GetUserSessions,
 )
 from modules.session.dependencies.providers import get_session_repository
 from modules.session.repositories.session_repository import SessionRepository
@@ -87,7 +87,7 @@ async def get_campaign_sessions(
     return SessionListResponse(sessions=sessions, total=len(sessions))
 
 
-@router.put("/{session_id}", response_model=SessionResponse)
+@router.put("/{session_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def update_session(
     session_id: UUID,
     request: UpdateSessionRequest,
@@ -98,7 +98,6 @@ async def update_session(
     try:
         command = UpdateSession(session_repo)
         command.execute(session_id=session_id, host_id=user_id, name=request.name)
-        return GetSessionById(session_repo).execute(session_id)
     except ValueError as e:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
 
@@ -118,7 +117,7 @@ async def delete_session(
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
 
 
-@router.delete("/{session_id}/players/{player_id}", response_model=SessionResponse)
+@router.delete("/{session_id}/players/{player_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def remove_player_from_session(
     session_id: UUID,
     player_id: UUID,
@@ -130,13 +129,12 @@ async def remove_player_from_session(
     try:
         command = RemovePlayerFromSession(session_repo, character_repo)
         command.execute(session_id=session_id, user_id=player_id, removed_by=user_id)
-        return GetSessionById(session_repo).execute(session_id)
     except ValueError as e:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
 
 # === Session State Actions ===
 
-@router.post("/{session_id}/start", response_model=SessionResponse)
+@router.post("/{session_id}/start", status_code=status.HTTP_204_NO_CONTENT)
 async def start_session(
     session_id: UUID,
     user_id: UUID = Depends(get_current_user_id),
@@ -157,14 +155,10 @@ async def start_session(
     4. Generates fresh presigned URLs for all assets (parallel)
     5. Calls api-game to create MongoDB active_session with assets + URLs
     6. Sets session status to ACTIVE with active_game_id
-
-    Returns session with status='ACTIVE' and active_game_id set.
-    Frontend can then redirect to /game?room_id={active_game_id}
     """
     try:
         command = StartSession(session_repo, user_repo, campaign_repo, event_manager, asset_repo, s3_service)
         await command.execute(session_id, user_id)
-        return GetSessionById(session_repo).execute(session_id)
 
     except ValueError as e:
         raise HTTPException(
@@ -179,7 +173,7 @@ async def start_session(
         )
 
 
-@router.post("/{session_id}/pause", response_model=SessionResponse)
+@router.post("/{session_id}/pause", status_code=status.HTTP_204_NO_CONTENT)
 async def pause_session(
     session_id: UUID,
     user_id: UUID = Depends(get_current_user_id),
@@ -202,13 +196,11 @@ async def pause_session(
     6. Unlocks all characters that were locked to this session
     7. Broadcasts session_paused event (silent state update) to all campaign members
 
-    Returns session with status='inactive'.
     If PostgreSQL write fails, MongoDB session is preserved and error returned.
     """
     try:
         command = PauseSession(session_repo, user_repo, character_repo, campaign_repo, event_manager, asset_repo)
         await command.execute(session_id, user_id)
-        return GetSessionById(session_repo).execute(session_id)
 
     except ValueError as e:
         raise HTTPException(
@@ -223,7 +215,7 @@ async def pause_session(
         )
 
 
-@router.post("/{session_id}/finish", response_model=SessionResponse)
+@router.post("/{session_id}/finish", status_code=status.HTTP_204_NO_CONTENT)
 async def finish_session(
     session_id: UUID,
     user_id: UUID = Depends(get_current_user_id),
@@ -242,13 +234,10 @@ async def finish_session(
     2. If INACTIVE: Sets FINISHED directly
     3. Unlocks all characters that were locked to this session
     4. FINISHED sessions cannot be resumed and are preserved in campaign history
-
-    Returns session with status='finished'.
     """
     try:
         command = FinishSession(session_repo, user_repo, character_repo, campaign_repo, event_manager, asset_repo)
         await command.execute(session_id, user_id)
-        return GetSessionById(session_repo).execute(session_id)
 
     except ValueError as e:
         raise HTTPException(
@@ -264,7 +253,7 @@ async def finish_session(
 
 # === Character Actions ===
 
-@router.post("/{session_id}/select-character")
+@router.post("/{session_id}/select-character", status_code=status.HTTP_204_NO_CONTENT)
 async def select_character_for_session(
     session_id: UUID,
     character_id: UUID,
@@ -275,21 +264,16 @@ async def select_character_for_session(
     """Select character for a joined session"""
     try:
         command = SelectCharacterForSession(session_repo, character_repo)
-        character = command.execute(
+        command.execute(
             session_id=session_id,
             user_id=user_id,
             character_id=character_id
         )
-        return {
-            "message": "Character selected successfully",
-            "character_id": str(character.id),
-            "character_name": character.character_name
-        }
     except ValueError as e:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
 
 
-@router.post("/{session_id}/disconnect")
+@router.post("/{session_id}/disconnect", status_code=status.HTTP_204_NO_CONTENT)
 async def disconnect_from_game(
     session_id: UUID,
     character_id: UUID,
@@ -298,20 +282,14 @@ async def disconnect_from_game(
     session_repo: SessionRepository = Depends(get_session_repository),
     character_repo: CharacterRepository = Depends(get_character_repository)
 ):
-    """Handle player disconnect from active game (partial ETL)"""
+    """Handle player disconnect from active game (character-level ETL)"""
     try:
         command = DisconnectFromGame(session_repo, character_repo)
-        character = command.execute(
+        command.execute(
             session_id=session_id,
             user_id=user_id,
             character_id=character_id,
             character_state=character_state
         )
-        return {
-            "message": "Character state saved successfully",
-            "character_id": str(character.id),
-            "hp_current": character.hp_current,
-            "is_alive": character.is_alive
-        }
     except ValueError as e:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))

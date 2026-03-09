@@ -17,7 +17,7 @@ from .schemas import (
 from modules.session.api.schemas import (
     CreateSessionRequest, SessionResponse
 )
-from modules.session.api.endpoints import _to_session_response
+from modules.session.application.queries import GetSessionById
 from modules.campaign.dependencies.providers import campaign_repository
 from modules.campaign.repositories.campaign_repository import CampaignRepository
 from modules.session.dependencies.providers import get_session_repository
@@ -125,8 +125,7 @@ async def create_session(
     user_id: UUID = Depends(get_current_user_id),
     session_repo: SessionRepository = Depends(get_session_repository),
     campaign_repo: CampaignRepository = Depends(campaign_repository),
-    event_manager: EventManager = Depends(get_event_manager),
-    db: Session = Depends(get_db)
+    event_manager: EventManager = Depends(get_event_manager)
 ):
     """Create a new session within a campaign"""
 
@@ -138,7 +137,7 @@ async def create_session(
             host_id=user_id,
             max_players=request.max_players
         )
-        return _to_session_response(session, db)
+        return GetSessionById(session_repo).execute(session.id)  # type: ignore[arg-type]
     except ValueError as e:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
 

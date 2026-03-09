@@ -8,45 +8,21 @@ Catalogue of code smells, architectural inconsistencies, and patterns that contr
 
 ## api-site: Session Module
 
-### 1. `_to_session_response` — endpoint doing query-layer work
+### ~~1. `_to_session_response` — endpoint doing query-layer work~~ ✅ DONE
 
-**Location:** [endpoints.py:56-112](api-site/modules/session/api/endpoints.py#L56-L112)
-
-**Smell:** The endpoint helper `_to_session_response` takes a raw `db: Session` and runs SQL joins across User and Character tables to enrich roster data. This is read-side query work that belongs in the application layer (`queries.py`), not in the API layer.
-
-**Why it matters:** Every session endpoint passes `db: Session` as a dependency just to feed this helper. FastAPI's `response_model` should handle serialization on its own — the fact that we need a manual conversion function means the application layer isn't returning enriched-enough data.
-
-**What "fixed" looks like:** `GetSessionById` (and similar queries) return an already-enriched object with host name, roster details, and character info. Endpoints return the query result directly, `response_model` serializes it. No `_to_session_response`, no `db` dependency on endpoints.
-
-**Blocked by:** Nothing — independent cleanup.
+Resolved in `72cc2bf`. Enrichment logic moved to `_build_response()` in `queries.py`. Endpoints no longer take `db: Session` — they call query objects and return the result directly.
 
 ---
 
-### 2. Over-returning on session action endpoints
+### ~~2. Over-returning on session action endpoints~~ ✅ DONE
 
-**Location:** [endpoints.py:223-264](api-site/modules/session/api/endpoints.py#L223-L264) (start), also pause/finish
-
-**Smell:** Start, pause, and finish endpoints all return the full `SessionResponse` (roster, host name, joined users, etc.) when the frontend only needs `active_game_id` and `status` for the start action. The same `_to_session_response` + full response pattern is used everywhere regardless of what the consumer actually needs.
-
-**Why it matters:** Couples all mutation endpoints to the same heavy response shape. Makes it look like the frontend needs all that data after every action, when it doesn't.
-
-**What "fixed" looks like:** Action endpoints return a lean response (`SessionActionResponse` with `status` + `active_game_id`). TanStack Query invalidates the session cache to trigger a refetch if the full shape is needed.
-
-**Blocked by:** Frontend changes to handle leaner responses.
+All action endpoints (start, pause, finish, update, remove_player, select-character, disconnect) now return `204 No Content`. Frontend mutation hooks updated to not parse response body — they already relied on TanStack Query cache invalidation.
 
 ---
 
-### 3. `GetUserSessions` loads all sessions into memory
+### ~~3. `GetUserSessions` loads all sessions into memory~~ ✅ DONE
 
-**Location:** [queries.py:47-70](api-site/modules/session/application/queries.py#L47-L70)
-
-**Smell:** `GetUserSessions.execute()` calls `self.session_repo.get_all()` then filters in Python. This loads every session in the database into memory to check if the user is host or participant.
-
-**Why it matters:** O(n) over all sessions for every user query. Fine with 10 sessions, problematic at scale. The filtering should be a SQL query, not Python iteration.
-
-**What "fixed" looks like:** Repository method `get_by_user_id(user_id)` with a SQL query that joins `sessions` with `session_joined_users` and filters by `host_id = user_id OR user_id IN (joined_users)`.
-
-**Blocked by:** Nothing — independent cleanup.
+Resolved in `72cc2bf`. `GetUserSessions` now uses a SQL subquery on `SessionJoinedUser` with `or_()` filter instead of loading all sessions into memory.
 
 ---
 
@@ -267,19 +243,9 @@ except Exception:
 
 ---
 
-### 18. Character action endpoints return raw dicts with no response_model
+### ~~18. Character action endpoints return raw dicts with no response_model~~ ✅ DONE
 
-**Locations:**
-- [endpoints.py:357-379](api-site/modules/session/api/endpoints.py#L357-L379) (`select_character_for_session`)
-- [endpoints.py:382-407](api-site/modules/session/api/endpoints.py#L382-L407) (`disconnect_from_game`)
-
-**Smell:** Both endpoints return hand-built dicts (`{"message": ..., "character_id": ...}`) with no `response_model` on the decorator. FastAPI doesn't validate or filter the response, and the response shape is only knowable by reading the code.
-
-**Why it matters:** The responses echo back data the frontend already has (it sent the character_id, it sent the character_state). These are mutation endpoints — in CQRS, commands don't return query data.
-
-**What "fixed" looks like:** Return `204 No Content` with no body. The command succeeded — that's all the caller needs to know. If the frontend needs fresh state, it re-queries through the read path.
-
-**Blocked by:** Nothing — independent cleanup.
+Resolved alongside #2. Both `select_character_for_session` and `disconnect_from_game` now return `204 No Content`. Frontend `useSelectCharacter` hook updated to not parse response body.
 
 ---
 
@@ -331,13 +297,13 @@ Items that are independent cleanup (do anytime):
 
 | Item | Effort | Notes |
 |------|--------|-------|
-| #1 `_to_session_response` | Medium | Move enrichment to queries |
-| #2 Over-returning | Medium | Needs frontend changes |
-| #3 `GetUserSessions` | Small | SQL query instead of Python filter |
+| ~~#1 `_to_session_response`~~ | ~~Medium~~ | ✅ Done (`72cc2bf`) |
+| ~~#2 Over-returning~~ | ~~Medium~~ | ✅ Done (204 No Content) |
+| ~~#3 `GetUserSessions`~~ | ~~Small~~ | ✅ Done (`72cc2bf`) |
 | #5 Auth without authorization | Small | Add user membership checks |
 | #6 StartSession size | Medium | Extract restoration helpers |
 | #7 Pause/Finish duplication | Medium | Extract shared ETL method |
 | #17 Silent WebSocket failures | Small | Return error to sender |
-| #18 Raw dict returns on char endpoints | Small | Return 204 No Content |
+| ~~#18 Raw dict returns on char endpoints~~ | ~~Small~~ | ✅ Done (204 No Content) |
 | #19 "Partial ETL" terminology | Tiny | Rename to "character-level ETL" |
 | #20 `_set_active_display` dup | Small | Move to GameService |
