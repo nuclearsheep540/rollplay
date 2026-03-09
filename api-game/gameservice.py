@@ -11,6 +11,17 @@ from datetime import datetime
 logger = logging.getLogger()
 CONFIG = get_settings()
 
+DEFAULT_SEAT_COLORS = [
+    "#3b82f6",  # blue
+    "#ef4444",  # red
+    "#22c55e",  # green
+    "#f97316",  # orange
+    "#a855f7",  # purple
+    "#06b6d4",  # cyan
+    "#ec4899",  # pink
+    "#65a30d",  # lime
+]
+
 class GameSettings(BaseModel):
     "Basic settings for a game lobby"
 
@@ -41,6 +52,13 @@ class GameSettings(BaseModel):
 class GameService:
     "Creating and joining active game lobbies"
 
+    @staticmethod
+    def room_filter(room_id: str) -> dict:
+        """Build MongoDB filter for _id, handling both ObjectId and string formats."""
+        try:
+            return {"_id": ObjectId(oid=room_id)}
+        except Exception:
+            return {"_id": room_id}
 
     def _get_active_session():
         "returns the active sessions collection"
@@ -62,17 +80,9 @@ class GameService:
         "Gets the room id"
         
         collection = GameService._get_active_session()
-        try:
-            oid = ObjectId(oid=id)
-            cursor = collection.find({"_id": oid})
-        except Exception:
-            # could be a bad oid, could be an id that doesnt match
-            # could also be our test ID which isnt an objectId
-            try:
-                cursor = collection.find({"_id": id})
-            except Exception:
-                return
-        
+        filter_criteria = GameService.room_filter(id)
+        cursor = collection.find(filter_criteria)
+
         try:
             result = [x for x in cursor]
             result = result[0] # get first record
@@ -85,21 +95,14 @@ class GameService:
     def delete_room(id):
         """Delete a room from active_sessions collection"""
         collection = GameService._get_active_session()
+        filter_criteria = GameService.room_filter(id)
         try:
-            # Try ObjectId first
-            oid = ObjectId(oid=id)
-            result = collection.delete_one({"_id": oid})
-            logger.info(f"Deleted room {id} (ObjectId): {result.deleted_count} documents")
+            result = collection.delete_one(filter_criteria)
+            logger.info(f"Deleted room {id}: {result.deleted_count} documents")
             return result.deleted_count > 0
-        except Exception:
-            # Fall back to string ID (for UUIDs from PostgreSQL)
-            try:
-                result = collection.delete_one({"_id": id})
-                logger.info(f"Deleted room {id} (string): {result.deleted_count} documents")
-                return result.deleted_count > 0
-            except Exception as e:
-                logger.error(f"Failed to delete room {id}: {e}")
-                return False
+        except Exception as e:
+            logger.error(f"Failed to delete room {id}: {e}")
+            return False
 
     # need to be able to query a room_id
     @staticmethod
@@ -128,13 +131,7 @@ class GameService:
         # Lowercase all player names in the seat layout for consistency
         normalized_seat_layout = [name.lower() if name != "empty" else name for name in seat_layout]
 
-        # Handle ObjectId conversion like get_room does
-        try:
-            oid = ObjectId(oid=room_id)
-            filter_criteria = {"_id": oid}
-        except Exception:
-            # Fall back to string ID (for test rooms or non-ObjectId rooms)
-            filter_criteria = {"_id": room_id}
+        filter_criteria = GameService.room_filter(room_id)
 
         # Validate: Check for duplicate players in seats
         player_names = [name for name in normalized_seat_layout if name != "empty"]
@@ -177,14 +174,8 @@ class GameService:
         """Update the maximum number of seats for a room"""
         collection = GameService._get_active_session()
         
-        # Handle ObjectId conversion like get_room does
-        try:
-            oid = ObjectId(oid=room_id)
-            filter_criteria = {"_id": oid}
-        except Exception:
-            # Fall back to string ID (for test rooms or non-ObjectId rooms)
-            filter_criteria = {"_id": room_id}
-        
+        filter_criteria = GameService.room_filter(room_id)
+
         print(f"🔄 Updating seat count with filter: {filter_criteria}")
         print(f"📝 New max players: {new_max}")
         
@@ -210,13 +201,8 @@ class GameService:
         """Get the current seat layout for a room"""
         collection = GameService._get_active_session()
         
-        # Handle ObjectId conversion like get_room does
-        try:
-            oid = ObjectId(oid=room_id)
-            room = collection.find_one({"_id": oid})
-        except Exception:
-            room = collection.find_one({"_id": room_id})
-        
+        room = collection.find_one(GameService.room_filter(room_id))
+
         if room and "seat_layout" in room:
             return room["seat_layout"]
         else:
@@ -229,14 +215,8 @@ class GameService:
         """Update seat colors for a room"""
         collection = GameService._get_active_session()
         
-        # Handle ObjectId conversion like get_room does
-        try:
-            oid = ObjectId(oid=room_id)
-            filter_criteria = {"_id": oid}
-        except Exception:
-            # Fall back to string ID (for test rooms or non-ObjectId rooms)
-            filter_criteria = {"_id": room_id}
-        
+        filter_criteria = GameService.room_filter(room_id)
+
         print(f"🎨 Updating seat colors with filter: {filter_criteria}")
         print(f"🌈 New seat colors: {seat_colors}")
         
@@ -262,29 +242,13 @@ class GameService:
         """Get the current seat colors for a room"""
         collection = GameService._get_active_session()
         
-        # Handle ObjectId conversion like get_room does
-        try:
-            oid = ObjectId(oid=room_id)
-            room = collection.find_one({"_id": oid})
-        except Exception:
-            room = collection.find_one({"_id": room_id})
-        
+        room = collection.find_one(GameService.room_filter(room_id))
+
         if room and "seat_colors" in room:
             return room["seat_colors"]
         else:
-            # Return default colors based on seat indices (0-7)
-            default_colors = {
-                "0": "#3b82f6",  # blue
-                "1": "#ef4444",  # red
-                "2": "#22c55e",  # green
-                "3": "#f97316",  # orange
-                "4": "#a855f7",  # purple
-                "5": "#06b6d4",  # cyan
-                "6": "#ec4899",  # pink
-                "7": "#65a30d",  # lime
-            }
             max_players = room.get("max_players", 8) if room else 8
-            return {str(i): default_colors.get(str(i), "#3b82f6") for i in range(max_players)}
+            return {str(i): DEFAULT_SEAT_COLORS[i] if i < len(DEFAULT_SEAT_COLORS) else DEFAULT_SEAT_COLORS[0] for i in range(max_players)}
 
     @staticmethod
     def is_host(room_id: str, player_name: str) -> bool:
@@ -328,13 +292,8 @@ class GameService:
         # Lowercase the player name for consistency
         player_name = player_name.lower()
         
-        # Handle ObjectId conversion
-        try:
-            oid = ObjectId(oid=room_id)
-            filter_criteria = {"_id": oid}
-        except Exception:
-            filter_criteria = {"_id": room_id}
-        
+        filter_criteria = GameService.room_filter(room_id)
+
         result = collection.update_one(
             filter_criteria,
             {"$addToSet": {"moderators": player_name}}
@@ -353,13 +312,8 @@ class GameService:
         # Lowercase the player name for consistency
         player_name = player_name.lower()
         
-        # Handle ObjectId conversion
-        try:
-            oid = ObjectId(oid=room_id)
-            filter_criteria = {"_id": oid}
-        except Exception:
-            filter_criteria = {"_id": room_id}
-        
+        filter_criteria = GameService.room_filter(room_id)
+
         result = collection.update_one(
             filter_criteria,
             {"$pull": {"moderators": player_name}}
@@ -378,13 +332,8 @@ class GameService:
         # Lowercase the player name for consistency
         player_name = player_name.lower()
         
-        # Handle ObjectId conversion
-        try:
-            oid = ObjectId(oid=room_id)
-            filter_criteria = {"_id": oid}
-        except Exception:
-            filter_criteria = {"_id": room_id}
-        
+        filter_criteria = GameService.room_filter(room_id)
+
         result = collection.update_one(
             filter_criteria,
             {"$set": {"dungeon_master": player_name}}
@@ -400,12 +349,7 @@ class GameService:
         """Remove the current dungeon master"""
         collection = GameService._get_active_session()
 
-        # Handle ObjectId conversion
-        try:
-            oid = ObjectId(oid=room_id)
-            filter_criteria = {"_id": oid}
-        except Exception:
-            filter_criteria = {"_id": room_id}
+        filter_criteria = GameService.room_filter(room_id)
 
         result = collection.update_one(
             filter_criteria,
@@ -436,12 +380,7 @@ class GameService:
         """
         collection = GameService._get_active_session()
 
-        # Handle ObjectId conversion
-        try:
-            oid = ObjectId(oid=room_id)
-            filter_criteria = {"_id": oid}
-        except Exception:
-            filter_criteria = {"_id": room_id}
+        filter_criteria = GameService.room_filter(room_id)
 
         # Get current room
         room = collection.find_one(filter_criteria)
@@ -513,11 +452,7 @@ class GameService:
         """Update a single audio channel's state in the active session (fire-and-forget)"""
         collection = GameService._get_active_session()
 
-        try:
-            oid = ObjectId(oid=room_id)
-            filter_criteria = {"_id": oid}
-        except Exception:
-            filter_criteria = {"_id": room_id}
+        filter_criteria = GameService.room_filter(room_id)
 
         collection.update_one(
             filter_criteria,
@@ -529,11 +464,7 @@ class GameService:
         """Get current audio state from active session"""
         collection = GameService._get_active_session()
 
-        try:
-            oid = ObjectId(oid=room_id)
-            room = collection.find_one({"_id": oid}, {"audio_state": 1})
-        except Exception:
-            room = collection.find_one({"_id": room_id}, {"audio_state": 1})
+        room = collection.find_one(GameService.room_filter(room_id), {"audio_state": 1})
 
         return room.get("audio_state", {}) if room else {}
 
@@ -542,11 +473,7 @@ class GameService:
         """Stash a track's config when swapped out of a channel (survives channel swaps)"""
         collection = GameService._get_active_session()
 
-        try:
-            oid = ObjectId(oid=room_id)
-            filter_criteria = {"_id": oid}
-        except Exception:
-            filter_criteria = {"_id": room_id}
+        filter_criteria = GameService.room_filter(room_id)
 
         collection.update_one(
             filter_criteria,
@@ -558,11 +485,7 @@ class GameService:
         """Retrieve a stashed track config (returns None if never loaded)"""
         collection = GameService._get_active_session()
 
-        try:
-            oid = ObjectId(oid=room_id)
-            filter_criteria = {"_id": oid}
-        except Exception:
-            filter_criteria = {"_id": room_id}
+        filter_criteria = GameService.room_filter(room_id)
 
         session = collection.find_one(filter_criteria, {f"audio_track_config.{asset_id}": 1})
         if session:
@@ -574,13 +497,22 @@ class GameService:
         """Remove stashed config when track is loaded back into a channel"""
         collection = GameService._get_active_session()
 
-        try:
-            oid = ObjectId(oid=room_id)
-            filter_criteria = {"_id": oid}
-        except Exception:
-            filter_criteria = {"_id": room_id}
+        filter_criteria = GameService.room_filter(room_id)
 
         collection.update_one(
             filter_criteria,
             {"$unset": {f"audio_track_config.{asset_id}": ""}}
         )
+
+    @staticmethod
+    def set_active_display(room_id: str, display_type):
+        """Update the active_display field on the game session document"""
+        collection = GameService._get_active_session()
+
+        filter_criteria = GameService.room_filter(room_id)
+
+        collection.update_one(
+            filter_criteria,
+            {"$set": {"active_display": display_type}}
+        )
+        logger.info(f"Set active_display to '{display_type}' for room {room_id}")

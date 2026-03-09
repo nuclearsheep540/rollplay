@@ -1,7 +1,6 @@
 # Copyright (C) 2025 Matthew Davey
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-from typing import List
 from uuid import UUID
 import logging
 from fastapi import APIRouter, Depends, HTTPException, status
@@ -12,8 +11,7 @@ from .schemas import (
     CreateSessionRequest,
     UpdateSessionRequest,
     SessionResponse,
-    SessionListResponse,
-    RosterPlayerResponse
+    SessionListResponse
 )
 from modules.session.application.commands import (
     CreateSession,
@@ -29,7 +27,7 @@ from modules.session.application.commands import (
 from modules.session.application.queries import (
     GetSessionById,
     GetSessionsByCampaign,
-    GetUserSessions
+    GetUserSessions,
 )
 from modules.session.dependencies.providers import get_session_repository
 from modules.session.repositories.session_repository import SessionRepository
@@ -41,108 +39,42 @@ from modules.campaign.repositories.campaign_repository import CampaignRepository
 from modules.campaign.dependencies.providers import campaign_repository
 from modules.library.dependencies.providers import get_asset_repository
 from modules.library.repositories.asset_repository import MediaAssetRepository
-from modules.session.domain.session_aggregate import SessionEntity
 from shared.services.s3_service import S3Service, get_s3_service
 from shared.dependencies.auth import get_current_user_id
-from shared.dependencies.db import get_db
 from modules.events.event_manager import EventManager
 from modules.events.dependencies.providers import get_event_manager
-from sqlalchemy.orm import Session
 
 
 router = APIRouter(tags=["sessions"])
 
 
-def _to_session_response(session: SessionEntity, db: Session) -> SessionResponse:
-    """Convert SessionEntity to SessionResponse with enriched roster data"""
-    from modules.campaign.model.session_model import SessionJoinedUser
-    from modules.user.model.user_model import User
-    from modules.characters.model.character_model import Character
-
-    # Fetch host/DM information
-    host_user = db.query(User).filter(User.id == session.host_id).first()
-    host_name = host_user.screen_name or host_user.email if host_user else "Unknown"
-
-    # Fetch roster data with character and user information
-    roster_data = []
-    roster_query = db.query(
-        SessionJoinedUser,
-        User,
-        Character
-    ).join(
-        User, SessionJoinedUser.user_id == User.id
-    ).outerjoin(
-        Character, SessionJoinedUser.selected_character_id == Character.id
-    ).filter(
-        SessionJoinedUser.session_id == session.id
-    ).all()
-
-    for joined_user, user, character in roster_query:
-        # Format character classes for multi-class support
-        character_class_str = None
-        if character and character.character_classes:
-            character_class_str = ' / '.join([cc.character_class.value for cc in character.character_classes])
-
-        roster_data.append(RosterPlayerResponse(
-            user_id=user.id,
-            username=user.screen_name or user.email,
-            character_id=character.id if character else None,
-            character_name=character.character_name if character else None,
-            character_level=character.level if character else None,
-            character_class=character_class_str,
-            character_race=character.character_race if character else None,
-            joined_at=joined_user.joined_at
-        ))
-
-    return SessionResponse(
-        id=session.id,
-        name=session.name,
-        campaign_id=session.campaign_id,
-        host_id=session.host_id,
-        host_name=host_name,
-        status=session.status.value,
-        created_at=session.created_at,
-        started_at=session.started_at,
-        stopped_at=session.stopped_at,
-        active_game_id=session.active_game_id,
-        joined_users=session.joined_users,
-        roster=roster_data,
-        player_count=session.player_count,
-        max_players=session.max_players
-    )
-
+# === Session CRUD ===
 
 @router.get("/my-sessions", response_model=SessionListResponse)
 async def get_my_sessions(
     user_id: UUID = Depends(get_current_user_id),
-    session_repo: SessionRepository = Depends(get_session_repository),
-    db: Session = Depends(get_db)
+    session_repo: SessionRepository = Depends(get_session_repository)
 ):
     """Get all sessions where user is host or invited player"""
     query = GetUserSessions(session_repo)
     sessions = query.execute(user_id)
-
-    return SessionListResponse(
-        sessions=[_to_session_response(session, db) for session in sessions],
-        total=len(sessions)
-    )
+    return SessionListResponse(sessions=sessions, total=len(sessions))
 
 
 @router.get("/{session_id}", response_model=SessionResponse)
 async def get_session(
     session_id: UUID,
     user_id: UUID = Depends(get_current_user_id),
-    session_repo: SessionRepository = Depends(get_session_repository),
-    db: Session = Depends(get_db)
+    session_repo: SessionRepository = Depends(get_session_repository)
 ):
     """Get session by ID"""
     query = GetSessionById(session_repo)
     session = query.execute(session_id)
-
     if not session:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Session not found")
-
-    return _to_session_response(session, db)
+    if session.host_id != user_id and user_id not in session.joined_users:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not authorized to view this session")
+    return session
 
 
 @router.get("/campaign/{campaign_id}", response_model=SessionListResponse)
@@ -150,35 +82,28 @@ async def get_campaign_sessions(
     campaign_id: UUID,
     user_id: UUID = Depends(get_current_user_id),
     session_repo: SessionRepository = Depends(get_session_repository),
-    db: Session = Depends(get_db)
+    campaign_repo: CampaignRepository = Depends(campaign_repository)
 ):
     """Get all sessions for a campaign"""
+    campaign = campaign_repo.get_by_id(campaign_id)
+    if not campaign or not campaign.is_member(user_id):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not authorized to view this campaign's sessions")
     query = GetSessionsByCampaign(session_repo)
     sessions = query.execute(campaign_id)
-
-    return SessionListResponse(
-        sessions=[_to_session_response(session, db) for session in sessions],
-        total=len(sessions)
-    )
+    return SessionListResponse(sessions=sessions, total=len(sessions))
 
 
-@router.put("/{session_id}", response_model=SessionResponse)
+@router.put("/{session_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def update_session(
     session_id: UUID,
     request: UpdateSessionRequest,
     user_id: UUID = Depends(get_current_user_id),
-    session_repo: SessionRepository = Depends(get_session_repository),
-    db: Session = Depends(get_db)
+    session_repo: SessionRepository = Depends(get_session_repository)
 ):
     """Update session details (host only)"""
     try:
         command = UpdateSession(session_repo)
-        session = command.execute(
-            session_id=session_id,
-            host_id=user_id,
-            name=request.name
-        )
-        return _to_session_response(session, db)
+        command.execute(session_id=session_id, host_id=user_id, name=request.name)
     except ValueError as e:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
 
@@ -198,29 +123,24 @@ async def delete_session(
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
 
 
-@router.delete("/{session_id}/players/{player_id}", response_model=SessionResponse)
+@router.delete("/{session_id}/players/{player_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def remove_player_from_session(
     session_id: UUID,
     player_id: UUID,
     user_id: UUID = Depends(get_current_user_id),
     session_repo: SessionRepository = Depends(get_session_repository),
-    character_repo: CharacterRepository = Depends(get_character_repository),
-    db: Session = Depends(get_db)
+    character_repo: CharacterRepository = Depends(get_character_repository)
 ):
     """Remove a player from the session roster (host only)"""
     try:
         command = RemovePlayerFromSession(session_repo, character_repo)
-        session = command.execute(
-            session_id=session_id,
-            user_id=player_id,
-            removed_by=user_id
-        )
-        return _to_session_response(session, db)
+        command.execute(session_id=session_id, user_id=player_id, removed_by=user_id)
     except ValueError as e:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
 
+# === Session State Actions ===
 
-@router.post("/{session_id}/start", response_model=SessionResponse)
+@router.post("/{session_id}/start", status_code=status.HTTP_204_NO_CONTENT)
 async def start_session(
     session_id: UUID,
     user_id: UUID = Depends(get_current_user_id),
@@ -229,8 +149,7 @@ async def start_session(
     campaign_repo: CampaignRepository = Depends(campaign_repository),
     asset_repo: MediaAssetRepository = Depends(get_asset_repository),
     event_manager: EventManager = Depends(get_event_manager),
-    s3_service: S3Service = Depends(get_s3_service),
-    db: Session = Depends(get_db)
+    s3_service: S3Service = Depends(get_s3_service)
 ):
     """
     Start a session (INACTIVE → ACTIVE).
@@ -242,14 +161,10 @@ async def start_session(
     4. Generates fresh presigned URLs for all assets (parallel)
     5. Calls api-game to create MongoDB active_session with assets + URLs
     6. Sets session status to ACTIVE with active_game_id
-
-    Returns session with status='ACTIVE' and active_game_id set.
-    Frontend can then redirect to /game?room_id={active_game_id}
     """
     try:
         command = StartSession(session_repo, user_repo, campaign_repo, event_manager, asset_repo, s3_service)
-        session = await command.execute(session_id, user_id)
-        return _to_session_response(session, db)
+        await command.execute(session_id, user_id)
 
     except ValueError as e:
         raise HTTPException(
@@ -264,7 +179,7 @@ async def start_session(
         )
 
 
-@router.post("/{session_id}/pause", response_model=SessionResponse)
+@router.post("/{session_id}/pause", status_code=status.HTTP_204_NO_CONTENT)
 async def pause_session(
     session_id: UUID,
     user_id: UUID = Depends(get_current_user_id),
@@ -273,8 +188,7 @@ async def pause_session(
     character_repo = Depends(get_character_repository),
     campaign_repo: CampaignRepository = Depends(campaign_repository),
     event_manager: EventManager = Depends(get_event_manager),
-    asset_repo: MediaAssetRepository = Depends(get_asset_repository),
-    db: Session = Depends(get_db)
+    asset_repo: MediaAssetRepository = Depends(get_asset_repository)
 ):
     """
     Pause a session (ACTIVE → INACTIVE) using fail-safe three-phase pattern.
@@ -288,13 +202,11 @@ async def pause_session(
     6. Unlocks all characters that were locked to this session
     7. Broadcasts session_paused event (silent state update) to all campaign members
 
-    Returns session with status='inactive'.
     If PostgreSQL write fails, MongoDB session is preserved and error returned.
     """
     try:
         command = PauseSession(session_repo, user_repo, character_repo, campaign_repo, event_manager, asset_repo)
-        session = await command.execute(session_id, user_id)
-        return _to_session_response(session, db)
+        await command.execute(session_id, user_id)
 
     except ValueError as e:
         raise HTTPException(
@@ -309,7 +221,7 @@ async def pause_session(
         )
 
 
-@router.post("/{session_id}/finish", response_model=SessionResponse)
+@router.post("/{session_id}/finish", status_code=status.HTTP_204_NO_CONTENT)
 async def finish_session(
     session_id: UUID,
     user_id: UUID = Depends(get_current_user_id),
@@ -318,8 +230,7 @@ async def finish_session(
     character_repo = Depends(get_character_repository),
     campaign_repo: CampaignRepository = Depends(campaign_repository),
     event_manager: EventManager = Depends(get_event_manager),
-    asset_repo: MediaAssetRepository = Depends(get_asset_repository),
-    db: Session = Depends(get_db)
+    asset_repo: MediaAssetRepository = Depends(get_asset_repository)
 ):
     """
     Finish a session permanently (ACTIVE/INACTIVE → FINISHED).
@@ -329,13 +240,10 @@ async def finish_session(
     2. If INACTIVE: Sets FINISHED directly
     3. Unlocks all characters that were locked to this session
     4. FINISHED sessions cannot be resumed and are preserved in campaign history
-
-    Returns session with status='finished'.
     """
     try:
         command = FinishSession(session_repo, user_repo, character_repo, campaign_repo, event_manager, asset_repo)
-        session = await command.execute(session_id, user_id)
-        return _to_session_response(session, db)
+        await command.execute(session_id, user_id)
 
     except ValueError as e:
         raise HTTPException(
@@ -349,10 +257,9 @@ async def finish_session(
             detail="Failed to finish session"
         )
 
+# === Character Actions ===
 
-# === Character Selection Endpoints ===
-
-@router.post("/{session_id}/select-character")
+@router.post("/{session_id}/select-character", status_code=status.HTTP_204_NO_CONTENT)
 async def select_character_for_session(
     session_id: UUID,
     character_id: UUID,
@@ -363,21 +270,16 @@ async def select_character_for_session(
     """Select character for a joined session"""
     try:
         command = SelectCharacterForSession(session_repo, character_repo)
-        character = command.execute(
+        command.execute(
             session_id=session_id,
             user_id=user_id,
             character_id=character_id
         )
-        return {
-            "message": "Character selected successfully",
-            "character_id": str(character.id),
-            "character_name": character.character_name
-        }
     except ValueError as e:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
 
 
-@router.post("/{session_id}/disconnect")
+@router.post("/{session_id}/disconnect", status_code=status.HTTP_204_NO_CONTENT)
 async def disconnect_from_game(
     session_id: UUID,
     character_id: UUID,
@@ -386,20 +288,14 @@ async def disconnect_from_game(
     session_repo: SessionRepository = Depends(get_session_repository),
     character_repo: CharacterRepository = Depends(get_character_repository)
 ):
-    """Handle player disconnect from active game (partial ETL)"""
+    """Handle player disconnect from active game (character-level ETL)"""
     try:
         command = DisconnectFromGame(session_repo, character_repo)
-        character = command.execute(
+        command.execute(
             session_id=session_id,
             user_id=user_id,
             character_id=character_id,
             character_state=character_state
         )
-        return {
-            "message": "Character state saved successfully",
-            "character_id": str(character.id),
-            "hp_current": character.hp_current,
-            "is_alive": character.is_alive
-        }
     except ValueError as e:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))

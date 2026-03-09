@@ -60,8 +60,6 @@ export function useStartSession() {
         const errorData = await response.json().catch(() => ({}))
         throw new Error(errorData.detail || 'Failed to start game')
       }
-
-      return response.json()
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['campaigns'] })
@@ -87,8 +85,6 @@ export function usePauseSession() {
         const errorData = await response.json().catch(() => ({}))
         throw new Error(errorData.detail || 'Failed to pause session')
       }
-
-      return response.json()
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['campaigns'] })
@@ -114,8 +110,6 @@ export function useFinishSession() {
         const errorData = await response.json().catch(() => ({}))
         throw new Error(errorData.detail || 'Failed to finish session')
       }
-
-      return response.json()
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['campaigns'] })

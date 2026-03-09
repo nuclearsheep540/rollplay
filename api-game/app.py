@@ -11,7 +11,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from sentry_config import init_sentry
 init_sentry()
 
-from gameservice import GameService, GameSettings
+from gameservice import GameService, GameSettings, DEFAULT_SEAT_COLORS
 from adventure_log_service import AdventureLogService
 from mapservice import MapService, MapSettings
 from imageservice import ImageService, ImageSettings
@@ -426,19 +426,8 @@ async def create_session(request: SessionStartRequest):
                 detail="Game already exists for this session"
             )
 
-        # Default color palette for seats
         def get_default_color(index):
-            colors = [
-                "#3b82f6",  # blue
-                "#ef4444",  # red
-                "#22c55e",  # green
-                "#f97316",  # orange
-                "#a855f7",  # purple
-                "#06b6d4",  # cyan
-                "#ec4899",  # pink
-                "#65a30d",  # lime
-            ]
-            return colors[index] if index < len(colors) else "#3b82f6"
+            return DEFAULT_SEAT_COLORS[index] if index < len(DEFAULT_SEAT_COLORS) else DEFAULT_SEAT_COLORS[0]
 
         # Convert assets to dict format for MongoDB storage
         available_assets = [asset.model_dump() for asset in request.assets] if request.assets else []
@@ -502,7 +491,7 @@ async def create_session(request: SessionStartRequest):
         # Restore active_display from previous session
         if request.active_display:
             try:
-                image_service._set_active_display(request.session_id, request.active_display)
+                GameService.set_active_display(request.session_id, request.active_display)
                 logger.info(f"Restored active_display '{request.active_display}' for session {request.session_id}")
             except Exception as e:
                 logger.warning(f"active_display restoration failed (non-fatal): {e}")
