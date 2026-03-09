@@ -1165,7 +1165,7 @@ class SelectCharacterForSession:
 
 
 class DisconnectFromGame:
-    """Handle player disconnect from active game (partial ETL)"""
+    """Handle player disconnect from active game (character-level ETL)"""
 
     def __init__(
         self,
@@ -1185,7 +1185,7 @@ class DisconnectFromGame:
         """
         Save character state when player disconnects from active game.
 
-        Partial ETL - updates ONLY the character's state from MongoDB to PostgreSQL.
+        Character-level ETL - updates ONLY the character's state from MongoDB to PostgreSQL.
 
         Business rules:
         - Session must be ACTIVE
@@ -1234,9 +1234,9 @@ class DisconnectFromGame:
         # character.position = character_state.get("current_position")
         # character.status_effects = character_state.get("status_effects", [])
 
-        # Save character (partial ETL complete)
+        # Save character (character-level ETL complete)
         self.character_repo.save(character)
 
-        logger.info(f"Partial ETL complete for character {character_id} in session {session_id}")
+        logger.info(f"Character-level ETL complete for character {character_id} in session {session_id}")
 
         return character
