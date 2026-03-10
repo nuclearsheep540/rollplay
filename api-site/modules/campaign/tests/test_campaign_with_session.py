@@ -45,9 +45,6 @@ class TestCampaignCreateWithSessionName:
         mock_campaign.description = "Test description"
         mock_campaign.hero_image = None
         mock_campaign.host_id = mock_user.id
-        mock_campaign.assets = None
-        mock_campaign.scenes = None
-        mock_campaign.npc_factory = None
         mock_campaign.created_at = Mock()
         mock_campaign.updated_at = Mock()
         mock_campaign.invited_player_ids = []

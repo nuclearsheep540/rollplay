@@ -5,7 +5,7 @@
 MediaAsset Aggregate - Domain model for S3-backed media files
 
 Represents a media asset (map, music, sfx, image) in the DM's library.
-Media assets are owned by users and can be associated with campaigns/sessions.
+Media assets are owned by users and can be associated with campaigns.
 
 This is distinct from domain objects (NPCs, Items) which have business logic
 but no S3 backing.
@@ -35,7 +35,6 @@ class MediaAssetAggregate:
     asset_type: MediaAssetType
     file_size: Optional[int] = None
     campaign_ids: List[UUID] = field(default_factory=list)
-    session_ids: List[UUID] = field(default_factory=list)
     created_at: Optional[datetime] = None
     updated_at: Optional[datetime] = None
 
@@ -90,7 +89,6 @@ class MediaAssetAggregate:
             asset_type=asset_type,
             file_size=file_size,
             campaign_ids=campaign_ids,
-            session_ids=[],
             created_at=datetime.utcnow(),
             updated_at=None
         )
@@ -116,22 +114,6 @@ class MediaAssetAggregate:
         if campaign_id in self.campaign_ids:
             self.campaign_ids.remove(campaign_id)
             self.updated_at = datetime.utcnow()
-
-    def associate_with_session(self, session_id: UUID, campaign_id: UUID) -> None:
-        """
-        Associate this asset with a session.
-        Also associates with the session's campaign (inheritance rule).
-
-        Args:
-            session_id: The session to associate with
-            campaign_id: The session's parent campaign
-        """
-        if session_id not in self.session_ids:
-            self.session_ids.append(session_id)
-            self.updated_at = datetime.utcnow()
-
-        # Ensure campaign association (inheritance rule)
-        self.associate_with_campaign(campaign_id)
 
     def change_type(self, new_type: "MediaAssetType") -> None:
         """

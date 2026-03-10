@@ -78,9 +78,10 @@ Single `alembic revision --autogenerate` for all Phase 1 drops (campaign dead co
 | `id` | UUID | PK |
 | `campaign_id` | UUID | FK → campaigns(id) ON DELETE CASCADE |
 | `user_id` | UUID | FK → users(id) ON DELETE CASCADE |
-| `role` | VARCHAR(10) | NOT NULL — `'player'` or `'invited'` |
+| `role` | VARCHAR(10) | NOT NULL, CHECK `IN ('player', 'invited')` |
 | `joined_at` | DateTime | NOT NULL, server default NOW() |
 | UNIQUE | | (campaign_id, user_id) |
+| INDEX | | (user_id, role) |
 
 Invite acceptance = UPDATE role from `'invited'` to `'player'`. Single table, one row per membership.
 
@@ -106,13 +107,14 @@ Follows existing pattern: `SessionJoinedUser` in `campaign/model/session_model.p
 
 ### Repository query changes
 
-**`get_by_member_id()`** — JSONB containment → JOIN:
+**`get_by_member_id()`** — JSONB containment → EXISTS subquery:
 ```python
-.outerjoin(CampaignMember)
-.filter(or_(
-    CampaignModel.host_id == user_id,
-    and_(CampaignMember.user_id == user_id, CampaignMember.role == 'player')
+is_player = exists().where(and_(
+    CampaignMember.campaign_id == CampaignModel.id,
+    CampaignMember.user_id == user_id,
+    CampaignMember.role == 'player'
 ))
+.filter(or_(CampaignModel.host_id == user_id, is_player))
 ```
 
 **`get_invited_campaigns()`** — JSONB containment → JOIN:

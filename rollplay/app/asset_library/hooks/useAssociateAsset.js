@@ -7,17 +7,14 @@ import { authFetch } from '@/app/shared/utils/authFetch'
 /**
  * Mutation hook for associating an asset with a campaign.
  *
- * @returns TanStack mutation with mutate({ assetId, campaignId, sessionId? })
+ * @returns TanStack mutation with mutate({ assetId, campaignId })
  */
 export function useAssociateAsset() {
   const queryClient = useQueryClient()
 
   return useMutation({
-    mutationFn: async ({ assetId, campaignId, sessionId = null }) => {
+    mutationFn: async ({ assetId, campaignId }) => {
       const body = { campaign_id: campaignId }
-      if (sessionId) {
-        body.session_id = sessionId
-      }
 
       const response = await authFetch(`/api/library/${assetId}/associate`, {
         method: 'POST',

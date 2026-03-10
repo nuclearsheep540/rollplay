@@ -26,9 +26,6 @@ class CampaignAggregate:
     host_id: UUID
     created_at: datetime
     updated_at: datetime
-    assets: Optional[dict]
-    scenes: Optional[dict]
-    npc_factory: Optional[dict]
     session_ids: List[UUID] = field(default_factory=list)
     invited_player_ids: List[UUID] = field(default_factory=list)
     player_ids: List[UUID] = field(default_factory=list)
@@ -68,9 +65,6 @@ class CampaignAggregate:
             host_id=host_id,
             created_at=now,
             updated_at=now,
-            assets=None,
-            scenes=None,
-            npc_factory=None,
             session_ids=[],
             invited_player_ids=[],
             player_ids=[]
