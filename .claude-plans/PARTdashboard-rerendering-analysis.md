@@ -122,8 +122,27 @@ The drawer position effect schedules **4 timeout-based DOM measurements** (at 50
 
 ---
 
+## Current Status (2026-03-10)
+
+Most critical issues have been resolved by the TanStack Query migration:
+
+| Issue | Status | Notes |
+|-------|--------|-------|
+| #1 refreshTrigger full refetches | ✅ DONE | Replaced with `useEventQueryInvalidation` hook (TanStack Query) |
+| #2 campaigns array dependency | ✅ DONE | Query cache provides stable references |
+| #3 Duplicate useEffects | ✅ DONE | Resolved during TanStack migration |
+| #4 Modal state spreads | ✅ DONE | `openModal` pattern removed from CampaignManager |
+| #5 Conditional ref / drawer | ✅ DONE | Refactored with CampaignManager changes |
+
+### Remaining: SessionsManager refreshTrigger
+
+`SessionsManager.js` still uses the old `refreshTrigger` pattern. Low priority — it's a simple read-only component (shows active sessions + "Enter Game" button) that only fetches two endpoints (`/api/sessions/my-sessions`, `/api/characters/`). Migrating to TanStack Query would bring it in line with the rest of the dashboard.
+
+---
+
 ## Files Involved
 
-- **Primary**: `rollplay/app/dashboard/components/CampaignManager.js`
-- **Parent**: `rollplay/app/dashboard/page.js` (refreshTrigger pattern)
-- **Related**: `rollplay/app/dashboard/components/DashboardLayout.js`
+- **Primary**: `rollplay/app/dashboard/components/CampaignManager.js` (resolved)
+- **Parent**: `rollplay/app/dashboard/page.js` (refreshTrigger removed for campaigns)
+- **Remaining**: `rollplay/app/dashboard/components/SessionsManager.js` (still uses refreshTrigger)
+- **Related**: `rollplay/app/dashboard/hooks/useEventQueryInvalidation.js`
