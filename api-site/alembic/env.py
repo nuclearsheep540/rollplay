@@ -22,6 +22,10 @@ try:
     from modules.user.model.user_model import User
     from modules.user.model.friend_code_model import FriendCode
     from modules.characters.model.character_model import Character
+    from modules.characters.model.dnd_class_model import DndClass
+    from modules.characters.model.character_class_model import CharacterClassEntry
+    from modules.characters.model.dnd_ability_model import DndAbility
+    from modules.characters.model.character_ability_model import CharacterAbilityScore, CharacterOriginBonus
     from modules.campaign.model.campaign_model import Campaign
     from modules.campaign.model.campaign_member_model import CampaignMember
     from modules.campaign.model.session_model import Session, SessionJoinedUser
