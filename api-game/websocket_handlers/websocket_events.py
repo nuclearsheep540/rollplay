@@ -14,6 +14,7 @@ from models.log_type import LogType
 from mapservice import MapService, MapSettings
 from imageservice import ImageService, ImageSettings
 from gameservice import GameService
+from shared_contracts.audio import AudioChannelState, AudioTrackConfig, AudioEffects
 
 
 adventure_log = AdventureLogService()
@@ -741,17 +742,17 @@ class WebsocketEvent():
             for track in tracks:
                 channel_id = track.get("channelId")
                 if channel_id:
-                    channel_state = {
-                        "filename": track.get("filename"),
-                        "asset_id": track.get("asset_id"),
-                        "s3_url": track.get("s3_url"),
-                        "volume": track.get("volume", 0.8),
-                        "looping": track.get("looping", True),
-                        "playback_state": "playing",
-                        "started_at": time.time(),
-                        "paused_elapsed": None,
-                    }
-                    GameService.update_audio_state(client_id, channel_id, channel_state)
+                    channel_state = AudioChannelState(
+                        filename=track.get("filename"),
+                        asset_id=track.get("asset_id"),
+                        s3_url=track.get("s3_url"),
+                        volume=track.get("volume", 0.8),
+                        looping=track.get("looping", True),
+                        playback_state="playing",
+                        started_at=time.time(),
+                        paused_elapsed=None,
+                    )
+                    GameService.update_audio_state(client_id, channel_id, channel_state.model_dump())
             print(f"🎵 Audio play state persisted for {len(tracks)} track(s)")
         except Exception as e:
             print(f"⚠️ Failed to persist audio play state: {e}")
@@ -899,74 +900,71 @@ class WebsocketEvent():
 
                 if operation == "play":
                     ch = current_audio_state.get(track_id, {})
-                    channel_state = {
-                        **ch,
-                        "filename": op.get("filename"),
-                        "asset_id": op.get("asset_id"),
-                        "s3_url": op.get("s3_url"),
-                        "volume": op.get("volume", 0.8),
-                        "looping": op.get("looping", True),
-                        "playback_state": "playing",
-                        "started_at": time.time(),
-                        "paused_elapsed": None,
-                    }
-                    GameService.update_audio_state(client_id, track_id, channel_state)
+                    channel_state = AudioChannelState(
+                        **{**ch,
+                           "filename": op.get("filename"),
+                           "asset_id": op.get("asset_id"),
+                           "s3_url": op.get("s3_url"),
+                           "volume": op.get("volume", 0.8),
+                           "looping": op.get("looping", True),
+                           "playback_state": "playing",
+                           "started_at": time.time(),
+                           "paused_elapsed": None,
+                           }
+                    )
+                    GameService.update_audio_state(client_id, track_id, channel_state.model_dump())
 
                 elif operation == "stop":
                     # Stop playback but keep track loaded in channel
                     ch = current_audio_state.get(track_id, {})
-                    channel_state = {
-                        **ch,
-                        "playback_state": "stopped",
-                        "started_at": None,
-                        "paused_elapsed": None,
-                    }
-                    GameService.update_audio_state(client_id, track_id, channel_state)
+                    channel_state = AudioChannelState(
+                        **{**ch, "playback_state": "stopped", "started_at": None, "paused_elapsed": None}
+                    )
+                    GameService.update_audio_state(client_id, track_id, channel_state.model_dump())
 
                 elif operation == "pause":
                     ch = current_audio_state.get(track_id, {})
                     started_at = ch.get("started_at")
                     paused_elapsed = (time.time() - started_at) if started_at else 0
-                    channel_state = {
-                        **ch,
-                        "playback_state": "paused",
-                        "paused_elapsed": paused_elapsed,
-                    }
-                    GameService.update_audio_state(client_id, track_id, channel_state)
+                    channel_state = AudioChannelState(
+                        **{**ch, "playback_state": "paused", "paused_elapsed": paused_elapsed}
+                    )
+                    GameService.update_audio_state(client_id, track_id, channel_state.model_dump())
 
                 elif operation == "resume":
                     ch = current_audio_state.get(track_id, {})
                     paused_elapsed = ch.get("paused_elapsed", 0)
-                    channel_state = {
-                        **ch,
-                        "playback_state": "playing",
-                        "started_at": time.time() - paused_elapsed,
-                        "paused_elapsed": None,
-                    }
-                    GameService.update_audio_state(client_id, track_id, channel_state)
+                    channel_state = AudioChannelState(
+                        **{**ch,
+                           "playback_state": "playing",
+                           "started_at": time.time() - paused_elapsed,
+                           "paused_elapsed": None,
+                           }
+                    )
+                    GameService.update_audio_state(client_id, track_id, channel_state.model_dump())
 
                 elif operation == "volume":
                     ch = current_audio_state.get(track_id, {}) if current_audio_state else {}
-                    channel_state = {**ch, "volume": op.get("volume")}
-                    GameService.update_audio_state(client_id, track_id, channel_state)
+                    channel_state = AudioChannelState(**{**ch, "volume": op.get("volume")})
+                    GameService.update_audio_state(client_id, track_id, channel_state.model_dump())
 
                 elif operation == "loop":
                     ch = current_audio_state.get(track_id, {}) if current_audio_state else {}
-                    channel_state = {**ch, "looping": op.get("looping")}
-                    GameService.update_audio_state(client_id, track_id, channel_state)
+                    channel_state = AudioChannelState(**{**ch, "looping": op.get("looping")})
+                    GameService.update_audio_state(client_id, track_id, channel_state.model_dump())
 
                 elif operation == "load":
                     # 1. Save outgoing track's full config to audio_track_config
                     old_ch = current_audio_state.get(track_id, {})
                     old_asset_id = old_ch.get("asset_id")
                     if old_asset_id:
-                        track_config = {
-                            "volume": old_ch.get("volume"),
-                            "looping": old_ch.get("looping"),
-                            "effects": old_ch.get("effects", {}),
-                            "paused_elapsed": old_ch.get("paused_elapsed"),
-                        }
-                        GameService.save_track_config(client_id, old_asset_id, track_config)
+                        track_config = AudioTrackConfig(
+                            volume=old_ch.get("volume"),
+                            looping=old_ch.get("looping"),
+                            effects=AudioEffects(**(old_ch.get("effects") or {})),
+                            paused_elapsed=old_ch.get("paused_elapsed"),
+                        )
+                        GameService.save_track_config(client_id, old_asset_id, track_config.model_dump())
 
                     # 2. Check for saved config for incoming track
                     new_asset_id = op.get("asset_id")
@@ -974,85 +972,79 @@ class WebsocketEvent():
 
                     # 3. Build channel state — restore from saved config or use provided defaults
                     if saved_config:
-                        channel_state = {
-                            "filename": op.get("filename"),
-                            "asset_id": new_asset_id,
-                            "s3_url": op.get("s3_url"),
-                            "volume": saved_config.get("volume", op.get("volume", 0.8)),
-                            "looping": saved_config.get("looping", op.get("looping")),
-                            "effects": saved_config.get("effects", {}),
-                            "playback_state": "stopped",
-                            "started_at": None,
-                            "paused_elapsed": saved_config.get("paused_elapsed"),
-                        }
+                        channel_state = AudioChannelState(
+                            filename=op.get("filename"),
+                            asset_id=new_asset_id,
+                            s3_url=op.get("s3_url"),
+                            volume=saved_config.get("volume", op.get("volume", 0.8)),
+                            looping=saved_config.get("looping", op.get("looping")),
+                            effects=saved_config.get("effects", {}),
+                            playback_state="stopped",
+                            started_at=None,
+                            paused_elapsed=saved_config.get("paused_elapsed"),
+                        )
                     else:
-                        channel_state = {
-                            "filename": op.get("filename"),
-                            "asset_id": new_asset_id,
-                            "s3_url": op.get("s3_url"),
-                            "volume": op.get("volume", 0.8),
-                            "looping": op.get("looping") if op.get("looping") is not None else True,
-                            "effects": op.get("effects", {}),
-                            "playback_state": "stopped",
-                            "started_at": None,
-                            "paused_elapsed": None,
-                        }
+                        channel_state = AudioChannelState(
+                            filename=op.get("filename"),
+                            asset_id=new_asset_id,
+                            s3_url=op.get("s3_url"),
+                            volume=op.get("volume", 0.8),
+                            looping=op.get("looping") if op.get("looping") is not None else True,
+                            effects=op.get("effects", {}),
+                            playback_state="stopped",
+                            started_at=None,
+                            paused_elapsed=None,
+                        )
 
                     # Preserve channel-level mute/solo (not asset-level — survives track swaps)
-                    channel_state["muted"] = old_ch.get("muted", False)
-                    channel_state["soloed"] = old_ch.get("soloed", False)
+                    channel_state.muted = old_ch.get("muted", False)
+                    channel_state.soloed = old_ch.get("soloed", False)
 
-                    GameService.update_audio_state(client_id, track_id, channel_state)
+                    GameService.update_audio_state(client_id, track_id, channel_state.model_dump())
 
                     # 4. Remove saved config (it's now active in a channel)
                     if new_asset_id and saved_config:
                         GameService.remove_track_config(client_id, new_asset_id)
 
                     # Update op so the broadcast carries the resolved config
-                    op["volume"] = channel_state["volume"]
-                    op["looping"] = channel_state["looping"]
-                    op["effects"] = channel_state["effects"]
-                    op["paused_elapsed"] = channel_state["paused_elapsed"]
+                    op["volume"] = channel_state.volume
+                    op["looping"] = channel_state.looping
+                    op["effects"] = channel_state.effects.model_dump()
+                    op["paused_elapsed"] = channel_state.paused_elapsed
 
                 elif operation == "effects":
                     ch = current_audio_state.get(track_id, {})
-                    channel_state = {**ch, "effects": op.get("effects", {})}
-                    GameService.update_audio_state(client_id, track_id, channel_state)
+                    channel_state = AudioChannelState(**{**ch, "effects": op.get("effects", {})})
+                    GameService.update_audio_state(client_id, track_id, channel_state.model_dump())
 
                 elif operation == "mute":
                     ch = current_audio_state.get(track_id, {})
-                    channel_state = {**ch, "muted": op.get("muted", False)}
-                    GameService.update_audio_state(client_id, track_id, channel_state)
+                    channel_state = AudioChannelState(**{**ch, "muted": op.get("muted", False)})
+                    GameService.update_audio_state(client_id, track_id, channel_state.model_dump())
 
                 elif operation == "solo":
                     ch = current_audio_state.get(track_id, {})
-                    channel_state = {**ch, "soloed": op.get("soloed", False)}
-                    GameService.update_audio_state(client_id, track_id, channel_state)
+                    channel_state = AudioChannelState(**{**ch, "soloed": op.get("soloed", False)})
+                    GameService.update_audio_state(client_id, track_id, channel_state.model_dump())
 
                 elif operation == "clear":
                     # Save outgoing track's full config before clearing
                     old_ch = current_audio_state.get(track_id, {})
                     old_asset_id = old_ch.get("asset_id")
                     if old_asset_id:
-                        track_config = {
-                            "volume": old_ch.get("volume"),
-                            "looping": old_ch.get("looping"),
-                            "effects": old_ch.get("effects", {}),
-                            "paused_elapsed": old_ch.get("paused_elapsed"),
-                        }
-                        GameService.save_track_config(client_id, old_asset_id, track_config)
+                        track_config = AudioTrackConfig(
+                            volume=old_ch.get("volume"),
+                            looping=old_ch.get("looping"),
+                            effects=AudioEffects(**(old_ch.get("effects") or {})),
+                            paused_elapsed=old_ch.get("paused_elapsed"),
+                        )
+                        GameService.save_track_config(client_id, old_asset_id, track_config.model_dump())
 
-                    channel_state = {
-                        "filename": None,
-                        "asset_id": None,
-                        "s3_url": None,
-                        "volume": op.get("volume", 0.8),
-                        "looping": False,
-                        "playback_state": "stopped",
-                        "started_at": None,
-                        "paused_elapsed": None,
-                    }
-                    GameService.update_audio_state(client_id, track_id, channel_state)
+                    channel_state = AudioChannelState(
+                        volume=op.get("volume", 0.8),
+                        looping=False,
+                    )
+                    GameService.update_audio_state(client_id, track_id, channel_state.model_dump())
 
             print(f"🎵 Audio state persisted to MongoDB for {len(operations)} operations")
         except Exception as e:

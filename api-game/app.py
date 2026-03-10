@@ -18,7 +18,17 @@ from imageservice import ImageService, ImageSettings
 from message_templates import format_message, MESSAGE_TEMPLATES
 from models.log_type import LogType
 from websocket_handlers.connection_manager import manager as connection_manager
-from schemas.session_schemas import SessionStartRequest, SessionStartResponse, SessionEndRequest, SessionEndResponse
+from shared_contracts.session import (
+    SessionStartPayload,
+    SessionStartResponse,
+    SessionEndFinalState,
+    SessionEndResponse,
+    PlayerState,
+    SessionStats,
+)
+from shared_contracts.map import MapConfig
+from shared_contracts.image import ImageConfig
+from schemas.session_schemas import SessionEndRequest
 from datetime import datetime
 
 logger = logging.getLogger()
@@ -396,7 +406,7 @@ def gameservice_create_with_id(room_id: str, settings: GameSettings):
     return {"id": new_room}
 
 @app.post("/game/session/start", response_model=SessionStartResponse)
-async def create_session(request: SessionStartRequest):
+async def create_session(request: SessionStartPayload):
     """
     Create MongoDB active game for a session.
 
@@ -443,8 +453,8 @@ async def create_session(request: SessionStartRequest):
             room_host=request.dm_username.lower(),
             available_assets=available_assets,
             campaign_id=request.campaign_id,  # For proxying asset requests to api-site
-            audio_state=request.audio_config if request.audio_config else {},
-            audio_track_config=request.audio_track_config if request.audio_track_config else {}
+            audio_state={k: v.model_dump() for k, v in request.audio_config.items()} if request.audio_config else {},
+            audio_track_config={k: v.model_dump() for k, v in request.audio_track_config.items()} if request.audio_track_config else {}
         )
 
         # Use session_id as MongoDB _id (back-reference to PostgreSQL session)
@@ -453,38 +463,40 @@ async def create_session(request: SessionStartRequest):
         logger.info(f"Created game {game_id} for session {request.session_id} with {len(request.joined_user_ids)} joined players")
 
         # Restore map from previous session if available
-        if request.map_config and request.map_config.get("filename"):
+        if request.map_config and request.map_config.filename:
             try:
+                map_config = request.map_config
                 restored_map = MapSettings(
                     room_id=request.session_id,
-                    asset_id=request.map_config.get("asset_id"),
-                    filename=request.map_config["filename"],
-                    original_filename=request.map_config.get("original_filename", request.map_config["filename"]),
-                    file_path=request.map_config.get("file_path", ""),
-                    grid_config=request.map_config.get("grid_config"),
-                    map_image_config=request.map_config.get("map_image_config"),
+                    asset_id=map_config.asset_id,
+                    filename=map_config.filename,
+                    original_filename=map_config.original_filename or map_config.filename,
+                    file_path=map_config.file_path,
+                    grid_config=map_config.grid_config.model_dump() if map_config.grid_config else None,
+                    map_image_config=map_config.map_image_config,
                     uploaded_by="system",
                     active=True
                 )
                 map_service.set_active_map(request.session_id, restored_map)
-                logger.info(f"Restored map '{request.map_config['filename']}' for session {request.session_id}")
+                logger.info(f"Restored map '{map_config.filename}' for session {request.session_id}")
             except Exception as e:
                 logger.warning(f"Map restoration failed (non-fatal): {e}")
 
         # Restore image from previous session if available
-        if request.image_config and request.image_config.get("filename"):
+        if request.image_config and request.image_config.filename:
             try:
+                image_config = request.image_config
                 restored_image = ImageSettings(
                     room_id=request.session_id,
-                    asset_id=request.image_config.get("asset_id"),
-                    filename=request.image_config["filename"],
-                    original_filename=request.image_config.get("original_filename", request.image_config["filename"]),
-                    file_path=request.image_config.get("file_path", ""),
+                    asset_id=image_config.asset_id,
+                    filename=image_config.filename,
+                    original_filename=image_config.original_filename or image_config.filename,
+                    file_path=image_config.file_path,
                     loaded_by="system",
                     active=True
                 )
                 image_service.set_active_image(request.session_id, restored_image)
-                logger.info(f"Restored image '{request.image_config['filename']}' for session {request.session_id}")
+                logger.info(f"Restored image '{image_config.filename}' for session {request.session_id}")
             except Exception as e:
                 logger.warning(f"Image restoration failed (non-fatal): {e}")
 
@@ -547,11 +559,11 @@ async def end_session(request: SessionEndRequest, validate_only: bool = False):
         players = []
         for idx, seat in enumerate(room.get("seat_layout", [])):
             if seat != "empty":
-                players.append({
-                    "player_name": seat,
-                    "seat_position": idx,
-                    "seat_color": room.get("seat_colors", {}).get(str(idx))
-                })
+                players.append(PlayerState(
+                    player_name=seat,
+                    seat_position=idx,
+                    seat_color=room.get("seat_colors", {}).get(str(idx), "")
+                ))
 
         # Calculate session duration
         created_at = room.get("created_at")
@@ -567,43 +579,45 @@ async def end_session(request: SessionEndRequest, validate_only: bool = False):
 
         # Get active map state for ETL
         active_map = map_service.get_active_map(request.session_id)
-        map_state = {}
-        if active_map:
-            map_state = {
-                "asset_id": active_map.get("asset_id"),
-                "filename": active_map.get("filename"),
-                "original_filename": active_map.get("original_filename"),
-                "grid_config": active_map.get("grid_config"),
-                "map_image_config": active_map.get("map_image_config")
-            }
+        map_state = None
+        if active_map and active_map.get("filename"):
+            map_state = MapConfig(
+                asset_id=active_map["asset_id"],
+                filename=active_map["filename"],
+                original_filename=active_map.get("original_filename"),
+                file_path=active_map["file_path"],
+                grid_config=active_map.get("grid_config"),
+                map_image_config=active_map.get("map_image_config"),
+            )
 
         # Get active image state for ETL
         active_image = image_service.get_active_image(request.session_id)
-        image_state = {}
-        if active_image:
-            image_state = {
-                "asset_id": active_image.get("asset_id"),
-                "filename": active_image.get("filename"),
-                "original_filename": active_image.get("original_filename"),
-            }
+        image_state = None
+        if active_image and active_image.get("filename"):
+            image_state = ImageConfig(
+                asset_id=active_image["asset_id"],
+                filename=active_image["filename"],
+                original_filename=active_image.get("original_filename"),
+                file_path=active_image["file_path"],
+            )
 
         # Get active_display from game session
         active_display = image_service.get_active_display(request.session_id)
 
         # Build final state
-        final_state = {
-            "players": players,
-            "session_stats": {
-                "duration_minutes": duration_minutes,
-                "total_logs": log_count,
-                "max_players": room.get("max_players", 0)
-            },
-            "audio_state": room.get("audio_state", {}),
-            "audio_track_config": room.get("audio_track_config", {}),
-            "map_state": map_state,
-            "image_state": image_state,
-            "active_display": active_display
-        }
+        final_state = SessionEndFinalState(
+            players=players,
+            session_stats=SessionStats(
+                duration_minutes=duration_minutes,
+                total_logs=log_count,
+                max_players=room.get("max_players", 0),
+            ),
+            audio_state=room.get("audio_state", {}),
+            audio_track_config=room.get("audio_track_config", {}),
+            map_state=map_state,
+            image_state=image_state,
+            active_display=active_display,
+        )
 
         # If not validate_only, delete the game (deprecated flow)
         if not validate_only:

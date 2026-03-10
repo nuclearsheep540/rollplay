@@ -1,3 +1,4 @@
+rollplay-shared-contracts @ file:./rollplay-shared-contracts
 fastapi == 0.108.0
 pydantic-settings == 2.1.0
 uvicorn == 0.25.0
