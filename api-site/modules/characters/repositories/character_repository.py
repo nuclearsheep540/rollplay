@@ -8,7 +8,7 @@ from sqlalchemy.orm import Session, joinedload
 
 from modules.characters.model.character_model import Character as CharacterModel
 from modules.characters.model.character_class_model import CharacterClassEntry
-from modules.characters.model.character_ability_model import CharacterAbilityScore, CharacterOriginBonus
+from modules.characters.model.character_ability_model import CharacterAbilityScore
 from modules.characters.model.dnd_class_model import DndClass
 from modules.characters.model.dnd_ability_model import DndAbility
 from modules.characters.domain.character_aggregate import (
@@ -52,16 +52,18 @@ class CharacterRepository:
             .options(
                 joinedload(CharacterModel.class_entries).joinedload(CharacterClassEntry.dnd_class),
                 joinedload(CharacterModel.ability_score_entries).joinedload(CharacterAbilityScore.dnd_ability),
-                joinedload(CharacterModel.origin_bonus_entries).joinedload(CharacterOriginBonus.dnd_ability),
             )
         )
 
     def _model_to_aggregate(self, model: CharacterModel) -> CharacterAggregate:
         """Helper to convert ORM model → Domain aggregate"""
-        # Build ability scores from join table
+        # Build ability scores and origin bonuses from the same join table
         scores_dict = {}
+        origin_ability_bonuses = {}
         for entry in (model.ability_score_entries or []):
             scores_dict[entry.dnd_ability.name] = entry.score
+            if entry.origin_bonus > 0:
+                origin_ability_bonuses[entry.dnd_ability.name] = entry.origin_bonus
         ability_scores = AbilityScores.from_dict(scores_dict) if scores_dict else AbilityScores.default()
 
         # Build character classes from join table
@@ -72,11 +74,6 @@ class CharacterRepository:
             )
             for entry in (model.class_entries or [])
         ]
-
-        # Build origin bonuses from join table
-        origin_ability_bonuses = {}
-        for entry in (model.origin_bonus_entries or []):
-            origin_ability_bonuses[entry.dnd_ability.name] = entry.bonus
 
         return CharacterAggregate(
             id=model.id,
@@ -151,7 +148,6 @@ class CharacterRepository:
             # Sync join tables
             self._sync_classes(character_model, aggregate, class_lookup)
             self._sync_ability_scores(character_model, aggregate, ability_lookup)
-            self._sync_origin_bonuses(character_model, aggregate, ability_lookup)
 
         else:
             # Create new character
@@ -182,23 +178,16 @@ class CharacterRepository:
                     level=class_info.level
                 ))
 
-            # Insert ability score entries
+            # Insert ability score entries (with background bonuses on same row)
             scores = aggregate.ability_scores.to_dict()
+            bonuses = aggregate.origin_ability_bonuses or {}
             for ability_name, score in scores.items():
                 self.db.add(CharacterAbilityScore(
                     character_id=character_model.id,
                     ability_id=ability_lookup[ability_name],
-                    score=score
+                    score=score,
+                    origin_bonus=bonuses.get(ability_name, 0)
                 ))
-
-            # Insert origin bonus entries (sparse — only non-zero)
-            for ability_name, bonus in (aggregate.origin_ability_bonuses or {}).items():
-                if bonus > 0:
-                    self.db.add(CharacterOriginBonus(
-                        character_id=character_model.id,
-                        ability_id=ability_lookup[ability_name],
-                        bonus=bonus
-                    ))
 
         self.db.commit()
         self.db.refresh(character_model)
@@ -227,48 +216,32 @@ class CharacterRepository:
                 ))
 
     def _sync_ability_scores(self, model: CharacterModel, aggregate: CharacterAggregate, ability_lookup: Dict[str, int]) -> None:
-        """Diff and sync character_ability_scores join table"""
+        """Diff and sync character_ability_scores join table (scores + background bonuses)"""
+        scores = aggregate.ability_scores.to_dict()
+        bonuses = aggregate.origin_ability_bonuses or {}
         desired = {
-            ability_lookup[name]: score
-            for name, score in aggregate.ability_scores.to_dict().items()
+            ability_lookup[name]: (scores[name], bonuses.get(name, 0))
+            for name in scores
         }
         current = {entry.ability_id: entry for entry in model.ability_score_entries}
 
         for ability_id, entry in current.items():
             if ability_id not in desired:
                 self.db.delete(entry)
-            elif entry.score != desired[ability_id]:
-                entry.score = desired[ability_id]
+            else:
+                desired_score, desired_bonus = desired[ability_id]
+                if entry.score != desired_score:
+                    entry.score = desired_score
+                if entry.origin_bonus != desired_bonus:
+                    entry.origin_bonus = desired_bonus
 
-        for ability_id, score in desired.items():
+        for ability_id, (score, bonus) in desired.items():
             if ability_id not in current:
                 self.db.add(CharacterAbilityScore(
                     character_id=model.id,
                     ability_id=ability_id,
-                    score=score
-                ))
-
-    def _sync_origin_bonuses(self, model: CharacterModel, aggregate: CharacterAggregate, ability_lookup: Dict[str, int]) -> None:
-        """Diff and sync character_origin_bonuses join table"""
-        desired = {
-            ability_lookup[name]: bonus
-            for name, bonus in (aggregate.origin_ability_bonuses or {}).items()
-            if bonus > 0
-        }
-        current = {entry.ability_id: entry for entry in model.origin_bonus_entries}
-
-        for ability_id, entry in current.items():
-            if ability_id not in desired:
-                self.db.delete(entry)
-            elif entry.bonus != desired[ability_id]:
-                entry.bonus = desired[ability_id]
-
-        for ability_id, bonus in desired.items():
-            if ability_id not in current:
-                self.db.add(CharacterOriginBonus(
-                    character_id=model.id,
-                    ability_id=ability_id,
-                    bonus=bonus
+                    score=score,
+                    origin_bonus=bonus
                 ))
 
     def delete(self, character_id: UUID) -> bool:

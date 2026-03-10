@@ -31,7 +31,6 @@ class Character(Base):
     # Relationships to normalized join tables
     class_entries = relationship("CharacterClassEntry", back_populates="character", cascade="all, delete-orphan", passive_deletes=True)
     ability_score_entries = relationship("CharacterAbilityScore", back_populates="character", cascade="all, delete-orphan", passive_deletes=True)
-    origin_bonus_entries = relationship("CharacterOriginBonus", back_populates="character", cascade="all, delete-orphan", passive_deletes=True)
 
     def __repr__(self):
         classes_str = ', '.join([f"{e.dnd_class.name} {e.level}" for e in (self.class_entries or [])]) if self.class_entries else ''
