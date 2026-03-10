@@ -4,7 +4,7 @@
 from typing import List, Optional
 from uuid import UUID
 
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, selectinload
 from sqlalchemy import and_
 
 from modules.campaign.domain.campaign_aggregate import CampaignAggregate
@@ -76,6 +76,7 @@ class GetCampaignMembers:
         # Imports here to avoid circular dependencies between modules
         from modules.user.model.user_model import User
         from modules.characters.model.character_model import Character
+        from modules.characters.model.character_class_model import CharacterClassEntry
 
         campaign = self.campaign_repo.get_by_id(campaign_id)
         if not campaign:
@@ -95,6 +96,9 @@ class GetCampaignMembers:
             # Get character locked to THIS campaign (not just any character owned by user)
             character = (
                 self.db.query(Character)
+                .options(
+                    selectinload(Character.class_entries).joinedload(CharacterClassEntry.dnd_class)
+                )
                 .filter(
                     and_(
                         Character.user_id == member_id,
@@ -107,9 +111,9 @@ class GetCampaignMembers:
 
             # Format multi-class
             character_class_str = None
-            if character and character.character_classes:
+            if character and character.class_entries:
                 character_class_str = ' / '.join([
-                    cc['class'] for cc in character.character_classes
+                    entry.dnd_class.name for entry in character.class_entries
                 ])
 
             members.append({

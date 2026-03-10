@@ -4,13 +4,14 @@
 from typing import List, Optional
 from uuid import UUID
 from sqlalchemy import or_
-from sqlalchemy.orm import Session as DbSession
+from sqlalchemy.orm import Session as DbSession, selectinload
 
 from modules.session.repositories.session_repository import SessionRepository
 from modules.session.api.schemas import SessionResponse, RosterPlayerResponse
 from modules.campaign.model.session_model import Session as SessionModel, SessionJoinedUser
 from modules.user.model.user_model import User
 from modules.characters.model.character_model import Character
+from modules.characters.model.character_class_model import CharacterClassEntry
 
 
 def _build_response(db: DbSession, model: SessionModel) -> SessionResponse:
@@ -31,6 +32,8 @@ def _build_response(db: DbSession, model: SessionModel) -> SessionResponse:
         User, SessionJoinedUser.user_id == User.id
     ).outerjoin(
         Character, SessionJoinedUser.selected_character_id == Character.id
+    ).options(
+        selectinload(Character.class_entries).joinedload(CharacterClassEntry.dnd_class)
     ).filter(
         SessionJoinedUser.session_id == model.id
     ).all()
@@ -40,9 +43,9 @@ def _build_response(db: DbSession, model: SessionModel) -> SessionResponse:
     for joined_user, user, character in roster_query:
         joined_user_ids.append(user.id)
         character_class_str = None
-        if character and character.character_classes:
+        if character and character.class_entries:
             character_class_str = ' / '.join(
-                [cc.character_class.value for cc in character.character_classes]
+                [entry.dnd_class.name for entry in character.class_entries]
             )
         roster.append(RosterPlayerResponse(
             user_id=user.id,
