@@ -582,10 +582,10 @@ async def end_session(request: SessionEndRequest, validate_only: bool = False):
         map_state = None
         if active_map and active_map.get("filename"):
             map_state = MapConfig(
-                asset_id=active_map.get("asset_id", ""),
+                asset_id=active_map["asset_id"],
                 filename=active_map["filename"],
                 original_filename=active_map.get("original_filename"),
-                file_path=active_map.get("file_path", ""),
+                file_path=active_map["file_path"],
                 grid_config=active_map.get("grid_config"),
                 map_image_config=active_map.get("map_image_config"),
             )
@@ -595,10 +595,10 @@ async def end_session(request: SessionEndRequest, validate_only: bool = False):
         image_state = None
         if active_image and active_image.get("filename"):
             image_state = ImageConfig(
-                asset_id=active_image.get("asset_id", ""),
+                asset_id=active_image["asset_id"],
                 filename=active_image["filename"],
                 original_filename=active_image.get("original_filename"),
-                file_path=active_image.get("file_path", ""),
+                file_path=active_image["file_path"],
             )
 
         # Get active_display from game session
