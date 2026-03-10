@@ -60,18 +60,19 @@ class GameService:
         except Exception:
             return {"_id": room_id}
 
+    @staticmethod
     def _get_active_session():
         "returns the active sessions collection"
         username = CONFIG.get('MONGO_USER')
         password = CONFIG.get('MONGO_PASS')
-        try: 
+        try:
             conn = MongoClient(f'mongodb://{username}:{password}@mongo')
             db = conn.rollplay
-            collection = db.active_sessions
-            logger.info("Connected successfully to mongo DB") 
-        except Exception:   
+            logger.info("Connected successfully to mongo DB")
+            return db.active_sessions
+        except Exception:
             logger.error("Could not connect to MongoDB")
-        return collection
+            raise
 
     # need to be able to generate a room_id
     # creating the room needs to update mongo with this player and basic config
