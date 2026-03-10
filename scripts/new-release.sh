@@ -268,7 +268,7 @@ TAG="rollplay-${RELEASE_VERSION}"
 echo ""
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 echo "Ready to commit, tag, and push:"
-echo "  commit: releases.json + .env"
+echo "  commit: releases.json"
 echo "  tag:    $TAG"
 echo "  push:   origin main --tags"
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
@@ -277,14 +277,14 @@ if [[ "$confirm" != "y" && "$confirm" != "Y" ]]; then
     echo ""
     echo "Manifest and .env updated locally but NOT committed."
     echo "To finish manually:"
-    echo "  git add releases.json .env"
+    echo "  git add releases.json"
     echo "  git commit -m \"release $RELEASE_VERSION\""
     echo "  git tag $TAG"
     echo "  git push origin main --tags"
     exit 0
 fi
 
-git add releases.json .env
+git add releases.json
 git commit -m "release $RELEASE_VERSION — $RELEASE_DESCRIPTION"
 git tag "$TAG"
 git push origin main --tags
