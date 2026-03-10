@@ -77,9 +77,6 @@ def _to_campaign_response(campaign: CampaignAggregate, user_repo: UserRepository
         hero_image=campaign.hero_image,
         host_id=str(campaign.host_id),
         host_screen_name=host_screen_name,
-        assets=campaign.assets,
-        scenes=campaign.scenes,
-        npc_factory=campaign.npc_factory,
         created_at=campaign.created_at,
         updated_at=campaign.updated_at,
         sessions=[],  # Sessions fetched separately via session module

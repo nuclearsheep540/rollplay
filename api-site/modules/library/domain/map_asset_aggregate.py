@@ -66,7 +66,6 @@ class MapAsset(MediaAssetAggregate):
             asset_type=MediaAssetType.MAP,  # Always MAP
             file_size=file_size,
             campaign_ids=campaign_ids,
-            session_ids=[],
             created_at=datetime.utcnow(),
             updated_at=None,
             grid_width=grid_width,
@@ -96,7 +95,6 @@ class MapAsset(MediaAssetAggregate):
             asset_type=base.asset_type,
             file_size=base.file_size,
             campaign_ids=base.campaign_ids,
-            session_ids=base.session_ids,
             created_at=base.created_at,
             updated_at=base.updated_at,
             grid_width=grid_width,

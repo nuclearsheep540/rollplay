@@ -110,7 +110,6 @@ class MediaAssetRepository:
             existing.asset_type = aggregate.asset_type
             existing.file_size = aggregate.file_size
             existing.campaign_ids = aggregate.campaign_ids
-            existing.session_ids = aggregate.session_ids
 
             # Update map-specific fields if MapAsset
             if isinstance(aggregate, MapAsset) and isinstance(existing, MapAssetModel):
@@ -144,7 +143,6 @@ class MediaAssetRepository:
                     asset_type=aggregate.asset_type,
                     file_size=aggregate.file_size,
                     campaign_ids=aggregate.campaign_ids,
-                    session_ids=aggregate.session_ids,
                     grid_width=aggregate.grid_width,
                     grid_height=aggregate.grid_height,
                     grid_opacity=aggregate.grid_opacity
@@ -159,7 +157,6 @@ class MediaAssetRepository:
                     asset_type=aggregate.asset_type,
                     file_size=aggregate.file_size,
                     campaign_ids=aggregate.campaign_ids,
-                    session_ids=aggregate.session_ids,
                     duration_seconds=aggregate.duration_seconds,
                     default_volume=aggregate.default_volume,
                     default_looping=aggregate.default_looping,
@@ -177,7 +174,6 @@ class MediaAssetRepository:
                     asset_type=aggregate.asset_type,
                     file_size=aggregate.file_size,
                     campaign_ids=aggregate.campaign_ids,
-                    session_ids=aggregate.session_ids,
                     duration_seconds=aggregate.duration_seconds,
                     default_volume=aggregate.default_volume,
                     default_looping=aggregate.default_looping
@@ -191,8 +187,7 @@ class MediaAssetRepository:
                     content_type=aggregate.content_type,
                     asset_type=aggregate.asset_type,
                     file_size=aggregate.file_size,
-                    campaign_ids=aggregate.campaign_ids,
-                    session_ids=aggregate.session_ids
+                    campaign_ids=aggregate.campaign_ids
                 )
             else:
                 model = MediaAssetModel(
@@ -203,8 +198,7 @@ class MediaAssetRepository:
                     content_type=aggregate.content_type,
                     asset_type=aggregate.asset_type,
                     file_size=aggregate.file_size,
-                    campaign_ids=aggregate.campaign_ids,
-                    session_ids=aggregate.session_ids
+                    campaign_ids=aggregate.campaign_ids
                 )
             self.db.add(model)
 
@@ -237,7 +231,6 @@ class MediaAssetRepository:
             asset_type=model.asset_type,
             file_size=model.file_size,
             campaign_ids=list(model.campaign_ids) if model.campaign_ids else [],
-            session_ids=list(model.session_ids) if model.session_ids else [],
             created_at=model.created_at,
             updated_at=model.updated_at
         )

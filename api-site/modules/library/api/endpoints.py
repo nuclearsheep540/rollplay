@@ -8,7 +8,7 @@ Provides REST endpoints for media asset management:
 - GET /upload-url - Generate presigned S3 upload URL
 - POST /confirm - Confirm upload and create media asset record
 - GET / - List media assets with optional filters
-- POST /{id}/associate - Associate media asset with campaign/session
+- POST /{id}/associate - Associate media asset with campaign
 - DELETE /{id} - Delete media asset
 """
 
@@ -77,7 +77,7 @@ def _to_media_asset_response(asset, s3_service: S3Service = None) -> MediaAssetR
             asset_type=asset_type_value,
             file_size=asset.file_size,
             campaign_ids=[str(cid) for cid in asset.campaign_ids],
-            session_ids=[str(sid) for sid in asset.session_ids],
+
             created_at=asset.created_at,
             updated_at=asset.updated_at,
             grid_width=asset.grid_width,
@@ -97,7 +97,7 @@ def _to_media_asset_response(asset, s3_service: S3Service = None) -> MediaAssetR
             asset_type=asset_type_value,
             file_size=asset.file_size,
             campaign_ids=[str(cid) for cid in asset.campaign_ids],
-            session_ids=[str(sid) for sid in asset.session_ids],
+
             created_at=asset.created_at,
             updated_at=asset.updated_at,
             duration_seconds=asset.duration_seconds,
@@ -120,7 +120,7 @@ def _to_media_asset_response(asset, s3_service: S3Service = None) -> MediaAssetR
             asset_type=asset_type_value,
             file_size=asset.file_size,
             campaign_ids=[str(cid) for cid in asset.campaign_ids],
-            session_ids=[str(sid) for sid in asset.session_ids],
+
             created_at=asset.created_at,
             updated_at=asset.updated_at,
             duration_seconds=asset.duration_seconds,
@@ -138,7 +138,6 @@ def _to_media_asset_response(asset, s3_service: S3Service = None) -> MediaAssetR
         asset_type=asset_type_value,
         file_size=asset.file_size,
         campaign_ids=[str(cid) for cid in asset.campaign_ids],
-        session_ids=[str(sid) for sid in asset.session_ids],
         created_at=asset.created_at,
         updated_at=asset.updated_at
     )
@@ -287,15 +286,14 @@ async def associate_media_asset(
     s3_service: S3Service = Depends(get_s3_service)
 ) -> MediaAssetResponse:
     """
-    Associate a media asset with a campaign (and optionally a session).
+    Associate a media asset with a campaign.
     """
     try:
         command = AssociateWithCampaign(repo, session_repo)
         asset = command.execute(
             asset_id=asset_id,
             campaign_id=request.campaign_id,
-            user_id=current_user.id,
-            session_id=request.session_id
+            user_id=current_user.id
         )
 
         logger.info(f"Associated media asset {asset_id} with campaign {request.campaign_id}")

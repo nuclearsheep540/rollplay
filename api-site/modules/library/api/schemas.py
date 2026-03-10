@@ -29,9 +29,8 @@ class ConfirmUploadRequest(BaseModel):
 
 
 class AssociateRequest(BaseModel):
-    """Request to associate a media asset with a campaign/session"""
+    """Request to associate a media asset with a campaign"""
     campaign_id: UUID = Field(..., description="Campaign to associate with")
-    session_id: Optional[UUID] = Field(None, description="Session to associate with (optional)")
 
 
 class RenameRequest(BaseModel):
@@ -55,7 +54,6 @@ class MediaAssetResponse(BaseModel):
     asset_type: str  # Return as string for JSON compatibility
     file_size: Optional[int] = None
     campaign_ids: List[str] = []
-    session_ids: List[str] = []
     created_at: datetime
     updated_at: Optional[datetime] = None
 

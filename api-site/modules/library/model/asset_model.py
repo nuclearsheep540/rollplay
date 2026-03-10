@@ -52,7 +52,6 @@ class MediaAsset(Base):
     # Associations (many-to-many via ARRAY for POC simplicity)
     # Full implementation may use junction tables
     campaign_ids = Column(ARRAY(UUID(as_uuid=True)), default=[], nullable=False)
-    session_ids = Column(ARRAY(UUID(as_uuid=True)), default=[], nullable=False)
 
     # Timestamps
     created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)

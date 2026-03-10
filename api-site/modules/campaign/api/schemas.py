@@ -43,9 +43,6 @@ class CampaignResponse(BaseModel):
     hero_image: Optional[str]
     host_id: str
     host_screen_name: Optional[str] = None
-    assets: Optional[dict]
-    scenes: Optional[dict]
-    npc_factory: Optional[dict]
     created_at: datetime
     updated_at: datetime
     sessions: List = []  # Sessions fetched separately via session module

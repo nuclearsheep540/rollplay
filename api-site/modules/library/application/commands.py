@@ -279,7 +279,7 @@ class ChangeAssetType:
 
 class AssociateWithCampaign:
     """
-    Associate a media asset with a campaign (and optionally a session).
+    Associate a media asset with a campaign.
     """
 
     def __init__(self, repository: MediaAssetRepository, session_repository: SessionRepository = None):
@@ -290,17 +290,15 @@ class AssociateWithCampaign:
         self,
         asset_id: UUID,
         campaign_id: UUID,
-        user_id: UUID,
-        session_id: Optional[UUID] = None
+        user_id: UUID
     ) -> MediaAssetAggregate:
         """
-        Associate media asset with campaign/session.
+        Associate media asset with campaign.
 
         Args:
             asset_id: The asset to associate
             campaign_id: The campaign to associate with
             user_id: The requesting user's ID
-            session_id: Optional session to associate with
 
         Returns:
             Updated MediaAssetAggregate
@@ -319,10 +317,7 @@ class AssociateWithCampaign:
         if self.session_repository:
             check_asset_in_active_session(asset.campaign_ids, self.session_repository)
 
-        if session_id:
-            asset.associate_with_session(session_id, campaign_id)
-        else:
-            asset.associate_with_campaign(campaign_id)
+        asset.associate_with_campaign(campaign_id)
 
         self.repository.save(asset)
 
