@@ -12,6 +12,8 @@ from datetime import datetime
 from typing import Optional
 from uuid import UUID, uuid4
 
+from shared_contracts.audio import AudioChannelState, AudioEffects
+
 from modules.library.domain.asset_aggregate import MediaAssetAggregate
 from modules.library.domain.media_asset_type import MediaAssetType
 
@@ -177,37 +179,33 @@ class MusicAsset(MediaAssetAggregate):
             "effect_reverb_enabled": self.effect_reverb_enabled,
         }
 
-    def build_effects_for_game(self) -> dict:
-        """Build the effects shape expected by api-game/MongoDB.
+    def build_effects_for_game(self) -> AudioEffects:
+        """Build the effects contract for the api-game boundary.
 
         Returns enabled-only flags. Effect parameters (frequency, mix, preset)
         are app-defined constants on the frontend — never stored in the database.
-        Returns empty dict if no effects have been configured.
         """
-        if (self.effect_hpf_enabled is None
-                and self.effect_lpf_enabled is None
-                and self.effect_reverb_enabled is None):
-            return {}
-        return {
-            "hpf": self.effect_hpf_enabled or False,
-            "lpf": self.effect_lpf_enabled or False,
-            "reverb": self.effect_reverb_enabled or False,
-        }
+        return AudioEffects(
+            hpf=self.effect_hpf_enabled or False,
+            lpf=self.effect_lpf_enabled or False,
+            reverb=self.effect_reverb_enabled or False,
+        )
 
-    def build_channel_state_for_game(self, s3_url: str) -> dict:
-        """Build the MongoDB audio channel state from domain fields.
+    def build_channel_state_for_game(self, s3_url: str) -> AudioChannelState:
+        """Build the audio channel state contract for the api-game boundary.
 
-        Constructs the complete channel state shape that api-game expects,
-        translating asset-level defaults into the runtime boundary contract.
+        Translates asset-level defaults into the shared contract type.
+        Contract defaults (volume=0.8, looping=True, playback_state="stopped")
+        apply when domain fields are None.
         """
-        return {
+        kwargs = {
             "asset_id": str(self.id),
             "filename": self.filename,
             "s3_url": s3_url,
-            "volume": self.default_volume or 0.8,
-            "looping": self.default_looping if self.default_looping is not None else True,
             "effects": self.build_effects_for_game(),
-            "playback_state": "stopped",
-            "started_at": None,
-            "paused_elapsed": None,
         }
+        if self.default_volume is not None:
+            kwargs["volume"] = self.default_volume
+        if self.default_looping is not None:
+            kwargs["looping"] = self.default_looping
+        return AudioChannelState(**kwargs)

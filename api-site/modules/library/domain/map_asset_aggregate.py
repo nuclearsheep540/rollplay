@@ -13,6 +13,8 @@ from datetime import datetime
 from typing import List, Optional, Union
 from uuid import UUID, uuid4
 
+from shared_contracts.map import GridColorMode, GridConfig
+
 from modules.library.domain.asset_aggregate import MediaAssetAggregate
 from modules.library.domain.media_asset_type import MediaAssetType
 
@@ -142,45 +144,38 @@ class MapAsset(MediaAssetAggregate):
             "grid_opacity": self.grid_opacity
         }
 
-    def build_grid_config_for_game(self) -> dict | None:
-        """Build the full grid_config shape expected by api-game/MongoDB.
+    def build_grid_config_for_game(self) -> GridConfig | None:
+        """Build the grid config contract for the api-game boundary.
 
-        Translates domain fields into the runtime structure the frontend renders.
-        Display defaults (line_color, line_width) are presentation constants owned
-        by the frontend — they're reconstructed here to satisfy the boundary contract.
-        Returns None if no grid has been configured.
+        Contract defaults (line_color="#d1d5db", opacity=0.5, line_width=1)
+        apply when domain fields are None. Returns None if no grid configured.
         """
         if not self.has_grid_config():
             return None
-        opacity = self.grid_opacity if self.grid_opacity is not None else 0.3
-        return {
-            "grid_width": self.grid_width,
-            "grid_height": self.grid_height,
-            "enabled": True,
-            "colors": {
-                "edit_mode": {"line_color": "#d1d5db", "opacity": opacity, "line_width": 1},
-                "display_mode": {"line_color": "#d1d5db", "opacity": opacity, "line_width": 1},
-            },
-        }
+        color_kwargs = {}
+        if self.grid_opacity is not None:
+            color_kwargs["opacity"] = self.grid_opacity
+        color_mode = GridColorMode(**color_kwargs)
+        return GridConfig(
+            grid_width=self.grid_width,
+            grid_height=self.grid_height,
+            colors={"edit_mode": color_mode, "display_mode": color_mode},
+        )
 
-    def update_grid_config_from_game(self, game_grid_config: dict) -> None:
-        """Update domain fields from the api-game/MongoDB grid_config shape.
+    def update_grid_config_from_game(self, game_grid_config: GridConfig) -> None:
+        """Update domain fields from the api-game grid config contract.
 
         The inverse of build_grid_config_for_game(). Extracts domain-owned fields
-        (width, height, opacity) from the runtime structure. Opacity lives at
-        colors.display_mode.opacity in the game shape, not as a top-level field.
+        (width, height, opacity) from the contract type.
         """
         if not game_grid_config:
             return
-        grid_width = game_grid_config.get("grid_width")
-        grid_height = game_grid_config.get("grid_height")
-        # Opacity is nested in the colors structure in the game shape
-        grid_opacity = (
-            game_grid_config.get("colors", {}).get("display_mode", {}).get("opacity")
-        )
+        grid_opacity = None
+        if game_grid_config.colors and "display_mode" in game_grid_config.colors:
+            grid_opacity = game_grid_config.colors["display_mode"].opacity
         self.update_grid_config(
-            grid_width=grid_width,
-            grid_height=grid_height,
+            grid_width=game_grid_config.grid_width,
+            grid_height=game_grid_config.grid_height,
             grid_opacity=grid_opacity,
         )
 

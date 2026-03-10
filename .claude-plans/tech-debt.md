@@ -50,7 +50,7 @@ Catalogue of code smells, architectural inconsistencies, and patterns that contr
 
 ---
 
-### 4. SessionEntity uses `dict` for warehoused state
+### ~~4. SessionEntity uses `dict` for warehoused state~~ ✅ DONE
 
 **Location:** [session_aggregate.py:90-93](api-site/modules/session/domain/session_aggregate.py#L90-L93)
 
@@ -58,9 +58,7 @@ Catalogue of code smells, architectural inconsistencies, and patterns that contr
 
 **Why it matters:** The aggregate's `remove_asset_references()` method (line 177-206) uses raw `.get()` chains on these dicts to find and remove asset references. There's no structural guarantee about what's in these dicts.
 
-**Contracts impact:** After shared contracts, these could be typed as `Optional[Dict[str, AudioChannelState]]` etc. — but since api-site warehouses (not owns) this data, JSONB storage is still correct. The typing just gives us structural confidence when reading/writing.
-
-**Blocked by:** shared-contracts-acl PR 1 (define types) then PR 3 (type the aggregate fields).
+**Resolution:** Typing applied at the application layer (session commands) rather than the aggregate. `_extract_and_sync_game_state()` parses api-game responses as `SessionEndResponse` → typed `SessionEndFinalState`. `StartSession` builds typed `SessionStartPayload`. The aggregate fields stay as `Optional[dict]` because they hold thin JSONB references (`{"asset_id": "..."}`) — typing at the boundary gives structural confidence without adding complexity to persistence.
 
 ---
 
@@ -80,17 +78,13 @@ Catalogue of code smells, architectural inconsistencies, and patterns that contr
 
 ---
 
-### 6. StartSession command is ~270 lines of procedural code
+### ~~6. StartSession command is ~270 lines of procedural code~~ ✅ DONE
 
 **Location:** [commands.py:248-522](api-site/modules/session/application/commands.py#L248-L522)
 
 **Smell:** `StartSession.execute()` does everything in one method: validation, campaign lookup, session conflict check, host user lookup, asset fetching, parallel URL generation, audio config restoration, map config restoration, image config restoration, payload construction, HTTP call, response parsing, status update, event broadcasting, and error recovery.
 
-**Why it matters:** Difficult to test individual steps, hard to read, and mixes concerns (asset restoration is a different responsibility from payload construction). The audio/map/image restoration blocks (lines 400-451) are structurally identical — fetch asset, check existence, build dict — begging for extraction.
-
-**What "fixed" looks like:** Extract restoration logic into domain methods or a dedicated ETL builder. The command orchestrates; it doesn't build dicts field-by-field.
-
-**Blocked by:** Shared contracts make this easier — once contract types exist, the restoration becomes `asset.build_channel_state_for_game(url)` returning a typed object instead of manual dict construction.
+**Resolution:** Extracted three restoration helpers (`_restore_audio_config`, `_restore_map_config`, `_restore_image_config`) as class methods. Payload built as typed `SessionStartPayload`. Response parsed as `SessionStartResponse`. Audio restoration expanded to include `SfxAsset` (was `MusicAsset` only).
 
 ---
 
@@ -110,21 +104,17 @@ Catalogue of code smells, architectural inconsistencies, and patterns that contr
 
 ## api-site: Library Module (ETL Methods)
 
-### 8. `build_*_for_game()` methods return raw dicts
+### ~~8. `build_*_for_game()` methods return raw dicts~~ ✅ DONE
 
 **Locations:**
 - [music_asset_aggregate.py:180-213](api-site/modules/library/domain/music_asset_aggregate.py#L180-L213) (`build_effects_for_game`, `build_channel_state_for_game`)
 - [map_asset_aggregate.py:145-164](api-site/modules/library/domain/map_asset_aggregate.py#L145-L164) (`build_grid_config_for_game`)
 
-**Smell:** These methods return `dict` with string keys. No type safety on the return value, no validation that the dict matches what api-game expects.
-
-**Why it matters:** If you add a field to the contract but forget to update the builder, or misspell a key, it silently produces wrong data. The shape is only validated when api-game receives it (if at all — see #4 above).
-
-**What "fixed" looks like:** PR 3 of shared-contracts-acl — these methods return contract types (`AudioChannelState`, `GridConfig`, etc.) instead of dicts.
+**Resolution:** `build_effects_for_game()` → `AudioEffects`, `build_channel_state_for_game()` → `AudioChannelState`, `build_grid_config_for_game()` → `GridConfig | None`. Added `SfxAsset.build_channel_state_for_game()` → `AudioChannelState` (was missing). `update_grid_config_from_game()` now accepts `GridConfig` instead of `dict`.
 
 ---
 
-### 9. Duplicate constraint validation between aggregates and schemas
+### ~~9. Duplicate constraint validation between aggregates and schemas~~ ✅ DONE
 
 **Locations:**
 - [music_asset_aggregate.py:140](api-site/modules/library/domain/music_asset_aggregate.py#L140): `if not 0.0 <= default_volume <= 1.3`
@@ -133,28 +123,18 @@ Catalogue of code smells, architectural inconsistencies, and patterns that contr
 - [map_asset_aggregate.py:117-128](api-site/modules/library/domain/map_asset_aggregate.py#L117-L128): grid width/height 1-100, opacity 0.0-1.0
 - [schemas.py:74-76](api-site/modules/library/api/schemas.py#L74-L76): same constraints on `UpdateGridConfigRequest`
 
-**Smell:** The same business constraint (volume range, grid bounds) is defined in both the domain aggregate AND the API schema. Change one, forget the other, constraints silently diverge.
-
-**Why it matters:** This is the single-responsibility problem we discussed. When contracts arrive, the constraint should exist in ONE place (the contract), and both the aggregate and API schema should delegate to it.
-
-**What "fixed" looks like:** The contract defines the constraint once (`volume: Field(ge=0.0, le=1.3)`). The aggregate's builder methods (`build_channel_state_for_game()`) produce contract types — Pydantic validates at construction time, so the aggregate no longer needs its own manual range check for boundary output. The API schema can reference the same constraint or delegate to the contract type. The aggregate's own internal fields (`default_volume`) may keep their own validation as a domain concern — but the boundary duplication between API schema and aggregate is eliminated.
-
-**Blocked by:** shared-contracts-acl PR 1 + PR 3.
+**Resolution:** Contract types (`AudioChannelState`, `GridConfig`, `GridColorMode`) now define constraints once. Builder methods produce contract types — Pydantic validates at construction time. Domain aggregate constraints remain for mutation guards (`update_audio_config`, `update_grid_config`). API schema constraints remain for inbound user input validation. The boundary duplication (builder fallback defaults) is eliminated.
 
 ---
 
-### 10. Hardcoded presentation defaults in domain aggregates
+### ~~10. Hardcoded presentation defaults in domain aggregates~~ ✅ DONE
 
 **Locations:**
 - [music_asset_aggregate.py:207](api-site/modules/library/domain/music_asset_aggregate.py#L207): `"volume": self.default_volume or 0.8`
 - [music_asset_aggregate.py:208](api-site/modules/library/domain/music_asset_aggregate.py#L208): `"looping": ... if ... is not None else True`
 - [map_asset_aggregate.py:155-163](api-site/modules/library/domain/map_asset_aggregate.py#L155-L163): `"line_color": "#d1d5db"`, `"opacity": opacity`, `"line_width": 1`
 
-**Smell:** Domain aggregates embed presentation defaults (grid line colors, default volume values) that belong to the frontend or a shared constant. The aggregate shouldn't know that the default grid line color is `#d1d5db`.
-
-**Why it matters:** When the contract defines `volume: float = Field(default=0.8)`, the aggregate's `or 0.8` fallback becomes redundant. These should be in one place.
-
-**Blocked by:** shared-contracts-acl PR 1 (defaults in contract) then PR 3 (remove from aggregates).
+**Resolution:** Builder methods now construct contract types (`AudioChannelState`, `GridColorMode`) and omit fields when domain values are None — Pydantic fills in contract defaults (`volume=0.8`, `looping=True`, `line_color="#d1d5db"`, `opacity=0.5`, `line_width=1`). Grid opacity default changed from 0.3 → 0.5 (contract default wins).
 
 ---
 
@@ -323,9 +303,9 @@ Items that should ideally be cleaned up **before** or **alongside** shared contr
 |------|--------|----------------------|-----|
 | ~~#11 ObjectId helper~~ | ~~Small~~ | ✅ Done (`room_filter()`) | ~~Reduces PR 2 diff noise~~ |
 | ~~#12 Color palette constant~~ | ~~Tiny~~ | ✅ Done (`DEFAULT_SEAT_COLORS`) | ~~Independent~~ |
-| #9 Duplicate constraints | — | Fixed BY contracts | Contracts eliminate the duplication |
-| #10 Hardcoded defaults | — | Fixed BY contracts | Contract defaults replace inline fallbacks |
-| #8 Raw dict returns | — | Fixed BY contracts PR 3 | Builder methods return contract types |
+| ~~#9 Duplicate constraints~~ | ~~—~~ | ✅ Done (PR 3) | ~~Contracts eliminate the duplication~~ |
+| ~~#10 Hardcoded defaults~~ | ~~—~~ | ✅ Done (PR 3) | ~~Contract defaults replace inline fallbacks~~ |
+| ~~#8 Raw dict returns~~ | ~~—~~ | ✅ Done (PR 3) | ~~Builder methods return contract types~~ |
 
 Items that are independent cleanup (do anytime):
 
@@ -334,8 +314,9 @@ Items that are independent cleanup (do anytime):
 | ~~#1 `_to_session_response`~~ | ~~Medium~~ | ✅ Done (`72cc2bf`) |
 | ~~#2 Over-returning~~ | ~~Medium~~ | ✅ Done (204 No Content) |
 | ~~#3 `GetUserSessions`~~ | ~~Small~~ | ✅ Done (`72cc2bf`) |
+| ~~#4 SessionEntity dict fields~~ | ~~Medium~~ | ✅ Done (PR 3 — typed at application layer) |
 | ~~#5 Auth without authorization~~ | ~~Small~~ | ✅ Done (inline 403 checks) |
-| #6 StartSession size | Medium | Extract restoration helpers |
+| ~~#6 StartSession size~~ | ~~Medium~~ | ✅ Done (PR 3 — extracted restoration helpers) |
 | ~~#7 Pause/Finish duplication~~ | ~~Medium~~ | ✅ Done (shared ETL helpers) |
 | ~~#17 Silent WebSocket failures~~ | ~~Small~~ | ✅ Done (structured errors to sender) |
 | ~~#18 Raw dict returns on char endpoints~~ | ~~Small~~ | ✅ Done (204 No Content) |

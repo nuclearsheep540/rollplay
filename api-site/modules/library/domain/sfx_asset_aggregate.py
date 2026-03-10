@@ -12,6 +12,8 @@ from datetime import datetime
 from typing import Optional
 from uuid import UUID, uuid4
 
+from shared_contracts.audio import AudioChannelState, AudioEffects
+
 from modules.library.domain.asset_aggregate import MediaAssetAggregate
 from modules.library.domain.media_asset_type import MediaAssetType
 
@@ -141,3 +143,24 @@ class SfxAsset(MediaAssetAggregate):
             "default_volume": self.default_volume,
             "default_looping": self.default_looping
         }
+
+    def build_channel_state_for_game(self, s3_url: str) -> AudioChannelState:
+        """Build the audio channel state contract for the api-game boundary.
+
+        SFX defaults to looping=False (overrides contract default of True).
+        Contract defaults apply for volume and playback_state when domain
+        fields are None.
+        """
+        kwargs = {
+            "asset_id": str(self.id),
+            "filename": self.filename,
+            "s3_url": s3_url,
+            "effects": AudioEffects(),
+        }
+        if self.default_volume is not None:
+            kwargs["volume"] = self.default_volume
+        if self.default_looping is not None:
+            kwargs["looping"] = self.default_looping
+        else:
+            kwargs["looping"] = False
+        return AudioChannelState(**kwargs)
