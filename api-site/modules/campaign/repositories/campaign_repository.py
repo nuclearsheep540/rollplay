@@ -1,10 +1,13 @@
 # Copyright (C) 2025 Matthew Davey
 # SPDX-License-Identifier: GPL-3.0-or-later
 
+import logging
 from typing import List, Optional
 from uuid import UUID
 from sqlalchemy.orm import Session, joinedload
-from sqlalchemy import or_, and_
+from sqlalchemy import or_, and_, exists
+
+logger = logging.getLogger(__name__)
 
 from modules.campaign.model.campaign_model import Campaign as CampaignModel
 from modules.campaign.model.campaign_member_model import CampaignMember
@@ -44,14 +47,20 @@ class CampaignRepository:
     def get_by_member_id(self, user_id: UUID) -> List[CampaignAggregate]:
         """Get all campaigns where user is either host or player (accepted invites only)"""
         try:
+            is_player = exists().where(
+                and_(
+                    CampaignMember.campaign_id == CampaignModel.id,
+                    CampaignMember.user_id == user_id,
+                    CampaignMember.role == 'player'
+                )
+            )
             models = (
                 self.db.query(CampaignModel)
                 .options(joinedload(CampaignModel.members))
-                .outerjoin(CampaignMember)
                 .filter(
                     or_(
                         CampaignModel.host_id == user_id,
-                        and_(CampaignMember.user_id == user_id, CampaignMember.role == 'player')
+                        is_player
                     )
                 )
                 .order_by(CampaignModel.created_at.desc())
@@ -65,13 +74,13 @@ class CampaignRepository:
                     if campaign:
                         result.append(campaign)
                 except Exception as e:
-                    print(f"Error converting campaign {model.id} to domain: {e}")
+                    logger.error("Error converting campaign %s to domain: %s", model.id, e)
                     continue
 
             return result
 
         except Exception as e:
-            print(f"Error in get_by_member_id: {e}")
+            logger.error("Error in get_by_member_id: %s", e)
             return []
 
     def get_invited_campaigns(self, user_id: UUID) -> List[CampaignAggregate]:
@@ -96,13 +105,13 @@ class CampaignRepository:
                     if campaign:
                         result.append(campaign)
                 except Exception as e:
-                    print(f"Error converting campaign {model.id} to domain: {e}")
+                    logger.error("Error converting campaign %s to domain: %s", model.id, e)
                     continue
 
             return result
 
         except Exception as e:
-            print(f"Error in get_invited_campaigns: {e}")
+            logger.error("Error in get_invited_campaigns: %s", e)
             return []
 
     def save(self, aggregate: CampaignAggregate) -> UUID:

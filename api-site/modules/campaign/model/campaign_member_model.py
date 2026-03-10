@@ -1,7 +1,7 @@
 # Copyright (C) 2025 Matthew Davey
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-from sqlalchemy import Column, String, DateTime, ForeignKey, UniqueConstraint
+from sqlalchemy import Column, String, DateTime, ForeignKey, UniqueConstraint, CheckConstraint
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
@@ -30,6 +30,7 @@ class CampaignMember(Base):
 
     __table_args__ = (
         UniqueConstraint('campaign_id', 'user_id', name='uq_campaign_member'),
+        CheckConstraint("role IN ('player', 'invited')", name='ck_campaign_member_role'),
     )
 
     # Relationships
