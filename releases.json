@@ -1,8 +1,9 @@
 {
-  "latest": "0.27.1",
+  "latest": "0.27.2",
   "releases": {
     "0.27.1": {
       "date": "2026-03-10",
+      "commit": "16e2c23",
       "description": "Normalize JSONB columns phase 2",
       "services": {
         "app_version": "0.16.0",
