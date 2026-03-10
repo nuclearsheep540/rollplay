@@ -1,7 +1,7 @@
 # Copyright (C) 2025 Matthew Davey
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-from typing import Optional
+from typing import Dict, Optional
 from dataclasses import dataclass
 from uuid import UUID
 import httpx
@@ -10,6 +10,17 @@ import asyncio
 import os
 from concurrent.futures import ThreadPoolExecutor
 from sqlalchemy import update
+
+from shared_contracts.assets import AssetRef
+from shared_contracts.audio import AudioChannelState
+from shared_contracts.display import ActiveDisplayType
+from shared_contracts.image import ImageConfig
+from shared_contracts.map import MapConfig
+from shared_contracts.session import (
+    SessionEndResponse,
+    SessionStartPayload,
+    SessionStartResponse,
+)
 
 from modules.session.repositories.session_repository import SessionRepository
 from modules.user.repositories.user_repository import UserRepository
@@ -264,6 +275,74 @@ class StartSession:
         logger.info(f"Generated {len(successful)}/{len(assets)} presigned URLs with {max_workers} workers on {cpu_count} CPUs")
         return successful
 
+    def _restore_audio_config(
+        self, session: SessionEntity, asset_lookup: dict, url_map: dict
+    ) -> Dict[str, AudioChannelState]:
+        """Restore audio channel state from PostgreSQL domain aggregates (cold → hot)."""
+        audio_config = {}
+        if not session.audio_config or not self.asset_repo:
+            return audio_config
+        for channel_id, ch in session.audio_config.items():
+            asset_id = ch.get("asset_id")
+            if not asset_id:
+                continue
+            asset = asset_lookup.get(asset_id)
+            if not asset or not isinstance(asset, (MusicAsset, SfxAsset)):
+                logger.warning(f"Cannot restore channel {channel_id}: asset {asset_id} not in campaign")
+                continue
+            audio_config[channel_id] = asset.build_channel_state_for_game(url_map.get(asset.s3_key))
+        logger.info(f"Restoring audio config: {len(audio_config)} channels from domain aggregates")
+        return audio_config
+
+    @staticmethod
+    def _restore_map_config(
+        session: SessionEntity, asset_lookup: dict, url_map: dict
+    ) -> Optional[MapConfig]:
+        """Restore map config from PostgreSQL domain aggregate (cold → hot)."""
+        if not session.map_config or not session.map_config.get("asset_id"):
+            return None
+        map_asset_id = session.map_config["asset_id"]
+        map_asset = asset_lookup.get(map_asset_id)
+        if not map_asset:
+            logger.warning(f"Cannot restore map: asset {map_asset_id} not in campaign")
+            return None
+        fresh_url = url_map.get(map_asset.s3_key)
+        if not fresh_url:
+            logger.warning(f"Cannot restore map: asset {map_asset_id} has no presigned URL")
+            return None
+        logger.info(f"Restoring map: {map_asset.filename} with grid config")
+        return MapConfig(
+            asset_id=map_asset_id,
+            filename=map_asset.filename,
+            original_filename=map_asset.filename,
+            file_path=fresh_url,
+            grid_config=map_asset.build_grid_config_for_game() if isinstance(map_asset, MapAsset) else None,
+        )
+
+    @staticmethod
+    def _restore_image_config(
+        session: SessionEntity, asset_lookup: dict, url_map: dict
+    ) -> Optional[ImageConfig]:
+        """Restore image config from PostgreSQL domain aggregate (cold → hot)."""
+        if not session.image_config or not session.image_config.get("asset_id"):
+            return None
+        image_asset_id = session.image_config["asset_id"]
+        image_asset = asset_lookup.get(image_asset_id)
+        if not image_asset:
+            logger.warning(f"Cannot restore image: asset {image_asset_id} not in campaign")
+            return None
+        fresh_url = url_map.get(image_asset.s3_key)
+        if not fresh_url:
+            logger.warning(f"Cannot restore image: asset {image_asset_id} has no presigned URL")
+            return None
+        logger.info(f"Restoring image: {image_asset.filename}")
+        return ImageConfig(
+            asset_id=image_asset_id,
+            filename=image_asset.filename,
+            original_filename=image_asset.filename,
+            file_path=fresh_url,
+        )
+
     async def execute(self, session_id: UUID, host_id: UUID) -> SessionEntity:
         """
         Start a session.
@@ -324,26 +403,15 @@ class StartSession:
             dm_username = host_user.screen_name or host_user.email
 
             # 7. Fetch campaign assets and generate fresh presigned URLs
-            assets = []
+            campaign_assets = []
+            asset_lookup = {}
+            url_map = {}
             if self.asset_repo:
                 campaign_assets = self.asset_repo.get_by_campaign_id(session.campaign_id)
 
                 # Generate presigned URLs in parallel (CPU-bound HMAC signing)
                 url_map = await self._generate_presigned_urls_parallel(campaign_assets)
-
-                assets = [
-                    {
-                        "id": str(asset.id),
-                        "filename": asset.filename,
-                        "s3_key": asset.s3_key,
-                        # Convert enum to string for api-game JSON payload
-                        "asset_type": asset.asset_type.value if hasattr(asset.asset_type, 'value') else str(asset.asset_type),
-                        # Fresh presigned URL
-                        "s3_url": url_map.get(asset.s3_key)
-                    }
-                    for asset in campaign_assets
-                ]
-                logger.info(f"Found {len(assets)} assets for campaign {session.campaign_id} with {len(url_map)} fresh URLs")
+                logger.info(f"Found {len(campaign_assets)} assets for campaign {session.campaign_id} with {len(url_map)} fresh URLs")
 
                 # Build asset_id → asset aggregate lookup (single source of truth for warm-up)
                 asset_lookup = {str(a.id): a for a in campaign_assets}
@@ -351,79 +419,38 @@ class StartSession:
             # UX delay: Show "Starting" animation to users
             await asyncio.sleep(2)
 
-            # 8. Build payload for api-game — restore session state from domain aggregates
-            audio_config_for_game = {}
-            if session.audio_config and self.asset_repo:
-                for channel_id, ch in session.audio_config.items():
-                    asset_id = ch.get("asset_id")
-                    if not asset_id:
-                        continue
-                    asset = asset_lookup.get(asset_id)
-                    if not asset or not isinstance(asset, MusicAsset):
-                        logger.warning(f"Cannot restore channel {channel_id}: asset {asset_id} not in campaign")
-                        continue
-                    logger.info(f"DEBUG ETL cold→hot: {channel_id} → asset={asset_id}, pg_effects=({asset.effect_hpf_enabled}, {asset.effect_lpf_enabled}, {asset.effect_reverb_enabled}), build_effects={asset.build_effects_for_game()}")
-                    audio_config_for_game[channel_id] = asset.build_channel_state_for_game(url_map.get(asset.s3_key))
-                logger.info(f"Restoring audio config: {len(audio_config_for_game)} channels from domain aggregates")
+            # 8. Build typed payload for api-game — restore session state from domain aggregates
+            audio_config_for_game = self._restore_audio_config(session, asset_lookup, url_map)
+            map_config_for_game = self._restore_map_config(session, asset_lookup, url_map)
+            image_config_for_game = self._restore_image_config(session, asset_lookup, url_map)
 
-            map_config_for_game = {}
-            if session.map_config and session.map_config.get("asset_id") and self.asset_repo:
-                map_asset_id = session.map_config["asset_id"]
-                map_asset = asset_lookup.get(map_asset_id)
-                if map_asset:
-                    fresh_url = url_map.get(map_asset.s3_key)
-                    if fresh_url:
-                        map_config_for_game = {
-                            "asset_id": map_asset_id,
-                            "filename": map_asset.filename,
-                            "original_filename": map_asset.filename,
-                            "file_path": fresh_url,
-                            "grid_config": map_asset.build_grid_config_for_game() if isinstance(map_asset, MapAsset) else None,
-                        }
-                        logger.info(f"Restoring map: {map_asset.filename} with grid config")
-                    else:
-                        logger.warning(f"Cannot restore map: asset {map_asset_id} has no presigned URL")
-                else:
-                    logger.warning(f"Cannot restore map: asset {map_asset_id} not in campaign")
-
-            image_config_for_game = {}
-            if session.image_config and session.image_config.get("asset_id") and self.asset_repo:
-                image_asset_id = session.image_config["asset_id"]
-                image_asset = asset_lookup.get(image_asset_id)
-                if image_asset:
-                    fresh_url = url_map.get(image_asset.s3_key)
-                    if fresh_url:
-                        image_config_for_game = {
-                            "asset_id": image_asset_id,
-                            "filename": image_asset.filename,
-                            "original_filename": image_asset.filename,
-                            "file_path": fresh_url,
-                        }
-                        logger.info(f"Restoring image: {image_asset.filename}")
-                    else:
-                        logger.warning(f"Cannot restore image: asset {image_asset_id} has no presigned URL")
-                else:
-                    logger.warning(f"Cannot restore image: asset {image_asset_id} not in campaign")
-
-            payload = {
-                "session_id": str(session.id),
-                "campaign_id": str(session.campaign_id),  # For api-game to proxy asset requests to api-site
-                "dm_username": dm_username,
-                "max_players": session.max_players,  # From session aggregate
-                "joined_user_ids": [str(user_id) for user_id in session.joined_users],  # Campaign players
-                "assets": assets,  # Campaign library assets (legacy, api-game will fetch fresh URLs on-demand)
-                "audio_config": audio_config_for_game,
-                "audio_track_config": {},  # Starts empty each session; populated by in-session track swaps
-                "map_config": map_config_for_game,
-                "image_config": image_config_for_game,
-                "active_display": session.active_display
-            }
+            payload = SessionStartPayload(
+                session_id=str(session.id),
+                campaign_id=str(session.campaign_id),
+                dm_username=dm_username,
+                max_players=session.max_players,
+                joined_user_ids=[str(uid) for uid in session.joined_users],
+                assets=[
+                    AssetRef(
+                        id=str(asset.id),
+                        filename=asset.filename,
+                        s3_key=asset.s3_key,
+                        asset_type=asset.asset_type.value if hasattr(asset.asset_type, 'value') else str(asset.asset_type),
+                        s3_url=url_map.get(asset.s3_key),
+                    )
+                    for asset in campaign_assets
+                ] if self.asset_repo else [],
+                audio_config=audio_config_for_game,
+                map_config=map_config_for_game,
+                image_config=image_config_for_game,
+                active_display=ActiveDisplayType(session.active_display) if session.active_display else None,
+            )
 
             # 9. Call api-game (synchronous await)
             async with httpx.AsyncClient() as client:
                 response = await client.post(
                     "http://api-game:8081/game/session/start",
-                    json=payload,
+                    json=payload.model_dump(),
                     timeout=10.0
                 )
 
@@ -433,8 +460,8 @@ class StartSession:
                 raise ValueError(f"Failed to create game: {error_detail}")
 
             # 10. Parse response
-            result = response.json()
-            active_game_id = result["session_id"]  # MongoDB ObjectID
+            start_response = SessionStartResponse(**response.json())
+            active_game_id = start_response.session_id
 
             # 11. Mark ACTIVE with the MongoDB game ID
             session.activate(active_game_id)
@@ -516,51 +543,50 @@ async def _extract_and_sync_game_state(
             logger.error(f"Failed to fetch final state: {response.text}")
             raise ValueError(f"Cannot fetch game state: {response.text}")
 
-        final_state = response.json()["final_state"]
-        logger.info(f"Fetched final state for {session_id}: {len(final_state.get('players', []))} players")
+        end_response = SessionEndResponse(**response.json())
+        final_state = end_response.final_state
+        logger.info(f"Fetched final state for {session_id}: {len(final_state.players)} players")
 
         # Extract max_players from MongoDB session stats
-        max_players = final_state.get("session_stats", {}).get("max_players", session.max_players)
+        max_players = final_state.session_stats.max_players if final_state.session_stats else session.max_players
         logger.info(f"Session max_players: {max_players} (original: {session.max_players})")
 
-        # Extract audio config (strip runtime fields, keep only track config)
-        raw_audio = final_state.get("audio_state", {})
-        raw_track_config = final_state.get("audio_track_config", {})
-
-        # Collect per-asset volumes and effects from BOTH active channels AND stashed track configs
-        asset_configs = {}
-        for channel_id, ch in raw_audio.items():
-            if ch and ch.get("asset_id"):
-                asset_configs[ch["asset_id"]] = {
-                    "volume": ch.get("volume"),
-                    "looping": ch.get("looping"),
-                    "effects": ch.get("effects", {}),
+        # Collect per-asset audio settings from BOTH active channels AND stashed track configs.
+        # Uses a common shape: {volume, looping, effects} — channel state always has values,
+        # track config has Optional fields (None = don't override).
+        asset_audio_settings = {}
+        for channel_id, ch in final_state.audio_state.items():
+            if ch and ch.asset_id:
+                asset_audio_settings[ch.asset_id] = {
+                    "volume": ch.volume,
+                    "looping": ch.looping,
+                    "effects": ch.effects,
                 }
-        for asset_id_str, tc in raw_track_config.items():
-            if asset_id_str not in asset_configs:
-                asset_configs[asset_id_str] = {
-                    "volume": tc.get("volume"),
-                    "looping": tc.get("looping"),
-                    "effects": tc.get("effects", {}),
+        for asset_id_str, tc in final_state.audio_track_config.items():
+            if asset_id_str not in asset_audio_settings:
+                asset_audio_settings[asset_id_str] = {
+                    "volume": tc.volume,
+                    "looping": tc.looping,
+                    "effects": tc.effects,
                 }
 
         # Sync per-asset volumes and effects back to PostgreSQL (ETL: hot → cold)
-        if asset_repo and asset_configs:
+        if asset_repo and asset_audio_settings:
             synced_assets = set()
-            for asset_id_str, cfg in asset_configs.items():
+            for asset_id_str, settings in asset_audio_settings.items():
                 try:
                     asset = asset_repo.get_by_id(UUID(asset_id_str))
                     if asset and isinstance(asset, (MusicAsset, SfxAsset)):
                         config_kwargs = {}
-                        if cfg.get("volume") is not None:
-                            config_kwargs["default_volume"] = cfg["volume"]
-                        if cfg.get("looping") is not None:
-                            config_kwargs["default_looping"] = cfg["looping"]
-                        effects = cfg.get("effects", {})
+                        if settings["volume"] is not None:
+                            config_kwargs["default_volume"] = settings["volume"]
+                        if settings["looping"] is not None:
+                            config_kwargs["default_looping"] = settings["looping"]
+                        effects = settings["effects"]
                         if effects and isinstance(asset, MusicAsset):
-                            config_kwargs["effect_hpf_enabled"] = bool(effects.get("hpf", False))
-                            config_kwargs["effect_lpf_enabled"] = bool(effects.get("lpf", False))
-                            config_kwargs["effect_reverb_enabled"] = bool(effects.get("reverb", False))
+                            config_kwargs["effect_hpf_enabled"] = effects.hpf
+                            config_kwargs["effect_lpf_enabled"] = effects.lpf
+                            config_kwargs["effect_reverb_enabled"] = effects.reverb
                         if config_kwargs:
                             asset.update_audio_config(**config_kwargs)
                             asset_repo.save(asset)
@@ -571,25 +597,23 @@ async def _extract_and_sync_game_state(
 
         # Thin JSONB: store only channel → asset_id references (all config synced back to assets above)
         audio_config = {}
-        for channel_id, ch in raw_audio.items():
-            if ch and ch.get("asset_id"):
-                audio_config[channel_id] = {"asset_id": ch["asset_id"]}
+        for channel_id, ch in final_state.audio_state.items():
+            if ch and ch.asset_id:
+                audio_config[channel_id] = {"asset_id": ch.asset_id}
         logger.info(f"Extracted audio config: {len(audio_config)} channel references")
 
         # Extract map config — sync grid_config back to MapAsset, store only asset_id reference
-        raw_map = final_state.get("map_state", {})
         map_config = {}
-        if raw_map and raw_map.get("asset_id"):
-            map_asset_id = raw_map["asset_id"]
+        if final_state.map_state and final_state.map_state.asset_id:
+            map_asset_id = final_state.map_state.asset_id
             map_config = {"asset_id": map_asset_id}
 
             # Sync grid config back to MapAsset (ETL: hot → cold)
-            game_grid_config = raw_map.get("grid_config")
-            if game_grid_config and asset_repo:
+            if final_state.map_state.grid_config and asset_repo:
                 try:
                     map_asset = asset_repo.get_by_id(UUID(map_asset_id))
                     if map_asset and isinstance(map_asset, MapAsset):
-                        map_asset.update_grid_config_from_game(game_grid_config)
+                        map_asset.update_grid_config_from_game(final_state.map_state.grid_config)
                         asset_repo.save(map_asset)
                         logger.info(f"Synced grid config back to MapAsset {map_asset_id}")
                 except Exception as e:
@@ -597,14 +621,13 @@ async def _extract_and_sync_game_state(
         logger.info(f"Extracted map config: {'has map' if map_config else 'no active map'}")
 
         # Extract image config (asset_id for session persistence)
-        raw_image = final_state.get("image_state", {})
         image_config = {}
-        if raw_image and raw_image.get("asset_id"):
-            image_config = {"asset_id": raw_image.get("asset_id")}
+        if final_state.image_state and final_state.image_state.asset_id:
+            image_config = {"asset_id": final_state.image_state.asset_id}
         logger.info(f"Extracted image config: {'has image' if image_config else 'no active image'}")
 
         # Extract active_display
-        active_display = final_state.get("active_display")
+        active_display = final_state.active_display.value if final_state.active_display else None
         logger.info(f"Extracted active_display: {active_display}")
 
         return _ExtractedGameState(
