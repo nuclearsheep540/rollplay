@@ -1,0 +1,20 @@
+{
+  "latest": "0.27.2",
+  "releases": {
+    "0.27.1": {
+      "date": "2026-03-10",
+      "commit": "16e2c23",
+      "description": "Normalize JSONB columns phase 2",
+      "services": {
+        "app_version": "0.16.0",
+        "api_site_version": "0.13.1",
+        "api_game_version": "0.11.0",
+        "api_auth_version": "0.2.1",
+        "nginx_version": "0.4.10",
+        "postgres_version": "0.1.8",
+        "mongo_db_version": "0.3.2",
+        "certbot_version": "0.1.2"
+      }
+    }
+  }
+}
