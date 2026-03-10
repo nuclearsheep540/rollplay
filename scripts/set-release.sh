@@ -43,7 +43,7 @@ else
 fi
 
 # Validate version exists in manifest
-RELEASE=$(jq -r ".releases[\"$VERSION\"] // empty" "$MANIFEST")
+RELEASE=$(jq --arg ver "$VERSION" -r '.releases[$ver] // empty' "$MANIFEST")
 if [[ -z "$RELEASE" ]]; then
     echo "Error: release '$VERSION' not found in releases.json" >&2
     echo ""

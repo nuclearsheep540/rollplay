@@ -74,7 +74,7 @@ bump_major() {
 
 # ── Resolve baseline ─────────────────────────────────────────────
 LATEST=$(jq -r '.latest' "$MANIFEST")
-BASELINE_COMMIT=$(jq -r ".releases[\"$LATEST\"].commit // empty" "$MANIFEST")
+BASELINE_COMMIT=$(jq --arg ver "$LATEST" -r '.releases[$ver].commit // empty' "$MANIFEST")
 
 if [[ -z "$BASELINE_COMMIT" ]]; then
     echo "Error: release '$LATEST' has no commit SHA in releases.json" >&2
@@ -95,7 +95,7 @@ declare -A NEW_VERSIONS
 CHANGED_COUNT=0
 
 for service in "${SERVICE_ORDER[@]}"; do
-    current=$(jq -r ".releases[\"$LATEST\"].services[\"$service\"]" "$MANIFEST")
+    current=$(jq --arg ver "$LATEST" --arg svc "$service" -r '.releases[$ver].services[$svc]' "$MANIFEST")
     paths="${SERVICE_PATHS[$service]}"
 
     # Check if any watched paths have changes
@@ -164,7 +164,7 @@ read -rp "Add version bumps for any other services? [y/N]: " add_more
 if [[ "$add_more" == "y" || "$add_more" == "Y" ]]; then
     for service in "${SERVICE_ORDER[@]}"; do
         current="${NEW_VERSIONS[$service]}"
-        original=$(jq -r ".releases[\"$LATEST\"].services[\"$service\"]" "$MANIFEST")
+        original=$(jq --arg ver "$LATEST" --arg svc "$service" -r '.releases[$ver].services[$svc]' "$MANIFEST")
         # Only prompt for services that weren't already bumped
         if [[ "$current" == "$original" ]]; then
             p=$(bump_patch "$current")
@@ -197,7 +197,7 @@ echo ""
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 echo "Service versions for new release:"
 for service in "${SERVICE_ORDER[@]}"; do
-    current=$(jq -r ".releases[\"$LATEST\"].services[\"$service\"]" "$MANIFEST")
+    current=$(jq --arg ver "$LATEST" --arg svc "$service" -r '.releases[$ver].services[$svc]' "$MANIFEST")
     new="${NEW_VERSIONS[$service]}"
     if [[ "$new" != "$current" ]]; then
         echo "  $service: $current → $new"
@@ -231,7 +231,7 @@ while true; do
 done
 
 # Check version doesn't already exist
-if jq -e ".releases[\"$RELEASE_VERSION\"]" "$MANIFEST" &>/dev/null; then
+if jq --arg ver "$RELEASE_VERSION" -e '.releases[$ver]' "$MANIFEST" &>/dev/null; then
     echo "Error: release '$RELEASE_VERSION' already exists in releases.json" >&2
     exit 1
 fi
