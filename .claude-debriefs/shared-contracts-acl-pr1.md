@@ -1,6 +1,6 @@
 # Debrief: Shared Contracts Package + Anti-Corruption Layer (PR 1)
 
-**Plan file:** `.claude-plans/shared-contracts-acl.md`
+**Plan file:** `.claude-plans/DONEshared-contracts-acl.md`
 **Branch:** `shared-contracts-PR-1` — PR #84
 **Period:** 2026-03-09
 **Status:** PR 1 complete — package, schemas, Docker wiring, CI, and test fixes all delivered

@@ -1,10 +1,9 @@
 # Copyright (C) 2025 Matthew Davey
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-import logging
 from typing import List, Optional, Dict
 from uuid import UUID
-from sqlalchemy.orm import Session, joinedload
+from sqlalchemy.orm import Session, selectinload, joinedload
 
 from modules.characters.model.character_model import Character as CharacterModel
 from modules.characters.model.character_class_model import CharacterClassEntry
@@ -19,9 +18,6 @@ from modules.characters.domain.character_aggregate import (
     CharacterClassInfo,
     CharacterBackground
 )
-
-logger = logging.getLogger(__name__)
-
 
 class CharacterRepository:
     """Repository handling Character aggregate persistence with inline ORM conversion"""
@@ -46,12 +42,12 @@ class CharacterRepository:
         return self._ability_lookup
 
     def _character_query(self):
-        """Base query with eager-loaded join tables"""
+        """Base query with eager-loaded join tables (selectinload avoids cartesian product)"""
         return (
             self.db.query(CharacterModel)
             .options(
-                joinedload(CharacterModel.class_entries).joinedload(CharacterClassEntry.dnd_class),
-                joinedload(CharacterModel.ability_score_entries).joinedload(CharacterAbilityScore.dnd_ability),
+                selectinload(CharacterModel.class_entries).joinedload(CharacterClassEntry.dnd_class),
+                selectinload(CharacterModel.ability_score_entries).joinedload(CharacterAbilityScore.dnd_ability),
             )
         )
 

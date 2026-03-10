@@ -1,9 +1,9 @@
-# Debrief: Normalize JSONB Columns to Relational Tables (Phases 1–2)
+# Debrief: Normalize JSONB Columns to Relational Tables
 
 **Plan file:** `.claude-plans/NEXTnormalize-jsonb-columns.md`
 **Branch:** `normalize-jsonb` — PR #88
 **Period:** 2026-03-10
-**Status:** Phase 1 (1a + 1b) complete, Phase 2 complete, Phases 3–4 deferred to future branch
+**Status:** All 4 phases complete
 
 ---
 
@@ -11,7 +11,9 @@
 
 - **Phase 1a:** Remove dead campaign columns (`assets`, `scenes`, `npc_factory`)
 - **Phase 1b:** Remove unused asset `session_ids` scoping (column + all plumbing through backend/frontend)
-- **Phase 2:** Replace `player_ids` and `invited_player_ids` JSONB arrays with a `campaign_members` join table, gaining FK CASCADE and referential integrity
+- **Phase 2:** Replace `player_ids` and `invited_player_ids` JSONB arrays with a `campaign_members` join table
+- **Phase 3:** Replace `character_classes` JSONB with `dnd_classes` lookup + `character_classes` join table
+- **Phase 4:** Replace `stats` and `origin_ability_bonuses` JSONB with `dnd_abilities` lookup + `character_ability_scores` join table
 
 ---
 
@@ -51,108 +53,142 @@ Removed `session_ids` from:
 
 **Aggregate interface:** Unchanged. `CampaignAggregate` keeps `player_ids` and `invited_player_ids` as `List[UUID]`. Zero changes to commands, queries, endpoints, events, schemas, or frontend.
 
-**Alembic env.py:** Added `CampaignMember` import for autogenerate detection.
-
 ### Phase 2 Migrations
 
 1. `4be93e6ca7d8_campaign_members_join_table.py` — creates table, migrates JSONB data (with orphaned UUID filtering), drops old columns
 2. `0cab2701cd5b_add_check_constraint_and_index_to_.py` — adds CHECK constraint on `role` + index on `(user_id, role)`
 
+### Phase 3: Character Classes Normalization
+
+**New models:**
+- `dnd_class_model.py` — `DndClass` lookup table (12 seeded rows: Barbarian through Wizard)
+- `character_class_model.py` — `CharacterClassEntry` join table with composite PK `(character_id, class_id)` + `level`
+
+**Character model:** Removed `character_classes` JSONB column, removed JSONB import, added `class_entries` relationship.
+
+**Repository rewrite:**
+- `_character_query()` base method with `joinedload` for both class and ability score entries
+- `_model_to_aggregate()` builds `List[CharacterClassInfo]` from join table rows
+- `save()` inserts `CharacterClassEntry` rows for new characters; `_sync_classes()` diff logic for updates
+- Lazy-loaded `_get_class_lookup()` maps class names → IDs (cached per repository instance)
+
+### Phase 4: Ability Scores + Origin Bonuses Normalization
+
+**New models:**
+- `dnd_ability_model.py` — `DndAbility` lookup table (6 seeded rows: strength through charisma)
+- `character_ability_model.py` — `CharacterAbilityScore` with composite PK `(character_id, ability_id)`, `score`, and `origin_bonus` (default 0)
+
+**Character model:** Removed `stats` and `origin_ability_bonuses` JSONB columns, added `ability_score_entries` relationship.
+
+**Repository rewrite:**
+- `_model_to_aggregate()` reads both `score` and `origin_bonus` from the same 6 rows, builds `AbilityScores` value object + `origin_ability_bonuses` dict (non-zero entries only)
+- `save()` inserts `CharacterAbilityScore` rows with both score and origin_bonus for new characters
+- `_sync_ability_scores()` diffs both `score` and `origin_bonus` fields in a single pass
+
+**Aggregate interface:** Unchanged. `CharacterAggregate` keeps `ability_scores: AbilityScores`, `origin_ability_bonuses: Dict[str, int]`, and `character_classes: List[CharacterClassInfo]`. Zero changes to commands, queries, endpoints, schemas, or frontend.
+
+### Phase 3–4 Migrations
+
+1. `c56ee1499677_normalize_character_classes_and_ability_.py` — creates lookup tables, seeds data, creates join tables, migrates JSONB data, drops old columns
+2. `75c40a22ba56_merge_origin_bonuses_into_ability_.py` — adds `background_bonus` column to `character_ability_scores`, migrates data from `character_origin_bonuses` table, drops table
+3. `638ec6564fb6_rename_background_bonus_to_origin_bonus.py` — renames column to `origin_bonus` for consistency with codebase naming
+
 ---
 
 ## 3. Challenges
 
-### Orphaned UUIDs in JSONB arrays
+### Orphaned UUIDs in JSONB arrays (Phase 2)
 The data migration discovered that JSONB `player_ids` arrays could contain UUIDs pointing to deleted users (the exact bug this normalization fixes). Migration validates against `users` table and skips orphaned UUIDs with `ON CONFLICT DO NOTHING`.
 
-### Alembic autogenerate limitations
-Autogenerate doesn't detect CHECK constraints or standalone indexes. The second migration was generated as empty stubs and filled in manually — expected Alembic behaviour.
+### Alembic autogenerate limitations (Phases 2–4)
+Autogenerate doesn't detect CHECK constraints, standalone indexes, seed data, or data migrations. These were all filled in manually after generating the migration stubs. Column renames detected as drop + add — rewritten to `ALTER COLUMN RENAME`.
 
-### SQLAlchemy relationship resolution
-Standalone verification scripts that imported `CampaignMember` without importing `Campaign` hit `InvalidRequestError` due to unresolved relationship references. Resolved by importing via `main.py` which loads all models.
+### Autogenerate false positive on campaign_members index
+Alembic repeatedly tried to drop `ix_campaign_members_user_id_role` in unrelated migrations because the manually-created index wasn't in its metadata tracking. Removed from each generated migration.
+
+### Origin bonuses over-engineering (Phase 4)
+Initially created a separate `character_origin_bonuses` table (sparse, 2-3 rows per character). Identified during review as over-engineered — an `origin_bonus` column (default 0) on the existing `character_ability_scores` table is simpler with no extra table or joins.
+
+### Naming consistency
+Column was initially named `background_bonus`, but `origin` is the consistent term used throughout the codebase (aggregate field, API schema, frontend). Renamed via migration to `origin_bonus`.
 
 ---
 
 ## 4. Decisions & Diversions
 
-### D1: EXISTS subquery instead of outerjoin (plan said outerjoin)
+### D1: EXISTS subquery instead of outerjoin (Phase 2)
 
 **Plan said:** `get_by_member_id()` uses `.outerjoin(CampaignMember)`
 **Shipped:** EXISTS subquery via `exists().where(...)`
 
-**Rationale:** GitHub Copilot PR review identified that outerjoin could produce duplicate campaigns when a user is both host AND a player member. EXISTS subquery is semantically correct — it answers "does a matching row exist?" without joining rows into the result set.
+**Rationale:** GitHub Copilot PR review identified that outerjoin could produce duplicate campaigns when a user is both host AND a player member. EXISTS subquery is semantically correct.
 
-### D2: CHECK constraint + index added (not in original plan)
+### D2: CHECK constraint + index added (Phase 2, not in plan)
 
 **Plan said:** `role` as free-form `String(10)` with no DB-level validation
 **Shipped:** `CheckConstraint("role IN ('player', 'invited')")` + index on `(user_id, role)`
 
-**Rationale:** GitHub Copilot PR review flagged the missing constraint. CHECK constraint enforces domain invariant at DB level (defence in depth). Index on `(user_id, role)` supports the two most common query patterns (`get_by_member_id` filtering `role='player'`, `get_invited_campaigns` filtering `role='invited'`).
+**Rationale:** GitHub Copilot PR review. Defence in depth + query performance.
 
-### D3: `print()` → `logging` in repository (not in original plan)
+### D3: `print()` → `logging` in campaign repository (not in plan)
 
 **Plan said:** Not specified
 **Shipped:** `logging.getLogger(__name__)` with `logger.error()` calls
 
-**Rationale:** GitHub Copilot PR review flagged `print()` statements in error handlers. `logging` is the correct approach for production error visibility — integrates with log aggregation, respects log levels, includes module context.
+**Rationale:** GitHub Copilot PR review. Production-appropriate error visibility.
 
-### D4: Phases 3–4 deferred
+### D4: Origin bonuses merged into ability scores table (Phase 4)
 
-**Plan said:** Character classes and ability scores normalization in same branch
-**Shipped:** Only Phases 1–2
+**Plan said:** Separate `character_origin_bonuses` table with sparse rows
+**Shipped:** `origin_bonus` column (default 0) on `character_ability_scores`
 
-**Rationale:** Phases 1–2 are a self-contained unit of work with a clean PR boundary. Character normalization (Phases 3–4) involves new lookup tables, seed data, and a different aggregate — better as a separate branch/PR.
+**Rationale:** User identified during review that a separate table was over-engineering. Since every character already has exactly 6 ability score rows, adding a single integer column is simpler — no extra table, no extra joins, no extra sync method. The ability_id on each row already tells the app which ability the bonus applies to.
+
+### D5: Lazy-loaded lookup caches in character repository (not in plan)
+
+**Plan said:** Not specified
+**Shipped:** `_get_class_lookup()` and `_get_ability_lookup()` cache name→id maps per repository instance
+
+**Rationale:** Lookup tables are static (seeded once, never mutated). Caching avoids repeated queries during save operations that need to resolve names to IDs.
 
 ---
 
 ## 5. Current Architecture
 
-### `campaign_members` Table
+### New Tables
 
 ```
-campaign_members
-├── id (UUID, PK)
-├── campaign_id (UUID, FK → campaigns ON DELETE CASCADE)
-├── user_id (UUID, FK → users ON DELETE CASCADE)
-├── role (VARCHAR(10), CHECK: 'player' | 'invited')
-├── joined_at (DateTime, default NOW())
-├── UNIQUE(campaign_id, user_id)
-└── INDEX(user_id, role)
+dnd_classes (lookup, 12 rows)            dnd_abilities (lookup, 6 rows)
+├── id (Integer, PK)                     ├── id (Integer, PK)
+└── name (VARCHAR(20), UNIQUE)           └── name (VARCHAR(20), UNIQUE)
+
+character_classes                        character_ability_scores
+├── character_id (UUID, PK, FK CASCADE)  ├── character_id (UUID, PK, FK CASCADE)
+├── class_id (Integer, PK, FK)           ├── ability_id (Integer, PK, FK)
+└── level (Integer)                      ├── score (Integer)
+                                         └── origin_bonus (Integer, default 0)
 ```
 
-### Data Flow
+### Repository Pattern
 
-```
-Invite player    → INSERT campaign_members (role='invited')
-Accept invite    → UPDATE role → 'player'
-Leave campaign   → DELETE campaign_members row
-Delete user      → CASCADE deletes all their memberships
-Delete campaign  → CASCADE deletes all member rows
-```
+Both campaign and character repositories now follow the same pattern:
+- `joinedload` on all relationship queries to avoid N+1
+- `_model_to_aggregate()` reads join table rows → builds domain objects
+- `_sync_*()` methods diff desired state against current join table rows (delete/update/insert)
+- Aggregate interface unchanged — repository handles all ORM mapping
 
-### Repository Query Map
+### JSONB Columns Remaining (all verified correct)
 
-| Method | Query Pattern |
-|--------|--------------|
-| `get_by_id()` | `filter_by(id)` + `joinedload(members)` |
-| `get_by_host_id()` | `filter_by(host_id)` + `joinedload(members)` |
-| `get_by_member_id()` | EXISTS subquery on `campaign_members` + `joinedload(members)` |
-| `get_invited_campaigns()` | JOIN `campaign_members` WHERE `role='invited'` + `joinedload(members)` |
+| Column | Reason to keep |
+|--------|---------------|
+| `session.audio_config` | Thin ETL bookmark, opaque to queries |
+| `session.map_config` | Thin ETL bookmark |
+| `session.image_config` | Thin ETL bookmark |
+| `notification.data` | Opaque event payload, never queried by field |
 
 ---
 
-## 6. Downstream Readiness
-
-| Phase 3–4 Dependency | What Phases 1–2 Delivered | Ready? |
-|---|---|---|
-| Join table pattern established | `campaign_members` with role-based membership, diff sync | Yes |
-| Lookup + join table pattern needed | Not yet — Phase 3 introduces `dnd_classes` lookup | N/A |
-| Migration with data migration pattern | JSONB → rows with orphan filtering, tested | Yes |
-| Aggregate interface isolation | Repository handles all mapping, aggregate unchanged | Yes |
-
----
-
-## 7. Open Items
+## 6. Open Items
 
 - PR #88 ready for merge
-- Phases 3–4 (character classes + ability scores) planned for next branch
+- All JSONB normalization complete — no further phases planned

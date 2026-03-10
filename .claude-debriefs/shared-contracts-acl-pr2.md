@@ -1,6 +1,6 @@
 # Debrief: Shared Contracts Package + Anti-Corruption Layer (PR 2)
 
-**Plan file:** `.claude-plans/shared-contracts-acl.md`
+**Plan file:** `.claude-plans/DONEshared-contracts-acl.md`
 **Branch:** `shared-contracts-PR-2`
 **Period:** 2026-03-09 → 2026-03-10
 **Status:** PR 2 complete — api-game ACL adopted at HTTP + WebSocket boundaries, drive-by fixes applied

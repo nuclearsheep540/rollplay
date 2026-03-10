@@ -1,6 +1,6 @@
 # Debrief: Shared Contracts PR 3 + Tech Debt Consolidation
 
-**Plan file:** `.claude-plans/shared-contracts-acl.md` (PR 3 section) + `.claude/plans/majestic-mixing-adleman.md` (combined plan)
+**Plan file:** `.claude-plans/DONEshared-contracts-acl.md` (PR 3 section) + `.claude/plans/majestic-mixing-adleman.md` (combined plan)
 **Branch:** `shared-contracts-pr3`
 **Period:** 2026-03-10
 **Status:** Complete — api-site integration delivered, tech debt #4/#6/#8/#9/#10 resolved
