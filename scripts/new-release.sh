@@ -270,7 +270,7 @@ echo "━━━━━━━━━━━━━━━━━━━━━━━━�
 echo "Ready to commit, tag, and push:"
 echo "  commit: releases.json"
 echo "  tag:    $TAG"
-echo "  push:   origin main --tags"
+echo "  push:   origin main + $TAG"
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 read -rp "Proceed? [y/N]: " confirm
 if [[ "$confirm" != "y" && "$confirm" != "Y" ]]; then
@@ -280,14 +280,14 @@ if [[ "$confirm" != "y" && "$confirm" != "Y" ]]; then
     echo "  git add releases.json"
     echo "  git commit -m \"release $RELEASE_VERSION\""
     echo "  git tag $TAG"
-    echo "  git push origin main --tags"
+    echo "  git push origin main "$TAG""
     exit 0
 fi
 
 git add releases.json
 git commit -m "release $RELEASE_VERSION — $RELEASE_DESCRIPTION"
 git tag "$TAG"
-git push origin main --tags
+git push origin main "$TAG"
 
 echo ""
 echo "Released $RELEASE_VERSION ($TAG) and pushed to origin."
