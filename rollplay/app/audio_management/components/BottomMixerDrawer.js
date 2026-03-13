@@ -156,7 +156,7 @@ export default function BottomMixerDrawer({
                   {channelLabel}
                 </div>
                 <div className="text-center px-1 h-4 flex items-center justify-center bg-gray-800/50 overflow-hidden w-0 min-w-full">
-                  <span className="text-[10px] text-gray-300 font-mono truncate" title={trackState.filename || ''}>
+                  <span className="text-[10px] text-gray-200 font-mono truncate" title={trackState.filename || ''}>
                     {trackState.filename ? trackState.filename.replace(/\.[^.]+$/, '') : '—'}
                   </span>
                 </div>

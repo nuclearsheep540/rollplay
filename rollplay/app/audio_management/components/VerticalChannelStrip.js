@@ -302,7 +302,7 @@ export default function VerticalChannelStrip({
               style={{ bottom: `${pct}%` }}
             >
               <div className={`flex-1 border-t ${db === 0 ? 'border-white/40' : 'border-white/20'}`} />
-              <span className="text-[11px] text-white/40 pl-[2px] leading-none font-mono">
+              <span className="text-xs text-white/40 pl-[2px] leading-none font-mono">
                 {db}
               </span>
             </div>
@@ -325,15 +325,15 @@ export default function VerticalChannelStrip({
       {/* Footer — fixed height across all strip types for fader alignment */}
       <div className="w-full text-center px-1 pb-1 h-[28px] flex flex-col justify-end">
         {stripType === 'channel' && filename && (
-          <div className="text-xs text-gray-500 font-mono">
+          <div className="text-xs text-gray-200 font-mono">
             {formatTime(currentTime)}
           </div>
         )}
         {isEffect && (
-          <div className="text-xs text-gray-500 font-mono">{footerLabel || 'Mix'}</div>
+          <div className="text-xs text-gray-200 font-mono">{footerLabel || 'Mix'}</div>
         )}
         {stripType === 'master' && (
-          <div className="text-xs text-gray-500 font-mono">Out</div>
+          <div className="text-xs text-gray-200 font-mono">Out</div>
         )}
       </div>
     </div>
