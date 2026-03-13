@@ -606,7 +606,7 @@ async def end_session(request: SessionEndRequest, validate_only: bool = False):
 
         # Build final state — extract __master_volume from audio_state (it's a float,
         # not an AudioChannelState) before passing to the typed contract
-        raw_audio_state = room.get("audio_state", {})
+        raw_audio_state = dict(room.get("audio_state", {}))
         broadcast_master_volume = raw_audio_state.pop("__master_volume", None)
         final_state = SessionEndFinalState(
             players=players,

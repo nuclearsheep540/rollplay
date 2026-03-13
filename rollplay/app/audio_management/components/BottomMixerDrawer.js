@@ -3,12 +3,10 @@
  * SPDX-License-Identifier: GPL-3.0-or-later
  */
 
-import React, { useCallback, useRef } from 'react';
-import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
-import { faPowerOff } from '@fortawesome/free-solid-svg-icons';
+import React, { useCallback } from 'react';
 import VerticalChannelStrip from './VerticalChannelStrip';
 import FilterKnob from './FilterKnob';
-import { PlaybackState, DEFAULT_EFFECTS } from '../types';
+import { DEFAULT_EFFECTS } from '../types';
 
 /**
  * Bottom mixer drawer — renders vertical channel strips for BGM channels,
@@ -49,8 +47,6 @@ export default function BottomMixerDrawer({
   masterVolume = 1.0,
   onMasterVolumeChange,
 }) {
-  const volumeDebounceTimers = useRef({});
-
   // Get BGM channels sorted
   const bgmChannels = Object.keys(remoteTrackStates)
     .filter(id => id.startsWith('audio_channel_'))
@@ -62,9 +58,6 @@ export default function BottomMixerDrawer({
   }, [setRemoteTrackVolume]);
 
   const handleVolumeChangeDebounced = useCallback((trackId, newVol) => {
-    if (volumeDebounceTimers.current[trackId]) {
-      clearTimeout(volumeDebounceTimers.current[trackId]);
-    }
     sendRemoteAudioBatch?.([{
       trackId,
       operation: 'volume',

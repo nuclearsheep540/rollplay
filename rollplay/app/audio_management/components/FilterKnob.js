@@ -62,7 +62,7 @@ export default function FilterKnob({
     dragging.current = true;
     startY.current = e.clientY;
     startVal.current = value;
-    e.target.setPointerCapture(e.pointerId);
+    e.currentTarget.setPointerCapture(e.pointerId);
   }, [value, disabled]);
 
   const handlePointerMove = useCallback((e) => {
@@ -135,9 +135,30 @@ export default function FilterKnob({
           viewBox={`0 0 ${SVG_SIZE} ${SVG_SIZE}`}
           className={`select-none w-full max-w-[52px] ${knobDisabled ? 'cursor-default' : 'cursor-ns-resize'}`}
           preserveAspectRatio="xMidYMid meet"
+          tabIndex={knobDisabled ? -1 : 0}
+          role="slider"
+          aria-label={label || filterType}
+          aria-valuemin={0}
+          aria-valuemax={1}
+          aria-valuenow={parseFloat(value.toFixed(2))}
           onPointerDown={handlePointerDown}
           onPointerMove={handlePointerMove}
           onPointerUp={handlePointerUp}
+          onKeyDown={(e) => {
+            if (knobDisabled) return;
+            const step = e.shiftKey ? 0.1 : 0.02;
+            if (e.key === 'ArrowUp' || e.key === 'ArrowRight') {
+              e.preventDefault();
+              const newVal = clamp(value + step);
+              onChange?.(newVal);
+              onChangeEnd?.(newVal);
+            } else if (e.key === 'ArrowDown' || e.key === 'ArrowLeft') {
+              e.preventDefault();
+              const newVal = clamp(value - step);
+              onChange?.(newVal);
+              onChangeEnd?.(newVal);
+            }
+          }}
           style={{ touchAction: 'none' }}
         >
           {/* Background arc (full range) */}

@@ -114,7 +114,7 @@ class UpdateAudioConfigRequest(BaseModel):
     effect_lpf_enabled: Optional[bool] = Field(None, description="Low-pass filter enabled")
     effect_lpf_mix: Optional[float] = Field(None, ge=0.0, le=1.0, description="LPF mix level")
     effect_reverb_enabled: Optional[bool] = Field(None, description="Reverb enabled")
-    effect_reverb_mix: Optional[float] = Field(None, ge=0.0, le=1.0, description="Reverb mix level")
+    effect_reverb_mix: Optional[float] = Field(None, ge=0.0, le=1.3, description="Reverb mix level")
     effect_reverb_preset: Optional[str] = Field(None, description="Reverb preset name")
 
 
