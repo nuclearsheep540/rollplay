@@ -711,7 +711,7 @@ body {
   left: 0;
   right: 0;
   bottom: 0;
-  height: max(40vh, 300px);
+  height: max(50vh, 300px);
   z-index: 35;
   transition: transform 300ms ease;
   background: linear-gradient(0deg, rgba(0,0,0,0.95) 0%, rgba(26,26,46,0.9) 100%);

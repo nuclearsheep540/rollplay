@@ -6,7 +6,7 @@
 import React, { useCallback, useRef } from 'react';
 import VerticalChannelStrip from './VerticalChannelStrip';
 import FilterKnob from './FilterKnob';
-import { PlaybackState, EFFECT_STRIP_DEFS, DEFAULT_EFFECTS } from '../types';
+import { PlaybackState, DEFAULT_EFFECTS } from '../types';
 
 /**
  * Bottom mixer drawer — renders vertical channel strips for BGM channels,
@@ -146,18 +146,23 @@ export default function BottomMixerDrawer({
           const channelLabel = trackId.replace('audio_channel_', '');
           const trackState = remoteTrackStates[trackId] || {};
           const effects = channelEffects[trackId] || {};
-          const enabledEffects = EFFECT_STRIP_DEFS.filter(fx => effects[fx.key]);
 
           return (
             <React.Fragment key={trackId}>
               {/* Group separator (between channel groups, not before first) */}
               {idx > 0 && <div className="mixer-group-separator" />}
 
+              {/* Channel group wrapper — header spans all strips in the group */}
+              <div className="flex flex-col h-full flex-shrink-0">
+                <div className="text-center text-xs font-bold py-0.5 bg-rose-600 text-white rounded-t tracking-wider">
+                  {channelLabel}
+                </div>
+                <div className="flex flex-1 min-h-0">
+
               {/* Channel strip */}
               <VerticalChannelStrip
                 stripType="channel"
-                label={channelLabel}
-                color="rose"
+                label="TRK"
                 trackId={trackId}
                 trackState={trackState}
                 analysers={remoteTrackAnalysers[trackId]}
@@ -185,7 +190,7 @@ export default function BottomMixerDrawer({
               {/* EQ strip — shown when EQ is toggled on */}
               {effects.eq && (
                 <div className="flex flex-col items-center h-full w-[60px] flex-shrink-0 gap-1">
-                  <div className="w-full text-center text-xs font-bold py-1 rounded-t bg-gray-600 text-white">
+                  <div className="w-full text-center text-xs font-bold py-1 bg-gray-700 text-gray-300">
                     EQ
                   </div>
                   <div className="flex-1 flex flex-col items-center gap-0 w-full min-h-0">
@@ -221,7 +226,6 @@ export default function BottomMixerDrawer({
                     key={reverbId}
                     stripType="effect"
                     label="RVB"
-                    color="purple"
                     trackId={trackId}
                     footerLabel="Mix"
                     analysers={remoteTrackAnalysers[reverbId]}
@@ -232,9 +236,22 @@ export default function BottomMixerDrawer({
                     isSoloed={soloedChannels[reverbId] || false}
                     onMuteToggle={() => setChannelMuted?.(reverbId, !mutedChannels[reverbId])}
                     onSoloToggle={() => setChannelSoloed?.(reverbId, !soloedChannels[reverbId])}
+                    reverbPreset={effects.reverb_preset || 'room'}
+                    onReverbPresetChange={(preset) => {
+                      const updatedEffects = { ...effects, reverb_preset: preset };
+                      applyChannelEffects?.(trackId, updatedEffects);
+                      sendRemoteAudioBatch?.([{
+                        trackId,
+                        operation: 'effects',
+                        effects: updatedEffects,
+                      }]);
+                    }}
                   />
                 );
               })()}
+
+                </div>
+              </div>
             </React.Fragment>
           );
         })}
@@ -242,25 +259,31 @@ export default function BottomMixerDrawer({
         {/* Separator before master */}
         <div className="mixer-separator" />
 
-        {/* Master strip */}
-        <VerticalChannelStrip
-          stripType="master"
-          label="MST"
-          color="silver"
-          trackId="master"
-          analysers={masterAnalysers?.current || null}
-          volume={masterVolume}
-          onVolumeChange={onMasterVolumeChange}
-          onVolumeChangeDebounced={(vol) => {
-            sendRemoteAudioBatch?.([{
-              trackId: 'master',
-              operation: 'master_volume',
-              volume: vol,
-            }]);
-          }}
-          isMuted={false}
-          onMuteToggle={() => {}}
-        />
+        {/* Master group wrapper — matching header height for strip alignment */}
+        <div className="flex flex-col h-full flex-shrink-0">
+          <div className="text-center text-xs font-bold py-0.5 bg-gray-400 text-black rounded-t tracking-wider">
+            MST
+          </div>
+          <div className="flex flex-1 min-h-0">
+            <VerticalChannelStrip
+              stripType="master"
+              label="OUT"
+              trackId="master"
+              analysers={masterAnalysers?.current || null}
+              volume={masterVolume}
+              onVolumeChange={onMasterVolumeChange}
+              onVolumeChangeDebounced={(vol) => {
+                sendRemoteAudioBatch?.([{
+                  trackId: 'master',
+                  operation: 'master_volume',
+                  volume: vol,
+                }]);
+              }}
+              isMuted={false}
+              onMuteToggle={() => {}}
+            />
+          </div>
+        </div>
       </div>
     </div>
   );
