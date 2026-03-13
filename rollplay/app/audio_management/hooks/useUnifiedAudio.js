@@ -374,6 +374,8 @@ export const useUnifiedAudio = () => {
             // Pre-fader, post-EQ — reverb receives the EQ-shaped signal
             const convolver = ctx.createConvolver();
             convolver.buffer = impulseResponseBufferRef.current;
+            const reverbMakeupGain = ctx.createGain();
+            reverbMakeupGain.gain.value = 3.0; // fixed 3x boost to compensate for convolution attenuation
             const reverbWetGain = ctx.createGain();
             reverbWetGain.gain.value = 0.0; // disabled by default
             const reverbSendMuteGain = ctx.createGain();
@@ -382,7 +384,8 @@ export const useUnifiedAudio = () => {
             const reverbMetering = createStereoMeteringChain(ctx);
 
             postEqNode.connect(convolver);
-            convolver.connect(reverbWetGain);
+            convolver.connect(reverbMakeupGain);
+            reverbMakeupGain.connect(reverbWetGain);
             reverbWetGain.connect(reverbSendMuteGain);
             reverbSendMuteGain.connect(reverbMetering.upmix);
             reverbMetering.merger.connect(masterGainRef.current);
