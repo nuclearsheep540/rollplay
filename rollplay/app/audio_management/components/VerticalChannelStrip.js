@@ -154,12 +154,14 @@ export default function VerticalChannelStrip({
   const channelDisabled = isChannel && !filename;
   const disabledClass = channelDisabled ? 'opacity-30 pointer-events-none' : '';
   const stripWidth = isEffect ? 'w-[60px]' : 'w-[80px]';
-  const showTransport = isChannel || isEffect;
-  const showSends = isChannel || isEffect;
-  const showMute = !isEffect || !!(onMuteToggle);
+  const isMaster = stripType === 'master';
+  // All controls always render for layout consistency — invisible on strips that don't use them.
+  // This ensures the fader container is always the same height, so pip lines align.
+  const transportClass = isEffect || isMaster ? 'invisible' : disabledClass;
+  const loopSendsClass = isEffect || isMaster ? 'invisible' : disabledClass;
   const showMeters = !isEffect || !!(analysers?.left && analysers?.right);
-  const faderMax = isEffect ? '1.0' : '1.3';
-  const faderMaxNum = isEffect ? 1.0 : 1.3;
+  const faderMax = '1.3';
+  const faderMaxNum = 1.3;
 
   // dB pip marks — position as percentage from bottom of fader
   const dbPips = [
@@ -179,106 +181,95 @@ export default function VerticalChannelStrip({
         {label}
       </div>
 
-      {/* Transport controls — always rendered for layout; invisible on effect strips, disabled on empty channels */}
-      {showTransport && (
-        <div className={`flex gap-1 ${isEffect ? 'invisible' : disabledClass}`}>
-          {/* Play/Pause toggle */}
-          {playbackState === PlaybackState.PLAYING ? (
-            <button
-              className={`w-7 h-6 rounded text-xs flex items-center justify-center bg-orange-600 hover:bg-orange-700 text-white ${
-                pendingOperations.pause ? 'opacity-50 cursor-not-allowed' : ''
-              }`}
-              onClick={onPause}
-              disabled={pendingOperations.pause}
-              title="Pause"
-            >
-              <FontAwesomeIcon icon={faPause} size="xs" />
-            </button>
-          ) : (
-            <button
-              className={`w-7 h-6 rounded text-xs flex items-center justify-center ${
-                playbackState === PlaybackState.PAUSED
-                  ? 'bg-blue-600 hover:bg-blue-700'
-                  : 'bg-green-600 hover:bg-green-700'
-              } text-white ${pendingOperations.play ? 'opacity-50 cursor-not-allowed' : ''}`}
-              onClick={onPlay}
-              disabled={pendingOperations.play}
-              title={playbackState === PlaybackState.PAUSED ? 'Resume' : 'Play'}
-            >
-              <FontAwesomeIcon icon={faPlay} size="xs" />
-            </button>
-          )}
+      {/* Transport — always rendered; invisible on non-channel strips for layout consistency */}
+      <div className={`flex gap-1 ${transportClass}`}>
+        {playbackState === PlaybackState.PLAYING ? (
           <button
-            className={`w-7 h-6 rounded text-xs flex items-center justify-center bg-red-600 hover:bg-red-700 text-white ${
-              pendingOperations.stop ? 'opacity-50 cursor-not-allowed' : ''
+            className={`w-7 h-6 rounded text-xs flex items-center justify-center bg-orange-600 hover:bg-orange-700 text-white ${
+              pendingOperations.pause ? 'opacity-50 cursor-not-allowed' : ''
             }`}
-            onClick={onStop}
-            disabled={pendingOperations.stop}
-            title="Stop"
+            onClick={onPause}
+            disabled={pendingOperations.pause}
+            title="Pause"
           >
-            <FontAwesomeIcon icon={faStop} size="xs" />
+            <FontAwesomeIcon icon={faPause} size="xs" />
           </button>
-        </div>
-      )}
-
-      {/* Loop toggle — always rendered for layout; invisible on effect strips, disabled on empty channels */}
-      {(isChannel || isEffect) && (
-        <div className={`w-full px-1 ${isEffect ? 'invisible' : disabledClass}`}>
+        ) : (
           <button
-            onClick={() => onLoopToggle?.(trackId, !isLooping)}
+            className={`w-7 h-6 rounded text-xs flex items-center justify-center ${
+              playbackState === PlaybackState.PAUSED
+                ? 'bg-blue-600 hover:bg-blue-700'
+                : 'bg-green-600 hover:bg-green-700'
+            } text-white ${pendingOperations.play ? 'opacity-50 cursor-not-allowed' : ''}`}
+            onClick={onPlay}
+            disabled={pendingOperations.play}
+            title={playbackState === PlaybackState.PAUSED ? 'Resume' : 'Play'}
+          >
+            <FontAwesomeIcon icon={faPlay} size="xs" />
+          </button>
+        )}
+        <button
+          className={`w-7 h-6 rounded text-xs flex items-center justify-center bg-red-600 hover:bg-red-700 text-white ${
+            pendingOperations.stop ? 'opacity-50 cursor-not-allowed' : ''
+          }`}
+          onClick={onStop}
+          disabled={pendingOperations.stop}
+          title="Stop"
+        >
+          <FontAwesomeIcon icon={faStop} size="xs" />
+        </button>
+      </div>
+
+      {/* Loop — always rendered; invisible on non-channel strips */}
+      <div className={`w-full px-1 ${loopSendsClass}`}>
+        <button
+          onClick={() => onLoopToggle?.(trackId, !isLooping)}
+          className={`w-full h-5 rounded text-[11px] font-bold transition-colors ${
+            isLooping
+              ? 'bg-blue-600 text-white'
+              : 'bg-gray-700 text-gray-500 hover:bg-gray-600'
+          }`}
+          title={isLooping ? 'Disable looping' : 'Enable looping'}
+        >
+          LOOP
+        </button>
+      </div>
+
+      {/* Send toggles — always rendered; invisible on non-channel strips */}
+      <div className={`flex flex-col gap-0.5 w-full px-1 ${loopSendsClass}`}>
+        {['eq', 'reverb'].map(bus => (
+          <button
+            key={bus}
+            onClick={() => onToggleSend?.(trackId, bus)}
             className={`w-full h-5 rounded text-[11px] font-bold transition-colors ${
-              isLooping
-                ? 'bg-blue-600 text-white'
+              sends[bus]
+                ? 'bg-rose-600 text-white'
                 : 'bg-gray-700 text-gray-500 hover:bg-gray-600'
             }`}
-            title={isLooping ? 'Disable looping' : 'Enable looping'}
+            title={`${bus === 'eq' ? 'EQ' : 'RVB'} ${sends[bus] ? 'on' : 'off'}`}
           >
-            LOOP
+            {bus === 'reverb' ? 'RVB' : 'EQ'}
           </button>
-        </div>
-      )}
+        ))}
+      </div>
 
-      {/* Send toggles — always rendered for layout; invisible on effect strips, disabled on empty channels */}
-      {showSends && (
-        <div className={`flex flex-col gap-0.5 w-full px-1 ${isEffect ? 'invisible' : disabledClass}`}>
-          {['eq', 'reverb'].map(bus => (
-            <button
-              key={bus}
-              onClick={() => onToggleSend?.(trackId, bus)}
-              className={`w-full h-5 rounded text-[11px] font-bold transition-colors ${
-                sends[bus]
-                  ? 'bg-rose-600 text-white'
-                  : 'bg-gray-700 text-gray-500 hover:bg-gray-600'
-              }`}
-              title={`${bus === 'eq' ? 'EQ' : 'RVB'} ${sends[bus] ? 'on' : 'off'}`}
-            >
-              {bus === 'reverb' ? 'RVB' : 'EQ'}
-            </button>
-          ))}
-        </div>
-      )}
-
-      {/* Solo / Mute — invisible spacer on effect strips for layout alignment */}
-      {(showMute || isEffect) && (
-        <div className={`flex gap-1 ${isEffect && !onMuteToggle ? 'invisible' : ''} ${channelDisabled ? disabledClass : ''}`}>
-          {stripType !== 'master' && (
-            <button
-              className={`w-7 h-6 rounded text-xs font-bold transition-colors flex items-center justify-center ${
-                isSoloed ? 'bg-yellow-500 text-black' : 'bg-gray-600 text-gray-400 hover:bg-gray-500'
-              }`}
-              onClick={onSoloToggle}
-              title={isSoloed ? 'Unsolo' : 'Solo'}
-            >S</button>
-          )}
-          <button
-            className={`w-7 h-6 rounded text-xs font-bold transition-colors flex items-center justify-center ${
-              isMuted ? 'bg-red-600 text-white' : 'bg-gray-600 text-gray-400 hover:bg-gray-500'
-            }`}
-            onClick={onMuteToggle}
-            title={isMuted ? 'Unmute' : 'Mute'}
-          >M</button>
-        </div>
-      )}
+      {/* Solo / Mute — always rendered; invisible when no callbacks provided */}
+      <div className={`flex gap-1 ${!onMuteToggle && !onSoloToggle ? 'invisible' : ''} ${channelDisabled ? disabledClass : ''}`}>
+        <button
+          className={`w-7 h-6 rounded text-xs font-bold transition-colors flex items-center justify-center ${
+            isSoloed ? 'bg-yellow-500 text-black' : 'bg-gray-600 text-gray-400 hover:bg-gray-500'
+          }`}
+          onClick={onSoloToggle}
+          title={isSoloed ? 'Unsolo' : 'Solo'}
+        >S</button>
+        <button
+          className={`w-7 h-6 rounded text-xs font-bold transition-colors flex items-center justify-center ${
+            isMuted ? 'bg-red-600 text-white' : 'bg-gray-600 text-gray-400 hover:bg-gray-500'
+          }`}
+          onClick={onMuteToggle}
+          title={isMuted ? 'Unmute' : 'Mute'}
+        >M</button>
+      </div>
 
       {/* Vertical fader + L/R meters — meters drive layout, fader overlaid */}
       <div className={`flex-1 relative flex items-stretch justify-center gap-[2px] w-full min-h-0 ${channelDisabled ? disabledClass : ''}`}>
@@ -321,33 +312,27 @@ export default function VerticalChannelStrip({
         />
       </div>
 
-      {/* Filename + time — channel strips only */}
-      {stripType === 'channel' && (
-        <div className="w-full text-center px-1 pb-1">
-          <div className="text-[11px] text-gray-400 truncate font-mono" title={filename || ''}>
-            {filename ? filename.replace(/\.[^.]+$/, '') : '—'}
-          </div>
-          {filename && (
-            <div className="text-[10px] text-gray-500 font-mono">
-              {formatTime(currentTime)}
+      {/* Footer — fixed height across all strip types for fader alignment */}
+      <div className="w-full text-center px-1 pb-1 h-[28px] flex flex-col justify-end">
+        {stripType === 'channel' && (
+          <>
+            <div className="text-[11px] text-gray-400 truncate font-mono" title={filename || ''}>
+              {filename ? filename.replace(/\.[^.]+$/, '') : '—'}
             </div>
-          )}
-        </div>
-      )}
-
-      {/* Effect strip footer */}
-      {isEffect && (
-        <div className="w-full text-center pb-1">
+            {filename && (
+              <div className="text-[10px] text-gray-500 font-mono">
+                {formatTime(currentTime)}
+              </div>
+            )}
+          </>
+        )}
+        {isEffect && (
           <div className="text-[11px] text-gray-500 font-mono">{footerLabel || 'Mix'}</div>
-        </div>
-      )}
-
-      {/* Master label footer */}
-      {stripType === 'master' && (
-        <div className="w-full text-center pb-1">
+        )}
+        {stripType === 'master' && (
           <div className="text-[11px] text-gray-500 font-mono">Out</div>
-        </div>
-      )}
+        )}
+      </div>
     </div>
   );
 }
