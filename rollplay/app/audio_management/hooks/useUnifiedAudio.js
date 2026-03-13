@@ -1238,6 +1238,16 @@ export const useUnifiedAudio = () => {
         inserts.reverb.wetGain.gain.linearRampToValueAtTime(effects.reverb_mix, now + RAMP_TIME);
       }
     }
+
+    // Reverb preset change — regenerate impulse response buffer on the channel's ConvolverNode
+    if (effects.reverb_preset !== undefined) {
+      const currentPreset = inserts.reverb.currentPreset || 'room';
+      if (effects.reverb_preset !== currentPreset) {
+        const presetConfig = REVERB_PRESETS[effects.reverb_preset] || REVERB_PRESETS.room;
+        inserts.reverb.effectNode.buffer = createImpulseResponse(ctx, presetConfig.duration, presetConfig.decay);
+        inserts.reverb.currentPreset = effects.reverb_preset;
+      }
+    }
   }, [channelEffects]);
 
   // Set the mix level for a specific effect on a specific channel.

@@ -17,6 +17,7 @@ class AudioEffects(BaseModel):
     lpf_mix: float = Field(default=0.5, ge=0.0, le=1.0)
     reverb: bool = False
     reverb_mix: float = Field(default=0.5, ge=0.0, le=1.0)
+    reverb_preset: str = "room"
 
 
 class AudioChannelState(BaseModel):
