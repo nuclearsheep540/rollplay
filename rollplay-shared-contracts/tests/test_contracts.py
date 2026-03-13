@@ -26,7 +26,7 @@ from shared_contracts.session import (
 
 class TestAudioRoundTrip:
     def test_audio_effects_round_trip(self):
-        effects = AudioEffects(hpf=True, lpf=False, reverb=True)
+        effects = AudioEffects(eq=True, hpf=True, hpf_mix=0.7, lpf=False, lpf_mix=0.3, reverb=True, reverb_mix=1.1, reverb_preset="hall")
         assert AudioEffects.model_validate(effects.model_dump()) == effects
 
     def test_audio_channel_state_round_trip(self):
@@ -153,10 +153,22 @@ class TestAudioShapeConformance:
         }
         assert required_keys.issubset(set(AudioChannelState.model_fields.keys()))
 
-    def test_audio_effects_is_flat_booleans(self):
+    def test_audio_effects_shape(self):
         effects = AudioEffects()
         dumped = effects.model_dump()
-        assert all(isinstance(v, bool) for v in dumped.values())
+        expected_types = {
+            "eq": bool,
+            "hpf": bool,
+            "hpf_mix": float,
+            "lpf": bool,
+            "lpf_mix": float,
+            "reverb": bool,
+            "reverb_mix": float,
+            "reverb_preset": str,
+        }
+        assert set(dumped.keys()) == set(expected_types.keys())
+        for key, expected_type in expected_types.items():
+            assert isinstance(dumped[key], expected_type), f"{key} should be {expected_type.__name__}"
 
     def test_audio_track_config_has_required_fields(self):
         required_keys = {"volume", "looping", "effects", "paused_elapsed"}
