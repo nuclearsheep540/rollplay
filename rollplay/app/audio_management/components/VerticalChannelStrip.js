@@ -324,23 +324,16 @@ export default function VerticalChannelStrip({
 
       {/* Footer — fixed height across all strip types for fader alignment */}
       <div className="w-full text-center px-1 pb-1 h-[28px] flex flex-col justify-end">
-        {stripType === 'channel' && (
-          <>
-            <div className="text-[11px] text-gray-400 truncate font-mono" title={filename || ''}>
-              {filename ? filename.replace(/\.[^.]+$/, '') : '—'}
-            </div>
-            {filename && (
-              <div className="text-[10px] text-gray-500 font-mono">
-                {formatTime(currentTime)}
-              </div>
-            )}
-          </>
+        {stripType === 'channel' && filename && (
+          <div className="text-xs text-gray-500 font-mono">
+            {formatTime(currentTime)}
+          </div>
         )}
         {isEffect && (
-          <div className="text-[11px] text-gray-500 font-mono">{footerLabel || 'Mix'}</div>
+          <div className="text-xs text-gray-500 font-mono">{footerLabel || 'Mix'}</div>
         )}
         {stripType === 'master' && (
-          <div className="text-[11px] text-gray-500 font-mono">Out</div>
+          <div className="text-xs text-gray-500 font-mono">Out</div>
         )}
       </div>
     </div>

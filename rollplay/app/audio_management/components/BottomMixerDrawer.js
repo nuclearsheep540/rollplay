@@ -149,9 +149,14 @@ export default function BottomMixerDrawer({
               {idx > 0 && <div className="mixer-group-separator" />}
 
               {/* Channel group wrapper — header spans all strips in the group */}
-              <div className="flex flex-col h-full flex-shrink-0">
+              <div className="flex flex-col h-full flex-shrink-0 min-w-0">
                 <div className="text-center text-xs font-bold py-0.5 bg-rose-600 text-white rounded-t tracking-wider">
                   {channelLabel}
+                </div>
+                <div className="text-center px-1 h-4 flex items-center justify-center bg-gray-800/50 overflow-hidden w-0 min-w-full">
+                  <span className="text-[10px] text-gray-300 font-mono truncate" title={trackState.filename || ''}>
+                    {trackState.filename ? trackState.filename.replace(/\.[^.]+$/, '') : '—'}
+                  </span>
                 </div>
                 <div className="flex flex-1 min-h-0">
 
@@ -258,8 +263,9 @@ export default function BottomMixerDrawer({
         {/* Master group wrapper — matching header height for strip alignment */}
         <div className="flex flex-col h-full flex-shrink-0">
           <div className="text-center text-xs font-bold py-0.5 bg-gray-400 text-black rounded-t tracking-wider">
-            MST
+            MASTER
           </div>
+          <div className="h-4" />
           <div className="flex flex-1 min-h-0">
             <VerticalChannelStrip
               stripType="master"
