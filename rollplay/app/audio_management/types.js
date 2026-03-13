@@ -28,7 +28,12 @@ export const DEFAULT_EFFECTS = {
 // Reverb IR presets — generated at runtime from { duration, decay } configs
 // No static WAV files needed; AudioBuffers created via createImpulseResponse()
 export const REVERB_PRESETS = {
-  room: { duration: 0.6, decay: 3.0 },
-  hall: { duration: 1.0, decay: 1.0 },
-  cathedral: { duration: 3.0, decay: 1.5 },
+  room: { duration: 0.3, decay: 1.0 },
+  hall: { duration: 0.6, decay: 1.5 },
+  cathedral: { duration: 1.0, decay: 0.3 },
 };
+
+// Effect strip definitions for mixer drawer rendering (reverb only — HPF/LPF are knobs on channel strip)
+export const EFFECT_STRIP_DEFS = [
+  { key: 'reverb', label: 'RVB', color: 'purple' },
+];

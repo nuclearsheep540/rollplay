@@ -134,6 +134,8 @@ export const handleRemoteAudioBatch = async (data, {
   // Channel mute/solo
   setChannelMuted,
   setChannelSoloed,
+  // Broadcast master volume
+  setBroadcastMasterVolume,
 }) => {
   console.log("🎛️ Remote audio batch command received:", data);
   const { operations, triggered_by, fade_duration } = data;
@@ -305,6 +307,13 @@ export const handleRemoteAudioBatch = async (data, {
           if (setChannelSoloed) {
             setChannelSoloed(trackId, op.soloed);
             console.log(`✅ Batch operation ${index + 1}: ${op.soloed ? 'soloed' : 'unsoloed'} ${trackId}`);
+          }
+          break;
+
+        case 'master_volume':
+          if (setBroadcastMasterVolume) {
+            setBroadcastMasterVolume(op.volume);
+            console.log(`✅ Batch operation ${index + 1}: set broadcast master volume to ${op.volume}`);
           }
           break;
 

@@ -820,7 +820,7 @@ class WebsocketEvent():
         print(f"🎛️ Backend received batch audio operations from {triggered_by}: {len(operations)} operations")
         
         # Validate all operations
-        valid_operations = ["play", "stop", "pause", "resume", "volume", "loop", "load", "clear", "effects", "mute", "solo"]
+        valid_operations = ["play", "stop", "pause", "resume", "volume", "loop", "load", "clear", "effects", "mute", "solo", "master_volume"]
         for i, op in enumerate(operations):
             if not isinstance(op, dict):
                 return WebsocketEventResult.error(f"Invalid batch audio operation {i}: must be an object")
@@ -838,9 +838,9 @@ class WebsocketEvent():
             if operation == "play" or operation == "load":
                 if not op.get("filename"):
                     return WebsocketEventResult.error(f"Invalid batch audio {operation} operation {i}: missing filename")
-            elif operation == "volume":
+            elif operation == "volume" or operation == "master_volume":
                 if "volume" not in op:
-                    return WebsocketEventResult.error(f"Invalid batch audio volume operation {i}: missing volume parameter")
+                    return WebsocketEventResult.error(f"Invalid batch audio {operation} operation {i}: missing volume parameter")
             elif operation == "loop":
                 if "looping" not in op:
                     return WebsocketEventResult.error(f"Invalid batch audio loop operation {i}: missing looping parameter")
@@ -885,6 +885,9 @@ class WebsocketEvent():
             elif operation == "solo":
                 soloed = op.get("soloed", False)
                 operation_summaries.append(f"{'solo' if soloed else 'unsolo'} {track_id}")
+            elif operation == "master_volume":
+                volume = op.get("volume", 1.0)
+                operation_summaries.append(f"set master volume to {volume}")
 
         log_message = f"🎛️ {triggered_by} executed batch audio operations: {', '.join(operation_summaries)}"
         print(log_message)
@@ -1026,6 +1029,10 @@ class WebsocketEvent():
                     ch = current_audio_state.get(track_id, {})
                     channel_state = AudioChannelState(**{**ch, "soloed": op.get("soloed", False)})
                     GameService.update_audio_state(client_id, track_id, channel_state.model_dump())
+
+                elif operation == "master_volume":
+                    # Store broadcast master volume as a top-level field on audio_state
+                    GameService.update_audio_state(client_id, "__master_volume", op.get("volume", 1.0))
 
                 elif operation == "clear":
                     # Save outgoing track's full config before clearing

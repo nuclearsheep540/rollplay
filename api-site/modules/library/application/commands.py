@@ -403,9 +403,14 @@ class UpdateAudioConfig:
         duration_seconds: Optional[float] = None,
         default_volume: Optional[float] = None,
         default_looping: Optional[bool] = None,
+        effect_eq_enabled: Optional[bool] = None,
         effect_hpf_enabled: Optional[bool] = None,
+        effect_hpf_mix: Optional[float] = None,
         effect_lpf_enabled: Optional[bool] = None,
-        effect_reverb_enabled: Optional[bool] = None
+        effect_lpf_mix: Optional[float] = None,
+        effect_reverb_enabled: Optional[bool] = None,
+        effect_reverb_mix: Optional[float] = None,
+        effect_reverb_preset: Optional[str] = None
     ) -> Union[MusicAsset, SfxAsset]:
         """
         Update audio configuration for an audio asset.
@@ -416,9 +421,7 @@ class UpdateAudioConfig:
             duration_seconds: Track duration in seconds (>= 0)
             default_volume: Default playback volume (0.0-1.3)
             default_looping: Default loop behavior
-            effect_hpf_enabled: High-pass filter enabled (MusicAsset only)
-            effect_lpf_enabled: Low-pass filter enabled (MusicAsset only)
-            effect_reverb_enabled: Reverb enabled (MusicAsset only)
+            effect_*: Effect configuration fields (MusicAsset only)
 
         Returns:
             Updated MusicAsset or SfxAsset
@@ -448,9 +451,14 @@ class UpdateAudioConfig:
         )
         if isinstance(asset, MusicAsset):
             config_kwargs.update(
+                effect_eq_enabled=effect_eq_enabled,
                 effect_hpf_enabled=effect_hpf_enabled,
+                effect_hpf_mix=effect_hpf_mix,
                 effect_lpf_enabled=effect_lpf_enabled,
+                effect_lpf_mix=effect_lpf_mix,
                 effect_reverb_enabled=effect_reverb_enabled,
+                effect_reverb_mix=effect_reverb_mix,
+                effect_reverb_preset=effect_reverb_preset,
             )
 
         asset.update_audio_config(**config_kwargs)

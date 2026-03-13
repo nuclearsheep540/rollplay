@@ -16,7 +16,8 @@ import MapControlsPanel from './components/MapControlsPanel';
 import ImageControlsPanel from './components/ImageControlsPanel';
 import CombatControlsPanel from './components/CombatControlsPanel';
 import ModeratorControls from './components/ModeratorControls';
-import { AudioMixerPanel } from '../audio_management/components';
+import { AudioMixerPanel, BottomMixerDrawer } from '../audio_management/components';
+import { PlaybackState } from '../audio_management/types';
 import HorizontalInitiativeTracker from './components/HorizontalInitiativeTracker';
 import AdventureLog from './components/AdventureLog';
 import LobbyPanel from './components/LobbyPanel';
@@ -29,10 +30,10 @@ import { MapDisplay, GridOverlay, useMapWebSocket, ImageDisplay, useImageWebSock
 // Tab configuration for right drawer - static, role filtering applied at render time
 const RIGHT_DRAWER_TABS = [
   { id: 'moderator', label: 'MOD', dmOnly: false },
+  { id: 'audio', label: 'AUDIO', dmOnly: true },
   { id: 'map', label: 'MAP', dmOnly: true },
   { id: 'image', label: 'IMAGE', dmOnly: true },
   { id: 'combat', label: 'COMBAT', dmOnly: true },
-  { id: 'audio', label: 'AUDIO', dmOnly: true },
 ];
 
 // Helper function to get character data — module scope (pure, no component state deps)
@@ -146,6 +147,7 @@ function GameContent() {
   const [isSpectator, setIsSpectator] = useState(false);
   const [isDrawerOpen, setIsDrawerOpen] = useState(true);
   const [activeRightDrawer, setActiveRightDrawer] = useState(null); // null | 'dm' | 'moderator'
+  const [isMixerOpen, setIsMixerOpen] = useState(false);
   const [mapImageConfig, setMapImageConfig] = useState(null); // Map image positioning/scaling
 
   // Stable callbacks for grid/map config changes — passed to DMControlCenter useEffect deps
@@ -781,6 +783,8 @@ function GameContent() {
     isAudioUnlocked,
     masterVolume,
     setMasterVolume,
+    broadcastMasterVolume,
+    setBroadcastMasterVolume,
     unlockAudio,
     playLocalSFX,
     remoteTrackStates,
@@ -799,9 +803,12 @@ function GameContent() {
     syncAudioState,
     activeFades,
     cancelFade,
-    // Channel effects
+    // Per-channel insert effects
     channelEffects,
     applyChannelEffects,
+    setEffectMixLevel,
+    // Master metering
+    masterAnalysers,
     // SFX Soundboard
     sfxSlots,
     playSfxSlot,
@@ -884,6 +891,9 @@ function GameContent() {
     // Channel effects (for effects batch operations from other clients)
     applyChannelEffects,
 
+    // Broadcast master volume (for master_volume batch operations from DM)
+    setBroadcastMasterVolume,
+
     // SFX Soundboard (for batch operations from other clients)
     playSfxSlot,
     stopSfxSlot,
@@ -903,7 +913,7 @@ function GameContent() {
     activeFades, cancelFade, syncAudioState, loadAssetIntoChannel, applyChannelEffects,
     playSfxSlot, stopSfxSlot, setSfxSlotVolume, loadSfxSlot, clearSfxSlot, sfxSlots,
     audioBuffersRef, audioContextRef,
-    setChannelMuted, setChannelSoloed
+    setChannelMuted, setChannelSoloed, setBroadcastMasterVolume
   ]);
 
   // Initialize WebSocket hook with game context (after audio functions are available)
@@ -930,6 +940,36 @@ function GameContent() {
 
   // Sync ref so handleRoleChange can call sendSeatChange without circular dep
   sendSeatChangeRef.current = sendSeatChange;
+
+  // Mixer drawer transport handlers — send via WebSocket batch
+  const handleMixerPlay = useCallback((trackId) => {
+    const trackState = remoteTrackStates[trackId];
+    if (!trackState?.filename) return;
+    if (trackState.playbackState === PlaybackState.PAUSED) {
+      sendRemoteAudioBatch?.([{ trackId, operation: 'resume' }]);
+    } else {
+      sendRemoteAudioBatch?.([{
+        trackId,
+        operation: 'play',
+        filename: trackState.filename,
+        asset_id: trackState.asset_id,
+        s3_url: trackState.s3_url,
+        looping: trackState.looping,
+        volume: trackState.volume,
+        type: trackState.type,
+        channelGroup: trackState.channelGroup,
+        track: trackState.track,
+      }]);
+    }
+  }, [remoteTrackStates, sendRemoteAudioBatch]);
+
+  const handleMixerPause = useCallback((trackId) => {
+    sendRemoteAudioBatch?.([{ trackId, operation: 'pause' }]);
+  }, [sendRemoteAudioBatch]);
+
+  const handleMixerStop = useCallback((trackId) => {
+    sendRemoteAudioBatch?.([{ trackId, operation: 'stop' }]);
+  }, [sendRemoteAudioBatch]);
 
   // Map management WebSocket hook (atomic approach)
   // Wrap setActiveMap to also update activeDisplay when a map is loaded
@@ -1664,9 +1704,6 @@ function GameContent() {
                   isExpanded={true}
                   onToggle={() => {}}
                   remoteTrackStates={remoteTrackStates}
-                  remoteTrackAnalysers={remoteTrackAnalysers}
-                  sendRemoteAudioPlay={sendRemoteAudioPlay}
-                  sendRemoteAudioResume={sendRemoteAudioResume}
                   sendRemoteAudioBatch={sendRemoteAudioBatch}
                   unlockAudio={unlockAudio}
                   isAudioUnlocked={isAudioUnlocked}
@@ -1677,14 +1714,7 @@ function GameContent() {
                   loadSfxSlot={loadSfxSlot}
                   clearSfxSlot={clearSfxSlot}
                   setSfxSlotVolume={setSfxSlotVolume}
-                  setRemoteTrackVolume={setRemoteTrackVolume}
                   activeFades={activeFades}
-                  channelEffects={channelEffects}
-                  applyChannelEffects={applyChannelEffects}
-                  mutedChannels={mutedChannels}
-                  soloedChannels={soloedChannels}
-                  setChannelMuted={setChannelMuted}
-                  setChannelSoloed={setChannelSoloed}
                 />
               )}
             </div>
@@ -1743,6 +1773,32 @@ function GameContent() {
           />
         );
       })()}
+
+      {/* Bottom Mixer Drawer — DM only */}
+      {isDM && (
+        <BottomMixerDrawer
+          isOpen={isMixerOpen}
+          onToggle={() => setIsMixerOpen(prev => !prev)}
+          remoteTrackStates={remoteTrackStates}
+          remoteTrackAnalysers={remoteTrackAnalysers}
+          setRemoteTrackVolume={setRemoteTrackVolume}
+          sendRemoteAudioBatch={sendRemoteAudioBatch}
+          onPlay={handleMixerPlay}
+          onPause={handleMixerPause}
+          onStop={handleMixerStop}
+          onLoopToggle={toggleRemoteTrackLooping}
+          channelEffects={channelEffects}
+          applyChannelEffects={applyChannelEffects}
+          setEffectMixLevel={setEffectMixLevel}
+          mutedChannels={mutedChannels}
+          soloedChannels={soloedChannels}
+          setChannelMuted={setChannelMuted}
+          setChannelSoloed={setChannelSoloed}
+          masterAnalysers={masterAnalysers}
+          masterVolume={broadcastMasterVolume}
+          onMasterVolumeChange={setBroadcastMasterVolume}
+        />
+      )}
 
       {/* Audio Gate Overlay — provides user gesture for AudioContext + auto-seats player */}
       {!isAudioUnlocked && (

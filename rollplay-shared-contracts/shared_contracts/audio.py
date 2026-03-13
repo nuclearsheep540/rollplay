@@ -9,11 +9,16 @@ from pydantic import BaseModel, Field
 
 
 class AudioEffects(BaseModel):
-    """Effect toggle state — V1 stores booleans only, V2 will add parameters."""
+    """Per-channel insert effect state — enabled flags + wet/dry mix levels."""
 
+    eq: bool = False
     hpf: bool = False
+    hpf_mix: float = Field(default=0.5, ge=0.0, le=1.0)
     lpf: bool = False
+    lpf_mix: float = Field(default=0.5, ge=0.0, le=1.0)
     reverb: bool = False
+    reverb_mix: float = Field(default=0.5, ge=0.0, le=1.3)
+    reverb_preset: str = "room"
 
 
 class AudioChannelState(BaseModel):

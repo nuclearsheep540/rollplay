@@ -122,9 +122,14 @@ class MediaAssetRepository:
                 existing.duration_seconds = aggregate.duration_seconds
                 existing.default_volume = aggregate.default_volume
                 existing.default_looping = aggregate.default_looping
+                existing.effect_eq_enabled = aggregate.effect_eq_enabled
                 existing.effect_hpf_enabled = aggregate.effect_hpf_enabled
+                existing.effect_hpf_mix = aggregate.effect_hpf_mix
                 existing.effect_lpf_enabled = aggregate.effect_lpf_enabled
+                existing.effect_lpf_mix = aggregate.effect_lpf_mix
                 existing.effect_reverb_enabled = aggregate.effect_reverb_enabled
+                existing.effect_reverb_mix = aggregate.effect_reverb_mix
+                existing.effect_reverb_preset = aggregate.effect_reverb_preset
 
             # Update sfx-specific fields if SfxAsset
             if isinstance(aggregate, SfxAsset) and isinstance(existing, SfxAssetModel):
@@ -160,9 +165,14 @@ class MediaAssetRepository:
                     duration_seconds=aggregate.duration_seconds,
                     default_volume=aggregate.default_volume,
                     default_looping=aggregate.default_looping,
+                    effect_eq_enabled=aggregate.effect_eq_enabled,
                     effect_hpf_enabled=aggregate.effect_hpf_enabled,
+                    effect_hpf_mix=aggregate.effect_hpf_mix,
                     effect_lpf_enabled=aggregate.effect_lpf_enabled,
-                    effect_reverb_enabled=aggregate.effect_reverb_enabled
+                    effect_lpf_mix=aggregate.effect_lpf_mix,
+                    effect_reverb_enabled=aggregate.effect_reverb_enabled,
+                    effect_reverb_mix=aggregate.effect_reverb_mix,
+                    effect_reverb_preset=aggregate.effect_reverb_preset
                 )
             elif isinstance(aggregate, SfxAsset):
                 model = SfxAssetModel(
@@ -251,9 +261,14 @@ class MediaAssetRepository:
                 duration_seconds=model.duration_seconds,
                 default_volume=model.default_volume,
                 default_looping=model.default_looping,
+                effect_eq_enabled=model.effect_eq_enabled,
                 effect_hpf_enabled=model.effect_hpf_enabled,
+                effect_hpf_mix=model.effect_hpf_mix,
                 effect_lpf_enabled=model.effect_lpf_enabled,
-                effect_reverb_enabled=model.effect_reverb_enabled
+                effect_lpf_mix=model.effect_lpf_mix,
+                effect_reverb_enabled=model.effect_reverb_enabled,
+                effect_reverb_mix=model.effect_reverb_mix,
+                effect_reverb_preset=model.effect_reverb_preset
             )
 
         # If it's a SfxAssetModel, promote to SfxAsset with audio fields

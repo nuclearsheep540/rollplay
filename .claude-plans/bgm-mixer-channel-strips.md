@@ -254,3 +254,148 @@ BufferSource → trackGainNode → muteGainNode → ChannelSplitter(2)
 10. Solo overrides Mute: soloed+muted track is audible
 11. Un-solo all: all unmuted tracks resume
 12. Late-joining player sees correct mute/solo state from MongoDB
+
+---
+
+# Phase 2: Full Effects State Persistence — WebSocket, MongoDB, and ETL
+
+## Context
+
+Channel effects (EQ, reverb, mix levels, reverb presets) lose state on page refresh and across sessions. The system was built for V1 (boolean toggles only) but V2 added mix levels (`hpf_mix`, `lpf_mix`, `reverb_mix`), reverb presets (`reverb_preset`), and `eq` as a master bypass. These new fields are partially wired — they work in-memory but aren't fully persisted through MongoDB or PostgreSQL.
+
+### What's broken
+
+| Issue | Impact |
+|-------|--------|
+| `eq` not in AudioEffects model or backend | Page refresh loses EQ strip visibility AND individual HPF/LPF config |
+| EQ toggle zeros out `hpf`/`lpf` flags | Re-enabling EQ doesn't restore which filters were active |
+| `reverb_preset` missing from frontend `channelEffects` init | Preset not included in initial state broadcasts |
+| PostgreSQL has no columns for mix levels, preset, or eq | Cold storage only saves enabled flags — mix levels reset to defaults on session restart |
+| ETL out only writes `effect_hpf_enabled` etc. | Mix levels, preset, and eq bypass lost on PauseSession/FinishSession |
+| ETL in (`build_effects_for_game`) only sends enabled flags | StartSession restores toggles but defaults all mix levels |
+| Frontend load (AudioMixerPanel) only sends enabled flags | Track load broadcasts lack mix levels |
+
+### What works
+
+- MongoDB stores full `AudioEffects` during live sessions (WebSocket effects operations pass through all fields)
+- `syncAudioState` correctly calls `applyChannelEffects` with MongoDB state
+- Track swap stash/restore in api-game preserves full effects
+- `AudioEffects` Pydantic model already has `hpf_mix`, `lpf_mix`, `reverb_mix`, `reverb_preset` fields
+- `hpf_mix`/`lpf_mix` values already survive state merges (not zeroed on EQ toggle)
+
+---
+
+## Changes
+
+### P2-1. `eq` as a real persisted master bypass
+
+`eq` is a **master bypass** for pass filters — NOT derived from `hpf || lpf`. When `eq` is off, no filters are applied, but the individual `hpf`/`lpf` enabled flags and mix values are preserved. Re-enabling `eq` restores the exact filter config.
+
+**Shared contract — `rollplay-shared-contracts/shared_contracts/audio.py`:**
+- Add `eq: bool = False` to `AudioEffects` model (master bypass for HPF/LPF)
+
+**`BottomMixerDrawer.js`** — Fix `handleToggleSend` for `eq`:
+- **Stop zeroing `hpf`/`lpf`** when EQ toggles off. Only toggle the `eq` flag itself
+- Current code (lines 82-85) sets `hpf: false, lpf: false` — remove that
+- The `eq` field is now sent to backend as part of the effects object (no stripping)
+
+**`useUnifiedAudio.js`** — `applyChannelEffects` respects `eq` bypass:
+- Add `eq: false` and `reverb_preset: 'room'` to `channelEffects` init (lines 233-246)
+- When processing HPF/LPF in `applyChannelEffects`: check `eq` flag first. If `eq === false`, set both filters to pass-all frequencies (20 Hz / 20 kHz) regardless of individual `hpf`/`lpf` state
+- When `eq` toggles back to `true`, re-apply the stored `hpf`/`lpf` + mix values from `channelEffects` state
+
+**`useUnifiedAudio.js`** — `syncAudioState`:
+- When syncing from MongoDB, if `eq` field is present, apply it. If absent (old sessions), derive from `hpf || lpf` for backward compat
+
+### P2-2. PostgreSQL: Add mix level, preset, and eq columns
+
+**`api-site/modules/library/model/audio_asset_models.py`** — Add to MusicAsset:
+```python
+effect_eq_enabled = Column(Boolean, nullable=True)   # master bypass for HPF/LPF
+effect_hpf_mix = Column(Float, nullable=True)        # 0.0-1.0
+effect_lpf_mix = Column(Float, nullable=True)        # 0.0-1.0
+effect_reverb_mix = Column(Float, nullable=True)     # 0.0-1.0
+effect_reverb_preset = Column(String, nullable=True) # 'room'|'hall'|'cathedral'
+```
+
+**Alembic migration**: `alembic revision --autogenerate -m "add eq bypass, effect mix levels, and reverb preset to music assets"`
+
+### P2-3. Asset domain: Full effects in `build_effects_for_game`
+
+**`api-site/modules/library/domain/music_asset_aggregate.py`** — Update `build_effects_for_game()`:
+```python
+def build_effects_for_game(self) -> AudioEffects:
+    return AudioEffects(
+        eq=self.effect_eq_enabled or False,
+        hpf=self.effect_hpf_enabled or False,
+        hpf_mix=self.effect_hpf_mix if self.effect_hpf_mix is not None else 0.5,
+        lpf=self.effect_lpf_enabled or False,
+        lpf_mix=self.effect_lpf_mix if self.effect_lpf_mix is not None else 0.5,
+        reverb=self.effect_reverb_enabled or False,
+        reverb_mix=self.effect_reverb_mix if self.effect_reverb_mix is not None else 0.5,
+        reverb_preset=self.effect_reverb_preset or 'room',
+    )
+```
+
+### P2-4. ETL out: Save full effects on PauseSession/FinishSession
+
+**`api-site/modules/session/application/commands.py`** — In `_extract_and_sync_game_state()`, expand the effects sync:
+```python
+if effects and isinstance(asset, MusicAsset):
+    config_kwargs["effect_eq_enabled"] = effects.eq
+    config_kwargs["effect_hpf_enabled"] = effects.hpf
+    config_kwargs["effect_hpf_mix"] = effects.hpf_mix
+    config_kwargs["effect_lpf_enabled"] = effects.lpf
+    config_kwargs["effect_lpf_mix"] = effects.lpf_mix
+    config_kwargs["effect_reverb_enabled"] = effects.reverb
+    config_kwargs["effect_reverb_mix"] = effects.reverb_mix
+    config_kwargs["effect_reverb_preset"] = effects.reverb_preset
+```
+
+### P2-5. Frontend load: Include full effects in broadcast
+
+**`rollplay/app/audio_management/components/AudioMixerPanel.js`** — In `handleAssetSelected`:
+```javascript
+const effects = {
+  eq: asset.effect_eq_enabled || false,
+  hpf: asset.effect_hpf_enabled || false,
+  hpf_mix: asset.effect_hpf_mix ?? DEFAULT_EFFECTS.hpf.mix,
+  lpf: asset.effect_lpf_enabled || false,
+  lpf_mix: asset.effect_lpf_mix ?? DEFAULT_EFFECTS.lpf.mix,
+  reverb: asset.effect_reverb_enabled || false,
+  reverb_mix: asset.effect_reverb_mix ?? DEFAULT_EFFECTS.reverb.mix,
+  reverb_preset: asset.effect_reverb_preset || 'room',
+};
+```
+
+Also update `loadAssetIntoChannel` in `useUnifiedAudio.js` to handle full effects from load operations.
+
+### P2-6. API schema: Expose new fields in asset responses
+
+**`api-site/modules/library/api/schemas.py`** — Add eq, mix level, and preset fields to the MusicAsset response schema.
+
+---
+
+## Phase 2 Key Files
+
+| File | Change |
+|------|--------|
+| `rollplay-shared-contracts/shared_contracts/audio.py` | Add `eq: bool = False` to AudioEffects |
+| `rollplay/app/audio_management/hooks/useUnifiedAudio.js` | `eq`/`reverb_preset` init, `eq` bypass in `applyChannelEffects`, full effects in load |
+| `rollplay/app/audio_management/components/BottomMixerDrawer.js` | Stop zeroing `hpf`/`lpf` on EQ toggle — only toggle `eq` flag |
+| `rollplay/app/audio_management/components/AudioMixerPanel.js` | Include full effects (incl. `eq`) in load broadcast |
+| `api-site/modules/library/model/audio_asset_models.py` | Add `eq_enabled`, mix level + preset columns |
+| `api-site/modules/library/domain/music_asset_aggregate.py` | Full effects incl. `eq` in `build_effects_for_game()` |
+| `api-site/modules/session/application/commands.py` | Save full effects incl. `eq` in ETL out |
+| `api-site/modules/library/api/schemas.py` | Expose new fields in asset response |
+| Alembic migration | New columns on music_assets table |
+
+## Phase 2 Verification
+
+1. **EQ bypass round-trip**: Enable EQ → enable HPF only → toggle EQ off → toggle EQ on → HPF is re-enabled, LPF stays disabled
+2. **Page refresh**: Enable EQ + reverb with custom mix levels → refresh → all effects restored including EQ strip visibility, individual filter states, mix levels, and reverb preset
+3. **Late joiner**: Second client joins → sees correct effects state including EQ bypass and filter config
+4. **Session pause/resume**: Pause session → resume → effects fully restored with mix levels and EQ bypass state
+5. **Track swap**: Load track A with effects → swap to track B → swap back to A → effects restored from stash
+6. **Cold start**: Finish session → start new session with same campaign → asset-level defaults include eq, mix levels, preset
+7. **Build passes**, no Pydantic validation errors

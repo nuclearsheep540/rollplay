@@ -4,6 +4,8 @@
  */
 
 import React, { useRef, useEffect } from 'react';
+import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
+import { faPlay, faPause, faStop } from '@fortawesome/free-solid-svg-icons';
 import { PlaybackState } from '../types';
 import {
   DM_SUB_HEADER,
@@ -24,10 +26,14 @@ const formatTime = (seconds) => {
   return `${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
 };
 
-// dB converter (unused for visualizer, but left in)
-function volumeToDb(volume) {
-  if (volume === 0) return -Infinity;
-  return 40 * Math.log10(volume);
+// RMS → dB → percentage for meter display
+const DB_FLOOR = -60;
+const DB_CEIL = 0;
+function rmsToPct(rms) {
+  if (rms < 0.001) return 0;
+  const dB = 20 * Math.log10(rms);
+  const clamped = Math.max(DB_FLOOR, Math.min(DB_CEIL, dB));
+  return ((clamped - DB_FLOOR) / (DB_CEIL - DB_FLOOR)) * 100;
 }
 
 export default function AudioTrack({
@@ -45,9 +51,11 @@ export default function AudioTrack({
   onSoloToggle,
   syncMode = false,
   pendingOperations = { play: false, pause: false, stop: false, loop: false },
-  isLast = false
+  isLast = false,
+  effects = {},
+  onToggleEffect = null,
 }) {
-  const { trackId, type, icon, label, analyserNode, isRouted, track, isDisabled } = config;
+  const { trackId, type, icon, label, analysers, isRouted, track, isDisabled } = config;
   const {
     playbackState = PlaybackState.STOPPED,
     volume = 1.0,
@@ -60,8 +68,10 @@ export default function AudioTrack({
   // refs for debouncing volume send
   const volumeDebounceTimer = useRef(null);
 
-  // refs for slider fill
+  // refs for stereo meter bars
   const sliderRef = useRef(null);
+  const meterLRef = useRef(null);
+  const meterRRef = useRef(null);
   const rafRef = useRef(null);
 
   // cleanup debounce timer on unmount
@@ -72,71 +82,48 @@ export default function AudioTrack({
   }, []);
 
   // ——————————————————————————————————————
-  // 1) Setup RAF loop for real-time fill using existing analyser
+  // Stereo RMS meter loop (dB-scaled)
   useEffect(() => {
-    const analyser = analyserNode;          // from props.config.analyserNode
-    const sliderEl = sliderRef.current;
-    if (!analyser || !sliderEl) return;     // bail early if no analyser or no DOM
-  
-    const data = new Uint8Array(analyser.frequencyBinCount);
-    let lastRms = 0;                        // remember between frames
-  
-    const tick = () => {
-      // schedule next frame first (so we can bail on cleanup)
-      rafRef.current = requestAnimationFrame(tick);
-  
-      // pull raw waveform
-      analyser.getByteTimeDomainData(data);
-  
-      // compute RMS 0→1
-      let sumSquares = 0;
+    if (!analysers?.left || !analysers?.right) return;
+
+    const dataL = new Uint8Array(analysers.left.frequencyBinCount);
+    const dataR = new Uint8Array(analysers.right.frequencyBinCount);
+    let lastL = 0;
+    let lastR = 0;
+
+    const computeRms = (data) => {
+      let sum = 0;
       for (let i = 0; i < data.length; i++) {
-        const norm = (data[i] - 128) / 128; // normalize -1→1
-        sumSquares += norm * norm;
+        const norm = (data[i] - 128) / 128;
+        sum += norm * norm;
       }
-      const rms = Math.sqrt(sumSquares / data.length);
-  
-      // simple low-pass in JS: smooth out jagged changes
-      const smoothed = lastRms * 0.85 + rms * 0.15;
-      lastRms = smoothed;
-  
-      // convert to percentage
-      let pct = Math.min(1, smoothed) * 100;
-      pct = (pct * 3) * (trackState.volume)
-
-      // fake a 15% boost based off our smoothness
-      pct > 5 ? pct = pct * 1.15 : null
-  
-      // defend against missing ref in mid-cleanup
-      const rms_hot = 40;
-      const rms_peak = 60;
-      
-      const fillColor =
-        pct >= rms_peak ? '#FF0000'
-        : pct >= rms_hot ? '#FFD700'
-        : '#04AA6D';
-
-      if (sliderRef.current) {
-        // a "flat" gradient: fillColor up to pct, then grey
-        sliderRef.current.style.background = `
-          linear-gradient(
-            to right,
-            ${fillColor} 0%,
-            ${fillColor} ${pct}%,
-            #555 ${pct}%,
-            #555 100%
-          )
-        `;
-      }
+      return Math.sqrt(sum / data.length);
     };
-  
-    // kick it off
+
+    const applyMeter = (ref, pct) => {
+      if (!ref.current) return;
+      const color = pct >= 90 ? '#FF0000' : pct >= 70 ? '#FFD700' : '#04AA6D';
+      ref.current.style.background = `linear-gradient(to right, ${color} 0%, ${color} ${pct}%, #1e293b ${pct}%, #1e293b 100%)`;
+    };
+
+    const tick = () => {
+      rafRef.current = requestAnimationFrame(tick);
+
+      analysers.left.getByteTimeDomainData(dataL);
+      analysers.right.getByteTimeDomainData(dataR);
+
+      const smoothL = lastL * 0.8 + computeRms(dataL) * 0.2;
+      const smoothR = lastR * 0.8 + computeRms(dataR) * 0.2;
+      lastL = smoothL;
+      lastR = smoothR;
+
+      applyMeter(meterLRef, rmsToPct(smoothL));
+      applyMeter(meterRRef, rmsToPct(smoothR));
+    };
+
     tick();
-  
-    return () => {
-      cancelAnimationFrame(rafRef.current);
-    };
-  }, [analyserNode, trackState.volume]);
+    return () => cancelAnimationFrame(rafRef.current);
+  }, [analysers]);
 
   // debounced volume handler
   const handleVolumeChange = (newVol) => {
@@ -195,55 +182,57 @@ export default function AudioTrack({
             {/* Play button - shown when stopped, or for SFX when playing (to restart) */}
             {(playbackState === PlaybackState.STOPPED || (type === 'sfx' && playbackState === PlaybackState.PLAYING)) && (
               <button
-                className={`bg-green-600 hover:bg-green-700 text-white px-3 py-1 rounded text-xs flex items-center gap-1 ${
+                className={`bg-green-600 hover:bg-green-700 text-white w-8 h-6 rounded text-xs flex items-center justify-center ${
                   pendingOperations.play ? 'opacity-50 cursor-not-allowed' : ''
                 }`}
                 onClick={onPlay}
                 disabled={pendingOperations.play}
                 title="Play from beginning"
               >
-                ▶ {type === 'sfx' ? 'PLAY' : (pendingOperations.play ? 'PLAYING...' : 'PLAY')}
+                <FontAwesomeIcon icon={faPlay} size="xs" />
               </button>
             )}
 
             {/* Pause button - shown when playing BGM only (SFX cannot be paused) */}
             {playbackState === PlaybackState.PLAYING && type !== 'sfx' && (
               <button
-                className={`bg-orange-600 hover:bg-orange-700 text-white px-3 py-1 rounded text-xs flex items-center gap-1 ${
+                className={`bg-orange-600 hover:bg-orange-700 text-white w-8 h-6 rounded text-xs flex items-center justify-center ${
                   pendingOperations.pause ? 'opacity-50 cursor-not-allowed' : ''
                 }`}
                 onClick={onPause}
                 disabled={pendingOperations.pause}
+                title="Pause"
               >
-                ⏸ {pendingOperations.pause ? 'PAUSING...' : 'PAUSE'}
+                <FontAwesomeIcon icon={faPause} size="xs" />
               </button>
             )}
 
             {/* Resume button - shown when paused */}
             {playbackState === PlaybackState.PAUSED && (
               <button
-                className={`bg-blue-600 hover:bg-blue-700 text-white px-3 py-1 rounded text-xs flex items-center gap-1 ${
+                className={`bg-blue-600 hover:bg-blue-700 text-white w-8 h-6 rounded text-xs flex items-center justify-center ${
                   pendingOperations.play ? 'opacity-50 cursor-not-allowed' : ''
                 }`}
                 onClick={onPlay}
                 disabled={pendingOperations.play}
                 title="Resume from paused position"
               >
-                ▶ {pendingOperations.play ? 'RESUMING...' : 'RESUME'}
+                <FontAwesomeIcon icon={faPlay} size="xs" />
               </button>
             )}
             <button
-              className={`bg-red-600 hover:bg-red-700 text-white px-3 py-1 rounded text-xs flex items-center gap-1 ${
+              className={`bg-red-600 hover:bg-red-700 text-white w-8 h-6 rounded text-xs flex items-center justify-center ${
                 pendingOperations.stop ? 'opacity-50 cursor-not-allowed' : ''
               }`}
               onClick={onStop}
               disabled={pendingOperations.stop}
+              title="Stop"
             >
-              ⏹ {pendingOperations.stop ? 'STOPPING...' : 'STOP'}
+              <FontAwesomeIcon icon={faStop} size="xs" />
             </button>
             {type !== 'sfx' && (
               <button
-                className={`p-0 rounded ml-2 transition-all duration-200 flex items-center ${
+                className={`p-0 rounded ml-2 transition-all duration-200 flex items-center h-6 ${
                   pendingOperations.loop
                     ? 'opacity-50 cursor-not-allowed bg-gray-500'
                     : looping
@@ -269,64 +258,103 @@ export default function AudioTrack({
                 />
               </button>
             )}
-            {/* Solo/Mute — channel-level controls */}
+            {/* Solo/Mute/Effects — channel-level controls */}
             {type !== 'sfx' && (
               <>
                 <button
-                  className={`px-2 py-0.5 rounded text-xs font-bold transition-colors ${
+                  className={`px-2 h-6 rounded text-xs font-bold transition-colors flex items-center justify-center ${
                     isSoloed ? 'bg-yellow-500 text-black' : 'bg-gray-600 text-gray-400 hover:bg-gray-500'
                   }`}
                   onClick={onSoloToggle}
                   title={isSoloed ? 'Unsolo' : 'Solo'}
                 >S</button>
                 <button
-                  className={`px-2 py-0.5 rounded text-xs font-bold transition-colors ${
+                  className={`px-2 h-6 rounded text-xs font-bold transition-colors flex items-center justify-center ${
                     isMuted ? 'bg-red-600 text-white' : 'bg-gray-600 text-gray-400 hover:bg-gray-500'
                   }`}
                   onClick={onMuteToggle}
                   title={isMuted ? 'Unmute' : 'Mute'}
                 >M</button>
+                {onToggleEffect && (
+                  <>
+                    <button
+                      className={`px-2 h-6 rounded text-[10px] font-bold transition-colors border flex items-center justify-center ${
+                        effects?.hpf ? 'bg-rose-600 text-white border-rose-500 hover:bg-rose-700' : 'bg-gray-700 text-gray-400 border-gray-600 hover:bg-gray-600'
+                      }`}
+                      onClick={() => onToggleEffect(trackId, 'hpf')}
+                      title="High-Pass Filter (removes low-end rumble)"
+                    >HPF</button>
+                    <button
+                      className={`px-2 h-6 rounded text-[10px] font-bold transition-colors border flex items-center justify-center ${
+                        effects?.lpf ? 'bg-rose-600 text-white border-rose-500 hover:bg-rose-700' : 'bg-gray-700 text-gray-400 border-gray-600 hover:bg-gray-600'
+                      }`}
+                      onClick={() => onToggleEffect(trackId, 'lpf')}
+                      title="Low-Pass Filter (muffled / distant sound)"
+                    >LPF</button>
+                    <button
+                      className={`px-2 h-6 rounded text-[10px] font-bold transition-colors border flex items-center justify-center ${
+                        effects?.reverb ? 'bg-rose-600 text-white border-rose-500 hover:bg-rose-700' : 'bg-gray-700 text-gray-400 border-gray-600 hover:bg-gray-600'
+                      }`}
+                      onClick={() => onToggleEffect(trackId, 'reverb')}
+                      title="Reverb (room ambiance)"
+                    >RVB</button>
+                  </>
+                )}
               </>
             )}
           </div>
         )}
 
-        {/* Level Slider w/ Analyser-driven fill - only show when file is loaded */}
+        {/* Stereo RMS meter bars + Volume slider - only show when file is loaded */}
         {filename && (
-          <div className="flex items-center gap-1">
-            <span className="mt-3 font-mono">dB</span>
-            <div className="flex-1 font-mono">
-              <datalist id="markers">
-                <option value="15" label="-48" />
-                <option value="30" label="-36" />
-                <option value="40" label="-24" />
-                <option value="50" label="-12" />
-                <option value="60" label="-3" />
-                <option value="70" label="-0" className='mr-12' />
-                <option value="130" label="+3" />
-              </datalist>
-
-              <input
-                ref={sliderRef}
-                type="range"
-                min="0.0"
-                max="1.3"
-                step="0.01"
-                value={volume}
-                onChange={(e) =>
-                  handleVolumeChange(parseFloat(e.target.value))
-                }
-                onMouseUp={(e) =>
-                  handleVolumeRelease(parseFloat(e.target.value))
-                }
-                onTouchEnd={(e) =>
-                  handleVolumeRelease(parseFloat(e.target.value))
-                }
-                className="slider bg-slate-800"
-                list="markers"
-              />
+          <>
+            {/* L/R meter bars */}
+            <div className="flex flex-col gap-[1px] px-1 mb-1">
+              <div className="flex items-center gap-1 h-[8px]">
+                <span className="text-[11px] leading-none w-3 font-mono" style={{ color: '#F7F4F3' }}>L</span>
+                <div ref={meterLRef} className="h-full flex-1 rounded-sm bg-slate-800" />
+              </div>
+              <div className="flex items-center gap-1 h-[8px]">
+                <span className="text-[11px] leading-none w-3 font-mono" style={{ color: '#F7F4F3' }}>R</span>
+                <div ref={meterRRef} className="h-full flex-1 rounded-sm bg-slate-800" />
+              </div>
             </div>
-          </div>
+            {/* Volume fader */}
+            <div className="flex items-center gap-1">
+              <span className="mt-3 font-mono">dB</span>
+              <div className="flex-1 font-mono">
+                <datalist id="markers">
+                  <option value="0.00" label="-∞" />
+                  <option value="0.03" label="-30" />
+                  <option value="0.10" label="-20" />
+                  <option value="0.25" label="-12" />
+                  <option value="0.50" label="-6" />
+                  <option value="1.00" label="0" />
+                  <option value="1.30" label="+2" />
+                </datalist>
+
+                <input
+                  ref={sliderRef}
+                  type="range"
+                  min="0.0"
+                  max="1.3"
+                  step="0.01"
+                  value={volume}
+                  onChange={(e) =>
+                    handleVolumeChange(parseFloat(e.target.value))
+                  }
+                  onMouseUp={(e) =>
+                    handleVolumeRelease(parseFloat(e.target.value))
+                  }
+                  onTouchEnd={(e) =>
+                    handleVolumeRelease(parseFloat(e.target.value))
+                  }
+                  className="slider bg-slate-800"
+                  list="markers"
+                />
+              </div>
+            </div>
+          </>
         )}
       </div>
     </div>

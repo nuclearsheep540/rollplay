@@ -6,10 +6,8 @@
  */
 
 import React, { useState, useEffect, useCallback, useMemo, useRef, memo } from 'react';
-import AudioTrack from './AudioTrack';
 import AudioTrackSelector from './AudioTrackSelector';
 import SfxSoundboard from './SfxSoundboard';
-import ChannelEffects from './ChannelEffects';
 import { PlaybackState, ChannelType, DEFAULT_EFFECTS } from '../types';
 import {
   DM_CHILD,
@@ -73,7 +71,6 @@ export default function AudioMixerPanel({
   onToggle,
   remoteTrackStates = {},
   sendRemoteAudioBatch,
-  remoteTrackAnalysers = {},
   unlockAudio = null,
   isAudioUnlocked = false,
   clearPendingOperation = null,
@@ -84,16 +81,7 @@ export default function AudioMixerPanel({
   loadSfxSlot = null,
   clearSfxSlot = null,
   setSfxSlotVolume = null,
-  setRemoteTrackVolume = null,
   activeFades = {},
-  // Channel effects (HPF, LPF, Reverb)
-  channelEffects = {},
-  applyChannelEffects = null,
-  // Channel mute/solo
-  mutedChannels = {},
-  soloedChannels = {},
-  setChannelMuted = null,
-  setChannelSoloed = null,
 }) {
   
 
@@ -115,9 +103,14 @@ export default function AudioMixerPanel({
     if (sendRemoteAudioBatch) {
       const effects = (asset.effect_hpf_enabled !== undefined || asset.effect_lpf_enabled !== undefined || asset.effect_reverb_enabled !== undefined)
         ? {
+            eq: asset.effect_eq_enabled || false,
             hpf: asset.effect_hpf_enabled || false,
+            hpf_mix: asset.effect_hpf_mix ?? DEFAULT_EFFECTS.hpf.mix,
             lpf: asset.effect_lpf_enabled || false,
+            lpf_mix: asset.effect_lpf_mix ?? DEFAULT_EFFECTS.lpf.mix,
             reverb: asset.effect_reverb_enabled || false,
+            reverb_mix: asset.effect_reverb_mix ?? DEFAULT_EFFECTS.reverb.mix,
+            reverb_preset: asset.effect_reverb_preset || 'room',
           }
         : {};
 
@@ -134,20 +127,13 @@ export default function AudioMixerPanel({
     }
   }, [loadAssetIntoChannel, sendRemoteAudioBatch]);
 
-  // Clear a BGM channel — stop audio, reset asset, effects, mute/solo
+  // Clear a BGM channel — stop audio, reset asset
   const handleBgmClear = useCallback((channelId) => {
     if (loadAssetIntoChannel) {
       loadAssetIntoChannel(channelId, { id: null, filename: null, s3_url: null });
     }
-    // Reset effects to all-off
-    if (applyChannelEffects) {
-      applyChannelEffects(channelId, { hpf: false, lpf: false, reverb: false });
-    }
-    // Reset mute/solo
-    if (setChannelMuted) setChannelMuted(channelId, false);
-    if (setChannelSoloed) setChannelSoloed(channelId, false);
     sendRemoteAudioBatch?.([{ trackId: channelId, operation: 'clear' }]);
-  }, [loadAssetIntoChannel, applyChannelEffects, setChannelMuted, setChannelSoloed, sendRemoteAudioBatch]);
+  }, [loadAssetIntoChannel, sendRemoteAudioBatch]);
 
   // Collect asset IDs currently loaded in any BGM channel (for filtering the selection modal)
   const loadedAssetIds = useMemo(() => {
@@ -199,20 +185,6 @@ export default function AudioMixerPanel({
     }
   }, [currentCue, pgmTargetTracks]);
 
-  // Helper to add pending operation
-  const addPendingOperation = (operation) => {
-    setPendingOperations(prev => new Set(prev).add(operation));
-    
-    // Auto-clear after 5 seconds (timeout fallback)
-    setTimeout(() => {
-      setPendingOperations(prev => {
-        const newSet = new Set(prev);
-        newSet.delete(operation);
-        return newSet;
-      });
-    }, 5000);
-  };
-  
   // Helper to clear pending operation (memoized to prevent unnecessary re-renders)
   const clearPendingOperationLocal = useCallback((operation) => {
     setPendingOperations(prev => {
@@ -442,84 +414,6 @@ export default function AudioMixerPanel({
     sendRemoteAudioBatch?.(stopOperations);
   };
 
-  // Volume change handler — WebSocket only, asset persistence handled by ETL on session pause/finish
-  const handleVolumeChange = (channelId, volume) => {
-    sendRemoteAudioBatch?.([{ trackId: channelId, operation: 'volume', volume }]);
-  };
-
-  // Handle loop toggle with WebSocket broadcast (server-authoritative)
-  const handleLoopToggle = (trackId, looping) => {
-    const operationKey = `loop_${trackId}`;
-    
-    // Don't allow if operation is already pending
-    if (pendingOperations.has(operationKey)) {
-      console.log(`⏳ Loop operation already pending for ${trackId}`);
-      return;
-    }
-    
-    // Mark operation as pending
-    addPendingOperation(operationKey);
-    
-    // Only broadcast to server - no local state update
-    // Server response will update state via handleRemoteAudioLoop
-    const loopOperation = [{
-      trackId,
-      operation: 'loop',
-      looping
-    }];
-    sendRemoteAudioBatch?.(loopOperation);
-  };
-
-  // Channel effects toggle handler
-  // Effects shape is slim: { hpf: true/false, lpf: true/false, reverb: true/false }
-  // Parameters (frequency, mix, preset) are app-defined in DEFAULT_EFFECTS — never stored in DB.
-  const handleEffectToggle = useCallback((trackId, effectType) => {
-    const currentEffects = channelEffects[trackId] || {
-      hpf: DEFAULT_EFFECTS.hpf.enabled,
-      lpf: DEFAULT_EFFECTS.lpf.enabled,
-      reverb: DEFAULT_EFFECTS.reverb.enabled,
-    };
-    const newEnabled = !currentEffects[effectType];
-
-    const updatedEffects = {
-      ...currentEffects,
-      [effectType]: newEnabled,
-    };
-
-    // Apply locally (applyChannelEffects merges flags with DEFAULT_EFFECTS internally)
-    if (applyChannelEffects) {
-      applyChannelEffects(trackId, updatedEffects);
-    }
-
-    // Broadcast slim flags to all clients
-    sendRemoteAudioBatch?.([{
-      trackId,
-      operation: 'effects',
-      effects: updatedEffects,
-    }]);
-  }, [channelEffects, applyChannelEffects, sendRemoteAudioBatch]);
-
-  // Channel mute/solo handlers — toggle locally + broadcast via WebSocket
-  const handleMuteToggle = useCallback((channelId) => {
-    const newMuted = !mutedChannels[channelId];
-    if (setChannelMuted) setChannelMuted(channelId, newMuted);
-    sendRemoteAudioBatch?.([{
-      trackId: channelId,
-      operation: 'mute',
-      muted: newMuted,
-    }]);
-  }, [mutedChannels, sendRemoteAudioBatch, setChannelMuted]);
-
-  const handleSoloToggle = useCallback((channelId) => {
-    const newSoloed = !soloedChannels[channelId];
-    if (setChannelSoloed) setChannelSoloed(channelId, newSoloed);
-    sendRemoteAudioBatch?.([{
-      trackId: channelId,
-      operation: 'solo',
-      soloed: newSoloed,
-    }]);
-  }, [soloedChannels, sendRemoteAudioBatch, setChannelSoloed]);
-
   // SFX Soundboard handlers
   const handleSfxTrigger = async (slotIndex) => {
     if (!isAudioUnlocked) {
@@ -575,122 +469,6 @@ export default function AudioMixerPanel({
     return { channelId, type: ChannelType.BGM, channelGroup, track, label };
   });
 
-
-  // Simplified play handler using centralized sync logic
-  const handlePlay = async (channel) => {
-    const operationKey = `play_${channel.channelId}`;
-    
-    // Don't allow if operation is already pending
-    if (pendingOperations.has(operationKey)) {
-      console.log(`⏳ Play operation already pending for ${channel.channelId}`);
-      return;
-    }
-    
-    // Mark operation as pending
-    addPendingOperation(operationKey);
-    
-    // Ensure audio is unlocked before playing
-    if (!isAudioUnlocked) {
-      console.log('🔓 Unlocking audio for play action...');
-      const unlocked = await unlockAudio();
-      if (!unlocked) {
-        console.warn('❌ Failed to unlock audio - cannot play');
-        clearPendingOperationLocal(operationKey);
-        return;
-      }
-    }
-    
-    const channelState = remoteTrackStates[channel.channelId];
-    if (!channelState?.filename) {
-      console.warn(`No audio file loaded in ${channel.channelId}`);
-      clearPendingOperationLocal(operationKey);
-      return;
-    }
-    
-    // Simple individual track operation (sync removed - use cue system for multi-track)
-    const trackState = remoteTrackStates[channel.channelId];
-    
-    if (!trackState) {
-      console.warn(`❌ No track state found for ${channel.channelId}`);
-      clearPendingOperationLocal(operationKey);
-      return;
-    }
-    
-    // Determine if track is paused (should resume instead of fresh play)
-    const shouldResume = trackState.playbackState === PlaybackState.PAUSED;
-    
-    if (shouldResume) {
-      // Resume single track
-      const resumeOperation = [{
-        trackId: channel.channelId,
-        operation: 'resume'
-      }];
-      sendRemoteAudioBatch?.(resumeOperation);
-    } else {
-      // Play single track
-      const playOperation = [{
-        trackId: channel.channelId,
-        operation: 'play',
-        filename: trackState.filename,
-        asset_id: trackState.asset_id,
-        s3_url: trackState.s3_url,
-        looping: trackState.looping,
-        volume: trackState.volume,
-        type: trackState.type,
-        channelGroup: trackState.channelGroup,
-        track: trackState.track
-      }];
-      sendRemoteAudioBatch?.(playOperation);
-    }
-  };
-  // Simplified pause handler for individual tracks
-  const handlePause = (channel) => {
-    const operationKey = `pause_${channel.channelId}`;
-    
-    // Don't allow if operation is already pending
-    if (pendingOperations.has(operationKey)) {
-      console.log(`⏳ Pause operation already pending for ${channel.channelId}`);
-      return;
-    }
-    
-    // Mark operation as pending
-    addPendingOperation(operationKey);
-    
-    // Simple individual track pause (sync removed - use cue system for multi-track)
-    const trackState = remoteTrackStates[channel.channelId];
-    
-    if (trackState && trackState.playbackState === PlaybackState.PLAYING) {
-      const pauseOperation = [{
-        trackId: channel.channelId,
-        operation: 'pause'
-      }];
-      sendRemoteAudioBatch?.(pauseOperation);
-    }
-  };
-  // Simplified stop handler for individual tracks
-  const handleStop = (channel) => {
-    const operationKey = `stop_${channel.channelId}`;
-    
-    // Don't allow if operation is already pending
-    if (pendingOperations.has(operationKey)) {
-      console.log(`⏳ Stop operation already pending for ${channel.channelId}`);
-      return;
-    }
-    
-    // Mark operation as pending
-    addPendingOperation(operationKey);
-    
-    // Simple individual track stop (sync removed - use cue system for multi-track)
-    const trackState = remoteTrackStates[channel.channelId];
-    
-    if (trackState && (trackState.playbackState === PlaybackState.PLAYING || trackState.playbackState === PlaybackState.PAUSED)) {
-      const stopOperation = [{
-        trackId: channel.channelId,
-        operation: 'stop'
-      }];
-      sendRemoteAudioBatch?.(stopOperation);
-    }
-  };
 
   return (
     <div className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden flex flex-col">
@@ -822,23 +600,26 @@ export default function AudioMixerPanel({
                       const isSelectedInPFL = effectiveCueTargets.includes(channel.channelId);
                       const channelLabel = channel.channelId.replace('audio_channel_', '');
 
-                      // Preview shows resulting PGM state after CUT
-                      let previewState = 'empty'; // no audio loaded
-                      if (hasAudio && isSelectedInPFL) previewState = 'play';
-                      else if (hasAudio && !isSelectedInPFL) previewState = 'stop';
+                      // Preview shows resulting PGM state after cut, with red highlighting stops
+                      const pgmState = trackState?.playbackState;
+                      const isCurrentlyPlaying = pgmState === PlaybackState.PLAYING || pgmState === PlaybackState.TRANSITIONING;
+
+                      let previewState = 'off'; // off and staying off, or no audio
+                      if (hasAudio && isSelectedInPFL) previewState = 'on';
+                      else if (hasAudio && !isSelectedInPFL && isCurrentlyPlaying) previewState = 'stopping';
 
                       return (
                         <div
                           key={`preview-${channel.channelId}`}
                           className={`w-10 h-8 rounded text-center text-xs transition-all duration-200 flex items-center justify-center border ${
-                            previewState === 'play' ? 'bg-green-500 text-white border-green-400' :
-                            previewState === 'stop' ? 'bg-red-500 text-white border-red-400' :
+                            previewState === 'on' ? 'bg-green-500 text-white border-green-400' :
+                            previewState === 'stopping' ? 'bg-red-500 text-white border-red-400' :
                             'bg-gray-600 text-gray-300 border-gray-500'
                           }`}
                           title={
-                            previewState === 'play' ? `${channelLabel} will be playing` :
-                            previewState === 'stop' ? `${channelLabel} will be stopped` :
-                            'No audio loaded'
+                            previewState === 'on' ? `${channelLabel} will be playing` :
+                            previewState === 'stopping' ? `${channelLabel} will be stopped` :
+                            hasAudio ? `${channelLabel} off` : 'No audio loaded'
                           }
                         >
                           {hasAudio ? channelLabel : '-'}
@@ -945,67 +726,7 @@ export default function AudioMixerPanel({
               </div>
           )}
 
-          {/* BGM Channels */}
-          {bgmChannels.length > 0 && (
-            <>
-              <div className="text-white font-bold mt-4">Background Music</div>
-              {bgmChannels.map((channel) => {
-                const pendingOps = {
-                  play: pendingOperations.has(`play_${channel.channelId}`),
-                  pause: pendingOperations.has(`pause_${channel.channelId}`),
-                  stop: pendingOperations.has(`stop_${channel.channelId}`),
-                  loop: pendingOperations.has(`loop_${channel.channelId}`)
-                };
-                return (
-                  <React.Fragment key={channel.channelId}>
-                    <AudioTrack
-                      config={{
-                        trackId: channel.channelId,
-                        type: channel.type,
-                        label: channel.label,
-                        analyserNode: remoteTrackAnalysers[channel.channelId],
-                        track: channel.track
-                      }}
-                      pendingOperations={pendingOps}
-                      trackState={
-                        remoteTrackStates[channel.channelId] || {
-                          playbackState: PlaybackState.STOPPED,
-                          volume: 1.0,
-                          filename: null,
-                          currentTime: 0,
-                          duration: 0,
-                          looping: true
-                        }
-                      }
-                      onPlay={() => handlePlay(channel)}
-                      onPause={() => handlePause(channel)}
-                      onStop={() => handleStop(channel)}
-                      onVolumeChange={(v) =>
-                        setRemoteTrackVolume?.(channel.channelId, v)
-                      }
-                      onVolumeChangeDebounced={(v) =>
-                        handleVolumeChange(channel.channelId, v)
-                      }
-                      onLoopToggle={(id, loop) =>
-                        handleLoopToggle(id, loop)
-                      }
-                      isMuted={mutedChannels[channel.channelId] || false}
-                      isSoloed={soloedChannels[channel.channelId] || false}
-                      onMuteToggle={() => handleMuteToggle(channel.channelId)}
-                      onSoloToggle={() => handleSoloToggle(channel.channelId)}
-                      isLast={false}
-                    />
-                    <ChannelEffects
-                      trackId={channel.channelId}
-                      effects={channelEffects[channel.channelId]}
-                      onToggleEffect={handleEffectToggle}
-                      disabled={!remoteTrackStates[channel.channelId]?.filename}
-                    />
-                  </React.Fragment>
-                );
-              })}
-            </>
-          )}
+          {/* BGM channel strips moved to bottom mixer drawer */}
 
           {/* SFX Soundboard */}
           <div className="text-white font-bold mt-6">Sound Effects</div>
