@@ -584,9 +584,14 @@ async def _extract_and_sync_game_state(
                             config_kwargs["default_looping"] = settings["looping"]
                         effects = settings["effects"]
                         if effects and isinstance(asset, MusicAsset):
+                            config_kwargs["effect_eq_enabled"] = effects.eq
                             config_kwargs["effect_hpf_enabled"] = effects.hpf
+                            config_kwargs["effect_hpf_mix"] = effects.hpf_mix
                             config_kwargs["effect_lpf_enabled"] = effects.lpf
+                            config_kwargs["effect_lpf_mix"] = effects.lpf_mix
                             config_kwargs["effect_reverb_enabled"] = effects.reverb
+                            config_kwargs["effect_reverb_mix"] = effects.reverb_mix
+                            config_kwargs["effect_reverb_preset"] = effects.reverb_preset
                         if config_kwargs:
                             asset.update_audio_config(**config_kwargs)
                             asset_repo.save(asset)

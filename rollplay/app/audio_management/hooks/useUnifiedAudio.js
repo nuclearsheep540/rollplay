@@ -234,12 +234,14 @@ export const useUnifiedAudio = () => {
     const effects = {};
     ['A', 'B', 'C', 'D', 'E', 'F'].forEach(ch => {
       effects[`audio_channel_${ch}`] = {
+        eq: false,
         hpf: DEFAULT_EFFECTS.hpf.enabled,
         hpf_mix: DEFAULT_EFFECTS.hpf.mix,
         lpf: DEFAULT_EFFECTS.lpf.enabled,
         lpf_mix: DEFAULT_EFFECTS.lpf.mix,
         reverb: DEFAULT_EFFECTS.reverb.enabled,
         reverb_mix: DEFAULT_EFFECTS.reverb.mix,
+        reverb_preset: DEFAULT_EFFECTS.reverb.preset || 'room',
       };
     });
     return effects;
@@ -400,7 +402,7 @@ export const useUnifiedAudio = () => {
               hpf: { effectNode: hpfNode },
               lpf: { effectNode: lpfNode },
               postEqNode,
-              reverb: { effectNode: convolver, wetGain: reverbWetGain, sendMuteGain: reverbSendMuteGain },
+              reverb: { effectNode: convolver, makeupGain: reverbMakeupGain, wetGain: reverbWetGain, sendMuteGain: reverbSendMuteGain },
             };
           } else {
             // Non-BGM tracks: simple gain → muteGain → metering → master
@@ -1189,36 +1191,56 @@ export const useUnifiedAudio = () => {
     const RAMP_TIME = 0.02; // 20ms to avoid clicks
     const now = ctx.currentTime;
 
-    // HPF insert — toggle sets frequency (pass-all 20Hz vs configured cutoff)
-    if (effects.hpf !== undefined) {
+    // Resolve the effective eq state after merging incoming effects
+    const mergedState = { ...channelEffects[trackId], ...effects };
+    const eqActive = mergedState.eq ?? false;
+
+    // EQ master bypass — when eq toggles, re-evaluate both filters against stored state
+    console.log(`🎛️ applyChannelEffects ${trackId}: eq=${effects.eq}, eqActive=${eqActive}, reverb=${effects.reverb}, reverb_mix=${effects.reverb_mix}, reverb_preset=${effects.reverb_preset}`);
+    if (effects.eq !== undefined) {
+      const hpfEnabled = mergedState.hpf ?? false;
+      const hpfMix = mergedState.hpf_mix ?? DEFAULT_EFFECTS.hpf.mix;
+      const hpfTarget = (eqActive && hpfEnabled) ? mapHpfFrequency(hpfMix) : 20;
+      inserts.hpf.effectNode.frequency.setValueAtTime(inserts.hpf.effectNode.frequency.value, now);
+      inserts.hpf.effectNode.frequency.linearRampToValueAtTime(hpfTarget, now + RAMP_TIME);
+
+      const lpfEnabled = mergedState.lpf ?? false;
+      const lpfMix = mergedState.lpf_mix ?? DEFAULT_EFFECTS.lpf.mix;
+      const lpfTarget = (eqActive && lpfEnabled) ? mapLpfFrequency(lpfMix) : 20000;
+      inserts.lpf.effectNode.frequency.setValueAtTime(inserts.lpf.effectNode.frequency.value, now);
+      inserts.lpf.effectNode.frequency.linearRampToValueAtTime(lpfTarget, now + RAMP_TIME);
+    }
+
+    // HPF insert — only apply if eq bypass is active
+    if (effects.hpf !== undefined && effects.eq === undefined) {
       const enabled = typeof effects.hpf === 'boolean' ? effects.hpf : !!effects.hpf;
       const mixLevel = effects.hpf_mix ?? channelEffects[trackId]?.hpf_mix ?? DEFAULT_EFFECTS.hpf.mix;
-      const targetFreq = enabled ? mapHpfFrequency(mixLevel) : 20;
+      const targetFreq = (eqActive && enabled) ? mapHpfFrequency(mixLevel) : 20;
       inserts.hpf.effectNode.frequency.setValueAtTime(inserts.hpf.effectNode.frequency.value, now);
       inserts.hpf.effectNode.frequency.linearRampToValueAtTime(targetFreq, now + RAMP_TIME);
     }
-    // HPF frequency update from fader — only apply if enabled
-    if (effects.hpf_mix !== undefined && effects.hpf === undefined) {
+    // HPF frequency update from fader — only apply if eq active and hpf enabled
+    if (effects.hpf_mix !== undefined && effects.hpf === undefined && effects.eq === undefined) {
       const isEnabled = channelEffects[trackId]?.hpf ?? false;
-      if (isEnabled) {
+      if (eqActive && isEnabled) {
         const targetFreq = mapHpfFrequency(effects.hpf_mix);
         inserts.hpf.effectNode.frequency.setValueAtTime(inserts.hpf.effectNode.frequency.value, now);
         inserts.hpf.effectNode.frequency.linearRampToValueAtTime(targetFreq, now + RAMP_TIME);
       }
     }
 
-    // LPF insert — toggle sets frequency (pass-all 20kHz vs configured cutoff)
-    if (effects.lpf !== undefined) {
+    // LPF insert — only apply if eq bypass is active
+    if (effects.lpf !== undefined && effects.eq === undefined) {
       const enabled = typeof effects.lpf === 'boolean' ? effects.lpf : !!effects.lpf;
       const mixLevel = effects.lpf_mix ?? channelEffects[trackId]?.lpf_mix ?? DEFAULT_EFFECTS.lpf.mix;
-      const targetFreq = enabled ? mapLpfFrequency(mixLevel) : 20000;
+      const targetFreq = (eqActive && enabled) ? mapLpfFrequency(mixLevel) : 20000;
       inserts.lpf.effectNode.frequency.setValueAtTime(inserts.lpf.effectNode.frequency.value, now);
       inserts.lpf.effectNode.frequency.linearRampToValueAtTime(targetFreq, now + RAMP_TIME);
     }
-    // LPF frequency update from fader — only apply if enabled
-    if (effects.lpf_mix !== undefined && effects.lpf === undefined) {
+    // LPF frequency update from fader — only apply if eq active and lpf enabled
+    if (effects.lpf_mix !== undefined && effects.lpf === undefined && effects.eq === undefined) {
       const isEnabled = channelEffects[trackId]?.lpf ?? false;
-      if (isEnabled) {
+      if (eqActive && isEnabled) {
         const targetFreq = mapLpfFrequency(effects.lpf_mix);
         inserts.lpf.effectNode.frequency.setValueAtTime(inserts.lpf.effectNode.frequency.value, now);
         inserts.lpf.effectNode.frequency.linearRampToValueAtTime(targetFreq, now + RAMP_TIME);
@@ -1230,6 +1252,7 @@ export const useUnifiedAudio = () => {
       const enabled = typeof effects.reverb === 'boolean' ? effects.reverb : !!effects.reverb;
       const mixLevel = effects.reverb_mix ?? channelEffects[trackId]?.reverb_mix ?? DEFAULT_EFFECTS.reverb.mix;
       const targetGain = enabled ? mixLevel : 0.0;
+      console.log(`🔊 Reverb ${trackId}: enabled=${enabled}, mixLevel=${mixLevel}, targetGain=${targetGain}, ctxState=${ctx.state}, now=${now}`);
       inserts.reverb.wetGain.gain.setValueAtTime(inserts.reverb.wetGain.gain.value, now);
       inserts.reverb.wetGain.gain.linearRampToValueAtTime(targetGain, now + RAMP_TIME);
     }
@@ -1363,6 +1386,12 @@ export const useUnifiedAudio = () => {
 
     console.log('🔄 Syncing audio state from server:', Object.keys(audioState));
 
+    // Ensure audio graph exists before syncing effects — on re-entry, the eager
+    // init useEffect may not have fired yet when the WebSocket initial_state arrives.
+    if (!audioContextRef.current || audioContextRef.current.state === 'closed') {
+      await initializeWebAudio();
+    }
+
     // Restore broadcast master volume if present
     if (audioState.__master_volume !== undefined) {
       setBroadcastMasterVolume(audioState.__master_volume);
@@ -1416,7 +1445,19 @@ export const useUnifiedAudio = () => {
 
       // Restore effects state if present
       if (channelState.effects) {
-        applyChannelEffects(channelId, channelState.effects);
+        const syncEffects = { ...channelState.effects };
+        // Backward compat: old sessions without eq field — derive from hpf || lpf
+        if (syncEffects.eq === undefined) {
+          syncEffects.eq = !!(syncEffects.hpf || syncEffects.lpf);
+        }
+        // Backward compat: old sessions without reverb_preset — default to 'room'
+        if (syncEffects.reverb !== undefined && syncEffects.reverb_preset === undefined) {
+          syncEffects.reverb_preset = 'room';
+        }
+        console.log(`🔍 SYNC EFFECTS ${channelId}:`, JSON.stringify(syncEffects));
+        applyChannelEffects(channelId, syncEffects);
+      } else {
+        console.log(`🔍 SYNC EFFECTS ${channelId}: NO EFFECTS DATA`);
       }
 
       // Restore mute/solo state if present (channel-level, from MongoDB)
@@ -1489,6 +1530,13 @@ export const useUnifiedAudio = () => {
       // "stopped" channels with filename are already handled by the metadata update above
     }
 
+    // Diagnostic: verify reverb chain integrity after sync
+    for (const [chId, inserts] of Object.entries(channelInsertEffectsRef.current)) {
+      if (!inserts?.reverb) continue;
+      const r = inserts.reverb;
+      console.log(`🔍 REVERB DIAG ${chId}: convolver.buffer=${r.effectNode?.buffer ? `${r.effectNode.buffer.duration.toFixed(2)}s` : 'NULL'}, makeupGain=${r.makeupGain?.gain?.value}, wetGain=${r.wetGain?.gain?.value}, sendMuteGain=${r.sendMuteGain?.gain?.value}, ctx=${audioContextRef.current?.state}`);
+    }
+
     console.log('✅ Audio state sync complete');
   };
 
@@ -1536,21 +1584,30 @@ export const useUnifiedAudio = () => {
       };
     });
 
-    // Apply effects — slim flags from backend or asset-level defaults.
-    // applyChannelEffects merges flags with DEFAULT_EFFECTS for parameters.
+    // Apply effects — full state from backend broadcast or asset-level defaults from PostgreSQL.
     if (asset.effects && typeof asset.effects === 'object') {
-      // Backend broadcast carries slim flags: { hpf: true, lpf: false, reverb: true }
-      applyChannelEffects(channelId, asset.effects);
+      // Backend broadcast carries full effects object
+      const syncEffects = { ...asset.effects };
+      if (syncEffects.eq === undefined) {
+        syncEffects.eq = !!(syncEffects.hpf || syncEffects.lpf);
+      }
+      applyChannelEffects(channelId, syncEffects);
     } else if (asset.effect_hpf_enabled !== undefined || asset.effect_lpf_enabled !== undefined || asset.effect_reverb_enabled !== undefined) {
-      // DM's local load — asset has individual enabled flags from PostgreSQL
+      // DM's local load — asset has individual fields from PostgreSQL
       applyChannelEffects(channelId, {
+        eq: asset.effect_eq_enabled || false,
         hpf: asset.effect_hpf_enabled || false,
+        hpf_mix: asset.effect_hpf_mix ?? DEFAULT_EFFECTS.hpf.mix,
         lpf: asset.effect_lpf_enabled || false,
+        lpf_mix: asset.effect_lpf_mix ?? DEFAULT_EFFECTS.lpf.mix,
         reverb: asset.effect_reverb_enabled || false,
+        reverb_mix: asset.effect_reverb_mix ?? DEFAULT_EFFECTS.reverb.mix,
+        reverb_preset: asset.effect_reverb_preset || 'room',
       });
     } else {
       // No effects data — apply all-off defaults
       applyChannelEffects(channelId, {
+        eq: false,
         hpf: false,
         lpf: false,
         reverb: false,

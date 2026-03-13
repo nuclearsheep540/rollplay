@@ -8,7 +8,7 @@ Extends MediaAsset with audio playback configuration (duration, volume, looping)
 Uses SQLAlchemy joined table inheritance pattern.
 """
 
-from sqlalchemy import Column, Float, Boolean, ForeignKey
+from sqlalchemy import Column, Float, Boolean, String, ForeignKey
 from sqlalchemy.dialects.postgresql import UUID
 
 from modules.library.model.asset_model import MediaAsset
@@ -36,10 +36,15 @@ class MusicAssetModel(MediaAsset):
     default_volume = Column(Float, nullable=True)
     default_looping = Column(Boolean, nullable=True)
 
-    # Audio effects — asset-level defaults (V1: on/off toggles, V2 adds frequency/mix/preset)
+    # Audio effects — asset-level defaults
+    effect_eq_enabled = Column(Boolean, nullable=True)
     effect_hpf_enabled = Column(Boolean, nullable=True)
+    effect_hpf_mix = Column(Float, nullable=True)
     effect_lpf_enabled = Column(Boolean, nullable=True)
+    effect_lpf_mix = Column(Float, nullable=True)
     effect_reverb_enabled = Column(Boolean, nullable=True)
+    effect_reverb_mix = Column(Float, nullable=True)
+    effect_reverb_preset = Column(String, nullable=True)
 
     __mapper_args__ = {
         'polymorphic_identity': MediaAssetType.MUSIC,

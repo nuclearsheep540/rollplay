@@ -86,9 +86,14 @@ class MusicAssetResponse(MediaAssetResponse):
     duration_seconds: Optional[float] = None
     default_volume: Optional[float] = None
     default_looping: Optional[bool] = None
+    effect_eq_enabled: Optional[bool] = None
     effect_hpf_enabled: Optional[bool] = None
+    effect_hpf_mix: Optional[float] = None
     effect_lpf_enabled: Optional[bool] = None
+    effect_lpf_mix: Optional[float] = None
     effect_reverb_enabled: Optional[bool] = None
+    effect_reverb_mix: Optional[float] = None
+    effect_reverb_preset: Optional[str] = None
 
 
 class SfxAssetResponse(MediaAssetResponse):
@@ -103,9 +108,14 @@ class UpdateAudioConfigRequest(BaseModel):
     duration_seconds: Optional[float] = Field(None, ge=0, description="Track duration in seconds")
     default_volume: Optional[float] = Field(None, ge=0.0, le=1.3, description="Default playback volume")
     default_looping: Optional[bool] = Field(None, description="Default loop behavior")
+    effect_eq_enabled: Optional[bool] = Field(None, description="EQ master bypass")
     effect_hpf_enabled: Optional[bool] = Field(None, description="High-pass filter enabled")
+    effect_hpf_mix: Optional[float] = Field(None, ge=0.0, le=1.0, description="HPF mix level")
     effect_lpf_enabled: Optional[bool] = Field(None, description="Low-pass filter enabled")
+    effect_lpf_mix: Optional[float] = Field(None, ge=0.0, le=1.0, description="LPF mix level")
     effect_reverb_enabled: Optional[bool] = Field(None, description="Reverb enabled")
+    effect_reverb_mix: Optional[float] = Field(None, ge=0.0, le=1.0, description="Reverb mix level")
+    effect_reverb_preset: Optional[str] = Field(None, description="Reverb preset name")
 
 
 # Aliases for backwards compatibility

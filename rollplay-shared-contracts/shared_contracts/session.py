@@ -49,6 +49,7 @@ class SessionEndFinalState(BaseModel):
     session_stats: Optional[SessionStats] = None
     audio_state: Dict[str, AudioChannelState] = {}
     audio_track_config: Dict[str, AudioTrackConfig] = {}
+    broadcast_master_volume: Optional[float] = None
     map_state: Optional[MapConfig] = None
     image_state: Optional[ImageConfig] = None
     active_display: Optional[ActiveDisplayType] = None

@@ -604,7 +604,10 @@ async def end_session(request: SessionEndRequest, validate_only: bool = False):
         # Get active_display from game session
         active_display = image_service.get_active_display(request.session_id)
 
-        # Build final state
+        # Build final state — extract __master_volume from audio_state (it's a float,
+        # not an AudioChannelState) before passing to the typed contract
+        raw_audio_state = room.get("audio_state", {})
+        broadcast_master_volume = raw_audio_state.pop("__master_volume", None)
         final_state = SessionEndFinalState(
             players=players,
             session_stats=SessionStats(
@@ -612,8 +615,9 @@ async def end_session(request: SessionEndRequest, validate_only: bool = False):
                 total_logs=log_count,
                 max_players=room.get("max_players", 0),
             ),
-            audio_state=room.get("audio_state", {}),
+            audio_state=raw_audio_state,
             audio_track_config=room.get("audio_track_config", {}),
+            broadcast_master_volume=broadcast_master_volume,
             map_state=map_state,
             image_state=image_state,
             active_display=active_display,

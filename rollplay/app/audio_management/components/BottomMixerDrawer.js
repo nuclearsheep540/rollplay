@@ -71,18 +71,14 @@ export default function BottomMixerDrawer({
   }, [sendRemoteAudioBatch]);
 
   // Effect toggle handler — toggles enabled state and broadcasts
-  // 'eq' is a meta-toggle: off disables both hpf + lpf
+  // 'eq' is a master bypass: off bypasses filters at audio graph level,
+  // but preserves individual hpf/lpf enabled flags and mix values
   const handleToggleSend = useCallback((trackId, effectName) => {
     const currentEffects = channelEffects[trackId] || {};
 
     if (effectName === 'eq') {
       const newEnabled = !currentEffects.eq;
       const updatedEffects = { ...currentEffects, eq: newEnabled };
-      // When EQ strip is closed, disable both filters
-      if (!newEnabled) {
-        updatedEffects.hpf = false;
-        updatedEffects.lpf = false;
-      }
       applyChannelEffects?.(trackId, updatedEffects);
       sendRemoteAudioBatch?.([{
         trackId,

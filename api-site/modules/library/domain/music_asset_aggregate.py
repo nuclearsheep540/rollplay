@@ -31,10 +31,15 @@ class MusicAsset(MediaAssetAggregate):
     default_volume: Optional[float] = None
     default_looping: Optional[bool] = None
 
-    # Audio effects — asset-level defaults (V1: on/off toggles, V2 adds frequency/mix/preset)
+    # Audio effects — asset-level defaults
+    effect_eq_enabled: Optional[bool] = None
     effect_hpf_enabled: Optional[bool] = None
+    effect_hpf_mix: Optional[float] = None
     effect_lpf_enabled: Optional[bool] = None
+    effect_lpf_mix: Optional[float] = None
     effect_reverb_enabled: Optional[bool] = None
+    effect_reverb_mix: Optional[float] = None
+    effect_reverb_preset: Optional[str] = None
 
     @classmethod
     def create(
@@ -48,9 +53,14 @@ class MusicAsset(MediaAssetAggregate):
         duration_seconds: Optional[float] = None,
         default_volume: Optional[float] = None,
         default_looping: Optional[bool] = None,
+        effect_eq_enabled: Optional[bool] = None,
         effect_hpf_enabled: Optional[bool] = None,
+        effect_hpf_mix: Optional[float] = None,
         effect_lpf_enabled: Optional[bool] = None,
-        effect_reverb_enabled: Optional[bool] = None
+        effect_lpf_mix: Optional[float] = None,
+        effect_reverb_enabled: Optional[bool] = None,
+        effect_reverb_mix: Optional[float] = None,
+        effect_reverb_preset: Optional[str] = None
     ) -> "MusicAsset":
         """
         Factory method to create a new music asset.
@@ -77,9 +87,14 @@ class MusicAsset(MediaAssetAggregate):
             duration_seconds=duration_seconds,
             default_volume=default_volume,
             default_looping=default_looping,
+            effect_eq_enabled=effect_eq_enabled,
             effect_hpf_enabled=effect_hpf_enabled,
+            effect_hpf_mix=effect_hpf_mix,
             effect_lpf_enabled=effect_lpf_enabled,
-            effect_reverb_enabled=effect_reverb_enabled
+            effect_lpf_mix=effect_lpf_mix,
+            effect_reverb_enabled=effect_reverb_enabled,
+            effect_reverb_mix=effect_reverb_mix,
+            effect_reverb_preset=effect_reverb_preset
         )
 
     @classmethod
@@ -89,9 +104,14 @@ class MusicAsset(MediaAssetAggregate):
         duration_seconds: Optional[float] = None,
         default_volume: Optional[float] = None,
         default_looping: Optional[bool] = None,
+        effect_eq_enabled: Optional[bool] = None,
         effect_hpf_enabled: Optional[bool] = None,
+        effect_hpf_mix: Optional[float] = None,
         effect_lpf_enabled: Optional[bool] = None,
-        effect_reverb_enabled: Optional[bool] = None
+        effect_lpf_mix: Optional[float] = None,
+        effect_reverb_enabled: Optional[bool] = None,
+        effect_reverb_mix: Optional[float] = None,
+        effect_reverb_preset: Optional[str] = None
     ) -> "MusicAsset":
         """
         Promote a base MediaAssetAggregate to MusicAsset.
@@ -112,9 +132,14 @@ class MusicAsset(MediaAssetAggregate):
             duration_seconds=duration_seconds,
             default_volume=default_volume,
             default_looping=default_looping,
+            effect_eq_enabled=effect_eq_enabled,
             effect_hpf_enabled=effect_hpf_enabled,
+            effect_hpf_mix=effect_hpf_mix,
             effect_lpf_enabled=effect_lpf_enabled,
-            effect_reverb_enabled=effect_reverb_enabled
+            effect_lpf_mix=effect_lpf_mix,
+            effect_reverb_enabled=effect_reverb_enabled,
+            effect_reverb_mix=effect_reverb_mix,
+            effect_reverb_preset=effect_reverb_preset
         )
 
     def update_audio_config(
@@ -122,9 +147,14 @@ class MusicAsset(MediaAssetAggregate):
         duration_seconds: Optional[float] = None,
         default_volume: Optional[float] = None,
         default_looping: Optional[bool] = None,
+        effect_eq_enabled: Optional[bool] = None,
         effect_hpf_enabled: Optional[bool] = None,
+        effect_hpf_mix: Optional[float] = None,
         effect_lpf_enabled: Optional[bool] = None,
-        effect_reverb_enabled: Optional[bool] = None
+        effect_lpf_mix: Optional[float] = None,
+        effect_reverb_enabled: Optional[bool] = None,
+        effect_reverb_mix: Optional[float] = None,
+        effect_reverb_preset: Optional[str] = None
     ) -> None:
         """
         Update audio configuration.
@@ -144,14 +174,29 @@ class MusicAsset(MediaAssetAggregate):
         if default_looping is not None:
             self.default_looping = default_looping
 
+        if effect_eq_enabled is not None:
+            self.effect_eq_enabled = effect_eq_enabled
+
         if effect_hpf_enabled is not None:
             self.effect_hpf_enabled = effect_hpf_enabled
+
+        if effect_hpf_mix is not None:
+            self.effect_hpf_mix = effect_hpf_mix
 
         if effect_lpf_enabled is not None:
             self.effect_lpf_enabled = effect_lpf_enabled
 
+        if effect_lpf_mix is not None:
+            self.effect_lpf_mix = effect_lpf_mix
+
         if effect_reverb_enabled is not None:
             self.effect_reverb_enabled = effect_reverb_enabled
+
+        if effect_reverb_mix is not None:
+            self.effect_reverb_mix = effect_reverb_mix
+
+        if effect_reverb_preset is not None:
+            self.effect_reverb_preset = effect_reverb_preset
 
         self.updated_at = datetime.utcnow()
 
@@ -161,6 +206,7 @@ class MusicAsset(MediaAssetAggregate):
             self.duration_seconds is not None
             or self.default_volume is not None
             or self.default_looping is not None
+            or self.effect_eq_enabled is not None
             or self.effect_hpf_enabled is not None
             or self.effect_lpf_enabled is not None
             or self.effect_reverb_enabled is not None
@@ -172,21 +218,27 @@ class MusicAsset(MediaAssetAggregate):
             "duration_seconds": self.duration_seconds,
             "default_volume": self.default_volume,
             "default_looping": self.default_looping,
+            "effect_eq_enabled": self.effect_eq_enabled,
             "effect_hpf_enabled": self.effect_hpf_enabled,
+            "effect_hpf_mix": self.effect_hpf_mix,
             "effect_lpf_enabled": self.effect_lpf_enabled,
+            "effect_lpf_mix": self.effect_lpf_mix,
             "effect_reverb_enabled": self.effect_reverb_enabled,
+            "effect_reverb_mix": self.effect_reverb_mix,
+            "effect_reverb_preset": self.effect_reverb_preset,
         }
 
     def build_effects_for_game(self) -> AudioEffects:
-        """Build the effects contract for the api-game boundary.
-
-        Returns enabled-only flags. Effect parameters (frequency, mix, preset)
-        are app-defined constants on the frontend — never stored in the database.
-        """
+        """Build the effects contract for the api-game boundary."""
         return AudioEffects(
+            eq=self.effect_eq_enabled or False,
             hpf=self.effect_hpf_enabled or False,
+            hpf_mix=self.effect_hpf_mix if self.effect_hpf_mix is not None else 0.5,
             lpf=self.effect_lpf_enabled or False,
+            lpf_mix=self.effect_lpf_mix if self.effect_lpf_mix is not None else 0.5,
             reverb=self.effect_reverb_enabled or False,
+            reverb_mix=self.effect_reverb_mix if self.effect_reverb_mix is not None else 0.5,
+            reverb_preset=self.effect_reverb_preset or 'room',
         )
 
     def build_channel_state_for_game(self, s3_url: str) -> AudioChannelState:

@@ -8,7 +8,7 @@
 import React, { useState, useEffect, useCallback, useMemo, useRef, memo } from 'react';
 import AudioTrackSelector from './AudioTrackSelector';
 import SfxSoundboard from './SfxSoundboard';
-import { PlaybackState, ChannelType } from '../types';
+import { PlaybackState, ChannelType, DEFAULT_EFFECTS } from '../types';
 import {
   DM_CHILD,
   PANEL_CHILD,
@@ -103,9 +103,14 @@ export default function AudioMixerPanel({
     if (sendRemoteAudioBatch) {
       const effects = (asset.effect_hpf_enabled !== undefined || asset.effect_lpf_enabled !== undefined || asset.effect_reverb_enabled !== undefined)
         ? {
+            eq: asset.effect_eq_enabled || false,
             hpf: asset.effect_hpf_enabled || false,
+            hpf_mix: asset.effect_hpf_mix ?? DEFAULT_EFFECTS.hpf.mix,
             lpf: asset.effect_lpf_enabled || false,
+            lpf_mix: asset.effect_lpf_mix ?? DEFAULT_EFFECTS.lpf.mix,
             reverb: asset.effect_reverb_enabled || false,
+            reverb_mix: asset.effect_reverb_mix ?? DEFAULT_EFFECTS.reverb.mix,
+            reverb_preset: asset.effect_reverb_preset || 'room',
           }
         : {};
 

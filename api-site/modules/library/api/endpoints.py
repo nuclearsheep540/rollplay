@@ -103,9 +103,14 @@ def _to_media_asset_response(asset, s3_service: S3Service = None) -> MediaAssetR
             duration_seconds=asset.duration_seconds,
             default_volume=asset.default_volume,
             default_looping=asset.default_looping,
+            effect_eq_enabled=asset.effect_eq_enabled,
             effect_hpf_enabled=asset.effect_hpf_enabled,
+            effect_hpf_mix=asset.effect_hpf_mix,
             effect_lpf_enabled=asset.effect_lpf_enabled,
-            effect_reverb_enabled=asset.effect_reverb_enabled
+            effect_lpf_mix=asset.effect_lpf_mix,
+            effect_reverb_enabled=asset.effect_reverb_enabled,
+            effect_reverb_mix=asset.effect_reverb_mix,
+            effect_reverb_preset=asset.effect_reverb_preset
         )
 
     # If it's a SfxAsset, return SfxAssetResponse with audio fields
@@ -444,9 +449,14 @@ async def update_audio_config(
             duration_seconds=request.duration_seconds,
             default_volume=request.default_volume,
             default_looping=request.default_looping,
+            effect_eq_enabled=request.effect_eq_enabled,
             effect_hpf_enabled=request.effect_hpf_enabled,
+            effect_hpf_mix=request.effect_hpf_mix,
             effect_lpf_enabled=request.effect_lpf_enabled,
-            effect_reverb_enabled=request.effect_reverb_enabled
+            effect_lpf_mix=request.effect_lpf_mix,
+            effect_reverb_enabled=request.effect_reverb_enabled,
+            effect_reverb_mix=request.effect_reverb_mix,
+            effect_reverb_preset=request.effect_reverb_preset
         )
 
         logger.info(f"Updated audio config for asset {asset_id}: {asset.get_audio_config()}")
