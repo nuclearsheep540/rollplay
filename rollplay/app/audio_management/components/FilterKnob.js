@@ -153,7 +153,7 @@ export default function FilterKnob({
             <path
               d={arcPath(ARC_START, valueAngle)}
               fill="none"
-              stroke={color}
+              stroke={knobDisabled ? 'rgba(255,255,255,0.25)' : color}
               strokeWidth="10"
               strokeLinecap="butt"
             />
