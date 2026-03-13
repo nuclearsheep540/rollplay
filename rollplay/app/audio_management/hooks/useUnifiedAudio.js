@@ -1196,7 +1196,6 @@ export const useUnifiedAudio = () => {
     const eqActive = mergedState.eq ?? false;
 
     // EQ master bypass — when eq toggles, re-evaluate both filters against stored state
-    console.log(`🎛️ applyChannelEffects ${trackId}: eq=${effects.eq}, eqActive=${eqActive}, reverb=${effects.reverb}, reverb_mix=${effects.reverb_mix}, reverb_preset=${effects.reverb_preset}`);
     if (effects.eq !== undefined) {
       const hpfEnabled = mergedState.hpf ?? false;
       const hpfMix = mergedState.hpf_mix ?? DEFAULT_EFFECTS.hpf.mix;
@@ -1252,7 +1251,6 @@ export const useUnifiedAudio = () => {
       const enabled = typeof effects.reverb === 'boolean' ? effects.reverb : !!effects.reverb;
       const mixLevel = effects.reverb_mix ?? channelEffects[trackId]?.reverb_mix ?? DEFAULT_EFFECTS.reverb.mix;
       const targetGain = enabled ? mixLevel : 0.0;
-      console.log(`🔊 Reverb ${trackId}: enabled=${enabled}, mixLevel=${mixLevel}, targetGain=${targetGain}, ctxState=${ctx.state}, now=${now}`);
       inserts.reverb.wetGain.gain.setValueAtTime(inserts.reverb.wetGain.gain.value, now);
       inserts.reverb.wetGain.gain.linearRampToValueAtTime(targetGain, now + RAMP_TIME);
     }
@@ -1454,10 +1452,7 @@ export const useUnifiedAudio = () => {
         if (syncEffects.reverb !== undefined && syncEffects.reverb_preset === undefined) {
           syncEffects.reverb_preset = 'room';
         }
-        console.log(`🔍 SYNC EFFECTS ${channelId}:`, JSON.stringify(syncEffects));
         applyChannelEffects(channelId, syncEffects);
-      } else {
-        console.log(`🔍 SYNC EFFECTS ${channelId}: NO EFFECTS DATA`);
       }
 
       // Restore mute/solo state if present (channel-level, from MongoDB)
@@ -1528,13 +1523,6 @@ export const useUnifiedAudio = () => {
         console.log(`⏸️ Sync: ${channelId} paused at ${normalizedTime.toFixed(1)}s`);
       }
       // "stopped" channels with filename are already handled by the metadata update above
-    }
-
-    // Diagnostic: verify reverb chain integrity after sync
-    for (const [chId, inserts] of Object.entries(channelInsertEffectsRef.current)) {
-      if (!inserts?.reverb) continue;
-      const r = inserts.reverb;
-      console.log(`🔍 REVERB DIAG ${chId}: convolver.buffer=${r.effectNode?.buffer ? `${r.effectNode.buffer.duration.toFixed(2)}s` : 'NULL'}, makeupGain=${r.makeupGain?.gain?.value}, wetGain=${r.wetGain?.gain?.value}, sendMuteGain=${r.sendMuteGain?.gain?.value}, ctx=${audioContextRef.current?.state}`);
     }
 
     console.log('✅ Audio state sync complete');

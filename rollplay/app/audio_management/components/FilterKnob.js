@@ -106,17 +106,19 @@ export default function FilterKnob({
 
   return (
     <div
-      className={`flex flex-col items-center flex-1 min-h-0 w-full ${disabled ? 'opacity-30 pointer-events-none' : ''}`}
+      className={`flex flex-col items-center basis-1/3 min-h-0 w-full gap-1 ${disabled ? 'opacity-30 pointer-events-none' : ''}`}
       title={label}
     >
-      {/* Label */}
-      <span className={`text-[11px] font-bold leading-none shrink-0 pt-1 ${enabled ? '' : 'opacity-40'}`} style={{ color }}>
-        {label}
-      </span>
-      {/* Power toggle */}
+      {/* Label — matches transport row height so toggle aligns with LOOP */}
+      <div className={`w-full h-5 flex items-center justify-center shrink-0 ${enabled ? '' : 'opacity-40'}`}>
+        <span className="text-[11px] font-bold leading-none" style={{ color }}>
+          {label}
+        </span>
+      </div>
+      {/* Power toggle — aligns with LOOP button */}
       <button
         onClick={onToggle}
-        className={`w-full mx-1 h-4 flex items-center justify-center rounded shrink-0 transition-colors ${
+        className={`w-full mx-1 h-5 rounded text-[11px] font-bold flex items-center justify-center shrink-0 transition-colors ${
           enabled
             ? 'bg-green-600 text-white'
             : 'bg-gray-700 text-gray-500 hover:bg-gray-600'
@@ -125,7 +127,7 @@ export default function FilterKnob({
       >
         <FontAwesomeIcon icon={faPowerOff} className="text-[10px]" />
       </button>
-      <div className={`flex-1 flex flex-col items-center justify-center min-h-0 w-full ${knobDisabled ? 'opacity-30 pointer-events-none' : ''}`}>
+      <div className={`flex-1 flex flex-col items-center justify-start min-h-0 w-full ${knobDisabled ? 'opacity-30 pointer-events-none' : ''}`}>
         <svg
           viewBox={`0 0 ${SVG_SIZE} ${SVG_SIZE}`}
           className={`select-none w-full max-w-[52px] ${knobDisabled ? 'cursor-default' : 'cursor-ns-resize'}`}
