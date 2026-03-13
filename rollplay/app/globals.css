@@ -704,6 +704,131 @@ body {
   text-shadow: none;
 }
 
+/* Bottom Mixer Drawer
+   ========================================================================== */
+.bottom-mixer-drawer {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: max(40vh, 300px);
+  z-index: 35;
+  transition: transform 300ms ease;
+  background: linear-gradient(0deg, rgba(0,0,0,0.95) 0%, rgba(26,26,46,0.9) 100%);
+  backdrop-filter: blur(8px);
+  border-top: 1px solid rgba(255, 255, 255, 0.1);
+  overflow: visible;
+}
+
+.bottom-mixer-drawer .drawer-content {
+  height: 100%;
+  display: flex;
+  flex-direction: row;
+  overflow-x: auto;
+  overflow-y: hidden;
+  padding: calc(8px * var(--ui-scale)) calc(12px * var(--ui-scale));
+  gap: calc(4px * var(--ui-scale));
+}
+
+.bottom-mixer-tab {
+  position: absolute;
+  top: -40px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: auto;
+  height: 40px;
+  padding: 0 16px;
+  white-space: nowrap;
+  z-index: 36;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 14px;
+  font-weight: 600;
+  font-family: system-ui;
+  color: rgba(255, 255, 255, 0.5);
+  background: rgba(0, 0, 0, 0.7);
+  backdrop-filter: blur(8px);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-bottom: none;
+  border-radius: 6px 6px 0 0;
+  cursor: pointer;
+  transition: color 200ms, background 200ms;
+}
+
+.bottom-mixer-tab:hover {
+  color: rgba(255, 255, 255, 0.8);
+  background: rgba(0, 0, 0, 0.8);
+}
+
+.bottom-mixer-tab.active {
+  color: var(--content-primary);
+  background: rgba(247, 244, 243, 0.9);  /* smoke at 90% opacity */
+  border-color: rgba(181, 173, 166, 1);   /* silver */
+  text-shadow: none;
+}
+
+/* Mixer channel strip separator */
+.mixer-separator {
+  width: 1px;
+  align-self: stretch;
+  background: rgba(255, 255, 255, 0.15);
+  margin: 0 calc(4px * var(--ui-scale));
+  flex-shrink: 0;
+}
+
+/* Mixer channel group separator — wider spacing between channel groups */
+.mixer-group-separator {
+  width: 3px;
+  align-self: stretch;
+  background: rgba(255, 255, 255, 0.08);
+  margin: 0 calc(6px * var(--ui-scale));
+  flex-shrink: 0;
+}
+
+/* Vertical fader styling */
+.vertical-fader {
+  writing-mode: vertical-lr;
+  direction: rtl;
+  -webkit-appearance: none;
+  appearance: none;
+  width: calc(24px * var(--ui-scale));
+  background: transparent;
+  cursor: pointer;
+}
+
+.vertical-fader::-webkit-slider-runnable-track {
+  width: calc(6px * var(--ui-scale));
+  background: #1e293b;
+  border-radius: calc(3px * var(--ui-scale));
+}
+
+.vertical-fader::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: calc(16px * var(--ui-scale));
+  height: calc(8px * var(--ui-scale));
+  background: #F7F4F3;
+  border-radius: calc(2px * var(--ui-scale));
+  cursor: pointer;
+  margin-top: calc(-5px * var(--ui-scale));
+}
+
+.vertical-fader::-moz-range-track {
+  width: calc(6px * var(--ui-scale));
+  background: #1e293b;
+  border-radius: calc(3px * var(--ui-scale));
+}
+
+.vertical-fader::-moz-range-thumb {
+  width: calc(16px * var(--ui-scale));
+  height: calc(8px * var(--ui-scale));
+  background: #F7F4F3;
+  border-radius: calc(2px * var(--ui-scale));
+  border: none;
+  cursor: pointer;
+}
+
 /* Custom Scrollbar for DM Control Center
    ========================================================================== */
 .scrollbar-thin {

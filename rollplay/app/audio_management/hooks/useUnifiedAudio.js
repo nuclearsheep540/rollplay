@@ -29,7 +29,7 @@ export const useUnifiedAudio = () => {
   // Callback to clear pending operations when tracks auto-stop
   const clearPendingOperationCallbackRef = useRef(null);
   
-  // Master volume (client-controlled)
+  // Local listening volume (per-client, localStorage-persisted, private)
   const [masterVolume, setMasterVolume] = useState(() => {
     if (typeof window !== 'undefined') {
       const saved = localStorage.getItem('rollplay_master_volume');
@@ -37,6 +37,9 @@ export const useUnifiedAudio = () => {
     }
     return 0.5;
   });
+
+  // Broadcast master volume (DM-controlled, synced to all clients via WebSocket)
+  const [broadcastMasterVolume, setBroadcastMasterVolume] = useState(1.0);
 
   // =====================================
   // LOCAL AUDIO SYSTEM (HTML5 Audio)
@@ -98,8 +101,10 @@ export const useUnifiedAudio = () => {
   // REMOTE AUDIO SYSTEM (Web Audio API)
   // =====================================
   const audioContextRef = useRef(null);
-  const masterGainRef = useRef(null);
+  const masterGainRef = useRef(null);  // Broadcast master level (DM-controlled, synced to all clients)
+  const localGainRef = useRef(null);   // Per-client listening level (private, localStorage-persisted)
   const remoteTrackGainsRef = useRef({});
+  const remoteTrackInputNodesRef = useRef({}); // Pre-fader input nodes for BGM channels (effect sends tap here)
   const remoteTrackMuteGainsRef = useRef({});
   const remoteTrackAnalysersRef = useRef({});
   const audioBuffersRef = useRef({});
@@ -176,47 +181,53 @@ export const useUnifiedAudio = () => {
   const [activeFades, setActiveFades] = useState({}); // { trackId: { type, startTime, duration, startGain, targetGain, operation } }
   const activeFadeRafsRef = useRef({}); // { [trackId]: animationId } — rAF IDs stored outside state to avoid per-frame re-renders
 
-  // Per-channel audio effects (HPF, LPF, Reverb)
-  // Web Audio nodes per BGM channel — nested object: { trackId: { hpf: { filterNode, dryGain, wetGain, inputGain, outputGain }, ... } }
-  const channelEffectNodesRef = useRef({});
-  // Cached reverb impulse response AudioBuffers (shared across channels, keyed by preset name)
-  const impulseResponseBuffersRef = useRef({});
-  // Per-channel effects state — slim enabled-only flags: { hpf: false, lpf: false, reverb: false }
-  // Parameters (frequency, mix, preset) live in DEFAULT_EFFECTS — single source of truth.
+  // Per-channel insert effects — each channel owns its own HPF, LPF, Reverb instances
+  // { audio_channel_A: { hpf: { effectNode, wetGain }, lpf: {...}, reverb: {...} }, ... }
+  const channelInsertEffectsRef = useRef({});
+  // Master output analysers for master strip metering
+  const masterAnalysersRef = useRef(null);
+  // Cached reverb impulse response AudioBuffer (shared across per-channel ConvolverNodes)
+  const impulseResponseBufferRef = useRef(null);
+  // Per-channel effect state — enabled flags + mix levels
   const [channelEffects, setChannelEffects] = useState(() => {
     const effects = {};
     ['A', 'B', 'C', 'D', 'E', 'F'].forEach(ch => {
       effects[`audio_channel_${ch}`] = {
         hpf: DEFAULT_EFFECTS.hpf.enabled,
+        hpf_mix: DEFAULT_EFFECTS.hpf.mix,
         lpf: DEFAULT_EFFECTS.lpf.enabled,
+        lpf_mix: DEFAULT_EFFECTS.lpf.mix,
         reverb: DEFAULT_EFFECTS.reverb.enabled,
+        reverb_mix: DEFAULT_EFFECTS.reverb.mix,
       };
     });
     return effects;
   });
 
-  // Create a single dry/wet parallel route for an effect node.
-  // Always connected — toggling is done via gain values (no click-prone reconnection).
-  const createEffectStage = (ctx, effectNode) => {
-    const inputGain = ctx.createGain();
-    const dryGain = ctx.createGain();
-    const wetGain = ctx.createGain();
-    const outputGain = ctx.createGain();
+  // Create a stereo metering chain: upmix → splitter → [L,R analysers] → merger
+  // Reusable for BGM channels, effect buses, and master output
+  const createStereoMeteringChain = (ctx) => {
+    const upmix = ctx.createGain();
+    upmix.channelCount = 2;
+    upmix.channelCountMode = 'explicit';
+    upmix.channelInterpretation = 'speakers';
 
-    // Dry path: input → dry → output
-    inputGain.connect(dryGain);
-    dryGain.connect(outputGain);
+    const splitter = ctx.createChannelSplitter(2);
+    const merger = ctx.createChannelMerger(2);
+    const analyserL = ctx.createAnalyser();
+    const analyserR = ctx.createAnalyser();
+    analyserL.fftSize = 256;
+    analyserL.smoothingTimeConstant = 0.8;
+    analyserR.fftSize = 256;
+    analyserR.smoothingTimeConstant = 0.8;
 
-    // Wet path: input → effect → wet → output
-    inputGain.connect(effectNode);
-    effectNode.connect(wetGain);
-    wetGain.connect(outputGain);
+    upmix.connect(splitter);
+    splitter.connect(analyserL, 0);
+    splitter.connect(analyserR, 1);
+    analyserL.connect(merger, 0, 0);
+    analyserR.connect(merger, 0, 1);
 
-    // Default: bypassed (dry=1, wet=0)
-    dryGain.gain.value = 1.0;
-    wetGain.gain.value = 0.0;
-
-    return { inputGain, dryGain, wetGain, outputGain };
+    return { upmix, splitter, analyserL, analyserR, merger };
   };
 
   // Generate a reverb impulse response AudioBuffer at runtime.
@@ -240,12 +251,27 @@ export const useUnifiedAudio = () => {
         audioContextRef.current = new (window.AudioContext || window.webkitAudioContext)();
         const ctx = audioContextRef.current;
 
-        // Create master gain node
+        // Create broadcast master gain node (DM-controlled, synced to all clients)
         masterGainRef.current = ctx.createGain();
-        masterGainRef.current.connect(ctx.destination);
-        masterGainRef.current.gain.value = masterVolume;
+        masterGainRef.current.gain.value = broadcastMasterVolume;
 
-        // Create gain nodes, stereo analyser chain, and effects for each remote track
+        // Create local listening gain node (per-client, private)
+        localGainRef.current = ctx.createGain();
+        localGainRef.current.gain.value = masterVolume;
+
+        // Chain: channels → masterGain (broadcast) → metering → localGain (local) → destination
+        // Metering reflects broadcast level, unaffected by local listening volume
+        const masterMetering = createStereoMeteringChain(ctx);
+        masterGainRef.current.connect(masterMetering.upmix);
+        masterMetering.merger.connect(localGainRef.current);
+        localGainRef.current.connect(ctx.destination);
+        masterAnalysersRef.current = { left: masterMetering.analyserL, right: masterMetering.analyserR };
+
+        // ── Shared reverb impulse response buffer (reused by all per-channel ConvolverNodes) ──
+        const defaultPreset = REVERB_PRESETS[DEFAULT_EFFECTS.reverb.preset] || REVERB_PRESETS.room;
+        impulseResponseBufferRef.current = createImpulseResponse(ctx, defaultPreset.duration, defaultPreset.decay);
+
+        // ── Per-channel gain nodes, metering, and insert effects ──
         Object.keys(remoteTrackStates).forEach(trackId => {
           const gainNode = ctx.createGain();
 
@@ -253,69 +279,76 @@ export const useUnifiedAudio = () => {
           const muteGainNode = ctx.createGain();
           muteGainNode.gain.value = 1.0;
 
-          // Upmix node: forces mono→stereo before the splitter
-          const upmixNode = ctx.createGain();
-          upmixNode.channelCount = 2;
-          upmixNode.channelCountMode = 'explicit';
-          upmixNode.channelInterpretation = 'speakers';
-
-          // Stereo split for independent L/R metering
-          const splitter = ctx.createChannelSplitter(2);
-          const merger = ctx.createChannelMerger(2);
-          const analyserL = ctx.createAnalyser();
-          const analyserR = ctx.createAnalyser();
-          analyserL.fftSize = 256;
-          analyserL.smoothingTimeConstant = 0.8;
-          analyserR.fftSize = 256;
-          analyserR.smoothingTimeConstant = 0.8;
-
-          // Chain: gain → muteGain → upmix → splitter → [L,R analysers] → merger → master
-          gainNode.connect(muteGainNode);
-          muteGainNode.connect(upmixNode);
-          upmixNode.connect(splitter);
-          splitter.connect(analyserL, 0);
-          splitter.connect(analyserR, 1);
-          analyserL.connect(merger, 0, 0);
-          analyserR.connect(merger, 0, 1);
-          merger.connect(masterGainRef.current);
-          remoteTrackMuteGainsRef.current[trackId] = muteGainNode;
+          // Stereo metering chain
+          const metering = createStereoMeteringChain(ctx);
 
           gainNode.gain.value = remoteTrackStates[trackId]?.volume || 1.0;
           remoteTrackGainsRef.current[trackId] = gainNode;
-          remoteTrackAnalysersRef.current[trackId] = { left: analyserL, right: analyserR };
+          remoteTrackAnalysersRef.current[trackId] = { left: metering.analyserL, right: metering.analyserR };
 
-          // BGM channels get an effects chain: [HPF] → [LPF] → [Reverb] → GainNode
-          // SFX channels do not — they connect source directly to gain
+          // BGM channels get pre-fader effect sends with wet/dry mix
+          // True send architecture:
+          //   source → inputNode → gainNode (fader) → muteGain → metering → master
+          //                      → hpfNode → hpfWetGain → master  (pre-fader send)
+          //                      → lpfNode → lpfWetGain → master  (pre-fader send)
+          //                      → convolver → reverbWetGain → master  (pre-fader send)
+          // Effect sends tap pre-fader so you can fade the channel to zero and still
+          // hear the effect returns (e.g. reverb tail with channel fully down).
           if (trackId.startsWith('audio_channel_')) {
-            const hpfFilter = ctx.createBiquadFilter();
-            hpfFilter.type = 'highpass';
-            hpfFilter.frequency.value = DEFAULT_EFFECTS.hpf.frequency;
-            hpfFilter.Q.value = 0.707;
-            const hpfStage = createEffectStage(ctx, hpfFilter);
+            // Pre-fader input node — sources connect here, fans out to fader + effect sends
+            const inputNode = ctx.createGain();
+            inputNode.gain.value = 1.0;
+            remoteTrackInputNodesRef.current[trackId] = inputNode;
 
-            const lpfFilter = ctx.createBiquadFilter();
-            lpfFilter.type = 'lowpass';
-            lpfFilter.frequency.value = DEFAULT_EFFECTS.lpf.frequency;
-            lpfFilter.Q.value = 0.707;
-            const lpfStage = createEffectStage(ctx, lpfFilter);
+            // Dry path: inputNode → gainNode (fader) → muteGain → metering → master
+            inputNode.connect(gainNode);
+            gainNode.connect(muteGainNode);
+            muteGainNode.connect(metering.upmix);
+            metering.merger.connect(masterGainRef.current);
+            remoteTrackMuteGainsRef.current[trackId] = muteGainNode;
 
-            // ConvolverNode needs a buffer before audio can pass through the wet path.
-            // We set a default IR immediately so the node is always ready.
+            // HPF send: inputNode → hpfNode → hpfWetGain → master (pre-fader)
+            const hpfNode = ctx.createBiquadFilter();
+            hpfNode.type = 'highpass';
+            hpfNode.frequency.value = DEFAULT_EFFECTS.hpf.frequency;
+            hpfNode.Q.value = 0.707;
+            const hpfWetGain = ctx.createGain();
+            hpfWetGain.gain.value = 0.0; // disabled by default
+            inputNode.connect(hpfNode);
+            hpfNode.connect(hpfWetGain);
+            hpfWetGain.connect(masterGainRef.current);
+
+            // LPF send: inputNode → lpfNode → lpfWetGain → master (pre-fader)
+            const lpfNode = ctx.createBiquadFilter();
+            lpfNode.type = 'lowpass';
+            lpfNode.frequency.value = DEFAULT_EFFECTS.lpf.frequency;
+            lpfNode.Q.value = 0.707;
+            const lpfWetGain = ctx.createGain();
+            lpfWetGain.gain.value = 0.0;
+            inputNode.connect(lpfNode);
+            lpfNode.connect(lpfWetGain);
+            lpfWetGain.connect(masterGainRef.current);
+
+            // Reverb send: inputNode → convolver → reverbWetGain → master (pre-fader)
             const convolver = ctx.createConvolver();
-            const defaultPreset = REVERB_PRESETS[DEFAULT_EFFECTS.reverb.preset] || REVERB_PRESETS.hall;
-            convolver.buffer = createImpulseResponse(ctx, defaultPreset.duration, defaultPreset.decay);
-            const reverbStage = createEffectStage(ctx, convolver);
+            convolver.buffer = impulseResponseBufferRef.current;
+            const reverbWetGain = ctx.createGain();
+            reverbWetGain.gain.value = 0.0;
+            inputNode.connect(convolver);
+            convolver.connect(reverbWetGain);
+            reverbWetGain.connect(masterGainRef.current);
 
-            // Chain: HPF out → LPF in → LPF out → Reverb in → Reverb out → GainNode
-            hpfStage.outputGain.connect(lpfStage.inputGain);
-            lpfStage.outputGain.connect(reverbStage.inputGain);
-            reverbStage.outputGain.connect(gainNode);
-
-            channelEffectNodesRef.current[trackId] = {
-              hpf: { ...hpfStage, filterNode: hpfFilter },
-              lpf: { ...lpfStage, filterNode: lpfFilter },
-              reverb: { ...reverbStage, convolverNode: convolver },
+            channelInsertEffectsRef.current[trackId] = {
+              hpf: { effectNode: hpfNode, wetGain: hpfWetGain },
+              lpf: { effectNode: lpfNode, wetGain: lpfWetGain },
+              reverb: { effectNode: convolver, wetGain: reverbWetGain },
             };
+          } else {
+            // Non-BGM tracks: simple gain → muteGain → metering → master
+            gainNode.connect(muteGainNode);
+            muteGainNode.connect(metering.upmix);
+            metering.merger.connect(masterGainRef.current);
+            remoteTrackMuteGainsRef.current[trackId] = muteGainNode;
           }
         });
 
@@ -598,13 +631,10 @@ export const useUnifiedAudio = () => {
       
       console.log(`🔄 Loop determination: trackType=${trackType}, completeState.looping=${completeTrackState?.looping}, fallback.loop=${loop}, final.shouldLoop=${shouldLoop}`);
   
-      // Connect to effects chain input if available (BGM), else direct to gain (SFX)
-      const effectChain = channelEffectNodesRef.current[trackId];
-      if (effectChain?.hpf?.inputGain) {
-        source.connect(effectChain.hpf.inputGain);
-      } else {
-        source.connect(remoteTrackGainsRef.current[trackId]);
-      }
+      // Connect source to pre-fader input node (BGM channels) or directly to gain node (others)
+      // BGM channels use inputNode so effect sends tap the signal pre-fader
+      const connectNode = remoteTrackInputNodesRef.current[trackId] || remoteTrackGainsRef.current[trackId];
+      source.connect(connectNode);
   
       // Compute resume offset
       const resumeFromPause =
@@ -945,20 +975,24 @@ export const useUnifiedAudio = () => {
     }
   };
 
-  // Update master volume for both systems
+  // Update local listening volume (per-client)
   useEffect(() => {
-    // Update Web Audio master gain
-    if (masterGainRef.current) {
-      masterGainRef.current.gain.value = masterVolume;
+    if (localGainRef.current) {
+      localGainRef.current.gain.value = masterVolume;
     }
-    
-    // Save master volume to localStorage
+
+    // Save to localStorage
     if (typeof window !== 'undefined') {
       localStorage.setItem('rollplay_master_volume', masterVolume.toString());
     }
-    
-    // Local audio volumes are updated in separate useEffect above
   }, [masterVolume]);
+
+  // Update broadcast master volume (DM-controlled, synced to all clients)
+  useEffect(() => {
+    if (masterGainRef.current) {
+      masterGainRef.current.gain.value = broadcastMasterVolume;
+    }
+  }, [broadcastMasterVolume]);
 
   // Unlock both audio systems
   const unlockAudio = async () => {
@@ -1075,9 +1109,9 @@ export const useUnifiedAudio = () => {
     }
   };
 
-  // Apply effects to a BGM channel's Web Audio nodes and update React state.
-  // Accepts slim enabled-only flags: { hpf: true/false, lpf: true/false, reverb: true/false }
-  // Parameters (frequency, mix, preset) come from DEFAULT_EFFECTS — single source of truth.
+  // Apply effect toggles to a BGM channel's per-channel insert wet gains.
+  // Accepts: { hpf: true/false, lpf: true/false, reverb: true/false, hpf_mix: 0.5, ... }
+  // Toggle on = ramp wet gain to mix level, toggle off = ramp to 0.0.
   const applyChannelEffects = useCallback((trackId, effects) => {
     // Always update React state so UI toggles reflect correct values immediately,
     // even if Web Audio chains aren't ready yet (e.g. during initial sync)
@@ -1086,8 +1120,8 @@ export const useUnifiedAudio = () => {
       [trackId]: { ...prev[trackId], ...effects },
     }));
 
-    const chain = channelEffectNodesRef.current[trackId];
-    if (!chain) return;
+    const inserts = channelInsertEffectsRef.current[trackId];
+    if (!inserts) return;
 
     const ctx = audioContextRef.current;
     if (!ctx) return;
@@ -1095,42 +1129,51 @@ export const useUnifiedAudio = () => {
     const RAMP_TIME = 0.02; // 20ms to avoid clicks
     const now = ctx.currentTime;
 
-    // HPF
-    if (effects.hpf !== undefined) {
-      const enabled = typeof effects.hpf === 'boolean' ? effects.hpf : !!effects.hpf;
-      const { frequency, mix } = DEFAULT_EFFECTS.hpf;
-      chain.hpf.filterNode.frequency.setValueAtTime(frequency, now);
-      chain.hpf.dryGain.gain.linearRampToValueAtTime(enabled ? (1 - mix) : 1.0, now + RAMP_TIME);
-      chain.hpf.wetGain.gain.linearRampToValueAtTime(enabled ? mix : 0.0, now + RAMP_TIME);
-    }
-
-    // LPF
-    if (effects.lpf !== undefined) {
-      const enabled = typeof effects.lpf === 'boolean' ? effects.lpf : !!effects.lpf;
-      const { frequency, mix } = DEFAULT_EFFECTS.lpf;
-      chain.lpf.filterNode.frequency.setValueAtTime(frequency, now);
-      chain.lpf.dryGain.gain.linearRampToValueAtTime(enabled ? (1 - mix) : 1.0, now + RAMP_TIME);
-      chain.lpf.wetGain.gain.linearRampToValueAtTime(enabled ? mix : 0.0, now + RAMP_TIME);
-    }
-
-    // Reverb
-    if (effects.reverb !== undefined) {
-      const enabled = typeof effects.reverb === 'boolean' ? effects.reverb : !!effects.reverb;
-      const { preset, mix } = DEFAULT_EFFECTS.reverb;
-
-      // Generate and cache IR buffer for the requested preset
-      if (enabled && preset && REVERB_PRESETS[preset]) {
-        if (!impulseResponseBuffersRef.current[preset]) {
-          const { duration, decay } = REVERB_PRESETS[preset];
-          impulseResponseBuffersRef.current[preset] = createImpulseResponse(ctx, duration, decay);
-        }
-        chain.reverb.convolverNode.buffer = impulseResponseBuffersRef.current[preset];
+    ['hpf', 'lpf', 'reverb'].forEach(fx => {
+      if (effects[fx] !== undefined) {
+        const enabled = typeof effects[fx] === 'boolean' ? effects[fx] : !!effects[fx];
+        // Use mix level from this update, or fall back to current state, or default
+        const mixLevel = effects[`${fx}_mix`] ?? channelEffects[trackId]?.[`${fx}_mix`] ?? DEFAULT_EFFECTS[fx].mix;
+        const targetGain = enabled ? mixLevel : 0.0;
+        // Anchor current value before ramping (required for linearRamp to work reliably)
+        inserts[fx].wetGain.gain.setValueAtTime(inserts[fx].wetGain.gain.value, now);
+        inserts[fx].wetGain.gain.linearRampToValueAtTime(targetGain, now + RAMP_TIME);
       }
+      // Direct mix level update (from effect strip fader) — only apply if effect is enabled
+      if (effects[`${fx}_mix`] !== undefined && effects[fx] === undefined) {
+        const isEnabled = channelEffects[trackId]?.[fx] ?? false;
+        if (isEnabled) {
+          inserts[fx].wetGain.gain.setValueAtTime(inserts[fx].wetGain.gain.value, now);
+          inserts[fx].wetGain.gain.linearRampToValueAtTime(
+            effects[`${fx}_mix`],
+            now + RAMP_TIME
+          );
+        }
+      }
+    });
+  }, [channelEffects]);
 
-      chain.reverb.dryGain.gain.linearRampToValueAtTime(enabled ? (1 - mix) : 1.0, now + RAMP_TIME);
-      chain.reverb.wetGain.gain.linearRampToValueAtTime(enabled ? mix : 0.0, now + RAMP_TIME);
+  // Set the wet/dry mix level for a specific effect on a specific channel
+  const setEffectMixLevel = useCallback((trackId, effectName, mixLevel) => {
+    setChannelEffects(prev => ({
+      ...prev,
+      [trackId]: { ...prev[trackId], [`${effectName}_mix`]: mixLevel },
+    }));
+
+    const inserts = channelInsertEffectsRef.current[trackId];
+    if (!inserts?.[effectName]) return;
+
+    const ctx = audioContextRef.current;
+    if (!ctx) return;
+
+    // Only ramp the wet gain if the effect is currently enabled
+    const isEnabled = channelEffects[trackId]?.[effectName] ?? false;
+    if (isEnabled) {
+      const now = ctx.currentTime;
+      inserts[effectName].wetGain.gain.setValueAtTime(inserts[effectName].wetGain.gain.value, now);
+      inserts[effectName].wetGain.gain.linearRampToValueAtTime(mixLevel, now + 0.02);
     }
-  }, []);
+  }, [channelEffects]);
 
   // Cleanup function to stop all audio (called on unmount)
   const cleanupAllAudio = useCallback(() => {
@@ -1177,9 +1220,11 @@ export const useUnifiedAudio = () => {
     playOperationsRef.current = {};
     sfxSlotSourcesRef.current = {};
 
-    // Clear effects refs
-    channelEffectNodesRef.current = {};
-    impulseResponseBuffersRef.current = {};
+    // Clear insert effect refs
+    channelInsertEffectsRef.current = {};
+    remoteTrackInputNodesRef.current = {};
+    masterAnalysersRef.current = null;
+    impulseResponseBufferRef.current = null;
 
     // Cancel all active fades
     Object.keys(activeFades).forEach(trackId => {
@@ -1206,7 +1251,14 @@ export const useUnifiedAudio = () => {
 
     console.log('🔄 Syncing audio state from server:', Object.keys(audioState));
 
+    // Restore broadcast master volume if present
+    if (audioState.__master_volume !== undefined) {
+      setBroadcastMasterVolume(audioState.__master_volume);
+      console.log(`🔊 Sync: restored broadcast master volume to ${audioState.__master_volume}`);
+    }
+
     for (const [channelId, channelState] of Object.entries(audioState)) {
+      if (channelId === '__master_volume') continue; // Already handled above
       if (!channelState || !channelState.filename) continue;
 
       // SFX soundboard slots — restore loaded asset only (no playback sync for one-shots)
@@ -1528,6 +1580,8 @@ export const useUnifiedAudio = () => {
     isAudioUnlocked,
     masterVolume,
     setMasterVolume,
+    broadcastMasterVolume,
+    setBroadcastMasterVolume,
 
     // Local audio functions (for hardcoded events)
     playLocalSFX,
@@ -1556,9 +1610,13 @@ export const useUnifiedAudio = () => {
     // Asset library integration
     loadAssetIntoChannel,
 
-    // Channel effects (HPF, LPF, Reverb)
+    // Per-channel insert effects (HPF, LPF, Reverb with wet/dry mix)
     channelEffects,
     applyChannelEffects,
+    setEffectMixLevel,
+
+    // Master metering
+    masterAnalysers: masterAnalysersRef,
 
     // Channel mute/solo (channel-level, not asset-level)
     mutedChannels,
