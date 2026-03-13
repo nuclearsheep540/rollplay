@@ -963,7 +963,7 @@ export default function AudioMixerPanel({
                         trackId: channel.channelId,
                         type: channel.type,
                         label: channel.label,
-                        analyserNode: remoteTrackAnalysers[channel.channelId],
+                        analysers: remoteTrackAnalysers[channel.channelId],
                         track: channel.track
                       }}
                       pendingOperations={pendingOps}

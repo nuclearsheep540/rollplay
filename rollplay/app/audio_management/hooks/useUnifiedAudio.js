@@ -245,26 +245,44 @@ export const useUnifiedAudio = () => {
         masterGainRef.current.connect(ctx.destination);
         masterGainRef.current.gain.value = masterVolume;
 
-        // Create gain nodes, analyser nodes, and effects chain for each remote track
+        // Create gain nodes, stereo analyser chain, and effects for each remote track
         Object.keys(remoteTrackStates).forEach(trackId => {
           const gainNode = ctx.createGain();
-          const analyserNode = ctx.createAnalyser();
 
-          // Configure analyser
-          analyserNode.fftSize = 256;
-          analyserNode.smoothingTimeConstant = 0.9;
-
-          // Connect: gain → muteGain → analyser → master
+          // Mute gain node (solo/mute gate)
           const muteGainNode = ctx.createGain();
-          muteGainNode.gain.value = 1.0; // default: unmuted
+          muteGainNode.gain.value = 1.0;
+
+          // Upmix node: forces mono→stereo before the splitter
+          const upmixNode = ctx.createGain();
+          upmixNode.channelCount = 2;
+          upmixNode.channelCountMode = 'explicit';
+          upmixNode.channelInterpretation = 'speakers';
+
+          // Stereo split for independent L/R metering
+          const splitter = ctx.createChannelSplitter(2);
+          const merger = ctx.createChannelMerger(2);
+          const analyserL = ctx.createAnalyser();
+          const analyserR = ctx.createAnalyser();
+          analyserL.fftSize = 256;
+          analyserL.smoothingTimeConstant = 0.8;
+          analyserR.fftSize = 256;
+          analyserR.smoothingTimeConstant = 0.8;
+
+          // Chain: gain → muteGain → upmix → splitter → [L,R analysers] → merger → master
           gainNode.connect(muteGainNode);
-          muteGainNode.connect(analyserNode);
-          analyserNode.connect(masterGainRef.current);
+          muteGainNode.connect(upmixNode);
+          upmixNode.connect(splitter);
+          splitter.connect(analyserL, 0);
+          splitter.connect(analyserR, 1);
+          analyserL.connect(merger, 0, 0);
+          analyserR.connect(merger, 0, 1);
+          merger.connect(masterGainRef.current);
           remoteTrackMuteGainsRef.current[trackId] = muteGainNode;
 
           gainNode.gain.value = remoteTrackStates[trackId]?.volume || 1.0;
           remoteTrackGainsRef.current[trackId] = gainNode;
-          remoteTrackAnalysersRef.current[trackId] = analyserNode;
+          remoteTrackAnalysersRef.current[trackId] = { left: analyserL, right: analyserR };
 
           // BGM channels get an effects chain: [HPF] → [LPF] → [Reverb] → GainNode
           // SFX channels do not — they connect source directly to gain
