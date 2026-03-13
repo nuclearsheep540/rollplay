@@ -30,10 +30,10 @@ import { MapDisplay, GridOverlay, useMapWebSocket, ImageDisplay, useImageWebSock
 // Tab configuration for right drawer - static, role filtering applied at render time
 const RIGHT_DRAWER_TABS = [
   { id: 'moderator', label: 'MOD', dmOnly: false },
+  { id: 'audio', label: 'AUDIO', dmOnly: true },
   { id: 'map', label: 'MAP', dmOnly: true },
   { id: 'image', label: 'IMAGE', dmOnly: true },
   { id: 'combat', label: 'COMBAT', dmOnly: true },
-  { id: 'audio', label: 'AUDIO', dmOnly: true },
 ];
 
 // Helper function to get character data — module scope (pure, no component state deps)

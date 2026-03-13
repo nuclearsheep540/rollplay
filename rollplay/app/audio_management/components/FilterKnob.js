@@ -47,6 +47,7 @@ export default function FilterKnob({
   onChange,
   onChangeEnd,
   disabled = false,
+  knobOnly = false,
 }) {
   const dragging = useRef(false);
   const startY = useRef(0);
@@ -97,36 +98,38 @@ export default function FilterKnob({
 
   const valueAngle = ARC_START + value * ARC_RANGE;
 
-  // Indicator line from center toward value angle
-  const indicatorLen = r - 2;
-  const ix = cx + indicatorLen * Math.cos(valueAngle);
-  const iy = cy + indicatorLen * Math.sin(valueAngle);
+  // Inner circle meets the inner edge of the value arc (strokeWidth=10, so inner edge is r-5)
+  const innerR = r - 5;
 
   const knobDisabled = disabled || !enabled;
 
   return (
     <div
-      className={`flex flex-col items-center basis-1/3 min-h-0 w-full gap-1 ${disabled ? 'opacity-30 pointer-events-none' : ''}`}
+      className={`flex flex-col items-center ${knobOnly ? 'flex-1' : 'basis-1/3'} min-h-0 w-full gap-1 ${disabled ? 'opacity-30 pointer-events-none' : ''}`}
       title={label}
     >
-      {/* Label — matches transport row height so toggle aligns with LOOP */}
-      <div className={`w-full h-5 flex items-center justify-center shrink-0 ${enabled ? '' : 'opacity-40'}`}>
-        <span className="text-[11px] font-bold leading-none" style={{ color }}>
-          {label}
-        </span>
-      </div>
-      {/* Power toggle — aligns with LOOP button */}
-      <button
-        onClick={onToggle}
-        className={`w-full mx-1 h-5 rounded text-[11px] font-bold flex items-center justify-center shrink-0 transition-colors ${
-          enabled
-            ? 'bg-green-600 text-white'
-            : 'bg-gray-700 text-gray-500 hover:bg-gray-600'
-        }`}
-        title={enabled ? `Disable ${label}` : `Enable ${label}`}
-      >
-        <FontAwesomeIcon icon={faPowerOff} className="text-[10px]" />
-      </button>
+      {!knobOnly && (
+        <>
+          {/* Label — matches transport row height so toggle aligns with LOOP */}
+          <div className={`w-full h-5 flex items-center justify-center shrink-0 ${enabled ? '' : 'opacity-40'}`}>
+            <span className="text-[11px] font-bold leading-none" style={{ color }}>
+              {label}
+            </span>
+          </div>
+          {/* Power toggle — aligns with LOOP button */}
+          <button
+            onClick={onToggle}
+            className={`w-full mx-1 h-5 rounded text-[11px] font-bold flex items-center justify-center shrink-0 transition-colors ${
+              enabled
+                ? 'bg-green-600 text-white'
+                : 'bg-gray-700 text-gray-500 hover:bg-gray-600'
+            }`}
+            title={enabled ? `Disable ${label}` : `Enable ${label}`}
+          >
+            <FontAwesomeIcon icon={faPowerOff} className="text-[10px]" />
+          </button>
+        </>
+      )}
       <div className={`flex-1 flex flex-col items-center justify-start min-h-0 w-full ${knobDisabled ? 'opacity-30 pointer-events-none' : ''}`}>
         <svg
           viewBox={`0 0 ${SVG_SIZE} ${SVG_SIZE}`}
@@ -143,34 +146,33 @@ export default function FilterKnob({
             fill="none"
             stroke="rgba(255,255,255,0.15)"
             strokeWidth="8"
-            strokeLinecap="round"
+            strokeLinecap="butt"
           />
-          {/* Value arc */}
+          {/* Value arc — slightly wider to fully cover the background track */}
           {value > 0.005 && (
             <path
               d={arcPath(ARC_START, valueAngle)}
               fill="none"
               stroke={color}
-              strokeWidth="8"
-              strokeLinecap="round"
+              strokeWidth="10"
+              strokeLinecap="butt"
             />
           )}
-          {/* Center dot */}
-          <circle cx={cx} cy={cy} r="10" fill="#374151" stroke="rgba(255,255,255,0.3)" strokeWidth="1.5" />
-          {/* Indicator line */}
-          <line
-            x1={cx}
-            y1={cy}
-            x2={ix}
-            y2={iy}
-            stroke="rgba(255,255,255,0.7)"
-            strokeWidth="5"
-            strokeLinecap="round"
-          />
+          {/* Center circle — fills inside the arc track */}
+          <circle cx={cx} cy={cy} r={innerR} fill="#374151" />
+          {/* Hz readout — inside center circle, non-interactive */}
+          <text
+            x={cx}
+            y={cy + 8}
+            textAnchor="middle"
+            fill="rgba(255,255,255,0.7)"
+            fontSize="24"
+            fontFamily="ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif"
+            pointerEvents="none"
+          >
+            {formatHz(mapFrequency(value, filterType))}
+          </text>
         </svg>
-        <span className={`text-[11px] font-mono leading-none ${knobDisabled ? 'text-gray-600' : 'text-gray-400'}`}>
-          {formatHz(mapFrequency(value, filterType))}
-        </span>
       </div>
     </div>
   );

@@ -4,6 +4,8 @@
  */
 
 import React, { useCallback, useRef } from 'react';
+import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
+import { faPowerOff } from '@fortawesome/free-solid-svg-icons';
 import VerticalChannelStrip from './VerticalChannelStrip';
 import FilterKnob from './FilterKnob';
 import { PlaybackState, DEFAULT_EFFECTS } from '../types';
@@ -194,22 +196,47 @@ export default function BottomMixerDrawer({
                   <div className="w-full text-center text-xs font-bold py-1 bg-gray-700 text-gray-300">
                     EQ
                   </div>
-                  <div className="flex-1 flex flex-col items-center gap-0 w-full min-h-0">
+                  {/* Control rows — aligned with channel strip rows */}
+                  <div className="w-full px-1 flex flex-col gap-1">
+                    {/* Row 1 (transport): HPF toggle with label */}
+                    <button
+                      onClick={() => handleToggleSend(trackId, 'hpf')}
+                      className={`w-full h-5 rounded text-[11px] font-bold flex items-center justify-center transition-colors ${
+                        effects.hpf ? 'bg-orange-500 text-white' : 'bg-gray-700 text-gray-500 hover:bg-gray-600'
+                      }`}
+                      title={effects.hpf ? 'Disable HPF' : 'Enable HPF'}
+                    >
+                      HPF
+                    </button>
+                    {/* Rows 2-4 (LOOP/EQ/RVB): HPF knob — height matches 3 button rows + 2 gaps */}
+                    <div className="w-full" style={{ height: 'calc(3 * 1.25rem + 2 * 0.25rem)' }}>
+                      <FilterKnob
+                        filterType="hpf"
+                        knobOnly
+                        enabled={!!effects.hpf}
+                        value={effects.hpf_mix ?? DEFAULT_EFFECTS.hpf.mix}
+                        color="#f97316"
+                        onChange={(val) => handleEffectMixChange(trackId, 'hpf', val)}
+                        onChangeEnd={(val) => handleEffectMixChangeDebounced(trackId, 'hpf', val)}
+                      />
+                    </div>
+                    {/* Row 5 (S/M): LPF toggle with label */}
+                    <button
+                      onClick={() => handleToggleSend(trackId, 'lpf')}
+                      className={`w-full h-5 rounded text-[11px] font-bold flex items-center justify-center transition-colors ${
+                        effects.lpf ? 'bg-cyan-500 text-white' : 'bg-gray-700 text-gray-500 hover:bg-gray-600'
+                      }`}
+                      title={effects.lpf ? 'Disable LPF' : 'Enable LPF'}
+                    >
+                      LPF
+                    </button>
+                  </div>
+                  {/* LPF knob — in the fader area */}
+                  <div className="flex-1 flex flex-col items-center justify-start w-full min-h-0">
                     <FilterKnob
-                      label="HPF"
-                      filterType="hpf"
-                      enabled={!!effects.hpf}
-                      onToggle={() => handleToggleSend(trackId, 'hpf')}
-                      value={effects.hpf_mix ?? DEFAULT_EFFECTS.hpf.mix}
-                      color="#f97316"
-                      onChange={(val) => handleEffectMixChange(trackId, 'hpf', val)}
-                      onChangeEnd={(val) => handleEffectMixChangeDebounced(trackId, 'hpf', val)}
-                    />
-                    <FilterKnob
-                      label="LPF"
                       filterType="lpf"
+                      knobOnly
                       enabled={!!effects.lpf}
-                      onToggle={() => handleToggleSend(trackId, 'lpf')}
                       value={effects.lpf_mix ?? DEFAULT_EFFECTS.lpf.mix}
                       color="#06b6d4"
                       onChange={(val) => handleEffectMixChange(trackId, 'lpf', val)}
