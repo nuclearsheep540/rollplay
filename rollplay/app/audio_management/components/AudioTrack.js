@@ -4,6 +4,8 @@
  */
 
 import React, { useRef, useEffect } from 'react';
+import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
+import { faPlay, faPause, faStop } from '@fortawesome/free-solid-svg-icons';
 import { PlaybackState } from '../types';
 import {
   DM_SUB_HEADER,
@@ -49,7 +51,9 @@ export default function AudioTrack({
   onSoloToggle,
   syncMode = false,
   pendingOperations = { play: false, pause: false, stop: false, loop: false },
-  isLast = false
+  isLast = false,
+  effects = {},
+  onToggleEffect = null,
 }) {
   const { trackId, type, icon, label, analysers, isRouted, track, isDisabled } = config;
   const {
@@ -99,7 +103,7 @@ export default function AudioTrack({
     const applyMeter = (ref, pct) => {
       if (!ref.current) return;
       const color = pct >= 90 ? '#FF0000' : pct >= 70 ? '#FFD700' : '#04AA6D';
-      ref.current.style.background = `linear-gradient(to right, ${color} 0%, ${color} ${pct}%, #374151 ${pct}%, #374151 100%)`;
+      ref.current.style.background = `linear-gradient(to right, ${color} 0%, ${color} ${pct}%, #1e293b ${pct}%, #1e293b 100%)`;
     };
 
     const tick = () => {
@@ -178,55 +182,57 @@ export default function AudioTrack({
             {/* Play button - shown when stopped, or for SFX when playing (to restart) */}
             {(playbackState === PlaybackState.STOPPED || (type === 'sfx' && playbackState === PlaybackState.PLAYING)) && (
               <button
-                className={`bg-green-600 hover:bg-green-700 text-white px-3 py-1 rounded text-xs flex items-center gap-1 ${
+                className={`bg-green-600 hover:bg-green-700 text-white w-8 h-6 rounded text-xs flex items-center justify-center ${
                   pendingOperations.play ? 'opacity-50 cursor-not-allowed' : ''
                 }`}
                 onClick={onPlay}
                 disabled={pendingOperations.play}
                 title="Play from beginning"
               >
-                ▶ {type === 'sfx' ? 'PLAY' : (pendingOperations.play ? 'PLAYING...' : 'PLAY')}
+                <FontAwesomeIcon icon={faPlay} size="xs" />
               </button>
             )}
 
             {/* Pause button - shown when playing BGM only (SFX cannot be paused) */}
             {playbackState === PlaybackState.PLAYING && type !== 'sfx' && (
               <button
-                className={`bg-orange-600 hover:bg-orange-700 text-white px-3 py-1 rounded text-xs flex items-center gap-1 ${
+                className={`bg-orange-600 hover:bg-orange-700 text-white w-8 h-6 rounded text-xs flex items-center justify-center ${
                   pendingOperations.pause ? 'opacity-50 cursor-not-allowed' : ''
                 }`}
                 onClick={onPause}
                 disabled={pendingOperations.pause}
+                title="Pause"
               >
-                ⏸ {pendingOperations.pause ? 'PAUSING...' : 'PAUSE'}
+                <FontAwesomeIcon icon={faPause} size="xs" />
               </button>
             )}
 
             {/* Resume button - shown when paused */}
             {playbackState === PlaybackState.PAUSED && (
               <button
-                className={`bg-blue-600 hover:bg-blue-700 text-white px-3 py-1 rounded text-xs flex items-center gap-1 ${
+                className={`bg-blue-600 hover:bg-blue-700 text-white w-8 h-6 rounded text-xs flex items-center justify-center ${
                   pendingOperations.play ? 'opacity-50 cursor-not-allowed' : ''
                 }`}
                 onClick={onPlay}
                 disabled={pendingOperations.play}
                 title="Resume from paused position"
               >
-                ▶ {pendingOperations.play ? 'RESUMING...' : 'RESUME'}
+                <FontAwesomeIcon icon={faPlay} size="xs" />
               </button>
             )}
             <button
-              className={`bg-red-600 hover:bg-red-700 text-white px-3 py-1 rounded text-xs flex items-center gap-1 ${
+              className={`bg-red-600 hover:bg-red-700 text-white w-8 h-6 rounded text-xs flex items-center justify-center ${
                 pendingOperations.stop ? 'opacity-50 cursor-not-allowed' : ''
               }`}
               onClick={onStop}
               disabled={pendingOperations.stop}
+              title="Stop"
             >
-              ⏹ {pendingOperations.stop ? 'STOPPING...' : 'STOP'}
+              <FontAwesomeIcon icon={faStop} size="xs" />
             </button>
             {type !== 'sfx' && (
               <button
-                className={`p-0 rounded ml-2 transition-all duration-200 flex items-center ${
+                className={`p-0 rounded ml-2 transition-all duration-200 flex items-center h-6 ${
                   pendingOperations.loop
                     ? 'opacity-50 cursor-not-allowed bg-gray-500'
                     : looping
@@ -252,23 +258,48 @@ export default function AudioTrack({
                 />
               </button>
             )}
-            {/* Solo/Mute — channel-level controls */}
+            {/* Solo/Mute/Effects — channel-level controls */}
             {type !== 'sfx' && (
               <>
                 <button
-                  className={`px-2 py-0.5 rounded text-xs font-bold transition-colors ${
+                  className={`px-2 h-6 rounded text-xs font-bold transition-colors flex items-center justify-center ${
                     isSoloed ? 'bg-yellow-500 text-black' : 'bg-gray-600 text-gray-400 hover:bg-gray-500'
                   }`}
                   onClick={onSoloToggle}
                   title={isSoloed ? 'Unsolo' : 'Solo'}
                 >S</button>
                 <button
-                  className={`px-2 py-0.5 rounded text-xs font-bold transition-colors ${
+                  className={`px-2 h-6 rounded text-xs font-bold transition-colors flex items-center justify-center ${
                     isMuted ? 'bg-red-600 text-white' : 'bg-gray-600 text-gray-400 hover:bg-gray-500'
                   }`}
                   onClick={onMuteToggle}
                   title={isMuted ? 'Unmute' : 'Mute'}
                 >M</button>
+                {onToggleEffect && (
+                  <>
+                    <button
+                      className={`px-2 h-6 rounded text-[10px] font-bold transition-colors border flex items-center justify-center ${
+                        effects?.hpf ? 'bg-rose-600 text-white border-rose-500 hover:bg-rose-700' : 'bg-gray-700 text-gray-400 border-gray-600 hover:bg-gray-600'
+                      }`}
+                      onClick={() => onToggleEffect(trackId, 'hpf')}
+                      title="High-Pass Filter (removes low-end rumble)"
+                    >HPF</button>
+                    <button
+                      className={`px-2 h-6 rounded text-[10px] font-bold transition-colors border flex items-center justify-center ${
+                        effects?.lpf ? 'bg-rose-600 text-white border-rose-500 hover:bg-rose-700' : 'bg-gray-700 text-gray-400 border-gray-600 hover:bg-gray-600'
+                      }`}
+                      onClick={() => onToggleEffect(trackId, 'lpf')}
+                      title="Low-Pass Filter (muffled / distant sound)"
+                    >LPF</button>
+                    <button
+                      className={`px-2 h-6 rounded text-[10px] font-bold transition-colors border flex items-center justify-center ${
+                        effects?.reverb ? 'bg-rose-600 text-white border-rose-500 hover:bg-rose-700' : 'bg-gray-700 text-gray-400 border-gray-600 hover:bg-gray-600'
+                      }`}
+                      onClick={() => onToggleEffect(trackId, 'reverb')}
+                      title="Reverb (room ambiance)"
+                    >RVB</button>
+                  </>
+                )}
               </>
             )}
           </div>
@@ -281,11 +312,11 @@ export default function AudioTrack({
             <div className="flex flex-col gap-[1px] px-1 mb-1">
               <div className="flex items-center gap-1 h-[8px]">
                 <span className="text-[11px] leading-none w-3 font-mono" style={{ color: '#F7F4F3' }}>L</span>
-                <div ref={meterLRef} className="h-full flex-1 rounded-sm bg-gray-700" />
+                <div ref={meterLRef} className="h-full flex-1 rounded-sm bg-slate-800" />
               </div>
               <div className="flex items-center gap-1 h-[8px]">
                 <span className="text-[11px] leading-none w-3 font-mono" style={{ color: '#F7F4F3' }}>R</span>
-                <div ref={meterRRef} className="h-full flex-1 rounded-sm bg-gray-700" />
+                <div ref={meterRRef} className="h-full flex-1 rounded-sm bg-slate-800" />
               </div>
             </div>
             {/* Volume fader */}

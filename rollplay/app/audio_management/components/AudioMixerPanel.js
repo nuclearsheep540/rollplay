@@ -9,7 +9,6 @@ import React, { useState, useEffect, useCallback, useMemo, useRef, memo } from '
 import AudioTrack from './AudioTrack';
 import AudioTrackSelector from './AudioTrackSelector';
 import SfxSoundboard from './SfxSoundboard';
-import ChannelEffects from './ChannelEffects';
 import { PlaybackState, ChannelType, DEFAULT_EFFECTS } from '../types';
 import {
   DM_CHILD,
@@ -822,23 +821,26 @@ export default function AudioMixerPanel({
                       const isSelectedInPFL = effectiveCueTargets.includes(channel.channelId);
                       const channelLabel = channel.channelId.replace('audio_channel_', '');
 
-                      // Preview shows resulting PGM state after CUT
-                      let previewState = 'empty'; // no audio loaded
-                      if (hasAudio && isSelectedInPFL) previewState = 'play';
-                      else if (hasAudio && !isSelectedInPFL) previewState = 'stop';
+                      // Preview shows resulting PGM state after cut, with red highlighting stops
+                      const pgmState = trackState?.playbackState;
+                      const isCurrentlyPlaying = pgmState === PlaybackState.PLAYING || pgmState === PlaybackState.TRANSITIONING;
+
+                      let previewState = 'off'; // off and staying off, or no audio
+                      if (hasAudio && isSelectedInPFL) previewState = 'on';
+                      else if (hasAudio && !isSelectedInPFL && isCurrentlyPlaying) previewState = 'stopping';
 
                       return (
                         <div
                           key={`preview-${channel.channelId}`}
                           className={`w-10 h-8 rounded text-center text-xs transition-all duration-200 flex items-center justify-center border ${
-                            previewState === 'play' ? 'bg-green-500 text-white border-green-400' :
-                            previewState === 'stop' ? 'bg-red-500 text-white border-red-400' :
+                            previewState === 'on' ? 'bg-green-500 text-white border-green-400' :
+                            previewState === 'stopping' ? 'bg-red-500 text-white border-red-400' :
                             'bg-gray-600 text-gray-300 border-gray-500'
                           }`}
                           title={
-                            previewState === 'play' ? `${channelLabel} will be playing` :
-                            previewState === 'stop' ? `${channelLabel} will be stopped` :
-                            'No audio loaded'
+                            previewState === 'on' ? `${channelLabel} will be playing` :
+                            previewState === 'stopping' ? `${channelLabel} will be stopped` :
+                            hasAudio ? `${channelLabel} off` : 'No audio loaded'
                           }
                         >
                           {hasAudio ? channelLabel : '-'}
@@ -993,13 +995,9 @@ export default function AudioMixerPanel({
                       isSoloed={soloedChannels[channel.channelId] || false}
                       onMuteToggle={() => handleMuteToggle(channel.channelId)}
                       onSoloToggle={() => handleSoloToggle(channel.channelId)}
-                      isLast={false}
-                    />
-                    <ChannelEffects
-                      trackId={channel.channelId}
                       effects={channelEffects[channel.channelId]}
                       onToggleEffect={handleEffectToggle}
-                      disabled={!remoteTrackStates[channel.channelId]?.filename}
+                      isLast={false}
                     />
                   </React.Fragment>
                 );
