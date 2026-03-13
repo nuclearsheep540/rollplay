@@ -1786,6 +1786,7 @@ function GameContent() {
           onPlay={handleMixerPlay}
           onPause={handleMixerPause}
           onStop={handleMixerStop}
+          onLoopToggle={toggleRemoteTrackLooping}
           channelEffects={channelEffects}
           applyChannelEffects={applyChannelEffects}
           setEffectMixLevel={setEffectMixLevel}

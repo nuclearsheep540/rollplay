@@ -8,6 +8,21 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { PlaybackState, ChannelType, DEFAULT_EFFECTS, REVERB_PRESETS } from '../types';
 
+// Logarithmic frequency mapping for filter faders (0.0–1.0 → Hz)
+// HPF: 0.0 = 20Hz (minimal cut), 1.0 = 5000Hz (aggressive cut)
+const mapHpfFrequency = (faderValue) => {
+  const minLog = Math.log(20);
+  const maxLog = Math.log(5000);
+  return Math.exp(minLog + faderValue * (maxLog - minLog));
+};
+// LPF: 0.0 = 200Hz (aggressive cut), 1.0 = 20000Hz (minimal cut)
+// Inverted so fader-up = brighter (less cut)
+const mapLpfFrequency = (faderValue) => {
+  const minLog = Math.log(200);
+  const maxLog = Math.log(20000);
+  return Math.exp(minLog + faderValue * (maxLog - minLog));
+};
+
 /**
  * Unified Audio System for Tabletop Tavern
  * 
@@ -161,19 +176,45 @@ export const useUnifiedAudio = () => {
     setSoloedChannels(prev => ({ ...prev, [channelId]: soloed }));
   }, []);
 
-  // Recompute muteGainNode values whenever mute/solo state changes
+  // Recompute muteGainNode values whenever mute/solo state changes.
+  // Channel mute/solo cascades to that channel's effect sends.
+  // Effect strips have independent mute/solo via composite keys (e.g. "audio_channel_A_hpf").
+  // All strips (channels + effect returns) participate in the same solo group.
   useEffect(() => {
     const anySoloed = Object.values(soloedChannels).some(Boolean);
+
+    // Channel dry paths
     for (const [trackId, muteGain] of Object.entries(remoteTrackMuteGainsRef.current)) {
       const isMuted = mutedChannels[trackId] || false;
       const isSoloed = soloedChannels[trackId] || false;
       let gain;
       if (anySoloed) {
-        gain = isSoloed ? 1.0 : 0.0; // Solo overrides mute
+        gain = isSoloed ? 1.0 : 0.0;
       } else {
         gain = isMuted ? 0.0 : 1.0;
       }
       muteGain.gain.setValueAtTime(gain, muteGain.context.currentTime);
+    }
+
+    // Reverb send paths — only reverb has a sendMuteGain (HPF/LPF are inline inserts, no mute gate)
+    for (const [trackId, inserts] of Object.entries(channelInsertEffectsRef.current)) {
+      const channelMuted = mutedChannels[trackId] || false;
+      const channelSoloed = soloedChannels[trackId] || false;
+
+      const sendMuteGain = inserts.reverb?.sendMuteGain;
+      if (!sendMuteGain) continue;
+
+      const effectId = `${trackId}_reverb`;
+      const effectMuted = mutedChannels[effectId] || false;
+      const effectSoloed = soloedChannels[effectId] || false;
+
+      let gain;
+      if (anySoloed) {
+        gain = ((channelSoloed || effectSoloed) && !effectMuted) ? 1.0 : 0.0;
+      } else {
+        gain = (channelMuted || effectMuted) ? 0.0 : 1.0;
+      }
+      sendMuteGain.gain.setValueAtTime(gain, sendMuteGain.context.currentTime);
     }
   }, [mutedChannels, soloedChannels]);
 
@@ -286,62 +327,77 @@ export const useUnifiedAudio = () => {
           remoteTrackGainsRef.current[trackId] = gainNode;
           remoteTrackAnalysersRef.current[trackId] = { left: metering.analyserL, right: metering.analyserR };
 
-          // BGM channels get pre-fader effect sends with wet/dry mix
-          // True send architecture:
-          //   source → inputNode → gainNode (fader) → muteGain → metering → master
-          //                      → hpfNode → hpfWetGain → master  (pre-fader send)
-          //                      → lpfNode → lpfWetGain → master  (pre-fader send)
-          //                      → convolver → reverbWetGain → master  (pre-fader send)
-          // Effect sends tap pre-fader so you can fade the channel to zero and still
-          // hear the effect returns (e.g. reverb tail with channel fully down).
+          // BGM channels: HPF/LPF as inline inserts, reverb as post-EQ pre-fader send
+          //
+          // Signal chain:
+          //   source → inputNode → hpfNode → lpfNode → postEqNode → gainNode (fader) → muteGain → metering → master
+          //                                                        → convolver → reverbWetGain → reverbSendMuteGain → master
+          //
+          // HPF/LPF are always inline — "disabled" = pass-all frequency (HPF 20Hz, LPF 20kHz).
+          // Their strip faders control cutoff frequency.
+          // Reverb is a pre-fader post-EQ send — its strip fader controls wet/dry mix.
           if (trackId.startsWith('audio_channel_')) {
-            // Pre-fader input node — sources connect here, fans out to fader + effect sends
+            // Pre-fader input node — sources connect here
             const inputNode = ctx.createGain();
             inputNode.gain.value = 1.0;
             remoteTrackInputNodesRef.current[trackId] = inputNode;
 
-            // Dry path: inputNode → gainNode (fader) → muteGain → metering → master
-            inputNode.connect(gainNode);
+            // HPF insert (inline) — disabled = 20Hz (passes all audible)
+            const hpfNode = ctx.createBiquadFilter();
+            hpfNode.type = 'highpass';
+            hpfNode.frequency.value = 20; // pass-all by default
+            hpfNode.Q.value = 0.707;
+
+            // LPF insert (inline) — disabled = 20kHz (passes all audible)
+            const lpfNode = ctx.createBiquadFilter();
+            lpfNode.type = 'lowpass';
+            lpfNode.frequency.value = 20000; // pass-all by default
+            lpfNode.Q.value = 0.707;
+
+            // Post-EQ fan-out node — after inserts, before fader and reverb send
+            const postEqNode = ctx.createGain();
+            postEqNode.gain.value = 1.0;
+
+            // Inline insert chain: inputNode → HPF → LPF → postEqNode
+            inputNode.connect(hpfNode);
+            hpfNode.connect(lpfNode);
+            lpfNode.connect(postEqNode);
+
+            // Dry path: postEqNode → gainNode (fader) → muteGain → metering → master
+            postEqNode.connect(gainNode);
             gainNode.connect(muteGainNode);
             muteGainNode.connect(metering.upmix);
             metering.merger.connect(masterGainRef.current);
             remoteTrackMuteGainsRef.current[trackId] = muteGainNode;
 
-            // HPF send: inputNode → hpfNode → hpfWetGain → master (pre-fader)
-            const hpfNode = ctx.createBiquadFilter();
-            hpfNode.type = 'highpass';
-            hpfNode.frequency.value = DEFAULT_EFFECTS.hpf.frequency;
-            hpfNode.Q.value = 0.707;
-            const hpfWetGain = ctx.createGain();
-            hpfWetGain.gain.value = 0.0; // disabled by default
-            inputNode.connect(hpfNode);
-            hpfNode.connect(hpfWetGain);
-            hpfWetGain.connect(masterGainRef.current);
-
-            // LPF send: inputNode → lpfNode → lpfWetGain → master (pre-fader)
-            const lpfNode = ctx.createBiquadFilter();
-            lpfNode.type = 'lowpass';
-            lpfNode.frequency.value = DEFAULT_EFFECTS.lpf.frequency;
-            lpfNode.Q.value = 0.707;
-            const lpfWetGain = ctx.createGain();
-            lpfWetGain.gain.value = 0.0;
-            inputNode.connect(lpfNode);
-            lpfNode.connect(lpfWetGain);
-            lpfWetGain.connect(masterGainRef.current);
-
-            // Reverb send: inputNode → convolver → reverbWetGain → master (pre-fader)
+            // Reverb send: postEqNode → convolver → reverbWetGain → reverbSendMuteGain → master
+            // Pre-fader, post-EQ — reverb receives the EQ-shaped signal
             const convolver = ctx.createConvolver();
             convolver.buffer = impulseResponseBufferRef.current;
             const reverbWetGain = ctx.createGain();
-            reverbWetGain.gain.value = 0.0;
-            inputNode.connect(convolver);
+            reverbWetGain.gain.value = 0.0; // disabled by default
+            const reverbSendMuteGain = ctx.createGain();
+            reverbSendMuteGain.gain.value = 1.0;
+            // Reverb metering chain (stereo)
+            const reverbMetering = createStereoMeteringChain(ctx);
+
+            postEqNode.connect(convolver);
             convolver.connect(reverbWetGain);
-            reverbWetGain.connect(masterGainRef.current);
+            reverbWetGain.connect(reverbSendMuteGain);
+            reverbSendMuteGain.connect(reverbMetering.upmix);
+            reverbMetering.merger.connect(masterGainRef.current);
+
+            // Store reverb analysers with composite key
+            remoteTrackAnalysersRef.current[`${trackId}_reverb`] = {
+              left: reverbMetering.analyserL,
+              right: reverbMetering.analyserR,
+            };
 
             channelInsertEffectsRef.current[trackId] = {
-              hpf: { effectNode: hpfNode, wetGain: hpfWetGain },
-              lpf: { effectNode: lpfNode, wetGain: lpfWetGain },
-              reverb: { effectNode: convolver, wetGain: reverbWetGain },
+              hpf: { effectNode: hpfNode },
+              lpf: { effectNode: lpfNode },
+              postEqNode,
+              reverb: { effectNode: convolver, wetGain: reverbWetGain, sendMuteGain: reverbSendMuteGain },
             };
           } else {
             // Non-BGM tracks: simple gain → muteGain → metering → master
@@ -1109,9 +1165,10 @@ export const useUnifiedAudio = () => {
     }
   };
 
-  // Apply effect toggles to a BGM channel's per-channel insert wet gains.
-  // Accepts: { hpf: true/false, lpf: true/false, reverb: true/false, hpf_mix: 0.5, ... }
-  // Toggle on = ramp wet gain to mix level, toggle off = ramp to 0.0.
+  // Apply effect toggles to a BGM channel's insert/send effects.
+  // HPF/LPF are inline inserts — toggle changes frequency (pass-all vs configured).
+  // Reverb is a send — toggle ramps wet gain to mix level or 0.0.
+  // Accepts: { hpf: true/false, lpf: true/false, reverb: true/false, hpf_mix: 0.5, reverb_mix: 0.6, ... }
   const applyChannelEffects = useCallback((trackId, effects) => {
     // Always update React state so UI toggles reflect correct values immediately,
     // even if Web Audio chains aren't ready yet (e.g. during initial sync)
@@ -1129,31 +1186,63 @@ export const useUnifiedAudio = () => {
     const RAMP_TIME = 0.02; // 20ms to avoid clicks
     const now = ctx.currentTime;
 
-    ['hpf', 'lpf', 'reverb'].forEach(fx => {
-      if (effects[fx] !== undefined) {
-        const enabled = typeof effects[fx] === 'boolean' ? effects[fx] : !!effects[fx];
-        // Use mix level from this update, or fall back to current state, or default
-        const mixLevel = effects[`${fx}_mix`] ?? channelEffects[trackId]?.[`${fx}_mix`] ?? DEFAULT_EFFECTS[fx].mix;
-        const targetGain = enabled ? mixLevel : 0.0;
-        // Anchor current value before ramping (required for linearRamp to work reliably)
-        inserts[fx].wetGain.gain.setValueAtTime(inserts[fx].wetGain.gain.value, now);
-        inserts[fx].wetGain.gain.linearRampToValueAtTime(targetGain, now + RAMP_TIME);
+    // HPF insert — toggle sets frequency (pass-all 20Hz vs configured cutoff)
+    if (effects.hpf !== undefined) {
+      const enabled = typeof effects.hpf === 'boolean' ? effects.hpf : !!effects.hpf;
+      const mixLevel = effects.hpf_mix ?? channelEffects[trackId]?.hpf_mix ?? DEFAULT_EFFECTS.hpf.mix;
+      const targetFreq = enabled ? mapHpfFrequency(mixLevel) : 20;
+      inserts.hpf.effectNode.frequency.setValueAtTime(inserts.hpf.effectNode.frequency.value, now);
+      inserts.hpf.effectNode.frequency.linearRampToValueAtTime(targetFreq, now + RAMP_TIME);
+    }
+    // HPF frequency update from fader — only apply if enabled
+    if (effects.hpf_mix !== undefined && effects.hpf === undefined) {
+      const isEnabled = channelEffects[trackId]?.hpf ?? false;
+      if (isEnabled) {
+        const targetFreq = mapHpfFrequency(effects.hpf_mix);
+        inserts.hpf.effectNode.frequency.setValueAtTime(inserts.hpf.effectNode.frequency.value, now);
+        inserts.hpf.effectNode.frequency.linearRampToValueAtTime(targetFreq, now + RAMP_TIME);
       }
-      // Direct mix level update (from effect strip fader) — only apply if effect is enabled
-      if (effects[`${fx}_mix`] !== undefined && effects[fx] === undefined) {
-        const isEnabled = channelEffects[trackId]?.[fx] ?? false;
-        if (isEnabled) {
-          inserts[fx].wetGain.gain.setValueAtTime(inserts[fx].wetGain.gain.value, now);
-          inserts[fx].wetGain.gain.linearRampToValueAtTime(
-            effects[`${fx}_mix`],
-            now + RAMP_TIME
-          );
-        }
+    }
+
+    // LPF insert — toggle sets frequency (pass-all 20kHz vs configured cutoff)
+    if (effects.lpf !== undefined) {
+      const enabled = typeof effects.lpf === 'boolean' ? effects.lpf : !!effects.lpf;
+      const mixLevel = effects.lpf_mix ?? channelEffects[trackId]?.lpf_mix ?? DEFAULT_EFFECTS.lpf.mix;
+      const targetFreq = enabled ? mapLpfFrequency(mixLevel) : 20000;
+      inserts.lpf.effectNode.frequency.setValueAtTime(inserts.lpf.effectNode.frequency.value, now);
+      inserts.lpf.effectNode.frequency.linearRampToValueAtTime(targetFreq, now + RAMP_TIME);
+    }
+    // LPF frequency update from fader — only apply if enabled
+    if (effects.lpf_mix !== undefined && effects.lpf === undefined) {
+      const isEnabled = channelEffects[trackId]?.lpf ?? false;
+      if (isEnabled) {
+        const targetFreq = mapLpfFrequency(effects.lpf_mix);
+        inserts.lpf.effectNode.frequency.setValueAtTime(inserts.lpf.effectNode.frequency.value, now);
+        inserts.lpf.effectNode.frequency.linearRampToValueAtTime(targetFreq, now + RAMP_TIME);
       }
-    });
+    }
+
+    // Reverb send — toggle ramps wet gain
+    if (effects.reverb !== undefined) {
+      const enabled = typeof effects.reverb === 'boolean' ? effects.reverb : !!effects.reverb;
+      const mixLevel = effects.reverb_mix ?? channelEffects[trackId]?.reverb_mix ?? DEFAULT_EFFECTS.reverb.mix;
+      const targetGain = enabled ? mixLevel : 0.0;
+      inserts.reverb.wetGain.gain.setValueAtTime(inserts.reverb.wetGain.gain.value, now);
+      inserts.reverb.wetGain.gain.linearRampToValueAtTime(targetGain, now + RAMP_TIME);
+    }
+    // Reverb mix level update from fader — only apply if enabled
+    if (effects.reverb_mix !== undefined && effects.reverb === undefined) {
+      const isEnabled = channelEffects[trackId]?.reverb ?? false;
+      if (isEnabled) {
+        inserts.reverb.wetGain.gain.setValueAtTime(inserts.reverb.wetGain.gain.value, now);
+        inserts.reverb.wetGain.gain.linearRampToValueAtTime(effects.reverb_mix, now + RAMP_TIME);
+      }
+    }
   }, [channelEffects]);
 
-  // Set the wet/dry mix level for a specific effect on a specific channel
+  // Set the mix level for a specific effect on a specific channel.
+  // HPF/LPF: fader controls cutoff frequency (via logarithmic mapping).
+  // Reverb: fader controls wet gain level.
   const setEffectMixLevel = useCallback((trackId, effectName, mixLevel) => {
     setChannelEffects(prev => ({
       ...prev,
@@ -1166,12 +1255,22 @@ export const useUnifiedAudio = () => {
     const ctx = audioContextRef.current;
     if (!ctx) return;
 
-    // Only ramp the wet gain if the effect is currently enabled
     const isEnabled = channelEffects[trackId]?.[effectName] ?? false;
-    if (isEnabled) {
-      const now = ctx.currentTime;
-      inserts[effectName].wetGain.gain.setValueAtTime(inserts[effectName].wetGain.gain.value, now);
-      inserts[effectName].wetGain.gain.linearRampToValueAtTime(mixLevel, now + 0.02);
+    if (!isEnabled) return;
+
+    const now = ctx.currentTime;
+
+    if (effectName === 'hpf') {
+      const targetFreq = mapHpfFrequency(mixLevel);
+      inserts.hpf.effectNode.frequency.setValueAtTime(inserts.hpf.effectNode.frequency.value, now);
+      inserts.hpf.effectNode.frequency.linearRampToValueAtTime(targetFreq, now + 0.02);
+    } else if (effectName === 'lpf') {
+      const targetFreq = mapLpfFrequency(mixLevel);
+      inserts.lpf.effectNode.frequency.setValueAtTime(inserts.lpf.effectNode.frequency.value, now);
+      inserts.lpf.effectNode.frequency.linearRampToValueAtTime(targetFreq, now + 0.02);
+    } else if (effectName === 'reverb') {
+      inserts.reverb.wetGain.gain.setValueAtTime(inserts.reverb.wetGain.gain.value, now);
+      inserts.reverb.wetGain.gain.linearRampToValueAtTime(mixLevel, now + 0.02);
     }
   }, [channelEffects]);
 

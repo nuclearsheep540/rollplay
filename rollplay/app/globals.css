@@ -786,47 +786,61 @@ body {
   flex-shrink: 0;
 }
 
-/* Vertical fader styling */
+/* Vertical fader — overlaid absolutely on meter area so meters stay tight.
+   In writing-mode: vertical-lr, thumb width = along-track (vert), height = cross-track (horiz). */
 .vertical-fader {
   writing-mode: vertical-lr;
   direction: rtl;
   -webkit-appearance: none;
   appearance: none;
-  width: calc(24px * var(--ui-scale));
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
   background: transparent;
   cursor: pointer;
+  margin: 0;
+  padding: 0;
+  z-index: 2;
 }
 
 .vertical-fader::-webkit-slider-runnable-track {
-  width: calc(6px * var(--ui-scale));
-  background: #1e293b;
-  border-radius: calc(3px * var(--ui-scale));
+  width: 1px;
+  background: rgba(255, 255, 255, 0.15);
+  border-radius: 0;
 }
 
 .vertical-fader::-webkit-slider-thumb {
   -webkit-appearance: none;
   appearance: none;
-  width: calc(16px * var(--ui-scale));
-  height: calc(8px * var(--ui-scale));
+  /* Browser swaps axes under writing-mode: vertical-lr.
+     Declare wide×thin — browser renders as horizontal thumb. */
+  width: calc(22px * var(--ui-scale));
+  height: calc(6px * var(--ui-scale));
   background: #F7F4F3;
-  border-radius: calc(2px * var(--ui-scale));
+  border-radius: calc(1px * var(--ui-scale));
   cursor: pointer;
-  margin-top: calc(-5px * var(--ui-scale));
+  /* Center thumb over the L/R meters */
+  transform: translateX(-50%);
+  box-shadow: 0 0 3px rgba(0, 0, 0, 0.6);
 }
 
 .vertical-fader::-moz-range-track {
-  width: calc(6px * var(--ui-scale));
-  background: #1e293b;
-  border-radius: calc(3px * var(--ui-scale));
+  width: 1px;
+  background: rgba(255, 255, 255, 0.15);
+  border-radius: 0;
 }
 
 .vertical-fader::-moz-range-thumb {
-  width: calc(16px * var(--ui-scale));
-  height: calc(8px * var(--ui-scale));
+  /* Browser swaps axes under writing-mode: vertical-lr.
+     Declare wide×thin — browser renders as horizontal thumb. */
+  width: calc(22px * var(--ui-scale));
+  height: calc(6px * var(--ui-scale));
   background: #F7F4F3;
-  border-radius: calc(2px * var(--ui-scale));
+  border-radius: calc(1px * var(--ui-scale));
   border: none;
   cursor: pointer;
+  box-shadow: 0 0 3px rgba(0, 0, 0, 0.6);
 }
 
 /* Custom Scrollbar for DM Control Center
@@ -1128,7 +1142,7 @@ input[type="range"] {
   border-radius: 6px;
 }
 
-input[type="range"]::-webkit-slider-thumb {
+input[type="range"]:not(.vertical-fader)::-webkit-slider-thumb {
   -webkit-appearance: none; /* Required */
   width: 13px;
   height: 22px;

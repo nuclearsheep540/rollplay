@@ -36,6 +36,7 @@ export default function VerticalChannelStrip({
   stripType = 'channel',
   label,
   color = 'rose',
+  footerLabel,
   // Audio state (channel strips)
   trackState = {},
   analysers,
@@ -56,6 +57,9 @@ export default function VerticalChannelStrip({
   // Send toggles (channel strips only)
   sends = {},
   onToggleSend,
+  // Loop toggle (channel strips only)
+  isLooping = true,
+  onLoopToggle,
   trackId,
 }) {
   const {
@@ -146,12 +150,27 @@ export default function VerticalChannelStrip({
   };
 
   const isEffect = stripType === 'effect';
+  const isChannel = stripType === 'channel';
+  const channelDisabled = isChannel && !filename;
+  const disabledClass = channelDisabled ? 'opacity-30 pointer-events-none' : '';
   const stripWidth = isEffect ? 'w-[60px]' : 'w-[80px]';
-  const showTransport = stripType === 'channel' && filename;
-  const showSends = stripType === 'channel' && filename;
-  const showMute = !isEffect && (stripType !== 'channel' || filename);
-  const showMeters = !isEffect;
+  const showTransport = isChannel || isEffect;
+  const showSends = isChannel || isEffect;
+  const showMute = !isEffect || !!(onMuteToggle);
+  const showMeters = !isEffect || !!(analysers?.left && analysers?.right);
   const faderMax = isEffect ? '1.0' : '1.3';
+  const faderMaxNum = isEffect ? 1.0 : 1.3;
+
+  // dB pip marks — position as percentage from bottom of fader
+  const dbPips = [
+    { db: 0, gain: 1.0 },
+    { db: -3, gain: 0.708 },
+    { db: -6, gain: 0.501 },
+    { db: -10, gain: 0.316 },
+    { db: -20, gain: 0.1 },
+  ]
+    .map(({ db, gain }) => ({ db, pct: (gain / faderMaxNum) * 100 }))
+    .filter(({ pct }) => pct <= 100 && pct >= 0);
 
   return (
     <div className={`flex flex-col items-center h-full ${stripWidth} flex-shrink-0 gap-1`}>
@@ -160,9 +179,9 @@ export default function VerticalChannelStrip({
         {label}
       </div>
 
-      {/* Transport controls — channel strips only when file loaded */}
+      {/* Transport controls — always rendered for layout; invisible on effect strips, disabled on empty channels */}
       {showTransport && (
-        <div className="flex gap-1">
+        <div className={`flex gap-1 ${isEffect ? 'invisible' : disabledClass}`}>
           {/* Play/Pause toggle */}
           {playbackState === PlaybackState.PLAYING ? (
             <button
@@ -202,29 +221,46 @@ export default function VerticalChannelStrip({
         </div>
       )}
 
-      {/* Send toggles — channel strips only */}
+      {/* Loop toggle — always rendered for layout; invisible on effect strips, disabled on empty channels */}
+      {(isChannel || isEffect) && (
+        <div className={`w-full px-1 ${isEffect ? 'invisible' : disabledClass}`}>
+          <button
+            onClick={() => onLoopToggle?.(trackId, !isLooping)}
+            className={`w-full h-5 rounded text-[11px] font-bold transition-colors ${
+              isLooping
+                ? 'bg-blue-600 text-white'
+                : 'bg-gray-700 text-gray-500 hover:bg-gray-600'
+            }`}
+            title={isLooping ? 'Disable looping' : 'Enable looping'}
+          >
+            LOOP
+          </button>
+        </div>
+      )}
+
+      {/* Send toggles — always rendered for layout; invisible on effect strips, disabled on empty channels */}
       {showSends && (
-        <div className="flex flex-col gap-0.5 w-full px-1">
-          {['hpf', 'lpf', 'reverb'].map(bus => (
+        <div className={`flex flex-col gap-0.5 w-full px-1 ${isEffect ? 'invisible' : disabledClass}`}>
+          {['eq', 'reverb'].map(bus => (
             <button
               key={bus}
               onClick={() => onToggleSend?.(trackId, bus)}
-              className={`w-full h-5 rounded text-[9px] font-bold transition-colors ${
+              className={`w-full h-5 rounded text-[11px] font-bold transition-colors ${
                 sends[bus]
                   ? 'bg-rose-600 text-white'
                   : 'bg-gray-700 text-gray-500 hover:bg-gray-600'
               }`}
-              title={`${bus.toUpperCase()} ${sends[bus] ? 'on' : 'off'}`}
+              title={`${bus === 'eq' ? 'EQ' : 'RVB'} ${sends[bus] ? 'on' : 'off'}`}
             >
-              {bus === 'reverb' ? 'RVB' : bus.toUpperCase()}
+              {bus === 'reverb' ? 'RVB' : 'EQ'}
             </button>
           ))}
         </div>
       )}
 
-      {/* Solo / Mute */}
-      {showMute && (
-        <div className="flex gap-1">
+      {/* Solo / Mute — invisible spacer on effect strips for layout alignment */}
+      {(showMute || isEffect) && (
+        <div className={`flex gap-1 ${isEffect && !onMuteToggle ? 'invisible' : ''} ${channelDisabled ? disabledClass : ''}`}>
           {stripType !== 'master' && (
             <button
               className={`w-7 h-6 rounded text-xs font-bold transition-colors flex items-center justify-center ${
@@ -244,40 +280,55 @@ export default function VerticalChannelStrip({
         </div>
       )}
 
-      {/* Vertical fader + L/R meters — main body */}
-      <div className="flex-1 flex items-stretch gap-[2px] w-full px-1 min-h-0">
+      {/* Vertical fader + L/R meters — meters drive layout, fader overlaid */}
+      <div className={`flex-1 relative flex items-stretch justify-center gap-[2px] w-full min-h-0 ${channelDisabled ? disabledClass : ''}`}>
         {/* L meter */}
         {showMeters && (
           <div ref={meterLRef} className="w-[6px] rounded-sm bg-slate-800 flex-shrink-0" />
         )}
-        {/* Vertical fader */}
-        <div className="flex-1 flex items-center justify-center">
-          <input
-            type="range"
-            min="0.0"
-            max={faderMax}
-            step="0.01"
-            value={volume}
-            onChange={(e) => handleVolumeChange(parseFloat(e.target.value))}
-            onMouseUp={(e) => handleVolumeRelease(parseFloat(e.target.value))}
-            onTouchEnd={(e) => handleVolumeRelease(parseFloat(e.target.value))}
-            className="vertical-fader"
-          />
-        </div>
+        {/* Center track spacer (visible when no meters, e.g. effect strips) */}
+        {!showMeters && <div className="w-[2px]" />}
         {/* R meter */}
         {showMeters && (
           <div ref={meterRRef} className="w-[6px] rounded-sm bg-slate-800 flex-shrink-0" />
         )}
+        {/* dB pip lines — absolutely positioned over meters */}
+        <div className="absolute inset-0 pointer-events-none z-[1]">
+          {dbPips.map(({ db, pct }) => (
+            <div
+              key={db}
+              className="absolute left-0 right-0 flex items-center"
+              style={{ bottom: `${pct}%` }}
+            >
+              <div className={`flex-1 border-t ${db === 0 ? 'border-white/40' : 'border-white/20'}`} />
+              <span className="text-[11px] text-white/40 pl-[2px] leading-none font-mono">
+                {db}
+              </span>
+            </div>
+          ))}
+        </div>
+        {/* Fader — absolutely positioned over the meters, thumb overlaps them */}
+        <input
+          type="range"
+          min="0.0"
+          max={faderMax}
+          step="0.01"
+          value={volume}
+          onChange={(e) => handleVolumeChange(parseFloat(e.target.value))}
+          onMouseUp={(e) => handleVolumeRelease(parseFloat(e.target.value))}
+          onTouchEnd={(e) => handleVolumeRelease(parseFloat(e.target.value))}
+          className="vertical-fader"
+        />
       </div>
 
       {/* Filename + time — channel strips only */}
       {stripType === 'channel' && (
         <div className="w-full text-center px-1 pb-1">
-          <div className="text-[9px] text-gray-400 truncate font-mono" title={filename || ''}>
+          <div className="text-[11px] text-gray-400 truncate font-mono" title={filename || ''}>
             {filename ? filename.replace(/\.[^.]+$/, '') : '—'}
           </div>
           {filename && (
-            <div className="text-[8px] text-gray-500 font-mono">
+            <div className="text-[10px] text-gray-500 font-mono">
               {formatTime(currentTime)}
             </div>
           )}
@@ -287,14 +338,14 @@ export default function VerticalChannelStrip({
       {/* Effect strip footer */}
       {isEffect && (
         <div className="w-full text-center pb-1">
-          <div className="text-[9px] text-gray-500 font-mono">Mix</div>
+          <div className="text-[11px] text-gray-500 font-mono">{footerLabel || 'Mix'}</div>
         </div>
       )}
 
       {/* Master label footer */}
       {stripType === 'master' && (
         <div className="w-full text-center pb-1">
-          <div className="text-[9px] text-gray-500 font-mono">Out</div>
+          <div className="text-[11px] text-gray-500 font-mono">Out</div>
         </div>
       )}
     </div>

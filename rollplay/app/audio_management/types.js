@@ -33,9 +33,7 @@ export const REVERB_PRESETS = {
   cathedral: { duration: 3.0, decay: 1.5 },
 };
 
-// Effect strip definitions for mixer drawer rendering (per-channel inserts)
+// Effect strip definitions for mixer drawer rendering (reverb only — HPF/LPF are knobs on channel strip)
 export const EFFECT_STRIP_DEFS = [
-  { key: 'hpf',    label: 'HPF', color: 'orange' },
-  { key: 'lpf',    label: 'LPF', color: 'cyan' },
   { key: 'reverb', label: 'RVB', color: 'purple' },
 ];

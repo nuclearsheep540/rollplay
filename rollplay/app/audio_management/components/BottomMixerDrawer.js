@@ -5,11 +5,15 @@
 
 import React, { useCallback, useRef } from 'react';
 import VerticalChannelStrip from './VerticalChannelStrip';
+import FilterKnob from './FilterKnob';
 import { PlaybackState, EFFECT_STRIP_DEFS, DEFAULT_EFFECTS } from '../types';
 
 /**
  * Bottom mixer drawer — renders vertical channel strips for BGM channels,
- * per-channel effect inserts (wet/dry faders), and master output.
+ * per-channel effect inserts/sends, and master output.
+ *
+ * HPF/LPF are inline inserts (fader = cutoff frequency).
+ * Reverb is a post-EQ send (fader = wet/dry mix, with solo/mute).
  *
  * DM-only. Overlaps side drawers when open (z-index 35).
  */
@@ -27,6 +31,8 @@ export default function BottomMixerDrawer({
   onPause,
   onStop,
   pendingOperations = new Set(),
+  // Loop toggle
+  onLoopToggle,
   // Effect toggles + mix levels
   channelEffects = {},
   applyChannelEffects,
@@ -65,20 +71,37 @@ export default function BottomMixerDrawer({
   }, [sendRemoteAudioBatch]);
 
   // Effect toggle handler — toggles enabled state and broadcasts
+  // 'eq' is a meta-toggle: off disables both hpf + lpf
   const handleToggleSend = useCallback((trackId, effectName) => {
     const currentEffects = channelEffects[trackId] || {};
-    const newEnabled = !currentEffects[effectName];
-    const updatedEffects = { ...currentEffects, [effectName]: newEnabled };
 
-    applyChannelEffects?.(trackId, updatedEffects);
-    sendRemoteAudioBatch?.([{
-      trackId,
-      operation: 'effects',
-      effects: updatedEffects,
-    }]);
+    if (effectName === 'eq') {
+      const newEnabled = !currentEffects.eq;
+      const updatedEffects = { ...currentEffects, eq: newEnabled };
+      // When EQ strip is closed, disable both filters
+      if (!newEnabled) {
+        updatedEffects.hpf = false;
+        updatedEffects.lpf = false;
+      }
+      applyChannelEffects?.(trackId, updatedEffects);
+      sendRemoteAudioBatch?.([{
+        trackId,
+        operation: 'effects',
+        effects: updatedEffects,
+      }]);
+    } else {
+      const newEnabled = !currentEffects[effectName];
+      const updatedEffects = { ...currentEffects, [effectName]: newEnabled };
+      applyChannelEffects?.(trackId, updatedEffects);
+      sendRemoteAudioBatch?.([{
+        trackId,
+        operation: 'effects',
+        effects: updatedEffects,
+      }]);
+    }
   }, [channelEffects, applyChannelEffects, sendRemoteAudioBatch]);
 
-  // Effect mix level handler — updates wet/dry fader
+  // Effect mix level handler — updates fader (frequency for HPF/LPF, wet gain for reverb)
   const handleEffectMixChange = useCallback((trackId, effectName, mixLevel) => {
     setEffectMixLevel?.(trackId, effectName, mixLevel);
   }, [setEffectMixLevel]);
@@ -92,6 +115,16 @@ export default function BottomMixerDrawer({
       effects: { ...currentEffects, [`${effectName}_mix`]: mixLevel },
     }]);
   }, [channelEffects, sendRemoteAudioBatch]);
+
+  // Loop toggle handler — toggles looping and broadcasts
+  const handleLoopToggle = useCallback((trackId, looping) => {
+    onLoopToggle?.(trackId, looping);
+    sendRemoteAudioBatch?.([{
+      trackId,
+      operation: 'loop',
+      looping,
+    }]);
+  }, [onLoopToggle, sendRemoteAudioBatch]);
 
   return (
     <div
@@ -128,7 +161,7 @@ export default function BottomMixerDrawer({
                 trackId={trackId}
                 trackState={trackState}
                 analysers={remoteTrackAnalysers[trackId]}
-                volume={trackState.volume || 1.0}
+                volume={trackState.volume ?? 1.0}
                 onVolumeChange={(vol) => handleVolumeChange(trackId, vol)}
                 onVolumeChangeDebounced={(vol) => handleVolumeChangeDebounced(trackId, vol)}
                 onPlay={() => onPlay?.(trackId)}
@@ -141,25 +174,67 @@ export default function BottomMixerDrawer({
                 }}
                 sends={effects}
                 onToggleSend={handleToggleSend}
+                isLooping={trackState.looping ?? true}
+                onLoopToggle={handleLoopToggle}
                 isMuted={mutedChannels[trackId] || false}
                 isSoloed={soloedChannels[trackId] || false}
                 onMuteToggle={() => setChannelMuted?.(trackId, !mutedChannels[trackId])}
                 onSoloToggle={() => setChannelSoloed?.(trackId, !soloedChannels[trackId])}
               />
 
-              {/* Effect insert strips — only shown when enabled */}
-              {enabledEffects.map(fx => (
-                <VerticalChannelStrip
-                  key={`${trackId}_${fx.key}`}
-                  stripType="effect"
-                  label={fx.label}
-                  color={fx.color}
-                  trackId={trackId}
-                  volume={effects[`${fx.key}_mix`] ?? DEFAULT_EFFECTS[fx.key].mix}
-                  onVolumeChange={(vol) => handleEffectMixChange(trackId, fx.key, vol)}
-                  onVolumeChangeDebounced={(vol) => handleEffectMixChangeDebounced(trackId, fx.key, vol)}
-                />
-              ))}
+              {/* EQ strip — shown when EQ is toggled on */}
+              {effects.eq && (
+                <div className="flex flex-col items-center h-full w-[60px] flex-shrink-0 gap-1">
+                  <div className="w-full text-center text-xs font-bold py-1 rounded-t bg-gray-600 text-white">
+                    EQ
+                  </div>
+                  <div className="flex-1 flex flex-col items-center gap-0 w-full min-h-0">
+                    <FilterKnob
+                      label="HPF"
+                      filterType="hpf"
+                      enabled={!!effects.hpf}
+                      onToggle={() => handleToggleSend(trackId, 'hpf')}
+                      value={effects.hpf_mix ?? DEFAULT_EFFECTS.hpf.mix}
+                      color="#f97316"
+                      onChange={(val) => handleEffectMixChange(trackId, 'hpf', val)}
+                      onChangeEnd={(val) => handleEffectMixChangeDebounced(trackId, 'hpf', val)}
+                    />
+                    <FilterKnob
+                      label="LPF"
+                      filterType="lpf"
+                      enabled={!!effects.lpf}
+                      onToggle={() => handleToggleSend(trackId, 'lpf')}
+                      value={effects.lpf_mix ?? DEFAULT_EFFECTS.lpf.mix}
+                      color="#06b6d4"
+                      onChange={(val) => handleEffectMixChange(trackId, 'lpf', val)}
+                      onChangeEnd={(val) => handleEffectMixChangeDebounced(trackId, 'lpf', val)}
+                    />
+                  </div>
+                </div>
+              )}
+
+              {/* Reverb effect strip — only shown when reverb is enabled */}
+              {effects.reverb && (() => {
+                const reverbId = `${trackId}_reverb`;
+                return (
+                  <VerticalChannelStrip
+                    key={reverbId}
+                    stripType="effect"
+                    label="RVB"
+                    color="purple"
+                    trackId={trackId}
+                    footerLabel="Mix"
+                    analysers={remoteTrackAnalysers[reverbId]}
+                    volume={effects.reverb_mix ?? DEFAULT_EFFECTS.reverb.mix}
+                    onVolumeChange={(vol) => handleEffectMixChange(trackId, 'reverb', vol)}
+                    onVolumeChangeDebounced={(vol) => handleEffectMixChangeDebounced(trackId, 'reverb', vol)}
+                    isMuted={mutedChannels[reverbId] || false}
+                    isSoloed={soloedChannels[reverbId] || false}
+                    onMuteToggle={() => setChannelMuted?.(reverbId, !mutedChannels[reverbId])}
+                    onSoloToggle={() => setChannelSoloed?.(reverbId, !soloedChannels[reverbId])}
+                  />
+                );
+              })()}
             </React.Fragment>
           );
         })}
