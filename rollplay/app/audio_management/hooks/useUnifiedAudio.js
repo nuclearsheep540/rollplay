@@ -199,7 +199,6 @@ export const useUnifiedAudio = () => {
     // Reverb send paths — only reverb has a sendMuteGain (HPF/LPF are inline inserts, no mute gate)
     for (const [trackId, inserts] of Object.entries(channelInsertEffectsRef.current)) {
       const channelMuted = mutedChannels[trackId] || false;
-      const channelSoloed = soloedChannels[trackId] || false;
 
       const sendMuteGain = inserts.reverb?.sendMuteGain;
       if (!sendMuteGain) continue;
@@ -210,7 +209,7 @@ export const useUnifiedAudio = () => {
 
       let gain;
       if (anySoloed) {
-        gain = ((channelSoloed || effectSoloed) && !effectMuted) ? 1.0 : 0.0;
+        gain = (effectSoloed && !effectMuted) ? 1.0 : 0.0;
       } else {
         gain = (channelMuted || effectMuted) ? 0.0 : 1.0;
       }
