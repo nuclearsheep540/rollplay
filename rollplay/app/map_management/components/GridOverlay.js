@@ -57,8 +57,9 @@ const GridOverlay = ({
 
   // ── Dimension tracking ──────────────────────────────────────────────────────
 
-  const [windowSize, setWindowSize]   = useState({ width: 0, height: 0 });
+  const [windowSize, setWindowSize]     = useState({ width: 0, height: 0 });
   const [mapDimensions, setMapDimensions] = useState({ width: 0, height: 0 });
+  const [hoveredCell, setHoveredCell]   = useState(null); // { col, row } | null
 
   // Rerender when the browser window resizes
   useEffect(() => {
@@ -219,6 +220,22 @@ const GridOverlay = ({
 
   const labelStyle = { userSelect: 'none', pointerEvents: 'none' };
 
+  // ── Hover handler ────────────────────────────────────────────────────────────
+  // Converts mouse position to SVG space, then to a (col, row) cell address.
+  // The outer div keeps pointerEvents:'none' so the map drag is unaffected;
+  // the SVG itself is 'all' so it can receive mousemove without stopPropagation,
+  // letting pointerDown still bubble to the map container for dragging.
+
+  const handleSvgMouseMove = (e) => {
+    const svgEl = svgRef.current;
+    if (!svgEl || !layout) return;
+    const pt = svgEl.createSVGPoint();
+    pt.x = e.clientX;
+    pt.y = e.clientY;
+    const { x, y } = pt.matrixTransform(svgEl.getScreenCTM().inverse());
+    setHoveredCell(cellAtPoint(x, y, layout));
+  };
+
   // ── Render ──────────────────────────────────────────────────────────────────
 
   return (
@@ -241,10 +258,14 @@ const GridOverlay = ({
           transform: 'translate(-50%, -50%)',
           width:  `${svgWidth}px`,
           height: `${svgHeight}px`,
-          pointerEvents: 'none',
+          pointerEvents: 'all',
           overflow: 'visible',
           backgroundColor: 'transparent',
+          cursor: hoveredCell ? 'crosshair' : 'default',
         }}
+        onMouseMove={handleSvgMouseMove}
+        onMouseLeave={() => setHoveredCell(null)}
+        onPointerDown={() => setHoveredCell(null)}
       >
         {/* Grid cells — each cell is a rect, visibility determined by layout */}
         {cells.map(cell => (
@@ -261,6 +282,45 @@ const GridOverlay = ({
             vectorEffect="non-scaling-stroke"
           />
         ))}
+
+        {/* Hover highlight — rendered above grid lines, below labels */}
+        {hoveredCell && layout && (() => {
+          const { col, row } = hoveredCell;
+          const x1  = layout.originX + col * layout.cellSize;
+          const y1  = layout.originY + row * layout.cellSize;
+          const cx  = x1 + layout.cellSize / 2;
+          const label = `${String.fromCharCode(65 + (col % 26))}${row + 1}`;
+          const badgeWidth = label.length * 8 + 10;
+          return (
+            <g pointerEvents="none">
+              <rect
+                x={x1} y={y1}
+                width={layout.cellSize} height={layout.cellSize}
+                fill={currentColors.line_color}
+                fillOpacity={0.4}
+                stroke="none"
+              />
+              <rect
+                x={cx - badgeWidth / 2} y={y1 - 18}
+                width={badgeWidth} height={16}
+                rx={3}
+                fill="rgba(0,0,0,0.72)"
+              />
+              <text
+                x={cx} y={y1 - 10}
+                fill="#fff"
+                fontSize="11"
+                fontFamily="monospace"
+                fontWeight="700"
+                textAnchor="middle"
+                dominantBaseline="middle"
+                style={labelStyle}
+              >
+                {label}
+              </text>
+            </g>
+          );
+        })()}
 
         {/* Column labels — one per visible column, x = actual cell center */}
         {colLabels.map(label => (
