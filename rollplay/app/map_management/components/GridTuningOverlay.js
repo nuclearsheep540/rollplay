@@ -5,7 +5,8 @@
 
 'use client'
 
-import React, { useRef } from 'react';
+import React from 'react';
+import HoldButton from '@/app/shared/components/HoldButton';
 
 const BTN_SIZE = 96;
 
@@ -27,42 +28,13 @@ const BUTTON_STYLE = {
   userSelect: 'none',
 };
 
-const HOLD_DELAY_MS = 100;
-const HOLD_INTERVAL_MS = 50;
-
-/**
- * Button that fires once on press, then repeatedly after a 100ms hold delay.
- * Uses onPointerDown/Up/Leave so it also works on touch devices.
- */
-const HoldButton = ({ action, title, children }) => {
-  const timeoutRef = useRef(null);
-  const intervalRef = useRef(null);
-
-  const start = (e) => {
-    e.stopPropagation();
-    action();
-    timeoutRef.current = setTimeout(() => {
-      intervalRef.current = setInterval(action, HOLD_INTERVAL_MS);
-    }, HOLD_DELAY_MS);
-  };
-
-  const stop = () => {
-    clearTimeout(timeoutRef.current);
-    clearInterval(intervalRef.current);
-  };
-
-  return (
-    <button
-      style={BUTTON_STYLE}
-      title={title}
-      onPointerDown={start}
-      onPointerUp={stop}
-      onPointerLeave={stop}
-      onPointerCancel={stop}
-    >
-      {children}
-    </button>
-  );
+// Compact style for trim buttons — narrower label, smaller font
+const TRIM_BUTTON_STYLE = {
+  ...BUTTON_STYLE,
+  width: '120px',
+  height: '52px',
+  fontSize: '22px',
+  borderRadius: '8px',
 };
 
 // Empty cell spacer for 3×3 d-pad corners and centre
@@ -82,6 +54,8 @@ const GridTuningOverlay = ({
   onOffsetXChange,
   onOffsetYChange,
   onGridSizeChange,
+  onColTrimChange,
+  onRowTrimChange,
 }) => {
   const gridStyle = {
     display: 'grid',
@@ -102,17 +76,29 @@ const GridTuningOverlay = ({
         alignItems: 'center',
         gap: '8px',
       }}>
-        {/* Grid size +/- */}
+        {/* Column trim */}
         <div style={{ display: 'flex', gap: '4px' }}>
-          <HoldButton action={() => onGridSizeChange(1)}  title="Increase cell size">−</HoldButton>
-          <HoldButton action={() => onGridSizeChange(-1)} title="Decrease cell size">+</HoldButton>
+          <HoldButton action={() => onColTrimChange(-1)} title="Remove last column" style={TRIM_BUTTON_STYLE}>−col</HoldButton>
+          <HoldButton action={() => onColTrimChange(1)}  title="Restore column"     style={TRIM_BUTTON_STYLE}>+col</HoldButton>
         </div>
 
-        {/* 3×3 d-pad */}
+        {/* Row trim */}
+        <div style={{ display: 'flex', gap: '4px' }}>
+          <HoldButton action={() => onRowTrimChange(-1)} title="Remove last row" style={TRIM_BUTTON_STYLE}>−row</HoldButton>
+          <HoldButton action={() => onRowTrimChange(1)}  title="Restore row"     style={TRIM_BUTTON_STYLE}>+row</HoldButton>
+        </div>
+
+        {/* Grid size +/- */}
+        <div style={{ display: 'flex', gap: '4px' }}>
+          <HoldButton action={() => onGridSizeChange(1)}  title="Increase cell size" style={BUTTON_STYLE}>−</HoldButton>
+          <HoldButton action={() => onGridSizeChange(-1)} title="Decrease cell size" style={BUTTON_STYLE}>+</HoldButton>
+        </div>
+
+        {/* 3×3 offset d-pad */}
         <div style={gridStyle}>
-          <Empty /><HoldButton action={() => onOffsetYChange(-1)} title="Shift grid up">↑</HoldButton><Empty />
-          <HoldButton action={() => onOffsetXChange(-1)} title="Shift grid left">←</HoldButton><Empty /><HoldButton action={() => onOffsetXChange(1)} title="Shift grid right">→</HoldButton>
-          <Empty /><HoldButton action={() => onOffsetYChange(1)} title="Shift grid down">↓</HoldButton><Empty />
+          <Empty /><HoldButton action={() => onOffsetYChange(-1)} title="Shift grid up"    style={BUTTON_STYLE}>↑</HoldButton><Empty />
+          <HoldButton action={() => onOffsetXChange(-1)} title="Shift grid left"  style={BUTTON_STYLE}>←</HoldButton><Empty /><HoldButton action={() => onOffsetXChange(1)} title="Shift grid right" style={BUTTON_STYLE}>→</HoldButton>
+          <Empty /><HoldButton action={() => onOffsetYChange(1)}  title="Shift grid down"  style={BUTTON_STYLE}>↓</HoldButton><Empty />
         </div>
       </div>
     </div>

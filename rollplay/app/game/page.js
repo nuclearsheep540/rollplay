@@ -132,6 +132,7 @@ function GameContent() {
   const [isMapLocked, setIsMapLocked] = useState(false);
   const [tuningMode, setTuningMode] = useState(null); // null | 'offset'
   const [liveTuning, setLiveTuning] = useState({ offsetX: 0, offsetY: 0 });
+  const [liveTrim, setLiveTrim] = useState({ cols: 0, rows: 0 }); // Independent col/row trim delta
   const [gridSize, setGridSize] = useState(10); // Cells on shorter image edge (shared with overlay)
   const [mapNaturalDimensions, setMapNaturalDimensions] = useState(null); // { naturalWidth, naturalHeight }
 
@@ -487,25 +488,32 @@ function GameContent() {
     }
   }, [activeRightDrawer, gridEditMode, tuningMode]);
 
-  // Sync liveTuning from activeMap grid config
+  // Sync liveTuning from activeMap grid config (depends on grid_config specifically, not the whole map)
   useEffect(() => {
     if (!activeMap?.grid_config) return;
     const gc = activeMap.grid_config;
-    setLiveTuning({
-      offsetX: gc.offset_x ?? 0,
-      offsetY: gc.offset_y ?? 0,
-    });
-  }, [activeMap]);
+    setLiveTuning({ offsetX: gc.offset_x ?? 0, offsetY: gc.offset_y ?? 0 });
+    setLiveTrim({ cols: 0, rows: 0 }); // Reset trim when map/config changes
+  }, [activeMap?.grid_config]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Reset trim when proportional gridSize changes (fresh proportional base = fresh trim)
+  useEffect(() => { setLiveTrim({ cols: 0, rows: 0 }); }, [gridSize]);
 
   // Computed effective grid config:
   // - Edit mode (grid size/colour preview): use live gridConfig if available, else fall back to saved map config
   // - Always overlay live offset when tuning is active (Edit Grid keeps both modes open simultaneously)
-  const effectiveGridConfig = (() => {
+  const effectiveGridConfig = useMemo(() => {
     const base = (gridEditMode && gridConfig) ? gridConfig : activeMap?.grid_config;
     if (!base) return null;
-    if (tuningMode) return { ...base, offset_x: liveTuning.offsetX, offset_y: liveTuning.offsetY };
-    return base;
-  })();
+    const result = { ...base };
+    if (tuningMode) {
+      result.offset_x = liveTuning.offsetX;
+      result.offset_y = liveTuning.offsetY;
+    }
+    return result;
+    // Note: liveTrim (col/row trim) is passed separately to GridOverlay so it doesn't
+    // affect cellSize or origin calculation — only the number of cells drawn.
+  }, [gridEditMode, gridConfig, activeMap?.grid_config, tuningMode, liveTuning]);
 
   // UPDATED: Seat count management with displaced player handling
   const setSeatCount = async (newSeatCount) => {
@@ -1773,6 +1781,8 @@ function GameContent() {
               isMapLocked={isMapLocked}
               offsetX={liveTuning.offsetX}
               offsetY={liveTuning.offsetY}
+              colTrim={gridEditMode ? liveTrim.cols : 0}
+              rowTrim={gridEditMode ? liveTrim.rows : 0}
               onImageLoad={setMapNaturalDimensions}
             />
           )}
@@ -1793,6 +1803,8 @@ function GameContent() {
                 onOffsetXChange={(delta) => setLiveTuning(prev => ({ ...prev, offsetX: prev.offsetX + delta }))}
                 onOffsetYChange={(delta) => setLiveTuning(prev => ({ ...prev, offsetY: prev.offsetY + delta }))}
                 onGridSizeChange={(delta) => setGridSize(prev => Math.min(80, Math.max(4, prev + delta)))}
+                onColTrimChange={(delta) => setLiveTrim(prev => ({ ...prev, cols: prev.cols + delta }))}
+                onRowTrimChange={(delta) => setLiveTrim(prev => ({ ...prev, rows: prev.rows + delta }))}
               />
             )}
           </MapSafeArea>

@@ -175,3 +175,78 @@ These are real issues but out of scope here to avoid over-engineering:
 6. Window resize / drawer open-close → grid recalculates via ResizeObserver
 7. (Future) Token at col=2, row=4 → `cellBounds(2, 4, layout)` returns correct pixel rect
 8. Check page.js: changing map lock state no longer triggers liveTuning sync
+
+---
+
+---
+
+## Phase 3 — Independent Column/Row Trim
+
+### Context
+
+When `gridSize` is set proportionally, the resulting `grid_width`/`grid_height` may produce edge columns or rows that overhang the useful area of a map (e.g. decorative borders). The user wants to trim these independently — remove the last N columns or rows — to tidy up. **Remove, not hide.** No new schema fields needed; trim is absorbed into the existing `grid_width`/`grid_height` on Apply.
+
+### New state — `page.js`
+
+```javascript
+const [liveTrim, setLiveTrim] = useState({ cols: 0, rows: 0 });
+```
+
+Reset on proportional gridSize change and map change:
+```javascript
+useEffect(() => { setLiveTrim({ cols: 0, rows: 0 }); }, [gridSize]);
+useEffect(() => { setLiveTrim({ cols: 0, rows: 0 }); }, [activeMap?.grid_config]);
+```
+
+Update `effectiveGridConfig` to apply trim (only when `gridEditMode` is active):
+```javascript
+if (gridEditMode) {
+  result.grid_width  = Math.max(2, (result.grid_width  || 8)  + liveTrim.cols);
+  result.grid_height = Math.max(2, (result.grid_height || 12) + liveTrim.rows);
+}
+```
+
+Callbacks passed to `GridTuningOverlay`:
+```javascript
+onColTrimChange={(delta) => setLiveTrim(prev => ({ ...prev, cols: prev.cols + delta }))}
+onRowTrimChange={(delta) => setLiveTrim(prev => ({ ...prev, rows: prev.rows + delta }))}
+```
+
+### GridTuningOverlay — compact trim row
+
+Add `onColTrimChange` and `onRowTrimChange` props. Add a compact trim row **above** the existing size +/- buttons (smaller buttons to visually distinguish from main controls):
+
+```
+[ −col ][ +col ]    ← column trim (compact)
+[ −row ][ +row ]    ← row trim (compact)
+[  −  ][  +  ]      ← grid size (existing)
+_   ↑   _
+←   _   →           ← offset d-pad (existing)
+_   ↓   _
+```
+
+Compact button style: `width: 128px, height: 48px, fontSize: 22px` — wide enough to label clearly (`−col`, `+col`, `−row`, `+row`).
+
+### Apply
+
+`applyGrid()` in `MapControlsPanel` reads from `effectiveGridConfig` which already has trim baked in — no special handling needed. After apply, page.js resets `liveTrim` to `{ cols: 0, rows: 0 }`.
+
+### Files changed (Phase 3)
+
+| File | Change |
+|------|--------|
+| `rollplay/app/game/page.js` | Add `liveTrim` state; update `effectiveGridConfig`; pass trim callbacks to GridTuningOverlay; reset on gridSize/map change |
+| `rollplay/app/map_management/components/GridTuningOverlay.js` | Add `onColTrimChange`/`onRowTrimChange` props; add compact trim button row above existing controls |
+
+No backend changes. No schema changes.
+
+### Verification (Phase 3)
+
+1. Open Edit Grid → compact trim buttons appear above the size +/- row on the overlay
+2. Press `−col` → rightmost column disappears from live preview immediately
+3. Press `−row` → bottom row disappears
+4. Press `+col`/`+row` → cells reappear (delta goes back toward 0)
+5. Trim below 2 is clamped — can't reduce to fewer than 2 columns or rows
+6. Press Apply → trimmed dimensions saved; grid stays at trimmed size
+7. Change gridSize → trim resets to 0 (proportional resize starts fresh)
+8. Load different map → trim resets to 0

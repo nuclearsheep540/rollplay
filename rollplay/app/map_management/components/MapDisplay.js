@@ -23,6 +23,8 @@ const MapDisplay = ({
   isMapLocked = false,
   offsetX = 0,
   offsetY = 0,
+  colTrim = 0,
+  rowTrim = 0,
   onImageLoad = null, // fires with { naturalWidth, naturalHeight } when map image loads
 }) => {
   const [mapLoaded, setMapLoaded] = useState(false);
@@ -188,6 +190,8 @@ const MapDisplay = ({
             liveGridOpacity={liveGridOpacity}
             offsetX={offsetX}
             offsetY={offsetY}
+            colTrim={colTrim}
+            rowTrim={rowTrim}
           />
         )}
       </div>
