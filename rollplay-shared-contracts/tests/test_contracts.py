@@ -73,6 +73,8 @@ class TestMapRoundTrip:
                 "edit_mode": GridColorMode(line_color="#ff0000"),
                 "display_mode": GridColorMode(opacity=0.3),
             },
+            offset_x=-5,
+            offset_y=15,
         )
         assert GridConfig.model_validate(config.model_dump()) == config
 
@@ -181,7 +183,7 @@ class TestMapShapeConformance:
         assert required_keys.issubset(set(MapConfig.model_fields.keys()))
 
     def test_grid_config_has_required_fields(self):
-        required_keys = {"grid_width", "grid_height", "enabled", "colors"}
+        required_keys = {"grid_width", "grid_height", "enabled", "colors", "offset_x", "offset_y"}
         assert required_keys.issubset(set(GridConfig.model_fields.keys()))
 
 
@@ -247,3 +249,8 @@ class TestMapConstraints:
     def test_map_config_rejects_empty_asset_id(self):
         with pytest.raises(ValidationError):
             MapConfig(asset_id="", filename="test.png", file_path="/test")
+
+    def test_grid_offset_accepts_negative(self):
+        config = GridConfig(offset_x=-50, offset_y=-50)
+        assert config.offset_x == -50
+        assert config.offset_y == -50

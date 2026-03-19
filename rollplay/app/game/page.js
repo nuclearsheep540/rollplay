@@ -26,6 +26,9 @@ import Modal from '@/app/shared/components/Modal';
 import { useWebSocket } from './hooks/useWebSocket';
 import { useUnifiedAudio } from '../audio_management';
 import { MapDisplay, GridOverlay, useMapWebSocket, ImageDisplay, useImageWebSocket } from '../map_management';
+import MapOverlayPanel from './components/MapOverlayPanel';
+import MapSafeArea from './components/MapSafeArea';
+import GridTuningOverlay from '../map_management/components/GridTuningOverlay';
 
 // Tab configuration for right drawer - static, role filtering applied at render time
 const RIGHT_DRAWER_TABS = [
@@ -126,6 +129,11 @@ function GameContent() {
   const [gridEditMode, setGridEditMode] = useState(false); // Is DM editing grid dimensions?
   const [gridConfig, setGridConfig] = useState(null); // Current grid configuration
   const [liveGridOpacity, setLiveGridOpacity] = useState(0.2); // Live grid opacity for real-time updates
+  const [isMapLocked, setIsMapLocked] = useState(false);
+  const [tuningMode, setTuningMode] = useState(null); // null | 'offset'
+  const [liveTuning, setLiveTuning] = useState({ offsetX: 0, offsetY: 0 });
+  const [gridSize, setGridSize] = useState(10); // Cells on shorter image edge (shared with overlay)
+  const [mapNaturalDimensions, setMapNaturalDimensions] = useState(null); // { naturalWidth, naturalHeight }
 
   // Image system state
   const [activeImage, setActiveImage] = useState(null); // Current active image data
@@ -472,10 +480,32 @@ function GameContent() {
   // Auto-exit grid edit mode when navigating away from Map tab
   useEffect(() => {
     if (activeRightDrawer !== 'map' && gridEditMode) {
-      console.log('📐 Auto-exiting grid edit mode (navigated away from Map tab)');
       setGridEditMode(false);
     }
-  }, [activeRightDrawer, gridEditMode]);
+    if (activeRightDrawer !== 'map' && tuningMode) {
+      setTuningMode(null);
+    }
+  }, [activeRightDrawer, gridEditMode, tuningMode]);
+
+  // Sync liveTuning from activeMap grid config
+  useEffect(() => {
+    if (!activeMap?.grid_config) return;
+    const gc = activeMap.grid_config;
+    setLiveTuning({
+      offsetX: gc.offset_x ?? 0,
+      offsetY: gc.offset_y ?? 0,
+    });
+  }, [activeMap]);
+
+  // Computed effective grid config:
+  // - Edit mode (grid size/colour preview): use live gridConfig if available, else fall back to saved map config
+  // - Always overlay live offset when tuning is active (Edit Grid keeps both modes open simultaneously)
+  const effectiveGridConfig = (() => {
+    const base = (gridEditMode && gridConfig) ? gridConfig : activeMap?.grid_config;
+    if (!base) return null;
+    if (tuningMode) return { ...base, offset_x: liveTuning.offsetX, offset_y: liveTuning.offsetY };
+    return base;
+  })();
 
   // UPDATED: Seat count management with displaced player handling
   const setSeatCount = async (newSeatCount) => {
@@ -1676,6 +1706,11 @@ function GameContent() {
                   setLiveGridOpacity={setLiveGridOpacity}
                   sendMapLoad={sendMapLoad}
                   sendMapClear={sendMapClear}
+                  liveTuning={liveTuning}
+                  onTuningModeChange={setTuningMode}
+                  onOffsetChange={(ox, oy) => setLiveTuning({ offsetX: ox, offsetY: oy })}
+                  gridSize={gridSize}
+                  onGridSizeChange={setGridSize}
                 />
               )}
               {activeRightDrawer === 'image' && isDM && (
@@ -1734,9 +1769,33 @@ function GameContent() {
               mapImageEditMode={gridEditMode && isDM}
               onMapImageChange={handleMapImageChange}
               liveGridOpacity={liveGridOpacity}
-              gridConfig={gridConfig}
+              gridConfig={effectiveGridConfig}
+              isMapLocked={isMapLocked}
+              offsetX={liveTuning.offsetX}
+              offsetY={liveTuning.offsetY}
+              onImageLoad={setMapNaturalDimensions}
             />
           )}
+
+          {/* Safe area: shrinks insets to match open drawers — all overlays live here */}
+          <MapSafeArea
+            isDrawerOpen={isDrawerOpen}
+            activeRightDrawer={activeRightDrawer}
+            isMixerOpen={isMixerOpen}
+          >
+            <MapOverlayPanel
+              isMapLocked={isMapLocked}
+              onToggleLock={() => setIsMapLocked(prev => !prev)}
+              activeMap={activeMap}
+            />
+            {tuningMode && (
+              <GridTuningOverlay
+                onOffsetXChange={(delta) => setLiveTuning(prev => ({ ...prev, offsetX: prev.offsetX + delta }))}
+                onOffsetYChange={(delta) => setLiveTuning(prev => ({ ...prev, offsetY: prev.offsetY + delta }))}
+                onGridSizeChange={(delta) => setGridSize(prev => Math.min(80, Math.max(4, prev + delta)))}
+              />
+            )}
+          </MapSafeArea>
 
           {/* Image display — visible when activeDisplay is "image" */}
           {activeDisplay === 'image' && (

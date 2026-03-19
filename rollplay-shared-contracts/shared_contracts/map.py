@@ -23,6 +23,8 @@ class GridConfig(BaseModel):
     grid_height: int = Field(default=20, ge=1, le=100)
     enabled: bool = True
     colors: Optional[Dict[str, GridColorMode]] = None  # "edit_mode", "display_mode"
+    offset_x: int = 0  # Whole-grid X shift (image px, can be negative)
+    offset_y: int = 0  # Whole-grid Y shift (image px, can be negative)
 
 
 class MapConfig(BaseModel):

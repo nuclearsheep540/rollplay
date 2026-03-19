@@ -342,7 +342,10 @@ class UpdateGridConfig:
         user_id: UUID,
         grid_width: Optional[int] = None,
         grid_height: Optional[int] = None,
-        grid_opacity: Optional[float] = None
+        grid_opacity: Optional[float] = None,
+        grid_offset_x: Optional[int] = None,
+        grid_offset_y: Optional[int] = None,
+        grid_line_color: Optional[str] = None
     ) -> MapAsset:
         """
         Update grid configuration for a map asset.
@@ -353,6 +356,9 @@ class UpdateGridConfig:
             grid_width: Grid width in cells (1-100)
             grid_height: Grid height in cells (1-100)
             grid_opacity: Grid overlay opacity (0.0-1.0)
+            grid_offset_x: Whole-grid X shift (image px)
+            grid_offset_y: Whole-grid Y shift (image px)
+            grid_line_color: Grid line colour hex string
 
         Returns:
             Updated MapAsset
@@ -377,7 +383,10 @@ class UpdateGridConfig:
         asset.update_grid_config(
             grid_width=grid_width,
             grid_height=grid_height,
-            grid_opacity=grid_opacity
+            grid_opacity=grid_opacity,
+            grid_offset_x=grid_offset_x,
+            grid_offset_y=grid_offset_y,
+            grid_line_color=grid_line_color
         )
 
         self.repository.save(asset)

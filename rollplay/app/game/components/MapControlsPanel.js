@@ -1,7 +1,7 @@
 /* Copyright (C) 2025 Matthew Davey */
 /* SPDX-License-Identifier: GPL-3.0-or-later */
 
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { authFetch } from '@/app/shared/utils/authFetch';
 import {
   DM_CHILD,
@@ -67,9 +67,14 @@ export default function MapControlsPanel({
   setLiveGridOpacity = null,
   sendMapLoad = null,
   sendMapClear = null,
+  liveTuning = { offsetX: 0, offsetY: 0 },
+  onTuningModeChange = null,
+  onOffsetChange = null,
+  gridSize = 10,
+  onGridSizeChange = null,
+  imageDimensions: externalImageDimensions = null,
 }) {
-  // Grid size slider (cells on shorter image edge - always produces square cells)
-  const [gridSize, setGridSize] = useState(10);
+  const setGridSize = onGridSizeChange;
   const [isDimensionsExpanded, setIsDimensionsExpanded] = useState(false);
 
   // Image dimensions for auto-calculating square grid
@@ -80,6 +85,13 @@ export default function MapControlsPanel({
 
   // State for map selection inline section
   const [isMapExpanded, setIsMapExpanded] = useState(true);
+
+  // Grid colour state
+  const [liveGridColor, setLiveGridColor] = useState('#d1d5db');
+  const gridColorInputRef = useRef(null);
+
+  // Original offset before tuning (for cancel/restore)
+  const [originalTuning, setOriginalTuning] = useState(null);
 
   // Load image dimensions when map changes
   useEffect(() => {
@@ -144,11 +156,9 @@ export default function MapControlsPanel({
         setLiveGridOpacity(configOpacity);
       }
 
-      console.log('🎯 Synced slider with atomic map grid config:', {
-        gridSize: newSize,
-        opacity: configOpacity,
-        filename: activeMap.filename
-      });
+      // Sync grid line colour
+      const configColor = gridConfig.colors?.display_mode?.line_color || '#d1d5db';
+      setLiveGridColor(configColor);
     } else if (!activeMap || activeMap.grid_config === null) {
       // Reset to defaults when no map or no grid config
       setGridSize(10);
@@ -169,12 +179,12 @@ export default function MapControlsPanel({
       enabled: true,
       colors: {
         edit_mode: {
-          line_color: "#d1d5db",
+          line_color: liveGridColor,
           opacity: liveGridOpacity,
           line_width: 1
         },
         display_mode: {
-          line_color: "#d1d5db",
+          line_color: liveGridColor,
           opacity: liveGridOpacity,
           line_width: 1
         }
@@ -182,8 +192,45 @@ export default function MapControlsPanel({
     };
 
     handleGridChange(previewConfig);
-    console.log('🎯 Live preview updated:', previewConfig);
-  }, [calculatedGrid, liveGridOpacity, isDimensionsExpanded, handleGridChange]);
+  }, [calculatedGrid, liveGridOpacity, liveGridColor, isDimensionsExpanded, handleGridChange]);
+
+  // Initialize Coloris for grid colour picker when Edit Grid section is expanded
+  useEffect(() => {
+    if (!isDimensionsExpanded) return;
+
+    let cleanup = null;
+
+    const initColoris = async () => {
+      try {
+        const { default: Coloris } = await import('@melloware/coloris');
+        Coloris.init();
+        Coloris({
+          el: '.grid-color-input',
+          wrap: false,
+          theme: 'polaroid',
+          themeMode: 'dark',
+          alpha: false,
+          format: 'hex',
+          clearButton: false,
+          closeButton: true,
+          closeLabel: 'Close',
+        });
+
+        const handleGridColorPick = (event) => {
+          if (event.target !== gridColorInputRef.current) return;
+          setLiveGridColor(event.detail.color);
+        };
+
+        document.addEventListener('coloris:pick', handleGridColorPick);
+        cleanup = () => document.removeEventListener('coloris:pick', handleGridColorPick);
+      } catch (error) {
+        console.error('Failed to initialize Coloris for grid colour:', error);
+      }
+    };
+
+    initColoris();
+    return () => { if (cleanup) cleanup(); };
+  }, [isDimensionsExpanded]);
 
   // Sync local state when parent's gridEditMode changes externally (e.g., tab navigation)
   useEffect(() => {
@@ -206,12 +253,12 @@ export default function MapControlsPanel({
       enabled: true,
       colors: {
         edit_mode: {
-          line_color: "#d1d5db",
+          line_color: liveGridColor,
           opacity: liveGridOpacity,
           line_width: 1
         },
         display_mode: {
-          line_color: "#d1d5db",
+          line_color: liveGridColor,
           opacity: liveGridOpacity,
           line_width: 1
         }
@@ -235,83 +282,67 @@ export default function MapControlsPanel({
     }
   };
 
-  // Apply grid dimensions to current map via HTTP API (server authoritative)
-  const applyGridDimensions = async () => {
-    if (!activeMap) {
-      console.error('🎯 Cannot apply grid - no active map');
-      return;
-    }
+  // Apply all grid settings (cell size, offset, colour, opacity) via dual-write
+  const applyGrid = async () => {
+    if (!activeMap) return;
 
-    console.log('🎯 Applying grid dimensions via HTTP API - activeMap:', activeMap);
-    console.log('🎯 activeMap.filename:', activeMap.filename);
+    const colors = {
+      edit_mode:    { line_color: liveGridColor, opacity: liveGridOpacity, line_width: 1 },
+      display_mode: { line_color: liveGridColor, opacity: liveGridOpacity, line_width: 1 },
+    };
 
-    const newGridConfig = createGridFromDimensions(
-      calculatedGrid.width,
-      calculatedGrid.height
-    );
+    const newGridConfig = {
+      grid_width: calculatedGrid.width,
+      grid_height: calculatedGrid.height,
+      enabled: true,
+      offset_x: liveTuning.offsetX,
+      offset_y: liveTuning.offsetY,
+      colors,
+    };
 
-    console.log('🎯 Created new grid config (square cells):', newGridConfig);
+    const { _id, ...mapWithoutId } = activeMap;
+    const updatedMap = { ...mapWithoutId, grid_config: newGridConfig };
 
     try {
-      // Send COMPLETE updated map via HTTP API (atomic)
-      // Remove MongoDB _id field to avoid immutable field error
-      const { _id, ...mapWithoutId } = activeMap;
-      const updatedMap = {
-        ...mapWithoutId,
-        grid_config: newGridConfig
-      };
-
+      // 1. PUT to MongoDB (hot) + WebSocket broadcast
       const response = await fetch(`/api/game/${roomId}/map`, {
         method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          map: updatedMap,
-          updated_by: 'dm'
-        })
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ map: updatedMap, updated_by: 'dm' })
       });
 
       if (response.ok) {
-        const result = await response.json();
-        console.log('🎯 ✅ Grid config updated successfully via HTTP API:', result);
-
-        // Also persist grid config to MapAsset in PostgreSQL for cross-session reuse
+        // 2. PATCH to PostgreSQL (cold) for cross-session persistence
         if (activeMap.asset_id) {
           try {
-            const assetResponse = await authFetch(`/api/library/${activeMap.asset_id}/grid`, {
+            await authFetch(`/api/library/${activeMap.asset_id}/grid`, {
               method: 'PATCH',
-              headers: {
-                'Content-Type': 'application/json',
-              },
+              headers: { 'Content-Type': 'application/json' },
               credentials: 'include',
               body: JSON.stringify({
                 grid_width: calculatedGrid.width,
                 grid_height: calculatedGrid.height,
-                grid_opacity: liveGridOpacity
+                grid_opacity: liveGridOpacity,
+                grid_line_color: liveGridColor,
+                grid_offset_x: liveTuning.offsetX,
+                grid_offset_y: liveTuning.offsetY,
               })
             });
-
-            if (assetResponse.ok) {
-              console.log('🎯 ✅ Grid config persisted to MapAsset in PostgreSQL');
-            } else {
-              console.warn('🎯 ⚠️ Failed to persist grid config to MapAsset:', await assetResponse.text());
-            }
           } catch (assetError) {
-            console.warn('🎯 ⚠️ Error persisting grid config to MapAsset:', assetError);
+            console.warn('⚠️ Error persisting grid to MapAsset:', assetError);
           }
         }
+        // Update the restore point so closing won't revert the saved values
+        setOriginalTuning({ ...liveTuning });
       } else {
         const error = await response.text();
-        console.error('🎯 ❌ Failed to update grid config via HTTP API:', error);
-        alert('Failed to update grid configuration. Please try again.');
+        console.error('❌ Failed to apply grid:', error);
+        alert('Failed to apply grid configuration. Please try again.');
       }
     } catch (error) {
-      console.error('🎯 ❌ Error updating grid config via HTTP API:', error);
-      alert('Failed to update grid configuration. Please try again.');
+      console.error('❌ Error applying grid:', error);
+      alert('Failed to apply grid configuration. Please try again.');
     }
-
-    console.log('🎯 Applied grid dimensions:', calculatedGrid, 'resulting config:', newGridConfig);
   };
 
   return (
@@ -356,16 +387,21 @@ export default function MapControlsPanel({
           onClick={() => {
             const newExpanded = !isDimensionsExpanded;
             setIsDimensionsExpanded(newExpanded);
-            if (setGridEditMode) {
-              setGridEditMode(newExpanded);
-            }
-            if (newExpanded && originalServerOpacity === null) {
-              setOriginalServerOpacity(liveGridOpacity);
-            } else if (!newExpanded && originalServerOpacity !== null) {
-              if (setLiveGridOpacity) {
+            if (setGridEditMode) setGridEditMode(newExpanded);
+            if (newExpanded) {
+              if (originalServerOpacity === null) setOriginalServerOpacity(liveGridOpacity);
+              setOriginalTuning({ ...liveTuning });
+              if (onTuningModeChange) onTuningModeChange('offset');
+            } else {
+              if (originalServerOpacity !== null && setLiveGridOpacity) {
                 setLiveGridOpacity(originalServerOpacity);
               }
               setOriginalServerOpacity(null);
+              if (originalTuning && onOffsetChange) {
+                onOffsetChange(originalTuning.offsetX, originalTuning.offsetY);
+              }
+              if (onTuningModeChange) onTuningModeChange(null);
+              setOriginalTuning(null);
             }
           }}
           disabled={!activeMap}
@@ -386,7 +422,7 @@ export default function MapControlsPanel({
               <input
                 type="range"
                 min="4"
-                max="40"
+                max="80"
                 step="1"
                 value={gridSize}
                 onChange={(e) => setGridSize(parseInt(e.target.value))}
@@ -395,7 +431,7 @@ export default function MapControlsPanel({
               <div className="flex justify-between text-xs text-gray-500 mt-1">
                 <span>Large (4)</span>
                 <span>Medium</span>
-                <span>Small (40)</span>
+                <span>Small (80)</span>
               </div>
             </div>
 
@@ -427,9 +463,40 @@ export default function MapControlsPanel({
               </div>
             </div>
 
+            <div className="mb-3">
+              <label className="block text-xs text-gray-400 mb-1">
+                Grid Colour
+              </label>
+              <div className="flex items-center gap-2">
+                <input
+                  ref={gridColorInputRef}
+                  type="text"
+                  className="grid-color-input w-8 h-8 rounded border-2 cursor-pointer"
+                  value={liveGridColor}
+                  readOnly
+                  style={{
+                    color: 'transparent',
+                    textIndent: '-9999px',
+                    backgroundColor: 'transparent',
+                    borderColor: liveGridColor,
+                  }}
+                />
+                <span className="text-xs text-gray-500">{liveGridColor}</span>
+              </div>
+            </div>
+
+            <div className="mb-3">
+              <div className="text-xs text-gray-400 mb-1">
+                Grid Offset: X {liveTuning.offsetX}px / Y {liveTuning.offsetY}px
+              </div>
+              <div className="text-xs text-gray-500">
+                Use the on-map D-pad to nudge the grid position.
+              </div>
+            </div>
+
             <button
               className={DM_CHILD_LAST}
-              onClick={applyGridDimensions}
+              onClick={applyGrid}
             >
               ✨ Apply {calculatedGrid.width}×{calculatedGrid.height} Grid
             </button>

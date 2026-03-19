@@ -6,6 +6,7 @@
 // Export all map management components
 export { default as MapDisplay } from './components/MapDisplay';
 export { default as GridOverlay } from './components/GridOverlay';
+export { default as GridTuningOverlay } from './components/GridTuningOverlay';
 
 // Future exports:
 // export { default as MapManager } from './components/MapManager';

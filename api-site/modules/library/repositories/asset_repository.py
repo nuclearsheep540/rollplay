@@ -116,6 +116,9 @@ class MediaAssetRepository:
                 existing.grid_width = aggregate.grid_width
                 existing.grid_height = aggregate.grid_height
                 existing.grid_opacity = aggregate.grid_opacity
+                existing.grid_offset_x = aggregate.grid_offset_x
+                existing.grid_offset_y = aggregate.grid_offset_y
+                existing.grid_line_color = aggregate.grid_line_color
 
             # Update music-specific fields if MusicAsset
             if isinstance(aggregate, MusicAsset) and isinstance(existing, MusicAssetModel):
@@ -150,7 +153,10 @@ class MediaAssetRepository:
                     campaign_ids=aggregate.campaign_ids,
                     grid_width=aggregate.grid_width,
                     grid_height=aggregate.grid_height,
-                    grid_opacity=aggregate.grid_opacity
+                    grid_opacity=aggregate.grid_opacity,
+                    grid_offset_x=aggregate.grid_offset_x,
+                    grid_offset_y=aggregate.grid_offset_y,
+                    grid_line_color=aggregate.grid_line_color
                 )
             elif isinstance(aggregate, MusicAsset):
                 model = MusicAssetModel(
@@ -251,7 +257,10 @@ class MediaAssetRepository:
                 base,
                 grid_width=model.grid_width,
                 grid_height=model.grid_height,
-                grid_opacity=model.grid_opacity
+                grid_opacity=model.grid_opacity,
+                grid_offset_x=model.grid_offset_x,
+                grid_offset_y=model.grid_offset_y,
+                grid_line_color=model.grid_line_color
             )
 
         # If it's a MusicAssetModel, promote to MusicAsset with audio fields

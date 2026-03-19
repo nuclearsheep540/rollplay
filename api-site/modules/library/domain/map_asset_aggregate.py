@@ -31,6 +31,9 @@ class MapAsset(MediaAssetAggregate):
     grid_width: Optional[int] = None
     grid_height: Optional[int] = None
     grid_opacity: Optional[float] = None
+    grid_offset_x: Optional[int] = None
+    grid_offset_y: Optional[int] = None
+    grid_line_color: Optional[str] = None
 
     @classmethod
     def create(
@@ -79,7 +82,10 @@ class MapAsset(MediaAssetAggregate):
         base: MediaAssetAggregate,
         grid_width: Optional[int] = None,
         grid_height: Optional[int] = None,
-        grid_opacity: Optional[float] = None
+        grid_opacity: Optional[float] = None,
+        grid_offset_x: Optional[int] = None,
+        grid_offset_y: Optional[int] = None,
+        grid_line_color: Optional[str] = None
     ) -> "MapAsset":
         """
         Promote a base MediaAssetAggregate to MapAsset.
@@ -99,14 +105,20 @@ class MapAsset(MediaAssetAggregate):
             updated_at=base.updated_at,
             grid_width=grid_width,
             grid_height=grid_height,
-            grid_opacity=grid_opacity
+            grid_opacity=grid_opacity,
+            grid_offset_x=grid_offset_x,
+            grid_offset_y=grid_offset_y,
+            grid_line_color=grid_line_color
         )
 
     def update_grid_config(
         self,
         grid_width: Optional[int] = None,
         grid_height: Optional[int] = None,
-        grid_opacity: Optional[float] = None
+        grid_opacity: Optional[float] = None,
+        grid_offset_x: Optional[int] = None,
+        grid_offset_y: Optional[int] = None,
+        grid_line_color: Optional[str] = None
     ) -> None:
         """
         Update grid configuration.
@@ -127,6 +139,15 @@ class MapAsset(MediaAssetAggregate):
             if not 0.0 <= grid_opacity <= 1.0:
                 raise ValueError("grid_opacity must be between 0.0 and 1.0")
             self.grid_opacity = grid_opacity
+
+        if grid_offset_x is not None:
+            self.grid_offset_x = grid_offset_x
+
+        if grid_offset_y is not None:
+            self.grid_offset_y = grid_offset_y
+
+        if grid_line_color is not None:
+            self.grid_line_color = grid_line_color
 
         self.updated_at = datetime.utcnow()
 
@@ -153,28 +174,41 @@ class MapAsset(MediaAssetAggregate):
         color_kwargs = {}
         if self.grid_opacity is not None:
             color_kwargs["opacity"] = self.grid_opacity
+        if self.grid_line_color is not None:
+            color_kwargs["line_color"] = self.grid_line_color
         color_mode = GridColorMode(**color_kwargs)
+        grid_kwargs = {}
+        if self.grid_offset_x is not None:
+            grid_kwargs["offset_x"] = self.grid_offset_x
+        if self.grid_offset_y is not None:
+            grid_kwargs["offset_y"] = self.grid_offset_y
         return GridConfig(
             grid_width=self.grid_width,
             grid_height=self.grid_height,
             colors={"edit_mode": color_mode, "display_mode": color_mode},
+            **grid_kwargs,
         )
 
     def update_grid_config_from_game(self, game_grid_config: GridConfig) -> None:
         """Update domain fields from the api-game grid config contract.
 
         The inverse of build_grid_config_for_game(). Extracts domain-owned fields
-        (width, height, opacity) from the contract type.
+        (width, height, opacity, offset, line_color) from the contract type.
         """
         if not game_grid_config:
             return
         grid_opacity = None
+        grid_line_color = None
         if game_grid_config.colors and "display_mode" in game_grid_config.colors:
             grid_opacity = game_grid_config.colors["display_mode"].opacity
+            grid_line_color = game_grid_config.colors["display_mode"].line_color
         self.update_grid_config(
             grid_width=game_grid_config.grid_width,
             grid_height=game_grid_config.grid_height,
             grid_opacity=grid_opacity,
+            grid_offset_x=game_grid_config.offset_x,
+            grid_offset_y=game_grid_config.offset_y,
+            grid_line_color=grid_line_color,
         )
 
     def clear_grid_config(self) -> None:
