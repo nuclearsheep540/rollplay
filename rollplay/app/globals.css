@@ -688,11 +688,37 @@ body {
   flex-direction: column;
 }
 
-.right-drawer-tab {
+/* Scrollable tab strip — sits to the left of the drawer body */
+.right-drawer-tab-strip {
   position: absolute;
   left: -40px;
   width: 40px;
+  top: 0;
+  bottom: 0;
+  overflow-y: auto;
+  overflow-x: visible;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+  z-index: 31;
+}
+
+.right-drawer-tab-strip::-webkit-scrollbar {
+  display: none;
+}
+
+/* Inner wrapper — centers tabs when they fit, stacks from top when they overflow */
+.right-drawer-tab-strip-inner {
+  display: flex;
+  flex-direction: column;
+  min-height: 100%;
+  justify-content: center;
+  gap: 8px;
+}
+
+.right-drawer-tab {
+  width: 40px;
   height: 112px;
+  flex-shrink: 0;
   background: rgba(0, 0, 0, 0.7);
   backdrop-filter: blur(8px);
   border: 1px solid rgba(255, 255, 255, 0.1);
@@ -706,7 +732,6 @@ body {
   font-size: 14px;
   font-weight: 600;
   font-family: system-ui;
-  z-index: 31;
   transition: color 200ms, background 200ms;
   writing-mode: vertical-rl;
   text-orientation: mixed;

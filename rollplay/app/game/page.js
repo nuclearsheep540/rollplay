@@ -1697,24 +1697,20 @@ function GameContent() {
             className="right-drawer"
             style={{ transform: activeRightDrawer ? 'translateX(0)' : 'translateX(100%)' }}
           >
-            {/* Dynamic drawer tabs - filtered by role */}
-            {visibleTabs.map((tab, index) => {
-              const tabHeight = 120; // 112px tab + 8px gap
-              const totalHeight = visibleTabs.length * tabHeight;
-              const startOffset = totalHeight / 2;
-              const topPosition = `calc(50% - ${startOffset - (index * tabHeight)}px)`;
-
-              return (
-                <button
-                  key={tab.id}
-                  className={`right-drawer-tab ${activeRightDrawer === tab.id ? 'active' : ''}`}
-                  style={{ top: topPosition }}
-                  onClick={() => setActiveRightDrawer(prev => prev === tab.id ? null : tab.id)}
-                >
-                  {tab.label}
-                </button>
-              );
-            })}
+            {/* Scrollable tab strip — centers when tabs fit, scrolls when they overflow */}
+            <div className="right-drawer-tab-strip">
+              <div className="right-drawer-tab-strip-inner">
+                {visibleTabs.map((tab) => (
+                  <button
+                    key={tab.id}
+                    className={`right-drawer-tab ${activeRightDrawer === tab.id ? 'active' : ''}`}
+                    onClick={() => setActiveRightDrawer(prev => prev === tab.id ? null : tab.id)}
+                  >
+                    {tab.label}
+                  </button>
+                ))}
+              </div>
+            </div>
 
             <div className="drawer-content">
               {activeRightDrawer === 'moderator' && (
