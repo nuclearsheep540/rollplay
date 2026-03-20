@@ -5,10 +5,12 @@
 
 from typing import Any, Dict, Optional
 
-from pydantic import BaseModel, Field
+from pydantic import Field
+
+from .base import ContractModel
 
 
-class GridColorMode(BaseModel):
+class GridColorMode(ContractModel):
     """Color configuration for a single grid display mode (edit or display)."""
 
     line_color: str = "#d1d5db"
@@ -16,16 +18,19 @@ class GridColorMode(BaseModel):
     line_width: int = Field(default=1, ge=1, le=10)
 
 
-class GridConfig(BaseModel):
+class GridConfig(ContractModel):
     """Grid overlay configuration for a map."""
 
-    grid_width: int = Field(default=20, ge=1, le=100)
-    grid_height: int = Field(default=20, ge=1, le=100)
+    grid_width: int = Field(default=20, ge=1, le=1000)
+    grid_height: int = Field(default=20, ge=1, le=1000)
     enabled: bool = True
     colors: Optional[Dict[str, GridColorMode]] = None  # "edit_mode", "display_mode"
+    offset_x: int = 0  # Whole-grid X shift (image px, can be negative)
+    offset_y: int = 0  # Whole-grid Y shift (image px, can be negative)
+    grid_cell_size: Optional[int] = None  # Absolute cell size in native image pixels; None = not yet tuned
 
 
-class MapConfig(BaseModel):
+class MapConfig(ContractModel):
     """Map state for ETL boundary (session start/end)."""
 
     asset_id: str = Field(..., min_length=1)

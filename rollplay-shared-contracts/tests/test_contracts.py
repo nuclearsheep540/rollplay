@@ -6,6 +6,7 @@
 import pytest
 from pydantic import ValidationError
 
+from shared_contracts.base import ContractModel
 from shared_contracts.audio import AudioChannelState, AudioEffects, AudioTrackConfig
 from shared_contracts.assets import AssetRef
 from shared_contracts.display import ActiveDisplayType
@@ -19,6 +20,19 @@ from shared_contracts.session import (
     SessionStartResponse,
     SessionStats,
 )
+
+
+# --- ContractModel base class ---
+
+
+class TestContractModel:
+    def test_extra_fields_forbidden(self):
+        with pytest.raises(ValidationError):
+            AudioChannelState(volume=0.5, unknown_field="should_fail")
+
+    def test_valid_model_accepts_known_fields(self):
+        state = AudioChannelState(volume=0.5)
+        assert state.volume == 0.5
 
 
 # --- Round-trip tests: model_dump → model_validate produces identical object ---
@@ -73,6 +87,8 @@ class TestMapRoundTrip:
                 "edit_mode": GridColorMode(line_color="#ff0000"),
                 "display_mode": GridColorMode(opacity=0.3),
             },
+            offset_x=-5,
+            offset_y=15,
         )
         assert GridConfig.model_validate(config.model_dump()) == config
 
@@ -181,7 +197,7 @@ class TestMapShapeConformance:
         assert required_keys.issubset(set(MapConfig.model_fields.keys()))
 
     def test_grid_config_has_required_fields(self):
-        required_keys = {"grid_width", "grid_height", "enabled", "colors"}
+        required_keys = {"grid_width", "grid_height", "enabled", "colors", "offset_x", "offset_y"}
         assert required_keys.issubset(set(GridConfig.model_fields.keys()))
 
 
@@ -238,7 +254,7 @@ class TestMapConstraints:
 
     def test_grid_width_rejects_above_max(self):
         with pytest.raises(ValidationError):
-            GridConfig(grid_width=101)
+            GridConfig(grid_width=1001)
 
     def test_grid_opacity_rejects_above_max(self):
         with pytest.raises(ValidationError):
@@ -247,3 +263,8 @@ class TestMapConstraints:
     def test_map_config_rejects_empty_asset_id(self):
         with pytest.raises(ValidationError):
             MapConfig(asset_id="", filename="test.png", file_path="/test")
+
+    def test_grid_offset_accepts_negative(self):
+        config = GridConfig(offset_x=-50, offset_y=-50)
+        assert config.offset_x == -50
+        assert config.offset_y == -50
