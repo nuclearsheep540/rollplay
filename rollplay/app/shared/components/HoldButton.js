@@ -15,20 +15,23 @@ const HOLD_INTERVAL_MS = 50;
  * Works on mouse and touch via pointer events.
  *
  * Props:
- *   action   — function to call on each fire
- *   title    — tooltip text
- *   style    — inline style object
- *   children — button content
+ *   action     — function to call on initial press
+ *   holdAction — function to call on each hold repeat (falls back to action if omitted)
+ *   title      — tooltip text
+ *   style      — inline style object
+ *   children   — button content
  */
-const HoldButton = ({ action, title, style, children }) => {
+const HoldButton = ({ action, holdAction, title, style, children }) => {
   const timeoutRef  = useRef(null);
   const intervalRef = useRef(null);
+
+  const repeat = holdAction ?? action;
 
   const start = (e) => {
     e.stopPropagation();
     action();
     timeoutRef.current = setTimeout(() => {
-      intervalRef.current = setInterval(action, HOLD_INTERVAL_MS);
+      intervalRef.current = setInterval(repeat, HOLD_INTERVAL_MS);
     }, HOLD_DELAY_MS);
   };
 

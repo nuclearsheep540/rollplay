@@ -126,9 +126,10 @@ const GridOverlay = ({
       ? gridConfig.grid_cell_size * renderScale
       : Math.min(mapWidth / gridCols, mapHeight / gridRows);
 
-    // Center the grid on the map, then shift by the live offset
-    const originX = LABEL_OFFSET_X + (mapWidth  - cellSize * gridCols) / 2 + offsetX * renderScale;
-    const originY = LABEL_OFFSET_Y + (mapHeight - cellSize * gridRows) / 2 + offsetY * renderScale;
+    // Top-left anchor: offset is the absolute position of cell (0,0) from the map edge.
+    // Adding/removing cols or rows extends outward without shifting the origin.
+    const originX = LABEL_OFFSET_X + offsetX * renderScale;
+    const originY = LABEL_OFFSET_Y + offsetY * renderScale;
 
     return {
       cellSize,

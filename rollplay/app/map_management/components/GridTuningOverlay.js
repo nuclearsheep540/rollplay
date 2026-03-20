@@ -31,9 +31,9 @@ const BUTTON_STYLE = {
 // Compact style for trim buttons — narrower label, smaller font
 const TRIM_BUTTON_STYLE = {
   ...BUTTON_STYLE,
-  width: '120px',
+  width: '146px',
   height: '52px',
-  fontSize: '22px',
+  fontSize: '18px',
   borderRadius: '8px',
 };
 
@@ -78,27 +78,27 @@ const GridTuningOverlay = ({
       }}>
         {/* Column count */}
         <div style={{ display: 'flex', gap: '4px' }}>
-          <HoldButton action={() => onColChange(-1)} title="Remove last column" style={TRIM_BUTTON_STYLE}>−col</HoldButton>
-          <HoldButton action={() => onColChange(1)}  title="Add column"         style={TRIM_BUTTON_STYLE}>+col</HoldButton>
+          <HoldButton action={() => onColChange(-1)} title="Remove last column" style={TRIM_BUTTON_STYLE}>Column<br />Remove</HoldButton>
+          <HoldButton action={() => onColChange(1)}  title="Add column"         style={TRIM_BUTTON_STYLE}>Column<br />Add</HoldButton>
         </div>
 
         {/* Row count */}
         <div style={{ display: 'flex', gap: '4px' }}>
-          <HoldButton action={() => onRowChange(-1)} title="Remove last row" style={TRIM_BUTTON_STYLE}>−row</HoldButton>
-          <HoldButton action={() => onRowChange(1)}  title="Add row"         style={TRIM_BUTTON_STYLE}>+row</HoldButton>
+          <HoldButton action={() => onRowChange(-1)} title="Remove last row" style={TRIM_BUTTON_STYLE}>Row<br />Remove</HoldButton>
+          <HoldButton action={() => onRowChange(1)}  title="Add row"         style={TRIM_BUTTON_STYLE}>Row<br />Add</HoldButton>
         </div>
 
         {/* Cell size +/- (1px native per tick) */}
         <div style={{ display: 'flex', gap: '4px' }}>
-          <HoldButton action={() => onCellSizeChange(-1)} title="Smaller cells" style={BUTTON_STYLE}>−</HoldButton>
-          <HoldButton action={() => onCellSizeChange(1)}  title="Larger cells"  style={BUTTON_STYLE}>+</HoldButton>
+          <HoldButton action={() => onCellSizeChange(-1)} title="Smaller cells" style={TRIM_BUTTON_STYLE}>Cell Size<br />Decrease</HoldButton>
+          <HoldButton action={() => onCellSizeChange(1)}  title="Larger cells"  style={TRIM_BUTTON_STYLE}>Cell Size<br />Increase</HoldButton>
         </div>
 
         {/* 3×3 offset d-pad */}
         <div style={gridStyle}>
-          <Empty /><HoldButton action={() => onOffsetYChange(-1)} title="Shift grid up"    style={BUTTON_STYLE}>↑</HoldButton><Empty />
-          <HoldButton action={() => onOffsetXChange(-1)} title="Shift grid left"  style={BUTTON_STYLE}>←</HoldButton><Empty /><HoldButton action={() => onOffsetXChange(1)} title="Shift grid right" style={BUTTON_STYLE}>→</HoldButton>
-          <Empty /><HoldButton action={() => onOffsetYChange(1)}  title="Shift grid down"  style={BUTTON_STYLE}>↓</HoldButton><Empty />
+          <Empty /><HoldButton action={() => onOffsetYChange(-1)} holdAction={() => onOffsetYChange(-2)} title="Shift grid up"    style={BUTTON_STYLE}>↑</HoldButton><Empty />
+          <HoldButton action={() => onOffsetXChange(-1)} holdAction={() => onOffsetXChange(-2)} title="Shift grid left"  style={BUTTON_STYLE}>←</HoldButton><Empty /><HoldButton action={() => onOffsetXChange(1)} holdAction={() => onOffsetXChange(2)} title="Shift grid right" style={BUTTON_STYLE}>→</HoldButton>
+          <Empty /><HoldButton action={() => onOffsetYChange(1)}  holdAction={() => onOffsetYChange(2)}  title="Shift grid down"  style={BUTTON_STYLE}>↓</HoldButton><Empty />
         </div>
       </div>
     </div>
