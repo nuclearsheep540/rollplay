@@ -110,7 +110,9 @@ function GameContent() {
   const [isModerator, setIsModerator] = useState(false); // Moderator status
   const [isHost, setIsHost] = useState(false); // Host status
   const [dicePortalActive, setDicePortalActive] = useState(true);
-  const [uiScale, setUIScale] = useState('medium'); // UI Scale state
+  const [uiScale, setUIScale] = useState(() =>
+    typeof window !== 'undefined' && window.innerWidth <= 768 ? 'small' : 'medium'
+  ); // UI Scale state
   const [combatActive, setCombatActive] = useState(false); // Combat state
   const [rollLog, setRollLog] = useState([
     { id: 1, message: 'Welcome to Tabletop Tavern', type: 'system'}
@@ -1905,7 +1907,7 @@ function GameContent() {
       {/* Audio Gate Overlay — provides user gesture for AudioContext + auto-seats player */}
       {!isAudioUnlocked && (
         <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm cursor-pointer"
+          className="fixed inset-0 z-[102] flex items-center justify-center bg-black/80 backdrop-blur-sm cursor-pointer"
           onClick={handleEnterSession}
         >
           <div
