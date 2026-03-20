@@ -132,8 +132,9 @@ function GameContent() {
   const [isMapLocked, setIsMapLocked] = useState(false);
   const [tuningMode, setTuningMode] = useState(null); // null | 'offset'
   const [liveTuning, setLiveTuning] = useState({ offsetX: 0, offsetY: 0 });
-  const [liveTrim, setLiveTrim] = useState({ cols: 0, rows: 0 }); // Independent col/row trim delta
-  const [gridSize, setGridSize] = useState(10); // Cells on shorter image edge (shared with overlay)
+  const [liveCellSize, setLiveCellSize] = useState(64); // Cell size in native image pixels
+  const [liveGridCols, setLiveGridCols] = useState(10); // Direct column count
+  const [liveGridRows, setLiveGridRows] = useState(10); // Direct row count
   const [mapNaturalDimensions, setMapNaturalDimensions] = useState(null); // { naturalWidth, naturalHeight }
 
   // Image system state
@@ -488,32 +489,56 @@ function GameContent() {
     }
   }, [activeRightDrawer, gridEditMode, tuningMode]);
 
-  // Sync liveTuning from activeMap grid config (depends on grid_config specifically, not the whole map)
+  // Sync live grid state from activeMap.grid_config whenever it changes
   useEffect(() => {
-    if (!activeMap?.grid_config) return;
-    const gc = activeMap.grid_config;
-    setLiveTuning({ offsetX: gc.offset_x ?? 0, offsetY: gc.offset_y ?? 0 });
-    setLiveTrim({ cols: 0, rows: 0 }); // Reset trim when map/config changes
+    const gc = activeMap?.grid_config;
+    setLiveTuning({ offsetX: gc?.offset_x ?? 0, offsetY: gc?.offset_y ?? 0 });
+    setLiveGridCols(gc?.grid_width  || 10);
+    setLiveGridRows(gc?.grid_height || 10);
+    if (gc?.grid_cell_size) setLiveCellSize(gc.grid_cell_size);
+    // If no stored cell_size, mapNaturalDimensions effect computes the default
   }, [activeMap?.grid_config]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Reset trim when proportional gridSize changes (fresh proportional base = fresh trim)
-  useEffect(() => { setLiveTrim({ cols: 0, rows: 0 }); }, [gridSize]);
+  // Compute default cell_size from image dimensions when no stored value is present
+  useEffect(() => {
+    if (!mapNaturalDimensions) return;
+    const gc = activeMap?.grid_config;
+    if (gc?.grid_cell_size) return; // already have a stored value
+    const { naturalWidth, naturalHeight } = mapNaturalDimensions;
+    const cols = gc?.grid_width  || 10;
+    const rows = gc?.grid_height || 10;
+    setLiveCellSize(Math.max(8, Math.round(Math.min(naturalWidth / cols, naturalHeight / rows))));
+  }, [mapNaturalDimensions]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Default colors used when no grid_config exists yet (fresh map)
+  const DEFAULT_GRID_COLORS = {
+    edit_mode:    { line_color: '#d1d5db', opacity: 0.2, line_width: 1 },
+    display_mode: { line_color: '#d1d5db', opacity: 0.2, line_width: 1 },
+  };
 
   // Computed effective grid config:
-  // - Edit mode (grid size/colour preview): use live gridConfig if available, else fall back to saved map config
-  // - Always overlay live offset when tuning is active (Edit Grid keeps both modes open simultaneously)
+  // - Edit mode: merge live col/row/cellSize into the preview config (colors come from gridConfig)
+  // - Display mode: use saved activeMap.grid_config directly, with live offset when tuning
   const effectiveGridConfig = useMemo(() => {
-    const base = (gridEditMode && gridConfig) ? gridConfig : activeMap?.grid_config;
-    if (!base) return null;
-    const result = { ...base };
-    if (tuningMode) {
-      result.offset_x = liveTuning.offsetX;
-      result.offset_y = liveTuning.offsetY;
+    if (gridEditMode) {
+      if (!activeMap) return null;
+      const colorBase = gridConfig || activeMap?.grid_config || {};
+      return {
+        ...colorBase,
+        enabled: true,
+        grid_width:  liveGridCols,
+        grid_height: liveGridRows,
+        grid_cell_size: liveCellSize,
+        offset_x:    liveTuning.offsetX,
+        offset_y:    liveTuning.offsetY,
+        colors: colorBase.colors || DEFAULT_GRID_COLORS,
+      };
     }
-    return result;
-    // Note: liveTrim (col/row trim) is passed separately to GridOverlay so it doesn't
-    // affect cellSize or origin calculation — only the number of cells drawn.
-  }, [gridEditMode, gridConfig, activeMap?.grid_config, tuningMode, liveTuning]);
+    const base = activeMap?.grid_config;
+    if (!base) return null;
+    if (tuningMode) return { ...base, offset_x: liveTuning.offsetX, offset_y: liveTuning.offsetY };
+    return base;
+  }, [gridEditMode, liveGridCols, liveGridRows, liveCellSize, gridConfig, activeMap, tuningMode, liveTuning]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // UPDATED: Seat count management with displaced player handling
   const setSeatCount = async (newSeatCount) => {
@@ -1717,8 +1742,10 @@ function GameContent() {
                   liveTuning={liveTuning}
                   onTuningModeChange={setTuningMode}
                   onOffsetChange={(ox, oy) => setLiveTuning({ offsetX: ox, offsetY: oy })}
-                  gridSize={gridSize}
-                  onGridSizeChange={setGridSize}
+                  cellSize={liveCellSize}
+                  onCellSizeChange={(delta) => setLiveCellSize(prev => Math.max(8, Math.min(500, prev + delta)))}
+                  liveGridCols={liveGridCols}
+                  liveGridRows={liveGridRows}
                 />
               )}
               {activeRightDrawer === 'image' && isDM && (
@@ -1781,8 +1808,6 @@ function GameContent() {
               isMapLocked={isMapLocked}
               offsetX={liveTuning.offsetX}
               offsetY={liveTuning.offsetY}
-              colTrim={gridEditMode ? liveTrim.cols : 0}
-              rowTrim={gridEditMode ? liveTrim.rows : 0}
               onImageLoad={setMapNaturalDimensions}
             />
           )}
@@ -1802,9 +1827,9 @@ function GameContent() {
               <GridTuningOverlay
                 onOffsetXChange={(delta) => setLiveTuning(prev => ({ ...prev, offsetX: prev.offsetX + delta }))}
                 onOffsetYChange={(delta) => setLiveTuning(prev => ({ ...prev, offsetY: prev.offsetY + delta }))}
-                onGridSizeChange={(delta) => setGridSize(prev => Math.min(80, Math.max(4, prev + delta)))}
-                onColTrimChange={(delta) => setLiveTrim(prev => ({ ...prev, cols: prev.cols + delta }))}
-                onRowTrimChange={(delta) => setLiveTrim(prev => ({ ...prev, rows: prev.rows + delta }))}
+                onCellSizeChange={(delta) => setLiveCellSize(prev => Math.max(8, Math.min(500, prev + delta)))}
+                onColChange={(delta) => setLiveGridCols(prev => Math.max(2, prev + delta))}
+                onRowChange={(delta) => setLiveGridRows(prev => Math.max(2, prev + delta))}
               />
             )}
           </MapSafeArea>

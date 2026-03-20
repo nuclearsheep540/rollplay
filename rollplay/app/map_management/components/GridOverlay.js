@@ -11,6 +11,23 @@ import React, { useMemo, useState, useRef, useEffect } from 'react';
 const LABEL_OFFSET_X = 30; // left — row numbers
 const LABEL_OFFSET_Y = 20; // top  — column letters
 
+// ─── Helpers ──────────────────────────────────────────────────────────────────
+
+/**
+ * Convert a zero-based column index to an Excel-style label.
+ * 0→A, 25→Z, 26→AA, 51→AZ, 52→BA, 701→ZZ, 702→AAA, …
+ */
+function colIndexToLabel(index) {
+  let label = '';
+  let n = index + 1; // work in 1-based space
+  while (n > 0) {
+    const rem = (n - 1) % 26;
+    label = String.fromCharCode(65 + rem) + label;
+    n = Math.floor((n - 1) / 26);
+  }
+  return label;
+}
+
 // ─── Grid math helpers (exported for future placement/token features) ─────────
 
 /**
@@ -50,8 +67,6 @@ const GridOverlay = ({
   liveGridOpacity = null,
   offsetX = 0, // Live offset in image-native pixels
   offsetY = 0,
-  colTrim = 0, // Reduce drawn columns from the right edge (negative = trim, positive = restore)
-  rowTrim = 0, // Reduce drawn rows from the bottom edge
 }) => {
   const svgRef = useRef(null);
 
@@ -102,11 +117,14 @@ const GridOverlay = ({
     const gridCols = gridConfig.grid_width  || 8;
     const gridRows = gridConfig.grid_height || 12;
 
-    // Scale factor: image-native pixels (stored in offset_x/y) → rendered pixels
+    // Scale factor: image-native pixels (stored in offset_x/y and cell_size) → rendered pixels
     const renderScale = mapWidth / (el.naturalWidth || mapWidth);
 
-    // Square cells — size constrained by whichever map dimension is tighter
-    const cellSize = Math.min(mapWidth / gridCols, mapHeight / gridRows);
+    // Cell size: use stored absolute value if available (stable across col/row changes),
+    // otherwise fall back to fitting the grid proportionally (backward compat for old configs)
+    const cellSize = gridConfig.grid_cell_size
+      ? gridConfig.grid_cell_size * renderScale
+      : Math.min(mapWidth / gridCols, mapHeight / gridRows);
 
     // Center the grid on the map, then shift by the live offset
     const originX = LABEL_OFFSET_X + (mapWidth  - cellSize * gridCols) / 2 + offsetX * renderScale;
@@ -139,14 +157,8 @@ const GridOverlay = ({
     const { cellSize, originX, originY, gridCols, gridRows, mapBounds } = layout;
     const result = [];
 
-    // Trim removes cells from the right/bottom edges only.
-    // cellSize and originX/Y are always based on the full untrimmed gridCols/gridRows
-    // so the top-left anchor stays fixed regardless of trim.
-    const drawnCols = Math.max(2, gridCols + colTrim);
-    const drawnRows = Math.max(2, gridRows + rowTrim);
-
-    for (let col = 0; col < drawnCols; col++) {
-      for (let row = 0; row < drawnRows; row++) {
+    for (let col = 0; col < gridCols; col++) {
+      for (let row = 0; row < gridRows; row++) {
         const x1 = originX + col       * cellSize;
         const x2 = originX + (col + 1) * cellSize;
         const y1 = originY + row       * cellSize;
@@ -160,7 +172,7 @@ const GridOverlay = ({
     }
 
     return result;
-  }, [layout, colTrim, rowTrim]);
+  }, [layout]);
 
   // ── Label derivation ────────────────────────────────────────────────────────
   //
@@ -182,7 +194,7 @@ const GridOverlay = ({
         seenCols.add(cell.col);
         colLabels.push({
           key:  `col-${cell.col}`,
-          text: String.fromCharCode(65 + (cell.col % 26)),
+          text: colIndexToLabel(cell.col),
           x:    originX + (cell.col + 0.5) * cellSize, // actual cell center
           y:    LABEL_OFFSET_Y - 15,
         });
@@ -289,7 +301,7 @@ const GridOverlay = ({
           const x1  = layout.originX + col * layout.cellSize;
           const y1  = layout.originY + row * layout.cellSize;
           const cx  = x1 + layout.cellSize / 2;
-          const label = `${String.fromCharCode(65 + (col % 26))}${row + 1}`;
+          const label = `${colIndexToLabel(col)}${row + 1}`;
           const badgeWidth = label.length * 8 + 10;
           return (
             <g pointerEvents="none">
@@ -328,7 +340,7 @@ const GridOverlay = ({
             key={label.key}
             x={label.x}
             y={label.y}
-            fill={currentColors.line_color}
+            fill="#e5e7eb"
             opacity={1.0}
             fontSize="12"
             fontFamily="monospace"
@@ -347,7 +359,7 @@ const GridOverlay = ({
             key={label.key}
             x={label.x}
             y={label.y}
-            fill={currentColors.line_color}
+            fill="#e5e7eb"
             opacity={1.0}
             fontSize="12"
             fontFamily="monospace"

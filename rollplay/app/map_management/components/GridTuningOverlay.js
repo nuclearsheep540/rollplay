@@ -53,9 +53,9 @@ const Empty = () => <div style={{ width: BTN_SIZE, height: BTN_SIZE }} />;
 const GridTuningOverlay = ({
   onOffsetXChange,
   onOffsetYChange,
-  onGridSizeChange,
-  onColTrimChange,
-  onRowTrimChange,
+  onCellSizeChange,
+  onColChange,
+  onRowChange,
 }) => {
   const gridStyle = {
     display: 'grid',
@@ -76,22 +76,22 @@ const GridTuningOverlay = ({
         alignItems: 'center',
         gap: '8px',
       }}>
-        {/* Column trim */}
+        {/* Column count */}
         <div style={{ display: 'flex', gap: '4px' }}>
-          <HoldButton action={() => onColTrimChange(-1)} title="Remove last column" style={TRIM_BUTTON_STYLE}>−col</HoldButton>
-          <HoldButton action={() => onColTrimChange(1)}  title="Restore column"     style={TRIM_BUTTON_STYLE}>+col</HoldButton>
+          <HoldButton action={() => onColChange(-1)} title="Remove last column" style={TRIM_BUTTON_STYLE}>−col</HoldButton>
+          <HoldButton action={() => onColChange(1)}  title="Add column"         style={TRIM_BUTTON_STYLE}>+col</HoldButton>
         </div>
 
-        {/* Row trim */}
+        {/* Row count */}
         <div style={{ display: 'flex', gap: '4px' }}>
-          <HoldButton action={() => onRowTrimChange(-1)} title="Remove last row" style={TRIM_BUTTON_STYLE}>−row</HoldButton>
-          <HoldButton action={() => onRowTrimChange(1)}  title="Restore row"     style={TRIM_BUTTON_STYLE}>+row</HoldButton>
+          <HoldButton action={() => onRowChange(-1)} title="Remove last row" style={TRIM_BUTTON_STYLE}>−row</HoldButton>
+          <HoldButton action={() => onRowChange(1)}  title="Add row"         style={TRIM_BUTTON_STYLE}>+row</HoldButton>
         </div>
 
-        {/* Grid size +/- */}
+        {/* Cell size +/- (1px native per tick) */}
         <div style={{ display: 'flex', gap: '4px' }}>
-          <HoldButton action={() => onGridSizeChange(1)}  title="Increase cell size" style={BUTTON_STYLE}>−</HoldButton>
-          <HoldButton action={() => onGridSizeChange(-1)} title="Decrease cell size" style={BUTTON_STYLE}>+</HoldButton>
+          <HoldButton action={() => onCellSizeChange(-1)} title="Smaller cells" style={BUTTON_STYLE}>−</HoldButton>
+          <HoldButton action={() => onCellSizeChange(1)}  title="Larger cells"  style={BUTTON_STYLE}>+</HoldButton>
         </div>
 
         {/* 3×3 offset d-pad */}

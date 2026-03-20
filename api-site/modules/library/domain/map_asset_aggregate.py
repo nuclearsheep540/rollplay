@@ -34,6 +34,7 @@ class MapAsset(MediaAssetAggregate):
     grid_offset_x: Optional[int] = None
     grid_offset_y: Optional[int] = None
     grid_line_color: Optional[str] = None
+    grid_cell_size: Optional[int] = None
 
     @classmethod
     def create(
@@ -85,7 +86,8 @@ class MapAsset(MediaAssetAggregate):
         grid_opacity: Optional[float] = None,
         grid_offset_x: Optional[int] = None,
         grid_offset_y: Optional[int] = None,
-        grid_line_color: Optional[str] = None
+        grid_line_color: Optional[str] = None,
+        grid_cell_size: Optional[int] = None
     ) -> "MapAsset":
         """
         Promote a base MediaAssetAggregate to MapAsset.
@@ -108,7 +110,8 @@ class MapAsset(MediaAssetAggregate):
             grid_opacity=grid_opacity,
             grid_offset_x=grid_offset_x,
             grid_offset_y=grid_offset_y,
-            grid_line_color=grid_line_color
+            grid_line_color=grid_line_color,
+            grid_cell_size=grid_cell_size
         )
 
     def update_grid_config(
@@ -118,7 +121,8 @@ class MapAsset(MediaAssetAggregate):
         grid_opacity: Optional[float] = None,
         grid_offset_x: Optional[int] = None,
         grid_offset_y: Optional[int] = None,
-        grid_line_color: Optional[str] = None
+        grid_line_color: Optional[str] = None,
+        grid_cell_size: Optional[int] = None
     ) -> None:
         """
         Update grid configuration.
@@ -126,13 +130,13 @@ class MapAsset(MediaAssetAggregate):
         Only updates provided values; None values keep current.
         """
         if grid_width is not None:
-            if grid_width < 1 or grid_width > 100:
-                raise ValueError("grid_width must be between 1 and 100")
+            if grid_width < 1 or grid_width > 1000:
+                raise ValueError("grid_width must be between 1 and 1000")
             self.grid_width = grid_width
 
         if grid_height is not None:
-            if grid_height < 1 or grid_height > 100:
-                raise ValueError("grid_height must be between 1 and 100")
+            if grid_height < 1 or grid_height > 1000:
+                raise ValueError("grid_height must be between 1 and 1000")
             self.grid_height = grid_height
 
         if grid_opacity is not None:
@@ -148,6 +152,9 @@ class MapAsset(MediaAssetAggregate):
 
         if grid_line_color is not None:
             self.grid_line_color = grid_line_color
+
+        if grid_cell_size is not None:
+            self.grid_cell_size = grid_cell_size
 
         self.updated_at = datetime.utcnow()
 
@@ -182,6 +189,8 @@ class MapAsset(MediaAssetAggregate):
             grid_kwargs["offset_x"] = self.grid_offset_x
         if self.grid_offset_y is not None:
             grid_kwargs["offset_y"] = self.grid_offset_y
+        if self.grid_cell_size is not None:
+            grid_kwargs["grid_cell_size"] = self.grid_cell_size
         return GridConfig(
             grid_width=self.grid_width,
             grid_height=self.grid_height,
@@ -209,6 +218,7 @@ class MapAsset(MediaAssetAggregate):
             grid_offset_x=game_grid_config.offset_x,
             grid_offset_y=game_grid_config.offset_y,
             grid_line_color=grid_line_color,
+            grid_cell_size=game_grid_config.grid_cell_size,
         )
 
     def clear_grid_config(self) -> None:

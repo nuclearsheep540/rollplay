@@ -5,10 +5,10 @@
 
 from typing import Optional
 
-from pydantic import BaseModel
+from .base import ContractModel
 
 
-class AssetRef(BaseModel):
+class AssetRef(ContractModel):
     """Reference to a library asset crossing the service boundary."""
 
     id: str

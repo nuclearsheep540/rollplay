@@ -38,6 +38,7 @@ class MapAssetModel(MediaAsset):
     grid_offset_x = Column(Integer, nullable=True)
     grid_offset_y = Column(Integer, nullable=True)
     grid_line_color = Column(String(20), nullable=True)  # hex colour e.g. "#d1d5db"
+    grid_cell_size = Column(Integer, nullable=True)  # absolute cell size in native image pixels
 
     __mapper_args__ = {
         'polymorphic_identity': MediaAssetType.MAP,  # Enum value, not string

@@ -5,10 +5,10 @@
 
 from typing import Optional
 
-from pydantic import BaseModel
+from .base import ContractModel
 
 
-class ImageConfig(BaseModel):
+class ImageConfig(ContractModel):
     """Image state for ETL boundary."""
 
     asset_id: str

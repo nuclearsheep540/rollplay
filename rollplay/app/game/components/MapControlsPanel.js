@@ -1,8 +1,8 @@
 /* Copyright (C) 2025 Matthew Davey */
 /* SPDX-License-Identifier: GPL-3.0-or-later */
 
-import React, { useState, useEffect, useMemo, useRef } from 'react';
-import { authFetch } from '@/app/shared/utils/authFetch';
+import React, { useState, useEffect, useRef } from 'react';
+
 import {
   DM_CHILD,
   DM_CHILD_LAST,
@@ -70,15 +70,12 @@ export default function MapControlsPanel({
   liveTuning = { offsetX: 0, offsetY: 0 },
   onTuningModeChange = null,
   onOffsetChange = null,
-  gridSize = 10,
-  onGridSizeChange = null,
-  imageDimensions: externalImageDimensions = null,
+  cellSize = 64,
+  onCellSizeChange = null,
+  liveGridCols = 10,
+  liveGridRows = 10,
 }) {
-  const setGridSize = onGridSizeChange;
   const [isDimensionsExpanded, setIsDimensionsExpanded] = useState(false);
-
-  // Image dimensions for auto-calculating square grid
-  const [imageDimensions, setImageDimensions] = useState(null);
 
   // Store original server opacity when entering edit mode
   const [originalServerOpacity, setOriginalServerOpacity] = useState(null);
@@ -93,106 +90,36 @@ export default function MapControlsPanel({
   // Original offset before tuning (for cancel/restore)
   const [originalTuning, setOriginalTuning] = useState(null);
 
-  // Load image dimensions when map changes
+  // Sync opacity and colour from the loaded grid config
   useEffect(() => {
-    if (!activeMap?.file_path) {
-      setImageDimensions(null);
-      return;
-    }
-
-    const img = new Image();
-    img.onload = () => {
-      setImageDimensions({
-        width: img.naturalWidth,
-        height: img.naturalHeight
-      });
-      console.log('📏 Loaded image dimensions:', img.naturalWidth, 'x', img.naturalHeight);
-    };
-    img.onerror = () => {
-      setImageDimensions(null);
-      console.warn('📏 Failed to load image for grid calculation');
-    };
-    img.src = activeMap.file_path;
-  }, [activeMap?.file_path]);
-
-  // Calculate grid dimensions to ensure square cells
-  const calculatedGrid = useMemo(() => {
-    if (!imageDimensions) return { width: gridSize, height: gridSize };
-
-    const { width: imgW, height: imgH } = imageDimensions;
-    const isLandscape = imgW >= imgH;
-
-    if (isLandscape) {
-      // Height is shorter edge
-      const gridHeight = gridSize;
-      const gridWidth = Math.round(gridSize * imgW / imgH);
-      return { width: gridWidth, height: gridHeight };
-    } else {
-      // Width is shorter edge
-      const gridWidth = gridSize;
-      const gridHeight = Math.round(gridSize * imgH / imgW);
-      return { width: gridWidth, height: gridHeight };
-    }
-  }, [imageDimensions, gridSize]);
-
-  // Sync slider with loaded grid config
-  useEffect(() => {
-    const gridConfig = activeMap?.grid_config;
-
-    if (gridConfig && imageDimensions) {
-      // Calculate what gridSize would produce this config
-      const { width: imgW, height: imgH } = imageDimensions;
-      const isLandscape = imgW >= imgH;
-
-      // Extract the shorter dimension as the gridSize
-      const newSize = isLandscape ? gridConfig.grid_height : gridConfig.grid_width;
-      setGridSize(newSize || 10);
-
-      // Extract opacity from grid config (try both edit and display mode)
-      const editOpacity = gridConfig.colors?.edit_mode?.opacity;
-      const displayOpacity = gridConfig.colors?.display_mode?.opacity;
-      const configOpacity = editOpacity || displayOpacity || 0.2;
-      if (setLiveGridOpacity) {
-        setLiveGridOpacity(configOpacity);
-      }
-
-      // Sync grid line colour
-      const configColor = gridConfig.colors?.display_mode?.line_color || '#d1d5db';
-      setLiveGridColor(configColor);
+    const gc = activeMap?.grid_config;
+    if (gc) {
+      const editOpacity    = gc.colors?.edit_mode?.opacity;
+      const displayOpacity = gc.colors?.display_mode?.opacity;
+      if (setLiveGridOpacity) setLiveGridOpacity(editOpacity || displayOpacity || 0.2);
+      setLiveGridColor(gc.colors?.display_mode?.line_color || '#d1d5db');
     } else if (!activeMap || activeMap.grid_config === null) {
-      // Reset to defaults when no map or no grid config
-      setGridSize(10);
-      if (setLiveGridOpacity) {
-        setLiveGridOpacity(0.2);
-      }
-      console.log('🎯 Reset slider to defaults (no active map or grid config)');
+      if (setLiveGridOpacity) setLiveGridOpacity(0.2);
     }
-  }, [activeMap, imageDimensions]);
+  }, [activeMap]);
 
-  // Live preview: update grid overlay when dimensions or opacity change during edit mode
+  // Live preview: push color/opacity changes to the grid overlay during edit mode
   useEffect(() => {
     if (!isDimensionsExpanded || !handleGridChange) return;
 
     const previewConfig = {
-      grid_width: calculatedGrid.width,
-      grid_height: calculatedGrid.height,
+      grid_width: liveGridCols,
+      grid_height: liveGridRows,
+      grid_cell_size: cellSize,
       enabled: true,
       colors: {
-        edit_mode: {
-          line_color: liveGridColor,
-          opacity: liveGridOpacity,
-          line_width: 1
-        },
-        display_mode: {
-          line_color: liveGridColor,
-          opacity: liveGridOpacity,
-          line_width: 1
-        }
-      }
+        edit_mode:    { line_color: liveGridColor, opacity: liveGridOpacity, line_width: 1 },
+        display_mode: { line_color: liveGridColor, opacity: liveGridOpacity, line_width: 1 },
+      },
     };
 
     handleGridChange(previewConfig);
-  }, [calculatedGrid, liveGridOpacity, liveGridColor, isDimensionsExpanded, handleGridChange]);
+  }, [liveGridCols, liveGridRows, cellSize, liveGridOpacity, liveGridColor, isDimensionsExpanded, handleGridChange]);
 
   // Initialize Coloris for grid colour picker when Edit Grid section is expanded
   useEffect(() => {
@@ -217,7 +144,6 @@ export default function MapControlsPanel({
         });
 
         const handleGridColorPick = (event) => {
-          if (event.target !== gridColorInputRef.current) return;
           setLiveGridColor(event.detail.color);
         };
 
@@ -245,27 +171,6 @@ export default function MapControlsPanel({
     }
   }, [gridEditMode]);
 
-  // Create grid configuration from dimensions (pure dimensional grid)
-  const createGridFromDimensions = (gridWidth, gridHeight) => {
-    return {
-      grid_width: gridWidth,
-      grid_height: gridHeight,
-      enabled: true,
-      colors: {
-        edit_mode: {
-          line_color: liveGridColor,
-          opacity: liveGridOpacity,
-          line_width: 1
-        },
-        display_mode: {
-          line_color: liveGridColor,
-          opacity: liveGridOpacity,
-          line_width: 1
-        }
-      }
-    };
-  };
-
   // Handle map selection from modal
   const handleMapSelection = (mapData) => {
     console.log('🗺️ Map selected:', mapData);
@@ -282,7 +187,7 @@ export default function MapControlsPanel({
     }
   };
 
-  // Apply all grid settings (cell size, offset, colour, opacity) via dual-write
+  // Apply grid settings to MongoDB (hot storage). ETL handles cold persistence at session end.
   const applyGrid = async () => {
     if (!activeMap) return;
 
@@ -292,8 +197,9 @@ export default function MapControlsPanel({
     };
 
     const newGridConfig = {
-      grid_width: calculatedGrid.width,
-      grid_height: calculatedGrid.height,
+      grid_width:  Math.max(2, liveGridCols),
+      grid_height: Math.max(2, liveGridRows),
+      grid_cell_size: Math.max(8, cellSize),
       enabled: true,
       offset_x: liveTuning.offsetX,
       offset_y: liveTuning.offsetY,
@@ -304,7 +210,6 @@ export default function MapControlsPanel({
     const updatedMap = { ...mapWithoutId, grid_config: newGridConfig };
 
     try {
-      // 1. PUT to MongoDB (hot) + WebSocket broadcast
       const response = await fetch(`/api/game/${roomId}/map`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
@@ -312,28 +217,20 @@ export default function MapControlsPanel({
       });
 
       if (response.ok) {
-        // 2. PATCH to PostgreSQL (cold) for cross-session persistence
-        if (activeMap.asset_id) {
-          try {
-            await authFetch(`/api/library/${activeMap.asset_id}/grid`, {
-              method: 'PATCH',
-              headers: { 'Content-Type': 'application/json' },
-              credentials: 'include',
-              body: JSON.stringify({
-                grid_width: calculatedGrid.width,
-                grid_height: calculatedGrid.height,
-                grid_opacity: liveGridOpacity,
-                grid_line_color: liveGridColor,
-                grid_offset_x: liveTuning.offsetX,
-                grid_offset_y: liveTuning.offsetY,
-              })
-            });
-          } catch (assetError) {
-            console.warn('⚠️ Error persisting grid to MapAsset:', assetError);
-          }
+        // Optimistic local update: reflect the trimmed config immediately so the
+        // grid shows the correct result when the panel closes, without waiting for
+        // the WebSocket broadcast. The broadcast will follow and set the same value.
+        if (setActiveMap) {
+          setActiveMap({ ...mapWithoutId, grid_config: newGridConfig });
         }
-        // Update the restore point so closing won't revert the saved values
-        setOriginalTuning({ ...liveTuning });
+
+        // Close the panel — display mode uses activeMap.grid_config directly,
+        // which we just set above, so the correct trimmed grid shows immediately.
+        setIsDimensionsExpanded(false);
+        if (setGridEditMode) setGridEditMode(false);
+        if (onTuningModeChange) onTuningModeChange(null);
+        setOriginalServerOpacity(null);
+        setOriginalTuning(null);
       } else {
         const error = await response.text();
         console.error('❌ Failed to apply grid:', error);
@@ -412,26 +309,26 @@ export default function MapControlsPanel({
           📐 {isDimensionsExpanded ? 'Exit Grid Edit' : 'Edit Grid'}
         </button>
 
-        {/* Grid Size Slider (expandable) */}
+        {/* Grid controls (expandable) */}
         {isDimensionsExpanded && activeMap && (
           <div className="ml-4 mb-6">
             <div className="mb-3">
               <label className="block text-xs text-gray-400 mb-1">
-                Grid Size: {calculatedGrid.width}×{calculatedGrid.height} cells (square)
+                Cell Size: {cellSize}px · Grid: {liveGridCols}×{liveGridRows} cells
               </label>
               <input
                 type="range"
-                min="4"
-                max="80"
+                min="8"
+                max="500"
                 step="1"
-                value={gridSize}
-                onChange={(e) => setGridSize(parseInt(e.target.value))}
+                value={cellSize}
+                onChange={(e) => { if (onCellSizeChange) onCellSizeChange(parseInt(e.target.value) - cellSize); }}
                 className="w-full h-2 bg-gray-700 rounded-lg appearance-none cursor-pointer slider"
               />
               <div className="flex justify-between text-xs text-gray-500 mt-1">
-                <span>Large (4)</span>
+                <span>Small (8px)</span>
                 <span>Medium</span>
-                <span>Small (80)</span>
+                <span>Large (500px)</span>
               </div>
             </div>
 
@@ -477,7 +374,7 @@ export default function MapControlsPanel({
                   style={{
                     color: 'transparent',
                     textIndent: '-9999px',
-                    backgroundColor: 'transparent',
+                    backgroundColor: liveGridColor,
                     borderColor: liveGridColor,
                   }}
                 />
@@ -498,7 +395,7 @@ export default function MapControlsPanel({
               className={DM_CHILD_LAST}
               onClick={applyGrid}
             >
-              ✨ Apply {calculatedGrid.width}×{calculatedGrid.height} Grid
+              ✨ Apply Grid Changes
             </button>
 
             <div className="text-xs text-gray-400 mt-2">
