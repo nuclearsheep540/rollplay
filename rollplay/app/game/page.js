@@ -353,6 +353,18 @@ function GameContent() {
     }
   }, []);
 
+  // Lock page scroll while in game — the game shell is a fixed viewport, not a document
+  useEffect(() => {
+    const html = document.documentElement;
+    const body = document.body;
+    html.style.overflow = 'hidden';
+    body.style.overflow = 'hidden';
+    return () => {
+      html.style.overflow = '';
+      body.style.overflow = '';
+    };
+  }, []);
+
   // Fetch current user data once on page load
   useEffect(() => {
     const fetchCurrentUser = async () => {
