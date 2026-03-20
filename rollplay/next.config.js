@@ -5,6 +5,9 @@ const nextConfig = {
   // Enable standalone output for smaller, more secure Docker images
   output: 'standalone',
 
+  // Allow cross-origin requests from LAN IP for mobile dev testing
+  allowedDevOrigins: ['192.168.1.211'],
+
   // Most API routing is handled by NGINX reverse proxy
   // These rewrites only apply when requests come directly to Next.js (rare in our setup)
   async rewrites() {

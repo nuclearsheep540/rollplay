@@ -213,7 +213,7 @@ export const handleRemoteAudioBatch = async (data, {
               }
             }
             // else: Buffer already pre-loaded for synchronized operations
-            
+
             // Pass synchronized start time for batch operations (null for single operations)
             await playRemoteTrack(trackId, filename, looping, volume, null, op, true, syncStartTime, fade, fadeDuration);
             console.log(`✅ Batch operation ${index + 1}: played ${trackId} (${filename}) ${syncStartTime ? `at sync time ${syncStartTime}` : 'immediately'}${fade ? ` with ${fadeDuration}ms fade-in` : ''}`);

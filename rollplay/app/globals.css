@@ -326,8 +326,8 @@ body {
 }
 
 [data-ui-scale="small"] {
-  --ui-scale: 1; /* Original becomes small baseline */
-  --panel-width-addition: 0px; /* No additional width - baseline */
+  --ui-scale: 0.7; /* Original becomes small baseline */
+  --panel-width-addition: -100px; /* No additional width - baseline */
 }
 
 [data-ui-scale="medium"] {
@@ -355,34 +355,49 @@ body {
 
 /* Top Command Bar
    ========================================================================== */
-.command-bar {
+.top-nav {
   height: calc(50px * var(--ui-scale));
   background: linear-gradient(90deg, rgba(0,0,0,0.9) 0%, rgba(26,26,46,0.8) 100%);
   backdrop-filter: blur(8px);
   border-bottom: 1px solid rgba(74, 222, 128, 0.3);
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  gap: calc(16px * var(--ui-scale));
   padding: 0 calc(24px * var(--ui-scale));
   position: relative;
   z-index: 100; /* Above everything */
 }
 
 .campaign-info {
+  flex: 1;
   display: flex;
   align-items: center;
   gap: calc(20px * var(--ui-scale));
+  min-width: 0;
+  overflow: hidden;
 }
 
 .campaign-title {
   font-size: calc(18px * var(--ui-scale));
   font-weight: 600;
   color: #4ade80;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .location-breadcrumb {
   color: #9ca3af;
   font-size: calc(14px * var(--ui-scale));
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+@media (max-width: 600px) {
+  .location-breadcrumb {
+    display: none;
+  }
 }
 
 .room-code {
@@ -421,10 +436,18 @@ body {
   opacity: 1;
 }
 
-.dm-controls-bar {
+.nav-actions {
   display: flex;
   align-items: center;
   gap: calc(16px * var(--ui-scale));
+  flex-shrink: 0;
+}
+
+.nav-back-btn {
+  flex-shrink: 0;
+  white-space: nowrap;
+  font-size: calc(12px * var(--ui-scale));
+  color: #e0e0e0;
 }
 
 .control-btn {
@@ -448,10 +471,6 @@ body {
 .ui-scale-nav {
   display: flex;
   gap: calc(2px * var(--ui-scale));
-  background: rgba(0, 0, 0, 0.3);
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  border-radius: calc(4px * var(--ui-scale));
-  padding: calc(2px * var(--ui-scale));
 }
 
 .ui-scale-nav .scale-btn {
@@ -1010,12 +1029,14 @@ body {
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 6px 12px;
-  background: rgba(59, 130, 246, 0.1);
-  border: 1px solid rgba(59, 130, 246, 0.3);
-  border-radius: 6px;
   font-size: 12px;
   color: #e2e8f0;
+}
+
+@media (max-width: 639px) {
+  .master-volume-control {
+    display: none;
+  }
 }
 
 .volume-label {

@@ -47,6 +47,8 @@ export const useUnifiedAudio = () => {
   // Local listening volume (per-client, localStorage-persisted, private)
   const [masterVolume, setMasterVolume] = useState(() => {
     if (typeof window !== 'undefined') {
+      const isMobile = window.matchMedia('(max-width: 639px)').matches;
+      if (isMobile) return 0.75;
       const saved = localStorage.getItem('rollplay_master_volume');
       return saved ? parseFloat(saved) : 0.5;
     }
@@ -1488,8 +1490,6 @@ export const useUnifiedAudio = () => {
             ...channelState,
             channelId,
           }, true);
-        } else {
-          console.warn(`⚠️ Sync: failed to load buffer for ${channelId}`);
         }
       } else if (playback_state === 'paused' && paused_elapsed != null) {
         // Load buffer to get duration for normalizing paused position

@@ -27,6 +27,8 @@ import { useWebSocket } from './hooks/useWebSocket';
 import { useUnifiedAudio } from '../audio_management';
 import { MapDisplay, GridOverlay, useMapWebSocket, ImageDisplay, useImageWebSocket } from '../map_management';
 import MapOverlayPanel from './components/MapOverlayPanel';
+import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
+import { faVolumeHigh, faVolumeXmark } from '@fortawesome/free-solid-svg-icons';
 import MapSafeArea from './components/MapSafeArea';
 import GridTuningOverlay from '../map_management/components/GridTuningOverlay';
 
@@ -1489,17 +1491,16 @@ function GameContent() {
   return (
     <div className="game-interface" data-ui-scale={uiScale}>
       {/* Top Command Bar */}
-      <div className="command-bar">
+      <div className="top-nav">
         <div className="campaign-info">
           <div className="campaign-title">The Curse of Strahd</div>
-          <div className="location-breadcrumb">› Barovia Village › The Blood on the Vine Tavern</div>
         </div>
 
-        <div className="dm-controls-bar">
+        <div className="nav-actions">
           {/* Master Volume Control */}
           <div className="master-volume-control">
             <label htmlFor="master-volume" className="volume-label">
-              {isAudioUnlocked ? '🔊' : '🔇'}
+              <FontAwesomeIcon icon={isAudioUnlocked ? faVolumeHigh : faVolumeXmark} />
             </label>
             <input
               id="master-volume"
@@ -1551,18 +1552,15 @@ function GameContent() {
               L
             </button>
           </div>
-
-          <button
-            onClick={() => router.push('/dashboard')}
-            className="flex items-center gap-2 px-4 py-2 bg-slate-700 hover:bg-slate-600 text-slate-200 rounded-lg border border-slate-600 transition-all text-sm"
-            title="Back to Dashboard"
-          >
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
-            </svg>
-            Back to Dashboard
-          </button>
         </div>
+
+        <button
+          onClick={() => router.push('/dashboard')}
+          className="nav-back-btn"
+          title="Back to Dashboard"
+        >
+          Back
+        </button>
       </div>
 
       {/* Spectator Banner */}
