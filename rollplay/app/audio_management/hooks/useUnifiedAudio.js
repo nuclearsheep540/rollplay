@@ -1060,42 +1060,39 @@ export const useUnifiedAudio = () => {
   const unlockAudio = async () => {
     try {
       console.log('🔓 Starting audio unlock process...');
-      
-      // Unlock HTML5 Audio with a silent WAV built as a data URI.
-      // iOS requires HTML5 Audio.play() within a user gesture to activate the
-      // hardware audio session — Web Audio resume() alone is not sufficient.
-      // Samples are 0x80 (silence for 8-bit unsigned PCM). We use 4410 samples
-      // (~100ms) since iOS may silently reject ultra-short audio files.
-      const numSamples = 4410;
-      const wavBuf = new ArrayBuffer(44 + numSamples);
-      const dv = new DataView(wavBuf);
-      [0x52,0x49,0x46,0x46].forEach((b,i) => dv.setUint8(i, b));     // "RIFF"
-      dv.setUint32(4, 36 + numSamples, true);                          // file size - 8
-      [0x57,0x41,0x56,0x45].forEach((b,i) => dv.setUint8(8+i, b));   // "WAVE"
-      [0x66,0x6D,0x74,0x20].forEach((b,i) => dv.setUint8(12+i, b));  // "fmt "
-      dv.setUint32(16, 16, true);                                      // chunk size
-      dv.setUint16(20, 1, true);                                       // PCM format
-      dv.setUint16(22, 1, true);                                       // mono
-      dv.setUint32(24, 44100, true);                                   // sample rate
-      dv.setUint32(28, 44100, true);                                   // byte rate
-      dv.setUint16(32, 1, true);                                       // block align
-      dv.setUint16(34, 8, true);                                       // bits per sample
-      [0x64,0x61,0x74,0x61].forEach((b,i) => dv.setUint8(36+i, b));  // "data"
-      dv.setUint32(40, numSamples, true);                               // data size
-      new Uint8Array(wavBuf, 44).fill(0x80);                           // silent samples
-      const base64 = btoa(String.fromCharCode(...new Uint8Array(wavBuf)));
-      const silentAudio = new Audio(`data:audio/wav;base64,${base64}`);
+
+      // Step 1: Activate iOS audio session via HTML5 Audio.play() within user gesture.
+      // Uses a silent MP3 because iOS ignores volume=0 (read-only, always 1.0).
+      const silentAudio = new Audio('/audio/silence.mp3');
       silentAudio.volume = 0;
       await silentAudio.play().catch(() => {});
-      console.log('✅ HTML5 audio unlocked (silent WAV)');
+      console.log('✅ HTML5 audio session activated');
 
-      // Unlock Web Audio API
-      console.log('🎵 Initializing Web Audio API...');
+      // Step 2: Close the eagerly-created AudioContext.
+      // On iOS, a context created outside a user gesture (the mount useEffect)
+      // cannot produce audible output even after resume() — the iOS audio session
+      // wasn't active when it was created. We must create a fresh context now that
+      // the audio session is active. AudioBuffers in audioBuffersRef are
+      // context-independent (raw PCM) and survive this replacement.
+      if (audioContextRef.current && audioContextRef.current.state !== 'closed') {
+        console.log('🔄 Closing stale eager-init AudioContext for iOS compatibility...');
+        await audioContextRef.current.close();
+      }
+      audioContextRef.current = null;
+
+      // Step 3: Create fresh AudioContext + full audio graph within user gesture.
+      // initializeWebAudio() guards on (!ref || state === 'closed'), so nulling
+      // the ref above ensures it rebuilds everything: master/local gain, per-channel
+      // gains, EQ chains, reverb sends, metering, SFX slot gains. All refs are
+      // reassigned inside initializeWebAudio().
+      console.log('🎵 Creating fresh Web Audio context within user gesture...');
       const webAudioSuccess = await initializeWebAudio();
       if (!webAudioSuccess) {
         throw new Error('Failed to initialize Web Audio API');
       }
 
+      // Step 4: Resume if still suspended (defensive — context created within a
+      // gesture should start 'running', but resume() is harmless if already running).
       console.log(`🔧 Web Audio context state: ${audioContextRef.current?.state}`);
       if (audioContextRef.current && audioContextRef.current.state === 'suspended') {
         console.log('🔄 Resuming suspended Web Audio context...');
