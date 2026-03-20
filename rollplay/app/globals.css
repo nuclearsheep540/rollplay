@@ -356,14 +356,19 @@ body {
 /* Top Command Bar
    ========================================================================== */
 .top-nav {
-  height: calc(50px * var(--ui-scale));
+  /* Height grows by the notch inset; padding-top pushes content below it.
+     align-items: center then centers within the remaining 50px band. */
+  height: calc(50px * var(--ui-scale) + env(safe-area-inset-top, 0px));
+  padding-top: env(safe-area-inset-top, 0px);
+  /* Landscape notch (left/right) adds to horizontal padding */
+  padding-left: calc(24px * var(--ui-scale) + env(safe-area-inset-left, 0px));
+  padding-right: calc(24px * var(--ui-scale) + env(safe-area-inset-right, 0px));
   background: linear-gradient(90deg, rgba(0,0,0,0.9) 0%, rgba(26,26,46,0.8) 100%);
   backdrop-filter: blur(8px);
   border-bottom: 1px solid rgba(74, 222, 128, 0.3);
   display: flex;
   align-items: center;
   gap: calc(16px * var(--ui-scale));
-  padding: 0 calc(24px * var(--ui-scale));
   position: relative;
   z-index: 100; /* Above everything */
 }
@@ -515,7 +520,7 @@ body {
 .party-drawer {
   position: fixed;
   left: 0;
-  top: calc(50px * var(--ui-scale));
+  top: calc(50px * var(--ui-scale) + env(safe-area-inset-top, 0px));
   bottom: 0;
   width: calc(380px + var(--panel-width-addition));
   z-index: 30;
@@ -675,7 +680,7 @@ body {
 .right-drawer {
   position: fixed;
   right: 0;
-  top: calc(50px * var(--ui-scale));
+  top: calc(50px * var(--ui-scale) + env(safe-area-inset-top, 0px));
   bottom: 0;
   width: calc(380px + var(--panel-width-addition));
   z-index: 30;
@@ -756,7 +761,7 @@ body {
   right: 0;
   bottom: 0;
   height: max(50vh, 300px);
-  z-index: 35;
+  z-index: 101;
   transition: transform 300ms ease;
   background: linear-gradient(0deg, rgba(0,0,0,0.95) 0%, rgba(26,26,46,0.9) 100%);
   backdrop-filter: blur(8px);
@@ -769,6 +774,7 @@ body {
   display: flex;
   flex-direction: row;
   overflow-x: auto;
+  padding-bottom: env(safe-area-inset-bottom, 0px);
   overflow-y: hidden;
   padding: calc(8px * var(--ui-scale)) calc(12px * var(--ui-scale));
   gap: calc(4px * var(--ui-scale));
@@ -783,7 +789,7 @@ body {
   height: 40px;
   padding: 0 16px;
   white-space: nowrap;
-  z-index: 36;
+  z-index: 1;
   display: flex;
   align-items: center;
   justify-content: center;
