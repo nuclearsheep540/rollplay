@@ -406,10 +406,7 @@ async def update_grid_config(
             user_id=current_user.id,
             grid_width=request.grid_width,
             grid_height=request.grid_height,
-            grid_opacity=request.grid_opacity,
-            grid_offset_x=request.grid_offset_x,
-            grid_offset_y=request.grid_offset_y,
-            grid_line_color=request.grid_line_color
+            grid_opacity=request.grid_opacity
         )
 
         logger.info(f"Updated grid config for map {asset_id}: {asset.get_grid_config()}")

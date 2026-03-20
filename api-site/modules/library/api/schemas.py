@@ -69,12 +69,9 @@ class MediaAssetListResponse(BaseModel):
 
 class UpdateGridConfigRequest(BaseModel):
     """Request to update map grid configuration"""
-    grid_width: Optional[int] = Field(None, ge=1, le=1000, description="Grid width in cells")
-    grid_height: Optional[int] = Field(None, ge=1, le=1000, description="Grid height in cells")
+    grid_width: Optional[int] = Field(None, ge=1, le=100, description="Grid width in cells")
+    grid_height: Optional[int] = Field(None, ge=1, le=100, description="Grid height in cells")
     grid_opacity: Optional[float] = Field(None, ge=0.0, le=1.0, description="Grid overlay opacity")
-    grid_offset_x: Optional[int] = Field(None, description="Whole-grid X shift (image px)")
-    grid_offset_y: Optional[int] = Field(None, description="Whole-grid Y shift (image px)")
-    grid_line_color: Optional[str] = Field(None, description="Grid line colour hex e.g. '#d1d5db'")
 
 
 class MapAssetResponse(MediaAssetResponse):
@@ -82,9 +79,6 @@ class MapAssetResponse(MediaAssetResponse):
     grid_width: Optional[int] = None
     grid_height: Optional[int] = None
     grid_opacity: Optional[float] = None
-    grid_offset_x: Optional[int] = None
-    grid_offset_y: Optional[int] = None
-    grid_line_color: Optional[str] = None
 
 
 class MusicAssetResponse(MediaAssetResponse):

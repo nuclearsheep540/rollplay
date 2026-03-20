@@ -5,12 +5,10 @@
 
 from typing import Literal, Optional
 
-from pydantic import Field
-
-from .base import ContractModel
+from pydantic import BaseModel, Field
 
 
-class AudioEffects(ContractModel):
+class AudioEffects(BaseModel):
     """Per-channel insert effect state — enabled flags + wet/dry mix levels."""
 
     eq: bool = False
@@ -23,7 +21,7 @@ class AudioEffects(ContractModel):
     reverb_preset: str = "room"
 
 
-class AudioChannelState(ContractModel):
+class AudioChannelState(BaseModel):
     """Complete state of a single audio channel (BGM or SFX) in MongoDB."""
 
     # Identity
@@ -43,7 +41,7 @@ class AudioChannelState(ContractModel):
     paused_elapsed: Optional[float] = Field(default=None, ge=0)
 
 
-class AudioTrackConfig(ContractModel):
+class AudioTrackConfig(BaseModel):
     """Stashed config for a track swapped out of a channel. Keyed by asset_id."""
 
     volume: Optional[float] = Field(default=None, ge=0.0, le=1.3)

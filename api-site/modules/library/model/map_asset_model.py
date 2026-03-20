@@ -8,7 +8,7 @@ Extends MediaAsset with grid configuration fields (width, height, opacity).
 Uses SQLAlchemy joined table inheritance pattern.
 """
 
-from sqlalchemy import Column, Integer, Float, ForeignKey, String
+from sqlalchemy import Column, Integer, Float, ForeignKey
 from sqlalchemy.dialects.postgresql import UUID
 
 from modules.library.model.asset_model import MediaAsset
@@ -35,10 +35,6 @@ class MapAssetModel(MediaAsset):
     grid_width = Column(Integer, nullable=True)
     grid_height = Column(Integer, nullable=True)
     grid_opacity = Column(Float, nullable=True)
-    grid_offset_x = Column(Integer, nullable=True)
-    grid_offset_y = Column(Integer, nullable=True)
-    grid_line_color = Column(String(20), nullable=True)  # hex colour e.g. "#d1d5db"
-    grid_cell_size = Column(Integer, nullable=True)  # absolute cell size in native image pixels
 
     __mapper_args__ = {
         'polymorphic_identity': MediaAssetType.MAP,  # Enum value, not string

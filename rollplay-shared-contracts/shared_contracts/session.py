@@ -5,27 +5,28 @@
 
 from typing import Dict, List, Optional
 
+from pydantic import BaseModel
+
 from .assets import AssetRef
-from .base import ContractModel
 from .audio import AudioChannelState, AudioTrackConfig
 from .display import ActiveDisplayType
 from .image import ImageConfig
 from .map import MapConfig
 
 
-class PlayerState(ContractModel):
+class PlayerState(BaseModel):
     player_name: str
     seat_position: int
     seat_color: str
 
 
-class SessionStats(ContractModel):
+class SessionStats(BaseModel):
     duration_minutes: int
     total_logs: int
     max_players: int
 
 
-class SessionStartPayload(ContractModel):
+class SessionStartPayload(BaseModel):
     """Complete payload for POST /game/session/start."""
 
     session_id: str
@@ -41,7 +42,7 @@ class SessionStartPayload(ContractModel):
     active_display: Optional[ActiveDisplayType] = None
 
 
-class SessionEndFinalState(ContractModel):
+class SessionEndFinalState(BaseModel):
     """Structure of final_state returned by POST /game/session/end."""
 
     players: List[PlayerState] = []
@@ -54,13 +55,13 @@ class SessionEndFinalState(ContractModel):
     active_display: Optional[ActiveDisplayType] = None
 
 
-class SessionStartResponse(ContractModel):
+class SessionStartResponse(BaseModel):
     success: bool
     session_id: str
     message: str = ""
 
 
-class SessionEndResponse(ContractModel):
+class SessionEndResponse(BaseModel):
     success: bool
     final_state: SessionEndFinalState
     message: str = ""
