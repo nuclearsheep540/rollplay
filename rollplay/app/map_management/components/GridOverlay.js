@@ -220,7 +220,10 @@ const GridOverlay = ({
 
   // ── Color resolution ────────────────────────────────────────────────────────
 
-  const baseColors    = isEditMode ? gridConfig.colors.edit_mode : gridConfig.colors.display_mode;
+  const DEFAULT_COLORS = { line_color: '#d1d5db', opacity: 0.2, line_width: 1 };
+  const baseColors    = isEditMode
+    ? (gridConfig.colors?.edit_mode    ?? DEFAULT_COLORS)
+    : (gridConfig.colors?.display_mode ?? DEFAULT_COLORS);
   const currentColors = {
     ...baseColors,
     opacity: (isEditMode && liveGridOpacity !== null) ? liveGridOpacity : baseColors.opacity,

@@ -353,8 +353,8 @@ class UpdateGridConfig:
         Args:
             asset_id: The map asset to update
             user_id: The requesting user's ID
-            grid_width: Grid width in cells (1-100)
-            grid_height: Grid height in cells (1-100)
+            grid_width: Grid width in cells (1-1000)
+            grid_height: Grid height in cells (1-1000)
             grid_opacity: Grid overlay opacity (0.0-1.0)
             grid_offset_x: Whole-grid X shift (image px)
             grid_offset_y: Whole-grid Y shift (image px)

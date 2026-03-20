@@ -5,7 +5,7 @@
 
 'use client'
 
-import React, { useRef } from 'react';
+import React, { useRef, useEffect } from 'react';
 
 const HOLD_DELAY_MS    = 100;
 const HOLD_INTERVAL_MS = 50;
@@ -39,6 +39,8 @@ const HoldButton = ({ action, holdAction, title, style, children }) => {
     clearTimeout(timeoutRef.current);
     clearInterval(intervalRef.current);
   };
+
+  useEffect(() => stop, []);
 
   return (
     <button
