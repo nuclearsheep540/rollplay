@@ -6,6 +6,7 @@
 import pytest
 from pydantic import ValidationError
 
+from shared_contracts.base import ContractModel
 from shared_contracts.audio import AudioChannelState, AudioEffects, AudioTrackConfig
 from shared_contracts.assets import AssetRef
 from shared_contracts.display import ActiveDisplayType
@@ -19,6 +20,19 @@ from shared_contracts.session import (
     SessionStartResponse,
     SessionStats,
 )
+
+
+# --- ContractModel base class ---
+
+
+class TestContractModel:
+    def test_extra_fields_forbidden(self):
+        with pytest.raises(ValidationError):
+            AudioChannelState(volume=0.5, unknown_field="should_fail")
+
+    def test_valid_model_accepts_known_fields(self):
+        state = AudioChannelState(volume=0.5)
+        assert state.volume == 0.5
 
 
 # --- Round-trip tests: model_dump → model_validate produces identical object ---
