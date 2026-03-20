@@ -254,7 +254,7 @@ class TestMapConstraints:
 
     def test_grid_width_rejects_above_max(self):
         with pytest.raises(ValidationError):
-            GridConfig(grid_width=101)
+            GridConfig(grid_width=1001)
 
     def test_grid_opacity_rejects_above_max(self):
         with pytest.raises(ValidationError):
