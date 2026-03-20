@@ -110,9 +110,18 @@ function GameContent() {
   const [isModerator, setIsModerator] = useState(false); // Moderator status
   const [isHost, setIsHost] = useState(false); // Host status
   const [dicePortalActive, setDicePortalActive] = useState(true);
-  const [uiScale, setUIScale] = useState(() =>
-    typeof window !== 'undefined' && window.innerWidth <= 768 ? 'small' : 'medium'
-  ); // UI Scale state
+  const [uiScale, setUIScale] = useState('medium'); // UI Scale state
+
+  // Default to 'small' on mobile/tablet devices — must be in useEffect
+  // since navigator is unavailable during SSR. iPadOS and Chrome on iPad
+  // report as "Macintosh" in the UA string, so we also detect them via
+  // maxTouchPoints (iPads report 5, real Macs report 0).
+  useEffect(() => {
+    const ua = navigator.userAgent;
+    const isMobile = /iPhone|iPod|Android/i.test(ua)
+      || (navigator.maxTouchPoints > 1 && /Macintosh/i.test(ua));
+    if (isMobile) setUIScale('small');
+  }, []);
   const [combatActive, setCombatActive] = useState(false); // Combat state
   const [rollLog, setRollLog] = useState([
     { id: 1, message: 'Welcome to Tabletop Tavern', type: 'system'}
