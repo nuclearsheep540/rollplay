@@ -1105,6 +1105,18 @@ export const useUnifiedAudio = () => {
       setIsAudioUnlocked(true);
       console.log('🔊 Unified audio system unlocked successfully');
 
+      // Re-apply channel effects to the fresh Web Audio nodes.
+      // syncAudioState (from WebSocket initial_state) runs before unlock, so
+      // channelEffects React state is populated but the Web Audio nodes it set
+      // belong to the old (now closed) context. The new context's nodes have
+      // default values (e.g. reverb wetGain = 0.0). Re-applying syncs them.
+      for (const [trackId, effects] of Object.entries(channelEffects)) {
+        if (channelInsertEffectsRef.current[trackId]) {
+          applyChannelEffects(trackId, effects);
+          console.log(`🔄 Re-applied effects for ${trackId} to fresh audio graph`);
+        }
+      }
+
       // Drain pending play operations that were queued while context was suspended
       const pending = pendingPlayOpsRef.current;
       pendingPlayOpsRef.current = [];

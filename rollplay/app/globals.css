@@ -763,8 +763,7 @@ body {
   height: max(50vh, 300px);
   z-index: 101;
   transition: transform 300ms ease;
-  background: linear-gradient(0deg, rgba(0,0,0,0.95) 0%, rgba(26,26,46,0.9) 100%);
-  backdrop-filter: blur(8px);
+  background: linear-gradient(0deg, rgb(0,0,0) 0%, rgb(26,26,46) 100%);
   border-top: 1px solid rgba(255, 255, 255, 0.1);
   overflow: visible;
 }
