@@ -143,6 +143,24 @@ function GameContent() {
   const [gridConfig, setGridConfig] = useState(null); // Current grid configuration
   const [liveGridOpacity, setLiveGridOpacity] = useState(0.2); // Live grid opacity for real-time updates
   const [isMapLocked, setIsMapLocked] = useState(false);
+  const [gridInspect, setGridInspect] = useState(false);
+  const [gridInspectMode, setGridInspectMode] = useState('hold'); // 'hold' | 'toggle'
+
+  // Shift key → grid inspect (hold mode: down=on, up=off; toggle mode: down=flip)
+  useEffect(() => {
+    const onKeyDown = (e) => {
+      if (e.key !== 'Shift' || e.repeat) return;
+      setGridInspect(prev => gridInspectMode === 'toggle' ? !prev : true);
+    };
+    const onKeyUp = (e) => {
+      if (e.key !== 'Shift' || gridInspectMode === 'toggle') return;
+      setGridInspect(false);
+    };
+    window.addEventListener('keydown', onKeyDown);
+    window.addEventListener('keyup', onKeyUp);
+    return () => { window.removeEventListener('keydown', onKeyDown); window.removeEventListener('keyup', onKeyUp); };
+  }, [gridInspectMode]);
+
   const [tuningMode, setTuningMode] = useState(null); // null | 'offset'
   const [liveTuning, setLiveTuning] = useState({ offsetX: 0, offsetY: 0 });
   const [liveCellSize, setLiveCellSize] = useState(64); // Cell size in native image pixels
@@ -1831,6 +1849,7 @@ function GameContent() {
               liveGridOpacity={liveGridOpacity}
               gridConfig={effectiveGridConfig}
               isMapLocked={isMapLocked}
+              gridInspect={gridInspect}
               offsetX={liveTuning.offsetX}
               offsetY={liveTuning.offsetY}
               onImageLoad={setMapNaturalDimensions}
@@ -1847,6 +1866,9 @@ function GameContent() {
               isMapLocked={isMapLocked}
               onToggleLock={() => setIsMapLocked(prev => !prev)}
               activeMap={activeMap}
+              gridInspect={gridInspect}
+              gridInspectMode={gridInspectMode}
+              onToggleInspectMode={() => setGridInspectMode(prev => prev === 'hold' ? 'toggle' : 'hold')}
             />
             {tuningMode && (
               <GridTuningOverlay

@@ -68,6 +68,7 @@ const GridOverlay = ({
   activeMap = null,
   mapImageRef = null,
   liveGridOpacity = null,
+  gridInspect = false,
   offsetX = 0, // Live offset in image-native pixels
   offsetY = 0,
 }) => {
@@ -261,6 +262,10 @@ const GridOverlay = ({
   // letting pointerDown still bubble to the map container for dragging.
 
   const handleSvgMouseMove = (e) => {
+    if (!gridInspect) {
+      if (hoveredCell) setHoveredCell(null);
+      return;
+    }
     const svgEl = svgRef.current;
     if (!svgEl || !layout) return;
     const pt = svgEl.createSVGPoint();

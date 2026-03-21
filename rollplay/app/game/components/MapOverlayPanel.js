@@ -5,7 +5,7 @@
 
 import React from 'react';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
-import { faLock, faLockOpen } from '@fortawesome/free-solid-svg-icons';
+import { faLock, faLockOpen, faCrosshairs } from '@fortawesome/free-solid-svg-icons';
 
 /**
  * Lock Map button. Rendered inside MapSafeArea so positioning is simply
@@ -16,6 +16,9 @@ const MapOverlayPanel = ({
   isMapLocked = false,
   onToggleLock,
   activeMap = null,
+  gridInspect = false,
+  gridInspectMode = 'hold',
+  onToggleInspectMode = null,
 }) => {
   const disabled = !activeMap;
   const isMobile = typeof window !== 'undefined' &&
@@ -24,15 +27,55 @@ const MapOverlayPanel = ({
 
   const scale = isMobile ? 1 : 1.5;
 
+  const buttonBase = {
+    height: `${36 * scale}px`,
+    padding: `0 ${12 * scale}px`,
+    border: '1px solid rgba(255, 255, 255, 0.1)',
+    borderTop: 'none',
+    outline: 'none',
+    backdropFilter: 'blur(8px)',
+    display: 'flex',
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: `${7 * scale}px`,
+    transition: 'background 200ms, color 200ms',
+    fontFamily: 'system-ui',
+    fontSize: `${11 * scale}px`,
+    fontWeight: '600',
+    whiteSpace: 'nowrap',
+  };
+
   return (
-    <div style={{ position: 'absolute', top: '0px', right: '16px', pointerEvents: 'auto' }}>
+    <div style={{ position: 'absolute', top: '0px', right: '16px', pointerEvents: 'auto', display: 'flex', gap: `${6 * scale}px` }}>
+      {/* Grid Inspect button — desktop only */}
+      {!isMobile && activeMap && (
+        <button
+          onClick={onToggleInspectMode}
+          title={`Grid Inspect: ${gridInspectMode === 'hold' ? 'Hold Shift' : 'Toggle Shift'} (click to switch)`}
+          style={{
+            ...buttonBase,
+            background: gridInspect
+              ? 'rgba(59, 130, 246, 0.85)'
+              : 'rgba(0, 0, 0, 0.7)',
+            color: gridInspect
+              ? '#bfdbfe'
+              : 'rgba(255, 255, 255, 0.5)',
+            borderRadius: `0 0 ${6 * scale}px ${6 * scale}px`,
+            cursor: 'pointer',
+          }}
+        >
+          <FontAwesomeIcon icon={faCrosshairs} style={{ fontSize: `${12 * scale}px` }} />
+          {gridInspectMode === 'hold' ? 'HOLD' : 'TOGGLE'}
+        </button>
+      )}
+
+      {/* Lock Map button */}
       <button
         onClick={onToggleLock}
         disabled={disabled}
         title={isMapLocked ? 'Unlock Map' : 'Lock Map'}
         style={{
-          height: `${36 * scale}px`,
-          padding: `0 ${12 * scale}px`,
+          ...buttonBase,
           background: disabled
             ? 'rgba(0, 0, 0, 0.7)'
             : isMapLocked
@@ -43,21 +86,9 @@ const MapOverlayPanel = ({
             : isMapLocked
               ? '#fde68a'
               : 'rgba(255, 255, 255, 0.5)',
-          border: '1px solid rgba(255, 255, 255, 0.1)',
-          borderTop: 'none',
           borderRadius: `0 0 ${6 * scale}px ${6 * scale}px`,
-          backdropFilter: 'blur(8px)',
           cursor: disabled ? 'not-allowed' : 'pointer',
-          display: 'flex',
-          flexDirection: 'row',
-          alignItems: 'center',
-          gap: `${7 * scale}px`,
           opacity: disabled ? 0.4 : 1,
-          transition: 'background 200ms, color 200ms',
-          fontFamily: 'system-ui',
-          fontSize: `${11 * scale}px`,
-          fontWeight: '600',
-          whiteSpace: 'nowrap',
         }}
       >
         <FontAwesomeIcon icon={isMapLocked ? faLock : faLockOpen} style={{ fontSize: `${12 * scale}px` }} />

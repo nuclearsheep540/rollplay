@@ -23,6 +23,7 @@ const MapDisplay = ({
   liveGridOpacity = null,
   gridConfig = null, // Preview grid config for edit mode
   isMapLocked = false,
+  gridInspect = false,
   offsetX = 0,
   offsetY = 0,
   onImageLoad = null, // fires with { naturalWidth, naturalHeight } when map image loads
@@ -31,17 +32,24 @@ const MapDisplay = ({
   const mapImageRef = useRef(null);
   const containerRef = useRef(null);
 
-  // Unified view state (replaces separate map/grid zoom)
-  const [viewTransform, setViewTransform] = useState({
-    x: 0,
-    y: 0,
-    scale: 1.0
-  });
+  // Unified view state — ref is the source of truth for real-time DOM updates
+  // during drag/pinch (bypasses React render cycle). React state syncs on drag end
+  // so the non-dragging CSS transition can animate.
+  const [viewTransform, setViewTransform] = useState({ x: 0, y: 0, scale: 1.0 });
+  const viewRef = useRef({ x: 0, y: 0, scale: 1.0 });
+  const contentRef = useRef(null);
 
   // Pointer tracking refs — no re-render needed for gesture state
   const activePointers = useRef(new Map()); // pointerId → { x, y }
   const lastPinch      = useRef(null);      // { dist, midX, midY }
   const [isDragging, setIsDragging] = useState(false); // cursor style only
+
+  // Apply transform directly to DOM — no React render
+  const applyTransform = useCallback(() => {
+    if (!contentRef.current) return;
+    const { x, y, scale } = viewRef.current;
+    contentRef.current.style.transform = `translate3d(${x}px, ${y}px, 0) scale(${scale})`;
+  }, []);
 
   // Handle map loading
   useEffect(() => {
@@ -64,16 +72,18 @@ const MapDisplay = ({
     const rect   = e.currentTarget.getBoundingClientRect();
     const fx     = e.clientX - rect.left;
     const fy     = e.clientY - rect.top;
-    setViewTransform(prev => {
-      const newScale = clamp(prev.scale * factor, 0.25, 5.0);
-      const ratio    = newScale / prev.scale;
-      return {
-        scale: newScale,
-        x: fx - ratio * (fx - prev.x),
-        y: fy - ratio * (fy - prev.y),
-      };
-    });
-  }, [isMapLocked]);
+    const prev   = viewRef.current;
+    const newScale = clamp(prev.scale * factor, 0.25, 5.0);
+    const ratio    = newScale / prev.scale;
+    const next = {
+      scale: newScale,
+      x: fx - ratio * (fx - prev.x),
+      y: fy - ratio * (fy - prev.y),
+    };
+    viewRef.current = next;
+    applyTransform();
+    setViewTransform(next); // sync React state for info overlay
+  }, [isMapLocked, applyTransform]);
 
   const handlePointerDown = useCallback((e) => {
     if (isMapLocked) return;
@@ -94,7 +104,9 @@ const MapDisplay = ({
       if (!prevPos) return;
       const dx = e.clientX - prevPos.x;
       const dy = e.clientY - prevPos.y;
-      setViewTransform(t => ({ ...t, x: t.x + dx, y: t.y + dy }));
+      const prev = viewRef.current;
+      viewRef.current = { ...prev, x: prev.x + dx, y: prev.y + dy };
+      applyTransform();
 
     } else if (pointers.length === 2) {
       const [p1, p2] = pointers;
@@ -109,30 +121,36 @@ const MapDisplay = ({
         const rect   = containerRef.current.getBoundingClientRect();
         const fx     = midX - rect.left;
         const fy     = midY - rect.top;
-        setViewTransform(prev => {
-          const newScale = clamp(prev.scale * factor, 0.25, 5.0);
-          const ratio    = newScale / prev.scale;
-          return {
-            scale: newScale,
-            x: fx - ratio * (fx - prev.x) + panDX,
-            y: fy - ratio * (fy - prev.y) + panDY,
-          };
-        });
+        const prev   = viewRef.current;
+        const newScale = clamp(prev.scale * factor, 0.25, 5.0);
+        const ratio    = newScale / prev.scale;
+        viewRef.current = {
+          scale: newScale,
+          x: fx - ratio * (fx - prev.x) + panDX,
+          y: fy - ratio * (fy - prev.y) + panDY,
+        };
+        applyTransform();
       }
       lastPinch.current = { dist, midX, midY };
     }
-  }, [isMapLocked]);
+  }, [isMapLocked, applyTransform]);
 
   const handlePointerUp = useCallback((e) => {
     activePointers.current.delete(e.pointerId);
     if (activePointers.current.size < 2) lastPinch.current = null;
-    if (activePointers.current.size === 0) setIsDragging(false);
+    if (activePointers.current.size === 0) {
+      setIsDragging(false);
+      setViewTransform(viewRef.current); // sync React state on drag end
+    }
   }, []);
 
   const handlePointerCancel = useCallback((e) => {
     activePointers.current.delete(e.pointerId);
     if (activePointers.current.size < 2) lastPinch.current = null;
-    if (activePointers.current.size === 0) setIsDragging(false);
+    if (activePointers.current.size === 0) {
+      setIsDragging(false);
+      setViewTransform(viewRef.current); // sync React state on drag end
+    }
   }, []);
 
   const baseStyles = {
@@ -152,6 +170,7 @@ const MapDisplay = ({
     transform: `translate3d(${viewTransform.x}px, ${viewTransform.y}px, 0) scale(${viewTransform.scale})`,
     transformOrigin: '0px 0px',   // required for zoom-to-point maths
     transition: isDragging ? 'none' : 'transform 0.1s ease-out',
+    willChange: 'transform',
     width: '100%',
     height: '100%',
     position: 'relative'
@@ -169,7 +188,7 @@ const MapDisplay = ({
         onPointerUp={handlePointerUp}
         onPointerCancel={handlePointerCancel}
       >
-        <div style={contentTransform}>
+        <div ref={contentRef} style={contentTransform}>
           {showGrid && (
             <GridOverlay
               gridConfig={(isEditMode && gridConfig) ? gridConfig : null}
@@ -179,6 +198,7 @@ const MapDisplay = ({
               activeMap={null}
               mapImageRef={null}
               liveGridOpacity={liveGridOpacity}
+              gridInspect={gridInspect}
             />
           )}
         </div>
@@ -210,7 +230,7 @@ const MapDisplay = ({
       )}
 
       {/* Transformed content — map image and grid overlay pan/zoom together */}
-      <div style={contentTransform}>
+      <div ref={contentRef} style={contentTransform}>
         <img
           ref={mapImageRef}
           src={activeMap?.file_path}
@@ -231,6 +251,7 @@ const MapDisplay = ({
             activeMap={activeMap}
             mapImageRef={mapImageRef}
             liveGridOpacity={liveGridOpacity}
+            gridInspect={gridInspect}
             offsetX={offsetX}
             offsetY={offsetY}
           />
