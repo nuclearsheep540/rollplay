@@ -18,6 +18,11 @@ const MapOverlayPanel = ({
   activeMap = null,
 }) => {
   const disabled = !activeMap;
+  const isMobile = typeof window !== 'undefined' &&
+    (/iPhone|iPod|Android/i.test(navigator.userAgent) ||
+     (navigator.maxTouchPoints > 1 && /Macintosh/i.test(navigator.userAgent)));
+
+  const scale = isMobile ? 1 : 2;
 
   return (
     <div style={{ position: 'absolute', top: '0px', right: '16px', pointerEvents: 'auto' }}>
@@ -26,8 +31,8 @@ const MapOverlayPanel = ({
         disabled={disabled}
         title={isMapLocked ? 'Unlock Map' : 'Lock Map'}
         style={{
-          height: '36px',
-          padding: '0 12px',
+          height: `${36 * scale}px`,
+          padding: `0 ${12 * scale}px`,
           background: disabled
             ? 'rgba(0, 0, 0, 0.7)'
             : isMapLocked
@@ -40,22 +45,22 @@ const MapOverlayPanel = ({
               : 'rgba(255, 255, 255, 0.5)',
           border: '1px solid rgba(255, 255, 255, 0.1)',
           borderTop: 'none',
-          borderRadius: '0 0 6px 6px',
+          borderRadius: `0 0 ${6 * scale}px ${6 * scale}px`,
           backdropFilter: 'blur(8px)',
           cursor: disabled ? 'not-allowed' : 'pointer',
           display: 'flex',
           flexDirection: 'row',
           alignItems: 'center',
-          gap: '7px',
+          gap: `${7 * scale}px`,
           opacity: disabled ? 0.4 : 1,
           transition: 'background 200ms, color 200ms',
           fontFamily: 'system-ui',
-          fontSize: '11px',
+          fontSize: `${11 * scale}px`,
           fontWeight: '600',
           whiteSpace: 'nowrap',
         }}
       >
-        <FontAwesomeIcon icon={isMapLocked ? faLock : faLockOpen} style={{ fontSize: '12px' }} />
+        <FontAwesomeIcon icon={isMapLocked ? faLock : faLockOpen} style={{ fontSize: `${12 * scale}px` }} />
         {isMapLocked ? 'LOCKED' : 'LOCK MAP'}
       </button>
     </div>
