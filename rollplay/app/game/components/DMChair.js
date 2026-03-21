@@ -18,7 +18,7 @@ export default function DMChair({ dmName, isEmpty }) {
     return (
       <div 
         className={`
-          rounded-lg border border-dashed text-center transition-all duration-300
+          rounded-lg border border-dashed text-center transition-colors duration-300
           p-[calc(12px*var(--ui-scale))] mb-[calc(12px*var(--ui-scale))]
           bg-rose-500/5 border-rose-500/30 opacity-60
         `}
@@ -36,7 +36,7 @@ export default function DMChair({ dmName, isEmpty }) {
   return (
     <div 
       className={`
-        rounded-lg border transition-all duration-300 relative p-[calc(12px*var(--ui-scale))] mb-[calc(12px*var(--ui-scale))] border-l-4
+        rounded-lg border transition-colors duration-300 relative p-[calc(12px*var(--ui-scale))] mb-[calc(12px*var(--ui-scale))] border-l-4
         bg-rose-500/10 border-rose-500/30 shadow-lg shadow-rose-500/20
       `}
       style={{

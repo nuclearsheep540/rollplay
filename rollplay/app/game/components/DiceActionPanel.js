@@ -160,9 +160,9 @@ export default function DiceActionPanel({
   return (
     <>
       <div 
-        className={`dice-action-panel transition-all duration-300 fixed bottom-[calc(24px*var(--ui-scale))] left-1/2 z-[100] ${
-          isPanelActive 
-            ? 'active-turn transform -translate-x-1/2 scale-100' 
+        className={`dice-action-panel transition-[transform,opacity] duration-300 fixed bottom-[calc(24px*var(--ui-scale))] left-1/2 z-[100] ${
+          isPanelActive
+            ? 'active-turn transform -translate-x-1/2 scale-100'
             : 'inactive-turn transform -translate-x-1/2 scale-85'
         }`}
       >
@@ -222,7 +222,7 @@ export default function DiceActionPanel({
           >
             {/* Roll Dice Button */}
             <button
-              className={`roll-dice-btn rounded-lg px-8 py-2.5 text-lg font-bold transition-all duration-200 border-2 ${
+              className={`roll-dice-btn rounded-lg px-8 py-2.5 text-lg font-bold transition-colors duration-200 border-2 ${
                 isButtonEnabled 
                   ? (isPromptedToRoll 
                       ? 'bg-emerald-500/20 border-emerald-500/50 text-emerald-400 hover:bg-emerald-500/30 hover:-translate-y-0.5 cursor-pointer' 
@@ -238,7 +238,7 @@ export default function DiceActionPanel({
             {/* End Turn Button - Only show during combat turns (not prompts) */}
             {isMyTurn && combatActive && !isPromptedToRoll && (
               <button
-                className="end-turn-btn active bg-red-500/20 border-2 border-red-500/50 text-red-500 rounded-xl px-8 py-4 text-lg font-bold cursor-pointer transition-all duration-200 hover:bg-red-500/30 hover:-translate-y-0.5"
+                className="end-turn-btn active bg-red-500/20 border-2 border-red-500/50 text-red-500 rounded-xl px-8 py-4 text-lg font-bold cursor-pointer transition-colors duration-200 hover:bg-red-500/30 hover:-translate-y-0.5"
                 onClick={handleEndTurn}
               >
                 ⏭️ End Turn
@@ -304,7 +304,7 @@ export default function DiceActionPanel({
                   {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map(num => (
                     <button
                       key={num}
-                      className={`px-2 py-1 rounded text-xs border transition-all ${
+                      className={`px-2 py-1 rounded text-xs border transition-colors ${
                         primaryMultiplier === num
                           ? 'bg-emerald-500/30 border-emerald-500/60 text-emerald-200'
                           : 'bg-slate-600/30 border-slate-500 text-slate-300 hover:bg-slate-500/30'
@@ -328,7 +328,7 @@ export default function DiceActionPanel({
                 ].map((dice) => (
                   <button
                     key={dice.name}
-                    className={`p-3 rounded-md text-sm cursor-pointer flex flex-col items-center transition-all border-2 ${
+                    className={`p-3 rounded-md text-sm cursor-pointer flex flex-col items-center transition-colors border-2 ${
                       selectedDice === dice.name 
                         ? 'bg-emerald-500/30 border-emerald-500/60 text-emerald-200' 
                         : 'bg-slate-600/30 border-slate-500 text-slate-300 hover:bg-slate-500/30'
@@ -344,7 +344,7 @@ export default function DiceActionPanel({
 
                 {/* D100 - Spans 2 columns */}
                 <button
-                  className={`p-3 rounded-md text-sm cursor-pointer flex flex-col items-center col-span-2 transition-all border-2 ${
+                  className={`p-3 rounded-md text-sm cursor-pointer flex flex-col items-center col-span-2 transition-colors border-2 ${
                     selectedDice === 'D100' 
                       ? 'bg-emerald-500/30 border-emerald-500/60 text-emerald-200' 
                       : 'bg-slate-600/30 border-slate-500 text-slate-300 hover:bg-slate-500/30'
@@ -363,7 +363,7 @@ export default function DiceActionPanel({
             <div className="mb-3">
               <button
                 onClick={toggleSecondDiceSection}
-                className="w-full p-3 rounded-lg bg-slate-700/50 border border-slate-600 text-slate-300 hover:bg-slate-600/50 transition-all flex items-center justify-between"
+                className="w-full p-3 rounded-lg bg-slate-700/50 border border-slate-600 text-slate-300 hover:bg-slate-600/50 transition-colors flex items-center justify-between"
               >
                 <span className="text-sm font-medium">
                   {showSecondDice ? '➖ Hide Second Die' : '➕ Add Second Die'}
@@ -382,7 +382,7 @@ export default function DiceActionPanel({
                       {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map(num => (
                         <button
                           key={num}
-                          className={`px-2 py-1 rounded text-xs border transition-all ${
+                          className={`px-2 py-1 rounded text-xs border transition-colors ${
                             secondMultiplier === num
                               ? 'bg-blue-500/30 border-blue-500/60 text-blue-200'
                               : 'bg-slate-600/30 border-slate-500 text-slate-300 hover:bg-slate-500/30'
@@ -406,7 +406,7 @@ export default function DiceActionPanel({
                     ].map((dice) => (
                       <button
                         key={dice.name}
-                        className={`p-3 rounded-md text-sm cursor-pointer flex flex-col items-center transition-all border-2 ${
+                        className={`p-3 rounded-md text-sm cursor-pointer flex flex-col items-center transition-colors border-2 ${
                           secondDice === dice.name 
                             ? 'bg-blue-500/30 border-blue-500/60 text-blue-200' 
                             : 'bg-slate-600/30 border-slate-500 text-slate-300 hover:bg-slate-500/30'
@@ -422,7 +422,7 @@ export default function DiceActionPanel({
 
                     {/* D100 - Spans 2 columns */}
                     <button
-                      className={`p-3 rounded-md text-sm cursor-pointer flex flex-col items-center col-span-2 transition-all border-2 ${
+                      className={`p-3 rounded-md text-sm cursor-pointer flex flex-col items-center col-span-2 transition-colors border-2 ${
                         secondDice === 'D100' 
                           ? 'bg-blue-500/30 border-blue-500/60 text-blue-200' 
                           : 'bg-slate-600/30 border-slate-500 text-slate-300 hover:bg-slate-500/30'
@@ -443,7 +443,7 @@ export default function DiceActionPanel({
             <div className="p-3 rounded-lg mb-4 bg-slate-600/50 border border-slate-500">
               <div className="flex gap-4 justify-center">
                 <button
-                  className={`px-6 py-2 rounded-lg text-base font-medium transition-all border-2 flex-1 max-w-[200px] ${
+                  className={`px-6 py-2 rounded-lg text-base font-medium transition-colors border-2 flex-1 max-w-[200px] ${
                     advantageMode === 'advantage'
                       ? 'bg-green-500/30 border-green-500/60 text-green-300 shadow-lg shadow-green-500/20'
                       : 'bg-slate-700/50 border-slate-600 text-slate-300 hover:bg-slate-600/50 hover:border-slate-500'
@@ -453,7 +453,7 @@ export default function DiceActionPanel({
                   Advantage
                 </button>
                 <button
-                  className={`px-6 py-2 rounded-lg text-base font-medium transition-all border-2 flex-1 max-w-[200px] ${
+                  className={`px-6 py-2 rounded-lg text-base font-medium transition-colors border-2 flex-1 max-w-[200px] ${
                     advantageMode === 'disadvantage'
                       ? 'bg-red-500/30 border-red-500/60 text-red-300 shadow-lg shadow-red-500/20'
                       : 'bg-slate-700/50 border-slate-600 text-slate-300 hover:bg-slate-600/50 hover:border-slate-500'
@@ -493,7 +493,7 @@ export default function DiceActionPanel({
             <div className="flex gap-4 justify-center">
               <button
                 onClick={() => handleDiceRoll()}
-                className="bg-emerald-500/20 border-2 border-emerald-500/50 text-emerald-500 rounded-xl px-6 py-3 text-base font-bold cursor-pointer transition-all duration-200 hover:bg-emerald-500/30 hover:scale-105"
+                className="bg-emerald-500/20 border-2 border-emerald-500/50 text-emerald-500 rounded-xl px-6 py-3 text-base font-bold cursor-pointer transition-colors duration-200 hover:bg-emerald-500/30 hover:scale-105"
               >
                 🎲 Roll {formatDiceNotation(selectedDice, primaryMultiplier, secondDice, secondMultiplier)}{rollBonus ? ` ${rollBonus}` : ''}
                 {myPrompts.length > 0 && (
@@ -508,7 +508,7 @@ export default function DiceActionPanel({
 
               <button
                 onClick={() => setIsDiceModalOpen(false)}
-                className="bg-slate-500/20 border-2 border-slate-500/50 text-slate-500 rounded-xl px-6 py-3 text-base font-bold cursor-pointer transition-all duration-200 hover:bg-slate-500/30"
+                className="bg-slate-500/20 border-2 border-slate-500/50 text-slate-500 rounded-xl px-6 py-3 text-base font-bold cursor-pointer transition-colors duration-200 hover:bg-slate-500/30"
               >
                 Cancel
               </button>

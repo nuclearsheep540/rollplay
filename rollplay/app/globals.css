@@ -525,12 +525,15 @@ body {
   width: calc(380px + var(--panel-width-addition));
   z-index: 30;
   transition: transform 300ms ease;
-  background: linear-gradient(90deg, rgba(0,0,0,0.8) 0%, rgba(26,26,46,0.7) 100%);
-  backdrop-filter: blur(8px);
+  background: linear-gradient(90deg, rgb(0,0,0) 0%, rgb(26,26,46) 100%);
   border-right: 1px solid rgba(255, 255, 255, 0.1);
   overflow: visible;
   display: flex;
   flex-direction: column;
+}
+.party-drawer.drawer-settled {
+  background: linear-gradient(90deg, rgba(0,0,0,0.8) 0%, rgba(26,26,46,0.7) 100%);
+  backdrop-filter: blur(8px);
 }
 
 .drawer-content {
@@ -685,12 +688,15 @@ body {
   width: calc(380px + var(--panel-width-addition));
   z-index: 30;
   transition: transform 300ms ease;
-  background: linear-gradient(270deg, rgba(0,0,0,0.8) 0%, rgba(26,26,46,0.7) 100%);
-  backdrop-filter: blur(8px);
+  background: linear-gradient(270deg, rgb(0,0,0) 0%, rgb(26,26,46) 100%);
   border-left: 1px solid rgba(255, 255, 255, 0.1);
   overflow: visible;
   display: flex;
   flex-direction: column;
+}
+.right-drawer.drawer-settled {
+  background: linear-gradient(270deg, rgba(0,0,0,0.8) 0%, rgba(26,26,46,0.7) 100%);
+  backdrop-filter: blur(8px);
 }
 
 /* Scrollable tab strip — sits to the left of the drawer body */

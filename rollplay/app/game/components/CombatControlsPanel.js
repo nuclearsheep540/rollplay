@@ -100,7 +100,7 @@ export default function CombatControlsPanel({
           ⚔️ Toggle Combat
 
           <div
-            className={`rounded-full border-2 transition-all duration-200 w-14 h-7 ${
+            className={`rounded-full border-2 transition-colors duration-200 w-14 h-7 ${
               combatActive
                 ? COMBAT_TOGGLE_ACTIVE
                 : COMBAT_TOGGLE_INACTIVE

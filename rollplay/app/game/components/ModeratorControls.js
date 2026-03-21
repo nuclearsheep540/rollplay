@@ -336,7 +336,7 @@ export default function ModeratorControls({
                           {filteredUsers.map((moderator) => (
                             <button
                               key={moderator.seatId}
-                              className="w-full text-left p-3 bg-orange-500/10 border border-orange-500/30 text-orange-300 rounded transition-all duration-200 hover:bg-orange-500/20"
+                              className="w-full text-left p-3 bg-orange-500/10 border border-orange-500/30 text-orange-300 rounded transition-colors duration-200 hover:bg-orange-500/20"
                               onClick={() => handleRoleAction(selectedAction, moderator.playerName)}
                             >
                               <div className="flex items-center justify-between">
@@ -369,7 +369,7 @@ export default function ModeratorControls({
                             {seatedFiltered.map((player) => (
                               <button
                                 key={player.seatId}
-                                className="w-full text-left p-3 bg-emerald-500/10 border border-emerald-500/30 text-emerald-300 rounded transition-all duration-200 hover:bg-emerald-500/20"
+                                className="w-full text-left p-3 bg-emerald-500/10 border border-emerald-500/30 text-emerald-300 rounded transition-colors duration-200 hover:bg-emerald-500/20"
                                 onClick={() => handleRoleAction(selectedAction, player.playerName)}
                               >
                                 <div className="flex items-center justify-between">
@@ -398,7 +398,7 @@ export default function ModeratorControls({
                             {lobbyFiltered.map((user) => (
                               <button
                                 key={user.seatId}
-                                className="w-full text-left p-3 bg-emerald-500/10 border border-emerald-500/30 text-emerald-300 rounded transition-all duration-200 hover:bg-emerald-500/20"
+                                className="w-full text-left p-3 bg-emerald-500/10 border border-emerald-500/30 text-emerald-300 rounded transition-colors duration-200 hover:bg-emerald-500/20"
                                 onClick={() => handleRoleAction(selectedAction, user.playerName)}
                               >
                                 <div className="flex items-center justify-between">
@@ -435,7 +435,7 @@ export default function ModeratorControls({
 
             <div className="flex justify-end gap-3">
               <button
-                className="px-4 py-2 bg-gray-600 border border-gray-500 text-gray-300 rounded transition-all duration-200 hover:bg-gray-500"
+                className="px-4 py-2 bg-gray-600 border border-gray-500 text-gray-300 rounded transition-colors duration-200 hover:bg-gray-500"
                 onClick={() => setIsModeratorModalOpen(false)}
               >
                 Cancel
@@ -478,7 +478,7 @@ export default function ModeratorControls({
                       {activePlayers.map((player) => (
                         <button
                           key={player.seatId}
-                          className="w-full text-left p-3 bg-amber-500/10 border border-amber-500/30 text-amber-300 rounded transition-all duration-200 hover:bg-amber-500/20"
+                          className="w-full text-left p-3 bg-amber-500/10 border border-amber-500/30 text-amber-300 rounded transition-colors duration-200 hover:bg-amber-500/20"
                           onClick={() => handleRoleAction('set_dm', player.playerName)}
                         >
                           <div className="flex items-center justify-between">
@@ -505,7 +505,7 @@ export default function ModeratorControls({
                       {lobbyUsers.map((user) => (
                         <button
                           key={`lobby_${user.player_name || user.name}`}
-                          className="w-full text-left p-3 bg-amber-500/10 border border-amber-500/30 text-amber-300 rounded transition-all duration-200 hover:bg-amber-500/20"
+                          className="w-full text-left p-3 bg-amber-500/10 border border-amber-500/30 text-amber-300 rounded transition-colors duration-200 hover:bg-amber-500/20"
                           onClick={() => handleRoleAction('set_dm', user.player_name || user.name)}
                         >
                           <div className="flex items-center justify-between">
@@ -531,7 +531,7 @@ export default function ModeratorControls({
 
             <div className="flex justify-end gap-3">
               <button
-                className="px-4 py-2 bg-gray-600 border border-gray-500 text-gray-300 rounded transition-all duration-200 hover:bg-gray-500"
+                className="px-4 py-2 bg-gray-600 border border-gray-500 text-gray-300 rounded transition-colors duration-200 hover:bg-gray-500"
                 onClick={() => setIsDMModalOpen(false)}
               >
                 Cancel
@@ -646,7 +646,7 @@ export default function ModeratorControls({
                   {activePlayers.map((player) => (
                     <button
                       key={player.seatId}
-                      className="w-full text-left p-3 bg-red-500/10 border border-red-500/30 text-red-300 rounded transition-all duration-200 hover:bg-red-500/20"
+                      className="w-full text-left p-3 bg-red-500/10 border border-red-500/30 text-red-300 rounded transition-colors duration-200 hover:bg-red-500/20"
                       onClick={() => {
                         handleKickPlayer(player.playerName);
                         setIsKickModalOpen(false);
@@ -675,7 +675,7 @@ export default function ModeratorControls({
 
             <div className="flex justify-end gap-3">
               <button
-                className="px-4 py-2 bg-gray-600 border border-gray-500 text-gray-300 rounded transition-all duration-200 hover:bg-gray-500"
+                className="px-4 py-2 bg-gray-600 border border-gray-500 text-gray-300 rounded transition-colors duration-200 hover:bg-gray-500"
                 onClick={() => setIsKickModalOpen(false)}
               >
                 Cancel

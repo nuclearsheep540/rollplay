@@ -169,7 +169,9 @@ function GameContent() {
   // Spectator mode - user has no character selected for this campaign
   const [isSpectator, setIsSpectator] = useState(false);
   const [isDrawerOpen, setIsDrawerOpen] = useState(true);
+  const [partyDrawerSettled, setPartyDrawerSettled] = useState(true); // starts open, so settled
   const [activeRightDrawer, setActiveRightDrawer] = useState(null); // null | 'dm' | 'moderator'
+  const [rightDrawerSettled, setRightDrawerSettled] = useState(false); // starts closed
   const [isMixerOpen, setIsMixerOpen] = useState(false);
   const [mapImageConfig, setMapImageConfig] = useState(null); // Map image positioning/scaling
 
@@ -1626,12 +1628,15 @@ function GameContent() {
 
       {/* Party drawer — fixed-position, outside grid flow */}
       <div
-        className="party-drawer"
+        className={`party-drawer ${partyDrawerSettled ? 'drawer-settled' : ''}`}
         style={{ transform: isDrawerOpen ? 'translateX(0)' : 'translateX(-100%)' }}
+        onTransitionEnd={(e) => {
+          if (e.propertyName === 'transform') setPartyDrawerSettled(isDrawerOpen);
+        }}
       >
         <button
           className={`drawer-toggle-tab ${isDrawerOpen ? 'active' : ''}`}
-          onClick={() => setIsDrawerOpen(!isDrawerOpen)}
+          onClick={() => { setPartyDrawerSettled(false); setIsDrawerOpen(!isDrawerOpen); }}
         >
           PARTY
         </button>
@@ -1705,8 +1710,11 @@ function GameContent() {
 
         return (
           <div
-            className="right-drawer"
+            className={`right-drawer ${rightDrawerSettled ? 'drawer-settled' : ''}`}
             style={{ transform: activeRightDrawer ? 'translateX(0)' : 'translateX(100%)' }}
+            onTransitionEnd={(e) => {
+              if (e.propertyName === 'transform') setRightDrawerSettled(!!activeRightDrawer);
+            }}
           >
             {/* Scrollable tab strip — centers when tabs fit, scrolls when they overflow */}
             <div className="right-drawer-tab-strip">
@@ -1715,7 +1723,7 @@ function GameContent() {
                   <button
                     key={tab.id}
                     className={`right-drawer-tab ${activeRightDrawer === tab.id ? 'active' : ''}`}
-                    onClick={() => setActiveRightDrawer(prev => prev === tab.id ? null : tab.id)}
+                    onClick={() => { setRightDrawerSettled(false); setActiveRightDrawer(prev => prev === tab.id ? null : tab.id); }}
                   >
                     {tab.label}
                   </button>
