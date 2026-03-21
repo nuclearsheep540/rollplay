@@ -1,5 +1,5 @@
 {
-  "latest": "0.29.0",
+  "latest": "0.30.0",
   "releases": {
     "0.27.1": {
       "date": "2026-03-10",
@@ -67,6 +67,21 @@
       "description": "Map config now includes grid color, and offset. Cell rows and columns can now be added/removed",
       "services": {
         "app_version": "0.18.0",
+        "api_site_version": "0.15.0",
+        "api_game_version": "0.12.0",
+        "api_auth_version": "0.2.1",
+        "nginx_version": "0.4.10",
+        "postgres_version": "0.1.8",
+        "mongo_db_version": "0.3.2",
+        "certbot_version": "0.1.2"
+      }
+    },
+    "0.30.0": {
+      "date": "2026-03-21",
+      "commit": "468f354",
+      "description": "Mobile Optimisations - Map and Animations",
+      "services": {
+        "app_version": "0.19.0",
         "api_site_version": "0.15.0",
         "api_game_version": "0.12.0",
         "api_auth_version": "0.2.1",
