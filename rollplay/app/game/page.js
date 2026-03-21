@@ -1584,7 +1584,7 @@ function GameContent() {
           className="nav-back-btn"
           title="Back to Dashboard"
         >
-          Back
+          Dashboard
         </button>
       </div>
 

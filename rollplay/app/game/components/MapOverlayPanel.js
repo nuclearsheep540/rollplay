@@ -22,7 +22,7 @@ const MapOverlayPanel = ({
     (/iPhone|iPod|Android/i.test(navigator.userAgent) ||
      (navigator.maxTouchPoints > 1 && /Macintosh/i.test(navigator.userAgent)));
 
-  const scale = isMobile ? 1 : 2;
+  const scale = isMobile ? 1 : 1.5;
 
   return (
     <div style={{ position: 'absolute', top: '0px', right: '16px', pointerEvents: 'auto' }}>
