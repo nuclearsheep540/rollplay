@@ -73,7 +73,7 @@ export default function PlayerCard({
     return (
       <div
         className={`
-          rounded-lg border transition-all duration-300 relative p-[calc(8px*var(--ui-scale))] mb-[calc(8px*var(--ui-scale))] border-l-4
+          rounded-lg border transition-colors duration-300 relative p-[calc(8px*var(--ui-scale))] mb-[calc(8px*var(--ui-scale))] border-l-4
           ${isMyTurn
             ? 'bg-emerald-500/10 border-emerald-500/30 shadow-lg shadow-emerald-500/20'
             : isThisPlayerSeat
@@ -144,7 +144,7 @@ export default function PlayerCard({
               >
                 {/* HP Fill Overlay */}
                 <div
-                  className="absolute inset-0 bg-gray-800/80 transition-all duration-300"
+                  className="absolute inset-0 bg-gray-800/80 transition-[left] duration-300"
                   style={{
                     left: `${hpPercentage}%`,
                   }}

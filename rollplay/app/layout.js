@@ -42,6 +42,15 @@ export const metadata = {
   description: 'Made for my friends',
 }
 
+// viewport-fit=cover extends rendering into notch/home-indicator zones.
+// Safe area insets (env(safe-area-inset-*)) are then used in CSS to push
+// content clear of those zones.
+export const viewport = {
+  width: 'device-width',
+  initialScale: 1,
+  viewportFit: 'cover',
+}
+
 export default function RootLayout({ children }) {
   return (
     <html lang="en" className={`${inter.variable} ${newRocker.variable} ${metamorphous.variable} ${ubuntu.variable} ${outfit.variable}`}>

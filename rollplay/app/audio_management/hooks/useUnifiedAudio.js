@@ -48,7 +48,12 @@ export const useUnifiedAudio = () => {
   const [masterVolume, setMasterVolume] = useState(() => {
     if (typeof window !== 'undefined') {
       const saved = localStorage.getItem('rollplay_master_volume');
-      return saved ? parseFloat(saved) : 0.5;
+      if (saved !== null) {
+        const parsed = parseFloat(saved);
+        if (!Number.isNaN(parsed)) return parsed;
+      }
+      const isMobile = window.matchMedia('(max-width: 639px)').matches;
+      return isMobile ? 0.75 : 0.5;
     }
     return 0.5;
   });
@@ -1058,21 +1063,43 @@ export const useUnifiedAudio = () => {
   const unlockAudio = async () => {
     try {
       console.log('🔓 Starting audio unlock process...');
-      
-      // Unlock HTML5 audio with silent audio
-      const silentAudio = new Audio();
-      silentAudio.src = 'data:audio/wav;base64,UklGRnoGAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQoGAACBhYqFbF1fdJivrJBhNjVgodDbq2EcBj+a2/LDciUFLIHO8tiJNwgZaLvt559NEAxQp+PwtmMcBjiR1/LMeSwFJHfH8N2QQAoUXrTp66hVFApGn+DyvmwhGS2Q1/LNeSsFJHfH8N2QQAoUXrTp66hVFApGn+DyvmwhGS2Q1/LNeSsFJHfH8N2QQAoUXrTp66hVFApGn+DyvmwhGS2Q1/LNeSsFJHfH8N2QQAoUXrTp66hVFApGn+DyvmwhGS2Q1/LNeSsFJHfH8N2QQAoUXrTp66hVFApGn+DyvmwhGS2Q1/LNeSsFJHfH8N2QQAoUXrTp66hVFApGn+DyvmwhGS2Q1/LNeSsFJHfH8N2QQAoUXrTp66hVFApGn+DyvmwhGS2Q1/LNeSsFJHfH8N2QQAoUXrTp66hVFApGn+DyvmwhGS2Q1/LNeSsFJHfH8N2QQAoUXrTp66hVFApGn+DyvmwhGS2Q1/LNeSsFJHfH8N2QQAoUXrTp66hVFApGn+DyvmwhGS2Q1/LNeSsFJHfH8N2QQAoUXrTp66hVFApGn+DyvmzhGS2Q1/LNeSsFJHfH8N2QQAoUXrTp66hVFApGn+DyvmwhGS2Q1/LNeSsFJHfH8N2QQAoUXrTp66hVFApGn+DyvmwhGS2Q1/LNeSsFJHfH8N2QQAoUXrTp66hVFApGn+DyvmwhGS2Q1/LNeSsFJHfH8N2QQAoUXrTp66hVFApGn+DyvmwhGS2Q1/LNeSsFJHfH8N2QQAoUXrTp66hVFApGn+DyvmwhGS2Q1/LNeSsFJHfH8N2QQAoUXrTp66hVFApGn+DyvmwhGS2Q1/LNeSsFJHfH8N2QQAoUXrTp66hVFApGn+DyvmwhGS2Q1/LNeSsFJHfH8N2QQAoUXrTp66hVFApGn+DyvmzhGS2Q1/LNeSsFJHfH8N2QQAoUXrTp66hVFApGn+DyvmwhGS2Q1/LNeSsFJHfH8N2QQAoUXrTp66hVFApGn+DyvmwhGS2Q1/LNeSsFJHfH8N2QQAoUXrTp66hVFApGn+DyvmwhGS2Q1/LNeSsFJHfH8N2QQAoUXrTp66hVFApGn+DyvmwhGS2Q1/LNeSsFJHfH8N2QQAoUXrTp66hVFApGn+DyvmwhGS2Q1/LNeSsFJHfH8N2QQAoUXrTp66hVFApGn+DyvmwhGS2Q1/LNeSsFJHfH8N2QQAoUXrTp66hVFApGn+DyvmwhGS2Q1/LNeSsFJHfH8N2QQAoUXrTp66hVFApGn+DyvmzhGS2Q1/LNeSsFJHfH8N2QQAoUXrTp66hVFApGn+DyvmwhGS2Q1/LNeSsFJHfH8N2QQAoUXrTp66hVFApGn+DyvmwhGS2Q1/LNeSsFJHfH8N2QQAoUXrTp66hVFApGn+DyvmwhGS2Q1/LNeSsFJHfH8N2QQAoUXrTp66hVFApGn+DyvmwhGS2Q1/LNeSsFJHfH8N2QQAoUXrTp66hVFApGn+DyvmwhGS2Q1/LNeSsFJHfH8N2QQAoUXrTp66hVFApGn+DyvmwhGS2Q1/LNeSsFJHfH8N2QQAoUXrTp66hVFApGn+DyvmwhGS2Q1/LNeSsFJHfH8N2QQAoUXrTp66hVFApGn+DyvmzhGS2Q1/LNeSsFJHfH8N2QQAoUXrTp66hVFApGn+DyvmwhGS2Q1/LNeSsFJHfH8N2QQAoUXrTp66hVFApGn+DyvmwhGS2Q1/LNeSsFJHfH8N2QQAoUXrTp66hVFApGn+DyvmwhGS2Q1/LNeSsFJHfH8N2QQAoUXrTp66hVFApGn+DyvmwhGS2Q1/LNeSsFJHfH8N2QQAoUXrTp66hVFApGn+DyvmwhGS2Q1/LNeSsFJHfH8N2QQAoUXrTp66hVFApGn+DyvmwhGS2Q1/LNeSsFJHfH8N2QQAoUXrTp66hVFApGn+DyvmwhGS2Q1/LNeSsFJHfH8N2QQAoUXrTp66hVFApGn+Dy';
-      silentAudio.volume = 0;
-      await silentAudio.play();
-      console.log('✅ HTML5 audio unlocked');
 
-      // Unlock Web Audio API
-      console.log('🎵 Initializing Web Audio API...');
+      // Step 1: Activate iOS audio session via HTML5 Audio.play() within user gesture.
+      // Uses an inline base64 MP3 data URI — no network fetch, so the user gesture
+      // window is preserved for both Safari and Chrome on iOS.
+      // (Safari needs MP3 format; Chrome needs no network delay. This satisfies both.)
+      const silentAudio = new Audio('data:audio/mp3;base64,SUQzBAAAAAAAIlRTU0UAAAAOAAADTGF2ZjYxLjcuMTAwAAAAAAAAAAAAAAD/+0DAAAAAAAAAAAAAAAAAAAAAAABJbmZvAAAADwAAAAUAAAK+AGhoaGhoaGhoaGhoaGhoaGhoaGiOjo6Ojo6Ojo6Ojo6Ojo6Ojo6OjrS0tLS0tLS0tLS0tLS0tLS0tLS02tra2tra2tra2tra2tra2tra2tr//////////////////////////wAAAABMYXZjNjEuMTkAAAAAAAAAAAAAAAAkAwYAAAAAAAACvhC6DYoAAAAAAP/7EMQAA8AAAaQAAAAgAAA0gAAABExBTUUzLjEwMFVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVV//sQxCmDwAABpAAAACAAADSAAAAEVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVX/+xDEUwPAAAGkAAAAIAAANIAAAARVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVf/7EMR8g8AAAaQAAAAgAAA0gAAABFVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVV//sQxKYDwAABpAAAACAAADSAAAAEVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVU=');
+      silentAudio.volume = 0;
+      await silentAudio.play().catch((err) => {
+        console.warn('⚠️ silentAudio.play() rejected:', err);
+      });
+      console.log('✅ HTML5 audio session activated');
+
+      // Step 2: Close the eagerly-created AudioContext.
+      // On iOS, a context created outside a user gesture (the mount useEffect)
+      // cannot produce audible output even after resume() — the iOS audio session
+      // wasn't active when it was created. We must create a fresh context now that
+      // the audio session is active. AudioBuffers in audioBuffersRef are
+      // context-independent (raw PCM) and survive this replacement.
+      if (audioContextRef.current && audioContextRef.current.state !== 'closed') {
+        console.log('🔄 Closing stale eager-init AudioContext for iOS compatibility...');
+        await audioContextRef.current.close();
+      }
+      audioContextRef.current = null;
+
+      // Step 3: Create fresh AudioContext + full audio graph within user gesture.
+      // initializeWebAudio() guards on (!ref || state === 'closed'), so nulling
+      // the ref above ensures it rebuilds everything: master/local gain, per-channel
+      // gains, EQ chains, reverb sends, metering, SFX slot gains. All refs are
+      // reassigned inside initializeWebAudio().
+      console.log('🎵 Creating fresh Web Audio context within user gesture...');
       const webAudioSuccess = await initializeWebAudio();
       if (!webAudioSuccess) {
         throw new Error('Failed to initialize Web Audio API');
       }
-      
+
+      // Step 4: Resume if still suspended (defensive — context created within a
+      // gesture should start 'running', but resume() is harmless if already running).
       console.log(`🔧 Web Audio context state: ${audioContextRef.current?.state}`);
       if (audioContextRef.current && audioContextRef.current.state === 'suspended') {
         console.log('🔄 Resuming suspended Web Audio context...');
@@ -1082,6 +1109,18 @@ export const useUnifiedAudio = () => {
       
       setIsAudioUnlocked(true);
       console.log('🔊 Unified audio system unlocked successfully');
+
+      // Re-apply channel effects to the fresh Web Audio nodes.
+      // syncAudioState (from WebSocket initial_state) runs before unlock, so
+      // channelEffects React state is populated but the Web Audio nodes it set
+      // belong to the old (now closed) context. The new context's nodes have
+      // default values (e.g. reverb wetGain = 0.0). Re-applying syncs them.
+      for (const [trackId, effects] of Object.entries(channelEffects)) {
+        if (channelInsertEffectsRef.current[trackId]) {
+          applyChannelEffects(trackId, effects);
+          console.log(`🔄 Re-applied effects for ${trackId} to fresh audio graph`);
+        }
+      }
 
       // Drain pending play operations that were queued while context was suspended
       const pending = pendingPlayOpsRef.current;
@@ -1488,8 +1527,6 @@ export const useUnifiedAudio = () => {
             ...channelState,
             channelId,
           }, true);
-        } else {
-          console.warn(`⚠️ Sync: failed to load buffer for ${channelId}`);
         }
       } else if (playback_state === 'paused' && paused_elapsed != null) {
         // Load buffer to get duration for normalizing paused position

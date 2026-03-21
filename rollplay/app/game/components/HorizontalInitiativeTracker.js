@@ -52,9 +52,9 @@ export default function HorizontalInitiativeTracker({
       {/* Initiative Order - Animated show/hide based on combat state */}
       {shouldRender && (
         <div 
-          className={`absolute left-1/2 top-[calc(24px*var(--ui-scale))] z-10 transition-all duration-300 ease-out ${
-            isVisible 
-              ? 'transform -translate-x-1/2 translate-y-0 opacity-100' 
+          className={`absolute left-1/2 top-[calc(24px*var(--ui-scale))] z-10 transition-[transform,opacity] duration-300 ease-out ${
+            isVisible
+              ? 'transform -translate-x-1/2 translate-y-0 opacity-100'
               : 'transform -translate-x-1/2 -translate-y-full opacity-0'
           }`}
         >
@@ -66,9 +66,9 @@ export default function HorizontalInitiativeTracker({
                 <div
                   key={index}
                   className={`
-                    relative group transition-all duration-300 cursor-pointer
-                    ${character.active 
-                      ? 'scale-110 z-20' 
+                    relative group transition-transform duration-300 cursor-pointer
+                    ${character.active
+                      ? 'scale-110 z-20'
                       : 'scale-100'
                     }
                   `}
@@ -76,9 +76,9 @@ export default function HorizontalInitiativeTracker({
                 >
                   {/* Character Frame - Subtle container with party/enemy colors */}
                   <div className={`
-                    rounded transition-all duration-300 p-[calc(2.4px*var(--ui-scale))]
-                    ${character.active 
-                      ? 'bg-emerald-500/20 border-2 border-emerald-400/80' 
+                    rounded transition-colors duration-300 p-[calc(2.4px*var(--ui-scale))]
+                    ${character.active
+                      ? 'bg-emerald-500/20 border-2 border-emerald-400/80'
                       : isEnemy(character.character_name)
                         ? 'bg-black/20 border-2 border-red-400/60'
                         : 'bg-black/20 border-2 border-blue-400/60'
@@ -87,7 +87,7 @@ export default function HorizontalInitiativeTracker({
                     
                     {/* Character Portrait - 2:3 Rectangle (20% bigger) */}
                     <div className={`
-                      rounded transition-all duration-300 flex items-center justify-center text-white font-bold shadow-md overflow-hidden w-[calc(38px*var(--ui-scale))] h-[calc(58px*var(--ui-scale))] text-[calc(14px*var(--ui-scale))]
+                      rounded transition-colors duration-300 flex items-center justify-center text-white font-bold shadow-md overflow-hidden w-[calc(38px*var(--ui-scale))] h-[calc(58px*var(--ui-scale))] text-[calc(14px*var(--ui-scale))]
                       ${getBackgroundColor(character.character_name)}
                     `}>
                       {/* Placeholder for future avatar image */}
@@ -122,9 +122,9 @@ export default function HorizontalInitiativeTracker({
       {/* Combat Status Indicators (Bottom Right) - Only show during combat */}
       {shouldRender && (
         <div 
-          className={`absolute bottom-[calc(24px*var(--ui-scale))] right-[calc(24px*var(--ui-scale))] z-10 transition-all duration-300 ease-out delay-100 ${
-            isVisible 
-              ? 'transform translate-x-0 opacity-100' 
+          className={`absolute bottom-[calc(24px*var(--ui-scale))] right-[calc(24px*var(--ui-scale))] z-10 transition-[transform,opacity] duration-300 ease-out delay-100 ${
+            isVisible
+              ? 'transform translate-x-0 opacity-100'
               : 'transform translate-x-full opacity-0'
           }`}
         >

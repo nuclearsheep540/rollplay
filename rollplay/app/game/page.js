@@ -27,6 +27,8 @@ import { useWebSocket } from './hooks/useWebSocket';
 import { useUnifiedAudio } from '../audio_management';
 import { MapDisplay, GridOverlay, useMapWebSocket, ImageDisplay, useImageWebSocket } from '../map_management';
 import MapOverlayPanel from './components/MapOverlayPanel';
+import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
+import { faVolumeHigh, faVolumeXmark } from '@fortawesome/free-solid-svg-icons';
 import MapSafeArea from './components/MapSafeArea';
 import GridTuningOverlay from '../map_management/components/GridTuningOverlay';
 
@@ -109,6 +111,17 @@ function GameContent() {
   const [isHost, setIsHost] = useState(false); // Host status
   const [dicePortalActive, setDicePortalActive] = useState(true);
   const [uiScale, setUIScale] = useState('medium'); // UI Scale state
+
+  // Default to 'small' on mobile/tablet devices — must be in useEffect
+  // since navigator is unavailable during SSR. iPadOS and Chrome on iPad
+  // report as "Macintosh" in the UA string, so we also detect them via
+  // maxTouchPoints (iPads report 5, real Macs report 0).
+  useEffect(() => {
+    const ua = navigator.userAgent;
+    const isMobile = /iPhone|iPod|Android/i.test(ua)
+      || (navigator.maxTouchPoints > 1 && /Macintosh/i.test(ua));
+    if (isMobile) setUIScale('small');
+  }, []);
   const [combatActive, setCombatActive] = useState(false); // Combat state
   const [rollLog, setRollLog] = useState([
     { id: 1, message: 'Welcome to Tabletop Tavern', type: 'system'}
@@ -130,6 +143,24 @@ function GameContent() {
   const [gridConfig, setGridConfig] = useState(null); // Current grid configuration
   const [liveGridOpacity, setLiveGridOpacity] = useState(0.2); // Live grid opacity for real-time updates
   const [isMapLocked, setIsMapLocked] = useState(false);
+  const [gridInspect, setGridInspect] = useState(false);
+  const [gridInspectMode, setGridInspectMode] = useState('hold'); // 'hold' | 'toggle'
+
+  // Shift key → grid inspect (hold mode: down=on, up=off; toggle mode: down=flip)
+  useEffect(() => {
+    const onKeyDown = (e) => {
+      if (e.key !== 'Shift' || e.repeat) return;
+      setGridInspect(prev => gridInspectMode === 'toggle' ? !prev : true);
+    };
+    const onKeyUp = (e) => {
+      if (e.key !== 'Shift' || gridInspectMode === 'toggle') return;
+      setGridInspect(false);
+    };
+    window.addEventListener('keydown', onKeyDown);
+    window.addEventListener('keyup', onKeyUp);
+    return () => { window.removeEventListener('keydown', onKeyDown); window.removeEventListener('keyup', onKeyUp); };
+  }, [gridInspectMode]);
+
   const [tuningMode, setTuningMode] = useState(null); // null | 'offset'
   const [liveTuning, setLiveTuning] = useState({ offsetX: 0, offsetY: 0 });
   const [liveCellSize, setLiveCellSize] = useState(64); // Cell size in native image pixels
@@ -156,7 +187,9 @@ function GameContent() {
   // Spectator mode - user has no character selected for this campaign
   const [isSpectator, setIsSpectator] = useState(false);
   const [isDrawerOpen, setIsDrawerOpen] = useState(true);
+  const [partyDrawerSettled, setPartyDrawerSettled] = useState(true); // starts open, so settled
   const [activeRightDrawer, setActiveRightDrawer] = useState(null); // null | 'dm' | 'moderator'
+  const [rightDrawerSettled, setRightDrawerSettled] = useState(false); // starts closed
   const [isMixerOpen, setIsMixerOpen] = useState(false);
   const [mapImageConfig, setMapImageConfig] = useState(null); // Map image positioning/scaling
 
@@ -349,6 +382,18 @@ function GameContent() {
     } catch (error) {
       console.error('Error refreshing dynamic roles:', error);
     }
+  }, []);
+
+  // Lock page scroll while in game — the game shell is a fixed viewport, not a document
+  useEffect(() => {
+    const html = document.documentElement;
+    const body = document.body;
+    html.style.overflow = 'hidden';
+    body.style.overflow = 'hidden';
+    return () => {
+      html.style.overflow = '';
+      body.style.overflow = '';
+    };
   }, []);
 
   // Fetch current user data once on page load
@@ -1489,17 +1534,16 @@ function GameContent() {
   return (
     <div className="game-interface" data-ui-scale={uiScale}>
       {/* Top Command Bar */}
-      <div className="command-bar">
+      <div className="top-nav">
         <div className="campaign-info">
           <div className="campaign-title">The Curse of Strahd</div>
-          <div className="location-breadcrumb">› Barovia Village › The Blood on the Vine Tavern</div>
         </div>
 
-        <div className="dm-controls-bar">
+        <div className="nav-actions">
           {/* Master Volume Control */}
           <div className="master-volume-control">
             <label htmlFor="master-volume" className="volume-label">
-              {isAudioUnlocked ? '🔊' : '🔇'}
+              <FontAwesomeIcon icon={isAudioUnlocked ? faVolumeHigh : faVolumeXmark} />
             </label>
             <input
               id="master-volume"
@@ -1551,18 +1595,15 @@ function GameContent() {
               L
             </button>
           </div>
-
-          <button
-            onClick={() => router.push('/dashboard')}
-            className="flex items-center gap-2 px-4 py-2 bg-slate-700 hover:bg-slate-600 text-slate-200 rounded-lg border border-slate-600 transition-all text-sm"
-            title="Back to Dashboard"
-          >
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
-            </svg>
-            Back to Dashboard
-          </button>
         </div>
+
+        <button
+          onClick={() => router.push('/dashboard')}
+          className="nav-back-btn"
+          title="Back to Dashboard"
+        >
+          Dashboard
+        </button>
       </div>
 
       {/* Spectator Banner */}
@@ -1605,12 +1646,15 @@ function GameContent() {
 
       {/* Party drawer — fixed-position, outside grid flow */}
       <div
-        className="party-drawer"
+        className={`party-drawer ${partyDrawerSettled ? 'drawer-settled' : ''}`}
         style={{ transform: isDrawerOpen ? 'translateX(0)' : 'translateX(-100%)' }}
+        onTransitionEnd={(e) => {
+          if (e.propertyName === 'transform') setPartyDrawerSettled(isDrawerOpen);
+        }}
       >
         <button
           className={`drawer-toggle-tab ${isDrawerOpen ? 'active' : ''}`}
-          onClick={() => setIsDrawerOpen(!isDrawerOpen)}
+          onClick={() => { setPartyDrawerSettled(false); setIsDrawerOpen(!isDrawerOpen); }}
         >
           PARTY
         </button>
@@ -1675,6 +1719,7 @@ function GameContent() {
             rollLog={rollLog}
             playerSeatMap={playerSeatMap}
           />
+          <div aria-hidden="true" style={{ flexShrink: 0, height: '40vh' }} />
         </div>
       </div>
 
@@ -1684,27 +1729,26 @@ function GameContent() {
 
         return (
           <div
-            className="right-drawer"
+            className={`right-drawer ${rightDrawerSettled ? 'drawer-settled' : ''}`}
             style={{ transform: activeRightDrawer ? 'translateX(0)' : 'translateX(100%)' }}
+            onTransitionEnd={(e) => {
+              if (e.propertyName === 'transform') setRightDrawerSettled(!!activeRightDrawer);
+            }}
           >
-            {/* Dynamic drawer tabs - filtered by role */}
-            {visibleTabs.map((tab, index) => {
-              const tabHeight = 120; // 112px tab + 8px gap
-              const totalHeight = visibleTabs.length * tabHeight;
-              const startOffset = totalHeight / 2;
-              const topPosition = `calc(50% - ${startOffset - (index * tabHeight)}px)`;
-
-              return (
-                <button
-                  key={tab.id}
-                  className={`right-drawer-tab ${activeRightDrawer === tab.id ? 'active' : ''}`}
-                  style={{ top: topPosition }}
-                  onClick={() => setActiveRightDrawer(prev => prev === tab.id ? null : tab.id)}
-                >
-                  {tab.label}
-                </button>
-              );
-            })}
+            {/* Scrollable tab strip — centers when tabs fit, scrolls when they overflow */}
+            <div className="right-drawer-tab-strip">
+              <div className="right-drawer-tab-strip-inner">
+                {visibleTabs.map((tab) => (
+                  <button
+                    key={tab.id}
+                    className={`right-drawer-tab ${activeRightDrawer === tab.id ? 'active' : ''}`}
+                    onClick={() => { setRightDrawerSettled(false); setActiveRightDrawer(prev => prev === tab.id ? null : tab.id); }}
+                  >
+                    {tab.label}
+                  </button>
+                ))}
+              </div>
+            </div>
 
             <div className="drawer-content">
               {activeRightDrawer === 'moderator' && (
@@ -1787,6 +1831,7 @@ function GameContent() {
                   activeFades={activeFades}
                 />
               )}
+              <div aria-hidden="true" style={{ flexShrink: 0, height: '40vh' }} />
             </div>
           </div>
         );
@@ -1806,6 +1851,7 @@ function GameContent() {
               liveGridOpacity={liveGridOpacity}
               gridConfig={effectiveGridConfig}
               isMapLocked={isMapLocked}
+              gridInspect={gridInspect}
               offsetX={liveTuning.offsetX}
               offsetY={liveTuning.offsetY}
               onImageLoad={setMapNaturalDimensions}
@@ -1822,6 +1868,9 @@ function GameContent() {
               isMapLocked={isMapLocked}
               onToggleLock={() => setIsMapLocked(prev => !prev)}
               activeMap={activeMap}
+              gridInspect={gridInspect}
+              gridInspectMode={gridInspectMode}
+              onToggleInspectMode={() => setGridInspectMode(prev => prev === 'hold' ? 'toggle' : 'hold')}
             />
             {tuningMode && (
               <GridTuningOverlay
@@ -1899,7 +1948,7 @@ function GameContent() {
       {/* Audio Gate Overlay — provides user gesture for AudioContext + auto-seats player */}
       {!isAudioUnlocked && (
         <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm cursor-pointer"
+          className="fixed inset-0 z-[102] flex items-center justify-center bg-black/80 backdrop-blur-sm cursor-pointer"
           onClick={handleEnterSession}
         >
           <div

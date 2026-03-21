@@ -6,11 +6,18 @@
 'use client'
 
 import React from 'react';
+import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
+import { faArrowUp, faArrowDown, faArrowLeft, faArrowRight } from '@fortawesome/free-solid-svg-icons';
 import HoldButton from '@/app/shared/components/HoldButton';
 
-const BTN_SIZE = 96;
+// Responsive sizes — clamp(min, preferred, max)
+// On 375px landscape (vmin≈375): d-pad ≈ 44px, trim ≈ 32×80px
+// On desktop (vmin≈900): d-pad = 96px, trim = 52×146px
+const BTN    = 'clamp(44px, 11vmin, 96px)';
+const TRIM_W = 'clamp(80px, 32vmin, 146px)';
+const TRIM_H = 'clamp(32px, 8vmin, 52px)';
 
-const BUTTON_STYLE = {
+const BASE = {
   pointerEvents: 'auto',
   background: 'rgba(0,0,0,0.75)',
   color: '#fff',
@@ -19,26 +26,30 @@ const BUTTON_STYLE = {
   cursor: 'pointer',
   fontFamily: 'monospace',
   fontWeight: 600,
-  fontSize: '40px',
-  width: `${BTN_SIZE}px`,
-  height: `${BTN_SIZE}px`,
   display: 'flex',
   alignItems: 'center',
   justifyContent: 'center',
   userSelect: 'none',
+  WebkitUserSelect: 'none',
+  touchAction: 'manipulation',
 };
 
-// Compact style for trim buttons — narrower label, smaller font
+const BUTTON_STYLE = {
+  ...BASE,
+  width: BTN,
+  height: BTN,
+  fontSize: 'clamp(18px, 5vmin, 40px)',
+};
+
 const TRIM_BUTTON_STYLE = {
-  ...BUTTON_STYLE,
-  width: '146px',
-  height: '52px',
-  fontSize: '18px',
+  ...BASE,
+  width: TRIM_W,
+  height: TRIM_H,
+  fontSize: 'clamp(11px, 2.5vmin, 18px)',
   borderRadius: '8px',
 };
 
-// Empty cell spacer for 3×3 d-pad corners and centre
-const Empty = () => <div style={{ width: BTN_SIZE, height: BTN_SIZE }} />;
+const Empty = () => <div style={{ width: BTN, height: BTN }} />;
 
 /**
  * On-map tuning controls. Rendered inside MapSafeArea so it has no knowledge
@@ -59,13 +70,13 @@ const GridTuningOverlay = ({
 }) => {
   const gridStyle = {
     display: 'grid',
-    gridTemplateColumns: `repeat(3, ${BTN_SIZE}px)`,
+    gridTemplateColumns: `repeat(3, ${BTN})`,
     gap: '4px',
   };
 
   return (
     <div style={{ position: 'absolute', inset: 0, pointerEvents: 'none' }}>
-      {/* All controls centred as a single column */}
+      {/* All controls centred as a single column, capped to 70% of the viewport */}
       <div style={{
         position: 'absolute',
         left: '50%',
@@ -74,7 +85,10 @@ const GridTuningOverlay = ({
         display: 'flex',
         flexDirection: 'column',
         alignItems: 'center',
-        gap: '8px',
+        gap: '4px',
+        maxWidth: '70vw',
+        maxHeight: '70vh',
+        overflow: 'hidden',
       }}>
         {/* Column count */}
         <div style={{ display: 'flex', gap: '4px' }}>
@@ -96,9 +110,15 @@ const GridTuningOverlay = ({
 
         {/* 3×3 offset d-pad */}
         <div style={gridStyle}>
-          <Empty /><HoldButton action={() => onOffsetYChange(-1)} holdAction={() => onOffsetYChange(-2)} title="Shift grid up"    style={BUTTON_STYLE}>↑</HoldButton><Empty />
-          <HoldButton action={() => onOffsetXChange(-1)} holdAction={() => onOffsetXChange(-2)} title="Shift grid left"  style={BUTTON_STYLE}>←</HoldButton><Empty /><HoldButton action={() => onOffsetXChange(1)} holdAction={() => onOffsetXChange(2)} title="Shift grid right" style={BUTTON_STYLE}>→</HoldButton>
-          <Empty /><HoldButton action={() => onOffsetYChange(1)}  holdAction={() => onOffsetYChange(2)}  title="Shift grid down"  style={BUTTON_STYLE}>↓</HoldButton><Empty />
+          <Empty />
+          <HoldButton action={() => onOffsetYChange(-1)} holdAction={() => onOffsetYChange(-2)} title="Shift grid up"    style={BUTTON_STYLE}><FontAwesomeIcon icon={faArrowUp} /></HoldButton>
+          <Empty />
+          <HoldButton action={() => onOffsetXChange(-1)} holdAction={() => onOffsetXChange(-2)} title="Shift grid left"  style={BUTTON_STYLE}><FontAwesomeIcon icon={faArrowLeft} /></HoldButton>
+          <Empty />
+          <HoldButton action={() => onOffsetXChange(1)}  holdAction={() => onOffsetXChange(2)}  title="Shift grid right" style={BUTTON_STYLE}><FontAwesomeIcon icon={faArrowRight} /></HoldButton>
+          <Empty />
+          <HoldButton action={() => onOffsetYChange(1)}  holdAction={() => onOffsetYChange(2)}  title="Shift grid down"  style={BUTTON_STYLE}><FontAwesomeIcon icon={faArrowDown} /></HoldButton>
+          <Empty />
         </div>
       </div>
     </div>

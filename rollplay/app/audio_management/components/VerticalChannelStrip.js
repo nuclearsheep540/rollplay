@@ -73,6 +73,8 @@ export default function VerticalChannelStrip({
 
   const meterLRef = useRef(null);
   const meterRRef = useRef(null);
+  const lastColorLRef = useRef(null);
+  const lastColorRRef = useRef(null);
   const rafRef = useRef(null);
   const volumeDebounceTimer = useRef(null);
 
@@ -101,10 +103,16 @@ export default function VerticalChannelStrip({
       return Math.sqrt(sum / data.length);
     };
 
-    const applyMeter = (ref, pct) => {
+    // GPU-composited meter update: scaleY is a transform (compositor-only, no repaint).
+    // Color only updates when the threshold band changes (rare), not every frame.
+    const applyMeter = (ref, colorRef, pct) => {
       if (!ref.current) return;
       const color = pct >= 90 ? '#FF0000' : pct >= 70 ? '#FFD700' : '#04AA6D';
-      ref.current.style.background = `linear-gradient(to top, ${color} 0%, ${color} ${pct}%, #1e293b ${pct}%, #1e293b 100%)`;
+      ref.current.style.transform = `scaleY(${pct / 100})`;
+      if (color !== colorRef.current) {
+        ref.current.style.backgroundColor = color;
+        colorRef.current = color;
+      }
     };
 
     const tick = () => {
@@ -118,8 +126,8 @@ export default function VerticalChannelStrip({
       lastL = smoothL;
       lastR = smoothR;
 
-      applyMeter(meterLRef, rmsToPct(smoothL));
-      applyMeter(meterRRef, rmsToPct(smoothR));
+      applyMeter(meterLRef, lastColorLRef, rmsToPct(smoothL));
+      applyMeter(meterRRef, lastColorRRef, rmsToPct(smoothR));
     };
 
     tick();
@@ -283,15 +291,19 @@ export default function VerticalChannelStrip({
 
       {/* Vertical fader + L/R meters — meters drive layout, fader overlaid */}
       <div className={`flex-1 relative flex items-stretch justify-center gap-[2px] w-full min-h-0 ${channelDisabled ? disabledClass : ''}`}>
-        {/* L meter */}
+        {/* L meter — container holds background, child fill uses GPU-composited scaleY */}
         {showMeters && (
-          <div ref={meterLRef} className="w-[6px] rounded-sm bg-slate-800 flex-shrink-0" />
+          <div className="w-[6px] rounded-sm bg-slate-800 flex-shrink-0 relative overflow-hidden">
+            <div ref={meterLRef} className="absolute inset-0 will-change-transform origin-bottom" style={{ backgroundColor: '#04AA6D', transform: 'scaleY(0)' }} />
+          </div>
         )}
         {/* Center track spacer (visible when no meters, e.g. effect strips) */}
         {!showMeters && <div className="w-[2px]" />}
         {/* R meter */}
         {showMeters && (
-          <div ref={meterRRef} className="w-[6px] rounded-sm bg-slate-800 flex-shrink-0" />
+          <div className="w-[6px] rounded-sm bg-slate-800 flex-shrink-0 relative overflow-hidden">
+            <div ref={meterRRef} className="absolute inset-0 will-change-transform origin-bottom" style={{ backgroundColor: '#04AA6D', transform: 'scaleY(0)' }} />
+          </div>
         )}
         {/* dB pip lines — absolutely positioned over meters */}
         <div className="absolute inset-0 pointer-events-none z-[1]">

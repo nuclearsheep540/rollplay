@@ -139,7 +139,7 @@ export default function ColorPicker({
         disabled={disabled || cooldownActive}
         className={`
           color-picker-input custom-color-input w-[calc(24px*var(--ui-scale))] h-[calc(24px*var(--ui-scale))] 
-          rounded border cursor-pointer transition-all duration-200
+          rounded border cursor-pointer transition-colors duration-200
           flex items-center justify-center text-[calc(12px*var(--ui-scale))]
           ${cooldownActive 
             ? 'opacity-50 cursor-not-allowed' 

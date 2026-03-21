@@ -326,8 +326,8 @@ body {
 }
 
 [data-ui-scale="small"] {
-  --ui-scale: 1; /* Original becomes small baseline */
-  --panel-width-addition: 0px; /* No additional width - baseline */
+  --ui-scale: 0.7; /* Original becomes small baseline */
+  --panel-width-addition: -100px; /* No additional width - baseline */
 }
 
 [data-ui-scale="medium"] {
@@ -337,7 +337,7 @@ body {
 
 [data-ui-scale="large"] {
   --ui-scale: 1.3; /* 30% larger than original */
-  --panel-width-addition: 120px; /* +80px width */
+  --panel-width-addition: 180px;
 }
 
 /* Game Interface Layout
@@ -346,7 +346,7 @@ body {
   font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
   background: #1a1a2e;
   color: #e0e0e0;
-  height: 100vh;
+  height: 100dvh;
   overflow: hidden;
   display: flex;
   flex-direction: column;
@@ -355,34 +355,54 @@ body {
 
 /* Top Command Bar
    ========================================================================== */
-.command-bar {
-  height: calc(50px * var(--ui-scale));
+.top-nav {
+  /* Height grows by the notch inset; padding-top pushes content below it.
+     align-items: center then centers within the remaining 50px band. */
+  height: calc(50px * var(--ui-scale) + env(safe-area-inset-top, 0px));
+  padding-top: env(safe-area-inset-top, 0px);
+  /* Landscape notch (left/right) adds to horizontal padding */
+  padding-left: calc(24px * var(--ui-scale) + env(safe-area-inset-left, 0px));
+  padding-right: calc(24px * var(--ui-scale) + env(safe-area-inset-right, 0px));
   background: linear-gradient(90deg, rgba(0,0,0,0.9) 0%, rgba(26,26,46,0.8) 100%);
   backdrop-filter: blur(8px);
   border-bottom: 1px solid rgba(74, 222, 128, 0.3);
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  padding: 0 calc(24px * var(--ui-scale));
+  gap: calc(16px * var(--ui-scale));
   position: relative;
   z-index: 100; /* Above everything */
 }
 
 .campaign-info {
+  flex: 1;
   display: flex;
   align-items: center;
   gap: calc(20px * var(--ui-scale));
+  min-width: 0;
+  overflow: hidden;
 }
 
 .campaign-title {
   font-size: calc(18px * var(--ui-scale));
   font-weight: 600;
   color: #4ade80;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .location-breadcrumb {
   color: #9ca3af;
   font-size: calc(14px * var(--ui-scale));
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+@media (max-width: 600px) {
+  .location-breadcrumb {
+    display: none;
+  }
 }
 
 .room-code {
@@ -421,10 +441,18 @@ body {
   opacity: 1;
 }
 
-.dm-controls-bar {
+.nav-actions {
   display: flex;
   align-items: center;
   gap: calc(16px * var(--ui-scale));
+  flex-shrink: 0;
+}
+
+.nav-back-btn {
+  flex-shrink: 0;
+  white-space: nowrap;
+  font-size: calc(12px * var(--ui-scale));
+  color: #e0e0e0;
 }
 
 .control-btn {
@@ -448,10 +476,6 @@ body {
 .ui-scale-nav {
   display: flex;
   gap: calc(2px * var(--ui-scale));
-  background: rgba(0, 0, 0, 0.3);
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  border-radius: calc(4px * var(--ui-scale));
-  padding: calc(2px * var(--ui-scale));
 }
 
 .ui-scale-nav .scale-btn {
@@ -496,26 +520,28 @@ body {
 .party-drawer {
   position: fixed;
   left: 0;
-  top: calc(50px * var(--ui-scale));
+  top: calc(50px * var(--ui-scale) + env(safe-area-inset-top, 0px));
   bottom: 0;
   width: calc(380px + var(--panel-width-addition));
   z-index: 30;
   transition: transform 300ms ease;
-  background: linear-gradient(90deg, rgba(0,0,0,0.8) 0%, rgba(26,26,46,0.7) 100%);
-  backdrop-filter: blur(8px);
+  background: linear-gradient(90deg, rgb(0,0,0) 0%, rgb(26,26,46) 100%);
   border-right: 1px solid rgba(255, 255, 255, 0.1);
   overflow: visible;
   display: flex;
   flex-direction: column;
+}
+.party-drawer.drawer-settled {
+  background: linear-gradient(90deg, rgba(0,0,0,0.8) 0%, rgba(26,26,46,0.7) 100%);
+  backdrop-filter: blur(8px);
 }
 
 .drawer-content {
   flex: 1;
   overflow-y: auto;
   padding: calc(20px * var(--ui-scale)) calc(16px * var(--ui-scale));
-  display: flex;
-  flex-direction: column;
 }
+
 
 .drawer-toggle-tab {
   position: absolute;
@@ -656,24 +682,53 @@ body {
 .right-drawer {
   position: fixed;
   right: 0;
-  top: calc(50px * var(--ui-scale));
+  top: calc(50px * var(--ui-scale) + env(safe-area-inset-top, 0px));
   bottom: 0;
   width: calc(380px + var(--panel-width-addition));
   z-index: 30;
   transition: transform 300ms ease;
-  background: linear-gradient(270deg, rgba(0,0,0,0.8) 0%, rgba(26,26,46,0.7) 100%);
-  backdrop-filter: blur(8px);
+  background: linear-gradient(270deg, rgb(0,0,0) 0%, rgb(26,26,46) 100%);
   border-left: 1px solid rgba(255, 255, 255, 0.1);
   overflow: visible;
   display: flex;
   flex-direction: column;
 }
+.right-drawer.drawer-settled {
+  background: linear-gradient(270deg, rgba(0,0,0,0.8) 0%, rgba(26,26,46,0.7) 100%);
+  backdrop-filter: blur(8px);
+}
 
-.right-drawer-tab {
+/* Scrollable tab strip — sits to the left of the drawer body */
+.right-drawer-tab-strip {
   position: absolute;
   left: -40px;
   width: 40px;
+  top: 0;
+  bottom: 0;
+  overflow-y: auto;
+  overflow-x: visible;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+  z-index: 31;
+}
+
+.right-drawer-tab-strip::-webkit-scrollbar {
+  display: none;
+}
+
+/* Inner wrapper — centers tabs when they fit, stacks from top when they overflow */
+.right-drawer-tab-strip-inner {
+  display: flex;
+  flex-direction: column;
+  min-height: 100%;
+  justify-content: center;
+  gap: 8px;
+}
+
+.right-drawer-tab {
+  width: 40px;
   height: 112px;
+  flex-shrink: 0;
   background: rgba(0, 0, 0, 0.7);
   backdrop-filter: blur(8px);
   border: 1px solid rgba(255, 255, 255, 0.1);
@@ -687,7 +742,6 @@ body {
   font-size: 14px;
   font-weight: 600;
   font-family: system-ui;
-  z-index: 31;
   transition: color 200ms, background 200ms;
   writing-mode: vertical-rl;
   text-orientation: mixed;
@@ -712,10 +766,9 @@ body {
   right: 0;
   bottom: 0;
   height: max(50vh, 300px);
-  z-index: 35;
+  z-index: 101;
   transition: transform 300ms ease;
-  background: linear-gradient(0deg, rgba(0,0,0,0.95) 0%, rgba(26,26,46,0.9) 100%);
-  backdrop-filter: blur(8px);
+  background: linear-gradient(0deg, rgb(0,0,0) 0%, rgb(26,26,46) 100%);
   border-top: 1px solid rgba(255, 255, 255, 0.1);
   overflow: visible;
 }
@@ -724,7 +777,9 @@ body {
   height: 100%;
   display: flex;
   flex-direction: row;
+  justify-content: center;
   overflow-x: auto;
+  padding-bottom: env(safe-area-inset-bottom, 0px);
   overflow-y: hidden;
   padding: calc(8px * var(--ui-scale)) calc(12px * var(--ui-scale));
   gap: calc(4px * var(--ui-scale));
@@ -739,7 +794,7 @@ body {
   height: 40px;
   padding: 0 16px;
   white-space: nowrap;
-  z-index: 36;
+  z-index: 1;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -1010,12 +1065,14 @@ body {
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 6px 12px;
-  background: rgba(59, 130, 246, 0.1);
-  border: 1px solid rgba(59, 130, 246, 0.3);
-  border-radius: 6px;
   font-size: 12px;
   color: #e2e8f0;
+}
+
+@media (max-width: 639px) {
+  .master-volume-control {
+    display: none;
+  }
 }
 
 .volume-label {

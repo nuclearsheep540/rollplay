@@ -6,6 +6,9 @@
 'use client'
 
 import React, { useMemo, useState, useRef, useEffect } from 'react';
+import { Roboto_Mono } from 'next/font/google';
+
+const gridFont = Roboto_Mono({ subsets: ['latin'], weight: ['600'] });
 
 // Space reserved in SVG for coordinate labels (px)
 const LABEL_OFFSET_X = 30; // left — row numbers
@@ -65,6 +68,7 @@ const GridOverlay = ({
   activeMap = null,
   mapImageRef = null,
   liveGridOpacity = null,
+  gridInspect = false,
   offsetX = 0, // Live offset in image-native pixels
   offsetY = 0,
 }) => {
@@ -75,6 +79,11 @@ const GridOverlay = ({
   const [windowSize, setWindowSize]     = useState({ width: 0, height: 0 });
   const [mapDimensions, setMapDimensions] = useState({ width: 0, height: 0 });
   const [hoveredCell, setHoveredCell]   = useState(null); // { col, row } | null
+
+  // Clear highlight immediately when inspect is toggled off
+  useEffect(() => {
+    if (!gridInspect) setHoveredCell(null);
+  }, [gridInspect]);
 
   // Rerender when the browser window resizes
   useEffect(() => {
@@ -180,9 +189,9 @@ const GridOverlay = ({
   // Labels are derived directly from the visible cell set — each label position
   // is computed from the same origin + k*cellSize formula used for the cells.
 
-  const { colLabels, rowLabels } = useMemo(() => {
+  const { colLabels, rowLabels, labelFontSize } = useMemo(() => {
     if (!showLabels || !layout || cells.length === 0) {
-      return { colLabels: [], rowLabels: [] };
+      return { colLabels: [], rowLabels: [], labelFontSize: 10 };
     }
     const { cellSize, originX, originY } = layout;
     const seenCols = new Set();
@@ -190,28 +199,41 @@ const GridOverlay = ({
     const colLabels = [];
     const rowLabels = [];
 
+    // Single font size for all labels — derived from cell size so labels
+    // scale with the grid. Upper-bounded by the tightest gutter constraint
+    // (2 chars stacked in LABEL_OFFSET_Y = 20px max). Lower-bounded at 6px.
+    // On mobile where cells are smaller, font naturally shrinks with them.
+    const LABEL_FONT_SIZE = Math.max(6, Math.min(10, cellSize));
+
+    // Fixed baseline: bottom character of every col label sits here.
+    const colBaselineY = LABEL_OFFSET_Y / 2 + LABEL_FONT_SIZE / 2;
+
     for (const cell of cells) {
       if (!seenCols.has(cell.col)) {
         seenCols.add(cell.col);
+        const text = colIndexToLabel(cell.col);
+        // Last char sits at colBaselineY, preceding chars stack upward
+        const startY = colBaselineY - (text.length - 1) * LABEL_FONT_SIZE;
         colLabels.push({
-          key:  `col-${cell.col}`,
-          text: colIndexToLabel(cell.col),
-          x:    originX + (cell.col + 0.5) * cellSize, // actual cell center
-          y:    LABEL_OFFSET_Y - 15,
+          key:      `col-${cell.col}`,
+          chars:    text.split(''),
+          textX:    originX + (cell.col + 0.5) * cellSize,
+          textY:    startY,
         });
       }
       if (!seenRows.has(cell.row)) {
         seenRows.add(cell.row);
+        const text = (cell.row + 1).toString();
         rowLabels.push({
-          key:  `row-${cell.row}`,
-          text: (cell.row + 1).toString(),
-          x:    LABEL_OFFSET_X - 15,
-          y:    originY + (cell.row + 0.5) * cellSize, // actual cell center
+          key:      `row-${cell.row}`,
+          text,
+          textX:    LABEL_OFFSET_X / 2,
+          textY:    originY + (cell.row + 0.5) * cellSize,
         });
       }
     }
 
-    return { colLabels, rowLabels };
+    return { colLabels, rowLabels, labelFontSize: LABEL_FONT_SIZE };
   }, [cells, showLabels, layout]);
 
   // ── Early exits ─────────────────────────────────────────────────────────────
@@ -235,6 +257,8 @@ const GridOverlay = ({
   const svgHeight = layout ? layout.mapHeight + LABEL_OFFSET_Y * 2 : 600;
 
   const labelStyle = { userSelect: 'none', pointerEvents: 'none' };
+  const LABEL_FONT = gridFont.style.fontFamily;
+
 
   // ── Hover handler ────────────────────────────────────────────────────────────
   // Converts mouse position to SVG space, then to a (col, row) cell address.
@@ -243,6 +267,10 @@ const GridOverlay = ({
   // letting pointerDown still bubble to the map container for dragging.
 
   const handleSvgMouseMove = (e) => {
+    if (!gridInspect) {
+      if (hoveredCell) setHoveredCell(null);
+      return;
+    }
     const svgEl = svgRef.current;
     if (!svgEl || !layout) return;
     const pt = svgEl.createSVGPoint();
@@ -326,8 +354,8 @@ const GridOverlay = ({
                 x={cx} y={y1 - 10}
                 fill="#fff"
                 fontSize="11"
-                fontFamily="monospace"
-                fontWeight="700"
+                fontFamily={LABEL_FONT}
+                fontWeight="600"
                 textAnchor="middle"
                 dominantBaseline="middle"
                 style={labelStyle}
@@ -338,42 +366,42 @@ const GridOverlay = ({
           );
         })()}
 
-        {/* Column labels — one per visible column, x = actual cell center */}
+        {/* Column labels — vertical stacking via <tspan>, same rendering as row labels */}
         {colLabels.map(label => (
-          <text
-            key={label.key}
-            x={label.x}
-            y={label.y}
-            fill="#e5e7eb"
-            opacity={1.0}
-            fontSize="12"
-            fontFamily="monospace"
-            fontWeight="500"
-            textAnchor="middle"
-            dominantBaseline="middle"
-            style={labelStyle}
-          >
-            {label.text}
-          </text>
+          <g key={label.key} style={labelStyle}>
+            <text
+              x={label.textX} y={label.textY}
+              fill="#e5e7eb"
+              fontSize={labelFontSize}
+              fontFamily={LABEL_FONT}
+              fontWeight="600"
+              textAnchor="middle"
+              dominantBaseline="middle"
+            >
+              {label.chars.map((char, i) => (
+                <tspan key={i} x={label.textX} dy={i === 0 ? 0 : labelFontSize}>
+                  {char}
+                </tspan>
+              ))}
+            </text>
+          </g>
         ))}
 
-        {/* Row labels — one per visible row, y = actual cell center */}
+        {/* Row labels — horizontal, same font size as column labels */}
         {rowLabels.map(label => (
-          <text
-            key={label.key}
-            x={label.x}
-            y={label.y}
-            fill="#e5e7eb"
-            opacity={1.0}
-            fontSize="12"
-            fontFamily="monospace"
-            fontWeight="500"
-            textAnchor="middle"
-            dominantBaseline="middle"
-            style={labelStyle}
-          >
-            {label.text}
-          </text>
+          <g key={label.key} style={labelStyle}>
+            <text
+              x={label.textX} y={label.textY}
+              fill="#e5e7eb"
+              fontSize={labelFontSize}
+              fontFamily={LABEL_FONT}
+              fontWeight="600"
+              textAnchor="middle"
+              dominantBaseline="middle"
+            >
+              {label.text}
+            </text>
+          </g>
         ))}
 
         {/* Edit mode indicator */}
