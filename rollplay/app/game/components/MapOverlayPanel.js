@@ -5,7 +5,7 @@
 
 import React from 'react';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
-import { faLock, faLockOpen, faCrosshairs } from '@fortawesome/free-solid-svg-icons';
+import { faLock, faLockOpen, faCrosshairs, faKeyboard } from '@fortawesome/free-solid-svg-icons';
 
 /**
  * Lock Map button. Rendered inside MapSafeArea so positioning is simply
@@ -47,26 +47,44 @@ const MapOverlayPanel = ({
 
   return (
     <div style={{ position: 'absolute', top: '0px', right: '16px', pointerEvents: 'auto', display: 'flex', gap: `${6 * scale}px` }}>
-      {/* Grid Inspect button — desktop only */}
+      {/* Grid Inspect button + key hint — desktop only */}
       {!isMobile && activeMap && (
-        <button
-          onClick={onToggleInspectMode}
-          title={`Grid Inspect: ${gridInspectMode === 'hold' ? 'Hold Shift' : 'Toggle Shift'} (click to switch)`}
-          style={{
-            ...buttonBase,
-            background: gridInspect
-              ? 'rgba(59, 130, 246, 0.85)'
-              : 'rgba(0, 0, 0, 0.7)',
-            color: gridInspect
-              ? '#bfdbfe'
-              : 'rgba(255, 255, 255, 0.5)',
-            borderRadius: `0 0 ${6 * scale}px ${6 * scale}px`,
-            cursor: 'pointer',
-          }}
-        >
-          <FontAwesomeIcon icon={faCrosshairs} style={{ fontSize: `${12 * scale}px` }} />
-          {gridInspectMode === 'hold' ? 'HOLD' : 'TOGGLE'}
-        </button>
+        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+          <button
+            onClick={onToggleInspectMode}
+            title={`Grid Inspect: ${gridInspectMode === 'hold' ? 'Hold Shift' : 'Toggle Shift'} (click to switch)`}
+            style={{
+              ...buttonBase,
+              background: gridInspect
+                ? 'rgba(59, 130, 246, 0.85)'
+                : 'rgba(0, 0, 0, 0.7)',
+              color: gridInspect
+                ? '#bfdbfe'
+                : 'rgba(255, 255, 255, 0.5)',
+              borderRadius: `0 0 ${6 * scale}px ${6 * scale}px`,
+              cursor: 'pointer',
+            }}
+          >
+            <FontAwesomeIcon icon={faCrosshairs} style={{ fontSize: `${12 * scale}px` }} />
+            {gridInspectMode === 'hold' ? 'HOLD' : 'TOGGLE'}
+          </button>
+          <div style={{
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            gap: `${5 * scale}px`,
+            marginTop: '4px',
+            width: '100%',
+            color: 'rgba(255, 255, 255, 0.5)',
+            fontSize: `${11 * scale}px`,
+            fontFamily: 'system-ui',
+            fontWeight: '500',
+            pointerEvents: 'none',
+          }}>
+            <FontAwesomeIcon icon={faKeyboard} style={{ fontSize: `${10 * scale}px` }} />
+            shift
+          </div>
+        </div>
       )}
 
       {/* Lock Map button */}

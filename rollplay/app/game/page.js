@@ -1719,6 +1719,7 @@ function GameContent() {
             rollLog={rollLog}
             playerSeatMap={playerSeatMap}
           />
+          <div aria-hidden="true" style={{ flexShrink: 0, height: '40vh' }} />
         </div>
       </div>
 
@@ -1830,6 +1831,7 @@ function GameContent() {
                   activeFades={activeFades}
                 />
               )}
+              <div aria-hidden="true" style={{ flexShrink: 0, height: '40vh' }} />
             </div>
           </div>
         );

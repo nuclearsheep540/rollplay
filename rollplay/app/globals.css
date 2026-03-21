@@ -540,10 +540,8 @@ body {
   flex: 1;
   overflow-y: auto;
   padding: calc(20px * var(--ui-scale)) calc(16px * var(--ui-scale));
-  padding-bottom: 40vh;
-  display: flex;
-  flex-direction: column;
 }
+
 
 .drawer-toggle-tab {
   position: absolute;
