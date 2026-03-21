@@ -80,6 +80,11 @@ const GridOverlay = ({
   const [mapDimensions, setMapDimensions] = useState({ width: 0, height: 0 });
   const [hoveredCell, setHoveredCell]   = useState(null); // { col, row } | null
 
+  // Clear highlight immediately when inspect is toggled off
+  useEffect(() => {
+    if (!gridInspect) setHoveredCell(null);
+  }, [gridInspect]);
+
   // Rerender when the browser window resizes
   useEffect(() => {
     const update = () => setWindowSize({ width: window.innerWidth, height: window.innerHeight });
@@ -196,7 +201,7 @@ const GridOverlay = ({
 
     // Single font size for all labels — derived from cell size so labels
     // scale with the grid. Upper-bounded by the tightest gutter constraint
-    // (2 chars stacked in LABEL_OFFSET_Y = 10px max). Lower-bounded at 6px.
+    // (2 chars stacked in LABEL_OFFSET_Y = 20px max). Lower-bounded at 6px.
     // On mobile where cells are smaller, font naturally shrinks with them.
     const LABEL_FONT_SIZE = Math.max(6, Math.min(10, cellSize));
 

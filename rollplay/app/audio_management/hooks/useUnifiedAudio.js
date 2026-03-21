@@ -47,10 +47,13 @@ export const useUnifiedAudio = () => {
   // Local listening volume (per-client, localStorage-persisted, private)
   const [masterVolume, setMasterVolume] = useState(() => {
     if (typeof window !== 'undefined') {
-      const isMobile = window.matchMedia('(max-width: 639px)').matches;
-      if (isMobile) return 0.75;
       const saved = localStorage.getItem('rollplay_master_volume');
-      return saved ? parseFloat(saved) : 0.5;
+      if (saved !== null) {
+        const parsed = parseFloat(saved);
+        if (!Number.isNaN(parsed)) return parsed;
+      }
+      const isMobile = window.matchMedia('(max-width: 639px)').matches;
+      return isMobile ? 0.75 : 0.5;
     }
     return 0.5;
   });
@@ -1067,7 +1070,9 @@ export const useUnifiedAudio = () => {
       // (Safari needs MP3 format; Chrome needs no network delay. This satisfies both.)
       const silentAudio = new Audio('data:audio/mp3;base64,SUQzBAAAAAAAIlRTU0UAAAAOAAADTGF2ZjYxLjcuMTAwAAAAAAAAAAAAAAD/+0DAAAAAAAAAAAAAAAAAAAAAAABJbmZvAAAADwAAAAUAAAK+AGhoaGhoaGhoaGhoaGhoaGhoaGiOjo6Ojo6Ojo6Ojo6Ojo6Ojo6OjrS0tLS0tLS0tLS0tLS0tLS0tLS02tra2tra2tra2tra2tra2tra2tr//////////////////////////wAAAABMYXZjNjEuMTkAAAAAAAAAAAAAAAAkAwYAAAAAAAACvhC6DYoAAAAAAP/7EMQAA8AAAaQAAAAgAAA0gAAABExBTUUzLjEwMFVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVV//sQxCmDwAABpAAAACAAADSAAAAEVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVX/+xDEUwPAAAGkAAAAIAAANIAAAARVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVf/7EMR8g8AAAaQAAAAgAAA0gAAABFVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVV//sQxKYDwAABpAAAACAAADSAAAAEVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVU=');
       silentAudio.volume = 0;
-      await silentAudio.play().catch(() => {});
+      await silentAudio.play().catch((err) => {
+        console.warn('⚠️ silentAudio.play() rejected:', err);
+      });
       console.log('✅ HTML5 audio session activated');
 
       // Step 2: Close the eagerly-created AudioContext.
