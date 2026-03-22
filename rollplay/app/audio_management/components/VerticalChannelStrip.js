@@ -18,14 +18,6 @@ function rmsToPct(rms) {
   return ((clamped - DB_FLOOR) / (DB_CEIL - DB_FLOOR)) * 100;
 }
 
-// Helper: format seconds → MM:SS
-const formatTime = (seconds) => {
-  if (!seconds || isNaN(seconds)) return '00:00';
-  const m = Math.floor(seconds / 60);
-  const s = Math.floor(seconds % 60);
-  return `${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
-};
-
 // Helper: format remaining seconds → -MM:SS
 const formatTimeRemaining = (remaining) => {
   if (!remaining || isNaN(remaining) || remaining <= 0) return '-00:00';

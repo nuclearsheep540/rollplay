@@ -134,6 +134,7 @@ export const useUnifiedAudio = () => {
   const playOperationsRef = useRef({}); // Track active play operations to prevent duplicates
   const pendingPlayOpsRef = useRef([]); // Queue play ops when AudioContext is suspended (non-DM players)
   const pendingAudioStateRef = useRef(null); // Store audio_state from initial_state for post-unlock reconciliation
+  const unlockInProgressRef = useRef(false); // Prevent overlapping unlockAudio calls
 
   // Remote track states (for DM-controlled BGM audio)
   // Channels start empty — DM loads audio from asset library via AudioTrackSelector
@@ -146,6 +147,10 @@ export const useUnifiedAudio = () => {
     audio_channel_E: { playbackState: PlaybackState.STOPPED, volume: 0.8, filename: null, asset_id: null, s3_url: null, type: ChannelType.BGM, channelGroup: ChannelType.BGM, track: 'E', currentTime: 0, duration: 0, looping: true },
     audio_channel_F: { playbackState: PlaybackState.STOPPED, volume: 0.8, filename: null, asset_id: null, s3_url: null, type: ChannelType.BGM, channelGroup: ChannelType.BGM, track: 'F', currentTime: 0, duration: 0, looping: true },
   });
+
+  // Refs mirroring state for use in event listeners (avoids re-registering on every state change)
+  const remoteTrackStatesRef = useRef(remoteTrackStates);
+  useEffect(() => { remoteTrackStatesRef.current = remoteTrackStates; }, [remoteTrackStates]);
 
   // =====================================
   // SFX SOUNDBOARD (Lightweight fire-and-forget)
@@ -251,6 +256,9 @@ export const useUnifiedAudio = () => {
     });
     return effects;
   });
+
+  const channelEffectsRef = useRef(channelEffects);
+  useEffect(() => { channelEffectsRef.current = channelEffects; }, [channelEffects]);
 
   // Create a stereo metering chain: upmix → splitter → [L,R analysers] → merger
   // Reusable for BGM channels, effect buses, and master output
@@ -839,7 +847,8 @@ export const useUnifiedAudio = () => {
                 ...prev[trackId],
                 playbackState: PlaybackState.STOPPED,
                 currentTime: 0,
-                duration: 0
+                duration: 0,
+                remaining: null
               }
             }));
             
@@ -921,7 +930,8 @@ export const useUnifiedAudio = () => {
               ...prev[trackId],
               playbackState: PlaybackState.STOPPED,
               currentTime: 0,
-              duration: 0
+              duration: 0,
+              remaining: null
             }
           }));
 
@@ -958,7 +968,8 @@ export const useUnifiedAudio = () => {
           [trackId]: {
             ...prev[trackId],
             playbackState: PlaybackState.PAUSED,
-            currentTime: currentTime
+            currentTime: currentTime,
+            remaining: null
           }
         }));
 
@@ -1258,6 +1269,11 @@ export const useUnifiedAudio = () => {
   //   'running'   → desktop (keep context, sources stay alive)
   //   'suspended' → mobile/iOS (close + recreate within gesture)
   const unlockAudio = async () => {
+    if (unlockInProgressRef.current) {
+      console.log('🔓 Audio unlock already in progress, skipping');
+      return false;
+    }
+    unlockInProgressRef.current = true;
     try {
       const contextState = audioContextRef.current?.state;
       console.log(`🔓 Audio unlock — context state: ${contextState}`);
@@ -1273,6 +1289,8 @@ export const useUnifiedAudio = () => {
     } catch (error) {
       console.warn('Audio unlock failed:', error);
       return false;
+    } finally {
+      unlockInProgressRef.current = false;
     }
   };
 
@@ -1563,8 +1581,7 @@ export const useUnifiedAudio = () => {
       }
 
       // Check each track that should be playing but has a dead/missing source
-      // Use a snapshot of current state via the ref-based approach
-      const currentStates = { ...remoteTrackStates };
+      const currentStates = { ...remoteTrackStatesRef.current };
       for (const [trackId, trackState] of Object.entries(currentStates)) {
         if (trackState.playbackState !== PlaybackState.PLAYING) continue;
 
@@ -1588,7 +1605,7 @@ export const useUnifiedAudio = () => {
       }
 
       // Re-apply channel effects to ensure audio graph is correct
-      for (const [trackId, effects] of Object.entries(channelEffects)) {
+      for (const [trackId, effects] of Object.entries(channelEffectsRef.current)) {
         if (channelInsertEffectsRef.current[trackId]) {
           applyChannelEffects(trackId, effects);
         }
@@ -1597,7 +1614,7 @@ export const useUnifiedAudio = () => {
 
     document.addEventListener('visibilitychange', handleVisibilityChange);
     return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
-  }, [isAudioUnlocked, remoteTrackStates, channelEffects]);
+  }, [isAudioUnlocked]);
 
   // Sync audio state from server (called on initial_state for late-joiners)
   const syncAudioState = async (audioState) => {
@@ -1740,6 +1757,7 @@ export const useUnifiedAudio = () => {
             playbackState: PlaybackState.PAUSED,
             currentTime: normalizedTime,
             duration: buffer?.duration,
+            remaining: null,
           }
         }));
         console.log(`⏸️ Sync: ${channelId} paused at ${normalizedTime.toFixed(1)}s`);
