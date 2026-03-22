@@ -48,6 +48,21 @@ map_service = MapService()
 image_service = ImageService()
 
 
+def build_role_change_payload(room_id: str, action: str, target_player: str, changed_by: str, message: str) -> dict:
+    room = GameService.get_room(id=room_id) or {}
+    return {
+        "event_type": "role_change",
+        "data": {
+            "action": action,
+            "target_player": target_player,
+            "changed_by": changed_by,
+            "message": message,
+            "moderators": room.get("moderators", []),
+            "dungeon_master": room.get("dungeon_master", ""),
+        }
+    }
+
+
 @app.get("/game/{room_id}/logs")
 async def get_room_logs(room_id: str, limit: int = 100, skip: int = 0):
     """Get adventure logs for a room"""
@@ -286,7 +301,7 @@ def get_player_roles(room_id: str, playerName: str):
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.post("/game/{room_id}/moderators")
-def add_moderator(room_id: str, request: dict):
+async def add_moderator(room_id: str, request: dict):
     """Add a player as moderator"""
     try:
         check_room = GameService.get_room(id=room_id)
@@ -299,15 +314,25 @@ def add_moderator(room_id: str, request: dict):
         
         success = GameService.add_moderator(room_id, player_name)
         if success:
+            role_change_message = build_role_change_payload(
+                room_id,
+                "add_moderator",
+                player_name,
+                "System",
+                f"{player_name} added as moderator",
+            )
+            await connection_manager.update_room_data(room_id, role_change_message)
             return {"success": True, "message": f"{player_name} added as moderator"}
         else:
             return {"success": False, "message": f"{player_name} is already a moderator"}
-        
+
+    except ValueError as e:
+        raise HTTPException(status_code=409, detail=str(e))
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.delete("/game/{room_id}/moderators")
-def remove_moderator(room_id: str, request: dict):
+async def remove_moderator(room_id: str, request: dict):
     """Remove a player from moderators"""
     try:
         check_room = GameService.get_room(id=room_id)
@@ -320,6 +345,14 @@ def remove_moderator(room_id: str, request: dict):
         
         success = GameService.remove_moderator(room_id, player_name)
         if success:
+            role_change_message = build_role_change_payload(
+                room_id,
+                "remove_moderator",
+                player_name,
+                "System",
+                f"{player_name} removed from moderators",
+            )
+            await connection_manager.update_room_data(room_id, role_change_message)
             return {"success": True, "message": f"{player_name} removed from moderators"}
         else:
             return {"success": False, "message": f"{player_name} was not a moderator"}
@@ -342,17 +375,14 @@ async def set_dm(room_id: str, request: dict):
         success = GameService.set_dm(room_id, player_name)
         if success:
             # Broadcast role change event to all clients in the room
-            from websocket_handlers.connection_manager import manager
-            role_change_message = {
-                "event_type": "role_change",
-                "data": {
-                    "action": "set_dm",
-                    "target_player": player_name,
-                    "changed_by": "System",
-                    "message": f"{player_name} has been set as Dungeon Master"
-                }
-            }
-            await manager.update_room_data(room_id, role_change_message)
+            role_change_message = build_role_change_payload(
+                room_id,
+                "set_dm",
+                player_name,
+                "System",
+                f"{player_name} has been set as Dungeon Master",
+            )
+            await connection_manager.update_room_data(room_id, role_change_message)
             
             return {"success": True, "message": f"{player_name} set as Dungeon Master"}
         else:
@@ -375,17 +405,14 @@ async def unset_dm(room_id: str):
         success = GameService.unset_dm(room_id)
         if success:
             # Broadcast role change event to all clients in the room
-            from websocket_handlers.connection_manager import manager
-            role_change_message = {
-                "event_type": "role_change",
-                "data": {
-                    "action": "unset_dm",
-                    "target_player": current_dm,
-                    "changed_by": "System",
-                    "message": f"Dungeon Master role has been removed"
-                }
-            }
-            await manager.update_room_data(room_id, role_change_message)
+            role_change_message = build_role_change_payload(
+                room_id,
+                "unset_dm",
+                current_dm,
+                "System",
+                "Dungeon Master role has been removed",
+            )
+            await connection_manager.update_room_data(room_id, role_change_message)
             
             return {"success": True, "message": "Dungeon Master removed"}
         else:
@@ -785,7 +812,7 @@ async def update_seat_layout(room_id: str, request: dict):
             raise HTTPException(status_code=404, detail=f"Room {room_id} not found")
 
         seat_layout = request.get("seat_layout")
-        updated_by = request.get("updated_by")
+        updated_by = request.get("updated_by", "System")
 
         logger.debug(f"Updated by: {updated_by}")
         logger.debug(f"New seat layout: {seat_layout}")
@@ -802,6 +829,38 @@ async def update_seat_layout(room_id: str, request: dict):
             raise HTTPException(
                 status_code=400, 
                 detail=f"Seat layout cannot exceed {current_max} seats"
+            )
+
+        normalized_seat_layout = [
+            seat.lower() if isinstance(seat, str) and seat != "empty" else seat
+            for seat in seat_layout
+        ]
+        non_empty_players = [seat for seat in normalized_seat_layout if isinstance(seat, str) and seat != "empty"]
+
+        room_dm = str(check_room.get("dungeon_master", "")).lower()
+        if room_dm and room_dm in non_empty_players:
+            raise HTTPException(status_code=409, detail="Dungeon Master cannot sit in party seats")
+
+        room_moderators = {
+            str(name).lower()
+            for name in check_room.get("moderators", [])
+            if isinstance(name, str) and name
+        }
+        if any(name in room_moderators for name in non_empty_players):
+            raise HTTPException(status_code=409, detail="Moderators cannot sit in party seats")
+
+        player_metadata = check_room.get("player_metadata", {})
+        if not isinstance(player_metadata, dict):
+            player_metadata = {}
+
+        invalid_players = [
+            name for name in non_empty_players
+            if not player_metadata.get(name, {}).get("character_id")
+        ]
+        if invalid_players:
+            raise HTTPException(
+                status_code=409,
+                detail="Only adventurers with selected characters can sit in party seats",
             )
         
         # Update MongoDB record
@@ -835,6 +894,9 @@ async def update_seat_layout(room_id: str, request: dict):
 
     except HTTPException:
         raise  # Re-raise HTTP exceptions
+    except ValueError as e:
+        logger.warning(f"Seat layout validation failed: {str(e)}")
+        raise HTTPException(status_code=409, detail=str(e))
     except Exception as e:
         logger.error(f"Unexpected error in update_seat_layout: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))

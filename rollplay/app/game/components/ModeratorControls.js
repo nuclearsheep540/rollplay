@@ -55,11 +55,40 @@ export default function ModeratorControls({
 
   // Get active players (non-empty seats)
   const activePlayers = gameSeats?.filter(seat => seat.playerName !== "empty") || [];
+
+  const formatCharacterSummary = (characterData) => {
+    if (!characterData) return null;
+    const classValue = characterData.character_class || characterData.class;
+    const className = Array.isArray(classValue) ? classValue.join(' / ') : classValue;
+    const level = characterData.level;
+    if (!className || level === undefined || level === null) return null;
+    return `${className} • Level ${level}`;
+  };
+
+  const seatedPlayerNames = new Set(
+    activePlayers
+      .map((seat) => seat.playerName)
+      .filter(Boolean)
+      .map((name) => name.toLowerCase())
+  );
+
+  const uniqueLobbyUsers = (lobbyUsers || []).filter((user) => {
+    const lobbyName = user.player_name || user.name;
+    if (!lobbyName) return false;
+    return !seatedPlayerNames.has(lobbyName.toLowerCase());
+  });
+
+  const playerHasSelectedCharacter = (playerName) => {
+    if (!playerName) return false;
+    const playerMetadata = roomData?.player_metadata;
+    if (!playerMetadata || typeof playerMetadata !== 'object') return false;
+    return Boolean(playerMetadata[playerName.toLowerCase()]?.character_id);
+  };
   
   // Combine seated players and lobby users for DM/moderator selection
   const allAvailableUsers = [
     ...activePlayers,
-    ...(lobbyUsers || []).map(user => ({
+    ...uniqueLobbyUsers.map(user => ({
       playerName: user.player_name || user.name,
       seatId: `lobby_${user.player_name || user.name}`,
       characterData: null,
@@ -135,11 +164,6 @@ export default function ModeratorControls({
         await fetchRoomRoles();
         if (onRoleChange) {
           onRoleChange(action, playerName);
-        }
-        
-        // Broadcast role change via WebSocket (if sendRoleChange is available)
-        if (sendRoleChange) {
-          sendRoleChange(action, playerName);
         }
         
         // Close modals
@@ -308,10 +332,11 @@ export default function ModeratorControls({
                     let filteredUsers;
                     
                     if (selectedAction === 'add_moderator') {
-                      // Filter users based on who isn't already a moderator
+                      // Only non-adventurers can be moderators.
                       filteredUsers = allAvailableUsers.filter(user => {
                         return !roomData?.moderators?.includes(user.playerName) 
-                               && user.playerName !== roomData?.room_host;
+                               && user.playerName !== roomData?.room_host
+                               && !playerHasSelectedCharacter(user.playerName);
                       });
                     } else {
                       // For remove_moderator, create user objects directly from roomData.moderators
@@ -373,9 +398,9 @@ export default function ModeratorControls({
                                 <div className="flex items-center justify-between">
                                   <div>
                                     <div className="font-medium">{player.playerName}</div>
-                                    {player.characterData && (
+                                    {formatCharacterSummary(player.characterData) && (
                                       <div className="text-gray-400 text-sm">
-                                        {player.characterData.class} • Level {player.characterData.level}
+                                        {formatCharacterSummary(player.characterData)}
                                       </div>
                                     )}
                                   </div>
@@ -482,9 +507,9 @@ export default function ModeratorControls({
                           <div className="flex items-center justify-between">
                             <div>
                               <div className="font-medium">{player.playerName}</div>
-                              {player.characterData && (
+                              {formatCharacterSummary(player.characterData) && (
                                 <div className="text-gray-400 text-sm">
-                                  {player.characterData.class} • Level {player.characterData.level}
+                                  {formatCharacterSummary(player.characterData)}
                                 </div>
                               )}
                             </div>
@@ -496,11 +521,11 @@ export default function ModeratorControls({
                   )}
                   
                   {/* Lobby Users Section */}
-                  {lobbyUsers && lobbyUsers.length > 0 && (
+                  {uniqueLobbyUsers.length > 0 && (
                     <>
                       {activePlayers.length > 0 && <div className="my-3 border-t border-amber-500/20"></div>}
                       <div className="text-amber-400/70 text-xs mb-2 font-medium">LOBBY USERS</div>
-                      {lobbyUsers.map((user) => (
+                      {uniqueLobbyUsers.map((user) => (
                         <button
                           key={`lobby_${user.player_name || user.name}`}
                           className="w-full text-left p-3 bg-amber-500/10 border border-amber-500/30 text-amber-300 rounded transition-colors duration-200 hover:bg-amber-500/20"
@@ -585,11 +610,17 @@ export default function ModeratorControls({
                   ? 'bg-emerald-500/20 border-emerald-500/40 text-emerald-200 cursor-not-allowed'
                   : ''
               }`}
-              onClick={() => {
+              onClick={async () => {
                 if (!isClearingLogs) {
                   setIsClearingLogs(true);
-                  handleClearSystemMessages();
-                  setTimeout(() => setIsClearingLogs(false), 1000);
+                  try {
+                    await handleClearSystemMessages();
+                  } catch (error) {
+                    console.error('Failed to clear system messages:', error);
+                    alert('Failed to clear system messages. Please try again.');
+                  } finally {
+                    setIsClearingLogs(false);
+                  }
                 }
               }}
               disabled={isClearingLogs}
@@ -635,9 +666,9 @@ export default function ModeratorControls({
                       <div className="flex items-center justify-between">
                         <div>
                           <div className="font-medium">{player.playerName}</div>
-                          {player.characterData && (
+                          {formatCharacterSummary(player.characterData) && (
                             <div className="text-gray-400 text-sm">
-                              {player.characterData.class} • Level {player.characterData.level}
+                              {formatCharacterSummary(player.characterData)}
                             </div>
                           )}
                         </div>

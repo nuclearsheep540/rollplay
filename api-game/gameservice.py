@@ -152,6 +152,27 @@ class GameService:
             dm_name = room.get("dungeon_master", "").lower()
             if dm_name and dm_name in normalized_seat_layout:
                 raise Exception("Dungeon Master cannot sit in party seats")
+
+            moderators = {
+                str(name).lower()
+                for name in room.get("moderators", [])
+                if isinstance(name, str) and name
+            }
+            seated_staff = [name for name in player_names if name in moderators]
+            if seated_staff:
+                raise ValueError("Moderators cannot sit in party seats")
+
+            player_metadata = room.get("player_metadata", {})
+            if not isinstance(player_metadata, dict):
+                player_metadata = {}
+
+            # Any seated player must be an adventurer with a selected character in hot-state metadata.
+            invalid_players = [
+                name for name in player_names
+                if not player_metadata.get(name, {}).get("character_id")
+            ]
+            if invalid_players:
+                raise ValueError("Only adventurers with selected characters can sit in party seats")
         
         print(f"🔄 Updating seat layout with filter: {filter_criteria}")
         print(f"📝 New seat layout: {normalized_seat_layout}")
@@ -292,12 +313,33 @@ class GameService:
         return dungeon_master.lower() == player_name.lower()
 
     @staticmethod
+    def player_has_selected_character(room_id: str, player_name: str) -> bool:
+        """Check whether a player is an adventurer in this hot-state session."""
+        room = GameService.get_room(room_id)
+        if not room:
+            return False
+
+        player_metadata = room.get("player_metadata", {})
+        if not isinstance(player_metadata, dict):
+            return False
+
+        metadata = player_metadata.get(player_name.lower(), {})
+        return bool(metadata.get("character_id"))
+
+    @staticmethod
     def add_moderator(room_id: str, player_name: str):
         """Add a player as moderator"""
         collection = GameService._get_active_session()
         
         # Lowercase the player name for consistency
         player_name = player_name.lower()
+
+        current_seat_layout = GameService.get_seat_layout(room_id)
+        if player_name in [seat.lower() for seat in current_seat_layout if isinstance(seat, str) and seat != "empty"]:
+            raise ValueError("Seated players cannot be moderators")
+
+        if GameService.player_has_selected_character(room_id, player_name):
+            raise ValueError("Adventurers cannot be moderators")
         
         filter_criteria = GameService.room_filter(room_id)
 
@@ -399,6 +441,8 @@ class GameService:
             raise Exception("player_name is required")
 
         player_metadata = room.get("player_metadata", {})
+        if not isinstance(player_metadata, dict):
+            player_metadata = {}
         player_metadata[player_name] = {
             "player_name": player_name,
             "user_id": character_data.get("user_id"),

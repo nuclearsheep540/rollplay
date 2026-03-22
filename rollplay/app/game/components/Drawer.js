@@ -52,7 +52,7 @@ export default function Drawer({ side = 'left', tabs, activeTab, onTabChange, ch
   }, [activeTab]);
 
   const handleTransitionEnd = (e) => {
-    if (e.propertyName === 'transform') {
+    if (e.target === e.currentTarget && e.propertyName === 'transform') {
       setSettled(!!activeTab);
     }
   };
