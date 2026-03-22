@@ -2,6 +2,16 @@
 @tailwind components;
 @tailwind utilities;
 
+/* Audio gate overlay — hide description on short viewports */
+.gate-description {
+  display: none !important;
+}
+@media (min-height: 500px) {
+  .gate-description {
+    display: flex !important;
+  }
+}
+
 /* Hide scrollbar but keep scrolling functionality */
 html::-webkit-scrollbar,
 body::-webkit-scrollbar,

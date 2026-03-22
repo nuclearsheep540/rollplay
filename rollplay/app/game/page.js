@@ -18,6 +18,7 @@ import CombatControlsPanel from './components/CombatControlsPanel';
 import ModeratorControls from './components/ModeratorControls';
 import { AudioMixerPanel, BottomMixerDrawer } from '../audio_management/components';
 import { PlaybackState } from '../audio_management/types';
+import { COLORS } from '../styles/colorTheme';
 import HorizontalInitiativeTracker from './components/HorizontalInitiativeTracker';
 import AdventureLog from './components/AdventureLog';
 import LobbyPanel from './components/LobbyPanel';
@@ -508,7 +509,7 @@ function GameContent() {
       .then(data => {
         if (data) {
           console.log(`✅ Campaign metadata loaded: "${data.title}"`);
-          setCampaignMeta({ title: data.title, heroImage: data.hero_image });
+          setCampaignMeta({ title: data.title, description: data.description, heroImage: data.hero_image });
           // Preload hero image so we can gate the overlay on it being ready
           if (data.hero_image) {
             const img = new Image();
@@ -1962,49 +1963,61 @@ function GameContent() {
           onClick={handleEnterSession}
         >
           {heroImageReady && <div
-            className="relative rounded-sm overflow-hidden shadow-2xl shadow-black/50 select-none border-2 border-[#F7F4F3]"
+            className="relative rounded-sm overflow-hidden shadow-2xl shadow-black/50 select-none border-2"
             style={{
-              width: 'min(70vw, calc(82vh * 16 / 9))',
+              borderColor: COLORS.smoke,
+              width: 'min(80vw, calc(90vh * 16 / 9))',
               backgroundImage: campaignMeta?.heroImage ? `url(${campaignMeta.heroImage})` : 'none',
               backgroundSize: 'cover',
               backgroundPosition: 'center',
               aspectRatio: '16 / 9',
             }}
           >
-            {/* Gradient overlays for text readability at top and bottom */}
-            <div className="absolute inset-0 bg-gradient-to-b from-black/90 via-transparent to-black/90" />
+            {/* Gradient overlay for text readability */}
+            <div className="absolute inset-0 bg-gradient-to-b from-black/90 via-black/40 to-black/90" />
 
             {/* Content */}
-            <div className="absolute inset-0 flex flex-col justify-between py-12 px-8">
+            <div className="absolute inset-0 flex flex-col justify-evenly px-8" style={{ paddingTop: 'clamp(1rem, 3vh, 3rem)', paddingBottom: 'clamp(1rem, 3vh, 3rem)' }}>
               {campaignMeta?.title && (
-                <h2 className="text-4xl text-white font-[family-name:var(--font-metamorphous)] text-center">
+                <h2 className="text-4xl text-white font-[family-name:var(--font-metamorphous)] text-center leading-none">
                   {campaignMeta.title}
                 </h2>
               )}
 
-              <div className="relative">
-                {/* Click to enter — centered */}
-                <p className="text-2xl text-[#F7F4F3] tracking-widest capitalize text-center font-[family-name:var(--font-metamorphous)]">
-                  Click to enter
-                </p>
-
-                {/* Connected players — bottom-left, positioned above "Click to enter" */}
-                {(() => {
-                  const seated = gameSeats.filter(s => s.playerName !== 'empty').map(s => s.playerName);
-                  const inLobby = lobbyUsers.filter(u => u.status === 'connected').map(u => u.name);
-                  const allConnected = [...new Set([...seated, ...inLobby])];
-                  if (allConnected.length === 0) return null;
-                  return (
-                    <div className="absolute bottom-full left-0 mb-4 text-left">
-                      <p className="text-sm text-gray-400 uppercase tracking-widest mb-1">Connected Players</p>
-                      {allConnected.map(name => (
-                        <p key={name} className="text-base text-gray-300">{name}</p>
-                      ))}
-                    </div>
-                  );
-                })()}
+              {/* Middle row — spacer (1/4) | description (2/4) | spacer (1/4) */}
+              <div className="flex items-center gate-description">
+                <div className="w-1/4" />
+                <div className="w-2/4">
+                  {campaignMeta?.description && (
+                    <p className="text-center overflow-hidden" style={{ color: COLORS.smoke, whiteSpace: 'pre-line', fontSize: 'clamp(0.65rem, 0.9vw, 1rem)' }}>
+                      {campaignMeta.description}
+                    </p>
+                  )}
+                </div>
+                <div className="w-1/4" />
               </div>
+
+              {/* Click to enter — centered */}
+              <p className="text-2xl tracking-widest capitalize text-center font-[family-name:var(--font-metamorphous)] leading-none" style={{ color: COLORS.smoke }}>
+                Click to enter
+              </p>
             </div>
+
+            {/* Connected players — absolutely positioned, grows upward */}
+            {(() => {
+              const seated = gameSeats.filter(s => s.playerName !== 'empty').map(s => s.playerName);
+              const inLobby = lobbyUsers.filter(u => u.status === 'connected').map(u => u.name);
+              const allConnected = [...new Set([...seated, ...inLobby])];
+              if (allConnected.length === 0) return null;
+              return (
+                <div className="absolute left-0 bottom-0 text-left px-8" style={{ paddingBottom: 'clamp(1rem, 3vh, 3rem)' }}>
+                  <p className="text-sm uppercase tracking-widest mb-1" style={{ color: COLORS.smoke }}>Connected:</p>
+                  {allConnected.map(name => (
+                    <p key={name} className="text-base text-gray-300">{name}</p>
+                  ))}
+                </div>
+              );
+            })()}
           </div>}
         </div>
       )}
