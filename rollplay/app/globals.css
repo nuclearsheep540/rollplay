@@ -562,13 +562,33 @@ body {
 }
 
 
-.drawer-toggle-tab {
+/* Left drawer tab strip — mirrors right drawer but on the right edge */
+.left-drawer-tab-strip {
   position: absolute;
   right: -40px;
-  top: 50%;
-  transform: translateY(-50%);
+  width: 40px;
+  top: 0;
+  bottom: 0;
+  overflow-y: auto;
+  overflow-x: visible;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+  z-index: 31;
+}
+.left-drawer-tab-strip::-webkit-scrollbar { display: none; }
+
+.left-drawer-tab-strip-inner {
+  display: flex;
+  flex-direction: column;
+  min-height: 100%;
+  justify-content: center;
+  gap: 8px;
+}
+
+.left-drawer-tab {
   width: 40px;
   height: 112px;
+  flex-shrink: 0;
   background: rgba(0, 0, 0, 0.7);
   backdrop-filter: blur(8px);
   border: 1px solid rgba(255, 255, 255, 0.1);
@@ -582,18 +602,17 @@ body {
   font-size: 14px;
   font-weight: 600;
   font-family: system-ui;
-  z-index: 31;
   transition: color 200ms, background 200ms;
   writing-mode: vertical-rl;
   text-orientation: mixed;
 }
-.drawer-toggle-tab:hover {
+.left-drawer-tab:hover {
   color: rgba(255, 255, 255, 0.8);
 }
-.drawer-toggle-tab.active {
+.left-drawer-tab.active {
   color: var(--content-primary);
-  background: rgba(247, 244, 243, 0.9);  /* smoke at 90% opacity */
-  border-color: rgba(181, 173, 166, 1);   /* silver */
+  background: rgba(247, 244, 243, 0.9);
+  border-color: rgba(181, 173, 166, 1);
   text-shadow: none;
 }
 
@@ -621,8 +640,6 @@ body {
   min-height: 0;
   display: flex;
   flex-direction: column;
-  border-top: 1px solid rgba(255, 255, 255, 0.1);
-  padding-top: calc(16px * var(--ui-scale));
 }
 
 .adventure-log-section .log-header {

@@ -29,11 +29,18 @@ import { useUnifiedAudio } from '../audio_management';
 import { MapDisplay, GridOverlay, useMapWebSocket, ImageDisplay, useImageWebSocket } from '../map_management';
 import MapOverlayPanel from './components/MapOverlayPanel';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
-import { faVolumeHigh, faVolumeXmark } from '@fortawesome/free-solid-svg-icons';
+import { faVolumeHigh, faVolumeXmark, faRightToBracket, faEye } from '@fortawesome/free-solid-svg-icons';
 import MapSafeArea from './components/MapSafeArea';
+import Drawer from './components/Drawer';
 import GridTuningOverlay from '../map_management/components/GridTuningOverlay';
 
-// Tab configuration for right drawer - static, role filtering applied at render time
+// Tab configuration for left drawer
+const LEFT_DRAWER_TABS = [
+  { id: 'party', label: 'PARTY' },
+  { id: 'log', label: 'LOG' },
+];
+
+// Tab configuration for right drawer - role filtering applied at render time
 const RIGHT_DRAWER_TABS = [
   { id: 'moderator', label: 'MOD', dmOnly: false },
   { id: 'audio', label: 'AUDIO', dmOnly: true },
@@ -41,20 +48,6 @@ const RIGHT_DRAWER_TABS = [
   { id: 'image', label: 'IMAGE', dmOnly: true },
   { id: 'combat', label: 'COMBAT', dmOnly: true },
 ];
-
-// Helper function to get character data — module scope (pure, no component state deps)
-const getCharacterData = (playerName) => {
-  const characterDatabase = {
-    'Thorin': { class: 'Dwarf Fighter', level: 3, hp: 34, maxHp: 40 }
-  };
-
-  return characterDatabase[playerName] || {
-    class: 'Adventurer',
-    level: 1,
-    hp: 10,
-    maxHp: 10
-  };
-};
 
 function GameContent() {
   const params = useSearchParams();
@@ -75,6 +68,10 @@ function GameContent() {
 
   // UNIFIED STRUCTURE - Replaces both seats and partyMembers
   const [gameSeats, setGameSeats] = useState([]);
+
+  // Character metadata is hydrated from api-game hot state via ETL.
+  const [playerMetadata, setPlayerMetadata] = useState({});
+  const [moderators, setModerators] = useState([]);
 
   // State for seat colors (loaded from backend)
   const [seatColors, setSeatColors] = useState({});
@@ -105,6 +102,15 @@ function GameContent() {
     return map;
   }, [gameSeats, seatColors]);
 
+  const getCharacterData = useCallback((playerName) => {
+    if (!playerName || playerName === "empty") {
+      return null;
+    }
+
+    const normalizedPlayerName = playerName.toLowerCase();
+    return playerMetadata[normalizedPlayerName] || null;
+  }, [playerMetadata]);
+
   // UPDATED: State management for TabletopInterface - REMOVED HARDCODED DEFAULTS
   const [currentTurn, setCurrentTurn] = useState(null); // ❌ Removed 'Thorin' default
   const [isDM, setIsDM] = useState(null); // null = unknown, false = not DM, true = DM
@@ -128,6 +134,10 @@ function GameContent() {
     { id: 1, message: 'Welcome to Tabletop Tavern', type: 'system'}
   ]);
   
+  // Derived: filter system messages out of adventure log, route them to lobby
+  const filteredRollLog = useMemo(() => rollLog.filter(e => e.type !== 'system'), [rollLog]);
+  const systemMessages = useMemo(() => rollLog.filter(e => e.type === 'system'), [rollLog]);
+
   const [initiativeOrder, setInitiativeOrder] = useState([]); // ❌ Removed hardcoded data
 
   const [currentTrack, setCurrentTrack] = useState('🏰 Tavern Ambience');
@@ -189,12 +199,28 @@ function GameContent() {
   // Spectator mode - user has no character selected for this campaign
   const [isSpectator, setIsSpectator] = useState(false);
   const navRef = useRef(null);
-  const [isDrawerOpen, setIsDrawerOpen] = useState(true);
-  const [partyDrawerSettled, setPartyDrawerSettled] = useState(true); // starts open, so settled
+  const [activeLeftDrawer, setActiveLeftDrawer] = useState('party'); // 'party' | 'log' | null
   const [activeRightDrawer, setActiveRightDrawer] = useState(null); // null | 'dm' | 'moderator'
   const [rightDrawerSettled, setRightDrawerSettled] = useState(false); // starts closed
   const [isMixerOpen, setIsMixerOpen] = useState(false);
   const [mapImageConfig, setMapImageConfig] = useState(null); // Map image positioning/scaling
+
+  const canUseModeratorTools = isModerator || isHost;
+
+  useEffect(() => {
+    const normalizedPlayerName = (thisPlayer || currentUser?.screen_name || currentUser?.email || '').toLowerCase();
+    if (!normalizedPlayerName) return;
+    setIsModerator(moderators.includes(normalizedPlayerName));
+  }, [moderators, thisPlayer, currentUser]);
+
+  const visibleRightTabs = useMemo(() => {
+    return RIGHT_DRAWER_TABS.filter((tab) => {
+      if (tab.id === 'moderator') {
+        return canUseModeratorTools;
+      }
+      return !tab.dmOnly || isDM;
+    });
+  }, [canUseModeratorTools, isDM]);
 
   // Stable callbacks for grid/map config changes — passed to DMControlCenter useEffect deps
   const handleGridChange = useCallback((newGridConfig) => {
@@ -204,6 +230,16 @@ function GameContent() {
   const handleMapImageChange = useCallback((newMapImageConfig) => {
     setMapImageConfig(newMapImageConfig);
   }, []);
+
+  // If permissions change (role/DM status), close any no-longer-visible right drawer tab.
+  useEffect(() => {
+    if (!activeRightDrawer) return;
+
+    const activeTabStillVisible = visibleRightTabs.some((tab) => tab.id === activeRightDrawer);
+    if (!activeTabStillVisible) {
+      setActiveRightDrawer(null);
+    }
+  }, [activeRightDrawer, visibleRightTabs]);
 
 
 
@@ -289,6 +325,14 @@ function GameContent() {
       const seatLayout = res["current_seat_layout"] || [];
       const maxPlayers = res["max_players"];
       const backendSeatColors = res["seat_colors"] || {};
+      const backendPlayerMetadata = Object.fromEntries(
+        Object.entries(res["player_metadata"] || {}).map(([playerName, metadata]) => [
+          playerName.toLowerCase(),
+          metadata
+        ])
+      );
+
+      setPlayerMetadata(backendPlayerMetadata);
       
       // Set seat colors from backend
       setSeatColors(backendSeatColors);
@@ -310,7 +354,7 @@ function GameContent() {
         initialSeats.push({
           seatId: i,
           playerName: normalizedPlayerName,
-          characterData: normalizedPlayerName !== "empty" ? getCharacterData(normalizedPlayerName) : null,
+          characterData: normalizedPlayerName !== "empty" ? (backendPlayerMetadata[normalizedPlayerName] || null) : null,
           isActive: false
         });
       }
@@ -339,13 +383,11 @@ function GameContent() {
       const playerName = user.screen_name || user.email;
       const mongoRolesResponse = await fetch(`/api/game/${roomId}/roles?playerName=${playerName}`);
       let isHost = false;
-      let isModerator = false;
       let isDMRole = false;
 
       if (mongoRolesResponse.ok) {
         const mongoRoles = await mongoRolesResponse.json();
         isHost = mongoRoles.is_host;
-        isModerator = mongoRoles.is_moderator;
         isDMRole = mongoRoles.is_dm;  // Use MongoDB DM flag
         console.log('📋 MongoDB roles:', mongoRoles);
       } else {
@@ -354,38 +396,13 @@ function GameContent() {
 
       // Set roles in component state
       setIsHost(isHost);
-      setIsModerator(isModerator);
       setIsDM(isDMRole);
-      console.log(`✅ Initial roles set - Host: ${isHost}, Moderator: ${isModerator}, DM: ${isDMRole}`);
+      console.log(`✅ Initial roles set - Host: ${isHost}, DM: ${isDMRole}`);
 
     } catch (error) {
       console.error('Error checking player roles:', error);
     }
   };
-
-  // Refresh dynamic roles (host/moderator) after WebSocket events
-  // DM status is static and never changes during session
-  const refreshDynamicRoles = useCallback(async (roomId, user) => {
-    try {
-      console.log(`🔄 Refreshing dynamic roles for user: ${user.screen_name || user.email}`);
-
-      // Only fetch MongoDB-based roles (host, moderator) - DM status is static
-      const playerName = user.screen_name || user.email;
-      const mongoRolesResponse = await fetch(`/api/game/${roomId}/roles?playerName=${playerName}`);
-
-      if (mongoRolesResponse.ok) {
-        const mongoRoles = await mongoRolesResponse.json();
-        setIsHost(mongoRoles.is_host);
-        setIsModerator(mongoRoles.is_moderator);
-        console.log('🔄 Dynamic roles updated:', mongoRoles);
-      } else {
-        console.error('❌ Failed to refresh dynamic roles:', mongoRolesResponse.status);
-      }
-
-    } catch (error) {
-      console.error('Error refreshing dynamic roles:', error);
-    }
-  }, []);
 
   // Lock page scroll while in game — the game shell is a fixed viewport, not a document
   useEffect(() => {
@@ -459,16 +476,16 @@ function GameContent() {
     }
   }, [currentUser, userLoading])
 
-  // Check spectator status when campaign ID is available
-  // DMs are never spectators even without a character
+  // Check spectator status when campaign ID is available.
+  // Staff users (DM/Host/Moderator) are never spectators even without a character.
   useEffect(() => {
     // Don't decide spectator status until roles have been resolved
     if (isDM === null || !campaignId || !currentUser) return;
 
-    // DM is never a spectator
-    if (isDM) {
+    // Staff are never spectators
+    if (isDM || isHost || isModerator) {
       setIsSpectator(false);
-      console.log('✅ User is DM - not a spectator');
+      console.log('✅ User has staff role - not a spectator');
       return;
     }
 
@@ -493,7 +510,7 @@ function GameContent() {
     };
 
     checkSpectatorStatus();
-  }, [campaignId, currentUser, isDM]);
+  }, [campaignId, currentUser, isDM, isHost, isModerator]);
 
   // Measure total nav height (including spectator banner when present)
   // and publish as --nav-height on the game-interface container so all
@@ -865,6 +882,7 @@ function GameContent() {
     // Update DM seat based on the action
     if (action === 'set_dm') {
       setDmSeat(playerName);
+      setIsDM(playerName?.toLowerCase() === getCurrentPlayerName());
 
       // Business logic: If new DM is sitting in a party seat, remove them from it
       const playerSeatIndex = gameSeats.findIndex(seat => seat.playerName === playerName);
@@ -886,19 +904,14 @@ function GameContent() {
       }
     } else if (action === 'unset_dm') {
       setDmSeat("");
-    }
-
-    // Refresh dynamic roles (host/moderator) for current user
-    // DM status is static and doesn't change during session
-    if (roomId && currentUser) {
-      await refreshDynamicRoles(roomId, currentUser);
+      setIsDM(false);
     }
 
     // Trigger refresh of ModeratorControls room data for all users
     setRoleChangeTrigger(Date.now());
 
     // Role changes are now broadcasted via WebSocket to all connected users
-  }, [gameSeats, roomId, currentUser, refreshDynamicRoles]);
+  }, [gameSeats]);
 
   // Create a setter function for playerSeatMap updates
   const setPlayerSeatMap = useCallback((updaterFunction) => {
@@ -988,6 +1001,8 @@ function GameContent() {
     setDisconnectTimeouts,
     setCurrentInitiativePromptId,
     setCampaignId,
+    setPlayerMetadata,
+    setModerators,
     setChannelMuted,
     setChannelSoloed,
 
@@ -1047,7 +1062,7 @@ function GameContent() {
   }), [
     gameSeats, thisPlayer, currentUser, lobbyUsers,
     disconnectTimeouts, currentInitiativePromptId, remoteTrackStates,
-    addToLog, handleRoleChange, setPlayerSeatMap,
+    addToLog, getCharacterData, handleRoleChange, setPlayerSeatMap,
     playRemoteTrack, resumeRemoteTrack, pauseRemoteTrack, stopRemoteTrack,
     setRemoteTrackVolume, toggleRemoteTrackLooping, loadRemoteAudioBuffer,
     activeFades, cancelFade, syncAudioState, loadAssetIntoChannel, applyChannelEffects,
@@ -1161,23 +1176,51 @@ function GameContent() {
     // 1. Unlock audio (drains pending play ops with corrected offsets)
     await unlockAudio();
 
-    // 2. Auto-seat if eligible (not DM, not spectator, not already seated)
-    if (isDM === false && !isSpectator) {
-      const alreadySeated = gameSeats.some(s => s.playerName === thisPlayer);
-      if (!alreadySeated) {
-        const emptyIdx = gameSeats.findIndex(s => s.playerName === "empty");
-        if (emptyIdx !== -1) {
-          const newSeats = [...gameSeats];
-          newSeats[emptyIdx] = {
-            ...newSeats[emptyIdx],
-            playerName: thisPlayer,
-            characterData: getCharacterData(thisPlayer),
-            isActive: false
-          };
-          sendSeatChange(newSeats);
-        }
-      }
+    if (!roomId || !thisPlayer) {
+      return;
     }
+
+    // 2. Re-check live role state to avoid stale client role flags on refresh.
+    let liveRoles = null;
+    try {
+      const roleResponse = await fetch(`/api/game/${roomId}/roles?playerName=${encodeURIComponent(thisPlayer)}`);
+      if (roleResponse.ok) {
+        liveRoles = await roleResponse.json();
+      }
+    } catch (error) {
+      console.warn('Could not re-check roles before auto-seat:', error);
+    }
+
+    const isLiveStaff = Boolean(liveRoles?.is_dm || liveRoles?.is_moderator);
+    if (isLiveStaff || isDM || isModerator) {
+      return;
+    }
+
+    const characterData = getCharacterData(thisPlayer);
+    if (!characterData?.character_id) {
+      setIsSpectator(true);
+      return;
+    }
+
+    // 3. Auto-seat only valid adventurers who are not already seated.
+    const alreadySeated = gameSeats.some(s => s.playerName === thisPlayer);
+    if (alreadySeated) {
+      return;
+    }
+
+    const emptyIdx = gameSeats.findIndex(s => s.playerName === "empty");
+    if (emptyIdx === -1) {
+      return;
+    }
+
+    const newSeats = [...gameSeats];
+    newSeats[emptyIdx] = {
+      ...newSeats[emptyIdx],
+      playerName: thisPlayer,
+      characterData,
+      isActive: false
+    };
+    await sendSeatChange(newSeats);
   };
 
   // Show dice portal for player rolls
@@ -1304,19 +1347,9 @@ function GameContent() {
 
 
   // Handle clearing system messages
+  // Send WebSocket event — server clears MongoDB and broadcasts to all clients
   const handleClearSystemMessages = async () => {
-    try {
-      await sendClearSystemMessages();
-      
-      // Remove system messages from local state immediately
-      setRollLog(prev => prev.filter(entry => entry.type !== 'system'));
-      
-      // Adventure log will be handled by server broadcast
-      
-    } catch (error) {
-      console.error('Error clearing system messages:', error);
-      alert('Failed to clear system messages. Please try again.');
-    }
+    await sendClearSystemMessages();
   };
 
   // Handle clearing all adventure log messages
@@ -1636,6 +1669,7 @@ function GameContent() {
             title="Back to Dashboard"
           >
             Dashboard
+            <FontAwesomeIcon icon={faRightToBracket} size="xl" style={{ marginLeft: '6px'}} />
           </button>
         </div>
 
@@ -1651,7 +1685,9 @@ function GameContent() {
             gap: '16px'
           }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-              <span style={{ fontSize: '20px' }}>👁️</span>
+              <span style={{ fontSize: '22px', color: '#f59e0b' }}>
+                <FontAwesomeIcon icon={faEye} />
+              </span>
               <div>
                 <p style={{ color: '#f59e0b', fontWeight: '600', margin: 0 }}>Spectator Mode</p>
                 <p style={{ color: '#94a3b8', fontSize: '14px', margin: 0 }}>
@@ -1678,88 +1714,73 @@ function GameContent() {
         )}
       </div>
 
-      {/* Party drawer — fixed-position, outside grid flow */}
-      <div
-        className={`party-drawer ${partyDrawerSettled ? 'drawer-settled' : ''}`}
-        style={{ transform: isDrawerOpen ? 'translateX(0)' : 'translateX(-100%)' }}
-        onTransitionEnd={(e) => {
-          if (e.propertyName === 'transform') setPartyDrawerSettled(isDrawerOpen);
-        }}
+      {/* Left drawer — fixed-position, tabbed (PARTY / LOG) */}
+      <Drawer
+        side="left"
+        tabs={LEFT_DRAWER_TABS}
+        activeTab={activeLeftDrawer}
+        onTabChange={setActiveLeftDrawer}
       >
-        <button
-          className={`drawer-toggle-tab ${isDrawerOpen ? 'active' : ''}`}
-          onClick={() => { setPartyDrawerSettled(false); setIsDrawerOpen(!isDrawerOpen); }}
-        >
-          PARTY
-        </button>
+        {activeLeftDrawer === 'party' && (
+          <>
+            <DMChair
+              dmName={dmSeat}
+              isEmpty={dmSeat === ""}
+              moderators={moderators}
+            />
 
-        <div className="drawer-content">
-          {/* DM Section */}
-          <div
-            className="party-header"
-            style={{
-              color: '#fb7185',
-              borderBottom: '1px solid rgba(251, 113, 133, 0.3)'
-            }}
-          >
-            <span>Dungeon Master</span>
-          </div>
+            {gameSeats.filter(seat => !isSpectator || canUseModeratorTools || seat.playerName !== "empty").map((seat) => {
+              const isSitting = seat.playerName === getCurrentPlayerName();
+              const currentColor = seatColors[seat.seatId] || getSeatColor(seat.seatId);
 
-          <DMChair
-            dmName={dmSeat}
-            isEmpty={dmSeat === ""}
-          />
+              return (
+                <PlayerCard
+                  key={seat.seatId}
+                  seatId={seat.seatId}
+                  seats={gameSeats}
+                  thisPlayer={getCurrentPlayerName()}
+                  isSitting={isSitting}
+                  currentTurn={currentTurn}
+                  onDiceRoll={handlePlayerDiceRoll}
+                  playerData={seat.characterData}
+                  onColorChange={handlePlayerColorChange}
+                  currentColor={currentColor}
+                />
+              );
+            })}
 
-          {gameSeats.filter(seat => isDM || seat.playerName !== "empty").map((seat) => {
-            const isSitting = seat.playerName === getCurrentPlayerName();
-            const currentColor = seatColors[seat.seatId] || getSeatColor(seat.seatId);
+            {/* Lobby / Connected Users */}
+            <LobbyPanel
+              lobbyUsers={lobbyUsers}
+              systemMessages={systemMessages}
+            />
+          </>
+        )}
 
-            return (
-              <PlayerCard
-                key={seat.seatId}
-                seatId={seat.seatId}
-                seats={gameSeats}
-                thisPlayer={getCurrentPlayerName()}
-                isSitting={isSitting}
-                currentTurn={currentTurn}
-                onDiceRoll={handlePlayerDiceRoll}
-                playerData={seat.characterData}
-                onColorChange={handlePlayerColorChange}
-                currentColor={currentColor}
-              />
-            );
-          })}
-
-          {/* Lobby Panel */}
-          <LobbyPanel
-            lobbyUsers={lobbyUsers}
-          />
-
-          {/* Adventure Log */}
+        {activeLeftDrawer === 'log' && (
           <AdventureLog
-            rollLog={rollLog}
+            rollLog={filteredRollLog}
             playerSeatMap={playerSeatMap}
           />
-          <div aria-hidden="true" style={{ flexShrink: 0, height: '40vh' }} />
-        </div>
-      </div>
+        )}
+      </Drawer>
 
       {/* Right drawer — fixed-position, outside grid flow */}
       {(() => {
-        const visibleTabs = RIGHT_DRAWER_TABS.filter(tab => !tab.dmOnly || isDM);
-
         return (
           <div
             className={`right-drawer ${rightDrawerSettled ? 'drawer-settled' : ''}`}
             style={{ transform: activeRightDrawer ? 'translateX(0)' : 'translateX(100%)' }}
             onTransitionEnd={(e) => {
-              if (e.propertyName === 'transform') setRightDrawerSettled(!!activeRightDrawer);
+              if (e.target === e.currentTarget && e.propertyName === 'transform') {
+                setRightDrawerSettled(!!activeRightDrawer);
+              }
             }}
           >
             {/* Scrollable tab strip — centers when tabs fit, scrolls when they overflow */}
             <div className="right-drawer-tab-strip">
               <div className="right-drawer-tab-strip-inner">
-                {visibleTabs.map((tab) => (
+                {visibleRightTabs.map((tab) => (
                   <button
                     key={tab.id}
                     className={`right-drawer-tab ${activeRightDrawer === tab.id ? 'active' : ''}`}
@@ -1772,7 +1793,7 @@ function GameContent() {
             </div>
 
             <div className="drawer-content">
-              {activeRightDrawer === 'moderator' && (
+              {activeRightDrawer === 'moderator' && canUseModeratorTools && (
                 <ModeratorControls
                   isModerator={isModerator}
                   isHost={isHost}
@@ -1787,7 +1808,6 @@ function GameContent() {
                   setSeatCount={setSeatCount}
                   handleKickPlayer={handleKickPlayer}
                   handleClearSystemMessages={handleClearSystemMessages}
-                  handleClearAllMessages={handleClearAllMessages}
                   roleChangeTrigger={roleChangeTrigger}
                 />
               )}
@@ -1881,7 +1901,7 @@ function GameContent() {
 
           {/* Safe area: shrinks insets to match open drawers — all overlays live here */}
           <MapSafeArea
-            isDrawerOpen={isDrawerOpen}
+            isDrawerOpen={!!activeLeftDrawer}
             activeRightDrawer={activeRightDrawer}
             isMixerOpen={isMixerOpen}
           >

@@ -91,6 +91,23 @@ class WebsocketEvent():
         return "".join(message_parts)
 
     @staticmethod
+    def _get_player_metadata(room_id: str) -> Dict[str, Any]:
+        room = GameService.get_room(room_id) or {}
+        player_metadata = room.get("player_metadata", {})
+        return player_metadata if isinstance(player_metadata, dict) else {}
+
+    @staticmethod
+    def _character_name_for_prompt(room_id: str, player_name: str, player_metadata: Optional[Dict[str, Any]] = None) -> str:
+        if not player_name:
+            return "Unknown"
+
+        if player_metadata is None:
+            player_metadata = WebsocketEvent._get_player_metadata(room_id)
+
+        metadata = player_metadata.get(player_name.lower(), {}) if isinstance(player_metadata, dict) else {}
+        return metadata.get("character_name") or player_name
+
+    @staticmethod
     async def player_connection(websocket, data, event_data, player_name, client_id, manager):
         # Note: manager.connect() is already called in app_websocket.py
         # This event just handles the logging and broadcast
@@ -141,9 +158,12 @@ class WebsocketEvent():
         roll_type = event_data.get("roll_type")
         prompted_by = event_data.get("prompted_by", player_name)
         prompt_id = event_data.get("prompt_id")  # New: Get prompt ID
+
+        player_metadata = WebsocketEvent._get_player_metadata(client_id)
+        target_character = WebsocketEvent._character_name_for_prompt(client_id, prompted_player, player_metadata)
         
         # Log the prompt to adventure log with prompt_id for later removal
-        log_message = format_message(MESSAGE_TEMPLATES["dice_prompt"], target=prompted_player, roll_type=roll_type)
+        log_message = format_message(MESSAGE_TEMPLATES["dice_prompt"], target=target_character, roll_type=roll_type)
         
         adventure_log.add_log_entry(
             room_id=client_id,
@@ -175,9 +195,16 @@ class WebsocketEvent():
                 
         # Generate unique initiative prompt ID for potential removal
         initiative_prompt_id = f"initiative_all_{int(time.time() * 1000)}"
+
+        player_metadata = WebsocketEvent._get_player_metadata(client_id)
+
+        character_targets = [
+            WebsocketEvent._character_name_for_prompt(client_id, player, player_metadata)
+            for player in players_to_prompt
+        ]
         
         # Log ONE adventure log entry for the collective action
-        log_message = format_message(MESSAGE_TEMPLATES["initiative_prompt"], players=", ".join(players_to_prompt))
+        log_message = format_message(MESSAGE_TEMPLATES["initiative_prompt"], players=", ".join(character_targets))
         
         adventure_log.add_log_entry(
             room_id=client_id,

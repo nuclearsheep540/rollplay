@@ -26,7 +26,6 @@ export default function ModeratorControls({
   setSeatCount, // Function to change seat count
   handleKickPlayer, // Function to kick players
   handleClearSystemMessages, // Function to clear system messages
-  handleClearAllMessages, // Function to clear all messages
   roleChangeTrigger // Timestamp or counter that changes when any role change occurs
 }) {
   
@@ -46,7 +45,6 @@ export default function ModeratorControls({
   const [isKickModalOpen, setIsKickModalOpen] = useState(false);
   const [selectedPlayerToKick, setSelectedPlayerToKick] = useState('');
   const [isClearingLogs, setIsClearingLogs] = useState(false);
-  const [isClearingAllLogs, setIsClearingAllLogs] = useState(false);
 
   const toggleSection = (section) => {
     setExpandedSections(prev => ({
@@ -57,11 +55,40 @@ export default function ModeratorControls({
 
   // Get active players (non-empty seats)
   const activePlayers = gameSeats?.filter(seat => seat.playerName !== "empty") || [];
+
+  const formatCharacterSummary = (characterData) => {
+    if (!characterData) return null;
+    const classValue = characterData.character_class || characterData.class;
+    const className = Array.isArray(classValue) ? classValue.join(' / ') : classValue;
+    const level = characterData.level;
+    if (!className || level === undefined || level === null) return null;
+    return `${className} • Level ${level}`;
+  };
+
+  const seatedPlayerNames = new Set(
+    activePlayers
+      .map((seat) => seat.playerName)
+      .filter(Boolean)
+      .map((name) => name.toLowerCase())
+  );
+
+  const uniqueLobbyUsers = (lobbyUsers || []).filter((user) => {
+    const lobbyName = user.player_name || user.name;
+    if (!lobbyName) return false;
+    return !seatedPlayerNames.has(lobbyName.toLowerCase());
+  });
+
+  const playerHasSelectedCharacter = (playerName) => {
+    if (!playerName) return false;
+    const playerMetadata = roomData?.player_metadata;
+    if (!playerMetadata || typeof playerMetadata !== 'object') return false;
+    return Boolean(playerMetadata[playerName.toLowerCase()]?.character_id);
+  };
   
   // Combine seated players and lobby users for DM/moderator selection
   const allAvailableUsers = [
     ...activePlayers,
-    ...(lobbyUsers || []).map(user => ({
+    ...uniqueLobbyUsers.map(user => ({
       playerName: user.player_name || user.name,
       seatId: `lobby_${user.player_name || user.name}`,
       characterData: null,
@@ -139,11 +166,6 @@ export default function ModeratorControls({
           onRoleChange(action, playerName);
         }
         
-        // Broadcast role change via WebSocket (if sendRoleChange is available)
-        if (sendRoleChange) {
-          sendRoleChange(action, playerName);
-        }
-        
         // Close modals
         setIsModeratorModalOpen(false);
         setIsDMModalOpen(false);
@@ -181,7 +203,7 @@ export default function ModeratorControls({
           className={MODERATOR_HEADER}
           onClick={() => toggleSection('moderators')}
         >
-          👥 Manage Moderators
+          Manage Moderators
           <span className={`${MODERATOR_ARROW} ${expandedSections.moderators ? 'rotate-180' : ''}`}>
             ▼
           </span>
@@ -192,7 +214,7 @@ export default function ModeratorControls({
               className={MODERATOR_CHILD} 
               onClick={() => openModeratorModal('add_moderator')}
             >
-              ➕ Add Moderator
+              Add Moderator
             </button>
             
             {(isHost || isDM) && (
@@ -200,7 +222,7 @@ export default function ModeratorControls({
                 className={MODERATOR_CHILD}
                 onClick={() => openModeratorModal('remove_moderator')}
               >
-                ➖ Remove Moderator
+                Remove Moderator
               </button>
             )}
 
@@ -239,7 +261,7 @@ export default function ModeratorControls({
           className={MODERATOR_HEADER}
           onClick={() => toggleSection('dm')}
         >
-          🎲 Manage DM
+          Manage DM
           <span className={`${MODERATOR_ARROW} ${expandedSections.dm ? 'rotate-180' : ''}`}>
             ▼
           </span>
@@ -251,7 +273,7 @@ export default function ModeratorControls({
                 className={MODERATOR_CHILD}
                 onClick={() => openDMModal('set_dm')}
               >
-                👑 Set Dungeon Master
+                Set Dungeon Master
               </button>
             )}
             
@@ -260,7 +282,7 @@ export default function ModeratorControls({
                 className={MODERATOR_CHILD}
                 onClick={() => handleRoleAction('unset_dm', roomData.dungeon_master)}
               >
-                🚫 Remove Dungeon Master
+                Remove Dungeon Master
               </button>
             )}
 
@@ -287,7 +309,7 @@ export default function ModeratorControls({
         <div style={{ padding: 'calc(24px * var(--ui-scale))' }}>
             <div className="flex items-center justify-between mb-6">
               <h3 className="text-emerald-300 font-bold">
-                {selectedAction === 'add_moderator' ? '➕ Add Moderator' : '➖ Remove Moderator'}
+                {selectedAction === 'add_moderator' ? 'Add Moderator' : 'Remove Moderator'}
               </h3>
               <button 
                 className="text-gray-400 hover:text-white transition-colors"
@@ -310,10 +332,11 @@ export default function ModeratorControls({
                     let filteredUsers;
                     
                     if (selectedAction === 'add_moderator') {
-                      // Filter users based on who isn't already a moderator
+                      // Only non-adventurers can be moderators.
                       filteredUsers = allAvailableUsers.filter(user => {
                         return !roomData?.moderators?.includes(user.playerName) 
-                               && user.playerName !== roomData?.room_host;
+                               && user.playerName !== roomData?.room_host
+                               && !playerHasSelectedCharacter(user.playerName);
                       });
                     } else {
                       // For remove_moderator, create user objects directly from roomData.moderators
@@ -332,7 +355,7 @@ export default function ModeratorControls({
                       // For remove_moderator, show all moderators in a simple list
                       return (
                         <>
-                          <div className="text-orange-400/70 text-xs mb-2 font-medium">👑 CURRENT MODERATORS</div>
+                          <div className="text-orange-400/70 text-xs mb-2 font-medium">CURRENT MODERATORS</div>
                           {filteredUsers.map((moderator) => (
                             <button
                               key={moderator.seatId}
@@ -343,11 +366,11 @@ export default function ModeratorControls({
                                 <div>
                                   <div className="font-medium">{moderator.playerName}</div>
                                   <div className="text-orange-400/70 text-sm">
-                                    🛡️ Moderator
+                                    Moderator
                                   </div>
                                 </div>
-                                <div className="text-orange-400">
-                                  ➖
+                                <div className="text-orange-400 text-sm">
+                                  Remove
                                 </div>
                               </div>
                             </button>
@@ -365,7 +388,7 @@ export default function ModeratorControls({
                         {/* Seated Players Section */}
                         {seatedFiltered.length > 0 && (
                           <>
-                            <div className="text-emerald-400/70 text-xs mb-2 font-medium">🪑 SEATED PLAYERS</div>
+                            <div className="text-emerald-400/70 text-xs mb-2 font-medium">SEATED PLAYERS</div>
                             {seatedFiltered.map((player) => (
                               <button
                                 key={player.seatId}
@@ -375,14 +398,14 @@ export default function ModeratorControls({
                                 <div className="flex items-center justify-between">
                                   <div>
                                     <div className="font-medium">{player.playerName}</div>
-                                    {player.characterData && (
+                                    {formatCharacterSummary(player.characterData) && (
                                       <div className="text-gray-400 text-sm">
-                                        {player.characterData.class} • Level {player.characterData.level}
+                                        {formatCharacterSummary(player.characterData)}
                                       </div>
                                     )}
                                   </div>
-                                  <div className="text-emerald-400">
-                                    ➕
+                                  <div className="text-emerald-400 text-sm">
+                                    Add
                                   </div>
                                 </div>
                               </button>
@@ -394,7 +417,7 @@ export default function ModeratorControls({
                         {lobbyFiltered.length > 0 && (
                           <>
                             {seatedFiltered.length > 0 && <div className="my-3 border-t border-emerald-500/20"></div>}
-                            <div className="text-emerald-400/70 text-xs mb-2 font-medium">🏛️ LOBBY USERS</div>
+                            <div className="text-emerald-400/70 text-xs mb-2 font-medium">LOBBY USERS</div>
                             {lobbyFiltered.map((user) => (
                               <button
                                 key={user.seatId}
@@ -405,11 +428,11 @@ export default function ModeratorControls({
                                   <div>
                                     <div className="font-medium">{user.playerName}</div>
                                     <div className="text-emerald-400/70 text-sm">
-                                      📡 Connected • In Lobby
+                                      Connected • In Lobby
                                     </div>
                                   </div>
-                                  <div className="text-emerald-400">
-                                    ➕
+                                  <div className="text-emerald-400 text-sm">
+                                    Add
                                   </div>
                                 </div>
                               </button>
@@ -454,7 +477,7 @@ export default function ModeratorControls({
         <div style={{ padding: 'calc(24px * var(--ui-scale))' }}>
             <div className="flex items-center justify-between mb-6">
               <h3 className="text-amber-300 font-bold">
-                👑 Set Dungeon Master
+                Set Dungeon Master
               </h3>
               <button 
                 className="text-gray-400 hover:text-white transition-colors"
@@ -474,7 +497,7 @@ export default function ModeratorControls({
                   {/* Seated Players Section */}
                   {activePlayers.length > 0 && (
                     <>
-                      <div className="text-amber-400/70 text-xs mb-2 font-medium">🪑 SEATED PLAYERS</div>
+                      <div className="text-amber-400/70 text-xs mb-2 font-medium">SEATED PLAYERS</div>
                       {activePlayers.map((player) => (
                         <button
                           key={player.seatId}
@@ -484,13 +507,13 @@ export default function ModeratorControls({
                           <div className="flex items-center justify-between">
                             <div>
                               <div className="font-medium">{player.playerName}</div>
-                              {player.characterData && (
+                              {formatCharacterSummary(player.characterData) && (
                                 <div className="text-gray-400 text-sm">
-                                  {player.characterData.class} • Level {player.characterData.level}
+                                  {formatCharacterSummary(player.characterData)}
                                 </div>
                               )}
                             </div>
-                            <div className="text-amber-400">👑</div>
+                            <div className="text-amber-400 text-sm">Set</div>
                           </div>
                         </button>
                       ))}
@@ -498,11 +521,11 @@ export default function ModeratorControls({
                   )}
                   
                   {/* Lobby Users Section */}
-                  {lobbyUsers && lobbyUsers.length > 0 && (
+                  {uniqueLobbyUsers.length > 0 && (
                     <>
                       {activePlayers.length > 0 && <div className="my-3 border-t border-amber-500/20"></div>}
-                      <div className="text-amber-400/70 text-xs mb-2 font-medium">🏛️ LOBBY USERS</div>
-                      {lobbyUsers.map((user) => (
+                      <div className="text-amber-400/70 text-xs mb-2 font-medium">LOBBY USERS</div>
+                      {uniqueLobbyUsers.map((user) => (
                         <button
                           key={`lobby_${user.player_name || user.name}`}
                           className="w-full text-left p-3 bg-amber-500/10 border border-amber-500/30 text-amber-300 rounded transition-colors duration-200 hover:bg-amber-500/20"
@@ -512,10 +535,10 @@ export default function ModeratorControls({
                             <div>
                               <div className="font-medium">{user.player_name || user.name}</div>
                               <div className="text-amber-400/70 text-sm">
-                                📡 Connected • In Lobby
+                                Connected • In Lobby
                               </div>
                             </div>
-                            <div className="text-amber-400">👑</div>
+                            <div className="text-amber-400 text-sm">Set</div>
                           </div>
                         </button>
                       ))}
@@ -546,7 +569,7 @@ export default function ModeratorControls({
           className={MODERATOR_HEADER}
           onClick={() => toggleSection('party')}
         >
-          👥 Party Management
+          Party Management
           <span className={`${MODERATOR_ARROW} ${expandedSections.party ? 'rotate-180' : ''}`}>
             ▼
           </span>
@@ -555,7 +578,7 @@ export default function ModeratorControls({
           <div>
             {/* Seat Count Management */}
             <div className={MODERATOR_CHILD}>
-              <div className={MODERATOR_LABEL}>🪑 Seat Count (Current: {gameSeats?.length || 0})</div>
+              <div className={MODERATOR_LABEL}>Seat Count (Current: {gameSeats?.length || 0})</div>
               <div>
                 {[1, 2, 3, 4, 5, 6, 7, 8].map(count => (
                   <button
@@ -577,45 +600,33 @@ export default function ModeratorControls({
               className={MODERATOR_CHILD}
               onClick={() => setIsKickModalOpen(true)}
             >
-              🚫 Kick Player
+              Kick Player
             </button>
 
             {/* Clear Messages */}
-            <div>
-              <button 
-                className={`${MODERATOR_CHILD} ${
-                  isClearingLogs 
-                    ? 'bg-emerald-500/20 border-emerald-500/40 text-emerald-200 cursor-not-allowed'
-                    : ''
-                }`}
-                onClick={() => {
-                  if (!isClearingLogs) {
-                    setIsClearingLogs(true);
-                    handleClearSystemMessages().finally(() => setIsClearingLogs(false));
+            <button
+              className={`${MODERATOR_CHILD_LAST} ${
+                isClearingLogs
+                  ? 'bg-emerald-500/20 border-emerald-500/40 text-emerald-200 cursor-not-allowed'
+                  : ''
+              }`}
+              onClick={async () => {
+                if (!isClearingLogs) {
+                  setIsClearingLogs(true);
+                  try {
+                    await handleClearSystemMessages();
+                  } catch (error) {
+                    console.error('Failed to clear system messages:', error);
+                    alert('Failed to clear system messages. Please try again.');
+                  } finally {
+                    setIsClearingLogs(false);
                   }
-                }}
-                disabled={isClearingLogs}
-              >
-                {isClearingLogs ? '🔄 Clearing...' : '🧹 Clear System Messages'}
-              </button>
-              
-              <button 
-                className={`${MODERATOR_CHILD_LAST} ${
-                  isClearingAllLogs 
-                    ? 'bg-emerald-500/20 border-emerald-500/40 text-emerald-200 cursor-not-allowed'
-                    : ''
-                }`}
-                onClick={() => {
-                  if (!isClearingAllLogs) {
-                    setIsClearingAllLogs(true);
-                    handleClearAllMessages().finally(() => setIsClearingAllLogs(false));
-                  }
-                }}
-                disabled={isClearingAllLogs}
-              >
-                {isClearingAllLogs ? '🔄 Clearing...' : '💥 Clear All Messages'}
-              </button>
-            </div>
+                }
+              }}
+              disabled={isClearingLogs}
+            >
+              {isClearingLogs ? 'Clearing...' : 'Clear System Messages'}
+            </button>
           </div>
         )}
       </div>
@@ -629,7 +640,7 @@ export default function ModeratorControls({
       >
         <div style={{ padding: 'calc(24px * var(--ui-scale))' }}>
             <div className="flex items-center justify-between mb-6">
-              <h3 className="text-red-300 font-bold">🚫 Kick Player</h3>
+              <h3 className="text-red-300 font-bold">Kick Player</h3>
               <button
                 className="text-gray-400 hover:text-white transition-colors"
                 onClick={() => setIsKickModalOpen(false)}
@@ -655,13 +666,13 @@ export default function ModeratorControls({
                       <div className="flex items-center justify-between">
                         <div>
                           <div className="font-medium">{player.playerName}</div>
-                          {player.characterData && (
+                          {formatCharacterSummary(player.characterData) && (
                             <div className="text-gray-400 text-sm">
-                              {player.characterData.class} • Level {player.characterData.level}
+                              {formatCharacterSummary(player.characterData)}
                             </div>
                           )}
                         </div>
-                        <div className="text-red-400">🚫</div>
+                        <div className="text-red-400 text-sm">Kick</div>
                       </div>
                     </button>
                   ))}

@@ -1,6 +1,8 @@
 'use client'
 
 import { useEffect, useRef } from 'react'
+import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
+import { faCrown } from '@fortawesome/free-solid-svg-icons'
 export default function AdventureLog({ rollLog, playerSeatMap }) {
   const logRef = useRef(null);
 
@@ -137,11 +139,7 @@ export default function AdventureLog({ rollLog, playerSeatMap }) {
   const messageGroups = groupMessages(rollLog);
 
   return (
-    <div className="adventure-log-section mt-6 w-full">
-      <div className="log-header">
-        Adventure Log
-        <span style={{ fontSize: '10px', color: '#6b7280' }}>(Live)</span>
-      </div>
+    <div className="adventure-log-section w-full">
       <div className="log-entries flex flex-col-reverse" ref={logRef}>
         {messageGroups.map((group, groupIndex) => {
           if (group.type === "party-member") {
@@ -246,7 +244,7 @@ export default function AdventureLog({ rollLog, playerSeatMap }) {
               >
                 {/* DM Header with special styling */}
                 <div className="dm-header flex items-center gap-[calc(8px*var(--ui-scale))] mb-[calc(4px*var(--ui-scale))]">
-                  <span className="text-[calc(18px*var(--ui-scale))] drop-shadow-lg">🔮</span>
+                  <FontAwesomeIcon icon={faCrown} className="text-purple-300 drop-shadow-lg" style={{ fontSize: 'calc(16px * var(--ui-scale))' }} />
                   <span className="text-purple-300 font-bold text-[calc(14px*var(--ui-scale))] drop-shadow-sm uppercase tracking-wider">
                     Dungeon Master
                   </span>

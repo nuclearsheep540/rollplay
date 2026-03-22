@@ -29,12 +29,29 @@ export const handleInitialState = (data, handlers) => {
   const {
     seat_layout,
     dungeon_master,
+    moderators,
     combat_active,
     seat_colors,
     max_players,
     campaign_id,
+    player_metadata,
     audio_state
   } = data;
+
+  const normalizedPlayerMetadata = Object.fromEntries(
+    Object.entries(player_metadata || {}).map(([playerName, metadata]) => [
+      playerName.toLowerCase(),
+      metadata
+    ])
+  );
+
+  if (handlers.setPlayerMetadata) {
+    handlers.setPlayerMetadata(normalizedPlayerMetadata);
+  }
+
+  if (handlers.setModerators) {
+    handlers.setModerators((moderators || []).map((name) => name.toLowerCase()));
+  }
 
   // Set DM name
   if (handlers.setDmSeat && dungeon_master) {
@@ -57,11 +74,11 @@ export const handleInitialState = (data, handlers) => {
   }
 
   // Convert seat layout to frontend unified structure
-  if (seat_layout && handlers.setGameSeats && handlers.getCharacterData) {
+  if (seat_layout && handlers.setGameSeats) {
     const seats = seat_layout.map((playerName, index) => ({
       seatId: index,
       playerName: playerName,
-      characterData: playerName !== "empty" ? handlers.getCharacterData(playerName) : null,
+      characterData: playerName !== "empty" ? (normalizedPlayerMetadata[playerName.toLowerCase()] || null) : null,
       isActive: false
     }));
 
@@ -111,7 +128,7 @@ export const handleSeatCountChange = (data, { setGameSeats, getCharacterData }) 
  * Handle player character change during active session
  * Updates the seat with new character data
  */
-export const handlePlayerCharacterChanged = (data, { setGameSeats }) => {
+export const handlePlayerCharacterChanged = (data, { setGameSeats, setPlayerMetadata }) => {
   console.log("received player character change:", data);
   const {
     player_name,
@@ -151,6 +168,23 @@ export const handlePlayerCharacterChanged = (data, { setGameSeats }) => {
       return seat;
     })
   );
+
+  if (setPlayerMetadata) {
+    setPlayerMetadata(prev => ({
+      ...prev,
+      [player_name.toLowerCase()]: {
+        player_name,
+        character_id,
+        character_name,
+        character_class,
+        character_race,
+        level,
+        hp_current,
+        hp_max,
+        ac
+      }
+    }));
+  }
 
   console.log(`✅ Updated character for ${player_name} to ${character_name}`);
 };
@@ -436,10 +470,14 @@ export const handleAdventureLogRemoved = (data, { setRollLog }) => {
   console.log(`🗑️ Removed adventure log entry with prompt_id: ${prompt_id}`);
 };
 
-export const handleRoleChange = (data, { handleRoleChange }) => {
+export const handleRoleChange = (data, { handleRoleChange, setModerators }) => {
   console.log("🎭 Role change received:", data);
   
-  const { action, target_player, changed_by, message } = data;
+  const { action, target_player, changed_by, message, moderators } = data;
+
+  if (setModerators && Array.isArray(moderators)) {
+    setModerators(moderators.map((name) => name.toLowerCase()));
+  }
   
   // Add role change to adventure log
   // Backend handles role change logging
@@ -520,38 +558,16 @@ export const createSendFunctions = (webSocket, isConnected, roomId, playerName) 
   };
 
   const sendClearSystemMessages = async () => {
-    if (!webSocket || !isConnected) return;
-  
-    try {
-      const response = await fetch(`/api/game/${roomId}/logs/system`, {
-        method: 'DELETE',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          cleared_by: playerName
-        }),
-      });
-  
-      if (!response.ok) {
-        throw new Error('Failed to clear system messages from database');
-      }
-  
-      const result = await response.json();
-      console.log(`✅ Cleared ${result.deleted_count} system messages`);
-  
-      webSocket.send(JSON.stringify({
-        "event_type": "clear_system_messages",
-        "data": {
-          "cleared_by": playerName,
-          "deleted_count": result.deleted_count
-        }
-      }));
-  
-    } catch (error) {
-      console.error('❌ Error clearing system messages:', error);
-      throw error;
+    if (!webSocket || !isConnected) {
+      throw new Error('Cannot clear system messages: WebSocket not connected');
     }
+
+    webSocket.send(JSON.stringify({
+      "event_type": "clear_system_messages",
+      "data": {
+        "cleared_by": playerName
+      }
+    }));
   };
 
   const sendClearAllMessages = async () => {

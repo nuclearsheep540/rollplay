@@ -9,6 +9,7 @@ from pydantic import ValidationError
 from shared_contracts.base import ContractModel
 from shared_contracts.audio import AudioChannelState, AudioEffects, AudioTrackConfig
 from shared_contracts.assets import AssetRef
+from shared_contracts.character import PlayerCharacter
 from shared_contracts.display import ActiveDisplayType
 from shared_contracts.image import ImageConfig
 from shared_contracts.map import GridColorMode, GridConfig, MapConfig
@@ -123,6 +124,20 @@ class TestSessionRoundTrip:
             dm_username="dm",
             max_players=6,
             joined_user_ids=["u1", "u2"],
+            player_characters=[
+                PlayerCharacter(
+                    user_id="u1",
+                    player_name="alice",
+                    character_id="char-1",
+                    character_name="Aelwyn",
+                    character_class=["Wizard"],
+                    character_race="Elf",
+                    level=5,
+                    hp_current=22,
+                    hp_max=28,
+                    ac=14,
+                )
+            ],
             assets=[AssetRef(id="a1", filename="map.png", s3_key="maps/map.png", asset_type="map")],
             audio_config={"channel_0": AudioChannelState(filename="bgm.mp3", volume=0.7)},
             map_config=MapConfig(asset_id="m1", filename="dungeon.png", file_path="https://s3.example.com/dungeon.png"),
@@ -205,10 +220,20 @@ class TestSessionShapeConformance:
     def test_session_start_payload_has_required_fields(self):
         required_keys = {
             "session_id", "campaign_id", "dm_username", "max_players",
-            "joined_user_ids", "assets", "audio_config", "audio_track_config",
+            "joined_user_ids", "player_characters", "assets", "audio_config", "audio_track_config",
             "map_config", "image_config", "active_display",
         }
         assert required_keys.issubset(set(SessionStartPayload.model_fields.keys()))
+
+
+class TestCharacterShapeConformance:
+    def test_player_character_has_required_fields(self):
+        required_keys = {
+            "user_id", "player_name", "character_id", "character_name",
+            "character_class", "character_race", "level", "hp_current",
+            "hp_max", "ac",
+        }
+        assert required_keys.issubset(set(PlayerCharacter.model_fields.keys()))
 
     def test_session_end_final_state_has_required_fields(self):
         required_keys = {

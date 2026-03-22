@@ -133,10 +133,10 @@ export const useWebSocket = (roomId, thisPlayer, gameContext) => {
           case 'dice_roll':
             handleDiceRoll(data, handlers);
             break;
-          case 'clear_system_messages':
+          case 'system_messages_cleared':
             handleSystemMessagesCleared(data, handlers);
             break;
-          case 'clear_all_messages':
+          case 'all_messages_cleared':
             handleAllMessagesCleared(data, handlers);
             break;
           case 'dice_prompt':
@@ -204,10 +204,17 @@ export const useWebSocket = (roomId, thisPlayer, gameContext) => {
     }
   }, [gameContext, thisPlayer]);
 
-  // Create send functions
-  const sendFunctions = webSocket && isConnected 
+  // Create send functions (no-op stubs when disconnected so callers never get undefined)
+  const noop = () => {};
+  const sendFunctions = webSocket && isConnected
     ? createSendFunctions(webSocket, isConnected, roomId, thisPlayer)
-    : {};
+    : {
+        sendSeatChange: noop, sendSeatCountChange: noop, sendCombatStateChange: noop,
+        sendPlayerKick: noop, sendDiceRoll: noop, sendClearSystemMessages: noop,
+        sendClearAllMessages: noop, sendDicePrompt: noop, sendDicePromptClear: noop,
+        sendInitiativePromptAll: noop, sendColorChange: noop, sendRoleChange: noop,
+        sendRemoteAudioPlay: noop, sendRemoteAudioResume: noop, sendRemoteAudioBatch: noop,
+      };
 
   return {
     webSocket,

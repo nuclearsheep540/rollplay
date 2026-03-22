@@ -1,6 +1,8 @@
 import { React, useEffect, useState, useRef } from 'react'
 import { getSeatColor } from '../../utils/seatColors'
 import ColorPicker from './ColorPicker'
+import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
+import { faGamepad } from '@fortawesome/free-solid-svg-icons'
 
 export default function PlayerCard({
     seatId,
@@ -24,6 +26,17 @@ export default function PlayerCard({
     const occupantName = currentSeat.playerName;
     const isMyTurn = currentTurn === occupantName;
     const isThisPlayerSeat = currentSeat.playerName === thisPlayer;
+
+    // Character payload can arrive in two shapes depending on source;
+    // normalize once so rendering uses a single format.
+    const displayCharacterName = playerData?.character_name || playerData?.name || occupantName;
+    const displayCharacterClassRaw = playerData?.character_class || playerData?.class;
+    const displayCharacterClass = Array.isArray(displayCharacterClassRaw)
+      ? displayCharacterClassRaw.join(' / ')
+      : displayCharacterClassRaw;
+    const displayCharacterLevel = playerData?.level;
+    const displayHpCurrent = playerData?.hp_current ?? playerData?.hp;
+    const displayHpMax = playerData?.hp_max ?? playerData?.maxHp;
 
     // Get the actual seat color from CSS custom property
     const getActualSeatColor = (seatIndex) => {
@@ -54,8 +67,23 @@ export default function PlayerCard({
       return name.charAt(0).toUpperCase() + name.slice(1).toLowerCase();
     };
 
+    // Avoid NaN/infinite HP values when metadata arrives incomplete or stringified.
+    const numericHpCurrent = Number(displayHpCurrent);
+    const numericHpMax = Number(displayHpMax);
+    const hasValidHpValues = Number.isFinite(numericHpCurrent)
+      && Number.isFinite(numericHpMax)
+      && numericHpMax > 0;
+
     // Calculate HP percentage for styling
-    const hpPercentage = playerData ? (playerData.hp / playerData.maxHp) * 100 : 0;
+    const hpPercentage = hasValidHpValues
+      ? (numericHpCurrent / numericHpMax) * 100
+      : 0;
+    const hpPercentageClamped = Math.max(0, Math.min(100, hpPercentage));
+    const hpFillColor = hpPercentageClamped > 60
+      ? '#22c55e'
+      : hpPercentageClamped > 30
+        ? '#eab308'
+        : '#ef4444';
 
     // Render empty seat (static placeholder — seats are auto-assigned via Enter Session overlay)
     if (!isOccupied) {
@@ -63,7 +91,7 @@ export default function PlayerCard({
         <div className="rounded-lg border border-dashed border-gray-500/30 bg-white/5 text-center
           p-[calc(12px*var(--ui-scale))] mb-[calc(12px*var(--ui-scale))]">
           <div className="text-gray-500 font-medium text-[calc(12px*var(--ui-scale))]">
-            🪑 Seat {seatId + 1}
+            <FontAwesomeIcon icon={faGamepad} style={{ marginRight: '6px' }} />Seat {seatId + 1}
           </div>
         </div>
       );
@@ -97,7 +125,7 @@ export default function PlayerCard({
           <div
             className="font-semibold text-blue-400 text-[calc(16px*var(--ui-scale))]"
           >
-            {toTitleCase(occupantName)}
+            {toTitleCase(displayCharacterName)}
           </div>
           <div className="flex items-center gap-[calc(8px*var(--ui-scale))]">
             {isMyTurn && (
@@ -128,7 +156,7 @@ export default function PlayerCard({
             <div
               className="text-gray-400 text-[calc(13px*var(--ui-scale))] mb-[calc(4px*var(--ui-scale))]"
             >
-              {playerData.class} • Level {playerData.level}
+              Level {displayCharacterLevel} {displayCharacterClass}
             </div>
 
             {/* HP Display */}
@@ -137,16 +165,14 @@ export default function PlayerCard({
             >
               {/* HP Bar Container */}
               <div
-                className="flex-1 bg-white/10 rounded-full overflow-hidden relative h-[calc(6px*var(--ui-scale))]"
-                style={{
-                  background: 'linear-gradient(90deg, #ef4444 0%, #ef4444 30%, #eab308 30%, #eab308 60%, #22c55e 60%, #22c55e 100%)',
-                }}
+                className="flex-1 bg-gray-800/70 rounded-full overflow-hidden relative h-[calc(6px*var(--ui-scale))]"
               >
-                {/* HP Fill Overlay */}
+                {/* HP Fill changes color by threshold and width by current HP */}
                 <div
-                  className="absolute inset-0 bg-gray-800/80 transition-[left] duration-300"
+                  className="h-full transition-[width,background-color] duration-300"
                   style={{
-                    left: `${hpPercentage}%`,
+                    width: `${hpPercentageClamped}%`,
+                    backgroundColor: hpFillColor,
                   }}
                 ></div>
               </div>
@@ -158,13 +184,13 @@ export default function PlayerCard({
                 <span
                   className="text-white text-[calc(13px*var(--ui-scale))]"
                 >
-                  {playerData.hp}
+                  {displayHpCurrent}
                 </span>
                 <span className="mx-1">/</span>
                 <span
                   className="font-semibold text-[calc(15px*var(--ui-scale))]"
                 >
-                  {playerData.maxHp}
+                  {displayHpMax}
                 </span>
               </div>
             </div>

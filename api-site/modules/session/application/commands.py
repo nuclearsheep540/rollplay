@@ -1,7 +1,7 @@
 # Copyright (C) 2025 Matthew Davey
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-from typing import Dict, Optional
+from typing import Dict, List, Optional
 from dataclasses import dataclass
 from uuid import UUID
 import httpx
@@ -13,6 +13,7 @@ from sqlalchemy import update
 
 from shared_contracts.assets import AssetRef
 from shared_contracts.audio import AudioChannelState
+from shared_contracts.character import PlayerCharacter
 from shared_contracts.display import ActiveDisplayType
 from shared_contracts.image import ImageConfig
 from shared_contracts.map import MapConfig
@@ -221,6 +222,7 @@ class StartSession:
         self,
         session_repository: SessionRepository,
         user_repository: UserRepository,
+        character_repository: CharacterRepository,
         campaign_repository: CampaignRepository,
         event_manager: EventManager,
         asset_repository: MediaAssetRepository = None,
@@ -228,10 +230,51 @@ class StartSession:
     ):
         self.session_repo = session_repository
         self.user_repo = user_repository
+        self.character_repo = character_repository
         self.campaign_repo = campaign_repository
         self.event_manager = event_manager
         self.asset_repo = asset_repository
         self.s3_service = s3_service
+
+    def _build_player_characters(self, session: SessionEntity) -> List[PlayerCharacter]:
+        """Build ETL character DTOs for rostered users with campaign-bound characters."""
+        player_characters = []
+
+        for user_id in session.joined_users:
+            user = self.user_repo.get_by_id(user_id)
+            if not user:
+                logger.warning(f"Skipping ETL character lookup for missing user {user_id}")
+                continue
+
+            character = self.character_repo.get_user_character_for_campaign(user_id, session.campaign_id)
+            if not character:
+                logger.info(f"No campaign-bound character for user {user_id} in session {session.id}")
+                continue
+
+            player_name = (user.screen_name or user.email or "").lower()
+            if not player_name:
+                logger.warning(f"Skipping ETL character for user {user_id} with no player_name")
+                continue
+
+            class_names = [class_info.character_class.value for class_info in character.character_classes]
+
+            player_characters.append(
+                PlayerCharacter(
+                    user_id=str(user_id),
+                    player_name=player_name,
+                    character_id=str(character.id),
+                    character_name=character.character_name,
+                    character_class=class_names,
+                    character_race=character.character_race.value,
+                    level=character.level,
+                    hp_current=character.hp_current,
+                    hp_max=character.hp_max,
+                    ac=character.ac,
+                )
+            )
+
+        logger.info(f"Built {len(player_characters)} player character DTOs for session {session.id}")
+        return player_characters
 
     async def _generate_presigned_urls_parallel(self, assets):
         """
@@ -423,6 +466,7 @@ class StartSession:
             audio_config_for_game = self._restore_audio_config(session, asset_lookup, url_map)
             map_config_for_game = self._restore_map_config(session, asset_lookup, url_map)
             image_config_for_game = self._restore_image_config(session, asset_lookup, url_map)
+            player_characters_for_game = self._build_player_characters(session)
 
             payload = SessionStartPayload(
                 session_id=str(session.id),
@@ -430,6 +474,7 @@ class StartSession:
                 dm_username=dm_username,
                 max_players=session.max_players,
                 joined_user_ids=[str(uid) for uid in session.joined_users],
+                player_characters=player_characters_for_game,
                 assets=[
                     AssetRef(
                         id=str(asset.id),
