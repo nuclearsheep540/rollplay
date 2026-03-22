@@ -519,39 +519,15 @@ export const createSendFunctions = (webSocket, isConnected, roomId, playerName) 
     }));
   };
 
-  const sendClearSystemMessages = async () => {
+  const sendClearSystemMessages = () => {
     if (!webSocket || !isConnected) return;
-  
-    try {
-      const response = await fetch(`/api/game/${roomId}/logs/system`, {
-        method: 'DELETE',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          cleared_by: playerName
-        }),
-      });
-  
-      if (!response.ok) {
-        throw new Error('Failed to clear system messages from database');
+
+    webSocket.send(JSON.stringify({
+      "event_type": "clear_system_messages",
+      "data": {
+        "cleared_by": playerName
       }
-  
-      const result = await response.json();
-      console.log(`✅ Cleared ${result.deleted_count} system messages`);
-  
-      webSocket.send(JSON.stringify({
-        "event_type": "clear_system_messages",
-        "data": {
-          "cleared_by": playerName,
-          "deleted_count": result.deleted_count
-        }
-      }));
-  
-    } catch (error) {
-      console.error('❌ Error clearing system messages:', error);
-      throw error;
-    }
+    }));
   };
 
   const sendClearAllMessages = async () => {

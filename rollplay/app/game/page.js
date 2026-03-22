@@ -1314,19 +1314,9 @@ function GameContent() {
 
 
   // Handle clearing system messages
-  const handleClearSystemMessages = async () => {
-    try {
-      await sendClearSystemMessages();
-      
-      // Remove system messages from local state immediately
-      setRollLog(prev => prev.filter(entry => entry.type !== 'system'));
-      
-      // Adventure log will be handled by server broadcast
-      
-    } catch (error) {
-      console.error('Error clearing system messages:', error);
-      alert('Failed to clear system messages. Please try again.');
-    }
+  // Send WebSocket event — server clears MongoDB and broadcasts to all clients
+  const handleClearSystemMessages = () => {
+    sendClearSystemMessages();
   };
 
   // Handle clearing all adventure log messages
@@ -1781,7 +1771,6 @@ function GameContent() {
                   setSeatCount={setSeatCount}
                   handleKickPlayer={handleKickPlayer}
                   handleClearSystemMessages={handleClearSystemMessages}
-                  handleClearAllMessages={handleClearAllMessages}
                   roleChangeTrigger={roleChangeTrigger}
                 />
               )}

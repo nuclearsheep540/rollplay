@@ -133,10 +133,10 @@ export const useWebSocket = (roomId, thisPlayer, gameContext) => {
           case 'dice_roll':
             handleDiceRoll(data, handlers);
             break;
-          case 'clear_system_messages':
+          case 'system_messages_cleared':
             handleSystemMessagesCleared(data, handlers);
             break;
-          case 'clear_all_messages':
+          case 'all_messages_cleared':
             handleAllMessagesCleared(data, handlers);
             break;
           case 'dice_prompt':
