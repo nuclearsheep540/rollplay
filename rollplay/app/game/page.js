@@ -2023,7 +2023,7 @@ function GameContent() {
               </div>
 
               {/* Click to enter — centered */}
-              <p className="text-2xl tracking-widest capitalize text-center font-[family-name:var(--font-metamorphous)] leading-none" style={{ color: COLORS.smoke }}>
+              <p className="text-2xl tracking-widest capitalize text-center font-[family-name:var(--font-metamorphous)] leading-none mt-auto" style={{ color: COLORS.smoke }}>
                 Click to enter
               </p>
             </div>
