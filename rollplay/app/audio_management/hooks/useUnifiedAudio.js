@@ -500,6 +500,12 @@ export const useUnifiedAudio = () => {
     // at full level and cutting abruptly on stop.
     const inserts = channelInsertEffectsRef.current[trackId];
     const reverbWetGainAtStart = inserts?.reverb?.wetGain?.gain?.value ?? 0;
+    // For fade-ins, wet gain starts at 0 — we need the target level to scale toward
+    const effects = channelEffectsRef.current[trackId];
+    const reverbEnabled = effects?.reverb ?? false;
+    const reverbTargetLevel = reverbEnabled
+      ? (effects?.reverb_mix ?? DEFAULT_EFFECTS.reverb.mix)
+      : 0;
 
     console.log(`🌊 Starting ${type} fade for ${trackId}: ${startGain} → ${targetGain} over ${duration}ms`);
 
@@ -528,10 +534,20 @@ export const useUnifiedAudio = () => {
         remoteTrackGainsRef.current[trackId].gain.value = currentGain;
       }
 
-      // Fade reverb send in proportion — scale from its level at fade start
-      if (reverbWetGainAtStart > 0 && inserts?.reverb?.wetGain) {
-        const fadeRatio = startGain > 0 ? currentGain / startGain : 0;
-        inserts.reverb.wetGain.gain.value = reverbWetGainAtStart * fadeRatio;
+      // Fade reverb send in proportion alongside the dry signal
+      if (inserts?.reverb?.wetGain) {
+        let fadeRatio;
+        if (type === 'out') {
+          fadeRatio = startGain > 0 ? currentGain / startGain : 0;
+        } else if (type === 'in') {
+          fadeRatio = targetGain > 0 ? currentGain / targetGain : 0;
+        } else {
+          fadeRatio = 1;
+        }
+        fadeRatio = Math.min(Math.max(fadeRatio, 0), 1);
+        // Fade-out: scale down from current level. Fade-in: scale up toward target level.
+        const reverbBase = type === 'in' ? reverbTargetLevel : reverbWetGainAtStart;
+        inserts.reverb.wetGain.gain.value = reverbBase * fadeRatio;
       }
 
       if (progress < 1.0) {
