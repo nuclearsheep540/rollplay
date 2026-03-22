@@ -29,7 +29,7 @@ import { useUnifiedAudio } from '../audio_management';
 import { MapDisplay, GridOverlay, useMapWebSocket, ImageDisplay, useImageWebSocket } from '../map_management';
 import MapOverlayPanel from './components/MapOverlayPanel';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
-import { faVolumeHigh, faVolumeXmark, faRightToBracket } from '@fortawesome/free-solid-svg-icons';
+import { faVolumeHigh, faVolumeXmark, faRightToBracket, faEye } from '@fortawesome/free-solid-svg-icons';
 import MapSafeArea from './components/MapSafeArea';
 import Drawer from './components/Drawer';
 import GridTuningOverlay from '../map_management/components/GridTuningOverlay';
@@ -476,16 +476,16 @@ function GameContent() {
     }
   }, [currentUser, userLoading])
 
-  // Check spectator status when campaign ID is available
-  // DMs are never spectators even without a character
+  // Check spectator status when campaign ID is available.
+  // Staff users (DM/Host/Moderator) are never spectators even without a character.
   useEffect(() => {
     // Don't decide spectator status until roles have been resolved
     if (isDM === null || !campaignId || !currentUser) return;
 
-    // DM is never a spectator
-    if (isDM) {
+    // Staff are never spectators
+    if (isDM || isHost || isModerator) {
       setIsSpectator(false);
-      console.log('✅ User is DM - not a spectator');
+      console.log('✅ User has staff role - not a spectator');
       return;
     }
 
@@ -510,7 +510,7 @@ function GameContent() {
     };
 
     checkSpectatorStatus();
-  }, [campaignId, currentUser, isDM]);
+  }, [campaignId, currentUser, isDM, isHost, isModerator]);
 
   // Measure total nav height (including spectator banner when present)
   // and publish as --nav-height on the game-interface container so all
@@ -1657,7 +1657,9 @@ function GameContent() {
             gap: '16px'
           }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-              <span style={{ fontSize: '20px' }}>👁️</span>
+              <span style={{ fontSize: '22px', color: '#f59e0b' }}>
+                <FontAwesomeIcon icon={faEye} />
+              </span>
               <div>
                 <p style={{ color: '#f59e0b', fontWeight: '600', margin: 0 }}>Spectator Mode</p>
                 <p style={{ color: '#94a3b8', fontSize: '14px', margin: 0 }}>
@@ -1699,7 +1701,7 @@ function GameContent() {
               moderators={moderators}
             />
 
-            {gameSeats.filter(seat => !isSpectator || seat.playerName !== "empty").map((seat) => {
+            {gameSeats.filter(seat => !isSpectator || canUseModeratorTools || seat.playerName !== "empty").map((seat) => {
               const isSitting = seat.playerName === getCurrentPlayerName();
               const currentColor = seatColors[seat.seatId] || getSeatColor(seat.seatId);
 
