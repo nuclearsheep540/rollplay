@@ -70,25 +70,32 @@ export default function DMChair({ dmName, isEmpty, moderators = [] }) {
         </div>
       </div>
 
-      {visibleModerators.length > 0 && (
+      {visibleModerators.map((moderator) => (
         <div
-          className="rounded-lg border border-emerald-500/20 bg-emerald-500/5 p-[calc(10px*var(--ui-scale))] mb-[calc(12px*var(--ui-scale))]"
+          key={moderator}
+          className={`
+            w-[90%] rounded-lg border transition-colors duration-300 relative
+            p-[calc(10px*var(--ui-scale))] mb-[calc(12px*var(--ui-scale))] border-l-4
+            bg-blue-500/10 border-blue-400/50 shadow-lg shadow-blue-500/20
+          `}
+          style={{
+            borderLeftColor: '#60a5fa'
+          }}
         >
-          <div className="text-emerald-300 font-semibold text-[calc(11px*var(--ui-scale))] uppercase tracking-wider mb-[calc(6px*var(--ui-scale))]">
-            Moderators
+          <div className="flex items-center justify-between mb-[calc(3px*var(--ui-scale))]">
+            <div className="font-semibold text-blue-400 text-[calc(15px*var(--ui-scale))]">
+              {toTitleCase(moderator)}
+            </div>
+            <div className="bg-blue-500/20 text-blue-300 px-[calc(5px*var(--ui-scale))] py-[calc(2px*var(--ui-scale))] rounded-full font-semibold uppercase tracking-wider text-[calc(8px*var(--ui-scale))]">
+              MOD
+            </div>
           </div>
-          <div className="flex flex-wrap gap-[calc(6px*var(--ui-scale))]">
-            {visibleModerators.map((moderator) => (
-              <div
-                key={moderator}
-                className="px-[calc(8px*var(--ui-scale))] py-[calc(4px*var(--ui-scale))] rounded-full bg-emerald-500/15 text-emerald-200 text-[calc(11px*var(--ui-scale))] font-medium"
-              >
-                {toTitleCase(moderator)}
-              </div>
-            ))}
+
+          <div className="text-blue-300 text-[calc(11px*var(--ui-scale))] opacity-80">
+            Moderator
           </div>
         </div>
-      )}
+      ))}
     </>
   );
 }
