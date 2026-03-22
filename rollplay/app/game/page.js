@@ -188,6 +188,7 @@ function GameContent() {
 
   // Spectator mode - user has no character selected for this campaign
   const [isSpectator, setIsSpectator] = useState(false);
+  const spectatorBannerRef = useRef(null);
   const [isDrawerOpen, setIsDrawerOpen] = useState(true);
   const [partyDrawerSettled, setPartyDrawerSettled] = useState(true); // starts open, so settled
   const [activeRightDrawer, setActiveRightDrawer] = useState(null); // null | 'dm' | 'moderator'
@@ -493,6 +494,25 @@ function GameContent() {
 
     checkSpectatorStatus();
   }, [campaignId, currentUser, isDM]);
+
+  // Measure spectator banner height and update drawer top positions directly
+  useEffect(() => {
+    const banner = spectatorBannerRef.current;
+
+    const applyOffset = () => {
+      const height = banner ? banner.offsetHeight : 0;
+      document.querySelectorAll('.party-drawer, .right-drawer').forEach(drawer => {
+        drawer.style.setProperty('--spectator-offset', `${height}px`);
+      });
+    };
+
+    applyOffset();
+
+    if (!banner) return;
+    const observer = new ResizeObserver(applyOffset);
+    observer.observe(banner);
+    return () => observer.disconnect();
+  }, [isSpectator]);
 
   // Fetch campaign metadata (title + hero_image) for the Enter Session overlay
   useEffect(() => {
@@ -1619,7 +1639,12 @@ function GameContent() {
 
       {/* Spectator Banner */}
       {isSpectator && (
-        <div className="spectator-banner" style={{
+        <div ref={spectatorBannerRef} className="spectator-banner" style={{
+          position: 'fixed',
+          top: 'calc(50px * var(--ui-scale) + env(safe-area-inset-top, 0px))',
+          left: 0,
+          right: 0,
+          zIndex: 40,
           backgroundColor: '#1e293b',
           borderBottom: '2px solid #f59e0b',
           padding: '12px 24px',

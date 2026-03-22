@@ -530,7 +530,7 @@ body {
 .party-drawer {
   position: fixed;
   left: 0;
-  top: calc(50px * var(--ui-scale) + env(safe-area-inset-top, 0px));
+  top: calc(50px * var(--ui-scale) + env(safe-area-inset-top, 0px) + var(--spectator-offset, 0px));
   bottom: 0;
   width: calc(380px + var(--panel-width-addition));
   z-index: 30;
@@ -692,7 +692,7 @@ body {
 .right-drawer {
   position: fixed;
   right: 0;
-  top: calc(50px * var(--ui-scale) + env(safe-area-inset-top, 0px));
+  top: calc(50px * var(--ui-scale) + env(safe-area-inset-top, 0px) + var(--spectator-offset, 0px));
   bottom: 0;
   width: calc(380px + var(--panel-width-addition));
   z-index: 30;
