@@ -133,6 +133,7 @@ export const useUnifiedAudio = () => {
   const resumeOperationsRef = useRef({}); // Track active resume operations to prevent duplicates
   const playOperationsRef = useRef({}); // Track active play operations to prevent duplicates
   const pendingPlayOpsRef = useRef([]); // Queue play ops when AudioContext is suspended (non-DM players)
+  const pendingAudioStateRef = useRef(null); // Store audio_state from initial_state for post-unlock reconciliation
 
   // Remote track states (for DM-controlled BGM audio)
   // Channels start empty — DM loads audio from asset library via AudioTrackSelector
@@ -702,25 +703,40 @@ export const useUnifiedAudio = () => {
       source.connect(connectNode);
   
       // Compute resume offset
-      const resumeFromPause =
-        resumeFromTime !== null ||
-        (remoteTrackStates[trackId]?.playbackState === PlaybackState.PAUSED &&
-          remoteTrackStates[trackId]?.currentTime > 0);
-      const startOffset =
-        resumeFromTime !== null
-          ? resumeFromTime
-          : resumeFromPause
-          ? remoteTrackStates[trackId].currentTime
-          : 0;
-  
-      console.log(
-        `🔍 Resume logic: resumeFromTime=${resumeFromTime}, ` +
-        `resumeFromPause=${resumeFromPause}, startOffset=${startOffset}` +
-        `${syncStartTime ? `, syncStartTime=${syncStartTime}` : ''}`
-      );
+      let startOffset;
+      let resumeFromPause = false;
+      const NETWORK_COMPENSATION = 0.4; // seconds to subtract for network/processing latency
 
-      // DEBUG: Log exact values passed to Web Audio API
-      console.log(`🔊 SOURCE.START DEBUG: offset=${startOffset}, resumeFromTime=${resumeFromTime}, resumeFromPause=${resumeFromPause}`);
+      if (completeTrackState?.started_at && resumeFromTime === null) {
+        // JIT offset calculation from started_at (late-joiner sync / visibility recovery)
+        // Calculating at the last moment eliminates drift from buffer loading and context creation
+        const elapsed = (Date.now() / 1000) - completeTrackState.started_at;
+        const compensated = Math.max(0, elapsed - NETWORK_COMPENSATION);
+        startOffset = shouldLoop
+          ? (compensated % audioBuffer.duration)
+          : Math.min(compensated, audioBuffer.duration);
+        resumeFromPause = true; // treat JIT sync like a resume (timer needs the offset)
+        console.log(
+          `🎯 [${operationId}] JIT offset: elapsed=${elapsed.toFixed(2)}s, ` +
+          `compensated=${compensated.toFixed(2)}s, offset=${startOffset.toFixed(2)}s`
+        );
+      } else {
+        resumeFromPause =
+          resumeFromTime !== null ||
+          (remoteTrackStates[trackId]?.playbackState === PlaybackState.PAUSED &&
+            remoteTrackStates[trackId]?.currentTime > 0);
+        startOffset =
+          resumeFromTime !== null
+            ? resumeFromTime
+            : resumeFromPause
+            ? remoteTrackStates[trackId].currentTime
+            : 0;
+        console.log(
+          `🔍 Resume logic: resumeFromTime=${resumeFromTime}, ` +
+          `resumeFromPause=${resumeFromPause}, startOffset=${startOffset}` +
+          `${syncStartTime ? `, syncStartTime=${syncStartTime}` : ''}`
+        );
+      }
 
       // Start playback (synchronized if syncStartTime provided)
       if (syncStartTime) {
@@ -836,6 +852,7 @@ export const useUnifiedAudio = () => {
               [trackId]: {
                 ...prev[trackId],
                 currentTime,
+                remaining: (prev[trackId]?.duration || timer.duration) - currentTime,
                 playbackState: PlaybackState.PLAYING
               }
             }));
@@ -1059,99 +1076,189 @@ export const useUnifiedAudio = () => {
     }
   }, [broadcastMasterVolume]);
 
-  // Unlock both audio systems
+  // ── Shared unlock helpers ────────────────────────────────────────────
+  // These are called by both unlockDesktop and unlockMobile strategies.
+
+  // Re-apply channel effects to current Web Audio nodes.
+  // syncAudioState populates channelEffects React state before unlock,
+  // so re-applying ensures the audio graph matches the stored state.
+  const reapplyEffects = () => {
+    for (const [trackId, effects] of Object.entries(channelEffects)) {
+      if (channelInsertEffectsRef.current[trackId]) {
+        applyChannelEffects(trackId, effects);
+        console.log(`🔄 Re-applied effects for ${trackId}`);
+      }
+    }
+  };
+
+  // Drain play operations that were queued while context was suspended.
+  // On mobile: these are the syncAudioState → playRemoteTrack calls that
+  // couldn't play because the context was suspended.
+  // On desktop: typically empty (context was running), but handled for safety.
+  const drainPendingOps = async () => {
+    const pending = pendingPlayOpsRef.current;
+    pendingPlayOpsRef.current = [];
+    if (pending.length === 0) return;
+
+    console.log(`🔓 Draining ${pending.length} pending play operation(s)...`);
+    for (const op of pending) {
+      let offset = op.resumeFromTime ?? null;
+      // If started_at is available, let playRemoteTrack do JIT offset calculation
+      if (op.completeTrackState?.started_at) {
+        offset = null;
+      } else if (offset != null && op.queuedAt) {
+        // Non-sync operations (DM resume etc.) — recalculate for wait time
+        const waitSeconds = (Date.now() - op.queuedAt) / 1000;
+        offset = offset + waitSeconds;
+        if (op.loop) {
+          const assetId = op.completeTrackState?.asset_id;
+          const bufferKey = `${op.trackId}_${assetId || op.audioFile}`;
+          const buffer = audioBuffersRef.current[bufferKey];
+          if (buffer) {
+            offset = offset % buffer.duration;
+          }
+        }
+        console.log(`🕐 Recalculated offset for ${op.trackId}: ${op.resumeFromTime?.toFixed(1)}s → ${offset.toFixed(1)}s (waited ${waitSeconds.toFixed(1)}s)`);
+      }
+      await playRemoteTrack(op.trackId, op.audioFile, op.loop, op.volume, offset, op.completeTrackState, op.skipBufferLoad);
+    }
+    console.log('✅ All pending play operations drained');
+  };
+
+  // Reconcile: start any channels from pendingAudioStateRef that should be
+  // playing but have no active source. Catches the race where the user clicked
+  // "Enter Session" before syncAudioState finished loading all buffers.
+  const reconcileAudioState = async () => {
+    const pendingState = pendingAudioStateRef.current;
+    if (!pendingState) return;
+
+    pendingAudioStateRef.current = null;
+    for (const [channelId, channelState] of Object.entries(pendingState)) {
+      if (channelId === '__master_volume') continue;
+      if (!channelState?.filename) continue;
+      if (channelState.playback_state !== 'playing' || !channelState.started_at) continue;
+      if (channelId.startsWith('sfx_slot_')) continue;
+
+      // Skip channels that already have an active source
+      if (activeSourcesRef.current[channelId]) continue;
+
+      console.log(`🔄 Reconciling ${channelId} — should be playing but has no active source`);
+      const audioUrl = channelState.s3_url || `/audio/${channelState.filename}`;
+      const assetId = channelState.asset_id || channelState.filename;
+      const bufferKey = `${channelId}_${assetId}`;
+      let buffer = audioBuffersRef.current[bufferKey];
+
+      if (!buffer) {
+        buffer = await loadRemoteAudioBuffer(audioUrl, channelId);
+        if (buffer) audioBuffersRef.current[bufferKey] = buffer;
+      }
+
+      if (buffer) {
+        const elapsed = (Date.now() / 1000) - channelState.started_at;
+        if (!channelState.looping && elapsed >= buffer.duration) continue;
+
+        // playRemoteTrack will do JIT offset calc from started_at
+        await playRemoteTrack(channelId, channelState.filename, channelState.looping,
+          channelState.volume, null, { ...channelState, channelId }, true);
+      }
+    }
+  };
+
+  // ── Desktop unlock strategy ────────────────────────────────────────
+  // The eager-init AudioContext started 'running' (desktop browsers allow
+  // this when the origin has prior user interaction). syncAudioState may
+  // have already started real playback on this context. We keep it alive
+  // — no close, no recreate, no silent MP3.
+  const unlockDesktop = async () => {
+    console.log('🖥️ Desktop unlock — keeping existing AudioContext');
+
+    // Defensive: resume if somehow suspended
+    if (audioContextRef.current?.state === 'suspended') {
+      await audioContextRef.current.resume();
+    }
+
+    setIsAudioUnlocked(true);
+    reapplyEffects();
+    await drainPendingOps();
+    await reconcileAudioState();
+  };
+
+  // ── Mobile unlock strategy ─────────────────────────────────────────
+  // On iOS the eager-init context is 'suspended' — it can decode audio
+  // but cannot produce output. We must:
+  //   1. Activate the iOS audio session (base64 silent MP3 within gesture)
+  //   2. Close the stale context
+  //   3. Create a fresh context within the gesture
+  const unlockMobile = async () => {
+    console.log('📱 Mobile unlock — close/recreate AudioContext within gesture');
+
+    // 1. Activate iOS audio session via HTML5 Audio.play() within user gesture.
+    //    Uses inline base64 MP3 — no network fetch, preserving the gesture timing
+    //    window for both Safari (needs MP3) and Chrome iOS (needs no network delay).
+    const silentAudio = new Audio('data:audio/mp3;base64,SUQzBAAAAAAAIlRTU0UAAAAOAAADTGF2ZjYxLjcuMTAwAAAAAAAAAAAAAAD/+0DAAAAAAAAAAAAAAAAAAAAAAABJbmZvAAAADwAAAAUAAAK+AGhoaGhoaGhoaGhoaGhoaGhoaGiOjo6Ojo6Ojo6Ojo6Ojo6Ojo6OjrS0tLS0tLS0tLS0tLS0tLS0tLS02tra2tra2tra2tra2tra2tra2tr//////////////////////////wAAAABMYXZjNjEuMTkAAAAAAAAAAAAAAAAkAwYAAAAAAAACvhC6DYoAAAAAAP/7EMQAA8AAAaQAAAAgAAA0gAAABExBTUUzLjEwMFVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVV//sQxCmDwAABpAAAACAAADSAAAAEVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVX/+xDEUwPAAAGkAAAAIAAANIAAAARVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVf/7EMR8g8AAAaQAAAAgAAA0gAAABFVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVV//sQxKYDwAABpAAAACAAADSAAAAEVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVU=');
+    silentAudio.volume = 0;
+    await silentAudio.play().catch((err) => {
+      console.warn('⚠️ silentAudio.play() rejected:', err);
+    });
+    console.log('✅ HTML5 audio session activated');
+
+    // 2. Close the eager-init context — it can never produce audio on iOS.
+    //    AudioBuffers in audioBuffersRef are context-independent (raw PCM)
+    //    and survive this replacement.
+    if (audioContextRef.current && audioContextRef.current.state !== 'closed') {
+      console.log('🔄 Closing stale eager-init AudioContext...');
+      await audioContextRef.current.close();
+    }
+    audioContextRef.current = null;
+
+    // 3. Clear stale refs — sources died with the old context.
+    //    On iOS these should be empty (context was suspended, nothing played),
+    //    but clear defensively in case of edge cases.
+    activeSourcesRef.current = {};
+    trackTimersRef.current = {};
+    playOperationsRef.current = {};
+
+    // 4. Create fresh AudioContext + full audio graph within user gesture.
+    console.log('🎵 Creating fresh Web Audio context within gesture...');
+    const webAudioSuccess = await initializeWebAudio();
+    if (!webAudioSuccess) {
+      throw new Error('Failed to initialize Web Audio API');
+    }
+
+    // 5. Resume if still suspended (defensive — context created within a
+    //    gesture should start 'running', but resume() is harmless if already running).
+    if (audioContextRef.current?.state === 'suspended') {
+      console.log('🔄 Resuming suspended Web Audio context...');
+      await audioContextRef.current.resume();
+    }
+
+    // 6. Mark unlocked + finish
+    setIsAudioUnlocked(true);
+    reapplyEffects();
+    await drainPendingOps();
+    await reconcileAudioState();
+  };
+
+  // ── Unlock orchestrator ────────────────────────────────────────────
+  // Picks the right strategy based on AudioContext state. No UA sniffing —
+  // the context state is the authoritative signal:
+  //   'running'   → desktop (keep context, sources stay alive)
+  //   'suspended' → mobile/iOS (close + recreate within gesture)
   const unlockAudio = async () => {
     try {
-      console.log('🔓 Starting audio unlock process...');
+      const contextState = audioContextRef.current?.state;
+      console.log(`🔓 Audio unlock — context state: ${contextState}`);
 
-      // Step 1: Activate iOS audio session via HTML5 Audio.play() within user gesture.
-      // Uses an inline base64 MP3 data URI — no network fetch, so the user gesture
-      // window is preserved for both Safari and Chrome on iOS.
-      // (Safari needs MP3 format; Chrome needs no network delay. This satisfies both.)
-      const silentAudio = new Audio('data:audio/mp3;base64,SUQzBAAAAAAAIlRTU0UAAAAOAAADTGF2ZjYxLjcuMTAwAAAAAAAAAAAAAAD/+0DAAAAAAAAAAAAAAAAAAAAAAABJbmZvAAAADwAAAAUAAAK+AGhoaGhoaGhoaGhoaGhoaGhoaGiOjo6Ojo6Ojo6Ojo6Ojo6Ojo6OjrS0tLS0tLS0tLS0tLS0tLS0tLS02tra2tra2tra2tra2tra2tra2tr//////////////////////////wAAAABMYXZjNjEuMTkAAAAAAAAAAAAAAAAkAwYAAAAAAAACvhC6DYoAAAAAAP/7EMQAA8AAAaQAAAAgAAA0gAAABExBTUUzLjEwMFVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVV//sQxCmDwAABpAAAACAAADSAAAAEVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVX/+xDEUwPAAAGkAAAAIAAANIAAAARVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVf/7EMR8g8AAAaQAAAAgAAA0gAAABFVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVV//sQxKYDwAABpAAAACAAADSAAAAEVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVU=');
-      silentAudio.volume = 0;
-      await silentAudio.play().catch((err) => {
-        console.warn('⚠️ silentAudio.play() rejected:', err);
-      });
-      console.log('✅ HTML5 audio session activated');
-
-      // Step 2: Close the eagerly-created AudioContext.
-      // On iOS, a context created outside a user gesture (the mount useEffect)
-      // cannot produce audible output even after resume() — the iOS audio session
-      // wasn't active when it was created. We must create a fresh context now that
-      // the audio session is active. AudioBuffers in audioBuffersRef are
-      // context-independent (raw PCM) and survive this replacement.
-      if (audioContextRef.current && audioContextRef.current.state !== 'closed') {
-        console.log('🔄 Closing stale eager-init AudioContext for iOS compatibility...');
-        await audioContextRef.current.close();
-      }
-      audioContextRef.current = null;
-
-      // Step 3: Create fresh AudioContext + full audio graph within user gesture.
-      // initializeWebAudio() guards on (!ref || state === 'closed'), so nulling
-      // the ref above ensures it rebuilds everything: master/local gain, per-channel
-      // gains, EQ chains, reverb sends, metering, SFX slot gains. All refs are
-      // reassigned inside initializeWebAudio().
-      console.log('🎵 Creating fresh Web Audio context within user gesture...');
-      const webAudioSuccess = await initializeWebAudio();
-      if (!webAudioSuccess) {
-        throw new Error('Failed to initialize Web Audio API');
+      if (contextState === 'running') {
+        await unlockDesktop();
+      } else {
+        await unlockMobile();
       }
 
-      // Step 4: Resume if still suspended (defensive — context created within a
-      // gesture should start 'running', but resume() is harmless if already running).
-      console.log(`🔧 Web Audio context state: ${audioContextRef.current?.state}`);
-      if (audioContextRef.current && audioContextRef.current.state === 'suspended') {
-        console.log('🔄 Resuming suspended Web Audio context...');
-        await audioContextRef.current.resume();
-        console.log(`✅ Web Audio context resumed, new state: ${audioContextRef.current.state}`);
-      }
-      
-      setIsAudioUnlocked(true);
-      console.log('🔊 Unified audio system unlocked successfully');
-
-      // Re-apply channel effects to the fresh Web Audio nodes.
-      // syncAudioState (from WebSocket initial_state) runs before unlock, so
-      // channelEffects React state is populated but the Web Audio nodes it set
-      // belong to the old (now closed) context. The new context's nodes have
-      // default values (e.g. reverb wetGain = 0.0). Re-applying syncs them.
-      for (const [trackId, effects] of Object.entries(channelEffects)) {
-        if (channelInsertEffectsRef.current[trackId]) {
-          applyChannelEffects(trackId, effects);
-          console.log(`🔄 Re-applied effects for ${trackId} to fresh audio graph`);
-        }
-      }
-
-      // Drain pending play operations that were queued while context was suspended
-      const pending = pendingPlayOpsRef.current;
-      pendingPlayOpsRef.current = [];
-      if (pending.length > 0) {
-        console.log(`🔓 Draining ${pending.length} pending play operation(s)...`);
-        for (const op of pending) {
-          // Recalculate offset to account for time spent waiting for unlock
-          let offset = op.resumeFromTime ?? null;
-          if (offset != null && op.queuedAt) {
-            const waitSeconds = (Date.now() - op.queuedAt) / 1000;
-            offset = offset + waitSeconds;
-            // Wrap for looping tracks using cached buffer duration
-            if (op.loop) {
-              const assetId = op.completeTrackState?.asset_id;
-              const bufferKey = `${op.trackId}_${assetId || op.audioFile}`;
-              const buffer = audioBuffersRef.current[bufferKey];
-              if (buffer) {
-                offset = offset % buffer.duration;
-              }
-            }
-            console.log(`🕐 Recalculated offset for ${op.trackId}: ${op.resumeFromTime?.toFixed(1)}s → ${offset.toFixed(1)}s (waited ${waitSeconds.toFixed(1)}s)`);
-          }
-          await playRemoteTrack(op.trackId, op.audioFile, op.loop, op.volume, offset, op.completeTrackState, op.skipBufferLoad);
-        }
-        console.log('✅ All pending play operations drained');
-      }
-
+      console.log('🔊 Audio system unlocked successfully');
       return true;
     } catch (error) {
-      console.warn('Unified audio unlock failed:', error);
+      console.warn('Audio unlock failed:', error);
       return false;
     }
   };
@@ -1416,9 +1523,76 @@ export const useUnifiedAudio = () => {
     console.log('✅ All audio cleanup complete');
   }, [activeFades]);
 
+  // Recover audio playback after page visibility change (phone lock, tab switch)
+  useEffect(() => {
+    if (typeof document === 'undefined') return;
+
+    const handleVisibilityChange = async () => {
+      if (document.visibilityState !== 'visible') return;
+      if (!isAudioUnlocked || !audioContextRef.current) return;
+
+      console.log('👁️ Page became visible — checking audio recovery...');
+
+      // Resume AudioContext if it was suspended/interrupted by OS
+      if (audioContextRef.current.state === 'suspended') {
+        try {
+          await audioContextRef.current.resume();
+          console.log('✅ AudioContext resumed after visibility change');
+        } catch (e) {
+          console.warn('❌ Failed to resume AudioContext:', e);
+          return;
+        }
+      }
+
+      if (audioContextRef.current.state !== 'running') {
+        console.warn('⚠️ AudioContext not running after resume attempt:', audioContextRef.current.state);
+        return;
+      }
+
+      // Check each track that should be playing but has a dead/missing source
+      // Use a snapshot of current state via the ref-based approach
+      const currentStates = { ...remoteTrackStates };
+      for (const [trackId, trackState] of Object.entries(currentStates)) {
+        if (trackState.playbackState !== PlaybackState.PLAYING) continue;
+
+        // Check if source is still alive
+        const source = activeSourcesRef.current[trackId];
+        if (source && trackTimersRef.current[trackId]) continue; // Source + timer alive, likely fine
+
+        const { filename, s3_url, asset_id, volume, looping, currentTime: lastKnownTime, duration } = trackState;
+        if (!filename) continue;
+
+        // Restart from last known position
+        let offset = lastKnownTime || 0;
+        if (looping && duration > 0) {
+          offset = offset % duration;
+        }
+
+        console.log(`🔄 Restarting ${trackId} at offset ${offset.toFixed(1)}s after visibility recovery`);
+        await playRemoteTrack(trackId, filename, looping, volume, offset, {
+          asset_id, s3_url, looping
+        }, false);
+      }
+
+      // Re-apply channel effects to ensure audio graph is correct
+      for (const [trackId, effects] of Object.entries(channelEffects)) {
+        if (channelInsertEffectsRef.current[trackId]) {
+          applyChannelEffects(trackId, effects);
+        }
+      }
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
+  }, [isAudioUnlocked, remoteTrackStates, channelEffects]);
+
   // Sync audio state from server (called on initial_state for late-joiners)
   const syncAudioState = async (audioState) => {
     if (!audioState || typeof audioState !== 'object') return;
+
+    // Store for post-unlock reconciliation (handles race where user clicks
+    // "Enter Session" before buffer loads finish — unlockAudio can re-sync)
+    pendingAudioStateRef.current = audioState;
 
     console.log('🔄 Syncing audio state from server:', Object.keys(audioState));
 
@@ -1511,19 +1685,18 @@ export const useUnifiedAudio = () => {
           const bufferKey = `${channelId}_${asset_id || filename}`;
           audioBuffersRef.current[bufferKey] = buffer;
 
-          // Calculate offset: elapsed time modulo track duration for looping
-          const elapsed = (Date.now() / 1000) - started_at;
-          const offset = looping ? (elapsed % buffer.duration) : Math.min(elapsed, buffer.duration);
-
           // If non-looping track has already finished, don't play
+          const elapsed = (Date.now() / 1000) - started_at;
           if (!looping && elapsed >= buffer.duration) {
             console.log(`⏹️ Sync: ${channelId} has already finished (non-looping)`);
             continue;
           }
 
-          console.log(`▶️ Sync: starting ${channelId} at offset ${offset.toFixed(1)}s (elapsed: ${elapsed.toFixed(1)}s, duration: ${buffer.duration.toFixed(1)}s)`);
+          // Pass resumeFromTime=null so playRemoteTrack calculates offset JIT
+          // from started_at (in completeTrackState) right before source.start()
+          console.log(`▶️ Sync: starting ${channelId} (elapsed: ${elapsed.toFixed(1)}s, duration: ${buffer.duration.toFixed(1)}s)`);
 
-          await playRemoteTrack(channelId, filename, looping, volume, offset, {
+          await playRemoteTrack(channelId, filename, looping, volume, null, {
             ...channelState,
             channelId,
           }, true);
@@ -1559,6 +1732,12 @@ export const useUnifiedAudio = () => {
         console.log(`⏸️ Sync: ${channelId} paused at ${normalizedTime.toFixed(1)}s`);
       }
       // "stopped" channels with filename are already handled by the metadata update above
+    }
+
+    // If audio is already unlocked, sync succeeded with running context —
+    // no need for post-unlock reconciliation
+    if (isAudioUnlocked) {
+      pendingAudioStateRef.current = null;
     }
 
     console.log('✅ Audio state sync complete');
