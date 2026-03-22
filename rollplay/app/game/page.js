@@ -1948,14 +1948,14 @@ function GameContent() {
       {/* Audio Gate Overlay — provides user gesture for AudioContext + auto-seats player */}
       {!isAudioUnlocked && (
         <div
-          className="fixed inset-0 z-[102] flex items-center justify-center bg-black/80 backdrop-blur-sm cursor-pointer"
+          className="fixed inset-0 z-[102] flex items-center justify-center bg-black cursor-pointer"
           onClick={handleEnterSession}
         >
           <div
-            className="relative rounded-sm overflow-hidden shadow-2xl shadow-black/50 select-none"
+            className="relative rounded-sm overflow-hidden shadow-2xl shadow-black/50 select-none border-2 border-[#F7F4F3]"
             style={{
               width: 'min(60vw, calc(70vh * 16 / 9))',
-              backgroundImage: `url(${campaignMeta?.heroImage || '/campaign-tile-bg.png'})`,
+              backgroundImage: campaignMeta?.heroImage ? `url(${campaignMeta.heroImage})` : 'none',
               backgroundSize: 'cover',
               backgroundPosition: 'center',
               aspectRatio: '16 / 9',
@@ -1975,6 +1975,22 @@ function GameContent() {
                 Click to enter
               </p>
             </div>
+
+            {/* Connected players — bottom-left overlay */}
+            {(() => {
+              const seated = gameSeats.filter(s => s.playerName !== 'empty').map(s => s.playerName);
+              const inLobby = lobbyUsers.filter(u => u.status === 'connected').map(u => u.name);
+              const allConnected = [...new Set([...seated, ...inLobby])];
+              if (allConnected.length === 0) return null;
+              return (
+                <div className="absolute bottom-6 left-6 text-left">
+                  <p className="text-sm text-gray-400 uppercase tracking-widest mb-1">Connected Players</p>
+                  {allConnected.map(name => (
+                    <p key={name} className="text-base text-gray-300">{name}</p>
+                  ))}
+                </div>
+              );
+            })()}
           </div>
         </div>
       )}
