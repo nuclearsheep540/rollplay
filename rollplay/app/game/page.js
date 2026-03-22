@@ -33,6 +33,12 @@ import { faVolumeHigh, faVolumeXmark } from '@fortawesome/free-solid-svg-icons';
 import MapSafeArea from './components/MapSafeArea';
 import GridTuningOverlay from '../map_management/components/GridTuningOverlay';
 
+// Tab configuration for left drawer
+const LEFT_DRAWER_TABS = [
+  { id: 'party', label: 'PARTY' },
+  { id: 'log', label: 'LOG' },
+];
+
 // Tab configuration for right drawer - static, role filtering applied at render time
 const RIGHT_DRAWER_TABS = [
   { id: 'moderator', label: 'MOD', dmOnly: false },
@@ -128,6 +134,10 @@ function GameContent() {
     { id: 1, message: 'Welcome to Tabletop Tavern', type: 'system'}
   ]);
   
+  // Derived: filter system messages out of adventure log, route them to lobby
+  const filteredRollLog = useMemo(() => rollLog.filter(e => e.type !== 'system'), [rollLog]);
+  const systemMessages = useMemo(() => rollLog.filter(e => e.type === 'system'), [rollLog]);
+
   const [initiativeOrder, setInitiativeOrder] = useState([]); // ❌ Removed hardcoded data
 
   const [currentTrack, setCurrentTrack] = useState('🏰 Tavern Ambience');
@@ -189,8 +199,8 @@ function GameContent() {
   // Spectator mode - user has no character selected for this campaign
   const [isSpectator, setIsSpectator] = useState(false);
   const navRef = useRef(null);
-  const [isDrawerOpen, setIsDrawerOpen] = useState(true);
-  const [partyDrawerSettled, setPartyDrawerSettled] = useState(true); // starts open, so settled
+  const [activeLeftDrawer, setActiveLeftDrawer] = useState('party'); // 'party' | 'log' | null
+  const [leftDrawerSettled, setLeftDrawerSettled] = useState(true); // starts open, so settled
   const [activeRightDrawer, setActiveRightDrawer] = useState(null); // null | 'dm' | 'moderator'
   const [rightDrawerSettled, setRightDrawerSettled] = useState(false); // starts closed
   const [isMixerOpen, setIsMixerOpen] = useState(false);
@@ -1678,69 +1688,85 @@ function GameContent() {
         )}
       </div>
 
-      {/* Party drawer — fixed-position, outside grid flow */}
+      {/* Left drawer — fixed-position, tabbed (PARTY / LOG) */}
       <div
-        className={`party-drawer ${partyDrawerSettled ? 'drawer-settled' : ''}`}
-        style={{ transform: isDrawerOpen ? 'translateX(0)' : 'translateX(-100%)' }}
+        className={`party-drawer ${leftDrawerSettled ? 'drawer-settled' : ''}`}
+        style={{ transform: activeLeftDrawer ? 'translateX(0)' : 'translateX(-100%)' }}
         onTransitionEnd={(e) => {
-          if (e.propertyName === 'transform') setPartyDrawerSettled(isDrawerOpen);
+          if (e.propertyName === 'transform') setLeftDrawerSettled(!!activeLeftDrawer);
         }}
       >
-        <button
-          className={`drawer-toggle-tab ${isDrawerOpen ? 'active' : ''}`}
-          onClick={() => { setPartyDrawerSettled(false); setIsDrawerOpen(!isDrawerOpen); }}
-        >
-          PARTY
-        </button>
+        <div className="left-drawer-tab-strip">
+          <div className="left-drawer-tab-strip-inner">
+            {LEFT_DRAWER_TABS.map(tab => (
+              <button
+                key={tab.id}
+                className={`left-drawer-tab ${activeLeftDrawer === tab.id ? 'active' : ''}`}
+                onClick={() => { setLeftDrawerSettled(false); setActiveLeftDrawer(prev => prev === tab.id ? null : tab.id); }}
+              >
+                {tab.label}
+              </button>
+            ))}
+          </div>
+        </div>
 
         <div className="drawer-content">
-          {/* DM Section */}
-          <div
-            className="party-header"
-            style={{
-              color: '#fb7185',
-              borderBottom: '1px solid rgba(251, 113, 133, 0.3)'
-            }}
-          >
-            <span>Dungeon Master</span>
-          </div>
+          {activeLeftDrawer === 'party' && (
+            <>
+              {/* DM Section */}
+              <div
+                className="party-header"
+                style={{
+                  color: '#fb7185',
+                  borderBottom: '1px solid rgba(251, 113, 133, 0.3)'
+                }}
+              >
+                <span>Dungeon Master</span>
+              </div>
 
-          <DMChair
-            dmName={dmSeat}
-            isEmpty={dmSeat === ""}
-          />
-
-          {gameSeats.filter(seat => isDM || seat.playerName !== "empty").map((seat) => {
-            const isSitting = seat.playerName === getCurrentPlayerName();
-            const currentColor = seatColors[seat.seatId] || getSeatColor(seat.seatId);
-
-            return (
-              <PlayerCard
-                key={seat.seatId}
-                seatId={seat.seatId}
-                seats={gameSeats}
-                thisPlayer={getCurrentPlayerName()}
-                isSitting={isSitting}
-                currentTurn={currentTurn}
-                onDiceRoll={handlePlayerDiceRoll}
-                playerData={seat.characterData}
-                onColorChange={handlePlayerColorChange}
-                currentColor={currentColor}
+              <DMChair
+                dmName={dmSeat}
+                isEmpty={dmSeat === ""}
               />
-            );
-          })}
 
-          {/* Lobby Panel */}
-          <LobbyPanel
-            lobbyUsers={lobbyUsers}
-          />
+              {gameSeats.filter(seat => isDM || seat.playerName !== "empty").map((seat) => {
+                const isSitting = seat.playerName === getCurrentPlayerName();
+                const currentColor = seatColors[seat.seatId] || getSeatColor(seat.seatId);
 
-          {/* Adventure Log */}
-          <AdventureLog
-            rollLog={rollLog}
-            playerSeatMap={playerSeatMap}
-          />
-          <div aria-hidden="true" style={{ flexShrink: 0, height: '40vh' }} />
+                return (
+                  <PlayerCard
+                    key={seat.seatId}
+                    seatId={seat.seatId}
+                    seats={gameSeats}
+                    thisPlayer={getCurrentPlayerName()}
+                    isSitting={isSitting}
+                    currentTurn={currentTurn}
+                    onDiceRoll={handlePlayerDiceRoll}
+                    playerData={seat.characterData}
+                    onColorChange={handlePlayerColorChange}
+                    currentColor={currentColor}
+                  />
+                );
+              })}
+
+              {/* Lobby / Connected Users */}
+              <LobbyPanel
+                lobbyUsers={lobbyUsers}
+                systemMessages={systemMessages}
+              />
+              <div aria-hidden="true" style={{ flexShrink: 0, height: '40vh' }} />
+            </>
+          )}
+
+          {activeLeftDrawer === 'log' && (
+            <>
+              <AdventureLog
+                rollLog={filteredRollLog}
+                playerSeatMap={playerSeatMap}
+              />
+              <div aria-hidden="true" style={{ flexShrink: 0, height: '40vh' }} />
+            </>
+          )}
         </div>
       </div>
 
@@ -1881,7 +1907,7 @@ function GameContent() {
 
           {/* Safe area: shrinks insets to match open drawers — all overlays live here */}
           <MapSafeArea
-            isDrawerOpen={isDrawerOpen}
+            isDrawerOpen={!!activeLeftDrawer}
             activeRightDrawer={activeRightDrawer}
             isMixerOpen={isMixerOpen}
           >
