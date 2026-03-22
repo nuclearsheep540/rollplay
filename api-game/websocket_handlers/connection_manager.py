@@ -122,15 +122,15 @@ class ConnectionManager:
         if room_id not in self.room_users:
             return
         
-        # Get users who are connected but not in party (including disconnecting users)
+        # Include all users tracked in the room (connected and disconnecting),
+        # independent of seat/party state.
         lobby_users = []
         for user_name, user_data in self.room_users[room_id].items():
-            if not user_data["is_in_party"]:
-                lobby_users.append({
-                    "name": user_name,
-                    "id": user_name,  # Use name as ID for simplicity
-                    "status": user_data.get("status", "connected")
-                })
+            lobby_users.append({
+                "name": user_name,
+                "id": user_name,  # Use name as ID for simplicity
+                "status": user_data.get("status", "connected")
+            })
         
         lobby_message = {
             "event_type": "lobby_update",
