@@ -6,6 +6,8 @@ from typing import Optional, List, Dict
 from uuid import UUID
 
 from modules.characters.repositories.character_repository import CharacterRepository
+from modules.session.repositories.session_repository import SessionRepository
+from modules.session.domain.session_aggregate import SessionStatus
 from modules.characters.domain.character_aggregate import (
     CharacterAggregate,
     AbilityScores,
@@ -56,8 +58,19 @@ class CreateCharacter:
 
 class UpdateAbilityScores:
     """Update character ability scores"""
-    def __init__(self, repository: CharacterRepository):
+    def __init__(self, repository: CharacterRepository, session_repository: SessionRepository):
         self.repository = repository
+        self.session_repository = session_repository
+
+    def _validate_edit_policy(self, character: CharacterAggregate) -> None:
+        """Block edits while the character's campaign has a live or transitional session."""
+        if not character.active_campaign:
+            return
+
+        sessions = self.session_repository.get_by_campaign_id(character.active_campaign)
+        blocked_statuses = {SessionStatus.ACTIVE, SessionStatus.STARTING, SessionStatus.STOPPING}
+        if any(session.status in blocked_statuses for session in sessions):
+            raise ValueError("Cannot edit character while campaign session is active or transitioning")
 
     def execute(
         self,
@@ -74,6 +87,8 @@ class UpdateAbilityScores:
         if not character.is_owned_by(user_id):
             raise ValueError("Only character owner can update ability scores")
 
+        self._validate_edit_policy(character)
+
         # Update via aggregate method
         character.update_ability_scores(ability_scores)
 
@@ -84,8 +99,19 @@ class UpdateAbilityScores:
 
 class UpdateCharacter:
     """Update existing character"""
-    def __init__(self, repository: CharacterRepository):
+    def __init__(self, repository: CharacterRepository, session_repository: SessionRepository):
         self.repository = repository
+        self.session_repository = session_repository
+
+    def _validate_edit_policy(self, character: CharacterAggregate) -> None:
+        """Block edits while the character's campaign has a live or transitional session."""
+        if not character.active_campaign:
+            return
+
+        sessions = self.session_repository.get_by_campaign_id(character.active_campaign)
+        blocked_statuses = {SessionStatus.ACTIVE, SessionStatus.STARTING, SessionStatus.STOPPING}
+        if any(session.status in blocked_statuses for session in sessions):
+            raise ValueError("Cannot edit character while campaign session is active or transitioning")
 
     def execute(
         self,
@@ -111,6 +137,8 @@ class UpdateCharacter:
         # Business rule: Only owner can update
         if not character.is_owned_by(user_id):
             raise ValueError("Only character owner can update this character")
+
+        self._validate_edit_policy(character)
 
         # Update via domain method (includes business rule validation)
         character.update_character(
