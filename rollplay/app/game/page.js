@@ -180,6 +180,7 @@ function GameContent() {
 
   // Campaign metadata for overlay (fetched from api-site when campaignId is set)
   const [campaignMeta, setCampaignMeta] = useState(null);
+  const [heroImageReady, setHeroImageReady] = useState(false);
 
   // Ref for sendSeatChange — breaks circular dep: handleRoleChange → sendSeatChange → useWebSocket → gameContext → handleRoleChange
   const sendSeatChangeRef = useRef(null);
@@ -508,6 +509,15 @@ function GameContent() {
         if (data) {
           console.log(`✅ Campaign metadata loaded: "${data.title}"`);
           setCampaignMeta({ title: data.title, heroImage: data.hero_image });
+          // Preload hero image so we can gate the overlay on it being ready
+          if (data.hero_image) {
+            const img = new Image();
+            img.onload = () => setHeroImageReady(true);
+            img.onerror = () => setHeroImageReady(true); // Show content anyway on error
+            img.src = data.hero_image;
+          } else {
+            setHeroImageReady(true); // No hero image — show content immediately
+          }
         }
       })
       .catch(err => console.warn('⚠️ Campaign metadata fetch error:', err));
@@ -1951,10 +1961,10 @@ function GameContent() {
           className="fixed inset-0 z-[102] flex items-center justify-center bg-black cursor-pointer"
           onClick={handleEnterSession}
         >
-          <div
+          {heroImageReady && <div
             className="relative rounded-sm overflow-hidden shadow-2xl shadow-black/50 select-none border-2 border-[#F7F4F3]"
             style={{
-              width: 'min(60vw, calc(70vh * 16 / 9))',
+              width: 'min(70vw, calc(82vh * 16 / 9))',
               backgroundImage: campaignMeta?.heroImage ? `url(${campaignMeta.heroImage})` : 'none',
               backgroundSize: 'cover',
               backgroundPosition: 'center',
@@ -1974,7 +1984,7 @@ function GameContent() {
 
               <div className="relative">
                 {/* Click to enter — centered */}
-                <p className="text-sm text-gray-300/80 tracking-widest uppercase text-center">
+                <p className="text-2xl text-[#F7F4F3] tracking-widest capitalize text-center font-[family-name:var(--font-metamorphous)]">
                   Click to enter
                 </p>
 
@@ -1995,7 +2005,7 @@ function GameContent() {
                 })()}
               </div>
             </div>
-          </div>
+          </div>}
         </div>
       )}
 
