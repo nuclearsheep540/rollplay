@@ -485,6 +485,13 @@ export const useUnifiedAudio = () => {
 
     const startTime = performance.now();
 
+    // Capture the reverb send's current wet gain at fade start so we can
+    // scale it proportionally alongside the channel fader. This ensures
+    // the send fades in lockstep with the dry signal rather than staying
+    // at full level and cutting abruptly on stop.
+    const inserts = channelInsertEffectsRef.current[trackId];
+    const reverbWetGainAtStart = inserts?.reverb?.wetGain?.gain?.value ?? 0;
+
     console.log(`🌊 Starting ${type} fade for ${trackId}: ${startGain} → ${targetGain} over ${duration}ms`);
 
     // Set state ONCE at fade start — this is the only state update until fade ends
@@ -499,7 +506,7 @@ export const useUnifiedAudio = () => {
       [trackId]: { ...prev[trackId], playbackState: PlaybackState.TRANSITIONING }
     }));
 
-    // Animation loop — only touches the gain node and the ref, NOT React state
+    // Animation loop — only touches gain nodes and the ref, NOT React state
     const animate = (currentTime) => {
       const elapsed = currentTime - startTime;
       const progress = Math.min(elapsed / duration, 1.0);
@@ -507,9 +514,15 @@ export const useUnifiedAudio = () => {
       // Calculate current gain using linear interpolation
       const currentGain = startGain + (targetGain - startGain) * progress;
 
-      // Apply gain if track's gain node exists
+      // Apply gain to channel fader (dry path)
       if (remoteTrackGainsRef.current[trackId]) {
         remoteTrackGainsRef.current[trackId].gain.value = currentGain;
+      }
+
+      // Fade reverb send in proportion — scale from its level at fade start
+      if (reverbWetGainAtStart > 0 && inserts?.reverb?.wetGain) {
+        const fadeRatio = startGain > 0 ? currentGain / startGain : 0;
+        inserts.reverb.wetGain.gain.value = reverbWetGainAtStart * fadeRatio;
       }
 
       if (progress < 1.0) {
