@@ -2,11 +2,14 @@
 @tailwind components;
 @tailwind utilities;
 
-/* Audio gate overlay — hide description on short viewports */
+/* Audio gate overlay — hide description when card is too short */
+.gate-card {
+  container-type: size;
+}
 .gate-description {
   display: none !important;
 }
-@media (min-height: 500px) {
+@container (min-height: 350px) {
   .gate-description {
     display: flex !important;
   }

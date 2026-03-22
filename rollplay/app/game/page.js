@@ -1988,7 +1988,7 @@ function GameContent() {
           onClick={handleEnterSession}
         >
           {heroImageReady && <div
-            className="relative rounded-sm overflow-hidden shadow-2xl shadow-black/50 select-none border-2"
+            className="relative rounded-sm overflow-hidden shadow-2xl shadow-black/50 select-none border-2 gate-card"
             style={{
               borderColor: COLORS.smoke,
               width: 'min(80vw, calc(90vh * 16 / 9))',
