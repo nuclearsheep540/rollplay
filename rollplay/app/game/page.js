@@ -1176,23 +1176,51 @@ function GameContent() {
     // 1. Unlock audio (drains pending play ops with corrected offsets)
     await unlockAudio();
 
-    // 2. Auto-seat if eligible (not DM, not spectator, not already seated)
-    if (isDM === false && !isSpectator) {
-      const alreadySeated = gameSeats.some(s => s.playerName === thisPlayer);
-      if (!alreadySeated) {
-        const emptyIdx = gameSeats.findIndex(s => s.playerName === "empty");
-        if (emptyIdx !== -1) {
-          const newSeats = [...gameSeats];
-          newSeats[emptyIdx] = {
-            ...newSeats[emptyIdx],
-            playerName: thisPlayer,
-            characterData: getCharacterData(thisPlayer),
-            isActive: false
-          };
-          sendSeatChange(newSeats);
-        }
-      }
+    if (!roomId || !thisPlayer) {
+      return;
     }
+
+    // 2. Re-check live role state to avoid stale client role flags on refresh.
+    let liveRoles = null;
+    try {
+      const roleResponse = await fetch(`/api/game/${roomId}/roles?playerName=${encodeURIComponent(thisPlayer)}`);
+      if (roleResponse.ok) {
+        liveRoles = await roleResponse.json();
+      }
+    } catch (error) {
+      console.warn('Could not re-check roles before auto-seat:', error);
+    }
+
+    const isLiveStaff = Boolean(liveRoles?.is_dm || liveRoles?.is_moderator);
+    if (isLiveStaff || isDM || isModerator) {
+      return;
+    }
+
+    const characterData = getCharacterData(thisPlayer);
+    if (!characterData?.character_id) {
+      setIsSpectator(true);
+      return;
+    }
+
+    // 3. Auto-seat only valid adventurers who are not already seated.
+    const alreadySeated = gameSeats.some(s => s.playerName === thisPlayer);
+    if (alreadySeated) {
+      return;
+    }
+
+    const emptyIdx = gameSeats.findIndex(s => s.playerName === "empty");
+    if (emptyIdx === -1) {
+      return;
+    }
+
+    const newSeats = [...gameSeats];
+    newSeats[emptyIdx] = {
+      ...newSeats[emptyIdx],
+      playerName: thisPlayer,
+      characterData,
+      isActive: false
+    };
+    await sendSeatChange(newSeats);
   };
 
   // Show dice portal for player rolls
@@ -1320,8 +1348,8 @@ function GameContent() {
 
   // Handle clearing system messages
   // Send WebSocket event — server clears MongoDB and broadcasts to all clients
-  const handleClearSystemMessages = () => {
-    sendClearSystemMessages();
+  const handleClearSystemMessages = async () => {
+    await sendClearSystemMessages();
   };
 
   // Handle clearing all adventure log messages

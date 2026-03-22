@@ -507,9 +507,9 @@ export default function ModeratorControls({
                           <div className="flex items-center justify-between">
                             <div>
                               <div className="font-medium">{player.playerName}</div>
-                              {player.characterData && (
+                              {formatCharacterSummary(player.characterData) && (
                                 <div className="text-gray-400 text-sm">
-                                  {player.characterData.class} • Level {player.characterData.level}
+                                  {formatCharacterSummary(player.characterData)}
                                 </div>
                               )}
                             </div>
@@ -610,11 +610,17 @@ export default function ModeratorControls({
                   ? 'bg-emerald-500/20 border-emerald-500/40 text-emerald-200 cursor-not-allowed'
                   : ''
               }`}
-              onClick={() => {
+              onClick={async () => {
                 if (!isClearingLogs) {
                   setIsClearingLogs(true);
-                  handleClearSystemMessages();
-                  setTimeout(() => setIsClearingLogs(false), 1000);
+                  try {
+                    await handleClearSystemMessages();
+                  } catch (error) {
+                    console.error('Failed to clear system messages:', error);
+                    alert('Failed to clear system messages. Please try again.');
+                  } finally {
+                    setIsClearingLogs(false);
+                  }
                 }
               }}
               disabled={isClearingLogs}

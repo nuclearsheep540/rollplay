@@ -557,8 +557,10 @@ export const createSendFunctions = (webSocket, isConnected, roomId, playerName) 
     }));
   };
 
-  const sendClearSystemMessages = () => {
-    if (!webSocket || !isConnected) return;
+  const sendClearSystemMessages = async () => {
+    if (!webSocket || !isConnected) {
+      throw new Error('Cannot clear system messages: WebSocket not connected');
+    }
 
     webSocket.send(JSON.stringify({
       "event_type": "clear_system_messages",

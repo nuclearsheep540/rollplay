@@ -812,7 +812,7 @@ async def update_seat_layout(room_id: str, request: dict):
             raise HTTPException(status_code=404, detail=f"Room {room_id} not found")
 
         seat_layout = request.get("seat_layout")
-        updated_by = request.get("updated_by")
+        updated_by = request.get("updated_by", "System")
 
         logger.debug(f"Updated by: {updated_by}")
         logger.debug(f"New seat layout: {seat_layout}")
@@ -829,6 +829,38 @@ async def update_seat_layout(room_id: str, request: dict):
             raise HTTPException(
                 status_code=400, 
                 detail=f"Seat layout cannot exceed {current_max} seats"
+            )
+
+        normalized_seat_layout = [
+            seat.lower() if isinstance(seat, str) and seat != "empty" else seat
+            for seat in seat_layout
+        ]
+        non_empty_players = [seat for seat in normalized_seat_layout if isinstance(seat, str) and seat != "empty"]
+
+        room_dm = str(check_room.get("dungeon_master", "")).lower()
+        if room_dm and room_dm in non_empty_players:
+            raise HTTPException(status_code=409, detail="Dungeon Master cannot sit in party seats")
+
+        room_moderators = {
+            str(name).lower()
+            for name in check_room.get("moderators", [])
+            if isinstance(name, str) and name
+        }
+        if any(name in room_moderators for name in non_empty_players):
+            raise HTTPException(status_code=409, detail="Moderators cannot sit in party seats")
+
+        player_metadata = check_room.get("player_metadata", {})
+        if not isinstance(player_metadata, dict):
+            player_metadata = {}
+
+        invalid_players = [
+            name for name in non_empty_players
+            if not player_metadata.get(name, {}).get("character_id")
+        ]
+        if invalid_players:
+            raise HTTPException(
+                status_code=409,
+                detail="Only adventurers with selected characters can sit in party seats",
             )
         
         # Update MongoDB record
@@ -862,6 +894,9 @@ async def update_seat_layout(room_id: str, request: dict):
 
     except HTTPException:
         raise  # Re-raise HTTP exceptions
+    except ValueError as e:
+        logger.warning(f"Seat layout validation failed: {str(e)}")
+        raise HTTPException(status_code=409, detail=str(e))
     except Exception as e:
         logger.error(f"Unexpected error in update_seat_layout: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
