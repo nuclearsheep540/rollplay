@@ -40,7 +40,8 @@ const mapLpfFrequency = (faderValue) => {
 
 export const useUnifiedAudio = () => {
   const [isAudioUnlocked, setIsAudioUnlocked] = useState(false);
-  
+  const isAudioUnlockedRef = useRef(false);
+
   // Callback to clear pending operations when tracks auto-stop
   const clearPendingOperationCallbackRef = useRef(null);
   
@@ -621,12 +622,13 @@ export const useUnifiedAudio = () => {
         await initializeWebAudio();
       }
 
-      // Check if Web Audio context exists and is unlocked
+      // Check if Web Audio context exists, is unlocked, and the user has clicked the gate overlay
       if (
         !audioContextRef.current ||
-        audioContextRef.current.state === 'suspended'
+        audioContextRef.current.state === 'suspended' ||
+        !isAudioUnlockedRef.current
       ) {
-        console.warn('🕐 Audio context suspended — queueing play operation for unlock');
+        console.warn('🕐 Audio not ready — queueing play operation for unlock');
         console.log(
           '💡 User needs to interact with the page to unlock audio ' +
           '(click volume slider, sit in seat, etc.)'
@@ -1201,6 +1203,7 @@ export const useUnifiedAudio = () => {
       await audioContextRef.current.resume();
     }
 
+    isAudioUnlockedRef.current = true;
     setIsAudioUnlocked(true);
     reapplyEffects();
     await drainPendingOps();
@@ -1257,6 +1260,7 @@ export const useUnifiedAudio = () => {
     }
 
     // 6. Mark unlocked + finish
+    isAudioUnlockedRef.current = true;
     setIsAudioUnlocked(true);
     reapplyEffects();
     await drainPendingOps();

@@ -1965,32 +1965,36 @@ function GameContent() {
             <div className="absolute inset-0 bg-gradient-to-b from-black/90 via-transparent to-black/90" />
 
             {/* Content */}
-            <div className="absolute inset-0 flex flex-col items-center justify-between py-12 px-6 text-center">
+            <div className="absolute inset-0 flex flex-col justify-between py-12 px-8">
               {campaignMeta?.title && (
-                <h2 className="text-4xl text-white font-[family-name:var(--font-metamorphous)]">
+                <h2 className="text-4xl text-white font-[family-name:var(--font-metamorphous)] text-center">
                   {campaignMeta.title}
                 </h2>
               )}
-              <p className="text-sm text-gray-300/80 tracking-widest uppercase">
-                Click to enter
-              </p>
-            </div>
 
-            {/* Connected players — bottom-left overlay */}
-            {(() => {
-              const seated = gameSeats.filter(s => s.playerName !== 'empty').map(s => s.playerName);
-              const inLobby = lobbyUsers.filter(u => u.status === 'connected').map(u => u.name);
-              const allConnected = [...new Set([...seated, ...inLobby])];
-              if (allConnected.length === 0) return null;
-              return (
-                <div className="absolute bottom-6 left-6 text-left">
-                  <p className="text-sm text-gray-400 uppercase tracking-widest mb-1">Connected Players</p>
-                  {allConnected.map(name => (
-                    <p key={name} className="text-base text-gray-300">{name}</p>
-                  ))}
-                </div>
-              );
-            })()}
+              <div className="relative">
+                {/* Click to enter — centered */}
+                <p className="text-sm text-gray-300/80 tracking-widest uppercase text-center">
+                  Click to enter
+                </p>
+
+                {/* Connected players — bottom-left, positioned above "Click to enter" */}
+                {(() => {
+                  const seated = gameSeats.filter(s => s.playerName !== 'empty').map(s => s.playerName);
+                  const inLobby = lobbyUsers.filter(u => u.status === 'connected').map(u => u.name);
+                  const allConnected = [...new Set([...seated, ...inLobby])];
+                  if (allConnected.length === 0) return null;
+                  return (
+                    <div className="absolute bottom-full left-0 mb-4 text-left">
+                      <p className="text-sm text-gray-400 uppercase tracking-widest mb-1">Connected Players</p>
+                      {allConnected.map(name => (
+                        <p key={name} className="text-base text-gray-300">{name}</p>
+                      ))}
+                    </div>
+                  );
+                })()}
+              </div>
+            </div>
           </div>
         </div>
       )}
