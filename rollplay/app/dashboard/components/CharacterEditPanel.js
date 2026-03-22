@@ -129,7 +129,7 @@ export default function CharacterEditPanel({
 
     try {
       const apiData = {
-        character_name: formData.name.trim(),
+        name: formData.name.trim(),
         character_race: formData.character_race,
         background: formData.background || null,
         character_classes: formData.character_classes,
