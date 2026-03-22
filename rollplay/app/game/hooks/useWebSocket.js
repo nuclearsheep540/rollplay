@@ -204,10 +204,17 @@ export const useWebSocket = (roomId, thisPlayer, gameContext) => {
     }
   }, [gameContext, thisPlayer]);
 
-  // Create send functions
-  const sendFunctions = webSocket && isConnected 
+  // Create send functions (no-op stubs when disconnected so callers never get undefined)
+  const noop = () => {};
+  const sendFunctions = webSocket && isConnected
     ? createSendFunctions(webSocket, isConnected, roomId, thisPlayer)
-    : {};
+    : {
+        sendSeatChange: noop, sendSeatCountChange: noop, sendCombatStateChange: noop,
+        sendPlayerKick: noop, sendDiceRoll: noop, sendClearSystemMessages: noop,
+        sendClearAllMessages: noop, sendDicePrompt: noop, sendDicePromptClear: noop,
+        sendInitiativePromptAll: noop, sendColorChange: noop, sendRoleChange: noop,
+        sendRemoteAudioPlay: noop, sendRemoteAudioResume: noop, sendRemoteAudioBatch: noop,
+      };
 
   return {
     webSocket,

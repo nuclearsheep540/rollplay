@@ -26,6 +26,6 @@ MESSAGE_TEMPLATES = {
     "combat_ended": "Combat ended by {player}",
     "messages_cleared": "{player} cleared {count} messages",
     "player_kicked": "{player} was removed from the game",
-    "dice_prompt": "DM: {target}, please roll a {roll_type}",
+    "dice_prompt": "{target}, roll a {roll_type}",
     "initiative_prompt": "DM prompted all players for Initiative: {players}"
 }

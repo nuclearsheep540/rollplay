@@ -26,13 +26,13 @@ export default function LobbyPanel({ lobbyUsers = [], systemMessages = [] }) {
   const recentSystemMessages = systemMessages.slice(-20).reverse();
 
   return (
-    <div className="lobby-section mt-4 mb-4">
+    <div className="lobby-section mt-[calc(24px*var(--ui-scale))] mb-4">
       {/* Connected Users */}
       {hasLobbyUsers && (
         <>
-          <div className="lobby-header text-[calc(14px*var(--ui-scale))] font-semibold text-gray-300 mb-[calc(8px*var(--ui-scale))] flex items-center gap-[calc(6px*var(--ui-scale))]">
+          <div className="lobby-header text-[calc(12px*var(--ui-scale))] font-semibold mb-[calc(8px*var(--ui-scale))] flex items-center gap-[calc(6px*var(--ui-scale))] uppercase tracking-wider" style={{ color: '#F7F4F3' }}>
             <span>Lobby</span>
-            <span className="text-[calc(10px*var(--ui-scale))] text-gray-500 font-normal">
+            <span className="text-[calc(10px*var(--ui-scale))] text-gray-600 font-normal">
               ({connectedCount} connected{disconnectingCount > 0 ? ` : ${disconnectingCount} disconnecting` : ''})
             </span>
           </div>

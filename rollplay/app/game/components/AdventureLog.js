@@ -137,11 +137,7 @@ export default function AdventureLog({ rollLog, playerSeatMap }) {
   const messageGroups = groupMessages(rollLog);
 
   return (
-    <div className="adventure-log-section mt-6 w-full">
-      <div className="log-header">
-        Adventure Log
-        <span style={{ fontSize: '10px', color: '#6b7280' }}>(Live)</span>
-      </div>
+    <div className="adventure-log-section w-full">
       <div className="log-entries flex flex-col-reverse" ref={logRef}>
         {messageGroups.map((group, groupIndex) => {
           if (group.type === "party-member") {

@@ -31,6 +31,7 @@ import MapOverlayPanel from './components/MapOverlayPanel';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { faVolumeHigh, faVolumeXmark } from '@fortawesome/free-solid-svg-icons';
 import MapSafeArea from './components/MapSafeArea';
+import Drawer from './components/Drawer';
 import GridTuningOverlay from '../map_management/components/GridTuningOverlay';
 
 // Tab configuration for left drawer
@@ -200,7 +201,6 @@ function GameContent() {
   const [isSpectator, setIsSpectator] = useState(false);
   const navRef = useRef(null);
   const [activeLeftDrawer, setActiveLeftDrawer] = useState('party'); // 'party' | 'log' | null
-  const [leftDrawerSettled, setLeftDrawerSettled] = useState(true); // starts open, so settled
   const [activeRightDrawer, setActiveRightDrawer] = useState(null); // null | 'dm' | 'moderator'
   const [rightDrawerSettled, setRightDrawerSettled] = useState(false); // starts closed
   const [isMixerOpen, setIsMixerOpen] = useState(false);
@@ -1689,86 +1689,54 @@ function GameContent() {
       </div>
 
       {/* Left drawer — fixed-position, tabbed (PARTY / LOG) */}
-      <div
-        className={`party-drawer ${leftDrawerSettled ? 'drawer-settled' : ''}`}
-        style={{ transform: activeLeftDrawer ? 'translateX(0)' : 'translateX(-100%)' }}
-        onTransitionEnd={(e) => {
-          if (e.propertyName === 'transform') setLeftDrawerSettled(!!activeLeftDrawer);
-        }}
+      <Drawer
+        side="left"
+        tabs={LEFT_DRAWER_TABS}
+        activeTab={activeLeftDrawer}
+        onTabChange={setActiveLeftDrawer}
       >
-        <div className="left-drawer-tab-strip">
-          <div className="left-drawer-tab-strip-inner">
-            {LEFT_DRAWER_TABS.map(tab => (
-              <button
-                key={tab.id}
-                className={`left-drawer-tab ${activeLeftDrawer === tab.id ? 'active' : ''}`}
-                onClick={() => { setLeftDrawerSettled(false); setActiveLeftDrawer(prev => prev === tab.id ? null : tab.id); }}
-              >
-                {tab.label}
-              </button>
-            ))}
-          </div>
-        </div>
+        {activeLeftDrawer === 'party' && (
+          <>
+            <DMChair
+              dmName={dmSeat}
+              isEmpty={dmSeat === ""}
+            />
 
-        <div className="drawer-content">
-          {activeLeftDrawer === 'party' && (
-            <>
-              {/* DM Section */}
-              <div
-                className="party-header"
-                style={{
-                  color: '#fb7185',
-                  borderBottom: '1px solid rgba(251, 113, 133, 0.3)'
-                }}
-              >
-                <span>Dungeon Master</span>
-              </div>
+            {gameSeats.filter(seat => !isSpectator || seat.playerName !== "empty").map((seat) => {
+              const isSitting = seat.playerName === getCurrentPlayerName();
+              const currentColor = seatColors[seat.seatId] || getSeatColor(seat.seatId);
 
-              <DMChair
-                dmName={dmSeat}
-                isEmpty={dmSeat === ""}
-              />
+              return (
+                <PlayerCard
+                  key={seat.seatId}
+                  seatId={seat.seatId}
+                  seats={gameSeats}
+                  thisPlayer={getCurrentPlayerName()}
+                  isSitting={isSitting}
+                  currentTurn={currentTurn}
+                  onDiceRoll={handlePlayerDiceRoll}
+                  playerData={seat.characterData}
+                  onColorChange={handlePlayerColorChange}
+                  currentColor={currentColor}
+                />
+              );
+            })}
 
-              {gameSeats.filter(seat => isDM || seat.playerName !== "empty").map((seat) => {
-                const isSitting = seat.playerName === getCurrentPlayerName();
-                const currentColor = seatColors[seat.seatId] || getSeatColor(seat.seatId);
+            {/* Lobby / Connected Users */}
+            <LobbyPanel
+              lobbyUsers={lobbyUsers}
+              systemMessages={systemMessages}
+            />
+          </>
+        )}
 
-                return (
-                  <PlayerCard
-                    key={seat.seatId}
-                    seatId={seat.seatId}
-                    seats={gameSeats}
-                    thisPlayer={getCurrentPlayerName()}
-                    isSitting={isSitting}
-                    currentTurn={currentTurn}
-                    onDiceRoll={handlePlayerDiceRoll}
-                    playerData={seat.characterData}
-                    onColorChange={handlePlayerColorChange}
-                    currentColor={currentColor}
-                  />
-                );
-              })}
-
-              {/* Lobby / Connected Users */}
-              <LobbyPanel
-                lobbyUsers={lobbyUsers}
-                systemMessages={systemMessages}
-              />
-              <div aria-hidden="true" style={{ flexShrink: 0, height: '40vh' }} />
-            </>
-          )}
-
-          {activeLeftDrawer === 'log' && (
-            <>
-              <AdventureLog
-                rollLog={filteredRollLog}
-                playerSeatMap={playerSeatMap}
-              />
-              <div aria-hidden="true" style={{ flexShrink: 0, height: '40vh' }} />
-            </>
-          )}
-        </div>
-      </div>
+        {activeLeftDrawer === 'log' && (
+          <AdventureLog
+            rollLog={filteredRollLog}
+            playerSeatMap={playerSeatMap}
+          />
+        )}
+      </Drawer>
 
       {/* Right drawer — fixed-position, outside grid flow */}
       {(() => {
