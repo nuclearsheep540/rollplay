@@ -18,6 +18,7 @@ import CombatControlsPanel from './components/CombatControlsPanel';
 import ModeratorControls from './components/ModeratorControls';
 import { AudioMixerPanel, BottomMixerDrawer } from '../audio_management/components';
 import { PlaybackState } from '../audio_management/types';
+import { COLORS } from '../styles/colorTheme';
 import HorizontalInitiativeTracker from './components/HorizontalInitiativeTracker';
 import AdventureLog from './components/AdventureLog';
 import LobbyPanel from './components/LobbyPanel';
@@ -180,12 +181,14 @@ function GameContent() {
 
   // Campaign metadata for overlay (fetched from api-site when campaignId is set)
   const [campaignMeta, setCampaignMeta] = useState(null);
+  const [heroImageReady, setHeroImageReady] = useState(false);
 
   // Ref for sendSeatChange — breaks circular dep: handleRoleChange → sendSeatChange → useWebSocket → gameContext → handleRoleChange
   const sendSeatChangeRef = useRef(null);
 
   // Spectator mode - user has no character selected for this campaign
   const [isSpectator, setIsSpectator] = useState(false);
+  const navRef = useRef(null);
   const [isDrawerOpen, setIsDrawerOpen] = useState(true);
   const [partyDrawerSettled, setPartyDrawerSettled] = useState(true); // starts open, so settled
   const [activeRightDrawer, setActiveRightDrawer] = useState(null); // null | 'dm' | 'moderator'
@@ -492,6 +495,26 @@ function GameContent() {
     checkSpectatorStatus();
   }, [campaignId, currentUser, isDM]);
 
+  // Measure total nav height (including spectator banner when present)
+  // and publish as --nav-height on the game-interface container so all
+  // fixed elements (drawers, MapSafeArea) stay below the nav automatically.
+  useEffect(() => {
+    const nav = navRef.current;
+    if (!nav) return;
+
+    const applyHeight = () => {
+      const gameInterface = nav.closest('.game-interface');
+      if (gameInterface) {
+        gameInterface.style.setProperty('--nav-height', `${nav.offsetHeight}px`);
+      }
+    };
+
+    applyHeight();
+    const observer = new ResizeObserver(applyHeight);
+    observer.observe(nav);
+    return () => observer.disconnect();
+  }, [isSpectator]);
+
   // Fetch campaign metadata (title + hero_image) for the Enter Session overlay
   useEffect(() => {
     if (!campaignId) return;
@@ -507,7 +530,16 @@ function GameContent() {
       .then(data => {
         if (data) {
           console.log(`✅ Campaign metadata loaded: "${data.title}"`);
-          setCampaignMeta({ title: data.title, heroImage: data.hero_image });
+          setCampaignMeta({ title: data.title, description: data.description, heroImage: data.hero_image });
+          // Preload hero image so we can gate the overlay on it being ready
+          if (data.hero_image) {
+            const img = new Image();
+            img.onload = () => setHeroImageReady(true);
+            img.onerror = () => setHeroImageReady(true); // Show content anyway on error
+            img.src = data.hero_image;
+          } else {
+            setHeroImageReady(true); // No hero image — show content immediately
+          }
         }
       })
       .catch(err => console.warn('⚠️ Campaign metadata fetch error:', err));
@@ -1533,116 +1565,118 @@ function GameContent() {
   // MAIN RENDER
   return (
     <div className="game-interface" data-ui-scale={uiScale}>
-      {/* Top Command Bar */}
-      <div className="top-nav">
-        <div className="campaign-info">
-          <div className="campaign-title">The Curse of Strahd</div>
-        </div>
-
-        <div className="nav-actions">
-          {/* Master Volume Control */}
-          <div className="master-volume-control">
-            <label htmlFor="master-volume" className="volume-label">
-              <FontAwesomeIcon icon={isAudioUnlocked ? faVolumeHigh : faVolumeXmark} />
-            </label>
-            <input
-              id="master-volume"
-              type="range"
-              min="0"
-              max="1"
-              step="0.1"
-              value={masterVolume}
-              onChange={(e) => {
-                // Unlock audio on first volume interaction
-                if (!isAudioUnlocked && unlockAudio) {
-                  unlockAudio().then(() => {
-                    console.log('🔊 Audio unlocked when player adjusted volume');
-                  }).catch(err => {
-                    console.warn('Audio unlock failed on volume adjustment:', err);
-                  });
-                }
-                setMasterVolume(parseFloat(e.target.value));
-              }}
-              className="volume-slider"
-              title={`Master Volume: ${Math.round(masterVolume * 100)}%`}
-            />
-            <span className="volume-percentage">
-              {Math.round(masterVolume * 100)}%
-            </span>
+      {/* Top Command Bar — flex column so spectator banner extends the nav height */}
+      <div ref={navRef} className="top-nav">
+        <div className="top-nav-bar">
+          <div className="campaign-info">
+            <div className="campaign-title">The Curse of Strahd</div>
           </div>
 
-          {/* UI Scale Toggle */}
-          <div className="ui-scale-nav">
-            <button
-              className={`scale-btn ${uiScale === 'small' ? 'active' : ''}`}
-              onClick={() => setUIScale('small')}
-              title="Small UI"
-            >
-              S
-            </button>
-            <button
-              className={`scale-btn ${uiScale === 'medium' ? 'active' : ''}`}
-              onClick={() => setUIScale('medium')}
-              title="Medium UI"
-            >
-              M
-            </button>
-            <button
-              className={`scale-btn ${uiScale === 'large' ? 'active' : ''}`}
-              onClick={() => setUIScale('large')}
-              title="Large UI"
-            >
-              L
-            </button>
-          </div>
-        </div>
+          <div className="nav-actions">
+            {/* Master Volume Control */}
+            <div className="master-volume-control">
+              <label htmlFor="master-volume" className="volume-label">
+                <FontAwesomeIcon icon={isAudioUnlocked ? faVolumeHigh : faVolumeXmark} />
+              </label>
+              <input
+                id="master-volume"
+                type="range"
+                min="0"
+                max="1"
+                step="0.1"
+                value={masterVolume}
+                onChange={(e) => {
+                  // Unlock audio on first volume interaction
+                  if (!isAudioUnlocked && unlockAudio) {
+                    unlockAudio().then(() => {
+                      console.log('🔊 Audio unlocked when player adjusted volume');
+                    }).catch(err => {
+                      console.warn('Audio unlock failed on volume adjustment:', err);
+                    });
+                  }
+                  setMasterVolume(parseFloat(e.target.value));
+                }}
+                className="volume-slider"
+                title={`Master Volume: ${Math.round(masterVolume * 100)}%`}
+              />
+              <span className="volume-percentage">
+                {Math.round(masterVolume * 100)}%
+              </span>
+            </div>
 
-        <button
-          onClick={() => router.push('/dashboard')}
-          className="nav-back-btn"
-          title="Back to Dashboard"
-        >
-          Dashboard
-        </button>
-      </div>
-
-      {/* Spectator Banner */}
-      {isSpectator && (
-        <div className="spectator-banner" style={{
-          backgroundColor: '#1e293b',
-          borderBottom: '2px solid #f59e0b',
-          padding: '12px 24px',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-          gap: '16px'
-        }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-            <span style={{ fontSize: '20px' }}>👁️</span>
-            <div>
-              <p style={{ color: '#f59e0b', fontWeight: '600', margin: 0 }}>Spectator Mode</p>
-              <p style={{ color: '#94a3b8', fontSize: '14px', margin: 0 }}>
-                You're watching this session. Select a character in your campaign to participate.
-              </p>
+            {/* UI Scale Toggle */}
+            <div className="ui-scale-nav">
+              <button
+                className={`scale-btn ${uiScale === 'small' ? 'active' : ''}`}
+                onClick={() => setUIScale('small')}
+                title="Small UI"
+              >
+                S
+              </button>
+              <button
+                className={`scale-btn ${uiScale === 'medium' ? 'active' : ''}`}
+                onClick={() => setUIScale('medium')}
+                title="Medium UI"
+              >
+                M
+              </button>
+              <button
+                className={`scale-btn ${uiScale === 'large' ? 'active' : ''}`}
+                onClick={() => setUIScale('large')}
+                title="Large UI"
+              >
+                L
+              </button>
             </div>
           </div>
+
           <button
             onClick={() => router.push('/dashboard')}
-            style={{
-              backgroundColor: '#f59e0b',
-              color: '#1e293b',
-              padding: '8px 16px',
-              borderRadius: '6px',
-              fontWeight: '600',
-              fontSize: '14px',
-              border: 'none',
-              cursor: 'pointer'
-            }}
+            className="nav-back-btn"
+            title="Back to Dashboard"
           >
-            Go to Campaigns
+            Dashboard
           </button>
         </div>
-      )}
+
+        {/* Spectator Banner — in normal flow inside nav, grows nav height */}
+        {isSpectator && (
+          <div className="spectator-banner" style={{
+            backgroundColor: '#1e293b',
+            borderBottom: '2px solid #f59e0b',
+            padding: '12px 24px',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            gap: '16px'
+          }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+              <span style={{ fontSize: '20px' }}>👁️</span>
+              <div>
+                <p style={{ color: '#f59e0b', fontWeight: '600', margin: 0 }}>Spectator Mode</p>
+                <p style={{ color: '#94a3b8', fontSize: '14px', margin: 0 }}>
+                  You're watching this session. Select a character in your campaign to participate.
+                </p>
+              </div>
+            </div>
+            <button
+              onClick={() => router.push('/dashboard')}
+              style={{
+                backgroundColor: '#f59e0b',
+                color: '#1e293b',
+                padding: '8px 16px',
+                borderRadius: '6px',
+                fontWeight: '600',
+                fontSize: '14px',
+                border: 'none',
+                cursor: 'pointer'
+              }}
+            >
+              Go to Campaigns
+            </button>
+          </div>
+        )}
+      </div>
 
       {/* Party drawer — fixed-position, outside grid flow */}
       <div
@@ -1675,19 +1709,6 @@ function GameContent() {
             dmName={dmSeat}
             isEmpty={dmSeat === ""}
           />
-
-          {/* Party Section */}
-          <div
-            className="party-header"
-            style={{
-              borderBottom: '1px solid rgba(74, 222, 128, 0.3)'
-            }}
-          >
-            <span>Party</span>
-            <span className="seat-indicator">
-              {gameSeats.filter(seat => seat.playerName !== "empty").length}/{gameSeats.length} Seats
-            </span>
-          </div>
 
           {gameSeats.filter(seat => isDM || seat.playerName !== "empty").map((seat) => {
             const isSitting = seat.playerName === getCurrentPlayerName();
@@ -1948,34 +1969,66 @@ function GameContent() {
       {/* Audio Gate Overlay — provides user gesture for AudioContext + auto-seats player */}
       {!isAudioUnlocked && (
         <div
-          className="fixed inset-0 z-[102] flex items-center justify-center bg-black/80 backdrop-blur-sm cursor-pointer"
+          className="fixed inset-0 z-[102] flex items-center justify-center bg-black cursor-pointer"
           onClick={handleEnterSession}
         >
-          <div
-            className="relative rounded-sm overflow-hidden shadow-2xl shadow-black/50 select-none"
+          {heroImageReady && <div
+            className="relative rounded-sm overflow-hidden shadow-2xl shadow-black/50 select-none border-2 gate-card"
             style={{
-              width: 'min(60vw, calc(70vh * 16 / 9))',
-              backgroundImage: `url(${campaignMeta?.heroImage || '/campaign-tile-bg.png'})`,
+              borderColor: COLORS.smoke,
+              width: 'min(90vw, calc(90vh * 16 / 9))',
+              backgroundImage: campaignMeta?.heroImage ? `url(${campaignMeta.heroImage})` : 'none',
               backgroundSize: 'cover',
               backgroundPosition: 'center',
               aspectRatio: '16 / 9',
             }}
           >
-            {/* Gradient overlays for text readability at top and bottom */}
-            <div className="absolute inset-0 bg-gradient-to-b from-black/90 via-transparent to-black/90" />
+            {/* Gradient overlay for text readability */}
+            <div className="absolute inset-0 bg-gradient-to-b from-black/90 via-black/40 to-black/90" />
 
             {/* Content */}
-            <div className="absolute inset-0 flex flex-col items-center justify-between py-12 px-6 text-center">
+            <div className="absolute inset-0 flex flex-col px-8" style={{ paddingTop: 'clamp(1rem, 3vh, 3rem)', paddingBottom: 'clamp(1rem, 3vh, 3rem)' }}>
               {campaignMeta?.title && (
-                <h2 className="text-4xl text-white font-[family-name:var(--font-metamorphous)]">
+                <h2 className="text-4xl text-white font-[family-name:var(--font-metamorphous)] text-center leading-none">
                   {campaignMeta.title}
                 </h2>
               )}
-              <p className="text-sm text-gray-300/80 tracking-widest uppercase">
+
+              {/* Middle row — spacer | description (75%) | spacer */}
+              <div className="flex items-center gate-description flex-1">
+                <div className="w-[12.5%]" />
+                <div className="w-3/4">
+                  {campaignMeta?.description && (
+                    <p className="text-center overflow-hidden mx-auto" style={{ color: COLORS.smoke, whiteSpace: 'pre-line', fontSize: 'clamp(0.65rem, 3cqh, 1.5rem)' }}>
+                      {campaignMeta.description}
+                    </p>
+                  )}
+                </div>
+                <div className="w-[12.5%]" />
+              </div>
+
+              {/* Click to enter — centered */}
+              <p className="text-2xl tracking-widest capitalize text-center font-[family-name:var(--font-metamorphous)] leading-none mt-auto" style={{ color: COLORS.smoke }}>
                 Click to enter
               </p>
             </div>
-          </div>
+
+            {/* Connected players — absolutely positioned, grows upward */}
+            {(() => {
+              const seated = gameSeats.filter(s => s.playerName !== 'empty').map(s => s.playerName);
+              const inLobby = lobbyUsers.filter(u => u.status === 'connected').map(u => u.name);
+              const allConnected = [...new Set([...seated, ...inLobby])];
+              if (allConnected.length === 0) return null;
+              return (
+                <div className="absolute left-0 bottom-0 text-left px-8" style={{ paddingBottom: 'clamp(1rem, 3vh, 3rem)' }}>
+                  <p className="text-sm uppercase tracking-widest mb-1" style={{ color: COLORS.smoke }}>Connected:</p>
+                  {allConnected.map(name => (
+                    <p key={name} className="text-base text-gray-300">{name}</p>
+                  ))}
+                </div>
+              );
+            })()}
+          </div>}
         </div>
       )}
 

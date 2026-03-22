@@ -18,12 +18,12 @@ function rmsToPct(rms) {
   return ((clamped - DB_FLOOR) / (DB_CEIL - DB_FLOOR)) * 100;
 }
 
-// Helper: format seconds → MM:SS
-const formatTime = (seconds) => {
-  if (!seconds || isNaN(seconds)) return '00:00';
-  const m = Math.floor(seconds / 60);
-  const s = Math.floor(seconds % 60);
-  return `${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
+// Helper: format remaining seconds → -MM:SS
+const formatTimeRemaining = (remaining) => {
+  if (!remaining || isNaN(remaining) || remaining <= 0) return '-00:00';
+  const m = Math.floor(remaining / 60);
+  const s = Math.floor(remaining % 60);
+  return `-${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
 };
 
 /**
@@ -69,6 +69,7 @@ export default function VerticalChannelStrip({
     filename,
     currentTime = 0,
     duration = 0,
+    remaining,
   } = trackState;
 
   const meterLRef = useRef(null);
@@ -338,7 +339,7 @@ export default function VerticalChannelStrip({
       <div className="w-full text-center px-1 pb-1 h-[28px] flex flex-col justify-end">
         {stripType === 'channel' && filename && (
           <div className="text-xs text-gray-200 font-mono">
-            {formatTime(currentTime)}
+            {formatTimeRemaining(remaining != null ? remaining : duration - currentTime)}
           </div>
         )}
         {isEffect && (

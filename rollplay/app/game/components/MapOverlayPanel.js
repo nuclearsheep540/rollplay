@@ -8,9 +8,9 @@ import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { faLock, faLockOpen, faCrosshairs, faKeyboard } from '@fortawesome/free-solid-svg-icons';
 
 /**
- * Lock Map button. Rendered inside MapSafeArea so positioning is simply
- * top/right relative to the safe area — no drawer awareness needed here.
- * Styled to match .right-drawer-tab — attaches flush to the safe area's right edge.
+ * Map overlay controls (Lock, Grid Inspect). Rendered inside MapSafeArea
+ * for drawer-aware right inset. Positioned at top: 0 (viewport origin) —
+ * the nav sits above with higher z-index, so buttons appear flush below it.
  */
 const MapOverlayPanel = ({
   isMapLocked = false,

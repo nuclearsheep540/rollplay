@@ -26,6 +26,14 @@ const formatTime = (seconds) => {
   return `${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
 };
 
+// Helper: format remaining seconds → -MM:SS
+const formatTimeRemaining = (remaining) => {
+  if (!remaining || isNaN(remaining) || remaining <= 0) return '-00:00';
+  const m = Math.floor(remaining / 60);
+  const s = Math.floor(remaining % 60);
+  return `-${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
+};
+
 // RMS → dB → percentage for meter display
 const DB_FLOOR = -60;
 const DB_CEIL = 0;
@@ -62,6 +70,7 @@ export default function AudioTrack({
     filename,
     currentTime = 0,
     duration = 0,
+    remaining,
     looping = true
   } = trackState;
 
@@ -171,7 +180,7 @@ export default function AudioTrack({
           </div>
           {filename && (
             <div className="text-gray-400 font-mono text-sm">
-              {formatTime(currentTime)} / {formatTime(duration)}
+              {formatTimeRemaining(remaining != null ? remaining : duration - currentTime)} / {formatTime(duration)}
             </div>
           )}
         </div>
