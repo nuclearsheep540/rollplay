@@ -33,8 +33,20 @@ export const handleInitialState = (data, handlers) => {
     seat_colors,
     max_players,
     campaign_id,
+    player_metadata,
     audio_state
   } = data;
+
+  const normalizedPlayerMetadata = Object.fromEntries(
+    Object.entries(player_metadata || {}).map(([playerName, metadata]) => [
+      playerName.toLowerCase(),
+      metadata
+    ])
+  );
+
+  if (handlers.setPlayerMetadata) {
+    handlers.setPlayerMetadata(normalizedPlayerMetadata);
+  }
 
   // Set DM name
   if (handlers.setDmSeat && dungeon_master) {
@@ -57,11 +69,11 @@ export const handleInitialState = (data, handlers) => {
   }
 
   // Convert seat layout to frontend unified structure
-  if (seat_layout && handlers.setGameSeats && handlers.getCharacterData) {
+  if (seat_layout && handlers.setGameSeats) {
     const seats = seat_layout.map((playerName, index) => ({
       seatId: index,
       playerName: playerName,
-      characterData: playerName !== "empty" ? handlers.getCharacterData(playerName) : null,
+      characterData: playerName !== "empty" ? (normalizedPlayerMetadata[playerName.toLowerCase()] || null) : null,
       isActive: false
     }));
 
@@ -111,7 +123,7 @@ export const handleSeatCountChange = (data, { setGameSeats, getCharacterData }) 
  * Handle player character change during active session
  * Updates the seat with new character data
  */
-export const handlePlayerCharacterChanged = (data, { setGameSeats }) => {
+export const handlePlayerCharacterChanged = (data, { setGameSeats, setPlayerMetadata }) => {
   console.log("received player character change:", data);
   const {
     player_name,
@@ -151,6 +163,23 @@ export const handlePlayerCharacterChanged = (data, { setGameSeats }) => {
       return seat;
     })
   );
+
+  if (setPlayerMetadata) {
+    setPlayerMetadata(prev => ({
+      ...prev,
+      [player_name.toLowerCase()]: {
+        player_name,
+        character_id,
+        character_name,
+        character_class,
+        character_race,
+        level,
+        hp_current,
+        hp_max,
+        ac
+      }
+    }));
+  }
 
   console.log(`✅ Updated character for ${player_name} to ${character_name}`);
 };

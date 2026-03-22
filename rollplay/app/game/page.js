@@ -49,20 +49,6 @@ const RIGHT_DRAWER_TABS = [
   { id: 'combat', label: 'COMBAT', dmOnly: true },
 ];
 
-// Helper function to get character data — module scope (pure, no component state deps)
-const getCharacterData = (playerName) => {
-  const characterDatabase = {
-    'Thorin': { class: 'Dwarf Fighter', level: 3, hp: 34, maxHp: 40 }
-  };
-
-  return characterDatabase[playerName] || {
-    class: 'Adventurer',
-    level: 1,
-    hp: 10,
-    maxHp: 10
-  };
-};
-
 function GameContent() {
   const params = useSearchParams();
   const router = useRouter(); 
@@ -82,6 +68,9 @@ function GameContent() {
 
   // UNIFIED STRUCTURE - Replaces both seats and partyMembers
   const [gameSeats, setGameSeats] = useState([]);
+
+  // Character metadata is hydrated from api-game hot state via ETL.
+  const [playerMetadata, setPlayerMetadata] = useState({});
 
   // State for seat colors (loaded from backend)
   const [seatColors, setSeatColors] = useState({});
@@ -111,6 +100,15 @@ function GameContent() {
     });
     return map;
   }, [gameSeats, seatColors]);
+
+  const getCharacterData = useCallback((playerName) => {
+    if (!playerName || playerName === "empty") {
+      return null;
+    }
+
+    const normalizedPlayerName = playerName.toLowerCase();
+    return playerMetadata[normalizedPlayerName] || null;
+  }, [playerMetadata]);
 
   // UPDATED: State management for TabletopInterface - REMOVED HARDCODED DEFAULTS
   const [currentTurn, setCurrentTurn] = useState(null); // ❌ Removed 'Thorin' default
@@ -299,6 +297,14 @@ function GameContent() {
       const seatLayout = res["current_seat_layout"] || [];
       const maxPlayers = res["max_players"];
       const backendSeatColors = res["seat_colors"] || {};
+      const backendPlayerMetadata = Object.fromEntries(
+        Object.entries(res["player_metadata"] || {}).map(([playerName, metadata]) => [
+          playerName.toLowerCase(),
+          metadata
+        ])
+      );
+
+      setPlayerMetadata(backendPlayerMetadata);
       
       // Set seat colors from backend
       setSeatColors(backendSeatColors);
@@ -320,7 +326,7 @@ function GameContent() {
         initialSeats.push({
           seatId: i,
           playerName: normalizedPlayerName,
-          characterData: normalizedPlayerName !== "empty" ? getCharacterData(normalizedPlayerName) : null,
+          characterData: normalizedPlayerName !== "empty" ? (backendPlayerMetadata[normalizedPlayerName] || null) : null,
           isActive: false
         });
       }
@@ -998,6 +1004,7 @@ function GameContent() {
     setDisconnectTimeouts,
     setCurrentInitiativePromptId,
     setCampaignId,
+    setPlayerMetadata,
     setChannelMuted,
     setChannelSoloed,
 
@@ -1057,7 +1064,7 @@ function GameContent() {
   }), [
     gameSeats, thisPlayer, currentUser, lobbyUsers,
     disconnectTimeouts, currentInitiativePromptId, remoteTrackStates,
-    addToLog, handleRoleChange, setPlayerSeatMap,
+    addToLog, getCharacterData, handleRoleChange, setPlayerSeatMap,
     playRemoteTrack, resumeRemoteTrack, pauseRemoteTrack, stopRemoteTrack,
     setRemoteTrackVolume, toggleRemoteTrackLooping, loadRemoteAudioBuffer,
     activeFades, cancelFade, syncAudioState, loadAssetIntoChannel, applyChannelEffects,

@@ -30,7 +30,10 @@ export default function PlayerCard({
     // Character payload can arrive in two shapes depending on source;
     // normalize once so rendering uses a single format.
     const displayCharacterName = playerData?.character_name || playerData?.name || occupantName;
-    const displayCharacterClass = playerData?.character_class || playerData?.class;
+    const displayCharacterClassRaw = playerData?.character_class || playerData?.class;
+    const displayCharacterClass = Array.isArray(displayCharacterClassRaw)
+      ? displayCharacterClassRaw.join(' / ')
+      : displayCharacterClassRaw;
     const displayCharacterLevel = playerData?.level;
     const displayHpCurrent = playerData?.hp_current ?? playerData?.hp;
     const displayHpMax = playerData?.hp_max ?? playerData?.maxHp;

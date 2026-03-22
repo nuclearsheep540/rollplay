@@ -441,6 +441,10 @@ async def create_session(request: SessionStartPayload):
 
         # Convert assets to dict format for MongoDB storage
         available_assets = [asset.model_dump() for asset in request.assets] if request.assets else []
+        player_metadata = {
+            player.player_name.lower(): player.model_dump()
+            for player in request.player_characters
+        } if request.player_characters else {}
 
         # Create minimal session
         settings = GameSettings(
@@ -453,6 +457,7 @@ async def create_session(request: SessionStartPayload):
             room_host=request.dm_username.lower(),
             available_assets=available_assets,
             campaign_id=request.campaign_id,  # For proxying asset requests to api-site
+            player_metadata=player_metadata,
             audio_state={k: v.model_dump() for k, v in request.audio_config.items()} if request.audio_config else {},
             audio_track_config={k: v.model_dump() for k, v in request.audio_track_config.items()} if request.audio_track_config else {}
         )
@@ -513,7 +518,6 @@ async def create_session(request: SessionStartPayload):
             session_id=game_id,  # Return MongoDB document ID as session_id for api-site
             message="Game created successfully for session"
         )
-
     except HTTPException:
         raise
     except Exception as e:
@@ -703,7 +707,7 @@ async def update_player_character(room_id: str, character_data: dict):
     Update a player's character data in the session.
 
     Called by api-site when a player changes their character mid-session.
-    Updates the seat_layout to include character information.
+    Updates room player_metadata with character information.
 
     Request:
     {
@@ -711,7 +715,7 @@ async def update_player_character(room_id: str, character_data: dict):
         "user_id": "uuid",
         "character_id": "uuid",
         "character_name": "Aragorn",
-        "character_class": "Ranger",
+        "character_class": ["Ranger"],
         "character_race": "Human",
         "level": 5,
         "hp_current": 20,
@@ -731,7 +735,7 @@ async def update_player_character(room_id: str, character_data: dict):
         if not room:
             raise HTTPException(status_code=404, detail="Session not found")
 
-        # Update the character in seat layout
+        # Update the character in room metadata
         GameService.update_player_character(room_id, character_data)
 
         # Broadcast character change to all clients via WebSocket

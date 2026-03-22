@@ -6,6 +6,7 @@
 from .audio import AudioChannelState, AudioEffects, AudioTrackConfig
 from .assets import AssetRef
 from .base import ContractModel
+from .character import PlayerCharacter
 from .display import ActiveDisplayType
 from .image import ImageConfig
 from .map import GridColorMode, GridConfig, MapConfig
@@ -24,6 +25,7 @@ __all__ = [
     "AudioEffects",
     "AudioTrackConfig",
     "AssetRef",
+    "PlayerCharacter",
     "ActiveDisplayType",
     "GridColorMode",
     "GridConfig",

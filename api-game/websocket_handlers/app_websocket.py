@@ -45,6 +45,7 @@ def register_websocket_routes(app: FastAPI):
                         "max_players": room.get("max_players", 8),
                         "seat_colors": room.get("seat_colors", {}),
                         "campaign_id": room.get("campaign_id", ""),
+                        "player_metadata": room.get("player_metadata", {}),
                         "audio_state": room.get("audio_state", {})
                     }
                 }

@@ -146,6 +146,7 @@ async def start_session(
     user_id: UUID = Depends(get_current_user_id),
     session_repo: SessionRepository = Depends(get_session_repository),
     user_repo: UserRepository = Depends(get_user_repository),
+    character_repo: CharacterRepository = Depends(get_character_repository),
     campaign_repo: CampaignRepository = Depends(campaign_repository),
     asset_repo: MediaAssetRepository = Depends(get_asset_repository),
     event_manager: EventManager = Depends(get_event_manager),
@@ -163,7 +164,7 @@ async def start_session(
     6. Sets session status to ACTIVE with active_game_id
     """
     try:
-        command = StartSession(session_repo, user_repo, campaign_repo, event_manager, asset_repo, s3_service)
+        command = StartSession(session_repo, user_repo, character_repo, campaign_repo, event_manager, asset_repo, s3_service)
         await command.execute(session_id, user_id)
 
     except ValueError as e:
