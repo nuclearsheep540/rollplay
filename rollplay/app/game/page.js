@@ -29,7 +29,7 @@ import { useUnifiedAudio } from '../audio_management';
 import { MapDisplay, GridOverlay, useMapWebSocket, ImageDisplay, useImageWebSocket } from '../map_management';
 import MapOverlayPanel from './components/MapOverlayPanel';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
-import { faVolumeHigh, faVolumeXmark, faRightToBracket} from '@fortawesome/free-solid-svg-icons';
+import { faVolumeHigh, faVolumeXmark, faRightToBracket } from '@fortawesome/free-solid-svg-icons';
 import MapSafeArea from './components/MapSafeArea';
 import Drawer from './components/Drawer';
 import GridTuningOverlay from '../map_management/components/GridTuningOverlay';
@@ -40,7 +40,7 @@ const LEFT_DRAWER_TABS = [
   { id: 'log', label: 'LOG' },
 ];
 
-// Tab configuration for right drawer - static, role filtering applied at render time
+// Tab configuration for right drawer - role filtering applied at render time
 const RIGHT_DRAWER_TABS = [
   { id: 'moderator', label: 'MOD', dmOnly: false },
   { id: 'audio', label: 'AUDIO', dmOnly: true },
@@ -71,6 +71,7 @@ function GameContent() {
 
   // Character metadata is hydrated from api-game hot state via ETL.
   const [playerMetadata, setPlayerMetadata] = useState({});
+  const [moderators, setModerators] = useState([]);
 
   // State for seat colors (loaded from backend)
   const [seatColors, setSeatColors] = useState({});
@@ -204,6 +205,23 @@ function GameContent() {
   const [isMixerOpen, setIsMixerOpen] = useState(false);
   const [mapImageConfig, setMapImageConfig] = useState(null); // Map image positioning/scaling
 
+  const canUseModeratorTools = isModerator || isHost;
+
+  useEffect(() => {
+    const normalizedPlayerName = (thisPlayer || currentUser?.screen_name || currentUser?.email || '').toLowerCase();
+    if (!normalizedPlayerName) return;
+    setIsModerator(moderators.includes(normalizedPlayerName));
+  }, [moderators, thisPlayer, currentUser]);
+
+  const visibleRightTabs = useMemo(() => {
+    return RIGHT_DRAWER_TABS.filter((tab) => {
+      if (tab.id === 'moderator') {
+        return canUseModeratorTools;
+      }
+      return !tab.dmOnly || isDM;
+    });
+  }, [canUseModeratorTools, isDM]);
+
   // Stable callbacks for grid/map config changes — passed to DMControlCenter useEffect deps
   const handleGridChange = useCallback((newGridConfig) => {
     setGridConfig(newGridConfig);
@@ -212,6 +230,16 @@ function GameContent() {
   const handleMapImageChange = useCallback((newMapImageConfig) => {
     setMapImageConfig(newMapImageConfig);
   }, []);
+
+  // If permissions change (role/DM status), close any no-longer-visible right drawer tab.
+  useEffect(() => {
+    if (!activeRightDrawer) return;
+
+    const activeTabStillVisible = visibleRightTabs.some((tab) => tab.id === activeRightDrawer);
+    if (!activeTabStillVisible) {
+      setActiveRightDrawer(null);
+    }
+  }, [activeRightDrawer, visibleRightTabs]);
 
 
 
@@ -355,13 +383,11 @@ function GameContent() {
       const playerName = user.screen_name || user.email;
       const mongoRolesResponse = await fetch(`/api/game/${roomId}/roles?playerName=${playerName}`);
       let isHost = false;
-      let isModerator = false;
       let isDMRole = false;
 
       if (mongoRolesResponse.ok) {
         const mongoRoles = await mongoRolesResponse.json();
         isHost = mongoRoles.is_host;
-        isModerator = mongoRoles.is_moderator;
         isDMRole = mongoRoles.is_dm;  // Use MongoDB DM flag
         console.log('📋 MongoDB roles:', mongoRoles);
       } else {
@@ -370,38 +396,13 @@ function GameContent() {
 
       // Set roles in component state
       setIsHost(isHost);
-      setIsModerator(isModerator);
       setIsDM(isDMRole);
-      console.log(`✅ Initial roles set - Host: ${isHost}, Moderator: ${isModerator}, DM: ${isDMRole}`);
+      console.log(`✅ Initial roles set - Host: ${isHost}, DM: ${isDMRole}`);
 
     } catch (error) {
       console.error('Error checking player roles:', error);
     }
   };
-
-  // Refresh dynamic roles (host/moderator) after WebSocket events
-  // DM status is static and never changes during session
-  const refreshDynamicRoles = useCallback(async (roomId, user) => {
-    try {
-      console.log(`🔄 Refreshing dynamic roles for user: ${user.screen_name || user.email}`);
-
-      // Only fetch MongoDB-based roles (host, moderator) - DM status is static
-      const playerName = user.screen_name || user.email;
-      const mongoRolesResponse = await fetch(`/api/game/${roomId}/roles?playerName=${playerName}`);
-
-      if (mongoRolesResponse.ok) {
-        const mongoRoles = await mongoRolesResponse.json();
-        setIsHost(mongoRoles.is_host);
-        setIsModerator(mongoRoles.is_moderator);
-        console.log('🔄 Dynamic roles updated:', mongoRoles);
-      } else {
-        console.error('❌ Failed to refresh dynamic roles:', mongoRolesResponse.status);
-      }
-
-    } catch (error) {
-      console.error('Error refreshing dynamic roles:', error);
-    }
-  }, []);
 
   // Lock page scroll while in game — the game shell is a fixed viewport, not a document
   useEffect(() => {
@@ -881,6 +882,7 @@ function GameContent() {
     // Update DM seat based on the action
     if (action === 'set_dm') {
       setDmSeat(playerName);
+      setIsDM(playerName?.toLowerCase() === getCurrentPlayerName());
 
       // Business logic: If new DM is sitting in a party seat, remove them from it
       const playerSeatIndex = gameSeats.findIndex(seat => seat.playerName === playerName);
@@ -902,19 +904,14 @@ function GameContent() {
       }
     } else if (action === 'unset_dm') {
       setDmSeat("");
-    }
-
-    // Refresh dynamic roles (host/moderator) for current user
-    // DM status is static and doesn't change during session
-    if (roomId && currentUser) {
-      await refreshDynamicRoles(roomId, currentUser);
+      setIsDM(false);
     }
 
     // Trigger refresh of ModeratorControls room data for all users
     setRoleChangeTrigger(Date.now());
 
     // Role changes are now broadcasted via WebSocket to all connected users
-  }, [gameSeats, roomId, currentUser, refreshDynamicRoles]);
+  }, [gameSeats]);
 
   // Create a setter function for playerSeatMap updates
   const setPlayerSeatMap = useCallback((updaterFunction) => {
@@ -1005,6 +1002,7 @@ function GameContent() {
     setCurrentInitiativePromptId,
     setCampaignId,
     setPlayerMetadata,
+    setModerators,
     setChannelMuted,
     setChannelSoloed,
 
@@ -1698,6 +1696,7 @@ function GameContent() {
             <DMChair
               dmName={dmSeat}
               isEmpty={dmSeat === ""}
+              moderators={moderators}
             />
 
             {gameSeats.filter(seat => !isSpectator || seat.playerName !== "empty").map((seat) => {
@@ -1738,20 +1737,20 @@ function GameContent() {
 
       {/* Right drawer — fixed-position, outside grid flow */}
       {(() => {
-        const visibleTabs = RIGHT_DRAWER_TABS.filter(tab => !tab.dmOnly || isDM);
-
         return (
           <div
             className={`right-drawer ${rightDrawerSettled ? 'drawer-settled' : ''}`}
             style={{ transform: activeRightDrawer ? 'translateX(0)' : 'translateX(100%)' }}
             onTransitionEnd={(e) => {
-              if (e.propertyName === 'transform') setRightDrawerSettled(!!activeRightDrawer);
+              if (e.target === e.currentTarget && e.propertyName === 'transform') {
+                setRightDrawerSettled(!!activeRightDrawer);
+              }
             }}
           >
             {/* Scrollable tab strip — centers when tabs fit, scrolls when they overflow */}
             <div className="right-drawer-tab-strip">
               <div className="right-drawer-tab-strip-inner">
-                {visibleTabs.map((tab) => (
+                {visibleRightTabs.map((tab) => (
                   <button
                     key={tab.id}
                     className={`right-drawer-tab ${activeRightDrawer === tab.id ? 'active' : ''}`}
@@ -1764,7 +1763,7 @@ function GameContent() {
             </div>
 
             <div className="drawer-content">
-              {activeRightDrawer === 'moderator' && (
+              {activeRightDrawer === 'moderator' && canUseModeratorTools && (
                 <ModeratorControls
                   isModerator={isModerator}
                   isHost={isHost}

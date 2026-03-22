@@ -29,6 +29,7 @@ export const handleInitialState = (data, handlers) => {
   const {
     seat_layout,
     dungeon_master,
+    moderators,
     combat_active,
     seat_colors,
     max_players,
@@ -46,6 +47,10 @@ export const handleInitialState = (data, handlers) => {
 
   if (handlers.setPlayerMetadata) {
     handlers.setPlayerMetadata(normalizedPlayerMetadata);
+  }
+
+  if (handlers.setModerators) {
+    handlers.setModerators((moderators || []).map((name) => name.toLowerCase()));
   }
 
   // Set DM name
@@ -465,10 +470,14 @@ export const handleAdventureLogRemoved = (data, { setRollLog }) => {
   console.log(`🗑️ Removed adventure log entry with prompt_id: ${prompt_id}`);
 };
 
-export const handleRoleChange = (data, { handleRoleChange }) => {
+export const handleRoleChange = (data, { handleRoleChange, setModerators }) => {
   console.log("🎭 Role change received:", data);
   
-  const { action, target_player, changed_by, message } = data;
+  const { action, target_player, changed_by, message, moderators } = data;
+
+  if (setModerators && Array.isArray(moderators)) {
+    setModerators(moderators.map((name) => name.toLowerCase()));
+  }
   
   // Add role change to adventure log
   // Backend handles role change logging

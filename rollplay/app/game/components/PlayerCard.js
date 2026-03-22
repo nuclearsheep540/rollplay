@@ -67,9 +67,16 @@ export default function PlayerCard({
       return name.charAt(0).toUpperCase() + name.slice(1).toLowerCase();
     };
 
+    // Avoid NaN/infinite HP values when metadata arrives incomplete or stringified.
+    const numericHpCurrent = Number(displayHpCurrent);
+    const numericHpMax = Number(displayHpMax);
+    const hasValidHpValues = Number.isFinite(numericHpCurrent)
+      && Number.isFinite(numericHpMax)
+      && numericHpMax > 0;
+
     // Calculate HP percentage for styling
-    const hpPercentage = playerData && displayHpMax
-      ? (displayHpCurrent / displayHpMax) * 100
+    const hpPercentage = hasValidHpValues
+      ? (numericHpCurrent / numericHpMax) * 100
       : 0;
     const hpPercentageClamped = Math.max(0, Math.min(100, hpPercentage));
     const hpFillColor = hpPercentageClamped > 60

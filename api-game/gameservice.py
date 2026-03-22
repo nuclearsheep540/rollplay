@@ -292,12 +292,29 @@ class GameService:
         return dungeon_master.lower() == player_name.lower()
 
     @staticmethod
+    def player_has_selected_character(room_id: str, player_name: str) -> bool:
+        """Check whether a player is an adventurer in this hot-state session."""
+        room = GameService.get_room(room_id)
+        if not room:
+            return False
+
+        player_metadata = room.get("player_metadata", {})
+        if not isinstance(player_metadata, dict):
+            return False
+
+        metadata = player_metadata.get(player_name.lower(), {})
+        return bool(metadata.get("character_id"))
+
+    @staticmethod
     def add_moderator(room_id: str, player_name: str):
         """Add a player as moderator"""
         collection = GameService._get_active_session()
         
         # Lowercase the player name for consistency
         player_name = player_name.lower()
+
+        if GameService.player_has_selected_character(room_id, player_name):
+            raise ValueError("Adventurers cannot be moderators")
         
         filter_criteria = GameService.room_filter(room_id)
 
@@ -399,6 +416,8 @@ class GameService:
             raise Exception("player_name is required")
 
         player_metadata = room.get("player_metadata", {})
+        if not isinstance(player_metadata, dict):
+            player_metadata = {}
         player_metadata[player_name] = {
             "player_name": player_name,
             "user_id": character_data.get("user_id"),
