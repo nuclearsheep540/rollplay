@@ -29,7 +29,7 @@ import { useUnifiedAudio } from '../audio_management';
 import { MapDisplay, GridOverlay, useMapWebSocket, ImageDisplay, useImageWebSocket } from '../map_management';
 import MapOverlayPanel from './components/MapOverlayPanel';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
-import { faVolumeHigh, faVolumeXmark } from '@fortawesome/free-solid-svg-icons';
+import { faVolumeHigh, faVolumeXmark, faRightToBracket} from '@fortawesome/free-solid-svg-icons';
 import MapSafeArea from './components/MapSafeArea';
 import Drawer from './components/Drawer';
 import GridTuningOverlay from '../map_management/components/GridTuningOverlay';
@@ -1636,6 +1636,7 @@ function GameContent() {
             title="Back to Dashboard"
           >
             Dashboard
+            <FontAwesomeIcon icon={faRightToBracket} size="xl" style={{ marginLeft: '6px'}} />
           </button>
         </div>
 
