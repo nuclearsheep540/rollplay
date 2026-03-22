@@ -27,6 +27,14 @@ export default function PlayerCard({
     const isMyTurn = currentTurn === occupantName;
     const isThisPlayerSeat = currentSeat.playerName === thisPlayer;
 
+    // Character payload can arrive in two shapes depending on source;
+    // normalize once so rendering uses a single format.
+    const displayCharacterName = playerData?.character_name || playerData?.name || occupantName;
+    const displayCharacterClass = playerData?.character_class || playerData?.class;
+    const displayCharacterLevel = playerData?.level;
+    const displayHpCurrent = playerData?.hp_current ?? playerData?.hp;
+    const displayHpMax = playerData?.hp_max ?? playerData?.maxHp;
+
     // Get the actual seat color from CSS custom property
     const getActualSeatColor = (seatIndex) => {
       if (typeof window !== 'undefined') {
@@ -57,7 +65,9 @@ export default function PlayerCard({
     };
 
     // Calculate HP percentage for styling
-    const hpPercentage = playerData ? (playerData.hp / playerData.maxHp) * 100 : 0;
+    const hpPercentage = playerData && displayHpMax
+      ? (displayHpCurrent / displayHpMax) * 100
+      : 0;
 
     // Render empty seat (static placeholder — seats are auto-assigned via Enter Session overlay)
     if (!isOccupied) {
@@ -99,7 +109,7 @@ export default function PlayerCard({
           <div
             className="font-semibold text-blue-400 text-[calc(16px*var(--ui-scale))]"
           >
-            {toTitleCase(occupantName)}
+            {toTitleCase(displayCharacterName)}
           </div>
           <div className="flex items-center gap-[calc(8px*var(--ui-scale))]">
             {isMyTurn && (
@@ -130,7 +140,7 @@ export default function PlayerCard({
             <div
               className="text-gray-400 text-[calc(13px*var(--ui-scale))] mb-[calc(4px*var(--ui-scale))]"
             >
-              {playerData.class} • Level {playerData.level}
+              Level {displayCharacterLevel} {displayCharacterClass}
             </div>
 
             {/* HP Display */}
@@ -160,13 +170,13 @@ export default function PlayerCard({
                 <span
                   className="text-white text-[calc(13px*var(--ui-scale))]"
                 >
-                  {playerData.hp}
+                  {displayHpCurrent}
                 </span>
                 <span className="mx-1">/</span>
                 <span
                   className="font-semibold text-[calc(15px*var(--ui-scale))]"
                 >
-                  {playerData.maxHp}
+                  {displayHpMax}
                 </span>
               </div>
             </div>
