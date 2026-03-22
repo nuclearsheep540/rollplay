@@ -2002,7 +2002,7 @@ function GameContent() {
             <div className="absolute inset-0 bg-gradient-to-b from-black/90 via-black/40 to-black/90" />
 
             {/* Content */}
-            <div className="absolute inset-0 flex flex-col justify-evenly px-8" style={{ paddingTop: 'clamp(1rem, 3vh, 3rem)', paddingBottom: 'clamp(1rem, 3vh, 3rem)' }}>
+            <div className="absolute inset-0 flex flex-col px-8" style={{ paddingTop: 'clamp(1rem, 3vh, 3rem)', paddingBottom: 'clamp(1rem, 3vh, 3rem)' }}>
               {campaignMeta?.title && (
                 <h2 className="text-4xl text-white font-[family-name:var(--font-metamorphous)] text-center leading-none">
                   {campaignMeta.title}
@@ -2014,7 +2014,7 @@ function GameContent() {
                 <div className="w-[12.5%]" />
                 <div className="w-3/4">
                   {campaignMeta?.description && (
-                    <p className="text-center overflow-hidden" style={{ color: COLORS.smoke, whiteSpace: 'pre-line', fontSize: 'clamp(0.65rem, 0.9vw, 1rem)' }}>
+                    <p className="text-center overflow-hidden mx-auto" style={{ color: COLORS.smoke, whiteSpace: 'pre-line', fontSize: 'clamp(0.65rem, 3cqh, 1.5rem)' }}>
                       {campaignMeta.description}
                     </p>
                   )}
