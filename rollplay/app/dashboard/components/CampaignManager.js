@@ -755,22 +755,6 @@ export default function CampaignManager({ user, onExpandedChange, inviteCampaign
                             <h4 className="text-3xl font-[family-name:var(--font-metamorphous)] mb-1 drop-shadow-lg" style={{color: THEME.textOnDark}}>
                               {campaign.title || 'Unnamed Campaign'}
                             </h4>
-                            {campaign.description && (
-                              <div className="text-base drop-shadow-md mt-2" style={{maxWidth: '70%'}}>
-                                <p
-                                  style={{
-                                    color: THEME.textAccent,
-                                    whiteSpace: 'pre-line',
-                                    display: isSelected ? 'block' : '-webkit-box',
-                                    WebkitLineClamp: isSelected ? 'unset' : 3,
-                                    WebkitBoxOrient: isSelected ? 'unset' : 'vertical',
-                                    overflow: 'hidden'
-                                  }}
-                                >
-                                  {campaign.description}
-                                </p>
-                              </div>
-                            )}
                           </div>
 
                           {/* Action Buttons - Top Right */}
@@ -794,6 +778,24 @@ export default function CampaignManager({ user, onExpandedChange, inviteCampaign
                             </Button>
                           </div>
                         </div>
+
+                        {/* Description - full width, below title row */}
+                        {campaign.description && (
+                          <div className="text-base drop-shadow-md mt-2 max-w-full sm:max-w-[70%]">
+                            <p
+                              style={{
+                                color: THEME.textAccent,
+                                whiteSpace: 'pre-line',
+                                display: isSelected ? 'block' : '-webkit-box',
+                                WebkitLineClamp: isSelected ? 'unset' : 3,
+                                WebkitBoxOrient: isSelected ? 'unset' : 'vertical',
+                                overflow: 'hidden'
+                              }}
+                            >
+                              {campaign.description}
+                            </p>
+                          </div>
+                        )}
 
                         {/* Middle - Spacer */}
                         <div className="flex-1" style={{ minHeight: 'max(1rem, 2vh)' }}></div>
@@ -1061,23 +1063,6 @@ export default function CampaignManager({ user, onExpandedChange, inviteCampaign
                           <h4 className="text-3xl font-[family-name:var(--font-metamorphous)] mb-1 drop-shadow-lg" style={{color: THEME.textOnDark}}>
                             {campaign.title || 'Unnamed Campaign'}
                           </h4>
-                          {campaign.description && (
-                            <div className="text-base drop-shadow-md mt-2" style={{maxWidth: '70%'}}>
-                              <p
-                                style={{
-                                  color: THEME.textAccent,
-                                  whiteSpace: 'pre-line',
-                                  // Only truncate when NOT selected, otherwise let it overflow naturally
-                                  display: isSelected ? 'block' : '-webkit-box',
-                                  WebkitLineClamp: isSelected ? 'unset' : 3,
-                                  WebkitBoxOrient: isSelected ? 'unset' : 'vertical',
-                                  overflow: 'hidden'
-                                }}
-                              >
-                                {campaign.description}
-                              </p>
-                            </div>
-                          )}
                         </div>
 
                         {/* Action Buttons - Top Right (fixed width container to prevent layout shift) */}
@@ -1091,6 +1076,24 @@ export default function CampaignManager({ user, onExpandedChange, inviteCampaign
 
                         </div>
                       </div>
+
+                      {/* Description - full width, below title row */}
+                      {campaign.description && (
+                        <div className="text-base drop-shadow-md mt-2 max-w-full sm:max-w-[70%]">
+                          <p
+                            style={{
+                              color: THEME.textAccent,
+                              whiteSpace: 'pre-line',
+                              display: isSelected ? 'block' : '-webkit-box',
+                              WebkitLineClamp: isSelected ? 'unset' : 3,
+                              WebkitBoxOrient: isSelected ? 'unset' : 'vertical',
+                              overflow: 'hidden'
+                            }}
+                          >
+                            {campaign.description}
+                          </p>
+                        </div>
+                      )}
 
                       {/* Middle - Spacer with responsive minimum gap */}
                       <div className="flex-1" style={{ minHeight: 'max(1rem, 2vh)' }}></div>
