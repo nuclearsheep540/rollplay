@@ -45,6 +45,10 @@ export default function CombatControlsPanel({
   // Get list of players currently in seats (excluding empty seats)
   const activePlayers = gameSeats?.filter(seat => seat.playerName !== "empty") || [];
 
+  const getCharacterDisplayName = (player) => {
+    return player?.characterData?.character_name || player?.characterData?.name || null;
+  };
+
   return (
     <div className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden flex flex-col">
         <DicePrompt
@@ -154,8 +158,8 @@ export default function CombatControlsPanel({
                     }}
                   >
                     {titleCase(player.playerName)}
-                    {player.characterData && (
-                      <span> • {player.characterData.class}</span>
+                    {getCharacterDisplayName(player) && (
+                      <span> as {getCharacterDisplayName(player)}</span>
                     )}
                   </button>
                 ))
