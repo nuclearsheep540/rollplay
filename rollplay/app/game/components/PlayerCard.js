@@ -1,6 +1,8 @@
 import { React, useEffect, useState, useRef } from 'react'
 import { getSeatColor } from '../../utils/seatColors'
 import ColorPicker from './ColorPicker'
+import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
+import { faGamepad } from '@fortawesome/free-solid-svg-icons'
 
 export default function PlayerCard({
     seatId,
@@ -63,7 +65,7 @@ export default function PlayerCard({
         <div className="rounded-lg border border-dashed border-gray-500/30 bg-white/5 text-center
           p-[calc(12px*var(--ui-scale))] mb-[calc(12px*var(--ui-scale))]">
           <div className="text-gray-500 font-medium text-[calc(12px*var(--ui-scale))]">
-            🪑 Seat {seatId + 1}
+            <FontAwesomeIcon icon={faGamepad} style={{ marginRight: '6px' }} />Seat {seatId + 1}
           </div>
         </div>
       );
