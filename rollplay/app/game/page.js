@@ -188,7 +188,7 @@ function GameContent() {
 
   // Spectator mode - user has no character selected for this campaign
   const [isSpectator, setIsSpectator] = useState(false);
-  const spectatorBannerRef = useRef(null);
+  const navRef = useRef(null);
   const [isDrawerOpen, setIsDrawerOpen] = useState(true);
   const [partyDrawerSettled, setPartyDrawerSettled] = useState(true); // starts open, so settled
   const [activeRightDrawer, setActiveRightDrawer] = useState(null); // null | 'dm' | 'moderator'
@@ -495,22 +495,23 @@ function GameContent() {
     checkSpectatorStatus();
   }, [campaignId, currentUser, isDM]);
 
-  // Measure spectator banner height and update drawer top positions directly
+  // Measure total nav height (including spectator banner when present)
+  // and publish as --nav-height on the game-interface container so all
+  // fixed elements (drawers, MapSafeArea) stay below the nav automatically.
   useEffect(() => {
-    const banner = spectatorBannerRef.current;
+    const nav = navRef.current;
+    if (!nav) return;
 
-    const applyOffset = () => {
-      const height = banner ? banner.offsetHeight : 0;
-      document.querySelectorAll('.party-drawer, .right-drawer').forEach(drawer => {
-        drawer.style.setProperty('--spectator-offset', `${height}px`);
-      });
+    const applyHeight = () => {
+      const gameInterface = nav.closest('.game-interface');
+      if (gameInterface) {
+        gameInterface.style.setProperty('--nav-height', `${nav.offsetHeight}px`);
+      }
     };
 
-    applyOffset();
-
-    if (!banner) return;
-    const observer = new ResizeObserver(applyOffset);
-    observer.observe(banner);
+    applyHeight();
+    const observer = new ResizeObserver(applyHeight);
+    observer.observe(nav);
     return () => observer.disconnect();
   }, [isSpectator]);
 
@@ -1564,121 +1565,118 @@ function GameContent() {
   // MAIN RENDER
   return (
     <div className="game-interface" data-ui-scale={uiScale}>
-      {/* Top Command Bar */}
-      <div className="top-nav">
-        <div className="campaign-info">
-          <div className="campaign-title">The Curse of Strahd</div>
-        </div>
-
-        <div className="nav-actions">
-          {/* Master Volume Control */}
-          <div className="master-volume-control">
-            <label htmlFor="master-volume" className="volume-label">
-              <FontAwesomeIcon icon={isAudioUnlocked ? faVolumeHigh : faVolumeXmark} />
-            </label>
-            <input
-              id="master-volume"
-              type="range"
-              min="0"
-              max="1"
-              step="0.1"
-              value={masterVolume}
-              onChange={(e) => {
-                // Unlock audio on first volume interaction
-                if (!isAudioUnlocked && unlockAudio) {
-                  unlockAudio().then(() => {
-                    console.log('🔊 Audio unlocked when player adjusted volume');
-                  }).catch(err => {
-                    console.warn('Audio unlock failed on volume adjustment:', err);
-                  });
-                }
-                setMasterVolume(parseFloat(e.target.value));
-              }}
-              className="volume-slider"
-              title={`Master Volume: ${Math.round(masterVolume * 100)}%`}
-            />
-            <span className="volume-percentage">
-              {Math.round(masterVolume * 100)}%
-            </span>
+      {/* Top Command Bar — flex column so spectator banner extends the nav height */}
+      <div ref={navRef} className="top-nav">
+        <div className="top-nav-bar">
+          <div className="campaign-info">
+            <div className="campaign-title">The Curse of Strahd</div>
           </div>
 
-          {/* UI Scale Toggle */}
-          <div className="ui-scale-nav">
-            <button
-              className={`scale-btn ${uiScale === 'small' ? 'active' : ''}`}
-              onClick={() => setUIScale('small')}
-              title="Small UI"
-            >
-              S
-            </button>
-            <button
-              className={`scale-btn ${uiScale === 'medium' ? 'active' : ''}`}
-              onClick={() => setUIScale('medium')}
-              title="Medium UI"
-            >
-              M
-            </button>
-            <button
-              className={`scale-btn ${uiScale === 'large' ? 'active' : ''}`}
-              onClick={() => setUIScale('large')}
-              title="Large UI"
-            >
-              L
-            </button>
-          </div>
-        </div>
+          <div className="nav-actions">
+            {/* Master Volume Control */}
+            <div className="master-volume-control">
+              <label htmlFor="master-volume" className="volume-label">
+                <FontAwesomeIcon icon={isAudioUnlocked ? faVolumeHigh : faVolumeXmark} />
+              </label>
+              <input
+                id="master-volume"
+                type="range"
+                min="0"
+                max="1"
+                step="0.1"
+                value={masterVolume}
+                onChange={(e) => {
+                  // Unlock audio on first volume interaction
+                  if (!isAudioUnlocked && unlockAudio) {
+                    unlockAudio().then(() => {
+                      console.log('🔊 Audio unlocked when player adjusted volume');
+                    }).catch(err => {
+                      console.warn('Audio unlock failed on volume adjustment:', err);
+                    });
+                  }
+                  setMasterVolume(parseFloat(e.target.value));
+                }}
+                className="volume-slider"
+                title={`Master Volume: ${Math.round(masterVolume * 100)}%`}
+              />
+              <span className="volume-percentage">
+                {Math.round(masterVolume * 100)}%
+              </span>
+            </div>
 
-        <button
-          onClick={() => router.push('/dashboard')}
-          className="nav-back-btn"
-          title="Back to Dashboard"
-        >
-          Dashboard
-        </button>
-      </div>
-
-      {/* Spectator Banner */}
-      {isSpectator && (
-        <div ref={spectatorBannerRef} className="spectator-banner" style={{
-          position: 'fixed',
-          top: 'calc(50px * var(--ui-scale) + env(safe-area-inset-top, 0px))',
-          left: 0,
-          right: 0,
-          zIndex: 40,
-          backgroundColor: '#1e293b',
-          borderBottom: '2px solid #f59e0b',
-          padding: '12px 24px',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-          gap: '16px'
-        }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-            <span style={{ fontSize: '20px' }}>👁️</span>
-            <div>
-              <p style={{ color: '#f59e0b', fontWeight: '600', margin: 0 }}>Spectator Mode</p>
-              <p style={{ color: '#94a3b8', fontSize: '14px', margin: 0 }}>
-                You're watching this session. Select a character in your campaign to participate.
-              </p>
+            {/* UI Scale Toggle */}
+            <div className="ui-scale-nav">
+              <button
+                className={`scale-btn ${uiScale === 'small' ? 'active' : ''}`}
+                onClick={() => setUIScale('small')}
+                title="Small UI"
+              >
+                S
+              </button>
+              <button
+                className={`scale-btn ${uiScale === 'medium' ? 'active' : ''}`}
+                onClick={() => setUIScale('medium')}
+                title="Medium UI"
+              >
+                M
+              </button>
+              <button
+                className={`scale-btn ${uiScale === 'large' ? 'active' : ''}`}
+                onClick={() => setUIScale('large')}
+                title="Large UI"
+              >
+                L
+              </button>
             </div>
           </div>
+
           <button
             onClick={() => router.push('/dashboard')}
-            style={{
-              backgroundColor: '#f59e0b',
-              color: '#1e293b',
-              padding: '8px 16px',
-              borderRadius: '6px',
-              fontWeight: '600',
-              fontSize: '14px',
-              border: 'none',
-              cursor: 'pointer'
-            }}
+            className="nav-back-btn"
+            title="Back to Dashboard"
           >
-            Go to Campaigns
+            Dashboard
           </button>
         </div>
-      )}
+
+        {/* Spectator Banner — in normal flow inside nav, grows nav height */}
+        {isSpectator && (
+          <div className="spectator-banner" style={{
+            backgroundColor: '#1e293b',
+            borderBottom: '2px solid #f59e0b',
+            padding: '12px 24px',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            gap: '16px'
+          }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+              <span style={{ fontSize: '20px' }}>👁️</span>
+              <div>
+                <p style={{ color: '#f59e0b', fontWeight: '600', margin: 0 }}>Spectator Mode</p>
+                <p style={{ color: '#94a3b8', fontSize: '14px', margin: 0 }}>
+                  You're watching this session. Select a character in your campaign to participate.
+                </p>
+              </div>
+            </div>
+            <button
+              onClick={() => router.push('/dashboard')}
+              style={{
+                backgroundColor: '#f59e0b',
+                color: '#1e293b',
+                padding: '8px 16px',
+                borderRadius: '6px',
+                fontWeight: '600',
+                fontSize: '14px',
+                border: 'none',
+                cursor: 'pointer'
+              }}
+            >
+              Go to Campaigns
+            </button>
+          </div>
+        )}
+      </div>
 
       {/* Party drawer — fixed-position, outside grid flow */}
       <div
