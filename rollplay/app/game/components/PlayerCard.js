@@ -71,6 +71,12 @@ export default function PlayerCard({
     const hpPercentage = playerData && displayHpMax
       ? (displayHpCurrent / displayHpMax) * 100
       : 0;
+    const hpPercentageClamped = Math.max(0, Math.min(100, hpPercentage));
+    const hpFillColor = hpPercentageClamped > 60
+      ? '#22c55e'
+      : hpPercentageClamped > 30
+        ? '#eab308'
+        : '#ef4444';
 
     // Render empty seat (static placeholder — seats are auto-assigned via Enter Session overlay)
     if (!isOccupied) {
@@ -152,16 +158,14 @@ export default function PlayerCard({
             >
               {/* HP Bar Container */}
               <div
-                className="flex-1 bg-white/10 rounded-full overflow-hidden relative h-[calc(6px*var(--ui-scale))]"
-                style={{
-                  background: 'linear-gradient(90deg, #ef4444 0%, #ef4444 30%, #eab308 30%, #eab308 60%, #22c55e 60%, #22c55e 100%)',
-                }}
+                className="flex-1 bg-gray-800/70 rounded-full overflow-hidden relative h-[calc(6px*var(--ui-scale))]"
               >
-                {/* HP Fill Overlay */}
+                {/* HP Fill changes color by threshold and width by current HP */}
                 <div
-                  className="absolute inset-0 bg-gray-800/80 transition-[left] duration-300"
+                  className="h-full transition-[width,background-color] duration-300"
                   style={{
-                    left: `${hpPercentage}%`,
+                    width: `${hpPercentageClamped}%`,
+                    backgroundColor: hpFillColor,
                   }}
                 ></div>
               </div>
