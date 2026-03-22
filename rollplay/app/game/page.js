@@ -1710,19 +1710,6 @@ function GameContent() {
             isEmpty={dmSeat === ""}
           />
 
-          {/* Party Section */}
-          <div
-            className="party-header"
-            style={{
-              borderBottom: '1px solid rgba(74, 222, 128, 0.3)'
-            }}
-          >
-            <span>Party</span>
-            <span className="seat-indicator">
-              {gameSeats.filter(seat => seat.playerName !== "empty").length}/{gameSeats.length} Seats
-            </span>
-          </div>
-
           {gameSeats.filter(seat => isDM || seat.playerName !== "empty").map((seat) => {
             const isSitting = seat.playerName === getCurrentPlayerName();
             const currentColor = seatColors[seat.seatId] || getSeatColor(seat.seatId);

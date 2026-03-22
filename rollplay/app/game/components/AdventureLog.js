@@ -139,7 +139,7 @@ export default function AdventureLog({ rollLog, playerSeatMap }) {
   return (
     <div className="adventure-log-section mt-6 w-full">
       <div className="log-header">
-        📜 Adventure Log
+        Adventure Log
         <span style={{ fontSize: '10px', color: '#6b7280' }}>(Live)</span>
       </div>
       <div className="log-entries flex flex-col-reverse" ref={logRef}>

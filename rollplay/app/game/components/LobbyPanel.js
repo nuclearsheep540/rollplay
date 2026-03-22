@@ -23,7 +23,6 @@ export default function LobbyPanel({ lobbyUsers = [] }) {
     <div className="lobby-section mt-4 mb-4">
       {/* Lobby Header */}
       <div className="lobby-header text-[calc(14px*var(--ui-scale))] font-semibold text-gray-300 mb-[calc(8px*var(--ui-scale))] flex items-center gap-[calc(6px*var(--ui-scale))]">
-        <span>👥</span>
         <span>Lobby</span>
         <span className="text-[calc(10px*var(--ui-scale))] text-gray-500 font-normal">
           ({connectedCount} connected{disconnectingCount > 0 ? ` : ${disconnectingCount} disconnecting` : ''})
