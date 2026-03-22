@@ -1991,7 +1991,7 @@ function GameContent() {
             className="relative rounded-sm overflow-hidden shadow-2xl shadow-black/50 select-none border-2 gate-card"
             style={{
               borderColor: COLORS.smoke,
-              width: 'min(80vw, calc(90vh * 16 / 9))',
+              width: 'min(90vw, calc(90vh * 16 / 9))',
               backgroundImage: campaignMeta?.heroImage ? `url(${campaignMeta.heroImage})` : 'none',
               backgroundSize: 'cover',
               backgroundPosition: 'center',
@@ -2009,17 +2009,17 @@ function GameContent() {
                 </h2>
               )}
 
-              {/* Middle row — spacer (1/4) | description (2/4) | spacer (1/4) */}
-              <div className="flex items-center gate-description">
-                <div className="w-1/4" />
-                <div className="w-2/4">
+              {/* Middle row — spacer | description (75%) | spacer */}
+              <div className="flex items-center gate-description flex-1">
+                <div className="w-[12.5%]" />
+                <div className="w-3/4">
                   {campaignMeta?.description && (
                     <p className="text-center overflow-hidden" style={{ color: COLORS.smoke, whiteSpace: 'pre-line', fontSize: 'clamp(0.65rem, 0.9vw, 1rem)' }}>
                       {campaignMeta.description}
                     </p>
                   )}
                 </div>
-                <div className="w-1/4" />
+                <div className="w-[12.5%]" />
               </div>
 
               {/* Click to enter — centered */}
