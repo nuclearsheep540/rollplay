@@ -15,9 +15,10 @@ def assert_character_is_editable(
         return
 
     if character.active_campaign is None:
-        raise ValueError("Invariant violation: locked character has no active_campaign")
+        # This should never happen since the above guard ensures the character is unlocked.
+        raise AssertionError("Invariant violation: locked character has no active_campaign")
 
     sessions = session_repository.get_by_campaign_id(character.active_campaign)
     blocked_statuses = {SessionStatus.ACTIVE, SessionStatus.STARTING, SessionStatus.STOPPING}
     if any(session.status in blocked_statuses for session in sessions):
-        raise ValueError("Cannot edit character while campaign session is active or transitioning")
+        raise AssertionError("Cannot edit character while campaign session is active or transitioning")
