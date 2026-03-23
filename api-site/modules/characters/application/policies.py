@@ -19,6 +19,5 @@ def assert_character_is_editable(
         raise AssertionError("Invariant violation: locked character has no active_campaign")
 
     sessions = session_repository.get_by_campaign_id(character.active_campaign)
-    blocked_statuses = {SessionStatus.ACTIVE, SessionStatus.STARTING, SessionStatus.STOPPING}
-    if any(session.status in blocked_statuses for session in sessions):
+    if any(session.is_locked for session in sessions):
         raise AssertionError("Cannot edit character while campaign session is active or transitioning")
