@@ -8,6 +8,7 @@ from sqlalchemy.orm import Session, selectinload
 from sqlalchemy import and_
 
 from modules.campaign.domain.campaign_aggregate import CampaignAggregate
+from modules.campaign.domain.campaign_role import CampaignRole
 from modules.campaign.repositories.campaign_repository import CampaignRepository
 
 
@@ -46,7 +47,7 @@ class GetUserHostedCampaigns:
 
     def execute(self, user_id: UUID) -> List[CampaignAggregate]:
         """Get all campaigns where user is the host (DM)"""
-        return self.repository.get_by_host_id(user_id)
+        return self.repository.get_by_creator_id(user_id)
 
 
 # Game-related queries moved to modules/game/application/queries.py
@@ -67,11 +68,11 @@ class GetCampaignMembers:
         Returns list of campaign members with character details.
 
         Logic:
-        1. Fetch campaign (get host_id + player_ids)
+        1. Fetch campaign (get all active members via roles)
         2. For each member: Get user info and character LOCKED to THIS campaign
         3. Only shows character if it's actually selected for this campaign
         4. Format multi-class as "Fighter / Ranger"
-        5. Sort: host first, then alphabetically
+        5. Sort: DM first, then alphabetically
         """
         # Imports here to avoid circular dependencies between modules
         from modules.user.model.user_model import User
@@ -82,11 +83,12 @@ class GetCampaignMembers:
         if not campaign:
             return []
 
-        member_ids = [campaign.host_id] + campaign.player_ids
+        # Get all active members (excludes INVITED)
+        active_member_ids = campaign.get_all_member_ids()
         members = []
 
-        for member_id in member_ids:
-            is_host = (member_id == campaign.host_id)
+        for member_id in active_member_ids:
+            role = campaign.get_role(member_id)
 
             # Get user
             user = self.db.query(User).filter(User.id == member_id).first()
@@ -120,14 +122,15 @@ class GetCampaignMembers:
                 'user_id': str(user.id),
                 'username': user.screen_name or user.email,
                 'account_tag': user.account_tag,
+                'campaign_role': role.value if role else 'spectator',
                 'character_id': str(character.id) if character else None,
                 'character_name': character.character_name if character else None,
                 'character_level': character.level if character else None,
                 'character_class': character_class_str,
                 'character_race': character.character_race if character else None,
-                'is_host': is_host
+                'is_host': role == CampaignRole.DM
             })
 
-        # Sort: host first, then alphabetically
+        # Sort: DM first, then alphabetically
         members.sort(key=lambda m: (not m['is_host'], m['username'].lower()))
         return members

@@ -50,7 +50,7 @@ class WebsocketEvent():
     websocket: WebSocket
     data: dict
     event_data: dict
-    player_name: str
+    user_id: str
     client_id: str
     manager: ConnectionManager
     
@@ -97,101 +97,113 @@ class WebsocketEvent():
         return player_metadata if isinstance(player_metadata, dict) else {}
 
     @staticmethod
-    def _character_name_for_prompt(room_id: str, player_name: str, player_metadata: Optional[Dict[str, Any]] = None) -> str:
-        if not player_name:
+    def _display_name(room_id: str, user_id: str, player_metadata: Optional[Dict[str, Any]] = None) -> str:
+        """Resolve user_id to display name via player_metadata."""
+        if not user_id:
+            return "Unknown"
+        if player_metadata is None:
+            player_metadata = WebsocketEvent._get_player_metadata(room_id)
+        metadata = player_metadata.get(user_id, {}) if isinstance(player_metadata, dict) else {}
+        return metadata.get("player_name") or user_id
+
+    @staticmethod
+    def _character_name_for_prompt(room_id: str, user_id: str, player_metadata: Optional[Dict[str, Any]] = None) -> str:
+        if not user_id:
             return "Unknown"
 
         if player_metadata is None:
             player_metadata = WebsocketEvent._get_player_metadata(room_id)
 
-        metadata = player_metadata.get(player_name.lower(), {}) if isinstance(player_metadata, dict) else {}
-        return metadata.get("character_name") or player_name
+        metadata = player_metadata.get(user_id, {}) if isinstance(player_metadata, dict) else {}
+        return metadata.get("character_name") or metadata.get("player_name") or user_id
 
     @staticmethod
-    async def player_connection(websocket, data, event_data, player_name, client_id, manager):
+    async def player_connection(websocket, data, event_data, user_id, client_id, manager):
         # Note: manager.connect() is already called in app_websocket.py
         # This event just handles the logging and broadcast
 
+        display_name = WebsocketEvent._display_name(client_id, user_id)
+
         # Log player connection to database
-        log_message = format_message(MESSAGE_TEMPLATES["player_connected"], player=player_name)
-        
+        log_message = format_message(MESSAGE_TEMPLATES["player_connected"], player=display_name)
+
         adventure_log.add_log_entry(
             room_id=client_id,
             message=log_message,
             log_type=LogType.SYSTEM,
-            from_player=player_name
+            from_player=display_name
         )
-        
+
         broadcast_message = {
-            "event_type": "player_connected", 
+            "event_type": "player_connected",
             "data": {
-                "connected_player": player_name
+                "connected_user_id": user_id,
+                "connected_player": display_name
             }
         }
-        
+
         return WebsocketEventResult(broadcast_message=broadcast_message)
 
     @staticmethod
-    async def seat_change(websocket, data, event_data, player_name, client_id, manager):
-        # Existing seat change logic...
+    async def seat_change(websocket, data, event_data, user_id, client_id, manager):
         seat_layout = data.get("data")
-        player_name_from_event = data.get("player_name", player_name)
 
         print(f"📡 Broadcasting seat layout change for room {client_id}: {seat_layout}")
 
         # Update party status for all users based on seat layout
-        for user_name in manager.room_users.get(client_id, {}):
-            is_in_party = user_name in seat_layout
-            manager.update_party_status(client_id, user_name, is_in_party)
+        for uid in manager.room_users.get(client_id, {}):
+            is_in_party = uid in seat_layout
+            manager.update_party_status(client_id, uid, is_in_party)
 
         broadcast_message = {
             "event_type": "seat_change",
             "data": seat_layout,
-            "player_name": player_name_from_event
+            "user_id": user_id
         }
-        
+
         return WebsocketEventResult(broadcast_message=broadcast_message)
 
     @staticmethod
-    async def dice_prompt(websocket, data, event_data, player_name, client_id, manager):
-        prompted_player = event_data.get("prompted_player")
+    async def dice_prompt(websocket, data, event_data, user_id, client_id, manager):
+        prompted_player = event_data.get("prompted_player")  # user_id of target
         roll_type = event_data.get("roll_type")
-        prompted_by = event_data.get("prompted_by", player_name)
-        prompt_id = event_data.get("prompt_id")  # New: Get prompt ID
+        prompted_by = event_data.get("prompted_by", user_id)
+        prompt_id = event_data.get("prompt_id")
 
         player_metadata = WebsocketEvent._get_player_metadata(client_id)
         target_character = WebsocketEvent._character_name_for_prompt(client_id, prompted_player, player_metadata)
-        
+        prompted_by_name = WebsocketEvent._display_name(client_id, prompted_by, player_metadata)
+
         # Log the prompt to adventure log with prompt_id for later removal
         log_message = format_message(MESSAGE_TEMPLATES["dice_prompt"], target=target_character, roll_type=roll_type)
-        
+
         adventure_log.add_log_entry(
             room_id=client_id,
             message=log_message,
             log_type=LogType.DUNGEON_MASTER,
-            from_player=prompted_by,
+            from_player=prompted_by_name,
             prompt_id=prompt_id
         )
-        
+
         print(f"🎲 {prompted_by} prompted {prompted_player} to roll {roll_type} (prompt_id: {prompt_id})")
-        
+
         broadcast_message = {
             "event_type": "dice_prompt",
             "data": {
                 "prompted_player": prompted_player,
                 "roll_type": roll_type,
                 "prompted_by": prompted_by,
-                "prompt_id": prompt_id,  # Include prompt ID in broadcast
-                "log_message": log_message  # Include the formatted log message
+                "prompt_id": prompt_id,
+                "log_message": log_message
             }
         }
-        
+
         return WebsocketEventResult(broadcast_message=broadcast_message)
     
     @staticmethod
-    async def initiative_prompt_all(websocket, data, event_data, player_name, client_id, manager):
-        players_to_prompt = event_data.get("players", [])
-        prompted_by = event_data.get("prompted_by", player_name)
+    async def initiative_prompt_all(websocket, data, event_data, user_id, client_id, manager):
+        players_to_prompt = event_data.get("players", [])  # user_ids
+        prompted_by = event_data.get("prompted_by", user_id)
                 
         # Generate unique initiative prompt ID for potential removal
         initiative_prompt_id = f"initiative_all_{int(time.time() * 1000)}"
@@ -206,14 +218,16 @@ class WebsocketEvent():
         # Log ONE adventure log entry for the collective action
         log_message = format_message(MESSAGE_TEMPLATES["initiative_prompt"], players=", ".join(character_targets))
         
+        prompted_by_name = WebsocketEvent._display_name(client_id, prompted_by, player_metadata)
+
         adventure_log.add_log_entry(
             room_id=client_id,
             message=log_message,
             log_type=LogType.DUNGEON_MASTER,
-            from_player=prompted_by,
+            from_player=prompted_by_name,
             prompt_id=initiative_prompt_id
         )
-        
+
         print(f"⚡ {prompted_by} prompted all players for initiative: {', '.join(players_to_prompt)}")
         
         # Single broadcast with player list - clients check if they're in the list
@@ -232,8 +246,8 @@ class WebsocketEvent():
         return WebsocketEventResult(broadcast_message=broadcast_message)
 
     @staticmethod
-    async def dice_prompt_clear(websocket, data, event_data, player_name, client_id, manager):
-        cleared_by = event_data.get("cleared_by", player_name)
+    async def dice_prompt_clear(websocket, data, event_data, user_id, client_id, manager):
+        cleared_by = event_data.get("cleared_by", user_id)
         clear_all = event_data.get("clear_all", False)  # New: Support clearing all prompts
         prompt_id = event_data.get("prompt_id")  # New: Support clearing specific prompt by ID
         initiative_prompt_id = event_data.get("initiative_prompt_id")  # New: Initiative prompt ID for clear all
@@ -294,7 +308,7 @@ class WebsocketEvent():
         return WebsocketEventResult(broadcast_message=broadcast_message, log_removal_message=log_removal_message)
 
     @staticmethod
-    async def dice_roll(websocket, data, event_data, player_name, client_id, manager):
+    async def dice_roll(websocket, data, event_data, user_id, client_id, manager):
         """Handle dice roll event - includes auto-clearing prompts"""
         roll_data = event_data
         player = roll_data.get("player")
@@ -372,19 +386,20 @@ class WebsocketEvent():
         )
 
     @staticmethod
-    async def combat_state(websocket, data, event_data, player_name, client_id, manager):
+    async def combat_state(websocket, data, event_data, user_id, client_id, manager):
         """Handle combat state changes"""
         combat_active = event_data.get("combatActive", False)
         action = "started" if combat_active else "ended"
-        
+        display_name = WebsocketEvent._display_name(client_id, user_id)
+
         template_key = "combat_started" if action == "started" else "combat_ended"
-        log_message = format_message(MESSAGE_TEMPLATES[template_key], player=player_name)
-        
+        log_message = format_message(MESSAGE_TEMPLATES[template_key], player=display_name)
+
         adventure_log.add_log_entry(
             room_id=client_id,
             message=log_message,
             log_type=LogType.SYSTEM,
-            from_player=player_name
+            from_player=display_name
         )
         
         broadcast_message = {
@@ -395,35 +410,35 @@ class WebsocketEvent():
         return WebsocketEventResult(broadcast_message=broadcast_message)
 
     @staticmethod
-    async def seat_count_change(websocket, data, event_data, player_name, client_id, manager):
+    async def seat_count_change(websocket, data, event_data, user_id, client_id, manager):
         """Handle seat count changes"""
-        
-        # Log seat count change to adventure log
+        display_name = WebsocketEvent._display_name(client_id, user_id)
+
         max_players = event_data.get("max_players")
         displaced_players = event_data.get("displaced_players", [])
-        
-        log_message = f"Seat count changed to {max_players} by {player_name}"
+
+        log_message = f"Seat count changed to {max_players} by {display_name}"
         if displaced_players:
-            displaced_names = [p["playerName"] for p in displaced_players]
+            displaced_names = [p.get("playerName", p.get("userId", "unknown")) for p in displaced_players]
             log_message += f". Moved to lobby: {', '.join(displaced_names)}"
-        
+
         adventure_log.add_log_entry(
             room_id=client_id,
             message=log_message,
             log_type=LogType.SYSTEM,
-            from_player=player_name
+            from_player=display_name
         )
-        
+
         broadcast_message = {
             "event_type": "seat_count_change",
             "data": event_data,
-            "player_name": player_name
+            "user_id": user_id
         }
-        
+
         return WebsocketEventResult(broadcast_message=broadcast_message)
 
     @staticmethod
-    async def player_displaced(websocket, data, event_data, player_name, client_id, manager):
+    async def player_displaced(websocket, data, event_data, user_id, client_id, manager):
         """Handle player displacement events"""
         displaced_player = event_data.get("player_name")
         former_seat = event_data.get("former_seat")
@@ -442,7 +457,7 @@ class WebsocketEvent():
         return WebsocketEventResult(broadcast_message=None)
 
     @staticmethod
-    async def system_message(websocket, data, event_data, player_name, client_id, manager):
+    async def system_message(websocket, data, event_data, user_id, client_id, manager):
         """Handle system messages"""
         message = event_data.get("message")
         
@@ -461,31 +476,33 @@ class WebsocketEvent():
         return WebsocketEventResult(broadcast_message=broadcast_message)
 
     @staticmethod
-    async def player_kicked(websocket, data, event_data, player_name, client_id, manager):
+    async def player_kicked(websocket, data, event_data, user_id, client_id, manager):
         """Handle player kicked events"""
-        kicked_player = event_data.get("kicked_player")
-        
-        log_message = format_message(MESSAGE_TEMPLATES["player_kicked"], player=kicked_player)
-        
+        kicked_user_id = event_data.get("kicked_player")  # user_id of kicked player
+        display_name = WebsocketEvent._display_name(client_id, user_id)
+        kicked_name = WebsocketEvent._display_name(client_id, kicked_user_id)
+
+        log_message = format_message(MESSAGE_TEMPLATES["player_kicked"], player=kicked_name)
+
         adventure_log.add_log_entry(
             room_id=client_id,
             message=log_message,
             log_type=LogType.SYSTEM,
-            from_player=player_name
+            from_player=display_name
         )
-        
+
         broadcast_message = {
             "event_type": "player_kicked",
             "data": event_data,
-            "player_name": player_name
+            "user_id": user_id
         }
-        
+
         return WebsocketEventResult(broadcast_message=broadcast_message)
 
     @staticmethod
-    async def clear_system_messages(websocket, data, event_data, player_name, client_id, manager):
+    async def clear_system_messages(websocket, data, event_data, user_id, client_id, manager):
         """Handle clearing system messages"""
-        cleared_by = event_data.get("cleared_by", player_name)
+        cleared_by = event_data.get("cleared_by", user_id)
         
         try:
             deleted_count = adventure_log.clear_system_messages(client_id)
@@ -522,9 +539,9 @@ class WebsocketEvent():
             return WebsocketEventResult(broadcast_message=error_message)
 
     @staticmethod
-    async def clear_all_messages(websocket, data, event_data, player_name, client_id, manager):
+    async def clear_all_messages(websocket, data, event_data, user_id, client_id, manager):
         """Handle clearing all messages"""
-        cleared_by = event_data.get("cleared_by", player_name)
+        cleared_by = event_data.get("cleared_by", user_id)
         
         try:
             deleted_count = adventure_log.clear_all_messages(client_id)
@@ -561,12 +578,12 @@ class WebsocketEvent():
             return WebsocketEventResult(broadcast_message=error_message)
 
     @staticmethod
-    async def color_change(websocket, data, event_data, player_name, client_id, manager):
+    async def color_change(websocket, data, event_data, user_id, client_id, manager):
         """Handle player color changes"""
-        player_changing = event_data.get("player")
+        player_changing = event_data.get("player")  # user_id of player whose color is changing
         seat_index = event_data.get("seat_index")
         new_color = event_data.get("new_color")
-        changed_by = event_data.get("changed_by", player_name)
+        changed_by = event_data.get("changed_by", user_id)
         
         if not all([player_changing, seat_index is not None, new_color]):
             error_message = {
@@ -610,35 +627,35 @@ class WebsocketEvent():
             return WebsocketEventResult(broadcast_message=error_message)
 
     @staticmethod
-    async def player_disconnect(websocket, data, event_data, player_name, client_id, manager):
+    async def player_disconnect(websocket, data, event_data, user_id, client_id, manager):
         """Handle player disconnect event"""
+        display_name = WebsocketEvent._display_name(client_id, user_id)
+
         # Log player disconnection to database
-        log_message = format_message(MESSAGE_TEMPLATES["player_disconnected"], player=player_name)
-        
+        log_message = format_message(MESSAGE_TEMPLATES["player_disconnected"], player=display_name)
+
         adventure_log.add_log_entry(
             room_id=client_id,
             message=log_message,
             log_type=LogType.SYSTEM,
-            from_player=player_name
+            from_player=display_name
         )
-        
-        # Update party status to move disconnecting player to lobby before marking as disconnected
-        print(f"🚪 Moving {player_name} from party to lobby on disconnect")
-        manager.update_party_status(client_id, player_name, False)
-        
-        manager.remove_connection(websocket, client_id, player_name)
 
-        # Try to clean up disconnected player's seat (may fail if room already closed)
+        # Update party status to move disconnecting user to lobby before marking as disconnected
+        print(f"🚪 Moving {user_id} from party to lobby on disconnect")
+        manager.update_party_status(client_id, user_id, False)
+
+        manager.remove_connection(websocket, client_id, user_id)
+
+        # Try to clean up disconnected user's seat (may fail if room already closed)
         try:
             current_seats = GameService.get_seat_layout(client_id)
 
-            # Remove disconnected player from their seat (case-insensitive)
-            updated_seats = []
-            for seat in current_seats:
-                if seat.lower() == player_name.lower():
-                    updated_seats.append("empty")
-                else:
-                    updated_seats.append(seat)
+            # Remove disconnected user from their seat
+            updated_seats = [
+                "empty" if seat == user_id else seat
+                for seat in current_seats
+            ]
 
             # Update seat layout in database (may fail if room was deleted)
             GameService.update_seat_layout(client_id, updated_seats)
@@ -647,7 +664,8 @@ class WebsocketEvent():
             disconnect_message = {
                 "event_type": "player_disconnected",
                 "data": {
-                    "disconnected_player": player_name
+                    "disconnected_user_id": user_id,
+                    "disconnected_player": display_name
                 }
             }
 
@@ -663,14 +681,15 @@ class WebsocketEvent():
             )
         except Exception as e:
             # Room was likely already closed/deleted - this is fine, just log it
-            print(f"⚠️ Could not update seat layout for {player_name} in room {client_id}: {str(e)}")
+            print(f"⚠️ Could not update seat layout for {user_id} in room {client_id}: {str(e)}")
             print(f"ℹ️ Room may have been closed - graceful disconnect without seat update")
 
             # Still broadcast disconnect message even if DB update fails
             disconnect_message = {
                 "event_type": "player_disconnected",
                 "data": {
-                    "disconnected_player": player_name
+                    "disconnected_user_id": user_id,
+                    "disconnected_player": display_name
                 }
             }
 
@@ -680,52 +699,55 @@ class WebsocketEvent():
             )
 
     @staticmethod
-    async def role_change(websocket, data, event_data, player_name, client_id, manager):
+    async def role_change(websocket, data, event_data, user_id, client_id, manager):
         """Handle role changes (moderator/DM assignments)"""
         action = event_data.get("action")  # 'add_moderator', 'remove_moderator', 'set_dm', 'unset_dm'
-        target_player = event_data.get("target_player")
-        
-        if not action or not target_player:
-            return WebsocketEventResult.error(f"Invalid role change request: action={action}, target_player={target_player}")
-        
-        print(f"🎭 Role change: {action} for {target_player} by {player_name}")
-        
+        target_user_id = event_data.get("target_player")  # user_id of target
+
+        if not action or not target_user_id:
+            return WebsocketEventResult.error(f"Invalid role change request: action={action}, target={target_user_id}")
+
+        display_name = WebsocketEvent._display_name(client_id, user_id)
+        target_name = WebsocketEvent._display_name(client_id, target_user_id)
+
+        print(f"🎭 Role change: {action} for {target_user_id} by {user_id}")
+
         # Create log message based on action
         log_messages = {
-            "add_moderator": f"{target_player} has been promoted to moderator by {player_name}",
-            "remove_moderator": f"{target_player} has been removed as moderator by {player_name}",
-            "set_dm": f"{target_player} has been set as Dungeon Master by {player_name}",
-            "unset_dm": f"Dungeon Master role has been removed by {player_name}"
+            "add_moderator": f"{target_name} has been set as moderator by {display_name}",
+            "remove_moderator": f"{target_name} has been removed as moderator by {display_name}",
+            "set_dm": f"{target_name} has been set as Dungeon Master by {display_name}",
+            "unset_dm": f"Dungeon Master role has been removed by {display_name}"
         }
-        
-        log_message = log_messages.get(action, f"Role change: {action} for {target_player}")
-        
+
+        log_message = log_messages.get(action, f"Role change: {action} for {target_name}")
+
         # Add to adventure log
         adventure_log.add_log_entry(
             room_id=client_id,
             message=log_message,
             log_type=LogType.SYSTEM,
-            from_player=player_name
+            from_player=display_name
         )
-        
+
         # Broadcast role change to all clients
         role_change_message = {
             "event_type": "role_change",
             "data": {
                 "action": action,
-                "target_player": target_player,
-                "changed_by": player_name,
+                "target_player": target_user_id,
+                "changed_by": user_id,
                 "message": log_message
             }
         }
-        
+
         return WebsocketEventResult(broadcast_message=role_change_message)
 
-    @staticmethod 
-    async def remote_audio_play(websocket, data, event_data, player_name, client_id, manager):
+    @staticmethod
+    async def remote_audio_play(websocket, data, event_data, user_id, client_id, manager):
         """Handle remote audio play events - DM controls audio for all players"""
-        print(f"🎵 Backend received remote_audio_play event from {player_name}: {event_data}")
-        triggered_by = event_data.get("triggered_by", player_name)
+        print(f"🎵 Backend received remote_audio_play event from {user_id}: {event_data}")
+        triggered_by = event_data.get("triggered_by", user_id)
         
         # Support both single track and multiple tracks (for synchronized playback)
         tracks = event_data.get("tracks")
@@ -798,9 +820,9 @@ class WebsocketEvent():
         return WebsocketEventResult(broadcast_message=audio_play_message)
 
     @staticmethod
-    async def remote_audio_resume(websocket, data, event_data, player_name, client_id, manager):
+    async def remote_audio_resume(websocket, data, event_data, user_id, client_id, manager):
         """Handle remote audio resume events - DM resumes paused audio for all players"""
-        triggered_by = event_data.get("triggered_by", player_name)
+        triggered_by = event_data.get("triggered_by", user_id)
         tracks = event_data.get("tracks")
         track_type = event_data.get("track_type")  # Legacy single track format
         
@@ -835,10 +857,10 @@ class WebsocketEvent():
         return WebsocketEventResult(broadcast_message=audio_resume_message)
 
     @staticmethod
-    async def remote_audio_batch(websocket, data, event_data, player_name, client_id, manager):
+    async def remote_audio_batch(websocket, data, event_data, user_id, client_id, manager):
         """Handle batch audio operations - execute multiple track operations in a single message"""
         operations = event_data.get("operations")  # Array of {trackId, operation, ...params}
-        triggered_by = event_data.get("triggered_by", player_name)
+        triggered_by = event_data.get("triggered_by", user_id)
         fade_duration = event_data.get("fade_duration")  # Optional fade duration for transitions
         
         if not operations or not isinstance(operations, list) or len(operations) == 0:
@@ -1102,7 +1124,7 @@ class WebsocketEvent():
         return WebsocketEventResult(broadcast_message=batch_audio_message)
     
     @staticmethod
-    async def map_load(websocket, data, event_data, player_name, client_id, manager):
+    async def map_load(websocket, data, event_data, user_id, client_id, manager):
         """Load/set active map for the room"""
         print(f"🗺️ Map load handler called for room {client_id} by {player_name}")
         print(f"🗺️ event_data: {event_data}")
@@ -1189,7 +1211,7 @@ class WebsocketEvent():
             })
     
     @staticmethod
-    async def map_clear(websocket, data, event_data, player_name, client_id, manager):
+    async def map_clear(websocket, data, event_data, user_id, client_id, manager):
         """Clear the active map for the room"""
         room_id = client_id  # Use client_id as room_id
         
@@ -1225,7 +1247,7 @@ class WebsocketEvent():
             return WebsocketEventResult(broadcast_message={"error": f"Failed to clear map: {str(e)}"})
     
     @staticmethod
-    async def map_config_update(websocket, data, event_data, player_name, client_id, manager):
+    async def map_config_update(websocket, data, event_data, user_id, client_id, manager):
         """Update map configuration (grid settings, etc.)"""
         room_id = client_id  # Use client_id as room_id
         filename = event_data.get("filename")
@@ -1272,7 +1294,7 @@ class WebsocketEvent():
             return WebsocketEventResult(broadcast_message={"error": f"Failed to update map config: {str(e)}"})
     
     @staticmethod
-    async def map_request(websocket, data, event_data, player_name, client_id, manager):
+    async def map_request(websocket, data, event_data, user_id, client_id, manager):
         """Request current active map (for new players joining)"""
         room_id = client_id  # Use client_id as room_id
         
@@ -1316,7 +1338,7 @@ class WebsocketEvent():
     # ─── Image Events ───────────────────────────────────────────────
 
     @staticmethod
-    async def image_load(websocket, data, event_data, player_name, client_id, manager):
+    async def image_load(websocket, data, event_data, user_id, client_id, manager):
         """Load/set active image for the room"""
         print(f"🖼️ Image load handler called for room {client_id} by {player_name}")
 
@@ -1384,7 +1406,7 @@ class WebsocketEvent():
             })
 
     @staticmethod
-    async def image_clear(websocket, data, event_data, player_name, client_id, manager):
+    async def image_clear(websocket, data, event_data, user_id, client_id, manager):
         """Clear the active image for the room"""
         room_id = client_id
 
@@ -1420,7 +1442,7 @@ class WebsocketEvent():
             return WebsocketEventResult(broadcast_message={"error": f"Failed to clear image: {str(e)}"})
 
     @staticmethod
-    async def image_request(websocket, data, event_data, player_name, client_id, manager):
+    async def image_request(websocket, data, event_data, user_id, client_id, manager):
         """Request current active image (for new players joining)"""
         room_id = client_id
 

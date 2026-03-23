@@ -15,6 +15,7 @@ from .map import MapConfig
 
 
 class PlayerState(ContractModel):
+    user_id: str
     player_name: str
     seat_position: int
     seat_color: str
@@ -31,7 +32,7 @@ class SessionStartPayload(ContractModel):
 
     session_id: str
     campaign_id: str
-    dm_username: str
+    dm_user_id: str
     max_players: int = 8
     joined_user_ids: List[str] = []
     player_characters: List[PlayerCharacter] = []

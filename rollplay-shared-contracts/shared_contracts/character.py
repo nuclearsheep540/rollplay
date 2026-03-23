@@ -13,6 +13,7 @@ class PlayerCharacter(ContractModel):
 
     user_id: str
     player_name: str
+    campaign_role: str
     character_id: str
     character_name: str
     character_class: List[str]

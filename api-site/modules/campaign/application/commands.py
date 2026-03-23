@@ -7,6 +7,7 @@ import logging
 import asyncio
 
 from modules.campaign.domain.campaign_aggregate import CampaignAggregate
+from modules.campaign.domain.campaign_role import CampaignRole
 from modules.campaign.domain.campaign_events import CampaignEvents
 from modules.events.event_manager import EventManager
 from modules.user.repositories.user_repository import UserRepository
@@ -20,11 +21,11 @@ class CreateCampaign:
         self.repository = repository
 
     def execute(self, host_id: UUID, title: str, description: str = "", hero_image: Optional[str] = None) -> CampaignAggregate:
-        """Create a new campaign"""
+        """Create a new campaign. The creator becomes the DM."""
         campaign = CampaignAggregate.create(
             title=title,
             description=description,
-            host_id=host_id,
+            created_by=host_id,
             hero_image=hero_image
         )
 
@@ -51,9 +52,9 @@ class UpdateCampaign:
         if not campaign:
             raise ValueError(f"Campaign {campaign_id} not found")
 
-        # Business rule: Only host can update campaign
-        if not campaign.is_owned_by(host_id):
-            raise ValueError("Only the host can update this campaign")
+        # Business rule: Only DM can update campaign
+        if not campaign.is_dm(host_id):
+            raise ValueError("Only the DM can update this campaign")
 
         campaign.update_details(title=title, description=description, hero_image=hero_image)
         self.repository.save(campaign)
@@ -85,9 +86,9 @@ class DeleteCampaign:
         if not campaign:
             return False
 
-        # Business rule: Only host can delete campaign
-        if not campaign.is_owned_by(host_id):
-            raise ValueError("Only the host can delete this campaign")
+        # Business rule: Only DM can delete campaign
+        if not campaign.is_dm(host_id):
+            raise ValueError("Only the DM can delete this campaign")
 
         # Business rule: Cannot delete campaign with non-FINISHED sessions
         if self.session_repository:
@@ -117,9 +118,9 @@ class AddPlayerToCampaign:
         if not campaign:
             raise ValueError(f"Campaign {campaign_id} not found")
 
-        # Business rule: Only host can invite players
-        if not campaign.is_owned_by(host_id):
-            raise ValueError("Only the host can invite players to this campaign")
+        # Business rule: Only DM can invite players
+        if not campaign.is_dm(host_id):
+            raise ValueError("Only the DM can invite players to this campaign")
 
         # Business logic in aggregate - sends invite (goes to invited_player_ids)
         campaign.invite_player(player_id)
@@ -175,9 +176,9 @@ class RemovePlayerFromCampaign:
         if not campaign:
             raise ValueError(f"Campaign {campaign_id} not found")
 
-        # Business rule: Only host can remove players
-        if not campaign.is_owned_by(host_id):
-            raise ValueError("Only the host can remove players from this campaign")
+        # Business rule: Only DM can remove players
+        if not campaign.is_dm(host_id):
+            raise ValueError("Only the DM can remove players from this campaign")
 
         # Get player details for notification before removing
         player = self.user_repo.get_by_id(player_id)
@@ -191,7 +192,7 @@ class RemovePlayerFromCampaign:
                 logger.info(f"Unlocked character {character.id} from campaign {campaign_id} (player removed by host)")
 
         # Business logic in aggregate
-        campaign.remove_player(player_id)
+        campaign.remove_member(player_id)
 
         # Save
         self.repository.save(campaign)
@@ -267,7 +268,7 @@ class AcceptCampaignInvite:
         player = self.user_repo.get_by_id(player_id)
         await self.event_manager.broadcast(
             CampaignEvents.campaign_invite_accepted(
-                host_id=campaign.host_id,
+                host_id=campaign.dm_id,
                 campaign_id=campaign_id,
                 campaign_name=campaign.title,
                 player_id=player_id,
@@ -301,7 +302,7 @@ class DeclineCampaignInvite:
         player = self.user_repo.get_by_id(player_id)
         await self.event_manager.broadcast(
             CampaignEvents.campaign_invite_declined(
-                host_id=campaign.host_id,
+                host_id=campaign.dm_id,
                 campaign_id=campaign_id,
                 campaign_name=campaign.title,
                 player_id=player_id,
@@ -325,12 +326,12 @@ class LeaveCampaign:
         if not campaign:
             raise ValueError(f"Campaign {campaign_id} not found")
 
-        # Business rule: Host cannot leave their own campaign
-        if campaign.is_owned_by(player_id):
-            raise ValueError("Host cannot leave their own campaign")
+        # Business rule: DM cannot leave their own campaign
+        if campaign.is_dm(player_id):
+            raise ValueError("DM cannot leave their own campaign")
 
-        # Business rule: Player must be a member to leave
-        if not campaign.is_player(player_id):
+        # Business rule: Must be an active member to leave
+        if not campaign.is_member(player_id):
             raise ValueError("You are not a member of this campaign")
 
         # Get player details for notification before removing
@@ -344,8 +345,8 @@ class LeaveCampaign:
                 self.character_repo.save(character)
                 logger.info(f"Unlocked character {character.id} from campaign {campaign_id} (player leaving)")
 
-        # Business logic in aggregate - removes from player_ids
-        campaign.remove_player(player_id)
+        # Business logic in aggregate - removes member
+        campaign.remove_member(player_id)
 
         # Save
         self.repository.save(campaign)
@@ -359,7 +360,7 @@ class LeaveCampaign:
         # Broadcast 1/2: Notification to host that player left
         await self.event_manager.broadcast(
             CampaignEvents.campaign_player_left(
-                host_id=campaign.host_id,
+                host_id=campaign.dm_id,
                 campaign_id=campaign_id,
                 campaign_name=campaign.title,
                 player_id=player_id,
@@ -391,9 +392,9 @@ class CancelCampaignInvite:
         if not campaign:
             raise ValueError(f"Campaign {campaign_id} not found")
 
-        # Business rule: Only host can cancel invites
-        if not campaign.is_owned_by(host_id):
-            raise ValueError("Only the host can cancel invites for this campaign")
+        # Business rule: Only DM can cancel invites
+        if not campaign.is_dm(host_id):
+            raise ValueError("Only the DM can cancel invites for this campaign")
 
         # Get player details for notification before removing
         player = self.user_repo.get_by_id(player_id)
@@ -486,12 +487,16 @@ class SelectCharacterForCampaign:
         character.lock_to_campaign(campaign_id)
         self.character_repo.save(character)
 
+        # Transition role: SPECTATOR → PLAYER
+        campaign.set_role(user_id, CampaignRole.PLAYER)
+        self.campaign_repo.save(campaign)
+
         logger.info(f"Character {character_id} locked to campaign {campaign_id} by user {user_id}")
 
         # Broadcast to all other campaign members
         if self.event_manager and self.user_repo:
             acting_user = self.user_repo.get_by_id(user_id)
-            all_members = list(campaign.player_ids) + [campaign.host_id]
+            all_members = campaign.get_all_member_ids()
             events = CampaignEvents.campaign_character_selected(
                 campaign_member_ids=all_members,
                 acting_user_id=user_id,
@@ -561,12 +566,16 @@ class ReleaseCharacterFromCampaign:
         character.unlock_from_campaign()
         self.character_repo.save(character)
 
+        # Transition role: PLAYER → SPECTATOR
+        campaign.set_role(user_id, CampaignRole.SPECTATOR)
+        self.campaign_repo.save(campaign)
+
         logger.info(f"Character {character.id} released from campaign {campaign_id} by user {user_id}")
 
         # Broadcast to all other campaign members
         if self.event_manager and self.user_repo:
             acting_user = self.user_repo.get_by_id(user_id)
-            all_members = list(campaign.player_ids) + [campaign.host_id]
+            all_members = campaign.get_all_member_ids()
             events = CampaignEvents.campaign_character_released(
                 campaign_member_ids=all_members,
                 acting_user_id=user_id,

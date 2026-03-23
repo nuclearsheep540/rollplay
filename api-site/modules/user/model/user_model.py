@@ -29,7 +29,7 @@ class User(Base):
     has_received_demo = Column(Boolean, default=False, nullable=False)  # Track demo campaign given
 
     # Relationships (for ORM convenience, not exposed to domain)
-    campaigns = relationship("Campaign", back_populates="host")  # UPDATED from "dm"
+    campaigns = relationship("Campaign", back_populates="creator")
     sessions = relationship("Session", back_populates="host")  # Renamed from "games"
 
     # Table constraints - sync model with existing DB constraints

@@ -17,17 +17,15 @@ adventure_log = AdventureLogService()
 
 def register_websocket_routes(app: FastAPI):
     """Register WebSocket routes with the FastAPI app"""
-    
+
     @app.websocket("/ws/{client_id}")
     async def websocket_endpoint(
         websocket: WebSocket,
         client_id: str,  # This should be your room_id
-        player_name: str
+        user_id: str
     ):
-        # Normalize player name to lowercase for consistent identification
-        player_name = player_name.lower()
-        await manager.connect(websocket, client_id, player_name)
-        
+        await manager.connect(websocket, client_id, user_id)
+
         # Create room-scoped manager for this connection
         room_manager = RoomManager(manager, client_id)
 
@@ -51,7 +49,7 @@ def register_websocket_routes(app: FastAPI):
                     }
                 }
                 await websocket.send_json(initial_state)
-                logger.debug(f"Sent initial state to {player_name}")
+                logger.debug(f"Sent initial state to {user_id}")
             else:
                 logger.warning(f"Room {client_id} not found, skipping initial state")
         except Exception as e:
@@ -62,7 +60,7 @@ def register_websocket_routes(app: FastAPI):
             websocket=websocket,
             data={},
             event_data={},
-            player_name=player_name,
+            user_id=user_id,
             client_id=client_id,
             manager=manager
         )
@@ -73,9 +71,9 @@ def register_websocket_routes(app: FastAPI):
                 data = await websocket.receive_json()
                 event_type = data.get("event_type")
                 event_data = data.get("data")
-                
-                logger.debug(f"WebSocket received: {event_type} from {player_name}")
-                
+
+                logger.debug(f"WebSocket received: {event_type} from {user_id}")
+
                 # Initialize variables for post-processing
                 broadcast_message = None
                 log_removal_message = None
@@ -84,7 +82,7 @@ def register_websocket_routes(app: FastAPI):
                 if event_type == "seat_change":
                     # Existing seat change logic...
                     seat_layout = data.get("data")
-                    
+
                     if not isinstance(seat_layout, list):
                         error_message = {
                             "event_type": "error",
@@ -97,7 +95,7 @@ def register_websocket_routes(app: FastAPI):
                         websocket=websocket,
                         data=data,
                         event_data=event_data,
-                        player_name=player_name,
+                        user_id=user_id,
                         client_id=client_id,
                         manager=manager
                     )
@@ -111,7 +109,7 @@ def register_websocket_routes(app: FastAPI):
                         websocket=websocket,
                         data=data,
                         event_data=event_data,
-                        player_name=player_name,
+                        user_id=user_id,
                         client_id=client_id,
                         manager=manager
                     )
@@ -126,7 +124,7 @@ def register_websocket_routes(app: FastAPI):
                         websocket=websocket,
                         data=data,
                         event_data=event_data,
-                        player_name=player_name,
+                        user_id=user_id,
                         client_id=client_id,
                         manager=manager
                     )
@@ -138,7 +136,7 @@ def register_websocket_routes(app: FastAPI):
                         websocket=websocket,
                         data=data,
                         event_data=event_data,
-                        player_name=player_name,
+                        user_id=user_id,
                         client_id=client_id,
                         manager=manager
                     )
@@ -150,7 +148,7 @@ def register_websocket_routes(app: FastAPI):
                         websocket=websocket,
                         data=data,
                         event_data=event_data,
-                        player_name=player_name,
+                        user_id=user_id,
                         client_id=client_id,
                         manager=manager
                     )
@@ -161,7 +159,7 @@ def register_websocket_routes(app: FastAPI):
                         websocket=websocket,
                         data=data,
                         event_data=event_data,
-                        player_name=player_name,
+                        user_id=user_id,
                         client_id=client_id,
                         manager=manager
                     )
@@ -172,7 +170,7 @@ def register_websocket_routes(app: FastAPI):
                         websocket=websocket,
                         data=data,
                         event_data=event_data,
-                        player_name=player_name,
+                        user_id=user_id,
                         client_id=client_id,
                         manager=manager
                     )
@@ -183,7 +181,7 @@ def register_websocket_routes(app: FastAPI):
                         websocket=websocket,
                         data=data,
                         event_data=event_data,
-                        player_name=player_name,
+                        user_id=user_id,
                         client_id=client_id,
                         manager=manager
                     )
@@ -194,41 +192,41 @@ def register_websocket_routes(app: FastAPI):
                         websocket=websocket,
                         data=data,
                         event_data=event_data,
-                        player_name=player_name,
+                        user_id=user_id,
                         client_id=client_id,
                         manager=manager
                     )
                     broadcast_message = result.broadcast_message
                     log_removal_message = result.log_removal_message
                     clear_prompt_message = result.clear_prompt_message
-                
+
                 elif event_type == "clear_system_messages":
                     result = await WebsocketEvent.clear_system_messages(
                         websocket=websocket,
                         data=data,
                         event_data=event_data,
-                        player_name=player_name,
+                        user_id=user_id,
                         client_id=client_id,
                         manager=manager
                     )
                     broadcast_message = result.broadcast_message
-                    
+
                     # Check if it's an error message and handle accordingly
                     if broadcast_message.get("event_type") == "error":
                         await websocket.send_json(broadcast_message)
                         continue
-                
+
                 elif event_type == "clear_all_messages":
                     result = await WebsocketEvent.clear_all_messages(
                         websocket=websocket,
                         data=data,
                         event_data=event_data,
-                        player_name=player_name,
+                        user_id=user_id,
                         client_id=client_id,
                         manager=manager
                     )
                     broadcast_message = result.broadcast_message
-                    
+
                     # Check if it's an error message and handle accordingly
                     if broadcast_message.get("event_type") == "error":
                         await websocket.send_json(broadcast_message)
@@ -239,12 +237,12 @@ def register_websocket_routes(app: FastAPI):
                         websocket=websocket,
                         data=data,
                         event_data=event_data,
-                        player_name=player_name,
+                        user_id=user_id,
                         client_id=client_id,
                         manager=manager
                     )
                     broadcast_message = result.broadcast_message
-                    
+
                     # Check if it's an error message and handle accordingly
                     if broadcast_message.get("event_type") == "error":
                         await websocket.send_json(broadcast_message)
@@ -255,7 +253,7 @@ def register_websocket_routes(app: FastAPI):
                         websocket=websocket,
                         data=data,
                         event_data=event_data,
-                        player_name=player_name,
+                        user_id=user_id,
                         client_id=client_id,
                         manager=manager
                     )
@@ -266,7 +264,7 @@ def register_websocket_routes(app: FastAPI):
                         websocket=websocket,
                         data=data,
                         event_data=event_data,
-                        player_name=player_name,
+                        user_id=user_id,
                         client_id=client_id,
                         manager=manager
                     )
@@ -277,7 +275,7 @@ def register_websocket_routes(app: FastAPI):
                         websocket=websocket,
                         data=data,
                         event_data=event_data,
-                        player_name=player_name,
+                        user_id=user_id,
                         client_id=client_id,
                         manager=manager
                     )
@@ -290,7 +288,7 @@ def register_websocket_routes(app: FastAPI):
                             websocket=websocket,
                             data=data,
                             event_data=event_data,
-                            player_name=player_name,
+                            user_id=user_id,
                             client_id=client_id,
                             manager=manager
                         )
@@ -305,7 +303,7 @@ def register_websocket_routes(app: FastAPI):
                         websocket=websocket,
                         data=data,
                         event_data=event_data,
-                        player_name=player_name,
+                        user_id=user_id,
                         client_id=client_id,
                         manager=manager
                     )
@@ -316,7 +314,7 @@ def register_websocket_routes(app: FastAPI):
                         websocket=websocket,
                         data=data,
                         event_data=event_data,
-                        player_name=player_name,
+                        user_id=user_id,
                         client_id=client_id,
                         manager=manager
                     )
@@ -327,7 +325,7 @@ def register_websocket_routes(app: FastAPI):
                         websocket=websocket,
                         data=data,
                         event_data=event_data,
-                        player_name=player_name,
+                        user_id=user_id,
                         client_id=client_id,
                         manager=manager
                     )
@@ -344,7 +342,7 @@ def register_websocket_routes(app: FastAPI):
                             websocket=websocket,
                             data=data,
                             event_data=event_data,
-                            player_name=player_name,
+                            user_id=user_id,
                             client_id=client_id,
                             manager=manager
                         )
@@ -359,7 +357,7 @@ def register_websocket_routes(app: FastAPI):
                         websocket=websocket,
                         data=data,
                         event_data=event_data,
-                        player_name=player_name,
+                        user_id=user_id,
                         client_id=client_id,
                         manager=manager
                     )
@@ -370,7 +368,7 @@ def register_websocket_routes(app: FastAPI):
                         websocket=websocket,
                         data=data,
                         event_data=event_data,
-                        player_name=player_name,
+                        user_id=user_id,
                         client_id=client_id,
                         manager=manager
                     )
@@ -384,7 +382,7 @@ def register_websocket_routes(app: FastAPI):
                     # Unknown event type - log and ignore
                     logger.warning(f"Unknown WebSocket event type: {event_type}")
                     continue
-                
+
                 # Send errors back to sender only, don't broadcast
                 if broadcast_message and broadcast_message.get("event_type") == "error":
                     await websocket.send_json(broadcast_message)
@@ -392,39 +390,39 @@ def register_websocket_routes(app: FastAPI):
 
                 # Broadcast the main message
                 await room_manager.update_room_data(broadcast_message)
-                
+
                 # Handle special cases for adventure log removal
                 if event_type == "dice_roll":
                     import asyncio
                     await asyncio.sleep(0.5)  # Small delay to ensure dice roll is processed first
-                    
+
                     # Send log removal message first
                     if log_removal_message:
                         await room_manager.update_room_data(log_removal_message)
-                    
+
                     # Then send prompt clear message
                     if clear_prompt_message:
                         await room_manager.update_room_data(clear_prompt_message)
-                
+
                 elif event_type == "dice_prompt_clear":
                     # Send log removal message for cancelled prompts (no delay needed)
                     if log_removal_message:
                         await room_manager.update_room_data(log_removal_message)
-                
+
         except WebSocketDisconnect:
             # Server-side disconnect handling with seat cleanup
             result = await WebsocketEvent.player_disconnect(
                 websocket=websocket,
                 data={},
                 event_data={},
-                player_name=player_name,
+                user_id=user_id,
                 client_id=client_id,
                 manager=manager
             )
-            
+
             # Send lobby update after disconnect (will show user as disconnecting)
             await room_manager.broadcast_lobby_update()
-            
+
             # Broadcast disconnect and seat change messages
             await room_manager.update_room_data(result.broadcast_message)
             if result.clear_prompt_message:  # This contains the seat change message

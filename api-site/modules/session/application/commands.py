@@ -37,6 +37,7 @@ from modules.library.domain.music_asset_aggregate import MusicAsset
 from modules.library.domain.sfx_asset_aggregate import SfxAsset
 from modules.events.event_manager import EventManager
 from modules.session.domain.session_events import SessionEvents
+from modules.campaign.domain.campaign_role import CampaignRole
 
 logger = logging.getLogger(__name__)
 
@@ -96,9 +97,9 @@ class CreateSession:
         # Create session aggregate (host_id auto-inherited from campaign)
         session = SessionEntity.create(name=name, campaign_id=campaign_id, host_id=host_id, max_players=max_players)
 
-        # Automatically add all campaign players to the session (bypass invite flow)
-        # Campaign players already accepted at campaign level, no need for session-level acceptance
-        for player_id in campaign.player_ids:
+        # Automatically add all active campaign members to the session (bypass invite flow)
+        # Campaign members already accepted at campaign level, no need for session-level acceptance
+        for player_id in campaign.get_all_member_ids():
             try:
                 # Add directly to joined_users (bypass invite acceptance)
                 if player_id not in session.joined_users:
@@ -119,10 +120,11 @@ class CreateSession:
         # Get host user for screen name
         host_user = self.campaign_repo.db.query(User).filter(User.id == host_id).first()
 
-        # Only broadcast if there are campaign members (excludes host)
-        if campaign.player_ids:
+        # Broadcast to non-DM members
+        non_dm_members = [uid for uid in campaign.get_all_member_ids() if uid != host_id]
+        if non_dm_members:
             events = SessionEvents.session_created(
-                campaign_player_ids=campaign.player_ids,
+                campaign_player_ids=non_dm_members,
                 session_id=session.id,
                 session_name=session.name,
                 campaign_id=campaign_id,
@@ -135,7 +137,7 @@ class CreateSession:
             for event_config in events:
                 await self.event_manager.broadcast(event_config)
 
-            logger.info(f"Broadcasting session_created event to {len(campaign.player_ids)} campaign members for session {session.id}")
+            logger.info(f"Broadcasting session_created event to {len(non_dm_members)} campaign members for session {session.id}")
 
         return session
 
@@ -236,7 +238,7 @@ class StartSession:
         self.asset_repo = asset_repository
         self.s3_service = s3_service
 
-    def _build_player_characters(self, session: SessionEntity) -> List[PlayerCharacter]:
+    def _build_player_characters(self, session: SessionEntity, campaign) -> List[PlayerCharacter]:
         """Build ETL character DTOs for rostered users with campaign-bound characters."""
         player_characters = []
 
@@ -256,12 +258,14 @@ class StartSession:
                 logger.warning(f"Skipping ETL character for user {user_id} with no player_name")
                 continue
 
+            role = campaign.get_role(user_id) if campaign else CampaignRole.SPECTATOR
             class_names = [class_info.character_class.value for class_info in character.character_classes]
 
             player_characters.append(
                 PlayerCharacter(
                     user_id=str(user_id),
                     player_name=player_name,
+                    campaign_role=role.value,
                     character_id=str(character.id),
                     character_name=character.character_name,
                     character_class=class_names,
@@ -437,13 +441,10 @@ class StartSession:
 
         # Wrap everything after STARTING in try/catch to ensure rollback on ANY error
         try:
-            # 6. Get host user
+            # 6. Validate host user exists
             host_user = self.user_repo.get_by_id(host_id)
             if not host_user:
                 raise ValueError("Host user not found")
-
-            # Use screen_name if set, otherwise email
-            dm_username = host_user.screen_name or host_user.email
 
             # 7. Fetch campaign assets and generate fresh presigned URLs
             campaign_assets = []
@@ -466,12 +467,12 @@ class StartSession:
             audio_config_for_game = self._restore_audio_config(session, asset_lookup, url_map)
             map_config_for_game = self._restore_map_config(session, asset_lookup, url_map)
             image_config_for_game = self._restore_image_config(session, asset_lookup, url_map)
-            player_characters_for_game = self._build_player_characters(session)
+            player_characters_for_game = self._build_player_characters(session, campaign)
 
             payload = SessionStartPayload(
                 session_id=str(session.id),
                 campaign_id=str(session.campaign_id),
-                dm_username=dm_username,
+                dm_user_id=str(campaign.dm_id),
                 max_players=session.max_players,
                 joined_user_ids=[str(uid) for uid in session.joined_users],
                 player_characters=player_characters_for_game,
@@ -518,7 +519,7 @@ class StartSession:
             campaign = self.campaign_repo.get_by_id(session.campaign_id)
             if campaign:
                 # Include DM in recipient list (DM gets confirmation toast)
-                all_recipients = list(campaign.player_ids) + [campaign.host_id]
+                all_recipients = campaign.get_all_member_ids()
 
                 events = SessionEvents.session_started(
                     campaign_player_ids=all_recipients,
@@ -800,7 +801,7 @@ class PauseSession:
         campaign = self.campaign_repo.get_by_id(session.campaign_id)
         if campaign:
             host_user = self.user_repo.get_by_id(host_id)
-            all_recipients = list(campaign.player_ids) + [campaign.host_id]
+            all_recipients = campaign.get_all_member_ids()
 
             events = SessionEvents.session_paused(
                 active_participant_ids=all_recipients,
@@ -876,11 +877,11 @@ class FinishSession:
             campaign = self.campaign_repo.get_by_id(session.campaign_id)
             if campaign:
                 # All campaign members (including host)
-                all_recipients = list(campaign.player_ids) + [campaign.host_id]
+                all_recipients = campaign.get_all_member_ids()
 
                 events = SessionEvents.session_finished(
-                    dm_id=campaign.host_id,
-                    participant_ids=campaign.player_ids,
+                    dm_id=campaign.dm_id,
+                    participant_ids=[uid for uid in campaign.get_all_member_ids() if uid != campaign.dm_id],
                     session_id=session.id,
                     session_name=session.name,
                     campaign_id=session.campaign_id
@@ -933,11 +934,11 @@ class FinishSession:
         # 8. Broadcast session_finished event to all campaign members (silent state update)
         campaign = self.campaign_repo.get_by_id(session.campaign_id)
         if campaign:
-            all_recipients = list(campaign.player_ids) + [campaign.host_id]
+            all_recipients = campaign.get_all_member_ids()
 
             events = SessionEvents.session_finished(
-                dm_id=campaign.host_id,
-                participant_ids=campaign.player_ids,
+                dm_id=campaign.dm_id,
+                participant_ids=[uid for uid in all_recipients if uid != campaign.dm_id],
                 session_id=session.id,
                 session_name=session.name,
                 campaign_id=session.campaign_id

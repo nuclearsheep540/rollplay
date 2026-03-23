@@ -82,9 +82,10 @@ class CampaignMemberResponse(BaseModel):
     user_id: str
     username: str  # screen_name or email
     account_tag: Optional[str] = None
+    campaign_role: str  # dm, player, spectator, mod
     character_id: Optional[str] = None
     character_name: Optional[str] = None
     character_level: Optional[int] = None
     character_class: Optional[str] = None  # Multi-class formatted
     character_race: Optional[str] = None
-    is_host: bool = False
+    is_host: bool = False  # Kept for frontend backward compat (true when role=dm)
