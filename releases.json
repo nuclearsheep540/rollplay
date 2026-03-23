@@ -1,5 +1,5 @@
 {
-  "latest": "0.31.0",
+  "latest": "0.32.0",
   "releases": {
     "0.27.1": {
       "date": "2026-03-10",
@@ -113,6 +113,21 @@
       "services": {
         "app_version": "0.20.0",
         "api_site_version": "0.16.0",
+        "api_game_version": "0.13.0",
+        "api_auth_version": "0.2.1",
+        "nginx_version": "0.4.10",
+        "postgres_version": "0.1.8",
+        "mongo_db_version": "0.3.2",
+        "certbot_version": "0.1.2"
+      }
+    },
+    "0.32.0": {
+      "date": "2026-03-23",
+      "commit": "4f3251a",
+      "description": "Fixed bugs around character editing being allowed during active or transitioning session state",
+      "services": {
+        "app_version": "0.21.0",
+        "api_site_version": "0.17.0",
         "api_game_version": "0.13.0",
         "api_auth_version": "0.2.1",
         "nginx_version": "0.4.10",
