@@ -6,6 +6,8 @@ from typing import Optional, List, Dict
 from uuid import UUID
 
 from modules.characters.repositories.character_repository import CharacterRepository
+from modules.session.repositories.session_repository import SessionRepository
+from modules.characters.application.policies import assert_character_is_editable
 from modules.characters.domain.character_aggregate import (
     CharacterAggregate,
     AbilityScores,
@@ -56,8 +58,9 @@ class CreateCharacter:
 
 class UpdateAbilityScores:
     """Update character ability scores"""
-    def __init__(self, repository: CharacterRepository):
+    def __init__(self, repository: CharacterRepository, session_repository: SessionRepository):
         self.repository = repository
+        self.session_repository = session_repository
 
     def execute(
         self,
@@ -74,6 +77,8 @@ class UpdateAbilityScores:
         if not character.is_owned_by(user_id):
             raise ValueError("Only character owner can update ability scores")
 
+        assert_character_is_editable(self.session_repository, character)
+
         # Update via aggregate method
         character.update_ability_scores(ability_scores)
 
@@ -84,8 +89,9 @@ class UpdateAbilityScores:
 
 class UpdateCharacter:
     """Update existing character"""
-    def __init__(self, repository: CharacterRepository):
+    def __init__(self, repository: CharacterRepository, session_repository: SessionRepository):
         self.repository = repository
+        self.session_repository = session_repository
 
     def execute(
         self,
@@ -111,6 +117,8 @@ class UpdateCharacter:
         # Business rule: Only owner can update
         if not character.is_owned_by(user_id):
             raise ValueError("Only character owner can update this character")
+
+        assert_character_is_editable(self.session_repository, character)
 
         # Update via domain method (includes business rule validation)
         character.update_character(

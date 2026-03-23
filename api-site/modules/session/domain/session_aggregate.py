@@ -108,6 +108,18 @@ class SessionEntity:
         self.image_config = image_config
         self.active_display = active_display
 
+    @property
+    def is_locked(self) -> bool:
+        """
+        A session is locked if it has an active game or
+        is in a transitioning state.
+        """
+        return self.status in {
+            SessionStatus.ACTIVE,
+            SessionStatus.STARTING,
+            SessionStatus.STOPPING
+        }
+
     @staticmethod
     def _validate_max_players(max_players: int) -> int:
         """Validate max_players is within allowed range (1-8)"""

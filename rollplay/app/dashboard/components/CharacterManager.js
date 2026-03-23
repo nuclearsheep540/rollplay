@@ -86,8 +86,14 @@ export default function CharacterManager({ user, onExpandedChange }) {
         setIsEditing(true)
         setIsCloneMode(false)
       }
+      return
     }
-  }, [searchParams, characters])
+
+    // Keep local edit mode in sync when URL edit param is cleared.
+    if (!editParam && !isCloneMode) {
+      setIsEditing(false)
+    }
+  }, [searchParams, characters, isCloneMode])
 
   // Resize handler - disable transitions during window resize
   useEffect(() => {

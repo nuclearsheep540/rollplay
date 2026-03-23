@@ -13,6 +13,8 @@ from .schemas import (
 )
 from modules.characters.dependencies.providers import get_character_repository
 from modules.characters.repositories.character_repository import CharacterRepository
+from modules.session.dependencies.providers import get_session_repository
+from modules.session.repositories.session_repository import SessionRepository
 from modules.characters.application.commands import CreateCharacter, UpdateCharacter, UpdateAbilityScores, DeleteCharacter, CloneCharacter
 from modules.characters.application.queries import GetCharactersByUser, GetCharacterById
 from shared.dependencies.auth import get_current_user_id
@@ -168,7 +170,8 @@ async def update_character(
     character_id: UUID,
     request: CharacterCreateRequest,
     user_id: UUID = Depends(get_current_user_id),
-    character_repo: CharacterRepository = Depends(get_character_repository)
+    character_repo: CharacterRepository = Depends(get_character_repository),
+    session_repo: SessionRepository = Depends(get_session_repository)
 ):
     """Update an existing character (full update) with multi-class support"""
     try:
@@ -198,7 +201,7 @@ async def update_character(
             # If no ability scores provided, use defaults
             ability_scores = AbilityScores.default()
 
-        command = UpdateCharacter(character_repo)
+        command = UpdateCharacter(character_repo, session_repo)
         character = command.execute(
             character_id=character_id,
             user_id=user_id,
@@ -228,7 +231,8 @@ async def update_character_ability_scores(
     character_id: UUID,
     request: UpdateAbilityScoresRequest,
     user_id: UUID = Depends(get_current_user_id),
-    character_repo: CharacterRepository = Depends(get_character_repository)
+    character_repo: CharacterRepository = Depends(get_character_repository),
+    session_repo: SessionRepository = Depends(get_session_repository)
 ):
     """Update character ability scores (partial update supported)"""
     try:
@@ -252,7 +256,7 @@ async def update_character_ability_scores(
         new_scores = character.ability_scores.update_score(**updates)
 
         # Execute command
-        command = UpdateAbilityScores(character_repo)
+        command = UpdateAbilityScores(character_repo, session_repo)
         character = command.execute(character_id, user_id, new_scores)
 
         return _to_character_response(character)
