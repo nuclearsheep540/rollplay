@@ -6,12 +6,13 @@ import { useEffect, useRef, useState } from 'react'
  * ColorPicker Component
  * Handles player seat color changes with Coloris integration
  */
-export default function ColorPicker({ 
-  currentColor, 
-  onColorChange, 
-  playerName, 
-  seatIndex, 
-  disabled = false 
+export default function ColorPicker({
+  currentColor,
+  onColorChange,
+  userId,
+  playerName,
+  seatIndex,
+  disabled = false
 }) {
   const inputRef = useRef(null);
   const [isChanging, setIsChanging] = useState(false);
@@ -119,8 +120,8 @@ export default function ColorPicker({
     setIsChanging(true);
     setCooldownActive(true);
 
-    // Call the parent's color change handler
-    onColorChange(playerName, seatIndex, newColor);
+    // Call the parent's color change handler with userId as identity
+    onColorChange(userId, seatIndex, newColor);
 
     // Set cooldown for 5 seconds
     setTimeout(() => {
@@ -179,7 +180,7 @@ export default function ColorPicker({
 export function useColorPicker(sendColorChange) {
   const [colorChangeDisabled, setColorChangeDisabled] = useState(false);
 
-  const handleColorChange = (playerName, seatIndex, newColor) => {
+  const handleColorChange = (userId, seatIndex, newColor) => {
     if (colorChangeDisabled) return;
 
     // Disable color changes for 5 seconds
@@ -187,7 +188,7 @@ export function useColorPicker(sendColorChange) {
     setTimeout(() => setColorChangeDisabled(false), 5000);
 
     // Send color change via WebSocket
-    sendColorChange(playerName, seatIndex, newColor);
+    sendColorChange(userId, seatIndex, newColor);
   };
 
   return {

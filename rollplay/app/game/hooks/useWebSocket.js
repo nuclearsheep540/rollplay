@@ -34,7 +34,7 @@ import {
   handleRemoteAudioBatch
 } from '../../audio_management';
 
-export const useWebSocket = (roomId, thisPlayer, gameContext) => {
+export const useWebSocket = (roomId, thisUserId, gameContext) => {
   const [webSocket, setWebSocket] = useState(null);
   const [isConnected, setIsConnected] = useState(false);
   const eventHandlersRef = useRef(null);
@@ -51,15 +51,15 @@ export const useWebSocket = (roomId, thisPlayer, gameContext) => {
 
   // Initialize WebSocket connection
   useEffect(() => {
-    if (!roomId || !thisPlayer) return;
+    if (!roomId || !thisUserId) return;
 
-    console.log(`🔌 Initializing WebSocket connection for room ${roomId}, player ${thisPlayer}`);
-    
+    console.log(`🔌 Initializing WebSocket connection for room ${roomId}, user ${thisUserId}`);
+
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-    const wsUrl = `${protocol}//${window.location.host}/ws/${roomId}?player_name=${thisPlayer}`;
-    
+    const wsUrl = `${protocol}//${window.location.host}/ws/${roomId}?user_id=${thisUserId}`;
+
     const ws = new WebSocket(wsUrl);
-    
+
     ws.onopen = () => {
       console.log('✅ WebSocket connected');
       setIsConnected(true);
@@ -78,13 +78,13 @@ export const useWebSocket = (roomId, thisPlayer, gameContext) => {
       try {
         const message = JSON.parse(event.data);
         const { event_type, data } = message;
-        
+
         // Check for valid event structure
         if (!event_type) {
           console.warn('WebSocket message missing event_type:', message);
           return;
         }
-        
+
         console.log(`📨 WebSocket message received: ${event_type}`, data);
 
         // Get current event handlers
@@ -192,22 +192,22 @@ export const useWebSocket = (roomId, thisPlayer, gameContext) => {
     return () => {
       ws.close();
     };
-  }, [roomId, thisPlayer]);
+  }, [roomId, thisUserId]);
 
   // Update event handlers ref when gameContext changes
   useEffect(() => {
     if (gameContext) {
       eventHandlersRef.current = {
         ...gameContext,
-        thisPlayer
+        thisUserId
       };
     }
-  }, [gameContext, thisPlayer]);
+  }, [gameContext, thisUserId]);
 
   // Create send functions (no-op stubs when disconnected so callers never get undefined)
   const noop = () => {};
   const sendFunctions = webSocket && isConnected
-    ? createSendFunctions(webSocket, isConnected, roomId, thisPlayer)
+    ? createSendFunctions(webSocket, isConnected, roomId, thisUserId)
     : {
         sendSeatChange: noop, sendSeatCountChange: noop, sendCombatStateChange: noop,
         sendPlayerKick: noop, sendDiceRoll: noop, sendClearSystemMessages: noop,

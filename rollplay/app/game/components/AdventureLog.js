@@ -3,7 +3,7 @@
 import { useEffect, useRef } from 'react'
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
 import { faCrown } from '@fortawesome/free-solid-svg-icons'
-export default function AdventureLog({ rollLog, playerSeatMap }) {
+export default function AdventureLog({ rollLog, playerSeatMap, displayNameMap = {} }) {
   const logRef = useRef(null);
 
   // Auto-scroll to top to show newest messages (with flex-col-reverse)
@@ -27,20 +27,21 @@ export default function AdventureLog({ rollLog, playerSeatMap }) {
     let currentGroup = null;
 
     reversedMessages.forEach((entry, index) => {
-      const hasPlayerName = entry.player_name && entry.player_name !== "";
-      const isPlayerMessage = (entry.type === "user" || entry.type === "dice" || entry.type === "player-roll") && hasPlayerName;
+      const hasUserId = entry.user_id && entry.user_id !== "";
+      const isPlayerMessage = (entry.type === "user" || entry.type === "dice" || entry.type === "player-roll") && hasUserId;
       const isSystemMessage = entry.type === "system";
       const isDungeonMasterMessage = entry.type === "dungeon-master";
 
       if (isPlayerMessage) {
-        const playerData = playerSeatMap[entry.player_name];
+        const playerData = playerSeatMap[entry.user_id];
         const playerIsInParty = !!playerData;
         const messageType = playerIsInParty ? "party-member" : "npc";
-        
+        const playerDisplayName = displayNameMap[entry.user_id] || entry.user_id;
+
         // Check if this continues the current group
-        if (currentGroup && 
-            currentGroup.type === messageType && 
-            currentGroup.playerName === entry.player_name) {
+        if (currentGroup &&
+            currentGroup.type === messageType &&
+            currentGroup.userId === entry.user_id) {
           // Add to existing group
           currentGroup.messages.push(entry);
         } else {
@@ -48,7 +49,8 @@ export default function AdventureLog({ rollLog, playerSeatMap }) {
           if (currentGroup) groups.push(currentGroup);
           currentGroup = {
             type: messageType,
-            playerName: entry.player_name,
+            userId: entry.user_id,
+            playerName: playerDisplayName,
             messages: [entry],
             seatColor: playerData?.seatColor || null,
             seatIndex: playerData?.seatIndex || 0,
@@ -98,7 +100,7 @@ export default function AdventureLog({ rollLog, playerSeatMap }) {
 
   // Helper function to format message content
   const formatMessageContent = (entry) => {
-    const { message, type, player_name } = entry;
+    const { message, type } = entry;
     
     switch (type) {
       case "user":

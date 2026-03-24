@@ -7,13 +7,14 @@ import { faGamepad } from '@fortawesome/free-solid-svg-icons'
 export default function PlayerCard({
     seatId,
     seats,
-    thisPlayer,
+    thisUserId,
     isSitting,
     currentTurn = null,
     onDiceRoll = null,
     playerData = null,
     onColorChange = null,
     currentColor = null,
+    displayNameMap = {},
   }) {
 
 
@@ -22,10 +23,10 @@ export default function PlayerCard({
     }, [seats[seatId]]);
 
     const currentSeat = seats[seatId];
-    const isOccupied = currentSeat.playerName !== "empty";
+    const isOccupied = currentSeat.userId && currentSeat.userId !== "empty";
     const occupantName = currentSeat.playerName;
     const isMyTurn = currentTurn === occupantName;
-    const isThisPlayerSeat = currentSeat.playerName === thisPlayer;
+    const isThisPlayerSeat = currentSeat.userId === thisUserId;
 
     // Character payload can arrive in two shapes depending on source;
     // normalize once so rendering uses a single format.
@@ -142,6 +143,7 @@ export default function PlayerCard({
                 <ColorPicker
                   currentColor={getActualSeatColor(seatId)}
                   onColorChange={onColorChange}
+                  userId={currentSeat.userId}
                   playerName={occupantName}
                   seatIndex={seatId}
                 />

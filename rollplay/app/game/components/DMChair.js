@@ -5,8 +5,8 @@
 
 import React from 'react'
 
-export default function DMChair({ dmName, isEmpty, moderators = [] }) {
-  
+export default function DMChair({ dmUserId, dmDisplayName, isEmpty, moderators = [], displayNameMap = {} }) {
+
   // Helper function to capitalize names
   const toTitleCase = (str) => {
     if (!str) return '';
@@ -14,7 +14,7 @@ export default function DMChair({ dmName, isEmpty, moderators = [] }) {
   };
 
   // Render empty DM chair
-  if (isEmpty || !dmName) {
+  if (isEmpty || !dmUserId) {
     return (
       <div 
         className={`
@@ -32,8 +32,8 @@ export default function DMChair({ dmName, isEmpty, moderators = [] }) {
     );
   }
 
-  // Render occupied DM chair
-  const visibleModerators = moderators.filter((moderator) => moderator && moderator !== dmName);
+  // Render occupied DM chair — moderators is an array of userIds, filter out the DM
+  const visibleModerators = moderators.filter((modUserId) => modUserId && modUserId !== dmUserId);
 
   return (
     <>
@@ -50,10 +50,10 @@ export default function DMChair({ dmName, isEmpty, moderators = [] }) {
         <div 
           className="flex items-center justify-between mb-[calc(4px*var(--ui-scale))]"
         >
-          <div 
+          <div
             className="font-semibold text-rose-400 text-[calc(16px*var(--ui-scale))]"
           >
-            {toTitleCase(dmName)}
+            {toTitleCase(dmDisplayName)}
           </div>
           <div 
             className="bg-rose-500/20 text-rose-400 px-[calc(6px*var(--ui-scale))] py-[calc(2px*var(--ui-scale))] rounded-full font-semibold uppercase tracking-wider text-[calc(9px*var(--ui-scale))]"
@@ -70,9 +70,9 @@ export default function DMChair({ dmName, isEmpty, moderators = [] }) {
         </div>
       </div>
 
-      {visibleModerators.map((moderator) => (
+      {visibleModerators.map((modUserId) => (
         <div
-          key={moderator}
+          key={modUserId}
           className={`
             w-[90%] rounded-lg border transition-colors duration-300 relative
             p-[calc(10px*var(--ui-scale))] mb-[calc(12px*var(--ui-scale))] border-l-4
@@ -84,7 +84,7 @@ export default function DMChair({ dmName, isEmpty, moderators = [] }) {
         >
           <div className="flex items-center justify-between mb-[calc(3px*var(--ui-scale))]">
             <div className="font-semibold text-blue-400 text-[calc(15px*var(--ui-scale))]">
-              {toTitleCase(moderator)}
+              {toTitleCase(displayNameMap[modUserId] || modUserId)}
             </div>
             <div className="bg-blue-500/20 text-blue-300 px-[calc(5px*var(--ui-scale))] py-[calc(2px*var(--ui-scale))] rounded-full font-semibold uppercase tracking-wider text-[calc(8px*var(--ui-scale))]">
               MOD

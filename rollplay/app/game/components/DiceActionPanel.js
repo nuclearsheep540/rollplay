@@ -5,7 +5,8 @@ import Modal from '@/app/shared/components/Modal'
 
 export default function DiceActionPanel({
   currentTurn,
-  thisPlayer,
+  thisUserId,
+  currentUser,
   combatActive,
   onRollDice,
   onEndTurn,
@@ -52,8 +53,11 @@ export default function DiceActionPanel({
   const [advantageMode, setAdvantageMode] = useState('normal'); // 'normal', 'advantage', 'disadvantage'
   
   // UPDATED: Check if player should see dice interface
-  const isMyTurn = currentTurn === thisPlayer && combatActive;
-  const myPrompts = activePrompts.filter(prompt => prompt.player === thisPlayer);
+  // currentTurn is a display name from initiative tracker; compare with screen_name
+  const myDisplayName = currentUser?.screen_name || '';
+  const isMyTurn = currentTurn === myDisplayName && combatActive;
+  // Prompts use userId for identity
+  const myPrompts = activePrompts.filter(prompt => prompt.player === thisUserId);
   const isPromptedToRoll = myPrompts.length > 0;
   
   // Show panel if: prompted to roll OR (in combat)
@@ -132,7 +136,7 @@ export default function DiceActionPanel({
     };
     
     if (onRollDice) {
-      onRollDice(thisPlayer, rollData); // Pass player name
+      onRollDice(thisUserId, rollData); // Pass userId as identity
     }
     setIsDiceModalOpen(false);
     // Reset states

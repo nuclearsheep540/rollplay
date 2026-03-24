@@ -23,10 +23,13 @@ export default function DicePrompt({
   isOpen,
   onClose,
   selectedPlayer,
+  selectedPlayerDisplayName,
   onPromptRoll
 }) {
-  const handlePromptPlayerForRoll = (playerName, rollType) => {
-    onPromptRoll(playerName, rollType);
+  const displayName = selectedPlayerDisplayName || selectedPlayer;
+
+  const handlePromptPlayerForRoll = (userId, rollType) => {
+    onPromptRoll(userId, rollType);
     onClose();
   };
 
@@ -39,7 +42,7 @@ export default function DicePrompt({
     >
       <div className="flex items-center justify-between mb-6">
         <h3 className={MODAL_TITLE}>
-          🎲 Prompt {selectedPlayer} to Roll
+          🎲 Prompt {displayName} to Roll
         </h3>
         <button
           className={MODAL_CLOSE_BUTTON}
@@ -132,7 +135,7 @@ export default function DicePrompt({
         <div className="space-y-3">
           <div>
             <label className={MODAL_LABEL}>
-              What should {selectedPlayer} roll for?
+              What should {displayName} roll for?
             </label>
             <input
               type="text"

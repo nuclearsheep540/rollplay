@@ -54,22 +54,18 @@ function GameContent() {
   const router = useRouter(); 
 
   const [room404, setRoom404] = useState(false)
-  const [thisPlayer, setThisPlayer] = useState()
+  const [thisUserId, setThisUserId] = useState()
   const [roomId, setRoomId] = useState()
-  
+
   // Current user state - fetched once on page load
   const [currentUser, setCurrentUser] = useState(null)
   const [userLoading, setUserLoading] = useState(true)
-
-  // Removed unused chat history state
-
-  // who generated the room
-  const [host, setHost] = useState("")
 
   // UNIFIED STRUCTURE - Replaces both seats and partyMembers
   const [gameSeats, setGameSeats] = useState([]);
 
   // Character metadata is hydrated from api-game hot state via ETL.
+  // Keyed by user_id (UUID string).
   const [playerMetadata, setPlayerMetadata] = useState({});
   const [moderators, setModerators] = useState([]);
 
@@ -88,27 +84,34 @@ function GameContent() {
   // DM seat state - string containing DM name or empty string
   const [dmSeat, setDmSeat] = useState("");
 
-  // Pre-computed player-to-seat mapping for O(1) lookups
+  // Pre-computed user-to-seat mapping for O(1) lookups (keyed by userId)
   const playerSeatMap = useMemo(() => {
     const map = {};
     gameSeats.forEach((seat, index) => {
-      if (seat.playerName !== "empty") {
-        map[seat.playerName] = {
+      if (seat.userId && seat.userId !== "empty") {
+        map[seat.userId] = {
           seatIndex: index,
-          seatColor: seatColors[index] || getSeatColor(index) // Use backend color or default
+          seatColor: seatColors[index] || getSeatColor(index)
         };
       }
     });
     return map;
   }, [gameSeats, seatColors]);
 
-  const getCharacterData = useCallback((playerName) => {
-    if (!playerName || playerName === "empty") {
+  // userId → display name map (derived from player_metadata)
+  const displayNameMap = useMemo(() => {
+    const map = {};
+    Object.entries(playerMetadata).forEach(([userId, meta]) => {
+      map[userId] = meta.player_name || userId;
+    });
+    return map;
+  }, [playerMetadata]);
+
+  const getCharacterData = useCallback((userId) => {
+    if (!userId || userId === "empty") {
       return null;
     }
-
-    const normalizedPlayerName = playerName.toLowerCase();
-    return playerMetadata[normalizedPlayerName] || null;
+    return playerMetadata[userId] || null;
   }, [playerMetadata]);
 
   // UPDATED: State management for TabletopInterface - REMOVED HARDCODED DEFAULTS
@@ -207,11 +210,12 @@ function GameContent() {
 
   const canUseModeratorTools = isModerator || isHost;
 
+  // Derive moderator status from campaign_role in player metadata
   useEffect(() => {
-    const normalizedPlayerName = (thisPlayer || currentUser?.screen_name || currentUser?.email || '').toLowerCase();
-    if (!normalizedPlayerName) return;
-    setIsModerator(moderators.includes(normalizedPlayerName));
-  }, [moderators, thisPlayer, currentUser]);
+    if (!thisUserId) return;
+    const role = playerMetadata[thisUserId]?.campaign_role;
+    setIsModerator(role === 'mod');
+  }, [playerMetadata, thisUserId]);
 
   const visibleRightTabs = useMemo(() => {
     return RIGHT_DRAWER_TABS.filter((tab) => {
@@ -305,7 +309,7 @@ function GameContent() {
     document.body.removeChild(textArea);
   };
 
-  // UPDATED onLoad function to use unified structure
+  // UPDATED onLoad function to use unified structure — userId-keyed
   async function onLoad(roomId) {
     const req = await fetch(`api/game/${roomId}`)
     if (req.status === 404) {
@@ -313,52 +317,46 @@ function GameContent() {
       setRoom404(true)
       return
     }
-  
+
     await req.json().then((res) => {
-      setHost(res["room_host"] || res["player_name"]) // Backward compatibility
-      
-      // Set DM seat from room data
+      // Set DM seat from room data (userId)
       const currentDM = res["dungeon_master"] || "";
       setDmSeat(currentDM);
-      
-      // Use actual seat layout from database if available
+
+      // Use actual seat layout from database (contains user_ids)
       const seatLayout = res["current_seat_layout"] || [];
       const maxPlayers = res["max_players"];
       const backendSeatColors = res["seat_colors"] || {};
-      const backendPlayerMetadata = Object.fromEntries(
-        Object.entries(res["player_metadata"] || {}).map(([playerName, metadata]) => [
-          playerName.toLowerCase(),
-          metadata
-        ])
-      );
+      // player_metadata is already keyed by user_id from api-game
+      const backendPlayerMetadata = res["player_metadata"] || {};
 
       setPlayerMetadata(backendPlayerMetadata);
-      
+
       // Set seat colors from backend
       setSeatColors(backendSeatColors);
-      
+
       // Initialize CSS variables for seat colors
       Object.keys(backendSeatColors).forEach(seatIndex => {
         document.documentElement.style.setProperty(
-          `--seat-color-${seatIndex}`, 
+          `--seat-color-${seatIndex}`,
           backendSeatColors[seatIndex]
         );
       });
-      
-      // Create unified seat structure from database data
+
+      // Create unified seat structure — userId is identity, playerName is display
       const initialSeats = [];
       for (let i = 0; i < maxPlayers; i++) {
-        const playerName = seatLayout[i] || "empty";
-        // Normalize player names when loading from database
-        const normalizedPlayerName = playerName !== "empty" ? playerName.toLowerCase() : "empty";
+        const userId = seatLayout[i] || "empty";
+        const meta = userId !== "empty" ? (backendPlayerMetadata[userId] || null) : null;
         initialSeats.push({
           seatId: i,
-          playerName: normalizedPlayerName,
-          characterData: normalizedPlayerName !== "empty" ? (backendPlayerMetadata[normalizedPlayerName] || null) : null,
+          userId: userId,
+          playerName: meta?.player_name || (userId !== "empty" ? userId : "empty"),
+          characterData: meta,
           isActive: false
         });
       }
-      
+
       console.log("Loaded seat layout from database:", initialSeats);
       console.log("Loaded seat colors from database:", backendSeatColors);
       setGameSeats(initialSeats);
@@ -379,25 +377,24 @@ function GameContent() {
     try {
       console.log(`🔍 Initial role check for user: ${user.screen_name || user.email} (ID: ${user.id}) in room: ${roomId}`);
 
-      // Get MongoDB-based roles (host, moderator, DM) from active game session
-      const playerName = user.screen_name || user.email;
-      const mongoRolesResponse = await fetch(`/api/game/${roomId}/roles?playerName=${playerName}`);
-      let isHost = false;
+      // Get MongoDB-based roles from active game session using user_id
+      const mongoRolesResponse = await fetch(`/api/game/${roomId}/roles?userId=${user.id}`);
+      let hostFlag = false;
       let isDMRole = false;
 
       if (mongoRolesResponse.ok) {
         const mongoRoles = await mongoRolesResponse.json();
-        isHost = mongoRoles.is_host;
-        isDMRole = mongoRoles.is_dm;  // Use MongoDB DM flag
+        hostFlag = mongoRoles.is_host;
+        isDMRole = mongoRoles.is_dm;
         console.log('📋 MongoDB roles:', mongoRoles);
       } else {
         console.error('❌ Failed to fetch MongoDB roles:', mongoRolesResponse.status);
       }
 
       // Set roles in component state
-      setIsHost(isHost);
+      setIsHost(hostFlag);
       setIsDM(isDMRole);
-      console.log(`✅ Initial roles set - Host: ${isHost}, DM: ${isDMRole}`);
+      console.log(`✅ Initial roles set - Host: ${hostFlag}, DM: ${isDMRole}`);
 
     } catch (error) {
       console.error('Error checking player roles:', error);
@@ -457,18 +454,17 @@ function GameContent() {
       console.log('Waiting for user data to load...');
       return;
     }
-    
-    // Set thisPlayer to use user's screen_name or email
-    const playerName = currentUser.screen_name || currentUser.email;
-    setThisPlayer(playerName?.toLowerCase());
-    console.log('Using player name from user data:', playerName);
+
+    // Set thisUserId to the authenticated user's UUID
+    setThisUserId(currentUser.id);
+    console.log('Using user ID:', currentUser.id);
 
     // fetches the room ID, and loads data
     onLoad(roomId)
-    
+
     console.log('roomId ', roomId)
-    console.log('thisPlayer ', thisPlayer)
-    console.log('roomId && thisPlayer ', roomId && thisPlayer)
+    console.log('thisUserId ', thisUserId)
+    console.log('roomId && thisUserId ', roomId && thisUserId)
 
     // Initial role check on page load - single source of truth
     if (roomId && currentUser) {
@@ -476,41 +472,22 @@ function GameContent() {
     }
   }, [currentUser, userLoading])
 
-  // Check spectator status when campaign ID is available.
-  // Staff users (DM/Host/Moderator) are never spectators even without a character.
+  // Derive spectator status from campaign_role in player metadata.
+  // Explicit: spectator if campaign_role === 'spectator', regardless of character state.
   useEffect(() => {
-    // Don't decide spectator status until roles have been resolved
-    if (isDM === null || !campaignId || !currentUser) return;
+    if (!thisUserId || isDM === null) return;
 
-    // Staff are never spectators
-    if (isDM || isHost || isModerator) {
+    const role = playerMetadata[thisUserId]?.campaign_role;
+    if (!role) return; // metadata not loaded yet
+
+    if (role === 'spectator') {
+      setIsSpectator(true);
+      console.log('👁️ campaign_role is spectator — entering as spectator');
+    } else {
       setIsSpectator(false);
-      console.log('✅ User has staff role - not a spectator');
-      return;
+      console.log(`✅ campaign_role is ${role} — not a spectator`);
     }
-
-    const checkSpectatorStatus = async () => {
-      try {
-        const response = await authFetch('/api/characters/', { credentials: 'include' });
-        if (!response.ok) return;
-
-        const characters = await response.json();
-        const selectedChar = characters.find(char => char.active_campaign === campaignId);
-
-        if (selectedChar) {
-          setIsSpectator(false);
-          console.log(`✅ Character found for campaign: ${selectedChar.character_name}`);
-        } else {
-          setIsSpectator(true);
-          console.log('👁️ No character selected - entering as spectator');
-        }
-      } catch (error) {
-        console.error('Error checking spectator status:', error);
-      }
-    };
-
-    checkSpectatorStatus();
-  }, [campaignId, currentUser, isDM, isHost, isModerator]);
+  }, [playerMetadata, thisUserId, isDM]);
 
   // Measure total nav height (including spectator banner when present)
   // and publish as --nav-height on the game-interface container so all
@@ -643,8 +620,9 @@ function GameContent() {
       const displacedPlayers = [];
       if (newSeatCount < gameSeats.length) {
         for (let i = newSeatCount; i < gameSeats.length; i++) {
-          if (gameSeats[i] && gameSeats[i].playerName !== "empty") {
+          if (gameSeats[i] && gameSeats[i].userId !== "empty") {
             displacedPlayers.push({
+              userId: gameSeats[i].userId,
               playerName: gameSeats[i].playerName,
               seatId: i,
               characterData: gameSeats[i].characterData
@@ -665,6 +643,7 @@ function GameContent() {
           // Add new empty seat
           newSeats.push({
             seatId: i,
+            userId: "empty",
             playerName: "empty",
             characterData: null,
             isActive: false
@@ -680,7 +659,7 @@ function GameContent() {
         },
         body: JSON.stringify({
           max_players: newSeatCount,
-          updated_by: getCurrentPlayerName(),
+          updated_by: thisUserId,
           displaced_players: displacedPlayers
         }),
       });
@@ -721,8 +700,8 @@ function GameContent() {
           message: log.message,
           type: log.type,
           timestamp: formatTimestamp(log.timestamp),
-          player_name: log.from_player, // Map from_player to player_name for styling
-          prompt_id: log.prompt_id // Include prompt_id for removal matching
+          user_id: log.from_user_id, // userId for seat color lookup + display name resolution
+          prompt_id: log.prompt_id
         }));
         
         // Replace your initial hardcoded logs with database logs
@@ -823,39 +802,38 @@ function GameContent() {
     }
   };
 
-  // UPDATED: Handle player kick
-  const handleKickPlayer = async (playerToKick, disconnected) => {
+  // Handle player kick — targets by userId
+  const handleKickPlayer = async (userIdToKick, disconnected) => {
     try {
-      
-      // Find the seat with this player and empty it
-      const updatedSeats = gameSeats.map(seat => 
-        seat.playerName === playerToKick 
-          ? { ...seat, playerName: "empty", characterData: null, isActive: false }
+      // Find the seat with this user and empty it
+      const updatedSeats = gameSeats.map(seat =>
+        seat.userId === userIdToKick
+          ? { ...seat, userId: "empty", playerName: "empty", characterData: null, isActive: false }
           : seat
       );
-  
+
       // Send kick event via websocket using hook method
-      sendPlayerKick(playerToKick);
-  
+      sendPlayerKick(userIdToKick);
+
       // Send updated seat layout using hook method
       sendSeatChange(updatedSeats);
-  
+
       // Update local state
       setGameSeats(updatedSeats);
 
       if (disconnected) {
         return
       }
-  
+
       // Adventure log will be handled by server broadcast
-  
+
     } catch (error) {
       console.error('Error kicking player:', error);
       alert('Failed to kick player. Please try again.');
     }
   };
 
-  const addToLog = useCallback((message, type, playerName = null, promptId = null) => {
+  const addToLog = useCallback((message, type, userId = null, promptId = null) => {
     const now = new Date();
     const timestamp = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 
@@ -864,7 +842,7 @@ function GameContent() {
       message,
       type,
       timestamp,
-      player_name: playerName
+      user_id: userId
     };
 
     // Add prompt_id if provided
@@ -875,30 +853,29 @@ function GameContent() {
     setRollLog(prev => [...prev, newEntry]);
   }, []);
 
-  // Handle role changes from ModeratorControls and WebSocket events
-  const handleRoleChange = useCallback(async (action, playerName) => {
-    console.log(`Role change: ${action} for ${playerName}`);
+  // Handle role changes from ModeratorControls and WebSocket events — uses userId
+  const handleRoleChange = useCallback(async (action, targetUserId) => {
+    console.log(`Role change: ${action} for ${targetUserId}`);
 
     // Update DM seat based on the action
     if (action === 'set_dm') {
-      setDmSeat(playerName);
-      setIsDM(playerName?.toLowerCase() === getCurrentPlayerName());
+      setDmSeat(targetUserId);
+      setIsDM(targetUserId === thisUserId);
 
       // Business logic: If new DM is sitting in a party seat, remove them from it
-      const playerSeatIndex = gameSeats.findIndex(seat => seat.playerName === playerName);
-      if (playerSeatIndex !== -1) {
-        console.log(`🎭 Removing ${playerName} from party seat ${playerSeatIndex} as they become DM`);
+      const seatIndex = gameSeats.findIndex(seat => seat.userId === targetUserId);
+      if (seatIndex !== -1) {
+        console.log(`🎭 Removing ${targetUserId} from party seat ${seatIndex} as they become DM`);
 
-        // Create updated seats with the DM removed from party
         const newSeats = [...gameSeats];
-        newSeats[playerSeatIndex] = {
-          ...newSeats[playerSeatIndex],
+        newSeats[seatIndex] = {
+          ...newSeats[seatIndex],
+          userId: "empty",
           playerName: "empty",
           characterData: null,
           isActive: false
         };
 
-        // Update local state and broadcast seat change
         setGameSeats(newSeats);
         sendSeatChangeRef.current?.(newSeats);
       }
@@ -909,9 +886,7 @@ function GameContent() {
 
     // Trigger refresh of ModeratorControls room data for all users
     setRoleChangeTrigger(Date.now());
-
-    // Role changes are now broadcasted via WebSocket to all connected users
-  }, [gameSeats]);
+  }, [gameSeats, thisUserId]);
 
   // Create a setter function for playerSeatMap updates
   const setPlayerSeatMap = useCallback((updaterFunction) => {
@@ -1008,7 +983,7 @@ function GameContent() {
 
     // Current state values
     gameSeats,
-    thisPlayer,
+    thisUserId,
     currentUser,
     lobbyUsers,
     disconnectTimeouts,
@@ -1060,7 +1035,7 @@ function GameContent() {
     // Session ended modal
     setSessionEndedData
   }), [
-    gameSeats, thisPlayer, currentUser, lobbyUsers,
+    gameSeats, thisUserId, currentUser, lobbyUsers,
     disconnectTimeouts, currentInitiativePromptId, remoteTrackStates,
     addToLog, getCharacterData, handleRoleChange, setPlayerSeatMap,
     playRemoteTrack, resumeRemoteTrack, pauseRemoteTrack, stopRemoteTrack,
@@ -1091,7 +1066,7 @@ function GameContent() {
     sendRemoteAudioResume,
     sendRemoteAudioBatch,
     registerHandler
-  } = useWebSocket(roomId, thisPlayer, gameContext);
+  } = useWebSocket(roomId, thisUserId, gameContext);
 
   // Sync ref so handleRoleChange can call sendSeatChange without circular dep
   sendSeatChangeRef.current = sendSeatChange;
@@ -1146,7 +1121,7 @@ function GameContent() {
     sendMapClear,
     sendMapConfigUpdate,
     sendMapRequest,
-  } = useMapWebSocket(webSocket, isConnected, roomId, thisPlayer, mapContext, registerHandler);
+  } = useMapWebSocket(webSocket, isConnected, roomId, thisUserId, mapContext, registerHandler);
 
   // Image management WebSocket hook
   const imageContext = {
@@ -1159,7 +1134,7 @@ function GameContent() {
     sendImageLoad,
     sendImageClear,
     sendImageRequest,
-  } = useImageWebSocket(webSocket, isConnected, roomId, thisPlayer, imageContext, registerHandler);
+  } = useImageWebSocket(webSocket, isConnected, roomId, thisUserId, imageContext, registerHandler);
 
   // Map/Image handlers are managed by their respective WebSocket hooks
   // Initial loading is handled by HTTP fetch in onLoad function
@@ -1176,14 +1151,14 @@ function GameContent() {
     // 1. Unlock audio (drains pending play ops with corrected offsets)
     await unlockAudio();
 
-    if (!roomId || !thisPlayer) {
+    if (!roomId || !thisUserId) {
       return;
     }
 
     // 2. Re-check live role state to avoid stale client role flags on refresh.
     let liveRoles = null;
     try {
-      const roleResponse = await fetch(`/api/game/${roomId}/roles?playerName=${encodeURIComponent(thisPlayer)}`);
+      const roleResponse = await fetch(`/api/game/${roomId}/roles?userId=${encodeURIComponent(thisUserId)}`);
       if (roleResponse.ok) {
         liveRoles = await roleResponse.json();
       }
@@ -1196,19 +1171,19 @@ function GameContent() {
       return;
     }
 
-    const characterData = getCharacterData(thisPlayer);
+    const characterData = getCharacterData(thisUserId);
     if (!characterData?.character_id) {
       setIsSpectator(true);
       return;
     }
 
     // 3. Auto-seat only valid adventurers who are not already seated.
-    const alreadySeated = gameSeats.some(s => s.playerName === thisPlayer);
+    const alreadySeated = gameSeats.some(s => s.userId === thisUserId);
     if (alreadySeated) {
       return;
     }
 
-    const emptyIdx = gameSeats.findIndex(s => s.playerName === "empty");
+    const emptyIdx = gameSeats.findIndex(s => s.userId === "empty");
     if (emptyIdx === -1) {
       return;
     }
@@ -1216,7 +1191,8 @@ function GameContent() {
     const newSeats = [...gameSeats];
     newSeats[emptyIdx] = {
       ...newSeats[emptyIdx],
-      playerName: thisPlayer,
+      userId: thisUserId,
+      playerName: displayNameMap[thisUserId] || getCurrentPlayerName(),
       characterData,
       isActive: false
     };
@@ -1234,45 +1210,39 @@ function GameContent() {
     setDicePortalActive(false);
   };
 
-  // UPDATED: DM prompts specific player to roll
-  const promptPlayerRoll = (playerName, rollType) => {
-    if (!playerName) {
+  // DM prompts specific player to roll — uses userId
+  const promptPlayerRoll = (userId, rollType) => {
+    if (!userId) {
       console.log("No player selected for roll prompt");
       return;
     }
-    
+
     // Generate unique prompt ID
-    const promptId = `${playerName}_${rollType}_${Date.now()}`;
-    
+    const promptId = `${userId}_${rollType}_${Date.now()}`;
+
     // Use the updated WebSocket method
-    sendDicePrompt(playerName, rollType, promptId);
-    
+    sendDicePrompt(userId, rollType, promptId);
+
     // Update local state
     const newPrompt = {
       id: promptId,
-      player: playerName,
+      player: userId,
       rollType: rollType,
-      promptedBy: getCurrentPlayerName()
+      promptedBy: thisUserId
     };
-    
+
     setActivePrompts(prev => {
-      // Check if this player already has an active prompt for this roll type
-      const existingIndex = prev.findIndex(p => p.player === playerName && p.rollType === rollType);
+      const existingIndex = prev.findIndex(p => p.player === userId && p.rollType === rollType);
       if (existingIndex >= 0) {
-        // Replace existing prompt
         const updated = [...prev];
         updated[existingIndex] = newPrompt;
         return updated;
       } else {
-        // Add new prompt
         return [...prev, newPrompt];
       }
     });
-    
+
     setIsDicePromptActive(true);
-    
-    // Note: Adventure log entry will be added via the WebSocket broadcast
-    // to prevent duplication for the DM who initiated the prompt
   };
 
   // UPDATED: Clear dice prompt (can clear specific prompt or all prompts)
@@ -1292,16 +1262,16 @@ function GameContent() {
     }
   };
 
-  // NEW: Prompt all players for initiative (collective approach)
+  // Prompt all seated players for initiative — sends userIds
   const promptAllPlayersInitiative = () => {
-    const activePlayers = gameSeats.filter(seat => seat.playerName !== "empty");
+    const activePlayers = gameSeats.filter(seat => seat.userId !== "empty");
     if (activePlayers.length === 0) {
       alert("No players in the game to prompt for initiative!");
       return;
     }
-    
-    const playerNames = activePlayers.map(player => player.playerName);
-    sendInitiativePromptAll(playerNames);
+
+    const userIds = activePlayers.map(player => player.userId);
+    sendInitiativePromptAll(userIds);
   };
 
   // Handle dice roll
@@ -1400,8 +1370,8 @@ function GameContent() {
     return `${primaryDice.toLowerCase()} + ${secondDice.toLowerCase()}`;
   };
 
-  // UPDATED: Handle dice rolls from PlayerCard components or DiceActionPanel
-  const handlePlayerDiceRoll = (playerName, rollData) => {
+  // Handle dice rolls from PlayerCard components or DiceActionPanel — userId is identity
+  const handlePlayerDiceRoll = (userId, rollData) => {
     // Extract rollFor at the top level so it's available throughout the function
     const rollFor = rollData.rollFor;
     
@@ -1547,15 +1517,15 @@ function GameContent() {
       formattedMessage = `: ${diceNotation}:  ${rollDetails}`;
     }
     
-    // Clear prompts for this player if they match the roll type
-    const playerPrompts = activePrompts.filter(prompt => 
-      prompt.player === playerName && 
-      (rollFor === prompt.rollType || rollFor === null) // Match specific roll type or clear if Standard Roll
+    // Clear prompts for this user if they match the roll type
+    const playerPrompts = activePrompts.filter(prompt =>
+      prompt.player === userId &&
+      (rollFor === prompt.rollType || rollFor === null)
     );
-    
+
     // Get the prompt_id for adventure log cleanup (use first matching prompt)
     const promptIdForCleanup = playerPrompts.length > 0 ? playerPrompts[0].id : null;
-    
+
     // Send raw dice data to backend for formatting
     if (sendDiceRoll) {
       const diceData = {
@@ -1567,7 +1537,7 @@ function GameContent() {
         context: rollFor && rollFor !== "Standard Roll" ? rollFor : "",
         promptId: promptIdForCleanup
       };
-      sendDiceRoll(playerName, diceData);
+      sendDiceRoll(userId, diceData);
     } else {
       console.error("sendDiceRoll function not available - WebSocket may not be connected");
     }
@@ -1584,15 +1554,15 @@ function GameContent() {
     // This is where you'd implement turn progression
   };
 
-  // Handle color changes from PlayerCard
-  const handlePlayerColorChange = (playerName, seatIndex, newColor) => {
+  // Handle color changes from PlayerCard — uses userId
+  const handlePlayerColorChange = (userId, seatIndex, newColor) => {
     if (!sendColorChange) {
       console.error('sendColorChange function not available');
       return;
     }
-    
-    console.log(`🎨 ${playerName} changing color (seat ${seatIndex}) to ${newColor}`);
-    sendColorChange(playerName, seatIndex, newColor);
+
+    console.log(`🎨 ${userId} changing color (seat ${seatIndex}) to ${newColor}`);
+    sendColorChange(userId, seatIndex, newColor);
   };
 
   // MAIN RENDER
@@ -1724,13 +1694,15 @@ function GameContent() {
         {activeLeftDrawer === 'party' && (
           <>
             <DMChair
-              dmName={dmSeat}
+              dmUserId={dmSeat}
+              dmDisplayName={displayNameMap[dmSeat] || ''}
               isEmpty={dmSeat === ""}
               moderators={moderators}
+              displayNameMap={displayNameMap}
             />
 
-            {gameSeats.filter(seat => !isSpectator || canUseModeratorTools || seat.playerName !== "empty").map((seat) => {
-              const isSitting = seat.playerName === getCurrentPlayerName();
+            {gameSeats.filter(seat => !isSpectator || canUseModeratorTools || seat.userId !== "empty").map((seat) => {
+              const isSitting = seat.userId === thisUserId;
               const currentColor = seatColors[seat.seatId] || getSeatColor(seat.seatId);
 
               return (
@@ -1738,13 +1710,14 @@ function GameContent() {
                   key={seat.seatId}
                   seatId={seat.seatId}
                   seats={gameSeats}
-                  thisPlayer={getCurrentPlayerName()}
+                  thisUserId={thisUserId}
                   isSitting={isSitting}
                   currentTurn={currentTurn}
                   onDiceRoll={handlePlayerDiceRoll}
                   playerData={seat.characterData}
                   onColorChange={handlePlayerColorChange}
                   currentColor={currentColor}
+                  displayNameMap={displayNameMap}
                 />
               );
             })}
@@ -1761,6 +1734,7 @@ function GameContent() {
           <AdventureLog
             rollLog={filteredRollLog}
             playerSeatMap={playerSeatMap}
+            displayNameMap={displayNameMap}
           />
         )}
       </Drawer>
@@ -1801,7 +1775,7 @@ function GameContent() {
                   gameSeats={gameSeats}
                   lobbyUsers={lobbyUsers}
                   roomId={roomId}
-                  thisPlayer={getCurrentPlayerName()}
+                  thisUserId={thisUserId}
                   currentUser={currentUser}
                   onRoleChange={handleRoleChange}
                   sendRoleChange={sendRoleChange}
@@ -1809,6 +1783,8 @@ function GameContent() {
                   handleKickPlayer={handleKickPlayer}
                   handleClearSystemMessages={handleClearSystemMessages}
                   roleChangeTrigger={roleChangeTrigger}
+                  displayNameMap={displayNameMap}
+                  playerMetadata={playerMetadata}
                 />
               )}
               {activeRightDrawer === 'map' && isDM && (
@@ -1852,6 +1828,7 @@ function GameContent() {
                   gameSeats={gameSeats}
                   activePrompts={activePrompts}
                   clearDicePrompt={clearDicePrompt}
+                  displayNameMap={displayNameMap}
                 />
               )}
               {activeRightDrawer === 'audio' && isDM && (
@@ -1942,13 +1919,12 @@ function GameContent() {
 
       {/* DiceActionPanel - only show if user is sitting in a seat OR is DM */}
       {(() => {
-        const playerName = getCurrentPlayerName();
-        const isPlayerSeated = gameSeats.some(seat => seat.playerName === playerName);
+        const isPlayerSeated = gameSeats.some(seat => seat.userId === thisUserId);
         const canUseDice = isPlayerSeated || isDM;
         return canUseDice && (
           <DiceActionPanel
             currentTurn={currentTurn}
-            thisPlayer={playerName}
+            thisUserId={thisUserId}
             currentUser={currentUser}
             combatActive={combatActive}
             onRollDice={handlePlayerDiceRoll}
@@ -2035,7 +2011,7 @@ function GameContent() {
 
             {/* Connected players — absolutely positioned, grows upward */}
             {(() => {
-              const seated = gameSeats.filter(s => s.playerName !== 'empty').map(s => s.playerName);
+              const seated = gameSeats.filter(s => s.userId !== 'empty').map(s => s.playerName);
               const inLobby = lobbyUsers.filter(u => u.status === 'connected').map(u => u.name);
               const allConnected = [...new Set([...seated, ...inLobby])];
               if (allConnected.length === 0) return null;
@@ -2128,9 +2104,9 @@ export default function Game() {
         height: '100vh',
         background: 'linear-gradient(135deg, #1e1b4b 0%, #312e81 50%, #1e3a8a 100%)',
         color: 'white',
-        fontSize: '18px'
+        fontSize: '28px'
       }}>
-        <div>🎲 Loading Tabletop Tavern...</div>
+        <div>Loading Tabletop Tavern...</div>
       </div>
     }>
       <GameContent />
