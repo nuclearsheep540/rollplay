@@ -1,8 +1,11 @@
+# Copyright (C) 2025 Matthew Davey
+# SPDX-License-Identifier: GPL-3.0-or-later
+
 """campaign roles and rename host_id to created_by
 
-Revision ID: a1b2c3d4e5f6
-Revises: 7fed31949a00
-Create Date: 2026-03-23 00:00:00.000000
+Revision ID: 88c248956ec9
+Revises: 82593774abd1
+Create Date: 2026-03-24 20:12:31.285876
 
 """
 from alembic import op
@@ -10,14 +13,15 @@ import sqlalchemy as sa
 
 
 # revision identifiers, used by Alembic.
-revision = 'whydoesclaudealwayswanttocreatealembicrevisinsmanually'
-down_revision = '7fed31949a00'
+revision = '88c248956ec9'
+down_revision = '82593774abd1'
 branch_labels = None
 depends_on = None
 
 
 def upgrade() -> None:
-    # 1. Drop old check constraint and add new one with all roles
+    # 1. Drop old check constraint and index, add new constraint with all roles
+    op.drop_index('ix_campaign_members_user_id_role', table_name='campaign_members')
     op.drop_constraint('ck_campaign_member_role', 'campaign_members', type_='check')
     op.create_check_constraint(
         'ck_campaign_member_role',
@@ -34,8 +38,8 @@ def upgrade() -> None:
         ON CONFLICT ON CONSTRAINT uq_campaign_member DO NOTHING
     """)
 
-    # 3. Update existing 'player' rows: if the user has a character locked to
-    #    this campaign, keep them as 'player'; otherwise set to 'spectator'
+    # 3. Update existing 'player' rows: if the user has no character locked to
+    #    this campaign, demote them to 'spectator'
     op.execute("""
         UPDATE campaign_members cm
         SET role = 'spectator'
@@ -43,12 +47,12 @@ def upgrade() -> None:
         AND NOT EXISTS (
             SELECT 1 FROM characters c
             WHERE c.user_id = cm.user_id
-            AND c.active_campaign = cm.campaign_id
+            AND c.active_in_campaign_id = cm.campaign_id
             AND c.is_deleted = false
         )
     """)
 
-    # 4. Rename host_id column to created_by
+    # 4. Rename host_id column to created_by (preserves data, unlike drop+add)
     op.alter_column('campaigns', 'host_id', new_column_name='created_by')
 
 
@@ -66,10 +70,11 @@ def downgrade() -> None:
         DELETE FROM campaign_members WHERE role = 'dm'
     """)
 
-    # Restore old check constraint
+    # Restore old check constraint and index
     op.drop_constraint('ck_campaign_member_role', 'campaign_members', type_='check')
     op.create_check_constraint(
         'ck_campaign_member_role',
         'campaign_members',
         "role IN ('player', 'invited')"
     )
+    op.create_index('ix_campaign_members_user_id_role', 'campaign_members', ['user_id', 'role'], unique=False)
