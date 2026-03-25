@@ -16,6 +16,24 @@ ModeratorControls makes two sequential HTTP calls:
 
 This avoids introducing inter-service HTTP coupling (api-game → api-site), which doesn't exist today.
 
+## ETL Analysis: Why No Migration Changes Are Needed
+
+The existing ETL already handles `campaign_role` correctly at every stage:
+
+**Cold → Hot (StartSession):** `_build_player_characters()` in `api-site/modules/session/application/commands.py` already extracts `campaign_role` from each user's `campaign_members` row in PostgreSQL and includes it in the `PlayerCharacter` DTO sent to api-game. api-game stores this verbatim in `player_metadata`. The only change needed here is removing the redundant `moderators` array seeding loop (Phase 3, item 2).
+
+**Hot → Cold (PauseSession / FinishSession):** These commands extract audio/map/image configs but do NOT extract `campaign_role` back to PostgreSQL. This is **correct** for our design because:
+- The dual-update pattern persists role changes to PostgreSQL **at change time** (the api-site PUT call in step 1)
+- There's nothing to extract back — PostgreSQL is already up to date
+
+**Resume (restart after pause):** Runs `StartSession` again, which re-extracts `campaign_role` fresh from PostgreSQL. Any role changes made during the session or while paused are correctly picked up because they were already persisted to PostgreSQL by the api-site endpoint.
+
+**Mid-session changes:** Our dual-update ensures both stores stay in sync:
+1. api-site PUT → PostgreSQL updated (persistent, survives session end)
+2. api-game POST → MongoDB `player_metadata.campaign_role` updated (live) + WebSocket broadcast
+
+**Net result:** The SHELVED plan's ETL concern is fully addressed. No changes to `_build_player_characters()`, `_extract_and_sync_game_state()`, `PauseSession`, or `FinishSession` are required.
+
 ---
 
 ## Phase 1: api-site — New Role Update Endpoint
