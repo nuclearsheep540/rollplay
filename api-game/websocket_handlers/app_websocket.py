@@ -38,7 +38,7 @@ def register_websocket_routes(app: FastAPI):
                     "event_type": "initial_state",
                     "data": {
                         "seat_layout": room.get("seat_layout", []),
-                        "dungeon_master": room.get("dungeon_master", ""),
+                        "dungeon_master": room.get("dungeon_master", {}),
                         "moderators": room.get("moderators", []),
                         "combat_active": room.get("combat_active", False),
                         "max_players": room.get("max_players", 8),

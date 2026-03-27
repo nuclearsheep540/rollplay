@@ -270,7 +270,7 @@ export default function ModeratorControls({
         </div>
         {expandedSections.dm && (
           <div>
-            {!roomData?.dungeon_master && (
+            {!roomData?.dungeon_master?.user_id && (
               <button 
                 className={MODERATOR_CHILD}
                 onClick={() => openDMModal('set_dm')}
@@ -279,21 +279,21 @@ export default function ModeratorControls({
               </button>
             )}
             
-            {roomData?.dungeon_master && (isHost || isDM) && (
+            {roomData?.dungeon_master?.user_id && (isHost || isDM) && (
               <button
                 className={MODERATOR_CHILD}
-                onClick={() => handleRoleAction('unset_dm', roomData.dungeon_master)}
+                onClick={() => handleRoleAction('unset_dm', roomData.dungeon_master.user_id)}
               >
                 Remove Dungeon Master
               </button>
             )}
 
             {/* Display current DM */}
-            {roomData?.dungeon_master && (
+            {roomData?.dungeon_master?.user_id && (
               <div className={MODERATOR_CHILD_LAST}>
                 <div>Current DM:</div>
                 <div>
-                  {displayNameMap[roomData.dungeon_master] || roomData.dungeon_master}
+                  {roomData.dungeon_master.player_name || roomData.dungeon_master.user_id}
                 </div>
               </div>
             )}
@@ -306,11 +306,12 @@ export default function ModeratorControls({
         open={isModeratorModalOpen}
         onClose={() => setIsModeratorModalOpen(false)}
         size="md"
-        panelClassName="bg-slate-800 border border-emerald-500/30 rounded-lg shadow-2xl"
+        showBackdrop={false}
+        panelClassName="bg-slate-800 border border-blue-500/30 rounded-lg shadow-2xl"
       >
         <div style={{ padding: 'calc(24px * var(--ui-scale))' }}>
             <div className="flex items-center justify-between mb-6">
-              <h3 className="text-emerald-300 font-bold">
+              <h3 className="text-blue-300 font-bold">
                 {selectedAction === 'add_moderator' ? 'Add Moderator' : 'Remove Moderator'}
               </h3>
               <button 
@@ -391,11 +392,11 @@ export default function ModeratorControls({
                         {/* Seated Players Section */}
                         {seatedFiltered.length > 0 && (
                           <>
-                            <div className="text-emerald-400/70 text-xs mb-2 font-medium">SEATED PLAYERS</div>
+                        <div className="text-blue-400/70 text-xs mb-2 font-medium">SEATED PLAYERS</div>
                             {seatedFiltered.map((player) => (
                               <button
                                 key={player.seatId}
-                                className="w-full text-left p-3 bg-emerald-500/10 border border-emerald-500/30 text-emerald-300 rounded transition-colors duration-200 hover:bg-emerald-500/20"
+                                className="w-full text-left p-3 bg-blue-500/10 border border-blue-500/30 text-blue-300 rounded transition-colors duration-200 hover:bg-blue-500/20"
                                 onClick={() => handleRoleAction(selectedAction, player.userId)}
                               >
                                 <div className="flex items-center justify-between">
@@ -407,7 +408,7 @@ export default function ModeratorControls({
                                       </div>
                                     )}
                                   </div>
-                                  <div className="text-emerald-400 text-sm">
+                                  <div className="text-blue-400 text-sm">
                                     Add
                                   </div>
                                 </div>
@@ -419,22 +420,22 @@ export default function ModeratorControls({
                         {/* Lobby Users Section - only for add_moderator */}
                         {lobbyFiltered.length > 0 && (
                           <>
-                            {seatedFiltered.length > 0 && <div className="my-3 border-t border-emerald-500/20"></div>}
-                            <div className="text-emerald-400/70 text-xs mb-2 font-medium">LOBBY USERS</div>
+                            {seatedFiltered.length > 0 && <div className="my-3 border-t border-blue-500/20"></div>}
+                            <div className="text-blue-400/70 text-xs mb-2 font-medium">LOBBY USERS</div>
                             {lobbyFiltered.map((user) => (
                               <button
                                 key={user.seatId}
-                                className="w-full text-left p-3 bg-emerald-500/10 border border-emerald-500/30 text-emerald-300 rounded transition-colors duration-200 hover:bg-emerald-500/20"
+                                className="w-full text-left p-3 bg-blue-500/10 border border-blue-500/30 text-blue-300 rounded transition-colors duration-200 hover:bg-blue-500/20"
                                 onClick={() => handleRoleAction(selectedAction, user.userId)}
                               >
                                 <div className="flex items-center justify-between">
                                   <div>
                                     <div className="font-medium">{user.playerName}</div>
-                                    <div className="text-emerald-400/70 text-sm">
+                                    <div className="text-blue-400/70 text-sm">
                                       Connected • In Lobby
                                     </div>
                                   </div>
-                                  <div className="text-emerald-400 text-sm">
+                                  <div className="text-blue-400 text-sm">
                                     Add
                                   </div>
                                 </div>

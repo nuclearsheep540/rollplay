@@ -13,7 +13,7 @@ from sqlalchemy import update
 
 from shared_contracts.assets import AssetRef
 from shared_contracts.audio import AudioChannelState
-from shared_contracts.character import PlayerCharacter
+from shared_contracts.character import DungeonMaster, PlayerCharacter
 from shared_contracts.display import ActiveDisplayType
 from shared_contracts.image import ImageConfig
 from shared_contracts.map import MapConfig
@@ -468,11 +468,15 @@ class StartSession:
             map_config_for_game = self._restore_map_config(session, asset_lookup, url_map)
             image_config_for_game = self._restore_image_config(session, asset_lookup, url_map)
             player_characters_for_game = self._build_player_characters(session, campaign)
+            dm_contract = DungeonMaster(
+                user_id=str(campaign.dm_id),
+                player_name=host_user.screen_name or host_user.email or "",
+            )
 
             payload = SessionStartPayload(
                 session_id=str(session.id),
                 campaign_id=str(session.campaign_id),
-                dm_user_id=str(campaign.dm_id),
+                dungeon_master=dm_contract,
                 max_players=session.max_players,
                 joined_user_ids=[str(uid) for uid in session.joined_users],
                 player_characters=player_characters_for_game,

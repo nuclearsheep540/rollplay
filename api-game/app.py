@@ -58,7 +58,7 @@ def build_role_change_payload(room_id: str, action: str, target_user_id: str, ch
             "changed_by": changed_by,
             "message": message,
             "moderators": room.get("moderators", []),
-            "dungeon_master": room.get("dungeon_master", ""),
+            "dungeon_master": room.get("dungeon_master", {}),
         }
     }
 
@@ -371,7 +371,12 @@ async def set_dm(room_id: str, request: dict):
         if not user_id:
             raise HTTPException(status_code=400, detail="user_id is required")
 
-        success = GameService.set_dm(room_id, user_id)
+        # Resolve player_name from hot-state metadata or request
+        player_metadata = check_room.get("player_metadata", {})
+        meta = player_metadata.get(user_id, {}) if isinstance(player_metadata, dict) else {}
+        player_name = request.get("player_name") or meta.get("player_name", "")
+
+        success = GameService.set_dm(room_id, user_id, player_name)
         if success:
             role_change_message = build_role_change_payload(
                 room_id,
@@ -397,9 +402,9 @@ async def unset_dm(room_id: str):
         if not check_room:
             raise HTTPException(status_code=404, detail=f"Room {room_id} not found")
         
-        # Get current DM name before removing
-        current_dm = check_room.get("dungeon_master", "")
-        
+        # Get current DM user_id before removing
+        current_dm = check_room.get("dungeon_master", {}).get("user_id", "")
+
         success = GameService.unset_dm(room_id)
         if success:
             # Broadcast role change event to all clients in the room
@@ -483,7 +488,7 @@ async def create_session(request: SessionStartPayload):
             seat_colors={str(i): get_default_color(i) for i in range(request.max_players)},
             created_at=datetime.utcnow(),
             moderators=moderators,
-            dungeon_master=request.dm_user_id,
+            dungeon_master=request.dungeon_master.model_dump(),
             available_assets=available_assets,
             campaign_id=request.campaign_id,
             player_metadata=player_metadata,
@@ -840,7 +845,7 @@ async def update_seat_layout(room_id: str, request: dict):
 
         non_empty_players = [seat for seat in seat_layout if isinstance(seat, str) and seat != "empty"]
 
-        room_dm = str(check_room.get("dungeon_master", ""))
+        room_dm = check_room.get("dungeon_master", {}).get("user_id", "")
         if room_dm and room_dm in non_empty_players:
             raise HTTPException(status_code=409, detail="Dungeon Master cannot sit in party seats")
 

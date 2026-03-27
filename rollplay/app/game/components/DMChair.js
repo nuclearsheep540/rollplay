@@ -5,7 +5,7 @@
 
 import React from 'react'
 
-export default function DMChair({ dmUserId, dmDisplayName, isEmpty, moderators = [], displayNameMap = {} }) {
+export default function DMChair({ dungeonMaster, moderators = [], displayNameMap = {} }) {
 
   // Helper function to capitalize names
   const toTitleCase = (str) => {
@@ -14,7 +14,7 @@ export default function DMChair({ dmUserId, dmDisplayName, isEmpty, moderators =
   };
 
   // Render empty DM chair
-  if (isEmpty || !dmUserId) {
+  if (!dungeonMaster?.user_id) {
     return (
       <div 
         className={`
@@ -33,7 +33,7 @@ export default function DMChair({ dmUserId, dmDisplayName, isEmpty, moderators =
   }
 
   // Render occupied DM chair — moderators is an array of userIds, filter out the DM
-  const visibleModerators = moderators.filter((modUserId) => modUserId && modUserId !== dmUserId);
+  const visibleModerators = moderators.filter((modUserId) => modUserId && modUserId !== dungeonMaster.user_id);
 
   return (
     <>
@@ -53,7 +53,7 @@ export default function DMChair({ dmUserId, dmDisplayName, isEmpty, moderators =
           <div
             className="font-semibold text-rose-400 text-[calc(16px*var(--ui-scale))]"
           >
-            {toTitleCase(dmDisplayName)}
+            {toTitleCase(dungeonMaster.player_name)}
           </div>
           <div 
             className="bg-rose-500/20 text-rose-400 px-[calc(6px*var(--ui-scale))] py-[calc(2px*var(--ui-scale))] rounded-full font-semibold uppercase tracking-wider text-[calc(9px*var(--ui-scale))]"

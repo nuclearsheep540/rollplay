@@ -122,12 +122,27 @@ class ConnectionManager:
         if room_id not in self.room_users:
             return
 
+        # Look up player names from the room's player_metadata
+        from gameservice import GameService
+        room = GameService.get_room(room_id)
+        player_metadata = room.get("player_metadata", {}) if room else {}
+        dm = room.get("dungeon_master", {}) if room else {}
+
         # Include all users tracked in the room (connected and disconnecting),
         # independent of seat/party state.
         lobby_users = []
         for uid, user_data in self.room_users[room_id].items():
+            # Resolve display name: player_metadata → DM contract → fallback to uid
+            meta = player_metadata.get(uid)
+            if meta:
+                display_name = meta.get("player_name", uid)
+            elif isinstance(dm, dict) and dm.get("user_id") == uid:
+                display_name = dm.get("player_name", uid)
+            else:
+                display_name = uid
             lobby_users.append({
-                "name": uid,
+                "name": display_name,
+                "user_id": uid,
                 "id": uid,
                 "status": user_data.get("status", "connected")
             })

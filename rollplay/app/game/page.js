@@ -81,8 +81,8 @@ function GameContent() {
   // Role change trigger to refresh ModeratorControls when any role changes occur
   const [roleChangeTrigger, setRoleChangeTrigger] = useState(Date.now());
 
-  // DM seat state - string containing DM name or empty string
-  const [dmSeat, setDmSeat] = useState("");
+  // DM state - object {user_id, player_name, campaign_role} or null
+  const [dungeonMaster, setDungeonMaster] = useState(null);
 
   // Pre-computed user-to-seat mapping for O(1) lookups (keyed by userId)
   const playerSeatMap = useMemo(() => {
@@ -103,6 +103,17 @@ function GameContent() {
     const map = {};
     Object.entries(playerMetadata).forEach(([userId, meta]) => {
       map[userId] = meta.player_name || userId;
+    });
+    return map;
+  }, [playerMetadata]);
+
+  // userId → character name map (derived from player_metadata)
+  const characterNameMap = useMemo(() => {
+    const map = {};
+    Object.entries(playerMetadata).forEach(([userId, meta]) => {
+      if (meta.character_name) {
+        map[userId] = meta.character_name;
+      }
     });
     return map;
   }, [playerMetadata]);
@@ -319,9 +330,8 @@ function GameContent() {
     }
 
     await req.json().then((res) => {
-      // Set DM seat from room data (userId)
-      const currentDM = res["dungeon_master"] || "";
-      setDmSeat(currentDM);
+      // Set DM from room data (object: {user_id, player_name, campaign_role})
+      setDungeonMaster(res["dungeon_master"] || null);
 
       // Use actual seat layout from database (contains user_ids)
       const seatLayout = res["current_seat_layout"] || [];
@@ -700,7 +710,7 @@ function GameContent() {
           message: log.message,
           type: log.type,
           timestamp: formatTimestamp(log.timestamp),
-          user_id: log.from_user_id, // userId for seat color lookup + display name resolution
+          user_id: log.from_player, // userId for seat color lookup + display name resolution
           prompt_id: log.prompt_id
         }));
         
@@ -857,9 +867,8 @@ function GameContent() {
   const handleRoleChange = useCallback(async (action, targetUserId) => {
     console.log(`Role change: ${action} for ${targetUserId}`);
 
-    // Update DM seat based on the action
+    // Update isDM flag — dungeonMaster object is set by WebSocket handler
     if (action === 'set_dm') {
-      setDmSeat(targetUserId);
       setIsDM(targetUserId === thisUserId);
 
       // Business logic: If new DM is sitting in a party seat, remove them from it
@@ -880,7 +889,6 @@ function GameContent() {
         sendSeatChangeRef.current?.(newSeats);
       }
     } else if (action === 'unset_dm') {
-      setDmSeat("");
       setIsDM(false);
     }
 
@@ -978,6 +986,7 @@ function GameContent() {
     setCampaignId,
     setPlayerMetadata,
     setModerators,
+    setDungeonMaster,
     setChannelMuted,
     setChannelSoloed,
 
@@ -1694,9 +1703,7 @@ function GameContent() {
         {activeLeftDrawer === 'party' && (
           <>
             <DMChair
-              dmUserId={dmSeat}
-              dmDisplayName={displayNameMap[dmSeat] || ''}
-              isEmpty={dmSeat === ""}
+              dungeonMaster={dungeonMaster}
               moderators={moderators}
               displayNameMap={displayNameMap}
             />
@@ -1735,6 +1742,7 @@ function GameContent() {
             rollLog={filteredRollLog}
             playerSeatMap={playerSeatMap}
             displayNameMap={displayNameMap}
+            characterNameMap={characterNameMap}
           />
         )}
       </Drawer>
@@ -1828,6 +1836,7 @@ function GameContent() {
                   gameSeats={gameSeats}
                   activePrompts={activePrompts}
                   clearDicePrompt={clearDicePrompt}
+                  characterNameMap={characterNameMap}
                   displayNameMap={displayNameMap}
                 />
               )}

@@ -30,7 +30,7 @@ class GameSettings(BaseModel):
     created_at: datetime
     seat_colors: dict
     moderators: list = []  # user_ids
-    dungeon_master: str = ""  # user_id of the DM
+    dungeon_master: dict = {}  # {user_id, player_name, campaign_role}
     available_assets: list = []  # Asset refs from campaign library (maps, audio, images)
     campaign_id: str = ""  # PostgreSQL campaign ID for proxying asset requests to api-site
     player_metadata: dict = {}  # user_id -> character metadata hydrated during cold -> hot ETL
@@ -128,7 +128,7 @@ class GameService:
         # Validate: Prevent DM and moderators from taking player seats
         room = collection.find_one(filter_criteria)
         if room:
-            dm_user_id = room.get("dungeon_master", "")
+            dm_user_id = room.get("dungeon_master", {}).get("user_id", "")
             if dm_user_id and dm_user_id in seat_layout:
                 raise Exception("Dungeon Master cannot sit in party seats")
 
@@ -261,7 +261,7 @@ class GameService:
             return False
 
         # DM is always a moderator
-        if room.get("dungeon_master", "") == user_id:
+        if room.get("dungeon_master", {}).get("user_id") == user_id:
             return True
 
         return user_id in room.get("moderators", [])
@@ -272,7 +272,7 @@ class GameService:
         room = GameService.get_room(room_id)
         if not room:
             return False
-        return room.get("dungeon_master", "") == user_id
+        return room.get("dungeon_master", {}).get("user_id") == user_id
 
     @staticmethod
     def player_has_selected_character(room_id: str, user_id: str) -> bool:
@@ -330,7 +330,7 @@ class GameService:
         return result.modified_count > 0
 
     @staticmethod
-    def set_dm(room_id: str, user_id: str):
+    def set_dm(room_id: str, user_id: str, player_name: str):
         """Set a user as dungeon master"""
         collection = GameService._get_active_session()
 
@@ -338,7 +338,7 @@ class GameService:
 
         result = collection.update_one(
             filter_criteria,
-            {"$set": {"dungeon_master": user_id}}
+            {"$set": {"dungeon_master": {"user_id": user_id, "player_name": player_name, "campaign_role": "dm"}}}
         )
 
         if result.matched_count == 0:
@@ -355,7 +355,7 @@ class GameService:
 
         result = collection.update_one(
             filter_criteria,
-            {"$set": {"dungeon_master": ""}}
+            {"$set": {"dungeon_master": {}}}
         )
 
         if result.matched_count == 0:

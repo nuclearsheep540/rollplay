@@ -52,9 +52,9 @@ export const handleInitialState = (data, handlers) => {
     handlers.setModerators(moderators || []);
   }
 
-  // Set DM userId
-  if (handlers.setDmSeat && dungeon_master) {
-    handlers.setDmSeat(dungeon_master);
+  // Set DM object {user_id, player_name, campaign_role}
+  if (handlers.setDungeonMaster) {
+    handlers.setDungeonMaster(dungeon_master && dungeon_master.user_id ? dungeon_master : null);
   }
 
   // Set campaign ID for asset library calls
@@ -433,14 +433,19 @@ export const handleAdventureLogRemoved = (data, { setRollLog }) => {
   console.log(`🗑️ Removed adventure log entry with prompt_id: ${prompt_id}`);
 };
 
-export const handleRoleChange = (data, { handleRoleChange, setModerators }) => {
+export const handleRoleChange = (data, { handleRoleChange, setModerators, setDungeonMaster }) => {
   console.log("🎭 Role change received:", data);
 
-  const { action, target_player, changed_by, message, moderators } = data;
+  const { action, target_player, changed_by, message, moderators, dungeon_master } = data;
 
   // moderators is now a userId array — no lowercase normalization
   if (setModerators && Array.isArray(moderators)) {
     setModerators(moderators);
+  }
+
+  // Update DM object from broadcast
+  if (setDungeonMaster) {
+    setDungeonMaster(dungeon_master && dungeon_master.user_id ? dungeon_master : null);
   }
 
   // Trigger role refresh — target_player is a userId

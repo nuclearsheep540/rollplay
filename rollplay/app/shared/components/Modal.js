@@ -33,11 +33,12 @@ const SIZE_CLASSES = {
  * @param {string} panelClassName - Override panel classes (replaces default bg/border/text)
  * @param {React.ReactNode} children - Modal content
  */
-export default function Modal({ open, onClose, size = 'md', initialFocus, panelClassName, children }) {
+export default function Modal({ open, onClose, size = 'md', initialFocus, panelClassName, showBackdrop = true, children }) {
   return (
     <Transition show={open} as={Fragment}>
       <Dialog onClose={onClose} initialFocus={initialFocus} className="relative z-50">
         {/* Backdrop */}
+        {showBackdrop && (
         <TransitionChild
           as={Fragment}
           enter="ease-out duration-200"
@@ -49,6 +50,7 @@ export default function Modal({ open, onClose, size = 'md', initialFocus, panelC
         >
           <DialogBackdrop className="fixed inset-0 bg-overlay-dark backdrop-blur-sm" />
         </TransitionChild>
+        )}
 
         {/* Panel */}
         <div className="fixed inset-0 overflow-y-auto">

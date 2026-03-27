@@ -3,7 +3,7 @@
 import { useEffect, useRef } from 'react'
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
 import { faCrown } from '@fortawesome/free-solid-svg-icons'
-export default function AdventureLog({ rollLog, playerSeatMap, displayNameMap = {} }) {
+export default function AdventureLog({ rollLog, playerSeatMap, displayNameMap = {}, characterNameMap = {} }) {
   const logRef = useRef(null);
 
   // Auto-scroll to top to show newest messages (with flex-col-reverse)
@@ -36,7 +36,7 @@ export default function AdventureLog({ rollLog, playerSeatMap, displayNameMap = 
         const playerData = playerSeatMap[entry.user_id];
         const playerIsInParty = !!playerData;
         const messageType = playerIsInParty ? "party-member" : "npc";
-        const playerDisplayName = displayNameMap[entry.user_id] || entry.user_id;
+        const playerDisplayName = characterNameMap[entry.user_id] || displayNameMap[entry.user_id] || entry.user_id;
 
         // Check if this continues the current group
         if (currentGroup &&

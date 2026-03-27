@@ -1242,6 +1242,7 @@ class WebsocketEvent():
     async def map_config_update(websocket, data, event_data, user_id, client_id, manager):
         """Update map configuration (grid settings, etc.)"""
         room_id = client_id  # Use client_id as room_id
+        display_name = WebsocketEvent._display_name(room_id, user_id)
         filename = event_data.get("filename")
         grid_config = event_data.get("grid_config")
         map_image_config = event_data.get("map_image_config")
@@ -1271,7 +1272,7 @@ class WebsocketEvent():
                         "filename": filename,
                         "grid_config": grid_config,
                         "map_image_config": map_image_config,
-                        "updated_by": player_name
+                        "updated_by": user_id
                     }
                 }
                 
@@ -1308,7 +1309,7 @@ class WebsocketEvent():
                     }
                 }
                 
-                print(f"🗺️ Sent current map to {player_name} in room {room_id}")
+                print(f"🗺️ Sent current map to {user_id} in room {room_id}")
                 # Only send to the requesting client (not broadcast)
                 await websocket.send_json(map_response_message)
                 return WebsocketEventResult(broadcast_message=None)
@@ -1332,9 +1333,9 @@ class WebsocketEvent():
     @staticmethod
     async def image_load(websocket, data, event_data, user_id, client_id, manager):
         """Load/set active image for the room"""
-        print(f"🖼️ Image load handler called for room {client_id} by {player_name}")
-
         room_id = client_id
+        display_name = WebsocketEvent._display_name(room_id, user_id)
+        print(f"🖼️ Image load handler called for room {client_id} by {display_name}")
         image_data = event_data.get("image_data")
 
         if not room_id or not image_data:
@@ -1351,7 +1352,7 @@ class WebsocketEvent():
                 filename=image_data.get("filename", "unknown.jpg"),
                 original_filename=image_data.get("original_filename", image_data.get("filename", "unknown.jpg")),
                 file_path=image_data.get("file_path", ""),
-                loaded_by=player_name,
+                loaded_by=user_id,
                 active=True
             )
 
@@ -1361,8 +1362,8 @@ class WebsocketEvent():
                 saved_image = image_service.get_active_image(room_id)
 
                 if saved_image:
-                    log_message = f"🖼️ {player_name.title()} loaded image: {image_settings.original_filename}"
-                    adventure_log.add_log_entry(room_id, log_message, LogType.SYSTEM, player_name)
+                    log_message = f"🖼️ {display_name.title()} loaded image: {image_settings.original_filename}"
+                    adventure_log.add_log_entry(room_id, log_message, LogType.SYSTEM, user_id)
 
                     active_display = image_service.get_active_display(room_id)
 
@@ -1371,7 +1372,7 @@ class WebsocketEvent():
                         "data": {
                             "image": saved_image,
                             "active_display": active_display,
-                            "loaded_by": player_name
+                            "loaded_by": user_id
                         }
                     }
                 else:
@@ -1401,6 +1402,7 @@ class WebsocketEvent():
     async def image_clear(websocket, data, event_data, user_id, client_id, manager):
         """Clear the active image for the room"""
         room_id = client_id
+        display_name = WebsocketEvent._display_name(room_id, user_id)
 
         if not room_id:
             print(f"❌ Invalid image clear request: missing room_id")
@@ -1410,8 +1412,8 @@ class WebsocketEvent():
             success = image_service.clear_active_image(room_id)
 
             if success:
-                log_message = f"🖼️ {player_name.title()} cleared the active image"
-                adventure_log.add_log_entry(room_id, log_message, LogType.SYSTEM, player_name)
+                log_message = f"🖼️ {display_name.title()} cleared the active image"
+                adventure_log.add_log_entry(room_id, log_message, LogType.SYSTEM, user_id)
 
                 active_display = image_service.get_active_display(room_id)
 
@@ -1419,7 +1421,7 @@ class WebsocketEvent():
                     "event_type": "image_clear",
                     "data": {
                         "active_display": active_display,
-                        "cleared_by": player_name
+                        "cleared_by": user_id
                     }
                 }
 
@@ -1456,7 +1458,7 @@ class WebsocketEvent():
                     }
                 }
 
-                print(f"🖼️ Sent current image to {player_name} in room {room_id}")
+                print(f"🖼️ Sent current image to {user_id} in room {room_id}")
                 await websocket.send_json(response_message)
                 return WebsocketEventResult(broadcast_message=None)
             else:

@@ -8,6 +8,14 @@ from typing import List
 from .base import ContractModel
 
 
+class DungeonMaster(ContractModel):
+    """DM metadata for session ETL. No character fields — the DM runs the session, not a character."""
+
+    user_id: str
+    player_name: str
+    campaign_role: str = "dm"
+
+
 class PlayerCharacter(ContractModel):
     """Character metadata for a rostered player in session ETL."""
 

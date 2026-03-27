@@ -26,6 +26,7 @@ export default function CombatControlsPanel({
   gameSeats,
   activePrompts = [],
   clearDicePrompt,
+  characterNameMap = {},
   displayNameMap = {},
 }) {
   // State for dice roll prompts
@@ -46,9 +47,6 @@ export default function CombatControlsPanel({
   // Get list of players currently in seats (excluding empty seats) — identity is seat.userId
   const activePlayers = gameSeats?.filter(seat => seat.userId && seat.userId !== "empty") || [];
 
-  const getCharacterDisplayName = (player) => {
-    return player?.characterData?.character_name || player?.characterData?.name || null;
-  };
 
   return (
     <div className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden flex flex-col">
@@ -56,7 +54,7 @@ export default function CombatControlsPanel({
           isOpen={rollPromptModalOpen}
           onClose={() => setRollPromptModalOpen(false)}
           selectedPlayer={selectedPlayerForModal}
-          selectedPlayerDisplayName={displayNameMap[selectedPlayerForModal] || selectedPlayerForModal}
+          selectedPlayerDisplayName={characterNameMap[selectedPlayerForModal] || displayNameMap[selectedPlayerForModal] || selectedPlayerForModal}
           onPromptRoll={handlePromptPlayerForRoll}
         />
 
@@ -83,7 +81,7 @@ export default function CombatControlsPanel({
                   <div className="flex items-center justify-between">
                     <div>
                       <div>
-                        {titleCase(displayNameMap[prompt.player] || prompt.player)} • {prompt.rollType}
+                        {titleCase(characterNameMap[prompt.player] || displayNameMap[prompt.player] || prompt.player)} • {prompt.rollType}
                       </div>
                     </div>
                     <button
@@ -159,10 +157,7 @@ export default function CombatControlsPanel({
                       setRollPromptModalOpen(true);
                     }}
                   >
-                    {titleCase(player.playerName || displayNameMap[player.userId] || player.userId)}
-                    {getCharacterDisplayName(player) && (
-                      <span> as {getCharacterDisplayName(player)}</span>
-                    )}
+                    {titleCase(characterNameMap[player.userId] || displayNameMap[player.userId] || player.userId)}
                   </button>
                 ))
               ) : (
