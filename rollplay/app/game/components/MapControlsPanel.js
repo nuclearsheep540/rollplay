@@ -319,16 +319,16 @@ export default function MapControlsPanel({
               <input
                 type="range"
                 min="8"
-                max="500"
-                step="1"
+                max="100"
+                step="0.5"
                 value={cellSize}
-                onChange={(e) => { if (onCellSizeChange) onCellSizeChange(parseInt(e.target.value) - cellSize); }}
+                onChange={(e) => { if (onCellSizeChange) onCellSizeChange(parseFloat(e.target.value) - cellSize); }}
                 className="w-full h-2 bg-gray-700 rounded-lg appearance-none cursor-pointer slider"
               />
               <div className="flex justify-between text-xs text-gray-500 mt-1">
                 <span>Small (8px)</span>
                 <span>Medium</span>
-                <span>Large (500px)</span>
+                <span>Large (100px)</span>
               </div>
             </div>
 

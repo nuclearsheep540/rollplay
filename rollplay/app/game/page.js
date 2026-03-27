@@ -98,14 +98,18 @@ function GameContent() {
     return map;
   }, [gameSeats, seatColors]);
 
-  // userId → display name map (derived from player_metadata)
+  // userId → display name map (derived from player_metadata + DM contract)
   const displayNameMap = useMemo(() => {
     const map = {};
     Object.entries(playerMetadata).forEach(([userId, meta]) => {
       map[userId] = meta.player_name || userId;
     });
+    // DM isn't in playerMetadata (no character), add from contract
+    if (dungeonMaster?.user_id && dungeonMaster.player_name) {
+      map[dungeonMaster.user_id] = dungeonMaster.player_name;
+    }
     return map;
-  }, [playerMetadata]);
+  }, [playerMetadata, dungeonMaster]);
 
   // userId → character name map (derived from player_metadata)
   const characterNameMap = useMemo(() => {
@@ -588,7 +592,7 @@ function GameContent() {
     const { naturalWidth, naturalHeight } = mapNaturalDimensions;
     const cols = gc?.grid_width  || 10;
     const rows = gc?.grid_height || 10;
-    setLiveCellSize(Math.max(8, Math.round(Math.min(naturalWidth / cols, naturalHeight / rows))));
+    setLiveCellSize(Math.max(8, Math.min(naturalWidth / cols, naturalHeight / rows)));
   }, [mapNaturalDimensions]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Default colors used when no grid_config exists yet (fresh map)
@@ -1733,6 +1737,7 @@ function GameContent() {
             <LobbyPanel
               lobbyUsers={lobbyUsers}
               systemMessages={systemMessages}
+              displayNameMap={displayNameMap}
             />
           </>
         )}
@@ -1812,7 +1817,7 @@ function GameContent() {
                   onTuningModeChange={setTuningMode}
                   onOffsetChange={(ox, oy) => setLiveTuning({ offsetX: ox, offsetY: oy })}
                   cellSize={liveCellSize}
-                  onCellSizeChange={(delta) => setLiveCellSize(prev => Math.max(8, Math.min(500, prev + delta)))}
+                  onCellSizeChange={(delta) => setLiveCellSize(prev => Math.max(8, Math.min(100, parseFloat((prev + delta).toFixed(1)))))}
                   liveGridCols={liveGridCols}
                   liveGridRows={liveGridRows}
                 />
@@ -1903,7 +1908,7 @@ function GameContent() {
               <GridTuningOverlay
                 onOffsetXChange={(delta) => setLiveTuning(prev => ({ ...prev, offsetX: prev.offsetX + delta }))}
                 onOffsetYChange={(delta) => setLiveTuning(prev => ({ ...prev, offsetY: prev.offsetY + delta }))}
-                onCellSizeChange={(delta) => setLiveCellSize(prev => Math.max(8, Math.min(500, prev + delta)))}
+                onCellSizeChange={(delta) => setLiveCellSize(prev => Math.max(8, Math.min(100, parseFloat((prev + delta).toFixed(1)))))}
                 onColChange={(delta) => setLiveGridCols(prev => Math.max(2, prev + delta))}
                 onRowChange={(delta) => setLiveGridRows(prev => Math.max(2, prev + delta))}
               />

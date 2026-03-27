@@ -3,7 +3,7 @@
 
 """Shared character DTOs used at service boundaries."""
 
-from typing import List
+from typing import List, Optional
 
 from .base import ContractModel
 
@@ -30,3 +30,13 @@ class PlayerCharacter(ContractModel):
     hp_current: int
     hp_max: int
     ac: int
+
+
+class SessionUser(ContractModel):
+    """Any user who joined a session. Character data is optional —
+    moderators and spectators participate without characters."""
+
+    user_id: str
+    player_name: str
+    campaign_role: str
+    character: Optional[PlayerCharacter] = None

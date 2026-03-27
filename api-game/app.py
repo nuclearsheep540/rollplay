@@ -475,11 +475,19 @@ async def create_session(request: SessionStartPayload):
         # Key player_metadata by user_id, seed moderators from campaign_role
         player_metadata = {}
         moderators = []
-        if request.player_characters:
-            for player in request.player_characters:
-                player_metadata[player.user_id] = player.model_dump()
-                if player.campaign_role == "mod":
-                    moderators.append(player.user_id)
+        if request.session_users:
+            for session_user in request.session_users:
+                # Flatten: top-level identity + character fields (if present)
+                entry = {
+                    "user_id": session_user.user_id,
+                    "player_name": session_user.player_name,
+                    "campaign_role": session_user.campaign_role,
+                }
+                if session_user.character:
+                    entry.update(session_user.character.model_dump())
+                player_metadata[session_user.user_id] = entry
+                if session_user.campaign_role == "mod":
+                    moderators.append(session_user.user_id)
 
         # Create minimal session
         settings = GameSettings(

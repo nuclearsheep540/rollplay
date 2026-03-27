@@ -13,7 +13,7 @@ from sqlalchemy import update
 
 from shared_contracts.assets import AssetRef
 from shared_contracts.audio import AudioChannelState
-from shared_contracts.character import DungeonMaster, PlayerCharacter
+from shared_contracts.character import DungeonMaster, PlayerCharacter, SessionUser
 from shared_contracts.display import ActiveDisplayType
 from shared_contracts.image import ImageConfig
 from shared_contracts.map import MapConfig
@@ -238,31 +238,29 @@ class StartSession:
         self.asset_repo = asset_repository
         self.s3_service = s3_service
 
-    def _build_player_characters(self, session: SessionEntity, campaign) -> List[PlayerCharacter]:
-        """Build ETL character DTOs for rostered users with campaign-bound characters."""
-        player_characters = []
+    def _build_session_users(self, session: SessionEntity, campaign) -> List[SessionUser]:
+        """Build SessionUser DTOs for ALL joined users. Character data is optional."""
+        session_users = []
 
         for user_id in session.joined_users:
             user = self.user_repo.get_by_id(user_id)
             if not user:
-                logger.warning(f"Skipping ETL character lookup for missing user {user_id}")
-                continue
-
-            character = self.character_repo.get_user_character_for_campaign(user_id, session.campaign_id)
-            if not character:
-                logger.info(f"No campaign-bound character for user {user_id} in session {session.id}")
+                logger.warning(f"Skipping ETL for missing user {user_id}")
                 continue
 
             player_name = user.screen_name or user.email or ""
             if not player_name:
-                logger.warning(f"Skipping ETL character for user {user_id} with no player_name")
+                logger.warning(f"Skipping ETL for user {user_id} with no player_name")
                 continue
 
             role = campaign.get_role(user_id) if campaign else CampaignRole.SPECTATOR
-            class_names = [class_info.character_class.value for class_info in character.character_classes]
 
-            player_characters.append(
-                PlayerCharacter(
+            # Character is optional — moderators and spectators don't have one
+            character_contract = None
+            character = self.character_repo.get_user_character_for_campaign(user_id, session.campaign_id)
+            if character:
+                class_names = [class_info.character_class.value for class_info in character.character_classes]
+                character_contract = PlayerCharacter(
                     user_id=str(user_id),
                     player_name=player_name,
                     campaign_role=role.value,
@@ -275,10 +273,18 @@ class StartSession:
                     hp_max=character.hp_max,
                     ac=character.ac,
                 )
+
+            session_users.append(
+                SessionUser(
+                    user_id=str(user_id),
+                    player_name=player_name,
+                    campaign_role=role.value,
+                    character=character_contract,
+                )
             )
 
-        logger.info(f"Built {len(player_characters)} player character DTOs for session {session.id}")
-        return player_characters
+        logger.info(f"Built {len(session_users)} session user DTOs for session {session.id}")
+        return session_users
 
     async def _generate_presigned_urls_parallel(self, assets):
         """
@@ -467,7 +473,7 @@ class StartSession:
             audio_config_for_game = self._restore_audio_config(session, asset_lookup, url_map)
             map_config_for_game = self._restore_map_config(session, asset_lookup, url_map)
             image_config_for_game = self._restore_image_config(session, asset_lookup, url_map)
-            player_characters_for_game = self._build_player_characters(session, campaign)
+            session_users_for_game = self._build_session_users(session, campaign)
             dm_contract = DungeonMaster(
                 user_id=str(campaign.dm_id),
                 player_name=host_user.screen_name or host_user.email or "",
@@ -479,7 +485,7 @@ class StartSession:
                 dungeon_master=dm_contract,
                 max_players=session.max_players,
                 joined_user_ids=[str(uid) for uid in session.joined_users],
-                player_characters=player_characters_for_game,
+                session_users=session_users_for_game,
                 assets=[
                     AssetRef(
                         id=str(asset.id),

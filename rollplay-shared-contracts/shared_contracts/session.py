@@ -8,7 +8,7 @@ from typing import Dict, List, Optional
 from .assets import AssetRef
 from .base import ContractModel
 from .audio import AudioChannelState, AudioTrackConfig
-from .character import DungeonMaster, PlayerCharacter
+from .character import DungeonMaster, PlayerCharacter, SessionUser
 from .display import ActiveDisplayType
 from .image import ImageConfig
 from .map import MapConfig
@@ -35,7 +35,7 @@ class SessionStartPayload(ContractModel):
     dungeon_master: DungeonMaster
     max_players: int = 8
     joined_user_ids: List[str] = []
-    player_characters: List[PlayerCharacter] = []
+    session_users: List[SessionUser] = []
     assets: List[AssetRef] = []
     audio_config: Dict[str, AudioChannelState] = {}
     audio_track_config: Dict[str, AudioTrackConfig] = {}
