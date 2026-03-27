@@ -25,9 +25,6 @@ class ImageSettings(BaseModel):
     active: bool = True
 
     def __init__(self, **data):
-        # Lowercase the loaded_by name
-        if 'loaded_by' in data:
-            data['loaded_by'] = data['loaded_by'].lower()
         super().__init__(**data)
 
 

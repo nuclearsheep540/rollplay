@@ -132,5 +132,5 @@ class GetCampaignMembers:
             })
 
         # Sort: DM first, then alphabetically
-        members.sort(key=lambda m: (not m['is_host'], m['username'].lower()))
+        members.sort(key=lambda m: (not m['is_host'], m['username']))
         return members

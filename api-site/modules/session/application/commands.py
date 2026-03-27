@@ -253,7 +253,7 @@ class StartSession:
                 logger.info(f"No campaign-bound character for user {user_id} in session {session.id}")
                 continue
 
-            player_name = (user.screen_name or user.email or "").lower()
+            player_name = user.screen_name or user.email or ""
             if not player_name:
                 logger.warning(f"Skipping ETL character for user {user_id} with no player_name")
                 continue

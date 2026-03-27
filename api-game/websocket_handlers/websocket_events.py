@@ -1126,7 +1126,7 @@ class WebsocketEvent():
     @staticmethod
     async def map_load(websocket, data, event_data, user_id, client_id, manager):
         """Load/set active map for the room"""
-        print(f"🗺️ Map load handler called for room {client_id} by {player_name}")
+        print(f"🗺️ Map load handler called for room {client_id} by {user_id}")
         print(f"🗺️ event_data: {event_data}")
         print(f"🗺️ data: {data}")
         
@@ -1163,7 +1163,7 @@ class WebsocketEvent():
                 file_path=map_data.get("file_path", ""),
                 grid_config=grid_config_to_use,
                 map_image_config=map_data.get("map_image_config"),
-                uploaded_by=player_name,
+                uploaded_by=user_id,
                 active=True
             )
             
@@ -1175,16 +1175,12 @@ class WebsocketEvent():
                 saved_map = map_service.get_active_map(room_id)
                 
                 if saved_map:
-                    # Log map loading
-                    log_message = f"🗺️ {player_name.title()} loaded map: {map_settings.original_filename}"
-                    adventure_log.add_log_entry(room_id, log_message, LogType.SYSTEM, player_name)
-                    
                     # Broadcast the actual saved map (with preserved grid_config from MongoDB)
                     map_load_message = {
                         "event_type": "map_load",
                         "data": {
                             "map": saved_map,
-                            "loaded_by": player_name
+                            "loaded_by": user_id
                         }
                     }
                 else:
@@ -1224,15 +1220,11 @@ class WebsocketEvent():
             success = map_service.clear_active_map(room_id)
             
             if success:
-                # Log map clearing
-                log_message = f"🗺️ {player_name.title()} cleared the active map"
-                adventure_log.add_log_entry(room_id, log_message, LogType.SYSTEM, player_name)
-                
                 # Broadcast to all clients
                 map_clear_message = {
                     "event_type": "map_clear",
                     "data": {
-                        "cleared_by": player_name
+                        "cleared_by": user_id
                     }
                 }
                 
