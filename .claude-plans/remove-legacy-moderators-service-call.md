@@ -44,11 +44,11 @@ This follows the existing pattern: `api-auth` calls `api-site:/api/users/interna
 
 ---
 
-## Phase 1: api-site — Internal Role Change Endpoint
+## Phase 1: api-site — Campaign Role Change Endpoint
 
 ### `api-site/modules/campaign/api/schemas.py`
-- Add `InternalSetRoleRequest(campaign_id, requesting_user_id, target_user_id, new_role)`
-- Add `InternalSetRoleResponse(success, campaign_id, target_user_id, new_role)`
+- Add `CampaignSetRoleRequest(campaign_id, requesting_user_id, target_user_id, new_role)`
+- Add `CampaignSetRoleResponse(success, campaign_id, target_user_id, new_role)`
 
 ### `api-site/modules/campaign/application/commands.py`
 - Add `SetMemberRole` command:
@@ -64,8 +64,8 @@ This follows the existing pattern: `api-auth` calls `api-site:/api/users/interna
   - This enforces the rule even outside live sessions (e.g., via dashboard)
 
 ### `api-site/modules/campaign/api/endpoints.py`
-- Add `POST /internal/set-role` endpoint
-  - No JWT auth — internal Docker-network only (same pattern as `/api/users/internal/resolve-user`)
+- Add `POST /set-role` endpoint (on campaign router, so full path is `/api/campaigns/set-role`)
+  - No JWT auth — Docker-network only, not exposed via NGINX
   - Injects `CampaignRepository` via `Depends()`
   - Creates `SetMemberRole` command, executes, returns response
   - ValueError → 400, Exception → 500
@@ -82,7 +82,7 @@ This follows the existing pattern: `api-auth` calls `api-site:/api/users/interna
 - Thin async httpx client following `api-auth/auth/passwordless.py` pattern
 - `async def request_role_change(campaign_id, requesting_user_id, target_user_id, new_role) -> dict`
 - `httpx.AsyncClient(timeout=10.0)` — same timeout as api-auth uses
-- POST to `{API_SITE_URL}/api/campaigns/internal/set-role`
+- POST to `{API_SITE_URL}/api/campaigns/set-role`
 - Returns parsed JSON on 200
 - Raises `ValueError` on 400 (api-site rejected — detail message passed through)
 - Raises `Exception` on network error or unexpected status
@@ -216,9 +216,9 @@ No retry logic — user can retry manually, and ETL at session start always re-s
 
 | File | Change |
 |------|--------|
-| `api-site/modules/campaign/api/schemas.py` | Add `InternalSetRoleRequest`, `InternalSetRoleResponse` |
+| `api-site/modules/campaign/api/schemas.py` | Add `CampaignSetRoleRequest`, `CampaignSetRoleResponse` |
 | `api-site/modules/campaign/application/commands.py` | Add `SetMemberRole` command, update `SelectCharacterForCampaign` to reject MODs |
-| `api-site/modules/campaign/api/endpoints.py` | Add `POST /internal/set-role` endpoint |
+| `api-site/modules/campaign/api/endpoints.py` | Add `POST /set-role` endpoint |
 | `api-game/config/settings.py` | Add `API_SITE_INTERNAL_URL` |
 | `api-game/site_client.py` | **NEW** — async httpx client for api-site |
 | `api-game/gameservice.py` | Remove `moderators` field + old methods, add `update_player_role()`, rewrite `is_moderator()`, fix seat validation |

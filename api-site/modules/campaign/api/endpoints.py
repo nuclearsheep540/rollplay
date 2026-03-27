@@ -13,6 +13,8 @@ from .schemas import (
     CampaignSummaryResponse,
     CampaignMemberResponse,
     CharacterSelectRequest,
+    CampaignSetRoleRequest,
+    CampaignSetRoleResponse,
 )
 from modules.session.api.schemas import (
     CreateSessionRequest, SessionResponse
@@ -33,7 +35,8 @@ from modules.campaign.application.commands import (
     CancelCampaignInvite,
     LeaveCampaign,
     SelectCharacterForCampaign,
-    ReleaseCharacterFromCampaign
+    ReleaseCharacterFromCampaign,
+    SetMemberRole,
 )
 from modules.characters.repositories.character_repository import CharacterRepository
 from modules.characters.dependencies.providers import get_character_repository
@@ -595,5 +598,36 @@ async def release_character_from_campaign(
             "character_id": str(character.id),
             "character_name": character.character_name
         }
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+
+
+# Internal service-to-service endpoints (Docker network only, no JWT)
+@router.post("/set-role", response_model=CampaignSetRoleResponse)
+async def set_campaign_role(
+    request: CampaignSetRoleRequest,
+    campaign_repo: CampaignRepository = Depends(campaign_repository),
+    character_repo: CharacterRepository = Depends(get_character_repository),
+):
+    """
+    Set a campaign member's role. Called by api-game during live sessions.
+
+    Not exposed via NGINX — only accessible within Docker network (http://api-site:8082).
+    All domain rules are enforced here (DM auth, membership, character conflicts).
+    """
+    try:
+        command = SetMemberRole(campaign_repo, character_repo)
+        campaign = command.execute(
+            campaign_id=UUID(request.campaign_id),
+            requesting_user_id=UUID(request.requesting_user_id),
+            target_user_id=UUID(request.target_user_id),
+            new_role=request.new_role,
+        )
+        return CampaignSetRoleResponse(
+            success=True,
+            campaign_id=request.campaign_id,
+            target_user_id=request.target_user_id,
+            new_role=request.new_role,
+        )
     except ValueError as e:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))

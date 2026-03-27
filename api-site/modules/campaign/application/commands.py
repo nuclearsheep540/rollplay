@@ -433,6 +433,43 @@ class CancelCampaignInvite:
         return campaign
 
 
+class SetMemberRole:
+    """
+    Set a campaign member's role. Called by api-game via internal endpoint.
+
+    Domain rules enforced:
+    - Requesting user must be the DM
+    - Target must be a member
+    - Cannot change DM role (handled by aggregate)
+    - If promoting to MOD: target must not have a selected character
+    """
+
+    def __init__(self, campaign_repo, character_repo: CharacterRepository):
+        self.campaign_repo = campaign_repo
+        self.character_repo = character_repo
+
+    def execute(self, campaign_id: UUID, requesting_user_id: UUID, target_user_id: UUID, new_role: str) -> CampaignAggregate:
+        campaign = self.campaign_repo.get_by_id(campaign_id)
+        if not campaign:
+            raise ValueError(f"Campaign {campaign_id} not found")
+
+        if not campaign.is_dm(requesting_user_id):
+            raise ValueError("Only the DM can change member roles")
+
+        role = CampaignRole.from_string(new_role)
+
+        # If promoting to MOD, check target doesn't have a selected character
+        if role == CampaignRole.MOD:
+            character = self.character_repo.get_user_character_for_campaign(target_user_id, campaign_id)
+            if character:
+                raise ValueError("Players with selected characters cannot be moderators")
+
+        campaign.set_role(target_user_id, role)
+        self.campaign_repo.save(campaign)
+
+        return campaign
+
+
 class SelectCharacterForCampaign:
     """
     Select a character to use in a campaign. Locks character to campaign.
@@ -465,6 +502,10 @@ class SelectCharacterForCampaign:
         # Business rule: User must be a member of the campaign
         if not campaign.is_member(user_id):
             raise ValueError("You are not a member of this campaign")
+
+        # Business rule: Moderators cannot select characters
+        if campaign.get_role(user_id) == CampaignRole.MOD:
+            raise ValueError("Moderators cannot select characters")
 
         # Get character
         character = self.character_repo.get_by_id(character_id)
