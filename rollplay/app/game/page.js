@@ -67,7 +67,12 @@ function GameContent() {
   // Character metadata is hydrated from api-game hot state via ETL.
   // Keyed by user_id (UUID string).
   const [playerMetadata, setPlayerMetadata] = useState({});
-  const [moderators, setModerators] = useState([]);
+  // Derived from playerMetadata — no separate state needed
+  const moderatorIds = useMemo(() => {
+    return Object.entries(playerMetadata)
+      .filter(([_, meta]) => meta.campaign_role === 'mod')
+      .map(([userId]) => userId);
+  }, [playerMetadata]);
 
   // State for seat colors (loaded from backend)
   const [seatColors, setSeatColors] = useState({});
@@ -989,7 +994,6 @@ function GameContent() {
     setCurrentInitiativePromptId,
     setCampaignId,
     setPlayerMetadata,
-    setModerators,
     setDungeonMaster,
     setChannelMuted,
     setChannelSoloed,
@@ -1708,7 +1712,7 @@ function GameContent() {
           <>
             <DMChair
               dungeonMaster={dungeonMaster}
-              moderators={moderators}
+              moderators={moderatorIds}
               displayNameMap={displayNameMap}
             />
 

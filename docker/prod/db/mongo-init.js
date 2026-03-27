@@ -63,8 +63,7 @@ var test_room = db.active_sessions.insertOne({
         "6": "#ec4899",  // pink
         "7": "#65a30d"   // lime
     },
-    moderators: [],        // New field: array of moderator names
-    dungeon_master: ""     // New field: current DM name
+    dungeon_master: {}     // DM contract: {user_id, player_name, campaign_role}
 });
 var testRoomId = test_room.insertedId;
 

@@ -100,7 +100,16 @@ export default function ModeratorControls({
   
   // Get current room data for displaying roles
   const [roomData, setRoomData] = useState(null);
-  
+
+  // Derive moderator IDs from player_metadata
+  const roomModeratorIds = React.useMemo(() => {
+    const pm = roomData?.player_metadata;
+    if (!pm || typeof pm !== 'object') return [];
+    return Object.entries(pm)
+      .filter(([_, meta]) => meta.campaign_role === 'mod')
+      .map(([uid]) => uid);
+  }, [roomData]);
+
   // Function to fetch current room roles
   const fetchRoomRoles = async () => {
     try {
@@ -138,12 +147,12 @@ export default function ModeratorControls({
       switch (action) {
         case 'add_moderator':
           endpoint = `/api/game/${roomId}/moderators`;
-          body = { user_id: userId, action: 'add' };
+          body = { user_id: userId, requesting_user_id: thisUserId };
           break;
         case 'remove_moderator':
           endpoint = `/api/game/${roomId}/moderators`;
           method = 'DELETE';
-          body = { user_id: userId };
+          body = { user_id: userId, requesting_user_id: thisUserId };
           break;
         case 'set_dm':
           endpoint = `/api/game/${roomId}/dm`;
@@ -229,27 +238,11 @@ export default function ModeratorControls({
             )}
 
             {/* Display current moderators */}
-            {(roomData?.moderators?.length > 0 || roomData?.room_host) && (
+            {roomModeratorIds.length > 0 && (
               <div className={MODERATOR_CHILD_LAST}>
                 <div>Current Moderators:</div>
                 <div>
-                  {(() => {
-                    // Always include the host, then add other moderators
-                    const allModerators = [];
-
-                    // Add host first (they're always a moderator)
-                    if (roomData?.room_host) {
-                      allModerators.push(`${displayNameMap[roomData.room_host] || roomData.room_host} (Host)`);
-                    }
-
-                    // Add other moderators (excluding host to avoid duplication)
-                    if (roomData?.moderators) {
-                      const otherModerators = roomData.moderators.filter(mod => mod !== roomData.room_host);
-                      allModerators.push(...otherModerators.map(modId => displayNameMap[modId] || modId));
-                    }
-
-                    return allModerators.join(', ');
-                  })()}
+                  {roomModeratorIds.map(modId => displayNameMap[modId] || modId).join(', ')}
                 </div>
               </div>
             )}
@@ -329,7 +322,7 @@ export default function ModeratorControls({
                   : 'Select a moderator to remove:'}
               </p>
               
-              {(selectedAction === 'add_moderator' ? allAvailableUsers.length > 0 : roomData?.moderators?.length > 0) ? (
+              {(selectedAction === 'add_moderator' ? allAvailableUsers.length > 0 : roomModeratorIds.length > 0) ? (
                 <div className="space-y-2">
                   {(() => {
                     let filteredUsers;
@@ -337,16 +330,13 @@ export default function ModeratorControls({
                     if (selectedAction === 'add_moderator') {
                       // Only non-adventurers can be moderators — compare by userId
                       filteredUsers = allAvailableUsers.filter(user => {
-                        return !roomData?.moderators?.includes(user.userId)
-                               && user.userId !== roomData?.room_host
+                        return !roomModeratorIds.includes(user.userId)
+                               && user.userId !== roomData?.dungeon_master?.user_id
                                && !playerHasSelectedCharacter(user.userId);
                       });
                     } else {
-                      // For remove_moderator, create user objects directly from roomData.moderators (userIds)
-                      // Filter out the host to ensure there's always at least one moderator
-                      filteredUsers = (roomData?.moderators || [])
-                        .filter(modUserId => modUserId !== roomData?.room_host)
-                        .map(modUserId => ({
+                      // For remove_moderator, build user objects from derived moderator IDs
+                      filteredUsers = roomModeratorIds.map(modUserId => ({
                           userId: modUserId,
                           playerName: displayNameMap[modUserId] || modUserId,
                           seatId: `moderator_${modUserId}`,

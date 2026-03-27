@@ -29,7 +29,6 @@ class GameSettings(BaseModel):
     seat_layout: list  # user_ids or "empty"
     created_at: datetime
     seat_colors: dict
-    moderators: list = []  # user_ids
     dungeon_master: dict = {}  # {user_id, player_name, campaign_role}
     available_assets: list = []  # Asset refs from campaign library (maps, audio, images)
     campaign_id: str = ""  # PostgreSQL campaign ID for proxying asset requests to api-site
@@ -132,14 +131,16 @@ class GameService:
             if dm_user_id and dm_user_id in seat_layout:
                 raise Exception("Dungeon Master cannot sit in party seats")
 
-            moderators = set(room.get("moderators", []))
-            seated_staff = [uid for uid in seated_user_ids if uid in moderators]
-            if seated_staff:
-                raise ValueError("Moderators cannot sit in party seats")
-
             player_metadata = room.get("player_metadata", {})
             if not isinstance(player_metadata, dict):
                 player_metadata = {}
+
+            seated_mods = [
+                uid for uid in seated_user_ids
+                if player_metadata.get(uid, {}).get("campaign_role") == "mod"
+            ]
+            if seated_mods:
+                raise ValueError("Moderators cannot sit in party seats")
 
             # Any seated user must have a selected character in hot-state metadata.
             invalid_users = [
@@ -264,7 +265,11 @@ class GameService:
         if room.get("dungeon_master", {}).get("user_id") == user_id:
             return True
 
-        return user_id in room.get("moderators", [])
+        player_metadata = room.get("player_metadata", {})
+        if isinstance(player_metadata, dict):
+            meta = player_metadata.get(user_id, {})
+            return meta.get("campaign_role") == "mod"
+        return False
 
     @staticmethod
     def is_dm(room_id: str, user_id: str) -> bool:
@@ -289,39 +294,14 @@ class GameService:
         return bool(metadata.get("character_id"))
 
     @staticmethod
-    def add_moderator(room_id: str, user_id: str):
-        """Add a user as moderator"""
+    def update_player_role(room_id: str, user_id: str, new_role: str):
+        """Update a player's campaign_role in player_metadata."""
         collection = GameService._get_active_session()
-
-        current_seat_layout = GameService.get_seat_layout(room_id)
-        if user_id in [seat for seat in current_seat_layout if seat != "empty"]:
-            raise ValueError("Seated players cannot be moderators")
-
-        if GameService.player_has_selected_character(room_id, user_id):
-            raise ValueError("Adventurers cannot be moderators")
-
         filter_criteria = GameService.room_filter(room_id)
 
         result = collection.update_one(
             filter_criteria,
-            {"$addToSet": {"moderators": user_id}}
-        )
-
-        if result.matched_count == 0:
-            raise Exception(f"Room {room_id} not found")
-
-        return result.modified_count > 0
-
-    @staticmethod
-    def remove_moderator(room_id: str, user_id: str):
-        """Remove a user from moderators"""
-        collection = GameService._get_active_session()
-
-        filter_criteria = GameService.room_filter(room_id)
-
-        result = collection.update_one(
-            filter_criteria,
-            {"$pull": {"moderators": user_id}}
+            {"$set": {f"player_metadata.{user_id}.campaign_role": new_role}}
         )
 
         if result.matched_count == 0:

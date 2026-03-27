@@ -32,7 +32,6 @@ export const handleInitialState = (data, handlers) => {
   const {
     seat_layout,
     dungeon_master,
-    moderators,
     combat_active,
     seat_colors,
     max_players,
@@ -46,10 +45,6 @@ export const handleInitialState = (data, handlers) => {
 
   if (handlers.setPlayerMetadata) {
     handlers.setPlayerMetadata(metadata);
-  }
-
-  if (handlers.setModerators) {
-    handlers.setModerators(moderators || []);
   }
 
   // Set DM object {user_id, player_name, campaign_role}
@@ -433,14 +428,14 @@ export const handleAdventureLogRemoved = (data, { setRollLog }) => {
   console.log(`🗑️ Removed adventure log entry with prompt_id: ${prompt_id}`);
 };
 
-export const handleRoleChange = (data, { handleRoleChange, setModerators, setDungeonMaster }) => {
+export const handleRoleChange = (data, { handleRoleChange, setPlayerMetadata, setDungeonMaster }) => {
   console.log("🎭 Role change received:", data);
 
-  const { action, target_player, changed_by, message, moderators, dungeon_master } = data;
+  const { action, target_player, changed_by, message, player_metadata, dungeon_master } = data;
 
-  // moderators is now a userId array — no lowercase normalization
-  if (setModerators && Array.isArray(moderators)) {
-    setModerators(moderators);
+  // Update player_metadata from broadcast — moderatorIds derived via useMemo
+  if (setPlayerMetadata && player_metadata) {
+    setPlayerMetadata(player_metadata);
   }
 
   // Update DM object from broadcast
