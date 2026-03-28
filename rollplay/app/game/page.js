@@ -83,8 +83,6 @@ function GameContent() {
   // Track disconnect timeouts for lobby users
   const [disconnectTimeouts, setDisconnectTimeouts] = useState({});
 
-  // Role change trigger to refresh ModeratorControls when any role changes occur
-  const [roleChangeTrigger, setRoleChangeTrigger] = useState(Date.now());
 
   // DM state - object {user_id, player_name, campaign_role} or null
   const [dungeonMaster, setDungeonMaster] = useState(null);
@@ -900,9 +898,6 @@ function GameContent() {
     } else if (action === 'unset_dm') {
       setIsDM(false);
     }
-
-    // Trigger refresh of ModeratorControls room data for all users
-    setRoleChangeTrigger(Date.now());
   }, [gameSeats, thisUserId]);
 
   // Create a setter function for playerSeatMap updates
@@ -1078,7 +1073,6 @@ function GameContent() {
     sendDicePromptClear,
     sendInitiativePromptAll,
     sendColorChange,
-    sendRoleChange,
     sendRemoteAudioPlay,
     sendRemoteAudioResume,
     sendRemoteAudioBatch,
@@ -1795,13 +1789,12 @@ function GameContent() {
                   thisUserId={thisUserId}
                   currentUser={currentUser}
                   onRoleChange={handleRoleChange}
-                  sendRoleChange={sendRoleChange}
                   setSeatCount={setSeatCount}
                   handleKickPlayer={handleKickPlayer}
                   handleClearSystemMessages={handleClearSystemMessages}
-                  roleChangeTrigger={roleChangeTrigger}
                   displayNameMap={displayNameMap}
                   playerMetadata={playerMetadata}
+                  dungeonMaster={dungeonMaster}
                 />
               )}
               {activeRightDrawer === 'map' && isDM && (

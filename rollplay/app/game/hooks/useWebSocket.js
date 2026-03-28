@@ -212,7 +212,7 @@ export const useWebSocket = (roomId, thisUserId, gameContext) => {
         sendSeatChange: noop, sendSeatCountChange: noop, sendCombatStateChange: noop,
         sendPlayerKick: noop, sendDiceRoll: noop, sendClearSystemMessages: noop,
         sendClearAllMessages: noop, sendDicePrompt: noop, sendDicePromptClear: noop,
-        sendInitiativePromptAll: noop, sendColorChange: noop, sendRoleChange: noop,
+        sendInitiativePromptAll: noop, sendColorChange: noop,
         sendRemoteAudioPlay: noop, sendRemoteAudioResume: noop, sendRemoteAudioBatch: noop,
       };
 

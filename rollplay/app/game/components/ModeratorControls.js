@@ -23,12 +23,12 @@ export default function ModeratorControls({
   thisUserId,
   currentUser,
   onRoleChange, // Callback when roles are changed
-  sendRoleChange, // WebSocket function to broadcast role changes
   setSeatCount, // Function to change seat count
   handleKickPlayer, // Function to kick players
   handleClearSystemMessages, // Function to clear system messages
-  roleChangeTrigger, // Timestamp or counter that changes when any role change occurs
   displayNameMap = {},
+  playerMetadata = {},
+  dungeonMaster = null,
 }) {
   
   // State for collapsible sections
@@ -81,7 +81,6 @@ export default function ModeratorControls({
 
   const playerHasSelectedCharacter = (userId) => {
     if (!userId) return false;
-    const playerMetadata = roomData?.player_metadata;
     if (!playerMetadata || typeof playerMetadata !== 'object') return false;
     return Boolean(playerMetadata[userId]?.character_id);
   };
@@ -98,44 +97,13 @@ export default function ModeratorControls({
     }))
   ];
   
-  // Get current room data for displaying roles
-  const [roomData, setRoomData] = useState(null);
-
-  // Derive moderator IDs from player_metadata
+  // Derive moderator IDs from playerMetadata (kept live via WebSocket broadcast)
   const roomModeratorIds = React.useMemo(() => {
-    const pm = roomData?.player_metadata;
-    if (!pm || typeof pm !== 'object') return [];
-    return Object.entries(pm)
+    if (!playerMetadata || typeof playerMetadata !== 'object') return [];
+    return Object.entries(playerMetadata)
       .filter(([_, meta]) => meta.campaign_role === 'mod')
       .map(([uid]) => uid);
-  }, [roomData]);
-
-  // Function to fetch current room roles
-  const fetchRoomRoles = async () => {
-    try {
-      const response = await fetch(`/api/game/${roomId}`);
-      if (response.ok) {
-        const data = await response.json();
-        setRoomData(data);
-      }
-    } catch (error) {
-      console.error('Error fetching room data:', error);
-    }
-  };
-
-  // Fetch room data on component mount
-  React.useEffect(() => {
-    if (roomId) {
-      fetchRoomRoles();
-    }
-  }, [roomId]);
-
-  // Refresh room data when any role change occurs (triggered by WebSocket events)
-  React.useEffect(() => {
-    if (roomId && roleChangeTrigger) {
-      fetchRoomRoles();
-    }
-  }, [roleChangeTrigger, roomId]);
+  }, [playerMetadata]);
 
   // Handle role changes — sends userId to api-game
   const handleRoleAction = async (action, userId) => {
@@ -171,8 +139,6 @@ export default function ModeratorControls({
       });
 
       if (response.ok) {
-        // Refresh room data and notify parent
-        await fetchRoomRoles();
         if (onRoleChange) {
           onRoleChange(action, userId);
         }
@@ -263,7 +229,7 @@ export default function ModeratorControls({
         </div>
         {expandedSections.dm && (
           <div>
-            {!roomData?.dungeon_master?.user_id && (
+            {!dungeonMaster?.user_id && (
               <button 
                 className={MODERATOR_CHILD}
                 onClick={() => openDMModal('set_dm')}
@@ -272,21 +238,21 @@ export default function ModeratorControls({
               </button>
             )}
             
-            {roomData?.dungeon_master?.user_id && (isHost || isDM) && (
+            {dungeonMaster?.user_id && (isHost || isDM) && (
               <button
                 className={MODERATOR_CHILD}
-                onClick={() => handleRoleAction('unset_dm', roomData.dungeon_master.user_id)}
+                onClick={() => handleRoleAction('unset_dm', dungeonMaster.user_id)}
               >
                 Remove Dungeon Master
               </button>
             )}
 
             {/* Display current DM */}
-            {roomData?.dungeon_master?.user_id && (
+            {dungeonMaster?.user_id && (
               <div className={MODERATOR_CHILD_LAST}>
                 <div>Current DM:</div>
                 <div>
-                  {roomData.dungeon_master.player_name || roomData.dungeon_master.user_id}
+                  {dungeonMaster.player_name || dungeonMaster.user_id}
                 </div>
               </div>
             )}
@@ -331,7 +297,7 @@ export default function ModeratorControls({
                       // Only non-adventurers can be moderators — compare by userId
                       filteredUsers = allAvailableUsers.filter(user => {
                         return !roomModeratorIds.includes(user.userId)
-                               && user.userId !== roomData?.dungeon_master?.user_id
+                               && user.userId !== dungeonMaster?.user_id
                                && !playerHasSelectedCharacter(user.userId);
                       });
                     } else {

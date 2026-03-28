@@ -680,23 +680,6 @@ export const createSendFunctions = (webSocket, isConnected, roomId, userId) => {
     }));
   };
 
-  const sendRoleChange = (action, targetUserId) => {
-    if (!webSocket || !isConnected) {
-      console.log("❌ Cannot send role change - WebSocket not connected");
-      return;
-    }
-
-    console.log(`🎭 Sending role change: ${action} for ${targetUserId}`);
-
-    webSocket.send(JSON.stringify({
-      "event_type": "role_change",
-      "data": {
-        "action": action,
-        "target_player": targetUserId
-      }
-    }));
-  };
-
   // Audio send functions from the audio management module
   const audioSendFunctions = createAudioSendFunctions(webSocket, isConnected, userId);
   const { sendRemoteAudioPlay, sendRemoteAudioResume, sendRemoteAudioBatch } = audioSendFunctions;
@@ -713,7 +696,6 @@ export const createSendFunctions = (webSocket, isConnected, roomId, userId) => {
     sendDicePromptClear,
     sendInitiativePromptAll,
     sendColorChange,
-    sendRoleChange,
     sendRemoteAudioPlay,
     sendRemoteAudioResume,
     sendRemoteAudioBatch
