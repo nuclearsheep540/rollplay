@@ -520,6 +520,24 @@ body {
   color: #000;
 }
 
+/* Fullscreen Toggle Button
+   ========================================================================== */
+.fullscreen-btn {
+  background: transparent;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  color: #e0e0e0;
+  padding: calc(4px * var(--ui-scale)) calc(8px * var(--ui-scale));
+  border-radius: calc(3px * var(--ui-scale));
+  cursor: pointer;
+  font-size: calc(14px * var(--ui-scale));
+  transition: all 0.2s ease;
+}
+
+.fullscreen-btn:hover {
+  border-color: #4ade80;
+  color: #4ade80;
+}
+
 /* Main Game Area Grid - Single column, all panels are fixed-position drawers
    ========================================================================== */
 .main-game-area {
