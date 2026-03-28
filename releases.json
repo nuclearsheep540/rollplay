@@ -6,14 +6,14 @@
       "commit": "16e2c23",
       "description": "Normalize JSONB columns phase 2",
       "services": {
-        "app_version": "0.16.0",
-        "api_site_version": "0.13.1",
-        "api_game_version": "0.11.0",
-        "api_auth_version": "0.2.1",
-        "nginx_version": "0.4.10",
-        "postgres_version": "0.1.8",
-        "mongo_db_version": "0.3.2",
-        "certbot_version": "0.1.2"
+        "app": "0.16.0",
+        "api_site": "0.13.1",
+        "api_game": "0.11.0",
+        "api_auth": "0.2.1",
+        "nginx": "0.4.10",
+        "postgres": "0.1.8",
+        "mongo": "0.3.2",
+        "certbot": "0.1.2"
       }
     },
     "0.27.2": {
@@ -21,14 +21,14 @@
       "commit": "9cccb00",
       "description": "Added versioning manifest",
       "services": {
-        "app_version": "0.16.0",
-        "api_site_version": "0.13.1",
-        "api_game_version": "0.11.0",
-        "api_auth_version": "0.2.1",
-        "nginx_version": "0.4.10",
-        "postgres_version": "0.1.8",
-        "mongo_db_version": "0.3.2",
-        "certbot_version": "0.1.2"
+        "app": "0.16.0",
+        "api_site": "0.13.1",
+        "api_game": "0.11.0",
+        "api_auth": "0.2.1",
+        "nginx": "0.4.10",
+        "postgres": "0.1.8",
+        "mongo": "0.3.2",
+        "certbot": "0.1.2"
       }
     },
     "0.27.3": {
@@ -36,14 +36,14 @@
       "commit": "4aa8d4c",
       "description": "Fixed release scsript issues",
       "services": {
-        "app_version": "0.16.0",
-        "api_site_version": "0.13.1",
-        "api_game_version": "0.11.0",
-        "api_auth_version": "0.2.1",
-        "nginx_version": "0.4.10",
-        "postgres_version": "0.1.8",
-        "mongo_db_version": "0.3.2",
-        "certbot_version": "0.1.2"
+        "app": "0.16.0",
+        "api_site": "0.13.1",
+        "api_game": "0.11.0",
+        "api_auth": "0.2.1",
+        "nginx": "0.4.10",
+        "postgres": "0.1.8",
+        "mongo": "0.3.2",
+        "certbot": "0.1.2"
       }
     },
     "0.28.0": {
@@ -51,14 +51,14 @@
       "commit": "0d4defe",
       "description": "Adds the new audio mixer, complete with EQ and Reverb presets",
       "services": {
-        "app_version": "0.17.0",
-        "api_site_version": "0.14.0",
-        "api_game_version": "0.12.0",
-        "api_auth_version": "0.2.1",
-        "nginx_version": "0.4.10",
-        "postgres_version": "0.1.8",
-        "mongo_db_version": "0.3.2",
-        "certbot_version": "0.1.2"
+        "app": "0.17.0",
+        "api_site": "0.14.0",
+        "api_game": "0.12.0",
+        "api_auth": "0.2.1",
+        "nginx": "0.4.10",
+        "postgres": "0.1.8",
+        "mongo": "0.3.2",
+        "certbot": "0.1.2"
       }
     },
     "0.29.0": {
@@ -66,14 +66,14 @@
       "commit": "0a1b314",
       "description": "Map config now includes grid color, and offset. Cell rows and columns can now be added/removed",
       "services": {
-        "app_version": "0.18.0",
-        "api_site_version": "0.15.0",
-        "api_game_version": "0.12.0",
-        "api_auth_version": "0.2.1",
-        "nginx_version": "0.4.10",
-        "postgres_version": "0.1.8",
-        "mongo_db_version": "0.3.2",
-        "certbot_version": "0.1.2"
+        "app": "0.18.0",
+        "api_site": "0.15.0",
+        "api_game": "0.12.0",
+        "api_auth": "0.2.1",
+        "nginx": "0.4.10",
+        "postgres": "0.1.8",
+        "mongo": "0.3.2",
+        "certbot": "0.1.2"
       }
     },
     "0.30.0": {
@@ -81,14 +81,14 @@
       "commit": "468f354",
       "description": "Mobile Optimisations - Map and Animations",
       "services": {
-        "app_version": "0.19.0",
-        "api_site_version": "0.15.0",
-        "api_game_version": "0.12.0",
-        "api_auth_version": "0.2.1",
-        "nginx_version": "0.4.10",
-        "postgres_version": "0.1.8",
-        "mongo_db_version": "0.3.2",
-        "certbot_version": "0.1.2"
+        "app": "0.19.0",
+        "api_site": "0.15.0",
+        "api_game": "0.12.0",
+        "api_auth": "0.2.1",
+        "nginx": "0.4.10",
+        "postgres": "0.1.8",
+        "mongo": "0.3.2",
+        "certbot": "0.1.2"
       }
     },
     "0.30.1": {
@@ -96,14 +96,14 @@
       "commit": "8be33fb",
       "description": "Mobile audio regression bug fixes and some other mobile view adjustments",
       "services": {
-        "app_version": "0.19.1",
-        "api_site_version": "0.15.0",
-        "api_game_version": "0.12.0",
-        "api_auth_version": "0.2.1",
-        "nginx_version": "0.4.10",
-        "postgres_version": "0.1.8",
-        "mongo_db_version": "0.3.2",
-        "certbot_version": "0.1.2"
+        "app": "0.19.1",
+        "api_site": "0.15.0",
+        "api_game": "0.12.0",
+        "api_auth": "0.2.1",
+        "nginx": "0.4.10",
+        "postgres": "0.1.8",
+        "mongo": "0.3.2",
+        "certbot": "0.1.2"
       }
     },
     "0.31.0": {
@@ -111,14 +111,14 @@
       "commit": "ed3c7e6",
       "description": "Overhauled the PARTY tab and added CHARACTER meta into game session incl ETL",
       "services": {
-        "app_version": "0.20.0",
-        "api_site_version": "0.16.0",
-        "api_game_version": "0.13.0",
-        "api_auth_version": "0.2.1",
-        "nginx_version": "0.4.10",
-        "postgres_version": "0.1.8",
-        "mongo_db_version": "0.3.2",
-        "certbot_version": "0.1.2"
+        "app": "0.20.0",
+        "api_site": "0.16.0",
+        "api_game": "0.13.0",
+        "api_auth": "0.2.1",
+        "nginx": "0.4.10",
+        "postgres": "0.1.8",
+        "mongo": "0.3.2",
+        "certbot": "0.1.2"
       }
     },
     "0.32.0": {
@@ -126,14 +126,14 @@
       "commit": "4f3251a",
       "description": "Fixed bugs around character editing being allowed during active or transitioning session state",
       "services": {
-        "app_version": "0.21.0",
-        "api_site_version": "0.17.0",
-        "api_game_version": "0.13.0",
-        "api_auth_version": "0.2.1",
-        "nginx_version": "0.4.10",
-        "postgres_version": "0.1.8",
-        "mongo_db_version": "0.3.2",
-        "certbot_version": "0.1.2"
+        "app": "0.21.0",
+        "api_site": "0.17.0",
+        "api_game": "0.13.0",
+        "api_auth": "0.2.1",
+        "nginx": "0.4.10",
+        "postgres": "0.1.8",
+        "mongo": "0.3.2",
+        "certbot": "0.1.2"
       }
     },
     "0.33.0": {
@@ -141,14 +141,14 @@
       "commit": "ffbb5dc",
       "description": "Now using UUIDs for user identification in game, added maps to the correct names, mod flow cross site implemented, session contract updated",
       "services": {
-        "app_version": "0.22.0",
-        "api_site_version": "0.18.0",
-        "api_game_version": "0.14.0",
-        "api_auth_version": "0.2.1",
-        "nginx_version": "0.4.10",
-        "postgres_version": "0.1.8",
-        "mongo_db_version": "0.4.0",
-        "certbot_version": "0.1.2"
+        "app": "0.22.0",
+        "api_site": "0.18.0",
+        "api_game": "0.14.0",
+        "api_auth": "0.2.1",
+        "nginx": "0.4.10",
+        "postgres": "0.1.8",
+        "mongo": "0.4.0",
+        "certbot": "0.1.2"
       }
     },
     "0.34.0": {
@@ -156,14 +156,14 @@
       "commit": "a4ab93a",
       "description": "Bulk uploads",
       "services": {
-        "app_version": "0.23.0",
-        "api_site_version": "0.18.0",
-        "api_game_version": "0.14.0",
-        "api_auth_version": "0.2.1",
-        "nginx_version": "0.4.10",
-        "postgres_version": "0.1.8",
-        "mongo_db_version": "0.4.0",
-        "certbot_version": "0.1.2"
+        "app": "0.23.0",
+        "api_site": "0.18.0",
+        "api_game": "0.14.0",
+        "api_auth": "0.2.1",
+        "nginx": "0.4.10",
+        "postgres": "0.1.8",
+        "mongo": "0.4.0",
+        "certbot": "0.1.2"
       }
     },
     "0.35.0": {
@@ -171,14 +171,14 @@
       "commit": "96305e7",
       "description": "Game page load optimisation - crossorigin and s3 preload and SSR wrap on game component",
       "services": {
-        "app_version": "0.24.0",
-        "api_site_version": "0.18.0",
-        "api_game_version": "0.15.0",
-        "api_auth_version": "0.2.1",
-        "nginx_version": "0.4.10",
-        "postgres_version": "0.1.8",
-        "mongo_db_version": "0.4.0",
-        "certbot_version": "0.1.2"
+        "app": "0.24.0",
+        "api_site": "0.18.0",
+        "api_game": "0.15.0",
+        "api_auth": "0.2.1",
+        "nginx": "0.4.10",
+        "postgres": "0.1.8",
+        "mongo": "0.4.0",
+        "certbot": "0.1.2"
       }
     }
   }

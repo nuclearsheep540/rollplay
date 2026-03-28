@@ -5,10 +5,7 @@ services:
     hostname: nginx
     env_file:
       - .env
-    image: ghcr.io/nuclearsheep540/rollplay/nginx:${nginx_version}
-    build:
-      context: ./docker/prod/nginx
-      dockerfile: Dockerfile
+    image: ghcr.io/nuclearsheep540/rollplay/nginx:${nginx}
     container_name: nginx
     ports:
       - "80:80"
@@ -31,10 +28,7 @@ services:
     env_file:
       - .env
     container_name: "api-game"
-    image: ghcr.io/nuclearsheep540/rollplay/api-game:${api_game_version}
-    build:
-      context: .
-      dockerfile: docker/prod/api-game/Dockerfile
+    image: ghcr.io/nuclearsheep540/rollplay/api-game:${api_game}
     ports:
       - "8081:8081"
     restart: unless-stopped
@@ -49,10 +43,7 @@ services:
     env_file:
       - .env
     container_name: "api-site"
-    image: ghcr.io/nuclearsheep540/rollplay/api-site:${api_site_version}
-    build:
-      context: .
-      dockerfile: docker/prod/api-site/Dockerfile
+    image: ghcr.io/nuclearsheep540/rollplay/api-site:${api_site}
     ports:
       - "8082:8082"
     restart: unless-stopped
@@ -67,10 +58,7 @@ services:
     env_file:
       - .env
     container_name: "api-auth"
-    image: ghcr.io/nuclearsheep540/rollplay/api-auth:${api_auth_version}
-    build:
-      context: ./api-auth
-      dockerfile: ../docker/prod/api-auth/Dockerfile
+    image: ghcr.io/nuclearsheep540/rollplay/api-auth:${api_auth}
     ports:
       - "8083:8083"
     restart: unless-stopped
@@ -84,15 +72,7 @@ services:
     env_file:
       - .env
     container_name: "rollplay"
-    image: ghcr.io/nuclearsheep540/rollplay/rollplay:${app_version}
-    build:
-      context: ./rollplay
-      dockerfile: ../docker/prod/rollplay/Dockerfile
-      args:
-        - NEXT_PUBLIC_SENTRY_DSN=${SENTRY_DSN_NEXTJS}
-        - SENTRY_ORG=${SENTRY_ORG}
-        - SENTRY_PROJECT=${SENTRY_PROJECT_NEXTJS}
-        - SENTRY_AUTH_TOKEN=${SENTRY_AUTH_TOKEN}
+    image: ghcr.io/nuclearsheep540/rollplay/rollplay:${app}
     environment:
       - NEXT_PUBLIC_SENTRY_DSN=${SENTRY_DSN_NEXTJS}
       - NEXT_PUBLIC_ENVIRONMENT=${ENVIRONMENT}
@@ -108,13 +88,7 @@ services:
       - .env
     container_name: "mongo"
     hostname: mongo
-    image: ghcr.io/nuclearsheep540/rollplay/db:${mongo_db_version}
-    build:
-      context: ./docker
-      dockerfile: prod/db/Dockerfile
-      args:
-        MONGO_INITDB_ROOT_USERNAME: ${MONGO_INITDB_ROOT_USERNAME}
-        MONGO_INITDB_ROOT_PASSWORD: ${MONGO_INITDB_ROOT_PASSWORD}
+    image: ghcr.io/nuclearsheep540/rollplay/db:${mongo}
     ports:
       - "27017:27017"
     volumes:
@@ -144,16 +118,7 @@ services:
   postgres:
     container_name: "postgres"
     hostname: postgres
-    image: ghcr.io/nuclearsheep540/rollplay/postgres:${postgres_version}
-    build:
-      context: ./docker
-      dockerfile: prod/postgres/Dockerfile
-      args:
-        POSTGRES_USER: ${POSTGRES_USER}
-        POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
-        POSTGRES_DB: rollplay
-        APP_DB_USER: ${APP_DB_USER}
-        APP_DB_PASSWORD: ${APP_DB_PASSWORD}
+    image: ghcr.io/nuclearsheep540/rollplay/postgres:${postgres}
     env_file:
       - .env
     environment:
@@ -173,11 +138,8 @@ services:
     networks:
       - default
 
-  certbot-renewer:
-    image: ghcr.io/nuclearsheep540/rollplay/certbot:${certbot_version}
-    build:
-      context: ./docker/prod/certbot-renewer
-      dockerfile: Dockerfile
+  certbot:
+    image: ghcr.io/nuclearsheep540/rollplay/certbot:${certbot}
     container_name: certbot-renewer
     volumes:
       - certbot_data:/etc/letsencrypt
