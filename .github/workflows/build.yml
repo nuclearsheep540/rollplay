@@ -34,6 +34,7 @@ jobs:
           RELEASE_TAG="${GITHUB_REF_NAME:-${GITHUB_REF##*/}}"
           RELEASE_VERSION="${RELEASE_TAG#rollplay-}"
           echo "Using release version from tag: $RELEASE_VERSION"
+          echo "RELEASE=$RELEASE_VERSION" >> "$GITHUB_ENV"
           jq -r ".releases[\"$RELEASE_VERSION\"].services | to_entries[] | \"\(.key)=\(.value)\"" releases.json >> "$GITHUB_ENV"
 
       - name: Detect changed services

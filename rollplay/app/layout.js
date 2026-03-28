@@ -38,7 +38,7 @@ const metamorphous = Metamorphous({
 })
 
 export const metadata = {
-  title: 'Rollplay - Online Dice Roll',
+  title: `Rollplay v${process.env.NEXT_PUBLIC_RELEASE || 'dev'}`,
   description: 'Made for my friends',
 }
 
