@@ -29,7 +29,8 @@ import { useUnifiedAudio } from '../audio_management';
 import { MapDisplay, useMapWebSocket, ImageDisplay, useImageWebSocket } from '../map_management';
 import MapOverlayPanel from './components/MapOverlayPanel';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
-import { faVolumeHigh, faVolumeXmark, faRightToBracket, faEye } from '@fortawesome/free-solid-svg-icons';
+import { faVolumeHigh, faVolumeXmark, faRightToBracket, faEye, faUpRightAndDownLeftFromCenter, faDownLeftAndUpRightToCenter } from '@fortawesome/free-solid-svg-icons';
+import { useFullscreen } from './hooks/useFullscreen';
 import MapSafeArea from './components/MapSafeArea';
 import Drawer from './components/Drawer';
 import GridTuningOverlay from '../map_management/components/GridTuningOverlay';
@@ -51,7 +52,8 @@ const RIGHT_DRAWER_TABS = [
 
 export default function GameContent() {
   const params = useSearchParams();
-  const router = useRouter(); 
+  const router = useRouter();
+  const { isFullscreen, toggleFullscreen } = useFullscreen()
 
   const [room404, setRoom404] = useState(false)
   const [thisUserId, setThisUserId] = useState()
@@ -1546,7 +1548,7 @@ export default function GameContent() {
       <div ref={navRef} className="top-nav">
         <div className="top-nav-bar">
           <div className="campaign-info">
-            <div className="campaign-title">The Curse of Strahd</div>
+            <div className="campaign-title">{campaignMeta?.title || 'Loading...'}</div>
           </div>
 
           <div className="nav-actions">
@@ -1605,6 +1607,17 @@ export default function GameContent() {
                 L
               </button>
             </div>
+
+            {/* Fullscreen Toggle */}
+            <button
+              onClick={toggleFullscreen}
+              className="fullscreen-btn"
+              title={isFullscreen ? 'Exit Fullscreen' : 'Enter Fullscreen'}
+              aria-label={isFullscreen ? 'Exit fullscreen' : 'Enter fullscreen'}
+              aria-pressed={isFullscreen}
+            >
+              <FontAwesomeIcon icon={isFullscreen ? faDownLeftAndUpRightToCenter : faUpRightAndDownLeftFromCenter} />
+            </button>
           </div>
 
           <button
@@ -1756,7 +1769,6 @@ export default function GameContent() {
                   handleClearSystemMessages={handleClearSystemMessages}
                   displayNameMap={displayNameMap}
                   playerMetadata={playerMetadata}
-                  dungeonMaster={dungeonMaster}
                 />
               )}
               {activeRightDrawer === 'map' && isDM && (
