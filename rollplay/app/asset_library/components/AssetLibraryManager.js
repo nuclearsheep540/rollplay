@@ -7,7 +7,6 @@ import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
 import { faUpload, faSquarePlus, faTrash, faEye, faPen, faTag } from '@fortawesome/free-solid-svg-icons'
 import { useAssets } from '../hooks/useAssets'
-import { useUploadAsset } from '../hooks/useUploadAsset'
 import { useDeleteAsset } from '../hooks/useDeleteAsset'
 import { useRenameAsset } from '../hooks/useRenameAsset'
 import { useAssociateAsset } from '../hooks/useAssociateAsset'
@@ -87,7 +86,6 @@ export default function AssetLibraryManager({ user }) {
     enabled: category !== 'objects',
   })
 
-  const uploadMutation = useUploadAsset()
   const deleteMutation = useDeleteAsset()
   const renameMutation = useRenameAsset()
   const associateMutation = useAssociateAsset()
@@ -131,10 +129,6 @@ export default function AssetLibraryManager({ user }) {
       setSubFilter([filterId])
     }
   }, [category])
-
-  const handleUpload = useCallback(async (file, assetType) => {
-    await uploadMutation.mutateAsync({ file, assetType })
-  }, [uploadMutation])
 
   const handleDeleteConfirm = useCallback(async () => {
     if (!deleteTarget) return
@@ -309,7 +303,7 @@ export default function AssetLibraryManager({ user }) {
           >
             <span className="text-content-on-dark">
               <FontAwesomeIcon icon={faUpload} className="mr-2" />
-              Upload Asset
+              Upload Assets
             </span>
           </Button>
           <Button
@@ -396,9 +390,6 @@ export default function AssetLibraryManager({ user }) {
         <AssetUploadModal
           isOpen={true}
           onClose={() => setUploadModalOpen(false)}
-          onUpload={handleUpload}
-          uploading={uploadMutation.isPending}
-          uploadProgress={uploadMutation.progress}
         />
       )}
 
