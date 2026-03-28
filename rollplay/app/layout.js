@@ -54,6 +54,10 @@ export const viewport = {
 export default function RootLayout({ children }) {
   return (
     <html lang="en" className={`${inter.variable} ${newRocker.variable} ${metamorphous.variable} ${ubuntu.variable} ${outfit.variable}`}>
+      <head>
+        {/* Preconnect to S3 so the TCP/TLS handshake is ready before the map image URL is known */}
+        <link rel="preconnect" href="https://s3.eu-west-1.amazonaws.com" crossOrigin="anonymous" />
+      </head>
       <body className={inter.className}>
         <QueryProvider>
           {children}
