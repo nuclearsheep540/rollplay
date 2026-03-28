@@ -31,16 +31,31 @@ jobs:
 
       - name: Export version env vars
         run: |
-          LATEST=$(jq -r '.latest' releases.json)
-          jq -r ".releases[\"$LATEST\"].services | to_entries[] | \"\(.key)=\(.value)\"" releases.json >> "$GITHUB_ENV"
+          RELEASE_TAG="${GITHUB_REF_NAME:-${GITHUB_REF##*/}}"
+          RELEASE_VERSION="${RELEASE_TAG#rollplay-}"
+          echo "Using release version from tag: $RELEASE_VERSION"
+          jq -r ".releases[\"$RELEASE_VERSION\"].services | to_entries[] | \"\(.key)=\(.value)\"" releases.json >> "$GITHUB_ENV"
 
       - name: Detect changed services
         id: changed
         run: |
-          CURR=$(jq -r '.latest' releases.json)
-          PREV=$(jq -r '.releases | keys | sort_by(split(".") | map(tonumber)) | .[-2]' releases.json)
+          RELEASE_TAG="${GITHUB_REF_NAME:-${GITHUB_REF##*/}}"
+          CURR="${RELEASE_TAG#rollplay-}"
+          PREV=$(jq -r --arg ver "$CURR" '
+            .releases | keys | sort_by(split(".") | map(tonumber))
+            | (index($ver) // -1) as $i
+            | if $i <= 0 then "" else .[$i-1] end
+          ' releases.json)
 
           echo "Current: $CURR  Previous: $PREV"
+
+          if [ -z "$PREV" ] || [ "$PREV" = "null" ]; then
+            echo "No previous release found; building all services."
+            CHANGED=$(jq -r ".releases[\"$CURR\"].services | keys[] | gsub(\"_\"; \"-\")" releases.json | xargs)
+            echo "changed=$CHANGED" >> "$GITHUB_OUTPUT"
+            echo "Building: $CHANGED"
+            exit 0
+          fi
 
           CHANGED=""
           for key in $(jq -r ".releases[\"$CURR\"].services | keys[]" releases.json); do
