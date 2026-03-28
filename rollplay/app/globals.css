@@ -504,9 +504,10 @@ body {
   padding: calc(4px * var(--ui-scale)) calc(8px * var(--ui-scale));
   border-radius: calc(3px * var(--ui-scale));
   cursor: pointer;
-  font-size: calc(10px * var(--ui-scale));
+  font-size: calc(14px * var(--ui-scale));
   transition: all 0.2s ease;
-  min-width: calc(24px * var(--ui-scale));
+  min-width: calc(30px * var(--ui-scale));
+  aspect-ratio: 1;
 }
 
 .ui-scale-nav .scale-btn:hover {
@@ -1062,9 +1063,9 @@ body {
 
 /* Focus States for Accessibility
    ========================================================================== */
-.control-btn:focus,
-.ui-scale-nav .scale-btn:focus,
-.fullscreen-btn:focus {
+.control-btn:focus-visible,
+.ui-scale-nav .scale-btn:focus-visible,
+.fullscreen-btn:focus-visible {
   outline: 2px solid #4ade80;
   outline-offset: 2px;
 }
