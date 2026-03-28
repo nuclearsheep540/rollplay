@@ -36,26 +36,26 @@ fi
 
 # ── Service → watch path mapping ──────────────────────────────────
 declare -A SERVICE_PATHS=(
-    [app_version]="rollplay/"
-    [api_site_version]="api-site/"
-    [api_game_version]="api-game/"
-    [api_auth_version]="api-auth/"
-    [nginx_version]="docker/dev/nginx/ docker/prod/nginx/"
-    [postgres_version]="docker/dev/postgres/ docker/prod/postgres/"
-    [mongo_db_version]="docker/dev/mongo/ docker/prod/db/"
-    [certbot_version]="docker/prod/certbot-renewer/"
+    [app]="rollplay/"
+    [api_site]="api-site/"
+    [api_game]="api-game/"
+    [api_auth]="api-auth/"
+    [nginx]="docker/dev/nginx/ docker/prod/nginx/"
+    [postgres]="docker/dev/postgres/ docker/prod/postgres/"
+    [mongo]="docker/dev/mongo/ docker/prod/db/"
+    [certbot]="docker/prod/certbot-renewer/"
 )
 
 # Display order
 SERVICE_ORDER=(
-    app_version
-    api_site_version
-    api_game_version
-    api_auth_version
-    nginx_version
-    postgres_version
-    mongo_db_version
-    certbot_version
+    app
+    api_site
+    api_game
+    api_auth
+    nginx
+    postgres
+    mongo
+    certbot
 )
 
 # ── Semver helpers ────────────────────────────────────────────────

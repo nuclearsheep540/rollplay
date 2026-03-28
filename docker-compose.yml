@@ -5,7 +5,7 @@ services:
     hostname: nginx
     env_file:
       - .env
-    image: ghcr.io/nuclearsheep540/rollplay/nginx:${nginx_version}
+    image: ghcr.io/nuclearsheep540/rollplay/nginx:${nginx}
     build:
       context: ./docker/prod/nginx
       dockerfile: Dockerfile
@@ -31,7 +31,7 @@ services:
     env_file:
       - .env
     container_name: "api-game"
-    image: ghcr.io/nuclearsheep540/rollplay/api-game:${api_game_version}
+    image: ghcr.io/nuclearsheep540/rollplay/api-game:${api_game}
     build:
       context: .
       dockerfile: docker/prod/api-game/Dockerfile
@@ -49,7 +49,7 @@ services:
     env_file:
       - .env
     container_name: "api-site"
-    image: ghcr.io/nuclearsheep540/rollplay/api-site:${api_site_version}
+    image: ghcr.io/nuclearsheep540/rollplay/api-site:${api_site}
     build:
       context: .
       dockerfile: docker/prod/api-site/Dockerfile
@@ -67,7 +67,7 @@ services:
     env_file:
       - .env
     container_name: "api-auth"
-    image: ghcr.io/nuclearsheep540/rollplay/api-auth:${api_auth_version}
+    image: ghcr.io/nuclearsheep540/rollplay/api-auth:${api_auth}
     build:
       context: ./api-auth
       dockerfile: ../docker/prod/api-auth/Dockerfile
@@ -84,7 +84,7 @@ services:
     env_file:
       - .env
     container_name: "rollplay"
-    image: ghcr.io/nuclearsheep540/rollplay/rollplay:${app_version}
+    image: ghcr.io/nuclearsheep540/rollplay/rollplay:${app}
     build:
       context: ./rollplay
       dockerfile: ../docker/prod/rollplay/Dockerfile
@@ -108,7 +108,7 @@ services:
       - .env
     container_name: "mongo"
     hostname: mongo
-    image: ghcr.io/nuclearsheep540/rollplay/db:${mongo_db_version}
+    image: ghcr.io/nuclearsheep540/rollplay/db:${mongo}
     build:
       context: ./docker
       dockerfile: prod/db/Dockerfile
@@ -144,7 +144,7 @@ services:
   postgres:
     container_name: "postgres"
     hostname: postgres
-    image: ghcr.io/nuclearsheep540/rollplay/postgres:${postgres_version}
+    image: ghcr.io/nuclearsheep540/rollplay/postgres:${postgres}
     build:
       context: ./docker
       dockerfile: prod/postgres/Dockerfile
@@ -173,8 +173,8 @@ services:
     networks:
       - default
 
-  certbot-renewer:
-    image: ghcr.io/nuclearsheep540/rollplay/certbot:${certbot_version}
+  certbot:
+    image: ghcr.io/nuclearsheep540/rollplay/certbot:${certbot}
     build:
       context: ./docker/prod/certbot-renewer
       dockerfile: Dockerfile

@@ -1,0 +1,80 @@
+# Copyright (C) 2025 Matthew Davey
+# SPDX-License-Identifier: GPL-3.0-or-later
+
+name: Build & Push Production Images
+
+on:
+  push:
+    tags:
+      - 'rollplay-*'
+
+jobs:
+  build:
+    name: Build changed services
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Export version env vars
+        run: |
+          LATEST=$(jq -r '.latest' releases.json)
+          jq -r ".releases[\"$LATEST\"].services | to_entries[] | \"\(.key)=\(.value)\"" releases.json >> "$GITHUB_ENV"
+
+      - name: Detect changed services
+        id: changed
+        run: |
+          CURR=$(jq -r '.latest' releases.json)
+          PREV=$(jq -r '.releases | keys | sort_by(split(".") | map(tonumber)) | .[-2]' releases.json)
+
+          echo "Current: $CURR  Previous: $PREV"
+
+          CHANGED=""
+          for key in $(jq -r ".releases[\"$CURR\"].services | keys[]" releases.json); do
+            curr=$(jq -r ".releases[\"$CURR\"].services[\"$key\"]" releases.json)
+            prev=$(jq -r ".releases[\"$PREV\"].services[\"$key\"]" releases.json)
+            service=$(echo "$key" | tr '_' '-')
+            if [[ "$curr" != "$prev" ]]; then
+              echo "  $service: $prev → $curr"
+              CHANGED="$CHANGED $service"
+            else
+              echo "  $service: $curr (unchanged)"
+            fi
+          done
+
+          CHANGED=$(echo $CHANGED | xargs)
+          echo "changed=$CHANGED" >> "$GITHUB_OUTPUT"
+          echo "Building: $CHANGED"
+
+      - name: Build images
+        if: steps.changed.outputs.changed != ''
+        env:
+          DOCKER_DEFAULT_PLATFORM: linux/amd64
+          SENTRY_DSN_NEXTJS: ${{ secrets.SENTRY_DSN_NEXTJS }}
+          SENTRY_ORG: ${{ secrets.SENTRY_ORG }}
+          SENTRY_PROJECT_NEXTJS: ${{ secrets.SENTRY_PROJECT_NEXTJS }}
+          SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
+          POSTGRES_USER: ${{ secrets.POSTGRES_USER }}
+          POSTGRES_PASSWORD: ${{ secrets.POSTGRES_PASSWORD }}
+          APP_DB_USER: ${{ secrets.APP_DB_USER }}
+          APP_DB_PASSWORD: ${{ secrets.APP_DB_PASSWORD }}
+          MONGO_INITDB_ROOT_USERNAME: ${{ secrets.MONGO_INITDB_ROOT_USERNAME }}
+          MONGO_INITDB_ROOT_PASSWORD: ${{ secrets.MONGO_INITDB_ROOT_PASSWORD }}
+        run: docker compose build ${{ steps.changed.outputs.changed }}
+
+      - name: Push images
+        if: steps.changed.outputs.changed != ''
+        run: docker compose push ${{ steps.changed.outputs.changed }}
