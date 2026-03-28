@@ -444,11 +444,12 @@ class SetMemberRole:
     - If promoting to MOD: target must not have a selected character
     """
 
-    def __init__(self, campaign_repo, character_repo: CharacterRepository):
+    def __init__(self, campaign_repo, character_repo: CharacterRepository, event_manager: Optional[EventManager] = None):
         self.campaign_repo = campaign_repo
         self.character_repo = character_repo
+        self.event_manager = event_manager
 
-    def execute(self, campaign_id: UUID, requesting_user_id: UUID, target_user_id: UUID, new_role: str) -> CampaignAggregate:
+    async def execute(self, campaign_id: UUID, requesting_user_id: UUID, target_user_id: UUID, new_role: str) -> CampaignAggregate:
         campaign = self.campaign_repo.get_by_id(campaign_id)
         if not campaign:
             raise ValueError(f"Campaign {campaign_id} not found")
@@ -466,6 +467,20 @@ class SetMemberRole:
 
         campaign.set_role(target_user_id, role)
         self.campaign_repo.save(campaign)
+
+        # Broadcast silent state change to all members
+        if self.event_manager:
+            all_members = campaign.get_all_member_ids()
+            events = CampaignEvents.campaign_role_changed(
+                campaign_member_ids=all_members,
+                acting_user_id=requesting_user_id,
+                target_user_id=target_user_id,
+                campaign_id=campaign_id,
+                campaign_name=campaign.title,
+                new_role=new_role,
+            )
+            for event_config in events:
+                await self.event_manager.broadcast(event_config)
 
         return campaign
 

@@ -1439,7 +1439,19 @@ export default function CampaignManager({ user, onExpandedChange, inviteCampaign
                                         >
                                           Dungeon Master
                                         </span>
-                                      ) : member.user_id === user.id ? (
+                                      ) : member.campaign_role === 'mod' ? (
+                                        <span
+                                          className="text-sm px-2 py-1 rounded-sm font-semibold"
+                                          style={{
+                                            backgroundColor: '#1e3a5f',
+                                            color: '#93c5fd',
+                                            borderColor: '#3b82f6',
+                                            border: '1px solid'
+                                          }}
+                                        >
+                                          Moderator
+                                        </span>
+                                      ) : member.user_id === user.id && member.campaign_role === 'spectator' ? (
                                         <button
                                           onClick={() => handleSelectCharacter(campaign)}
                                           className="text-sm px-2 py-1 rounded-sm border transition-all hover:opacity-80 font-semibold"

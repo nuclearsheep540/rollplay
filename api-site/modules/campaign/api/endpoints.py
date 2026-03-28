@@ -608,6 +608,7 @@ async def set_campaign_role(
     request: CampaignSetRoleRequest,
     campaign_repo: CampaignRepository = Depends(campaign_repository),
     character_repo: CharacterRepository = Depends(get_character_repository),
+    event_manager: EventManager = Depends(get_event_manager),
 ):
     """
     Set a campaign member's role. Called by api-game during live sessions.
@@ -616,8 +617,8 @@ async def set_campaign_role(
     All domain rules are enforced here (DM auth, membership, character conflicts).
     """
     try:
-        command = SetMemberRole(campaign_repo, character_repo)
-        campaign = command.execute(
+        command = SetMemberRole(campaign_repo, character_repo, event_manager)
+        campaign = await command.execute(
             campaign_id=UUID(request.campaign_id),
             requesting_user_id=UUID(request.requesting_user_id),
             target_user_id=UUID(request.target_user_id),

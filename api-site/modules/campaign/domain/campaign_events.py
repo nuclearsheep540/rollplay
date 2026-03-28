@@ -288,6 +288,37 @@ class CampaignEvents:
         )
 
     @staticmethod
+    def campaign_role_changed(
+        campaign_member_ids: List[UUID],
+        acting_user_id: UUID,
+        target_user_id: UUID,
+        campaign_id: UUID,
+        campaign_name: str,
+        new_role: str,
+    ) -> List[EventConfig]:
+        """
+        Event: A member's role was changed (notifies all members including target)
+
+        Silent event — no toast, no persistent notification. Purely for live cache invalidation.
+        """
+        events = []
+        for member_id in campaign_member_ids:
+            if member_id != acting_user_id:
+                events.append(EventConfig(
+                    user_id=member_id,
+                    event_type="campaign_role_changed",
+                    data={
+                        "campaign_id": str(campaign_id),
+                        "campaign_name": campaign_name,
+                        "target_user_id": str(target_user_id),
+                        "new_role": new_role,
+                    },
+                    show_toast=False,
+                    save_notification=False
+                ))
+        return events
+
+    @staticmethod
     def campaign_character_selected(
         campaign_member_ids: List[UUID],
         acting_user_id: UUID,
