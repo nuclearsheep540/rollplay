@@ -59,7 +59,7 @@ SERVICES=$(echo "$RELEASE" | jq -r '.services | to_entries[] | "\(.key)=\(.value
 while IFS='=' read -r key value; do
     # Match the key at start of line, optionally followed by =value and optional comment
     if grep -q "^${key}=" "$ENV_FILE"; then
-        sed -i "s|^${key}=.*|${key}=${value}|" "$ENV_FILE"
+        perl -i -pe "s|^\Q${key}\E=.*|${key}=${value}|" "$ENV_FILE"
     else
         echo "Warning: key '$key' not found in .env, skipping" >&2
     fi
@@ -67,7 +67,7 @@ done <<< "$SERVICES"
 
 # Update the RELEASE line
 if grep -q "^RELEASE=" "$ENV_FILE"; then
-    sed -i "s|^RELEASE=.*|RELEASE=${VERSION}|" "$ENV_FILE"
+    perl -i -pe "s|^RELEASE=.*|RELEASE=${VERSION}|" "$ENV_FILE"
 else
     echo "Warning: RELEASE key not found in .env, skipping" >&2
 fi
