@@ -73,8 +73,8 @@ jobs:
           APP_DB_PASSWORD: ${{ secrets.APP_DB_PASSWORD }}
           MONGO_INITDB_ROOT_USERNAME: ${{ secrets.MONGO_INITDB_ROOT_USERNAME }}
           MONGO_INITDB_ROOT_PASSWORD: ${{ secrets.MONGO_INITDB_ROOT_PASSWORD }}
-        run: docker compose build ${{ steps.changed.outputs.changed }}
+        run: docker compose -f docker-compose.build.yml build ${{ steps.changed.outputs.changed }}
 
       - name: Push images
         if: steps.changed.outputs.changed != ''
-        run: docker compose push ${{ steps.changed.outputs.changed }}
+        run: docker compose -f docker-compose.build.yml push ${{ steps.changed.outputs.changed }}
