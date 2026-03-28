@@ -24,14 +24,17 @@ export function useBulkUploadAssets() {
   const addFiles = useCallback((files) => {
     const newItems = Array.from(files)
       .filter(file => file.size > 0)
-      .map(file => ({
-        id: `upload-${++nextId}`,
-        file,
-        assetType: detectAssetType(file.type) || 'image',
-        status: 'pending',
-        progress: 0,
-        error: null,
-      }))
+      .map(file => {
+        const detectedType = detectAssetType(file.type)
+        return {
+          id: `upload-${++nextId}`,
+          file,
+          assetType: detectedType || 'image',
+          status: detectedType ? 'pending' : 'error',
+          progress: 0,
+          error: detectedType ? null : `Unsupported file type: ${file.type || 'unknown'}`,
+        }
+      })
     setQueue(prev => [...prev, ...newItems])
   }, [])
 
@@ -137,7 +140,7 @@ export function useBulkUploadAssets() {
   const completedCount = useMemo(() => queue.filter(i => i.status === 'done').length, [queue])
   const errorCount = useMemo(() => queue.filter(i => i.status === 'error').length, [queue])
   const hasValidationErrors = useMemo(() =>
-    queue.some(item => validateFileForType(item.file, item.assetType) !== null),
+    queue.some(item => item.status === 'error' || validateFileForType(item.file, item.assetType) !== null),
     [queue]
   )
 

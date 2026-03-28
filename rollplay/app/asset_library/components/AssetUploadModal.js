@@ -5,7 +5,7 @@
 
 import React, { useState, useRef, useCallback } from 'react'
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
-import { faCheck, faXmark, faSpinner, faCloudArrowUp } from '@fortawesome/free-solid-svg-icons'
+import { faCheck, faXmark, faSpinner } from '@fortawesome/free-solid-svg-icons'
 import Modal from '@/app/shared/components/Modal'
 import { Button } from '@/app/dashboard/components/shared/Button'
 import { useBulkUploadAssets } from '../hooks/useBulkUploadAssets'
@@ -150,7 +150,7 @@ export default function AssetUploadModal({ isOpen, onClose }) {
         {isUploading && (
           <div className="flex items-center gap-3 text-sm text-content-secondary">
             <FontAwesomeIcon icon={faSpinner} className="animate-spin" />
-            <span>Uploading {completedCount + 1} of {totalCount}...</span>
+            <span>Uploading {Math.min(completedCount + 1, totalCount)} of {totalCount}...</span>
           </div>
         )}
 
@@ -226,18 +226,28 @@ function FileQueueRow({ item, onRemove, onTypeChange, disabled }) {
       </div>
 
       {/* Asset Type Dropdown */}
-      <select
-        value={assetType}
-        onChange={(e) => onTypeChange(id, e.target.value)}
-        disabled={disabled || status === 'done'}
-        className="px-2 py-1 text-sm rounded-sm border border-border bg-surface-elevated text-content-on-dark disabled:opacity-50 focus:outline-none focus:border-border-active"
-      >
-        {compatibleTypes.map(type => (
-          <option key={type} value={type}>
-            {ACCEPTED_TYPES[type].label}
-          </option>
-        ))}
-      </select>
+      {compatibleTypes.length === 0 ? (
+        <select
+          value=""
+          disabled
+          className="px-2 py-1 text-sm rounded-sm border border-feedback-error/50 bg-surface-elevated text-feedback-error disabled:opacity-70 focus:outline-none"
+        >
+          <option value="">Unsupported</option>
+        </select>
+      ) : (
+        <select
+          value={assetType}
+          onChange={(e) => onTypeChange(id, e.target.value)}
+          disabled={disabled || status === 'done'}
+          className="px-2 py-1 text-sm rounded-sm border border-border bg-surface-elevated text-content-on-dark disabled:opacity-50 focus:outline-none focus:border-border-active"
+        >
+          {compatibleTypes.map(type => (
+            <option key={type} value={type}>
+              {ACCEPTED_TYPES[type].label}
+            </option>
+          ))}
+        </select>
+      )}
 
       {/* Status Indicator */}
       <div className="w-8 flex items-center justify-center">
