@@ -358,7 +358,7 @@ body {
 .game-interface {
   font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
   background: #1a1a2e;
-  color: #e0e0e0;
+  color: var(--content-on-dark);
   height: 100dvh;
   overflow: hidden;
   display: flex;
@@ -371,9 +371,9 @@ body {
 .top-nav {
   display: flex;
   flex-direction: column;
-  background: linear-gradient(90deg, rgba(0,0,0,0.9) 0%, rgba(26,26,46,0.8) 100%);
+  background: linear-gradient(180deg, rgba(0,0,0,0.9) 0%, rgba(26,26,46,0.8) 100%);
   backdrop-filter: blur(8px);
-  border-bottom: 1px solid rgba(74, 222, 128, 0.3);
+  border-bottom: 1px solid rgba(247, 244, 243, 0.2);
   position: relative;
   z-index: 100; /* Above everything */
 }
@@ -403,8 +403,7 @@ body {
 
 .campaign-title {
   font-size: calc(18px * var(--ui-scale));
-  font-weight: 600;
-  color: #4ade80;
+  font-weight: 400;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -425,13 +424,12 @@ body {
 }
 
 .room-code {
-  background: rgba(74, 222, 128, 0.15);
-  border: 1px solid rgba(74, 222, 128, 0.3);
+  background: rgba(247, 244, 243, 0.1);
+  border: 1px solid rgba(247, 244, 243, 0.2);
   padding: calc(4px * var(--ui-scale)) calc(12px * var(--ui-scale));
   border-radius: calc(4px * var(--ui-scale));
   font-family: monospace;
   font-size: calc(12px * var(--ui-scale));
-  color: #4ade80;
   cursor: pointer;
   transition: all 0.3s ease;
   user-select: none;
@@ -471,13 +469,11 @@ body {
   flex-shrink: 0;
   white-space: nowrap;
   font-size: calc(12px * var(--ui-scale));
-  color: #e0e0e0;
 }
 
 .control-btn {
   background: transparent;
   border: 1px solid rgba(255, 255, 255, 0.2);
-  color: #e0e0e0;
   padding: calc(6px * var(--ui-scale)) calc(12px * var(--ui-scale));
   border-radius: calc(4px * var(--ui-scale));
   cursor: pointer;
@@ -486,8 +482,7 @@ body {
 }
 
 .control-btn:hover {
-  border-color: #4ade80;
-  color: #4ade80;
+  border-color: var(--content-on-dark);
 }
 
 /* UI Scale Navigation Toggle - NEW: In-nav scaling controls
@@ -500,7 +495,6 @@ body {
 .ui-scale-nav .scale-btn {
   background: transparent;
   border: 1px solid rgba(255, 255, 255, 0.2);
-  color: #e0e0e0;
   padding: calc(4px * var(--ui-scale)) calc(8px * var(--ui-scale));
   border-radius: calc(3px * var(--ui-scale));
   cursor: pointer;
@@ -511,14 +505,13 @@ body {
 }
 
 .ui-scale-nav .scale-btn:hover {
-  border-color: #4ade80;
-  color: #4ade80;
+  border-color: var(--content-on-dark);
 }
 
 .ui-scale-nav .scale-btn.active {
-  background: #4ade80;
-  border-color: #4ade80;
-  color: #000;
+  background: var(--content-on-dark);
+  border-color: var(--content-on-dark);
+  color: #1a1a2e;
 }
 
 /* Fullscreen Toggle Button
@@ -526,7 +519,6 @@ body {
 .fullscreen-btn {
   background: transparent;
   border: 1px solid rgba(255, 255, 255, 0.2);
-  color: #e0e0e0;
   padding: calc(4px * var(--ui-scale)) calc(8px * var(--ui-scale));
   border-radius: calc(3px * var(--ui-scale));
   cursor: pointer;
@@ -535,8 +527,7 @@ body {
 }
 
 .fullscreen-btn:hover {
-  border-color: #4ade80;
-  color: #4ade80;
+  border-color: var(--content-on-dark);
 }
 
 /* Main Game Area Grid - Single column, all panels are fixed-position drawers
@@ -1066,7 +1057,7 @@ body {
 .control-btn:focus-visible,
 .ui-scale-nav .scale-btn:focus-visible,
 .fullscreen-btn:focus-visible {
-  outline: 2px solid #4ade80;
+  outline: 2px solid var(--content-on-dark);
   outline-offset: 2px;
 }
 

@@ -1548,7 +1548,7 @@ export default function GameContent() {
       <div ref={navRef} className="top-nav">
         <div className="top-nav-bar">
           <div className="campaign-info">
-            <div className="campaign-title">The Curse of Strahd</div>
+            <div className="campaign-title">{campaignMeta?.title || 'Loading...'}</div>
           </div>
 
           <div className="nav-actions">
