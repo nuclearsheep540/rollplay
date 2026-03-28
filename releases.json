@@ -1,5 +1,5 @@
 {
-  "latest": "0.34.0",
+  "latest": "0.35.0",
   "releases": {
     "0.27.1": {
       "date": "2026-03-10",
@@ -159,6 +159,21 @@
         "app_version": "0.23.0",
         "api_site_version": "0.18.0",
         "api_game_version": "0.14.0",
+        "api_auth_version": "0.2.1",
+        "nginx_version": "0.4.10",
+        "postgres_version": "0.1.8",
+        "mongo_db_version": "0.4.0",
+        "certbot_version": "0.1.2"
+      }
+    },
+    "0.35.0": {
+      "date": "2026-03-28",
+      "commit": "96305e7",
+      "description": "Game page load optimisation - crossorigin and s3 preload and SSR wrap on game component",
+      "services": {
+        "app_version": "0.24.0",
+        "api_site_version": "0.18.0",
+        "api_game_version": "0.15.0",
         "api_auth_version": "0.2.1",
         "nginx_version": "0.4.10",
         "postgres_version": "0.1.8",
