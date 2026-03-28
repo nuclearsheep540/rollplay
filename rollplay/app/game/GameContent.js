@@ -29,7 +29,7 @@ import { useUnifiedAudio } from '../audio_management';
 import { MapDisplay, useMapWebSocket, ImageDisplay, useImageWebSocket } from '../map_management';
 import MapOverlayPanel from './components/MapOverlayPanel';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
-import { faVolumeHigh, faVolumeXmark, faRightToBracket, faEye, faMaximize, faMinimize } from '@fortawesome/free-solid-svg-icons';
+import { faVolumeHigh, faVolumeXmark, faRightToBracket, faEye, faUpRightAndDownLeftFromCenter, faDownLeftAndUpRightToCenter } from '@fortawesome/free-solid-svg-icons';
 import { useFullscreen } from './hooks/useFullscreen';
 import MapSafeArea from './components/MapSafeArea';
 import Drawer from './components/Drawer';
@@ -1616,7 +1616,7 @@ export default function GameContent() {
               aria-label={isFullscreen ? 'Exit fullscreen' : 'Enter fullscreen'}
               aria-pressed={isFullscreen}
             >
-              <FontAwesomeIcon icon={isFullscreen ? faMinimize : faMaximize} />
+              <FontAwesomeIcon icon={isFullscreen ? faDownLeftAndUpRightToCenter : faUpRightAndDownLeftFromCenter} />
             </button>
           </div>
 
