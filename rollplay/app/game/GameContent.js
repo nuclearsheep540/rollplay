@@ -1613,6 +1613,8 @@ export default function GameContent() {
               onClick={toggleFullscreen}
               className="fullscreen-btn"
               title={isFullscreen ? 'Exit Fullscreen' : 'Enter Fullscreen'}
+              aria-label={isFullscreen ? 'Exit fullscreen' : 'Enter fullscreen'}
+              aria-pressed={isFullscreen}
             >
               <FontAwesomeIcon icon={isFullscreen ? faCompress : faExpand} />
             </button>

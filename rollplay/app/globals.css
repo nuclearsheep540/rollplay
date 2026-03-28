@@ -1063,7 +1063,8 @@ body {
 /* Focus States for Accessibility
    ========================================================================== */
 .control-btn:focus,
-.ui-scale-nav .scale-btn:focus {
+.ui-scale-nav .scale-btn:focus,
+.fullscreen-btn:focus {
   outline: 2px solid #4ade80;
   outline-offset: 2px;
 }

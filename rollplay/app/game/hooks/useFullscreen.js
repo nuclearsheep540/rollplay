@@ -3,6 +3,8 @@
  * SPDX-License-Identifier: GPL-3.0-or-later
  */
 
+'use client'
+
 import { useState, useCallback, useEffect } from 'react'
 
 function getFullscreenElement() {
@@ -27,6 +29,9 @@ export function useFullscreen() {
       setIsFullscreen(Boolean(getFullscreenElement()))
     }
 
+    // Initialize from current state in case we mounted while already fullscreen
+    handleChange()
+
     document.addEventListener('fullscreenchange', handleChange)
     document.addEventListener('webkitfullscreenchange', handleChange)
 
@@ -37,19 +42,23 @@ export function useFullscreen() {
   }, [])
 
   const toggleFullscreen = useCallback(async () => {
-    if (getFullscreenElement()) {
-      if (document.exitFullscreen) {
-        await document.exitFullscreen()
-      } else if (document.webkitExitFullscreen) {
-        document.webkitExitFullscreen()
+    try {
+      if (getFullscreenElement()) {
+        if (document.exitFullscreen) {
+          await document.exitFullscreen()
+        } else if (document.webkitExitFullscreen) {
+          document.webkitExitFullscreen()
+        }
+      } else {
+        const el = document.documentElement
+        if (el.requestFullscreen) {
+          await el.requestFullscreen({ navigationUI: 'hide' })
+        } else if (el.webkitRequestFullscreen) {
+          el.webkitRequestFullscreen()
+        }
       }
-    } else {
-      const el = document.documentElement
-      if (el.requestFullscreen) {
-        await el.requestFullscreen({ navigationUI: 'hide' })
-      } else if (el.webkitRequestFullscreen) {
-        el.webkitRequestFullscreen()
-      }
+    } catch (error) {
+      console.warn('Failed to toggle fullscreen:', error)
     }
   }, [])
 
