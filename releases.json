@@ -1,5 +1,5 @@
 {
-  "latest": "0.36.0",
+  "latest": "0.37.0",
   "releases": {
     "0.27.1": {
       "date": "2026-03-10",
@@ -194,6 +194,21 @@
         "postgres": "0.1.8",
         "mongo": "0.4.0",
         "certbot": "0.1.2"
+      }
+    },
+    "0.37.0": {
+      "date": "2026-03-28",
+      "commit": "3461f41",
+      "description": "Full screen button, nav restyle, remove mod dm rm function",
+      "services": {
+        "app": "0.25.0",
+        "api_site": "0.18.1",
+        "api_game": "0.15.1",
+        "api_auth": "0.2.2",
+        "nginx": "0.4.11",
+        "postgres": "0.1.9",
+        "mongo": "0.4.1",
+        "certbot": "0.1.3"
       }
     }
   }
