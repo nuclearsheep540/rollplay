@@ -28,20 +28,17 @@ export default function ModeratorControls({
   handleClearSystemMessages, // Function to clear system messages
   displayNameMap = {},
   playerMetadata = {},
-  dungeonMaster = null,
 }) {
   
   // State for collapsible sections
   const [expandedSections, setExpandedSections] = useState({
     moderators: true,
-    dm: true,
     party: true
   });
 
   // State for modals
   const [isModeratorModalOpen, setIsModeratorModalOpen] = useState(false);
-  const [isDMModalOpen, setIsDMModalOpen] = useState(false);
-  const [selectedAction, setSelectedAction] = useState(''); // 'add_moderator', 'remove_moderator', 'set_dm'
+  const [selectedAction, setSelectedAction] = useState(''); // 'add_moderator', 'remove_moderator'
   
   // State for party management
   const [isKickModalOpen, setIsKickModalOpen] = useState(false);
@@ -122,14 +119,6 @@ export default function ModeratorControls({
           method = 'DELETE';
           body = { user_id: userId, requesting_user_id: thisUserId };
           break;
-        case 'set_dm':
-          endpoint = `/api/game/${roomId}/dm`;
-          body = { user_id: userId };
-          break;
-        case 'unset_dm':
-          endpoint = `/api/game/${roomId}/dm`;
-          method = 'DELETE';
-          break;
       }
 
       const response = await fetch(endpoint, {
@@ -145,7 +134,6 @@ export default function ModeratorControls({
         
         // Close modals
         setIsModeratorModalOpen(false);
-        setIsDMModalOpen(false);
       } else {
         const error = await response.json();
         alert(`Error: ${error.detail || 'Failed to update role'}`);
@@ -159,11 +147,6 @@ export default function ModeratorControls({
   const openModeratorModal = (action) => {
     setSelectedAction(action);
     setIsModeratorModalOpen(true);
-  };
-
-  const openDMModal = (action) => {
-    setSelectedAction(action);
-    setIsDMModalOpen(true);
   };
 
   // Show only if user is a moderator or host
@@ -209,50 +192,6 @@ export default function ModeratorControls({
                 <div>Current Moderators:</div>
                 <div>
                   {roomModeratorIds.map(modId => displayNameMap[modId] || modId).join(', ')}
-                </div>
-              </div>
-            )}
-          </div>
-        )}
-      </div>
-
-      {/* DM Management Section */}
-      <div className="flex-shrink-0">
-        <div 
-          className={MODERATOR_HEADER}
-          onClick={() => toggleSection('dm')}
-        >
-          Manage DM
-          <span className={`${MODERATOR_ARROW} ${expandedSections.dm ? 'rotate-180' : ''}`}>
-            ▼
-          </span>
-        </div>
-        {expandedSections.dm && (
-          <div>
-            {!dungeonMaster?.user_id && (
-              <button 
-                className={MODERATOR_CHILD}
-                onClick={() => openDMModal('set_dm')}
-              >
-                Set Dungeon Master
-              </button>
-            )}
-            
-            {dungeonMaster?.user_id && (isHost || isDM) && (
-              <button
-                className={MODERATOR_CHILD}
-                onClick={() => handleRoleAction('unset_dm', dungeonMaster.user_id)}
-              >
-                Remove Dungeon Master
-              </button>
-            )}
-
-            {/* Display current DM */}
-            {dungeonMaster?.user_id && (
-              <div className={MODERATOR_CHILD_LAST}>
-                <div>Current DM:</div>
-                <div>
-                  {dungeonMaster.player_name || dungeonMaster.user_id}
                 </div>
               </div>
             )}
@@ -420,102 +359,6 @@ export default function ModeratorControls({
               <button
                 className="px-4 py-2 bg-gray-600 border border-gray-500 text-gray-300 rounded transition-colors duration-200 hover:bg-gray-500"
                 onClick={() => setIsModeratorModalOpen(false)}
-              >
-                Cancel
-              </button>
-            </div>
-          </div>
-      </Modal>
-
-      {/* DM Action Modal */}
-      <Modal
-        open={isDMModalOpen}
-        onClose={() => setIsDMModalOpen(false)}
-        size="md"
-        panelClassName="bg-slate-800 border border-amber-500/30 rounded-lg shadow-2xl"
-      >
-        <div style={{ padding: 'calc(24px * var(--ui-scale))' }}>
-            <div className="flex items-center justify-between mb-6">
-              <h3 className="text-amber-300 font-bold">
-                Set Dungeon Master
-              </h3>
-              <button 
-                className="text-gray-400 hover:text-white transition-colors"
-                onClick={() => setIsDMModalOpen(false)}
-              >
-                ✕
-              </button>
-            </div>
-
-            <div className="mb-6">
-              <p className="text-gray-300 mb-4">
-                Select a player to set as Dungeon Master:
-              </p>
-              
-              {allAvailableUsers.length > 0 ? (
-                <div className="space-y-2">
-                  {/* Seated Players Section */}
-                  {activePlayers.length > 0 && (
-                    <>
-                      <div className="text-amber-400/70 text-xs mb-2 font-medium">SEATED PLAYERS</div>
-                      {activePlayers.map((player) => (
-                        <button
-                          key={player.seatId}
-                          className="w-full text-left p-3 bg-amber-500/10 border border-amber-500/30 text-amber-300 rounded transition-colors duration-200 hover:bg-amber-500/20"
-                          onClick={() => handleRoleAction('set_dm', player.userId)}
-                        >
-                          <div className="flex items-center justify-between">
-                            <div>
-                              <div className="font-medium">{player.playerName}</div>
-                              {formatCharacterSummary(player.characterData) && (
-                                <div className="text-gray-400 text-sm">
-                                  {formatCharacterSummary(player.characterData)}
-                                </div>
-                              )}
-                            </div>
-                            <div className="text-amber-400 text-sm">Set</div>
-                          </div>
-                        </button>
-                      ))}
-                    </>
-                  )}
-
-                  {/* Lobby Users Section */}
-                  {uniqueLobbyUsers.length > 0 && (
-                    <>
-                      {activePlayers.length > 0 && <div className="my-3 border-t border-amber-500/20"></div>}
-                      <div className="text-amber-400/70 text-xs mb-2 font-medium">LOBBY USERS</div>
-                      {uniqueLobbyUsers.map((user) => (
-                        <button
-                          key={`lobby_${user.user_id || user.id}`}
-                          className="w-full text-left p-3 bg-amber-500/10 border border-amber-500/30 text-amber-300 rounded transition-colors duration-200 hover:bg-amber-500/20"
-                          onClick={() => handleRoleAction('set_dm', user.user_id || user.id)}
-                        >
-                          <div className="flex items-center justify-between">
-                            <div>
-                              <div className="font-medium">{user.player_name || user.name}</div>
-                              <div className="text-amber-400/70 text-sm">
-                                Connected • In Lobby
-                              </div>
-                            </div>
-                            <div className="text-amber-400 text-sm">Set</div>
-                          </div>
-                        </button>
-                      ))}
-                    </>
-                  )}
-                </div>
-              ) : (
-                <div className="text-center py-8 text-gray-500">
-                  <p>No players available</p>
-                </div>
-              )}
-            </div>
-
-            <div className="flex justify-end gap-3">
-              <button
-                className="px-4 py-2 bg-gray-600 border border-gray-500 text-gray-300 rounded transition-colors duration-200 hover:bg-gray-500"
-                onClick={() => setIsDMModalOpen(false)}
               >
                 Cancel
               </button>

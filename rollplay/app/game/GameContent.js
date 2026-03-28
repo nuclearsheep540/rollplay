@@ -1769,7 +1769,6 @@ export default function GameContent() {
                   handleClearSystemMessages={handleClearSystemMessages}
                   displayNameMap={displayNameMap}
                   playerMetadata={playerMetadata}
-                  dungeonMaster={dungeonMaster}
                 />
               )}
               {activeRightDrawer === 'map' && isDM && (
