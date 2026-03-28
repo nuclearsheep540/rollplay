@@ -5,81 +5,39 @@
 
 import React, { useState, useRef, useCallback } from 'react'
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
-import { faMap, faMusic, faBolt, faImage } from '@fortawesome/free-solid-svg-icons'
+import { faCheck, faXmark, faSpinner, faCloudArrowUp } from '@fortawesome/free-solid-svg-icons'
 import Modal from '@/app/shared/components/Modal'
 import { Button } from '@/app/dashboard/components/shared/Button'
+import { useBulkUploadAssets } from '../hooks/useBulkUploadAssets'
+import { ACCEPTED_TYPES, getCompatibleTypes, validateFileForType } from '../config/assetTypes'
 
-const ACCEPTED_TYPES = {
-  map: {
-    mimeTypes: ['image/png', 'image/jpeg', 'image/webp'],
-    extensions: '.png, .jpg, .jpeg, .webp',
-    label: 'Map',
-    icon: faMap
-  },
-  music: {
-    mimeTypes: ['audio/mpeg', 'audio/wav', 'audio/ogg'],
-    extensions: '.mp3, .wav, .ogg',
-    label: 'Music',
-    icon: faMusic
-  },
-  sfx: {
-    mimeTypes: ['audio/mpeg', 'audio/wav', 'audio/ogg'],
-    extensions: '.mp3, .wav, .ogg',
-    label: 'SFX',
-    icon: faBolt
-  },
-  image: {
-    mimeTypes: ['image/png', 'image/jpeg', 'image/webp', 'image/gif'],
-    extensions: '.png, .jpg, .jpeg, .webp, .gif',
-    label: 'Image',
-    icon: faImage
-  }
-}
-
-const MAX_FILE_SIZE = 50 * 1024 * 1024 // 50MB
+// Union of all accepted MIME types for the file input
+const ALL_ACCEPTED_MIMES = [...new Set(
+  Object.values(ACCEPTED_TYPES).flatMap(t => t.mimeTypes)
+)].join(',')
 
 /**
- * Modal for uploading new assets with drag-and-drop support.
- * Backed by Headless UI Dialog for focus trap, escape-to-close, and ARIA.
+ * Modal for uploading one or more assets with drag-and-drop support.
+ * Each file gets a per-file asset type dropdown before uploading.
  */
-export default function AssetUploadModal({
-  isOpen,
-  onClose,
-  onUpload,
-  uploading,
-  uploadProgress
-}) {
-  const [selectedFile, setSelectedFile] = useState(null)
-  const [assetType, setAssetType] = useState('map')
+export default function AssetUploadModal({ isOpen, onClose }) {
   const [dragActive, setDragActive] = useState(false)
-  const [error, setError] = useState(null)
   const fileInputRef = useRef(null)
 
-  const validateFile = useCallback((file) => {
-    if (!file) return 'No file selected'
+  const {
+    queue,
+    isUploading,
+    completedCount,
+    totalCount,
+    hasValidationErrors,
+    addFiles,
+    removeFile,
+    updateAssetType,
+    startUpload,
+    reset,
+  } = useBulkUploadAssets()
 
-    if (file.size > MAX_FILE_SIZE) {
-      return `File too large. Maximum size is ${MAX_FILE_SIZE / (1024 * 1024)}MB`
-    }
-
-    const typeConfig = ACCEPTED_TYPES[assetType]
-    if (!typeConfig.mimeTypes.includes(file.type)) {
-      return `Invalid file type for ${typeConfig.label}. Accepted: ${typeConfig.extensions}`
-    }
-
-    return null
-  }, [assetType])
-
-  const handleFileSelect = useCallback((file) => {
-    const validationError = validateFile(file)
-    if (validationError) {
-      setError(validationError)
-      setSelectedFile(null)
-    } else {
-      setError(null)
-      setSelectedFile(file)
-    }
-  }, [validateFile])
+  const allDone = totalCount > 0 && completedCount === totalCount
 
   const handleDrag = useCallback((e) => {
     e.preventDefault()
@@ -95,70 +53,39 @@ export default function AssetUploadModal({
     e.preventDefault()
     e.stopPropagation()
     setDragActive(false)
-
-    if (e.dataTransfer.files && e.dataTransfer.files[0]) {
-      handleFileSelect(e.dataTransfer.files[0])
+    if (e.dataTransfer.files?.length) {
+      addFiles(e.dataTransfer.files)
     }
-  }, [handleFileSelect])
+  }, [addFiles])
 
   const handleInputChange = useCallback((e) => {
-    if (e.target.files && e.target.files[0]) {
-      handleFileSelect(e.target.files[0])
+    if (e.target.files?.length) {
+      addFiles(e.target.files)
     }
     e.target.value = ''
-  }, [handleFileSelect])
+  }, [addFiles])
 
-  const handleSubmit = async () => {
-    if (!selectedFile) return
-
-    try {
-      await onUpload(selectedFile, assetType)
-      // Reset and close on success
-      setSelectedFile(null)
-      setAssetType('map')
-      setError(null)
-      onClose()
-    } catch (err) {
-      setError(err.message || 'Upload failed')
-    }
-  }
-
-  const handleClose = () => {
-    if (!uploading) {
-      setSelectedFile(null)
-      setAssetType('map')
-      setError(null)
+  const handleClose = useCallback(() => {
+    if (!isUploading) {
+      reset()
       onClose()
     }
-  }
+  }, [isUploading, reset, onClose])
 
-  // Re-validate when asset type changes
-  const handleTypeChange = (newType) => {
-    setAssetType(newType)
-    if (selectedFile) {
-      const typeConfig = ACCEPTED_TYPES[newType]
-      if (!typeConfig.mimeTypes.includes(selectedFile.type)) {
-        setError(`Selected file is not valid for ${typeConfig.label}. Please select a different file.`)
-      } else {
-        setError(null)
-      }
-    } else {
-      setError(null)
-    }
-  }
-
-  const currentTypeConfig = ACCEPTED_TYPES[assetType]
+  const handleSubmit = useCallback(async () => {
+    await startUpload()
+  }, [startUpload])
 
   return (
-    <Modal open={isOpen} onClose={uploading ? () => {} : handleClose} size="lg">
+    <Modal open={isOpen} onClose={isUploading ? () => {} : handleClose} size="2xl">
       {/* Header */}
       <div className="flex items-center justify-between p-4 border-b border-border">
         <h2 className="text-xl font-bold text-content-accent">
-          Upload Asset
+          Upload Assets
         </h2>
         <button
           onClick={handleClose}
-          disabled={uploading}
+          disabled={isUploading}
           className="transition-opacity hover:opacity-80 disabled:opacity-50 text-content-secondary"
         >
           <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -169,107 +96,70 @@ export default function AssetUploadModal({
 
       {/* Body */}
       <div className="p-4 space-y-4">
-        {/* Asset Type Selection */}
-        <div>
-          <label className="block text-sm font-medium mb-2 text-content-on-dark">
-            Asset Type
-          </label>
-          <div className="grid grid-cols-4 gap-2">
-            {Object.entries(ACCEPTED_TYPES).map(([type, config]) => (
-              <button
-                key={type}
-                onClick={() => handleTypeChange(type)}
-                disabled={uploading}
-                className={`p-3 rounded-sm border text-center transition-all disabled:opacity-50 ${
-                  assetType === type
-                    ? 'bg-surface-panel border-border-active text-content-on-dark'
-                    : 'bg-transparent border-border text-content-secondary'
-                }`}
-              >
-                <FontAwesomeIcon icon={config.icon} className="text-3xl block mx-auto mb-1" />
-                <span className="text-xs font-medium">{config.label}</span>
-              </button>
-            ))}
-          </div>
-        </div>
-
         {/* Drop Zone */}
-        <div
-          onDragEnter={handleDrag}
-          onDragLeave={handleDrag}
-          onDragOver={handleDrag}
-          onDrop={handleDrop}
-          onClick={() => !uploading && fileInputRef.current?.click()}
-          className={`relative border-2 border-dashed rounded-sm p-8 text-center cursor-pointer transition-all ${uploading ? 'pointer-events-none opacity-60' : ''} ${
-            dragActive
-              ? 'border-content-secondary'
-              : selectedFile
-                ? 'border-feedback-success'
-                : 'border-border'
-          }`}
-          style={{
-            backgroundColor: dragActive ? '#B5ADA610' : selectedFile ? '#16a34a10' : 'transparent'
-          }}
-        >
-          <input
-            ref={fileInputRef}
-            type="file"
-            onChange={handleInputChange}
-            accept={currentTypeConfig.mimeTypes.join(',')}
-            className="hidden"
-            disabled={uploading}
-          />
-
-          {selectedFile ? (
-            <div>
-              <FontAwesomeIcon icon={currentTypeConfig.icon} className="text-4xl block mx-auto mb-2" />
-              <p className="font-medium truncate text-content-on-dark">
-                {selectedFile.name}
-              </p>
-              <p className="text-sm mt-1 text-content-secondary">
-                {(selectedFile.size / (1024 * 1024)).toFixed(2)} MB
-              </p>
-              {!uploading && (
-                <p className="text-xs mt-2 text-content-secondary">
-                  Click to change file
-                </p>
-              )}
-            </div>
-          ) : (
-            <div>
-              <svg xmlns="http://www.w3.org/2000/svg" className="h-12 w-12 mx-auto mb-3 text-content-secondary" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
-              </svg>
-              <p className="mb-1 text-content-on-dark">
-                Drop file here or click to browse
-              </p>
-              <p className="text-sm text-content-secondary">
-                Accepted: {currentTypeConfig.extensions}
-              </p>
-            </div>
-          )}
-        </div>
-
-        {/* Upload Progress */}
-        {uploading && (
-          <div className="space-y-2">
-            <div className="flex justify-between text-sm">
-              <span className="text-content-secondary">Uploading...</span>
-              <span className="text-content-on-dark">{uploadProgress}%</span>
-            </div>
-            <div className="h-2 rounded-sm overflow-hidden bg-border">
-              <div
-                className="h-full transition-all duration-300 bg-interactive-hover"
-                style={{ width: `${uploadProgress}%` }}
-              />
-            </div>
+        {!isUploading && !allDone && (
+          <div
+            onDragEnter={handleDrag}
+            onDragLeave={handleDrag}
+            onDragOver={handleDrag}
+            onDrop={handleDrop}
+            onClick={() => fileInputRef.current?.click()}
+            className={`relative border-2 border-dashed rounded-sm p-8 text-center cursor-pointer transition-all ${
+              dragActive ? 'border-content-secondary' : 'border-border'
+            }`}
+            style={{
+              backgroundColor: dragActive ? '#B5ADA610' : 'transparent'
+            }}
+          >
+            <input
+              ref={fileInputRef}
+              type="file"
+              multiple
+              onChange={handleInputChange}
+              accept={ALL_ACCEPTED_MIMES}
+              className="hidden"
+            />
+            <svg xmlns="http://www.w3.org/2000/svg" className="h-12 w-12 mx-auto mb-3 text-content-secondary" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
+            </svg>
+            <p className="mb-1 text-content-on-dark">
+              {queue.length > 0 ? 'Drop more files or click to add' : 'Drop files here or click to browse'}
+            </p>
+            <p className="text-sm text-content-secondary">
+              Images (.png, .jpg, .webp, .gif) and Audio (.mp3, .wav, .ogg) — 50MB max each
+            </p>
           </div>
         )}
 
-        {/* Error Message */}
-        {error && (
-          <div className="p-3 rounded-sm border bg-feedback-error/15 border-feedback-error">
-            <p className="text-sm text-feedback-error">{error}</p>
+        {/* File Queue */}
+        {queue.length > 0 && (
+          <div className="space-y-1 max-h-80 overflow-y-auto">
+            {queue.map((item) => (
+              <FileQueueRow
+                key={item.id}
+                item={item}
+                onRemove={removeFile}
+                onTypeChange={updateAssetType}
+                disabled={isUploading}
+              />
+            ))}
+          </div>
+        )}
+
+        {/* Upload Progress Summary */}
+        {isUploading && (
+          <div className="flex items-center gap-3 text-sm text-content-secondary">
+            <FontAwesomeIcon icon={faSpinner} className="animate-spin" />
+            <span>Uploading {completedCount + 1} of {totalCount}...</span>
+          </div>
+        )}
+
+        {/* Done Summary */}
+        {allDone && (
+          <div className="p-3 rounded-sm border bg-feedback-success/15 border-feedback-success">
+            <p className="text-sm text-feedback-success">
+              {totalCount === 1 ? '1 file uploaded' : `All ${totalCount} files uploaded`} successfully.
+            </p>
           </div>
         )}
       </div>
@@ -279,18 +169,111 @@ export default function AssetUploadModal({
         <Button
           variant="ghost"
           onClick={handleClose}
-          disabled={uploading}
+          disabled={isUploading}
         >
-          Cancel
+          {allDone ? 'Close' : 'Cancel'}
         </Button>
-        <Button
-          variant="primary"
-          onClick={handleSubmit}
-          disabled={!selectedFile || uploading || error}
-        >
-          {uploading ? 'Uploading...' : 'Upload'}
-        </Button>
+        {!allDone && (
+          <Button
+            variant="primary"
+            onClick={handleSubmit}
+            disabled={queue.length === 0 || isUploading || hasValidationErrors}
+          >
+            {isUploading
+              ? 'Uploading...'
+              : queue.length <= 1
+                ? 'Upload'
+                : `Upload All (${queue.length})`
+            }
+          </Button>
+        )}
       </div>
     </Modal>
+  )
+}
+
+/**
+ * Single row in the file queue showing file info, type dropdown, status, and remove button.
+ */
+function FileQueueRow({ item, onRemove, onTypeChange, disabled }) {
+  const { id, file, assetType, status, progress, error } = item
+  const compatibleTypes = getCompatibleTypes(file.type)
+  const validationError = validateFileForType(file, assetType)
+  const hasError = status === 'error' || validationError
+
+  return (
+    <div className={`flex items-center gap-3 px-3 py-2 rounded-sm border ${
+      hasError
+        ? 'border-feedback-error/50 bg-feedback-error/5'
+        : status === 'done'
+          ? 'border-feedback-success/50 bg-feedback-success/5'
+          : 'border-border bg-surface-panel'
+    }`}>
+      {/* File Info */}
+      <div className="flex-1 min-w-0">
+        <p className="text-sm font-medium truncate text-content-on-dark">{file.name}</p>
+        <div className="flex items-center gap-2">
+          <span className="text-xs text-content-secondary">
+            {(file.size / (1024 * 1024)).toFixed(2)} MB
+          </span>
+          {validationError && (
+            <span className="text-xs text-feedback-error">{validationError}</span>
+          )}
+          {error && !validationError && (
+            <span className="text-xs text-feedback-error">{error}</span>
+          )}
+        </div>
+      </div>
+
+      {/* Asset Type Dropdown */}
+      <select
+        value={assetType}
+        onChange={(e) => onTypeChange(id, e.target.value)}
+        disabled={disabled || status === 'done'}
+        className="px-2 py-1 text-sm rounded-sm border border-border bg-surface-elevated text-content-on-dark disabled:opacity-50 focus:outline-none focus:border-border-active"
+      >
+        {compatibleTypes.map(type => (
+          <option key={type} value={type}>
+            {ACCEPTED_TYPES[type].label}
+          </option>
+        ))}
+      </select>
+
+      {/* Status Indicator */}
+      <div className="w-8 flex items-center justify-center">
+        {status === 'uploading' && (
+          <FontAwesomeIcon icon={faSpinner} className="animate-spin text-content-secondary" />
+        )}
+        {status === 'done' && (
+          <FontAwesomeIcon icon={faCheck} className="text-feedback-success" />
+        )}
+        {status === 'error' && (
+          <FontAwesomeIcon icon={faXmark} className="text-feedback-error" />
+        )}
+      </div>
+
+      {/* Upload Progress Bar (inline, shown during upload) */}
+      {status === 'uploading' && (
+        <div className="w-16 h-1.5 rounded-full overflow-hidden bg-border">
+          <div
+            className="h-full transition-all duration-300 bg-interactive-hover"
+            style={{ width: `${progress}%` }}
+          />
+        </div>
+      )}
+
+      {/* Remove Button */}
+      {status !== 'done' && (
+        <button
+          onClick={() => onRemove(id)}
+          disabled={disabled}
+          className="text-content-secondary hover:text-content-on-dark disabled:opacity-30 transition-opacity"
+        >
+          <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+          </svg>
+        </button>
+      )}
+    </div>
   )
 }
