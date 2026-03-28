@@ -205,12 +205,12 @@ export const handleLobbyUpdate = (data, { setLobbyUsers }) => {
 
 export const handlePlayerDisconnectedLobby = (data, { setLobbyUsers, setDisconnectTimeouts, disconnectTimeouts }) => {
   console.log("received player disconnected for lobby:", data);
-  const { disconnected_player } = data;
+  const { disconnected_user_id } = data;
 
-  // Mark user as disconnecting in lobby
+  // Mark user as disconnecting in lobby — match by userId
   setLobbyUsers(prev =>
     prev.map(user =>
-      (user.user_id === disconnected_player || user.name === disconnected_player)
+      user.user_id === disconnected_user_id
         ? { ...user, status: 'disconnecting' }
         : user
     )
@@ -274,10 +274,10 @@ export const handleCombatState = (data, { setCombatActive }) => {
 
 export const handlePlayerDisconnected = (data, { thisUserId, setLobbyUsers, setDisconnectTimeouts, disconnectTimeouts }) => {
   console.log("received player disconnect:", data);
-  const disconnected_player = data["disconnected_player"];
+  const disconnected_user_id = data["disconnected_user_id"];
 
   // Server will handle seat cleanup and broadcast updated layout
-  if (disconnected_player !== thisUserId) {
+  if (disconnected_user_id !== thisUserId) {
     // Backend handles disconnect logging
   }
 

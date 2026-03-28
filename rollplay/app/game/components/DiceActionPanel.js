@@ -52,10 +52,8 @@ export default function DiceActionPanel({
   // Advantage/Disadvantage state (separate from dice)
   const [advantageMode, setAdvantageMode] = useState('normal'); // 'normal', 'advantage', 'disadvantage'
   
-  // UPDATED: Check if player should see dice interface
-  // currentTurn is a display name from initiative tracker; compare with screen_name
-  const myDisplayName = currentUser?.screen_name || '';
-  const isMyTurn = currentTurn === myDisplayName && combatActive;
+  // Check if player should see dice interface — currentTurn is a userId
+  const isMyTurn = currentTurn === thisUserId && combatActive;
   // Prompts use userId for identity
   const myPrompts = activePrompts.filter(prompt => prompt.player === thisUserId);
   const isPromptedToRoll = myPrompts.length > 0;

@@ -1295,20 +1295,20 @@ function GameContent() {
     }, 1000);
   };
 
-  // Handle initiative order clicks
-  const handleInitiativeClick = (clickedName) => {
-    setInitiativeOrder(prev => 
+  // Handle initiative order clicks — identity is userId for players
+  const handleInitiativeClick = (userId) => {
+    setInitiativeOrder(prev =>
       prev.map(item => ({
         ...item,
-        active: item.name === clickedName
+        active: item.userId === userId
       }))
     );
-    
-    setCurrentTurn(clickedName);
-    
-    // Show dice portal for player turns (not NPCs)
-    if (clickedName !== 'Bandit #1') {
-      showDicePortal(clickedName);
+
+    setCurrentTurn(userId);
+
+    // Show dice portal for player turns (not NPCs — NPCs have no userId)
+    if (userId) {
+      showDicePortal(userId);
     } else {
       hideDicePortal();
     }
@@ -1726,7 +1726,6 @@ function GameContent() {
                   playerData={seat.characterData}
                   onColorChange={handlePlayerColorChange}
                   currentColor={currentColor}
-                  displayNameMap={displayNameMap}
                 />
               );
             })}

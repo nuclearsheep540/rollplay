@@ -424,6 +424,8 @@ class StartSession:
 
         # 4. Business Rule: Only one session (INACTIVE/STARTING/ACTIVE/STOPPING) per campaign at a time
         campaign = self.campaign_repo.get_by_id(session.campaign_id)
+        if not campaign:
+            raise ValueError(f"Campaign {session.campaign_id} not found — cannot start session without a campaign")
         if campaign:
             active_sessions = []
             for sid in campaign.session_ids:

@@ -49,7 +49,10 @@ async def request_role_change(
                 )
                 return data
 
-            detail = response.json().get("detail", response.text)
+            try:
+                detail = response.json().get("detail", response.text)
+            except Exception:
+                detail = response.text
             if response.status_code == 400:
                 logger.warning(f"Role change rejected by api-site: {detail}")
                 raise ValueError(detail)

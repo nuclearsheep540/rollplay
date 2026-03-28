@@ -14,7 +14,6 @@ export default function PlayerCard({
     playerData = null,
     onColorChange = null,
     currentColor = null,
-    displayNameMap = {},
   }) {
 
 
@@ -25,7 +24,7 @@ export default function PlayerCard({
     const currentSeat = seats[seatId];
     const isOccupied = currentSeat.userId && currentSeat.userId !== "empty";
     const occupantName = currentSeat.playerName;
-    const isMyTurn = currentTurn === occupantName;
+    const isMyTurn = currentTurn === currentSeat.userId;
     const isThisPlayerSeat = currentSeat.userId === thisUserId;
 
     // Character payload can arrive in two shapes depending on source;
