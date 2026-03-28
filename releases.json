@@ -1,5 +1,5 @@
 {
-  "latest": "0.33.0",
+  "latest": "0.34.0",
   "releases": {
     "0.27.1": {
       "date": "2026-03-10",
@@ -142,6 +142,21 @@
       "description": "Now using UUIDs for user identification in game, added maps to the correct names, mod flow cross site implemented, session contract updated",
       "services": {
         "app_version": "0.22.0",
+        "api_site_version": "0.18.0",
+        "api_game_version": "0.14.0",
+        "api_auth_version": "0.2.1",
+        "nginx_version": "0.4.10",
+        "postgres_version": "0.1.8",
+        "mongo_db_version": "0.4.0",
+        "certbot_version": "0.1.2"
+      }
+    },
+    "0.34.0": {
+      "date": "2026-03-28",
+      "commit": "a4ab93a",
+      "description": "Bulk uploads",
+      "services": {
+        "app_version": "0.23.0",
         "api_site_version": "0.18.0",
         "api_game_version": "0.14.0",
         "api_auth_version": "0.2.1",
