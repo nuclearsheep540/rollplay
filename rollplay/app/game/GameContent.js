@@ -5,7 +5,7 @@
 
 'use client'
 
-import { React, useEffect, useState, useMemo, useCallback, useRef, Suspense } from 'react'
+import { useEffect, useState, useMemo, useCallback, useRef, Suspense } from 'react'
 import { authFetch } from '@/app/shared/utils/authFetch'
 import { useSearchParams, useRouter } from "next/navigation";
 import { getSeatColor } from '../utils/seatColors';
@@ -26,7 +26,7 @@ import DiceActionPanel from './components/DiceActionPanel'; // NEW IMPORT
 import Modal from '@/app/shared/components/Modal';
 import { useWebSocket } from './hooks/useWebSocket';
 import { useUnifiedAudio } from '../audio_management';
-import { MapDisplay, GridOverlay, useMapWebSocket, ImageDisplay, useImageWebSocket } from '../map_management';
+import { MapDisplay, useMapWebSocket, ImageDisplay, useImageWebSocket } from '../map_management';
 import MapOverlayPanel from './components/MapOverlayPanel';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { faVolumeHigh, faVolumeXmark, faRightToBracket, faEye } from '@fortawesome/free-solid-svg-icons';
@@ -336,59 +336,59 @@ export default function GameContent() {
       return
     }
 
-    await req.json().then((res) => {
-      // Set DM from room data (object: {user_id, player_name, campaign_role})
-      setDungeonMaster(res["dungeon_master"] || null);
+    const res = await req.json();
 
-      // Use actual seat layout from database (contains user_ids)
-      const seatLayout = res["current_seat_layout"] || [];
-      const maxPlayers = res["max_players"];
-      const backendSeatColors = res["seat_colors"] || {};
-      // player_metadata is already keyed by user_id from api-game
-      const backendPlayerMetadata = res["player_metadata"] || {};
+    // Set DM from room data (object: {user_id, player_name, campaign_role})
+    setDungeonMaster(res["dungeon_master"] || null);
 
-      setPlayerMetadata(backendPlayerMetadata);
+    // Use actual seat layout from database (contains user_ids)
+    const seatLayout = res["current_seat_layout"] || [];
+    const maxPlayers = res["max_players"];
+    const backendSeatColors = res["seat_colors"] || {};
+    // player_metadata is already keyed by user_id from api-game
+    const backendPlayerMetadata = res["player_metadata"] || {};
 
-      // Set seat colors from backend
-      setSeatColors(backendSeatColors);
+    setPlayerMetadata(backendPlayerMetadata);
 
-      // Initialize CSS variables for seat colors
-      Object.keys(backendSeatColors).forEach(seatIndex => {
-        document.documentElement.style.setProperty(
-          `--seat-color-${seatIndex}`,
-          backendSeatColors[seatIndex]
-        );
+    // Set seat colors from backend
+    setSeatColors(backendSeatColors);
+
+    // Initialize CSS variables for seat colors
+    Object.keys(backendSeatColors).forEach(seatIndex => {
+      document.documentElement.style.setProperty(
+        `--seat-color-${seatIndex}`,
+        backendSeatColors[seatIndex]
+      );
+    });
+
+    // Create unified seat structure — userId is identity, playerName is display
+    const initialSeats = [];
+    for (let i = 0; i < maxPlayers; i++) {
+      const userId = seatLayout[i] || "empty";
+      const meta = userId !== "empty" ? (backendPlayerMetadata[userId] || null) : null;
+      initialSeats.push({
+        seatId: i,
+        userId: userId,
+        playerName: meta?.player_name || (userId !== "empty" ? userId : "empty"),
+        characterData: meta,
+        isActive: false
       });
+    }
 
-      // Create unified seat structure — userId is identity, playerName is display
-      const initialSeats = [];
-      for (let i = 0; i < maxPlayers; i++) {
-        const userId = seatLayout[i] || "empty";
-        const meta = userId !== "empty" ? (backendPlayerMetadata[userId] || null) : null;
-        initialSeats.push({
-          seatId: i,
-          userId: userId,
-          playerName: meta?.player_name || (userId !== "empty" ? userId : "empty"),
-          characterData: meta,
-          isActive: false
-        });
-      }
+    console.log("Loaded seat layout from database:", initialSeats);
+    console.log("Loaded seat colors from database:", backendSeatColors);
+    setGameSeats(initialSeats);
 
-      console.log("Loaded seat layout from database:", initialSeats);
-      console.log("Loaded seat colors from database:", backendSeatColors);
-      setGameSeats(initialSeats);
-
-      // Active map is embedded in the game state response — apply immediately so the
-      // browser can start fetching the S3 image without waiting for a second round trip.
-      if (res["active_map"]) {
-        const embeddedMap = res["active_map"];
-        console.log(`🗺️ Loaded active map (embedded): ${embeddedMap.original_filename}`);
-        setActiveMap(embeddedMap);
-      } else {
-        console.log("🗺️ No active map in game state");
-        setActiveMap(null);
-      }
-    })
+    // Active map is embedded in the game state response — apply immediately so the
+    // browser can start fetching the S3 image without waiting for a second round trip.
+    if (res["active_map"]) {
+      const embeddedMap = res["active_map"];
+      console.log(`🗺️ Loaded active map (embedded): ${embeddedMap.original_filename}`);
+      setActiveMap(embeddedMap);
+    } else {
+      console.log("🗺️ No active map in game state");
+      setActiveMap(null);
+    }
 
     // Adventure logs and active image are independent of each other — fetch in parallel.
     await Promise.all([
@@ -753,49 +753,6 @@ export default function GameContent() {
     return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
   };
 
-  // Load active map for the room
-  const loadActiveMap = async (roomId) => {
-    try {
-      console.log("🗺️ Loading active map from database...");
-      
-      const response = await fetch(`/api/game/${roomId}/active-map`);
-      
-      if (response.ok) {
-        const mapData = await response.json();
-        
-        if (mapData && mapData.active_map) {
-          const activeMapData = mapData.active_map;
-          console.log(`🗺️ Loaded active map: ${activeMapData.original_filename}`);
-          
-          // Set the active map (atomic - contains all map data including grid_config)
-          setActiveMap(activeMapData);
-          console.log('🗺️ Loaded complete map atomically:', {
-            filename: activeMapData.filename,
-            hasGridConfig: !!activeMapData.grid_config,
-            hasImageConfig: !!activeMapData.map_image_config
-          });
-          
-        } else {
-          console.log("🗺️ No active map found for room");
-          // Clear map state if no active map (atomic)
-          setActiveMap(null);
-        }
-        
-      } else if (response.status === 404) {
-        console.log("🗺️ No active map found for room");
-        // Clear map state if no active map (atomic)
-        setActiveMap(null);
-      } else {
-        console.log("🗺️ Failed to fetch active map:", response.status, response.statusText);
-      }
-      
-    } catch (error) {
-      console.log("🗺️ Error loading active map:", error);
-      // Don't set fallback map data - leave empty if error (atomic)
-      setActiveMap(null);
-    }
-  };
-
   // Load active image and display state for the room
   const loadActiveImage = async (roomId) => {
     try {
@@ -1081,8 +1038,6 @@ export default function GameContent() {
     sendDicePromptClear,
     sendInitiativePromptAll,
     sendColorChange,
-    sendRemoteAudioPlay,
-    sendRemoteAudioResume,
     sendRemoteAudioBatch,
     registerHandler
   } = useWebSocket(roomId, thisUserId, gameContext);

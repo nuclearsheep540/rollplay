@@ -18,15 +18,21 @@ export default async function Game({ searchParams }) {
     try {
       // Internal Docker network call — no auth required for this endpoint.
       // Silently fails if api-game is unreachable (e.g. local dev outside Docker).
+      // 500ms timeout: container-to-container is sub-ms, but on a constrained
+      // EC2 instance under load this gives headroom without blocking the page.
+      const controller = new AbortController()
+      const timeout = setTimeout(() => controller.abort(), 500)
       const res = await fetch(`http://api-game:8081/game/${roomId}`, {
         cache: 'no-store',
+        signal: controller.signal,
       })
+      clearTimeout(timeout)
       if (res.ok) {
         const data = await res.json()
         mapImageUrl = data.active_map?.file_path ?? null
       }
     } catch {
-      // Preload is a progressive enhancement — safe to skip on fetch failure.
+      // Preload is a progressive enhancement — safe to skip on fetch failure or timeout.
     }
   }
 
