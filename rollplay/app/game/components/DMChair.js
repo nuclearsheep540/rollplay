@@ -36,7 +36,7 @@ export default function DMChair({ dungeonMaster, moderators = [], displayNameMap
   const visibleModerators = moderators.filter((modUserId) => modUserId && modUserId !== dungeonMaster.user_id);
 
   return (
-    <>
+    <div className="mb-[calc(24px*var(--ui-scale))]">
       <div 
         className={`
           rounded-lg border transition-colors duration-300 relative p-[calc(12px*var(--ui-scale))] mb-[calc(8px*var(--ui-scale))] border-l-4
@@ -75,7 +75,7 @@ export default function DMChair({ dungeonMaster, moderators = [], displayNameMap
           key={modUserId}
           className={`
             w-[90%] rounded-lg border transition-colors duration-300 relative
-            p-[calc(10px*var(--ui-scale))] mb-[calc(12px*var(--ui-scale))] border-l-4
+            p-[calc(10px*var(--ui-scale))] border-l-4
             bg-blue-500/10 border-blue-400/50 shadow-lg shadow-blue-500/20
           `}
           style={{
@@ -96,6 +96,6 @@ export default function DMChair({ dungeonMaster, moderators = [], displayNameMap
           </div>
         </div>
       ))}
-    </>
+    </div>
   );
 }
