@@ -72,7 +72,7 @@ export default function HorizontalInitiativeTracker({
                       : 'scale-100'
                     }
                   `}
-                  onClick={() => handleInitiativeClick(character.character_name)}
+                  onClick={() => handleInitiativeClick(character.userId)}
                 >
                   {/* Character Frame - Subtle container with party/enemy colors */}
                   <div className={`

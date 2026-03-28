@@ -26,34 +26,15 @@ class GameSettings(BaseModel):
     "Basic settings for a game lobby"
 
     max_players: int
-    seat_layout: list
+    seat_layout: list  # user_ids or "empty"
     created_at: datetime
     seat_colors: dict
-    moderators: list = []
-    dungeon_master: str = ""
-    room_host: str = dungeon_master
+    dungeon_master: dict = {}  # {user_id, player_name, campaign_role}
     available_assets: list = []  # Asset refs from campaign library (maps, audio, images)
     campaign_id: str = ""  # PostgreSQL campaign ID for proxying asset requests to api-site
-    player_metadata: dict = {}  # Player -> character metadata hydrated during cold -> hot ETL
+    player_metadata: dict = {}  # user_id -> character metadata hydrated during cold -> hot ETL
     audio_state: dict = {}  # Per-channel audio state for late-joiner sync
     audio_track_config: dict = {}  # Per-track config stash (survives channel swaps within a session)
-    
-    def __init__(self, **data):
-        # Lowercase the room_host and any names in seat_layout
-        if 'room_host' in data:
-            data['room_host'] = data['room_host'].lower()
-        if 'seat_layout' in data:
-            data['seat_layout'] = [name.lower() if name != "empty" else name for name in data['seat_layout']]
-        if 'player_metadata' in data and isinstance(data['player_metadata'], dict):
-            data['player_metadata'] = {
-                str(player_name).lower(): metadata
-                for player_name, metadata in data['player_metadata'].items()
-            }
-        if 'moderators' in data:
-            data['moderators'] = [name.lower() for name in data['moderators']]
-        if 'dungeon_master' in data:
-            data['dungeon_master'] = data['dungeon_master'].lower()
-        super().__init__(**data)
 
 class GameService:
     "Creating and joining active game lobbies"
@@ -132,69 +113,64 @@ class GameService:
 
     @staticmethod
     def update_seat_layout(room_id: str, seat_layout: list):
-        """Update the seat layout for a room"""
+        """Update the seat layout for a room. Entries are user_ids or 'empty'."""
         collection = GameService._get_active_session()
-
-        # Lowercase all player names in the seat layout for consistency
-        normalized_seat_layout = [name.lower() if name != "empty" else name for name in seat_layout]
 
         filter_criteria = GameService.room_filter(room_id)
 
-        # Validate: Check for duplicate players in seats
-        player_names = [name for name in normalized_seat_layout if name != "empty"]
-        if len(player_names) != len(set(player_names)):
-            duplicates = [name for name in set(player_names) if player_names.count(name) > 1]
-            raise Exception(f"Player '{duplicates[0]}' already occupies another seat")
+        # Validate: Check for duplicate users in seats
+        seated_user_ids = [uid for uid in seat_layout if uid != "empty"]
+        if len(seated_user_ids) != len(set(seated_user_ids)):
+            duplicates = [uid for uid in set(seated_user_ids) if seated_user_ids.count(uid) > 1]
+            raise Exception(f"User '{duplicates[0]}' already occupies another seat")
 
-        # Validate: Prevent DM from taking player seats
+        # Validate: Prevent DM and moderators from taking player seats
         room = collection.find_one(filter_criteria)
         if room:
-            dm_name = room.get("dungeon_master", "").lower()
-            if dm_name and dm_name in normalized_seat_layout:
+            dm_user_id = room.get("dungeon_master", {}).get("user_id", "")
+            if dm_user_id and dm_user_id in seat_layout:
                 raise Exception("Dungeon Master cannot sit in party seats")
-
-            moderators = {
-                str(name).lower()
-                for name in room.get("moderators", [])
-                if isinstance(name, str) and name
-            }
-            seated_staff = [name for name in player_names if name in moderators]
-            if seated_staff:
-                raise ValueError("Moderators cannot sit in party seats")
 
             player_metadata = room.get("player_metadata", {})
             if not isinstance(player_metadata, dict):
                 player_metadata = {}
 
-            # Any seated player must be an adventurer with a selected character in hot-state metadata.
-            invalid_players = [
-                name for name in player_names
-                if not player_metadata.get(name, {}).get("character_id")
+            seated_mods = [
+                uid for uid in seated_user_ids
+                if player_metadata.get(uid, {}).get("campaign_role") == "mod"
             ]
-            if invalid_players:
+            if seated_mods:
+                raise ValueError("Moderators cannot sit in party seats")
+
+            # Any seated user must have a selected character in hot-state metadata.
+            invalid_users = [
+                uid for uid in seated_user_ids
+                if not player_metadata.get(uid, {}).get("character_id")
+            ]
+            if invalid_users:
                 raise ValueError("Only adventurers with selected characters can sit in party seats")
-        
+
         print(f"🔄 Updating seat layout with filter: {filter_criteria}")
-        print(f"📝 New seat layout: {normalized_seat_layout}")
-        
+        print(f"📝 New seat layout: {seat_layout}")
+
         result = collection.update_one(
             filter_criteria,
             {
                 "$set": {
-                    "seat_layout": normalized_seat_layout,
+                    "seat_layout": seat_layout,
                 }
             }
         )
-        
+
         print(f"📊 Update result: matched={result.matched_count}, modified={result.modified_count}")
-        
+
         if result.matched_count == 0:
             print(f"❌ No document found with _id: {room_id}")
             raise Exception(f"Room {room_id} not found")
-        
+
         if result.modified_count == 0:
             print(f"⚠️ Document found but not modified (seat layout might be the same)")
-        
+
         return str(result)
 
     @staticmethod
@@ -279,42 +255,33 @@ class GameService:
             return {str(i): DEFAULT_SEAT_COLORS[i] if i < len(DEFAULT_SEAT_COLORS) else DEFAULT_SEAT_COLORS[0] for i in range(max_players)}
 
     @staticmethod
-    def is_host(room_id: str, player_name: str) -> bool:
-        """Check if player is the room host"""
+    def is_moderator(room_id: str, user_id: str) -> bool:
+        """Check if user is a moderator (includes DM)"""
         room = GameService.get_room(room_id)
         if not room:
             return False
-        room_host = room.get("room_host", "")
-        return room_host.lower() == player_name.lower()
 
-    @staticmethod 
-    def is_moderator(room_id: str, player_name: str) -> bool:
-        """Check if player is a moderator (includes host)"""
-        room = GameService.get_room(room_id)
-        if not room:
-            return False
-        
-        # Host is always a moderator (case-insensitive)
-        room_host = room.get("room_host", "")
-        if room_host.lower() == player_name.lower():
+        # DM is always a moderator
+        if room.get("dungeon_master", {}).get("user_id") == user_id:
             return True
-            
-        # Check moderators list (case-insensitive)
-        moderators = room.get("moderators", [])
-        return any(mod.lower() == player_name.lower() for mod in moderators)
+
+        player_metadata = room.get("player_metadata", {})
+        if isinstance(player_metadata, dict):
+            meta = player_metadata.get(user_id, {})
+            return meta.get("campaign_role") == "mod"
+        return False
 
     @staticmethod
-    def is_dm(room_id: str, player_name: str) -> bool:
-        """Check if player is the dungeon master"""
+    def is_dm(room_id: str, user_id: str) -> bool:
+        """Check if user is the dungeon master"""
         room = GameService.get_room(room_id)
         if not room:
             return False
-        dungeon_master = room.get("dungeon_master", "")
-        return dungeon_master.lower() == player_name.lower()
+        return room.get("dungeon_master", {}).get("user_id") == user_id
 
     @staticmethod
-    def player_has_selected_character(room_id: str, player_name: str) -> bool:
-        """Check whether a player is an adventurer in this hot-state session."""
+    def player_has_selected_character(room_id: str, user_id: str) -> bool:
+        """Check whether a user is an adventurer in this hot-state session."""
         room = GameService.get_room(room_id)
         if not room:
             return False
@@ -323,74 +290,40 @@ class GameService:
         if not isinstance(player_metadata, dict):
             return False
 
-        metadata = player_metadata.get(player_name.lower(), {})
+        metadata = player_metadata.get(user_id, {})
         return bool(metadata.get("character_id"))
 
     @staticmethod
-    def add_moderator(room_id: str, player_name: str):
-        """Add a player as moderator"""
+    def update_player_role(room_id: str, user_id: str, new_role: str):
+        """Update a player's campaign_role in player_metadata."""
         collection = GameService._get_active_session()
-        
-        # Lowercase the player name for consistency
-        player_name = player_name.lower()
-
-        current_seat_layout = GameService.get_seat_layout(room_id)
-        if player_name in [seat.lower() for seat in current_seat_layout if isinstance(seat, str) and seat != "empty"]:
-            raise ValueError("Seated players cannot be moderators")
-
-        if GameService.player_has_selected_character(room_id, player_name):
-            raise ValueError("Adventurers cannot be moderators")
-        
         filter_criteria = GameService.room_filter(room_id)
 
         result = collection.update_one(
             filter_criteria,
-            {"$addToSet": {"moderators": player_name}}
+            {"$set": {f"player_metadata.{user_id}.campaign_role": new_role}}
         )
-        
+
         if result.matched_count == 0:
             raise Exception(f"Room {room_id} not found")
-        
+
         return result.modified_count > 0
 
     @staticmethod
-    def remove_moderator(room_id: str, player_name: str):
-        """Remove a player from moderators"""
+    def set_dm(room_id: str, user_id: str, player_name: str):
+        """Set a user as dungeon master"""
         collection = GameService._get_active_session()
-        
-        # Lowercase the player name for consistency
-        player_name = player_name.lower()
-        
+
         filter_criteria = GameService.room_filter(room_id)
 
         result = collection.update_one(
             filter_criteria,
-            {"$pull": {"moderators": player_name}}
+            {"$set": {"dungeon_master": {"user_id": user_id, "player_name": player_name, "campaign_role": "dm"}}}
         )
-        
+
         if result.matched_count == 0:
             raise Exception(f"Room {room_id} not found")
-        
-        return result.modified_count > 0
 
-    @staticmethod
-    def set_dm(room_id: str, player_name: str):
-        """Set a player as dungeon master"""
-        collection = GameService._get_active_session()
-        
-        # Lowercase the player name for consistency
-        player_name = player_name.lower()
-        
-        filter_criteria = GameService.room_filter(room_id)
-
-        result = collection.update_one(
-            filter_criteria,
-            {"$set": {"dungeon_master": player_name}}
-        )
-        
-        if result.matched_count == 0:
-            raise Exception(f"Room {room_id} not found")
-        
         return result.modified_count > 0
 
     @staticmethod
@@ -402,7 +335,7 @@ class GameService:
 
         result = collection.update_one(
             filter_criteria,
-            {"$set": {"dungeon_master": ""}}
+            {"$set": {"dungeon_master": {}}}
         )
 
         if result.matched_count == 0:
@@ -413,11 +346,12 @@ class GameService:
     @staticmethod
     def update_player_character(room_id: str, character_data: dict):
         """
-        Update a player's character data in room-level metadata.
+        Update a player's character data in room-level metadata, keyed by user_id.
 
         character_data should contain:
-        - player_name: str (to identify which seat to update)
-        - user_id: str
+        - user_id: str (primary key for metadata lookup)
+        - player_name: str (display name)
+        - campaign_role: str
         - character_id: str
         - character_name: str
         - character_class: list[str] | str
@@ -436,16 +370,17 @@ class GameService:
         if not room:
             raise Exception(f"Room {room_id} not found")
 
-        player_name = character_data.get("player_name", "").lower()
-        if not player_name:
-            raise Exception("player_name is required")
+        user_id = character_data.get("user_id", "")
+        if not user_id:
+            raise Exception("user_id is required")
 
         player_metadata = room.get("player_metadata", {})
         if not isinstance(player_metadata, dict):
             player_metadata = {}
-        player_metadata[player_name] = {
-            "player_name": player_name,
-            "user_id": character_data.get("user_id"),
+        player_metadata[user_id] = {
+            "user_id": user_id,
+            "player_name": character_data.get("player_name"),
+            "campaign_role": character_data.get("campaign_role"),
             "character_id": character_data.get("character_id"),
             "character_name": character_data.get("character_name"),
             "character_class": character_data.get("character_class"),
@@ -464,7 +399,7 @@ class GameService:
         if result.matched_count == 0:
             raise Exception(f"Room {room_id} not found")
 
-        logger.info(f"Updated character for player {player_name} in room {room_id}")
+        logger.info(f"Updated character for user {user_id} in room {room_id}")
         return True
 
     @staticmethod

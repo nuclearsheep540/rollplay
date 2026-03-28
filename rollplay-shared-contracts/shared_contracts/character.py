@@ -3,9 +3,17 @@
 
 """Shared character DTOs used at service boundaries."""
 
-from typing import List
+from typing import List, Optional
 
 from .base import ContractModel
+
+
+class DungeonMaster(ContractModel):
+    """DM metadata for session ETL. No character fields — the DM runs the session, not a character."""
+
+    user_id: str
+    player_name: str
+    campaign_role: str = "dm"
 
 
 class PlayerCharacter(ContractModel):
@@ -13,6 +21,7 @@ class PlayerCharacter(ContractModel):
 
     user_id: str
     player_name: str
+    campaign_role: str
     character_id: str
     character_name: str
     character_class: List[str]
@@ -21,3 +30,13 @@ class PlayerCharacter(ContractModel):
     hp_current: int
     hp_max: int
     ac: int
+
+
+class SessionUser(ContractModel):
+    """Any user who joined a session. Character data is optional —
+    moderators and spectators participate without characters."""
+
+    user_id: str
+    player_name: str
+    campaign_role: str
+    character: Optional[PlayerCharacter] = None

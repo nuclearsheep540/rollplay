@@ -26,6 +26,8 @@ export default function CombatControlsPanel({
   gameSeats,
   activePrompts = [],
   clearDicePrompt,
+  characterNameMap = {},
+  displayNameMap = {},
 }) {
   // State for dice roll prompts
   const [selectedPlayerForPrompt, setSelectedPlayerForPrompt] = useState('general');
@@ -37,17 +39,14 @@ export default function CombatControlsPanel({
     setCombatActive(!combatActive);
   };
 
-  // Handle prompting specific player for specific roll type
-  const handlePromptPlayerForRoll = (playerName, rollType) => {
-    promptPlayerRoll(playerName, rollType);
+  // Handle prompting specific player for specific roll type — uses userId
+  const handlePromptPlayerForRoll = (userId, rollType) => {
+    promptPlayerRoll(userId, rollType);
   };
 
-  // Get list of players currently in seats (excluding empty seats)
-  const activePlayers = gameSeats?.filter(seat => seat.playerName !== "empty") || [];
+  // Get list of players currently in seats (excluding empty seats) — identity is seat.userId
+  const activePlayers = gameSeats?.filter(seat => seat.userId && seat.userId !== "empty") || [];
 
-  const getCharacterDisplayName = (player) => {
-    return player?.characterData?.character_name || player?.characterData?.name || null;
-  };
 
   return (
     <div className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden flex flex-col">
@@ -55,6 +54,7 @@ export default function CombatControlsPanel({
           isOpen={rollPromptModalOpen}
           onClose={() => setRollPromptModalOpen(false)}
           selectedPlayer={selectedPlayerForModal}
+          selectedPlayerDisplayName={characterNameMap[selectedPlayerForModal] || displayNameMap[selectedPlayerForModal] || selectedPlayerForModal}
           onPromptRoll={handlePromptPlayerForRoll}
         />
 
@@ -81,7 +81,7 @@ export default function CombatControlsPanel({
                   <div className="flex items-center justify-between">
                     <div>
                       <div>
-                        {titleCase(prompt.player)} • {prompt.rollType}
+                        {titleCase(characterNameMap[prompt.player] || displayNameMap[prompt.player] || prompt.player)} • {prompt.rollType}
                       </div>
                     </div>
                     <button
@@ -153,14 +153,11 @@ export default function CombatControlsPanel({
                     key={player.seatId}
                     className={DM_CHILD}
                     onClick={() => {
-                      setSelectedPlayerForModal(player.playerName);
+                      setSelectedPlayerForModal(player.userId);
                       setRollPromptModalOpen(true);
                     }}
                   >
-                    {titleCase(player.playerName)}
-                    {getCharacterDisplayName(player) && (
-                      <span> as {getCharacterDisplayName(player)}</span>
-                    )}
+                    {titleCase(characterNameMap[player.userId] || displayNameMap[player.userId] || player.userId)}
                   </button>
                 ))
               ) : (

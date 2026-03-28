@@ -20,13 +20,15 @@ export default function ModeratorControls({
   gameSeats,
   lobbyUsers,
   roomId,
-  thisPlayer,
+  thisUserId,
+  currentUser,
   onRoleChange, // Callback when roles are changed
-  sendRoleChange, // WebSocket function to broadcast role changes
   setSeatCount, // Function to change seat count
   handleKickPlayer, // Function to kick players
   handleClearSystemMessages, // Function to clear system messages
-  roleChangeTrigger // Timestamp or counter that changes when any role change occurs
+  displayNameMap = {},
+  playerMetadata = {},
+  dungeonMaster = null,
 }) {
   
   // State for collapsible sections
@@ -53,8 +55,8 @@ export default function ModeratorControls({
     }));
   };
 
-  // Get active players (non-empty seats)
-  const activePlayers = gameSeats?.filter(seat => seat.playerName !== "empty") || [];
+  // Get active players (non-empty seats) — identity is seat.userId
+  const activePlayers = gameSeats?.filter(seat => seat.userId && seat.userId !== "empty") || [];
 
   const formatCharacterSummary = (characterData) => {
     if (!characterData) return null;
@@ -65,69 +67,46 @@ export default function ModeratorControls({
     return `${className} • Level ${level}`;
   };
 
-  const seatedPlayerNames = new Set(
+  const seatedUserIds = new Set(
     activePlayers
-      .map((seat) => seat.playerName)
+      .map((seat) => seat.userId)
       .filter(Boolean)
-      .map((name) => name.toLowerCase())
   );
 
   const uniqueLobbyUsers = (lobbyUsers || []).filter((user) => {
-    const lobbyName = user.player_name || user.name;
-    if (!lobbyName) return false;
-    return !seatedPlayerNames.has(lobbyName.toLowerCase());
+    const lobbyUserId = user.user_id || user.id;
+    if (!lobbyUserId) return false;
+    return !seatedUserIds.has(lobbyUserId);
   });
 
-  const playerHasSelectedCharacter = (playerName) => {
-    if (!playerName) return false;
-    const playerMetadata = roomData?.player_metadata;
+  const playerHasSelectedCharacter = (userId) => {
+    if (!userId) return false;
     if (!playerMetadata || typeof playerMetadata !== 'object') return false;
-    return Boolean(playerMetadata[playerName.toLowerCase()]?.character_id);
+    return Boolean(playerMetadata[userId]?.character_id);
   };
   
   // Combine seated players and lobby users for DM/moderator selection
   const allAvailableUsers = [
     ...activePlayers,
     ...uniqueLobbyUsers.map(user => ({
+      userId: user.user_id || user.id,
       playerName: user.player_name || user.name,
-      seatId: `lobby_${user.player_name || user.name}`,
+      seatId: `lobby_${user.user_id || user.id}`,
       characterData: null,
       isInLobby: true
     }))
   ];
   
-  // Get current room data for displaying roles
-  const [roomData, setRoomData] = useState(null);
-  
-  // Function to fetch current room roles
-  const fetchRoomRoles = async () => {
-    try {
-      const response = await fetch(`/api/game/${roomId}`);
-      if (response.ok) {
-        const data = await response.json();
-        setRoomData(data);
-      }
-    } catch (error) {
-      console.error('Error fetching room data:', error);
-    }
-  };
+  // Derive moderator IDs from playerMetadata (kept live via WebSocket broadcast)
+  const roomModeratorIds = React.useMemo(() => {
+    if (!playerMetadata || typeof playerMetadata !== 'object') return [];
+    return Object.entries(playerMetadata)
+      .filter(([_, meta]) => meta.campaign_role === 'mod')
+      .map(([uid]) => uid);
+  }, [playerMetadata]);
 
-  // Fetch room data on component mount
-  React.useEffect(() => {
-    if (roomId) {
-      fetchRoomRoles();
-    }
-  }, [roomId]);
-
-  // Refresh room data when any role change occurs (triggered by WebSocket events)
-  React.useEffect(() => {
-    if (roomId && roleChangeTrigger) {
-      fetchRoomRoles();
-    }
-  }, [roleChangeTrigger, roomId]);
-
-  // Handle role changes
-  const handleRoleAction = async (action, playerName) => {
+  // Handle role changes — sends userId to api-game
+  const handleRoleAction = async (action, userId) => {
     try {
       let endpoint = '';
       let method = 'POST';
@@ -136,16 +115,16 @@ export default function ModeratorControls({
       switch (action) {
         case 'add_moderator':
           endpoint = `/api/game/${roomId}/moderators`;
-          body = { player_name: playerName, action: 'add' };
+          body = { user_id: userId, requesting_user_id: thisUserId };
           break;
         case 'remove_moderator':
           endpoint = `/api/game/${roomId}/moderators`;
           method = 'DELETE';
-          body = { player_name: playerName };
+          body = { user_id: userId, requesting_user_id: thisUserId };
           break;
         case 'set_dm':
           endpoint = `/api/game/${roomId}/dm`;
-          body = { player_name: playerName };
+          body = { user_id: userId };
           break;
         case 'unset_dm':
           endpoint = `/api/game/${roomId}/dm`;
@@ -160,10 +139,8 @@ export default function ModeratorControls({
       });
 
       if (response.ok) {
-        // Refresh room data and notify parent
-        await fetchRoomRoles();
         if (onRoleChange) {
-          onRoleChange(action, playerName);
+          onRoleChange(action, userId);
         }
         
         // Close modals
@@ -227,27 +204,11 @@ export default function ModeratorControls({
             )}
 
             {/* Display current moderators */}
-            {(roomData?.moderators?.length > 0 || roomData?.room_host) && (
+            {roomModeratorIds.length > 0 && (
               <div className={MODERATOR_CHILD_LAST}>
                 <div>Current Moderators:</div>
                 <div>
-                  {(() => {
-                    // Always include the host, then add other moderators
-                    const allModerators = [];
-                    
-                    // Add host first (they're always a moderator)
-                    if (roomData?.room_host) {
-                      allModerators.push(`${roomData.room_host} (Host)`);
-                    }
-                    
-                    // Add other moderators (excluding host to avoid duplication)
-                    if (roomData?.moderators) {
-                      const otherModerators = roomData.moderators.filter(mod => mod !== roomData.room_host);
-                      allModerators.push(...otherModerators);
-                    }
-                    
-                    return allModerators.join(', ');
-                  })()}
+                  {roomModeratorIds.map(modId => displayNameMap[modId] || modId).join(', ')}
                 </div>
               </div>
             )}
@@ -268,7 +229,7 @@ export default function ModeratorControls({
         </div>
         {expandedSections.dm && (
           <div>
-            {!roomData?.dungeon_master && (
+            {!dungeonMaster?.user_id && (
               <button 
                 className={MODERATOR_CHILD}
                 onClick={() => openDMModal('set_dm')}
@@ -277,21 +238,21 @@ export default function ModeratorControls({
               </button>
             )}
             
-            {roomData?.dungeon_master && (isHost || isDM) && (
-              <button 
+            {dungeonMaster?.user_id && (isHost || isDM) && (
+              <button
                 className={MODERATOR_CHILD}
-                onClick={() => handleRoleAction('unset_dm', roomData.dungeon_master)}
+                onClick={() => handleRoleAction('unset_dm', dungeonMaster.user_id)}
               >
                 Remove Dungeon Master
               </button>
             )}
 
             {/* Display current DM */}
-            {roomData?.dungeon_master && (
+            {dungeonMaster?.user_id && (
               <div className={MODERATOR_CHILD_LAST}>
                 <div>Current DM:</div>
                 <div>
-                  {roomData.dungeon_master}
+                  {dungeonMaster.player_name || dungeonMaster.user_id}
                 </div>
               </div>
             )}
@@ -304,11 +265,12 @@ export default function ModeratorControls({
         open={isModeratorModalOpen}
         onClose={() => setIsModeratorModalOpen(false)}
         size="md"
-        panelClassName="bg-slate-800 border border-emerald-500/30 rounded-lg shadow-2xl"
+        showBackdrop={false}
+        panelClassName="bg-slate-800 border border-blue-500/30 rounded-lg shadow-2xl"
       >
         <div style={{ padding: 'calc(24px * var(--ui-scale))' }}>
             <div className="flex items-center justify-between mb-6">
-              <h3 className="text-emerald-300 font-bold">
+              <h3 className="text-blue-300 font-bold">
                 {selectedAction === 'add_moderator' ? 'Add Moderator' : 'Remove Moderator'}
               </h3>
               <button 
@@ -326,28 +288,26 @@ export default function ModeratorControls({
                   : 'Select a moderator to remove:'}
               </p>
               
-              {(selectedAction === 'add_moderator' ? allAvailableUsers.length > 0 : roomData?.moderators?.length > 0) ? (
+              {(selectedAction === 'add_moderator' ? allAvailableUsers.length > 0 : roomModeratorIds.length > 0) ? (
                 <div className="space-y-2">
                   {(() => {
                     let filteredUsers;
-                    
+
                     if (selectedAction === 'add_moderator') {
-                      // Only non-adventurers can be moderators.
+                      // Only non-adventurers can be moderators — compare by userId
                       filteredUsers = allAvailableUsers.filter(user => {
-                        return !roomData?.moderators?.includes(user.playerName) 
-                               && user.playerName !== roomData?.room_host
-                               && !playerHasSelectedCharacter(user.playerName);
+                        return !roomModeratorIds.includes(user.userId)
+                               && user.userId !== dungeonMaster?.user_id
+                               && !playerHasSelectedCharacter(user.userId);
                       });
                     } else {
-                      // For remove_moderator, create user objects directly from roomData.moderators
-                      // Filter out the host to ensure there's always at least one moderator
-                      filteredUsers = (roomData?.moderators || [])
-                        .filter(moderatorName => moderatorName !== roomData?.room_host)
-                        .map(moderatorName => ({
-                          playerName: moderatorName,
-                          seatId: `moderator_${moderatorName}`,
+                      // For remove_moderator, build user objects from derived moderator IDs
+                      filteredUsers = roomModeratorIds.map(modUserId => ({
+                          userId: modUserId,
+                          playerName: displayNameMap[modUserId] || modUserId,
+                          seatId: `moderator_${modUserId}`,
                           characterData: null,
-                          isInLobby: false // We don't know/care if they're in lobby for removal
+                          isInLobby: false
                         }));
                     }
 
@@ -360,7 +320,7 @@ export default function ModeratorControls({
                             <button
                               key={moderator.seatId}
                               className="w-full text-left p-3 bg-orange-500/10 border border-orange-500/30 text-orange-300 rounded transition-colors duration-200 hover:bg-orange-500/20"
-                              onClick={() => handleRoleAction(selectedAction, moderator.playerName)}
+                              onClick={() => handleRoleAction(selectedAction, moderator.userId)}
                             >
                               <div className="flex items-center justify-between">
                                 <div>
@@ -388,12 +348,12 @@ export default function ModeratorControls({
                         {/* Seated Players Section */}
                         {seatedFiltered.length > 0 && (
                           <>
-                            <div className="text-emerald-400/70 text-xs mb-2 font-medium">SEATED PLAYERS</div>
+                        <div className="text-blue-400/70 text-xs mb-2 font-medium">SEATED PLAYERS</div>
                             {seatedFiltered.map((player) => (
                               <button
                                 key={player.seatId}
-                                className="w-full text-left p-3 bg-emerald-500/10 border border-emerald-500/30 text-emerald-300 rounded transition-colors duration-200 hover:bg-emerald-500/20"
-                                onClick={() => handleRoleAction(selectedAction, player.playerName)}
+                                className="w-full text-left p-3 bg-blue-500/10 border border-blue-500/30 text-blue-300 rounded transition-colors duration-200 hover:bg-blue-500/20"
+                                onClick={() => handleRoleAction(selectedAction, player.userId)}
                               >
                                 <div className="flex items-center justify-between">
                                   <div>
@@ -404,7 +364,7 @@ export default function ModeratorControls({
                                       </div>
                                     )}
                                   </div>
-                                  <div className="text-emerald-400 text-sm">
+                                  <div className="text-blue-400 text-sm">
                                     Add
                                   </div>
                                 </div>
@@ -412,26 +372,26 @@ export default function ModeratorControls({
                             ))}
                           </>
                         )}
-                        
+
                         {/* Lobby Users Section - only for add_moderator */}
                         {lobbyFiltered.length > 0 && (
                           <>
-                            {seatedFiltered.length > 0 && <div className="my-3 border-t border-emerald-500/20"></div>}
-                            <div className="text-emerald-400/70 text-xs mb-2 font-medium">LOBBY USERS</div>
+                            {seatedFiltered.length > 0 && <div className="my-3 border-t border-blue-500/20"></div>}
+                            <div className="text-blue-400/70 text-xs mb-2 font-medium">LOBBY USERS</div>
                             {lobbyFiltered.map((user) => (
                               <button
                                 key={user.seatId}
-                                className="w-full text-left p-3 bg-emerald-500/10 border border-emerald-500/30 text-emerald-300 rounded transition-colors duration-200 hover:bg-emerald-500/20"
-                                onClick={() => handleRoleAction(selectedAction, user.playerName)}
+                                className="w-full text-left p-3 bg-blue-500/10 border border-blue-500/30 text-blue-300 rounded transition-colors duration-200 hover:bg-blue-500/20"
+                                onClick={() => handleRoleAction(selectedAction, user.userId)}
                               >
                                 <div className="flex items-center justify-between">
                                   <div>
                                     <div className="font-medium">{user.playerName}</div>
-                                    <div className="text-emerald-400/70 text-sm">
+                                    <div className="text-blue-400/70 text-sm">
                                       Connected • In Lobby
                                     </div>
                                   </div>
-                                  <div className="text-emerald-400 text-sm">
+                                  <div className="text-blue-400 text-sm">
                                     Add
                                   </div>
                                 </div>
@@ -502,7 +462,7 @@ export default function ModeratorControls({
                         <button
                           key={player.seatId}
                           className="w-full text-left p-3 bg-amber-500/10 border border-amber-500/30 text-amber-300 rounded transition-colors duration-200 hover:bg-amber-500/20"
-                          onClick={() => handleRoleAction('set_dm', player.playerName)}
+                          onClick={() => handleRoleAction('set_dm', player.userId)}
                         >
                           <div className="flex items-center justify-between">
                             <div>
@@ -519,7 +479,7 @@ export default function ModeratorControls({
                       ))}
                     </>
                   )}
-                  
+
                   {/* Lobby Users Section */}
                   {uniqueLobbyUsers.length > 0 && (
                     <>
@@ -527,9 +487,9 @@ export default function ModeratorControls({
                       <div className="text-amber-400/70 text-xs mb-2 font-medium">LOBBY USERS</div>
                       {uniqueLobbyUsers.map((user) => (
                         <button
-                          key={`lobby_${user.player_name || user.name}`}
+                          key={`lobby_${user.user_id || user.id}`}
                           className="w-full text-left p-3 bg-amber-500/10 border border-amber-500/30 text-amber-300 rounded transition-colors duration-200 hover:bg-amber-500/20"
-                          onClick={() => handleRoleAction('set_dm', user.player_name || user.name)}
+                          onClick={() => handleRoleAction('set_dm', user.user_id || user.id)}
                         >
                           <div className="flex items-center justify-between">
                             <div>
@@ -659,7 +619,7 @@ export default function ModeratorControls({
                       key={player.seatId}
                       className="w-full text-left p-3 bg-red-500/10 border border-red-500/30 text-red-300 rounded transition-colors duration-200 hover:bg-red-500/20"
                       onClick={() => {
-                        handleKickPlayer(player.playerName);
+                        handleKickPlayer(player.userId);
                         setIsKickModalOpen(false);
                       }}
                     >

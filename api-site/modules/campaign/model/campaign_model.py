@@ -17,14 +17,14 @@ class Campaign(Base):
     title = Column(String(100), nullable=False)
     description = Column(Text)
     hero_image = Column(String(255), nullable=True)
-    host_id = Column(UUID(as_uuid=True), ForeignKey('users.id'), nullable=False)
+    created_by = Column(UUID(as_uuid=True), ForeignKey('users.id'), nullable=False)
     created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)
 
     # Relationships
     sessions = relationship("Session", back_populates="campaign", cascade="all, delete-orphan")
-    host = relationship("User", back_populates="campaigns")
+    creator = relationship("User", back_populates="campaigns")
     members = relationship("CampaignMember", back_populates="campaign", cascade="all, delete-orphan", passive_deletes=True)
 
     def __repr__(self):
-        return f"<Campaign(id={self.id}, title='{self.title}', host_id={self.host_id})>"
+        return f"<Campaign(id={self.id}, title='{self.title}', created_by={self.created_by})>"

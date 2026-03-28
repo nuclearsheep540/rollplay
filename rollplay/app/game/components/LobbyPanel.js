@@ -2,7 +2,7 @@
 
 import { React } from 'react'
 
-export default function LobbyPanel({ lobbyUsers = [], systemMessages = [] }) {
+export default function LobbyPanel({ lobbyUsers = [], systemMessages = [], displayNameMap = {} }) {
 
   // Helper function to display player names in title case
   const toTitleCase = (name) => {
@@ -61,7 +61,7 @@ export default function LobbyPanel({ lobbyUsers = [], systemMessages = [] }) {
                 <div className={`user-name text-[calc(11px*var(--ui-scale))] font-medium ${
                   user.status === 'disconnecting' ? 'text-slate-400 opacity-60' : 'text-slate-300'
                 }`}>
-                  {toTitleCase(user.name)}
+                  {toTitleCase(displayNameMap[user.user_id] || displayNameMap[user.id] || user.name)}
                 </div>
               </div>
             ))}

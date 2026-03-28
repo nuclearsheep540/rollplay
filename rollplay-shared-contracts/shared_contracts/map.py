@@ -27,7 +27,7 @@ class GridConfig(ContractModel):
     colors: Optional[Dict[str, GridColorMode]] = None  # "edit_mode", "display_mode"
     offset_x: int = 0  # Whole-grid X shift (image px, can be negative)
     offset_y: int = 0  # Whole-grid Y shift (image px, can be negative)
-    grid_cell_size: Optional[int] = None  # Absolute cell size in native image pixels; None = not yet tuned
+    grid_cell_size: Optional[float] = None  # Absolute cell size in native image pixels; None = not yet tuned
 
 
 class MapConfig(ContractModel):

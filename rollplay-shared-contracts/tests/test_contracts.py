@@ -9,7 +9,7 @@ from pydantic import ValidationError
 from shared_contracts.base import ContractModel
 from shared_contracts.audio import AudioChannelState, AudioEffects, AudioTrackConfig
 from shared_contracts.assets import AssetRef
-from shared_contracts.character import PlayerCharacter
+from shared_contracts.character import DungeonMaster, PlayerCharacter, SessionUser
 from shared_contracts.display import ActiveDisplayType
 from shared_contracts.image import ImageConfig
 from shared_contracts.map import GridColorMode, GridConfig, MapConfig
@@ -121,22 +121,33 @@ class TestSessionRoundTrip:
         payload = SessionStartPayload(
             session_id="s1",
             campaign_id="c1",
-            dm_username="dm",
+            dungeon_master=DungeonMaster(user_id="u-dm", player_name="dm_user"),
             max_players=6,
             joined_user_ids=["u1", "u2"],
-            player_characters=[
-                PlayerCharacter(
+            session_users=[
+                SessionUser(
                     user_id="u1",
                     player_name="alice",
-                    character_id="char-1",
-                    character_name="Aelwyn",
-                    character_class=["Wizard"],
-                    character_race="Elf",
-                    level=5,
-                    hp_current=22,
-                    hp_max=28,
-                    ac=14,
-                )
+                    campaign_role="player",
+                    character=PlayerCharacter(
+                        user_id="u1",
+                        player_name="alice",
+                        campaign_role="player",
+                        character_id="char-1",
+                        character_name="Aelwyn",
+                        character_class=["Wizard"],
+                        character_race="Elf",
+                        level=5,
+                        hp_current=22,
+                        hp_max=28,
+                        ac=14,
+                    ),
+                ),
+                SessionUser(
+                    user_id="u2",
+                    player_name="bob",
+                    campaign_role="spectator",
+                ),
             ],
             assets=[AssetRef(id="a1", filename="map.png", s3_key="maps/map.png", asset_type="map")],
             audio_config={"channel_0": AudioChannelState(filename="bgm.mp3", volume=0.7)},
@@ -146,12 +157,16 @@ class TestSessionRoundTrip:
         assert SessionStartPayload.model_validate(payload.model_dump()) == payload
 
     def test_session_start_payload_minimal_round_trip(self):
-        payload = SessionStartPayload(session_id="s1", campaign_id="c1", dm_username="dm")
+        payload = SessionStartPayload(
+            session_id="s1",
+            campaign_id="c1",
+            dungeon_master=DungeonMaster(user_id="u-dm", player_name="dm_user"),
+        )
         assert SessionStartPayload.model_validate(payload.model_dump()) == payload
 
     def test_session_end_final_state_round_trip(self):
         state = SessionEndFinalState(
-            players=[PlayerState(player_name="Alice", seat_position=0, seat_color="#FF6B6B")],
+            players=[PlayerState(user_id="u1", player_name="Alice", seat_position=0, seat_color="#FF6B6B")],
             session_stats=SessionStats(duration_minutes=120, total_logs=47, max_players=5),
             audio_state={"channel_0": AudioChannelState(volume=0.5, playback_state="paused")},
             map_state=MapConfig(asset_id="m1", filename="map.png", file_path="https://s3.example.com/map.png"),
@@ -219,8 +234,8 @@ class TestMapShapeConformance:
 class TestSessionShapeConformance:
     def test_session_start_payload_has_required_fields(self):
         required_keys = {
-            "session_id", "campaign_id", "dm_username", "max_players",
-            "joined_user_ids", "player_characters", "assets", "audio_config", "audio_track_config",
+            "session_id", "campaign_id", "dungeon_master", "max_players",
+            "joined_user_ids", "session_users", "assets", "audio_config", "audio_track_config",
             "map_config", "image_config", "active_display",
         }
         assert required_keys.issubset(set(SessionStartPayload.model_fields.keys()))
@@ -229,9 +244,9 @@ class TestSessionShapeConformance:
 class TestCharacterShapeConformance:
     def test_player_character_has_required_fields(self):
         required_keys = {
-            "user_id", "player_name", "character_id", "character_name",
-            "character_class", "character_race", "level", "hp_current",
-            "hp_max", "ac",
+            "user_id", "player_name", "campaign_role", "character_id",
+            "character_name", "character_class", "character_race", "level",
+            "hp_current", "hp_max", "ac",
         }
         assert required_keys.issubset(set(PlayerCharacter.model_fields.keys()))
 

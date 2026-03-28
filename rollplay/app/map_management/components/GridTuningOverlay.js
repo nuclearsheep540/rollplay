@@ -102,10 +102,10 @@ const GridTuningOverlay = ({
           <HoldButton action={() => onRowChange(1)}  title="Add row"         style={TRIM_BUTTON_STYLE}>Row<br />Add</HoldButton>
         </div>
 
-        {/* Cell size +/- (1px native per tick) */}
+        {/* Cell size +/- (0.5px native per tick) */}
         <div style={{ display: 'flex', gap: '4px' }}>
-          <HoldButton action={() => onCellSizeChange(-1)} title="Smaller cells" style={TRIM_BUTTON_STYLE}>Cell Size<br />Decrease</HoldButton>
-          <HoldButton action={() => onCellSizeChange(1)}  title="Larger cells"  style={TRIM_BUTTON_STYLE}>Cell Size<br />Increase</HoldButton>
+          <HoldButton action={() => onCellSizeChange(-0.5)} title="Smaller cells" style={TRIM_BUTTON_STYLE}>Cell Size<br />Decrease</HoldButton>
+          <HoldButton action={() => onCellSizeChange(0.5)}  title="Larger cells"  style={TRIM_BUTTON_STYLE}>Cell Size<br />Increase</HoldButton>
         </div>
 
         {/* 3×3 offset d-pad */}

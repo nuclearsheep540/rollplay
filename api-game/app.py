@@ -48,17 +48,17 @@ map_service = MapService()
 image_service = ImageService()
 
 
-def build_role_change_payload(room_id: str, action: str, target_player: str, changed_by: str, message: str) -> dict:
+def build_role_change_payload(room_id: str, action: str, target_user_id: str, changed_by: str, message: str) -> dict:
     room = GameService.get_room(id=room_id) or {}
     return {
         "event_type": "role_change",
         "data": {
             "action": action,
-            "target_player": target_player,
+            "target_player": target_user_id,
             "changed_by": changed_by,
             "message": message,
-            "moderators": room.get("moderators", []),
-            "dungeon_master": room.get("dungeon_master", ""),
+            "dungeon_master": room.get("dungeon_master", {}),
+            "player_metadata": room.get("player_metadata", {}),
         }
     }
 
@@ -187,37 +187,37 @@ async def update_seat_count(room_id: str, request: dict):
         
         # Handle displaced players - move them back to lobby
         for displaced_player in displaced_players:
-            player_name = displaced_player.get("playerName")
-            if player_name:
+            displaced_user_id = displaced_player.get("userId")
+            if displaced_user_id:
                 try:
-                    logger.info(f"Moving {player_name} from seat {displaced_player.get('seatId')} to lobby")
-                    
+                    logger.info(f"Moving {displaced_user_id} from seat {displaced_player.get('seatId')} to lobby")
+
                     # Update player's party status in ConnectionManager
-                    await connection_manager.remove_player_from_party(room_id, player_name)
-                    
+                    await connection_manager.remove_player_from_party(room_id, displaced_user_id)
+
                     # Send displacement notification to the player
                     displacement_message = {
                         "event_type": "player_displaced",
                         "data": {
-                            "player_name": player_name,
+                            "user_id": displaced_user_id,
                             "reason": "seat_reduction",
-                            "message": f"You have been moved to the lobby due to seat count reduction",
+                            "message": "You have been moved to the lobby due to seat count reduction",
                             "former_seat": displaced_player.get("seatId", "unknown")
                         }
                     }
-                    await connection_manager.send_to_player(room_id, player_name, displacement_message)
-                    
+                    await connection_manager.send_to_player(room_id, displaced_user_id, displacement_message)
+
                     # Log displacement to adventure log
-                    log_message = f"{player_name} was moved to lobby due to seat reduction"
+                    log_message = f"{displaced_user_id} was moved to lobby due to seat reduction"
                     adventure_log.add_log_entry(
                         room_id=room_id,
                         message=log_message,
                         log_type=LogType.SYSTEM,
                         from_player="System"
                     )
-                    
+
                 except Exception as e:
-                    logger.error(f"Error handling displaced player {player_name}: {str(e)}")
+                    logger.error(f"Error handling displaced player {displaced_user_id}: {str(e)}")
                     # Continue processing other players even if one fails
         
         # Get current seat layout from database after displacement
@@ -233,7 +233,7 @@ async def update_seat_count(room_id: str, request: dict):
                     # Keep existing player if they weren't displaced
                     player_in_seat = current_seats[i]
                     # Check if this player was displaced
-                    was_displaced = any(dp.get("playerName") == player_in_seat for dp in displaced_players)
+                    was_displaced = any(dp.get("userId") == player_in_seat for dp in displaced_players)
                     new_seats.append("empty" if was_displaced else player_in_seat)
                 else:
                     new_seats.append("empty")
@@ -280,114 +280,134 @@ def gameservice_get(room_id):
         return Response(status_code=404, content=f'{{"error": "Room {room_id} not found"}}')
 
 @app.get("/game/{room_id}/roles")
-def get_player_roles(room_id: str, playerName: str):
-    """Check player's roles (host, moderator, DM) in a room"""
+def get_player_roles(room_id: str, userId: str):
+    """Check user's roles (moderator, DM) in a room"""
     try:
         check_room = GameService.get_room(id=room_id)
         if not check_room:
             raise HTTPException(status_code=404, detail=f"Room {room_id} not found")
-        
-        is_host = GameService.is_host(room_id, playerName)
-        is_moderator = GameService.is_moderator(room_id, playerName)
-        is_dm = GameService.is_dm(room_id, playerName)
-        
+
+        is_moderator = GameService.is_moderator(room_id, userId)
+        is_dm = GameService.is_dm(room_id, userId)
+
         return {
-            "is_host": is_host,
+            "is_host": is_dm,  # host = DM for backward compat
             "is_moderator": is_moderator,
             "is_dm": is_dm
         }
-        
+
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.post("/game/{room_id}/moderators")
 async def add_moderator(room_id: str, request: dict):
-    """Add a player as moderator"""
+    """Add a user as moderator — proxies to api-site for domain validation."""
     try:
         check_room = GameService.get_room(id=room_id)
         if not check_room:
             raise HTTPException(status_code=404, detail=f"Room {room_id} not found")
-        
-        player_name = request.get("player_name")
-        if not player_name:
-            raise HTTPException(status_code=400, detail="player_name is required")
-        
-        success = GameService.add_moderator(room_id, player_name)
-        if success:
-            role_change_message = build_role_change_payload(
-                room_id,
-                "add_moderator",
-                player_name,
-                "System",
-                f"{player_name} added as moderator",
-            )
-            await connection_manager.update_room_data(room_id, role_change_message)
-            return {"success": True, "message": f"{player_name} added as moderator"}
-        else:
-            return {"success": False, "message": f"{player_name} is already a moderator"}
+
+        user_id = request.get("user_id")
+        requesting_user_id = request.get("requesting_user_id")
+        if not user_id or not requesting_user_id:
+            raise HTTPException(status_code=400, detail="user_id and requesting_user_id are required")
+
+        # Hot-state check: target must not be seated
+        seat_layout = check_room.get("seat_layout", [])
+        if user_id in [s for s in seat_layout if s != "empty"]:
+            raise HTTPException(status_code=409, detail="Seated players cannot be moderators")
+
+        # Ask api-site (domain authority) for permission
+        import site_client
+        campaign_id = check_room.get("campaign_id", "")
+        await site_client.request_role_change(campaign_id, requesting_user_id, user_id, "mod")
+
+        # api-site approved — update hot state
+        GameService.update_player_role(room_id, user_id, "mod")
+
+        role_change_message = build_role_change_payload(
+            room_id, "add_moderator", user_id, requesting_user_id,
+            f"Added as moderator",
+        )
+        await connection_manager.update_room_data(room_id, role_change_message)
+        return {"success": True, "message": f"{user_id} added as moderator"}
 
     except ValueError as e:
         raise HTTPException(status_code=409, detail=str(e))
+    except HTTPException:
+        raise
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.error(f"Failed to add moderator: {e}")
+        raise HTTPException(status_code=502, detail=str(e))
 
 @app.delete("/game/{room_id}/moderators")
 async def remove_moderator(room_id: str, request: dict):
-    """Remove a player from moderators"""
+    """Remove a user from moderators — proxies to api-site for domain validation."""
     try:
         check_room = GameService.get_room(id=room_id)
         if not check_room:
             raise HTTPException(status_code=404, detail=f"Room {room_id} not found")
-        
-        player_name = request.get("player_name")
-        if not player_name:
-            raise HTTPException(status_code=400, detail="player_name is required")
-        
-        success = GameService.remove_moderator(room_id, player_name)
-        if success:
-            role_change_message = build_role_change_payload(
-                room_id,
-                "remove_moderator",
-                player_name,
-                "System",
-                f"{player_name} removed from moderators",
-            )
-            await connection_manager.update_room_data(room_id, role_change_message)
-            return {"success": True, "message": f"{player_name} removed from moderators"}
-        else:
-            return {"success": False, "message": f"{player_name} was not a moderator"}
-        
+
+        user_id = request.get("user_id")
+        requesting_user_id = request.get("requesting_user_id")
+        if not user_id or not requesting_user_id:
+            raise HTTPException(status_code=400, detail="user_id and requesting_user_id are required")
+
+        # Ask api-site (domain authority) for permission
+        import site_client
+        campaign_id = check_room.get("campaign_id", "")
+        await site_client.request_role_change(campaign_id, requesting_user_id, user_id, "spectator")
+
+        # api-site approved — update hot state
+        GameService.update_player_role(room_id, user_id, "spectator")
+
+        role_change_message = build_role_change_payload(
+            room_id, "remove_moderator", user_id, requesting_user_id,
+            f"Removed from moderators",
+        )
+        await connection_manager.update_room_data(room_id, role_change_message)
+        return {"success": True, "message": f"{user_id} removed from moderators"}
+
+    except ValueError as e:
+        raise HTTPException(status_code=409, detail=str(e))
+    except HTTPException:
+        raise
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.error(f"Failed to remove moderator: {e}")
+        raise HTTPException(status_code=502, detail=str(e))
 
 @app.post("/game/{room_id}/dm")
 async def set_dm(room_id: str, request: dict):
-    """Set a player as dungeon master"""
+    """Set a user as dungeon master"""
     try:
         check_room = GameService.get_room(id=room_id)
         if not check_room:
             raise HTTPException(status_code=404, detail=f"Room {room_id} not found")
-        
-        player_name = request.get("player_name")
-        if not player_name:
-            raise HTTPException(status_code=400, detail="player_name is required")
-        
-        success = GameService.set_dm(room_id, player_name)
+
+        user_id = request.get("user_id")
+        if not user_id:
+            raise HTTPException(status_code=400, detail="user_id is required")
+
+        # Resolve player_name from hot-state metadata or request
+        player_metadata = check_room.get("player_metadata", {})
+        meta = player_metadata.get(user_id, {}) if isinstance(player_metadata, dict) else {}
+        player_name = request.get("player_name") or meta.get("player_name", "")
+
+        success = GameService.set_dm(room_id, user_id, player_name)
         if success:
-            # Broadcast role change event to all clients in the room
             role_change_message = build_role_change_payload(
                 room_id,
                 "set_dm",
-                player_name,
+                user_id,
                 "System",
-                f"{player_name} has been set as Dungeon Master",
+                f"{user_id} has been set as Dungeon Master",
             )
             await connection_manager.update_room_data(room_id, role_change_message)
-            
-            return {"success": True, "message": f"{player_name} set as Dungeon Master"}
+
+            return {"success": True, "message": f"{user_id} set as Dungeon Master"}
         else:
             return {"success": False, "message": "Failed to set Dungeon Master"}
-        
+
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -399,9 +419,9 @@ async def unset_dm(room_id: str):
         if not check_room:
             raise HTTPException(status_code=404, detail=f"Room {room_id} not found")
         
-        # Get current DM name before removing
-        current_dm = check_room.get("dungeon_master", "")
-        
+        # Get current DM user_id before removing
+        current_dm = check_room.get("dungeon_master", {}).get("user_id", "")
+
         success = GameService.unset_dm(room_id)
         if success:
             # Broadcast role change event to all clients in the room
@@ -443,7 +463,7 @@ async def create_session(request: SessionStartPayload):
     Request:
     {
         "session_id": "550e8400-e29b-41d4-a716-446655440000",
-        "dm_username": "player1",
+        "dm_user_id": "uuid-of-dm",
         "max_players": 8
     }
 
@@ -468,10 +488,20 @@ async def create_session(request: SessionStartPayload):
 
         # Convert assets to dict format for MongoDB storage
         available_assets = [asset.model_dump() for asset in request.assets] if request.assets else []
-        player_metadata = {
-            player.player_name.lower(): player.model_dump()
-            for player in request.player_characters
-        } if request.player_characters else {}
+
+        # Key player_metadata by user_id — campaign_role lives on each entry
+        player_metadata = {}
+        if request.session_users:
+            for session_user in request.session_users:
+                # Flatten: top-level identity + character fields (if present)
+                entry = {
+                    "user_id": session_user.user_id,
+                    "player_name": session_user.player_name,
+                    "campaign_role": session_user.campaign_role,
+                }
+                if session_user.character:
+                    entry.update(session_user.character.model_dump())
+                player_metadata[session_user.user_id] = entry
 
         # Create minimal session
         settings = GameSettings(
@@ -479,11 +509,9 @@ async def create_session(request: SessionStartPayload):
             seat_layout=["empty"] * request.max_players,
             seat_colors={str(i): get_default_color(i) for i in range(request.max_players)},
             created_at=datetime.utcnow(),
-            moderators=[],
-            dungeon_master=request.dm_username.lower(),
-            room_host=request.dm_username.lower(),
+            dungeon_master=request.dungeon_master.model_dump(),
             available_assets=available_assets,
-            campaign_id=request.campaign_id,  # For proxying asset requests to api-site
+            campaign_id=request.campaign_id,
             player_metadata=player_metadata,
             audio_state={k: v.model_dump() for k, v in request.audio_config.items()} if request.audio_config else {},
             audio_track_config={k: v.model_dump() for k, v in request.audio_track_config.items()} if request.audio_track_config else {}
@@ -586,12 +614,17 @@ async def end_session(request: SessionEndRequest, validate_only: bool = False):
         if not room:
             raise HTTPException(status_code=404, detail="Game not found for session")
 
-        # Extract player data from seat_layout
+        # Extract player data from seat_layout (seats now contain user_ids)
+        player_metadata = room.get("player_metadata", {})
         players = []
         for idx, seat in enumerate(room.get("seat_layout", [])):
             if seat != "empty":
+                # Look up display name from player_metadata
+                meta = player_metadata.get(seat, {}) if isinstance(player_metadata, dict) else {}
+                display_name = meta.get("player_name", seat)
                 players.append(PlayerState(
-                    player_name=seat,
+                    user_id=seat,
+                    player_name=display_name,
                     seat_position=idx,
                     seat_color=room.get("seat_colors", {}).get(str(idx), "")
                 ))
@@ -831,31 +864,26 @@ async def update_seat_layout(room_id: str, request: dict):
                 detail=f"Seat layout cannot exceed {current_max} seats"
             )
 
-        normalized_seat_layout = [
-            seat.lower() if isinstance(seat, str) and seat != "empty" else seat
-            for seat in seat_layout
-        ]
-        non_empty_players = [seat for seat in normalized_seat_layout if isinstance(seat, str) and seat != "empty"]
+        non_empty_players = [seat for seat in seat_layout if isinstance(seat, str) and seat != "empty"]
 
-        room_dm = str(check_room.get("dungeon_master", "")).lower()
+        room_dm = check_room.get("dungeon_master", {}).get("user_id", "")
         if room_dm and room_dm in non_empty_players:
             raise HTTPException(status_code=409, detail="Dungeon Master cannot sit in party seats")
-
-        room_moderators = {
-            str(name).lower()
-            for name in check_room.get("moderators", [])
-            if isinstance(name, str) and name
-        }
-        if any(name in room_moderators for name in non_empty_players):
-            raise HTTPException(status_code=409, detail="Moderators cannot sit in party seats")
 
         player_metadata = check_room.get("player_metadata", {})
         if not isinstance(player_metadata, dict):
             player_metadata = {}
 
+        seated_mods = [
+            uid for uid in non_empty_players
+            if player_metadata.get(uid, {}).get("campaign_role") == "mod"
+        ]
+        if seated_mods:
+            raise HTTPException(status_code=409, detail="Moderators cannot sit in party seats")
+
         invalid_players = [
-            name for name in non_empty_players
-            if not player_metadata.get(name, {}).get("character_id")
+            uid for uid in non_empty_players
+            if not player_metadata.get(uid, {}).get("character_id")
         ]
         if invalid_players:
             raise HTTPException(

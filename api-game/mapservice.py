@@ -26,9 +26,6 @@ class MapSettings(BaseModel):
     active: bool = True
     
     def __init__(self, **data):
-        # Lowercase the uploaded_by name
-        if 'uploaded_by' in data:
-            data['uploaded_by'] = data['uploaded_by'].lower()
         super().__init__(**data)
 
 class MapService:

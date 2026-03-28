@@ -367,6 +367,11 @@ function DashboardContent() {
     'campaign_character_released': (message) => {
       invalidation.invalidateCampaigns()
       invalidation.invalidateNotifications()
+    },
+
+    // Role change events (silent — cache invalidation only)
+    'campaign_role_changed': (message) => {
+      invalidation.invalidateCampaigns()
     }
   }
 

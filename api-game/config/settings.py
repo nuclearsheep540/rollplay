@@ -51,6 +51,9 @@ class Settings(BaseSettings):
     APP_DB_USER: str
     APP_DB_PASSWORD: str
 
+    # Service URLs (Docker network)
+    API_SITE_URL: str = "http://api-site:8082"
+
     # LOGGING - optional with safe defaults
     logging_level: str = "INFO"
     logging_email_from: Optional[str] = None
@@ -93,4 +96,5 @@ def get_settings() -> dict:
         'logging_email_to': _settings.logging_email_to,
         'logging_email_subject': _settings.logging_email_subject,
         'logging_filename': _settings.logging_filename,
+        'API_SITE_URL': _settings.API_SITE_URL,
     }

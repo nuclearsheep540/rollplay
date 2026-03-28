@@ -13,6 +13,8 @@ from .schemas import (
     CampaignSummaryResponse,
     CampaignMemberResponse,
     CharacterSelectRequest,
+    CampaignSetRoleRequest,
+    CampaignSetRoleResponse,
 )
 from modules.session.api.schemas import (
     CreateSessionRequest, SessionResponse
@@ -33,7 +35,8 @@ from modules.campaign.application.commands import (
     CancelCampaignInvite,
     LeaveCampaign,
     SelectCharacterForCampaign,
-    ReleaseCharacterFromCampaign
+    ReleaseCharacterFromCampaign,
+    SetMemberRole,
 )
 from modules.characters.repositories.character_repository import CharacterRepository
 from modules.characters.dependencies.providers import get_character_repository
@@ -63,19 +66,20 @@ def _to_campaign_response(campaign: CampaignAggregate, user_repo: UserRepository
     # Campaign now only stores session_ids, not full session objects
     # Frontend should fetch sessions separately from /api/sessions/campaign/{id}
 
-    # Look up host screen name if user_repo provided
+    # Look up DM screen name if user_repo provided
+    dm_id = campaign.dm_id
     host_screen_name = None
-    if user_repo:
-        host_user = user_repo.get_by_id(campaign.host_id)
-        if host_user:
-            host_screen_name = host_user.screen_name
+    if user_repo and dm_id:
+        dm_user = user_repo.get_by_id(dm_id)
+        if dm_user:
+            host_screen_name = dm_user.screen_name
 
     return CampaignResponse(
         id=str(campaign.id),
         title=campaign.title,
         description=campaign.description,
         hero_image=campaign.hero_image,
-        host_id=str(campaign.host_id),
+        host_id=str(dm_id) if dm_id else str(campaign.created_by),
         host_screen_name=host_screen_name,
         created_at=campaign.created_at,
         updated_at=campaign.updated_at,
@@ -92,19 +96,20 @@ def _to_campaign_response(campaign: CampaignAggregate, user_repo: UserRepository
 def _to_campaign_summary_response(campaign: CampaignAggregate, user_repo: UserRepository = None) -> CampaignSummaryResponse:
     """Convert CampaignAggregate to CampaignSummaryResponse"""
 
-    # Look up host screen name if user_repo provided
+    # Look up DM screen name if user_repo provided
+    dm_id = campaign.dm_id
     host_screen_name = None
-    if user_repo:
-        host_user = user_repo.get_by_id(campaign.host_id)
-        if host_user:
-            host_screen_name = host_user.screen_name
+    if user_repo and dm_id:
+        dm_user = user_repo.get_by_id(dm_id)
+        if dm_user:
+            host_screen_name = dm_user.screen_name
 
     return CampaignSummaryResponse(
         id=str(campaign.id),
         title=campaign.title,
         description=campaign.description,
         hero_image=campaign.hero_image,
-        host_id=str(campaign.host_id),
+        host_id=str(dm_id) if dm_id else str(campaign.created_by),
         host_screen_name=host_screen_name,
         created_at=campaign.created_at,
         updated_at=campaign.updated_at,
@@ -509,8 +514,7 @@ async def get_campaign_members(
             )
 
         # Verify user is member or has pending invite
-        is_invited = user_id in campaign.invited_player_ids
-        if not campaign.is_member(user_id) and not is_invited:
+        if not campaign.is_member(user_id) and not campaign.is_invited(user_id):
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="Access denied - only campaign members can view member list"
@@ -594,5 +598,37 @@ async def release_character_from_campaign(
             "character_id": str(character.id),
             "character_name": character.character_name
         }
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+
+
+# Internal service-to-service endpoints (Docker network only, no JWT)
+@router.post("/set-role", response_model=CampaignSetRoleResponse)
+async def set_campaign_role(
+    request: CampaignSetRoleRequest,
+    campaign_repo: CampaignRepository = Depends(campaign_repository),
+    character_repo: CharacterRepository = Depends(get_character_repository),
+    event_manager: EventManager = Depends(get_event_manager),
+):
+    """
+    Set a campaign member's role. Called by api-game during live sessions.
+
+    Not exposed via NGINX — only accessible within Docker network (http://api-site:8082).
+    All domain rules are enforced here (DM auth, membership, character conflicts).
+    """
+    try:
+        command = SetMemberRole(campaign_repo, character_repo, event_manager)
+        campaign = await command.execute(
+            campaign_id=UUID(request.campaign_id),
+            requesting_user_id=UUID(request.requesting_user_id),
+            target_user_id=UUID(request.target_user_id),
+            new_role=request.new_role,
+        )
+        return CampaignSetRoleResponse(
+            success=True,
+            campaign_id=request.campaign_id,
+            target_user_id=request.target_user_id,
+            new_role=request.new_role,
+        )
     except ValueError as e:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))

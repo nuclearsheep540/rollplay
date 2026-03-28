@@ -12,6 +12,7 @@ logger = logging.getLogger(__name__)
 from modules.campaign.model.campaign_model import Campaign as CampaignModel
 from modules.campaign.model.campaign_member_model import CampaignMember
 from modules.campaign.domain.campaign_aggregate import CampaignAggregate
+from modules.campaign.domain.campaign_role import CampaignRole
 
 
 class CampaignRepository:
@@ -33,36 +34,31 @@ class CampaignRepository:
 
         return self._model_to_aggregate(model)
 
-    def get_by_host_id(self, host_id: UUID) -> List[CampaignAggregate]:
-        """Get all campaigns where user is host"""
+    def get_by_creator_id(self, creator_id: UUID) -> List[CampaignAggregate]:
+        """Get all campaigns created by user"""
         models = (
             self.db.query(CampaignModel)
             .options(joinedload(CampaignModel.members))
-            .filter_by(host_id=host_id)
+            .filter_by(created_by=creator_id)
             .order_by(CampaignModel.created_at.desc())
             .all()
         )
         return [self._model_to_aggregate(model) for model in models]
 
     def get_by_member_id(self, user_id: UUID) -> List[CampaignAggregate]:
-        """Get all campaigns where user is either host or player (accepted invites only)"""
+        """Get all campaigns where user is an active member (any role except invited)"""
         try:
-            is_player = exists().where(
+            is_active_member = exists().where(
                 and_(
                     CampaignMember.campaign_id == CampaignModel.id,
                     CampaignMember.user_id == user_id,
-                    CampaignMember.role == 'player'
+                    CampaignMember.role.in_([r.value for r in CampaignRole if r != CampaignRole.INVITED])
                 )
             )
             models = (
                 self.db.query(CampaignModel)
                 .options(joinedload(CampaignModel.members))
-                .filter(
-                    or_(
-                        CampaignModel.host_id == user_id,
-                        is_player
-                    )
-                )
+                .filter(is_active_member)
                 .order_by(CampaignModel.created_at.desc())
                 .all()
             )
@@ -92,7 +88,7 @@ class CampaignRepository:
                 .join(CampaignMember)
                 .filter(
                     CampaignMember.user_id == user_id,
-                    CampaignMember.role == 'invited'
+                    CampaignMember.role == CampaignRole.INVITED.value
                 )
                 .order_by(CampaignModel.created_at.desc())
                 .all()
@@ -143,7 +139,7 @@ class CampaignRepository:
                 title=aggregate.title,
                 description=aggregate.description,
                 hero_image=aggregate.hero_image,
-                host_id=aggregate.host_id,
+                created_by=aggregate.created_by,
                 created_at=aggregate.created_at,
                 updated_at=aggregate.updated_at
             )
@@ -153,18 +149,12 @@ class CampaignRepository:
             self.db.flush()
             aggregate.id = campaign_model.id
 
-            # Add initial members if any
-            for player_id in aggregate.player_ids:
+            # Add initial members from aggregate
+            for user_id, role in aggregate.members.items():
                 self.db.add(CampaignMember(
                     campaign_id=campaign_model.id,
-                    user_id=player_id,
-                    role='player'
-                ))
-            for player_id in aggregate.invited_player_ids:
-                self.db.add(CampaignMember(
-                    campaign_id=campaign_model.id,
-                    user_id=player_id,
-                    role='invited'
+                    user_id=user_id,
+                    role=role.value
                 ))
 
         self.db.commit()
@@ -172,13 +162,9 @@ class CampaignRepository:
         return campaign_model.id
 
     def _sync_members(self, campaign_model: CampaignModel, aggregate: CampaignAggregate) -> None:
-        """Diff and sync the campaign_members join table against aggregate lists"""
+        """Diff and sync the campaign_members join table against aggregate members dict"""
         # Build desired state from aggregate
-        desired = {}
-        for pid in aggregate.player_ids:
-            desired[pid] = 'player'
-        for pid in aggregate.invited_player_ids:
-            desired[pid] = 'invited'
+        desired = {uid: role.value for uid, role in aggregate.members.items()}
 
         # Build current state from join table
         current_members = {m.user_id: m for m in campaign_model.members}
@@ -223,27 +209,21 @@ class CampaignRepository:
 
     def _model_to_aggregate(self, model: CampaignModel) -> CampaignAggregate:
         """Helper to convert campaign model to aggregate"""
-        # Extract session IDs from relationship
         session_ids = [session.id for session in model.sessions or []]
 
-        # Split members by role into two UUID lists
-        invited_player_ids = []
-        player_ids = []
+        # Build members dict from join table
+        members = {}
         for member in (model.members or []):
-            if member.role == 'invited':
-                invited_player_ids.append(member.user_id)
-            elif member.role == 'player':
-                player_ids.append(member.user_id)
+            members[member.user_id] = CampaignRole.from_string(member.role)
 
         return CampaignAggregate(
             id=model.id,
             title=model.title,
             description=model.description,
             hero_image=model.hero_image,
-            host_id=model.host_id,
+            created_by=model.created_by,
             created_at=model.created_at,
             updated_at=model.updated_at,
             session_ids=session_ids,
-            invited_player_ids=invited_player_ids,
-            player_ids=player_ids
+            members=members
         )
