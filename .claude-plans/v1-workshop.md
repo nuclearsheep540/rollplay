@@ -7,37 +7,202 @@ Media Foundation V1 has 3 of 4 features shipped (F1: Image Loading, F2: SFX Soun
 The Workshop is a new dashboard tab and frontend slice (`rollplay/app/workshop/`) that serves as the DM's **preparation-time authoring space**. It's where DMs configure assets before sessions — loop points on audio, grid overlays on maps, and eventually NPCs, items, scenes.
 
 **Two deliverables:**
-1. **Part 1 (this plan):** Workshop shell + Map Grid Tool (backend exists, frontend only)
+1. **Part 1 (this plan):** Workshop shell + Map Grid Tool
 2. **Part 2 (follow-up):** F4 Audio Loop Editor with wavesurfer.js
 
 ---
 
 ## Part 1: Workshop Shell + Map Grid Tool
 
+### Phase 0 — Backend: Complete Grid API
+
+The `PATCH /api/library/{asset_id}/grid` endpoint exists but has two gaps that block Workshop use:
+
+**Gap 1: `grid_cell_size` not wired through the API layer.**
+The domain model (`MapAsset.grid_cell_size`) and DB column (`MapAssetModel.grid_cell_size`) exist, and `MapAsset.update_grid_config()` already accepts `grid_cell_size` as a parameter. But the API request schema, command `execute()`, and endpoint handler never pass it through.
+
+**Gap 2: Response serializer is incomplete.**
+`_to_media_asset_response()` (endpoints.py:70-86) only returns `grid_width`, `grid_height`, `grid_opacity` for map assets — it omits `grid_offset_x`, `grid_offset_y`, `grid_line_color`, `grid_cell_size` even though `MapAssetResponse` has the fields defined. The Workshop can't initialize the grid editor for a previously configured map without these values.
+
+#### 0.1 Add `grid_cell_size` to Request Schema
+
+**`api-site/modules/library/api/schemas.py` — `UpdateGridConfigRequest`:**
+Add field:
+```python
+grid_cell_size: Optional[int] = Field(None, ge=8, le=500, description="Cell size in native image pixels")
+```
+
+**`api-site/modules/library/api/schemas.py` — `MapAssetResponse`:**
+Add field:
+```python
+grid_cell_size: Optional[int] = None
+```
+
+#### 0.2 Wire `grid_cell_size` Through Command + Endpoint
+
+**`api-site/modules/library/application/commands.py` — `UpdateGridConfig.execute()`:**
+Add `grid_cell_size: Optional[int] = None` parameter, pass it to `asset.update_grid_config()`.
+
+**`api-site/modules/library/api/endpoints.py` — `update_grid_config()` handler (line 404-412):**
+Add `grid_cell_size=request.grid_cell_size` to the command call.
+
+#### 0.3 Fix Response Serializer
+
+**`api-site/modules/library/api/endpoints.py` — `_to_media_asset_response()` (line 70-86):**
+The `MapAssetResponse` construction is missing fields. Add:
+```python
+grid_offset_x=asset.grid_offset_x,
+grid_offset_y=asset.grid_offset_y,
+grid_line_color=asset.grid_line_color,
+grid_cell_size=asset.grid_cell_size,
+```
+
+No migration needed — columns already exist.
+
+**Files modified:**
+- `api-site/modules/library/api/schemas.py` — add `grid_cell_size` to request + response
+- `api-site/modules/library/application/commands.py` — wire `grid_cell_size` through
+- `api-site/modules/library/api/endpoints.py` — wire `grid_cell_size` in handler, fix serializer
+
+---
+
 ### Phase 1 — Shared Grid Hook (extract from game context)
 
-Currently, grid config state logic lives inline in `MapControlsPanel.js` (lines 78-122) — local state for cols, rows, cellSize, opacity, color, offset, plus a `useEffect` that pushes preview updates via `handleGridChange`. This is tightly coupled to the game session.
+#### Where grid state actually lives
 
-**Extract a shared `useGridConfig` hook** into `map_management/hooks/` that both Game and Workshop can consume.
+The grid editing state is **not** in `MapControlsPanel.js`. It's spread across two locations:
+
+**`GameContent.js` (lines 174-203)** — owns all core grid state as `useState`:
+- `liveCellSize` (line 200) — cell size in native image px
+- `liveGridCols` (line 201) — column count
+- `liveGridRows` (line 202) — row count
+- `liveGridOpacity` (line 178) — opacity value
+- `liveTuning` (line 199) — `{ offsetX, offsetY }`
+- `gridEditMode` (line 176) — edit mode flag
+- `tuningMode` (line 198) — null | 'offset'
+- `mapNaturalDimensions` (line 203) — `{ naturalWidth, naturalHeight }`
+
+**`GameContent.js` (lines 590-639)** — owns initialization and preview computation:
+- Sync effect (lines 590-598): when `activeMap.grid_config` changes, hydrates `liveTuning`, `liveGridCols`, `liveGridRows`, `liveCellSize` from the stored config
+- Default cell size effect (lines 600-609): when no stored `grid_cell_size`, computes default from image dimensions + grid dimensions
+- `effectiveGridConfig` useMemo (lines 620-639): merges live editing state into a preview config object (the nested shape that `MapDisplay`/`GridOverlay` consume)
+
+**`MapControlsPanel.js`** — only owns locally:
+- `liveGridColor` (line 87) — color hex string
+- `isDimensionsExpanded` (line 78) — panel open/closed
+- `originalServerOpacity` (line 81) — for cancel/restore
+- `originalTuning` (line 91) — for cancel/restore
+- Coloris color picker initialization (lines 124-159)
+- `applyGrid()` (lines 191-243) — persists to MongoDB via `PUT /api/game/${roomId}/map`
+- Live preview effect (lines 107-122) — calls `handleGridChange` to push color/opacity into `gridConfig` state
+
+**`GameContent.js`** passes state down to `MapControlsPanel` as props (lines 1775-1794):
+```
+liveGridOpacity, setLiveGridOpacity, liveTuning, cellSize={liveCellSize},
+onCellSizeChange, liveGridCols, liveGridRows, gridEditMode, setGridEditMode, handleGridChange
+```
+
+And passes derived state to `MapDisplay` (lines 1848-1861):
+```
+gridConfig={effectiveGridConfig}, liveGridOpacity, offsetX={liveTuning.offsetX}, offsetY={liveTuning.offsetY}
+```
+
+And to `GridTuningOverlay` (lines 1879-1885):
+```
+onOffsetXChange, onOffsetYChange, onCellSizeChange, onColChange, onRowChange
+```
 
 #### 1.1 Create `useGridConfig` Hook (`rollplay/app/map_management/hooks/useGridConfig.js`)
 
-Manages pure grid parameter state and preview computation:
-- **State**: `gridCols`, `gridRows`, `cellSize`, `gridOpacity`, `gridColor`, `offset { x, y }`
-- **Actions**: `setCellSize`, `setGridOpacity`, `setGridColor`, `adjustOffset`, `setGridDimensions`
-- **Derived**: `buildGridConfig()` — returns the complete grid config object (same shape both Game and Workshop need)
-- **Init**: `initFromConfig(gridConfig)` — hydrates state from an existing config (loaded from MongoDB in-game, or from asset API response in Workshop)
+Extracts the grid parameter state and preview computation from `GameContent.js`. This hook owns **no persistence logic** — it doesn't know about WebSocket, MongoDB, or REST.
 
-This hook owns **no persistence logic** — it doesn't know about WebSocket, MongoDB, or REST. It just manages the grid parameter state and preview shape.
+**State** (from GameContent.js lines 178, 198-203):
+- `cellSize` — cell size in native image pixels (default 64)
+- `gridCols` — column count (default 10)
+- `gridRows` — row count (default 10)
+- `gridOpacity` — opacity 0.0-1.0 (default 0.2)
+- `gridColor` — hex string (default '#d1d5db') — **moved from MapControlsPanel**
+- `offset` — `{ x, y }` (default { x: 0, y: 0 })
 
-#### 1.2 Refactor `MapControlsPanel.js`
+**Actions** (from GameContent.js lines 1791, 1880-1884 — the inline callbacks):
+- `setCellSize(value)` / `adjustCellSize(delta)` — with clamp 8-100
+- `setGridCols(value)` / `adjustGridCols(delta)` — with min 2
+- `setGridRows(value)` / `adjustGridRows(delta)` — with min 2
+- `setGridOpacity(value)`
+- `setGridColor(hex)`
+- `adjustOffset(deltaX, deltaY)`
 
-Replace the inline state management (lines 78-122) with `useGridConfig`. The `applyGrid` function (line 191-243) stays in `MapControlsPanel` — it calls `buildGridConfig()` from the hook and sends to `PUT /api/game/${roomId}/map`.
+**Init** (from GameContent.js lines 590-609):
+- `initFromConfig(gridConfig, naturalDimensions?)` — hydrates all state from a saved config object. Works with two shapes:
+  - **Nested (MongoDB/game)**: `{ grid_width, grid_height, grid_cell_size, offset_x, offset_y, colors: { display_mode: { line_color, opacity } } }`
+  - **Flat (REST API response)**: `{ grid_width, grid_height, grid_cell_size, grid_offset_x, grid_offset_y, grid_opacity, grid_line_color }`
+  - If no `grid_cell_size` and `naturalDimensions` provided: compute default cell size as `Math.max(8, Math.min(naturalWidth / cols, naturalHeight / rows))`
+
+**Derived** (from GameContent.js lines 620-639):
+- `effectiveGridConfig` — the nested config object for `MapDisplay`/`GridOverlay` preview:
+  ```js
+  { grid_width, grid_height, grid_cell_size, enabled: true, offset_x, offset_y,
+    colors: { edit_mode: { line_color, opacity, line_width: 1 },
+              display_mode: { line_color, opacity, line_width: 1 } } }
+  ```
+- `toFlatConfig()` — transforms state into the flat shape for `PATCH /api/library/{id}/grid`:
+  ```js
+  { grid_width, grid_height, grid_cell_size, grid_opacity, grid_offset_x, grid_offset_y, grid_line_color }
+  ```
+
+The two output shapes serve different consumers:
+- `effectiveGridConfig` → `MapDisplay` (gridConfig prop) and `GridOverlay` (both Game and Workshop preview)
+- `toFlatConfig()` → `useUpdateGridConfig` mutation (Workshop REST save only)
+
+#### 1.2 Refactor `GameContent.js`
+
+Replace the scattered `useState` declarations (lines 178, 198-202), the sync effect (lines 590-598), the default cell size effect (lines 600-609), and the `effectiveGridConfig` useMemo (lines 620-639) with `useGridConfig`.
+
+**Before** (GameContent.js):
+```js
+const [liveGridOpacity, setLiveGridOpacity] = useState(0.2);
+const [liveTuning, setLiveTuning] = useState({ offsetX: 0, offsetY: 0 });
+const [liveCellSize, setLiveCellSize] = useState(64);
+const [liveGridCols, setLiveGridCols] = useState(10);
+const [liveGridRows, setLiveGridRows] = useState(10);
+// + sync effects + effectiveGridConfig useMemo
+```
+
+**After** (GameContent.js):
+```js
+const grid = useGridConfig();
+// grid.cellSize, grid.gridCols, grid.gridRows, grid.gridOpacity, grid.gridColor, grid.offset
+// grid.effectiveGridConfig — replaces the useMemo
+// grid.initFromConfig(activeMap?.grid_config, mapNaturalDimensions)
+```
+
+GameContent still owns: `gridEditMode`, `tuningMode`, `gridConfig` (the raw config state set by `handleGridChange`), `mapNaturalDimensions`. The hook replaces the live editing state and preview computation.
+
+The inline delta callbacks (lines 1791, 1880-1884) become hook action calls:
+```js
+onCellSizeChange={(delta) => grid.adjustCellSize(delta)}
+onColChange={(delta) => grid.adjustGridCols(delta)}
+```
+
+#### 1.3 Refactor `MapControlsPanel.js`
+
+- Remove `liveGridColor` local state (line 87) — now comes from hook via props
+- Remove the Coloris-based live preview `useEffect` (lines 107-122) — the hook's `effectiveGridConfig` handles this
+- The `applyGrid` function (lines 191-243) stays — it reads from props (which now come from the hook) and sends to `PUT /api/game/${roomId}/map`
+- The Coloris color picker initialization (lines 124-159) stays — it calls the hook's `setGridColor` instead of local `setLiveGridColor`
+- The opacity/color sync effect (lines 94-104) is replaced by the hook's `initFromConfig`
+
+**Prop changes to MapControlsPanel:**
+- Remove: `liveGridOpacity`, `setLiveGridOpacity`, `liveTuning`, `cellSize`, `onCellSizeChange`, `liveGridCols`, `liveGridRows`, `handleGridChange`
+- Add: `grid` (the hook instance) — or spread individual values as props
 
 **Files modified:**
 - `rollplay/app/map_management/hooks/useGridConfig.js` — **new**
 - `rollplay/app/map_management/index.js` — export the new hook
-- `rollplay/app/game/components/MapControlsPanel.js` — consume the hook, remove inline state
+- `rollplay/app/game/GameContent.js` — consume hook, remove scattered state + effects + useMemo
+- `rollplay/app/game/components/MapControlsPanel.js` — consume hook values via props, remove local `liveGridColor`
+
+---
 
 ### Phase 2 — Frontend Slice Foundation
 
@@ -92,29 +257,62 @@ rollplay/app/workshop/
   )}
   ```
 
-### Phase 3 — Map Grid Tool
+---
 
-No backend work needed — `PATCH /api/library/{asset_id}/grid` already exists with full validation and active-session guards.
+### Phase 3 — Map Grid Tool
 
 #### 3.1 useUpdateGridConfig Hook (`hooks/useUpdateGridConfig.js`)
 - TanStack `useMutation` calling `PATCH /api/library/${assetId}/grid` via `authFetch`
+- Sends the flat config shape from `grid.toFlatConfig()`:
+  ```js
+  { grid_width, grid_height, grid_cell_size, grid_opacity, grid_offset_x, grid_offset_y, grid_line_color }
+  ```
 - On success: invalidate `['assets']` query key (keeps Library tab in sync)
+- On 409 error: surface "map is in an active session" message
 
 #### 3.2 MapGridTool (`components/MapGridTool.js`)
 - Renders `AssetPicker` filtered to `assetType="map"`
 - When a map is selected:
-  - Calls `useGridConfig` shared hook, initialized via `initFromConfig(asset.grid_config)`
-  - **Preview**: Import `MapDisplay` from `map_management` — pass asset's download URL + `buildGridConfig()` output
-  - **Grid overlay**: Import `GridOverlay` from `map_management` for live preview
+  - Instantiates `useGridConfig` shared hook
+  - Calls `initFromConfig()` with the asset's flat grid fields from the API response (Phase 0 ensures all fields are returned):
+    ```js
+    grid.initFromConfig({
+      grid_width: asset.grid_width,
+      grid_height: asset.grid_height,
+      grid_cell_size: asset.grid_cell_size,
+      grid_offset_x: asset.grid_offset_x,
+      grid_offset_y: asset.grid_offset_y,
+      grid_opacity: asset.grid_opacity,
+      grid_line_color: asset.grid_line_color,
+    }, naturalDimensions)
+    ```
+  - **Preview**: Render `MapDisplay` from `map_management`, passing:
+    - `activeMap` — constructed from asset data (needs `file_path: asset.s3_url`, `grid_config: grid.effectiveGridConfig`)
+    - `gridConfig={grid.effectiveGridConfig}` — the nested preview config
+    - `isEditMode={true}`
+    - `liveGridOpacity={grid.gridOpacity}`
+    - `offsetX={grid.offset.x}`, `offsetY={grid.offset.y}`
+    - `onImageLoad` — capture natural dimensions for default cell size computation
+  - **No separate GridOverlay import** — `MapDisplay` renders `GridOverlay` internally via its `gridConfig` prop
   - **Controls**: Render `WorkshopGridControls`, passing the hook's state + setters
 - Empty state when no asset selected
 
 #### 3.3 WorkshopGridControls (`components/WorkshopGridControls.js`)
-- Grid editing UI — same controls as in-game (cell size slider, opacity, color picker, offset)
+- Grid editing UI — same controls as in-game (cell size slider, opacity, color picker, offset readout)
 - Receives `useGridConfig` state + setters as props (pure presentation, no persistence logic)
-- "Save" button calls `useUpdateGridConfig` mutation with `buildGridConfig()` output
+- Color picker: uses Coloris (same as in-game) — initialization logic follows MapControlsPanel pattern (lines 124-159), calling `grid.setGridColor` on pick event
+- "Save" button calls `useUpdateGridConfig` mutation with `grid.toFlatConfig()` output
 - All saves go directly to PostgreSQL via REST — this is preparation-time, not live-session
-- Import `GridTuningOverlay` from `map_management` for on-map d-pad offset controls
+- `GridTuningOverlay` from `map_management` rendered as a sibling overlay on the map preview area (not inside WorkshopGridControls), with callbacks wired to:
+  ```js
+  onOffsetXChange={(delta) => grid.adjustOffset(delta, 0)}
+  onOffsetYChange={(delta) => grid.adjustOffset(0, delta)}
+  onCellSizeChange={(delta) => grid.adjustCellSize(delta)}
+  onColChange={(delta) => grid.adjustGridCols(delta)}
+  onRowChange={(delta) => grid.adjustGridRows(delta)}
+  ```
+
+---
 
 ### Phase 4 — Library-to-Workshop Bridge
 
@@ -178,7 +376,11 @@ LoopMode:
 ### Modify (Part 1)
 | File | Change |
 |------|--------|
-| `rollplay/app/game/components/MapControlsPanel.js` | Refactor to consume shared `useGridConfig` hook |
+| `api-site/modules/library/api/schemas.py` | Add `grid_cell_size` to request + response schemas |
+| `api-site/modules/library/application/commands.py` | Wire `grid_cell_size` through `UpdateGridConfig.execute()` |
+| `api-site/modules/library/api/endpoints.py` | Wire `grid_cell_size` in handler + fix `_to_media_asset_response()` serializer |
+| `rollplay/app/game/GameContent.js` | Replace scattered grid state/effects/useMemo with `useGridConfig` hook |
+| `rollplay/app/game/components/MapControlsPanel.js` | Consume grid state via props from hook, remove local `liveGridColor` |
 | `rollplay/app/dashboard/components/DashboardLayout.js` | Add workshop tab + validation |
 | `rollplay/app/dashboard/page.js` | Import WorkshopManager, add conditional render |
 | `rollplay/app/asset_library/components/AssetLibraryManager.js` | Add context menu items for Workshop bridge |
@@ -187,7 +389,7 @@ LoopMode:
 ### Create (Part 1)
 | File | Purpose |
 |------|---------|
-| `rollplay/app/map_management/hooks/useGridConfig.js` | Shared grid state logic (used by both Game and Workshop) |
+| `rollplay/app/map_management/hooks/useGridConfig.js` | Shared grid state + preview computation (used by both Game and Workshop) |
 | `rollplay/app/workshop/index.js` | Barrel export |
 | `rollplay/app/workshop/components/WorkshopManager.js` | Top-level orchestrator |
 | `rollplay/app/workshop/components/WorkshopToolNav.js` | Internal tool navigation |
@@ -200,28 +402,26 @@ LoopMode:
 | File | How Used |
 |------|----------|
 | `rollplay/app/asset_library/hooks/useAssets.js` | AssetPicker queries via `useAssets({ assetType: 'map' })` |
-| `rollplay/app/map_management/components/MapDisplay.js` | Map preview in grid tool |
-| `rollplay/app/map_management/components/GridOverlay.js` | Grid overlay on map preview |
-| `rollplay/app/map_management/components/GridTuningOverlay.js` | D-pad offset controls |
+| `rollplay/app/map_management/components/MapDisplay.js` | Map preview in grid tool (renders GridOverlay internally) |
+| `rollplay/app/map_management/components/GridTuningOverlay.js` | D-pad offset/size controls overlaid on map preview |
 | `rollplay/app/shared/utils/authFetch.js` | All API calls |
 | `rollplay/app/styles/colorTheme.js` | THEME tokens for styling |
-
-### Backend (no changes in Part 1)
-The grid config endpoint already exists: `PATCH /api/library/{asset_id}/grid` in `api-site/modules/library/api/endpoints.py:387-429`
 
 ---
 
 ## Verification
 
 ### Part 1 Checklist
-1. **Shared hook works in-game**: Existing grid editing in game sessions behaves identically after refactor to `useGridConfig`
-2. **Workshop tab visible**: Navigate to `/dashboard?tab=workshop` — tab appears in SubNav, content renders
-3. **Tool nav**: "Maps" tool is active, "Audio" shows coming soon state
-4. **Asset picker**: Shows only map assets, selecting one loads the preview
-5. **Map preview**: Selected map renders with `MapDisplay` + `GridOverlay`
-6. **Grid controls**: Sliders/inputs for cell size, rows, cols, opacity, color, offset all functional with live preview
-7. **Save persists**: Click save → `PATCH /api/library/{id}/grid` succeeds → reload shows saved config
-8. **Active session guard**: If map is in an active session, save returns 409 and UI shows appropriate message
-9. **Library bridge**: Right-click a map in Library → "Configure Grid" → navigates to Workshop with map pre-selected
-10. **Deep-linking**: Direct URL `?tab=workshop&tool=maps&asset_id={uuid}` opens the correct tool with the correct asset
-11. **`npm run build`**: Clean production build with no warnings
+1. **Backend grid_cell_size**: `PATCH /api/library/{id}/grid` with `grid_cell_size` field → returns full grid config including cell_size, offsets, color
+2. **Response completeness**: `GET /api/assets/` returns `grid_cell_size`, `grid_offset_x`, `grid_offset_y`, `grid_line_color` for map assets
+3. **Shared hook works in-game**: Existing grid editing in game sessions behaves identically after refactor to `useGridConfig`
+4. **Workshop tab visible**: Navigate to `/dashboard?tab=workshop` — tab appears in SubNav, content renders
+5. **Tool nav**: "Maps" tool is active, "Audio" shows coming soon state
+6. **Asset picker**: Shows only map assets, selecting one loads the preview
+7. **Map preview**: Selected map renders with `MapDisplay` + live grid overlay from `effectiveGridConfig`
+8. **Grid controls**: Sliders/inputs for cell size, rows, cols, opacity, color, offset all functional with live preview
+9. **Save persists**: Click save → `PATCH /api/library/{id}/grid` with flat config succeeds → reload shows saved config (including cell_size)
+10. **Active session guard**: If map is in an active session, save returns 409 and UI shows appropriate message
+11. **Library bridge**: Right-click a map in Library → "Configure Grid" → navigates to Workshop with map pre-selected
+12. **Deep-linking**: Direct URL `?tab=workshop&tool=maps&asset_id={uuid}` opens the correct tool with the correct asset
+13. **`npm run build`**: Clean production build with no warnings
