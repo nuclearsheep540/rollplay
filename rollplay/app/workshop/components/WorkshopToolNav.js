@@ -37,7 +37,7 @@ const TOOLS = [
 
 export default function WorkshopToolNav({ activeTool, onToolChange }) {
   return (
-    <div className="grid grid-cols-4 gap-4 mb-8">
+    <div className="grid grid-cols-4 gap-5 mb-8">
       {TOOLS.map((tool) => {
         const isActive = activeTool === tool.id;
         const isDisabled = !tool.enabled;
@@ -47,28 +47,42 @@ export default function WorkshopToolNav({ activeTool, onToolChange }) {
             key={tool.id}
             onClick={() => !isDisabled && onToolChange(tool.id)}
             disabled={isDisabled}
-            className={`relative flex flex-col items-center gap-3 px-4 py-6 rounded-sm border transition-all ${
-              isActive
-                ? 'bg-surface-secondary border-border-active'
-                : isDisabled
-                  ? 'bg-transparent border-border/30 cursor-not-allowed opacity-40'
-                  : 'bg-transparent border-border hover:border-border-active hover:bg-surface-elevated'
+            className={`relative flex flex-col items-center gap-4 px-5 py-8 rounded border-2 transition-all ${
+              isDisabled
+                ? 'bg-surface-secondary/40 border-border/10 cursor-not-allowed'
+                : isActive
+                  ? 'bg-surface-secondary border-border-active shadow-lg'
+                  : 'bg-surface-secondary border-border/60 hover:border-border-active hover:shadow-lg'
             }`}
           >
             <FontAwesomeIcon
               icon={tool.icon}
-              className={`text-2xl ${isActive ? 'text-content-on-dark' : 'text-content-secondary'}`}
+              className={`text-3xl ${
+                isDisabled
+                  ? 'text-content-secondary/30'
+                  : isActive
+                    ? 'text-content-on-dark'
+                    : 'text-content-secondary hover:text-content-on-dark'
+              }`}
             />
             <div className="text-center">
-              <div className={`text-sm font-semibold ${isActive ? 'text-content-on-dark' : 'text-content-secondary'}`}>
+              <div className={`text-sm font-semibold ${
+                isDisabled
+                  ? 'text-content-secondary/30'
+                  : 'text-content-on-dark'
+              }`}>
                 {tool.label}
               </div>
-              <div className="text-xs text-content-secondary/60 mt-1">
+              <div className={`text-xs mt-1 ${
+                isDisabled
+                  ? 'text-content-secondary/20'
+                  : 'text-content-secondary'
+              }`}>
                 {tool.description}
               </div>
             </div>
             {isDisabled && (
-              <span className="absolute top-2 right-2 text-[10px] font-medium text-content-secondary/50 uppercase tracking-wider">
+              <span className="absolute top-2.5 right-3 text-[10px] font-medium text-content-secondary/40 uppercase tracking-wider">
                 Soon
               </span>
             )}

@@ -232,13 +232,13 @@ export default function AssetLibraryManager({ user }) {
       items.push({
         label: 'Configure Grid',
         icon: <FontAwesomeIcon icon={faSliders} className="text-xs" />,
-        onClick: () => router.push(`/dashboard?tab=workshop&tool=maps&asset_id=${asset.id}`),
+        onClick: () => router.push(`/workshop/map-config?asset_id=${asset.id}`),
       })
     } else if (asset.asset_type === 'music') {
       items.push({
         label: 'Edit Loop Points',
         icon: <FontAwesomeIcon icon={faSliders} className="text-xs" />,
-        onClick: () => router.push(`/dashboard?tab=workshop&tool=audio&asset_id=${asset.id}`),
+        onClick: () => router.push(`/workshop/audio-workstation?asset_id=${asset.id}`),
       })
     }
 

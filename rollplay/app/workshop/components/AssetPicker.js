@@ -42,7 +42,7 @@ export default function AssetPicker({ assetType, selectedAssetId, onSelect }) {
 
   // Asset list for selection
   return (
-    <div className="max-h-48 overflow-y-auto space-y-1">
+    <div className="max-h-48 overflow-y-auto space-y-1 bg-surface-secondary rounded-sm p-2">
       {assets.map((asset) => (
         <button
           key={asset.id}
