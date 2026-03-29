@@ -57,7 +57,7 @@ function MapConfigContent() {
   }
 
   return (
-    <div className="h-screen flex flex-col" style={{ backgroundColor: THEME.bgPrimary, color: THEME.textPrimary }}>
+    <div className="h-screen flex flex-col overflow-hidden" style={{ backgroundColor: THEME.bgPrimary, color: THEME.textPrimary }}>
       {/* Site Header — same as dashboard, no SubNav */}
       <SiteHeader>
         <NotificationBell
