@@ -232,7 +232,7 @@ export default function AssetLibraryManager({ user }) {
       items.push({
         label: 'Configure Grid',
         icon: <FontAwesomeIcon icon={faSliders} className="text-xs" />,
-        onClick: () => router.push(`/workshop/map-config?asset_id=${asset.id}`),
+        onClick: () => router.push(`/workshop/map-config?asset_id=${asset.id}&from=library`),
       })
     } else if (asset.asset_type === 'music') {
       items.push({

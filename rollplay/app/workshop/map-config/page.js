@@ -5,7 +5,7 @@
 
 'use client'
 
-import { Suspense } from 'react'
+import { Suspense, useRef } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
 import { faArrowLeft, faRightFromBracket } from '@fortawesome/free-solid-svg-icons'
@@ -20,6 +20,20 @@ function MapConfigContent() {
   const router = useRouter()
   const searchParams = useSearchParams()
   const selectedAssetId = searchParams.get('asset_id')
+
+  // Capture the entry point once on mount (library vs workshop navigation)
+  const entryFromRef = useRef(null)
+  if (entryFromRef.current === null) {
+    entryFromRef.current = searchParams.get('from') || 'workshop'
+  }
+
+  // Back label is contextual:
+  //   Index view (no asset selected) → "Workshop" (back to tool grid)
+  //   Detail view from workshop      → "Map Config" (back to index)
+  //   Detail view from library       → "Library" (back to library)
+  const backLabel = !selectedAssetId
+    ? 'Workshop'
+    : entryFromRef.current === 'library' ? 'Library' : 'Map Config'
 
   const { user, loading, handleLogout } = useAuth()
   const { toasts, dismissToast } = useToast()
@@ -74,11 +88,11 @@ function MapConfigContent() {
             </p>
           </div>
           <button
-            onClick={() => router.push('/dashboard?tab=workshop')}
+            onClick={() => router.back()}
             className="flex items-center gap-2 px-4 py-2 text-sm font-medium rounded-sm border border-border text-content-primary hover:bg-surface-secondary hover:text-content-on-dark transition-colors"
           >
             <FontAwesomeIcon icon={faArrowLeft} className="text-xs" />
-            <span>Workshop</span>
+            <span>{backLabel}</span>
           </button>
         </div>
 

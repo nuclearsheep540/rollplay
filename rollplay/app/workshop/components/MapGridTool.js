@@ -3,7 +3,7 @@
 
 'use client'
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import { authFetch } from '@/app/shared/utils/authFetch';
 import AssetPicker from './AssetPicker';
 import WorkshopGridControls from './WorkshopGridControls';
@@ -107,11 +107,12 @@ export default function MapGridTool({ selectedAssetId, onAssetSelect }) {
     }
   }, [selectedAsset, grid, updateMutation]);
 
-  // Build activeMap shape that MapDisplay expects
-  const activeMapForDisplay = selectedAsset ? {
-    file_path: selectedAsset.s3_url,
-    grid_config: grid.effectiveGridConfig,
-  } : null;
+  // Stable reference — only changes when the actual asset changes, not on every grid nudge.
+  // Grid config is passed separately via the gridConfig prop.
+  const activeMapForDisplay = useMemo(() => {
+    if (!selectedAsset) return null;
+    return { file_path: selectedAsset.s3_url };
+  }, [selectedAsset?.s3_url]);
 
   return (
     <div className="flex flex-col h-full">
