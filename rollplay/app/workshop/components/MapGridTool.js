@@ -21,7 +21,7 @@ async function fetchAssetById(assetId) {
   return response.json();
 }
 
-export default function MapGridTool({ deepLinkAssetId, onDeepLinkConsumed }) {
+export default function MapGridTool({ selectedAssetId, onAssetSelect }) {
   const [selectedAsset, setSelectedAsset] = useState(null);
   const [loadingAsset, setLoadingAsset] = useState(false);
   const [naturalDimensions, setNaturalDimensions] = useState(null);
@@ -30,45 +30,53 @@ export default function MapGridTool({ deepLinkAssetId, onDeepLinkConsumed }) {
   const grid = useGridConfig();
   const updateMutation = useUpdateGridConfig();
 
-  // Handle deep-link: when an asset_id was passed via URL params
-  const [pendingDeepLinkId, setPendingDeepLinkId] = useState(deepLinkAssetId);
-
+  // Fetch and init grid when the URL-driven selectedAssetId changes
   useEffect(() => {
-    if (deepLinkAssetId && onDeepLinkConsumed) {
-      onDeepLinkConsumed();
-    }
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
-
-  // When an asset is selected (from picker or deep-link), fetch fresh data and init grid
-  const loadAsset = useCallback(async (asset) => {
-    if (!asset) {
+    if (!selectedAssetId) {
       setSelectedAsset(null);
+      setNaturalDimensions(null);
+      setSaveSuccess(false);
+      updateMutation.reset();
       return;
     }
 
-    setLoadingAsset(true);
-    setNaturalDimensions(null);
-    setSaveSuccess(false);
-    updateMutation.reset();
-    setPendingDeepLinkId(null);
+    // Skip if we already have this asset loaded
+    if (selectedAsset?.id === selectedAssetId) return;
 
-    // Fetch fresh asset data to get current grid config
-    const fresh = await fetchAssetById(asset.id);
-    const assetData = fresh || asset;
-    setSelectedAsset(assetData);
+    let cancelled = false;
 
-    grid.initFromConfig({
-      grid_width: assetData.grid_width,
-      grid_height: assetData.grid_height,
-      grid_cell_size: assetData.grid_cell_size,
-      grid_offset_x: assetData.grid_offset_x,
-      grid_offset_y: assetData.grid_offset_y,
-      grid_opacity: assetData.grid_opacity,
-      grid_line_color: assetData.grid_line_color,
-    });
+    async function loadAsset() {
+      setLoadingAsset(true);
+      setNaturalDimensions(null);
+      setSaveSuccess(false);
+      updateMutation.reset();
 
-    setLoadingAsset(false);
-  }, [grid, updateMutation]);
+      const assetData = await fetchAssetById(selectedAssetId);
+      if (cancelled) return;
+
+      if (!assetData) {
+        setLoadingAsset(false);
+        return;
+      }
+
+      setSelectedAsset(assetData);
+
+      grid.initFromConfig({
+        grid_width: assetData.grid_width,
+        grid_height: assetData.grid_height,
+        grid_cell_size: assetData.grid_cell_size,
+        grid_offset_x: assetData.grid_offset_x,
+        grid_offset_y: assetData.grid_offset_y,
+        grid_opacity: assetData.grid_opacity,
+        grid_line_color: assetData.grid_line_color,
+      });
+
+      setLoadingAsset(false);
+    }
+
+    loadAsset();
+    return () => { cancelled = true; };
+  }, [selectedAssetId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Recompute default cell size when natural dimensions arrive (if no stored value)
   useEffect(() => {
@@ -113,8 +121,8 @@ export default function MapGridTool({ deepLinkAssetId, onDeepLinkConsumed }) {
         <label className="block text-sm font-medium text-content-on-dark mb-2">Select Map</label>
         <AssetPicker
           assetType="map"
-          selectedAssetId={selectedAsset?.id || pendingDeepLinkId}
-          onSelect={loadAsset}
+          selectedAssetId={selectedAssetId}
+          onSelect={(assetId) => onAssetSelect(assetId)}
         />
       </div>
 

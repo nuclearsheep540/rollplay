@@ -19,10 +19,20 @@ import { THEME } from '@/app/styles/colorTheme'
 function MapConfigContent() {
   const router = useRouter()
   const searchParams = useSearchParams()
-  const assetIdParam = searchParams.get('asset_id')
+  const selectedAssetId = searchParams.get('asset_id')
 
   const { user, loading, handleLogout } = useAuth()
   const { toasts, dismissToast } = useToast()
+
+  // URL is the source of truth for asset selection.
+  // Browser back/forward navigates between states naturally.
+  const handleAssetSelect = (assetId) => {
+    if (assetId) {
+      router.push(`/workshop/map-config?asset_id=${assetId}`)
+    } else {
+      router.push('/workshop/map-config')
+    }
+  }
 
   if (!user || loading) {
     return (
@@ -75,8 +85,8 @@ function MapConfigContent() {
         {/* Map Grid Tool — fills remaining space */}
         <div className="flex-1 min-h-0">
           <MapGridTool
-            deepLinkAssetId={assetIdParam}
-            onDeepLinkConsumed={() => {}}
+            selectedAssetId={selectedAssetId}
+            onAssetSelect={handleAssetSelect}
           />
         </div>
       </main>
