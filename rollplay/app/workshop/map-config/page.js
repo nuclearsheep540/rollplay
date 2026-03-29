@@ -63,23 +63,23 @@ function MapConfigContent() {
 
       {/* Tool content — full remaining viewport */}
       <main className="flex-1 flex flex-col min-h-0 px-4 sm:px-8 md:px-10 pt-6 pb-4">
-        {/* Back to Workshop */}
-        <button
-          onClick={() => router.push('/dashboard?tab=workshop')}
-          className="flex items-center gap-2 text-sm text-content-secondary hover:text-content-on-dark transition-colors mb-4 self-start"
-        >
-          <FontAwesomeIcon icon={faArrowLeft} className="text-xs" />
-          <span>Workshop</span>
-        </button>
-
-        {/* Tool header */}
-        <div className="mb-6">
-          <h1 className="text-3xl font-bold font-[family-name:var(--font-metamorphous)] text-content-bold">
-            Map Config
-          </h1>
-          <p className="mt-1 text-sm text-content-primary">
-            Configure grid overlays and alignment for your maps
-          </p>
+        {/* Tool header with back button */}
+        <div className="flex items-center justify-between mb-6">
+          <div>
+            <h1 className="text-3xl font-bold font-[family-name:var(--font-metamorphous)] text-content-bold">
+              Map Config
+            </h1>
+            <p className="mt-1 text-sm text-content-primary">
+              Configure grid overlays and alignment for your maps
+            </p>
+          </div>
+          <button
+            onClick={() => router.push('/dashboard?tab=workshop')}
+            className="flex items-center gap-2 px-4 py-2 text-sm font-medium rounded-sm border border-border text-content-primary hover:bg-surface-secondary hover:text-content-on-dark transition-colors"
+          >
+            <FontAwesomeIcon icon={faArrowLeft} className="text-xs" />
+            <span>Workshop</span>
+          </button>
         </div>
 
         {/* Map Grid Tool — fills remaining space */}

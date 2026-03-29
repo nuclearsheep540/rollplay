@@ -116,17 +116,7 @@ export default function MapGridTool({ selectedAssetId, onAssetSelect }) {
 
   return (
     <div className="flex flex-col h-full">
-      {/* Asset Picker */}
-      <div className="mb-4">
-        <label className="block text-sm font-medium text-content-on-dark mb-2">Select Map</label>
-        <AssetPicker
-          assetType="map"
-          selectedAssetId={selectedAssetId}
-          onSelect={(assetId) => onAssetSelect(assetId)}
-        />
-      </div>
-
-      {/* Map Preview + Controls */}
+      {/* Map Preview + Controls (when asset selected) */}
       {loadingAsset ? (
         <div className="flex-1 flex items-center justify-center">
           <div className="text-sm text-content-secondary">Loading map config...</div>
@@ -166,15 +156,11 @@ export default function MapGridTool({ selectedAssetId, onAssetSelect }) {
           </div>
         </div>
       ) : (
-        <div className="flex-1 flex flex-col items-center justify-center py-16 text-center">
-          <div className="text-6xl mb-4 opacity-30">{'\uD83D\uDDFA\uFE0F'}</div>
-          <h3 className="text-lg font-medium mb-2 text-content-on-dark">
-            Select a Map
-          </h3>
-          <p className="max-w-sm text-content-secondary">
-            Choose a map from your library to configure its grid overlay.
-          </p>
-        </div>
+        /* Asset grid — shows when no asset is selected */
+        <AssetPicker
+          assetType="map"
+          onSelect={(assetId) => onAssetSelect(assetId)}
+        />
       )}
     </div>
   );
