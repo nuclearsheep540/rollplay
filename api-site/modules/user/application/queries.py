@@ -25,6 +25,19 @@ class GetUserByEmail:
         return self.user_repo.get_by_email(email)
 
 
+class CheckUserEmailExists:
+    """Query to check if a user with a given email exists (read-only, no side effects)"""
+
+    def __init__(self, user_repository: UserRepository):
+        self.user_repo = user_repository
+
+    def execute(self, email: str) -> bool:
+        """
+        Returns True if an active (non-deleted) user with this email exists, False otherwise.
+        """
+        return self.user_repo.get_by_email(email) is not None
+
+
 class GetUserDashboard:
     """Cross-aggregate coordination query for user dashboard"""
     def __init__(self, user_repository: UserRepository, campaign_repository):

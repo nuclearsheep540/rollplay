@@ -19,7 +19,7 @@ from .schemas import (
 from modules.user.dependencies.providers import user_repository
 from modules.user.repositories.user_repository import UserRepository
 from modules.user.application.commands import GetOrCreateUser, UpdateScreenName, SoftDeleteUser, HardDeleteUser
-from modules.user.application.queries import GetUserDashboard
+from modules.user.application.queries import GetUserDashboard, GetUserByEmail
 from modules.user.domain.user_aggregate import UserAggregate
 from modules.campaign.dependencies.providers import campaign_repository
 from modules.campaign.repositories.campaign_repository import CampaignRepository
@@ -144,6 +144,25 @@ async def resolve_user_for_auth(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Internal server error during user resolution"
         )
+
+
+@router.get("/internal/check-email")
+async def check_email_exists(
+    email: str,
+    user_repo: UserRepository = Depends(user_repository)
+):
+    """
+    Internal endpoint for api-auth to check whether a user email already exists.
+
+    Read-only — no side effects. NOT exposed via NGINX.
+    Only accessible within Docker network (http://api-site:8082).
+
+    Returns {"screen_name": "..."} for known active users, {"screen_name": null} otherwise.
+    screen_name truthiness indicates whether the user exists and has set a name.
+    """
+    query = GetUserByEmail(user_repo)
+    user = query.execute(email)
+    return {"screen_name": user.screen_name if user else None}
 
 
 @router.post("/auth/refresh")
