@@ -27,38 +27,65 @@ class PasswordlessAuth:
         self.api_site_url = settings.API_SITE_INTERNAL_URL
         # NOTE: No caching - always fetch fresh from api-site to handle account deletion/recreation
         
+    async def _get_screen_name(self, email: str) -> Optional[str]:
+        """Get user's screen_name from api-site. Returns None if not found or on error."""
+        try:
+            async with httpx.AsyncClient(timeout=5.0) as client:
+                response = await client.get(
+                    f"{self.api_site_url}/api/users/internal/check-email",
+                    params={"email": email}
+                )
+                if response.status_code == 200:
+                    return response.json().get("screen_name")
+        except Exception as e:
+            logger.warning(f"Could not check user for {email}: {e}")
+        return None
+
     async def send_magic_link(self, email: str) -> dict:
         """
-        Generate and send a magic link to the user's email
+        Generate and send a magic link to the user's email.
+        Determines new vs returning user and dispatches the appropriate email.
         """
         try:
-            # Validate user exists or will be created (optional pre-check)
-            # Note: We don't need user_data for magic link generation, just email
-            # The user will be fetched/created when the magic link is verified
-            
             # Generate JWT magic link token
             magic_token = self.jwt_handler.create_magic_token(email)
-            
+
             # Generate magic link URL for frontend page (query parameter)
             magic_link_url = f"{self.settings.NEXT_PUBLIC_API_URL}/auth/verify?token={magic_token}"
-            
+
             # Generate short code and store it mapped to the JWT
             short_code = self.short_code_generator.generate_code()
             code_stored = self.redis_client.set_short_code(short_code, magic_token, expire_minutes=15)
-            
+
             if not code_stored:
                 logger.warning(f"Failed to store short code for {email}, continuing with JWT-only")
                 short_code = None
             else:
                 logger.info(f"Generated short code {short_code} for {email}")
-            
-            # Send email with both link and short code
-            email_result = await self.email_service.send_magic_link_email(
-                email,
-                magic_link_url,
-                short_code=short_code,
-            )
-            
+
+            formatted_code = f"{short_code[:3]} {short_code[3:]}" if short_code and len(short_code) == 6 else short_code
+
+            # Determine new vs returning user and send appropriate email
+            screen_name = await self._get_screen_name(email)
+
+            if screen_name:
+                email_result = await self.email_service.send_returning_user_otp(
+                    to_email=email,
+                    magic_link=magic_link_url,
+                    formatted_code=formatted_code,
+                    screen_name=screen_name,
+                    expiry_minutes=15,
+                    site_url=self.settings.NEXT_PUBLIC_API_URL,
+                )
+            else:
+                email_result = await self.email_service.send_new_user_otp(
+                    to_email=email,
+                    magic_link=magic_link_url,
+                    formatted_code=formatted_code,
+                    expiry_minutes=15,
+                    site_url=self.settings.NEXT_PUBLIC_API_URL,
+                )
+
             if email_result["success"]:
                 logger.info(f"Magic link generated and sent successfully for {email}")
                 return {
@@ -74,7 +101,7 @@ class PasswordlessAuth:
                     "message": "Failed to send magic link email",
                     "email_response": email_result
                 }
-            
+
         except Exception as e:
             logger.error(f"Error sending magic link to {email}: {str(e)}")
             return {

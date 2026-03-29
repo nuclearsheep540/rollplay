@@ -1,0 +1,12 @@
+Welcome back, {{ screen_name }}!
+
+Here's your sign-in link:
+{{ magic_link }}
+
+Alternative — enter this code on the login page: {{ formatted_code }}
+
+This link will expire in {{ expiry_minutes }} minutes for security reasons.
+
+If you didn't request this email, you can safely ignore it.
+
+Tabletop Tavern — Virtual D&D Gaming Platform

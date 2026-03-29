@@ -5,11 +5,9 @@ import smtplib
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 from pathlib import Path
-from typing import Optional
 import logging
 
-import httpx
-from jinja2 import Environment, FileSystemLoader
+from jinja2 import Environment, FileSystemLoader, select_autoescape
 
 logger = logging.getLogger(__name__)
 
@@ -19,105 +17,82 @@ EXPIRY_MINUTES = 15
 
 class EmailService:
     """
-    Handles email sending for authentication.
+    Handles email rendering and sending via SMTP.
+    Template selection and context building are the caller's responsibility.
     """
 
     def __init__(self, settings):
-        self.settings = settings
         self.smtp_server = settings.SMTP_SERVER
         self.smtp_port = settings.SMTP_PORT
         self.smtp_username = settings.SMTP_USERNAME
         self.smtp_password = settings.SMTP_PASSWORD
         self.from_email = settings.FROM_EMAIL
-        self.api_site_url = settings.API_SITE_INTERNAL_URL
-        self.site_url = settings.NEXT_PUBLIC_API_URL
-        self._jinja_env = Environment(loader=FileSystemLoader(TEMPLATES_DIR), autoescape=True)
-
-    async def check_user_exists(self, email: str) -> bool:
-        """
-        Check if an active user with this email exists in api-site.
-        Falls back to False (returning-user template) on any error so the email always sends.
-        """
-        try:
-            async with httpx.AsyncClient(timeout=5.0) as client:
-                response = await client.get(
-                    f"{self.api_site_url}/api/users/internal/check-email",
-                    params={"email": email}
-                )
-                if response.status_code == 200:
-                    return response.json().get("exists", False)
-                logger.warning(f"check-email endpoint returned {response.status_code} for {email}")
-        except Exception as e:
-            logger.warning(f"Could not reach api-site to check email existence for {email}: {e}")
-        return False
+        self._jinja_env = Environment(
+            loader=FileSystemLoader(TEMPLATES_DIR),
+            autoescape=select_autoescape(["html"]),
+        )
 
     def _render_template(self, template_name: str, context: dict) -> str:
         return self._jinja_env.get_template(template_name).render(**context)
 
-    async def send_magic_link_email(self, to_email: str, magic_link: str, short_code: Optional[str] = None) -> dict:
-        """
-        Send a magic link email, selecting the appropriate template based on whether
-        the user already exists in the system.
-        """
+    async def send_new_user_otp(self, to_email: str, magic_link: str, formatted_code: str, expiry_minutes: int, site_url: str) -> dict:
+        """Send welcome OTP email to a new user."""
         try:
-            is_existing_user = await self.check_user_exists(to_email)
-            template_name = (
-                "magic_link_returning_user.html" if is_existing_user
-                else "magic_link_new_user.html"
-            )
-            logger.info(f"Sending {'returning' if is_existing_user else 'new'} user template to {to_email}")
-
-            formatted_code = (
-                f"{short_code[:3]} {short_code[3:]}" if short_code and len(short_code) == 6
-                else (short_code or "")
-            )
-
             context = {
                 "magic_link": magic_link,
-                "short_code": short_code,
                 "formatted_code": formatted_code,
-                "expiry_minutes": EXPIRY_MINUTES,
-                "site_url": self.site_url,
+                "expiry_minutes": expiry_minutes,
+                "site_url": site_url,
             }
-
-            subject = "Sign in to Tabletop Tavern" if is_existing_user else "Welcome to Tabletop Tavern!"
-            html_body = self._render_template(template_name, context)
-            text_body = self._build_text_body(magic_link, formatted_code, is_existing_user)
+            subject = "Welcome to Tabletop Tavern!"
+            html_body = self._render_template("magic_link_new_user.html", context)
+            text_body = self._render_template("magic_link_new_user.txt", context)
 
             smtp_result = await self._send_email(to_email, subject, text_body, html_body)
 
-            logger.info(f"Magic link email sent to {to_email} - SMTP Response: {smtp_result}")
+            logger.info(f"New user OTP email sent to {to_email}")
             return {
                 "success": True,
                 "smtp_response": smtp_result,
-                "message": "Magic link email sent successfully"
+                "message": "Email sent successfully",
             }
-
         except Exception as e:
-            logger.error(f"Error sending magic link email to {to_email}: {str(e)}")
+            logger.error(f"Error sending new user OTP email to {to_email}: {str(e)}")
             return {
                 "success": False,
                 "error": str(e),
-                "message": "Failed to send magic link email"
+                "message": "Failed to send OTP email",
             }
 
-    def _build_text_body(self, magic_link: str, formatted_code: str, is_existing_user: bool) -> str:
-        greeting = "Welcome back!" if is_existing_user else "Welcome to Tabletop Tavern!"
-        intro = (
-            "Here's your sign-in link:"
-            if is_existing_user
-            else "Tabletop Tavern is a virtual platform for running D&D campaigns and tabletop RPG sessions.\n\nClick the link below to sign in and get started:"
-        )
-        code_section = f"\nAlternative — enter this code on the login page: {formatted_code}\n" if formatted_code else ""
-        return (
-            f"{greeting}\n\n"
-            f"{intro}\n"
-            f"{magic_link}\n"
-            f"{code_section}\n"
-            f"This link will expire in {EXPIRY_MINUTES} minutes for security reasons.\n\n"
-            f"If you didn't request this email, you can safely ignore it.\n\n"
-            f"Tabletop Tavern — Virtual D&D Gaming Platform"
-        )
+    async def send_returning_user_otp(self, to_email: str, magic_link: str, formatted_code: str, screen_name: str, expiry_minutes: int, site_url: str) -> dict:
+        """Send sign-in OTP email to a returning user. screen_name is required."""
+        try:
+            context = {
+                "magic_link": magic_link,
+                "formatted_code": formatted_code,
+                "expiry_minutes": expiry_minutes,
+                "site_url": site_url,
+                "screen_name": screen_name,
+            }
+            subject = "Sign in to Tabletop Tavern"
+            html_body = self._render_template("magic_link_returning_user.html", context)
+            text_body = self._render_template("magic_link_returning_user.txt", context)
+
+            smtp_result = await self._send_email(to_email, subject, text_body, html_body)
+
+            logger.info(f"Returning user OTP email sent to {to_email}")
+            return {
+                "success": True,
+                "smtp_response": smtp_result,
+                "message": "Email sent successfully",
+            }
+        except Exception as e:
+            logger.error(f"Error sending returning user OTP email to {to_email}: {str(e)}")
+            return {
+                "success": False,
+                "error": str(e),
+                "message": "Failed to send OTP email",
+            }
 
     async def _send_email(self, to_email: str, subject: str, text_body: str, html_body: str) -> dict:
         """

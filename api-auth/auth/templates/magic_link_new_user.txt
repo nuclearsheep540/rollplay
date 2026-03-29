@@ -1,0 +1,14 @@
+Welcome to Tabletop Tavern!
+
+Tabletop Tavern is a virtual platform for running D&D campaigns and tabletop RPG sessions.
+
+Click the link below to sign in and get started:
+{{ magic_link }}
+
+Alternative — enter this code on the login page: {{ formatted_code }}
+
+This link will expire in {{ expiry_minutes }} minutes for security reasons.
+
+If you didn't request this email, you can safely ignore it.
+
+Tabletop Tavern — Virtual D&D Gaming Platform
