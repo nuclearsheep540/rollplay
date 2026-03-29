@@ -26,7 +26,7 @@ import DiceActionPanel from './components/DiceActionPanel'; // NEW IMPORT
 import Modal from '@/app/shared/components/Modal';
 import { useWebSocket } from './hooks/useWebSocket';
 import { useUnifiedAudio } from '../audio_management';
-import { MapDisplay, useMapWebSocket, ImageDisplay, useImageWebSocket } from '../map_management';
+import { MapDisplay, useMapWebSocket, ImageDisplay, useImageWebSocket, useGridConfig } from '../map_management';
 import MapOverlayPanel from './components/MapOverlayPanel';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { faVolumeHigh, faVolumeXmark, faRightToBracket, faEye, faUpRightAndDownLeftFromCenter, faDownLeftAndUpRightToCenter } from '@fortawesome/free-solid-svg-icons';
@@ -175,7 +175,6 @@ export default function GameContent() {
   const [activeMap, setActiveMap] = useState(null); // Current active map data
   const [gridEditMode, setGridEditMode] = useState(false); // Is DM editing grid dimensions?
   const [gridConfig, setGridConfig] = useState(null); // Current grid configuration
-  const [liveGridOpacity, setLiveGridOpacity] = useState(0.2); // Live grid opacity for real-time updates
   const [isMapLocked, setIsMapLocked] = useState(false);
   const [gridInspect, setGridInspect] = useState(false);
   const [gridInspectMode, setGridInspectMode] = useState('hold'); // 'hold' | 'toggle'
@@ -196,11 +195,10 @@ export default function GameContent() {
   }, [gridInspectMode]);
 
   const [tuningMode, setTuningMode] = useState(null); // null | 'offset'
-  const [liveTuning, setLiveTuning] = useState({ offsetX: 0, offsetY: 0 });
-  const [liveCellSize, setLiveCellSize] = useState(64); // Cell size in native image pixels
-  const [liveGridCols, setLiveGridCols] = useState(10); // Direct column count
-  const [liveGridRows, setLiveGridRows] = useState(10); // Direct row count
   const [mapNaturalDimensions, setMapNaturalDimensions] = useState(null); // { naturalWidth, naturalHeight }
+
+  // Shared grid editing state (cellSize, cols, rows, opacity, color, offset)
+  const grid = useGridConfig();
 
   // Image system state
   const [activeImage, setActiveImage] = useState(null); // Current active image data
@@ -587,14 +585,9 @@ export default function GameContent() {
     }
   }, [activeRightDrawer, gridEditMode, tuningMode]);
 
-  // Sync live grid state from activeMap.grid_config whenever it changes
+  // Sync grid hook state from activeMap.grid_config whenever it changes
   useEffect(() => {
-    const gc = activeMap?.grid_config;
-    setLiveTuning({ offsetX: gc?.offset_x ?? 0, offsetY: gc?.offset_y ?? 0 });
-    setLiveGridCols(gc?.grid_width  || 10);
-    setLiveGridRows(gc?.grid_height || 10);
-    if (gc?.grid_cell_size) setLiveCellSize(gc.grid_cell_size);
-    // If no stored cell_size, mapNaturalDimensions effect computes the default
+    grid.initFromConfig(activeMap?.grid_config, mapNaturalDimensions);
   }, [activeMap?.grid_config]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Compute default cell_size from image dimensions when no stored value is present
@@ -602,41 +595,27 @@ export default function GameContent() {
     if (!mapNaturalDimensions) return;
     const gc = activeMap?.grid_config;
     if (gc?.grid_cell_size) return; // already have a stored value
-    const { naturalWidth, naturalHeight } = mapNaturalDimensions;
-    const cols = gc?.grid_width  || 10;
-    const rows = gc?.grid_height || 10;
-    setLiveCellSize(Math.max(8, Math.min(naturalWidth / cols, naturalHeight / rows)));
+    grid.initFromConfig(gc, mapNaturalDimensions);
   }, [mapNaturalDimensions]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Default colors used when no grid_config exists yet (fresh map)
-  const DEFAULT_GRID_COLORS = {
-    edit_mode:    { line_color: '#d1d5db', opacity: 0.2, line_width: 1 },
-    display_mode: { line_color: '#d1d5db', opacity: 0.2, line_width: 1 },
-  };
-
   // Computed effective grid config:
-  // - Edit mode: merge live col/row/cellSize into the preview config (colors come from gridConfig)
+  // - Edit mode: use hook's live preview (includes color from gridConfig if pushed via handleGridChange)
   // - Display mode: use saved activeMap.grid_config directly, with live offset when tuning
   const effectiveGridConfig = useMemo(() => {
     if (gridEditMode) {
       if (!activeMap) return null;
-      const colorBase = gridConfig || activeMap?.grid_config || {};
-      return {
-        ...colorBase,
-        enabled: true,
-        grid_width:  liveGridCols,
-        grid_height: liveGridRows,
-        grid_cell_size: liveCellSize,
-        offset_x:    liveTuning.offsetX,
-        offset_y:    liveTuning.offsetY,
-        colors: colorBase.colors || DEFAULT_GRID_COLORS,
-      };
+      // If MapControlsPanel has pushed a preview config via handleGridChange, merge its colors
+      const colorOverride = gridConfig?.colors;
+      if (colorOverride) {
+        return { ...grid.effectiveGridConfig, colors: colorOverride };
+      }
+      return grid.effectiveGridConfig;
     }
     const base = activeMap?.grid_config;
     if (!base) return null;
-    if (tuningMode) return { ...base, offset_x: liveTuning.offsetX, offset_y: liveTuning.offsetY };
+    if (tuningMode) return { ...base, offset_x: grid.offset.x, offset_y: grid.offset.y };
     return base;
-  }, [gridEditMode, liveGridCols, liveGridRows, liveCellSize, gridConfig, activeMap, tuningMode, liveTuning]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [gridEditMode, grid.effectiveGridConfig, grid.offset, gridConfig, activeMap, tuningMode]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // UPDATED: Seat count management with displaced player handling
   const setSeatCount = async (newSeatCount) => {
@@ -1780,17 +1759,10 @@ export default function GameContent() {
                   gridEditMode={gridEditMode}
                   setGridEditMode={setGridEditMode}
                   handleGridChange={handleGridChange}
-                  liveGridOpacity={liveGridOpacity}
-                  setLiveGridOpacity={setLiveGridOpacity}
+                  grid={grid}
                   sendMapLoad={sendMapLoad}
                   sendMapClear={sendMapClear}
-                  liveTuning={liveTuning}
                   onTuningModeChange={setTuningMode}
-                  onOffsetChange={(ox, oy) => setLiveTuning({ offsetX: ox, offsetY: oy })}
-                  cellSize={liveCellSize}
-                  onCellSizeChange={(delta) => setLiveCellSize(prev => Math.max(8, Math.min(100, parseFloat((prev + delta).toFixed(1)))))}
-                  liveGridCols={liveGridCols}
-                  liveGridRows={liveGridRows}
                 />
               )}
               {activeRightDrawer === 'image' && isDM && (
@@ -1851,12 +1823,12 @@ export default function GameContent() {
               onGridChange={handleGridChange}
               mapImageEditMode={gridEditMode && isDM}
               onMapImageChange={handleMapImageChange}
-              liveGridOpacity={liveGridOpacity}
+              liveGridOpacity={grid.gridOpacity}
               gridConfig={effectiveGridConfig}
               isMapLocked={isMapLocked}
               gridInspect={gridInspect}
-              offsetX={liveTuning.offsetX}
-              offsetY={liveTuning.offsetY}
+              offsetX={grid.offset.x}
+              offsetY={grid.offset.y}
               onImageLoad={setMapNaturalDimensions}
             />
           )}
@@ -1877,11 +1849,11 @@ export default function GameContent() {
             />
             {tuningMode && (
               <GridTuningOverlay
-                onOffsetXChange={(delta) => setLiveTuning(prev => ({ ...prev, offsetX: prev.offsetX + delta }))}
-                onOffsetYChange={(delta) => setLiveTuning(prev => ({ ...prev, offsetY: prev.offsetY + delta }))}
-                onCellSizeChange={(delta) => setLiveCellSize(prev => Math.max(8, Math.min(100, parseFloat((prev + delta).toFixed(1)))))}
-                onColChange={(delta) => setLiveGridCols(prev => Math.max(2, prev + delta))}
-                onRowChange={(delta) => setLiveGridRows(prev => Math.max(2, prev + delta))}
+                onOffsetXChange={(delta) => grid.adjustOffset(delta, 0)}
+                onOffsetYChange={(delta) => grid.adjustOffset(0, delta)}
+                onCellSizeChange={(delta) => grid.adjustCellSize(delta)}
+                onColChange={(delta) => grid.adjustGridCols(delta)}
+                onRowChange={(delta) => grid.adjustGridRows(delta)}
               />
             )}
           </MapSafeArea>

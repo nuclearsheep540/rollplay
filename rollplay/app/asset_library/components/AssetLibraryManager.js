@@ -4,8 +4,9 @@
 'use client'
 
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react'
+import { useRouter } from 'next/navigation'
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
-import { faUpload, faSquarePlus, faTrash, faEye, faPen, faTag } from '@fortawesome/free-solid-svg-icons'
+import { faUpload, faSquarePlus, faTrash, faEye, faPen, faTag, faSliders } from '@fortawesome/free-solid-svg-icons'
 import { useAssets } from '../hooks/useAssets'
 import { useDeleteAsset } from '../hooks/useDeleteAsset'
 import { useRenameAsset } from '../hooks/useRenameAsset'
@@ -56,6 +57,7 @@ const SUB_FILTERS = {
  * Main container for the asset library management interface
  */
 export default function AssetLibraryManager({ user }) {
+  const router = useRouter()
   const [category, setCategory] = useState('media')
   const [subFilter, setSubFilter] = useState(['all'])
   const [uploadModalOpen, setUploadModalOpen] = useState(false)
@@ -225,6 +227,21 @@ export default function AssetLibraryManager({ user }) {
       })
     }
 
+    // Workshop bridge — asset-type-specific tools
+    if (asset.asset_type === 'map') {
+      items.push({
+        label: 'Configure Grid',
+        icon: <FontAwesomeIcon icon={faSliders} className="text-xs" />,
+        onClick: () => router.push(`/dashboard?tab=workshop&tool=maps&asset_id=${asset.id}`),
+      })
+    } else if (asset.asset_type === 'music') {
+      items.push({
+        label: 'Edit Loop Points',
+        icon: <FontAwesomeIcon icon={faSliders} className="text-xs" />,
+        onClick: () => router.push(`/dashboard?tab=workshop&tool=audio&asset_id=${asset.id}`),
+      })
+    }
+
     items.push({ separator: true })
     items.push({
       label: 'Delete',
@@ -234,7 +251,7 @@ export default function AssetLibraryManager({ user }) {
     })
 
     return items
-  }, [campaigns, associateMutation, changeTypeMutation])
+  }, [campaigns, associateMutation, changeTypeMutation, router])
 
   // Filter assets client-side when fetching all (multi-select or 'all' sub-filter)
   const filteredAssets = useMemo(() => {
