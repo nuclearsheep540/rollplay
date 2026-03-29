@@ -32,13 +32,14 @@ export default function DashboardLayout({
     { id: 'campaigns', label: 'Campaigns' },
     { id: 'characters', label: 'Characters' },
     { id: 'library', label: 'Library' },
+    { id: 'workshop', label: 'Workshop' },
     { id: 'account', label: 'Account' }
   ]
 
   // Initialize activeSection from URL parameter - run only once on mount
   useEffect(() => {
     const tabParam = searchParams.get('tab')
-    if (tabParam && ['characters', 'campaigns', 'library', 'account'].includes(tabParam)) {
+    if (tabParam && ['characters', 'campaigns', 'library', 'workshop', 'account'].includes(tabParam)) {
       setActiveSection(tabParam)
     } else if (!tabParam) {
       // If no tab parameter, set default and update URL

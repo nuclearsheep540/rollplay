@@ -85,6 +85,15 @@ const MapDisplay = ({
     setViewTransform(next); // sync React state for info overlay
   }, [isMapLocked, applyTransform]);
 
+  // Attach wheel handler as non-passive native listener so preventDefault()
+  // actually stops page scroll on Mac trackpads (React onWheel is passive).
+  useEffect(() => {
+    const el = containerRef.current;
+    if (!el) return;
+    el.addEventListener('wheel', handleWheel, { passive: false });
+    return () => el.removeEventListener('wheel', handleWheel);
+  }, [handleWheel]);
+
   const handlePointerDown = useCallback((e) => {
     if (isMapLocked) return;
     activePointers.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
@@ -163,7 +172,8 @@ const MapDisplay = ({
     backgroundColor: '#1a1a2e',
     overflow: 'hidden',
     cursor: !isMapLocked ? (isDragging ? 'grabbing' : 'grab') : 'default',
-    touchAction: 'none'
+    touchAction: 'none',
+    overscrollBehavior: 'contain'
   };
 
   const contentTransform = {
@@ -182,7 +192,6 @@ const MapDisplay = ({
         ref={containerRef}
         className={`map-display-background ${className}`}
         style={baseStyles}
-        onWheel={handleWheel}
         onPointerDown={handlePointerDown}
         onPointerMove={handlePointerMove}
         onPointerUp={handlePointerUp}

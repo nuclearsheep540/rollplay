@@ -10,6 +10,7 @@ import { useSearchParams, useRouter } from 'next/navigation'
 import CampaignManager from './components/CampaignManager'
 import CharacterManager from './components/CharacterManager'
 import { AssetLibraryManager } from '../asset_library'
+import { WorkshopManager } from '../workshop'
 import DashboardLayout from './components/DashboardLayout'
 import SocialManager from './components/SocialManager'
 import FriendsWidget from './components/FriendsWidget'
@@ -422,6 +423,13 @@ function DashboardContent() {
       {activeSection === 'library' && (
         <section className="flex-1 flex flex-col min-h-0">
           <AssetLibraryManager user={user} />
+        </section>
+      )}
+
+      {/* Workshop Section - Asset Authoring */}
+      {activeSection === 'workshop' && (
+        <section className="flex-1 flex flex-col min-h-0">
+          <WorkshopManager user={user} />
         </section>
       )}
 

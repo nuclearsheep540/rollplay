@@ -19,6 +19,7 @@ export { default as GridTuningOverlay } from './components/GridTuningOverlay';
 export { default as ImageDisplay } from './components/ImageDisplay';
 
 // Export hooks:
+export { useGridConfig } from './hooks/useGridConfig';
 export { useMapWebSocket } from './hooks/useMapWebSocket';
 export { useImageWebSocket } from './hooks/useImageWebSocket';
 // export { default as useMapState } from './hooks/useMapState';

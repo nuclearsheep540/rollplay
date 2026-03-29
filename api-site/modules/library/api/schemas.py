@@ -75,6 +75,7 @@ class UpdateGridConfigRequest(BaseModel):
     grid_offset_x: Optional[int] = Field(None, description="Whole-grid X shift (image px)")
     grid_offset_y: Optional[int] = Field(None, description="Whole-grid Y shift (image px)")
     grid_line_color: Optional[str] = Field(None, description="Grid line colour hex e.g. '#d1d5db'")
+    grid_cell_size: Optional[float] = Field(None, ge=8, le=500, description="Cell size in native image pixels")
 
 
 class MapAssetResponse(MediaAssetResponse):
@@ -85,6 +86,7 @@ class MapAssetResponse(MediaAssetResponse):
     grid_offset_x: Optional[int] = None
     grid_offset_y: Optional[int] = None
     grid_line_color: Optional[str] = None
+    grid_cell_size: Optional[float] = None
 
 
 class MusicAssetResponse(MediaAssetResponse):

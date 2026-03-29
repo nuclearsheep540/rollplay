@@ -10,6 +10,7 @@ import { API_SITE_INTERNAL_URL, API_AUTH_INTERNAL_URL } from './app/shared/confi
 const PROTECTED_ROUTES = [
   '/dashboard',
   '/game',
+  '/workshop',
   '/profile',
   '/settings'
 ]
