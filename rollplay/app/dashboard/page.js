@@ -13,7 +13,6 @@ import { AssetLibraryManager } from '../asset_library'
 import DashboardLayout from './components/DashboardLayout'
 import SocialManager from './components/SocialManager'
 import FriendsWidget from './components/FriendsWidget'
-import ScreenNameModal from './components/ScreenNameModal'
 import AccountNameModal from './components/AccountNameModal'
 import { useAuth } from './hooks/useAuth'
 import { useEvents } from '../shared/hooks/useEvents'
@@ -64,28 +63,29 @@ function DashboardContent() {
     setUser,
     loading,
     error,
-    screenName,
-    setScreenName,
-    updatingScreenName,
     showScreenNameModal,
     setShowScreenNameModal,
-    updateScreenName,
     handleLogout,
     setError
   } = useAuth()
 
-  // Check if user needs to set account name (shown before screen name modal)
-  const showAccountNameModal = user && !user.account_name
+  // Show setup modal if user is missing account name or screen name
+  const showSetupModal = user && (!user.account_name || (showScreenNameModal && !user.screen_name))
 
-  // Handle account name completion - update user state with new account info
-  const handleAccountNameComplete = (result) => {
-    if (result && user) {
-      setUser({
-        ...user,
-        account_name: result.account_name,
-        account_tag: result.account_tag,
-        account_identifier: result.account_identifier
-      })
+  // Handle setup completion - update user state with new account info and screen name
+  const handleSetupComplete = (accountResult, screenNameValue) => {
+    if (user) {
+      const updates = {}
+      if (accountResult) {
+        updates.account_name = accountResult.account_name
+        updates.account_tag = accountResult.account_tag
+        updates.account_identifier = accountResult.account_identifier
+      }
+      if (screenNameValue) {
+        updates.screen_name = screenNameValue
+      }
+      setUser({ ...user, ...updates })
+      setShowScreenNameModal(false)
     }
   }
 
@@ -440,21 +440,11 @@ function DashboardContent() {
         <FriendsWidget user={user} />
       )}
 
-      {/* Account Name Setup Modal (shown first, before screen name) */}
+      {/* Account Setup Modal (account name + screen name in one form) */}
       <AccountNameModal
-        show={showAccountNameModal}
+        show={showSetupModal}
         user={user}
-        onComplete={handleAccountNameComplete}
-      />
-
-      {/* Screen Name Setup Modal (shown after account name is set) */}
-      <ScreenNameModal
-        show={showScreenNameModal && !showAccountNameModal}
-        screenName={screenName}
-        setScreenName={setScreenName}
-        onUpdate={updateScreenName}
-        updating={updatingScreenName}
-        error={error}
+        onComplete={handleSetupComplete}
       />
     </DashboardLayout>
   )

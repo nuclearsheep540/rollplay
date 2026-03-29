@@ -7,7 +7,7 @@
 
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
-import { authFetch, authPut } from '@/app/shared/utils/authFetch'
+import { authFetch } from '@/app/shared/utils/authFetch'
 import { useTokenRefresh } from '@/app/shared/hooks/useTokenRefresh'
 
 export function useAuth() {
@@ -15,41 +15,10 @@ export function useAuth() {
   const [user, setUser] = useState(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
-  const [screenName, setScreenName] = useState('')
-  const [updatingScreenName, setUpdatingScreenName] = useState(false)
   const [showScreenNameModal, setShowScreenNameModal] = useState(false)
 
   // Proactive token refresh - only active when user is authenticated
   useTokenRefresh(user !== null)
-
-  // Update screen name
-  const updateScreenName = async () => {
-    if (!screenName.trim()) return
-
-    setUpdatingScreenName(true)
-    setError(null)
-
-    try {
-      const response = await authPut('/api/users/screen_name', {
-        screen_name: screenName.trim()
-      })
-
-      if (response.ok) {
-        const updatedUser = await response.json()
-        setUser(updatedUser)
-        setShowScreenNameModal(false)
-        setScreenName('')
-      } else {
-        const errorData = await response.json()
-        setError(errorData.detail || 'Failed to update screen name')
-      }
-    } catch (error) {
-      console.error('Error updating screen name:', error)
-      setError('Failed to update screen name')
-    } finally {
-      setUpdatingScreenName(false)
-    }
-  }
 
   // Handle logout
   const handleLogout = async () => {
@@ -120,12 +89,8 @@ export function useAuth() {
     setUser,
     loading,
     error,
-    screenName,
-    setScreenName,
-    updatingScreenName,
     showScreenNameModal,
     setShowScreenNameModal,
-    updateScreenName,
     handleLogout,
     setError
   }

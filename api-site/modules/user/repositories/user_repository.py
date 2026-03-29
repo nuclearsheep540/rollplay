@@ -326,12 +326,61 @@ class UserRepository:
         self.db.commit()
         return True
 
+    def reactivate(self, aggregate: UserAggregate):
+        """
+        Reactivate a soft-deleted user account.
+
+        Clears the deletion flags and resets profile fields from the aggregate.
+        The aggregate's reactivate() method should be called first to reset
+        domain state (screen_name, account_name, etc.).
+        """
+        if not aggregate.id:
+            raise ValueError("Cannot reactivate a user without an ID")
+
+        model = self.db.query(UserModel).filter_by(id=aggregate.id).first()
+        if not model:
+            raise ValueError(f"User {aggregate.id} not found for reactivation")
+
+        # Clear soft-delete flags
+        model.is_deleted = False
+        model.deleted_at = None
+
+        # Sync profile fields from reactivated aggregate
+        model.screen_name = aggregate.screen_name
+        model.account_name = aggregate.account_name
+        model.account_tag = aggregate.account_tag
+        model.has_received_demo = aggregate.has_received_demo
+        model.last_login = aggregate.last_login
+
+        # Generate a fresh account_tag for the reactivated user
+        if aggregate.account_tag is None:
+            account_tag = f"{random.randint(0, 9999):04d}"
+            aggregate.account_tag = account_tag
+            model.account_tag = account_tag
+
+        try:
+            self.db.commit()
+            self.db.refresh(model)
+        except Exception as e:
+            self.db.rollback()
+            raise RuntimeError(f"Failed to reactivate user: {e}")
+
     def soft_delete(self, user_id: UUID) -> bool:
         """
-        Soft delete a user by ID.
+        Soft delete a user by ID with full cascade cleanup of related data.
 
-        Sets is_deleted=True and deleted_at timestamp.
-        User data is preserved but user won't appear in queries.
+        Deletes all associated data so the account is a clean slate if reactivated:
+        - Characters owned by user
+        - Sessions hosted by user (session_joined_users cascade from DB FK)
+        - Campaigns created by user (campaign_members + sessions cascade from DB FK)
+        - Campaign memberships where user is a member (not host)
+        - Media assets (S3 deletion handled by command before this call)
+        - Friendships (both directions)
+        - Friend requests (both directions)
+        - Notifications
+        - Friend codes
+
+        Then marks the user as soft-deleted.
 
         Returns:
             True if user was soft deleted, False if not found
@@ -340,6 +389,69 @@ class UserRepository:
         if not model:
             return False
 
+        # Delete in dependency order (children before parents)
+
+        # 1. Characters owned by user
+        self.db.execute(
+            text("DELETE FROM characters WHERE user_id = :user_id"),
+            {"user_id": user_id}
+        )
+
+        # 2. Sessions hosted by user (session_joined_users has CASCADE on session_id)
+        self.db.execute(
+            text("DELETE FROM sessions WHERE host_id = :user_id"),
+            {"user_id": user_id}
+        )
+
+        # 3. Campaigns created by user (campaign_members + sessions CASCADE on campaign_id)
+        self.db.execute(
+            text("DELETE FROM campaigns WHERE created_by = :user_id"),
+            {"user_id": user_id}
+        )
+
+        # 4. Campaign memberships where user is a member of others' campaigns
+        self.db.execute(
+            text("DELETE FROM campaign_members WHERE user_id = :user_id"),
+            {"user_id": user_id}
+        )
+
+        # 5. Media assets (S3 objects already deleted by command)
+        self.db.execute(
+            text("DELETE FROM media_assets WHERE user_id = :user_id"),
+            {"user_id": user_id}
+        )
+
+        # 6. Friendships (both directions)
+        self.db.execute(
+            text("DELETE FROM friendships WHERE user1_id = :user_id OR user2_id = :user_id"),
+            {"user_id": user_id}
+        )
+
+        # 7. Friend requests (both directions)
+        self.db.execute(
+            text("DELETE FROM friend_requests WHERE requester_id = :user_id OR recipient_id = :user_id"),
+            {"user_id": user_id}
+        )
+
+        # 8. Notifications
+        self.db.execute(
+            text("DELETE FROM notifications WHERE user_id = :user_id"),
+            {"user_id": user_id}
+        )
+
+        # 9. Friend codes
+        self.db.execute(
+            text("DELETE FROM friend_codes WHERE user_id = :user_id"),
+            {"user_id": user_id}
+        )
+
+        # 10. Session joined users (in case user joined others' sessions)
+        self.db.execute(
+            text("DELETE FROM session_joined_users WHERE user_id = :user_id"),
+            {"user_id": user_id}
+        )
+
+        # Finally, mark user as soft-deleted
         model.is_deleted = True
         model.deleted_at = datetime.now(timezone.utc)
         self.db.commit()
