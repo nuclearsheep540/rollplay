@@ -21,17 +21,17 @@ export function useUpdateGridConfig() {
         body: JSON.stringify(gridConfig),
       });
 
+      const data = await response.json().catch(() => ({}));
+
       if (response.status === 409) {
-        const data = await response.json().catch(() => ({}));
         throw new Error(data.detail || 'This map is currently in an active session. End the session first.');
       }
 
       if (!response.ok) {
-        const data = await response.json().catch(() => ({}));
         throw new Error(data.detail || 'Failed to update grid configuration');
       }
 
-      return response.json();
+      return data;
     },
     onSuccess: () => {
       // Invalidate all asset queries so Library tab stays in sync
