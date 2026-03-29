@@ -54,10 +54,9 @@ class PasswordlessAuth:
             
             # Send email with both link and short code
             email_result = await self.email_service.send_magic_link_email(
-                email, 
-                magic_link_url, 
+                email,
+                magic_link_url,
                 short_code=short_code,
-                jwt_token=magic_token  # Still include full JWT as fallback
             )
             
             if email_result["success"]:

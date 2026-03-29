@@ -1,0 +1,80 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+</head>
+<body style="margin: 0; padding: 0; background-color: #0B0A09;">
+  <table width="100%" cellpadding="0" cellspacing="0" style="background-color: #0B0A09; padding: 40px 0;">
+    <tr>
+      <td align="center">
+        <table width="400" cellpadding="0" cellspacing="0" style="background-color: #B5ADA6; border-radius: 8px; border: 1px solid #37322F; overflow: hidden;">
+
+          <!-- Header -->
+          <tr>
+            <td style="background-color: #1F1F1F; padding: 24px 32px; border-bottom: 1px solid #37322F;">
+              <p style="margin: 0; font-family: Arial, sans-serif; font-size: 22px; font-weight: 700; letter-spacing: 0.5px;">
+                <span style="color: #F7F4F3;">TABLETOP</span><span style="color: #B5ADA6;">TAVERN</span>
+              </p>
+            </td>
+          </tr>
+
+          <!-- Body -->
+          <tr>
+            <td style="padding: 32px; font-family: Arial, sans-serif; color: #1F1F1F;">
+              <h2 style="margin: 0 0 6px 0; font-size: 22px; color: #1F1F1F;">Welcome to Tabletop Tavern!</h2>
+              <p style="margin: 0 0 20px 0; font-size: 13px; color: #37322F;">Your adventure begins here.</p>
+
+              <p style="font-size: 14px; line-height: 1.6; color: #1F1F1F; margin: 0 0 20px 0;">
+                Tabletop Tavern is a virtual platform for running D&amp;D campaigns and tabletop RPG sessions.
+                Once you're in, you can create campaigns, invite your party, roll dice, track combat initiative,
+                manage your character, and explore interactive maps - all in real time.
+              </p>
+
+              <p style="font-size: 14px; color: #1F1F1F; margin: 0 0 6px 0; font-weight: bold;">Option 1 - Click to enter your dashboard:</p>
+              <p style="font-size: 13px; color: #37322F; margin: 0 0 16px 0;">You'll be signed in and taken straight to your dashboard.</p>
+
+              <div style="text-align: center; margin: 0 0 28px 0;">
+                <a href="{{ magic_link }}"
+                   style="background-color: #1F1F1F; color: #F7F4F3; padding: 13px 28px;
+                          text-decoration: none; border-radius: 6px; display: inline-block;
+                          font-size: 15px; font-weight: bold; font-family: Arial, sans-serif;">
+                  Go to My Dashboard
+                </a>
+              </div>
+
+              <!-- Divider -->
+              <p style="font-size: 14px; color: #1F1F1F; margin: 0 0 6px 0; font-weight: bold;">Option 2 - Use the OTP code below:</p>
+              <p style="font-size: 13px; color: #37322F; margin: 0 0 16px 0;">Type the OTP code shown below into the login page.</p>
+
+              <!-- OTP code block -->
+              <div style="background-color: #1F1F1F; border-radius: 6px; padding: 14px; margin: 0 0 24px 0;
+                          text-align: center; font-family: 'Courier New', monospace;
+                          font-size: 26px; font-weight: bold; color: #F7F4F3; letter-spacing: 5px;">
+                {{ formatted_code }}
+              </div>
+
+              <p style="font-size: 12px; color: #37322F; margin: 0 0 8px 0;">
+                This link and code will expire in {{ expiry_minutes }} minutes.
+              </p>
+              <p style="font-size: 12px; color: #37322F; margin: 0;">
+                If you didn't request this email, you can safely ignore it.
+              </p>
+            </td>
+          </tr>
+
+          <!-- Footer -->
+          <tr>
+            <td style="background-color: #1F1F1F; padding: 16px 32px; border-top: 1px solid #37322F; text-align: center;">
+              <p style="margin: 0; font-family: Arial, sans-serif; font-size: 11px;">
+                <a href="{{ site_url }}" style="color: #B5ADA6; text-decoration: underline;">Tabletop Tavern - Virtual D&amp;D Gaming Platform</a>
+              </p>
+            </td>
+          </tr>
+
+        </table>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>
