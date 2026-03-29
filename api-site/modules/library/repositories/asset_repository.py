@@ -98,8 +98,11 @@ class MediaAssetRepository:
 
     def save(self, aggregate: Union[MediaAssetAggregate, MapAsset, MusicAsset, SfxAsset, ImageAsset]) -> UUID:
         """Save media asset aggregate (create or update)"""
-        query, entity = self._poly_query()
-        existing = query.filter(entity.id == aggregate.id).first()
+        existing = (
+            self.db.query(MediaAssetModel)
+            .filter_by(id=aggregate.id)
+            .first()
+        )
 
         if existing:
             # Update existing base fields

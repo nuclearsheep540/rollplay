@@ -130,7 +130,7 @@ export function useGridConfig() {
 
   // --- Derived: flat config for REST PATCH ---
 
-  const toFlatConfig = useCallback(() => ({
+  const toFlatConfig = () => ({
     grid_width: gridCols,
     grid_height: gridRows,
     grid_cell_size: cellSize,
@@ -138,7 +138,7 @@ export function useGridConfig() {
     grid_offset_x: Math.round(offset.x),
     grid_offset_y: Math.round(offset.y),
     grid_line_color: gridColor,
-  }), [gridCols, gridRows, cellSize, gridOpacity, offset, gridColor]);
+  });
 
   return {
     // State

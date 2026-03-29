@@ -3,7 +3,7 @@
 
 'use client'
 
-import { useState, useEffect, useCallback, useMemo } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { authFetch } from '@/app/shared/utils/authFetch';
 import AssetPicker from './AssetPicker';
 import WorkshopGridControls from './WorkshopGridControls';
@@ -91,7 +91,7 @@ export default function MapGridTool({ selectedAssetId, onAssetSelect }) {
     }, naturalDimensions);
   }, [naturalDimensions]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const handleSave = useCallback(async () => {
+  const handleSave = async () => {
     if (!selectedAsset) return;
     setSaveSuccess(false);
     try {
@@ -105,7 +105,7 @@ export default function MapGridTool({ selectedAssetId, onAssetSelect }) {
     } catch {
       // Error is available via updateMutation.error
     }
-  }, [selectedAsset, grid, updateMutation]);
+  };
 
   // Stable reference — only changes when the actual asset changes, not on every grid nudge.
   // Grid config is passed separately via the gridConfig prop.
