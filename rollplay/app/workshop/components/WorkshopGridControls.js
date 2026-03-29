@@ -4,6 +4,35 @@
 'use client'
 
 import { useEffect, useRef } from 'react';
+import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
+import { faArrowUp, faArrowDown, faArrowLeft, faArrowRight } from '@fortawesome/free-solid-svg-icons';
+import HoldButton from '@/app/shared/components/HoldButton';
+
+const dpadBtnStyle = {
+  width: 36,
+  height: 36,
+  background: '#1F1F1F',
+  color: '#F7F4F3',
+  border: '1px solid #37322F',
+  borderRadius: 6,
+  cursor: 'pointer',
+  display: 'flex',
+  alignItems: 'center',
+  justifyContent: 'center',
+  fontSize: 14,
+  userSelect: 'none',
+  touchAction: 'manipulation',
+};
+
+const trimBtnStyle = {
+  ...dpadBtnStyle,
+  width: 'auto',
+  height: 28,
+  padding: '0 10px',
+  fontSize: 11,
+  fontWeight: 500,
+  flex: 1,
+};
 
 export default function WorkshopGridControls({ grid, onSave, isSaving, saveSuccess, error }) {
   const gridColorInputRef = useRef(null);
@@ -112,13 +141,41 @@ export default function WorkshopGridControls({ grid, onSave, isSaving, saveSucce
         </div>
       </div>
 
-      {/* Offset readout */}
+      {/* Offset + D-pad */}
       <div>
-        <div className="text-xs text-content-secondary mb-1">
+        <div className="text-xs text-content-secondary mb-2">
           Grid Offset: X {grid.offset.x}px / Y {grid.offset.y}px
         </div>
-        <div className="text-xs text-content-secondary/60">
-          Use the on-map D-pad to nudge the grid position.
+
+        {/* Inline d-pad */}
+        <div className="flex flex-col items-center gap-1">
+          {/* Row: Column -/+ */}
+          <div className="flex gap-1">
+            <HoldButton action={() => grid.adjustGridCols(-1)} title="Remove column" style={trimBtnStyle}>Col −</HoldButton>
+            <HoldButton action={() => grid.adjustGridCols(1)} title="Add column" style={trimBtnStyle}>Col +</HoldButton>
+          </div>
+          {/* Row: Row -/+ */}
+          <div className="flex gap-1">
+            <HoldButton action={() => grid.adjustGridRows(-1)} title="Remove row" style={trimBtnStyle}>Row −</HoldButton>
+            <HoldButton action={() => grid.adjustGridRows(1)} title="Add row" style={trimBtnStyle}>Row +</HoldButton>
+          </div>
+          {/* Row: Cell size -/+ */}
+          <div className="flex gap-1">
+            <HoldButton action={() => grid.adjustCellSize(-0.5)} title="Smaller cells" style={trimBtnStyle}>Cell −</HoldButton>
+            <HoldButton action={() => grid.adjustCellSize(0.5)} title="Larger cells" style={trimBtnStyle}>Cell +</HoldButton>
+          </div>
+          {/* 3×3 offset d-pad */}
+          <div className="grid grid-cols-3 gap-1 mt-1" style={{ gridTemplateColumns: 'repeat(3, 36px)' }}>
+            <div />
+            <HoldButton action={() => grid.adjustOffset(0, -1)} holdAction={() => grid.adjustOffset(0, -2)} title="Shift up" style={dpadBtnStyle}><FontAwesomeIcon icon={faArrowUp} /></HoldButton>
+            <div />
+            <HoldButton action={() => grid.adjustOffset(-1, 0)} holdAction={() => grid.adjustOffset(-2, 0)} title="Shift left" style={dpadBtnStyle}><FontAwesomeIcon icon={faArrowLeft} /></HoldButton>
+            <div />
+            <HoldButton action={() => grid.adjustOffset(1, 0)} holdAction={() => grid.adjustOffset(2, 0)} title="Shift right" style={dpadBtnStyle}><FontAwesomeIcon icon={faArrowRight} /></HoldButton>
+            <div />
+            <HoldButton action={() => grid.adjustOffset(0, 1)} holdAction={() => grid.adjustOffset(0, 2)} title="Shift down" style={dpadBtnStyle}><FontAwesomeIcon icon={faArrowDown} /></HoldButton>
+            <div />
+          </div>
         </div>
       </div>
 

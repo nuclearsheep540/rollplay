@@ -8,7 +8,6 @@ import { authFetch } from '@/app/shared/utils/authFetch';
 import AssetPicker from './AssetPicker';
 import WorkshopGridControls from './WorkshopGridControls';
 import { MapDisplay } from '@/app/map_management';
-import GridTuningOverlay from '@/app/map_management/components/GridTuningOverlay';
 import { useGridConfig } from '@/app/map_management/hooks/useGridConfig';
 import { useUpdateGridConfig } from '../hooks/useUpdateGridConfig';
 
@@ -133,14 +132,6 @@ export default function MapGridTool({ selectedAssetId, onAssetSelect }) {
               offsetX={grid.offset.x}
               offsetY={grid.offset.y}
               onImageLoad={setNaturalDimensions}
-            />
-            {/* D-pad overlay for offset/size tuning */}
-            <GridTuningOverlay
-              onOffsetXChange={(delta) => grid.adjustOffset(delta, 0)}
-              onOffsetYChange={(delta) => grid.adjustOffset(0, delta)}
-              onCellSizeChange={(delta) => grid.adjustCellSize(delta)}
-              onColChange={(delta) => grid.adjustGridCols(delta)}
-              onRowChange={(delta) => grid.adjustGridRows(delta)}
             />
           </div>
 
