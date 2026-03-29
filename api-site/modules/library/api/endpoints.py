@@ -285,6 +285,33 @@ async def list_media_assets(
         raise HTTPException(status_code=500, detail="Failed to list media assets")
 
 
+@router.get("/{asset_id}", response_model=Union[MapAssetResponse, MusicAssetResponse, SfxAssetResponse, MediaAssetResponse])
+async def get_media_asset(
+    asset_id: UUID,
+    current_user: UserAggregate = Depends(get_current_user_from_token),
+    repo: MediaAssetRepository = Depends(get_media_asset_repository),
+    s3_service: S3Service = Depends(get_s3_service)
+) -> MediaAssetResponse:
+    """
+    Get a single media asset by ID with full type-specific fields.
+    """
+    try:
+        asset = repo.get_by_id(asset_id)
+        if not asset:
+            raise HTTPException(status_code=404, detail="Asset not found")
+
+        if not asset.is_owned_by(current_user.id):
+            raise HTTPException(status_code=403, detail="Access denied")
+
+        return _to_media_asset_response(asset, s3_service)
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Get media asset error: {e}")
+        raise HTTPException(status_code=500, detail="Failed to get media asset")
+
+
 @router.post("/{asset_id}/associate", response_model=MediaAssetResponse)
 async def associate_media_asset(
     asset_id: UUID,

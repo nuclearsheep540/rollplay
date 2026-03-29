@@ -346,7 +346,7 @@ class UpdateGridConfig:
         grid_offset_x: Optional[int] = None,
         grid_offset_y: Optional[int] = None,
         grid_line_color: Optional[str] = None,
-        grid_cell_size: Optional[int] = None
+        grid_cell_size: Optional[float] = None
     ) -> MapAsset:
         """
         Update grid configuration for a map asset.

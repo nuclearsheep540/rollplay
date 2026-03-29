@@ -135,8 +135,8 @@ export function useGridConfig() {
     grid_height: gridRows,
     grid_cell_size: cellSize,
     grid_opacity: gridOpacity,
-    grid_offset_x: offset.x,
-    grid_offset_y: offset.y,
+    grid_offset_x: Math.round(offset.x),
+    grid_offset_y: Math.round(offset.y),
     grid_line_color: gridColor,
   }), [gridCols, gridRows, cellSize, gridOpacity, offset, gridColor]);
 

@@ -7,7 +7,7 @@ MediaAsset Repository - Data access layer for MediaAsset aggregate
 
 from typing import List, Optional, Union
 from uuid import UUID
-from sqlalchemy.orm import Session as DbSession
+from sqlalchemy.orm import Session as DbSession, with_polymorphic
 from sqlalchemy import any_
 
 from modules.library.model.asset_model import MediaAsset as MediaAssetModel
@@ -29,13 +29,18 @@ class MediaAssetRepository:
     def __init__(self, db_session: DbSession):
         self.db = db_session
 
+    def _poly_query(self):
+        """Base query with explicit polymorphic loading for all subclasses."""
+        entity = with_polymorphic(
+            MediaAssetModel,
+            [MapAssetModel, MusicAssetModel, SfxAssetModel, ImageAssetModel]
+        )
+        return self.db.query(entity), entity
+
     def get_by_id(self, asset_id: UUID) -> Optional[MediaAssetAggregate]:
         """Get media asset by ID"""
-        model = (
-            self.db.query(MediaAssetModel)
-            .filter_by(id=asset_id)
-            .first()
-        )
+        query, entity = self._poly_query()
+        model = query.filter(entity.id == asset_id).first()
         if not model:
             return None
 
@@ -43,20 +48,20 @@ class MediaAssetRepository:
 
     def get_by_user_id(self, user_id: UUID) -> List[MediaAssetAggregate]:
         """Get all media assets owned by a user"""
+        query, entity = self._poly_query()
         models = (
-            self.db.query(MediaAssetModel)
-            .filter_by(user_id=user_id)
-            .order_by(MediaAssetModel.created_at.desc())
+            query.filter(entity.user_id == user_id)
+            .order_by(entity.created_at.desc())
             .all()
         )
         return [self._model_to_aggregate(model) for model in models]
 
     def get_by_campaign_id(self, campaign_id: UUID) -> List[MediaAssetAggregate]:
         """Get all media assets associated with a campaign"""
+        query, entity = self._poly_query()
         models = (
-            self.db.query(MediaAssetModel)
-            .filter(MediaAssetModel.campaign_ids.any(campaign_id))
-            .order_by(MediaAssetModel.created_at.desc())
+            query.filter(entity.campaign_ids.any(campaign_id))
+            .order_by(entity.created_at.desc())
             .all()
         )
         return [self._model_to_aggregate(model) for model in models]
@@ -71,24 +76,21 @@ class MediaAssetRepository:
         if isinstance(asset_type, str):
             asset_type = MediaAssetType(asset_type)
 
+        query, entity = self._poly_query()
         models = (
-            self.db.query(MediaAssetModel)
-            .filter(
-                MediaAssetModel.campaign_ids.any(campaign_id),
-                MediaAssetModel.asset_type == asset_type
+            query.filter(
+                entity.campaign_ids.any(campaign_id),
+                entity.asset_type == asset_type
             )
-            .order_by(MediaAssetModel.created_at.desc())
+            .order_by(entity.created_at.desc())
             .all()
         )
         return [self._model_to_aggregate(model) for model in models]
 
     def get_by_s3_key(self, s3_key: str) -> Optional[MediaAssetAggregate]:
         """Get media asset by S3 key"""
-        model = (
-            self.db.query(MediaAssetModel)
-            .filter_by(s3_key=s3_key)
-            .first()
-        )
+        query, entity = self._poly_query()
+        model = query.filter(entity.s3_key == s3_key).first()
         if not model:
             return None
 
@@ -96,11 +98,8 @@ class MediaAssetRepository:
 
     def save(self, aggregate: Union[MediaAssetAggregate, MapAsset, MusicAsset, SfxAsset, ImageAsset]) -> UUID:
         """Save media asset aggregate (create or update)"""
-        existing = (
-            self.db.query(MediaAssetModel)
-            .filter_by(id=aggregate.id)
-            .first()
-        )
+        query, entity = self._poly_query()
+        existing = query.filter(entity.id == aggregate.id).first()
 
         if existing:
             # Update existing base fields
