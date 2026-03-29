@@ -102,6 +102,19 @@ class UserAggregate:
             last_login=utc_now()  # We create accounts on first login, so set last_login to now
         )
 
+    def reactivate(self):
+        """
+        Reactivate a soft-deleted user account.
+
+        Resets profile fields so the user goes through onboarding again,
+        but preserves the email and ID.
+        """
+        self.screen_name = None
+        self.account_name = None
+        self.account_tag = None
+        self.has_received_demo = False
+        self.last_login = utc_now()
+
     def record_login(self):
         """
         Updates the last_login field to current UTC time.

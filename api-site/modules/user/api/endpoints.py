@@ -23,6 +23,9 @@ from modules.user.application.queries import GetUserDashboard
 from modules.user.domain.user_aggregate import UserAggregate
 from modules.campaign.dependencies.providers import campaign_repository
 from modules.campaign.repositories.campaign_repository import CampaignRepository
+from modules.library.dependencies.providers import get_media_asset_repository
+from modules.library.repositories.asset_repository import MediaAssetRepository
+from shared.services.s3_service import get_s3_service
 
 
 class ScreenNameUpdateRequest(BaseModel):
@@ -233,16 +236,19 @@ async def get_current_user(
 async def delete_current_user(
     response: Response,
     user_id: UUID = Depends(get_current_user_id),
-    user_repo: UserRepository = Depends(user_repository)
+    user_repo: UserRepository = Depends(user_repository),
+    asset_repo: MediaAssetRepository = Depends(get_media_asset_repository)
 ):
     """
-    Soft delete current user's account.
+    Soft delete current user's account with full data cleanup.
 
-    This marks the account as deleted but preserves data.
-    User can no longer log in but data is retained for recovery if needed.
+    Cascade-deletes all associated data (campaigns, characters, assets, friendships, etc.)
+    and removes media assets from S3. The user row is preserved but marked as deleted.
+    If the user re-registers with the same email, the account is reactivated with a clean slate.
     Clears the auth cookie to log the user out.
     """
-    command = SoftDeleteUser(user_repo)
+    s3_service = get_s3_service()
+    command = SoftDeleteUser(user_repo, asset_repo, s3_service)
     deleted = command.execute(user_id)
 
     if not deleted:
