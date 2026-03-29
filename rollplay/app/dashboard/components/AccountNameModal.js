@@ -32,7 +32,9 @@ export default function AccountNameModal({ show, user, onComplete }) {
   const [error, setError] = useState(null)
   const [result, setResult] = useState(null)
 
-  const needsAccountName = !user?.account_name
+  const [accountNameDone, setAccountNameDone] = useState(false)
+
+  const needsAccountName = !user?.account_name && !accountNameDone
   const needsScreenName = !user?.screen_name
 
   const isValidFormat = (name) => {
@@ -72,6 +74,7 @@ export default function AccountNameModal({ show, user, onComplete }) {
           throw new Error(data.detail || 'Failed to set account name')
         }
         accountResult = data
+        setAccountNameDone(true)
       }
 
       // Step 2: Set screen name if needed

@@ -28,7 +28,8 @@ class GetOrCreateUser:
         Demo campaigns are created lazily when user first views their campaign list.
 
         Returns:
-            Tuple of (user, created) where created is True if new user was created
+            Tuple of (user, is_new) where is_new is True if the user was newly
+            created or reactivated from a soft-deleted state (needs onboarding).
         """
         # Check for active user first
         user = self.repository.get_by_email(email)

@@ -389,70 +389,74 @@ class UserRepository:
         if not model:
             return False
 
-        # Delete in dependency order (children before parents)
+        try:
+            # Delete in dependency order (children before parents)
 
-        # 1. Characters owned by user
-        self.db.execute(
-            text("DELETE FROM characters WHERE user_id = :user_id"),
-            {"user_id": user_id}
-        )
+            # 1. Characters owned by user
+            self.db.execute(
+                text("DELETE FROM characters WHERE user_id = :user_id"),
+                {"user_id": user_id}
+            )
 
-        # 2. Sessions hosted by user (session_joined_users has CASCADE on session_id)
-        self.db.execute(
-            text("DELETE FROM sessions WHERE host_id = :user_id"),
-            {"user_id": user_id}
-        )
+            # 2. Sessions hosted by user (session_joined_users has CASCADE on session_id)
+            self.db.execute(
+                text("DELETE FROM sessions WHERE host_id = :user_id"),
+                {"user_id": user_id}
+            )
 
-        # 3. Campaigns created by user (campaign_members + sessions CASCADE on campaign_id)
-        self.db.execute(
-            text("DELETE FROM campaigns WHERE created_by = :user_id"),
-            {"user_id": user_id}
-        )
+            # 3. Campaigns created by user (campaign_members + sessions CASCADE on campaign_id)
+            self.db.execute(
+                text("DELETE FROM campaigns WHERE created_by = :user_id"),
+                {"user_id": user_id}
+            )
 
-        # 4. Campaign memberships where user is a member of others' campaigns
-        self.db.execute(
-            text("DELETE FROM campaign_members WHERE user_id = :user_id"),
-            {"user_id": user_id}
-        )
+            # 4. Campaign memberships where user is a member of others' campaigns
+            self.db.execute(
+                text("DELETE FROM campaign_members WHERE user_id = :user_id"),
+                {"user_id": user_id}
+            )
 
-        # 5. Media assets (S3 objects already deleted by command)
-        self.db.execute(
-            text("DELETE FROM media_assets WHERE user_id = :user_id"),
-            {"user_id": user_id}
-        )
+            # 5. Media assets (S3 objects already deleted by command)
+            self.db.execute(
+                text("DELETE FROM media_assets WHERE user_id = :user_id"),
+                {"user_id": user_id}
+            )
 
-        # 6. Friendships (both directions)
-        self.db.execute(
-            text("DELETE FROM friendships WHERE user1_id = :user_id OR user2_id = :user_id"),
-            {"user_id": user_id}
-        )
+            # 6. Friendships (both directions)
+            self.db.execute(
+                text("DELETE FROM friendships WHERE user1_id = :user_id OR user2_id = :user_id"),
+                {"user_id": user_id}
+            )
 
-        # 7. Friend requests (both directions)
-        self.db.execute(
-            text("DELETE FROM friend_requests WHERE requester_id = :user_id OR recipient_id = :user_id"),
-            {"user_id": user_id}
-        )
+            # 7. Friend requests (both directions)
+            self.db.execute(
+                text("DELETE FROM friend_requests WHERE requester_id = :user_id OR recipient_id = :user_id"),
+                {"user_id": user_id}
+            )
 
-        # 8. Notifications
-        self.db.execute(
-            text("DELETE FROM notifications WHERE user_id = :user_id"),
-            {"user_id": user_id}
-        )
+            # 8. Notifications
+            self.db.execute(
+                text("DELETE FROM notifications WHERE user_id = :user_id"),
+                {"user_id": user_id}
+            )
 
-        # 9. Friend codes
-        self.db.execute(
-            text("DELETE FROM friend_codes WHERE user_id = :user_id"),
-            {"user_id": user_id}
-        )
+            # 9. Friend codes
+            self.db.execute(
+                text("DELETE FROM friend_codes WHERE user_id = :user_id"),
+                {"user_id": user_id}
+            )
 
-        # 10. Session joined users (in case user joined others' sessions)
-        self.db.execute(
-            text("DELETE FROM session_joined_users WHERE user_id = :user_id"),
-            {"user_id": user_id}
-        )
+            # 10. Session joined users (in case user joined others' sessions)
+            self.db.execute(
+                text("DELETE FROM session_joined_users WHERE user_id = :user_id"),
+                {"user_id": user_id}
+            )
 
-        # Finally, mark user as soft-deleted
-        model.is_deleted = True
-        model.deleted_at = datetime.now(timezone.utc)
-        self.db.commit()
-        return True
+            # Finally, mark user as soft-deleted
+            model.is_deleted = True
+            model.deleted_at = datetime.now(timezone.utc)
+            self.db.commit()
+            return True
+        except Exception as e:
+            self.db.rollback()
+            raise RuntimeError(f"Failed to soft delete user {user_id}: {e}")
