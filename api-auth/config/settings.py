@@ -41,12 +41,9 @@ class Settings(BaseSettings):
     jwt_algorithm: str = "HS256"
     jwt_access_token_expire_minutes: int = 60 * 24 * 7  # 7 days
 
-    # Email Settings - required for production
-    SMTP_SERVER: str
-    SMTP_PORT: int
-    SMTP_USERNAME: str
-    SMTP_PASSWORD: str
-    FROM_EMAIL: str
+    # Mailtrap Email Settings
+    MAIL_TRAP_API_TOKEN: str
+    FROM_EMAIL: str = "hello@tabletop-tavern.uk"
 
     # Frontend URL for magic links - required
     NEXT_PUBLIC_API_URL: str
