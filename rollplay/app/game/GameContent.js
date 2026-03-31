@@ -1742,6 +1742,7 @@ export default function GameContent() {
                   isModerator={isModerator}
                   isHost={isHost}
                   isDM={isDM}
+                  dungeonMaster={dungeonMaster}
                   gameSeats={gameSeats}
                   lobbyUsers={lobbyUsers}
                   roomId={roomId}
