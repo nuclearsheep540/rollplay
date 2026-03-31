@@ -25,10 +25,11 @@ from modules.campaign.repositories.campaign_repository import CampaignRepository
 from modules.session.dependencies.providers import get_session_repository
 from modules.session.repositories.session_repository import SessionRepository
 from modules.library.domain.media_asset_type import MediaAssetType
-from modules.library.application.commands import ConfirmUpload, DeleteMediaAsset, AssociateWithCampaign, RenameMediaAsset, ChangeAssetType, UpdateGridConfig, UpdateAudioConfig, AssetInUseError
+from modules.library.application.commands import ConfirmUpload, DeleteMediaAsset, AssociateWithCampaign, RenameMediaAsset, ChangeAssetType, UpdateGridConfig, UpdateAudioConfig, UpdateImageConfig, AssetInUseError
 from modules.library.domain.map_asset_aggregate import MapAsset
 from modules.library.domain.music_asset_aggregate import MusicAsset
 from modules.library.domain.sfx_asset_aggregate import SfxAsset
+from modules.library.domain.image_asset_aggregate import ImageAsset
 from modules.library.application.queries import GetMediaAssetsByUser, GetMediaAssetsByCampaign
 from .schemas import (
     UploadUrlResponse,
@@ -40,7 +41,9 @@ from .schemas import (
     AssociateRequest,
     RenameRequest,
     ChangeTypeRequest,
+    ImageAssetResponse,
     UpdateGridConfigRequest,
+    UpdateImageConfigRequest,
     UpdateAudioConfigRequest,
     MediaAssetListResponse
 )
@@ -135,6 +138,24 @@ def _to_media_asset_response(asset, s3_service: S3Service = None) -> MediaAssetR
             duration_seconds=asset.duration_seconds,
             default_volume=asset.default_volume,
             default_looping=asset.default_looping
+        )
+
+    # If it's an ImageAsset, return ImageAssetResponse with display config
+    if isinstance(asset, ImageAsset):
+        return ImageAssetResponse(
+            id=str(asset.id),
+            user_id=str(asset.user_id),
+            filename=asset.filename,
+            s3_key=asset.s3_key,
+            s3_url=s3_url,
+            content_type=asset.content_type,
+            asset_type=asset_type_value,
+            file_size=asset.file_size,
+            campaign_ids=[str(cid) for cid in asset.campaign_ids],
+            created_at=asset.created_at,
+            updated_at=asset.updated_at,
+            display_mode=asset.display_mode,
+            aspect_ratio=asset.aspect_ratio
         )
 
     return MediaAssetResponse(
@@ -509,6 +530,47 @@ async def update_audio_config(
     except Exception as e:
         logger.error(f"Update audio config error: {e}")
         raise HTTPException(status_code=500, detail="Failed to update audio configuration")
+
+
+@router.patch("/{asset_id}/image-config", response_model=ImageAssetResponse)
+async def update_image_config(
+    asset_id: UUID,
+    request: UpdateImageConfigRequest,
+    current_user: UserAggregate = Depends(get_current_user_from_token),
+    repo: MediaAssetRepository = Depends(get_media_asset_repository),
+    session_repo: SessionRepository = Depends(get_session_repository),
+    s3_service: S3Service = Depends(get_s3_service)
+) -> ImageAssetResponse:
+    """
+    Update display configuration for an image asset.
+
+    Display config is stored on the asset itself, making it reusable
+    across all campaigns/sessions that use this image.
+    """
+    try:
+        command = UpdateImageConfig(repo, session_repo)
+        asset = command.execute(
+            asset_id=asset_id,
+            user_id=current_user.id,
+            display_mode=request.display_mode,
+            aspect_ratio=request.aspect_ratio
+        )
+
+        logger.info(f"Updated image config for asset {asset_id}: mode={asset.display_mode}, ratio={asset.aspect_ratio}")
+
+        return _to_media_asset_response(asset, s3_service)
+
+    except AssetInUseError as e:
+        logger.warning(f"Update image config blocked (in-use): {e}")
+        raise HTTPException(status_code=409, detail=str(e))
+    except ValueError as e:
+        logger.warning(f"Update image config failed: {e}")
+        raise HTTPException(status_code=400, detail=str(e))
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Update image config error: {e}")
+        raise HTTPException(status_code=500, detail="Failed to update image configuration")
 
 
 @router.get("/{asset_id}/download-url")

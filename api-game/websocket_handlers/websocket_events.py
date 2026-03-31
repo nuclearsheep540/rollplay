@@ -1353,7 +1353,9 @@ class WebsocketEvent():
                 original_filename=image_data.get("original_filename", image_data.get("filename", "unknown.jpg")),
                 file_path=image_data.get("file_path", ""),
                 loaded_by=user_id,
-                active=True
+                active=True,
+                display_mode=image_data.get("display_mode", "float"),
+                aspect_ratio=image_data.get("aspect_ratio"),
             )
 
             success = image_service.set_active_image(room_id, image_settings)
@@ -1434,6 +1436,38 @@ class WebsocketEvent():
         except Exception as e:
             print(f"❌ Error clearing image for room {room_id}: {e}")
             return WebsocketEventResult(broadcast_message={"error": f"Failed to clear image: {str(e)}"})
+
+    @staticmethod
+    async def image_config_update(websocket, data, event_data, user_id, client_id, manager):
+        """Update display config on the active image (lightweight, no re-save of full image)"""
+        room_id = client_id
+        display_mode = event_data.get("display_mode")
+        aspect_ratio = event_data.get("aspect_ratio")
+
+        if not room_id:
+            return WebsocketEventResult(broadcast_message={"error": "Invalid image config update request"})
+
+        try:
+            success = image_service.update_image_config(room_id, display_mode=display_mode, aspect_ratio=aspect_ratio)
+
+            if success:
+                saved_image = image_service.get_active_image(room_id)
+                broadcast_message = {
+                    "event_type": "image_config_update",
+                    "data": {
+                        "display_mode": saved_image.get("display_mode", "float") if saved_image else display_mode,
+                        "aspect_ratio": saved_image.get("aspect_ratio") if saved_image else aspect_ratio,
+                        "updated_by": user_id
+                    }
+                }
+                print(f"🖼️ Image config updated for room {room_id}: mode={display_mode}, ratio={aspect_ratio}")
+                return WebsocketEventResult(broadcast_message=broadcast_message)
+            else:
+                return WebsocketEventResult(broadcast_message={"info": "No image config updated"})
+
+        except Exception as e:
+            print(f"❌ Error updating image config for room {room_id}: {e}")
+            return WebsocketEventResult(broadcast_message={"error": f"Failed to update image config: {str(e)}"})
 
     @staticmethod
     async def image_request(websocket, data, event_data, user_id, client_id, manager):

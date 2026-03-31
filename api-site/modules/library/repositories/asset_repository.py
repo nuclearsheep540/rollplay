@@ -142,6 +142,11 @@ class MediaAssetRepository:
                 existing.duration_seconds = aggregate.duration_seconds
                 existing.default_volume = aggregate.default_volume
                 existing.default_looping = aggregate.default_looping
+
+            # Update image-specific fields if ImageAsset
+            if isinstance(aggregate, ImageAsset) and isinstance(existing, ImageAssetModel):
+                existing.display_mode = aggregate.display_mode
+                existing.aspect_ratio = aggregate.aspect_ratio
         else:
             # Create new - determine which model to use
             if isinstance(aggregate, MapAsset):
@@ -207,7 +212,9 @@ class MediaAssetRepository:
                     content_type=aggregate.content_type,
                     asset_type=aggregate.asset_type,
                     file_size=aggregate.file_size,
-                    campaign_ids=aggregate.campaign_ids
+                    campaign_ids=aggregate.campaign_ids,
+                    display_mode=aggregate.display_mode,
+                    aspect_ratio=aggregate.aspect_ratio
                 )
             else:
                 model = MediaAssetModel(
@@ -294,8 +301,12 @@ class MediaAssetRepository:
                 default_looping=model.default_looping
             )
 
-        # If it's an ImageAssetModel, promote to ImageAsset
+        # If it's an ImageAssetModel, promote to ImageAsset with display config
         if isinstance(model, ImageAssetModel):
-            return ImageAsset.from_base(base)
+            return ImageAsset.from_base(
+                base,
+                display_mode=model.display_mode,
+                aspect_ratio=model.aspect_ratio
+            )
 
         return base

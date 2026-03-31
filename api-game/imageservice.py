@@ -23,6 +23,8 @@ class ImageSettings(BaseModel):
     file_path: str
     loaded_by: str
     active: bool = True
+    display_mode: str = "float"  # "float" | "wrap" | "cine"
+    aspect_ratio: Optional[str] = None  # e.g. "2.39:1", "16:9" — only for cine
 
     def __init__(self, **data):
         super().__init__(**data)
@@ -132,6 +134,41 @@ class ImageService:
 
         except Exception as e:
             logger.error(f"Failed to clear active image for room {room_id}: {e}")
+            return False
+
+    def update_image_config(self, room_id: str, display_mode: str = None, aspect_ratio: str = None) -> bool:
+        """Update display config on the active image for a room (config-only, no re-save)"""
+        if self.collection is None:
+            logger.error("No database connection available for image service")
+            return False
+
+        try:
+            update_fields = {}
+            if display_mode is not None:
+                update_fields["display_mode"] = display_mode
+            if aspect_ratio is not None:
+                update_fields["aspect_ratio"] = aspect_ratio
+            # Clear aspect_ratio when switching away from cine
+            if display_mode and display_mode != "cine":
+                update_fields["aspect_ratio"] = None
+
+            if not update_fields:
+                return False
+
+            result = self.collection.update_one(
+                {"room_id": room_id, "active": True},
+                {"$set": update_fields}
+            )
+
+            if result.modified_count > 0:
+                logger.info(f"🖼️ Updated image config for room {room_id}: {update_fields}")
+                return True
+
+            logger.warning(f"🖼️ No active image to update config for room {room_id}")
+            return False
+
+        except Exception as e:
+            logger.error(f"Failed to update image config for room {room_id}: {e}")
             return False
 
     def get_active_display(self, room_id: str) -> Optional[str]:

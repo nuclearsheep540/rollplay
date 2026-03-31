@@ -35,6 +35,7 @@ from modules.library.repositories.asset_repository import MediaAssetRepository
 from modules.library.domain.map_asset_aggregate import MapAsset
 from modules.library.domain.music_asset_aggregate import MusicAsset
 from modules.library.domain.sfx_asset_aggregate import SfxAsset
+from modules.library.domain.image_asset_aggregate import ImageAsset
 from modules.events.event_manager import EventManager
 from modules.session.domain.session_events import SessionEvents
 from modules.campaign.domain.campaign_role import CampaignRole
@@ -389,12 +390,20 @@ class StartSession:
             logger.warning(f"Cannot restore image: asset {image_asset_id} has no presigned URL")
             return None
         logger.info(f"Restoring image: {image_asset.filename}")
-        return ImageConfig(
+
+        # Build config — use asset-level display config if available
+        config_kwargs = dict(
             asset_id=image_asset_id,
             filename=image_asset.filename,
             original_filename=image_asset.filename,
             file_path=fresh_url,
         )
+        if hasattr(image_asset, 'display_mode') and image_asset.display_mode:
+            config_kwargs["display_mode"] = image_asset.display_mode
+        if hasattr(image_asset, 'aspect_ratio') and image_asset.aspect_ratio:
+            config_kwargs["aspect_ratio"] = image_asset.aspect_ratio
+
+        return ImageConfig(**config_kwargs)
 
     async def execute(self, session_id: UUID, host_id: UUID) -> SessionEntity:
         """
@@ -683,10 +692,28 @@ async def _extract_and_sync_game_state(
                     logger.warning(f"Failed to sync grid config for map {map_asset_id}: {e}")
         logger.info(f"Extracted map config: {'has map' if map_config else 'no active map'}")
 
-        # Extract image config (asset_id for session persistence)
+        # Extract image config (asset_id + display config for session persistence)
         image_config = {}
         if final_state.image_state and final_state.image_state.asset_id:
-            image_config = {"asset_id": final_state.image_state.asset_id}
+            image_config = {
+                "asset_id": final_state.image_state.asset_id,
+                "display_mode": getattr(final_state.image_state, 'display_mode', "float"),
+                "aspect_ratio": getattr(final_state.image_state, 'aspect_ratio', None),
+            }
+            # Sync display config back to the image asset (like map grid sync)
+            if asset_repo:
+                image_asset_id = final_state.image_state.asset_id
+                try:
+                    image_asset = asset_repo.get_by_id(UUID(image_asset_id))
+                    if image_asset and isinstance(image_asset, ImageAsset):
+                        image_asset.update_image_config_from_game(
+                            display_mode=getattr(final_state.image_state, 'display_mode', None),
+                            aspect_ratio=getattr(final_state.image_state, 'aspect_ratio', None),
+                        )
+                        asset_repo.save(image_asset)
+                        logger.info(f"Synced display config back to ImageAsset {image_asset_id}")
+                except Exception as e:
+                    logger.warning(f"Failed to sync display config for image {image_asset_id}: {e}")
         logger.info(f"Extracted image config: {'has image' if image_config else 'no active image'}")
 
         # Extract active_display

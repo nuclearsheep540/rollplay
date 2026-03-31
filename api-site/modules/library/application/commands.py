@@ -477,3 +477,54 @@ class UpdateAudioConfig:
 
         self.repository.save(asset)
         return asset
+
+
+class UpdateImageConfig:
+    """
+    Update display configuration for an image asset.
+
+    Display config is stored on the asset itself, making it reusable
+    across all campaigns/sessions that use this image.
+    """
+
+    def __init__(self, repository: MediaAssetRepository, session_repository: SessionRepository = None):
+        self.repository = repository
+        self.session_repository = session_repository
+
+    def execute(
+        self,
+        asset_id: UUID,
+        user_id: UUID,
+        display_mode: Optional[str] = None,
+        aspect_ratio: Optional[str] = None
+    ) -> ImageAsset:
+        """
+        Update display configuration for an image asset.
+
+        Returns:
+            Updated ImageAsset
+
+        Raises:
+            ValueError: If asset not found, not owned, or not an image
+            AssetInUseError: If asset is in an active session
+        """
+        asset = self.repository.get_by_id(asset_id)
+        if not asset:
+            raise ValueError(f"Media asset {asset_id} not found")
+
+        if not asset.is_owned_by(user_id):
+            raise ValueError("Cannot modify media asset owned by another user")
+
+        if not isinstance(asset, ImageAsset):
+            raise ValueError("Image configuration only applies to image assets")
+
+        if self.session_repository:
+            check_asset_in_active_session(asset.campaign_ids, self.session_repository)
+
+        asset.update_image_config(
+            display_mode=display_mode,
+            aspect_ratio=aspect_ratio
+        )
+
+        self.repository.save(asset)
+        return asset

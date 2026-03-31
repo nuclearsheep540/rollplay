@@ -111,6 +111,18 @@ class SfxAssetResponse(MediaAssetResponse):
     default_looping: Optional[bool] = None
 
 
+class ImageAssetResponse(MediaAssetResponse):
+    """Response containing image asset details with display config"""
+    display_mode: Optional[str] = None
+    aspect_ratio: Optional[str] = None
+
+
+class UpdateImageConfigRequest(BaseModel):
+    """Request to update image display configuration"""
+    display_mode: Optional[str] = Field(None, description="Display mode: float, wrap, or cine")
+    aspect_ratio: Optional[str] = Field(None, description="Aspect ratio preset for cine mode")
+
+
 class UpdateAudioConfigRequest(BaseModel):
     """Request to update audio playback configuration"""
     duration_seconds: Optional[float] = Field(None, ge=0, description="Track duration in seconds")

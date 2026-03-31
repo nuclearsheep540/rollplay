@@ -228,6 +228,12 @@ export default function GameContent() {
 
   const canUseModeratorTools = isModerator || isHost;
 
+  // Cine mode hides UI for PLAYER roles only (not DM, MOD, or spectators)
+  const isPlayer = !isDM && !isModerator && !isSpectator;
+  const cineHideUI = activeDisplay === 'image'
+    && activeImage?.display_mode === 'cine'
+    && isPlayer;
+
   // Derive moderator status from campaign_role in player metadata
   useEffect(() => {
     if (!thisUserId) return;
@@ -1088,6 +1094,7 @@ export default function GameContent() {
   const {
     sendImageLoad,
     sendImageClear,
+    sendImageConfigUpdate,
     sendImageRequest,
   } = useImageWebSocket(webSocket, isConnected, roomId, thisUserId, imageContext, registerHandler);
 
@@ -1650,8 +1657,8 @@ export default function GameContent() {
         )}
       </div>
 
-      {/* Left drawer — fixed-position, tabbed (PARTY / LOG) */}
-      <Drawer
+      {/* Left drawer — fixed-position, tabbed (PARTY / LOG) — hidden in cine mode for players */}
+      {!cineHideUI && <Drawer
         side="left"
         tabs={LEFT_DRAWER_TABS}
         activeTab={activeLeftDrawer}
@@ -1702,10 +1709,10 @@ export default function GameContent() {
             characterNameMap={characterNameMap}
           />
         )}
-      </Drawer>
+      </Drawer>}
 
-      {/* Right drawer — fixed-position, outside grid flow */}
-      {(() => {
+      {/* Right drawer — fixed-position, outside grid flow — hidden in cine mode for players */}
+      {!cineHideUI && (() => {
         return (
           <div
             className={`right-drawer ${rightDrawerSettled ? 'drawer-settled' : ''}`}
@@ -1773,6 +1780,7 @@ export default function GameContent() {
                   setActiveImage={setActiveImage}
                   sendImageLoad={sendImageLoad}
                   sendImageClear={sendImageClear}
+                  sendImageConfigUpdate={sendImageConfigUpdate}
                 />
               )}
               {activeRightDrawer === 'combat' && isDM && (
@@ -1812,7 +1820,7 @@ export default function GameContent() {
         );
       })()}
 
-      {/* Main Game Area — conditional display: map or image */}
+      {/* Main game area — conditional display: map or image */}
       <div className="main-game-area">
         <div className="grid-area-map-canvas relative">
           {/* Map display — visible when activeDisplay is "map" or null (default) */}
@@ -1865,19 +1873,21 @@ export default function GameContent() {
             />
           )}
 
-          <HorizontalInitiativeTracker
-            initiativeOrder={initiativeOrder}
-            handleInitiativeClick={handleInitiativeClick}
-            currentTurn={currentTurn}
-            combatActive={combatActive}
-          />
+          {!cineHideUI && (
+            <HorizontalInitiativeTracker
+              initiativeOrder={initiativeOrder}
+              handleInitiativeClick={handleInitiativeClick}
+              currentTurn={currentTurn}
+              combatActive={combatActive}
+            />
+          )}
         </div>
       </div>
 
       {/* DiceActionPanel - only show if user is sitting in a seat OR is DM */}
       {(() => {
         const isPlayerSeated = gameSeats.some(seat => seat.userId === thisUserId);
-        const canUseDice = isPlayerSeated || isDM;
+        const canUseDice = (isPlayerSeated || isDM) && !cineHideUI;
         return canUseDice && (
           <DiceActionPanel
             currentTurn={currentTurn}

@@ -4,9 +4,8 @@
 """
 ImageAsset Aggregate - Domain model for image display assets
 
-Extends MediaAssetAggregate as a typed aggregate for IMAGE assets.
-Currently has no extra fields — exists for pattern consistency with
-MapAsset, MusicAsset, and SfxAsset, so every asset type has a discoverable aggregate.
+Extends MediaAssetAggregate with display configuration fields (display_mode, aspect_ratio).
+Display config is stored on the asset itself, making it reusable across campaigns.
 """
 
 from dataclasses import dataclass
@@ -14,8 +13,13 @@ from datetime import datetime
 from typing import Optional
 from uuid import UUID, uuid4
 
+from shared_contracts.image import ImageConfig
+
 from modules.library.domain.asset_aggregate import MediaAssetAggregate
 from modules.library.domain.media_asset_type import MediaAssetType
+
+VALID_DISPLAY_MODES = {"float", "wrap", "cine"}
+VALID_ASPECT_RATIOS = {"2.39:1", "1.85:1", "16:9", "4:3", "1:1"}
 
 
 @dataclass
@@ -23,10 +27,12 @@ class ImageAsset(MediaAssetAggregate):
     """
     ImageAsset domain aggregate.
 
-    Represents a plain image asset (non-map). Currently identical to
-    MediaAssetAggregate in fields — the typed aggregate ensures IMAGE
-    assets follow the same pattern as MAP, MUSIC, and SFX.
+    Extends MediaAssetAggregate with display configuration fields.
+    Display config belongs to the image asset, not the session - so it persists
+    across all uses of this image in any campaign/session.
     """
+    display_mode: Optional[str] = None
+    aspect_ratio: Optional[str] = None
 
     @classmethod
     def create(
@@ -63,11 +69,16 @@ class ImageAsset(MediaAssetAggregate):
         )
 
     @classmethod
-    def from_base(cls, base: MediaAssetAggregate) -> "ImageAsset":
+    def from_base(
+        cls,
+        base: MediaAssetAggregate,
+        display_mode: Optional[str] = None,
+        aspect_ratio: Optional[str] = None
+    ) -> "ImageAsset":
         """
         Promote a base MediaAssetAggregate to ImageAsset.
 
-        Used when repository loads from the database.
+        Used when repository loads from joined tables.
         """
         return cls(
             id=base.id,
@@ -79,5 +90,67 @@ class ImageAsset(MediaAssetAggregate):
             file_size=base.file_size,
             campaign_ids=base.campaign_ids,
             created_at=base.created_at,
-            updated_at=base.updated_at
+            updated_at=base.updated_at,
+            display_mode=display_mode,
+            aspect_ratio=aspect_ratio
+        )
+
+    def update_image_config(
+        self,
+        display_mode: Optional[str] = None,
+        aspect_ratio: Optional[str] = None
+    ) -> None:
+        """
+        Update display configuration.
+
+        Only updates provided values; None values keep current.
+        """
+        if display_mode is not None:
+            if display_mode not in VALID_DISPLAY_MODES:
+                raise ValueError(f"display_mode must be one of {VALID_DISPLAY_MODES}")
+            self.display_mode = display_mode
+
+        if aspect_ratio is not None:
+            if aspect_ratio not in VALID_ASPECT_RATIOS:
+                raise ValueError(f"aspect_ratio must be one of {VALID_ASPECT_RATIOS}")
+            self.aspect_ratio = aspect_ratio
+
+        # Clear aspect_ratio if switching away from cine
+        if display_mode is not None and display_mode != "cine":
+            self.aspect_ratio = None
+
+        self.updated_at = datetime.utcnow()
+
+    def has_image_config(self) -> bool:
+        """Check if display configuration has been set."""
+        return self.display_mode is not None
+
+    def build_image_config_for_game(
+        self, asset_id: str, filename: str, file_path: str
+    ) -> ImageConfig:
+        """Build the image config contract for the api-game boundary.
+
+        Includes display config fields. Contract defaults apply when
+        domain fields are None.
+        """
+        return ImageConfig(
+            asset_id=asset_id,
+            filename=filename,
+            original_filename=self.filename,
+            file_path=file_path,
+            display_mode=self.display_mode or "float",
+            aspect_ratio=self.aspect_ratio,
+        )
+
+    def update_image_config_from_game(
+        self, display_mode: Optional[str] = None, aspect_ratio: Optional[str] = None
+    ) -> None:
+        """Update domain fields from api-game state.
+
+        The inverse of build_image_config_for_game(). Used during
+        session end ETL to sync runtime changes back to PostgreSQL.
+        """
+        self.update_image_config(
+            display_mode=display_mode,
+            aspect_ratio=aspect_ratio,
         )

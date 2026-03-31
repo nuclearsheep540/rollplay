@@ -362,6 +362,17 @@ def register_websocket_routes(app: FastAPI):
                     )
                     broadcast_message = result.broadcast_message
 
+                elif event_type == "image_config_update":
+                    result = await WebsocketEvent.image_config_update(
+                        websocket=websocket,
+                        data=data,
+                        event_data=event_data,
+                        user_id=user_id,
+                        client_id=client_id,
+                        manager=manager
+                    )
+                    broadcast_message = result.broadcast_message
+
                 elif event_type == "image_request":
                     result = await WebsocketEvent.image_request(
                         websocket=websocket,

@@ -49,6 +49,25 @@ export const useImageWebSocket = (webSocket, isConnected, roomId, thisPlayer, im
     }
   }, []);
 
+  const handleImageConfigUpdate = useCallback((data) => {
+    console.log("🖼️ Image config updated:", data);
+    const { display_mode, aspect_ratio, updated_by } = data;
+    const handlers = eventHandlersRef.current;
+
+    if (handlers && handlers.setActiveImage) {
+      // Merge new config fields into existing activeImage
+      handlers.setActiveImage((prev) => {
+        if (!prev) return prev;
+        return {
+          ...prev,
+          display_mode: display_mode ?? prev.display_mode,
+          aspect_ratio: aspect_ratio !== undefined ? aspect_ratio : prev.aspect_ratio,
+        };
+      });
+      console.log(`🖼️ Image config updated by ${updated_by}: mode=${display_mode}, ratio=${aspect_ratio}`);
+    }
+  }, []);
+
   const handleImageClear = useCallback((data) => {
     console.log("🖼️ Image cleared (atomic):", data);
     const { active_display, cleared_by } = data;
@@ -76,10 +95,11 @@ export const useImageWebSocket = (webSocket, isConnected, roomId, thisPlayer, im
     const cleanups = [
       registerHandler('image_load', handleImageLoad),
       registerHandler('image_clear', handleImageClear),
+      registerHandler('image_config_update', handleImageConfigUpdate),
     ];
 
     return () => cleanups.forEach(fn => fn());
-  }, [registerHandler, handleImageLoad, handleImageClear]);
+  }, [registerHandler, handleImageLoad, handleImageClear, handleImageConfigUpdate]);
 
   // Image send functions
   const sendImageLoad = (imageData) => {
@@ -112,6 +132,19 @@ export const useImageWebSocket = (webSocket, isConnected, roomId, thisPlayer, im
     }));
   };
 
+  const sendImageConfigUpdate = ({ display_mode, aspect_ratio }) => {
+    if (!webSocket || !isConnected) {
+      console.warn('❌ Cannot send image config update - WebSocket not connected');
+      return;
+    }
+
+    console.log('🖼️ Sending image config update:', { display_mode, aspect_ratio });
+    webSocket.send(JSON.stringify({
+      event_type: 'image_config_update',
+      data: { display_mode, aspect_ratio }
+    }));
+  };
+
   const sendImageRequest = () => {
     if (!webSocket || !isConnected) {
       console.warn('❌ Cannot send image request - WebSocket not connected');
@@ -128,6 +161,7 @@ export const useImageWebSocket = (webSocket, isConnected, roomId, thisPlayer, im
   return {
     sendImageLoad,
     sendImageClear,
+    sendImageConfigUpdate,
     sendImageRequest,
   };
 };
