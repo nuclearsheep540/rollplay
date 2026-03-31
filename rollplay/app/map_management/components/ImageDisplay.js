@@ -80,7 +80,7 @@ const ImageDisplay = ({
     return null;
   }
 
-  const isLetterbox = displayMode === 'letterbox';
+  const isLetterbox = displayMode === 'letterbox' || displayMode === 'cine';
 
   // Image position within frame (object-position) — only meaningful for cover modes
   const posX = activeImage?.image_position_x ?? 50;
@@ -88,9 +88,7 @@ const ImageDisplay = ({
   const objectPosition = `${posX}% ${posY}%`;
 
   // Image styles per mode
-  const imageStyle = displayMode === 'wrap'
-    ? { width: '100%', height: '100%', objectFit: 'cover', objectPosition }
-    : displayMode === 'letterbox'
+  const imageStyle = displayMode === 'wrap' || isLetterbox
     ? { width: '100%', height: '100%', objectFit: 'cover', objectPosition }
     : { maxWidth: '100%', maxHeight: '100%', width: 'auto', height: 'auto', objectFit: 'contain' };
 
@@ -153,7 +151,7 @@ const ImageDisplay = ({
             onLoad={() => setImageLoaded(true)}
             onError={() => setImageLoaded(false)}
           />
-          {renderVisualOverlays(activeImage?.cine_config)}
+          {displayMode === 'cine' && renderVisualOverlays(activeImage?.cine_config)}
         </div>
       ) : (
         <>
@@ -170,7 +168,7 @@ const ImageDisplay = ({
             onLoad={() => setImageLoaded(true)}
             onError={() => setImageLoaded(false)}
           />
-          {renderVisualOverlays(activeImage?.cine_config)}
+          {displayMode === 'cine' && renderVisualOverlays(activeImage?.cine_config)}
         </>
       )}
     </div>
