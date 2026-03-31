@@ -7,6 +7,7 @@ from .audio import AudioChannelState, AudioEffects, AudioTrackConfig
 from .assets import AssetRef
 from .base import ContractModel
 from .character import DungeonMaster, PlayerCharacter, SessionUser
+from .cine import CineConfig, VisualOverlay
 from .display import ActiveDisplayType
 from .image import ImageConfig
 from .map import GridColorMode, GridConfig, MapConfig
@@ -25,6 +26,7 @@ __all__ = [
     "AudioEffects",
     "AudioTrackConfig",
     "AssetRef",
+    "CineConfig",
     "DungeonMaster",
     "PlayerCharacter",
     "SessionUser",
@@ -33,6 +35,7 @@ __all__ = [
     "GridConfig",
     "ImageConfig",
     "MapConfig",
+    "VisualOverlay",
     "PlayerState",
     "SessionEndFinalState",
     "SessionEndResponse",

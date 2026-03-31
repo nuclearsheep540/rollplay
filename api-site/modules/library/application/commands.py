@@ -499,7 +499,7 @@ class UpdateImageConfig:
         aspect_ratio: Optional[str] = None,
         image_position_x: Optional[float] = None,
         image_position_y: Optional[float] = None,
-        cine_config: Optional[dict] = None
+        cine_config=None
     ) -> ImageAsset:
         """
         Update display configuration for an image asset.

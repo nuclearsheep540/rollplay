@@ -15,12 +15,18 @@ from modules.library.model.map_asset_model import MapAssetModel
 from modules.library.model.music_asset_model import MusicAssetModel
 from modules.library.model.sfx_asset_model import SfxAssetModel
 from modules.library.model.image_asset_model import ImageAssetModel
+import logging
+
+from shared_contracts.cine import CineConfig
+
 from modules.library.domain.asset_aggregate import MediaAssetAggregate
 from modules.library.domain.map_asset_aggregate import MapAsset
 from modules.library.domain.music_asset_aggregate import MusicAsset
 from modules.library.domain.sfx_asset_aggregate import SfxAsset
 from modules.library.domain.image_asset_aggregate import ImageAsset
 from modules.library.domain.media_asset_type import MediaAssetType
+
+logger = logging.getLogger(__name__)
 
 
 class MediaAssetRepository:
@@ -149,7 +155,7 @@ class MediaAssetRepository:
                 existing.aspect_ratio = aggregate.aspect_ratio
                 existing.image_position_x = aggregate.image_position_x
                 existing.image_position_y = aggregate.image_position_y
-                existing.cine_config = aggregate.cine_config
+                existing.cine_config = aggregate.cine_config.model_dump() if aggregate.cine_config else None
         else:
             # Create new - determine which model to use
             if isinstance(aggregate, MapAsset):
@@ -220,7 +226,7 @@ class MediaAssetRepository:
                     aspect_ratio=aggregate.aspect_ratio,
                     image_position_x=aggregate.image_position_x,
                     image_position_y=aggregate.image_position_y,
-                    cine_config=aggregate.cine_config
+                    cine_config=aggregate.cine_config.model_dump() if aggregate.cine_config else None
                 )
             else:
                 model = MediaAssetModel(
@@ -309,13 +315,19 @@ class MediaAssetRepository:
 
         # If it's an ImageAssetModel, promote to ImageAsset with display config
         if isinstance(model, ImageAssetModel):
+            cine_config = None
+            if model.cine_config:
+                try:
+                    cine_config = CineConfig.model_validate(model.cine_config)
+                except Exception:
+                    logger.warning(f"Invalid cine_config for asset {model.id}, ignoring")
             return ImageAsset.from_base(
                 base,
                 display_mode=model.display_mode,
                 aspect_ratio=model.aspect_ratio,
                 image_position_x=model.image_position_x,
                 image_position_y=model.image_position_y,
-                cine_config=model.cine_config
+                cine_config=cine_config
             )
 
         return base

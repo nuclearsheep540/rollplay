@@ -26,6 +26,7 @@ export default function ImageConfigTool({ selectedAssetId, onAssetSelect }) {
   const [aspectRatio, setAspectRatio] = useState(null);
   const [imagePositionX, setImagePositionX] = useState(null);
   const [imagePositionY, setImagePositionY] = useState(null);
+  const [cineConfig, setCineConfig] = useState(null);
 
   const updateMutation = useUpdateImageConfig();
 
@@ -60,6 +61,7 @@ export default function ImageConfigTool({ selectedAssetId, onAssetSelect }) {
       setAspectRatio(assetData.aspect_ratio || null);
       setImagePositionX(assetData.image_position_x ?? null);
       setImagePositionY(assetData.image_position_y ?? null);
+      setCineConfig(assetData.cine_config || null);
       setLoadingAsset(false);
     }
 
@@ -78,6 +80,7 @@ export default function ImageConfigTool({ selectedAssetId, onAssetSelect }) {
           aspect_ratio: (displayMode === 'letterbox' || displayMode === 'cine') ? aspectRatio : null,
           image_position_x: imagePositionX,
           image_position_y: imagePositionY,
+          cine_config: cineConfig,
         },
       });
       setSelectedAsset(prev => ({ ...prev, ...updatedAsset }));
@@ -99,8 +102,9 @@ export default function ImageConfigTool({ selectedAssetId, onAssetSelect }) {
       aspect_ratio: (displayMode === 'letterbox' || displayMode === 'cine') ? aspectRatio : null,
       image_position_x: imagePositionX,
       image_position_y: imagePositionY,
+      cine_config: cineConfig,
     };
-  }, [selectedAsset?.s3_url, selectedAsset?.filename, displayMode, aspectRatio, imagePositionX, imagePositionY]);
+  }, [selectedAsset?.s3_url, selectedAsset?.filename, displayMode, aspectRatio, imagePositionX, imagePositionY, cineConfig]);
 
   // Track whether config has changed from saved state
   const hasChanges = selectedAsset && (
@@ -108,6 +112,7 @@ export default function ImageConfigTool({ selectedAssetId, onAssetSelect }) {
     || aspectRatio !== (selectedAsset.aspect_ratio || null)
     || imagePositionX !== (selectedAsset.image_position_x ?? null)
     || imagePositionY !== (selectedAsset.image_position_y ?? null)
+    || JSON.stringify(cineConfig) !== JSON.stringify(selectedAsset.cine_config || null)
   );
 
   return (
@@ -130,9 +135,11 @@ export default function ImageConfigTool({ selectedAssetId, onAssetSelect }) {
               aspectRatio={aspectRatio}
               imagePositionX={imagePositionX}
               imagePositionY={imagePositionY}
+              cineConfig={cineConfig}
               onDisplayModeChange={setDisplayMode}
               onAspectRatioChange={setAspectRatio}
               onImagePositionChange={(x, y) => { setImagePositionX(x); setImagePositionY(y); }}
+              onCineConfigChange={setCineConfig}
               onSave={handleSave}
               isSaving={updateMutation.isPending}
               saveSuccess={saveSuccess}

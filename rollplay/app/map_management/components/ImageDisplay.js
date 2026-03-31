@@ -29,6 +29,40 @@ function parseAspectRatio(ratioStr) {
  *   - letterbox: Full-width image, height constrained by aspect ratio,
  *                black background creates natural letterbox bars
  */
+function renderVisualOverlays(cineConfig) {
+  const overlays = cineConfig?.visual_overlays;
+  if (!overlays?.length) return null;
+  return overlays.filter(o => o.enabled).map((overlay, i) => {
+    const base = {
+      position: 'absolute',
+      top: 0, left: 0, width: '100%', height: '100%',
+      pointerEvents: 'none',
+      zIndex: 10 + i,
+      opacity: overlay.opacity,
+    };
+    if (overlay.type === 'film_grain') {
+      return (
+        <div key={i} style={{
+          ...base,
+          backgroundImage: 'url(/cine/overlay/film-grain.gif)',
+          backgroundSize: 'cover',
+          mixBlendMode: 'overlay',
+        }} />
+      );
+    }
+    if (overlay.type === 'color_filter') {
+      return (
+        <div key={i} style={{
+          ...base,
+          backgroundColor: overlay.params?.color || '#000000',
+          mixBlendMode: overlay.params?.blend_mode || 'multiply',
+        }} />
+      );
+    }
+    return null;
+  });
+}
+
 const ImageDisplay = ({
   activeImage = null,
   className = "",
@@ -119,22 +153,25 @@ const ImageDisplay = ({
             onLoad={() => setImageLoaded(true)}
             onError={() => setImageLoaded(false)}
           />
-          {/* z-5 through z-15: Reserved for future overlay layers */}
+          {renderVisualOverlays(activeImage?.cine_config)}
         </div>
       ) : (
-        <img
-          ref={imageRef}
-          src={activeImage.file_path}
-          alt={activeImage.original_filename || activeImage.filename || 'Game image'}
-          style={{
-            ...imageStyle,
-            pointerEvents: 'none',
-            userSelect: 'none',
-            zIndex: 1,
-          }}
-          onLoad={() => setImageLoaded(true)}
-          onError={() => setImageLoaded(false)}
-        />
+        <>
+          <img
+            ref={imageRef}
+            src={activeImage.file_path}
+            alt={activeImage.original_filename || activeImage.filename || 'Game image'}
+            style={{
+              ...imageStyle,
+              pointerEvents: 'none',
+              userSelect: 'none',
+              zIndex: 1,
+            }}
+            onLoad={() => setImageLoaded(true)}
+            onError={() => setImageLoaded(false)}
+          />
+          {renderVisualOverlays(activeImage?.cine_config)}
+        </>
       )}
     </div>
   );

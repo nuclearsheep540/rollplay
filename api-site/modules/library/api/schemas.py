@@ -6,12 +6,13 @@ MediaAsset API Schemas - Pydantic models for request/response validation
 """
 
 from datetime import datetime
-from typing import Any, Dict, List, Optional
+from typing import List, Optional
 from uuid import UUID
 
 from pydantic import BaseModel, Field
 
 from modules.library.domain.media_asset_type import MediaAssetType
+from shared_contracts.cine import CineConfig
 
 
 class UploadUrlResponse(BaseModel):
@@ -91,7 +92,7 @@ class MediaAssetResponse(BaseModel):
     aspect_ratio: Optional[str] = None
     image_position_x: Optional[float] = None
     image_position_y: Optional[float] = None
-    cine_config: Optional[Dict[str, Any]] = None
+    cine_config: Optional[CineConfig] = None
 
     class Config:
         from_attributes = True
@@ -121,7 +122,7 @@ class UpdateImageConfigRequest(BaseModel):
     aspect_ratio: Optional[str] = Field(None, description="Aspect ratio preset for letterbox/cine")
     image_position_x: Optional[float] = Field(None, ge=0.0, le=100.0, description="Image position X within frame (0-100%)")
     image_position_y: Optional[float] = Field(None, ge=0.0, le=100.0, description="Image position Y within frame (0-100%)")
-    cine_config: Optional[Dict[str, Any]] = Field(None, description="Cinematic config (workshop-authored)")
+    cine_config: Optional[CineConfig] = Field(None, description="Cinematic config (workshop-authored)")
 
 
 class UpdateAudioConfigRequest(BaseModel):

@@ -10,9 +10,10 @@ Display config is stored on the asset itself, making it reusable across campaign
 
 from dataclasses import dataclass
 from datetime import datetime
-from typing import Any, Dict, Optional
+from typing import Optional
 from uuid import UUID, uuid4
 
+from shared_contracts.cine import CineConfig
 from shared_contracts.image import ImageConfig
 
 from modules.library.domain.asset_aggregate import MediaAssetAggregate
@@ -35,7 +36,7 @@ class ImageAsset(MediaAssetAggregate):
     aspect_ratio: Optional[str] = None
     image_position_x: Optional[float] = None  # 0–100%, position of image within frame
     image_position_y: Optional[float] = None  # 0–100%, position of image within frame
-    cine_config: Optional[Dict[str, Any]] = None  # Workshop-authored, read-only at runtime
+    cine_config: Optional[CineConfig] = None  # Workshop-authored, read-only at runtime
 
     @classmethod
     def create(
@@ -79,7 +80,7 @@ class ImageAsset(MediaAssetAggregate):
         aspect_ratio: Optional[str] = None,
         image_position_x: Optional[float] = None,
         image_position_y: Optional[float] = None,
-        cine_config: Optional[Dict[str, Any]] = None
+        cine_config: Optional[CineConfig] = None
     ) -> "ImageAsset":
         """
         Promote a base MediaAssetAggregate to ImageAsset.
