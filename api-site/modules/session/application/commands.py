@@ -402,6 +402,8 @@ class StartSession:
             config_kwargs["display_mode"] = image_asset.display_mode
         if hasattr(image_asset, 'aspect_ratio') and image_asset.aspect_ratio:
             config_kwargs["aspect_ratio"] = image_asset.aspect_ratio
+        if hasattr(image_asset, 'cine_config') and image_asset.cine_config:
+            config_kwargs["cine_config"] = image_asset.cine_config
 
         return ImageConfig(**config_kwargs)
 

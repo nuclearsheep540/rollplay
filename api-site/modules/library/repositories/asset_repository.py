@@ -147,6 +147,7 @@ class MediaAssetRepository:
             if isinstance(aggregate, ImageAsset) and isinstance(existing, ImageAssetModel):
                 existing.display_mode = aggregate.display_mode
                 existing.aspect_ratio = aggregate.aspect_ratio
+                existing.cine_config = aggregate.cine_config
         else:
             # Create new - determine which model to use
             if isinstance(aggregate, MapAsset):
@@ -214,7 +215,8 @@ class MediaAssetRepository:
                     file_size=aggregate.file_size,
                     campaign_ids=aggregate.campaign_ids,
                     display_mode=aggregate.display_mode,
-                    aspect_ratio=aggregate.aspect_ratio
+                    aspect_ratio=aggregate.aspect_ratio,
+                    cine_config=aggregate.cine_config
                 )
             else:
                 model = MediaAssetModel(
@@ -306,7 +308,8 @@ class MediaAssetRepository:
             return ImageAsset.from_base(
                 base,
                 display_mode=model.display_mode,
-                aspect_ratio=model.aspect_ratio
+                aspect_ratio=model.aspect_ratio,
+                cine_config=model.cine_config
             )
 
         return base

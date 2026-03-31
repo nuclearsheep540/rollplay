@@ -140,6 +140,7 @@ export default function ImageSelectionSection({
       uploaded_by: "dm",
       display_mode: asset.display_mode || "float",
       aspect_ratio: asset.aspect_ratio || null,
+      cine_config: asset.cine_config || null,
     };
     onSelectImage(imageSettings);
   };

@@ -14,6 +14,7 @@ const DISPLAY_MODES = [
   { id: 'float', label: 'Float' },
   { id: 'wrap', label: 'Wrap' },
   { id: 'letterbox', label: 'Letterbox' },
+  { id: 'cine', label: 'Cine' },
 ];
 
 const ASPECT_RATIO_PRESETS = [
@@ -182,19 +183,26 @@ export default function ImageControlsPanel({
           <div className="mb-3">
             <label className="block text-xs text-gray-400 mb-1">Mode</label>
             <div className="flex gap-1">
-              {DISPLAY_MODES.map((mode) => (
-                <button
-                  key={mode.id}
-                  onClick={() => previewMode(mode.id)}
-                  className={`flex-1 px-2 py-1.5 text-xs font-medium rounded transition-colors ${
-                    currentMode === mode.id
-                      ? 'bg-rose-600/80 text-white'
-                      : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
-                  }`}
-                >
-                  {mode.label}
-                </button>
-              ))}
+              {DISPLAY_MODES.map((mode) => {
+                const isCineDisabled = mode.id === 'cine' && !activeImage?.cine_config;
+                return (
+                  <button
+                    key={mode.id}
+                    onClick={() => !isCineDisabled && previewMode(mode.id)}
+                    disabled={isCineDisabled}
+                    title={isCineDisabled ? 'Configure in Workshop' : undefined}
+                    className={`flex-1 px-2 py-1.5 text-xs font-medium rounded transition-colors ${
+                      isCineDisabled
+                        ? 'bg-gray-800 text-gray-600 cursor-not-allowed'
+                        : currentMode === mode.id
+                        ? 'bg-rose-600/80 text-white'
+                        : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
+                    }`}
+                  >
+                    {mode.label}
+                  </button>
+                );
+              })}
             </div>
           </div>
 

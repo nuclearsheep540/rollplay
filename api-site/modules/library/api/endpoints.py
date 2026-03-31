@@ -155,7 +155,8 @@ def _to_media_asset_response(asset, s3_service: S3Service = None) -> MediaAssetR
             created_at=asset.created_at,
             updated_at=asset.updated_at,
             display_mode=asset.display_mode,
-            aspect_ratio=asset.aspect_ratio
+            aspect_ratio=asset.aspect_ratio,
+            cine_config=asset.cine_config
         )
 
     return MediaAssetResponse(

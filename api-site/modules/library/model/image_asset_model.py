@@ -9,7 +9,7 @@ Uses SQLAlchemy joined table inheritance pattern, matching MapAssetModel.
 """
 
 from sqlalchemy import Column, String, ForeignKey
-from sqlalchemy.dialects.postgresql import UUID
+from sqlalchemy.dialects.postgresql import UUID, JSONB
 
 from modules.library.model.asset_model import MediaAsset
 from modules.library.domain.media_asset_type import MediaAssetType
@@ -32,8 +32,11 @@ class ImageAssetModel(MediaAsset):
     )
 
     # Display configuration - NULL means not yet configured (defaults to "float")
-    display_mode = Column(String(20), nullable=True)   # "float" | "wrap" | "letterbox"
+    display_mode = Column(String(20), nullable=True)   # "float" | "wrap" | "letterbox" | "cine"
     aspect_ratio = Column(String(20), nullable=True)   # "2.39:1", "1.85:1", "16:9", "4:3", "1:1"
+
+    # Cine configuration - workshop-authored, read-only at runtime
+    cine_config = Column(JSONB, nullable=True)
 
     __mapper_args__ = {
         'polymorphic_identity': MediaAssetType.IMAGE,

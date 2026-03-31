@@ -10,7 +10,7 @@ Display config is stored on the asset itself, making it reusable across campaign
 
 from dataclasses import dataclass
 from datetime import datetime
-from typing import Optional
+from typing import Any, Dict, Optional
 from uuid import UUID, uuid4
 
 from shared_contracts.image import ImageConfig
@@ -18,7 +18,7 @@ from shared_contracts.image import ImageConfig
 from modules.library.domain.asset_aggregate import MediaAssetAggregate
 from modules.library.domain.media_asset_type import MediaAssetType
 
-VALID_DISPLAY_MODES = {"float", "wrap", "letterbox"}
+VALID_DISPLAY_MODES = {"float", "wrap", "letterbox", "cine"}
 VALID_ASPECT_RATIOS = {"2.39:1", "1.85:1", "16:9", "4:3", "1:1"}
 
 
@@ -33,6 +33,7 @@ class ImageAsset(MediaAssetAggregate):
     """
     display_mode: Optional[str] = None
     aspect_ratio: Optional[str] = None
+    cine_config: Optional[Dict[str, Any]] = None  # Workshop-authored, read-only at runtime
 
     @classmethod
     def create(
@@ -73,7 +74,8 @@ class ImageAsset(MediaAssetAggregate):
         cls,
         base: MediaAssetAggregate,
         display_mode: Optional[str] = None,
-        aspect_ratio: Optional[str] = None
+        aspect_ratio: Optional[str] = None,
+        cine_config: Optional[Dict[str, Any]] = None
     ) -> "ImageAsset":
         """
         Promote a base MediaAssetAggregate to ImageAsset.
@@ -92,7 +94,8 @@ class ImageAsset(MediaAssetAggregate):
             created_at=base.created_at,
             updated_at=base.updated_at,
             display_mode=display_mode,
-            aspect_ratio=aspect_ratio
+            aspect_ratio=aspect_ratio,
+            cine_config=cine_config
         )
 
     def update_image_config(
@@ -115,8 +118,8 @@ class ImageAsset(MediaAssetAggregate):
                 raise ValueError(f"aspect_ratio must be one of {VALID_ASPECT_RATIOS}")
             self.aspect_ratio = aspect_ratio
 
-        # Clear aspect_ratio if switching away from letterbox
-        if display_mode is not None and display_mode != "letterbox":
+        # Clear aspect_ratio if switching away from letterbox/cine
+        if display_mode is not None and display_mode not in ("letterbox", "cine"):
             self.aspect_ratio = None
 
         self.updated_at = datetime.utcnow()
@@ -140,6 +143,7 @@ class ImageAsset(MediaAssetAggregate):
             file_path=file_path,
             display_mode=self.display_mode or "float",
             aspect_ratio=self.aspect_ratio,
+            cine_config=self.cine_config,
         )
 
     def update_image_config_from_game(

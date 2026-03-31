@@ -6,7 +6,7 @@ MediaAsset API Schemas - Pydantic models for request/response validation
 """
 
 from datetime import datetime
-from typing import List, Optional
+from typing import Any, Dict, List, Optional
 from uuid import UUID
 
 from pydantic import BaseModel, Field
@@ -115,6 +115,7 @@ class ImageAssetResponse(MediaAssetResponse):
     """Response containing image asset details with display config"""
     display_mode: Optional[str] = None
     aspect_ratio: Optional[str] = None
+    cine_config: Optional[Dict[str, Any]] = None
 
 
 class UpdateImageConfigRequest(BaseModel):

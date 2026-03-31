@@ -1356,6 +1356,7 @@ class WebsocketEvent():
                 active=True,
                 display_mode=image_data.get("display_mode", "float"),
                 aspect_ratio=image_data.get("aspect_ratio"),
+                cine_config=image_data.get("cine_config"),
             )
 
             success = image_service.set_active_image(room_id, image_settings)

@@ -23,8 +23,9 @@ class ImageSettings(BaseModel):
     file_path: str
     loaded_by: str
     active: bool = True
-    display_mode: str = "float"  # "float" | "wrap" | "letterbox"
-    aspect_ratio: Optional[str] = None  # e.g. "2.39:1", "16:9" — only for letterbox
+    display_mode: str = "float"  # "float" | "wrap" | "letterbox" | "cine"
+    aspect_ratio: Optional[str] = None  # e.g. "2.39:1", "16:9" — for letterbox/cine
+    cine_config: Optional[Dict[str, Any]] = None  # Workshop-authored, read-only at runtime
 
     def __init__(self, **data):
         super().__init__(**data)
@@ -71,6 +72,8 @@ class ImageService:
                     image_settings.display_mode = existing["display_mode"]
                 if existing.get("aspect_ratio"):
                     image_settings.aspect_ratio = existing["aspect_ratio"]
+                if existing.get("cine_config"):
+                    image_settings.cine_config = existing["cine_config"]
 
             # Deactivate any existing active images for this room
             self.collection.update_many(
@@ -159,8 +162,8 @@ class ImageService:
                 update_fields["display_mode"] = display_mode
             if aspect_ratio is not None:
                 update_fields["aspect_ratio"] = aspect_ratio
-            # Clear aspect_ratio when switching away from letterbox
-            if display_mode and display_mode != "letterbox":
+            # Clear aspect_ratio when switching away from letterbox/cine
+            if display_mode and display_mode not in ("letterbox", "cine"):
                 update_fields["aspect_ratio"] = None
 
             if not update_fields:
