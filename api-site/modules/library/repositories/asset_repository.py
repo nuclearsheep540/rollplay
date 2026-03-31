@@ -17,8 +17,7 @@ from modules.library.model.sfx_asset_model import SfxAssetModel
 from modules.library.model.image_asset_model import ImageAssetModel
 import logging
 
-from shared_contracts.cine import CineConfig
-
+from modules.library.domain.cine_config import CineConfig
 from modules.library.domain.asset_aggregate import MediaAssetAggregate
 from modules.library.domain.map_asset_aggregate import MapAsset
 from modules.library.domain.music_asset_aggregate import MusicAsset
@@ -318,7 +317,7 @@ class MediaAssetRepository:
             cine_config = None
             if model.cine_config:
                 try:
-                    cine_config = CineConfig.model_validate(model.cine_config)
+                    cine_config = CineConfig.from_dict(model.cine_config)
                 except Exception:
                     logger.warning(f"Invalid cine_config for asset {model.id}, ignoring")
             return ImageAsset.from_base(

@@ -1,41 +1,53 @@
 # Copyright (C) 2025 Matthew Davey
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-"""Cine boundary schemas for cinematic image configuration."""
+"""Cine boundary schemas for cinematic image configuration.
 
-from typing import Any, Dict, List, Optional
+Thin ETL layer mirroring the domain value objects in
+api-site/modules/library/domain/. No business logic here —
+just the serialization shape for the api-site ↔ api-game boundary.
+"""
+
+from typing import Annotated, Any, List, Literal, Optional, Union
 
 from pydantic import Field
 
 from .base import ContractModel
 
 
-class VisualOverlay(ContractModel):
-    """A single visual overlay in the cine overlay stack.
+class FilmGrainOverlay(ContractModel):
+    """Film grain overlay — animated texture over the image."""
 
-    Overlays are typed + stacked: each entry is one effect type,
-    and multiple entries combine in array order (first = bottom, last = top).
-
-    Type-specific params live in the ``params`` dict:
-      - film_grain: {} (no extra params — just enabled + opacity)
-      - color_filter: { color: "#hex", blend_mode: "multiply"|"overlay"|"screen"|"color" }
-    """
-
-    type: str  # "film_grain" | "color_filter"
+    type: Literal["film_grain"] = "film_grain"
     enabled: bool = True
     opacity: float = Field(default=0.5, ge=0.0, le=1.0)
-    params: Dict[str, Any] = {}  # Type-specific, interpreted by frontend
+
+
+class ColorFilterOverlay(ContractModel):
+    """Color filter overlay — solid color with blend mode."""
+
+    type: Literal["color_filter"] = "color_filter"
+    enabled: bool = True
+    opacity: float = Field(default=0.5, ge=0.0, le=1.0)
+    color: str = "#1a0a2e"
+    blend_mode: str = "multiply"
+
+
+VisualOverlay = Annotated[
+    Union[FilmGrainOverlay, ColorFilterOverlay],
+    Field(discriminator="type"),
+]
 
 
 class CineConfig(ContractModel):
     """Structured cinematic configuration for image assets.
 
-    Workshop-authored, read-only at runtime. Stored as JSONB on the
-    image asset in PostgreSQL and passed through to api-game via ETL.
+    Workshop-authored, read-only at runtime. Passed through
+    to api-game via ETL on the ImageConfig contract.
     """
 
-    transition: Optional[Any] = None  # Placeholder — entrance effect
-    ken_burns: Optional[Any] = None  # Placeholder — pan+zoom motion
-    text_overlays: Optional[Any] = None  # Placeholder — animated text
     visual_overlays: List[VisualOverlay] = []
     hide_player_ui: bool = True
+    transition: Optional[Any] = None  # Placeholder
+    ken_burns: Optional[Any] = None  # Placeholder
+    text_overlays: Optional[Any] = None  # Placeholder

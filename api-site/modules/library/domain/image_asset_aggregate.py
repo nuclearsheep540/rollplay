@@ -13,10 +13,11 @@ from datetime import datetime
 from typing import Optional
 from uuid import UUID, uuid4
 
-from shared_contracts.cine import CineConfig
+from shared_contracts.cine import CineConfig as CineConfigContract
 from shared_contracts.image import ImageConfig
 
 from modules.library.domain.asset_aggregate import MediaAssetAggregate
+from modules.library.domain.cine_config import CineConfig
 from modules.library.domain.media_asset_type import MediaAssetType
 
 VALID_DISPLAY_MODES = {"float", "wrap", "letterbox", "cine"}
@@ -155,6 +156,11 @@ class ImageAsset(MediaAssetAggregate):
         Includes display config fields. Contract defaults apply when
         domain fields are None.
         """
+        # Convert domain CineConfig to contract CineConfig for ETL
+        cine_contract = None
+        if self.cine_config:
+            cine_contract = CineConfigContract.model_validate(self.cine_config.to_dict())
+
         return ImageConfig(
             asset_id=asset_id,
             filename=filename,
@@ -164,7 +170,7 @@ class ImageAsset(MediaAssetAggregate):
             aspect_ratio=self.aspect_ratio,
             image_position_x=self.image_position_x,
             image_position_y=self.image_position_y,
-            cine_config=self.cine_config,
+            cine_config=cine_contract,
         )
 
     def update_image_config_from_game(

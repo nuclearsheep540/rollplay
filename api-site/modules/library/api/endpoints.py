@@ -113,7 +113,7 @@ def _to_media_asset_response(asset, s3_service: S3Service = None) -> MediaAssetR
             aspect_ratio=asset.aspect_ratio,
             image_position_x=asset.image_position_x,
             image_position_y=asset.image_position_y,
-            cine_config=asset.cine_config,
+            cine_config=asset.cine_config.to_dict() if asset.cine_config else None,
         )
 
     return MediaAssetResponse(**fields)

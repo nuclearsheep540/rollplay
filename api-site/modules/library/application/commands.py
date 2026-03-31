@@ -499,7 +499,7 @@ class UpdateImageConfig:
         aspect_ratio: Optional[str] = None,
         image_position_x: Optional[float] = None,
         image_position_y: Optional[float] = None,
-        cine_config=None
+        cine_config="UNSET"
     ) -> ImageAsset:
         """
         Update display configuration for an image asset.
@@ -531,9 +531,15 @@ class UpdateImageConfig:
             image_position_y=image_position_y
         )
 
-        if cine_config is not None:
-            asset.cine_config = cine_config
+        if cine_config != "UNSET":
             from datetime import datetime
+            if cine_config is not None:
+                from modules.library.domain.cine_config import CineConfig as DomainCineConfig
+                domain_cine = DomainCineConfig.from_dict(cine_config.model_dump())
+                domain_cine.validate()
+                asset.cine_config = domain_cine
+            else:
+                asset.cine_config = None
             asset.updated_at = datetime.utcnow()
 
         self.repository.save(asset)

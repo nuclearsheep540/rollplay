@@ -33,11 +33,10 @@ const BLEND_MODES = [
 ];
 
 function createOverlay(type) {
-  const base = { type, enabled: true, opacity: 0.5, params: {} };
   if (type === 'color_filter') {
-    base.params = { color: '#1a0a2e', blend_mode: 'multiply' };
+    return { type, enabled: true, opacity: 0.5, color: '#1a0a2e', blend_mode: 'multiply' };
   }
-  return base;
+  return { type, enabled: true, opacity: 0.5 };
 }
 
 export default function ImageDisplayControls({
@@ -83,12 +82,6 @@ export default function ImageDisplayControls({
 
   const updateOverlay = (index, changes) => {
     updateOverlays(overlays.map((o, i) => i === index ? { ...o, ...changes } : o));
-  };
-
-  const updateOverlayParams = (index, paramChanges) => {
-    updateOverlays(overlays.map((o, i) =>
-      i === index ? { ...o, params: { ...o.params, ...paramChanges } } : o
-    ));
   };
 
   const moveOverlay = (index, direction) => {
@@ -330,14 +323,14 @@ export default function ImageDisplayControls({
                         <div className="flex items-center gap-2 mt-2">
                           <input
                             type="color"
-                            value={overlay.params?.color || '#1a0a2e'}
-                            onChange={(e) => updateOverlayParams(index, { color: e.target.value })}
+                            value={overlay.color || '#1a0a2e'}
+                            onChange={(e) => updateOverlay(index, { color: e.target.value })}
                             className="w-6 h-6 rounded border border-border cursor-pointer bg-transparent"
                             title="Filter color"
                           />
                           <select
-                            value={overlay.params?.blend_mode || 'multiply'}
-                            onChange={(e) => updateOverlayParams(index, { blend_mode: e.target.value })}
+                            value={overlay.blend_mode || 'multiply'}
+                            onChange={(e) => updateOverlay(index, { blend_mode: e.target.value })}
                             className="flex-1 text-[10px] bg-surface-tertiary text-content-primary border border-border rounded px-2 py-1"
                           >
                             {BLEND_MODES.map((bm) => (

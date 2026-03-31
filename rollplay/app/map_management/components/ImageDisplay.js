@@ -54,8 +54,8 @@ function renderVisualOverlays(cineConfig) {
       return (
         <div key={i} style={{
           ...base,
-          backgroundColor: overlay.params?.color || '#000000',
-          mixBlendMode: overlay.params?.blend_mode || 'multiply',
+          backgroundColor: overlay.color || '#000000',
+          mixBlendMode: overlay.blend_mode || 'multiply',
         }} />
       );
     }
