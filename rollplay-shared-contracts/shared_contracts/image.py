@@ -15,5 +15,5 @@ class ImageConfig(ContractModel):
     filename: str
     original_filename: Optional[str] = None
     file_path: str  # Presigned S3 URL
-    display_mode: str = "float"  # "float" | "wrap" | "cine"
-    aspect_ratio: Optional[str] = None  # e.g. "2.39:1", "16:9" — only for cine
+    display_mode: str = "float"  # "float" | "wrap" | "letterbox"
+    aspect_ratio: Optional[str] = None  # e.g. "2.39:1", "16:9" — only for letterbox

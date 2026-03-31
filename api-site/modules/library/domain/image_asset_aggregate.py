@@ -18,7 +18,7 @@ from shared_contracts.image import ImageConfig
 from modules.library.domain.asset_aggregate import MediaAssetAggregate
 from modules.library.domain.media_asset_type import MediaAssetType
 
-VALID_DISPLAY_MODES = {"float", "wrap", "cine"}
+VALID_DISPLAY_MODES = {"float", "wrap", "letterbox"}
 VALID_ASPECT_RATIOS = {"2.39:1", "1.85:1", "16:9", "4:3", "1:1"}
 
 
@@ -115,8 +115,8 @@ class ImageAsset(MediaAssetAggregate):
                 raise ValueError(f"aspect_ratio must be one of {VALID_ASPECT_RATIOS}")
             self.aspect_ratio = aspect_ratio
 
-        # Clear aspect_ratio if switching away from cine
-        if display_mode is not None and display_mode != "cine":
+        # Clear aspect_ratio if switching away from letterbox
+        if display_mode is not None and display_mode != "letterbox":
             self.aspect_ratio = None
 
         self.updated_at = datetime.utcnow()

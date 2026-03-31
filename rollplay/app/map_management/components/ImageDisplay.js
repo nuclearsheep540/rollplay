@@ -8,8 +8,7 @@
 import React, { useState, useRef, useMemo } from 'react';
 
 /**
- * Aspect ratio presets for cine mode letterboxing.
- * Parse "W:H" string into a numeric ratio for CSS.
+ * Parse "W:H" string into a numeric ratio for CSS aspect-ratio.
  */
 function parseAspectRatio(ratioStr) {
   if (!ratioStr) return null;
@@ -25,61 +24,57 @@ function parseAspectRatio(ratioStr) {
  * ImageDisplay — Renders a DM-presented image in the game view.
  *
  * Three display modes:
- *   - float: Image centered with contain fit (default, original behavior)
+ *   - float: Image centered with contain fit (default)
  *   - wrap:  Image fills entire viewport with cover fit, cropping edges
- *   - cine:  Letterboxed image with explicit black bars + z-index layering
- *
- * Z-Index Stack (internal layers, all < z-30 to stay below game UI):
- *   z-25: Letterbox bars (cine only)
- *   z-20: Loading indicator
- *   z-15: [Reserved — text overlays, captions]
- *   z-10: [Reserved — visual overlay effects]
- *   z-5:  [Reserved — additional overlay slot]
- *   z-1:  Image layer
- *   z-0:  Background fill
+ *   - letterbox: Full-width image, height constrained by aspect ratio,
+ *                black background creates natural letterbox bars
  */
 const ImageDisplay = ({
   activeImage = null,
   className = "",
 }) => {
   const [imageLoaded, setImageLoaded] = useState(false);
-  const [imageDimensions, setImageDimensions] = useState(null);
-  const containerRef = useRef(null);
   const imageRef = useRef(null);
 
   const displayMode = activeImage?.display_mode || 'float';
-  const aspectRatioStr = activeImage?.aspect_ratio;
-  const cineRatio = useMemo(() => parseAspectRatio(aspectRatioStr), [aspectRatioStr]);
-
-  const baseStyles = {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    width: '100%',
-    height: '100%',
-    zIndex: 1,
-    backgroundColor: displayMode === 'cine' ? '#000' : '#1a1a2e',
-    overflow: 'hidden',
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-  };
+  const cineRatio = useMemo(
+    () => parseAspectRatio(activeImage?.aspect_ratio),
+    [activeImage?.aspect_ratio]
+  );
 
   if (!activeImage) {
     return null;
   }
 
+  const isLetterbox = displayMode === 'letterbox';
+
+  // Image styles per mode
+  const imageStyle = displayMode === 'wrap'
+    ? { width: '100%', height: '100%', objectFit: 'cover' }
+    : displayMode === 'letterbox'
+    ? { width: '100%', height: '100%', objectFit: 'cover' }
+    : { maxWidth: '100%', maxHeight: '100%', width: 'auto', height: 'auto', objectFit: 'contain' };
+
   return (
     <div
-      ref={containerRef}
       className={`image-display ${className}`}
       style={{
-        ...baseStyles,
+        position: 'absolute',
+        top: 0,
+        left: 0,
+        width: '100%',
+        height: '100%',
+        zIndex: 1,
+        backgroundColor: isLetterbox ? '#000' : '#1a1a2e',
+        overflow: 'hidden',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
         opacity: imageLoaded ? 1 : 0.5,
         transition: 'opacity 0.3s ease',
       }}
     >
-      {/* Loading indicator — z-20 */}
+      {/* Loading indicator */}
       {!imageLoaded && (
         <div style={{
           position: 'absolute',
@@ -95,147 +90,46 @@ const ImageDisplay = ({
         </div>
       )}
 
-      {/* === FLOAT MODE === */}
-      {displayMode === 'float' && (
-        <img
-          ref={imageRef}
-          src={activeImage.file_path}
-          alt={activeImage.original_filename || activeImage.filename || 'Game image'}
-          style={{
-            maxWidth: '100%',
-            maxHeight: '100%',
-            width: 'auto',
-            height: 'auto',
-            objectFit: 'contain',
-            pointerEvents: 'none',
-            userSelect: 'none',
-            zIndex: 1,
-          }}
-          onLoad={() => {
-            setImageLoaded(true);
-            const img = imageRef.current;
-            if (img) {
-              setImageDimensions({ w: img.naturalWidth, h: img.naturalHeight });
-            }
-          }}
-          onError={() => setImageLoaded(false)}
-        />
-      )}
-
-      {/* === WRAP MODE === */}
-      {displayMode === 'wrap' && (
-        <img
-          ref={imageRef}
-          src={activeImage.file_path}
-          alt={activeImage.original_filename || activeImage.filename || 'Game image'}
-          style={{
-            width: '100%',
-            height: '100%',
-            objectFit: 'cover',
-            pointerEvents: 'none',
-            userSelect: 'none',
-            zIndex: 1,
-          }}
-          onLoad={() => {
-            setImageLoaded(true);
-            const img = imageRef.current;
-            if (img) {
-              setImageDimensions({ w: img.naturalWidth, h: img.naturalHeight });
-            }
-          }}
-          onError={() => setImageLoaded(false)}
-        />
-      )}
-
-      {/* === CINE MODE === */}
-      {displayMode === 'cine' && (
-        <>
-          {/* Image in aspect-ratio-constrained container — z-1 */}
-          <div style={{
-            position: 'relative',
-            maxWidth: '100%',
-            maxHeight: '100%',
-            aspectRatio: cineRatio ? `${cineRatio}` : '2.39 / 1',
-            overflow: 'hidden',
-            zIndex: 1,
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-          }}>
-            <img
-              ref={imageRef}
-              src={activeImage.file_path}
-              alt={activeImage.original_filename || activeImage.filename || 'Game image'}
-              style={{
-                width: '100%',
-                height: '100%',
-                objectFit: 'cover',
-                pointerEvents: 'none',
-                userSelect: 'none',
-              }}
-              onLoad={() => {
-                setImageLoaded(true);
-                const img = imageRef.current;
-                if (img) {
-                  setImageDimensions({ w: img.naturalWidth, h: img.naturalHeight });
-                }
-              }}
-              onError={() => setImageLoaded(false)}
-            />
-
-            {/* z-5 through z-15: Reserved for future overlay layers */}
-            {/* Workshop-configured overlays will be inserted here */}
-          </div>
-
-          {/* Letterbox bars — z-25, rendered as overlay on top of everything inside ImageDisplay */}
-          {/* These use pointer-events: none so they don't block interaction with overlays below */}
-          <div
-            aria-hidden="true"
+      {/* Letterbox mode: aspect-ratio container sized to fit within viewport.
+          Wide ratios (2.39:1) fill full width with top/bottom bars.
+          Narrow ratios (4:3, 1:1) fill full height with left/right bars.
+          width: min(100%, 100vh * ratio) picks the right constraint automatically. */}
+      {isLetterbox ? (
+        <div style={{
+          width: `min(100%, ${(cineRatio || 2.39) * 100}vh)`,
+          aspectRatio: cineRatio ? `${cineRatio}` : '2.39 / 1',
+          overflow: 'hidden',
+          position: 'relative',
+          zIndex: 1,
+        }}>
+          <img
+            ref={imageRef}
+            src={activeImage.file_path}
+            alt={activeImage.original_filename || activeImage.filename || 'Game image'}
             style={{
-              position: 'absolute',
-              inset: 0,
-              zIndex: 25,
+              ...imageStyle,
               pointerEvents: 'none',
+              userSelect: 'none',
             }}
-          >
-            {/* Top bar */}
-            <div style={{
-              position: 'absolute',
-              top: 0,
-              left: 0,
-              right: 0,
-              height: 'calc((100% - min(100%, 100vw / ' + (cineRatio || 2.39) + ')) / 2)',
-              backgroundColor: '#000',
-            }} />
-            {/* Bottom bar */}
-            <div style={{
-              position: 'absolute',
-              bottom: 0,
-              left: 0,
-              right: 0,
-              height: 'calc((100% - min(100%, 100vw / ' + (cineRatio || 2.39) + ')) / 2)',
-              backgroundColor: '#000',
-            }} />
-            {/* Left bar */}
-            <div style={{
-              position: 'absolute',
-              top: 0,
-              bottom: 0,
-              left: 0,
-              width: 'calc((100% - min(100%, 100vh * ' + (cineRatio || 2.39) + ')) / 2)',
-              backgroundColor: '#000',
-            }} />
-            {/* Right bar */}
-            <div style={{
-              position: 'absolute',
-              top: 0,
-              bottom: 0,
-              right: 0,
-              width: 'calc((100% - min(100%, 100vh * ' + (cineRatio || 2.39) + ')) / 2)',
-              backgroundColor: '#000',
-            }} />
-          </div>
-        </>
+            onLoad={() => setImageLoaded(true)}
+            onError={() => setImageLoaded(false)}
+          />
+          {/* z-5 through z-15: Reserved for future overlay layers */}
+        </div>
+      ) : (
+        <img
+          ref={imageRef}
+          src={activeImage.file_path}
+          alt={activeImage.original_filename || activeImage.filename || 'Game image'}
+          style={{
+            ...imageStyle,
+            pointerEvents: 'none',
+            userSelect: 'none',
+            zIndex: 1,
+          }}
+          onLoad={() => setImageLoaded(true)}
+          onError={() => setImageLoaded(false)}
+        />
       )}
     </div>
   );

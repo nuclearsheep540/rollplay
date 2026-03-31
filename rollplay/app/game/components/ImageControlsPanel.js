@@ -13,7 +13,7 @@ import ImageSelectionSection from './ImageSelectionSection';
 const DISPLAY_MODES = [
   { id: 'float', label: 'Float' },
   { id: 'wrap', label: 'Wrap' },
-  { id: 'cine', label: 'Cine' },
+  { id: 'letterbox', label: 'Letterbox' },
 ];
 
 const ASPECT_RATIO_PRESETS = [
@@ -57,7 +57,7 @@ export default function ImageControlsPanel({
   // Whether the DM has changed anything from the original server state
   const hasChanges = originalMode !== null && (
     currentMode !== originalMode
-    || (currentMode === 'cine' && currentRatio !== (originalRatio || '2.39:1'))
+    || (currentMode === 'letterbox' && currentRatio !== (originalRatio || '2.39:1'))
   );
 
   const handleImageSelection = (imageData) => {
@@ -74,7 +74,7 @@ export default function ImageControlsPanel({
     setActiveImage((prev) => ({
       ...prev,
       display_mode: newMode,
-      aspect_ratio: newMode === 'cine' ? (prev.aspect_ratio || '2.39:1') : null,
+      aspect_ratio: newMode === 'letterbox' ? (prev.aspect_ratio || '2.39:1') : null,
     }));
   };
 
@@ -99,7 +99,7 @@ export default function ImageControlsPanel({
 
     sendImageConfigUpdate({
       display_mode: currentMode,
-      aspect_ratio: currentMode === 'cine' ? currentRatio : null,
+      aspect_ratio: currentMode === 'letterbox' ? currentRatio : null,
     });
 
     setOriginalMode(null);
@@ -199,7 +199,7 @@ export default function ImageControlsPanel({
           </div>
 
           {/* Aspect Ratio Presets — only shown in cine mode */}
-          {currentMode === 'cine' && (
+          {currentMode === 'letterbox' && (
             <div className="mb-3">
               <label className="block text-xs text-gray-400 mb-1">Aspect Ratio</label>
               <div className="flex flex-wrap gap-1">

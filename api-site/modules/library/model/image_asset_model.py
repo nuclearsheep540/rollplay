@@ -32,7 +32,7 @@ class ImageAssetModel(MediaAsset):
     )
 
     # Display configuration - NULL means not yet configured (defaults to "float")
-    display_mode = Column(String(20), nullable=True)   # "float" | "wrap" | "cine"
+    display_mode = Column(String(20), nullable=True)   # "float" | "wrap" | "letterbox"
     aspect_ratio = Column(String(20), nullable=True)   # "2.39:1", "1.85:1", "16:9", "4:3", "1:1"
 
     __mapper_args__ = {
