@@ -15,6 +15,7 @@ import DashboardLayout from './components/DashboardLayout'
 import SocialManager from './components/SocialManager'
 import FriendsWidget from './components/FriendsWidget'
 import AccountNameModal from './components/AccountNameModal'
+import InDevWarningModal from './components/InDevWarningModal'
 import { useAuth } from './hooks/useAuth'
 import { useEvents } from '../shared/hooks/useEvents'
 import { useToast } from '../shared/hooks/useToast'
@@ -70,8 +71,17 @@ function DashboardContent() {
     setError
   } = useAuth()
 
+  const [showInDevWarning, setShowInDevWarning] = useState(false)
+
   // Show setup modal if user is missing account name or screen name
   const showSetupModal = user && (!user.account_name || (showScreenNameModal && !user.screen_name))
+
+  // Show in-dev warning once user is loaded and setup modal is not showing
+  useEffect(() => {
+    if (user && !showSetupModal) {
+      setShowInDevWarning(true)
+    }
+  }, [user, showSetupModal])
 
   // Handle setup completion - update user state with new account info and screen name
   const handleSetupComplete = (accountResult, screenNameValue) => {
@@ -453,6 +463,12 @@ function DashboardContent() {
         show={showSetupModal}
         user={user}
         onComplete={handleSetupComplete}
+      />
+
+      {/* In-development warning — shown every login, after setup modal if applicable */}
+      <InDevWarningModal
+        show={showInDevWarning && !showSetupModal}
+        onClose={() => setShowInDevWarning(false)}
       />
     </DashboardLayout>
   )
