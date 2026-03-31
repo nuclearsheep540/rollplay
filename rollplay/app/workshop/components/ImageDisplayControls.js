@@ -26,6 +26,11 @@ const OVERLAY_TYPES = [
   { id: 'color_filter', label: 'Color Filter' },
 ];
 
+const GRAIN_STYLES = [
+  { id: 'vintage', label: 'Vintage' },
+  { id: 'grain', label: 'Grain' },
+];
+
 const GRAIN_BLEND_MODES = [
   { id: 'overlay', label: 'Overlay' },
   { id: 'screen', label: 'Screen' },
@@ -43,7 +48,7 @@ const COLOR_BLEND_MODES = [
 
 function createOverlay(type) {
   if (type === 'film_grain') {
-    return { type, enabled: true, opacity: 0.5, blend_mode: 'overlay' };
+    return { type, enabled: true, opacity: 0.5, style: 'vintage', blend_mode: 'overlay' };
   }
   if (type === 'color_filter') {
     return { type, enabled: true, opacity: 0.5, color: '#1a0a2e', blend_mode: 'multiply' };
@@ -339,7 +344,16 @@ export default function ImageDisplayControls({
 
                       {/* Film grain blend mode */}
                       {overlay.type === 'film_grain' && (
-                        <div className="mt-2">
+                        <div className="flex flex-col gap-2 mt-2">
+                          <select
+                            value={overlay.style || 'vintage'}
+                            onChange={(e) => updateOverlay(index, { style: e.target.value })}
+                            className="w-full text-[10px] bg-surface-tertiary text-content-primary border border-border rounded px-2 py-1"
+                          >
+                            {GRAIN_STYLES.map((s) => (
+                              <option key={s.id} value={s.id}>{s.label}</option>
+                            ))}
+                          </select>
                           <select
                             value={overlay.blend_mode || 'overlay'}
                             onChange={(e) => updateOverlay(index, { blend_mode: e.target.value })}

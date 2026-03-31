@@ -29,6 +29,11 @@ function parseAspectRatio(ratioStr) {
  *   - letterbox: Full-width image, height constrained by aspect ratio,
  *                black background creates natural letterbox bars
  */
+const GRAIN_STYLE_ASSETS = {
+  vintage: '/cine/overlay/film-grain.gif',
+  grain: '/cine/overlay/grain_noisy.gif',
+};
+
 function renderVisualOverlays(cineConfig) {
   const overlays = cineConfig?.visual_overlays;
   if (!overlays?.length) return null;
@@ -44,7 +49,7 @@ function renderVisualOverlays(cineConfig) {
       return (
         <div key={i} style={{
           ...base,
-          backgroundImage: 'url(/cine/overlay/film-grain.gif)',
+          backgroundImage: `url(${GRAIN_STYLE_ASSETS[overlay.style] || GRAIN_STYLE_ASSETS.vintage})`,
           backgroundSize: 'cover',
           mixBlendMode: overlay.blend_mode || 'overlay',
         }} />

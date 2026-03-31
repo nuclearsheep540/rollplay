@@ -98,7 +98,7 @@ export default function ImageConfigTool({ selectedAssetId, onAssetSelect }) {
       file_path: selectedAsset.s3_url,
       filename: selectedAsset.filename,
       original_filename: selectedAsset.filename,
-      display_mode: displayMode,
+      display_mode: cineConfig ? 'cine' : displayMode,
       aspect_ratio: (displayMode === 'letterbox' || displayMode === 'cine') ? aspectRatio : null,
       image_position_x: imagePositionX,
       image_position_y: imagePositionY,
