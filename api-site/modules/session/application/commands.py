@@ -407,7 +407,8 @@ class StartSession:
         if hasattr(image_asset, 'image_position_y') and image_asset.image_position_y is not None:
             config_kwargs["image_position_y"] = image_asset.image_position_y
         if hasattr(image_asset, 'cine_config') and image_asset.cine_config:
-            config_kwargs["cine_config"] = image_asset.cine_config
+            from shared_contracts.cine import CineConfig as CineConfigContract
+            config_kwargs["cine_config"] = CineConfigContract.model_validate(image_asset.cine_config.to_dict())
 
         return ImageConfig(**config_kwargs)
 
