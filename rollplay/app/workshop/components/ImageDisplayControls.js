@@ -4,7 +4,7 @@
 'use client'
 
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
-import { faClapperboard } from '@fortawesome/free-solid-svg-icons';
+import { faVideo, faVideoSlash } from '@fortawesome/free-solid-svg-icons';
 
 const DISPLAY_MODES = [
   { id: 'float', label: 'Float', description: 'Centred, natural size' },
@@ -222,7 +222,7 @@ export default function ImageDisplayControls({
               <div className="text-[10px] opacity-70 mt-0.5">Cinematic effects &amp; overlays</div>
             </div>
             <FontAwesomeIcon
-              icon={faClapperboard}
+              icon={cineConfig ? faVideo : faVideoSlash}
               className={`text-sm transition-colors ${cineEnabled ? 'text-rose-400' : 'text-content-secondary/30'}`}
             />
           </div>
