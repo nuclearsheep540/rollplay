@@ -5,7 +5,7 @@
 
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { authFetch, authPut } from '@/app/shared/utils/authFetch'
 import Modal from '@/app/shared/components/Modal'
 
@@ -106,6 +106,15 @@ export default function AccountNameModal({ show, user, onComplete }) {
     onComplete(result, screenName.trim())
   }
 
+  useEffect(() => {
+    if (!result) return
+    const handler = (e) => {
+      if (e.key === 'Enter') handleContinue()
+    }
+    window.addEventListener('keydown', handler)
+    return () => window.removeEventListener('keydown', handler)
+  }, [result])
+
   const handleKeyPress = (e) => {
     if (e.key === 'Enter' && !submitting) {
       const accountValid = !needsAccountName || isValidFormat(accountName.trim())
@@ -122,7 +131,7 @@ export default function AccountNameModal({ show, user, onComplete }) {
   const canSubmit = (!needsAccountName || isAccountValid) && (!needsScreenName || screenName.trim())
 
   return (
-    <Modal open={show} onClose={() => {}} size="md">
+    <Modal open={show} onClose={() => {}} size="md" backgroundImage={result ? '/confetti.gif' : undefined}>
       <div className="p-6">
         {/* Success state — only shown when account name was just created */}
         {result ? (
@@ -139,8 +148,8 @@ export default function AccountNameModal({ show, user, onComplete }) {
               </span>
             </div>
 
-            <div className="mb-6 p-3 rounded-sm border bg-feedback-success/15 border-feedback-success/30">
-              <p className="text-sm text-feedback-success">
+            <div className="mb-6">
+              <p className="text-base text-content-on-dark text-center">
                 Share your account tag with friends so they can find you!
               </p>
             </div>

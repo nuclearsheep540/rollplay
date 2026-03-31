@@ -33,7 +33,7 @@ const SIZE_CLASSES = {
  * @param {string} panelClassName - Override panel classes (replaces default bg/border/text)
  * @param {React.ReactNode} children - Modal content
  */
-export default function Modal({ open, onClose, size = 'md', initialFocus, panelClassName, showBackdrop = true, children }) {
+export default function Modal({ open, onClose, size = 'md', initialFocus, panelClassName, showBackdrop = true, backgroundImage, children }) {
   return (
     <Transition show={open} as={Fragment}>
       <Dialog onClose={onClose} initialFocus={initialFocus} className="relative z-50">
@@ -64,14 +64,23 @@ export default function Modal({ open, onClose, size = 'md', initialFocus, panelC
             leaveFrom="opacity-100 scale-100"
             leaveTo="opacity-0 scale-95"
           >
-            <DialogPanel
-              className={panelClassName
-                ? `${SIZE_CLASSES[size]} w-full ${panelClassName}`
-                : `${SIZE_CLASSES[size]} w-full bg-surface-secondary border border-border text-content-on-dark rounded-sm shadow-2xl`
-              }
-            >
-              {children}
-            </DialogPanel>
+            <div className={`${SIZE_CLASSES[size]} w-full relative`}>
+              {backgroundImage && (
+                <img
+                  src={backgroundImage}
+                  alt=""
+                  className="absolute bottom-0 w-full pointer-events-none scale-150 origin-bottom"
+                />
+              )}
+              <DialogPanel
+                className={panelClassName
+                  ? `relative ${panelClassName}`
+                  : `relative bg-surface-secondary border border-border text-content-on-dark rounded-sm shadow-2xl`
+                }
+              >
+                {children}
+              </DialogPanel>
+            </div>
           </TransitionChild>
         </div>
         </div>
