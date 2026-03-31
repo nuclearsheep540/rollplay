@@ -28,9 +28,12 @@ const ASPECT_RATIO_PRESETS = [
  * ImageControlsPanel — DM drawer tab for loading images and configuring display mode.
  *
  * Follows the MapControlsPanel pattern:
- * - Select IMAGE assets from campaign library
- * - Configure display mode (float / wrap / cine)
- * - Configure aspect ratio presets for cine mode
+ * - Collapsible image selection (Load Image / Hide Images)
+ * - Clear Image button
+ * - Collapsible Display Settings with optimistic preview + apply flow:
+ *   DM clicks mode/ratio → activeImage updates optimistically for live preview
+ *   DM clicks Apply → saves to MongoDB + broadcasts to all clients
+ *   DM clicks cancel → reverts to original server state stored on edit open
  */
 export default function ImageControlsPanel({
   roomId,
@@ -42,51 +45,85 @@ export default function ImageControlsPanel({
   sendImageConfigUpdate = null,
 }) {
   const [isImageExpanded, setIsImageExpanded] = useState(true);
-  const [isDisplayExpanded, setIsDisplayExpanded] = useState(true);
+  const [isDisplayExpanded, setIsDisplayExpanded] = useState(false);
+
+  // Original server state captured when Display Settings is opened — for cancel/revert
+  const [originalMode, setOriginalMode] = useState(null);
+  const [originalRatio, setOriginalRatio] = useState(null);
 
   const currentMode = activeImage?.display_mode || 'float';
   const currentRatio = activeImage?.aspect_ratio || '2.39:1';
 
-  const handleImageSelection = (imageData) => {
-    console.log('🖼️ Image selected:', imageData);
+  // Whether the DM has changed anything from the original server state
+  const hasChanges = originalMode !== null && (
+    currentMode !== originalMode
+    || (currentMode === 'cine' && currentRatio !== (originalRatio || '2.39:1'))
+  );
 
+  const handleImageSelection = (imageData) => {
     if (sendImageLoad) {
       sendImageLoad(imageData);
-      console.log('🖼️ Selected image load sent via WebSocket:', imageData);
-    } else {
-      if (setActiveImage) {
-        setActiveImage(imageData);
-        console.log('🖼️ Selected image loaded locally (WebSocket unavailable):', imageData);
-      }
+    } else if (setActiveImage) {
+      setActiveImage(imageData);
     }
   };
 
-  const handleModeChange = (newMode) => {
-    if (newMode === currentMode) return;
-
-    const update = {
+  // Optimistically update activeImage so ImageDisplay previews immediately
+  const previewMode = (newMode) => {
+    if (!setActiveImage || !activeImage) return;
+    setActiveImage((prev) => ({
+      ...prev,
       display_mode: newMode,
-      aspect_ratio: newMode === 'cine' ? currentRatio : null,
-    };
-
-    if (sendImageConfigUpdate) {
-      sendImageConfigUpdate(update);
-    }
+      aspect_ratio: newMode === 'cine' ? (prev.aspect_ratio || '2.39:1') : null,
+    }));
   };
 
-  const handleRatioChange = (newRatio) => {
-    if (newRatio === currentRatio) return;
+  const previewRatio = (newRatio) => {
+    if (!setActiveImage || !activeImage) return;
+    setActiveImage((prev) => ({
+      ...prev,
+      aspect_ratio: newRatio,
+    }));
+  };
 
-    if (sendImageConfigUpdate) {
-      sendImageConfigUpdate({
-        display_mode: 'cine',
-        aspect_ratio: newRatio,
-      });
+  // Open editing — snapshot current server state for cancel
+  const openDisplaySettings = () => {
+    setOriginalMode(currentMode);
+    setOriginalRatio(activeImage?.aspect_ratio || null);
+    setIsDisplayExpanded(true);
+  };
+
+  // Apply: save to MongoDB via WebSocket → broadcast replaces optimistic state with server truth
+  const applyDisplayConfig = () => {
+    if (!sendImageConfigUpdate || !activeImage) return;
+
+    sendImageConfigUpdate({
+      display_mode: currentMode,
+      aspect_ratio: currentMode === 'cine' ? currentRatio : null,
+    });
+
+    setOriginalMode(null);
+    setOriginalRatio(null);
+    setIsDisplayExpanded(false);
+  };
+
+  // Cancel: revert optimistic preview to original server state
+  const cancelDisplayConfig = () => {
+    if (setActiveImage && activeImage && originalMode !== null) {
+      setActiveImage((prev) => ({
+        ...prev,
+        display_mode: originalMode,
+        aspect_ratio: originalRatio,
+      }));
     }
+    setOriginalMode(null);
+    setOriginalRatio(null);
+    setIsDisplayExpanded(false);
   };
 
   return (
     <div className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden flex flex-col">
+      {/* Load Image — collapsible */}
       <button
         className={`${DM_CHILD} ${isImageExpanded ? ACTIVE_BACKGROUND : ''}`}
         onClick={() => setIsImageExpanded(!isImageExpanded)}
@@ -105,85 +142,94 @@ export default function ImageControlsPanel({
         currentImage={activeImage}
       />
 
-      {/* Display Settings — only shown when an image is active */}
-      {activeImage && (
-        <>
-          <button
-            className={`${DM_CHILD} ${isDisplayExpanded ? ACTIVE_BACKGROUND : ''}`}
-            onClick={() => setIsDisplayExpanded(!isDisplayExpanded)}
-          >
-            <span className={`${DM_ARROW} transform transition-transform ${isDisplayExpanded ? 'rotate-180' : ''}`}>
-              ▼
-            </span>
-            🎬 Display Settings
-          </button>
-
-          {isDisplayExpanded && (
-            <div className="px-3 py-2 space-y-3">
-              {/* Display Mode Selector */}
-              <div>
-                <div className="text-xs text-content-secondary mb-1.5 font-medium">Mode</div>
-                <div className="flex gap-1">
-                  {DISPLAY_MODES.map((mode) => (
-                    <button
-                      key={mode.id}
-                      onClick={() => handleModeChange(mode.id)}
-                      className={`flex-1 px-2 py-1.5 text-xs font-medium rounded transition-colors ${
-                        currentMode === mode.id
-                          ? 'bg-rose-600/80 text-white'
-                          : 'bg-surface-tertiary text-content-secondary hover:bg-surface-quaternary hover:text-content-primary'
-                      }`}
-                    >
-                      {mode.label}
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              {/* Aspect Ratio Presets — only shown in cine mode */}
-              {currentMode === 'cine' && (
-                <div>
-                  <div className="text-xs text-content-secondary mb-1.5 font-medium">Aspect Ratio</div>
-                  <div className="flex flex-wrap gap-1">
-                    {ASPECT_RATIO_PRESETS.map((preset) => (
-                      <button
-                        key={preset.id}
-                        onClick={() => handleRatioChange(preset.id)}
-                        className={`px-2 py-1.5 text-xs font-medium rounded transition-colors ${
-                          currentRatio === preset.id
-                            ? 'bg-rose-600/80 text-white'
-                            : 'bg-surface-tertiary text-content-secondary hover:bg-surface-quaternary hover:text-content-primary'
-                        }`}
-                        title={preset.description}
-                      >
-                        {preset.label}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              )}
-            </div>
-          )}
-        </>
-      )}
-
+      {/* Clear Image */}
       {activeImage && (
         <button
           className={`${DM_CHILD} ${ACTIVE_BACKGROUND}`}
           onClick={() => {
             if (sendImageClear) {
               sendImageClear();
-              console.log('🖼️ Image clear sent via WebSocket');
-            } else {
-              if (setActiveImage) {
-                setActiveImage(null);
-                console.log('🖼️ Image cleared locally (WebSocket unavailable)');
-              }
+            } else if (setActiveImage) {
+              setActiveImage(null);
             }
           }}
         >
           🗑️ Clear Image
         </button>
+      )}
+
+      {/* Display Settings — collapsible, only when image is active */}
+      <button
+        className={`${DM_CHILD} ${isDisplayExpanded ? ACTIVE_BACKGROUND : ''}`}
+        onClick={() => {
+          if (isDisplayExpanded) {
+            cancelDisplayConfig();
+          } else {
+            openDisplaySettings();
+          }
+        }}
+        disabled={!activeImage}
+      >
+        <span className={`${DM_ARROW} transform transition-transform ${isDisplayExpanded ? 'rotate-180' : ''}`}>
+          ▼
+        </span>
+        🎬 {isDisplayExpanded ? 'Exit Display Settings' : 'Display Settings'}
+      </button>
+
+      {isDisplayExpanded && activeImage && (
+        <div className="ml-4 mb-6">
+          {/* Display Mode Selector */}
+          <div className="mb-3">
+            <label className="block text-xs text-gray-400 mb-1">Mode</label>
+            <div className="flex gap-1">
+              {DISPLAY_MODES.map((mode) => (
+                <button
+                  key={mode.id}
+                  onClick={() => previewMode(mode.id)}
+                  className={`flex-1 px-2 py-1.5 text-xs font-medium rounded transition-colors ${
+                    currentMode === mode.id
+                      ? 'bg-rose-600/80 text-white'
+                      : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
+                  }`}
+                >
+                  {mode.label}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Aspect Ratio Presets — only shown in cine mode */}
+          {currentMode === 'cine' && (
+            <div className="mb-3">
+              <label className="block text-xs text-gray-400 mb-1">Aspect Ratio</label>
+              <div className="flex flex-wrap gap-1">
+                {ASPECT_RATIO_PRESETS.map((preset) => (
+                  <button
+                    key={preset.id}
+                    onClick={() => previewRatio(preset.id)}
+                    className={`px-2 py-1.5 text-xs font-medium rounded transition-colors ${
+                      currentRatio === preset.id
+                        ? 'bg-rose-600/80 text-white'
+                        : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
+                    }`}
+                    title={preset.description}
+                  >
+                    {preset.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Apply button */}
+          <button
+            className={DM_CHILD_LAST}
+            onClick={applyDisplayConfig}
+            disabled={!hasChanges}
+          >
+            ✨ Apply Display Changes
+          </button>
+        </div>
       )}
     </div>
   );

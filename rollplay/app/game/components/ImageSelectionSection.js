@@ -137,7 +137,9 @@ export default function ImageSelectionSection({
       filename: asset.filename,
       original_filename: asset.filename,
       file_path: asset.s3_url,
-      uploaded_by: "dm"
+      uploaded_by: "dm",
+      display_mode: asset.display_mode || "float",
+      aspect_ratio: asset.aspect_ratio || null,
     };
     onSelectImage(imageSettings);
   };

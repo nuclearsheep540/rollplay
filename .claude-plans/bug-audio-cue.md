@@ -1,0 +1,1 @@
+audio cue state isnt persisted between drawer states. ie, I could 'prep' what I want my next cue to look like, close the drawer, re-open the drawer and find that my prepared cue state is no more - its defauling to PGM.

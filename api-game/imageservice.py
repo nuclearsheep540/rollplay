@@ -61,6 +61,17 @@ class ImageService:
             return False
 
         try:
+            # Preserve display config from existing document for this image
+            # (config applied in-game lives in MongoDB until session-end ETL)
+            existing = self.collection.find_one(
+                {"room_id": room_id, "filename": image_settings.filename}
+            )
+            if existing:
+                if existing.get("display_mode"):
+                    image_settings.display_mode = existing["display_mode"]
+                if existing.get("aspect_ratio"):
+                    image_settings.aspect_ratio = existing["aspect_ratio"]
+
             # Deactivate any existing active images for this room
             self.collection.update_many(
                 {"room_id": room_id, "active": True},
