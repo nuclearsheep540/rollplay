@@ -45,6 +45,7 @@ export default function Magic() {
           const data = await response.json()
           if (data.valid) {
             // User is authenticated, redirect to dashboard
+            sessionStorage.setItem('just_logged_in', 'true')
             router.push('/dashboard')
             return
           }
@@ -201,6 +202,7 @@ export default function Magic() {
       
       // No need to store in localStorage - httpOnly cookie is set by backend
       // Redirect to dashboard
+      sessionStorage.setItem('just_logged_in', 'true')
       router.push('/dashboard')
       
     } catch (error) {

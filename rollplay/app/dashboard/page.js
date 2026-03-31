@@ -76,9 +76,10 @@ function DashboardContent() {
   // Show setup modal if user is missing account name or screen name
   const showSetupModal = user && (!user.account_name || (showScreenNameModal && !user.screen_name))
 
-  // Show in-dev warning once user is loaded and setup modal is not showing
+  // Show in-dev warning once per login (flag set during auth redirect)
   useEffect(() => {
-    if (user && !showSetupModal) {
+    if (user && !showSetupModal && sessionStorage.getItem('just_logged_in')) {
+      sessionStorage.removeItem('just_logged_in')
       setShowInDevWarning(true)
     }
   }, [user, showSetupModal])

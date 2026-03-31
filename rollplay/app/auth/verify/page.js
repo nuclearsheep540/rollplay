@@ -38,6 +38,7 @@ function MagicLinkVerifyContent() {
 
         // Redirect to dashboard after short delay
         setTimeout(() => {
+          sessionStorage.setItem('just_logged_in', 'true')
           router.push('/dashboard')
         }, 2000)
       } else {
