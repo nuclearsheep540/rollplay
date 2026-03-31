@@ -154,7 +154,7 @@ class MediaAssetRepository:
                 existing.aspect_ratio = aggregate.aspect_ratio
                 existing.image_position_x = aggregate.image_position_x
                 existing.image_position_y = aggregate.image_position_y
-                existing.cine_config = aggregate.cine_config.model_dump() if aggregate.cine_config else None
+                existing.cine_config = aggregate.cine_config.to_dict() if aggregate.cine_config else None
         else:
             # Create new - determine which model to use
             if isinstance(aggregate, MapAsset):
@@ -225,7 +225,7 @@ class MediaAssetRepository:
                     aspect_ratio=aggregate.aspect_ratio,
                     image_position_x=aggregate.image_position_x,
                     image_position_y=aggregate.image_position_y,
-                    cine_config=aggregate.cine_config.model_dump() if aggregate.cine_config else None
+                    cine_config=aggregate.cine_config.to_dict() if aggregate.cine_config else None
                 )
             else:
                 model = MediaAssetModel(

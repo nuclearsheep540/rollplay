@@ -46,7 +46,7 @@ function renderVisualOverlays(cineConfig) {
           ...base,
           backgroundImage: 'url(/cine/overlay/film-grain.gif)',
           backgroundSize: 'cover',
-          mixBlendMode: 'overlay',
+          mixBlendMode: overlay.blend_mode || 'overlay',
         }} />
       );
     }

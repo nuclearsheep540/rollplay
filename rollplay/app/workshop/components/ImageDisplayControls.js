@@ -3,6 +3,7 @@
 
 'use client'
 
+import { useState } from 'react';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { faVideo, faVideoSlash } from '@fortawesome/free-solid-svg-icons';
 
@@ -25,7 +26,15 @@ const OVERLAY_TYPES = [
   { id: 'color_filter', label: 'Color Filter' },
 ];
 
-const BLEND_MODES = [
+const GRAIN_BLEND_MODES = [
+  { id: 'overlay', label: 'Overlay' },
+  { id: 'screen', label: 'Screen' },
+  { id: 'soft-light', label: 'Soft Light' },
+  { id: 'multiply', label: 'Multiply' },
+  { id: 'luminosity', label: 'Luminosity' },
+];
+
+const COLOR_BLEND_MODES = [
   { id: 'multiply', label: 'Multiply' },
   { id: 'overlay', label: 'Overlay' },
   { id: 'screen', label: 'Screen' },
@@ -33,6 +42,9 @@ const BLEND_MODES = [
 ];
 
 function createOverlay(type) {
+  if (type === 'film_grain') {
+    return { type, enabled: true, opacity: 0.5, blend_mode: 'overlay' };
+  }
   if (type === 'color_filter') {
     return { type, enabled: true, opacity: 0.5, color: '#1a0a2e', blend_mode: 'multiply' };
   }
@@ -55,6 +67,8 @@ export default function ImageDisplayControls({
   hasChanges,
   error,
 }) {
+  const [addMenuOpen, setAddMenuOpen] = useState(false);
+
   // Cine is "enabled" only if there's meaningful content — not just an empty scaffolding
   const cineEnabled = cineConfig && (
     cineConfig.visual_overlays?.length > 0
@@ -229,21 +243,26 @@ export default function ImageDisplayControls({
             <div>
               <div className="flex items-center justify-between mb-2">
                 <label className="text-xs text-content-secondary font-medium">Visual Overlays</label>
-                <div className="relative group">
-                  <button className="text-[10px] text-rose-400 hover:text-rose-300 font-medium">
+                <div className="relative">
+                  <button
+                    onClick={() => setAddMenuOpen(!addMenuOpen)}
+                    className="text-[10px] text-rose-400 hover:text-rose-300 font-medium"
+                  >
                     + Add
                   </button>
-                  <div className="absolute right-0 top-full mt-1 bg-surface-secondary border border-border rounded shadow-lg z-10 hidden group-hover:block">
-                    {OVERLAY_TYPES.map((type) => (
-                      <button
-                        key={type.id}
-                        onClick={() => addOverlay(type.id)}
-                        className="block w-full px-3 py-1.5 text-left text-xs text-content-secondary hover:text-content-primary hover:bg-surface-tertiary whitespace-nowrap"
-                      >
-                        {type.label}
-                      </button>
-                    ))}
-                  </div>
+                  {addMenuOpen && (
+                    <div className="absolute right-0 top-full mt-1 bg-surface-secondary border border-border rounded shadow-lg z-10">
+                      {OVERLAY_TYPES.map((type) => (
+                        <button
+                          key={type.id}
+                          onClick={() => { addOverlay(type.id); setAddMenuOpen(false); }}
+                          className="block w-full px-3 py-1.5 text-left text-xs text-content-secondary hover:text-content-on-dark hover:bg-surface-tertiary whitespace-nowrap"
+                        >
+                          {type.label}
+                        </button>
+                      ))}
+                    </div>
+                  )}
                 </div>
               </div>
 
@@ -318,6 +337,21 @@ export default function ImageDisplayControls({
                         />
                       </div>
 
+                      {/* Film grain blend mode */}
+                      {overlay.type === 'film_grain' && (
+                        <div className="mt-2">
+                          <select
+                            value={overlay.blend_mode || 'overlay'}
+                            onChange={(e) => updateOverlay(index, { blend_mode: e.target.value })}
+                            className="w-full text-[10px] bg-surface-tertiary text-content-primary border border-border rounded px-2 py-1"
+                          >
+                            {GRAIN_BLEND_MODES.map((bm) => (
+                              <option key={bm.id} value={bm.id}>{bm.label}</option>
+                            ))}
+                          </select>
+                        </div>
+                      )}
+
                       {/* Color filter params */}
                       {overlay.type === 'color_filter' && (
                         <div className="flex items-center gap-2 mt-2">
@@ -333,7 +367,7 @@ export default function ImageDisplayControls({
                             onChange={(e) => updateOverlay(index, { blend_mode: e.target.value })}
                             className="flex-1 text-[10px] bg-surface-tertiary text-content-primary border border-border rounded px-2 py-1"
                           >
-                            {BLEND_MODES.map((bm) => (
+                            {COLOR_BLEND_MODES.map((bm) => (
                               <option key={bm.id} value={bm.id}>{bm.label}</option>
                             ))}
                           </select>
