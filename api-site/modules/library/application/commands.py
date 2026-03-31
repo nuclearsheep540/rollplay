@@ -496,7 +496,8 @@ class UpdateImageConfig:
         asset_id: UUID,
         user_id: UUID,
         display_mode: Optional[str] = None,
-        aspect_ratio: Optional[str] = None
+        aspect_ratio: Optional[str] = None,
+        cine_config: Optional[dict] = None
     ) -> ImageAsset:
         """
         Update display configuration for an image asset.
@@ -525,6 +526,11 @@ class UpdateImageConfig:
             display_mode=display_mode,
             aspect_ratio=aspect_ratio
         )
+
+        if cine_config is not None:
+            asset.cine_config = cine_config
+            from datetime import datetime
+            asset.updated_at = datetime.utcnow()
 
         self.repository.save(asset)
         return asset

@@ -554,7 +554,8 @@ async def update_image_config(
             asset_id=asset_id,
             user_id=current_user.id,
             display_mode=request.display_mode,
-            aspect_ratio=request.aspect_ratio
+            aspect_ratio=request.aspect_ratio,
+            cine_config=request.cine_config
         )
 
         logger.info(f"Updated image config for asset {asset_id}: mode={asset.display_mode}, ratio={asset.aspect_ratio}")

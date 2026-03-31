@@ -120,8 +120,9 @@ class ImageAssetResponse(MediaAssetResponse):
 
 class UpdateImageConfigRequest(BaseModel):
     """Request to update image display configuration"""
-    display_mode: Optional[str] = Field(None, description="Display mode: float, wrap, or cine")
-    aspect_ratio: Optional[str] = Field(None, description="Aspect ratio preset for cine mode")
+    display_mode: Optional[str] = Field(None, description="Display mode: float, wrap, letterbox, or cine")
+    aspect_ratio: Optional[str] = Field(None, description="Aspect ratio preset for letterbox/cine")
+    cine_config: Optional[Dict[str, Any]] = Field(None, description="Cinematic config (workshop-authored)")
 
 
 class UpdateAudioConfigRequest(BaseModel):
