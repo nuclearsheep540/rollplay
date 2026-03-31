@@ -497,6 +497,8 @@ class UpdateImageConfig:
         user_id: UUID,
         display_mode: Optional[str] = None,
         aspect_ratio: Optional[str] = None,
+        image_position_x: Optional[float] = None,
+        image_position_y: Optional[float] = None,
         cine_config: Optional[dict] = None
     ) -> ImageAsset:
         """
@@ -524,7 +526,9 @@ class UpdateImageConfig:
 
         asset.update_image_config(
             display_mode=display_mode,
-            aspect_ratio=aspect_ratio
+            aspect_ratio=aspect_ratio,
+            image_position_x=image_position_x,
+            image_position_y=image_position_y
         )
 
         if cine_config is not None:

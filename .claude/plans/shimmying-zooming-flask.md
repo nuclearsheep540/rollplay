@@ -119,21 +119,35 @@ Cine config is complex and nested (arrays of text overlays, nested objects for k
 
 ## Frontend Architecture
 
+### Component Layer Model
+
+The cinematic image object is a nested structure where each layer has a single responsibility and uses a different mechanism (no transform conflicts):
+
+```
+Transition wrapper (entrance/exit — animates EVERYTHING as one unit)
+  ├── Text overlays (z-15 — above letterbox, never clipped by bars)
+  └── Letterbox container (aspect-ratio, black bars)
+      └── Ken Burns wrapper (GSAP scale + translate within the frame)
+          ├── Visual overlays (z-10 — pan/zoom with the image)
+          └── <img object-fit:cover object-position:X% Y%> ← nudge/reframe
+```
+
+**Why this order:**
+- **Transition** wraps everything — the letterbox IS part of the image object, so entrance/exit animations move bars + image + overlays together
+- **Text overlays** sit above the letterbox so they're never clipped by bars, but inside the transition wrapper so they animate in/out with the object
+- **Letterbox** constrains the visual frame with aspect-ratio + black background
+- **Ken Burns** transforms only the image content within the letterbox frame
+- **Visual overlays** are inside Ken Burns so they pan/zoom with the image
+- **Image nudge** uses `object-position` (not transforms) to reframe the crop anchor — zero conflict with Ken Burns transforms or transitions
+
+**Mechanism separation:**
+- Transition = Animate.css class or GSAP on the outermost wrapper div
+- Ken Burns = GSAP `transform: scale() translate()` on its own wrapper div
+- Nudge = `object-position: X% Y%` on the `<img>` element (no transforms)
+
 ### New Component: `CineDisplay`
 
-Rendered inside ImageDisplay when `display_mode === "cine"`. Orchestrates the full cinematic sequence.
-
-```
-ImageDisplay (existing)
-├── float mode → <img> with contain
-├── wrap mode → <img> with cover
-├── letterbox mode → aspect-ratio container
-└── cine mode → <CineDisplay>
-    ├── z-1:  Image layer (with Ken Burns GSAP timeline)
-    ├── z-10: Visual overlay effects (future)
-    ├── z-15: Text overlays (GSAP animated)
-    └── z-25: Letterbox bars (from aspect_ratio, if set)
-```
+Rendered inside ImageDisplay when `display_mode === "cine"`. Orchestrates the full cinematic sequence using the layer model above.
 
 ### Animation Orchestration
 

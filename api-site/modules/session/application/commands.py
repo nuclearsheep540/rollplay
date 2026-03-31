@@ -402,6 +402,10 @@ class StartSession:
             config_kwargs["display_mode"] = image_asset.display_mode
         if hasattr(image_asset, 'aspect_ratio') and image_asset.aspect_ratio:
             config_kwargs["aspect_ratio"] = image_asset.aspect_ratio
+        if hasattr(image_asset, 'image_position_x') and image_asset.image_position_x is not None:
+            config_kwargs["image_position_x"] = image_asset.image_position_x
+        if hasattr(image_asset, 'image_position_y') and image_asset.image_position_y is not None:
+            config_kwargs["image_position_y"] = image_asset.image_position_y
         if hasattr(image_asset, 'cine_config') and image_asset.cine_config:
             config_kwargs["cine_config"] = image_asset.cine_config
 
@@ -711,6 +715,8 @@ async def _extract_and_sync_game_state(
                         image_asset.update_image_config_from_game(
                             display_mode=getattr(final_state.image_state, 'display_mode', None),
                             aspect_ratio=getattr(final_state.image_state, 'aspect_ratio', None),
+                            image_position_x=getattr(final_state.image_state, 'image_position_x', None),
+                            image_position_y=getattr(final_state.image_state, 'image_position_y', None),
                         )
                         asset_repo.save(image_asset)
                         logger.info(f"Synced display config back to ImageAsset {image_asset_id}")

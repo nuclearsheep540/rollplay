@@ -1356,6 +1356,8 @@ class WebsocketEvent():
                 active=True,
                 display_mode=image_data.get("display_mode", "float"),
                 aspect_ratio=image_data.get("aspect_ratio"),
+                image_position_x=image_data.get("image_position_x"),
+                image_position_y=image_data.get("image_position_y"),
                 cine_config=image_data.get("cine_config"),
             )
 

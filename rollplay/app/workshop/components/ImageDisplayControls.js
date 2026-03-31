@@ -20,8 +20,11 @@ const ASPECT_RATIO_PRESETS = [
 export default function ImageDisplayControls({
   displayMode,
   aspectRatio,
+  imagePositionX,
+  imagePositionY,
   onDisplayModeChange,
   onAspectRatioChange,
+  onImagePositionChange,
   onSave,
   isSaving,
   saveSuccess,
@@ -76,6 +79,55 @@ export default function ImageDisplayControls({
                 {preset.label}
               </button>
             ))}
+          </div>
+        </div>
+      )}
+
+      {/* Image Position — nudge the image within the frame (cover modes only) */}
+      {(displayMode === 'letterbox' || displayMode === 'wrap') && (
+        <div>
+          <label className="block text-xs text-content-secondary mb-2 font-medium">Image Position</label>
+
+          <div className="mb-2">
+            <div className="flex justify-between text-[10px] text-content-secondary mb-1">
+              <span>X: {imagePositionX ?? 50}%</span>
+              <button
+                onClick={() => onImagePositionChange(50, imagePositionY ?? 50)}
+                className="text-content-secondary/50 hover:text-content-primary"
+              >
+                Reset
+              </button>
+            </div>
+            <input
+              type="range"
+              min="0"
+              max="100"
+              step="1"
+              value={imagePositionX ?? 50}
+              onChange={(e) => onImagePositionChange(parseFloat(e.target.value), imagePositionY ?? 50)}
+              className="w-full h-1.5 bg-surface-tertiary rounded-lg appearance-none cursor-pointer"
+            />
+          </div>
+
+          <div className="mb-2">
+            <div className="flex justify-between text-[10px] text-content-secondary mb-1">
+              <span>Y: {imagePositionY ?? 50}%</span>
+              <button
+                onClick={() => onImagePositionChange(imagePositionX ?? 50, 50)}
+                className="text-content-secondary/50 hover:text-content-primary"
+              >
+                Reset
+              </button>
+            </div>
+            <input
+              type="range"
+              min="0"
+              max="100"
+              step="1"
+              value={imagePositionY ?? 50}
+              onChange={(e) => onImagePositionChange(imagePositionX ?? 50, parseFloat(e.target.value))}
+              className="w-full h-1.5 bg-surface-tertiary rounded-lg appearance-none cursor-pointer"
+            />
           </div>
         </div>
       )}

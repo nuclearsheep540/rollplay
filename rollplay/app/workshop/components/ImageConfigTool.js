@@ -24,6 +24,8 @@ export default function ImageConfigTool({ selectedAssetId, onAssetSelect }) {
   // Local draft state for config editing
   const [displayMode, setDisplayMode] = useState('float');
   const [aspectRatio, setAspectRatio] = useState(null);
+  const [imagePositionX, setImagePositionX] = useState(null);
+  const [imagePositionY, setImagePositionY] = useState(null);
 
   const updateMutation = useUpdateImageConfig();
 
@@ -56,6 +58,8 @@ export default function ImageConfigTool({ selectedAssetId, onAssetSelect }) {
       setSelectedAsset(assetData);
       setDisplayMode(assetData.display_mode || 'float');
       setAspectRatio(assetData.aspect_ratio || null);
+      setImagePositionX(assetData.image_position_x ?? null);
+      setImagePositionY(assetData.image_position_y ?? null);
       setLoadingAsset(false);
     }
 
@@ -72,6 +76,8 @@ export default function ImageConfigTool({ selectedAssetId, onAssetSelect }) {
         imageConfig: {
           display_mode: displayMode,
           aspect_ratio: (displayMode === 'letterbox' || displayMode === 'cine') ? aspectRatio : null,
+          image_position_x: imagePositionX,
+          image_position_y: imagePositionY,
         },
       });
       setSelectedAsset(prev => ({ ...prev, ...updatedAsset }));
@@ -91,13 +97,17 @@ export default function ImageConfigTool({ selectedAssetId, onAssetSelect }) {
       original_filename: selectedAsset.filename,
       display_mode: displayMode,
       aspect_ratio: (displayMode === 'letterbox' || displayMode === 'cine') ? aspectRatio : null,
+      image_position_x: imagePositionX,
+      image_position_y: imagePositionY,
     };
-  }, [selectedAsset?.s3_url, selectedAsset?.filename, displayMode, aspectRatio]);
+  }, [selectedAsset?.s3_url, selectedAsset?.filename, displayMode, aspectRatio, imagePositionX, imagePositionY]);
 
   // Track whether config has changed from saved state
   const hasChanges = selectedAsset && (
     displayMode !== (selectedAsset.display_mode || 'float')
     || aspectRatio !== (selectedAsset.aspect_ratio || null)
+    || imagePositionX !== (selectedAsset.image_position_x ?? null)
+    || imagePositionY !== (selectedAsset.image_position_y ?? null)
   );
 
   return (
@@ -118,8 +128,11 @@ export default function ImageConfigTool({ selectedAssetId, onAssetSelect }) {
             <ImageDisplayControls
               displayMode={displayMode}
               aspectRatio={aspectRatio}
+              imagePositionX={imagePositionX}
+              imagePositionY={imagePositionY}
               onDisplayModeChange={setDisplayMode}
               onAspectRatioChange={setAspectRatio}
+              onImagePositionChange={(x, y) => { setImagePositionX(x); setImagePositionY(y); }}
               onSave={handleSave}
               isSaving={updateMutation.isPending}
               saveSuccess={saveSuccess}

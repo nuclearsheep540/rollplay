@@ -13,7 +13,7 @@ Provides REST endpoints for media asset management:
 """
 
 import logging
-from typing import Optional, Union
+from typing import Optional
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query
@@ -35,13 +35,9 @@ from .schemas import (
     UploadUrlResponse,
     ConfirmUploadRequest,
     MediaAssetResponse,
-    MapAssetResponse,
-    MusicAssetResponse,
-    SfxAssetResponse,
     AssociateRequest,
     RenameRequest,
     ChangeTypeRequest,
-    ImageAssetResponse,
     UpdateGridConfigRequest,
     UpdateImageConfigRequest,
     UpdateAudioConfigRequest,
@@ -57,7 +53,7 @@ router = APIRouter()
 
 
 def _to_media_asset_response(asset, s3_service: S3Service = None) -> MediaAssetResponse:
-    """Convert domain aggregate to API response"""
+    """Convert any domain aggregate to the flat poly MediaAssetResponse."""
     s3_url = None
     if s3_service:
         try:
@@ -65,101 +61,9 @@ def _to_media_asset_response(asset, s3_service: S3Service = None) -> MediaAssetR
         except Exception as e:
             logger.warning(f"Failed to generate download URL for {asset.s3_key}: {e}")
 
-    # Convert enum to string for JSON response
     asset_type_value = asset.asset_type.value if hasattr(asset.asset_type, 'value') else str(asset.asset_type)
 
-    # If it's a MapAsset, return MapAssetResponse with grid fields
-    if isinstance(asset, MapAsset):
-        return MapAssetResponse(
-            id=str(asset.id),
-            user_id=str(asset.user_id),
-            filename=asset.filename,
-            s3_key=asset.s3_key,
-            s3_url=s3_url,
-            content_type=asset.content_type,
-            asset_type=asset_type_value,
-            file_size=asset.file_size,
-            campaign_ids=[str(cid) for cid in asset.campaign_ids],
-
-            created_at=asset.created_at,
-            updated_at=asset.updated_at,
-            grid_width=asset.grid_width,
-            grid_height=asset.grid_height,
-            grid_opacity=asset.grid_opacity,
-            grid_offset_x=asset.grid_offset_x,
-            grid_offset_y=asset.grid_offset_y,
-            grid_line_color=asset.grid_line_color,
-            grid_cell_size=asset.grid_cell_size
-        )
-
-    # If it's a MusicAsset, return MusicAssetResponse with audio fields
-    if isinstance(asset, MusicAsset):
-        return MusicAssetResponse(
-            id=str(asset.id),
-            user_id=str(asset.user_id),
-            filename=asset.filename,
-            s3_key=asset.s3_key,
-            s3_url=s3_url,
-            content_type=asset.content_type,
-            asset_type=asset_type_value,
-            file_size=asset.file_size,
-            campaign_ids=[str(cid) for cid in asset.campaign_ids],
-
-            created_at=asset.created_at,
-            updated_at=asset.updated_at,
-            duration_seconds=asset.duration_seconds,
-            default_volume=asset.default_volume,
-            default_looping=asset.default_looping,
-            effect_eq_enabled=asset.effect_eq_enabled,
-            effect_hpf_enabled=asset.effect_hpf_enabled,
-            effect_hpf_mix=asset.effect_hpf_mix,
-            effect_lpf_enabled=asset.effect_lpf_enabled,
-            effect_lpf_mix=asset.effect_lpf_mix,
-            effect_reverb_enabled=asset.effect_reverb_enabled,
-            effect_reverb_mix=asset.effect_reverb_mix,
-            effect_reverb_preset=asset.effect_reverb_preset
-        )
-
-    # If it's a SfxAsset, return SfxAssetResponse with audio fields
-    if isinstance(asset, SfxAsset):
-        return SfxAssetResponse(
-            id=str(asset.id),
-            user_id=str(asset.user_id),
-            filename=asset.filename,
-            s3_key=asset.s3_key,
-            s3_url=s3_url,
-            content_type=asset.content_type,
-            asset_type=asset_type_value,
-            file_size=asset.file_size,
-            campaign_ids=[str(cid) for cid in asset.campaign_ids],
-
-            created_at=asset.created_at,
-            updated_at=asset.updated_at,
-            duration_seconds=asset.duration_seconds,
-            default_volume=asset.default_volume,
-            default_looping=asset.default_looping
-        )
-
-    # If it's an ImageAsset, return ImageAssetResponse with display config
-    if isinstance(asset, ImageAsset):
-        return ImageAssetResponse(
-            id=str(asset.id),
-            user_id=str(asset.user_id),
-            filename=asset.filename,
-            s3_key=asset.s3_key,
-            s3_url=s3_url,
-            content_type=asset.content_type,
-            asset_type=asset_type_value,
-            file_size=asset.file_size,
-            campaign_ids=[str(cid) for cid in asset.campaign_ids],
-            created_at=asset.created_at,
-            updated_at=asset.updated_at,
-            display_mode=asset.display_mode,
-            aspect_ratio=asset.aspect_ratio,
-            cine_config=asset.cine_config
-        )
-
-    return MediaAssetResponse(
+    fields = dict(
         id=str(asset.id),
         user_id=str(asset.user_id),
         filename=asset.filename,
@@ -170,8 +74,49 @@ def _to_media_asset_response(asset, s3_service: S3Service = None) -> MediaAssetR
         file_size=asset.file_size,
         campaign_ids=[str(cid) for cid in asset.campaign_ids],
         created_at=asset.created_at,
-        updated_at=asset.updated_at
+        updated_at=asset.updated_at,
     )
+
+    if isinstance(asset, MapAsset):
+        fields.update(
+            grid_width=asset.grid_width,
+            grid_height=asset.grid_height,
+            grid_opacity=asset.grid_opacity,
+            grid_offset_x=asset.grid_offset_x,
+            grid_offset_y=asset.grid_offset_y,
+            grid_line_color=asset.grid_line_color,
+            grid_cell_size=asset.grid_cell_size,
+        )
+    elif isinstance(asset, MusicAsset):
+        fields.update(
+            duration_seconds=asset.duration_seconds,
+            default_volume=asset.default_volume,
+            default_looping=asset.default_looping,
+            effect_eq_enabled=asset.effect_eq_enabled,
+            effect_hpf_enabled=asset.effect_hpf_enabled,
+            effect_hpf_mix=asset.effect_hpf_mix,
+            effect_lpf_enabled=asset.effect_lpf_enabled,
+            effect_lpf_mix=asset.effect_lpf_mix,
+            effect_reverb_enabled=asset.effect_reverb_enabled,
+            effect_reverb_mix=asset.effect_reverb_mix,
+            effect_reverb_preset=asset.effect_reverb_preset,
+        )
+    elif isinstance(asset, SfxAsset):
+        fields.update(
+            duration_seconds=asset.duration_seconds,
+            default_volume=asset.default_volume,
+            default_looping=asset.default_looping,
+        )
+    elif isinstance(asset, ImageAsset):
+        fields.update(
+            display_mode=asset.display_mode,
+            aspect_ratio=asset.aspect_ratio,
+            image_position_x=asset.image_position_x,
+            image_position_y=asset.image_position_y,
+            cine_config=asset.cine_config,
+        )
+
+    return MediaAssetResponse(**fields)
 
 
 @router.get("/upload-url", response_model=UploadUrlResponse)
@@ -307,7 +252,7 @@ async def list_media_assets(
         raise HTTPException(status_code=500, detail="Failed to list media assets")
 
 
-@router.get("/{asset_id}", response_model=Union[MapAssetResponse, MusicAssetResponse, SfxAssetResponse, MediaAssetResponse])
+@router.get("/{asset_id}", response_model=MediaAssetResponse)
 async def get_media_asset(
     asset_id: UUID,
     current_user: UserAggregate = Depends(get_current_user_from_token),
@@ -437,7 +382,7 @@ async def change_asset_type(
         raise HTTPException(status_code=500, detail="Failed to change asset type")
 
 
-@router.patch("/{asset_id}/grid", response_model=MapAssetResponse)
+@router.patch("/{asset_id}/grid", response_model=MediaAssetResponse)
 async def update_grid_config(
     asset_id: UUID,
     request: UpdateGridConfigRequest,
@@ -445,7 +390,7 @@ async def update_grid_config(
     repo: MediaAssetRepository = Depends(get_media_asset_repository),
     session_repo: SessionRepository = Depends(get_session_repository),
     s3_service: S3Service = Depends(get_s3_service)
-) -> MapAssetResponse:
+) -> MediaAssetResponse:
     """
     Update grid configuration for a map asset.
 
@@ -483,7 +428,7 @@ async def update_grid_config(
         raise HTTPException(status_code=500, detail="Failed to update grid configuration")
 
 
-@router.patch("/{asset_id}/audio-config", response_model=Union[MusicAssetResponse, SfxAssetResponse])
+@router.patch("/{asset_id}/audio-config", response_model=MediaAssetResponse)
 async def update_audio_config(
     asset_id: UUID,
     request: UpdateAudioConfigRequest,
@@ -533,7 +478,7 @@ async def update_audio_config(
         raise HTTPException(status_code=500, detail="Failed to update audio configuration")
 
 
-@router.patch("/{asset_id}/image-config", response_model=ImageAssetResponse)
+@router.patch("/{asset_id}/image-config", response_model=MediaAssetResponse)
 async def update_image_config(
     asset_id: UUID,
     request: UpdateImageConfigRequest,
@@ -541,7 +486,7 @@ async def update_image_config(
     repo: MediaAssetRepository = Depends(get_media_asset_repository),
     session_repo: SessionRepository = Depends(get_session_repository),
     s3_service: S3Service = Depends(get_s3_service)
-) -> ImageAssetResponse:
+) -> MediaAssetResponse:
     """
     Update display configuration for an image asset.
 
@@ -555,6 +500,8 @@ async def update_image_config(
             user_id=current_user.id,
             display_mode=request.display_mode,
             aspect_ratio=request.aspect_ratio,
+            image_position_x=request.image_position_x,
+            image_position_y=request.image_position_y,
             cine_config=request.cine_config
         )
 

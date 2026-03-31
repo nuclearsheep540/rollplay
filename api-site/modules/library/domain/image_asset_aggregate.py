@@ -33,6 +33,8 @@ class ImageAsset(MediaAssetAggregate):
     """
     display_mode: Optional[str] = None
     aspect_ratio: Optional[str] = None
+    image_position_x: Optional[float] = None  # 0–100%, position of image within frame
+    image_position_y: Optional[float] = None  # 0–100%, position of image within frame
     cine_config: Optional[Dict[str, Any]] = None  # Workshop-authored, read-only at runtime
 
     @classmethod
@@ -75,6 +77,8 @@ class ImageAsset(MediaAssetAggregate):
         base: MediaAssetAggregate,
         display_mode: Optional[str] = None,
         aspect_ratio: Optional[str] = None,
+        image_position_x: Optional[float] = None,
+        image_position_y: Optional[float] = None,
         cine_config: Optional[Dict[str, Any]] = None
     ) -> "ImageAsset":
         """
@@ -95,13 +99,17 @@ class ImageAsset(MediaAssetAggregate):
             updated_at=base.updated_at,
             display_mode=display_mode,
             aspect_ratio=aspect_ratio,
+            image_position_x=image_position_x,
+            image_position_y=image_position_y,
             cine_config=cine_config
         )
 
     def update_image_config(
         self,
         display_mode: Optional[str] = None,
-        aspect_ratio: Optional[str] = None
+        aspect_ratio: Optional[str] = None,
+        image_position_x: Optional[float] = None,
+        image_position_y: Optional[float] = None
     ) -> None:
         """
         Update display configuration.
@@ -117,6 +125,16 @@ class ImageAsset(MediaAssetAggregate):
             if aspect_ratio not in VALID_ASPECT_RATIOS:
                 raise ValueError(f"aspect_ratio must be one of {VALID_ASPECT_RATIOS}")
             self.aspect_ratio = aspect_ratio
+
+        if image_position_x is not None:
+            if not 0.0 <= image_position_x <= 100.0:
+                raise ValueError("image_position_x must be between 0 and 100")
+            self.image_position_x = image_position_x
+
+        if image_position_y is not None:
+            if not 0.0 <= image_position_y <= 100.0:
+                raise ValueError("image_position_y must be between 0 and 100")
+            self.image_position_y = image_position_y
 
         # Clear aspect_ratio if switching away from letterbox/cine
         if display_mode is not None and display_mode not in ("letterbox", "cine"):
@@ -143,18 +161,27 @@ class ImageAsset(MediaAssetAggregate):
             file_path=file_path,
             display_mode=self.display_mode or "float",
             aspect_ratio=self.aspect_ratio,
+            image_position_x=self.image_position_x,
+            image_position_y=self.image_position_y,
             cine_config=self.cine_config,
         )
 
     def update_image_config_from_game(
-        self, display_mode: Optional[str] = None, aspect_ratio: Optional[str] = None
+        self,
+        display_mode: Optional[str] = None,
+        aspect_ratio: Optional[str] = None,
+        image_position_x: Optional[float] = None,
+        image_position_y: Optional[float] = None
     ) -> None:
         """Update domain fields from api-game state.
 
         The inverse of build_image_config_for_game(). Used during
         session end ETL to sync runtime changes back to PostgreSQL.
+        Does NOT touch cine_config (workshop-authored, read-only at runtime).
         """
         self.update_image_config(
             display_mode=display_mode,
             aspect_ratio=aspect_ratio,
+            image_position_x=image_position_x,
+            image_position_y=image_position_y,
         )

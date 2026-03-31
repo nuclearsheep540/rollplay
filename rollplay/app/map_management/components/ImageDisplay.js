@@ -48,11 +48,16 @@ const ImageDisplay = ({
 
   const isLetterbox = displayMode === 'letterbox';
 
+  // Image position within frame (object-position) — only meaningful for cover modes
+  const posX = activeImage?.image_position_x ?? 50;
+  const posY = activeImage?.image_position_y ?? 50;
+  const objectPosition = `${posX}% ${posY}%`;
+
   // Image styles per mode
   const imageStyle = displayMode === 'wrap'
-    ? { width: '100%', height: '100%', objectFit: 'cover' }
+    ? { width: '100%', height: '100%', objectFit: 'cover', objectPosition }
     : displayMode === 'letterbox'
-    ? { width: '100%', height: '100%', objectFit: 'cover' }
+    ? { width: '100%', height: '100%', objectFit: 'cover', objectPosition }
     : { maxWidth: '100%', maxHeight: '100%', width: 'auto', height: 'auto', objectFit: 'contain' };
 
   return (

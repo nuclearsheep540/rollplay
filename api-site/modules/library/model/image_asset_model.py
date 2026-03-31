@@ -8,7 +8,7 @@ Extends MediaAsset with display configuration fields (display_mode, aspect_ratio
 Uses SQLAlchemy joined table inheritance pattern, matching MapAssetModel.
 """
 
-from sqlalchemy import Column, String, ForeignKey
+from sqlalchemy import Column, String, Float, ForeignKey
 from sqlalchemy.dialects.postgresql import UUID, JSONB
 
 from modules.library.model.asset_model import MediaAsset
@@ -34,6 +34,10 @@ class ImageAssetModel(MediaAsset):
     # Display configuration - NULL means not yet configured (defaults to "float")
     display_mode = Column(String(20), nullable=True)   # "float" | "wrap" | "letterbox" | "cine"
     aspect_ratio = Column(String(20), nullable=True)   # "2.39:1", "1.85:1", "16:9", "4:3", "1:1"
+
+    # Image position within frame (object-position percentages)
+    image_position_x = Column(Float, nullable=True)  # 0–100%
+    image_position_y = Column(Float, nullable=True)  # 0–100%
 
     # Cine configuration - workshop-authored, read-only at runtime
     cine_config = Column(JSONB, nullable=True)

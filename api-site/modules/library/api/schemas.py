@@ -44,7 +44,12 @@ class ChangeTypeRequest(BaseModel):
 
 
 class MediaAssetResponse(BaseModel):
-    """Response containing media asset details"""
+    """Flat polymorphic response for any media asset type.
+
+    All subtype-specific fields are optional — only the fields relevant
+    to the asset's type will be populated. This mirrors the joined-table
+    inheritance in PostgreSQL: one shape, many asset types.
+    """
     id: str
     user_id: str
     filename: str
@@ -57,8 +62,40 @@ class MediaAssetResponse(BaseModel):
     created_at: datetime
     updated_at: Optional[datetime] = None
 
+    # Map fields
+    grid_width: Optional[int] = None
+    grid_height: Optional[int] = None
+    grid_opacity: Optional[float] = None
+    grid_offset_x: Optional[int] = None
+    grid_offset_y: Optional[int] = None
+    grid_line_color: Optional[str] = None
+    grid_cell_size: Optional[float] = None
+
+    # Audio fields (music + sfx)
+    duration_seconds: Optional[float] = None
+    default_volume: Optional[float] = None
+    default_looping: Optional[bool] = None
+
+    # Music-only effect fields
+    effect_eq_enabled: Optional[bool] = None
+    effect_hpf_enabled: Optional[bool] = None
+    effect_hpf_mix: Optional[float] = None
+    effect_lpf_enabled: Optional[bool] = None
+    effect_lpf_mix: Optional[float] = None
+    effect_reverb_enabled: Optional[bool] = None
+    effect_reverb_mix: Optional[float] = None
+    effect_reverb_preset: Optional[str] = None
+
+    # Image fields
+    display_mode: Optional[str] = None
+    aspect_ratio: Optional[str] = None
+    image_position_x: Optional[float] = None
+    image_position_y: Optional[float] = None
+    cine_config: Optional[Dict[str, Any]] = None
+
     class Config:
         from_attributes = True
+        extra = 'forbid'
 
 
 class MediaAssetListResponse(BaseModel):
@@ -78,50 +115,12 @@ class UpdateGridConfigRequest(BaseModel):
     grid_cell_size: Optional[float] = Field(None, ge=8, le=500, description="Cell size in native image pixels")
 
 
-class MapAssetResponse(MediaAssetResponse):
-    """Response containing map asset details with grid config"""
-    grid_width: Optional[int] = None
-    grid_height: Optional[int] = None
-    grid_opacity: Optional[float] = None
-    grid_offset_x: Optional[int] = None
-    grid_offset_y: Optional[int] = None
-    grid_line_color: Optional[str] = None
-    grid_cell_size: Optional[float] = None
-
-
-class MusicAssetResponse(MediaAssetResponse):
-    """Response containing music asset details with playback config"""
-    duration_seconds: Optional[float] = None
-    default_volume: Optional[float] = None
-    default_looping: Optional[bool] = None
-    effect_eq_enabled: Optional[bool] = None
-    effect_hpf_enabled: Optional[bool] = None
-    effect_hpf_mix: Optional[float] = None
-    effect_lpf_enabled: Optional[bool] = None
-    effect_lpf_mix: Optional[float] = None
-    effect_reverb_enabled: Optional[bool] = None
-    effect_reverb_mix: Optional[float] = None
-    effect_reverb_preset: Optional[str] = None
-
-
-class SfxAssetResponse(MediaAssetResponse):
-    """Response containing SFX asset details with playback config"""
-    duration_seconds: Optional[float] = None
-    default_volume: Optional[float] = None
-    default_looping: Optional[bool] = None
-
-
-class ImageAssetResponse(MediaAssetResponse):
-    """Response containing image asset details with display config"""
-    display_mode: Optional[str] = None
-    aspect_ratio: Optional[str] = None
-    cine_config: Optional[Dict[str, Any]] = None
-
-
 class UpdateImageConfigRequest(BaseModel):
     """Request to update image display configuration"""
     display_mode: Optional[str] = Field(None, description="Display mode: float, wrap, letterbox, or cine")
     aspect_ratio: Optional[str] = Field(None, description="Aspect ratio preset for letterbox/cine")
+    image_position_x: Optional[float] = Field(None, ge=0.0, le=100.0, description="Image position X within frame (0-100%)")
+    image_position_y: Optional[float] = Field(None, ge=0.0, le=100.0, description="Image position Y within frame (0-100%)")
     cine_config: Optional[Dict[str, Any]] = Field(None, description="Cinematic config (workshop-authored)")
 
 

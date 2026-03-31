@@ -147,6 +147,8 @@ class MediaAssetRepository:
             if isinstance(aggregate, ImageAsset) and isinstance(existing, ImageAssetModel):
                 existing.display_mode = aggregate.display_mode
                 existing.aspect_ratio = aggregate.aspect_ratio
+                existing.image_position_x = aggregate.image_position_x
+                existing.image_position_y = aggregate.image_position_y
                 existing.cine_config = aggregate.cine_config
         else:
             # Create new - determine which model to use
@@ -216,6 +218,8 @@ class MediaAssetRepository:
                     campaign_ids=aggregate.campaign_ids,
                     display_mode=aggregate.display_mode,
                     aspect_ratio=aggregate.aspect_ratio,
+                    image_position_x=aggregate.image_position_x,
+                    image_position_y=aggregate.image_position_y,
                     cine_config=aggregate.cine_config
                 )
             else:
@@ -309,6 +313,8 @@ class MediaAssetRepository:
                 base,
                 display_mode=model.display_mode,
                 aspect_ratio=model.aspect_ratio,
+                image_position_x=model.image_position_x,
+                image_position_y=model.image_position_y,
                 cine_config=model.cine_config
             )
 

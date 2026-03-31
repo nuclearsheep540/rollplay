@@ -25,6 +25,8 @@ class ImageSettings(BaseModel):
     active: bool = True
     display_mode: str = "float"  # "float" | "wrap" | "letterbox" | "cine"
     aspect_ratio: Optional[str] = None  # e.g. "2.39:1", "16:9" — for letterbox/cine
+    image_position_x: Optional[float] = None  # 0–100%, position of image within frame
+    image_position_y: Optional[float] = None  # 0–100%, position of image within frame
     cine_config: Optional[Dict[str, Any]] = None  # Workshop-authored, read-only at runtime
 
     def __init__(self, **data):
@@ -72,6 +74,10 @@ class ImageService:
                     image_settings.display_mode = existing["display_mode"]
                 if existing.get("aspect_ratio"):
                     image_settings.aspect_ratio = existing["aspect_ratio"]
+                if existing.get("image_position_x") is not None:
+                    image_settings.image_position_x = existing["image_position_x"]
+                if existing.get("image_position_y") is not None:
+                    image_settings.image_position_y = existing["image_position_y"]
                 if existing.get("cine_config"):
                     image_settings.cine_config = existing["cine_config"]
 
