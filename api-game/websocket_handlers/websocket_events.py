@@ -1460,12 +1460,20 @@ class WebsocketEvent():
         room_id = client_id
         display_mode = event_data.get("display_mode")
         aspect_ratio = event_data.get("aspect_ratio")
+        image_position_x = event_data.get("image_position_x")
+        image_position_y = event_data.get("image_position_y")
 
         if not room_id:
             return WebsocketEventResult(broadcast_message={"error": "Invalid image config update request"})
 
         try:
-            success = image_service.update_image_config(room_id, display_mode=display_mode, aspect_ratio=aspect_ratio)
+            success = image_service.update_image_config(
+                room_id,
+                display_mode=display_mode,
+                aspect_ratio=aspect_ratio,
+                image_position_x=image_position_x,
+                image_position_y=image_position_y
+            )
 
             if success:
                 saved_image = image_service.get_active_image(room_id)
@@ -1475,6 +1483,8 @@ class WebsocketEvent():
                     "data": {
                         "display_mode": saved_ic.get("display_mode", "float") if saved_image else display_mode,
                         "aspect_ratio": saved_ic.get("aspect_ratio") if saved_image else aspect_ratio,
+                        "image_position_x": saved_ic.get("image_position_x") if saved_image else image_position_x,
+                        "image_position_y": saved_ic.get("image_position_y") if saved_image else image_position_y,
                         "updated_by": user_id
                     }
                 }

@@ -51,17 +51,25 @@ export default function ImageControlsPanel({
   // Original server state captured when Display Settings is opened — for cancel/revert
   const [originalMode, setOriginalMode] = useState(null);
   const [originalRatio, setOriginalRatio] = useState(null);
+  const [originalPositionX, setOriginalPositionX] = useState(null);
+  const [originalPositionY, setOriginalPositionY] = useState(null);
 
   const currentMode = activeImage?.image_config?.display_mode || 'float';
   const currentRatio = activeImage?.image_config?.aspect_ratio || '2.39:1';
+  const currentPositionX = activeImage?.image_config?.image_position_x ?? 50;
+  const currentPositionY = activeImage?.image_config?.image_position_y ?? 50;
 
   // Whether the DM has changed anything from the original server state.
-  // Cine mode is workshop-authored and read-only at runtime — its aspect ratio
-  // and overlays are baked into the asset's cine_config, so we intentionally
-  // exclude cine from ratio-change tracking here.
+  // Cine mode is workshop-authored and read-only at runtime — its aspect ratio,
+  // position, and overlays are baked into the asset's cine_config, so we intentionally
+  // only track letterbox-specific changes (ratio + position) here.
   const hasChanges = originalMode !== null && (
     currentMode !== originalMode
-    || (currentMode === 'letterbox' && currentRatio !== (originalRatio || '2.39:1'))
+    || (currentMode === 'letterbox' && (
+      currentRatio !== (originalRatio || '2.39:1')
+      || currentPositionX !== (originalPositionX ?? 50)
+      || currentPositionY !== (originalPositionY ?? 50)
+    ))
   );
 
   const handleImageSelection = (imageData) => {
@@ -95,25 +103,47 @@ export default function ImageControlsPanel({
     }));
   };
 
+  // Preview position — optimistic update for live slider feedback (letterbox only)
+  const previewPositionX = (x) => {
+    if (!setActiveImage || !activeImage) return;
+    setActiveImage((prev) => ({
+      ...prev,
+      image_config: { ...prev.image_config, image_position_x: x },
+    }));
+  };
+  const previewPositionY = (y) => {
+    if (!setActiveImage || !activeImage) return;
+    setActiveImage((prev) => ({
+      ...prev,
+      image_config: { ...prev.image_config, image_position_y: y },
+    }));
+  };
+
   // Open editing — snapshot current server state for cancel
   const openDisplaySettings = () => {
     setOriginalMode(currentMode);
     setOriginalRatio(activeImage?.image_config?.aspect_ratio || null);
+    setOriginalPositionX(activeImage?.image_config?.image_position_x ?? 50);
+    setOriginalPositionY(activeImage?.image_config?.image_position_y ?? 50);
     setIsDisplayExpanded(true);
   };
 
   // Apply: save to MongoDB via WebSocket → broadcast replaces optimistic state with server truth.
-  // Only letterbox sends aspect_ratio — cine's ratio is baked into cine_config at the workshop level.
+  // Only letterbox sends aspect_ratio and position — cine's config is baked at the workshop level.
   const applyDisplayConfig = () => {
     if (!sendImageConfigUpdate || !activeImage) return;
 
     sendImageConfigUpdate({
       display_mode: currentMode,
       aspect_ratio: currentMode === 'letterbox' ? currentRatio : null,
+      image_position_x: currentMode === 'letterbox' ? currentPositionX : null,
+      image_position_y: currentMode === 'letterbox' ? currentPositionY : null,
     });
 
     setOriginalMode(null);
     setOriginalRatio(null);
+    setOriginalPositionX(null);
+    setOriginalPositionY(null);
     setIsDisplayExpanded(false);
   };
 
@@ -126,11 +156,15 @@ export default function ImageControlsPanel({
           ...prev.image_config,
           display_mode: originalMode,
           aspect_ratio: originalRatio,
+          image_position_x: originalPositionX,
+          image_position_y: originalPositionY,
         },
       }));
     }
     setOriginalMode(null);
     setOriginalRatio(null);
+    setOriginalPositionX(null);
+    setOriginalPositionY(null);
     setIsDisplayExpanded(false);
   };
 
@@ -218,7 +252,7 @@ export default function ImageControlsPanel({
             </div>
           </div>
 
-          {/* Aspect Ratio Presets — only shown in cine mode */}
+          {/* Aspect Ratio Presets — letterbox only (cine uses workshop-authored config) */}
           {currentMode === 'letterbox' && (
             <div className="mb-3">
               <label className="block text-xs text-gray-400 mb-1">Aspect Ratio</label>
@@ -237,6 +271,41 @@ export default function ImageControlsPanel({
                     {preset.label}
                   </button>
                 ))}
+              </div>
+            </div>
+          )}
+
+          {/* Image Position — letterbox only (cine position is workshop-authored) */}
+          {currentMode === 'letterbox' && (
+            <div className="mb-3">
+              <label className="block text-xs text-gray-400 mb-2">Image Position</label>
+              <div className="space-y-2">
+                <div className="flex items-center gap-2">
+                  <span className="text-xs text-gray-500 w-6">X</span>
+                  <input
+                    type="range"
+                    min="0"
+                    max="100"
+                    step="1"
+                    value={currentPositionX}
+                    onChange={(e) => previewPositionX(Number(e.target.value))}
+                    className="flex-1 h-1 accent-rose-500"
+                  />
+                  <span className="text-xs text-gray-400 w-8 text-right">{currentPositionX}%</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className="text-xs text-gray-500 w-6">Y</span>
+                  <input
+                    type="range"
+                    min="0"
+                    max="100"
+                    step="1"
+                    value={currentPositionY}
+                    onChange={(e) => previewPositionY(Number(e.target.value))}
+                    className="flex-1 h-1 accent-rose-500"
+                  />
+                  <span className="text-xs text-gray-400 w-8 text-right">{currentPositionY}%</span>
+                </div>
               </div>
             </div>
           )}

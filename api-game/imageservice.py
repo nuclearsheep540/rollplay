@@ -151,7 +151,8 @@ class ImageService:
             logger.error(f"Failed to clear active image for room {room_id}: {e}")
             return False
 
-    def update_image_config(self, room_id: str, display_mode: str = None, aspect_ratio: str = None) -> bool:
+    def update_image_config(self, room_id: str, display_mode: str = None, aspect_ratio: str = None,
+                            image_position_x: float = None, image_position_y: float = None) -> bool:
         """Update display config on the active image for a room (config-only, no re-save)"""
         if self.collection is None:
             logger.error("No database connection available for image service")
@@ -163,6 +164,10 @@ class ImageService:
                 update_fields["image_config.display_mode"] = display_mode
             if aspect_ratio is not None:
                 update_fields["image_config.aspect_ratio"] = aspect_ratio
+            if image_position_x is not None:
+                update_fields["image_config.image_position_x"] = image_position_x
+            if image_position_y is not None:
+                update_fields["image_config.image_position_y"] = image_position_y
             # Clear aspect_ratio when switching away from letterbox/cine
             if display_mode and display_mode not in ("letterbox", "cine"):
                 update_fields["image_config.aspect_ratio"] = None

@@ -12,6 +12,7 @@ from modules.library.domain.asset_aggregate import MediaAssetAggregate
 from modules.library.domain.map_asset_aggregate import MapAsset
 from modules.library.domain.music_asset_aggregate import MusicAsset
 from modules.library.domain.sfx_asset_aggregate import SfxAsset
+from modules.library.domain.cine_config import CineConfig as DomainCineConfig
 from modules.library.domain.image_asset_aggregate import ImageAsset
 from modules.library.domain.media_asset_type import MediaAssetType
 from modules.library.repositories.asset_repository import MediaAssetRepository
@@ -499,6 +500,10 @@ class UpdateImageConfig:
         aspect_ratio: Optional[str] = None,
         image_position_x: Optional[float] = None,
         image_position_y: Optional[float] = None,
+        # cine_config uses a sentinel because it has three valid states:
+        # "UNSET" = field omitted (don't touch), None = explicitly clear, object = set.
+        # The simpler fields above only need two states (None = don't touch, value = set)
+        # because they're never explicitly cleared via the API.
         cine_config="UNSET"
     ) -> ImageAsset:
         """
@@ -532,15 +537,13 @@ class UpdateImageConfig:
         )
 
         if cine_config != "UNSET":
-            from datetime import datetime
             if cine_config is not None:
-                from modules.library.domain.cine_config import CineConfig as DomainCineConfig
                 domain_cine = DomainCineConfig.from_dict(cine_config.model_dump())
                 domain_cine.validate()
                 asset.cine_config = domain_cine
             else:
                 asset.cine_config = None
-            asset.updated_at = datetime.utcnow()
+            # updated_at already set by update_image_config() above
 
         self.repository.save(asset)
         return asset
