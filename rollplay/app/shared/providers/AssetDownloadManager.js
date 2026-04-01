@@ -16,42 +16,90 @@ const AssetDownloadContext = createContext(null);
  *
  * Components use:
  *   useAssetDownload(url, fileSize)  → { blobUrl, ready, progress }
- *   useAssetProgress()               → { loading, loadedBytes, totalBytes }
+ *   useAssetProgress()               → { loading, loadedBytes, totalBytes, completedCount, totalCount, cachedCount }
  *
  * Audio can call imperatively:
  *   manager.download(url, fileSize)  → Promise<Blob>
  */
 export function AssetDownloadProvider({ children }) {
-  // Aggregate progress state for the nav indicator
-  const [progress, setProgress] = useState({ loading: false, loadedBytes: 0, totalBytes: 0 });
+  const [progress, setProgress] = useState({
+    loading: false,
+    lingering: false,
+    loadedBytes: 0,
+    totalBytes: 0,
+    completedCount: 0,
+    totalCount: 0,
+    cachedCount: 0,
+    cachedSize: 0,
+  });
 
   // Stable refs — survive re-renders without causing effect churn
   const cacheRef = useRef(new Map());       // url → Blob (completed downloads)
   const inflightRef = useRef(new Map());    // url → { promise, loadedBytes, totalBytes }
+  const completedBytesRef = useRef(0);      // bytes from finished downloads in current batch
+  const cachedSizeRef = useRef(0);          // total bytes of all cached blobs
   const idleTimerRef = useRef(null);
+  const rafRef = useRef(null);              // animation frame for throttled byte updates
 
-  const updateProgress = useCallback(() => {
+  // Core state reader — always reads latest from refs
+  const readProgress = useCallback(() => {
     const inflight = inflightRef.current;
-    let totalBytes = 0;
-    let loadedBytes = 0;
+    const cached = cacheRef.current.size;
+    let inflightTotal = 0;
+    let inflightLoaded = 0;
 
     for (const entry of inflight.values()) {
-      totalBytes += entry.totalBytes;
-      loadedBytes += entry.loadedBytes;
+      inflightTotal += entry.totalBytes;
+      inflightLoaded += entry.loadedBytes;
     }
 
-    setProgress({
+    return {
       loading: inflight.size > 0,
-      loadedBytes,
-      totalBytes,
-    });
+      lingering: false,
+      loadedBytes: completedBytesRef.current + inflightLoaded,
+      totalBytes: completedBytesRef.current + inflightTotal,
+      completedCount: cached,
+      totalCount: cached + inflight.size,
+      cachedCount: cached,
+      cachedSize: cachedSizeRef.current,
+    };
   }, []);
+
+  // Throttled update — for byte-level chunk progress (max once per frame)
+  const scheduleProgressUpdate = useCallback(() => {
+    if (rafRef.current) return;
+    rafRef.current = requestAnimationFrame(() => {
+      rafRef.current = null;
+      setProgress(readProgress());
+    });
+  }, [readProgress]);
+
+  // Immediate update — for completions so the count renders without delay
+  const flushProgressUpdate = useCallback(() => {
+    if (rafRef.current) {
+      cancelAnimationFrame(rafRef.current);
+      rafRef.current = null;
+    }
+    setProgress(readProgress());
+  }, [readProgress]);
 
   const scheduleReset = useCallback(() => {
     clearTimeout(idleTimerRef.current);
     if (inflightRef.current.size === 0) {
+      // Show completed state (lingering) for 2s before resetting to idle
+      setProgress(prev => ({ ...prev, lingering: true }));
       idleTimerRef.current = setTimeout(() => {
-        setProgress({ loading: false, loadedBytes: 0, totalBytes: 0 });
+        completedBytesRef.current = 0;
+        setProgress({
+          loading: false,
+          lingering: false,
+          loadedBytes: 0,
+          totalBytes: 0,
+          completedCount: cacheRef.current.size,
+          totalCount: cacheRef.current.size,
+          cachedCount: cacheRef.current.size,
+          cachedSize: cachedSizeRef.current,
+        });
       }, 2000);
     }
   }, []);
@@ -84,6 +132,7 @@ export function AssetDownloadProvider({ children }) {
         if (!entry.totalBytes) {
           const cl = response.headers.get('content-length');
           if (cl) entry.totalBytes = parseInt(cl, 10);
+          scheduleProgressUpdate();
         }
 
         const reader = response.body.getReader();
@@ -94,23 +143,25 @@ export function AssetDownloadProvider({ children }) {
           if (done) break;
           chunks.push(value);
           entry.loadedBytes += value.length;
-          updateProgress();
+          scheduleProgressUpdate();
         }
 
         const blob = new Blob(chunks, {
           type: response.headers.get('content-type') || 'application/octet-stream',
         });
 
-        // Cache and clean up
+        // Move bytes to completed bucket so ratio stays monotonic
+        completedBytesRef.current += entry.totalBytes;
+        cachedSizeRef.current += blob.size;
         cacheRef.current.set(url, blob);
         inflightRef.current.delete(url);
-        updateProgress();
+        flushProgressUpdate();
         scheduleReset();
 
         return blob;
       } catch (err) {
         inflightRef.current.delete(url);
-        updateProgress();
+        flushProgressUpdate();
         scheduleReset();
         throw err;
       }
@@ -118,18 +169,20 @@ export function AssetDownloadProvider({ children }) {
 
     inflightRef.current.set(url, entry);
     clearTimeout(idleTimerRef.current);
-    updateProgress();
+    flushProgressUpdate();
 
     return entry.promise;
-  }, [updateProgress, scheduleReset]);
+  }, [scheduleProgressUpdate, flushProgressUpdate, scheduleReset]);
 
   // Cleanup on unmount
   useEffect(() => {
-    return () => clearTimeout(idleTimerRef.current);
+    return () => {
+      clearTimeout(idleTimerRef.current);
+      if (rafRef.current) cancelAnimationFrame(rafRef.current);
+    };
   }, []);
 
   const manager = useRef({ download }).current;
-  // Keep the download function current without breaking ref identity
   manager.download = download;
 
   return (
@@ -148,7 +201,6 @@ export function useAssetDownload(url, fileSize) {
   const { manager } = useContext(AssetDownloadContext);
   const [blobUrl, setBlobUrl] = useState(null);
   const [ready, setReady] = useState(false);
-  const [progress, setLocalProgress] = useState(0);
 
   useEffect(() => {
     if (!url || !manager) return;
@@ -162,7 +214,6 @@ export function useAssetDownload(url, fileSize) {
       revoke = objectUrl;
       setBlobUrl(objectUrl);
       setReady(true);
-      setLocalProgress(1);
     }).catch(() => {
       if (!cancelled) setReady(false);
     });
@@ -172,11 +223,10 @@ export function useAssetDownload(url, fileSize) {
       if (revoke) URL.revokeObjectURL(revoke);
       setBlobUrl(null);
       setReady(false);
-      setLocalProgress(0);
     };
   }, [url, fileSize, manager]);
 
-  return { blobUrl, ready, progress };
+  return { blobUrl, ready };
 }
 
 /**

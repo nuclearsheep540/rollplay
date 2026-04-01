@@ -29,7 +29,7 @@ import { useUnifiedAudio } from '../audio_management';
 import { MapDisplay, useMapWebSocket, ImageDisplay, useImageWebSocket, useGridConfig } from '../map_management';
 import MapOverlayPanel from './components/MapOverlayPanel';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
-import { faVolumeHigh, faVolumeXmark, faRightToBracket, faEye, faUpRightAndDownLeftFromCenter, faDownLeftAndUpRightToCenter } from '@fortawesome/free-solid-svg-icons';
+import { faVolumeHigh, faVolumeXmark, faRightToBracket, faEye, faUpRightAndDownLeftFromCenter, faDownLeftAndUpRightToCenter, faCloud, faCloudArrowDown, faRulerHorizontal } from '@fortawesome/free-solid-svg-icons';
 import { useFullscreen } from './hooks/useFullscreen';
 import MapSafeArea from './components/MapSafeArea';
 import Drawer from './components/Drawer';
@@ -142,6 +142,8 @@ export default function GameContent() {
   const [isHost, setIsHost] = useState(false); // Host status
   const [dicePortalActive, setDicePortalActive] = useState(true);
   const [uiScale, setUIScale] = useState('medium'); // UI Scale state
+  const [showVolumeSlider, setShowVolumeSlider] = useState(false);
+  const [showScaleMenu, setShowScaleMenu] = useState(false);
 
   // Default to 'small' on mobile/tablet devices — must be in useEffect
   // since navigator is unavailable during SSR. iPadOS and Chrome on iPad
@@ -1553,90 +1555,176 @@ export default function GameContent() {
           </div>
 
           <div className="nav-actions">
-            {/* Asset status — always visible, swaps between progress bar and "ready" */}
-            <div style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: '6px',
-            }}>
-              <span style={{ color: '#9ca3af', fontSize: '11px', whiteSpace: 'nowrap' }}>
-                Assets
-              </span>
-              {s3Loading.totalBytes > 0 ? (
-                <div style={{
-                  width: '60px',
-                  height: '4px',
-                  backgroundColor: '#374151',
-                  borderRadius: '2px',
-                  overflow: 'hidden',
-                }}>
+            {/* Asset status — cloud icon + progress bar or cached size */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: 'calc(6px * var(--ui-scale))', width: 'calc(120px * var(--ui-scale))' }}>
+              {s3Loading.loading || s3Loading.lingering ? (
+                <>
+                  <FontAwesomeIcon icon={faCloudArrowDown} style={{ color: '#6366f1', fontSize: 'calc(16px * var(--ui-scale))' }} />
+                  <span style={{ color: '#d1d5db', fontSize: 'calc(12px * var(--ui-scale))', whiteSpace: 'nowrap' }}>
+                    {s3Loading.completedCount}/{s3Loading.totalCount}
+                  </span>
                   <div style={{
-                    height: '100%',
-                    width: `${s3Loading.totalBytes > 0 ? (s3Loading.loadedBytes / s3Loading.totalBytes) * 100 : 0}%`,
-                    backgroundColor: '#6366f1',
+                    width: 'calc(60px * var(--ui-scale))',
+                    height: 'calc(4px * var(--ui-scale))',
+                    backgroundColor: '#374151',
                     borderRadius: '2px',
-                    transition: 'width 0.15s ease',
-                  }} />
-                </div>
+                    overflow: 'hidden',
+                  }}>
+                    <div style={{
+                      height: '100%',
+                      width: `${s3Loading.totalBytes > 0 ? (s3Loading.loadedBytes / s3Loading.totalBytes) * 100 : 0}%`,
+                      backgroundColor: '#6366f1',
+                      borderRadius: '2px',
+                      transition: 'width 0.15s ease',
+                    }} />
+                  </div>
+                </>
               ) : (
-                <span style={{ color: '#6b7280', fontSize: '11px' }}>ready</span>
+                <>
+                  <div style={{ position: 'relative', display: 'inline-flex' }}>
+                    <FontAwesomeIcon icon={faCloud} style={{ color: '#6b7280', fontSize: 'calc(16px * var(--ui-scale))' }} />
+                    {s3Loading.cachedCount > 0 && (
+                      <span style={{
+                        position: 'absolute',
+                        top: '50%',
+                        left: '50%',
+                        transform: 'translate(-50%, -45%)',
+                        fontSize: 'calc(8px * var(--ui-scale))',
+                        fontWeight: '700',
+                        color: '#d1d5db',
+                        lineHeight: 1,
+                      }}>
+                        {s3Loading.cachedCount}
+                      </span>
+                    )}
+                  </div>
+                  <span style={{ color: '#6b7280', fontSize: 'calc(12px * var(--ui-scale))', whiteSpace: 'nowrap' }}>
+                    {s3Loading.cachedSize < 1024 * 1024
+                      ? `${(s3Loading.cachedSize / 1024).toFixed(0)} KB`
+                      : `${(s3Loading.cachedSize / (1024 * 1024)).toFixed(1)} MB`}
+                  </span>
+                </>
               )}
             </div>
 
-            {/* Master Volume Control */}
-            <div className="master-volume-control">
-              <label htmlFor="master-volume" className="volume-label">
-                <FontAwesomeIcon icon={isAudioUnlocked ? faVolumeHigh : faVolumeXmark} />
-              </label>
-              <input
-                id="master-volume"
-                type="range"
-                min="0"
-                max="1"
-                step="0.1"
-                value={masterVolume}
-                onChange={(e) => {
-                  // Unlock audio on first volume interaction
+            {/* Master Volume — bordered icon, vertical slider popup */}
+            <div style={{ position: 'relative' }}>
+              <button
+                onClick={() => {
                   if (!isAudioUnlocked && unlockAudio) {
-                    unlockAudio().then(() => {
-                      console.log('🔊 Audio unlocked when player adjusted volume');
-                    }).catch(err => {
-                      console.warn('Audio unlock failed on volume adjustment:', err);
-                    });
+                    unlockAudio().catch(() => {});
                   }
-                  setMasterVolume(parseFloat(e.target.value));
+                  setShowVolumeSlider(prev => !prev);
+                  setShowScaleMenu(false);
                 }}
-                className="volume-slider"
+                className="fullscreen-btn"
                 title={`Master Volume: ${Math.round(masterVolume * 100)}%`}
-              />
-              <span className="volume-percentage">
-                {Math.round(masterVolume * 100)}%
-              </span>
+              >
+                <FontAwesomeIcon icon={isAudioUnlocked ? faVolumeHigh : faVolumeXmark} />
+              </button>
+              {showVolumeSlider && (
+                <>
+                  <div
+                    style={{ position: 'fixed', inset: 0, zIndex: 99 }}
+                    onClick={() => setShowVolumeSlider(false)}
+                  />
+                  <div style={{
+                    position: 'absolute',
+                    top: '100%',
+                    left: '50%',
+                    transform: 'translateX(-50%)',
+                    marginTop: 'calc(6px * var(--ui-scale))',
+                    background: 'rgba(0,0,0,0.9)',
+                    border: '1px solid rgba(255,255,255,0.2)',
+                    borderRadius: 'calc(3px * var(--ui-scale))',
+                    padding: 'calc(12px * var(--ui-scale)) calc(8px * var(--ui-scale))',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    alignItems: 'center',
+                    gap: 'calc(6px * var(--ui-scale))',
+                    zIndex: 100,
+                  }}>
+                    <input
+                      id="master-volume"
+                      type="range"
+                      min="0"
+                      max="1"
+                      step="0.05"
+                      value={masterVolume}
+                      onChange={(e) => setMasterVolume(parseFloat(e.target.value))}
+                      className="volume-slider-vertical"
+                      style={{
+                        writingMode: 'vertical-lr',
+                        direction: 'rtl',
+                        height: 'calc(100px * var(--ui-scale))',
+                        width: 'calc(4px * var(--ui-scale))',
+                      }}
+                    />
+                    <span style={{
+                      fontFamily: 'monospace',
+                      fontSize: 'calc(11px * var(--ui-scale))',
+                      color: 'rgba(255,255,255,0.7)',
+                    }}>
+                      {Math.round(masterVolume * 100)}%
+                    </span>
+                  </div>
+                </>
+              )}
             </div>
 
-            {/* UI Scale Toggle */}
-            <div className="ui-scale-nav">
+            {/* UI Scale — bordered icon, dropdown menu */}
+            <div style={{ position: 'relative' }}>
               <button
-                className={`scale-btn ${uiScale === 'small' ? 'active' : ''}`}
-                onClick={() => setUIScale('small')}
-                title="Small UI"
+                onClick={() => { setShowScaleMenu(prev => !prev); setShowVolumeSlider(false); }}
+                className="fullscreen-btn"
+                title={`UI Scale: ${uiScale}`}
               >
-                S
+                <FontAwesomeIcon icon={faRulerHorizontal} />
               </button>
-              <button
-                className={`scale-btn ${uiScale === 'medium' ? 'active' : ''}`}
-                onClick={() => setUIScale('medium')}
-                title="Medium UI"
-              >
-                M
-              </button>
-              <button
-                className={`scale-btn ${uiScale === 'large' ? 'active' : ''}`}
-                onClick={() => setUIScale('large')}
-                title="Large UI"
-              >
-                L
-              </button>
+              {showScaleMenu && (
+                <>
+                  <div
+                    style={{ position: 'fixed', inset: 0, zIndex: 99 }}
+                    onClick={() => setShowScaleMenu(false)}
+                  />
+                  <div style={{
+                    position: 'absolute',
+                    top: '100%',
+                    left: '50%',
+                    transform: 'translateX(-50%)',
+                    marginTop: 'calc(6px * var(--ui-scale))',
+                    background: 'rgba(0,0,0,0.9)',
+                    border: '1px solid rgba(255,255,255,0.2)',
+                    borderRadius: 'calc(3px * var(--ui-scale))',
+                    padding: 'calc(4px * var(--ui-scale))',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    gap: 'calc(2px * var(--ui-scale))',
+                    zIndex: 100,
+                    minWidth: 'calc(60px * var(--ui-scale))',
+                  }}>
+                    {['small', 'medium', 'large'].map(size => (
+                      <button
+                        key={size}
+                        onClick={() => { setUIScale(size); setShowScaleMenu(false); }}
+                        style={{
+                          background: uiScale === size ? 'var(--content-on-dark)' : 'transparent',
+                          color: uiScale === size ? '#1a1a2e' : '#e2e8f0',
+                          border: 'none',
+                          borderRadius: 'calc(2px * var(--ui-scale))',
+                          padding: 'calc(4px * var(--ui-scale)) calc(8px * var(--ui-scale))',
+                          fontSize: 'calc(12px * var(--ui-scale))',
+                          cursor: 'pointer',
+                          textAlign: 'center',
+                          fontWeight: uiScale === size ? '600' : '400',
+                        }}
+                      >
+                        {size.charAt(0).toUpperCase() + size.slice(1)}
+                      </button>
+                    ))}
+                  </div>
+                </>
+              )}
             </div>
 
             {/* Fullscreen Toggle */}
