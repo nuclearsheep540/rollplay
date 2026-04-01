@@ -107,7 +107,7 @@ export default function GameContent() {
   const displayNameMap = useMemo(() => {
     const map = {};
     Object.entries(playerMetadata).forEach(([userId, meta]) => {
-      map[userId] = meta.player_name || userId;
+      map[userId] = meta.player_name || "";
     });
     // DM isn't in playerMetadata (no character), add from contract
     if (dungeonMaster?.user_id && dungeonMaster.player_name) {
@@ -225,6 +225,11 @@ export default function GameContent() {
   const [rightDrawerSettled, setRightDrawerSettled] = useState(false); // starts closed
   const [isMixerOpen, setIsMixerOpen] = useState(false);
   const [mapImageConfig, setMapImageConfig] = useState(null); // Map image positioning/scaling
+
+  // Audio cue state — lifted here so it persists across drawer open/close
+  const [currentCue, setCurrentCue] = useState(null);
+  const [trackFadeStates, setTrackFadeStates] = useState({});
+  const [fadeDuration, setFadeDuration] = useState(1000);
 
   const canUseModeratorTools = isModerator || isHost;
 
@@ -375,7 +380,7 @@ export default function GameContent() {
       initialSeats.push({
         seatId: i,
         userId: userId,
-        playerName: meta?.player_name || (userId !== "empty" ? userId : "empty"),
+        playerName: meta?.player_name || "",
         characterData: meta,
         isActive: false
       });
@@ -914,6 +919,9 @@ export default function GameContent() {
     soloedChannels,
     setChannelMuted,
     setChannelSoloed,
+    // Batch state updates (for atomic multi-track operations)
+    startStateBatch,
+    flushStateBatch,
   } = useUnifiedAudio();
 
   // Ref to hold the pending operation clearing function from AudioMixerPanel
@@ -996,6 +1004,10 @@ export default function GameContent() {
     clearSfxSlot,
     sfxSlots,
 
+    // Batch state updates (for atomic multi-track operations)
+    startStateBatch,
+    flushStateBatch,
+
     // Session ended modal
     setSessionEndedData
   }), [
@@ -1007,7 +1019,8 @@ export default function GameContent() {
     activeFades, cancelFade, syncAudioState, loadAssetIntoChannel, applyChannelEffects,
     playSfxSlot, stopSfxSlot, setSfxSlotVolume, loadSfxSlot, clearSfxSlot, sfxSlots,
     audioBuffersRef, audioContextRef,
-    setChannelMuted, setChannelSoloed, setBroadcastMasterVolume
+    setChannelMuted, setChannelSoloed, setBroadcastMasterVolume,
+    startStateBatch, flushStateBatch
   ]);
 
   // Initialize WebSocket hook with game context (after audio functions are available)
@@ -1813,6 +1826,12 @@ export default function GameContent() {
                   clearSfxSlot={clearSfxSlot}
                   setSfxSlotVolume={setSfxSlotVolume}
                   activeFades={activeFades}
+                  currentCue={currentCue}
+                  setCurrentCue={setCurrentCue}
+                  trackFadeStates={trackFadeStates}
+                  setTrackFadeStates={setTrackFadeStates}
+                  fadeDuration={fadeDuration}
+                  setFadeDuration={setFadeDuration}
                 />
               )}
               <div aria-hidden="true" style={{ flexShrink: 0, height: '40vh' }} />

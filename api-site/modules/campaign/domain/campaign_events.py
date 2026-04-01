@@ -401,3 +401,26 @@ class CampaignEvents:
                     save_notification=False
                 ))
         return events
+
+    @staticmethod
+    def campaign_deleted(
+        campaign_member_ids: List[UUID],
+        dm_id: UUID,
+        campaign_id: UUID,
+        campaign_name: str,
+    ) -> List[EventConfig]:
+        """Silent state event — triggers dashboard cache invalidation for all members."""
+        return [
+            EventConfig(
+                user_id=member_id,
+                event_type="campaign_deleted",
+                data={
+                    "campaign_id": str(campaign_id),
+                    "campaign_name": campaign_name,
+                },
+                show_toast=False,
+                save_notification=False
+            )
+            for member_id in campaign_member_ids
+            if member_id != dm_id
+        ]

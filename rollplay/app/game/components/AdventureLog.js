@@ -36,7 +36,7 @@ export default function AdventureLog({ rollLog, playerSeatMap, displayNameMap = 
         const playerData = playerSeatMap[entry.user_id];
         const playerIsInParty = !!playerData;
         const messageType = playerIsInParty ? "party-member" : "npc";
-        const playerDisplayName = characterNameMap[entry.user_id] || displayNameMap[entry.user_id] || entry.user_id;
+        const playerDisplayName = characterNameMap[entry.user_id] || displayNameMap[entry.user_id] || "";
 
         // Check if this continues the current group
         if (currentGroup &&

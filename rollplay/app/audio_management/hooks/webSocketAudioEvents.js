@@ -136,6 +136,11 @@ export const handleRemoteAudioBatch = async (data, {
   setChannelSoloed,
   // Broadcast master volume
   setBroadcastMasterVolume,
+  // Batch state updates — when provided, all setRemoteTrackStates calls
+  // within individual play/stop operations accumulate and flush as one
+  // atomic React state update, preventing sequential re-renders.
+  startStateBatch,
+  flushStateBatch,
 }) => {
   console.log("🎛️ Remote audio batch command received:", data);
   const { operations, triggered_by, fade_duration } = data;
@@ -200,21 +205,10 @@ export const handleRemoteAudioBatch = async (data, {
       switch (operation) {
         case 'play':
           if (playRemoteTrack && loadRemoteAudioBuffer && audioBuffersRef) {
-            const { filename, looping = true, volume = 1.0, fade = false, asset_id, s3_url } = op;
+            const { filename, looping = true, volume = 1.0, fade = false } = op;
 
-            // For synchronized operations, buffer is pre-loaded; for single operations, load it now
-            if (!syncStartTime) {
-              // Single track operation - load buffer now
-              const audioUrl = s3_url || `/audio/${filename}`;
-              const buffer = await loadRemoteAudioBuffer(audioUrl, trackId);
-              if (buffer && audioBuffersRef) {
-                const expectedKey = `${trackId}_${asset_id || filename}`;
-                audioBuffersRef.current[expectedKey] = buffer;
-              }
-            }
-            // else: Buffer already pre-loaded for synchronized operations
-
-            // Pass synchronized start time for batch operations (null for single operations)
+            // Buffers are always pre-loaded before operations execute (see pre-load phase above).
+            // Pass synchronized start time for coordinated multi-play operations (null otherwise).
             await playRemoteTrack(trackId, filename, looping, volume, null, op, true, syncStartTime, fade, fadeDuration);
             console.log(`✅ Batch operation ${index + 1}: played ${trackId} (${filename}) ${syncStartTime ? `at sync time ${syncStartTime}` : 'immediately'}${fade ? ` with ${fadeDuration}ms fade-in` : ''}`);
           } else {
@@ -335,53 +329,46 @@ export const handleRemoteAudioBatch = async (data, {
   console.log(`🎛️ Audio context state:`, audioContextRef?.current?.state);
   console.log(`🎛️ Audio context currentTime:`, audioContextRef?.current?.currentTime);
 
-  // Execute all operations in parallel
+  // Everything below is wrapped in try/finally so that flushStateBatch()
+  // is guaranteed to run — even if buffer pre-loading fails.
   try {
-    if (hasMultiplePlayOps && audioContextRef?.current) {
-      // For synchronized playback: Load all buffers first, then calculate sync time
-      console.log(`🎵 🔄 Pre-loading ${playOperations.length} audio buffers for synchronized playback...`);
-      
-      // Load all play operation buffers in parallel
-      const bufferLoadPromises = operations.map(async (op, index) => {
-        if (op.operation === 'play' && loadRemoteAudioBuffer && audioBuffersRef) {
-          const { filename, trackId, asset_id, s3_url } = op;
+    // Activate batch mode — all setRemoteTrackStates calls inside individual
+    // play/stop operations accumulate instead of firing separate re-renders.
+    if (startStateBatch) startStateBatch();
 
-          // Use S3 URL if available, fall back to local /audio/ path
-          const audioUrl = s3_url || `/audio/${filename}`;
-          const buffer = await loadRemoteAudioBuffer(audioUrl, trackId);
-          if (buffer && audioBuffersRef) {
-            const expectedKey = `${trackId}_${asset_id || filename}`;
-            audioBuffersRef.current[expectedKey] = buffer;
-          }
+    // Pre-load ALL play operation buffers before executing anything.
+    // Without this, stop operations (synchronous) fire instantly while play
+    // operations block on async buffer loading — causing fade-in to start
+    // hundreds of ms after fade-out, breaking crossfade timing.
+    if (playOperations.length > 0 && loadRemoteAudioBuffer && audioBuffersRef) {
+      console.log(`🎵 🔄 Pre-loading ${playOperations.length} audio buffer(s)...`);
+      await Promise.all(playOperations.map(async (op) => {
+        const { filename, trackId, asset_id, s3_url } = op;
+        const audioUrl = s3_url || `/audio/${filename}`;
+        const buffer = await loadRemoteAudioBuffer(audioUrl, trackId);
+        if (buffer) {
+          audioBuffersRef.current[`${trackId}_${asset_id || filename}`] = buffer;
         }
-        return op;
-      });
-      
-      // Wait for all buffers to load
-      await Promise.all(bufferLoadPromises);
-      console.log(`🎵 ✅ All buffers loaded, calculating sync time...`);
-      
-      // NOW calculate sync time after all buffers are ready
-      const syncStartTime = audioContextRef.current.currentTime + 0.2; // Increased buffer for safety
-      console.log(`🎵 ✅ Scheduling ${playOperations.length} tracks to start simultaneously at audio time ${syncStartTime}`);
-      
-      // Execute all operations with the calculated sync time
-      await Promise.all(operations.map((op, index) => processOperation(op, index, syncStartTime)));
-      
-    } else {
-      // Non-synchronized operations (single track or non-play operations)
-      if (!hasMultiplePlayOps) {
-        console.log(`🎵 Single/non-play operation - no synchronization needed`);
-      } else {
-        console.warn(`⚠️ Multiple play operations but no audio context available!`);
-      }
-      await Promise.all(operations.map((op, index) => processOperation(op, index, null)));
+      }));
+      console.log(`🎵 ✅ All buffers pre-loaded`);
     }
-    
+
+    // Execute all operations — buffers are warm, stops and plays fire together
+    let syncStartTime = null;
+    if (hasMultiplePlayOps && audioContextRef?.current) {
+      syncStartTime = audioContextRef.current.currentTime + 0.2;
+      console.log(`🎵 ✅ Scheduling ${playOperations.length} tracks at sync time ${syncStartTime}`);
+    }
+
+    await Promise.all(operations.map((op, index) => processOperation(op, index, syncStartTime)));
+
     console.log(`🎛️ ✅ Completed processing ${operations.length} batch operations from ${triggered_by} (synchronized)`);
   } catch (error) {
     console.error(`❌ Some batch operations failed:`, error);
     console.log(`🎛️ ⚠️ Partially completed processing ${operations.length} batch operations from ${triggered_by}`);
+  } finally {
+    // Flush all accumulated state updates as one atomic render
+    if (flushStateBatch) flushStateBatch();
   }
 };
 

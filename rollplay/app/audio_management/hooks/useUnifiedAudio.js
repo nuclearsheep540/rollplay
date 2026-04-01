@@ -140,7 +140,7 @@ export const useUnifiedAudio = () => {
   // Remote track states (for DM-controlled BGM audio)
   // Channels start empty — DM loads audio from asset library via AudioTrackSelector
   // SFX is handled separately by the lightweight soundboard system below
-  const [remoteTrackStates, setRemoteTrackStates] = useState({
+  const [remoteTrackStates, setRemoteTrackStatesRaw] = useState({
     audio_channel_A: { playbackState: PlaybackState.STOPPED, volume: 0.8, filename: null, asset_id: null, s3_url: null, type: ChannelType.BGM, channelGroup: ChannelType.BGM, track: 'A', currentTime: 0, duration: 0, looping: true },
     audio_channel_B: { playbackState: PlaybackState.STOPPED, volume: 0.8, filename: null, asset_id: null, s3_url: null, type: ChannelType.BGM, channelGroup: ChannelType.BGM, track: 'B', currentTime: 0, duration: 0, looping: true },
     audio_channel_C: { playbackState: PlaybackState.STOPPED, volume: 0.8, filename: null, asset_id: null, s3_url: null, type: ChannelType.BGM, channelGroup: ChannelType.BGM, track: 'C', currentTime: 0, duration: 0, looping: true },
@@ -152,6 +152,45 @@ export const useUnifiedAudio = () => {
   // Refs mirroring state for use in event listeners (avoids re-registering on every state change)
   const remoteTrackStatesRef = useRef(remoteTrackStates);
   useEffect(() => { remoteTrackStatesRef.current = remoteTrackStates; }, [remoteTrackStates]);
+
+  // Batch accumulator — when active, setRemoteTrackStates calls accumulate
+  // into the ref instead of firing individually. flushBatch() applies them
+  // as one atomic state update. Used by handleRemoteAudioBatch so that
+  // parallel play/stop operations produce a single re-render.
+  const batchAccumulatorRef = useRef(null);
+
+  // All internal code uses setRemoteTrackStates (the batched version).
+  // In normal mode it delegates to the raw setter immediately.
+  // In batch mode (startStateBatch → flushStateBatch) it accumulates
+  // updates and applies them as one atomic state transition.
+  const setRemoteTrackStates = useCallback((updater) => {
+    if (batchAccumulatorRef.current !== null) {
+      if (typeof updater === 'function') {
+        batchAccumulatorRef.current.push(updater);
+      } else {
+        batchAccumulatorRef.current.push(() => updater);
+      }
+    } else {
+      setRemoteTrackStatesRaw(updater);
+    }
+  }, []);
+
+  const startStateBatch = useCallback(() => {
+    batchAccumulatorRef.current = [];
+  }, []);
+
+  const flushStateBatch = useCallback(() => {
+    const updaters = batchAccumulatorRef.current;
+    batchAccumulatorRef.current = null;
+    if (!updaters || updaters.length === 0) return;
+    setRemoteTrackStatesRaw(prev => {
+      let state = prev;
+      for (const updater of updaters) {
+        state = typeof updater === 'function' ? updater(state) : { ...state, ...updater };
+      }
+      return state;
+    });
+  }, []);
 
   // =====================================
   // SFX SOUNDBOARD (Lightweight fire-and-forget)
@@ -2057,6 +2096,10 @@ export const useUnifiedAudio = () => {
     setSfxSlotVolume,
     loadSfxSlot,
     clearSfxSlot,
+
+    // Batch state updates (for atomic multi-track operations)
+    startStateBatch,
+    flushStateBatch,
 
     // Unified functions
     unlockAudio,

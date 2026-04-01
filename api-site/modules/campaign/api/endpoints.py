@@ -86,6 +86,7 @@ def _to_campaign_response(campaign: CampaignAggregate, user_repo: UserRepository
         sessions=[],  # Sessions fetched separately via session module
         invited_player_ids=[str(pid) for pid in campaign.invited_player_ids],
         player_ids=[str(pid) for pid in campaign.player_ids],
+        member_ids=[str(mid) for mid in campaign.get_all_member_ids()],
         total_sessions=campaign.get_total_sessions(),
         active_sessions=0,  # TODO: Query session module for active count
         invited_count=campaign.get_invited_count(),
@@ -117,6 +118,7 @@ def _to_campaign_summary_response(campaign: CampaignAggregate, user_repo: UserRe
         active_sessions=0,  # TODO: Query session module for active count
         invited_player_ids=[str(pid) for pid in campaign.invited_player_ids],
         player_ids=[str(pid) for pid in campaign.player_ids],
+        member_ids=[str(mid) for mid in campaign.get_all_member_ids()],
         invited_count=campaign.get_invited_count()
     )
 
@@ -324,17 +326,19 @@ async def delete_campaign(
     campaign_id: UUID,
     user_id: UUID = Depends(get_current_user_id),
     campaign_repo: CampaignRepository = Depends(campaign_repository),
-    session_repo: SessionRepository = Depends(get_session_repository)
+    session_repo: SessionRepository = Depends(get_session_repository),
+    character_repo: CharacterRepository = Depends(get_character_repository),
+    event_manager: EventManager = Depends(get_event_manager)
 ):
     """
     Delete campaign.
 
     Only allows deletion if there are no ACTIVE sessions.
-    INACTIVE sessions will be cascade-deleted with the campaign.
+    Releases all character locks and cascade-deletes sessions/members.
     """
     try:
-        command = DeleteCampaign(campaign_repo, session_repo)
-        success = command.execute(campaign_id, user_id)
+        command = DeleteCampaign(campaign_repo, session_repo, character_repo, event_manager)
+        success = await command.execute(campaign_id, user_id)
 
         if success:
             return {"message": "Campaign deleted successfully"}

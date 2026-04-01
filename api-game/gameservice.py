@@ -377,7 +377,12 @@ class GameService:
         player_metadata = room.get("player_metadata", {})
         if not isinstance(player_metadata, dict):
             player_metadata = {}
-        player_metadata[user_id] = {
+
+        # Merge incoming fields into existing entry — a player-only sync
+        # (user joins campaign) must not wipe character fields, and a
+        # character sync must not wipe player fields.
+        existing = player_metadata.get(user_id, {})
+        incoming = {
             "user_id": user_id,
             "player_name": character_data.get("player_name"),
             "campaign_role": character_data.get("campaign_role"),
@@ -390,6 +395,9 @@ class GameService:
             "hp_max": character_data.get("hp_max"),
             "ac": character_data.get("ac"),
         }
+        # Only overwrite with fields that were actually provided
+        merged = {**existing, **{k: v for k, v in incoming.items() if v is not None}}
+        player_metadata[user_id] = merged
 
         result = collection.update_one(
             filter_criteria,

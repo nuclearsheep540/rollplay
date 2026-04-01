@@ -48,6 +48,7 @@ class CampaignResponse(BaseModel):
     sessions: List = []  # Sessions fetched separately via session module
     invited_player_ids: List[str] = []
     player_ids: List[str] = []
+    member_ids: List[str] = []  # All joined members regardless of role (excludes INVITED)
     total_sessions: int = 0
     active_sessions: int = 0
     invited_count: int = 0
@@ -71,6 +72,7 @@ class CampaignSummaryResponse(BaseModel):
     active_sessions: int = 0
     invited_player_ids: List[str] = []
     player_ids: List[str] = []
+    member_ids: List[str] = []  # All joined members regardless of role (excludes INVITED)
     invited_count: int = 0
 
     class Config:

@@ -289,3 +289,241 @@ Register `image_config_update` handler in WebSocket event routing.
 8. **Workshop readiness**: `PATCH /assets/{id}/image-config` works from API — ready for workshop tool
 9. **Backwards compat**: Existing images with no config default to float
 10. **Z-index**: Verify letterbox bars render above image layer with z-5 gap reserved for overlays
+
+---
+
+## Sub-Plan A: Cine Mode — Cinematic Image Display
+
+> *Refined during implementation. Originally a standalone plan for the full cinematic feature.*
+
+### Context
+
+Cine mode transforms the image display from a simple tool into an interactive storytelling experience with:
+- **Entrance transitions** — how the image appears (fade, slide, zoom, etc.)
+- **Ken Burns motion** — slow pan + zoom across a still image
+- **Text overlays** — animated text appearing over the image
+- **Visual overlays** — effects layered on top of the image
+- **UI hiding** — hides game UI for PLAYER roles (wiring already in GameContent.js)
+
+### Key Architectural Decisions
+
+**Cine config is workshop-authored, game-read-only:**
+- **Workshop** creates and edits `cine_config` on the image asset in PostgreSQL
+- **Session start ETL** sends `cine_config` to api-game/MongoDB (read-only copy)
+- **In-game** the DM selects "Cine" as display mode → `CineDisplay` reads the config
+- **Session end ETL** does NOT write `cine_config` back — it's never mutated at runtime
+
+**Cine button disabled without config:**
+In the game IMAGE drawer, the "Cine" mode button is visible but **disabled** when the asset has no `cine_config`. Clear UX signal that this asset needs workshop configuration first.
+
+### Animation Library Decision
+
+**GSAP (`gsap` + `@gsap/react`)** for Ken Burns + text animations:
+- Timeline-based orchestration — sequence entrance → ken burns → text
+- Ken Burns is a coordinated `scale` + `x`/`y` tween
+- `useGSAP()` hook handles React lifecycle/cleanup
+- Performant — GPU-accelerated transforms
+
+**Animate.css** for entrance transitions:
+- Pre-built CSS classes (fadeIn, slideInUp, zoomIn, etc.)
+- 4KB, zero JS overhead — just toggle a class
+- Config stores effect names, frontend maps to Animate.css classes
+
+### Config Shape
+
+Config describes **what** to do, not **how**. The rendering layer (`CineDisplay`) decides which library handles each feature.
+
+```javascript
+// cine_config — stored as JSONB on the image asset, read-only at runtime
+{
+  transition: {
+    effect: "fadeIn",
+    duration: 1.5,
+    delay: 0,
+  },
+  ken_burns: {
+    enabled: true,
+    duration: 12,
+    start: { x: 0, y: 0, scale: 1.0 },
+    end: { x: -5, y: -3, scale: 1.3 },
+    easing: "power1.inOut",
+  },
+  text_overlays: [
+    {
+      text: "The kingdom falls silent...",
+      position: "bottom-center",
+      style: "subtitle",
+      animation: "fadeUp",
+      delay: 2.0,
+      duration: null,
+    }
+  ],
+  visual_overlays: [...],
+  hide_player_ui: true,
+}
+```
+
+### Frontend Component Layer Model
+
+```
+Transition wrapper (entrance/exit — animates EVERYTHING as one unit)
+  ├── Text overlays (z-15 — above letterbox, never clipped by bars)
+  └── Letterbox container (aspect-ratio, black bars)
+      └── Ken Burns wrapper (GSAP scale + translate within the frame)
+          ├── Visual overlays (z-10 — pan/zoom with the image)
+          └── <img object-fit:cover object-position:X% Y%> ← nudge/reframe
+```
+
+### Implementation Order
+
+1. **Install dependencies** — `npm install gsap @gsap/react animate.css`
+2. **Config schema** — add `cine_config` JSONB column + migration
+3. **Backend plumbing** — contract, aggregate, repository, ETL (read-only semantics)
+4. **ImageControlsPanel** — add Cine button (disabled without config)
+5. **CineDisplay component** — entrance transition + Ken Burns + text overlays
+6. **cineHideUI activation** — flip the flag for player role hiding
+7. **Workshop Image Config tool** — cine configuration editor
+
+---
+
+## Sub-Plan B: Structured CineConfig Schema + Visual Overlays
+
+> *Refined during implementation. Originally a standalone plan for typing cine_config and implementing the first overlay feature.*
+
+### Context
+
+`cine_config` was stored as `Dict[str, Any]` everywhere. This plan structures it into typed models and implements visual overlays as the first real cine feature.
+
+Visual overlays use a **typed + stacked** model: each overlay is a single effect type (`film_grain`, `color_filter`), and you combine by stacking multiple entries in the list. Array order = render order.
+
+### Phase 1: Shared Contract — CineConfig + VisualOverlay
+
+**New file: `rollplay-shared-contracts/shared_contracts/cine.py`**
+
+```python
+class FilmGrainOverlay(ContractModel):
+    type: Literal["film_grain"] = "film_grain"
+    enabled: bool = True
+    opacity: float = Field(default=0.5, ge=0.0, le=1.0)
+    style: str = "vintage"
+    blend_mode: str = "overlay"
+
+class ColorFilterOverlay(ContractModel):
+    type: Literal["color_filter"] = "color_filter"
+    enabled: bool = True
+    opacity: float = Field(default=0.5, ge=0.0, le=1.0)
+    color: str = "#1a0a2e"
+    blend_mode: str = "multiply"
+
+VisualOverlay = Annotated[Union[FilmGrainOverlay, ColorFilterOverlay], Field(discriminator="type")]
+
+class CineConfig(ContractModel):
+    visual_overlays: List[VisualOverlay] = []
+    hide_player_ui: bool = True
+    transition: Optional[Any] = None
+    ken_burns: Optional[Any] = None
+    text_overlays: Optional[Any] = None
+```
+
+### Phase 2: Domain + Commands (api-site)
+
+- Domain `CineConfig` dataclass with overlay stack management (add, remove, reorder, validate)
+- Domain overlay types (`FilmGrainOverlay`, `ColorFilterOverlay`) with blend mode / style validation
+- `UpdateImageConfig` command accepts typed `CineConfig`
+
+### Phase 3: API Schemas
+
+- `MediaAssetResponse` and `UpdateImageConfigRequest` use typed `CineConfig` instead of `Dict`
+
+### Phase 4: Repository Serialization
+
+- On write: `aggregate.cine_config.to_dict()` for JSONB
+- On read: `CineConfig.from_dict(model.cine_config)` with try/except for backwards compat
+
+### Phase 5: api-game — No changes needed
+
+api-game treats cine_config as an opaque blob — stores/returns it, never interprets it.
+
+### Phase 6: Workshop UI — Visual Overlay Editor
+
+- "Add Overlay" button with type picker (Film Grain, Color Filter)
+- Per-overlay card: type label, enabled toggle, opacity slider, type-specific controls, remove button
+- Up/down arrows for reorder
+
+### Phase 7: Game-time Overlay Rendering
+
+Render visual overlays at the reserved z-index slots:
+- `film_grain`: `background-image: url(/cine/overlay/film-grain.gif)`, `mix-blend-mode: overlay`
+- `color_filter`: `background-color` + `mix-blend-mode` from config
+- Each overlay's `opacity` applied via CSS
+
+### Verification
+
+1. Contract round-trip + constraint tests for CineConfig/VisualOverlay
+2. PATCH with `cine_config` containing visual_overlays — verify 200
+3. Invalid overlay (opacity > 1.0) — verify 422
+4. Workshop: add film grain overlay → adjust opacity → save → reload → persists
+5. Workshop preview: overlays visible in real-time
+6. Game rendering: overlays render correctly over image in cine mode
+7. Backwards compat: images with null cine_config still work
+
+---
+
+## Sub-Plan C: api-game — Compose Shared Contracts
+
+> *Refined during implementation. Originally a standalone plan created after repeated field-drift bugs.*
+
+### Context
+
+api-game's local models (`ImageSettings`, `MapSettings`) duplicate fields from shared contracts (`ImageConfig`, `MapConfig`) and add game-specific metadata (`room_id`, `loaded_by`, `active`). Construction sites manually map fields one-by-one, causing the same drift bug 4+ times — most recently `cine_config.style` being silently dropped.
+
+The fix: **compose the contract** inside the local model. The contract arrives whole, gets stored whole in MongoDB, and the frontend reads the same nested shape. One shape everywhere, no translation layers, no drift.
+
+### Phase 1: ImageSettings composes ImageConfig
+
+```python
+class ImageSettings(BaseModel):
+    room_id: str
+    loaded_by: str
+    active: bool = True
+    image_config: ImageConfig  # the whole contract
+```
+
+Update all service methods, backend construction sites, frontend construction + read sites to use nested paths (`image_config.field` instead of flat `field`).
+
+### Phase 2: MapSettings composes MapConfig
+
+```python
+class MapSettings(BaseModel):
+    room_id: str
+    uploaded_by: str
+    active: bool = True
+    map_config: MapConfig  # the whole contract
+```
+
+Same pattern — update service methods, construction sites, frontend reads.
+
+### MongoDB Document Shape (after)
+
+```json
+{
+  "room_id": "session-123",
+  "loaded_by": "system",
+  "active": true,
+  "image_config": {
+    "asset_id": "img-1",
+    "filename": "tavern.jpg",
+    "file_path": "https://s3...",
+    "display_mode": "cine",
+    "aspect_ratio": "2.39:1",
+    "cine_config": { "visual_overlays": [...], "hide_player_ui": true }
+  }
+}
+```
+
+### What's NOT changing
+
+- Shared contracts — no changes, already correct
+- api-site — no changes, domain and ETL are correct
+- AudioChannelState — already IS the contract
+- Config update broadcast shape — broadcasts remain flat deltas

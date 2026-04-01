@@ -77,11 +77,13 @@ class UpdateCampaign:
 
 
 class DeleteCampaign:
-    def __init__(self, repository, session_repository=None):
+    def __init__(self, repository, session_repository=None, character_repository: CharacterRepository = None, event_manager: EventManager = None):
         self.repository = repository
         self.session_repository = session_repository
+        self.character_repository = character_repository
+        self.event_manager = event_manager
 
-    def execute(self, campaign_id: UUID, host_id: UUID) -> bool:
+    async def execute(self, campaign_id: UUID, host_id: UUID) -> bool:
         """Delete campaign if business rules allow"""
         campaign = self.repository.get_by_id(campaign_id)
         if not campaign:
@@ -103,6 +105,26 @@ class DeleteCampaign:
             if non_finished_sessions:
                 count = len(non_finished_sessions)
                 raise ValueError(f"Cannot delete campaign with {count} unfinished session(s). Please finish or delete all sessions first.")
+
+        # Release all character locks before deletion — characters stay on
+        # the user's account but are no longer bound to this campaign.
+        if self.character_repository:
+            locked_characters = self.character_repository.get_by_active_campaign(campaign_id)
+            for character in locked_characters:
+                character.unlock_from_campaign()
+                self.character_repository.save(character)
+
+        # Broadcast before delete — we need campaign data for the event
+        if self.event_manager:
+            all_member_ids = list(campaign.members.keys())
+            events = CampaignEvents.campaign_deleted(
+                campaign_member_ids=all_member_ids,
+                dm_id=host_id,
+                campaign_id=campaign_id,
+                campaign_name=campaign.title,
+            )
+            for event in events:
+                await self.event_manager.broadcast(event)
 
         return self.repository.delete(campaign_id)
 
@@ -252,6 +274,9 @@ class AcceptCampaignInvite:
 
         # Add player to any active sessions in this campaign and track which ones
         auto_added_to_session_ids = []
+        player = self.user_repo.get_by_id(player_id)
+        player_name = player.screen_name if player else ""
+
         if self.session_repository:
             from modules.session.domain.session_aggregate import SessionStatus
             # Get all sessions for this campaign
@@ -265,8 +290,13 @@ class AcceptCampaignInvite:
                         auto_added_to_session_ids.append(session_id)
                         logger.info(f"✅ Auto-added late-joining player {player_id} to active session {session_id}")
 
+                    # Sync player_name to api-game so they don't show as UUID
+                    if session.active_game_id:
+                        await self._sync_player_to_game(
+                            session.active_game_id, player_id, player_name
+                        )
+
         # Broadcast notification event to host
-        player = self.user_repo.get_by_id(player_id)
         await self.event_manager.broadcast(
             CampaignEvents.campaign_invite_accepted(
                 host_id=campaign.dm_id,
@@ -279,6 +309,23 @@ class AcceptCampaignInvite:
         )
 
         return campaign
+
+    @staticmethod
+    async def _sync_player_to_game(game_id: str, player_id: UUID, player_name: str):
+        """Notify api-game about a new player so they appear by name, not UUID."""
+        try:
+            async with httpx.AsyncClient() as client:
+                response = await client.put(
+                    f"http://api-game:8081/game/{game_id}/player/character",
+                    json={"user_id": str(player_id), "player_name": player_name},
+                    timeout=5.0
+                )
+                if response.status_code == 200:
+                    logger.info(f"Synced late-joining player {player_id} ({player_name}) to game {game_id}")
+                else:
+                    logger.warning(f"Player sync to game failed ({response.status_code}): {response.text}")
+        except Exception as e:
+            logger.warning(f"Player sync to api-game failed (non-fatal): {e}")
 
 
 class DeclineCampaignInvite:
