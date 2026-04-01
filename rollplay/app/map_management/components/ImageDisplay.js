@@ -6,6 +6,7 @@
 'use client'
 
 import React, { useState, useRef, useMemo, useEffect } from 'react';
+import { useAssetDownload } from '@/app/shared/providers/AssetDownloadManager';
 
 /**
  * Parse "W:H" string into a numeric ratio for CSS aspect-ratio.
@@ -82,48 +83,45 @@ const ImageDisplay = ({
     [ic?.aspect_ratio]
   );
 
-  // Collect every URL the scene needs (base image + any film grain GIFs)
-  const preloadUrls = useMemo(() => {
+  // Download the main image through the asset manager (progressive byte tracking)
+  const { blobUrl: imageBlobUrl, ready: imageReady } = useAssetDownload(ic?.file_path, ic?.file_size);
+
+  // Collect local overlay URLs that still need preloading (film grain GIFs — not S3)
+  const overlayUrls = useMemo(() => {
+    if (displayMode !== 'cine' || !ic?.cine_config?.visual_overlays) return [];
     const urls = new Set();
-    if (ic?.file_path) urls.add(ic.file_path);
-    if (displayMode === 'cine' && ic?.cine_config?.visual_overlays) {
-      for (const overlay of ic.cine_config.visual_overlays) {
-        if (overlay.enabled && overlay.type === 'film_grain') {
-          urls.add(GRAIN_STYLE_ASSETS[overlay.style] || GRAIN_STYLE_ASSETS.vintage);
-        }
+    for (const overlay of ic.cine_config.visual_overlays) {
+      if (overlay.enabled && overlay.type === 'film_grain') {
+        urls.add(GRAIN_STYLE_ASSETS[overlay.style] || GRAIN_STYLE_ASSETS.vintage);
       }
     }
     return [...urls];
-  }, [ic?.file_path, displayMode, ic?.cine_config?.visual_overlays]);
+  }, [displayMode, ic?.cine_config?.visual_overlays]);
 
-  // Preload all assets in parallel — only reveal scene when every resource is ready.
-  // Uses img.complete to distinguish cache hits (no indicator) from network fetches.
-  const preloadKey = preloadUrls.join('|');
+  // Preload local overlay GIFs — these are small and local, just need cache priming
+  const overlayKey = overlayUrls.join('|');
+  const [overlaysReady, setOverlaysReady] = useState(overlayUrls.length === 0);
   useEffect(() => {
-    if (!preloadUrls.length) return;
-    setSceneReady(false);
+    if (!overlayUrls.length) { setOverlaysReady(true); return; }
+    setOverlaysReady(false);
     let cancelled = false;
 
-    const allImages = preloadUrls.map(url => {
-      const img = new Image();
-      img.src = url;
-      return img;
-    });
-
-    const allPromises = allImages.map(img => {
-      if (img.complete) return Promise.resolve();
-      return new Promise(resolve => {
+    Promise.all(
+      overlayUrls.map(url => new Promise(resolve => {
+        const img = new Image();
         img.onload = resolve;
         img.onerror = resolve;
-      });
-    });
-
-    Promise.all(allPromises).then(() => {
-      if (!cancelled) setSceneReady(true);
-    });
+        img.src = url;
+      }))
+    ).then(() => { if (!cancelled) setOverlaysReady(true); });
 
     return () => { cancelled = true; };
-  }, [preloadKey]);
+  }, [overlayKey]);
+
+  // Scene is ready when both the main image blob and overlays are loaded
+  useEffect(() => {
+    setSceneReady(imageReady && overlaysReady);
+  }, [imageReady, overlaysReady]);
 
   if (!activeImage) {
     return null;
@@ -174,7 +172,7 @@ const ImageDisplay = ({
         }}>
           <img
             ref={imageRef}
-            src={ic?.file_path}
+            src={imageBlobUrl}
             alt={ic?.original_filename || ic?.filename || 'Game image'}
             style={{
               ...imageStyle,
@@ -188,7 +186,7 @@ const ImageDisplay = ({
         <>
           <img
             ref={imageRef}
-            src={ic?.file_path}
+            src={imageBlobUrl}
             alt={ic?.original_filename || ic?.filename || 'Game image'}
             style={{
               ...imageStyle,

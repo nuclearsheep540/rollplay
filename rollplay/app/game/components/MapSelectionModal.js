@@ -5,6 +5,7 @@ import React, { useState, useRef, useCallback, useMemo } from 'react';
 import { useAssets } from '@/app/asset_library/hooks/useAssets';
 import { useUploadAsset } from '@/app/asset_library/hooks/useUploadAsset';
 import { useAssociateAsset } from '@/app/asset_library/hooks/useAssociateAsset';
+import S3Image from '@/app/shared/components/S3Image';
 import { DM_CHILD, DM_CHILD_LAST, PANEL_SUBTITLE, ACTIVE_BACKGROUND } from '../../styles/constants';
 
 const ACCEPTED_MAP_TYPES = ['image/png', 'image/jpeg', 'image/webp'];
@@ -253,7 +254,7 @@ export default function MapSelectionSection({
                 <div key={asset.id} className="flex items-center gap-2 p-2 rounded border border-gray-600 hover:border-gray-500">
                   <div className="w-10 h-10 flex-shrink-0 bg-gray-700 rounded flex items-center justify-center overflow-hidden">
                     {asset.s3_url ? (
-                      <img src={asset.s3_url} alt="" className="w-full h-full object-cover" />
+                      <S3Image src={asset.s3_url} fileSize={asset.file_size} alt="" className="w-full h-full object-cover" />
                     ) : (
                       <span className="text-gray-500 text-xs">🗺️</span>
                     )}
@@ -308,7 +309,7 @@ export default function MapSelectionSection({
               >
                 <div className="w-10 h-10 flex-shrink-0 bg-gray-700 rounded flex items-center justify-center overflow-hidden">
                   {asset.s3_url ? (
-                    <img src={asset.s3_url} alt="" className="w-full h-full object-cover" />
+                    <S3Image src={asset.s3_url} fileSize={asset.file_size} alt="" className="w-full h-full object-cover" />
                   ) : (
                     <span className="text-gray-500 text-xs">🗺️</span>
                   )}

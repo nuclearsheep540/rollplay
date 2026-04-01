@@ -7,6 +7,7 @@
 
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { PlaybackState, ChannelType, DEFAULT_EFFECTS, REVERB_PRESETS } from '../types';
+import { useAssetManager } from '@/app/shared/providers/AssetDownloadManager';
 
 // Logarithmic frequency mapping for filter faders (0.0–1.0 → Hz)
 // HPF: 0.0 = 20Hz (minimal cut), 1.0 = 5000Hz (aggressive cut)
@@ -41,6 +42,7 @@ const mapLpfFrequency = (faderValue) => {
 export const useUnifiedAudio = () => {
   const [isAudioUnlocked, setIsAudioUnlocked] = useState(false);
   const isAudioUnlockedRef = useRef(false);
+  const assetManager = useAssetManager();
 
   // Callback to clear pending operations when tracks auto-stop
   const clearPendingOperationCallbackRef = useRef(null);
@@ -506,10 +508,10 @@ export const useUnifiedAudio = () => {
 
     try {
       console.log(`📁 Loading remote audio buffer: ${url}`);
-      const response = await fetch(url);
-      const arrayBuffer = await response.arrayBuffer();
+      const blob = await assetManager.download(url);
+      const arrayBuffer = await blob.arrayBuffer();
       const audioBuffer = await audioContextRef.current.decodeAudioData(arrayBuffer);
-      
+
       audioBuffersRef.current[`${trackId}_${url}`] = audioBuffer;
       console.log(`✅ Loaded remote audio buffer for ${trackId}: ${url}`);
       return audioBuffer;

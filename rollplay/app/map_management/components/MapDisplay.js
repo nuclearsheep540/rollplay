@@ -7,6 +7,7 @@
 
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import GridOverlay from './GridOverlay';
+import { useAssetDownload } from '@/app/shared/providers/AssetDownloadManager';
 
 const clamp = (val, min, max) => Math.min(max, Math.max(min, val));
 
@@ -28,9 +29,12 @@ const MapDisplay = ({
   offsetY = 0,
   onImageLoad = null, // fires with { naturalWidth, naturalHeight } when map image loads
 }) => {
-  const [mapLoaded, setMapLoaded] = useState(false);
   const mapImageRef = useRef(null);
   const containerRef = useRef(null);
+
+  // Download map image through asset manager for progressive byte tracking
+  const mc = activeMap?.map_config;
+  const { blobUrl: mapBlobUrl, ready: mapLoaded } = useAssetDownload(mc?.file_path, mc?.file_size);
 
   // Unified view state — ref is the source of truth for real-time DOM updates
   // during drag/pinch (bypasses React render cycle). React state syncs on drag end
@@ -50,17 +54,6 @@ const MapDisplay = ({
     const { x, y, scale } = viewRef.current;
     contentRef.current.style.transform = `translate3d(${x}px, ${y}px, 0) scale(${scale})`;
   }, []);
-
-  // Handle map loading
-  useEffect(() => {
-    if (activeMap) {
-      setMapLoaded(false);
-      const timer = setTimeout(() => setMapLoaded(true), 100);
-      return () => clearTimeout(timer);
-    } else {
-      setMapLoaded(false);
-    }
-  }, [activeMap]);
 
   // Zoom-to-point wheel handler — supports mouse scroll and trackpad pinch (ctrlKey)
   const handleWheel = useCallback((e) => {
@@ -226,12 +219,6 @@ const MapDisplay = ({
       onPointerUp={handlePointerUp}
       onPointerCancel={handlePointerCancel}
     >
-      {!mapLoaded && (
-        <div style={{ position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%, -50%)', color: '#9ca3af', fontSize: '14px', fontWeight: '500', zIndex: 20 }}>
-          🗺️ Loading map...
-        </div>
-      )}
-
       {(isEditMode || mapImageEditMode) && mapLoaded && (
         <div style={{ position: 'absolute', top: '20px', left: '20px', background: 'rgba(0,0,0,0.8)', color: '#e0e0e0', padding: '8px 12px', borderRadius: '6px', fontSize: '12px', fontFamily: 'monospace', border: '1px solid rgba(255,255,255,0.2)', zIndex: 20 }}>
           📍 {activeMap.filename} • Scale: {viewTransform.scale.toFixed(1)}x
@@ -242,7 +229,7 @@ const MapDisplay = ({
       <div ref={contentRef} style={contentTransform}>
         <img
           ref={mapImageRef}
-          src={activeMap?.map_config?.file_path}
+          src={mapBlobUrl}
           alt={activeMap?.map_config?.filename || 'Map'}
           style={{ position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%, -50%)', maxWidth: '100%', maxHeight: '100%', width: 'auto', height: 'auto', objectFit: 'contain', pointerEvents: 'none' }}
           onLoad={() => {

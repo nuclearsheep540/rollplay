@@ -34,7 +34,7 @@ import { useFullscreen } from './hooks/useFullscreen';
 import MapSafeArea from './components/MapSafeArea';
 import Drawer from './components/Drawer';
 import GridTuningOverlay from '../map_management/components/GridTuningOverlay';
-import { useS3LoadingObserver } from './hooks/useS3LoadingObserver';
+import { useAssetProgress } from '@/app/shared/providers/AssetDownloadManager';
 
 // Tab configuration for left drawer
 const LEFT_DRAWER_TABS = [
@@ -204,7 +204,7 @@ export default function GameContent() {
   // Image system state
   const [activeImage, setActiveImage] = useState(null); // Current active image data
   const [activeDisplay, setActiveDisplay] = useState(null); // "map" | "image" | null
-  const s3Loading = useS3LoadingObserver();
+  const s3Loading = useAssetProgress();
 
   // Session ended modal state
   const [sessionEndedData, setSessionEndedData] = useState(null); // { message, reason } when session ends
@@ -1562,7 +1562,7 @@ export default function GameContent() {
               <span style={{ color: '#9ca3af', fontSize: '11px', whiteSpace: 'nowrap' }}>
                 Assets
               </span>
-              {s3Loading.total > 0 ? (
+              {s3Loading.totalBytes > 0 ? (
                 <div style={{
                   width: '60px',
                   height: '4px',
@@ -1572,10 +1572,10 @@ export default function GameContent() {
                 }}>
                   <div style={{
                     height: '100%',
-                    width: `${(s3Loading.loaded / s3Loading.total) * 100}%`,
+                    width: `${s3Loading.totalBytes > 0 ? (s3Loading.loadedBytes / s3Loading.totalBytes) * 100 : 0}%`,
                     backgroundColor: '#6366f1',
                     borderRadius: '2px',
-                    transition: 'width 0.2s ease',
+                    transition: 'width 0.15s ease',
                   }} />
                 </div>
               ) : (

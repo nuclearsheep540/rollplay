@@ -1,5 +1,6 @@
 import { Inter, New_Rocker, Metamorphous, Ubuntu, Outfit } from 'next/font/google'
 import QueryProvider from './shared/providers/QueryProvider'
+import { AssetDownloadProvider } from './shared/providers/AssetDownloadManager'
 import './globals.css'
 import '@melloware/coloris/dist/coloris.css'
 
@@ -60,7 +61,9 @@ export default function RootLayout({ children }) {
       </head>
       <body className={inter.className}>
         <QueryProvider>
-          {children}
+          <AssetDownloadProvider>
+            {children}
+          </AssetDownloadProvider>
         </QueryProvider>
       </body>
     </html>
