@@ -15,8 +15,8 @@ const AssetDownloadContext = createContext(null);
  * Caches completed blobs so repeat requests resolve instantly.
  *
  * Components use:
- *   useAssetDownload(url, fileSize)  → { blobUrl, ready, progress }
- *   useAssetProgress()               → { loading, loadedBytes, totalBytes, completedCount, totalCount, cachedCount }
+ *   useAssetDownload(url, fileSize)  → { blobUrl, ready }
+ *   useAssetProgress()               → { loading, lingering, loadedBytes, totalBytes, completedCount, totalCount, cachedCount, cachedSize }
  *
  * Audio can call imperatively:
  *   manager.download(url, fileSize)  → Promise<Blob>
@@ -131,27 +131,45 @@ export function AssetDownloadProvider({ children }) {
         // Use Content-Length if we didn't get fileSize from the asset data
         if (!entry.totalBytes) {
           const cl = response.headers.get('content-length');
-          if (cl) entry.totalBytes = parseInt(cl, 10);
+          if (cl) {
+            const parsed = parseInt(cl, 10);
+            if (Number.isFinite(parsed) && parsed > 0) {
+              entry.totalBytes = parsed;
+            }
+          }
           scheduleProgressUpdate();
         }
 
-        const reader = response.body.getReader();
-        const chunks = [];
+        let blob;
 
-        while (true) {
-          const { done, value } = await reader.read();
-          if (done) break;
-          chunks.push(value);
-          entry.loadedBytes += value.length;
+        // Some environments / responses do not provide a streaming body.
+        // Fall back to response.blob() so downloads still work (without chunk progress).
+        if (!response.body || typeof response.body.getReader !== 'function') {
+          blob = await response.blob();
+          if (!entry.totalBytes) entry.totalBytes = blob.size;
+          entry.loadedBytes = entry.totalBytes;
           scheduleProgressUpdate();
+        } else {
+          const reader = response.body.getReader();
+          const chunks = [];
+
+          while (true) {
+            const { done, value } = await reader.read();
+            if (done) break;
+            chunks.push(value);
+            entry.loadedBytes += value.length;
+            scheduleProgressUpdate();
+          }
+
+          blob = new Blob(chunks, {
+            type: response.headers.get('content-type') || 'application/octet-stream',
+          });
         }
 
-        const blob = new Blob(chunks, {
-          type: response.headers.get('content-type') || 'application/octet-stream',
-        });
-
-        // Move bytes to completed bucket so ratio stays monotonic
-        completedBytesRef.current += entry.totalBytes;
+        // Move bytes to completed bucket so ratio stays monotonic.
+        // If totalBytes was unknown (no fileSize and no Content-Length), fall back to blob.size.
+        const completedBytesDelta = entry.totalBytes > 0 ? entry.totalBytes : blob.size;
+        completedBytesRef.current += completedBytesDelta;
         cachedSizeRef.current += blob.size;
         cacheRef.current.set(url, blob);
         inflightRef.current.delete(url);
@@ -198,7 +216,9 @@ export function AssetDownloadProvider({ children }) {
  * Cleans up the object URL on unmount or URL change.
  */
 export function useAssetDownload(url, fileSize) {
-  const { manager } = useContext(AssetDownloadContext);
+  const ctx = useContext(AssetDownloadContext);
+  if (!ctx) throw new Error('useAssetDownload must be used within <AssetDownloadProvider>');
+  const { manager } = ctx;
   const [blobUrl, setBlobUrl] = useState(null);
   const [ready, setReady] = useState(false);
 
@@ -233,8 +253,9 @@ export function useAssetDownload(url, fileSize) {
  * Hook for the nav indicator — reads aggregate download progress.
  */
 export function useAssetProgress() {
-  const { progress } = useContext(AssetDownloadContext);
-  return progress;
+  const ctx = useContext(AssetDownloadContext);
+  if (!ctx) throw new Error('useAssetProgress must be used within <AssetDownloadProvider>');
+  return ctx.progress;
 }
 
 /**
@@ -242,6 +263,7 @@ export function useAssetProgress() {
  * Returns the manager's download function directly.
  */
 export function useAssetManager() {
-  const { manager } = useContext(AssetDownloadContext);
-  return manager;
+  const ctx = useContext(AssetDownloadContext);
+  if (!ctx) throw new Error('useAssetManager must be used within <AssetDownloadProvider>');
+  return ctx.manager;
 }

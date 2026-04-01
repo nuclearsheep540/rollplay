@@ -1619,6 +1619,8 @@ export default function GameContent() {
                 }}
                 className="fullscreen-btn"
                 title={`Master Volume: ${Math.round(masterVolume * 100)}%`}
+                aria-label={`Master Volume: ${Math.round(masterVolume * 100)}%`}
+                aria-expanded={showVolumeSlider}
               >
                 <FontAwesomeIcon icon={isAudioUnlocked ? faVolumeHigh : faVolumeXmark} />
               </button>
@@ -1646,6 +1648,7 @@ export default function GameContent() {
                   }}>
                     <input
                       id="master-volume"
+                      aria-label="Master volume"
                       type="range"
                       min="0"
                       max="1"
@@ -1678,6 +1681,8 @@ export default function GameContent() {
                 onClick={() => { setShowScaleMenu(prev => !prev); setShowVolumeSlider(false); }}
                 className="fullscreen-btn"
                 title={`UI Scale: ${uiScale}`}
+                aria-label={`UI Scale: ${uiScale}`}
+                aria-expanded={showScaleMenu}
               >
                 <FontAwesomeIcon icon={faRulerHorizontal} />
               </button>
