@@ -233,7 +233,7 @@ export default function AudioMixerPanel({
   
 
   // Crossfade execution function (memoized to prevent re-renders)
-  const executeCrossfade = useCallback(async () => {
+  const executeCut = useCallback(async () => {
     if (!currentCue?.targetTracks?.length) return;
     
     console.log(`🎚️ Executing seamless crossfade transition: PGM → PFL`);
@@ -269,68 +269,37 @@ export default function AudioMixerPanel({
     console.log(`🎚️ Tracks to start:`, tracksToStart.map(t => t.channelId));
     console.log(`🎚️ Tracks to stop:`, tracksToStop.map(t => t.channelId));
     
-    try {
-      // Create batch operations for seamless crossfade
-      const batchOperations = [];
-      
-      // Add play operations for tracks to start
-      tracksToStart.forEach(channel => {
-        const track = remoteTrackStates[channel.channelId];
-        batchOperations.push({
-          trackId: channel.channelId,
-          operation: 'play',
-          filename: track.filename,
-          asset_id: track.asset_id,
-          s3_url: track.s3_url,
-          looping: track.looping ?? (track.type !== 'sfx'),
-          volume: track.volume,
-          type: track.type,
-          channelGroup: track.channelGroup,
-          track: track.track
-        });
+    // Build a single atomic batch — starts and stops together.
+    // The Web Audio syncStartTime mechanism handles coordinated playback;
+    // splitting into two batches with a setTimeout added unnecessary latency.
+    const batchOperations = [];
+
+    tracksToStart.forEach(channel => {
+      const track = remoteTrackStates[channel.channelId];
+      batchOperations.push({
+        trackId: channel.channelId,
+        operation: 'play',
+        filename: track.filename,
+        asset_id: track.asset_id,
+        s3_url: track.s3_url,
+        looping: track.looping ?? (track.type !== 'sfx'),
+        volume: track.volume,
+        type: track.type,
+        channelGroup: track.channelGroup,
+        track: track.track
       });
-      
-      // Add stop operations for tracks to stop (with slight delay for seamless handoff)
-      if (tracksToStop.length > 0 && tracksToStart.length > 0) {
-        // For crossfade: start new tracks first, then stop old ones after brief delay
-        console.log(`🎚️ Executing batch crossfade: ${tracksToStart.length} starting, ${tracksToStop.length} stopping after delay`);
-        
-        // Send start operations first
-        const startOperations = batchOperations.filter(op => op.operation === 'play');
-        if (startOperations.length > 0) {
-          sendRemoteAudioBatch?.(startOperations);
-        }
-        
-        // Stop old tracks after brief delay for seamless handoff
-        setTimeout(() => {
-          const stopOperations = tracksToStop.map(channel => ({
-            trackId: channel.channelId,
-            operation: 'stop'
-          }));
-          sendRemoteAudioBatch?.(stopOperations);
-          console.log(`✅ Seamless crossfade completed`);
-        }, 100); // 100ms delay for audio buffer stabilization
-      } else {
-        // No crossfade needed, just execute all operations at once
-        // Add stop operations for tracks to stop (when no tracks are starting)
-        tracksToStop.forEach(channel => {
-          batchOperations.push({
-            trackId: channel.channelId,
-            operation: 'stop'
-          });
-        });
-        
-        console.log(`🎚️ Executing batch audio operations: ${batchOperations.length} operations`);
-        if (batchOperations.length > 0) {
-          sendRemoteAudioBatch?.(batchOperations);
-        }
-      }
-      
-    } catch (error) {
-      console.error(`❌ Crossfade failed:`, error);
-      
-      // Fallback: If new tracks fail to start, don't stop old ones
-      console.log(`⚠️ Keeping current tracks playing due to crossfade error`);
+    });
+
+    tracksToStop.forEach(channel => {
+      batchOperations.push({
+        trackId: channel.channelId,
+        operation: 'stop'
+      });
+    });
+
+    console.log(`🎚️ Executing atomic crossfade: ${tracksToStart.length} starting, ${tracksToStop.length} stopping`);
+    if (batchOperations.length > 0) {
+      sendRemoteAudioBatch?.(batchOperations);
     }
     
     // Keep cue as-is — optimistic render until PGM catches up
@@ -712,7 +681,7 @@ export default function AudioMixerPanel({
                       if (hasFadeTracks) {
                         executeFade();
                       } else {
-                        executeCrossfade();
+                        executeCut();
                       }
                     }}
                     disabled={currentCue === null}

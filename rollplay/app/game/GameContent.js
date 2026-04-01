@@ -919,6 +919,9 @@ export default function GameContent() {
     soloedChannels,
     setChannelMuted,
     setChannelSoloed,
+    // Batch state updates (for atomic multi-track operations)
+    startStateBatch,
+    flushStateBatch,
   } = useUnifiedAudio();
 
   // Ref to hold the pending operation clearing function from AudioMixerPanel
@@ -1001,6 +1004,10 @@ export default function GameContent() {
     clearSfxSlot,
     sfxSlots,
 
+    // Batch state updates (for atomic multi-track operations)
+    startStateBatch,
+    flushStateBatch,
+
     // Session ended modal
     setSessionEndedData
   }), [
@@ -1012,7 +1019,8 @@ export default function GameContent() {
     activeFades, cancelFade, syncAudioState, loadAssetIntoChannel, applyChannelEffects,
     playSfxSlot, stopSfxSlot, setSfxSlotVolume, loadSfxSlot, clearSfxSlot, sfxSlots,
     audioBuffersRef, audioContextRef,
-    setChannelMuted, setChannelSoloed, setBroadcastMasterVolume
+    setChannelMuted, setChannelSoloed, setBroadcastMasterVolume,
+    startStateBatch, flushStateBatch
   ]);
 
   // Initialize WebSocket hook with game context (after audio functions are available)
