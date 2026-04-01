@@ -295,7 +295,7 @@ export default function CampaignInviteModal({ campaign, onClose, onInviteSuccess
   }
 
   const hasUserAccepted = (userId) => {
-    return campaign.player_ids?.includes(userId)
+    return campaign.member_ids?.includes(userId)
   }
 
   const hasUserPendingInvite = (userId) => {
