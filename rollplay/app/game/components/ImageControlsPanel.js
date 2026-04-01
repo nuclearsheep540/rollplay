@@ -55,7 +55,10 @@ export default function ImageControlsPanel({
   const currentMode = activeImage?.image_config?.display_mode || 'float';
   const currentRatio = activeImage?.image_config?.aspect_ratio || '2.39:1';
 
-  // Whether the DM has changed anything from the original server state
+  // Whether the DM has changed anything from the original server state.
+  // Cine mode is workshop-authored and read-only at runtime — its aspect ratio
+  // and overlays are baked into the asset's cine_config, so we intentionally
+  // exclude cine from ratio-change tracking here.
   const hasChanges = originalMode !== null && (
     currentMode !== originalMode
     || (currentMode === 'letterbox' && currentRatio !== (originalRatio || '2.39:1'))
@@ -69,7 +72,9 @@ export default function ImageControlsPanel({
     }
   };
 
-  // Optimistically update activeImage so ImageDisplay previews immediately
+  // Optimistically update activeImage so ImageDisplay previews immediately.
+  // Cine mode uses the workshop-authored ratio from cine_config, so we clear
+  // aspect_ratio for non-letterbox modes — cine never reads it at runtime.
   const previewMode = (newMode) => {
     if (!setActiveImage || !activeImage) return;
     setActiveImage((prev) => ({
@@ -97,7 +102,8 @@ export default function ImageControlsPanel({
     setIsDisplayExpanded(true);
   };
 
-  // Apply: save to MongoDB via WebSocket → broadcast replaces optimistic state with server truth
+  // Apply: save to MongoDB via WebSocket → broadcast replaces optimistic state with server truth.
+  // Only letterbox sends aspect_ratio — cine's ratio is baked into cine_config at the workshop level.
   const applyDisplayConfig = () => {
     if (!sendImageConfigUpdate || !activeImage) return;
 

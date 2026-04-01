@@ -62,16 +62,17 @@ class ImageService:
             if existing:
                 existing_ic = existing.get("image_config", {})
                 incoming_ic = image_settings.image_config.model_dump()
-                # Merge: existing display config wins over incoming defaults
-                if existing_ic.get("display_mode"):
+                # Merge: existing display config wins over incoming defaults.
+                # Use `is not None` checks (not truthiness) so explicit clears are preserved.
+                if existing_ic.get("display_mode") is not None:
                     incoming_ic["display_mode"] = existing_ic["display_mode"]
-                if existing_ic.get("aspect_ratio"):
+                if existing_ic.get("aspect_ratio") is not None:
                     incoming_ic["aspect_ratio"] = existing_ic["aspect_ratio"]
                 if existing_ic.get("image_position_x") is not None:
                     incoming_ic["image_position_x"] = existing_ic["image_position_x"]
                 if existing_ic.get("image_position_y") is not None:
                     incoming_ic["image_position_y"] = existing_ic["image_position_y"]
-                if existing_ic.get("cine_config"):
+                if existing_ic.get("cine_config") is not None:
                     incoming_ic["cine_config"] = existing_ic["cine_config"]
                 image_settings.image_config = ImageConfig(**incoming_ic)
 

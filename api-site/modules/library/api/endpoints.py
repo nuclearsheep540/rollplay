@@ -495,6 +495,13 @@ async def update_image_config(
     """
     try:
         command = UpdateImageConfig(repo, session_repo)
+
+        # Only forward cine_config when the client explicitly included it in the
+        # request body.  Omitted fields default to None in the Pydantic model, which
+        # is indistinguishable from an explicit null — so we use model_fields_set to
+        # tell them apart and pass the "UNSET" sentinel when the field was omitted.
+        cine_arg = request.cine_config if "cine_config" in request.model_fields_set else "UNSET"
+
         asset = command.execute(
             asset_id=asset_id,
             user_id=current_user.id,
@@ -502,7 +509,7 @@ async def update_image_config(
             aspect_ratio=request.aspect_ratio,
             image_position_x=request.image_position_x,
             image_position_y=request.image_position_y,
-            cine_config=request.cine_config
+            cine_config=cine_arg
         )
 
         logger.info(f"Updated image config for asset {asset_id}: mode={asset.display_mode}, ratio={asset.aspect_ratio}")
