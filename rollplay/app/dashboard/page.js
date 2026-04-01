@@ -337,6 +337,10 @@ function DashboardContent() {
       }
     },
 
+    'campaign_deleted': () => {
+      invalidation.invalidateCampaigns()
+    },
+
     // Legacy game event names (for backward compatibility)
     'game_created': (message) => {
       invalidation.invalidateCampaigns()

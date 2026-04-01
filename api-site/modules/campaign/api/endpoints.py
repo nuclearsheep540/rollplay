@@ -324,17 +324,19 @@ async def delete_campaign(
     campaign_id: UUID,
     user_id: UUID = Depends(get_current_user_id),
     campaign_repo: CampaignRepository = Depends(campaign_repository),
-    session_repo: SessionRepository = Depends(get_session_repository)
+    session_repo: SessionRepository = Depends(get_session_repository),
+    character_repo: CharacterRepository = Depends(get_character_repository),
+    event_manager: EventManager = Depends(get_event_manager)
 ):
     """
     Delete campaign.
 
     Only allows deletion if there are no ACTIVE sessions.
-    INACTIVE sessions will be cascade-deleted with the campaign.
+    Releases all character locks and cascade-deletes sessions/members.
     """
     try:
-        command = DeleteCampaign(campaign_repo, session_repo)
-        success = command.execute(campaign_id, user_id)
+        command = DeleteCampaign(campaign_repo, session_repo, character_repo, event_manager)
+        success = await command.execute(campaign_id, user_id)
 
         if success:
             return {"message": "Campaign deleted successfully"}

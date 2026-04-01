@@ -77,11 +77,13 @@ class UpdateCampaign:
 
 
 class DeleteCampaign:
-    def __init__(self, repository, session_repository=None):
+    def __init__(self, repository, session_repository=None, character_repository: CharacterRepository = None, event_manager: EventManager = None):
         self.repository = repository
         self.session_repository = session_repository
+        self.character_repository = character_repository
+        self.event_manager = event_manager
 
-    def execute(self, campaign_id: UUID, host_id: UUID) -> bool:
+    async def execute(self, campaign_id: UUID, host_id: UUID) -> bool:
         """Delete campaign if business rules allow"""
         campaign = self.repository.get_by_id(campaign_id)
         if not campaign:
@@ -103,6 +105,26 @@ class DeleteCampaign:
             if non_finished_sessions:
                 count = len(non_finished_sessions)
                 raise ValueError(f"Cannot delete campaign with {count} unfinished session(s). Please finish or delete all sessions first.")
+
+        # Release all character locks before deletion — characters stay on
+        # the user's account but are no longer bound to this campaign.
+        if self.character_repository:
+            locked_characters = self.character_repository.get_by_active_campaign(campaign_id)
+            for character in locked_characters:
+                character.unlock_from_campaign()
+                self.character_repository.save(character)
+
+        # Broadcast before delete — we need campaign data for the event
+        if self.event_manager:
+            all_member_ids = list(campaign.members.keys())
+            events = CampaignEvents.campaign_deleted(
+                campaign_member_ids=all_member_ids,
+                dm_id=host_id,
+                campaign_id=campaign_id,
+                campaign_name=campaign.title,
+            )
+            for event in events:
+                await self.event_manager.broadcast(event)
 
         return self.repository.delete(campaign_id)
 
