@@ -2,19 +2,50 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 
 """
-Image Asset ORM Model - Single-table inheritance for IMAGE assets
+Image Asset ORM Model - Joined table inheritance for image display config
 
-No extra columns — IMAGE assets use only the base media_assets table fields.
-Exists as a separate model for pattern consistency with MapAssetModel and
-MusicAssetModel and SfxAssetModel, so every asset type has a discoverable model file.
+Extends MediaAsset with display configuration fields (display_mode, aspect_ratio).
+Uses SQLAlchemy joined table inheritance pattern, matching MapAssetModel.
 """
+
+from sqlalchemy import Column, String, Float, ForeignKey
+from sqlalchemy.dialects.postgresql import UUID, JSONB
 
 from modules.library.model.asset_model import MediaAsset
 from modules.library.domain.media_asset_type import MediaAssetType
 
 
 class ImageAssetModel(MediaAsset):
-    """Image asset - single-table inheritance (no extra columns)"""
+    """
+    ImageAsset entity - extends MediaAsset with display configuration.
+
+    Joined table inheritance: image_assets.id references media_assets.id
+    Display config is stored here, not in the base table, because it only
+    applies to image assets.
+    """
+    __tablename__ = 'image_assets'
+
+    id = Column(
+        UUID(as_uuid=True),
+        ForeignKey('media_assets.id', ondelete='CASCADE'),
+        primary_key=True
+    )
+
+    # Display configuration - NULL means not yet configured (defaults to "float")
+    display_mode = Column(String(20), nullable=True)   # "float" | "wrap" | "letterbox" | "cine"
+    aspect_ratio = Column(String(20), nullable=True)   # "2.39:1", "1.85:1", "16:9", "4:3", "1:1"
+
+    # Image position within frame (object-position percentages)
+    image_position_x = Column(Float, nullable=True)  # 0–100%
+    image_position_y = Column(Float, nullable=True)  # 0–100%
+
+    # Cine configuration - workshop-authored, read-only at runtime
+    cine_config = Column(JSONB, nullable=True)
+
     __mapper_args__ = {
         'polymorphic_identity': MediaAssetType.IMAGE,
     }
+
+    def __repr__(self):
+        mode = self.display_mode or "float"
+        return f"<ImageAsset(id={self.id}, filename='{self.filename}', mode={mode})>"

@@ -6,6 +6,7 @@ from pymongo import MongoClient
 from bson.objectid import ObjectId
 from config.settings import get_settings
 from gameservice import GameService
+from shared_contracts.image import ImageConfig
 import logging
 from typing import Optional, Dict, Any
 
@@ -14,18 +15,12 @@ CONFIG = get_settings()
 
 
 class ImageSettings(BaseModel):
-    """Image configuration for a room"""
+    """Image configuration for a room — composes the shared ImageConfig contract."""
 
     room_id: str
-    asset_id: Optional[str] = None  # PostgreSQL MediaAsset ID for ETL restoration
-    filename: str
-    original_filename: str
-    file_path: str
     loaded_by: str
     active: bool = True
-
-    def __init__(self, **data):
-        super().__init__(**data)
+    image_config: ImageConfig  # the whole contract, stored nested in MongoDB
 
 
 class ImageService:
@@ -59,16 +54,38 @@ class ImageService:
             return False
 
         try:
+            # Preserve display config from existing MongoDB document for this image
+            # (config applied in-game lives in MongoDB until session-end ETL)
+            existing = self.collection.find_one(
+                {"room_id": room_id, "image_config.filename": image_settings.image_config.filename}
+            )
+            if existing:
+                existing_ic = existing.get("image_config", {})
+                incoming_ic = image_settings.image_config.model_dump()
+                # Merge: existing display config wins over incoming defaults.
+                # Use `is not None` checks (not truthiness) so explicit clears are preserved.
+                if existing_ic.get("display_mode") is not None:
+                    incoming_ic["display_mode"] = existing_ic["display_mode"]
+                if existing_ic.get("aspect_ratio") is not None:
+                    incoming_ic["aspect_ratio"] = existing_ic["aspect_ratio"]
+                if existing_ic.get("image_position_x") is not None:
+                    incoming_ic["image_position_x"] = existing_ic["image_position_x"]
+                if existing_ic.get("image_position_y") is not None:
+                    incoming_ic["image_position_y"] = existing_ic["image_position_y"]
+                if existing_ic.get("cine_config") is not None:
+                    incoming_ic["cine_config"] = existing_ic["cine_config"]
+                image_settings.image_config = ImageConfig(**incoming_ic)
+
             # Deactivate any existing active images for this room
             self.collection.update_many(
                 {"room_id": room_id, "active": True},
                 {"$set": {"active": False}}
             )
 
-            # Insert or update the image
+            # Insert or update the image (nested shape stored in MongoDB)
             image_data = image_settings.model_dump()
             self.collection.replace_one(
-                {"room_id": room_id, "filename": image_settings.filename},
+                {"room_id": room_id, "image_config.filename": image_settings.image_config.filename},
                 image_data,
                 upsert=True
             )
@@ -76,7 +93,7 @@ class ImageService:
             # Update active_display on the game session document
             GameService.set_active_display(room_id, "image")
 
-            logger.info(f"🖼️ Set active image for room {room_id}: {image_settings.filename}")
+            logger.info(f"🖼️ Set active image for room {room_id}: {image_settings.image_config.filename}")
             return True
 
         except Exception as e:
@@ -96,7 +113,7 @@ class ImageService:
 
             if image_doc:
                 image_doc["_id"] = str(image_doc["_id"])
-                logger.info(f"📤 Loading active image for room {room_id}: {image_doc.get('filename')}")
+                logger.info(f"📤 Loading active image for room {room_id}: {image_doc.get('image_config', {}).get('filename')}")
             else:
                 logger.info(f"📭 No active image found for room {room_id}")
 
@@ -132,6 +149,46 @@ class ImageService:
 
         except Exception as e:
             logger.error(f"Failed to clear active image for room {room_id}: {e}")
+            return False
+
+    def update_image_config(self, room_id: str, display_mode: str = None, aspect_ratio: str = None,
+                            image_position_x: float = None, image_position_y: float = None) -> bool:
+        """Update display config on the active image for a room (config-only, no re-save)"""
+        if self.collection is None:
+            logger.error("No database connection available for image service")
+            return False
+
+        try:
+            update_fields = {}
+            if display_mode is not None:
+                update_fields["image_config.display_mode"] = display_mode
+            if aspect_ratio is not None:
+                update_fields["image_config.aspect_ratio"] = aspect_ratio
+            if image_position_x is not None:
+                update_fields["image_config.image_position_x"] = image_position_x
+            if image_position_y is not None:
+                update_fields["image_config.image_position_y"] = image_position_y
+            # Clear aspect_ratio when switching away from letterbox/cine
+            if display_mode and display_mode not in ("letterbox", "cine"):
+                update_fields["image_config.aspect_ratio"] = None
+
+            if not update_fields:
+                return False
+
+            result = self.collection.update_one(
+                {"room_id": room_id, "active": True},
+                {"$set": update_fields}
+            )
+
+            if result.modified_count > 0:
+                logger.info(f"🖼️ Updated image config for room {room_id}: {update_fields}")
+                return True
+
+            logger.warning(f"🖼️ No active image to update config for room {room_id}")
+            return False
+
+        except Exception as e:
+            logger.error(f"Failed to update image config for room {room_id}: {e}")
             return False
 
     def get_active_display(self, room_id: str) -> Optional[str]:

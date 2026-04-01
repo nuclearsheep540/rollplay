@@ -17,6 +17,7 @@ export default function ModeratorControls({
   isModerator,
   isHost,
   isDM,
+  dungeonMaster = null,
   gameSeats,
   lobbyUsers,
   roomId,

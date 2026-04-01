@@ -2,7 +2,7 @@
 /* SPDX-License-Identifier: GPL-3.0-or-later */
 
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
-import { faMap, faMusic, faShieldHalved, faClapperboard } from '@fortawesome/free-solid-svg-icons';
+import { faMap, faImage, faMusic, faShieldHalved, faClapperboard } from '@fortawesome/free-solid-svg-icons';
 
 const TOOLS = [
   {
@@ -10,6 +10,13 @@ const TOOLS = [
     label: 'Map Config',
     description: 'Grid overlays and alignment',
     icon: faMap,
+    enabled: true,
+  },
+  {
+    id: 'images',
+    label: 'Image Config',
+    description: 'Display modes and cinematic effects',
+    icon: faImage,
     enabled: true,
   },
   {

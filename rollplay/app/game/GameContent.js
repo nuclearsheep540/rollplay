@@ -228,6 +228,12 @@ export default function GameContent() {
 
   const canUseModeratorTools = isModerator || isHost;
 
+  // Cine mode hides all UI chrome for players — DMs and moderators keep controls visible.
+  const isPlayer = !isDM && !isModerator && !isSpectator;
+  const cineHideUI = activeDisplay === 'image'
+    && activeImage?.image_config?.display_mode === 'cine'
+    && isPlayer;
+
   // Derive moderator status from campaign_role in player metadata
   useEffect(() => {
     if (!thisUserId) return;
@@ -585,22 +591,22 @@ export default function GameContent() {
     }
   }, [activeRightDrawer, gridEditMode, tuningMode]);
 
-  // Sync grid hook state from activeMap.grid_config whenever it changes
+  // Sync grid hook state from activeMap.map_config.grid_config whenever it changes
   useEffect(() => {
-    grid.initFromConfig(activeMap?.grid_config, mapNaturalDimensions);
-  }, [activeMap?.grid_config]); // eslint-disable-line react-hooks/exhaustive-deps
+    grid.initFromConfig(activeMap?.map_config?.grid_config, mapNaturalDimensions);
+  }, [activeMap?.map_config?.grid_config]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Compute default cell_size from image dimensions when no stored value is present
   useEffect(() => {
     if (!mapNaturalDimensions) return;
-    const gc = activeMap?.grid_config;
+    const gc = activeMap?.map_config?.grid_config;
     if (gc?.grid_cell_size) return; // already have a stored value
     grid.initFromConfig(gc, mapNaturalDimensions);
   }, [mapNaturalDimensions]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Computed effective grid config:
   // - Edit mode: use hook's live preview (includes color from gridConfig if pushed via handleGridChange)
-  // - Display mode: use saved activeMap.grid_config directly, with live offset when tuning
+  // - Display mode: use saved activeMap.map_config.grid_config directly, with live offset when tuning
   const effectiveGridConfig = useMemo(() => {
     if (gridEditMode) {
       if (!activeMap) return null;
@@ -611,7 +617,7 @@ export default function GameContent() {
       }
       return grid.effectiveGridConfig;
     }
-    const base = activeMap?.grid_config;
+    const base = activeMap?.map_config?.grid_config;
     if (!base) return null;
     if (tuningMode) return { ...base, offset_x: grid.offset.x, offset_y: grid.offset.y };
     return base;
@@ -1088,6 +1094,7 @@ export default function GameContent() {
   const {
     sendImageLoad,
     sendImageClear,
+    sendImageConfigUpdate,
     sendImageRequest,
   } = useImageWebSocket(webSocket, isConnected, roomId, thisUserId, imageContext, registerHandler);
 
@@ -1650,8 +1657,8 @@ export default function GameContent() {
         )}
       </div>
 
-      {/* Left drawer — fixed-position, tabbed (PARTY / LOG) */}
-      <Drawer
+      {/* Left drawer — fixed-position, tabbed (PARTY / LOG) — hidden in cine mode for players */}
+      {!cineHideUI && <Drawer
         side="left"
         tabs={LEFT_DRAWER_TABS}
         activeTab={activeLeftDrawer}
@@ -1702,10 +1709,10 @@ export default function GameContent() {
             characterNameMap={characterNameMap}
           />
         )}
-      </Drawer>
+      </Drawer>}
 
-      {/* Right drawer — fixed-position, outside grid flow */}
-      {(() => {
+      {/* Right drawer — fixed-position, outside grid flow — hidden in cine mode for players */}
+      {!cineHideUI && (() => {
         return (
           <div
             className={`right-drawer ${rightDrawerSettled ? 'drawer-settled' : ''}`}
@@ -1737,6 +1744,7 @@ export default function GameContent() {
                   isModerator={isModerator}
                   isHost={isHost}
                   isDM={isDM}
+                  dungeonMaster={dungeonMaster}
                   gameSeats={gameSeats}
                   lobbyUsers={lobbyUsers}
                   roomId={roomId}
@@ -1773,6 +1781,7 @@ export default function GameContent() {
                   setActiveImage={setActiveImage}
                   sendImageLoad={sendImageLoad}
                   sendImageClear={sendImageClear}
+                  sendImageConfigUpdate={sendImageConfigUpdate}
                 />
               )}
               {activeRightDrawer === 'combat' && isDM && (
@@ -1812,7 +1821,7 @@ export default function GameContent() {
         );
       })()}
 
-      {/* Main Game Area — conditional display: map or image */}
+      {/* Main game area — conditional display: map or image */}
       <div className="main-game-area">
         <div className="grid-area-map-canvas relative">
           {/* Map display — visible when activeDisplay is "map" or null (default) */}
@@ -1839,14 +1848,16 @@ export default function GameContent() {
             activeRightDrawer={activeRightDrawer}
             isMixerOpen={isMixerOpen}
           >
-            <MapOverlayPanel
-              isMapLocked={isMapLocked}
-              onToggleLock={() => setIsMapLocked(prev => !prev)}
-              activeMap={activeMap}
-              gridInspect={gridInspect}
-              gridInspectMode={gridInspectMode}
-              onToggleInspectMode={() => setGridInspectMode(prev => prev === 'hold' ? 'toggle' : 'hold')}
-            />
+            {activeDisplay === 'map' && (
+              <MapOverlayPanel
+                isMapLocked={isMapLocked}
+                onToggleLock={() => setIsMapLocked(prev => !prev)}
+                activeMap={activeMap}
+                gridInspect={gridInspect}
+                gridInspectMode={gridInspectMode}
+                onToggleInspectMode={() => setGridInspectMode(prev => prev === 'hold' ? 'toggle' : 'hold')}
+              />
+            )}
             {tuningMode && (
               <GridTuningOverlay
                 onOffsetXChange={(delta) => grid.adjustOffset(delta, 0)}
@@ -1865,19 +1876,21 @@ export default function GameContent() {
             />
           )}
 
-          <HorizontalInitiativeTracker
-            initiativeOrder={initiativeOrder}
-            handleInitiativeClick={handleInitiativeClick}
-            currentTurn={currentTurn}
-            combatActive={combatActive}
-          />
+          {!cineHideUI && (
+            <HorizontalInitiativeTracker
+              initiativeOrder={initiativeOrder}
+              handleInitiativeClick={handleInitiativeClick}
+              currentTurn={currentTurn}
+              combatActive={combatActive}
+            />
+          )}
         </div>
       </div>
 
       {/* DiceActionPanel - only show if user is sitting in a seat OR is DM */}
       {(() => {
         const isPlayerSeated = gameSeats.some(seat => seat.userId === thisUserId);
-        const canUseDice = isPlayerSeated || isDM;
+        const canUseDice = (isPlayerSeated || isDM) && !cineHideUI;
         return canUseDice && (
           <DiceActionPanel
             currentTurn={currentTurn}

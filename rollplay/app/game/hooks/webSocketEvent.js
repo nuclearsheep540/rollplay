@@ -777,9 +777,10 @@ export const handleMapLoad = (data, { setActiveMap, setGridConfig, setMapImageCo
 
   if (map) {
     setActiveMap(map);
-    if (map.grid_config) setGridConfig(map.grid_config);
-    if (map.map_image_config) setMapImageConfig(map.map_image_config);
-    console.log(`🗺️ Map "${map.original_filename}" loaded by ${loaded_by}`);
+    const mc = map.map_config;
+    if (mc?.grid_config) setGridConfig(mc.grid_config);
+    if (mc?.map_image_config) setMapImageConfig(mc.map_image_config);
+    console.log(`🗺️ Map "${mc?.original_filename}" loaded by ${loaded_by}`);
   }
 };
 
@@ -794,11 +795,15 @@ export const handleMapConfigUpdate = (data, { setActiveMap, activeMap }) => {
   console.log("🗺️ Map config updated:", data);
   const { filename, grid_config, map_image_config, updated_by } = data;
 
-  if (activeMap && activeMap.filename === filename) {
+  if (activeMap && activeMap.map_config?.filename === filename) {
+    const prevMc = activeMap.map_config || {};
     const updatedMap = {
       ...activeMap,
-      ...(grid_config !== undefined && { grid_config }),
-      ...(map_image_config !== undefined && { map_image_config })
+      map_config: {
+        ...prevMc,
+        ...(grid_config !== undefined && { grid_config }),
+        ...(map_image_config !== undefined && { map_image_config }),
+      },
     };
     setActiveMap(updatedMap);
     console.log(`🗺️ Map ${filename} config updated atomically by ${updated_by}`);

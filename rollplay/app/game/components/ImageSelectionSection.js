@@ -133,11 +133,18 @@ export default function ImageSelectionSection({
   const handleImageSelect = (asset) => {
     const imageSettings = {
       room_id: roomId,
-      asset_id: asset.id,
-      filename: asset.filename,
-      original_filename: asset.filename,
-      file_path: asset.s3_url,
-      uploaded_by: "dm"
+      loaded_by: "dm",
+      image_config: {
+        asset_id: asset.id,
+        filename: asset.filename,
+        original_filename: asset.filename,
+        file_path: asset.s3_url,
+        display_mode: asset.display_mode || "float",
+        aspect_ratio: asset.aspect_ratio || null,
+        image_position_x: asset.image_position_x ?? null,
+        image_position_y: asset.image_position_y ?? null,
+        cine_config: asset.cine_config || null,
+      },
     };
     onSelectImage(imageSettings);
   };
@@ -284,7 +291,7 @@ export default function ImageSelectionSection({
       {!loading && !error && assets.length > 0 && (
         <div className="space-y-2">
           {assets.map((asset) => {
-            const isActive = currentImage?.asset_id === asset.id || currentImage?.filename === asset.filename;
+            const isActive = currentImage?.image_config?.asset_id === asset.id || currentImage?.image_config?.filename === asset.filename;
             const hasUrl = !!asset.s3_url;
             return (
               <div

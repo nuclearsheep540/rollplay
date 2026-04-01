@@ -9,6 +9,7 @@ import WorkshopToolNav from './WorkshopToolNav';
 // Route map for each tool
 const TOOL_ROUTES = {
   maps: '/workshop/map-config?from=map-config',
+  images: '/workshop/image-config?from=image-config',
   // audio: '/workshop/audio-workstation',
   // npcs: '/workshop/npc-barracks',
   // scenes: '/workshop/scene-builder',

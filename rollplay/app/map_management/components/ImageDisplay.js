@@ -5,18 +5,69 @@
 
 'use client'
 
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useMemo } from 'react';
+
+/**
+ * Parse "W:H" string into a numeric ratio for CSS aspect-ratio.
+ */
+function parseAspectRatio(ratioStr) {
+  if (!ratioStr) return null;
+  const parts = ratioStr.split(':');
+  if (parts.length !== 2) return null;
+  const w = parseFloat(parts[0]);
+  const h = parseFloat(parts[1]);
+  if (!w || !h) return null;
+  return w / h;
+}
 
 /**
  * ImageDisplay — Renders a DM-presented image in the game view.
  *
- * Unlike MapDisplay, images are non-interactive for players:
- * - No grid overlay
- * - No pan/zoom
- * - No player interaction
- *
- * Simply fills the game view with the image using object-fit: contain.
+ * Three display modes:
+ *   - float: Image centered with contain fit (default)
+ *   - wrap:  Image fills entire viewport with cover fit, cropping edges
+ *   - letterbox: Full-width image, height constrained by aspect ratio,
+ *                black background creates natural letterbox bars
  */
+const GRAIN_STYLE_ASSETS = {
+  vintage: '/cine/overlay/film-grain.gif',
+  grain: '/cine/overlay/grain_noisy.gif',
+};
+
+function renderVisualOverlays(cineConfig) {
+  const overlays = cineConfig?.visual_overlays;
+  if (!overlays?.length) return null;
+  return overlays.filter(o => o.enabled).map((overlay, i) => {
+    const base = {
+      position: 'absolute',
+      top: 0, left: 0, width: '100%', height: '100%',
+      pointerEvents: 'none',
+      zIndex: 10 + i,
+      opacity: overlay.opacity,
+    };
+    if (overlay.type === 'film_grain') {
+      return (
+        <div key={i} style={{
+          ...base,
+          backgroundImage: `url(${GRAIN_STYLE_ASSETS[overlay.style] || GRAIN_STYLE_ASSETS.vintage})`,
+          backgroundSize: 'cover',
+          mixBlendMode: overlay.blend_mode || 'overlay',
+        }} />
+      );
+    }
+    if (overlay.type === 'color_filter') {
+      return (
+        <div key={i} style={{
+          ...base,
+          backgroundColor: overlay.color || '#000000',
+          mixBlendMode: overlay.blend_mode || 'multiply',
+        }} />
+      );
+    }
+    return null;
+  });
+}
+
 const ImageDisplay = ({
   activeImage = null,
   className = "",
@@ -24,29 +75,44 @@ const ImageDisplay = ({
   const [imageLoaded, setImageLoaded] = useState(false);
   const imageRef = useRef(null);
 
-  const baseStyles = {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    width: '100%',
-    height: '100%',
-    zIndex: 1,
-    backgroundColor: '#1a1a2e',
-    overflow: 'hidden',
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-  };
+  const ic = activeImage?.image_config;
+  const displayMode = ic?.display_mode || 'float';
+  const cineRatio = useMemo(
+    () => parseAspectRatio(ic?.aspect_ratio),
+    [ic?.aspect_ratio]
+  );
 
   if (!activeImage) {
     return null;
   }
 
+  const isLetterbox = displayMode === 'letterbox' || displayMode === 'cine';
+
+  // Image position within frame (object-position) — only meaningful for cover modes
+  const posX = ic?.image_position_x ?? 50;
+  const posY = ic?.image_position_y ?? 50;
+  const objectPosition = `${posX}% ${posY}%`;
+
+  // Image styles per mode
+  const imageStyle = displayMode === 'wrap' || isLetterbox
+    ? { width: '100%', height: '100%', objectFit: 'cover', objectPosition }
+    : { maxWidth: '100%', maxHeight: '100%', width: 'auto', height: 'auto', objectFit: 'contain' };
+
   return (
     <div
       className={`image-display ${className}`}
       style={{
-        ...baseStyles,
+        position: 'absolute',
+        top: 0,
+        left: 0,
+        width: '100%',
+        height: '100%',
+        zIndex: 1,
+        backgroundColor: isLetterbox ? '#000' : '#1a1a2e',
+        overflow: 'hidden',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
         opacity: imageLoaded ? 1 : 0.5,
         transition: 'opacity 0.3s ease',
       }}
@@ -67,34 +133,50 @@ const ImageDisplay = ({
         </div>
       )}
 
-      <img
-        ref={imageRef}
-        src={activeImage.file_path}
-        alt={activeImage.original_filename || activeImage.filename || 'Game image'}
-        style={{
-          maxWidth: '100%',
-          maxHeight: '100%',
-          width: 'auto',
-          height: 'auto',
-          objectFit: 'contain',
-          pointerEvents: 'none',
-          userSelect: 'none',
-        }}
-        onLoad={() => {
-          setImageLoaded(true);
-          const img = imageRef.current;
-          if (img) {
-            console.log('🖼️ Image loaded:', {
-              natural: `${img.naturalWidth}x${img.naturalHeight}`,
-              rendered: `${img.clientWidth}x${img.clientHeight}`
-            });
-          }
-        }}
-        onError={() => {
-          console.error('🖼️ Failed to load image:', activeImage.file_path);
-          setImageLoaded(false);
-        }}
-      />
+      {/* Letterbox mode: aspect-ratio container sized to fit within viewport.
+          Wide ratios (2.39:1) fill full width with top/bottom bars.
+          Narrow ratios (4:3, 1:1) fill full height with left/right bars.
+          width: min(100%, 100vh * ratio) picks the right constraint automatically. */}
+      {isLetterbox ? (
+        <div style={{
+          width: `min(100%, ${(cineRatio || 2.39) * 100}vh)`,
+          aspectRatio: cineRatio ? `${cineRatio}` : '2.39 / 1',
+          overflow: 'hidden',
+          position: 'relative',
+          zIndex: 1,
+        }}>
+          <img
+            ref={imageRef}
+            src={ic?.file_path}
+            alt={ic?.original_filename || ic?.filename || 'Game image'}
+            style={{
+              ...imageStyle,
+              pointerEvents: 'none',
+              userSelect: 'none',
+            }}
+            onLoad={() => setImageLoaded(true)}
+            onError={() => setImageLoaded(false)}
+          />
+          {displayMode === 'cine' && renderVisualOverlays(ic?.cine_config)}
+        </div>
+      ) : (
+        <>
+          <img
+            ref={imageRef}
+            src={ic?.file_path}
+            alt={ic?.original_filename || ic?.filename || 'Game image'}
+            style={{
+              ...imageStyle,
+              pointerEvents: 'none',
+              userSelect: 'none',
+              zIndex: 1,
+            }}
+            onLoad={() => setImageLoaded(true)}
+            onError={() => setImageLoaded(false)}
+          />
+          {displayMode === 'cine' && renderVisualOverlays(ic?.cine_config)}
+        </>
+      )}
     </div>
   );
 };

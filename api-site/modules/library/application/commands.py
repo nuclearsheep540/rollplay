@@ -12,6 +12,7 @@ from modules.library.domain.asset_aggregate import MediaAssetAggregate
 from modules.library.domain.map_asset_aggregate import MapAsset
 from modules.library.domain.music_asset_aggregate import MusicAsset
 from modules.library.domain.sfx_asset_aggregate import SfxAsset
+from modules.library.domain.cine_config import CineConfig as DomainCineConfig
 from modules.library.domain.image_asset_aggregate import ImageAsset
 from modules.library.domain.media_asset_type import MediaAssetType
 from modules.library.repositories.asset_repository import MediaAssetRepository
@@ -474,6 +475,75 @@ class UpdateAudioConfig:
             )
 
         asset.update_audio_config(**config_kwargs)
+
+        self.repository.save(asset)
+        return asset
+
+
+class UpdateImageConfig:
+    """
+    Update display configuration for an image asset.
+
+    Display config is stored on the asset itself, making it reusable
+    across all campaigns/sessions that use this image.
+    """
+
+    def __init__(self, repository: MediaAssetRepository, session_repository: SessionRepository = None):
+        self.repository = repository
+        self.session_repository = session_repository
+
+    def execute(
+        self,
+        asset_id: UUID,
+        user_id: UUID,
+        display_mode: Optional[str] = None,
+        aspect_ratio: Optional[str] = None,
+        image_position_x: Optional[float] = None,
+        image_position_y: Optional[float] = None,
+        # cine_config uses a sentinel because it has three valid states:
+        # "UNSET" = field omitted (don't touch), None = explicitly clear, object = set.
+        # The simpler fields above only need two states (None = don't touch, value = set)
+        # because they're never explicitly cleared via the API.
+        cine_config="UNSET"
+    ) -> ImageAsset:
+        """
+        Update display configuration for an image asset.
+
+        Returns:
+            Updated ImageAsset
+
+        Raises:
+            ValueError: If asset not found, not owned, or not an image
+            AssetInUseError: If asset is in an active session
+        """
+        asset = self.repository.get_by_id(asset_id)
+        if not asset:
+            raise ValueError(f"Media asset {asset_id} not found")
+
+        if not asset.is_owned_by(user_id):
+            raise ValueError("Cannot modify media asset owned by another user")
+
+        if not isinstance(asset, ImageAsset):
+            raise ValueError("Image configuration only applies to image assets")
+
+        if self.session_repository:
+            check_asset_in_active_session(asset.campaign_ids, self.session_repository)
+
+        asset.update_image_config(
+            display_mode=display_mode,
+            aspect_ratio=aspect_ratio,
+            image_position_x=image_position_x,
+            image_position_y=image_position_y
+        )
+
+        if cine_config != "UNSET":
+            if cine_config is not None:
+                domain_cine = DomainCineConfig.from_dict(cine_config.model_dump())
+                domain_cine.validate()
+                asset.cine_config = domain_cine
+            else:
+                asset.cine_config = None
+            # updated_at already set by update_image_config() above
 
         self.repository.save(asset)
         return asset

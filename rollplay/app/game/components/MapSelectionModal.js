@@ -137,11 +137,13 @@ export default function MapSelectionSection({
   const handleMapSelect = (asset) => {
     const mapSettings = {
       room_id: roomId,
-      asset_id: asset.id,
-      filename: asset.filename,
-      original_filename: asset.filename,
-      file_path: asset.s3_url,
-      uploaded_by: "dm"
+      uploaded_by: "dm",
+      map_config: {
+        asset_id: asset.id,
+        filename: asset.filename,
+        original_filename: asset.filename,
+        file_path: asset.s3_url,
+      },
     };
     onSelectMap(mapSettings);
   };
@@ -288,7 +290,7 @@ export default function MapSelectionSection({
       {!loading && !error && assets.length > 0 && (
         <div className="space-y-2">
           {assets.map((asset) => {
-            const isActive = currentMap?.asset_id === asset.id || currentMap?.filename === asset.filename;
+            const isActive = currentMap?.map_config?.asset_id === asset.id || currentMap?.map_config?.filename === asset.filename;
             const hasUrl = !!asset.s3_url;
             return (
               <div

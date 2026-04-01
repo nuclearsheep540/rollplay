@@ -38,7 +38,7 @@ export const useImageWebSocket = (webSocket, isConnected, roomId, thisPlayer, im
     if (image && handlers) {
       if (handlers.setActiveImage) {
         handlers.setActiveImage(image);
-        console.log(`🖼️ Image "${image.original_filename}" loaded by ${loaded_by}`);
+        console.log(`🖼️ Image "${image.image_config?.original_filename}" loaded by ${loaded_by}`);
       }
       if (handlers.setActiveDisplay && active_display !== undefined) {
         handlers.setActiveDisplay(active_display);
@@ -46,6 +46,31 @@ export const useImageWebSocket = (webSocket, isConnected, roomId, thisPlayer, im
       }
     } else {
       console.warn("🖼️ Cannot load image - missing image data or handlers");
+    }
+  }, []);
+
+  const handleImageConfigUpdate = useCallback((data) => {
+    console.log("🖼️ Image config updated:", data);
+    const { display_mode, aspect_ratio, image_position_x, image_position_y, updated_by } = data;
+    const handlers = eventHandlersRef.current;
+
+    if (handlers && handlers.setActiveImage) {
+      // Merge new config fields into nested image_config
+      handlers.setActiveImage((prev) => {
+        if (!prev) return prev;
+        const prevIc = prev.image_config || {};
+        return {
+          ...prev,
+          image_config: {
+            ...prevIc,
+            display_mode: display_mode ?? prevIc.display_mode,
+            aspect_ratio: aspect_ratio !== undefined ? aspect_ratio : prevIc.aspect_ratio,
+            image_position_x: image_position_x !== undefined ? image_position_x : prevIc.image_position_x,
+            image_position_y: image_position_y !== undefined ? image_position_y : prevIc.image_position_y,
+          },
+        };
+      });
+      console.log(`🖼️ Image config updated by ${updated_by}: mode=${display_mode}, ratio=${aspect_ratio}`);
     }
   }, []);
 
@@ -76,10 +101,11 @@ export const useImageWebSocket = (webSocket, isConnected, roomId, thisPlayer, im
     const cleanups = [
       registerHandler('image_load', handleImageLoad),
       registerHandler('image_clear', handleImageClear),
+      registerHandler('image_config_update', handleImageConfigUpdate),
     ];
 
     return () => cleanups.forEach(fn => fn());
-  }, [registerHandler, handleImageLoad, handleImageClear]);
+  }, [registerHandler, handleImageLoad, handleImageClear, handleImageConfigUpdate]);
 
   // Image send functions
   const sendImageLoad = (imageData) => {
@@ -112,6 +138,19 @@ export const useImageWebSocket = (webSocket, isConnected, roomId, thisPlayer, im
     }));
   };
 
+  const sendImageConfigUpdate = ({ display_mode, aspect_ratio, image_position_x, image_position_y }) => {
+    if (!webSocket || !isConnected) {
+      console.warn('❌ Cannot send image config update - WebSocket not connected');
+      return;
+    }
+
+    console.log('🖼️ Sending image config update:', { display_mode, aspect_ratio, image_position_x, image_position_y });
+    webSocket.send(JSON.stringify({
+      event_type: 'image_config_update',
+      data: { display_mode, aspect_ratio, image_position_x, image_position_y }
+    }));
+  };
+
   const sendImageRequest = () => {
     if (!webSocket || !isConnected) {
       console.warn('❌ Cannot send image request - WebSocket not connected');
@@ -128,6 +167,7 @@ export const useImageWebSocket = (webSocket, isConnected, roomId, thisPlayer, im
   return {
     sendImageLoad,
     sendImageClear,
+    sendImageConfigUpdate,
     sendImageRequest,
   };
 };

@@ -11,6 +11,7 @@ from shared_contracts.audio import AudioChannelState, AudioEffects, AudioTrackCo
 from shared_contracts.assets import AssetRef
 from shared_contracts.character import DungeonMaster, PlayerCharacter, SessionUser
 from shared_contracts.display import ActiveDisplayType
+from shared_contracts.cine import CineConfig, ColorFilterOverlay, FilmGrainOverlay
 from shared_contracts.image import ImageConfig
 from shared_contracts.map import GridColorMode, GridConfig, MapConfig
 from shared_contracts.session import (
@@ -114,6 +115,58 @@ class TestImageRoundTrip:
             file_path="https://s3.example.com/tavern.jpg",
         )
         assert ImageConfig.model_validate(config.model_dump()) == config
+
+    def test_image_config_with_cine_config_round_trip(self):
+        """Round-trip ImageConfig carrying a full CineConfig with visual overlays."""
+        config = ImageConfig(
+            asset_id="img-2",
+            filename="castle.jpg",
+            original_filename="Dark Castle.jpg",
+            file_path="https://s3.example.com/castle.jpg",
+            display_mode="cine",
+            cine_config=CineConfig(
+                visual_overlays=[
+                    FilmGrainOverlay(opacity=0.3, style="grain", blend_mode="overlay"),
+                    ColorFilterOverlay(opacity=0.6, color="#1a0a2e", blend_mode="multiply"),
+                ],
+                hide_player_ui=True,
+            ),
+        )
+        rebuilt = ImageConfig.model_validate(config.model_dump())
+        assert rebuilt == config
+        # Verify discriminator survived the round-trip
+        assert rebuilt.cine_config.visual_overlays[0].type == "film_grain"
+        assert rebuilt.cine_config.visual_overlays[1].type == "color_filter"
+
+
+class TestCineConfigValidation:
+    def test_cine_config_round_trip(self):
+        cine = CineConfig(
+            visual_overlays=[
+                FilmGrainOverlay(),
+                ColorFilterOverlay(color="#ff0000"),
+            ],
+            hide_player_ui=False,
+        )
+        assert CineConfig.model_validate(cine.model_dump()) == cine
+
+    def test_cine_config_empty_overlays(self):
+        cine = CineConfig(visual_overlays=[], hide_player_ui=True)
+        rebuilt = CineConfig.model_validate(cine.model_dump())
+        assert rebuilt.visual_overlays == []
+
+    def test_overlay_discriminator_from_dict(self):
+        """Ensure the discriminated union deserializes correctly from raw dicts."""
+        raw = {
+            "visual_overlays": [
+                {"type": "film_grain", "opacity": 0.5, "style": "vintage", "blend_mode": "overlay", "enabled": True},
+                {"type": "color_filter", "opacity": 0.4, "color": "#000000", "blend_mode": "multiply", "enabled": True},
+            ],
+            "hide_player_ui": True,
+        }
+        cine = CineConfig.model_validate(raw)
+        assert isinstance(cine.visual_overlays[0], FilmGrainOverlay)
+        assert isinstance(cine.visual_overlays[1], ColorFilterOverlay)
 
 
 class TestSessionRoundTrip:
