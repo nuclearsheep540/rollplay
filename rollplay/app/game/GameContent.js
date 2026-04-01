@@ -228,9 +228,11 @@ export default function GameContent() {
 
   const canUseModeratorTools = isModerator || isHost;
 
-  // Reserved: cineHideUI will be used by future "cine" display mode to hide
-  // UI for PLAYER roles. Letterbox mode does NOT hide UI.
-  const cineHideUI = false;
+  // Cine mode hides all UI chrome for players — DMs and moderators keep controls visible.
+  const isPlayer = !isDM && !isModerator && !isSpectator;
+  const cineHideUI = activeDisplay === 'image'
+    && activeImage?.image_config?.display_mode === 'cine'
+    && isPlayer;
 
   // Derive moderator status from campaign_role in player metadata
   useEffect(() => {
