@@ -589,22 +589,22 @@ export default function GameContent() {
     }
   }, [activeRightDrawer, gridEditMode, tuningMode]);
 
-  // Sync grid hook state from activeMap.grid_config whenever it changes
+  // Sync grid hook state from activeMap.map_config.grid_config whenever it changes
   useEffect(() => {
-    grid.initFromConfig(activeMap?.grid_config, mapNaturalDimensions);
-  }, [activeMap?.grid_config]); // eslint-disable-line react-hooks/exhaustive-deps
+    grid.initFromConfig(activeMap?.map_config?.grid_config, mapNaturalDimensions);
+  }, [activeMap?.map_config?.grid_config]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Compute default cell_size from image dimensions when no stored value is present
   useEffect(() => {
     if (!mapNaturalDimensions) return;
-    const gc = activeMap?.grid_config;
+    const gc = activeMap?.map_config?.grid_config;
     if (gc?.grid_cell_size) return; // already have a stored value
     grid.initFromConfig(gc, mapNaturalDimensions);
   }, [mapNaturalDimensions]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Computed effective grid config:
   // - Edit mode: use hook's live preview (includes color from gridConfig if pushed via handleGridChange)
-  // - Display mode: use saved activeMap.grid_config directly, with live offset when tuning
+  // - Display mode: use saved activeMap.map_config.grid_config directly, with live offset when tuning
   const effectiveGridConfig = useMemo(() => {
     if (gridEditMode) {
       if (!activeMap) return null;
@@ -615,7 +615,7 @@ export default function GameContent() {
       }
       return grid.effectiveGridConfig;
     }
-    const base = activeMap?.grid_config;
+    const base = activeMap?.map_config?.grid_config;
     if (!base) return null;
     if (tuningMode) return { ...base, offset_x: grid.offset.x, offset_y: grid.offset.y };
     return base;

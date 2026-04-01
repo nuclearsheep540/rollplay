@@ -91,18 +91,20 @@ export default function ImageConfigTool({ selectedAssetId, onAssetSelect }) {
     }
   };
 
-  // Build a preview activeImage object for ImageDisplay
+  // Build a preview activeImage object for ImageDisplay (nested shape)
   const previewImage = useMemo(() => {
     if (!selectedAsset) return null;
     return {
-      file_path: selectedAsset.s3_url,
-      filename: selectedAsset.filename,
-      original_filename: selectedAsset.filename,
-      display_mode: cineConfig ? 'cine' : displayMode,
-      aspect_ratio: (displayMode === 'letterbox' || displayMode === 'cine') ? aspectRatio : null,
-      image_position_x: imagePositionX,
-      image_position_y: imagePositionY,
-      cine_config: cineConfig,
+      image_config: {
+        file_path: selectedAsset.s3_url,
+        filename: selectedAsset.filename,
+        original_filename: selectedAsset.filename,
+        display_mode: cineConfig ? 'cine' : displayMode,
+        aspect_ratio: (displayMode === 'letterbox' || displayMode === 'cine') ? aspectRatio : null,
+        image_position_x: imagePositionX,
+        image_position_y: imagePositionY,
+        cine_config: cineConfig,
+      },
     };
   }, [selectedAsset?.s3_url, selectedAsset?.filename, displayMode, aspectRatio, imagePositionX, imagePositionY, cineConfig]);
 

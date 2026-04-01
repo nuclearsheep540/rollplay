@@ -14,6 +14,8 @@ from models.log_type import LogType
 from mapservice import MapService, MapSettings
 from imageservice import ImageService, ImageSettings
 from gameservice import GameService
+from shared_contracts.image import ImageConfig
+from shared_contracts.map import MapConfig
 from shared_contracts.audio import AudioChannelState, AudioTrackConfig, AudioEffects
 
 
@@ -1141,30 +1143,38 @@ class WebsocketEvent():
             })
         
         try:
-            # Check if this map already exists with grid config
+            # Frontend sends nested shape: { room_id, uploaded_by, map_config: { ... } }
+            mc_data = map_data.get("map_config", map_data)
+
+            # Check if this map already exists with grid config (nested shape)
             existing_map = map_service.collection.find_one(
-                {"room_id": room_id, "filename": map_data.get("filename")}
+                {"room_id": room_id, "map_config.filename": mc_data.get("filename")}
             ) if map_service.collection is not None else None
-            
-            # Only use existing grid_config if found, otherwise NO grid config
+
             grid_config_to_use = None
-            if existing_map and existing_map.get("grid_config"):
-                grid_config_to_use = existing_map["grid_config"]
-                print(f"🗺️ Using existing grid config for map {map_data.get('filename')}: {grid_config_to_use}")
+            if existing_map:
+                existing_mc = existing_map.get("map_config", {})
+                if existing_mc.get("grid_config"):
+                    grid_config_to_use = existing_mc["grid_config"]
+                    print(f"🗺️ Using existing grid config for map {mc_data.get('filename')}: {grid_config_to_use}")
+                else:
+                    print(f"🗺️ No existing grid config for map {mc_data.get('filename')} - map will have no grid until DM sets one")
             else:
-                print(f"🗺️ No existing grid config for map {map_data.get('filename')} - map will have no grid until DM sets one")
-            
-            # Create MapSettings with existing grid config or None
+                print(f"🗺️ No existing map doc for {mc_data.get('filename')} - map will have no grid until DM sets one")
+
+            # Create MapConfig from websocket data, then wrap in MapSettings
+            map_config = MapConfig(
+                asset_id=mc_data.get("asset_id", ""),
+                filename=mc_data.get("filename", "unknown.jpg"),
+                original_filename=mc_data.get("original_filename", mc_data.get("filename", "unknown.jpg")),
+                file_path=mc_data.get("file_path", ""),
+                grid_config=grid_config_to_use,
+                map_image_config=mc_data.get("map_image_config"),
+            )
             map_settings = MapSettings(
                 room_id=room_id,
-                asset_id=map_data.get("asset_id"),  # PostgreSQL MediaAsset ID for ETL restoration
-                filename=map_data.get("filename", "unknown.jpg"),
-                original_filename=map_data.get("original_filename", map_data.get("filename", "unknown.jpg")),
-                file_path=map_data.get("file_path", ""),
-                grid_config=grid_config_to_use,
-                map_image_config=map_data.get("map_image_config"),
                 uploaded_by=user_id,
-                active=True
+                map_config=map_config,
             )
             
             # Save to database
@@ -1190,7 +1200,7 @@ class WebsocketEvent():
                         "data": {"error": "Failed to retrieve saved map"}
                     })
                 
-                print(f"🗺️ Map loaded for room {room_id}: {map_settings.filename}")
+                print(f"🗺️ Map loaded for room {room_id}: {map_settings.map_config.filename}")
                 return WebsocketEventResult(broadcast_message=map_load_message)
             else:
                 print(f"❌ Failed to save map to database for room {room_id}")
@@ -1346,19 +1356,23 @@ class WebsocketEvent():
             })
 
         try:
+            # Frontend sends nested shape: { room_id, loaded_by, image_config: { ... } }
+            ic_data = image_data.get("image_config", image_data)
+            image_config = ImageConfig(
+                asset_id=ic_data.get("asset_id", ""),
+                filename=ic_data.get("filename", "unknown.jpg"),
+                original_filename=ic_data.get("original_filename", ic_data.get("filename", "unknown.jpg")),
+                file_path=ic_data.get("file_path", ""),
+                display_mode=ic_data.get("display_mode", "float"),
+                aspect_ratio=ic_data.get("aspect_ratio"),
+                image_position_x=ic_data.get("image_position_x"),
+                image_position_y=ic_data.get("image_position_y"),
+                cine_config=ic_data.get("cine_config"),
+            )
             image_settings = ImageSettings(
                 room_id=room_id,
-                asset_id=image_data.get("asset_id"),
-                filename=image_data.get("filename", "unknown.jpg"),
-                original_filename=image_data.get("original_filename", image_data.get("filename", "unknown.jpg")),
-                file_path=image_data.get("file_path", ""),
                 loaded_by=user_id,
-                active=True,
-                display_mode=image_data.get("display_mode", "float"),
-                aspect_ratio=image_data.get("aspect_ratio"),
-                image_position_x=image_data.get("image_position_x"),
-                image_position_y=image_data.get("image_position_y"),
-                cine_config=image_data.get("cine_config"),
+                image_config=image_config,
             )
 
             success = image_service.set_active_image(room_id, image_settings)
@@ -1367,7 +1381,7 @@ class WebsocketEvent():
                 saved_image = image_service.get_active_image(room_id)
 
                 if saved_image:
-                    log_message = f"🖼️ {display_name.title()} loaded image: {image_settings.original_filename}"
+                    log_message = f"🖼️ {display_name.title()} loaded image: {image_settings.image_config.original_filename}"
                     adventure_log.add_log_entry(room_id, log_message, LogType.SYSTEM, user_id)
 
                     active_display = image_service.get_active_display(room_id)
@@ -1387,7 +1401,7 @@ class WebsocketEvent():
                         "data": {"error": "Failed to retrieve saved image"}
                     })
 
-                print(f"🖼️ Image loaded for room {room_id}: {image_settings.filename}")
+                print(f"🖼️ Image loaded for room {room_id}: {image_settings.image_config.filename}")
                 return WebsocketEventResult(broadcast_message=broadcast_message)
             else:
                 print(f"❌ Failed to save image to database for room {room_id}")
@@ -1455,11 +1469,12 @@ class WebsocketEvent():
 
             if success:
                 saved_image = image_service.get_active_image(room_id)
+                saved_ic = saved_image.get("image_config", {}) if saved_image else {}
                 broadcast_message = {
                     "event_type": "image_config_update",
                     "data": {
-                        "display_mode": saved_image.get("display_mode", "float") if saved_image else display_mode,
-                        "aspect_ratio": saved_image.get("aspect_ratio") if saved_image else aspect_ratio,
+                        "display_mode": saved_ic.get("display_mode", "float") if saved_image else display_mode,
+                        "aspect_ratio": saved_ic.get("aspect_ratio") if saved_image else aspect_ratio,
                         "updated_by": user_id
                     }
                 }

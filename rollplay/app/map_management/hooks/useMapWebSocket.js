@@ -36,8 +36,9 @@ export const useMapWebSocket = (webSocket, isConnected, roomId, thisPlayer, mapC
 
     if (map && handlers && handlers.setActiveMap) {
       handlers.setActiveMap(map);
-      console.log(`🗺️ Map "${map.original_filename}" loaded atomically by ${loaded_by}`);
-      console.log(`🗺️ Map includes grid_config: ${!!map.grid_config}, map_image_config: ${!!map.map_image_config}`);
+      const mc = map.map_config;
+      console.log(`🗺️ Map "${mc?.original_filename}" loaded atomically by ${loaded_by}`);
+      console.log(`🗺️ Map includes grid_config: ${!!mc?.grid_config}, map_image_config: ${!!mc?.map_image_config}`);
     } else {
       console.warn("🗺️ Cannot load map - missing map data or setActiveMap handler");
     }
@@ -63,16 +64,20 @@ export const useMapWebSocket = (webSocket, isConnected, roomId, thisPlayer, mapC
 
     if (handlers && handlers.setActiveMap) {
       const currentMap = handlers.activeMap;
-      if (currentMap && currentMap.filename === filename) {
+      if (currentMap && currentMap.map_config?.filename === filename) {
+        const prevMc = currentMap.map_config || {};
         const updatedMap = {
           ...currentMap,
-          ...(grid_config !== undefined && { grid_config }),
-          ...(map_image_config !== undefined && { map_image_config })
+          map_config: {
+            ...prevMc,
+            ...(grid_config !== undefined && { grid_config }),
+            ...(map_image_config !== undefined && { map_image_config }),
+          },
         };
 
         handlers.setActiveMap(updatedMap);
         console.log(`🗺️ Map ${filename} config updated atomically by ${updated_by}`);
-        console.log(`🗺️ Updated grid_config: ${!!updatedMap.grid_config}, map_image_config: ${!!updatedMap.map_image_config}`);
+        console.log(`🗺️ Updated grid_config: ${!!updatedMap.map_config.grid_config}, map_image_config: ${!!updatedMap.map_config.map_image_config}`);
       } else {
         console.warn(`🗺️ Config update for ${filename} but current map is different or missing`);
       }

@@ -75,10 +75,11 @@ const ImageDisplay = ({
   const [imageLoaded, setImageLoaded] = useState(false);
   const imageRef = useRef(null);
 
-  const displayMode = activeImage?.display_mode || 'float';
+  const ic = activeImage?.image_config;
+  const displayMode = ic?.display_mode || 'float';
   const cineRatio = useMemo(
-    () => parseAspectRatio(activeImage?.aspect_ratio),
-    [activeImage?.aspect_ratio]
+    () => parseAspectRatio(ic?.aspect_ratio),
+    [ic?.aspect_ratio]
   );
 
   if (!activeImage) {
@@ -88,8 +89,8 @@ const ImageDisplay = ({
   const isLetterbox = displayMode === 'letterbox' || displayMode === 'cine';
 
   // Image position within frame (object-position) — only meaningful for cover modes
-  const posX = activeImage?.image_position_x ?? 50;
-  const posY = activeImage?.image_position_y ?? 50;
+  const posX = ic?.image_position_x ?? 50;
+  const posY = ic?.image_position_y ?? 50;
   const objectPosition = `${posX}% ${posY}%`;
 
   // Image styles per mode
@@ -146,8 +147,8 @@ const ImageDisplay = ({
         }}>
           <img
             ref={imageRef}
-            src={activeImage.file_path}
-            alt={activeImage.original_filename || activeImage.filename || 'Game image'}
+            src={ic?.file_path}
+            alt={ic?.original_filename || ic?.filename || 'Game image'}
             style={{
               ...imageStyle,
               pointerEvents: 'none',
@@ -156,14 +157,14 @@ const ImageDisplay = ({
             onLoad={() => setImageLoaded(true)}
             onError={() => setImageLoaded(false)}
           />
-          {displayMode === 'cine' && renderVisualOverlays(activeImage?.cine_config)}
+          {displayMode === 'cine' && renderVisualOverlays(ic?.cine_config)}
         </div>
       ) : (
         <>
           <img
             ref={imageRef}
-            src={activeImage.file_path}
-            alt={activeImage.original_filename || activeImage.filename || 'Game image'}
+            src={ic?.file_path}
+            alt={ic?.original_filename || ic?.filename || 'Game image'}
             style={{
               ...imageStyle,
               pointerEvents: 'none',
@@ -173,7 +174,7 @@ const ImageDisplay = ({
             onLoad={() => setImageLoaded(true)}
             onError={() => setImageLoaded(false)}
           />
-          {displayMode === 'cine' && renderVisualOverlays(activeImage?.cine_config)}
+          {displayMode === 'cine' && renderVisualOverlays(ic?.cine_config)}
         </>
       )}
     </div>

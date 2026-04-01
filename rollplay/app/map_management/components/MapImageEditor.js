@@ -216,7 +216,7 @@ const MapImageEditor = ({
           left: 0,
           width: '100%',
           height: '100%',
-          backgroundImage: activeMap?.file_path ? `url(${activeMap.file_path})` : 'none',
+          backgroundImage: activeMap?.map_config?.file_path ? `url(${activeMap.map_config.file_path})` : 'none',
           backgroundSize: 'cover',
           backgroundPosition: 'center',
           backgroundRepeat: 'no-repeat',

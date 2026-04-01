@@ -6,6 +6,7 @@ from pymongo import MongoClient
 from bson.objectid import ObjectId
 from config.settings import get_settings
 from gameservice import GameService
+from shared_contracts.map import MapConfig
 import logging
 from typing import Optional, Dict, Any
 
@@ -13,20 +14,12 @@ logger = logging.getLogger()
 CONFIG = get_settings()
 
 class MapSettings(BaseModel):
-    """Map configuration for a room"""
+    """Map configuration for a room — composes the shared MapConfig contract."""
 
     room_id: str
-    asset_id: Optional[str] = None  # PostgreSQL MediaAsset ID for ETL restoration
-    filename: str  # This is our unique identifier
-    original_filename: str
-    file_path: str
-    grid_config: Optional[Dict[str, Any]] = None
-    map_image_config: Optional[Dict[str, Any]] = None
     uploaded_by: str
     active: bool = True
-    
-    def __init__(self, **data):
-        super().__init__(**data)
+    map_config: MapConfig  # the whole contract, stored nested in MongoDB
 
 class MapService:
     """Managing active maps for rooms"""
@@ -57,26 +50,26 @@ class MapService:
         if self.collection is None:
             logger.error("No database connection available")
             return False
-            
+
         try:
             # First, deactivate any existing active maps for this room
             self.collection.update_many(
                 {"room_id": room_id, "active": True},
                 {"$set": {"active": False}}
             )
-            
-            # Insert or update the map with provided grid config
+
+            # Insert or update the map (nested shape stored in MongoDB)
             map_data = map_settings.model_dump()
             result = self.collection.replace_one(
-                {"room_id": room_id, "filename": map_settings.filename},
+                {"room_id": room_id, "map_config.filename": map_settings.map_config.filename},
                 map_data,
                 upsert=True
             )
-            
+
             # Update active_display on the game session document
             GameService.set_active_display(room_id, "map")
 
-            logger.info(f"Set active map for room {room_id}: {map_settings.filename}")
+            logger.info(f"Set active map for room {room_id}: {map_settings.map_config.filename}")
             return True
 
         except Exception as e:
@@ -126,59 +119,50 @@ class MapService:
             logger.error(f"Failed to clear active map for room {room_id}: {e}")
             return False
     
-    def update_map_config(self, room_id: str, filename: str, 
+    def update_map_config(self, room_id: str, filename: str,
                          grid_config: Optional[Dict[str, Any]] = ...,
                          map_image_config: Optional[Dict[str, Any]] = ...) -> bool:
         """Update map configuration (grid settings, image positioning, etc.)"""
         if self.collection is None:
             logger.error("No database connection available")
             return False
-            
+
         try:
             update_data = {}
-            
-            # Handle grid_config parameter (including explicit None)
+
+            # Handle grid_config parameter (including explicit None) — nested path
             if grid_config is not ...:
-                update_data["grid_config"] = grid_config
-                logger.info(f"Setting grid_config to: {grid_config}")
-                
-            # Handle map_image_config parameter (including explicit None)
+                update_data["map_config.grid_config"] = grid_config
+                logger.info(f"Setting map_config.grid_config to: {grid_config}")
+
+            # Handle map_image_config parameter (including explicit None) — nested path
             if map_image_config is not ...:
-                update_data["map_image_config"] = map_image_config
-                logger.info(f"Setting map_image_config to: {map_image_config}")
-            
+                update_data["map_config.map_image_config"] = map_image_config
+                logger.info(f"Setting map_config.map_image_config to: {map_image_config}")
+
             if not update_data:
                 return True  # Nothing to update
-                
-            # Debug: Check if the map exists before updating
+
             existing_map = self.collection.find_one(
-                {"room_id": room_id, "filename": filename, "active": True}
+                {"room_id": room_id, "map_config.filename": filename, "active": True}
             )
-            
+
             if not existing_map:
                 logger.error(f"❌ No active map found for room {room_id}, filename {filename}")
                 return False
-            
-            logger.info(f"🔍 Found existing map before update: {existing_map.get('filename')} with grid_config: {existing_map.get('grid_config')}")
-            
+
+            mc = existing_map.get("map_config", {})
+            logger.info(f"🔍 Found existing map before update: {mc.get('filename')} with grid_config: {mc.get('grid_config')}")
+
             result = self.collection.update_one(
-                {"room_id": room_id, "filename": filename, "active": True},
+                {"room_id": room_id, "map_config.filename": filename, "active": True},
                 {"$set": update_data}
             )
-            
+
             logger.info(f"✅ Database update result - matched: {result.matched_count}, modified: {result.modified_count}")
-            
-            # Verify the update by fetching the updated document
-            updated_map = self.collection.find_one(
-                {"room_id": room_id, "filename": filename, "active": True}
-            )
-            if updated_map:
-                logger.info(f"🔍 Verified updated map has grid_config: {updated_map.get('grid_config')}")
-            else:
-                logger.error(f"❌ Could not find map after update")
-            
-            return result.matched_count > 0  # Changed: return True if we found and attempted to update the map
-            
+
+            return result.matched_count > 0
+
         except Exception as e:
             logger.error(f"Failed to update map config for room {room_id}: {e}")
             return False
@@ -188,51 +172,42 @@ class MapService:
         if self.collection is None:
             logger.error("No database connection available")
             return False
-            
+
         try:
-            filename = updated_map.get("filename")
-            
+            mc = updated_map.get("map_config", {})
+            filename = mc.get("filename")
+
             if not filename:
                 logger.error(f"❌ No filename provided in updated map")
                 return False
-            
-            # Debug: Check if the map exists before updating
+
             existing_map = self.collection.find_one(
-                {"room_id": room_id, "filename": filename, "active": True}
+                {"room_id": room_id, "map_config.filename": filename, "active": True}
             )
-            
+
             if not existing_map:
                 logger.error(f"❌ No active map found for room {room_id}, filename {filename}")
                 return False
-            
-            logger.info(f"🔍 Found existing map before atomic update: {existing_map.get('filename')}")
-            
+
+            logger.info(f"🔍 Found existing map before atomic update: {filename}")
+
             # Ensure the updated map maintains required fields
             updated_map_doc = {
                 **updated_map,
                 "room_id": room_id,
                 "active": True
             }
-            
+
             # Replace entire document atomically
             result = self.collection.replace_one(
-                {"room_id": room_id, "filename": filename, "active": True},
+                {"room_id": room_id, "map_config.filename": filename, "active": True},
                 updated_map_doc
             )
-            
+
             logger.info(f"✅ Atomic map update result - matched: {result.matched_count}, modified: {result.modified_count}")
-            
-            # Verify the update by fetching the updated document
-            verified_map = self.collection.find_one(
-                {"room_id": room_id, "filename": filename, "active": True}
-            )
-            if verified_map:
-                logger.info(f"🔍 Verified updated map has grid_config: {verified_map.get('grid_config')}")
-            else:
-                logger.error(f"❌ Could not find map after atomic update")
-            
+
             return result.matched_count > 0
-            
+
         except Exception as e:
             logger.error(f"Failed to update complete map for room {room_id}: {e}")
             return False

@@ -242,8 +242,8 @@ const MapDisplay = ({
       <div ref={contentRef} style={contentTransform}>
         <img
           ref={mapImageRef}
-          src={activeMap?.file_path}
-          alt={activeMap?.filename || 'Map'}
+          src={activeMap?.map_config?.file_path}
+          alt={activeMap?.map_config?.filename || 'Map'}
           style={{ position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%, -50%)', maxWidth: '100%', maxHeight: '100%', width: 'auto', height: 'auto', objectFit: 'contain', pointerEvents: 'none' }}
           onLoad={() => {
             const img = mapImageRef.current;
@@ -253,7 +253,7 @@ const MapDisplay = ({
 
         {showGrid && (
           <GridOverlay
-            gridConfig={(isEditMode && gridConfig) ? gridConfig : (activeMap?.grid_config || null)}
+            gridConfig={(isEditMode && gridConfig) ? gridConfig : (activeMap?.map_config?.grid_config || null)}
             isEditMode={isEditMode}
             showLabels={showGridLabels}
             onGridChange={onGridChange}

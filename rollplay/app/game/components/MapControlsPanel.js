@@ -17,7 +17,7 @@ const ImageDimensions = ({ activeMap }) => {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    if (!activeMap?.file_path) return;
+    if (!activeMap?.map_config?.file_path) return;
 
     setLoading(true);
     const img = new Image();
@@ -37,8 +37,8 @@ const ImageDimensions = ({ activeMap }) => {
       console.warn('📏 Failed to load image for dimensions');
     };
 
-    img.src = activeMap.file_path;
-  }, [activeMap?.file_path]);
+    img.src = activeMap.map_config.file_path;
+  }, [activeMap?.map_config?.file_path]);
 
   if (loading) return <span>Reading image dimensions...</span>;
   if (!dimensions) return <span>Unable to read image dimensions</span>;
@@ -173,7 +173,10 @@ export default function MapControlsPanel({
     const newGridConfig = grid.effectiveGridConfig;
 
     const { _id, ...mapWithoutId } = activeMap;
-    const updatedMap = { ...mapWithoutId, grid_config: newGridConfig };
+    const updatedMap = {
+      ...mapWithoutId,
+      map_config: { ...mapWithoutId.map_config, grid_config: newGridConfig },
+    };
 
     try {
       const response = await fetch(`/api/game/${roomId}/map`, {
@@ -187,7 +190,7 @@ export default function MapControlsPanel({
         // grid shows the correct result when the panel closes, without waiting for
         // the WebSocket broadcast. The broadcast will follow and set the same value.
         if (setActiveMap) {
-          setActiveMap({ ...mapWithoutId, grid_config: newGridConfig });
+          setActiveMap(updatedMap);
         }
 
         // Close the panel — display mode uses activeMap.grid_config directly,

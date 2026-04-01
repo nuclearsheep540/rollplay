@@ -52,8 +52,8 @@ export default function ImageControlsPanel({
   const [originalMode, setOriginalMode] = useState(null);
   const [originalRatio, setOriginalRatio] = useState(null);
 
-  const currentMode = activeImage?.display_mode || 'float';
-  const currentRatio = activeImage?.aspect_ratio || '2.39:1';
+  const currentMode = activeImage?.image_config?.display_mode || 'float';
+  const currentRatio = activeImage?.image_config?.aspect_ratio || '2.39:1';
 
   // Whether the DM has changed anything from the original server state
   const hasChanges = originalMode !== null && (
@@ -74,8 +74,11 @@ export default function ImageControlsPanel({
     if (!setActiveImage || !activeImage) return;
     setActiveImage((prev) => ({
       ...prev,
-      display_mode: newMode,
-      aspect_ratio: newMode === 'letterbox' ? (prev.aspect_ratio || '2.39:1') : null,
+      image_config: {
+        ...prev.image_config,
+        display_mode: newMode,
+        aspect_ratio: newMode === 'letterbox' ? (prev.image_config?.aspect_ratio || '2.39:1') : null,
+      },
     }));
   };
 
@@ -83,14 +86,14 @@ export default function ImageControlsPanel({
     if (!setActiveImage || !activeImage) return;
     setActiveImage((prev) => ({
       ...prev,
-      aspect_ratio: newRatio,
+      image_config: { ...prev.image_config, aspect_ratio: newRatio },
     }));
   };
 
   // Open editing — snapshot current server state for cancel
   const openDisplaySettings = () => {
     setOriginalMode(currentMode);
-    setOriginalRatio(activeImage?.aspect_ratio || null);
+    setOriginalRatio(activeImage?.image_config?.aspect_ratio || null);
     setIsDisplayExpanded(true);
   };
 
@@ -113,8 +116,11 @@ export default function ImageControlsPanel({
     if (setActiveImage && activeImage && originalMode !== null) {
       setActiveImage((prev) => ({
         ...prev,
-        display_mode: originalMode,
-        aspect_ratio: originalRatio,
+        image_config: {
+          ...prev.image_config,
+          display_mode: originalMode,
+          aspect_ratio: originalRatio,
+        },
       }));
     }
     setOriginalMode(null);
@@ -184,7 +190,7 @@ export default function ImageControlsPanel({
             <label className="block text-xs text-gray-400 mb-1">Mode</label>
             <div className="flex gap-1">
               {DISPLAY_MODES.map((mode) => {
-                const isCineDisabled = mode.id === 'cine' && !activeImage?.cine_config;
+                const isCineDisabled = mode.id === 'cine' && !activeImage?.image_config?.cine_config;
                 return (
                   <button
                     key={mode.id}

@@ -94,7 +94,8 @@ async def get_active_map(room_id: str):
         active_map = map_service.get_active_map(room_id)
         
         if active_map:
-            logger.info(f"HTTP endpoint returning active map for room {room_id}: {active_map.get('filename')} with grid_config: {active_map.get('grid_config')}")
+            mc = active_map.get('map_config', {})
+            logger.info(f"HTTP endpoint returning active map for room {room_id}: {mc.get('filename')} with grid_config: {mc.get('grid_config')}")
             return {"active_map": active_map}
         else:
             logger.info(f"HTTP endpoint: No active map found for room {room_id}")
@@ -112,7 +113,7 @@ async def get_active_image(room_id: str):
         active_display = image_service.get_active_display(room_id)
 
         if active_image:
-            logger.info(f"HTTP endpoint returning active image for room {room_id}: {active_image.get('filename')}")
+            logger.info(f"HTTP endpoint returning active image for room {room_id}: {active_image.get('image_config', {}).get('filename')}")
             return {"active_image": active_image, "active_display": active_display}
         else:
             logger.info(f"HTTP endpoint: No active image found for room {room_id}")
@@ -128,35 +129,37 @@ async def update_map(room_id: str, request: dict):
     try:
         updated_map = request.get("map")
         updated_by = request.get("updated_by", "unknown")
-        
-        if not updated_map or not updated_map.get("filename"):
-            raise HTTPException(status_code=400, detail="Complete map object with filename is required")
-        
-        filename = updated_map.get("filename")
-        
+
+        mc = updated_map.get("map_config", {}) if updated_map else {}
+        filename = mc.get("filename")
+
+        if not updated_map or not filename:
+            raise HTTPException(status_code=400, detail="Complete map object with map_config.filename is required")
+
         # Replace entire map in database (atomic)
         logger.info(f"HTTP: Updating complete map for room {room_id}, filename {filename} by {updated_by}")
         success = map_service.update_complete_map(room_id, updated_map)
-        
+
         if success:
             # Get the updated map to broadcast via WebSocket
             updated_map_result = map_service.get_active_map(room_id)
-            
+
             if updated_map_result:
-                # Broadcast the complete updated map to all clients via WebSocket (atomic)
+                result_mc = updated_map_result.get("map_config", {})
+                # Broadcast flat delta to all clients via WebSocket
                 map_update_message = {
                     "event_type": "map_config_update",
                     "data": {
                         "filename": filename,
-                        "grid_config": updated_map_result.get("grid_config"),
-                        "map_image_config": updated_map_result.get("map_image_config"),
+                        "grid_config": result_mc.get("grid_config"),
+                        "map_image_config": result_mc.get("map_image_config"),
                         "updated_by": updated_by
                     }
                 }
-                
+
                 # Broadcast to all connected clients in this room
                 await connection_manager.update_room_data(room_id, map_update_message)
-                
+
                 logger.info(f"HTTP: Complete map updated and broadcasted for room {room_id}")
                 return {"success": True, "updated_map": updated_map_result}
             else:
@@ -164,7 +167,7 @@ async def update_map(room_id: str, request: dict):
                 return {"success": True, "message": "Map updated but could not retrieve updated map"}
         else:
             raise HTTPException(status_code=404, detail="No active map found or no changes made")
-            
+
     except Exception as e:
         logger.error(f"Error updating map config for room {room_id}: {e}")
         raise HTTPException(status_code=500, detail=str(e))
@@ -532,14 +535,8 @@ async def create_session(request: SessionStartPayload):
                 map_config = request.map_config
                 restored_map = MapSettings(
                     room_id=request.session_id,
-                    asset_id=map_config.asset_id,
-                    filename=map_config.filename,
-                    original_filename=map_config.original_filename or map_config.filename,
-                    file_path=map_config.file_path,
-                    grid_config=map_config.grid_config.model_dump() if map_config.grid_config else None,
-                    map_image_config=map_config.map_image_config,
                     uploaded_by="system",
-                    active=True
+                    map_config=map_config,
                 )
                 map_service.set_active_map(request.session_id, restored_map)
                 logger.info(f"Restored map '{map_config.filename}' for session {request.session_id}")
@@ -552,12 +549,8 @@ async def create_session(request: SessionStartPayload):
                 image_config = request.image_config
                 restored_image = ImageSettings(
                     room_id=request.session_id,
-                    asset_id=image_config.asset_id,
-                    filename=image_config.filename,
-                    original_filename=image_config.original_filename or image_config.filename,
-                    file_path=image_config.file_path,
                     loaded_by="system",
-                    active=True
+                    image_config=image_config,
                 )
                 image_service.set_active_image(request.session_id, restored_image)
                 logger.info(f"Restored image '{image_config.filename}' for session {request.session_id}")
@@ -645,29 +638,17 @@ async def end_session(request: SessionEndRequest, validate_only: bool = False):
         # Get adventure log count
         log_count = adventure_log.get_room_log_count(request.session_id)
 
-        # Get active map state for ETL
+        # Get active map state for ETL — contract data is nested under map_config
         active_map = map_service.get_active_map(request.session_id)
         map_state = None
-        if active_map and active_map.get("filename"):
-            map_state = MapConfig(
-                asset_id=active_map["asset_id"],
-                filename=active_map["filename"],
-                original_filename=active_map.get("original_filename"),
-                file_path=active_map["file_path"],
-                grid_config=active_map.get("grid_config"),
-                map_image_config=active_map.get("map_image_config"),
-            )
+        if active_map and active_map.get("map_config", {}).get("filename"):
+            map_state = MapConfig(**active_map["map_config"])
 
-        # Get active image state for ETL
+        # Get active image state for ETL — contract data is nested under image_config
         active_image = image_service.get_active_image(request.session_id)
         image_state = None
-        if active_image and active_image.get("filename"):
-            image_state = ImageConfig(
-                asset_id=active_image["asset_id"],
-                filename=active_image["filename"],
-                original_filename=active_image.get("original_filename"),
-                file_path=active_image["file_path"],
-            )
+        if active_image and active_image.get("image_config", {}).get("filename"):
+            image_state = ImageConfig(**active_image["image_config"])
 
         # Get active_display from game session
         active_display = image_service.get_active_display(request.session_id)
