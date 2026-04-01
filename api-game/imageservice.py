@@ -112,7 +112,7 @@ class ImageService:
 
             if image_doc:
                 image_doc["_id"] = str(image_doc["_id"])
-                logger.info(f"📤 Loading active image for room {room_id}: {image_doc.get('filename')}")
+                logger.info(f"📤 Loading active image for room {room_id}: {image_doc.get('image_config', {}).get('filename')}")
             else:
                 logger.info(f"📭 No active image found for room {room_id}")
 

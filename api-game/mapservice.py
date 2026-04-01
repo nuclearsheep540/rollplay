@@ -90,7 +90,8 @@ class MapService:
             if map_doc:
                 # Convert ObjectId to string for JSON serialization
                 map_doc["_id"] = str(map_doc["_id"])
-                logger.info(f"📤 Loading active map for room {room_id}: {map_doc.get('filename')} with grid_config: {map_doc.get('grid_config')}")
+                mc = map_doc.get('map_config', {})
+                logger.info(f"📤 Loading active map for room {room_id}: {mc.get('filename')} with grid_config: {mc.get('grid_config')}")
             else:
                 logger.info(f"📭 No active map found for room {room_id}")
                 
