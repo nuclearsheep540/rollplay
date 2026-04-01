@@ -543,7 +543,8 @@ async def select_character_for_campaign(
     campaign_repo: CampaignRepository = Depends(campaign_repository),
     character_repo: CharacterRepository = Depends(get_character_repository),
     user_repo: UserRepository = Depends(get_user_repository),
-    event_manager: EventManager = Depends(get_event_manager)
+    event_manager: EventManager = Depends(get_event_manager),
+    session_repo: SessionRepository = Depends(get_session_repository)
 ):
     """
     Select a character for use in this campaign.
@@ -554,7 +555,7 @@ async def select_character_for_campaign(
     Domain Rule: A character can only be active in one campaign at a time.
     """
     try:
-        command = SelectCharacterForCampaign(campaign_repo, character_repo, user_repo, event_manager)
+        command = SelectCharacterForCampaign(campaign_repo, character_repo, user_repo, event_manager, session_repo)
         character = await command.execute(
             campaign_id=campaign_id,
             user_id=user_id,

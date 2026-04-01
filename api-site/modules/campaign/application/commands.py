@@ -5,6 +5,7 @@ from typing import Optional
 from uuid import UUID
 import logging
 import asyncio
+import httpx
 
 from modules.campaign.domain.campaign_aggregate import CampaignAggregate
 from modules.campaign.domain.campaign_role import CampaignRole
@@ -492,11 +493,12 @@ class SelectCharacterForCampaign:
     Domain Rule: A character can only be active in one campaign at a time.
     """
 
-    def __init__(self, campaign_repo, character_repo: CharacterRepository, user_repo: UserRepository = None, event_manager: EventManager = None):
+    def __init__(self, campaign_repo, character_repo: CharacterRepository, user_repo: UserRepository = None, event_manager: EventManager = None, session_repo=None):
         self.campaign_repo = campaign_repo
         self.character_repo = character_repo
         self.user_repo = user_repo
         self.event_manager = event_manager
+        self.session_repo = session_repo
 
     async def execute(self, campaign_id: UUID, user_id: UUID, character_id: UUID):
         """
@@ -564,7 +566,57 @@ class SelectCharacterForCampaign:
             for event_config in events:
                 await self.event_manager.broadcast(event_config)
 
+        # Hot update: if campaign has an ACTIVE session, notify api-game
+        if self.session_repo:
+            await self._notify_active_session(campaign_id, user_id, character)
+
         return character
+
+    async def _notify_active_session(self, campaign_id: UUID, user_id: UUID, character):
+        """If the campaign has a live session, push character change to api-game."""
+        from modules.session.domain.session_aggregate import SessionStatus
+
+        sessions = self.session_repo.get_by_campaign_id(campaign_id)
+        active_session = next(
+            (s for s in sessions if s.status == SessionStatus.ACTIVE and s.active_game_id),
+            None
+        )
+        if not active_session:
+            return
+
+        player_name = ""
+        if self.user_repo:
+            user = self.user_repo.get_by_id(user_id)
+            player_name = user.screen_name if user else ""
+
+        class_names = [ci.character_class.value for ci in character.character_classes]
+
+        character_data = {
+            "user_id": str(user_id),
+            "player_name": player_name,
+            "character_id": str(character.id),
+            "character_name": character.character_name,
+            "character_class": class_names,
+            "character_race": character.character_race.value,
+            "level": character.level,
+            "hp_current": character.hp_current,
+            "hp_max": character.hp_max,
+            "ac": character.ac,
+        }
+
+        try:
+            async with httpx.AsyncClient() as client:
+                response = await client.put(
+                    f"http://api-game:8081/game/{active_session.active_game_id}/player/character",
+                    json=character_data,
+                    timeout=5.0
+                )
+                if response.status_code == 200:
+                    logger.info(f"Hot update: character {character.id} synced to active session {active_session.active_game_id}")
+                else:
+                    logger.warning(f"Hot update failed ({response.status_code}): {response.text}")
+        except Exception as e:
+            logger.warning(f"Hot update to api-game failed (non-fatal): {e}")
 
 
 class ReleaseCharacterFromCampaign:

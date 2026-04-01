@@ -790,6 +790,7 @@ async def update_player_character(room_id: str, character_data: dict):
         change_message = {
             "event_type": "player_character_changed",
             "data": {
+                "user_id": character_data.get("user_id"),
                 "player_name": player_name,
                 "character_id": character_data.get("character_id"),
                 "character_name": character_name,
