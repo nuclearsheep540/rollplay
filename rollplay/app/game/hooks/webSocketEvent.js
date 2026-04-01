@@ -74,7 +74,7 @@ export const handleInitialState = (data, handlers) => {
       return {
         seatId: index,
         userId: userId,
-        playerName: meta?.player_name || (userId !== "empty" ? userId : "empty"),
+        playerName: meta?.player_name || "",
         characterData: meta,
         isActive: false
       };
@@ -100,7 +100,7 @@ export const handleSeatChange = (data, { setGameSeats, getCharacterData }) => {
     return {
       seatId: index,
       userId: userId,
-      playerName: charData?.player_name || (userId !== "empty" ? userId : "empty"),
+      playerName: charData?.player_name || "",
       characterData: charData,
       isActive: false
     };
@@ -119,7 +119,7 @@ export const handleSeatCountChange = (data, { setGameSeats, getCharacterData }) 
     return {
       seatId: index,
       userId: userId,
-      playerName: charData?.player_name || (userId !== "empty" ? userId : "empty"),
+      playerName: charData?.player_name || "",
       characterData: charData,
       isActive: false
     };

@@ -252,6 +252,9 @@ class AcceptCampaignInvite:
 
         # Add player to any active sessions in this campaign and track which ones
         auto_added_to_session_ids = []
+        player = self.user_repo.get_by_id(player_id)
+        player_name = player.screen_name if player else ""
+
         if self.session_repository:
             from modules.session.domain.session_aggregate import SessionStatus
             # Get all sessions for this campaign
@@ -265,8 +268,13 @@ class AcceptCampaignInvite:
                         auto_added_to_session_ids.append(session_id)
                         logger.info(f"✅ Auto-added late-joining player {player_id} to active session {session_id}")
 
+                    # Sync player_name to api-game so they don't show as UUID
+                    if session.active_game_id:
+                        await self._sync_player_to_game(
+                            session.active_game_id, player_id, player_name
+                        )
+
         # Broadcast notification event to host
-        player = self.user_repo.get_by_id(player_id)
         await self.event_manager.broadcast(
             CampaignEvents.campaign_invite_accepted(
                 host_id=campaign.dm_id,
@@ -279,6 +287,23 @@ class AcceptCampaignInvite:
         )
 
         return campaign
+
+    @staticmethod
+    async def _sync_player_to_game(game_id: str, player_id: UUID, player_name: str):
+        """Notify api-game about a new player so they appear by name, not UUID."""
+        try:
+            async with httpx.AsyncClient() as client:
+                response = await client.put(
+                    f"http://api-game:8081/game/{game_id}/player/character",
+                    json={"user_id": str(player_id), "player_name": player_name},
+                    timeout=5.0
+                )
+                if response.status_code == 200:
+                    logger.info(f"Synced late-joining player {player_id} ({player_name}) to game {game_id}")
+                else:
+                    logger.warning(f"Player sync to game failed ({response.status_code}): {response.text}")
+        except Exception as e:
+            logger.warning(f"Player sync to api-game failed (non-fatal): {e}")
 
 
 class DeclineCampaignInvite:

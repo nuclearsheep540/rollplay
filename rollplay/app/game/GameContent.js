@@ -107,7 +107,7 @@ export default function GameContent() {
   const displayNameMap = useMemo(() => {
     const map = {};
     Object.entries(playerMetadata).forEach(([userId, meta]) => {
-      map[userId] = meta.player_name || userId;
+      map[userId] = meta.player_name || "";
     });
     // DM isn't in playerMetadata (no character), add from contract
     if (dungeonMaster?.user_id && dungeonMaster.player_name) {
@@ -380,7 +380,7 @@ export default function GameContent() {
       initialSeats.push({
         seatId: i,
         userId: userId,
-        playerName: meta?.player_name || (userId !== "empty" ? userId : "empty"),
+        playerName: meta?.player_name || "",
         characterData: meta,
         isActive: false
       });

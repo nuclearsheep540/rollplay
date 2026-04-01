@@ -157,7 +157,7 @@ export default function CombatControlsPanel({
                       setRollPromptModalOpen(true);
                     }}
                   >
-                    {titleCase(characterNameMap[player.userId] || displayNameMap[player.userId] || player.userId)}
+                    {titleCase(characterNameMap[player.userId] || displayNameMap[player.userId] || "")}
                   </button>
                 ))
               ) : (
