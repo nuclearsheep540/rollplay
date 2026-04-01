@@ -1737,16 +1737,16 @@ export default function GameContent() {
             >
               <FontAwesomeIcon icon={isFullscreen ? faDownLeftAndUpRightToCenter : faUpRightAndDownLeftFromCenter} />
             </button>
-          </div>
 
-          <button
-            onClick={() => router.push('/dashboard')}
-            className="nav-back-btn"
-            title="Back to Dashboard"
-          >
-            Dashboard
-            <FontAwesomeIcon icon={faRightToBracket} size="xl" style={{ marginLeft: '6px'}} />
-          </button>
+            <button
+              onClick={() => router.push('/dashboard')}
+              className="fullscreen-btn"
+              title="Back to Dashboard"
+            >
+              Dashboard
+              <FontAwesomeIcon icon={faRightToBracket} style={{ marginLeft: 'calc(6px * var(--ui-scale))' }} />
+            </button>
+          </div>
         </div>
 
         {/* Spectator Banner — in normal flow inside nav, grows nav height */}
