@@ -329,29 +329,31 @@ export const handleRemoteAudioBatch = async (data, {
   console.log(`🎛️ Audio context state:`, audioContextRef?.current?.state);
   console.log(`🎛️ Audio context currentTime:`, audioContextRef?.current?.currentTime);
 
-  // Activate batch mode — all setRemoteTrackStates calls inside individual
-  // play/stop operations accumulate instead of firing separate re-renders.
-  if (startStateBatch) startStateBatch();
-
-  // Pre-load ALL play operation buffers before executing anything.
-  // Without this, stop operations (synchronous) fire instantly while play
-  // operations block on async buffer loading — causing fade-in to start
-  // hundreds of ms after fade-out, breaking crossfade timing.
-  if (playOperations.length > 0 && loadRemoteAudioBuffer && audioBuffersRef) {
-    console.log(`🎵 🔄 Pre-loading ${playOperations.length} audio buffer(s)...`);
-    await Promise.all(playOperations.map(async (op) => {
-      const { filename, trackId, asset_id, s3_url } = op;
-      const audioUrl = s3_url || `/audio/${filename}`;
-      const buffer = await loadRemoteAudioBuffer(audioUrl, trackId);
-      if (buffer) {
-        audioBuffersRef.current[`${trackId}_${asset_id || filename}`] = buffer;
-      }
-    }));
-    console.log(`🎵 ✅ All buffers pre-loaded`);
-  }
-
-  // Execute all operations — buffers are warm, stops and plays fire together
+  // Everything below is wrapped in try/finally so that flushStateBatch()
+  // is guaranteed to run — even if buffer pre-loading fails.
   try {
+    // Activate batch mode — all setRemoteTrackStates calls inside individual
+    // play/stop operations accumulate instead of firing separate re-renders.
+    if (startStateBatch) startStateBatch();
+
+    // Pre-load ALL play operation buffers before executing anything.
+    // Without this, stop operations (synchronous) fire instantly while play
+    // operations block on async buffer loading — causing fade-in to start
+    // hundreds of ms after fade-out, breaking crossfade timing.
+    if (playOperations.length > 0 && loadRemoteAudioBuffer && audioBuffersRef) {
+      console.log(`🎵 🔄 Pre-loading ${playOperations.length} audio buffer(s)...`);
+      await Promise.all(playOperations.map(async (op) => {
+        const { filename, trackId, asset_id, s3_url } = op;
+        const audioUrl = s3_url || `/audio/${filename}`;
+        const buffer = await loadRemoteAudioBuffer(audioUrl, trackId);
+        if (buffer) {
+          audioBuffersRef.current[`${trackId}_${asset_id || filename}`] = buffer;
+        }
+      }));
+      console.log(`🎵 ✅ All buffers pre-loaded`);
+    }
+
+    // Execute all operations — buffers are warm, stops and plays fire together
     let syncStartTime = null;
     if (hasMultiplePlayOps && audioContextRef?.current) {
       syncStartTime = audioContextRef.current.currentTime + 0.2;
