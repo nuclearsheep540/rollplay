@@ -1848,14 +1848,16 @@ export default function GameContent() {
             activeRightDrawer={activeRightDrawer}
             isMixerOpen={isMixerOpen}
           >
-            <MapOverlayPanel
-              isMapLocked={isMapLocked}
-              onToggleLock={() => setIsMapLocked(prev => !prev)}
-              activeMap={activeMap}
-              gridInspect={gridInspect}
-              gridInspectMode={gridInspectMode}
-              onToggleInspectMode={() => setGridInspectMode(prev => prev === 'hold' ? 'toggle' : 'hold')}
-            />
+            {activeDisplay === 'map' && (
+              <MapOverlayPanel
+                isMapLocked={isMapLocked}
+                onToggleLock={() => setIsMapLocked(prev => !prev)}
+                activeMap={activeMap}
+                gridInspect={gridInspect}
+                gridInspectMode={gridInspectMode}
+                onToggleInspectMode={() => setGridInspectMode(prev => prev === 'hold' ? 'toggle' : 'hold')}
+              />
+            )}
             {tuningMode && (
               <GridTuningOverlay
                 onOffsetXChange={(delta) => grid.adjustOffset(delta, 0)}
