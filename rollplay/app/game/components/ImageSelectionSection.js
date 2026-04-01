@@ -131,19 +131,18 @@ export default function ImageSelectionSection({
   };
 
   const handleImageSelect = (asset) => {
+    // Spread asset fields through — only rename what differs between
+    // asset API shape and ImageConfig contract shape.
+    const { id, s3_url, filename, ...rest } = asset;
     const imageSettings = {
       room_id: roomId,
       loaded_by: "dm",
       image_config: {
-        asset_id: asset.id,
-        filename: asset.filename,
-        original_filename: asset.filename,
-        file_path: asset.s3_url,
-        display_mode: asset.display_mode || "float",
-        aspect_ratio: asset.aspect_ratio || null,
-        image_position_x: asset.image_position_x ?? null,
-        image_position_y: asset.image_position_y ?? null,
-        cine_config: asset.cine_config || null,
+        asset_id: id,
+        filename,
+        original_filename: filename,
+        file_path: s3_url,
+        ...rest,
       },
     };
     onSelectImage(imageSettings);

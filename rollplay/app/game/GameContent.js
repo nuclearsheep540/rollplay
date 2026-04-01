@@ -34,6 +34,7 @@ import { useFullscreen } from './hooks/useFullscreen';
 import MapSafeArea from './components/MapSafeArea';
 import Drawer from './components/Drawer';
 import GridTuningOverlay from '../map_management/components/GridTuningOverlay';
+import { useS3LoadingObserver } from './hooks/useS3LoadingObserver';
 
 // Tab configuration for left drawer
 const LEFT_DRAWER_TABS = [
@@ -203,6 +204,7 @@ export default function GameContent() {
   // Image system state
   const [activeImage, setActiveImage] = useState(null); // Current active image data
   const [activeDisplay, setActiveDisplay] = useState(null); // "map" | "image" | null
+  const s3Loading = useS3LoadingObserver();
 
   // Session ended modal state
   const [sessionEndedData, setSessionEndedData] = useState(null); // { message, reason } when session ends
@@ -1551,6 +1553,36 @@ export default function GameContent() {
           </div>
 
           <div className="nav-actions">
+            {/* Asset status — always visible, swaps between progress bar and "ready" */}
+            <div style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '6px',
+            }}>
+              <span style={{ color: '#9ca3af', fontSize: '11px', whiteSpace: 'nowrap' }}>
+                Assets
+              </span>
+              {s3Loading.total > 0 ? (
+                <div style={{
+                  width: '60px',
+                  height: '4px',
+                  backgroundColor: '#374151',
+                  borderRadius: '2px',
+                  overflow: 'hidden',
+                }}>
+                  <div style={{
+                    height: '100%',
+                    width: `${(s3Loading.loaded / s3Loading.total) * 100}%`,
+                    backgroundColor: '#6366f1',
+                    borderRadius: '2px',
+                    transition: 'width 0.2s ease',
+                  }} />
+                </div>
+              ) : (
+                <span style={{ color: '#6b7280', fontSize: '11px' }}>ready</span>
+              )}
+            </div>
+
             {/* Master Volume Control */}
             <div className="master-volume-control">
               <label htmlFor="master-volume" className="volume-label">

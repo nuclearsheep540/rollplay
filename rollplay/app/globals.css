@@ -398,6 +398,7 @@ body {
   align-items: center;
   gap: calc(20px * var(--ui-scale));
   min-width: 0;
+  max-width: 50%;
   overflow: hidden;
 }
 

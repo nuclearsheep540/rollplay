@@ -14,6 +14,7 @@ export default async function Game({ searchParams }) {
   const roomId = (await searchParams)?.room_id
 
   let mapImageUrl = null
+  let imageUrl = null
   if (roomId) {
     try {
       // Internal Docker network call — no auth required for this endpoint.
@@ -30,6 +31,7 @@ export default async function Game({ searchParams }) {
       if (res.ok) {
         const data = await res.json()
         mapImageUrl = data.active_map?.file_path ?? null
+        imageUrl = data.active_image?.image_config?.file_path ?? null
       }
     } catch {
       // Preload is a progressive enhancement — safe to skip on fetch failure or timeout.
@@ -40,6 +42,9 @@ export default async function Game({ searchParams }) {
     <>
       {mapImageUrl && (
         <link rel="preload" as="image" href={mapImageUrl} />
+      )}
+      {imageUrl && (
+        <link rel="preload" as="image" href={imageUrl} />
       )}
       <Suspense fallback={
         <div className="game-loading" style={{

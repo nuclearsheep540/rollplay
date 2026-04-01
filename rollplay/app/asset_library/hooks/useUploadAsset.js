@@ -43,7 +43,10 @@ export function useUploadAsset() {
       const uploadResponse = await fetch(upload_url, {
         method: 'PUT',
         body: file,
-        headers: { 'Content-Type': file.type },
+        headers: {
+          'Content-Type': file.type,
+          'Cache-Control': 'public, max-age=31536000, immutable',
+        },
       })
 
       if (!uploadResponse.ok) {

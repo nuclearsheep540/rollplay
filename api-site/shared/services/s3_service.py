@@ -62,7 +62,8 @@ class S3Service:
                 Params={
                     'Bucket': self.bucket_name,
                     'Key': key,
-                    'ContentType': content_type
+                    'ContentType': content_type,
+                    'CacheControl': 'public, max-age=31536000, immutable',
                 },
                 ExpiresIn=expiry or self.expiry
             )
@@ -88,13 +89,15 @@ class S3Service:
             Presigned GET URL for download
         """
         try:
+            effective_expiry = expiry or self.expiry
             url = self.client.generate_presigned_url(
                 'get_object',
                 Params={
                     'Bucket': self.bucket_name,
-                    'Key': key
+                    'Key': key,
+                    'ResponseCacheControl': f'private, max-age={effective_expiry}',
                 },
-                ExpiresIn=expiry or self.expiry
+                ExpiresIn=effective_expiry
             )
             logger.info(f"Generated download URL for key: {key}")
             return url

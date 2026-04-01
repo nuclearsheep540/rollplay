@@ -370,6 +370,7 @@ class StartSession:
             filename=map_asset.filename,
             original_filename=map_asset.filename,
             file_path=fresh_url,
+            file_size=map_asset.file_size,
             grid_config=map_asset.build_grid_config_for_game() if isinstance(map_asset, MapAsset) else None,
         )
 
@@ -397,6 +398,7 @@ class StartSession:
             filename=image_asset.filename,
             original_filename=image_asset.filename,
             file_path=fresh_url,
+            file_size=image_asset.file_size,
         )
         if hasattr(image_asset, 'display_mode') and image_asset.display_mode:
             config_kwargs["display_mode"] = image_asset.display_mode
@@ -511,6 +513,7 @@ class StartSession:
                         s3_key=asset.s3_key,
                         asset_type=asset.asset_type.value if hasattr(asset.asset_type, 'value') else str(asset.asset_type),
                         s3_url=url_map.get(asset.s3_key),
+                        file_size=asset.file_size,
                     )
                     for asset in campaign_assets
                 ] if self.asset_repo else [],

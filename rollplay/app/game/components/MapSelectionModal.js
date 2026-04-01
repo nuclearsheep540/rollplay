@@ -135,14 +135,16 @@ export default function MapSelectionSection({
   };
 
   const handleMapSelect = (asset) => {
+    const { id, s3_url, filename, ...rest } = asset;
     const mapSettings = {
       room_id: roomId,
       uploaded_by: "dm",
       map_config: {
-        asset_id: asset.id,
-        filename: asset.filename,
-        original_filename: asset.filename,
-        file_path: asset.s3_url,
+        asset_id: id,
+        filename,
+        original_filename: filename,
+        file_path: s3_url,
+        ...rest,
       },
     };
     onSelectMap(mapSettings);
