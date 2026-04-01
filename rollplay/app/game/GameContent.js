@@ -226,6 +226,11 @@ export default function GameContent() {
   const [isMixerOpen, setIsMixerOpen] = useState(false);
   const [mapImageConfig, setMapImageConfig] = useState(null); // Map image positioning/scaling
 
+  // Audio cue state — lifted here so it persists across drawer open/close
+  const [currentCue, setCurrentCue] = useState(null);
+  const [trackFadeStates, setTrackFadeStates] = useState({});
+  const [fadeDuration, setFadeDuration] = useState(1000);
+
   const canUseModeratorTools = isModerator || isHost;
 
   // Cine mode hides all UI chrome for players — DMs and moderators keep controls visible.
@@ -1813,6 +1818,12 @@ export default function GameContent() {
                   clearSfxSlot={clearSfxSlot}
                   setSfxSlotVolume={setSfxSlotVolume}
                   activeFades={activeFades}
+                  currentCue={currentCue}
+                  setCurrentCue={setCurrentCue}
+                  trackFadeStates={trackFadeStates}
+                  setTrackFadeStates={setTrackFadeStates}
+                  fadeDuration={fadeDuration}
+                  setFadeDuration={setFadeDuration}
                 />
               )}
               <div aria-hidden="true" style={{ flexShrink: 0, height: '40vh' }} />

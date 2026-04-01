@@ -82,6 +82,13 @@ export default function AudioMixerPanel({
   clearSfxSlot = null,
   setSfxSlotVolume = null,
   activeFades = {},
+  // Cue state — lifted to parent so it persists across drawer open/close
+  currentCue,
+  setCurrentCue,
+  trackFadeStates,
+  setTrackFadeStates,
+  fadeDuration,
+  setFadeDuration,
 }) {
   
 
@@ -144,10 +151,9 @@ export default function AudioMixerPanel({
     return ids;
   }, [remoteTrackStates]);
 
-  // Cue system state
-  const [currentCue, setCurrentCue] = useState(null); // { targetTracks: [channelId, ...] }
-  const [trackFadeStates, setTrackFadeStates] = useState({}); // Per-track fade configuration { trackId: boolean }
-  const [fadeDuration, setFadeDuration] = useState(1000); // Global fade duration in ms
+  // Cue system — state owned by parent (GameContent) so it persists across drawer toggle.
+  // currentCue, setCurrentCue, trackFadeStates, setTrackFadeStates, fadeDuration, setFadeDuration
+  // are all received as props.
   const fadeRepeatRef = useRef(null);
 
   const startFadeRepeat = useCallback((delta) => {
