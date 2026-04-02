@@ -12,4 +12,7 @@ export const CINE_ASSETS = [
   '/cine/overlay/film-grain.gif',
   '/cine/overlay/grain_noisy.gif',
   '/cine/overlay/phys_light_particles.gif',
+  '/cine/overlay/lens_flare_leak.gif',
+  '/cine/overlay/bokeh_light_glow.gif',
+  '/cine/overlay/sun_glow.gif',
 ];

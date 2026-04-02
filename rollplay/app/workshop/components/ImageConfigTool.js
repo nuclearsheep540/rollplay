@@ -3,7 +3,9 @@
 
 'use client'
 
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useCallback } from 'react';
+import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
+import { faExpand } from '@fortawesome/free-solid-svg-icons';
 import { authFetch } from '@/app/shared/utils/authFetch';
 import AssetPicker from './AssetPicker';
 import ImageDisplayControls from './ImageDisplayControls';
@@ -28,7 +30,18 @@ export default function ImageConfigTool({ selectedAssetId, onAssetSelect }) {
   const [imagePositionY, setImagePositionY] = useState(null);
   const [cineConfig, setCineConfig] = useState(null);
 
+  const [fullscreenPreview, setFullscreenPreview] = useState(false);
   const updateMutation = useUpdateImageConfig();
+
+  const handleFullscreenClose = useCallback(() => setFullscreenPreview(false), []);
+
+  // Close fullscreen preview on Escape key
+  useEffect(() => {
+    if (!fullscreenPreview) return;
+    const handleKeyDown = (e) => { if (e.key === 'Escape') setFullscreenPreview(false); };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [fullscreenPreview]);
 
   // Fetch asset when URL-driven selectedAssetId changes
   useEffect(() => {
@@ -126,9 +139,29 @@ export default function ImageConfigTool({ selectedAssetId, onAssetSelect }) {
       ) : selectedAsset ? (
         <div className="flex-1 min-h-0 flex gap-6">
           {/* Image Preview Area */}
-          <div className="flex-1 min-w-0 relative rounded-sm overflow-hidden border border-border bg-surface-primary">
+          <div className="flex-1 min-w-0 relative rounded-sm overflow-hidden border border-border bg-surface-primary group">
             <ImageDisplay activeImage={previewImage} />
+            <button
+              onClick={() => setFullscreenPreview(true)}
+              className="absolute top-2 right-2 z-20 p-2 rounded bg-black/50 text-white/70 hover:text-white hover:bg-black/70 transition-opacity opacity-0 group-hover:opacity-100"
+              title="Fullscreen preview"
+            >
+              <FontAwesomeIcon icon={faExpand} className="text-sm" />
+            </button>
           </div>
+
+          {/* Fullscreen Preview Overlay — click anywhere to close */}
+          {fullscreenPreview && (
+            <div
+              onClick={handleFullscreenClose}
+              className="fixed inset-0 z-50 bg-black cursor-pointer"
+            >
+              <ImageDisplay activeImage={previewImage} />
+              <div className="absolute bottom-6 left-1/2 -translate-x-1/2 text-white/40 text-xs pointer-events-none">
+                Click anywhere to close
+              </div>
+            </div>
+          )}
 
           {/* Controls Sidebar */}
           <div className="w-72 flex-shrink-0 overflow-y-auto">

@@ -30,6 +30,9 @@ const GRAIN_STYLES = [
   { id: 'vintage', label: 'Vintage' },
   { id: 'grain', label: 'Grain' },
   { id: 'light_particles', label: 'Light Particles' },
+  { id: 'lens_flare_leak', label: 'Lens Flare Leak' },
+  { id: 'bokeh_light_glow', label: 'Bokeh Light Glow' },
+  { id: 'sun_glow', label: 'Sun Glow' },
 ];
 
 const GRAIN_BLEND_MODES = [
@@ -78,8 +81,9 @@ export default function ImageDisplayControls({
   // Cine is "enabled" only if there's meaningful content — not just an empty scaffolding
   const cineEnabled = cineConfig && (
     cineConfig.visual_overlays?.length > 0
+    || cineConfig.motion?.hand_held != null
+    || cineConfig.motion?.ken_burns != null
     || cineConfig.transition != null
-    || cineConfig.ken_burns != null
     || cineConfig.text_overlays != null
   );
 
@@ -111,6 +115,41 @@ export default function ImageDisplayControls({
     [next[index], next[target]] = [next[target], next[index]];
     updateOverlays(next);
   };
+
+  // --- Motion helpers ---
+  const handHeld = cineConfig?.motion?.hand_held;
+
+  const toggleHandHeld = () => {
+    if (handHeld) {
+      // Remove hand_held; if motion section becomes empty, remove it too
+      const newMotion = { ...(cineConfig.motion || {}), hand_held: null };
+      const motionHasContent = newMotion.ken_burns != null;
+      onCineConfigChange({
+        ...(cineConfig || { hide_player_ui: true }),
+        motion: motionHasContent ? newMotion : null,
+      });
+    } else {
+      onCineConfigChange({
+        ...(cineConfig || { hide_player_ui: true }),
+        motion: {
+          ...(cineConfig?.motion || {}),
+          hand_held: { enabled: true, track_points: 4, distance: 10, speed: 3, x_bias: 0, randomness: 0 },
+        },
+      });
+    }
+  };
+
+  const updateHandHeld = (changes) => {
+    onCineConfigChange({
+      ...(cineConfig || { hide_player_ui: true }),
+      motion: {
+        ...(cineConfig?.motion || {}),
+        hand_held: { ...handHeld, ...changes },
+      },
+    });
+  };
+
+  const speedToDuration = (s) => Math.round(60 - (s - 1) * (54 / 14));
 
   return (
     <div className="flex flex-col gap-5 h-full">
@@ -394,9 +433,107 @@ export default function ImageDisplayControls({
               )}
             </div>
 
+            {/* Motion */}
+            <div>
+              <label className="block text-xs text-content-secondary mb-2 font-medium">Motion</label>
+
+              {/* Hand Held toggle */}
+              <button
+                onClick={toggleHandHeld}
+                className={`w-full px-3 py-2 text-left text-xs rounded border transition-colors mb-2 ${
+                  handHeld
+                    ? 'bg-rose-600/20 text-rose-300 border-rose-600/50'
+                    : 'bg-surface-secondary text-content-secondary border-border hover:border-border-active hover:text-content-on-dark'
+                }`}
+              >
+                <div className="font-medium">Hand Held</div>
+                <div className="text-[10px] opacity-70 mt-0.5">Gentle camera drift through random waypoints</div>
+              </button>
+
+              {handHeld && (
+                <div className="rounded border bg-surface-secondary border-border-active p-2.5 flex flex-col gap-2">
+                  {/* Track Points */}
+                  <div>
+                    <div className="flex justify-between text-[10px] text-content-secondary mb-0.5">
+                      <span>Track Points: {handHeld.track_points}</span>
+                    </div>
+                    <input
+                      type="range" min="2" max="30" step="1"
+                      value={handHeld.track_points}
+                      onChange={(e) => updateHandHeld({ track_points: parseInt(e.target.value) })}
+                      className="w-full h-1 bg-surface-tertiary rounded-lg appearance-none cursor-pointer"
+                    />
+                  </div>
+
+                  {/* Distance */}
+                  <div>
+                    <div className="flex justify-between text-[10px] text-content-secondary mb-0.5">
+                      <span>Distance: {handHeld.distance}</span>
+                    </div>
+                    <input
+                      type="range" min="2" max="20" step="1"
+                      value={handHeld.distance}
+                      onChange={(e) => updateHandHeld({ distance: parseInt(e.target.value) })}
+                      className="w-full h-1 bg-surface-tertiary rounded-lg appearance-none cursor-pointer"
+                    />
+                  </div>
+
+                  {/* Speed */}
+                  <div>
+                    <div className="flex justify-between text-[10px] text-content-secondary mb-0.5">
+                      <span>Speed: {handHeld.speed}</span>
+                      <span className="text-content-secondary/50">~{speedToDuration(handHeld.speed)}s per loop</span>
+                    </div>
+                    <input
+                      type="range" min="1" max="15" step="1"
+                      value={handHeld.speed}
+                      onChange={(e) => updateHandHeld({ speed: parseInt(e.target.value) })}
+                      className="w-full h-1 bg-surface-tertiary rounded-lg appearance-none cursor-pointer"
+                    />
+                  </div>
+
+                  {/* Drift Bias */}
+                  <div>
+                    <div className="flex justify-between text-[10px] text-content-secondary mb-0.5">
+                      <span>Drift Bias: {handHeld.x_bias === 0 ? 'Even' : handHeld.x_bias > 0 ? `Horizontal ${handHeld.x_bias}%` : `Vertical ${Math.abs(handHeld.x_bias)}%`}</span>
+                    </div>
+                    <input
+                      type="range" min="-100" max="100" step="1"
+                      value={handHeld.x_bias}
+                      onChange={(e) => updateHandHeld({ x_bias: parseInt(e.target.value) })}
+                      className="w-full h-1 bg-surface-tertiary rounded-lg appearance-none cursor-pointer"
+                    />
+                    <div className="flex justify-between text-[9px] text-content-secondary/40 mt-0.5">
+                      <span>↕ More vertical drift</span>
+                      <span>More horizontal drift ↔</span>
+                    </div>
+                  </div>
+
+                  {/* Randomness */}
+                  <div>
+                    <div className="flex justify-between text-[10px] text-content-secondary mb-0.5">
+                      <span>Randomness: {handHeld.randomness}%</span>
+                      <span className="text-content-secondary/50">{handHeld.randomness === 0 ? 'Uniform' : handHeld.randomness < 40 ? 'Subtle' : handHeld.randomness < 70 ? 'Varied' : 'Erratic'}</span>
+                    </div>
+                    <input
+                      type="range" min="0" max="100" step="1"
+                      value={handHeld.randomness}
+                      onChange={(e) => updateHandHeld({ randomness: parseInt(e.target.value) })}
+                      className="w-full h-1 bg-surface-tertiary rounded-lg appearance-none cursor-pointer"
+                    />
+                  </div>
+                </div>
+              )}
+
+              {/* Ken Burns placeholder */}
+              <div className="text-[10px] text-content-secondary/40 italic mt-2">
+                Ken Burns coming soon
+              </div>
+            </div>
+
             {/* Placeholder for future cine modules */}
             <div className="text-[10px] text-content-secondary/40 italic">
-              Transitions, Ken Burns, and Text Overlays coming soon
+              Transitions and Text Overlays coming soon
             </div>
 
           </div>

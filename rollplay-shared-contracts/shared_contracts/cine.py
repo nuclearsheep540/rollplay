@@ -41,6 +41,24 @@ VisualOverlay = Annotated[
 ]
 
 
+class HandHeldMotion(ContractModel):
+    """Hand-held camera drift — constant looping motion through random waypoints."""
+
+    enabled: bool = True
+    track_points: int = Field(default=4, ge=2, le=30)
+    distance: int = Field(default=10, ge=2, le=20)
+    speed: int = Field(default=3, ge=1, le=15)
+    x_bias: int = Field(default=0, ge=-100, le=100)
+    randomness: int = Field(default=0, ge=0, le=100)
+
+
+class MotionConfig(ContractModel):
+    """Motion section — houses movement-based cine effects."""
+
+    hand_held: Optional[HandHeldMotion] = None
+    ken_burns: Optional[Any] = None  # Placeholder
+
+
 class CineConfig(ContractModel):
     """Structured cinematic configuration for image assets.
 
@@ -50,6 +68,7 @@ class CineConfig(ContractModel):
 
     visual_overlays: List[VisualOverlay] = []
     hide_player_ui: bool = True
+    motion: Optional[MotionConfig] = None
     transition: Optional[Any] = None  # Placeholder
-    ken_burns: Optional[Any] = None  # Placeholder
+    ken_burns: Optional[Any] = None  # Backward compat — old configs had this at top level
     text_overlays: Optional[Any] = None  # Placeholder

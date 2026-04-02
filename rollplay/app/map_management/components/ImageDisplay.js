@@ -7,6 +7,7 @@
 
 import React, { useState, useRef, useMemo, useEffect } from 'react';
 import { useAssetDownload } from '@/app/shared/providers/AssetDownloadManager';
+import { useCameraMotion } from '@/app/map_management/hooks/useCameraMotion';
 
 /**
  * Parse "W:H" string into a numeric ratio for CSS aspect-ratio.
@@ -34,6 +35,9 @@ const GRAIN_STYLE_ASSETS = {
   vintage: '/cine/overlay/film-grain.gif',
   grain: '/cine/overlay/grain_noisy.gif',
   light_particles: '/cine/overlay/phys_light_particles.gif',
+  lens_flare_leak: '/cine/overlay/lens_flare_leak.gif',
+  bokeh_light_glow: '/cine/overlay/bokeh_light_glow.gif',
+  sun_glow: '/cine/overlay/sun_glow.gif',
 };
 
 function renderVisualOverlays(cineConfig) {
@@ -83,6 +87,10 @@ const ImageDisplay = ({
     () => parseAspectRatio(ic?.aspect_ratio),
     [ic?.aspect_ratio]
   );
+
+  // Hand-held camera motion (transforms the <img>, not the overlays)
+  const handHeld = displayMode === 'cine' ? ic?.cine_config?.motion?.hand_held : null;
+  const { style: motionStyle } = useCameraMotion(handHeld);
 
   // Download the main image through the asset manager (progressive byte tracking)
   const { blobUrl: imageBlobUrl, ready: imageReady } = useAssetDownload(ic?.file_path, ic?.file_size, ic?.asset_id);
@@ -171,17 +179,24 @@ const ImageDisplay = ({
           opacity: sceneReady ? 1 : 0,
           transition: 'opacity 0.3s ease',
         }}>
-          <img
-            ref={imageRef}
-            src={imageBlobUrl}
-            alt={ic?.original_filename || ic?.filename || 'Game image'}
-            style={{
-              ...imageStyle,
-              pointerEvents: 'none',
-              userSelect: 'none',
-            }}
-          />
-          {displayMode === 'cine' && renderVisualOverlays(ic?.cine_config)}
+          <div style={{
+            width: '100%',
+            height: '100%',
+            position: 'relative',
+            ...motionStyle,
+          }}>
+            <img
+              ref={imageRef}
+              src={imageBlobUrl}
+              alt={ic?.original_filename || ic?.filename || 'Game image'}
+              style={{
+                ...imageStyle,
+                pointerEvents: 'none',
+                userSelect: 'none',
+              }}
+            />
+            {displayMode === 'cine' && renderVisualOverlays(ic?.cine_config)}
+          </div>
         </div>
       ) : (
         <>
