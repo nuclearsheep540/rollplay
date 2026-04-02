@@ -30,6 +30,7 @@ class AudioChannelState(ContractModel):
     filename: Optional[str] = None
     asset_id: Optional[str] = None
     s3_url: Optional[str] = None
+    file_size: Optional[int] = None
     # Playback config (persistent)
     volume: float = Field(default=0.8, ge=0.0, le=1.3)
     looping: bool = True

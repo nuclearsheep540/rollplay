@@ -88,6 +88,11 @@ export const handleInitialState = (data, handlers) => {
     handlers.syncAudioState(audio_state);
   }
 
+  // Capture raw audio state for batch preloading (useGatePreload builds the manifest)
+  if (handlers.setRawAudioState) {
+    handlers.setRawAudioState(audio_state || null);
+  }
+
   // Signal that initial state is fully received for gate preloading
   if (handlers.setWsInitialStateReceived) {
     handlers.setWsInitialStateReceived(true);

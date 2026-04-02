@@ -252,6 +252,7 @@ class MusicAsset(MediaAssetAggregate):
             "asset_id": str(self.id),
             "filename": self.filename,
             "s3_url": s3_url,
+            "file_size": self.file_size,
             "effects": self.build_effects_for_game(),
         }
         if self.default_volume is not None:

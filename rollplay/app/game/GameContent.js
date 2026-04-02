@@ -271,6 +271,7 @@ export default function GameContent() {
   // Gate preload readiness flags
   const [initialDataLoaded, setInitialDataLoaded] = useState(false);
   const [wsInitialStateReceived, setWsInitialStateReceived] = useState(false);
+  const [rawAudioState, setRawAudioState] = useState(null);
 
   // Ref for sendSeatChange — breaks circular dep: handleRoleChange → sendSeatChange → useWebSocket → gameContext → handleRoleChange
   const sendSeatChangeRef = useRef(null);
@@ -981,7 +982,7 @@ export default function GameContent() {
   } = useUnifiedAudio();
 
   // Gate preload — aggregates readiness from REST, WebSocket, and asset downloads
-  const gatePreload = useGatePreload({ campaignMeta, initialDataLoaded, wsInitialStateReceived, isAudioUnlocked });
+  const gatePreload = useGatePreload({ campaignMeta, initialDataLoaded, wsInitialStateReceived, isAudioUnlocked, activeMap, activeImage, rawAudioState });
 
   // Loading gate — rotating flavor text
   const [flavorIndex, setFlavorIndex] = useState(0);
@@ -1021,6 +1022,7 @@ export default function GameContent() {
     setPlayerMetadata,
     setDungeonMaster,
     setWsInitialStateReceived,
+    setRawAudioState,
     setChannelMuted,
     setChannelSoloed,
 
@@ -2148,8 +2150,8 @@ export default function GameContent() {
 
         return (
           <div
-            className={`fixed inset-0 z-[102] select-none ${gatePreload.ready ? 'cursor-pointer' : 'cursor-default'}`}
-            onClick={gatePreload.ready ? handleEnterSession : undefined}
+            className={`fixed inset-0 z-[102] select-none ${gatePreload.ctaReady ? 'cursor-pointer' : 'cursor-default'}`}
+            onClick={gatePreload.ctaReady ? handleEnterSession : undefined}
           >
             {/* Hero image background */}
             <div
@@ -2192,7 +2194,7 @@ export default function GameContent() {
 
                 {/* Campaign description */}
                 {campaignMeta?.description && (
-                  <p className="text-lg italic max-w-2xl mx-auto leading-relaxed" style={{ color: COLORS.silver }}>
+                  <p className="text-lg italic max-w-2xl mx-auto leading-relaxed" style={{ color: COLORS.silver, whiteSpace: 'pre-line' }}>
                     &ldquo;{campaignMeta.description}&rdquo;
                   </p>
                 )}
@@ -2201,42 +2203,42 @@ export default function GameContent() {
               {/* Spacer */}
               <div className="flex-1" />
 
-              {/* Progress bar / CTA section */}
+              {/* Progress bar + CTA section */}
               <div className="flex-shrink-0 w-3/5 mx-auto mb-4">
-                {!gatePreload.ready ? (
-                  /* Loading phase */
-                  <div className="relative py-6 px-6">
-                    {/* Corner brackets */}
-                    <div className="absolute top-0 left-0 w-4 h-4 border-t border-l" style={{ borderColor: COLORS.silver }} />
-                    <div className="absolute top-0 right-0 w-4 h-4 border-t border-r" style={{ borderColor: COLORS.silver }} />
-                    <div className="absolute bottom-0 left-0 w-4 h-4 border-b border-l" style={{ borderColor: COLORS.silver }} />
-                    <div className="absolute bottom-0 right-0 w-4 h-4 border-b border-r" style={{ borderColor: COLORS.silver }} />
+                {/* Progress bar — always visible */}
+                <div className="relative py-6 px-6">
+                  {/* Corner brackets */}
+                  <div className="absolute top-0 left-0 w-4 h-4 border-t border-l" style={{ borderColor: COLORS.silver }} />
+                  <div className="absolute top-0 right-0 w-4 h-4 border-t border-r" style={{ borderColor: COLORS.silver }} />
+                  <div className="absolute bottom-0 left-0 w-4 h-4 border-b border-l" style={{ borderColor: COLORS.silver }} />
+                  <div className="absolute bottom-0 right-0 w-4 h-4 border-b border-r" style={{ borderColor: COLORS.silver }} />
 
-                    {/* Flavor text + percentage row */}
-                    <div className="flex items-center justify-between mb-3">
-                      <p className="text-xs tracking-[0.2em] uppercase gate-flavor-pulse" style={{ color: COLORS.silver }}>
-                        {LOADING_PHRASES[flavorIndex]}...
-                      </p>
-                      <p className="text-lg font-[family-name:var(--font-metamorphous)]" style={{ color: COLORS.smoke }}>
-                        {progressPct}%
-                      </p>
-                    </div>
-
-                    {/* Progress bar */}
-                    <div className="w-full h-1.5 rounded-full overflow-hidden" style={{ backgroundColor: COLORS.graphite }}>
-                      <div
-                        className="h-full rounded-full"
-                        style={{
-                          width: `${progressPct}%`,
-                          backgroundColor: COLORS.smoke,
-                          transition: 'width 0.15s ease-out',
-                        }}
-                      />
-                    </div>
+                  {/* Flavor text + percentage row */}
+                  <div className="flex items-center justify-between mb-3">
+                    <p className="text-xs tracking-[0.2em] uppercase gate-flavor-pulse" style={{ color: COLORS.silver }}>
+                      {gatePreload.ready ? 'READY' : `${LOADING_PHRASES[flavorIndex]}...`}
+                    </p>
+                    <p className="text-lg font-[family-name:var(--font-metamorphous)]" style={{ color: COLORS.smoke }}>
+                      {gatePreload.ready ? '100' : (gatePreload.batchFired ? progressPct : 0)}%
+                    </p>
                   </div>
-                ) : (
-                  /* Ready phase — CTA */
-                  <div className="text-center py-6 gate-cta-enter">
+
+                  {/* Progress bar */}
+                  <div className="w-full h-1.5 rounded-full overflow-hidden" style={{ backgroundColor: COLORS.graphite }}>
+                    <div
+                      className="h-full rounded-full"
+                      style={{
+                        width: `${gatePreload.ready ? 100 : (gatePreload.batchFired ? progressPct : 0)}%`,
+                        backgroundColor: COLORS.smoke,
+                        transition: 'width 0.15s ease-out',
+                      }}
+                    />
+                  </div>
+                </div>
+
+                {/* CTA — appears below bar after 500ms hold at 100% */}
+                {gatePreload.ctaReady && (
+                  <div className="text-center mt-4 gate-cta-enter">
                     <p className="text-3xl tracking-[0.3em] uppercase font-[family-name:var(--font-metamorphous)] animate-pulse" style={{ color: COLORS.smoke }}>
                       Click to Enter
                     </p>
@@ -2269,7 +2271,7 @@ export default function GameContent() {
                         <div className="w-2 h-2 rounded-full" style={{ backgroundColor: player.connected ? '#d97706' : COLORS.graphite }} />
                         <span className="text-sm" style={{ color: COLORS.smoke }}>{player.name}</span>
                       </div>
-                      {gatePreload.ready ? (
+                      {gatePreload.ctaReady ? (
                         <span className="text-xs px-2 py-0.5 rounded-sm" style={{ backgroundColor: COLORS.graphite, color: COLORS.smoke }}>Ready</span>
                       ) : !player.connected ? (
                         <span className="text-xs italic" style={{ color: COLORS.silver }}>Connecting...</span>
