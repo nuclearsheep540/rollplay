@@ -60,9 +60,7 @@ export default function ImageControlsPanel({
   const currentPositionY = activeImage?.image_config?.image_position_y ?? 50;
 
   // Whether the DM has changed anything from the original server state.
-  // Cine mode is workshop-authored and read-only at runtime — its aspect ratio,
-  // position, and overlays are baked into the asset's cine_config, so we intentionally
-  // only track letterbox-specific changes (ratio + position) here.
+  // Both letterbox and cine modes track ratio + position changes.
   const hasChanges = originalMode !== null && (
     currentMode !== originalMode
     || ((currentMode === 'letterbox' || currentMode === 'cine') && (
