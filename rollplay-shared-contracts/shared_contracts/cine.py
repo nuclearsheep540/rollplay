@@ -21,7 +21,7 @@ class FilmGrainOverlay(ContractModel):
     type: Literal["film_grain"] = "film_grain"
     enabled: bool = True
     opacity: float = Field(default=0.5, ge=0.0, le=1.0)
-    style: str = "vintage"  # "vintage" | "grain"
+    style: str = "vintage"  # "vintage" | "grain" | "light_particles"
     blend_mode: str = "overlay"
 
 

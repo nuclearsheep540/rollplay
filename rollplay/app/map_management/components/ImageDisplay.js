@@ -33,6 +33,7 @@ function parseAspectRatio(ratioStr) {
 const GRAIN_STYLE_ASSETS = {
   vintage: '/cine/overlay/film-grain.gif',
   grain: '/cine/overlay/grain_noisy.gif',
+  light_particles: '/cine/overlay/phys_light_particles.gif',
 };
 
 function renderVisualOverlays(cineConfig) {

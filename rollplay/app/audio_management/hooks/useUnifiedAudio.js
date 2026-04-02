@@ -137,6 +137,7 @@ export const useUnifiedAudio = () => {
   const playOperationsRef = useRef({}); // Track active play operations to prevent duplicates
   const pendingPlayOpsRef = useRef([]); // Queue play ops when AudioContext is suspended (non-DM players)
   const pendingAudioStateRef = useRef(null); // Store audio_state from initial_state for post-unlock reconciliation
+  const [audioSyncComplete, setAudioSyncComplete] = useState(false);
   const unlockInProgressRef = useRef(false); // Prevent overlapping unlockAudio calls
 
   // Remote track states (for DM-controlled BGM audio)
@@ -497,7 +498,7 @@ export const useUnifiedAudio = () => {
   }, []);
 
   // Load remote audio buffer
-  const loadRemoteAudioBuffer = async (url, trackId) => {
+  const loadRemoteAudioBuffer = async (url, trackId, assetId) => {
     if (!audioContextRef.current || audioContextRef.current.state === 'closed') {
       await initializeWebAudio();
     }
@@ -508,7 +509,7 @@ export const useUnifiedAudio = () => {
 
     try {
       console.log(`📁 Loading remote audio buffer: ${url}`);
-      const blob = await assetManager.download(url);
+      const blob = await assetManager.download(url, undefined, assetId);
       const arrayBuffer = await blob.arrayBuffer();
       const audioBuffer = await audioContextRef.current.decodeAudioData(arrayBuffer);
 
@@ -754,7 +755,7 @@ export const useUnifiedAudio = () => {
         console.log(
           `📁 [${operationId}] Loading remote audio buffer: ${audioUrl}`
         );
-        audioBuffer = await loadRemoteAudioBuffer(audioUrl, trackId);
+        audioBuffer = await loadRemoteAudioBuffer(audioUrl, trackId, assetId);
         if (!audioBuffer) return false;
         audioBuffersRef.current[bufferKey] = audioBuffer;
       } else {
@@ -1232,7 +1233,7 @@ export const useUnifiedAudio = () => {
       let buffer = audioBuffersRef.current[bufferKey];
 
       if (!buffer) {
-        buffer = await loadRemoteAudioBuffer(audioUrl, channelId);
+        buffer = await loadRemoteAudioBuffer(audioUrl, channelId, channelState.asset_id);
         if (buffer) audioBuffersRef.current[bufferKey] = buffer;
       }
 
@@ -1720,7 +1721,7 @@ export const useUnifiedAudio = () => {
 
         // Pre-load buffer for instant playback
         if (channelState.s3_url) {
-          const buffer = await loadRemoteAudioBuffer(channelState.s3_url, channelId);
+          const buffer = await loadRemoteAudioBuffer(channelState.s3_url, channelId, channelState.asset_id);
           if (buffer) {
             sfxSlotBuffersRef.current[`${channelId}_${channelState.asset_id || channelState.filename}`] = buffer;
           }
@@ -1769,7 +1770,7 @@ export const useUnifiedAudio = () => {
       if (playback_state === 'playing' && started_at) {
         // Load buffer and start playback at calculated offset
         const audioUrl = s3_url || `/audio/${filename}`;
-        const buffer = await loadRemoteAudioBuffer(audioUrl, channelId);
+        const buffer = await loadRemoteAudioBuffer(audioUrl, channelId, asset_id);
 
         if (buffer) {
           // Store buffer with stable key
@@ -1795,7 +1796,7 @@ export const useUnifiedAudio = () => {
       } else if (playback_state === 'paused' && paused_elapsed != null) {
         // Load buffer to get duration for normalizing paused position
         const audioUrl = s3_url || `/audio/${filename}`;
-        const buffer = await loadRemoteAudioBuffer(audioUrl, channelId);
+        const buffer = await loadRemoteAudioBuffer(audioUrl, channelId, asset_id);
 
         // For looping tracks, normalize paused_elapsed within buffer duration
         // (server stores raw elapsed time which can exceed buffer length after multiple loops)
@@ -1832,6 +1833,7 @@ export const useUnifiedAudio = () => {
       pendingAudioStateRef.current = null;
     }
 
+    setAudioSyncComplete(true);
     console.log('✅ Audio state sync complete');
   };
 
@@ -1929,7 +1931,7 @@ export const useUnifiedAudio = () => {
 
     // Pre-fetch buffer for instant trigger response
     if (asset.s3_url) {
-      const buffer = await loadRemoteAudioBuffer(asset.s3_url, trackId);
+      const buffer = await loadRemoteAudioBuffer(asset.s3_url, trackId, asset.id);
       if (buffer) {
         sfxSlotBuffersRef.current[`${trackId}_${asset.id || asset.filename}`] = buffer;
         console.log(`✅ Pre-loaded SFX buffer for slot ${slotIndex}`);
@@ -1960,7 +1962,7 @@ export const useUnifiedAudio = () => {
     const bufferKey = `${trackId}_${slot.asset_id || slot.filename}`;
     let buffer = sfxSlotBuffersRef.current[bufferKey];
     if (!buffer) {
-      buffer = await loadRemoteAudioBuffer(slot.s3_url, trackId);
+      buffer = await loadRemoteAudioBuffer(slot.s3_url, trackId, slot.asset_id);
       if (!buffer) return false;
       sfxSlotBuffersRef.current[bufferKey] = buffer;
     }
@@ -2090,6 +2092,7 @@ export const useUnifiedAudio = () => {
 
     // Late-joiner sync
     syncAudioState,
+    audioSyncComplete,
 
     // SFX Soundboard
     sfxSlots,
