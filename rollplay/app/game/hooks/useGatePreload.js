@@ -37,9 +37,10 @@ export function useGatePreload({
   const downloadsComplete = batchFired && !progress.loading
 
   // Build manifest and fire single batch when all data sources are ready
+  const batchStartedRef = useRef(false)
   useEffect(() => {
-    if (!dataSourcesReady || batchFired) return
-    setBatchFired(true)
+    if (!dataSourcesReady || batchStartedRef.current) return
+    batchStartedRef.current = true
 
     const run = async () => {
       // Phase 1: Warm browser cache with local cine assets (not tracked in progress)
@@ -75,10 +76,12 @@ export function useGatePreload({
         assetManager.download(asset.url, asset.fileSize, asset.assetId)
       }
 
+      // Signal batch is queued — only now can downloadsComplete evaluate truthfully
+      setBatchFired(true)
       console.log(`🔄 Gate preload: fired batch of ${manifest.length} assets (cine: ${CINE_ASSETS.length} cached)`)
     }
     run()
-  }, [dataSourcesReady, batchFired]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [dataSourcesReady]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // CTA ready — 500ms after downloads complete
   useEffect(() => {

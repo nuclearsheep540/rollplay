@@ -267,8 +267,6 @@ export default function GameContent() {
   const heroImageUrl = heroAsset?.asset_id
     ? (heroAssetReady ? heroBlobUrl : null)
     : (campaignMeta?.heroImage || null);
-  const heroImageReady = heroAsset?.asset_id ? heroAssetReady : !!campaignMeta;
-
   // Gate preload readiness flags
   const [initialDataLoaded, setInitialDataLoaded] = useState(false);
   const [wsInitialStateReceived, setWsInitialStateReceived] = useState(false);
@@ -1409,7 +1407,7 @@ export default function GameContent() {
   }
 
   if (!roomId || userLoading || !currentUser) {
-    return <div style={earlyReturnStyle} />;
+    return <div style={earlyReturnStyle} aria-busy="true" />;
   }
 
   // Helper functions to access current user data
