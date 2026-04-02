@@ -279,7 +279,7 @@ export default function GameContent() {
   // Spectator mode - user has no character selected for this campaign
   const [isSpectator, setIsSpectator] = useState(false);
   const navRef = useRef(null);
-  const [activeLeftDrawer, setActiveLeftDrawer] = useState('party'); // 'party' | 'log' | null
+  const [activeLeftDrawer, setActiveLeftDrawer] = useState(null); // 'party' | 'log' | null
   const [activeRightDrawer, setActiveRightDrawer] = useState(null); // null | 'dm' | 'moderator'
   const [rightDrawerSettled, setRightDrawerSettled] = useState(false); // starts closed
   const [isMixerOpen, setIsMixerOpen] = useState(false);
@@ -1386,17 +1386,15 @@ export default function GameContent() {
     }
   };
 
-  // Show loading or 404 states
+  // Show loading or 404 states — styled to match the gate overlay so there's no white flash
+  const earlyReturnStyle = { display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh', backgroundColor: '#0B0A09', color: '#6B7280' };
+
   if (room404) {
-    return <div>Room not found</div>;
+    return <div style={earlyReturnStyle}>Room not found</div>;
   }
 
-  if (!roomId) {
-    return <div>Loading...</div>;
-  }
-
-  if (userLoading || !currentUser) {
-    return <div>Loading user data...</div>;
+  if (!roomId || userLoading || !currentUser) {
+    return <div style={earlyReturnStyle} />;
   }
 
   // Helper functions to access current user data
@@ -2263,7 +2261,7 @@ export default function GameContent() {
                 >
                   <div className="flex items-center gap-2 mb-3">
                     <FontAwesomeIcon icon={faUsers} className="text-xs" style={{ color: COLORS.silver }} />
-                    <p className="text-xs tracking-[0.2em] uppercase" style={{ color: COLORS.silver }}>The Fellowship</p>
+                    <p className="text-xs tracking-[0.2em] uppercase" style={{ color: COLORS.silver }}>Members Ready</p>
                   </div>
                   {fellowship.length > 0 ? fellowship.map(player => (
                     <div key={player.name} className="flex items-center justify-between py-1">

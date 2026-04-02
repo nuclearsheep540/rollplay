@@ -47,16 +47,22 @@ export default async function Game({ searchParams }) {
         <link rel="preload" as="image" href={imageUrl} crossOrigin="anonymous" />
       )}
       <Suspense fallback={
-        <div className="game-loading" style={{
-          display: 'flex',
-          justifyContent: 'center',
-          alignItems: 'center',
-          height: '100vh',
-          background: 'linear-gradient(135deg, #1e1b4b 0%, #312e81 50%, #1e3a8a 100%)',
-          color: 'white',
-          fontSize: '28px'
+        <div style={{
+          position: 'fixed',
+          inset: 0,
+          backgroundColor: '#000000',
         }}>
-          <div>Loading Tabletop Tavern...</div>
+          <span style={{
+            position: 'absolute',
+            bottom: '2rem',
+            right: '2rem',
+            color: '#6B7280',
+            fontSize: '0.75rem',
+            letterSpacing: '0.15em',
+            textTransform: 'uppercase',
+          }}>
+            Loading...
+          </span>
         </div>
       }>
         <GameContent />
