@@ -7,34 +7,36 @@ import { useState, useEffect, useRef } from 'react'
 import { useAssetProgress, useAssetManager } from '@/app/shared/providers/AssetDownloadManager'
 import { CINE_ASSETS } from '../cineManifest'
 
+const AUDIO_SYNC_TIMEOUT_MS = 3000
+
 /**
  * Aggregates readiness signals for the game loading gate.
  *
- * Waits for all data sources (REST, campaign metadata, WebSocket initial_state)
- * to arrive, then builds a manifest of every asset URL and fires a single batch
- * through AssetDownloadManager. This gives the progress bar a stable totalBytes
- * from the start — no mid-progress jumps as new downloads trickle in.
+ * Two-phase progress:
+ *  Phase 1 (0–90%): S3 asset downloads via AssetDownloadManager
+ *  Phase 2 (90–100%): Audio sync — buffers decoded and playback state restored
+ *
+ * Falls back after 3s if audio sync doesn't complete (e.g. decode failure),
+ * so users are never permanently blocked.
  *
  * Components that mount later (MapDisplay, ImageDisplay, syncAudioState) call
  * assetManager.download() and get instant cache hits from the batch.
- *
- * Timing windows:
- *  1. Batch fire — all data sources ready → build manifest → download all at once
- *  2. Ready hold (500ms) — after all downloads complete, holds at 100% before
- *     enabling the CTA. Gives a clean visual beat.
  */
 export function useGatePreload({
   campaignMeta, initialDataLoaded, wsInitialStateReceived, isAudioUnlocked,
-  activeMap, activeImage, rawAudioState
+  activeMap, activeImage, rawAudioState, audioSyncComplete
 }) {
   const progress = useAssetProgress()
   const assetManager = useAssetManager()
   const [batchFired, setBatchFired] = useState(false)
+  const [audioReady, setAudioReady] = useState(false)
   const [ctaReady, setCtaReady] = useState(false)
   const ctaTimerRef = useRef(null)
+  const audioTimeoutRef = useRef(null)
 
   const dataSourcesReady = !isAudioUnlocked && !!campaignMeta && initialDataLoaded && wsInitialStateReceived
   const downloadsComplete = batchFired && !progress.loading
+  const ready = downloadsComplete && audioReady
 
   // Build manifest and fire single batch when all data sources are ready
   const batchStartedRef = useRef(false)
@@ -83,20 +85,49 @@ export function useGatePreload({
     run()
   }, [dataSourcesReady]) // eslint-disable-line react-hooks/exhaustive-deps
 
-  // CTA ready — 500ms after downloads complete
+  // Phase 2: Audio sync — wait for syncAudioState to complete, or timeout after 3s
   useEffect(() => {
-    if (!downloadsComplete || ctaReady) return
+    if (!downloadsComplete || audioReady) return
+
+    if (audioSyncComplete) {
+      setAudioReady(true)
+      console.log('🔊 Gate: audio sync complete — proceeding')
+      return
+    }
+
+    audioTimeoutRef.current = setTimeout(() => {
+      setAudioReady(true)
+      console.log('⏱️ Gate: audio sync timeout — proceeding without full sync')
+    }, AUDIO_SYNC_TIMEOUT_MS)
+
+    return () => clearTimeout(audioTimeoutRef.current)
+  }, [downloadsComplete, audioSyncComplete, audioReady])
+
+  // CTA ready — 500ms after fully ready
+  useEffect(() => {
+    if (!ready || ctaReady) return
     ctaTimerRef.current = setTimeout(() => setCtaReady(true), 500)
     return () => clearTimeout(ctaTimerRef.current)
-  }, [downloadsComplete, ctaReady])
+  }, [ready, ctaReady])
+
+  // Scaled progress: downloads = 0-90%, audio sync = 90-100%
+  let percent = 0
+  if (batchFired) {
+    const downloadPct = progress.totalBytes > 0
+      ? (progress.loadedBytes / progress.totalBytes)
+      : (progress.loading ? 0 : 1)
+    percent = Math.round(downloadPct * 90)
+  }
+  if (downloadsComplete) percent = 90
+  if (ready) percent = 100
 
   // Once past the gate, readiness is irrelevant
-  if (isAudioUnlocked) return { ready: true, ctaReady: true, batchFired: true, ...progress }
+  if (isAudioUnlocked) return { ready: true, ctaReady: true, batchFired: true, percent: 100 }
 
   return {
-    ready: downloadsComplete,
+    ready,
     ctaReady,
     batchFired,
-    ...progress,
+    percent,
   }
 }

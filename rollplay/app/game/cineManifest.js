@@ -11,4 +11,5 @@
 export const CINE_ASSETS = [
   '/cine/overlay/film-grain.gif',
   '/cine/overlay/grain_noisy.gif',
+  '/cine/overlay/phys_light_particles.gif',
 ];

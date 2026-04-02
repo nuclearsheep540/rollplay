@@ -956,6 +956,7 @@ export default function GameContent() {
     setClearPendingOperationCallback,
     loadAssetIntoChannel,
     syncAudioState,
+    audioSyncComplete,
     activeFades,
     cancelFade,
     // Per-channel insert effects
@@ -983,7 +984,7 @@ export default function GameContent() {
   } = useUnifiedAudio();
 
   // Gate preload — aggregates readiness from REST, WebSocket, and asset downloads
-  const gatePreload = useGatePreload({ campaignMeta, initialDataLoaded, wsInitialStateReceived, isAudioUnlocked, activeMap, activeImage, rawAudioState });
+  const gatePreload = useGatePreload({ campaignMeta, initialDataLoaded, wsInitialStateReceived, isAudioUnlocked, activeMap, activeImage, rawAudioState, audioSyncComplete });
 
   // Loading gate — rotating flavor text
   const [flavorIndex, setFlavorIndex] = useState(0);
@@ -2146,9 +2147,6 @@ export default function GameContent() {
 
       {/* Loading Gate Overlay — full-screen themed loading screen */}
       {gateVisible && (() => {
-        const progressPct = gatePreload.totalBytes > 0
-          ? Math.round((gatePreload.loadedBytes / gatePreload.totalBytes) * 100)
-          : 0;
         const seated = gameSeats.filter(s => s.userId !== 'empty').map(s => ({ name: s.playerName, connected: true }));
         const inLobby = lobbyUsers.filter(u => u.status === 'connected').map(u => ({ name: u.name, connected: true }));
         const pendingLobby = lobbyUsers.filter(u => u.status !== 'connected').map(u => ({ name: u.name, connected: false }));
@@ -2239,7 +2237,7 @@ export default function GameContent() {
                       {gatePreload.ready ? 'READY' : `${LOADING_PHRASES[flavorIndex]}...`}
                     </p>
                     <p className="text-lg font-[family-name:var(--font-metamorphous)]" style={{ color: COLORS.smoke }}>
-                      {gatePreload.ready ? '100' : (gatePreload.batchFired ? progressPct : 0)}%
+                      {gatePreload.percent}%
                     </p>
                   </div>
 
@@ -2248,9 +2246,9 @@ export default function GameContent() {
                     <div
                       className="h-full rounded-full"
                       style={{
-                        width: `${gatePreload.ready ? 100 : (gatePreload.batchFired ? progressPct : 0)}%`,
+                        width: `${gatePreload.percent}%`,
                         backgroundColor: COLORS.smoke,
-                        transition: 'width 0.15s ease-out',
+                        transition: 'width 0.5s cubic-bezier(0.4, 0, 0.2, 1)',
                       }}
                     />
                   </div>

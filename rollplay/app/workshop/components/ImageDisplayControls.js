@@ -29,6 +29,7 @@ const OVERLAY_TYPES = [
 const GRAIN_STYLES = [
   { id: 'vintage', label: 'Vintage' },
   { id: 'grain', label: 'Grain' },
+  { id: 'light_particles', label: 'Light Particles' },
 ];
 
 const GRAIN_BLEND_MODES = [

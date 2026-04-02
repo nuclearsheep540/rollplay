@@ -137,6 +137,7 @@ export const useUnifiedAudio = () => {
   const playOperationsRef = useRef({}); // Track active play operations to prevent duplicates
   const pendingPlayOpsRef = useRef([]); // Queue play ops when AudioContext is suspended (non-DM players)
   const pendingAudioStateRef = useRef(null); // Store audio_state from initial_state for post-unlock reconciliation
+  const [audioSyncComplete, setAudioSyncComplete] = useState(false);
   const unlockInProgressRef = useRef(false); // Prevent overlapping unlockAudio calls
 
   // Remote track states (for DM-controlled BGM audio)
@@ -1832,6 +1833,7 @@ export const useUnifiedAudio = () => {
       pendingAudioStateRef.current = null;
     }
 
+    setAudioSyncComplete(true);
     console.log('✅ Audio state sync complete');
   };
 
@@ -2090,6 +2092,7 @@ export const useUnifiedAudio = () => {
 
     // Late-joiner sync
     syncAudioState,
+    audioSyncComplete,
 
     // SFX Soundboard
     sfxSlots,
