@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 
 from fastapi import APIRouter, Depends, HTTPException, status
-from typing import List
+from typing import List, Optional
 from uuid import UUID
 from sqlalchemy.orm import Session
 
@@ -15,6 +15,7 @@ from .schemas import (
     CharacterSelectRequest,
     CampaignSetRoleRequest,
     CampaignSetRoleResponse,
+    HeroImageAssetInfo,
 )
 from modules.session.api.schemas import (
     CreateSessionRequest, SessionResponse
@@ -49,6 +50,7 @@ from modules.campaign.application.queries import (
 from modules.campaign.domain.campaign_aggregate import CampaignAggregate
 from shared.dependencies.auth import get_current_user_from_token, get_current_user_id
 from shared.dependencies.db import get_db
+from shared.services.s3_service import S3Service, get_s3_service
 from modules.user.domain.user_aggregate import UserAggregate
 from modules.user.repositories.user_repository import UserRepository
 from modules.user.dependencies.providers import user_repository as get_user_repository
@@ -61,7 +63,27 @@ router = APIRouter()
 
 # Helper functions for response construction
 
-def _to_campaign_response(campaign: CampaignAggregate, user_repo: UserRepository = None) -> CampaignResponse:
+def _build_hero_image_asset_info(campaign: CampaignAggregate, s3_service: Optional[S3Service] = None) -> Optional[HeroImageAssetInfo]:
+    """Build HeroImageAssetInfo from aggregate's eager-loaded asset metadata."""
+    if not campaign.hero_image_asset_id or not campaign.hero_image_asset_meta:
+        return None
+
+    s3_url = None
+    if s3_service:
+        try:
+            s3_url = s3_service.generate_download_url(campaign.hero_image_asset_meta.s3_key)
+        except Exception:
+            pass
+
+    return HeroImageAssetInfo(
+        asset_id=str(campaign.hero_image_asset_id),
+        s3_url=s3_url,
+        file_size=campaign.hero_image_asset_meta.file_size,
+        filename=campaign.hero_image_asset_meta.filename,
+    )
+
+
+def _to_campaign_response(campaign: CampaignAggregate, user_repo: Optional[UserRepository] = None, s3_service: Optional[S3Service] = None) -> CampaignResponse:
     """Convert CampaignAggregate to CampaignResponse"""
     # Campaign now only stores session_ids, not full session objects
     # Frontend should fetch sessions separately from /api/sessions/campaign/{id}
@@ -79,6 +101,7 @@ def _to_campaign_response(campaign: CampaignAggregate, user_repo: UserRepository
         title=campaign.title,
         description=campaign.description,
         hero_image=campaign.hero_image,
+        hero_image_asset=_build_hero_image_asset_info(campaign, s3_service),
         host_id=str(dm_id) if dm_id else str(campaign.created_by),
         host_screen_name=host_screen_name,
         created_at=campaign.created_at,
@@ -94,7 +117,7 @@ def _to_campaign_response(campaign: CampaignAggregate, user_repo: UserRepository
     )
 
 
-def _to_campaign_summary_response(campaign: CampaignAggregate, user_repo: UserRepository = None) -> CampaignSummaryResponse:
+def _to_campaign_summary_response(campaign: CampaignAggregate, user_repo: Optional[UserRepository] = None, s3_service: Optional[S3Service] = None) -> CampaignSummaryResponse:
     """Convert CampaignAggregate to CampaignSummaryResponse"""
 
     # Look up DM screen name if user_repo provided
@@ -110,6 +133,7 @@ def _to_campaign_summary_response(campaign: CampaignAggregate, user_repo: UserRe
         title=campaign.title,
         description=campaign.description,
         hero_image=campaign.hero_image,
+        hero_image_asset=_build_hero_image_asset_info(campaign, s3_service),
         host_id=str(dm_id) if dm_id else str(campaign.created_by),
         host_screen_name=host_screen_name,
         created_at=campaign.created_at,
@@ -153,7 +177,8 @@ async def create_campaign(
     user_id: UUID = Depends(get_current_user_id),
     campaign_repo: CampaignRepository = Depends(campaign_repository),
     session_repo: SessionRepository = Depends(get_session_repository),
-    event_manager: EventManager = Depends(get_event_manager)
+    event_manager: EventManager = Depends(get_event_manager),
+    s3_service: S3Service = Depends(get_s3_service)
 ):
     """Create a new campaign, optionally with an initial session"""
     try:
@@ -162,7 +187,8 @@ async def create_campaign(
             host_id=user_id,
             title=request.title,
             description=request.description or "",
-            hero_image=request.hero_image
+            hero_image=request.hero_image,
+            hero_image_asset_id=UUID(request.hero_image_asset_id) if request.hero_image_asset_id else None
         )
 
         # Always create a session with the campaign
@@ -175,7 +201,11 @@ async def create_campaign(
             max_players=8
         )
 
-        return _to_campaign_response(campaign)
+        # Re-fetch to populate hero_image_asset_meta from eager-loaded relationship
+        if campaign.hero_image_asset_id:
+            campaign = campaign_repo.get_by_id(campaign.id)
+
+        return _to_campaign_response(campaign, s3_service=s3_service)
 
     except ValueError as e:
         raise HTTPException(
@@ -190,7 +220,8 @@ async def get_user_campaigns(
     campaign_repo: CampaignRepository = Depends(campaign_repository),
     user_repo: UserRepository = Depends(get_user_repository),
     session_repo: SessionRepository = Depends(get_session_repository),
-    event_manager: EventManager = Depends(get_event_manager)
+    event_manager: EventManager = Depends(get_event_manager),
+    s3_service: S3Service = Depends(get_s3_service)
 ):
     """Get all campaigns where user is host or member"""
     try:
@@ -230,7 +261,7 @@ async def get_user_campaigns(
         query = GetUserCampaigns(campaign_repo)
         campaigns = query.execute(current_user.id)
 
-        return [_to_campaign_summary_response(campaign, user_repo) for campaign in campaigns]
+        return [_to_campaign_summary_response(campaign, user_repo, s3_service) for campaign in campaigns]
 
     except ValueError as e:
         raise HTTPException(
@@ -243,14 +274,15 @@ async def get_user_campaigns(
 async def get_user_hosted_campaigns(
     user_id: UUID = Depends(get_current_user_id),
     campaign_repo: CampaignRepository = Depends(campaign_repository),
-    user_repo: UserRepository = Depends(get_user_repository)
+    user_repo: UserRepository = Depends(get_user_repository),
+    s3_service: S3Service = Depends(get_s3_service)
 ):
     """Get all campaigns where user is the DM/host (for friend invites)"""
     try:
         query = GetUserHostedCampaigns(campaign_repo)
         campaigns = query.execute(user_id)
 
-        return [_to_campaign_summary_response(campaign, user_repo) for campaign in campaigns]
+        return [_to_campaign_summary_response(campaign, user_repo, s3_service) for campaign in campaigns]
 
     except ValueError as e:
         raise HTTPException(
@@ -263,7 +295,8 @@ async def get_user_hosted_campaigns(
 async def get_campaign(
     campaign_id: UUID,
     user_id: UUID = Depends(get_current_user_id),
-    campaign_repo: CampaignRepository = Depends(campaign_repository)
+    campaign_repo: CampaignRepository = Depends(campaign_repository),
+    s3_service: S3Service = Depends(get_s3_service)
 ):
     """Get campaign by ID with all sessions"""
     try:
@@ -283,7 +316,7 @@ async def get_campaign(
                 detail="Access denied - only campaign members can view campaign details"
             )
 
-        return _to_campaign_response(campaign)
+        return _to_campaign_response(campaign, s3_service=s3_service)
 
     except ValueError as e:
         raise HTTPException(
@@ -298,7 +331,8 @@ async def update_campaign(
     request: CampaignUpdateRequest,
     user_id: UUID = Depends(get_current_user_id),
     campaign_repo: CampaignRepository = Depends(campaign_repository),
-    session_repo: SessionRepository = Depends(get_session_repository)
+    session_repo: SessionRepository = Depends(get_session_repository),
+    s3_service: S3Service = Depends(get_s3_service)
 ):
     """Update campaign details and optionally current session name"""
     try:
@@ -309,10 +343,15 @@ async def update_campaign(
             title=request.title,
             description=request.description,
             hero_image=request.hero_image,
+            hero_image_asset_id=request.hero_image_asset_id if request.hero_image_asset_id is not None else "UNSET",
             session_name=request.session_name
         )
 
-        return _to_campaign_response(campaign)
+        # Re-fetch to populate hero_image_asset_meta if asset changed
+        if request.hero_image_asset_id is not None:
+            campaign = campaign_repo.get_by_id(campaign_id)
+
+        return _to_campaign_response(campaign, s3_service=s3_service)
 
     except ValueError as e:
         raise HTTPException(

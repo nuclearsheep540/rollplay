@@ -12,6 +12,7 @@ class CampaignCreateRequest(BaseModel):
     title: str = Field(..., min_length=1, max_length=100)
     description: Optional[str] = Field(None, max_length=1000)
     hero_image: Optional[str] = Field(None, max_length=255)
+    hero_image_asset_id: Optional[str] = Field(None)
     session_name: Optional[str] = Field(None, max_length=100)
 
 
@@ -19,6 +20,7 @@ class CampaignUpdateRequest(BaseModel):
     title: Optional[str] = Field(None, min_length=1, max_length=100)
     description: Optional[str] = Field(None, max_length=1000)
     hero_image: Optional[str] = Field(None, max_length=255)
+    hero_image_asset_id: Optional[str] = Field(None)
     session_name: Optional[str] = Field(None, max_length=100)
 
 
@@ -35,12 +37,21 @@ class HostStatusResponse(BaseModel):
 
 # CAMPAIGN RESPONSE SCHEMAS
 
+class HeroImageAssetInfo(BaseModel):
+    """Nested asset info for S3-backed hero images"""
+    asset_id: str
+    s3_url: Optional[str] = None
+    file_size: Optional[int] = None
+    filename: Optional[str] = None
+
+
 class CampaignResponse(BaseModel):
     """Full campaign response with sessions - used for detail view"""
     id: str
     title: str
     description: Optional[str]
     hero_image: Optional[str]
+    hero_image_asset: Optional[HeroImageAssetInfo] = None
     host_id: str
     host_screen_name: Optional[str] = None
     created_at: datetime
@@ -64,6 +75,7 @@ class CampaignSummaryResponse(BaseModel):
     title: str
     description: Optional[str]
     hero_image: Optional[str]
+    hero_image_asset: Optional[HeroImageAssetInfo] = None
     host_id: str
     host_screen_name: Optional[str] = None
     created_at: datetime

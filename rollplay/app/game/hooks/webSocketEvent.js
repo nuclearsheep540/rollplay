@@ -88,6 +88,11 @@ export const handleInitialState = (data, handlers) => {
     handlers.syncAudioState(audio_state);
   }
 
+  // Signal that initial state is fully received for gate preloading
+  if (handlers.setWsInitialStateReceived) {
+    handlers.setWsInitialStateReceived(true);
+  }
+
   console.log("✅ Initial state applied - client synced with server");
 };
 

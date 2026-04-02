@@ -12,11 +12,12 @@ export function useCreateCampaign() {
   const queryClient = useQueryClient()
 
   return useMutation({
-    mutationFn: async ({ title, description, heroImage, sessionName }) => {
+    mutationFn: async ({ title, description, heroImage, heroImageAssetId, sessionName }) => {
       const campaignData = {
         title: title.trim(),
         description: description?.trim() || `Campaign created on ${new Date().toLocaleDateString()}`,
         hero_image: heroImage || null,
+        hero_image_asset_id: heroImageAssetId || null,
         session_name: sessionName?.trim() || null,
       }
 
@@ -48,11 +49,12 @@ export function useUpdateCampaign() {
   const queryClient = useQueryClient()
 
   return useMutation({
-    mutationFn: async ({ campaignId, title, description, heroImage, sessionName }) => {
+    mutationFn: async ({ campaignId, title, description, heroImage, heroImageAssetId, sessionName }) => {
       const campaignData = {
         title: title.trim(),
         description: description?.trim() || null,
         hero_image: heroImage || null,
+        hero_image_asset_id: heroImageAssetId || null,
         session_name: sessionName?.trim() || null,
       }
 

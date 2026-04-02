@@ -2,17 +2,22 @@
 @tailwind components;
 @tailwind utilities;
 
-/* Audio gate overlay — hide description when card is too short */
-.gate-card {
-  container-type: size;
+/* Loading gate — CTA fade-in when assets are ready */
+@keyframes gate-cta-enter {
+  from { opacity: 0; transform: translateY(4px); }
+  to { opacity: 1; transform: translateY(0); }
 }
-.gate-description {
-  display: none !important;
+.gate-cta-enter {
+  animation: gate-cta-enter 600ms ease-out forwards;
 }
-@container (min-height: 350px) {
-  .gate-description {
-    display: flex !important;
-  }
+
+/* Loading gate — flavor text crossfade */
+@keyframes gate-fade {
+  0%, 100% { opacity: 0.4; }
+  50% { opacity: 1; }
+}
+.gate-flavor-pulse {
+  animation: gate-fade 3s ease-in-out infinite;
 }
 
 /* Hide scrollbar but keep scrolling functionality */

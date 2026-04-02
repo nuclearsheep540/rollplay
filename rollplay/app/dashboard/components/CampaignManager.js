@@ -15,6 +15,8 @@ import DeleteCampaignModal from './DeleteCampaignModal'
 import DeleteSessionModal from './DeleteSessionModal'
 import CampaignInviteModal from './CampaignInviteModal'
 import CharacterSelectionModal from './CharacterSelectionModal'
+import HeroBackground from './HeroBackground'
+import S3Image from '@/app/shared/components/S3Image'
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
 import {
   faGear,
@@ -39,6 +41,7 @@ import { useCharacters } from '../hooks/useCharacters'
 import { useCreateCampaign, useUpdateCampaign, useDeleteCampaign, useAcceptInvite, useDeclineInvite, useLeaveCampaign, useRemovePlayer } from '../hooks/mutations/useCampaignMutations'
 import { useCreateSession, useStartSession, usePauseSession, useFinishSession, useDeleteSession } from '../hooks/mutations/useSessionMutations'
 import { useReleaseCharacter } from '../hooks/mutations/useCharacterMutations'
+import { useAssets } from '@/app/asset_library/hooks/useAssets'
 
 export default function CampaignManager({ user, onExpandedChange, inviteCampaignId, clearInviteCampaignId, expandCampaignId, clearExpandCampaignId, showToast }) {
   const router = useRouter()
@@ -53,6 +56,9 @@ export default function CampaignManager({ user, onExpandedChange, inviteCampaign
 
   const campaigns = campaignData?.campaigns ?? []
   const invitedCampaigns = campaignData?.invitedCampaigns ?? []
+
+  // Image assets for hero image picker (all user images, not campaign-scoped)
+  const { data: libraryImages = [] } = useAssets({ assetType: 'image', enabled: !!user?.id })
 
   // Derive allSessions from campaigns (sessions are embedded by useCampaigns)
   const allSessions = useMemo(
@@ -127,11 +133,11 @@ export default function CampaignManager({ user, onExpandedChange, inviteCampaign
   // Campaign form modal
   const [campaignFormOpen, setCampaignFormOpen] = useState(false)
   const [campaignForm, setCampaignForm] = useState({
-    title: '', description: '', heroImage: '/campaign-tile-bg.png', sessionName: '', editingCampaign: null
+    title: '', description: '', heroImage: '/campaign-tile-bg.png', heroImageAssetId: null, sessionName: '', editingCampaign: null
   })
   const closeCampaignForm = () => {
     setCampaignFormOpen(false)
-    setCampaignForm({ title: '', description: '', heroImage: '/campaign-tile-bg.png', sessionName: '', editingCampaign: null })
+    setCampaignForm({ title: '', description: '', heroImage: '/campaign-tile-bg.png', heroImageAssetId: null, sessionName: '', editingCampaign: null })
   }
 
   // Session creation modal
@@ -312,6 +318,7 @@ export default function CampaignManager({ user, onExpandedChange, inviteCampaign
         title: campaignForm.title,
         description: campaignForm.description,
         heroImage: campaignForm.heroImage,
+        heroImageAssetId: campaignForm.heroImageAssetId,
         sessionName: campaignForm.sessionName,
       })
 
@@ -333,6 +340,7 @@ export default function CampaignManager({ user, onExpandedChange, inviteCampaign
         title: campaignForm.title,
         description: campaignForm.description,
         heroImage: campaignForm.heroImage,
+        heroImageAssetId: campaignForm.heroImageAssetId,
         sessionName: campaignForm.sessionName,
       })
 
@@ -679,33 +687,29 @@ export default function CampaignManager({ user, onExpandedChange, inviteCampaign
                     }}
                   >
                     {/* Invited Campaign Card - Expandable */}
-                    <div
+                    <HeroBackground
                       ref={invitedCampaignCardRef}
+                      campaign={campaign}
                       className="w-full relative rounded-sm overflow-visible cursor-pointer border-2"
                       style={{
                         aspectRatio: isSelected ? 'unset' : '16/4',
                         minHeight: '200px',
-                        backgroundImage: campaign.hero_image ? `url(${campaign.hero_image})` : 'none',
-                        backgroundColor: campaign.hero_image ? 'transparent' : COLORS.carbon,
-                        backgroundSize: 'cover',
-                        backgroundPosition: 'center',
+                        backgroundColor: COLORS.carbon,
                         borderColor: isSelected ? THEME.borderActive : '#16a34a',
                         transition: isResizing ? 'none' : 'border-color 200ms ease-in-out'
                       }}
                       onClick={() => toggleInvitedCampaignDetails(campaign)}
                     >
                       {/* Expanding background layer */}
-                      <div
+                      <HeroBackground
+                        campaign={campaign}
                         className="absolute pointer-events-none"
                         style={{
                           left: isSelected ? 'calc(50% - 50vw)' : '0',
                           right: isSelected ? 'calc(50% - 50vw)' : '0',
                           top: 0,
                           height: isSelected ? 'calc(100% + 8px)' : '100%',
-                          backgroundImage: campaign.hero_image ? `url(${campaign.hero_image})` : 'none',
-                          backgroundColor: campaign.hero_image ? 'transparent' : COLORS.carbon,
-                          backgroundSize: 'cover',
-                          backgroundPosition: 'center',
+                          backgroundColor: COLORS.carbon,
                           borderRadius: '0.125rem',
                           borderBottomLeftRadius: isSelected ? '0' : '0.125rem',
                           borderBottomRightRadius: isSelected ? '0' : '0.125rem',
@@ -727,7 +731,7 @@ export default function CampaignManager({ user, onExpandedChange, inviteCampaign
                             borderBottomRightRadius: isSelected ? '0' : '0.125rem'
                           }}
                         />
-                      </div>
+                      </HeroBackground>
 
                       {/* Solid overlay for text readability */}
                       <div
@@ -807,7 +811,7 @@ export default function CampaignManager({ user, onExpandedChange, inviteCampaign
                           </div>
                         </div>
                       </div>
-                    </div>
+                    </HeroBackground>
 
                     {/* Invited Campaign Detail Panel - Expands to full viewport width */}
                     <div
@@ -978,42 +982,33 @@ export default function CampaignManager({ user, onExpandedChange, inviteCampaign
                   }}
                 >
                   {/* Campaign Card with expanding background */}
-                  <div
+                  <HeroBackground
                     ref={campaignCardRef}
+                    campaign={campaign}
+                    fallback="/campaign-tile-bg.png"
                     className="w-full relative rounded-sm overflow-visible cursor-pointer border-2"
                     style={{
-                      // When selected, allow card to grow with content but never shrink below collapsed size
-                      // Collapsed: 16:4 aspect ratio. Selected: unset to allow content-driven height
                       aspectRatio: isSelected ? 'unset' : '16/4',
-                      // Fixed 200px height when expanded since drawer handles content below
                       minHeight: '200px',
-                      backgroundImage: `url(${campaign.hero_image || '/campaign-tile-bg.png'})`,
-                      backgroundSize: 'cover',
-                      backgroundPosition: 'center',
                       borderColor: selectedCampaign?.id === campaign.id ? THEME.borderActive : THEME.borderDefault,
-                      // Disable transitions during window resize for instant layout updates
                       transition: isResizing ? 'none' : 'border-color 200ms ease-in-out'
                     }}
                     onClick={() => toggleCampaignDetails(campaign)}
                   >
                     {/* Expanding background layer - extends to full viewport width when selected */}
-                    <div
+                    <HeroBackground
+                      campaign={campaign}
+                      fallback="/campaign-tile-bg.png"
                       className="absolute pointer-events-none"
                       style={{
                         left: selectedCampaign?.id === campaign.id ? 'calc(50% - 50vw)' : '0',
                         right: selectedCampaign?.id === campaign.id ? 'calc(50% - 50vw)' : '0',
                         top: 0,
-                        // Use height instead of bottom - percentage tracks parent height instantly
                         height: selectedCampaign?.id === campaign.id ? 'calc(100% + 8px)' : '100%',
-                        backgroundImage: `url(${campaign.hero_image || '/campaign-tile-bg.png'})`,
-                        backgroundSize: 'cover',
-                        backgroundPosition: 'center',
-                        borderRadius: '0.125rem', // rounded-sm equivalent
+                        borderRadius: '0.125rem',
                         borderBottomLeftRadius: selectedCampaign?.id === campaign.id ? '0' : '0.125rem',
                         borderBottomRightRadius: selectedCampaign?.id === campaign.id ? '0' : '0.125rem',
                         zIndex: selectedCampaign?.id === campaign.id ? 0 : -1,
-                        // Only animate horizontal position and border-radius, NOT height
-                        // Height follows parent instantly via percentage
                         transition: isResizing
                           ? 'none'
                           : selectedCampaign?.id === campaign.id
@@ -1031,7 +1026,7 @@ export default function CampaignManager({ user, onExpandedChange, inviteCampaign
                           borderBottomRightRadius: selectedCampaign?.id === campaign.id ? '0' : '0.125rem'
                         }}
                       />
-                    </div>
+                    </HeroBackground>
 
                     {/* Solid overlay for text readability */}
                     <div
@@ -1111,7 +1106,7 @@ export default function CampaignManager({ user, onExpandedChange, inviteCampaign
                         </div>
                       </div>
                     </div>
-                  </div>
+                  </HeroBackground>
 
                   {/* Game Sessions Detail Panel - Expands to full viewport width */}
                   <div
@@ -1492,7 +1487,8 @@ export default function CampaignManager({ user, onExpandedChange, inviteCampaign
                                       editingCampaign: selectedCampaign,
                                       title: selectedCampaign.title,
                                       description: selectedCampaign.description || '',
-                                      heroImage: selectedCampaign.hero_image || '/campaign-tile-bg.png',
+                                      heroImage: selectedCampaign.hero_image_asset ? null : (selectedCampaign.hero_image || '/campaign-tile-bg.png'),
+                                      heroImageAssetId: selectedCampaign.hero_image_asset?.asset_id || null,
                                       sessionName: currentSession?.name || ''
                                     })
                                     setCampaignFormOpen(true)
@@ -1546,7 +1542,7 @@ export default function CampaignManager({ user, onExpandedChange, inviteCampaign
             {!selectedCampaign && (
               <div className="w-full" style={{ maxWidth: '1600px' }}>
                 <button
-                  onClick={() => { setCampaignForm({ title: '', description: '', heroImage: '/campaign-tile-bg.png', sessionName: '', editingCampaign: null }); setCampaignFormOpen(true) }}
+                  onClick={() => { setCampaignForm({ title: '', description: '', heroImage: '/campaign-tile-bg.png', heroImageAssetId: null, sessionName: '', editingCampaign: null }); setCampaignFormOpen(true) }}
                   className="aspect-[16/4] w-full relative rounded-sm overflow-hidden"
                   style={{
                     backgroundColor: 'transparent'
@@ -1718,9 +1714,9 @@ export default function CampaignManager({ user, onExpandedChange, inviteCampaign
                 <button
                   key={option.label}
                   type="button"
-                  onClick={() => setCampaignForm(prev => ({ ...prev, heroImage: option.value }))}
+                  onClick={() => setCampaignForm(prev => ({ ...prev, heroImage: option.value, heroImageAssetId: null }))}
                   className={`aspect-[16/9] rounded-sm border-2 overflow-hidden relative ${
-                    campaignForm.heroImage === option.value ? 'border-border-active' : 'border-border'
+                    !campaignForm.heroImageAssetId && campaignForm.heroImage === option.value ? 'border-border-active' : 'border-border'
                   }`}
                   style={{
                     width: 'calc(33.333% - 0.5rem)',
@@ -1743,6 +1739,40 @@ export default function CampaignManager({ user, onExpandedChange, inviteCampaign
                 </button>
               ))}
             </div>
+
+            {/* Library Images */}
+            {libraryImages.length > 0 && (
+              <>
+                <p className="text-xs font-medium mt-4 mb-2 text-content-secondary">From Library</p>
+                <div className="flex flex-wrap gap-3">
+                  {libraryImages.map((asset) => (
+                    <button
+                      key={asset.id}
+                      type="button"
+                      onClick={() => setCampaignForm(prev => ({ ...prev, heroImage: null, heroImageAssetId: asset.id }))}
+                      className={`aspect-[16/9] rounded-sm border-2 overflow-hidden relative ${
+                        campaignForm.heroImageAssetId === asset.id ? 'border-border-active' : 'border-border'
+                      }`}
+                      style={{ width: 'calc(33.333% - 0.5rem)' }}
+                    >
+                      <S3Image
+                        src={asset.s3_url}
+                        fileSize={asset.file_size}
+                        assetId={asset.id}
+                        alt={asset.filename}
+                        className="absolute inset-0 w-full h-full object-cover"
+                      />
+                      <span
+                        className="absolute bottom-1 left-1 right-1 text-xs px-1 py-0.5 rounded-sm text-center text-content-accent truncate"
+                        style={{ backgroundColor: `${COLORS.onyx}CC` }}
+                      >
+                        {asset.filename}
+                      </span>
+                    </button>
+                  ))}
+                </div>
+              </>
+            )}
           </div>
         </div>
 

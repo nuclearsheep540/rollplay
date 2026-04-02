@@ -11,7 +11,7 @@ logger = logging.getLogger(__name__)
 
 from modules.campaign.model.campaign_model import Campaign as CampaignModel
 from modules.campaign.model.campaign_member_model import CampaignMember
-from modules.campaign.domain.campaign_aggregate import CampaignAggregate
+from modules.campaign.domain.campaign_aggregate import CampaignAggregate, HeroImageAssetMeta
 from modules.campaign.domain.campaign_role import CampaignRole
 
 
@@ -127,6 +127,7 @@ class CampaignRepository:
             campaign_model.title = aggregate.title
             campaign_model.description = aggregate.description
             campaign_model.hero_image = aggregate.hero_image
+            campaign_model.hero_image_asset_id = aggregate.hero_image_asset_id
             campaign_model.updated_at = aggregate.updated_at
 
             # Sync members join table
@@ -139,6 +140,7 @@ class CampaignRepository:
                 title=aggregate.title,
                 description=aggregate.description,
                 hero_image=aggregate.hero_image,
+                hero_image_asset_id=aggregate.hero_image_asset_id,
                 created_by=aggregate.created_by,
                 created_at=aggregate.created_at,
                 updated_at=aggregate.updated_at
@@ -216,11 +218,23 @@ class CampaignRepository:
         for member in (model.members or []):
             members[member.user_id] = CampaignRole.from_string(member.role)
 
+        # Build hero image asset metadata from eager-loaded relationship
+        hero_meta = None
+        if model.hero_image_asset_id and model.hero_image_asset:
+            asset = model.hero_image_asset
+            hero_meta = HeroImageAssetMeta(
+                s3_key=asset.s3_key,
+                file_size=asset.file_size,
+                filename=asset.filename,
+            )
+
         return CampaignAggregate(
             id=model.id,
             title=model.title,
             description=model.description,
             hero_image=model.hero_image,
+            hero_image_asset_id=model.hero_image_asset_id,
+            hero_image_asset_meta=hero_meta,
             created_by=model.created_by,
             created_at=model.created_at,
             updated_at=model.updated_at,

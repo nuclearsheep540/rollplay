@@ -29,13 +29,14 @@ import { useUnifiedAudio } from '../audio_management';
 import { MapDisplay, useMapWebSocket, ImageDisplay, useImageWebSocket, useGridConfig } from '../map_management';
 import MapOverlayPanel from './components/MapOverlayPanel';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
-import { faVolumeHigh, faVolumeXmark, faRightToBracket, faEye, faUpRightAndDownLeftFromCenter, faDownLeftAndUpRightToCenter, faCloudArrowDown, faRulerHorizontal } from '@fortawesome/free-solid-svg-icons';
+import { faVolumeHigh, faVolumeXmark, faRightToBracket, faEye, faUpRightAndDownLeftFromCenter, faDownLeftAndUpRightToCenter, faCloudArrowDown, faRulerHorizontal, faUsers, faBookOpen } from '@fortawesome/free-solid-svg-icons';
 import { faCloud } from '@fortawesome/free-regular-svg-icons';
 import { useFullscreen } from './hooks/useFullscreen';
 import MapSafeArea from './components/MapSafeArea';
 import Drawer from './components/Drawer';
 import GridTuningOverlay from '../map_management/components/GridTuningOverlay';
-import { useAssetProgress } from '@/app/shared/providers/AssetDownloadManager';
+import { useAssetProgress, useAssetDownload } from '@/app/shared/providers/AssetDownloadManager';
+import { useGatePreload } from './hooks/useGatePreload';
 
 // Tab configuration for left drawer
 const LEFT_DRAWER_TABS = [
@@ -50,6 +51,27 @@ const RIGHT_DRAWER_TABS = [
   { id: 'map', label: 'MAP', dmOnly: true },
   { id: 'image', label: 'IMAGE', dmOnly: true },
   { id: 'combat', label: 'COMBAT', dmOnly: true },
+];
+
+// Loading gate — rotating themed flavor text
+const LOADING_PHRASES = [
+  'INKING CHRONICLES', 'SUMMONING SPIRITS', 'UNFURLING MAPS',
+  'TUNING THE SPHERES', 'FORGING BONDS', 'SETTING THE STAGE',
+  'AWAKENING RELICS', 'CHARTING REALMS', 'WEAVING FATE',
+];
+
+// Loading gate — random app tips
+const APP_TIPS = [
+  'Press Shift to inspect grid cells and view coordinates.',
+  'The DM can adjust reverb, filters, and effects per audio channel.',
+  'You can release your character between sessions to use them elsewhere.',
+  'Try fullscreen mode for the most immersive experience.',
+  'The DM can present images in cinematic letterbox mode.',
+  'Use the adventure log to track key moments in your session.',
+  'The DM can set audio cues to transition multiple tracks at once.',
+  'Characters can only be active in one campaign at a time.',
+  'Moderators can assist the DM with map and image controls.',
+  'The soundboard lets the DM trigger instant sound effects.',
 ];
 
 export default function GameContent() {
@@ -234,7 +256,21 @@ export default function GameContent() {
 
   // Campaign metadata for overlay (fetched from api-site when campaignId is set)
   const [campaignMeta, setCampaignMeta] = useState(null);
-  const [heroImageReady, setHeroImageReady] = useState(false);
+
+  // Hero image via AssetDownloadManager — cache hit if user came from dashboard
+  const heroAsset = campaignMeta?.heroImageAsset;
+  const { blobUrl: heroBlobUrl, ready: heroAssetReady } = useAssetDownload(
+    heroAsset?.s3_url, heroAsset?.file_size, heroAsset?.asset_id
+  );
+  // For S3-backed assets, use the blob URL; for presets, use the direct path; always ready if no hero image
+  const heroImageUrl = heroAsset?.asset_id
+    ? (heroAssetReady ? heroBlobUrl : null)
+    : (campaignMeta?.heroImage || null);
+  const heroImageReady = heroAsset?.asset_id ? heroAssetReady : !!campaignMeta;
+
+  // Gate preload readiness flags
+  const [initialDataLoaded, setInitialDataLoaded] = useState(false);
+  const [wsInitialStateReceived, setWsInitialStateReceived] = useState(false);
 
   // Ref for sendSeatChange — breaks circular dep: handleRoleChange → sendSeatChange → useWebSocket → gameContext → handleRoleChange
   const sendSeatChangeRef = useRef(null);
@@ -428,6 +464,8 @@ export default function GameContent() {
       loadAdventureLogs(roomId),
       loadActiveImage(roomId),
     ]);
+
+    setInitialDataLoaded(true);
   }
   
   // Check player roles on initial page load - single source of truth
@@ -582,16 +620,12 @@ export default function GameContent() {
       .then(data => {
         if (data) {
           console.log(`✅ Campaign metadata loaded: "${data.title}"`);
-          setCampaignMeta({ title: data.title, description: data.description, heroImage: data.hero_image });
-          // Preload hero image so we can gate the overlay on it being ready
-          if (data.hero_image) {
-            const img = new Image();
-            img.onload = () => setHeroImageReady(true);
-            img.onerror = () => setHeroImageReady(true); // Show content anyway on error
-            img.src = data.hero_image;
-          } else {
-            setHeroImageReady(true); // No hero image — show content immediately
-          }
+          setCampaignMeta({
+            title: data.title,
+            description: data.description,
+            heroImage: data.hero_image,
+            heroImageAsset: data.hero_image_asset || null,
+          });
         }
       })
       .catch(err => console.warn('⚠️ Campaign metadata fetch error:', err));
@@ -946,6 +980,20 @@ export default function GameContent() {
     flushStateBatch,
   } = useUnifiedAudio();
 
+  // Gate preload — aggregates readiness from REST, WebSocket, and asset downloads
+  const gatePreload = useGatePreload({ campaignMeta, initialDataLoaded, wsInitialStateReceived, isAudioUnlocked });
+
+  // Loading gate — rotating flavor text
+  const [flavorIndex, setFlavorIndex] = useState(0);
+  useEffect(() => {
+    if (isAudioUnlocked) return;
+    const id = setInterval(() => setFlavorIndex(i => (i + 1) % LOADING_PHRASES.length), 3000);
+    return () => clearInterval(id);
+  }, [isAudioUnlocked]);
+
+  // Loading gate — random app tip (selected once)
+  const selectedTip = useMemo(() => APP_TIPS[Math.floor(Math.random() * APP_TIPS.length)], []);
+
   // Ref to hold the pending operation clearing function from AudioMixerPanel
   const clearPendingOperationFnRef = useRef(null);
 
@@ -972,6 +1020,7 @@ export default function GameContent() {
     setCampaignId,
     setPlayerMetadata,
     setDungeonMaster,
+    setWsInitialStateReceived,
     setChannelMuted,
     setChannelSoloed,
 
@@ -2082,71 +2131,175 @@ export default function GameContent() {
         />
       )}
 
-      {/* Audio Gate Overlay — provides user gesture for AudioContext + auto-seats player */}
-      {!isAudioUnlocked && (
-        <div
-          className="fixed inset-0 z-[102] flex items-center justify-center bg-black cursor-pointer"
-          onClick={handleEnterSession}
-        >
-          {heroImageReady && <div
-            className="relative rounded-sm overflow-hidden shadow-2xl shadow-black/50 select-none border-2 gate-card"
-            style={{
-              borderColor: COLORS.smoke,
-              width: 'min(90vw, calc(90vh * 16 / 9))',
-              backgroundImage: campaignMeta?.heroImage ? `url(${campaignMeta.heroImage})` : 'none',
-              backgroundSize: 'cover',
-              backgroundPosition: 'center',
-              aspectRatio: '16 / 9',
-            }}
+      {/* Loading Gate Overlay — full-screen themed loading screen */}
+      {!isAudioUnlocked && (() => {
+        const progressPct = gatePreload.totalBytes > 0
+          ? Math.round((gatePreload.loadedBytes / gatePreload.totalBytes) * 100)
+          : 0;
+        const seated = gameSeats.filter(s => s.userId !== 'empty').map(s => ({ name: s.playerName, connected: true }));
+        const inLobby = lobbyUsers.filter(u => u.status === 'connected').map(u => ({ name: u.name, connected: true }));
+        const pendingLobby = lobbyUsers.filter(u => u.status !== 'connected').map(u => ({ name: u.name, connected: false }));
+        const seenNames = new Set();
+        const fellowship = [...seated, ...inLobby, ...pendingLobby].filter(p => {
+          if (seenNames.has(p.name)) return false;
+          seenNames.add(p.name);
+          return true;
+        });
+
+        return (
+          <div
+            className={`fixed inset-0 z-[102] select-none ${gatePreload.ready ? 'cursor-pointer' : 'cursor-default'}`}
+            onClick={gatePreload.ready ? handleEnterSession : undefined}
           >
-            {/* Gradient overlay for text readability */}
-            <div className="absolute inset-0 bg-gradient-to-b from-black/90 via-black/40 to-black/90" />
+            {/* Hero image background */}
+            <div
+              className="absolute inset-0"
+              style={{
+                backgroundImage: heroImageUrl ? `url(${heroImageUrl})` : 'none',
+                backgroundSize: 'cover',
+                backgroundPosition: 'center',
+                backgroundColor: COLORS.onyx,
+              }}
+            />
+            {/* Gradient overlays for readability */}
+            <div className="absolute inset-0" style={{ background: 'radial-gradient(ellipse at center, transparent 0%, rgba(0,0,0,0.7) 100%)' }} />
+            <div className="absolute inset-0 bg-black/50" />
 
-            {/* Content */}
-            <div className="absolute inset-0 flex flex-col px-8" style={{ paddingTop: 'clamp(1rem, 3vh, 3rem)', paddingBottom: 'clamp(1rem, 3vh, 3rem)' }}>
-              {campaignMeta?.title && (
-                <h2 className="text-4xl text-white font-[family-name:var(--font-metamorphous)] text-center leading-none">
-                  {campaignMeta.title}
-                </h2>
-              )}
+            {/* Content wrapper */}
+            <div className="absolute inset-0 flex flex-col px-8 md:px-16" style={{ paddingTop: '8vh' }}>
 
-              {/* Middle row — spacer | description (75%) | spacer */}
-              <div className="flex items-center gate-description flex-1">
-                <div className="w-[12.5%]" />
-                <div className="w-3/4">
-                  {campaignMeta?.description && (
-                    <p className="text-center overflow-hidden mx-auto" style={{ color: COLORS.smoke, whiteSpace: 'pre-line', fontSize: 'clamp(0.65rem, 3cqh, 1.5rem)' }}>
-                      {campaignMeta.description}
-                    </p>
-                  )}
+              {/* Top section — title area */}
+              <div className="flex-shrink-0 text-center">
+                {/* Decorative rule */}
+                <div className="flex items-center justify-center gap-4 mb-3">
+                  <div className="h-px w-16 md:w-24" style={{ backgroundColor: COLORS.silver }} />
+                  <span className="text-xs" style={{ color: COLORS.silver }}>&#9670;</span>
+                  <div className="h-px w-16 md:w-24" style={{ backgroundColor: COLORS.silver }} />
                 </div>
-                <div className="w-[12.5%]" />
+                <p className="text-xs tracking-[0.3em] uppercase mb-3" style={{ color: COLORS.silver }}>Now Entering</p>
+                <div className="flex items-center justify-center gap-4 mb-6">
+                  <div className="h-px w-12 md:w-16" style={{ backgroundColor: COLORS.silver }} />
+                  <span className="text-xs" style={{ color: COLORS.silver }}>&#9670;</span>
+                  <div className="h-px w-12 md:w-16" style={{ backgroundColor: COLORS.silver }} />
+                </div>
+
+                {/* Campaign title */}
+                {campaignMeta?.title && (
+                  <h1 className="text-5xl md:text-7xl font-[family-name:var(--font-metamorphous)] leading-none mb-6" style={{ color: COLORS.smoke }}>
+                    {campaignMeta.title}
+                  </h1>
+                )}
+
+                {/* Campaign description */}
+                {campaignMeta?.description && (
+                  <p className="text-lg italic max-w-2xl mx-auto leading-relaxed" style={{ color: COLORS.silver }}>
+                    &ldquo;{campaignMeta.description}&rdquo;
+                  </p>
+                )}
               </div>
 
-              {/* Click to enter — centered */}
-              <p className="text-2xl tracking-widest capitalize text-center font-[family-name:var(--font-metamorphous)] leading-none mt-auto" style={{ color: COLORS.smoke }}>
-                Click to enter
-              </p>
+              {/* Spacer */}
+              <div className="flex-1" />
+
+              {/* Progress bar / CTA section */}
+              <div className="flex-shrink-0 w-3/5 mx-auto mb-4">
+                {!gatePreload.ready ? (
+                  /* Loading phase */
+                  <div className="relative py-6 px-6">
+                    {/* Corner brackets */}
+                    <div className="absolute top-0 left-0 w-4 h-4 border-t border-l" style={{ borderColor: COLORS.silver }} />
+                    <div className="absolute top-0 right-0 w-4 h-4 border-t border-r" style={{ borderColor: COLORS.silver }} />
+                    <div className="absolute bottom-0 left-0 w-4 h-4 border-b border-l" style={{ borderColor: COLORS.silver }} />
+                    <div className="absolute bottom-0 right-0 w-4 h-4 border-b border-r" style={{ borderColor: COLORS.silver }} />
+
+                    {/* Flavor text + percentage row */}
+                    <div className="flex items-center justify-between mb-3">
+                      <p className="text-xs tracking-[0.2em] uppercase gate-flavor-pulse" style={{ color: COLORS.silver }}>
+                        {LOADING_PHRASES[flavorIndex]}...
+                      </p>
+                      <p className="text-lg font-[family-name:var(--font-metamorphous)]" style={{ color: COLORS.smoke }}>
+                        {progressPct}%
+                      </p>
+                    </div>
+
+                    {/* Progress bar */}
+                    <div className="w-full h-1.5 rounded-full overflow-hidden" style={{ backgroundColor: COLORS.graphite }}>
+                      <div
+                        className="h-full rounded-full"
+                        style={{
+                          width: `${progressPct}%`,
+                          backgroundColor: COLORS.smoke,
+                          transition: 'width 0.15s ease-out',
+                        }}
+                      />
+                    </div>
+                  </div>
+                ) : (
+                  /* Ready phase — CTA */
+                  <div className="text-center py-6 gate-cta-enter">
+                    <p className="text-3xl tracking-[0.3em] uppercase font-[family-name:var(--font-metamorphous)] animate-pulse" style={{ color: COLORS.smoke }}>
+                      Click to Enter
+                    </p>
+                  </div>
+                )}
+              </div>
+
+              {/* Spacer */}
+              <div className="flex-1 min-h-[2vh]" />
+
+              {/* Bottom row — fellowship + tips */}
+              <div className="flex-shrink-0 flex justify-between items-end pb-10">
+                {/* Fellowship panel */}
+                <div
+                  className="rounded-sm px-5 py-4 backdrop-blur-sm"
+                  style={{
+                    backgroundColor: 'rgba(0,0,0,0.6)',
+                    border: `1px solid ${COLORS.graphite}66`,
+                    minWidth: '240px',
+                    maxWidth: '320px',
+                  }}
+                >
+                  <div className="flex items-center gap-2 mb-3">
+                    <FontAwesomeIcon icon={faUsers} className="text-xs" style={{ color: COLORS.silver }} />
+                    <p className="text-xs tracking-[0.2em] uppercase" style={{ color: COLORS.silver }}>The Fellowship</p>
+                  </div>
+                  {fellowship.length > 0 ? fellowship.map(player => (
+                    <div key={player.name} className="flex items-center justify-between py-1">
+                      <div className="flex items-center gap-2">
+                        <div className="w-2 h-2 rounded-full" style={{ backgroundColor: player.connected ? '#d97706' : COLORS.graphite }} />
+                        <span className="text-sm" style={{ color: COLORS.smoke }}>{player.name}</span>
+                      </div>
+                      {gatePreload.ready ? (
+                        <span className="text-xs px-2 py-0.5 rounded-sm" style={{ backgroundColor: COLORS.graphite, color: COLORS.smoke }}>Ready</span>
+                      ) : !player.connected ? (
+                        <span className="text-xs italic" style={{ color: COLORS.silver }}>Connecting...</span>
+                      ) : null}
+                    </div>
+                  )) : (
+                    <p className="text-xs italic" style={{ color: COLORS.silver }}>Awaiting adventurers...</p>
+                  )}
+                </div>
+
+                {/* Tips panel */}
+                <div className="text-right" style={{ maxWidth: '280px' }}>
+                  <FontAwesomeIcon icon={faBookOpen} className="text-2xl mb-2" style={{ color: COLORS.graphite }} />
+                  <p className="text-xs tracking-[0.2em] uppercase mb-2" style={{ color: COLORS.silver }}>Did You Know?</p>
+                  <p className="text-sm italic leading-relaxed" style={{ color: COLORS.silver }}>{selectedTip}</p>
+                </div>
+              </div>
             </div>
 
-            {/* Connected players — absolutely positioned, grows upward */}
-            {(() => {
-              const seated = gameSeats.filter(s => s.userId !== 'empty').map(s => s.playerName);
-              const inLobby = lobbyUsers.filter(u => u.status === 'connected').map(u => u.name);
-              const allConnected = [...new Set([...seated, ...inLobby])];
-              if (allConnected.length === 0) return null;
-              return (
-                <div className="absolute left-0 bottom-0 text-left px-8" style={{ paddingBottom: 'clamp(1rem, 3vh, 3rem)' }}>
-                  <p className="text-sm uppercase tracking-widest mb-1" style={{ color: COLORS.smoke }}>Connected:</p>
-                  {allConnected.map(name => (
-                    <p key={name} className="text-base text-gray-300">{name}</p>
-                  ))}
-                </div>
-              );
-            })()}
-          </div>}
-        </div>
-      )}
+            {/* Footer bar */}
+            <div className="absolute bottom-0 left-0 right-0 flex items-center justify-between px-8 py-2">
+              <p className="text-xs" style={{ color: COLORS.graphite }}>Room: {roomId}</p>
+              <div className="flex items-center gap-2">
+                <div className="w-1.5 h-1.5 rounded-full bg-green-600" />
+                <p className="text-xs" style={{ color: COLORS.graphite }}>v{process.env.NEXT_PUBLIC_RELEASE || 'dev'}</p>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
 
       {/* Session Ended Modal with Countdown */}
       {sessionEndedData && (

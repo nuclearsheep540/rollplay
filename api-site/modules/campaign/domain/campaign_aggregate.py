@@ -10,6 +10,14 @@ from modules.campaign.domain.campaign_role import CampaignRole
 
 
 @dataclass
+class HeroImageAssetMeta:
+    """Lightweight read-only metadata for hero image asset, populated from eager-loaded relationship."""
+    s3_key: str
+    file_size: Optional[int] = None
+    filename: Optional[str] = None
+
+
+@dataclass
 class CampaignAggregate:
     """
     Campaign Aggregate Root
@@ -29,6 +37,8 @@ class CampaignAggregate:
     created_by: UUID
     created_at: datetime
     updated_at: datetime
+    hero_image_asset_id: Optional[UUID] = None
+    hero_image_asset_meta: Optional[HeroImageAssetMeta] = None
     session_ids: List[UUID] = field(default_factory=list)
     members: Dict[UUID, CampaignRole] = field(default_factory=dict)
 
@@ -38,7 +48,8 @@ class CampaignAggregate:
         title: str,
         description: str,
         created_by: UUID,
-        hero_image: Optional[str] = None
+        hero_image: Optional[str] = None,
+        hero_image_asset_id: Optional[UUID] = None
         ):
         """Create new campaign with business rules validation"""
         if not title or not title.strip():
@@ -60,7 +71,8 @@ class CampaignAggregate:
             id=None,
             title=normalized_title,
             description=normalized_description,
-            hero_image=hero_image,
+            hero_image=hero_image if not hero_image_asset_id else None,
+            hero_image_asset_id=hero_image_asset_id,
             created_by=created_by,
             created_at=now,
             updated_at=now,
@@ -152,7 +164,7 @@ class CampaignAggregate:
             return True
         return False
 
-    def update_details(self, title: Optional[str] = None, description: Optional[str] = None, hero_image: str = "UNSET"):
+    def update_details(self, title: Optional[str] = None, description: Optional[str] = None, hero_image: str = "UNSET", hero_image_asset_id: str = "UNSET"):
         """Update campaign details with business rules"""
         if title is not None:
             normalized_title = title.strip()
@@ -168,8 +180,15 @@ class CampaignAggregate:
                 raise ValueError("Campaign description too long (max 1000 characters)")
             self.description = normalized_description
 
+        # hero_image and hero_image_asset_id are mutually exclusive
+        if hero_image_asset_id != "UNSET":
+            self.hero_image_asset_id = UUID(hero_image_asset_id) if hero_image_asset_id else None
+            if self.hero_image_asset_id:
+                self.hero_image = None
         if hero_image != "UNSET":
             self.hero_image = hero_image if hero_image else None
+            if self.hero_image:
+                self.hero_image_asset_id = None
 
         self.update_timestamp()
 

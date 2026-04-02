@@ -21,13 +21,14 @@ class CreateCampaign:
     def __init__(self, repository):
         self.repository = repository
 
-    def execute(self, host_id: UUID, title: str, description: str = "", hero_image: Optional[str] = None) -> CampaignAggregate:
+    def execute(self, host_id: UUID, title: str, description: str = "", hero_image: Optional[str] = None, hero_image_asset_id: Optional[UUID] = None) -> CampaignAggregate:
         """Create a new campaign. The creator becomes the DM."""
         campaign = CampaignAggregate.create(
             title=title,
             description=description,
             created_by=host_id,
-            hero_image=hero_image
+            hero_image=hero_image,
+            hero_image_asset_id=hero_image_asset_id
         )
 
         self.repository.save(campaign)
@@ -46,6 +47,7 @@ class UpdateCampaign:
         title: Optional[str] = None,
         description: Optional[str] = None,
         hero_image: Optional[str] = "UNSET",
+        hero_image_asset_id: Optional[str] = "UNSET",
         session_name: Optional[str] = None
     ) -> CampaignAggregate:
         """Update campaign details and optionally current session name"""
@@ -57,7 +59,7 @@ class UpdateCampaign:
         if not campaign.is_dm(host_id):
             raise ValueError("Only the DM can update this campaign")
 
-        campaign.update_details(title=title, description=description, hero_image=hero_image)
+        campaign.update_details(title=title, description=description, hero_image=hero_image, hero_image_asset_id=hero_image_asset_id)
         self.repository.save(campaign)
 
         # Update current session name if provided and session_repository available
