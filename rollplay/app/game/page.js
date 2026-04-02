@@ -50,7 +50,7 @@ export default async function Game({ searchParams }) {
         <div style={{
           position: 'fixed',
           inset: 0,
-          backgroundColor: '#000000',
+          backgroundColor: '#0B0A09',
         }}>
           <span style={{
             position: 'absolute',
