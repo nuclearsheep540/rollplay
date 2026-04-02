@@ -37,5 +37,6 @@ class MapConfig(ContractModel):
     filename: str = Field(..., min_length=1)
     original_filename: Optional[str] = None
     file_path: str = Field(..., min_length=1)  # Presigned S3 URL
+    file_size: Optional[int] = None  # Size in bytes
     grid_config: Optional[GridConfig] = None
     map_image_config: Optional[Dict[str, Any]] = None  # Opaque to contracts, owned by frontend

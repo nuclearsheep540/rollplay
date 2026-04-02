@@ -60,12 +60,10 @@ export default function ImageControlsPanel({
   const currentPositionY = activeImage?.image_config?.image_position_y ?? 50;
 
   // Whether the DM has changed anything from the original server state.
-  // Cine mode is workshop-authored and read-only at runtime — its aspect ratio,
-  // position, and overlays are baked into the asset's cine_config, so we intentionally
-  // only track letterbox-specific changes (ratio + position) here.
+  // Both letterbox and cine modes track ratio + position changes.
   const hasChanges = originalMode !== null && (
     currentMode !== originalMode
-    || (currentMode === 'letterbox' && (
+    || ((currentMode === 'letterbox' || currentMode === 'cine') && (
       currentRatio !== (originalRatio || '2.39:1')
       || currentPositionX !== (originalPositionX ?? 50)
       || currentPositionY !== (originalPositionY ?? 50)
@@ -90,7 +88,7 @@ export default function ImageControlsPanel({
       image_config: {
         ...prev.image_config,
         display_mode: newMode,
-        aspect_ratio: newMode === 'letterbox' ? (prev.image_config?.aspect_ratio || '2.39:1') : null,
+        aspect_ratio: (newMode === 'letterbox' || newMode === 'cine') ? (prev.image_config?.aspect_ratio || '2.39:1') : null,
       },
     }));
   };
@@ -135,9 +133,9 @@ export default function ImageControlsPanel({
 
     sendImageConfigUpdate({
       display_mode: currentMode,
-      aspect_ratio: currentMode === 'letterbox' ? currentRatio : null,
-      image_position_x: currentMode === 'letterbox' ? currentPositionX : null,
-      image_position_y: currentMode === 'letterbox' ? currentPositionY : null,
+      aspect_ratio: (currentMode === 'letterbox' || currentMode === 'cine') ? currentRatio : null,
+      image_position_x: (currentMode === 'letterbox' || currentMode === 'cine') ? currentPositionX : null,
+      image_position_y: (currentMode === 'letterbox' || currentMode === 'cine') ? currentPositionY : null,
     });
 
     setOriginalMode(null);
@@ -252,8 +250,8 @@ export default function ImageControlsPanel({
             </div>
           </div>
 
-          {/* Aspect Ratio Presets — letterbox only (cine uses workshop-authored config) */}
-          {currentMode === 'letterbox' && (
+          {/* Aspect Ratio Presets — letterbox and cine */}
+          {(currentMode === 'letterbox' || currentMode === 'cine') && (
             <div className="mb-3">
               <label className="block text-xs text-gray-400 mb-1">Aspect Ratio</label>
               <div className="flex flex-wrap gap-1">
@@ -275,8 +273,8 @@ export default function ImageControlsPanel({
             </div>
           )}
 
-          {/* Image Position — letterbox only (cine position is workshop-authored) */}
-          {currentMode === 'letterbox' && (
+          {/* Image Position — letterbox and cine */}
+          {(currentMode === 'letterbox' || currentMode === 'cine') && (
             <div className="mb-3">
               <label className="block text-xs text-gray-400 mb-2">Image Position</label>
               <div className="space-y-2">

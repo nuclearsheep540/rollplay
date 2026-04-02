@@ -131,7 +131,7 @@ export default function ImageConfigTool({ selectedAssetId, onAssetSelect }) {
           </div>
 
           {/* Controls Sidebar */}
-          <div className="w-72 flex-shrink-0">
+          <div className="w-72 flex-shrink-0 overflow-y-auto">
             <ImageDisplayControls
               displayMode={displayMode}
               aspectRatio={aspectRatio}

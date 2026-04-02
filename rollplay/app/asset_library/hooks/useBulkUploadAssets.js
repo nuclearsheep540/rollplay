@@ -103,7 +103,10 @@ export function useBulkUploadAssets() {
         const uploadResponse = await fetch(upload_url, {
           method: 'PUT',
           body: item.file,
-          headers: { 'Content-Type': item.file.type },
+          headers: {
+            'Content-Type': item.file.type,
+            'Cache-Control': 'public, max-age=31536000, immutable',
+          },
         })
 
         if (!uploadResponse.ok) {

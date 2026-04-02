@@ -16,3 +16,4 @@ class AssetRef(ContractModel):
     s3_key: str
     asset_type: str  # "map", "music", "sfx", "image"
     s3_url: Optional[str] = None
+    file_size: Optional[int] = None  # Size in bytes

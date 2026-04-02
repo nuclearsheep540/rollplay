@@ -274,14 +274,17 @@ def gameservice_get(room_id):
         # Add current seat layout and seat colors to response
         seat_layout = GameService.get_seat_layout(room_id)
         seat_colors = GameService.get_seat_colors(room_id)
-        # Include active_map so the client gets the image URL in the first response,
-        # eliminating the separate /active-map round trip on initial page load.
+        # Include active_map and active_image so the client gets asset URLs in the
+        # first response, eliminating separate round trips on initial page load.
+        # The server component uses these for <link rel="preload"> hints.
         active_map = map_service.get_active_map(room_id)
+        active_image = image_service.get_active_image(room_id)
         return {
             **check_room,
             "current_seat_layout": seat_layout,
             "seat_colors": seat_colors,
             "active_map": active_map,
+            "active_image": active_image,
         }
     else:
         return Response(status_code=404, content=f'{{"error": "Room {room_id} not found"}}')

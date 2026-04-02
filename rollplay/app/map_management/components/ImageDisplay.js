@@ -5,7 +5,8 @@
 
 'use client'
 
-import React, { useState, useRef, useMemo } from 'react';
+import React, { useState, useRef, useMemo, useEffect } from 'react';
+import { useAssetDownload } from '@/app/shared/providers/AssetDownloadManager';
 
 /**
  * Parse "W:H" string into a numeric ratio for CSS aspect-ratio.
@@ -72,7 +73,7 @@ const ImageDisplay = ({
   activeImage = null,
   className = "",
 }) => {
-  const [imageLoaded, setImageLoaded] = useState(false);
+  const [sceneReady, setSceneReady] = useState(false);
   const imageRef = useRef(null);
 
   const ic = activeImage?.image_config;
@@ -81,6 +82,46 @@ const ImageDisplay = ({
     () => parseAspectRatio(ic?.aspect_ratio),
     [ic?.aspect_ratio]
   );
+
+  // Download the main image through the asset manager (progressive byte tracking)
+  const { blobUrl: imageBlobUrl, ready: imageReady } = useAssetDownload(ic?.file_path, ic?.file_size, ic?.asset_id);
+
+  // Collect local overlay URLs that still need preloading (film grain GIFs — not S3)
+  const overlayUrls = useMemo(() => {
+    if (displayMode !== 'cine' || !ic?.cine_config?.visual_overlays) return [];
+    const urls = new Set();
+    for (const overlay of ic.cine_config.visual_overlays) {
+      if (overlay.enabled && overlay.type === 'film_grain') {
+        urls.add(GRAIN_STYLE_ASSETS[overlay.style] || GRAIN_STYLE_ASSETS.vintage);
+      }
+    }
+    return [...urls];
+  }, [displayMode, ic?.cine_config?.visual_overlays]);
+
+  // Preload local overlay GIFs — these are small and local, just need cache priming
+  const overlayKey = overlayUrls.join('|');
+  const [overlaysReady, setOverlaysReady] = useState(overlayUrls.length === 0);
+  useEffect(() => {
+    if (!overlayUrls.length) { setOverlaysReady(true); return; }
+    setOverlaysReady(false);
+    let cancelled = false;
+
+    Promise.all(
+      overlayUrls.map(url => new Promise(resolve => {
+        const img = new Image();
+        img.onload = resolve;
+        img.onerror = resolve;
+        img.src = url;
+      }))
+    ).then(() => { if (!cancelled) setOverlaysReady(true); });
+
+    return () => { cancelled = true; };
+  }, [overlayKey]);
+
+  // Scene is ready when both the main image blob and overlays are loaded
+  useEffect(() => {
+    setSceneReady(imageReady && overlaysReady);
+  }, [imageReady, overlaysReady]);
 
   if (!activeImage) {
     return null;
@@ -113,26 +154,8 @@ const ImageDisplay = ({
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
-        opacity: imageLoaded ? 1 : 0.5,
-        transition: 'opacity 0.3s ease',
       }}
     >
-      {/* Loading indicator */}
-      {!imageLoaded && (
-        <div style={{
-          position: 'absolute',
-          top: '50%',
-          left: '50%',
-          transform: 'translate(-50%, -50%)',
-          color: '#9ca3af',
-          fontSize: '14px',
-          fontWeight: '500',
-          zIndex: 20,
-        }}>
-          Loading image...
-        </div>
-      )}
-
       {/* Letterbox mode: aspect-ratio container sized to fit within viewport.
           Wide ratios (2.39:1) fill full width with top/bottom bars.
           Narrow ratios (4:3, 1:1) fill full height with left/right bars.
@@ -144,18 +167,18 @@ const ImageDisplay = ({
           overflow: 'hidden',
           position: 'relative',
           zIndex: 1,
+          opacity: sceneReady ? 1 : 0,
+          transition: 'opacity 0.3s ease',
         }}>
           <img
             ref={imageRef}
-            src={ic?.file_path}
+            src={imageBlobUrl}
             alt={ic?.original_filename || ic?.filename || 'Game image'}
             style={{
               ...imageStyle,
               pointerEvents: 'none',
               userSelect: 'none',
             }}
-            onLoad={() => setImageLoaded(true)}
-            onError={() => setImageLoaded(false)}
           />
           {displayMode === 'cine' && renderVisualOverlays(ic?.cine_config)}
         </div>
@@ -163,16 +186,16 @@ const ImageDisplay = ({
         <>
           <img
             ref={imageRef}
-            src={ic?.file_path}
+            src={imageBlobUrl}
             alt={ic?.original_filename || ic?.filename || 'Game image'}
             style={{
               ...imageStyle,
               pointerEvents: 'none',
               userSelect: 'none',
               zIndex: 1,
+              opacity: sceneReady ? 1 : 0,
+              transition: 'opacity 0.3s ease',
             }}
-            onLoad={() => setImageLoaded(true)}
-            onError={() => setImageLoaded(false)}
           />
           {displayMode === 'cine' && renderVisualOverlays(ic?.cine_config)}
         </>

@@ -62,7 +62,8 @@ class S3Service:
                 Params={
                     'Bucket': self.bucket_name,
                     'Key': key,
-                    'ContentType': content_type
+                    'ContentType': content_type,
+                    'CacheControl': 'public, max-age=31536000, immutable',
                 },
                 ExpiresIn=expiry or self.expiry
             )
@@ -92,7 +93,7 @@ class S3Service:
                 'get_object',
                 Params={
                     'Bucket': self.bucket_name,
-                    'Key': key
+                    'Key': key,
                 },
                 ExpiresIn=expiry or self.expiry
             )
