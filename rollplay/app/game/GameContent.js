@@ -2219,8 +2219,16 @@ export default function GameContent() {
 
               {/* Progress bar + CTA section */}
               <div className="flex-shrink-0 w-3/5 mx-auto mb-4">
-                {/* Progress bar — always visible */}
-                <div className="relative py-6 px-6">
+                {/* Progress bar — starts in CTA position, slides up when complete */}
+                <div
+                  ref={el => {
+                    if (el && gatePreload.ctaReady && el.dataset.slid !== 'true') {
+                      el.dataset.slid = 'true';
+                      gsap.to(el, { y: -48, duration: 0.35, ease: 'power2.inOut' });
+                    }
+                  }}
+                  className="relative py-6 px-6"
+                >
                   {/* Corner brackets */}
                   <div className="absolute top-0 left-0 w-4 h-4 border-t border-l" style={{ borderColor: COLORS.silver }} />
                   <div className="absolute top-0 right-0 w-4 h-4 border-t border-r" style={{ borderColor: COLORS.silver }} />
