@@ -1,5 +1,5 @@
 {
-  "latest": "0.41.1",
+  "latest": "0.42.0",
   "releases": {
     "0.27.1": {
       "date": "2026-03-10",
@@ -356,6 +356,21 @@
         "api_game": "0.16.1",
         "api_auth": "0.3.0",
         "nginx": "0.4.12",
+        "postgres": "0.1.10",
+        "mongo": "0.4.2",
+        "certbot": "0.1.4"
+      }
+    },
+    "0.42.0": {
+      "date": "2026-04-02",
+      "commit": "7e5b6c0",
+      "description": "Bugfixes and optimisations around CINE, and caching S3 assets",
+      "services": {
+        "app": "0.28.0",
+        "api_site": "0.22.0",
+        "api_game": "0.17.0",
+        "api_auth": "0.3.0",
+        "nginx": "0.5.0",
         "postgres": "0.1.10",
         "mongo": "0.4.2",
         "certbot": "0.1.4"
