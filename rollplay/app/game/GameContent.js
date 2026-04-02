@@ -5,7 +5,8 @@
 
 'use client'
 
-import { useEffect, useState, useMemo, useCallback, useRef, Suspense } from 'react'
+import { useEffect, useState, useMemo, useCallback, useRef } from 'react'
+import gsap from 'gsap'
 import { authFetch } from '@/app/shared/utils/authFetch'
 import { useSearchParams, useRouter } from "next/navigation";
 import { getSeatColor } from '../utils/seatColors';
@@ -272,6 +273,8 @@ export default function GameContent() {
   const [initialDataLoaded, setInitialDataLoaded] = useState(false);
   const [wsInitialStateReceived, setWsInitialStateReceived] = useState(false);
   const [rawAudioState, setRawAudioState] = useState(null);
+  const [gateVisible, setGateVisible] = useState(true);
+  const gateRef = useRef(null);
 
   // Ref for sendSeatChange — breaks circular dep: handleRoleChange → sendSeatChange → useWebSocket → gameContext → handleRoleChange
   const sendSeatChangeRef = useRef(null);
@@ -1196,7 +1199,19 @@ export default function GameContent() {
 
   // Handle "Enter Session" overlay click — unlocks audio + auto-seats player
   const handleEnterSession = async () => {
-    // 1. Unlock audio (drains pending play ops with corrected offsets)
+    // 1. Fade out the gate overlay (GSAP autoAlpha = GPU-accelerated opacity + visibility)
+    if (gateRef.current) {
+      gsap.to(gateRef.current, {
+        autoAlpha: 0,
+        duration: 0.3,
+        ease: 'power2.inOut',
+        onComplete: () => setGateVisible(false),
+      });
+    } else {
+      setGateVisible(false);
+    }
+
+    // 2. Unlock audio (drains pending play ops with corrected offsets)
     await unlockAudio();
 
     if (!roomId || !thisUserId) {
@@ -2132,7 +2147,7 @@ export default function GameContent() {
       )}
 
       {/* Loading Gate Overlay — full-screen themed loading screen */}
-      {!isAudioUnlocked && (() => {
+      {gateVisible && (() => {
         const progressPct = gatePreload.totalBytes > 0
           ? Math.round((gatePreload.loadedBytes / gatePreload.totalBytes) * 100)
           : 0;
@@ -2148,6 +2163,7 @@ export default function GameContent() {
 
         return (
           <div
+            ref={gateRef}
             className={`fixed inset-0 z-[102] select-none ${gatePreload.ctaReady ? 'cursor-pointer' : 'cursor-default'}`}
             onClick={gatePreload.ctaReady ? handleEnterSession : undefined}
           >
