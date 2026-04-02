@@ -29,7 +29,8 @@ import { useUnifiedAudio } from '../audio_management';
 import { MapDisplay, useMapWebSocket, ImageDisplay, useImageWebSocket, useGridConfig } from '../map_management';
 import MapOverlayPanel from './components/MapOverlayPanel';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
-import { faVolumeHigh, faVolumeXmark, faRightToBracket, faEye, faUpRightAndDownLeftFromCenter, faDownLeftAndUpRightToCenter, faCloud, faCloudArrowDown, faRulerHorizontal } from '@fortawesome/free-solid-svg-icons';
+import { faVolumeHigh, faVolumeXmark, faRightToBracket, faEye, faUpRightAndDownLeftFromCenter, faDownLeftAndUpRightToCenter, faCloudArrowDown, faRulerHorizontal } from '@fortawesome/free-solid-svg-icons';
+import { faCloud } from '@fortawesome/free-regular-svg-icons';
 import { useFullscreen } from './hooks/useFullscreen';
 import MapSafeArea from './components/MapSafeArea';
 import Drawer from './components/Drawer';
@@ -144,6 +145,7 @@ export default function GameContent() {
   const [uiScale, setUIScale] = useState('medium'); // UI Scale state
   const [showVolumeSlider, setShowVolumeSlider] = useState(false);
   const [showScaleMenu, setShowScaleMenu] = useState(false);
+  const [showAssetInfo, setShowAssetInfo] = useState(true);
 
   // Default to 'small' on mobile/tablet devices — must be in useEffect
   // since navigator is unavailable during SSR. iPadOS and Chrome on iPad
@@ -1555,58 +1557,58 @@ export default function GameContent() {
           </div>
 
           <div className="nav-actions">
-            {/* Asset status — cloud icon + progress bar or cached size */}
-            <div style={{ display: 'flex', alignItems: 'center', gap: 'calc(6px * var(--ui-scale))', width: 'calc(120px * var(--ui-scale))' }}>
-              {s3Loading.loading || s3Loading.lingering ? (
-                <>
-                  <FontAwesomeIcon icon={faCloudArrowDown} style={{ color: '#6366f1', fontSize: 'calc(16px * var(--ui-scale))' }} />
-                  <span style={{ color: '#d1d5db', fontSize: 'calc(12px * var(--ui-scale))', whiteSpace: 'nowrap' }}>
-                    {s3Loading.completedCount}/{s3Loading.totalCount}
-                  </span>
-                  <div style={{
-                    width: 'calc(60px * var(--ui-scale))',
-                    height: 'calc(4px * var(--ui-scale))',
-                    backgroundColor: '#374151',
-                    borderRadius: '2px',
-                    overflow: 'hidden',
-                  }}>
-                    <div style={{
-                      height: '100%',
-                      width: `${s3Loading.totalBytes > 0 ? (s3Loading.loadedBytes / s3Loading.totalBytes) * 100 : 0}%`,
-                      backgroundColor: '#6366f1',
-                      borderRadius: '2px',
-                      transition: 'width 0.15s ease',
-                    }} />
-                  </div>
-                </>
-              ) : (
-                <>
-                  <div style={{ position: 'relative', display: 'inline-flex' }}>
-                    <FontAwesomeIcon icon={faCloud} style={{ color: '#6b7280', fontSize: 'calc(16px * var(--ui-scale))' }} />
-                    {s3Loading.cachedCount > 0 && (
-                      <span style={{
-                        position: 'absolute',
-                        top: '50%',
-                        left: '50%',
-                        transform: 'translate(-50%, -45%)',
-                        fontSize: 'calc(8px * var(--ui-scale))',
-                        fontWeight: '700',
-                        color: '#d1d5db',
-                        lineHeight: 1,
-                      }}>
-                        {s3Loading.cachedCount}
+            {/* Asset status — bordered icon toggle + expandable info */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: 'calc(6px * var(--ui-scale))' }}>
+              <button
+                onClick={() => setShowAssetInfo(prev => !prev)}
+                className="fullscreen-btn"
+                title="Asset download status"
+                aria-label="Asset download status"
+                aria-expanded={showAssetInfo}
+              >
+                <FontAwesomeIcon
+                  icon={s3Loading.loading || s3Loading.lingering ? faCloudArrowDown : faCloud}
+                  style={{ color: s3Loading.loading || s3Loading.lingering ? '#6366f1' : COLORS.smoke }}
+                />
+              </button>
+              {showAssetInfo && (
+                <div style={{ width: 'calc(120px * var(--ui-scale))', display: 'flex', alignItems: 'center' }}>
+                  {s3Loading.loading || s3Loading.lingering ? (
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 'calc(6px * var(--ui-scale))', width: '100%' }}>
+                      <span style={{ color: '#d1d5db', fontSize: 'calc(12px * var(--ui-scale))', whiteSpace: 'nowrap' }}>
+                        {s3Loading.completedCount}/{s3Loading.totalCount}
                       </span>
-                    )}
-                  </div>
-                  <span style={{ color: '#6b7280', fontSize: 'calc(12px * var(--ui-scale))', whiteSpace: 'nowrap' }}>
-                    {s3Loading.cachedSize < 1024 * 1024
-                      ? `${(s3Loading.cachedSize / 1024).toFixed(0)} KB`
-                      : `${(s3Loading.cachedSize / (1024 * 1024)).toFixed(1)} MB`}
-                  </span>
-                </>
+                      <div style={{
+                        flex: 1,
+                        height: 'calc(4px * var(--ui-scale))',
+                        backgroundColor: '#374151',
+                        borderRadius: '2px',
+                        overflow: 'hidden',
+                      }}>
+                        <div style={{
+                          height: '100%',
+                          width: `${s3Loading.totalBytes > 0 ? (s3Loading.loadedBytes / s3Loading.totalBytes) * 100 : 0}%`,
+                          backgroundColor: '#6366f1',
+                          borderRadius: '2px',
+                          transition: 'width 0.15s ease',
+                        }} />
+                      </div>
+                    </div>
+                  ) : (
+                    <div style={{ display: 'flex', flexDirection: 'column', lineHeight: 1.2 }}>
+                      <span style={{ color: '#d1d5db', fontSize: 'calc(11px * var(--ui-scale))', whiteSpace: 'nowrap' }}>
+                        {s3Loading.cachedCount} assets
+                      </span>
+                      <span style={{ color: '#6b7280', fontSize: 'calc(11px * var(--ui-scale))', whiteSpace: 'nowrap' }}>
+                        {s3Loading.cachedSize < 1024 * 1024
+                          ? `${(s3Loading.cachedSize / 1024).toFixed(0)} KB`
+                          : `${(s3Loading.cachedSize / (1024 * 1024)).toFixed(1)} MB`}
+                      </span>
+                    </div>
+                  )}
+                </div>
               )}
             </div>
-
             {/* Master Volume — bordered icon, vertical slider popup */}
             <div style={{ position: 'relative' }}>
               <button

@@ -84,7 +84,7 @@ const ImageDisplay = ({
   );
 
   // Download the main image through the asset manager (progressive byte tracking)
-  const { blobUrl: imageBlobUrl, ready: imageReady } = useAssetDownload(ic?.file_path, ic?.file_size);
+  const { blobUrl: imageBlobUrl, ready: imageReady } = useAssetDownload(ic?.file_path, ic?.file_size, ic?.asset_id);
 
   // Collect local overlay URLs that still need preloading (film grain GIFs — not S3)
   const overlayUrls = useMemo(() => {

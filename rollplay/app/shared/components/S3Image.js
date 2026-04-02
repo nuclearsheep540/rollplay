@@ -10,10 +10,10 @@ import { useAssetDownload } from '@/app/shared/providers/AssetDownloadManager';
  * Drop-in replacement for <img> that downloads through the AssetDownloadManager.
  * Provides progressive byte tracking and blob caching for S3 assets.
  *
- * Usage: <S3Image src={asset.s3_url} fileSize={asset.file_size} alt="" className="..." />
+ * Usage: <S3Image src={asset.s3_url} fileSize={asset.file_size} assetId={asset.id} alt="" className="..." />
  */
-const S3Image = React.forwardRef(({ src, fileSize, alt = '', ...props }, ref) => {
-  const { blobUrl, ready } = useAssetDownload(src, fileSize);
+const S3Image = React.forwardRef(({ src, fileSize, assetId, alt = '', ...props }, ref) => {
+  const { blobUrl, ready } = useAssetDownload(src, fileSize, assetId);
 
   return (
     <img

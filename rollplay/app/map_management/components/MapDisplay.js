@@ -34,7 +34,7 @@ const MapDisplay = ({
 
   // Download map image through asset manager for progressive byte tracking
   const mc = activeMap?.map_config;
-  const { blobUrl: mapBlobUrl, ready: mapLoaded } = useAssetDownload(mc?.file_path, mc?.file_size);
+  const { blobUrl: mapBlobUrl, ready: mapLoaded } = useAssetDownload(mc?.file_path, mc?.file_size, mc?.asset_id);
 
   // Unified view state — ref is the source of truth for real-time DOM updates
   // during drag/pinch (bypasses React render cycle). React state syncs on drag end

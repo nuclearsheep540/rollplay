@@ -15,11 +15,11 @@ const AssetDownloadContext = createContext(null);
  * Caches completed blobs so repeat requests resolve instantly.
  *
  * Components use:
- *   useAssetDownload(url, fileSize)  → { blobUrl, ready }
+ *   useAssetDownload(url, fileSize, assetId)  → { blobUrl, ready }
  *   useAssetProgress()               → { loading, lingering, loadedBytes, totalBytes, completedCount, totalCount, cachedCount, cachedSize }
  *
  * Audio can call imperatively:
- *   manager.download(url, fileSize)  → Promise<Blob>
+ *   manager.download(url, fileSize, assetId)  → Promise<Blob>
  */
 export function AssetDownloadProvider({ children }) {
   const [progress, setProgress] = useState({
@@ -104,17 +104,21 @@ export function AssetDownloadProvider({ children }) {
     }
   }, []);
 
-  const download = useCallback(async (url, fileSize) => {
+  const download = useCallback(async (url, fileSize, assetId) => {
     if (!url) return null;
 
+    // Cache by asset ID when available (presigned URLs change on every API call
+    // but the underlying asset is the same). Fall back to full URL for non-asset fetches.
+    const cacheKey = assetId || url;
+
     // Return cached blob immediately
-    if (cacheRef.current.has(url)) {
-      return cacheRef.current.get(url);
+    if (cacheRef.current.has(cacheKey)) {
+      return cacheRef.current.get(cacheKey);
     }
 
-    // Deduplicate — if already downloading this URL, piggyback on the existing promise
-    if (inflightRef.current.has(url)) {
-      return inflightRef.current.get(url).promise;
+    // Deduplicate — if already downloading this asset, piggyback on the existing promise
+    if (inflightRef.current.has(cacheKey)) {
+      return inflightRef.current.get(cacheKey).promise;
     }
 
     const entry = {
@@ -171,21 +175,26 @@ export function AssetDownloadProvider({ children }) {
         const completedBytesDelta = entry.totalBytes > 0 ? entry.totalBytes : blob.size;
         completedBytesRef.current += completedBytesDelta;
         cachedSizeRef.current += blob.size;
-        cacheRef.current.set(url, blob);
-        inflightRef.current.delete(url);
+        cacheRef.current.set(cacheKey, blob);
+        inflightRef.current.delete(cacheKey);
         flushProgressUpdate();
         scheduleReset();
 
         return blob;
       } catch (err) {
-        inflightRef.current.delete(url);
+        inflightRef.current.delete(cacheKey);
         flushProgressUpdate();
         scheduleReset();
         throw err;
       }
     })();
 
-    inflightRef.current.set(url, entry);
+    // Reset byte counters when starting a fresh batch — otherwise previous
+    // completed bytes dwarf new inflight bytes and the bar stays near 100%.
+    if (inflightRef.current.size === 0) {
+      completedBytesRef.current = 0;
+    }
+    inflightRef.current.set(cacheKey, entry);
     clearTimeout(idleTimerRef.current);
     flushProgressUpdate();
 
@@ -215,12 +224,16 @@ export function AssetDownloadProvider({ children }) {
  * Returns a blob URL suitable for <img src={blobUrl}>.
  * Cleans up the object URL on unmount or URL change.
  */
-export function useAssetDownload(url, fileSize) {
+export function useAssetDownload(url, fileSize, assetId) {
   const ctx = useContext(AssetDownloadContext);
   if (!ctx) throw new Error('useAssetDownload must be used within <AssetDownloadProvider>');
   const { manager } = ctx;
   const [blobUrl, setBlobUrl] = useState(null);
   const [ready, setReady] = useState(false);
+
+  // Use assetId as the stable dependency when available — the URL changes
+  // (presigned signature) but the asset doesn't, so we don't re-download.
+  const stableKey = assetId || url;
 
   useEffect(() => {
     if (!url || !manager) return;
@@ -228,7 +241,7 @@ export function useAssetDownload(url, fileSize) {
     let revoke = null;
     let cancelled = false;
 
-    manager.download(url, fileSize).then((blob) => {
+    manager.download(url, fileSize, assetId).then((blob) => {
       if (cancelled || !blob) return;
       const objectUrl = URL.createObjectURL(blob);
       revoke = objectUrl;
@@ -244,7 +257,7 @@ export function useAssetDownload(url, fileSize) {
       setBlobUrl(null);
       setReady(false);
     };
-  }, [url, fileSize, manager]);
+  }, [stableKey, manager]);
 
   return { blobUrl, ready };
 }

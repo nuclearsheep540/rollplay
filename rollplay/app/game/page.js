@@ -41,10 +41,10 @@ export default async function Game({ searchParams }) {
   return (
     <>
       {mapImageUrl && (
-        <link rel="preload" as="image" href={mapImageUrl} />
+        <link rel="preload" as="image" href={mapImageUrl} crossOrigin="anonymous" />
       )}
       {imageUrl && (
-        <link rel="preload" as="image" href={imageUrl} />
+        <link rel="preload" as="image" href={imageUrl} crossOrigin="anonymous" />
       )}
       <Suspense fallback={
         <div className="game-loading" style={{

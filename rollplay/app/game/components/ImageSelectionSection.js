@@ -252,7 +252,7 @@ export default function ImageSelectionSection({
                 <div key={asset.id} className="flex items-center gap-2 p-2 rounded border border-gray-600 hover:border-gray-500">
                   <div className="w-10 h-10 flex-shrink-0 bg-gray-700 rounded flex items-center justify-center overflow-hidden">
                     {asset.s3_url ? (
-                      <S3Image src={asset.s3_url} fileSize={asset.file_size} alt="" className="w-full h-full object-cover" />
+                      <S3Image src={asset.s3_url} fileSize={asset.file_size} assetId={asset.id} alt="" className="w-full h-full object-cover" />
                     ) : (
                       <span className="text-gray-500 text-xs">IMG</span>
                     )}
@@ -307,7 +307,7 @@ export default function ImageSelectionSection({
               >
                 <div className="w-10 h-10 flex-shrink-0 bg-gray-700 rounded flex items-center justify-center overflow-hidden">
                   {asset.s3_url ? (
-                    <S3Image src={asset.s3_url} fileSize={asset.file_size} alt="" className="w-full h-full object-cover" />
+                    <S3Image src={asset.s3_url} fileSize={asset.file_size} assetId={asset.id} alt="" className="w-full h-full object-cover" />
                   ) : (
                     <span className="text-gray-500 text-xs">IMG</span>
                   )}
