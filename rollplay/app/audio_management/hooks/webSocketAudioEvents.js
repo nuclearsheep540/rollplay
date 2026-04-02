@@ -27,7 +27,7 @@ export const handleRemoteAudioPlay = async (data, { playRemoteTrack, loadRemoteA
 
           // Use S3 URL if available, fall back to local /audio/ path
           const audioUrl = s3_url || `/audio/${filename}`;
-          const buffer = await loadRemoteAudioBuffer(audioUrl, channelId);
+          const buffer = await loadRemoteAudioBuffer(audioUrl, channelId, asset_id);
 
           // Store the buffer with stable key (asset_id or filename)
           if (buffer && audioBuffersRef) {
@@ -345,7 +345,7 @@ export const handleRemoteAudioBatch = async (data, {
       await Promise.all(playOperations.map(async (op) => {
         const { filename, trackId, asset_id, s3_url } = op;
         const audioUrl = s3_url || `/audio/${filename}`;
-        const buffer = await loadRemoteAudioBuffer(audioUrl, trackId);
+        const buffer = await loadRemoteAudioBuffer(audioUrl, trackId, asset_id);
         if (buffer) {
           audioBuffersRef.current[`${trackId}_${asset_id || filename}`] = buffer;
         }
