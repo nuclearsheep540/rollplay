@@ -146,6 +146,22 @@ export default function GameContent() {
   const [showVolumeSlider, setShowVolumeSlider] = useState(false);
   const [showScaleMenu, setShowScaleMenu] = useState(false);
   const [showAssetInfo, setShowAssetInfo] = useState(true);
+  const volumeRef = useRef(null);
+  const scaleRef = useRef(null);
+
+  // Click-outside to close volume and scale popups
+  useEffect(() => {
+    const handleClickOutside = (e) => {
+      if (showVolumeSlider && volumeRef.current && !volumeRef.current.contains(e.target)) {
+        setShowVolumeSlider(false);
+      }
+      if (showScaleMenu && scaleRef.current && !scaleRef.current.contains(e.target)) {
+        setShowScaleMenu(false);
+      }
+    };
+    document.addEventListener('pointerdown', handleClickOutside);
+    return () => document.removeEventListener('pointerdown', handleClickOutside);
+  }, [showVolumeSlider, showScaleMenu]);
 
   // Default to 'small' on mobile/tablet devices — must be in useEffect
   // since navigator is unavailable during SSR. iPadOS and Chrome on iPad
@@ -1560,7 +1576,7 @@ export default function GameContent() {
             {/* Asset status — bordered icon toggle + expandable info */}
             <div style={{ display: 'flex', alignItems: 'center', gap: 'calc(6px * var(--ui-scale))' }}>
               <button
-                onClick={() => setShowAssetInfo(prev => !prev)}
+                onClick={() => { setShowAssetInfo(prev => !prev); setShowVolumeSlider(false); setShowScaleMenu(false); }}
                 className="fullscreen-btn"
                 title="Asset download status"
                 aria-label="Asset download status"
@@ -1610,7 +1626,7 @@ export default function GameContent() {
               )}
             </div>
             {/* Master Volume — bordered icon, vertical slider popup */}
-            <div style={{ position: 'relative' }}>
+            <div ref={volumeRef} style={{ position: 'relative' }}>
               <button
                 onClick={() => {
                   if (!isAudioUnlocked && unlockAudio) {
@@ -1627,12 +1643,7 @@ export default function GameContent() {
                 <FontAwesomeIcon icon={isAudioUnlocked ? faVolumeHigh : faVolumeXmark} />
               </button>
               {showVolumeSlider && (
-                <>
-                  <div
-                    style={{ position: 'fixed', inset: 0, zIndex: 99 }}
-                    onClick={() => setShowVolumeSlider(false)}
-                  />
-                  <div style={{
+                <div style={{
                     position: 'absolute',
                     top: '100%',
                     left: '50%',
@@ -1646,7 +1657,7 @@ export default function GameContent() {
                     flexDirection: 'column',
                     alignItems: 'center',
                     gap: 'calc(6px * var(--ui-scale))',
-                    zIndex: 100,
+                    zIndex: 102,
                   }}>
                     <input
                       id="master-volume"
@@ -1673,12 +1684,11 @@ export default function GameContent() {
                       {Math.round(masterVolume * 100)}%
                     </span>
                   </div>
-                </>
               )}
             </div>
 
             {/* UI Scale — bordered icon, dropdown menu */}
-            <div style={{ position: 'relative' }}>
+            <div ref={scaleRef} style={{ position: 'relative' }}>
               <button
                 onClick={() => { setShowScaleMenu(prev => !prev); setShowVolumeSlider(false); }}
                 className="fullscreen-btn"
@@ -1689,12 +1699,7 @@ export default function GameContent() {
                 <FontAwesomeIcon icon={faRulerHorizontal} />
               </button>
               {showScaleMenu && (
-                <>
-                  <div
-                    style={{ position: 'fixed', inset: 0, zIndex: 99 }}
-                    onClick={() => setShowScaleMenu(false)}
-                  />
-                  <div style={{
+                <div style={{
                     position: 'absolute',
                     top: '100%',
                     left: '50%',
@@ -1707,7 +1712,7 @@ export default function GameContent() {
                     display: 'flex',
                     flexDirection: 'column',
                     gap: 'calc(2px * var(--ui-scale))',
-                    zIndex: 100,
+                    zIndex: 102,
                     minWidth: 'calc(60px * var(--ui-scale))',
                   }}>
                     {['small', 'medium', 'large'].map(size => (
@@ -1730,7 +1735,6 @@ export default function GameContent() {
                       </button>
                     ))}
                   </div>
-                </>
               )}
             </div>
 
