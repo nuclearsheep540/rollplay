@@ -25,11 +25,13 @@ function parseAspectRatio(ratioStr) {
 /**
  * ImageDisplay — Renders a DM-presented image in the game view.
  *
- * Three display modes:
+ * Image fit modes:
  *   - float: Image centered with contain fit (default)
  *   - wrap:  Image fills entire viewport with cover fit, cropping edges
  *   - letterbox: Full-width image, height constrained by aspect ratio,
  *                black background creates natural letterbox bars
+ *
+ * Visual effects (overlays, motion) render independently of fit mode.
  */
 const GRAIN_STYLE_ASSETS = {
   vintage: '/cine/overlay/film-grain.gif',
@@ -40,8 +42,7 @@ const GRAIN_STYLE_ASSETS = {
   sun_glow: '/cine/overlay/sun_glow.gif',
 };
 
-function renderVisualOverlays(cineConfig) {
-  const overlays = cineConfig?.visual_overlays;
+function renderVisualOverlays(overlays) {
   if (!overlays?.length) return null;
   return overlays.filter(o => o.enabled).map((overlay, i) => {
     const base = {
@@ -82,14 +83,22 @@ const ImageDisplay = ({
   const imageRef = useRef(null);
 
   const ic = activeImage?.image_config;
-  const displayMode = ic?.display_mode || 'float';
-  const cineRatio = useMemo(
+
+  // image_fit controls layout; legacy "cine" value treated as letterbox
+  const rawFit = ic?.image_fit || ic?.display_mode || 'float';
+  const imageFit = rawFit === 'cine' ? 'letterbox' : rawFit;
+
+  const letterboxRatio = useMemo(
     () => parseAspectRatio(ic?.aspect_ratio),
     [ic?.aspect_ratio]
   );
 
+  // Visual effects — independent of display mode
+  const visualOverlays = ic?.visual_overlays;
+  const handHeld = ic?.motion?.hand_held || null;
+  const hasEffects = !!(visualOverlays?.length || handHeld);
+
   // Hand-held camera motion (transforms the image + overlays together as one scene)
-  const handHeld = displayMode === 'cine' ? ic?.cine_config?.motion?.hand_held : null;
   const { style: motionStyle } = useCameraMotion(handHeld);
 
   // Download the main image through the asset manager (progressive byte tracking)
@@ -97,15 +106,15 @@ const ImageDisplay = ({
 
   // Collect local overlay URLs that still need preloading (film grain GIFs — not S3)
   const overlayUrls = useMemo(() => {
-    if (displayMode !== 'cine' || !ic?.cine_config?.visual_overlays) return [];
+    if (!visualOverlays) return [];
     const urls = new Set();
-    for (const overlay of ic.cine_config.visual_overlays) {
+    for (const overlay of visualOverlays) {
       if (overlay.enabled && overlay.type === 'film_grain') {
         urls.add(GRAIN_STYLE_ASSETS[overlay.style] || GRAIN_STYLE_ASSETS.vintage);
       }
     }
     return [...urls];
-  }, [displayMode, ic?.cine_config?.visual_overlays]);
+  }, [visualOverlays]);
 
   // Preload local overlay GIFs — these are small and local, just need cache priming
   const overlayKey = overlayUrls.join('|');
@@ -136,17 +145,44 @@ const ImageDisplay = ({
     return null;
   }
 
-  const isLetterbox = displayMode === 'letterbox' || displayMode === 'cine';
+  const isLetterbox = imageFit === 'letterbox';
 
-  // Image position within frame (object-position) — only meaningful for cover modes
+  // Image position within frame (object-position) — meaningful for cover modes
   const posX = ic?.image_position_x ?? 50;
   const posY = ic?.image_position_y ?? 50;
   const objectPosition = `${posX}% ${posY}%`;
 
-  // Image styles per mode
-  const imageStyle = displayMode === 'wrap' || isLetterbox
+  // Image styles per fit mode
+  const imageStyle = imageFit === 'wrap' || isLetterbox
     ? { width: '100%', height: '100%', objectFit: 'cover', objectPosition }
     : { maxWidth: '100%', maxHeight: '100%', width: 'auto', height: 'auto', objectFit: 'contain' };
+
+  // Shared inner content — image + optional effects wrapper
+  const imageElement = (
+    <img
+      ref={imageRef}
+      src={imageBlobUrl}
+      alt={ic?.original_filename || ic?.filename || 'Game image'}
+      style={{
+        ...imageStyle,
+        pointerEvents: 'none',
+        userSelect: 'none',
+      }}
+    />
+  );
+
+  // When effects exist, wrap image + overlays in a motion container
+  const sceneContent = hasEffects ? (
+    <div style={{
+      width: '100%',
+      height: '100%',
+      position: 'relative',
+      ...motionStyle,
+    }}>
+      {imageElement}
+      {renderVisualOverlays(visualOverlays)}
+    </div>
+  ) : imageElement;
 
   return (
     <div
@@ -165,56 +201,32 @@ const ImageDisplay = ({
         justifyContent: 'center',
       }}
     >
-      {/* Letterbox mode: aspect-ratio container sized to fit within viewport.
-          Wide ratios (2.39:1) fill full width with top/bottom bars.
-          Narrow ratios (4:3, 1:1) fill full height with left/right bars.
-          width: min(100%, 100vh * ratio) picks the right constraint automatically. */}
       {isLetterbox ? (
         <div style={{
-          width: `min(100%, ${(cineRatio || 2.39) * 100}vh)`,
-          aspectRatio: cineRatio ? `${cineRatio}` : '2.39 / 1',
+          width: `min(100%, ${(letterboxRatio || 2.39) * 100}vh)`,
+          aspectRatio: letterboxRatio ? `${letterboxRatio}` : '2.39 / 1',
           overflow: 'hidden',
           position: 'relative',
           zIndex: 1,
           opacity: sceneReady ? 1 : 0,
           transition: 'opacity 0.3s ease',
         }}>
-          <div style={{
-            width: '100%',
-            height: '100%',
-            position: 'relative',
-            ...motionStyle,
-          }}>
-            <img
-              ref={imageRef}
-              src={imageBlobUrl}
-              alt={ic?.original_filename || ic?.filename || 'Game image'}
-              style={{
-                ...imageStyle,
-                pointerEvents: 'none',
-                userSelect: 'none',
-              }}
-            />
-            {displayMode === 'cine' && renderVisualOverlays(ic?.cine_config)}
-          </div>
+          {sceneContent}
         </div>
       ) : (
-        <>
-          <img
-            ref={imageRef}
-            src={imageBlobUrl}
-            alt={ic?.original_filename || ic?.filename || 'Game image'}
-            style={{
-              ...imageStyle,
-              pointerEvents: 'none',
-              userSelect: 'none',
-              zIndex: 1,
-              opacity: sceneReady ? 1 : 0,
-              transition: 'opacity 0.3s ease',
-            }}
-          />
-          {displayMode === 'cine' && renderVisualOverlays(ic?.cine_config)}
-        </>
+        <div style={{
+          width: '100%',
+          height: '100%',
+          position: 'relative',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          overflow: 'hidden',
+          opacity: sceneReady ? 1 : 0,
+          transition: 'opacity 0.3s ease',
+        }}>
+          {sceneContent}
+        </div>
       )}
     </div>
   );

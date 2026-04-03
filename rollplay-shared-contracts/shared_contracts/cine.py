@@ -1,7 +1,7 @@
 # Copyright (C) 2025 Matthew Davey
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-"""Cine boundary schemas for cinematic image configuration.
+"""Visual effects boundary schemas for image configuration.
 
 Thin ETL layer mirroring the domain value objects in
 api-site/modules/library/domain/. No business logic here —
@@ -21,7 +21,7 @@ class FilmGrainOverlay(ContractModel):
     type: Literal["film_grain"] = "film_grain"
     enabled: bool = True
     opacity: float = Field(default=0.5, ge=0.0, le=1.0)
-    style: str = "vintage"  # "vintage" | "grain" | "light_particles"
+    style: str = "vintage"
     blend_mode: str = "overlay"
 
 
@@ -53,21 +53,7 @@ class HandHeldMotion(ContractModel):
 
 
 class MotionConfig(ContractModel):
-    """Motion section — houses movement-based cine effects."""
+    """Motion section — houses movement-based effects."""
 
     hand_held: Optional[HandHeldMotion] = None
     ken_burns: Optional[Any] = None  # Placeholder
-
-
-class CineConfig(ContractModel):
-    """Structured cinematic configuration for image assets.
-
-    Workshop-authored, read-only at runtime. Passed through
-    to api-game via ETL on the ImageConfig contract.
-    """
-
-    visual_overlays: List[VisualOverlay] = []
-    hide_player_ui: bool = True
-    motion: Optional[MotionConfig] = None
-    transition: Optional[Any] = None  # Placeholder
-    text_overlays: Optional[Any] = None  # Placeholder

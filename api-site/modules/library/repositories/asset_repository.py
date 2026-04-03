@@ -17,7 +17,7 @@ from modules.library.model.sfx_asset_model import SfxAssetModel
 from modules.library.model.image_asset_model import ImageAssetModel
 import logging
 
-from modules.library.domain.cine_config import CineConfig
+from modules.library.domain.cine_config import MotionConfig
 from modules.library.domain.asset_aggregate import MediaAssetAggregate
 from modules.library.domain.map_asset_aggregate import MapAsset
 from modules.library.domain.music_asset_aggregate import MusicAsset
@@ -150,11 +150,13 @@ class MediaAssetRepository:
 
             # Update image-specific fields if ImageAsset
             if isinstance(aggregate, ImageAsset) and isinstance(existing, ImageAssetModel):
-                existing.display_mode = aggregate.display_mode
+                existing.image_fit = aggregate.image_fit
                 existing.aspect_ratio = aggregate.aspect_ratio
+                existing.display_mode = aggregate.display_mode
                 existing.image_position_x = aggregate.image_position_x
                 existing.image_position_y = aggregate.image_position_y
-                existing.cine_config = aggregate.cine_config.to_dict() if aggregate.cine_config else None
+                existing.visual_overlays = [o if isinstance(o, dict) else o.to_dict() for o in aggregate.visual_overlays] if aggregate.visual_overlays else None
+                existing.motion = aggregate.motion.to_dict() if aggregate.motion else None
         else:
             # Create new - determine which model to use
             if isinstance(aggregate, MapAsset):
@@ -221,11 +223,13 @@ class MediaAssetRepository:
                     asset_type=aggregate.asset_type,
                     file_size=aggregate.file_size,
                     campaign_ids=aggregate.campaign_ids,
-                    display_mode=aggregate.display_mode,
+                    image_fit=aggregate.image_fit,
                     aspect_ratio=aggregate.aspect_ratio,
+                    display_mode=aggregate.display_mode,
                     image_position_x=aggregate.image_position_x,
                     image_position_y=aggregate.image_position_y,
-                    cine_config=aggregate.cine_config.to_dict() if aggregate.cine_config else None
+                    visual_overlays=[o if isinstance(o, dict) else o.to_dict() for o in aggregate.visual_overlays] if aggregate.visual_overlays else None,
+                    motion=aggregate.motion.to_dict() if aggregate.motion else None,
                 )
             else:
                 model = MediaAssetModel(
@@ -312,21 +316,23 @@ class MediaAssetRepository:
                 default_looping=model.default_looping
             )
 
-        # If it's an ImageAssetModel, promote to ImageAsset with display config
+        # If it's an ImageAssetModel, promote to ImageAsset with config
         if isinstance(model, ImageAssetModel):
-            cine_config = None
-            if model.cine_config:
+            motion = None
+            if model.motion:
                 try:
-                    cine_config = CineConfig.from_dict(model.cine_config)
+                    motion = MotionConfig.from_dict(model.motion)
                 except Exception:
-                    logger.warning(f"Invalid cine_config for asset {model.id}, ignoring")
+                    logger.warning(f"Invalid motion config for asset {model.id}, ignoring")
             return ImageAsset.from_base(
                 base,
-                display_mode=model.display_mode,
+                image_fit=model.image_fit,
                 aspect_ratio=model.aspect_ratio,
+                display_mode=model.display_mode,
                 image_position_x=model.image_position_x,
                 image_position_y=model.image_position_y,
-                cine_config=cine_config
+                visual_overlays=model.visual_overlays,
+                motion=motion,
             )
 
         return base

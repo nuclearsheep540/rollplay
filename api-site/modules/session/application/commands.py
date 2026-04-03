@@ -400,6 +400,8 @@ class StartSession:
             file_path=fresh_url,
             file_size=image_asset.file_size,
         )
+        if hasattr(image_asset, 'image_fit') and image_asset.image_fit:
+            config_kwargs["image_fit"] = image_asset.image_fit
         if hasattr(image_asset, 'display_mode') and image_asset.display_mode:
             config_kwargs["display_mode"] = image_asset.display_mode
         if hasattr(image_asset, 'aspect_ratio') and image_asset.aspect_ratio:
@@ -408,9 +410,11 @@ class StartSession:
             config_kwargs["image_position_x"] = image_asset.image_position_x
         if hasattr(image_asset, 'image_position_y') and image_asset.image_position_y is not None:
             config_kwargs["image_position_y"] = image_asset.image_position_y
-        if hasattr(image_asset, 'cine_config') and image_asset.cine_config:
-            from shared_contracts.cine import CineConfig as CineConfigContract
-            config_kwargs["cine_config"] = CineConfigContract.model_validate(image_asset.cine_config.to_dict())
+        if hasattr(image_asset, 'visual_overlays') and image_asset.visual_overlays:
+            config_kwargs["visual_overlays"] = image_asset.visual_overlays
+        if hasattr(image_asset, 'motion') and image_asset.motion:
+            from shared_contracts.cine import MotionConfig as MotionConfigContract
+            config_kwargs["motion"] = MotionConfigContract.model_validate(image_asset.motion.to_dict())
 
         return ImageConfig(**config_kwargs)
 

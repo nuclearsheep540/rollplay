@@ -11,7 +11,7 @@ from shared_contracts.audio import AudioChannelState, AudioEffects, AudioTrackCo
 from shared_contracts.assets import AssetRef
 from shared_contracts.character import DungeonMaster, PlayerCharacter, SessionUser
 from shared_contracts.display import ActiveDisplayType
-from shared_contracts.cine import CineConfig, ColorFilterOverlay, FilmGrainOverlay, HandHeldMotion, MotionConfig
+from shared_contracts.cine import ColorFilterOverlay, FilmGrainOverlay, HandHeldMotion, MotionConfig
 from shared_contracts.image import ImageConfig
 from shared_contracts.map import GridColorMode, GridConfig, MapConfig
 from shared_contracts.session import (
@@ -116,81 +116,70 @@ class TestImageRoundTrip:
         )
         assert ImageConfig.model_validate(config.model_dump()) == config
 
-    def test_image_config_with_cine_config_round_trip(self):
-        """Round-trip ImageConfig carrying a full CineConfig with visual overlays and motion."""
+    def test_image_config_with_effects_round_trip(self):
+        """Round-trip ImageConfig with visual overlays and motion as top-level fields."""
         config = ImageConfig(
             asset_id="img-2",
             filename="castle.jpg",
             original_filename="Dark Castle.jpg",
             file_path="https://s3.example.com/castle.jpg",
+            image_fit="letterbox",
             display_mode="cine",
-            cine_config=CineConfig(
-                visual_overlays=[
-                    FilmGrainOverlay(opacity=0.3, style="grain", blend_mode="overlay"),
-                    ColorFilterOverlay(opacity=0.6, color="#1a0a2e", blend_mode="multiply"),
-                ],
-                hide_player_ui=True,
-                motion=MotionConfig(
-                    hand_held=HandHeldMotion(track_points=5, distance=12, speed=7, x_bias=30, randomness=40),
-                ),
+            visual_overlays=[
+                FilmGrainOverlay(opacity=0.3, style="grain", blend_mode="overlay"),
+                ColorFilterOverlay(opacity=0.6, color="#1a0a2e", blend_mode="multiply"),
+            ],
+            motion=MotionConfig(
+                hand_held=HandHeldMotion(track_points=5, distance=12, speed=7, x_bias=30, randomness=40),
             ),
         )
         rebuilt = ImageConfig.model_validate(config.model_dump())
         assert rebuilt == config
         # Verify discriminator survived the round-trip
-        assert rebuilt.cine_config.visual_overlays[0].type == "film_grain"
-        assert rebuilt.cine_config.visual_overlays[1].type == "color_filter"
+        assert rebuilt.visual_overlays[0].type == "film_grain"
+        assert rebuilt.visual_overlays[1].type == "color_filter"
         # Verify motion survived the round-trip
-        assert rebuilt.cine_config.motion.hand_held.track_points == 5
-        assert rebuilt.cine_config.motion.hand_held.x_bias == 30
+        assert rebuilt.motion.hand_held.track_points == 5
+        assert rebuilt.motion.hand_held.x_bias == 30
 
-
-class TestCineConfigValidation:
-    def test_cine_config_round_trip(self):
-        cine = CineConfig(
-            visual_overlays=[
-                FilmGrainOverlay(),
-                ColorFilterOverlay(color="#ff0000"),
-            ],
-            hide_player_ui=False,
+    def test_image_config_legacy_cine_fit_coercion(self):
+        """Legacy image_fit='cine' is coerced to 'letterbox'."""
+        config = ImageConfig(
+            asset_id="img-3",
+            filename="old.jpg",
+            file_path="https://s3.example.com/old.jpg",
+            image_fit="cine",
         )
-        assert CineConfig.model_validate(cine.model_dump()) == cine
+        assert config.image_fit == "letterbox"
 
-    def test_cine_config_empty_overlays(self):
-        cine = CineConfig(visual_overlays=[], hide_player_ui=True)
-        rebuilt = CineConfig.model_validate(cine.model_dump())
-        assert rebuilt.visual_overlays == []
 
+class TestOverlayValidation:
     def test_overlay_discriminator_from_dict(self):
         """Ensure the discriminated union deserializes correctly from raw dicts."""
         raw = {
+            "asset_id": "img-1",
+            "filename": "test.jpg",
+            "file_path": "https://example.com/test.jpg",
             "visual_overlays": [
                 {"type": "film_grain", "opacity": 0.5, "style": "vintage", "blend_mode": "overlay", "enabled": True},
                 {"type": "color_filter", "opacity": 0.4, "color": "#000000", "blend_mode": "multiply", "enabled": True},
             ],
-            "hide_player_ui": True,
-            "motion": None,
         }
-        cine = CineConfig.model_validate(raw)
-        assert isinstance(cine.visual_overlays[0], FilmGrainOverlay)
-        assert isinstance(cine.visual_overlays[1], ColorFilterOverlay)
-        assert cine.motion is None
+        config = ImageConfig.model_validate(raw)
+        assert isinstance(config.visual_overlays[0], FilmGrainOverlay)
+        assert isinstance(config.visual_overlays[1], ColorFilterOverlay)
 
-    def test_motion_with_hand_held_round_trip(self):
-        cine = CineConfig(
-            motion=MotionConfig(
-                hand_held=HandHeldMotion(
-                    track_points=8, distance=15, speed=5, x_bias=-50,
-                ),
-            ),
+    def test_motion_round_trip(self):
+        motion = MotionConfig(
+            hand_held=HandHeldMotion(track_points=8, distance=15, speed=5, x_bias=-50),
         )
-        assert CineConfig.model_validate(cine.model_dump()) == cine
+        assert MotionConfig.model_validate(motion.model_dump()) == motion
 
     def test_motion_with_only_ken_burns_placeholder(self):
-        cine = CineConfig(motion=MotionConfig(ken_burns={"some": "future_data"}))
-        rebuilt = CineConfig.model_validate(cine.model_dump())
-        assert rebuilt.motion.hand_held is None
-        assert rebuilt.motion.ken_burns == {"some": "future_data"}
+        motion = MotionConfig(ken_burns={"some": "future_data"})
+        rebuilt = MotionConfig.model_validate(motion.model_dump())
+        assert rebuilt.hand_held is None
+        assert rebuilt.ken_burns == {"some": "future_data"}
 
 
 class TestMotionConstraints:

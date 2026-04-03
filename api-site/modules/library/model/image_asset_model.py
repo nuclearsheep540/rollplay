@@ -31,21 +31,25 @@ class ImageAssetModel(MediaAsset):
         primary_key=True
     )
 
-    # Display configuration - NULL means not yet configured (defaults to "float")
-    display_mode = Column(String(20), nullable=True)   # "float" | "wrap" | "letterbox" | "cine"
+    # Image fit — how the image fills the frame
+    image_fit = Column(String(20), nullable=True)      # "float" | "wrap" | "letterbox"
     aspect_ratio = Column(String(20), nullable=True)   # "2.39:1", "1.85:1", "16:9", "4:3", "1:1"
+
+    # Display mode — game UI behaviour when image is shown
+    display_mode = Column(String(20), nullable=True, default="standard")  # "standard" | "cine"
 
     # Image position within frame (object-position percentages)
     image_position_x = Column(Float, nullable=True)  # 0–100%
     image_position_y = Column(Float, nullable=True)  # 0–100%
 
-    # Cine configuration - workshop-authored, read-only at runtime
-    cine_config = Column(JSONB, nullable=True)
+    # Visual effects — independent of display mode
+    visual_overlays = Column(JSONB, nullable=True)
+    motion = Column(JSONB, nullable=True)
 
     __mapper_args__ = {
         'polymorphic_identity': MediaAssetType.IMAGE,
     }
 
     def __repr__(self):
-        mode = self.display_mode or "float"
-        return f"<ImageAsset(id={self.id}, filename='{self.filename}', mode={mode})>"
+        fit = self.image_fit or "float"
+        return f"<ImageAsset(id={self.id}, filename='{self.filename}', fit={fit})>"

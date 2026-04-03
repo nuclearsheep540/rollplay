@@ -13,14 +13,15 @@ from datetime import datetime
 from typing import Optional
 from uuid import UUID, uuid4
 
-from shared_contracts.cine import CineConfig as CineConfigContract
 from shared_contracts.image import ImageConfig
 
 from modules.library.domain.asset_aggregate import MediaAssetAggregate
-from modules.library.domain.cine_config import CineConfig
+from modules.library.domain.cine_config import MotionConfig
 from modules.library.domain.media_asset_type import MediaAssetType
+from modules.library.domain.overlays import Overlay
 
-VALID_DISPLAY_MODES = {"float", "wrap", "letterbox", "cine"}
+VALID_IMAGE_FITS = {"float", "wrap", "letterbox"}
+VALID_DISPLAY_MODES = {"standard", "cine"}
 VALID_ASPECT_RATIOS = {"2.39:1", "1.85:1", "16:9", "4:3", "1:1"}
 
 
@@ -29,15 +30,16 @@ class ImageAsset(MediaAssetAggregate):
     """
     ImageAsset domain aggregate.
 
-    Extends MediaAssetAggregate with display configuration fields.
-    Display config belongs to the image asset, not the session - so it persists
-    across all uses of this image in any campaign/session.
+    Extends MediaAssetAggregate with image fit, display mode, and visual effects.
+    Config belongs to the image asset, not the session - persists across all uses.
     """
-    display_mode: Optional[str] = None
+    image_fit: Optional[str] = None           # float / wrap / letterbox
     aspect_ratio: Optional[str] = None
-    image_position_x: Optional[float] = None  # 0–100%, position of image within frame
-    image_position_y: Optional[float] = None  # 0–100%, position of image within frame
-    cine_config: Optional[CineConfig] = None  # Workshop-authored, read-only at runtime
+    display_mode: Optional[str] = None        # standard / cine
+    image_position_x: Optional[float] = None  # 0–100%
+    image_position_y: Optional[float] = None  # 0–100%
+    visual_overlays: Optional[list] = None    # list of Overlay dicts
+    motion: Optional[MotionConfig] = None
 
     @classmethod
     def create(
@@ -77,11 +79,13 @@ class ImageAsset(MediaAssetAggregate):
     def from_base(
         cls,
         base: MediaAssetAggregate,
-        display_mode: Optional[str] = None,
+        image_fit: Optional[str] = None,
         aspect_ratio: Optional[str] = None,
+        display_mode: Optional[str] = None,
         image_position_x: Optional[float] = None,
         image_position_y: Optional[float] = None,
-        cine_config: Optional[CineConfig] = None
+        visual_overlays: Optional[list] = None,
+        motion: Optional[MotionConfig] = None,
     ) -> "ImageAsset":
         """
         Promote a base MediaAssetAggregate to ImageAsset.
@@ -99,25 +103,33 @@ class ImageAsset(MediaAssetAggregate):
             campaign_ids=base.campaign_ids,
             created_at=base.created_at,
             updated_at=base.updated_at,
-            display_mode=display_mode,
+            image_fit=image_fit,
             aspect_ratio=aspect_ratio,
+            display_mode=display_mode,
             image_position_x=image_position_x,
             image_position_y=image_position_y,
-            cine_config=cine_config
+            visual_overlays=visual_overlays,
+            motion=motion,
         )
 
     def update_image_config(
         self,
-        display_mode: Optional[str] = None,
+        image_fit: Optional[str] = None,
         aspect_ratio: Optional[str] = None,
+        display_mode: Optional[str] = None,
         image_position_x: Optional[float] = None,
-        image_position_y: Optional[float] = None
+        image_position_y: Optional[float] = None,
     ) -> None:
         """
         Update display configuration.
 
         Only updates provided values; None values keep current.
         """
+        if image_fit is not None:
+            if image_fit not in VALID_IMAGE_FITS:
+                raise ValueError(f"image_fit must be one of {VALID_IMAGE_FITS}")
+            self.image_fit = image_fit
+
         if display_mode is not None:
             if display_mode not in VALID_DISPLAY_MODES:
                 raise ValueError(f"display_mode must be one of {VALID_DISPLAY_MODES}")
@@ -138,55 +150,66 @@ class ImageAsset(MediaAssetAggregate):
                 raise ValueError("image_position_y must be between 0 and 100")
             self.image_position_y = image_position_y
 
-        # Clear aspect_ratio if switching away from letterbox/cine
-        if display_mode is not None and display_mode not in ("letterbox", "cine"):
+        # Clear aspect_ratio if switching away from letterbox
+        if image_fit is not None and image_fit != "letterbox":
             self.aspect_ratio = None
 
         self.updated_at = datetime.utcnow()
 
     def has_image_config(self) -> bool:
-        """Check if display configuration has been set."""
-        return self.display_mode is not None
+        """Check if image configuration has been set."""
+        return self.image_fit is not None
 
     def build_image_config_for_game(
         self, asset_id: str, filename: str, file_path: str
     ) -> ImageConfig:
         """Build the image config contract for the api-game boundary.
 
-        Includes display config fields. Contract defaults apply when
+        Includes all config fields. Contract defaults apply when
         domain fields are None.
         """
-        # Convert domain CineConfig to contract CineConfig for ETL
-        cine_contract = None
-        if self.cine_config:
-            cine_contract = CineConfigContract.model_validate(self.cine_config.to_dict())
+        from shared_contracts.cine import MotionConfig as MotionConfigContract
+
+        # Convert domain overlays to dicts for contract
+        overlays_for_contract = None
+        if self.visual_overlays:
+            overlays_for_contract = self.visual_overlays  # already list of dicts from JSONB
+
+        # Convert domain motion to contract
+        motion_contract = None
+        if self.motion:
+            motion_contract = MotionConfigContract.model_validate(self.motion.to_dict())
 
         return ImageConfig(
             asset_id=asset_id,
             filename=filename,
             original_filename=self.filename,
             file_path=file_path,
-            display_mode=self.display_mode or "float",
+            image_fit=self.image_fit or "float",
+            display_mode=self.display_mode or "standard",
             aspect_ratio=self.aspect_ratio,
             image_position_x=self.image_position_x,
             image_position_y=self.image_position_y,
-            cine_config=cine_contract,
+            visual_overlays=overlays_for_contract,
+            motion=motion_contract,
         )
 
     def update_image_config_from_game(
         self,
+        image_fit: Optional[str] = None,
         display_mode: Optional[str] = None,
         aspect_ratio: Optional[str] = None,
         image_position_x: Optional[float] = None,
-        image_position_y: Optional[float] = None
+        image_position_y: Optional[float] = None,
     ) -> None:
         """Update domain fields from api-game state.
 
         The inverse of build_image_config_for_game(). Used during
         session end ETL to sync runtime changes back to PostgreSQL.
-        Does NOT touch cine_config (workshop-authored, read-only at runtime).
+        Does NOT touch visual_overlays or motion (workshop-authored).
         """
         self.update_image_config(
+            image_fit=image_fit,
             display_mode=display_mode,
             aspect_ratio=aspect_ratio,
             image_position_x=image_position_x,
