@@ -735,7 +735,7 @@ async def delete_session(game_id: str, keep_logs: bool = True):
             logger.info(f"Deleting logs, maps, and images for {game_id}")
             adventure_log.delete_room_logs(game_id)
             map_service.clear_active_map(game_id)
-            image_service.clear_active_image(game_id)
+            image_service.delete_room_images(game_id)
 
         logger.info(f"Deleted session {game_id} (keep_logs={keep_logs})")
 

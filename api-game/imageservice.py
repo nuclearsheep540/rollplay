@@ -191,6 +191,20 @@ class ImageService:
             logger.error(f"Failed to update image config for room {room_id}: {e}")
             return False
 
+    def delete_room_images(self, room_id: str) -> bool:
+        """Delete all image documents for a room (session-end cleanup)."""
+        if self.collection is None:
+            logger.error("No database connection available for image service")
+            return False
+
+        try:
+            result = self.collection.delete_many({"room_id": room_id})
+            logger.info(f"🖼️ Deleted {result.deleted_count} image docs for room {room_id}")
+            return True
+        except Exception as e:
+            logger.error(f"Failed to delete images for room {room_id}: {e}")
+            return False
+
     def get_active_display(self, room_id: str) -> Optional[str]:
         """Get the current active_display value from the game session"""
         try:

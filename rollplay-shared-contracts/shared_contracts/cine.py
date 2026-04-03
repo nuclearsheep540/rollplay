@@ -70,5 +70,4 @@ class CineConfig(ContractModel):
     hide_player_ui: bool = True
     motion: Optional[MotionConfig] = None
     transition: Optional[Any] = None  # Placeholder
-    ken_burns: Optional[Any] = None  # Backward compat — old configs had this at top level
     text_overlays: Optional[Any] = None  # Placeholder
