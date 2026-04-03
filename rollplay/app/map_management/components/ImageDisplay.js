@@ -88,7 +88,7 @@ const ImageDisplay = ({
     [ic?.aspect_ratio]
   );
 
-  // Hand-held camera motion (transforms the <img>, not the overlays)
+  // Hand-held camera motion (transforms the image + overlays together as one scene)
   const handHeld = displayMode === 'cine' ? ic?.cine_config?.motion?.hand_held : null;
   const { style: motionStyle } = useCameraMotion(handHeld);
 

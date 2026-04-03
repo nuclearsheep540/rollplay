@@ -145,6 +145,7 @@ export default function ImageConfigTool({ selectedAssetId, onAssetSelect }) {
               onClick={() => setFullscreenPreview(true)}
               className="absolute top-2 right-2 z-20 p-2 rounded bg-black/50 text-white/70 hover:text-white hover:bg-black/70 transition-opacity opacity-0 group-hover:opacity-100"
               title="Fullscreen preview"
+              aria-label="Open fullscreen preview"
             >
               <FontAwesomeIcon icon={faExpand} className="text-sm" />
             </button>

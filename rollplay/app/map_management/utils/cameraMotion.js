@@ -117,12 +117,15 @@ export function buildKeyframesCSS(animationName, waypoints, scale, randomness = 
   }
   const totalWeight = weights.reduce((a, b) => a + b, 0);
 
-  // Convert weights to cumulative percentages
+  // Convert weights to cumulative percentages (1 decimal to avoid duplicates)
   const percentages = [0];
   let cumulative = 0;
   for (let i = 0; i < totalSegments; i++) {
     cumulative += weights[i] / totalWeight * 100;
-    percentages.push(Math.round(cumulative));
+    const pct = parseFloat(cumulative.toFixed(1));
+    // Ensure strictly increasing — nudge forward if duplicate
+    const prev = percentages[percentages.length - 1];
+    percentages.push(pct <= prev ? prev + 0.1 : pct);
   }
   percentages[percentages.length - 1] = 100; // ensure exact 100%
 
