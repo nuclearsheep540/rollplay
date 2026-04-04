@@ -41,6 +41,7 @@ export default function ImageControlsPanel({
 }) {
   const [isImageExpanded, setIsImageExpanded] = useState(true);
   const [isDisplayExpanded, setIsDisplayExpanded] = useState(false);
+  const [stagedImage, setStagedImage] = useState(null);
 
   // Original server state captured when Display Settings is opened — for cancel/revert
   const [originalFit, setOriginalFit] = useState(null);
@@ -71,10 +72,22 @@ export default function ImageControlsPanel({
   );
 
   const handleImageSelection = (imageData) => {
-    if (sendImageLoad) {
-      sendImageLoad(imageData);
-    } else if (setActiveImage) {
+    setStagedImage(imageData);
+    if (setActiveImage) {
       setActiveImage(imageData);
+    }
+  };
+
+  const activateStagedImage = () => {
+    if (!stagedImage || !sendImageLoad) return;
+    sendImageLoad(stagedImage);
+    setStagedImage(null);
+  };
+
+  const cancelStagedImage = () => {
+    setStagedImage(null);
+    if (setActiveImage) {
+      setActiveImage(null);
     }
   };
 
@@ -191,10 +204,29 @@ export default function ImageControlsPanel({
         roomId={roomId}
         campaignId={campaignId}
         currentImage={activeImage}
+        isStaged={!!stagedImage}
       />
 
-      {/* Clear Image */}
-      {activeImage && (
+      {/* Staged image — Activate / Cancel */}
+      {stagedImage && (
+        <>
+          <button
+            className={`${DM_CHILD} bg-emerald-700/40 hover:bg-emerald-600/50 text-emerald-300 font-semibold`}
+            onClick={activateStagedImage}
+          >
+            ▶ Activate Image
+          </button>
+          <button
+            className={`${DM_CHILD}`}
+            onClick={cancelStagedImage}
+          >
+            ✕ Cancel
+          </button>
+        </>
+      )}
+
+      {/* Clear Image — only when live (not staged) */}
+      {activeImage && !stagedImage && (
         <button
           className={`${DM_CHILD} ${ACTIVE_BACKGROUND}`}
           onClick={() => {
@@ -271,7 +303,7 @@ export default function ImageControlsPanel({
                     : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
                 }`}
               >
-                🎬 Cine
+                Cine
               </button>
             </div>
             <div className="text-[10px] text-gray-500 mt-1">
