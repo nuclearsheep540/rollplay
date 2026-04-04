@@ -5,10 +5,10 @@
 
 'use client'
 
-import { Suspense, useRef } from 'react'
-import { useRouter, useSearchParams } from 'next/navigation'
+import { Suspense } from 'react'
+import { useSearchParams } from 'next/navigation'
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
-import { faArrowLeft, faRightFromBracket, faHouse } from '@fortawesome/free-solid-svg-icons'
+import { faRightFromBracket } from '@fortawesome/free-solid-svg-icons'
 import SiteHeader from '@/app/shared/components/SiteHeader'
 import NotificationBell from '@/app/shared/components/NotificationBell'
 import { useAuth } from '@/app/dashboard/hooks/useAuth'
@@ -17,17 +17,8 @@ import AudioWorkstationTool from '../components/AudioWorkstationTool'
 import { THEME } from '@/app/styles/colorTheme'
 
 function AudioWorkstationContent() {
-  const router = useRouter()
   const searchParams = useSearchParams()
   const selectedAssetId = searchParams.get('asset_id')
-
-  // Capture the entry point once on mount (library vs workshop navigation)
-  const entryFromRef = useRef(null)
-  if (entryFromRef.current === null) {
-    entryFromRef.current = searchParams.get('from') || 'workshop'
-  }
-
-  const backLabel = entryFromRef.current === 'library' ? 'Library' : 'Workshop'
 
   const { user, loading, handleLogout } = useAuth()
   const { toasts, dismissToast } = useToast()
@@ -58,41 +49,10 @@ function AudioWorkstationContent() {
         </button>
       </SiteHeader>
 
-      <main className="flex-1 flex flex-col min-h-0 px-4 sm:px-8 md:px-10 pt-6 pb-4">
-        <div className="flex items-center justify-between mb-6">
-          <div>
-            <h1 className="text-3xl font-bold font-[family-name:var(--font-metamorphous)] text-content-bold">
-              Audio Workstation
-            </h1>
-            <p className="mt-1 text-sm text-content-primary">
-              Configure loop points, BPM, and waveform markers for your music tracks
-            </p>
-          </div>
-          <div className="flex items-center gap-2">
-            {selectedAssetId && (
-              <button
-                onClick={() => router.push('/dashboard')}
-                className="flex items-center gap-2 px-4 py-2 text-sm font-medium rounded-sm border border-border text-content-primary hover:bg-surface-secondary hover:text-content-on-dark transition-colors"
-              >
-                <FontAwesomeIcon icon={faHouse} className="text-xs" />
-                <span>Dashboard</span>
-              </button>
-            )}
-            <button
-              onClick={() => router.back()}
-              className="flex items-center gap-2 px-4 py-2 text-sm font-medium rounded-sm border border-border text-content-primary hover:bg-surface-secondary hover:text-content-on-dark transition-colors"
-            >
-              <FontAwesomeIcon icon={faArrowLeft} className="text-xs" />
-              <span>{backLabel}</span>
-            </button>
-          </div>
-        </div>
-
-        <div className="flex-1 min-h-0">
-          <AudioWorkstationTool
-            initialAssetId={selectedAssetId}
-          />
-        </div>
+      <main className="flex-1 min-h-0">
+        <AudioWorkstationTool
+          initialAssetId={selectedAssetId}
+        />
       </main>
     </div>
   )

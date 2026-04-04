@@ -336,25 +336,29 @@ export default function AudioWorkstationTool({ initialAssetId }) {
 
   // ── Render ───────────────────────────────────────────────────────────────
   return (
-    <div className="flex flex-col h-full rounded border border-border bg-surface-primary overflow-hidden">
+    <div className="flex flex-col h-full border border-border bg-surface-primary overflow-hidden">
       {/* ── Menu Bar ──────────────────────────────────────────────────────── */}
-      <div className="flex items-center gap-0 border-b border-border bg-surface-secondary text-xs select-none">
+      <div className="flex items-center gap-0 border-b border-border text-xs select-none" style={{ backgroundColor: '#B5ADA6', color: '#0B0A09' }}>
         <div className="relative">
           <button
             onClick={(e) => { e.stopPropagation(); setMenuOpen(menuOpen === 'file' ? null : 'file'); }}
             className={`px-4 py-2 font-medium transition-colors ${
               menuOpen === 'file'
-                ? 'bg-surface-primary text-content-on-dark'
-                : 'text-content-secondary hover:text-content-on-dark'
+                ? 'opacity-70'
+                : 'hover:opacity-70'
             }`}
+            style={{ color: '#0B0A09' }}
           >
             File
           </button>
           {menuOpen === 'file' && (
-            <div className="absolute top-full left-0 z-50 min-w-[180px] py-1 border border-border bg-surface-secondary rounded-sm shadow-lg">
+            <div className="absolute top-full left-0 z-50 min-w-[180px] py-1 border border-border shadow-lg" style={{ backgroundColor: '#B5ADA6', color: '#0B0A09' }}>
               <button
                 onClick={() => { setMenuOpen(null); setShowImportModal(true); }}
-                className="w-full flex items-center gap-3 px-4 py-2 text-xs text-content-secondary hover:bg-surface-primary hover:text-content-on-dark transition-colors"
+                className="w-full flex items-center gap-3 px-4 py-2 text-xs hover:bg-surface-secondary transition-colors"
+                style={{ color: '#0B0A09' }}
+                onMouseEnter={(e) => e.currentTarget.style.color = '#F7F4F3'}
+                onMouseLeave={(e) => e.currentTarget.style.color = '#0B0A09'}
               >
                 <FontAwesomeIcon icon={faFileImport} className="text-[10px] w-3" />
                 Import Asset
@@ -362,7 +366,8 @@ export default function AudioWorkstationTool({ initialAssetId }) {
               <button
                 onClick={() => { setMenuOpen(null); handleSave(); }}
                 disabled={!hasChanges || !selectedAsset}
-                className="w-full flex items-center gap-3 px-4 py-2 text-xs text-content-secondary hover:bg-surface-primary hover:text-content-on-dark transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+                className="w-full flex items-center gap-3 px-4 py-2 text-xs hover:bg-surface-secondary hover:text-content-on-dark transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+                style={{ color: '#0B0A09' }}
               >
                 <FontAwesomeIcon icon={faFloppyDisk} className="text-[10px] w-3" />
                 Save
@@ -370,7 +375,8 @@ export default function AudioWorkstationTool({ initialAssetId }) {
               <button
                 onClick={() => { setMenuOpen(null); handleReset(); }}
                 disabled={!hasChanges}
-                className="w-full flex items-center gap-3 px-4 py-2 text-xs text-content-secondary hover:bg-surface-primary hover:text-content-on-dark transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+                className="w-full flex items-center gap-3 px-4 py-2 text-xs hover:bg-surface-secondary hover:text-content-on-dark transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+                style={{ color: '#0B0A09' }}
               >
                 <FontAwesomeIcon icon={faArrowRotateLeft} className="text-[10px] w-3" />
                 Revert Changes
@@ -382,31 +388,6 @@ export default function AudioWorkstationTool({ initialAssetId }) {
 
       {/* ── Transport Bar ─────────────────────────────────────────────────── */}
       <div className="flex items-center gap-5 px-4 py-2 border-b border-border bg-surface-secondary">
-        {/* Transport controls */}
-        <div className="flex items-center gap-1.5">
-          <button
-            onClick={handleStop}
-            disabled={!selectedAsset}
-            className="flex items-center justify-center w-8 h-8 rounded-sm text-content-secondary hover:text-content-on-dark transition-colors disabled:opacity-30"
-          >
-            <FontAwesomeIcon icon={faStop} className="text-xs" />
-          </button>
-          <button
-            onClick={handlePlayPause}
-            disabled={!selectedAsset}
-            className={`flex items-center justify-center w-9 h-9 rounded-sm transition-colors disabled:opacity-30 ${
-              isPlaying
-                ? 'bg-content-on-dark text-surface-primary'
-                : 'text-content-on-dark hover:bg-content-on-dark/10'
-            }`}
-          >
-            <FontAwesomeIcon icon={isPlaying ? faPause : faPlay} className="text-sm" />
-          </button>
-        </div>
-
-        {/* Divider */}
-        <div className="w-px h-6 bg-border" />
-
         {/* BPM — interactive: click value to edit, detect button */}
         <div className="flex items-center gap-2">
           <div className="flex flex-col items-center">
@@ -429,6 +410,27 @@ export default function AudioWorkstationTool({ initialAssetId }) {
             title="Detect BPM"
           >
             {isDetectingBpm ? '...' : 'Detect'}
+          </button>
+        </div>
+
+        {/* Divider */}
+        <div className="w-px h-6 bg-border" />
+
+        {/* Transport controls */}
+        <div className="flex items-center gap-1.5">
+          <button
+            onClick={handleStop}
+            disabled={!selectedAsset}
+            className="flex items-center justify-center w-8 h-8 rounded-sm text-content-secondary hover:text-content-on-dark transition-colors disabled:opacity-30"
+          >
+            <FontAwesomeIcon icon={faStop} className="text-xs" />
+          </button>
+          <button
+            onClick={handlePlayPause}
+            disabled={!selectedAsset}
+            className="flex items-center justify-center w-9 h-9 rounded-sm text-content-on-dark hover:text-content-secondary transition-colors disabled:opacity-30"
+          >
+            <FontAwesomeIcon icon={isPlaying ? faPause : faPlay} className="text-sm" />
           </button>
         </div>
 
