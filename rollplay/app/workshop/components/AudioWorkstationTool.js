@@ -201,6 +201,7 @@ export default function AudioWorkstationTool({ initialAssetId }) {
       progressColor: '#37322F',
       cursorColor: 'transparent',
       cursorWidth: 0,
+      interact: false,
       barWidth: 2,
       barGap: 1,
       barRadius: 1,
