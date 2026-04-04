@@ -149,12 +149,12 @@ export const useUnifiedAudio = () => {
 
   // Remote track states (for DM-controlled BGM audio)
   const [remoteTrackStates, setRemoteTrackStatesRaw] = useState({
-    audio_channel_A: { playbackState: PlaybackState.STOPPED, volume: 0.8, filename: null, asset_id: null, s3_url: null, type: ChannelType.BGM, channelGroup: ChannelType.BGM, track: 'A', currentTime: 0, duration: 0, looping: true },
-    audio_channel_B: { playbackState: PlaybackState.STOPPED, volume: 0.8, filename: null, asset_id: null, s3_url: null, type: ChannelType.BGM, channelGroup: ChannelType.BGM, track: 'B', currentTime: 0, duration: 0, looping: true },
-    audio_channel_C: { playbackState: PlaybackState.STOPPED, volume: 0.8, filename: null, asset_id: null, s3_url: null, type: ChannelType.BGM, channelGroup: ChannelType.BGM, track: 'C', currentTime: 0, duration: 0, looping: true },
-    audio_channel_D: { playbackState: PlaybackState.STOPPED, volume: 0.8, filename: null, asset_id: null, s3_url: null, type: ChannelType.BGM, channelGroup: ChannelType.BGM, track: 'D', currentTime: 0, duration: 0, looping: true },
-    audio_channel_E: { playbackState: PlaybackState.STOPPED, volume: 0.8, filename: null, asset_id: null, s3_url: null, type: ChannelType.BGM, channelGroup: ChannelType.BGM, track: 'E', currentTime: 0, duration: 0, looping: true },
-    audio_channel_F: { playbackState: PlaybackState.STOPPED, volume: 0.8, filename: null, asset_id: null, s3_url: null, type: ChannelType.BGM, channelGroup: ChannelType.BGM, track: 'F', currentTime: 0, duration: 0, looping: true },
+    audio_channel_A: { playbackState: PlaybackState.STOPPED, volume: 0.8, filename: null, asset_id: null, s3_url: null, type: ChannelType.BGM, channelGroup: ChannelType.BGM, track: 'A', currentTime: 0, duration: 0, looping: true, loop_mode: null, loop_start: null, loop_end: null },
+    audio_channel_B: { playbackState: PlaybackState.STOPPED, volume: 0.8, filename: null, asset_id: null, s3_url: null, type: ChannelType.BGM, channelGroup: ChannelType.BGM, track: 'B', currentTime: 0, duration: 0, looping: true, loop_mode: null, loop_start: null, loop_end: null },
+    audio_channel_C: { playbackState: PlaybackState.STOPPED, volume: 0.8, filename: null, asset_id: null, s3_url: null, type: ChannelType.BGM, channelGroup: ChannelType.BGM, track: 'C', currentTime: 0, duration: 0, looping: true, loop_mode: null, loop_start: null, loop_end: null },
+    audio_channel_D: { playbackState: PlaybackState.STOPPED, volume: 0.8, filename: null, asset_id: null, s3_url: null, type: ChannelType.BGM, channelGroup: ChannelType.BGM, track: 'D', currentTime: 0, duration: 0, looping: true, loop_mode: null, loop_start: null, loop_end: null },
+    audio_channel_E: { playbackState: PlaybackState.STOPPED, volume: 0.8, filename: null, asset_id: null, s3_url: null, type: ChannelType.BGM, channelGroup: ChannelType.BGM, track: 'E', currentTime: 0, duration: 0, looping: true, loop_mode: null, loop_start: null, loop_end: null },
+    audio_channel_F: { playbackState: PlaybackState.STOPPED, volume: 0.8, filename: null, asset_id: null, s3_url: null, type: ChannelType.BGM, channelGroup: ChannelType.BGM, track: 'F', currentTime: 0, duration: 0, looping: true, loop_mode: null, loop_start: null, loop_end: null },
   });
 
   // Ref mirror for use in event listeners (avoids re-registering on every state change)
@@ -597,15 +597,29 @@ export const useUnifiedAudio = () => {
             : 0;
       }
 
-      // Configure channel loop mode before play
-      channel.setLoopMode(shouldLoop ? LoopMode.FULL : LoopMode.OFF);
+      // Configure channel loop mode — support region looping from asset config
+      const effectiveLoopMode = completeTrackState?.loop_mode;
+      if (effectiveLoopMode === 'region' && completeTrackState?.loop_start != null && completeTrackState?.loop_end != null) {
+        channel.setLoopMode(LoopMode.REGION);
+        channel.setLoopRegion(completeTrackState.loop_start, completeTrackState.loop_end);
+      } else {
+        channel.setLoopMode(shouldLoop ? LoopMode.FULL : LoopMode.OFF);
+      }
 
       // Create and configure the BufferSource directly (we need hook-level
       // timer control, so we manage the source ourselves rather than using channel.play())
       const ctx = engine.context;
       const source = ctx.createBufferSource();
       source.buffer = audioBuffer;
-      source.loop = shouldLoop;
+
+      // Apply loop config to source node
+      if (effectiveLoopMode === 'region' && completeTrackState?.loop_start != null && completeTrackState?.loop_end != null) {
+        source.loop = true;
+        source.loopStart = completeTrackState.loop_start;
+        source.loopEnd = completeTrackState.loop_end;
+      } else {
+        source.loop = shouldLoop;
+      }
 
       // Connect source to channel's effect chain input
       if (!channel.effectChain) {

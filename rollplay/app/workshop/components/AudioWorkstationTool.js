@@ -10,6 +10,7 @@ import {
   faFileImport, faFloppyDisk, faArrowRotateLeft,
   faMagnifyingGlassPlus, faMagnifyingGlassMinus,
   faArrowsLeftRight, faArrowsUpDown,
+  faArrowsLeftRightToLine,
 } from '@fortawesome/free-solid-svg-icons';
 import { authFetch } from '@/app/shared/utils/authFetch';
 import AssetPicker from './AssetPicker';
@@ -28,13 +29,6 @@ async function fetchAssetById(assetId) {
   return response.json();
 }
 
-// ── View tabs ────────────────────────────────────────────────────────────────
-const TABS = [
-  { id: 'arrangement', label: 'ARRANGEMENT' },
-  { id: 'mixer', label: 'MIXER', disabled: true },
-  { id: 'loop-points', label: 'LOOP POINTS' },
-];
-
 const TRACK_COUNT = 6;
 const emptyTrack = (index) => ({
   index,
@@ -52,8 +46,8 @@ export default function AudioWorkstationTool({ initialAssetId }) {
   const [activeTrackIndex, setActiveTrackIndex] = useState(0);
   const [loadingAsset, setLoadingAsset] = useState(false);
   const [saveSuccess, setSaveSuccess] = useState(false);
-  const [activeTab, setActiveTab] = useState('arrangement');
   const [showImportModal, setShowImportModal] = useState(false);
+  const [loopDrawerOpen, setLoopDrawerOpen] = useState(false);
   const [menuOpen, setMenuOpen] = useState(null); // 'file' | 'edit' | null
   const [isDetectingBpm, setIsDetectingBpm] = useState(false);
 
@@ -83,6 +77,10 @@ export default function AudioWorkstationTool({ initialAssetId }) {
 
   // Per-track WaveSurfer refs (keyed by track index)
   const waveformRefs = useRef({});
+  // Decoded audio buffers per track — fed to engine channels for actual playback
+  const audioBuffersRef = useRef({});
+  // Cursor sync rAF ids per track
+  const cursorSyncRefs = useRef({});
   const wavesurferRefs = useRef({});
   const regionsRefs = useRef({});
   const [isPlaying, setIsPlaying] = useState(false);
@@ -105,12 +103,13 @@ export default function AudioWorkstationTool({ initialAssetId }) {
     return () => window.removeEventListener('click', handleClick);
   }, [menuOpen]);
 
-  // Spacebar → play/pause
+  // Spacebar → play/pause (uses a ref to always call the latest handler)
+  const handlePlayPauseRef = useRef(() => {});
   useEffect(() => {
     const handleKeyDown = (e) => {
       if (e.code === 'Space') {
         e.preventDefault();
-        wavesurferRefs.current[activeTrackIndex]?.playPause();
+        handlePlayPauseRef.current();
       }
     };
     window.addEventListener('keydown', handleKeyDown);
@@ -190,7 +189,7 @@ export default function AudioWorkstationTool({ initialAssetId }) {
     }
 
     await preview.init();
-    preview.initFromAsset(asset);
+    preview.initChannelFromAsset(trackIndex, asset);
 
     const ws = WaveSurfer.create({
       container,
@@ -207,6 +206,9 @@ export default function AudioWorkstationTool({ initialAssetId }) {
       minPxPerSec: hZoom || undefined,
     });
 
+    // Mute WaveSurfer — audio comes from AudioEngine, WaveSurfer is visual-only
+    ws.setVolume(0);
+
     const regions = ws.registerPlugin(RegionsPlugin.create());
     wavesurferRefs.current[trackIndex] = ws;
     regionsRefs.current[trackIndex] = regions;
@@ -216,6 +218,18 @@ export default function AudioWorkstationTool({ initialAssetId }) {
 
     ws.on('ready', async () => {
       setDuration(ws.getDuration());
+
+      // Decode the blob into an AudioBuffer for the engine channel
+      try {
+        const arrayBuffer = await blob.arrayBuffer();
+        const engine = preview.engine.current;
+        if (engine?.context) {
+          const audioBuffer = await engine.context.decodeAudioData(arrayBuffer.slice(0));
+          audioBuffersRef.current[trackIndex] = audioBuffer;
+        }
+      } catch (error) {
+        console.warn(`Failed to decode buffer for track ${trackIndex}:`, error);
+      }
 
       if (asset.loop_start != null && asset.loop_end != null) {
         regions.addRegion({
@@ -251,10 +265,7 @@ export default function AudioWorkstationTool({ initialAssetId }) {
       }
     });
 
-    ws.on('timeupdate', (time) => setCurrentTime(time));
-    ws.on('play', () => setIsPlaying(true));
-    ws.on('pause', () => setIsPlaying(false));
-    ws.on('finish', () => setIsPlaying(false));
+    // WaveSurfer is visual-only; playback state + time come from the engine channel
 
     regions.on('region-updated', (region) => {
       setTracks(prev => prev.map((t, i) => i === trackIndex ? {
@@ -288,12 +299,15 @@ export default function AudioWorkstationTool({ initialAssetId }) {
     });
   }, [tracks.map(t => t.asset?.id).join(',')]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Cleanup all WaveSurfer instances on unmount
+  // Cleanup all WaveSurfer instances + cursor sync loops on unmount
   useEffect(() => {
     return () => {
       Object.values(wavesurferRefs.current).forEach(ws => ws?.destroy());
+      Object.values(cursorSyncRefs.current).forEach(id => id && cancelAnimationFrame(id));
       wavesurferRefs.current = {};
       regionsRefs.current = {};
+      cursorSyncRefs.current = {};
+      audioBuffersRef.current = {};
       preview.destroy();
     };
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
@@ -311,16 +325,103 @@ export default function AudioWorkstationTool({ initialAssetId }) {
     });
   }, [trackHeight]);
 
+  // ── Engine channel helpers ────────────────────────────────────────────────
+  const applyLoopConfigToChannel = useCallback((trackIndex) => {
+    const channel = preview.getChannel(trackIndex);
+    if (!channel) return;
+    const track = tracks[trackIndex];
+    if (!track) return;
+    if (track.loopMode === 'region' && track.loopStart != null && track.loopEnd != null) {
+      channel.setLoopMode('region');
+      channel.setLoopRegion(track.loopStart, track.loopEnd);
+    } else if (track.loopMode === 'off') {
+      channel.setLoopMode('off');
+    } else {
+      channel.setLoopMode('full');
+    }
+  }, [tracks, preview]);
+
+  // Start rAF loop syncing engine playback time to WaveSurfer cursor
+  const startCursorSync = useCallback((trackIndex) => {
+    const channel = preview.getChannel(trackIndex);
+    const ws = wavesurferRefs.current[trackIndex];
+    if (!channel || !ws) return;
+
+    const tick = () => {
+      if (channel.playbackState !== 'playing') {
+        cursorSyncRefs.current[trackIndex] = null;
+        return;
+      }
+      ws.setTime(channel.currentTime);
+      setCurrentTime(channel.currentTime);
+      cursorSyncRefs.current[trackIndex] = requestAnimationFrame(tick);
+    };
+    cursorSyncRefs.current[trackIndex] = requestAnimationFrame(tick);
+  }, [preview]);
+
+  const stopCursorSync = useCallback((trackIndex) => {
+    if (cursorSyncRefs.current[trackIndex]) {
+      cancelAnimationFrame(cursorSyncRefs.current[trackIndex]);
+      cursorSyncRefs.current[trackIndex] = null;
+    }
+  }, []);
+
   // ── Transport controls (operate on active track) ─────────────────────────
-  const handlePlayPause = useCallback(() => {
-    wavesurferRefs.current[activeTrackIndex]?.playPause();
-  }, [activeTrackIndex]);
+  const handlePlayPause = useCallback(async () => {
+    const channel = preview.getChannel(activeTrackIndex);
+    const buffer = audioBuffersRef.current[activeTrackIndex];
+    if (!channel || !buffer) return;
+
+    if (channel.playbackState === 'playing') {
+      channel.pause();
+      stopCursorSync(activeTrackIndex);
+      setIsPlaying(false);
+    } else if (channel.playbackState === 'paused') {
+      await channel.resume();
+      setIsPlaying(true);
+      startCursorSync(activeTrackIndex);
+    } else {
+      applyLoopConfigToChannel(activeTrackIndex);
+      await channel.play(buffer);
+      setIsPlaying(true);
+      startCursorSync(activeTrackIndex);
+    }
+  }, [activeTrackIndex, preview, applyLoopConfigToChannel, startCursorSync, stopCursorSync]);
+
+  // Keep spacebar ref in sync
+  useEffect(() => {
+    handlePlayPauseRef.current = handlePlayPause;
+  }, [handlePlayPause]);
 
   const handleStop = useCallback(() => {
-    wavesurferRefs.current[activeTrackIndex]?.stop();
+    const channel = preview.getChannel(activeTrackIndex);
+    const ws = wavesurferRefs.current[activeTrackIndex];
+    channel?.stop();
+    stopCursorSync(activeTrackIndex);
+    ws?.setTime(0);
     setIsPlaying(false);
     setCurrentTime(0);
-  }, [activeTrackIndex]);
+  }, [activeTrackIndex, preview, stopCursorSync]);
+
+  // Apply loop config whenever the user changes it (live update while playing)
+  useEffect(() => {
+    applyLoopConfigToChannel(activeTrackIndex);
+  }, [loopMode, loopStart, loopEnd, activeTrackIndex, applyLoopConfigToChannel]);
+
+  // Handle channel 'ended' events (non-looping playback finished)
+  useEffect(() => {
+    const channel = preview.getChannel(activeTrackIndex);
+    if (!channel) return;
+    const onEnded = () => {
+      stopCursorSync(activeTrackIndex);
+      setIsPlaying(false);
+      setCurrentTime(0);
+      const ws = wavesurferRefs.current[activeTrackIndex];
+      ws?.setTime(0);
+    };
+    channel.on('ended', onEnded);
+    return () => channel.off('ended', onEnded);
+  }, [activeTrackIndex, preview, stopCursorSync]);
 
   // ── BPM detection (active track) ─────────────────────────────────────────
   const handleDetectBpm = useCallback(async () => {
@@ -631,36 +732,15 @@ export default function AudioWorkstationTool({ initialAssetId }) {
         )}
       </div>
 
-      {/* ── Tab Navigation ────────────────────────────────────────────────── */}
-      <div className="flex items-center gap-0 border-b border-border bg-surface-secondary">
-        {TABS.map(tab => (
-          <button
-            key={tab.id}
-            onClick={() => !tab.disabled && setActiveTab(tab.id)}
-            disabled={tab.disabled}
-            className={`px-5 py-2.5 text-[11px] font-bold uppercase tracking-wider transition-colors border-b-2 ${
-              activeTab === tab.id
-                ? 'border-content-on-dark text-content-on-dark'
-                : tab.disabled
-                  ? 'border-transparent text-content-secondary/30 cursor-not-allowed'
-                  : 'border-transparent text-content-secondary hover:text-content-on-dark'
-            }`}
-          >
-            {tab.label}
-          </button>
-        ))}
-      </div>
-
       {/* ── Main Content Area ─────────────────────────────────────────────── */}
       <div className="flex-1 min-h-0 flex flex-col">
         {loadingAsset ? (
           <div className="flex-1 flex items-center justify-center">
             <div className="text-sm text-content-secondary">Loading track...</div>
           </div>
-        ) : activeTab === 'arrangement' ? (
-          /* ── Arrangement View — 6 track lanes ────────────────────────────── */
+        ) : (
+          /* ── Arrangement View — 6 track lanes (always visible) ──────────── */
           <div className="flex-1 min-h-0 overflow-auto">
-            {/* Track lanes */}
             {tracks.map((track, i) => {
               const isActive = i === activeTrackIndex;
               const hasAsset = track.asset !== null;
@@ -699,6 +779,13 @@ export default function AudioWorkstationTool({ initialAssetId }) {
                         <button className="w-6 h-5 rounded text-[10px] font-bold bg-border/40 text-content-secondary hover:bg-border hover:text-content-on-dark transition-colors">
                           M
                         </button>
+                        <button
+                          onClick={(e) => { e.stopPropagation(); setActiveTrackIndex(i); setLoopDrawerOpen(prev => !prev); }}
+                          className="w-6 h-5 rounded flex items-center justify-center bg-border/40 text-content-secondary hover:bg-border hover:text-content-on-dark transition-colors"
+                          title="Toggle loop points drawer"
+                        >
+                          <FontAwesomeIcon icon={faArrowsLeftRightToLine} className="text-xs" />
+                        </button>
                       </div>
                     )}
                   </div>
@@ -727,10 +814,23 @@ export default function AudioWorkstationTool({ initialAssetId }) {
               );
             })}
           </div>
-        ) : activeTab === 'loop-points' ? (
-          /* ── Loop Points View ──────────────────────────────────────────── */
-          selectedAsset ? (
-            <div className="flex-1 min-h-0 p-6 overflow-y-auto">
+        )}
+
+        {/* ── Loop Points Drawer (bottom) ─────────────────────────────────── */}
+        {loopDrawerOpen && selectedAsset && (
+          <div className="flex-shrink-0 border-t border-border-active bg-surface-secondary max-h-[50%] overflow-y-auto">
+            <div className="flex items-center justify-between px-4 py-2 border-b border-border">
+              <div className="text-[11px] font-bold uppercase tracking-wider text-content-on-dark">
+                Loop Points — {selectedAsset.filename}
+              </div>
+              <button
+                onClick={() => setLoopDrawerOpen(false)}
+                className="text-[10px] text-content-secondary hover:text-content-on-dark transition-colors uppercase tracking-wider"
+              >
+                Close
+              </button>
+            </div>
+            <div className="p-4">
               <AudioWorkstationControls
                 loopMode={loopMode}
                 onLoopModeChange={setLoopMode}
@@ -745,15 +845,6 @@ export default function AudioWorkstationTool({ initialAssetId }) {
                 hasChanges={hasChanges}
               />
             </div>
-          ) : (
-            <div className="flex-1 flex items-center justify-center text-sm text-content-secondary">
-              Import a track to configure loop points
-            </div>
-          )
-        ) : (
-          /* ── Placeholder tabs ──────────────────────────────────────────── */
-          <div className="flex-1 flex items-center justify-center text-sm text-content-secondary/40">
-            Coming soon
           </div>
         )}
       </div>

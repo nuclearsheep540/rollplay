@@ -9,16 +9,15 @@ import { CHANNEL_PRESETS } from '@/app/audio_management/engine/presets';
 import { assetToEngineConfig } from '@/app/audio_management/adapters/assetAdapter';
 
 /**
- * Workshop audio preview — single-channel playback through the engine's
- * full effect chain (HPF/LPF/reverb). DM hears the track as it would
- * sound in-game while editing loop points.
+ * Workshop audio preview — multi-channel playback through the engine's
+ * full effect chain (HPF/LPF/reverb). One channel per DAW track.
  *
- * WaveSurfer handles waveform visualization.
- * This hook handles audition playback through the effect chain.
+ * The engine's AudioChannel uses native Web Audio API `source.loopStart` /
+ * `source.loopEnd`, so loop regions are sample-accurate (no JS polling).
  */
 export function useWorkshopPreview() {
   const engineRef = useRef(null);
-  const channelRef = useRef(null);
+  const channelsRef = useRef({}); // { [trackIndex]: AudioChannel }
   const initializedRef = useRef(false);
 
   const init = useCallback(async () => {
@@ -28,55 +27,39 @@ export function useWorkshopPreview() {
     await engine.init();
     await engine.unlock();
 
-    const channel = engine.createChannel('preview', CHANNEL_PRESETS.BGM);
-
     engineRef.current = engine;
-    channelRef.current = channel;
     initializedRef.current = true;
   }, []);
 
   /**
-   * Apply asset's stored effect defaults to the preview channel.
-   * Uses the adapter to translate backend fields → engine config.
+   * Get or create a channel for a specific track index.
    */
-  const initFromAsset = useCallback((asset) => {
-    const channel = channelRef.current;
-    if (!channel?.effectChain) return;
-
-    const config = assetToEngineConfig(asset);
-    if (!config) return;
-
-    channel.effectChain.applyEffects(config.effects);
+  const getChannel = useCallback((trackIndex) => {
+    const engine = engineRef.current;
+    if (!engine) return null;
+    if (!channelsRef.current[trackIndex]) {
+      const channelId = `preview_${trackIndex}`;
+      channelsRef.current[trackIndex] = engine.createChannel(channelId, CHANNEL_PRESETS.BGM);
+    }
+    return channelsRef.current[trackIndex];
   }, []);
 
   /**
-   * Load and play a buffer through the preview channel.
-   * @param {AudioBuffer} buffer - Decoded audio buffer
-   * @param {object} options - { offset, volume }
+   * Apply asset's stored effect defaults to a track's channel.
    */
-  const play = useCallback(async (buffer, options = {}) => {
-    const channel = channelRef.current;
-    if (!channel) return false;
-    return channel.play(buffer, options);
-  }, []);
-
-  const stop = useCallback(() => {
-    channelRef.current?.stop();
-  }, []);
-
-  const pause = useCallback(() => {
-    channelRef.current?.pause();
-  }, []);
-
-  const resume = useCallback(async () => {
-    return channelRef.current?.resume();
-  }, []);
+  const initChannelFromAsset = useCallback((trackIndex, asset) => {
+    const channel = getChannel(trackIndex);
+    if (!channel?.effectChain) return;
+    const config = assetToEngineConfig(asset);
+    if (!config) return;
+    channel.effectChain.applyEffects(config.effects);
+  }, [getChannel]);
 
   const destroy = useCallback(() => {
     if (engineRef.current) {
       engineRef.current.destroy();
       engineRef.current = null;
-      channelRef.current = null;
+      channelsRef.current = {};
       initializedRef.current = false;
     }
   }, []);
@@ -88,13 +71,9 @@ export function useWorkshopPreview() {
 
   return {
     init,
-    initFromAsset,
-    play,
-    stop,
-    pause,
-    resume,
+    getChannel,
+    initChannelFromAsset,
     destroy,
     engine: engineRef,
-    channel: channelRef,
   };
 }
