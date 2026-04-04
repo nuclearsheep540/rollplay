@@ -27,20 +27,10 @@ function AudioWorkstationContent() {
     entryFromRef.current = searchParams.get('from') || 'workshop'
   }
 
-  const backLabel = !selectedAssetId
-    ? 'Workshop'
-    : entryFromRef.current === 'library' ? 'Library' : 'Audio Workstation'
+  const backLabel = entryFromRef.current === 'library' ? 'Library' : 'Workshop'
 
   const { user, loading, handleLogout } = useAuth()
   const { toasts, dismissToast } = useToast()
-
-  const handleAssetSelect = (assetId) => {
-    if (assetId) {
-      router.push(`/workshop/audio-workstation?asset_id=${assetId}`)
-    } else {
-      router.push('/workshop/audio-workstation')
-    }
-  }
 
   if (!user || loading) {
     return (
@@ -100,8 +90,7 @@ function AudioWorkstationContent() {
 
         <div className="flex-1 min-h-0">
           <AudioWorkstationTool
-            selectedAssetId={selectedAssetId}
-            onAssetSelect={handleAssetSelect}
+            initialAssetId={selectedAssetId}
           />
         </div>
       </main>

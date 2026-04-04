@@ -4,12 +4,13 @@
 'use client'
 
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
-import { faRepeat, faRotateRight, faBan, faWaveSquare, faFloppyDisk, faArrowRotateLeft, faTrash } from '@fortawesome/free-solid-svg-icons';
+import { faRepeat, faRotateRight, faBan, faFloppyDisk, faArrowRotateLeft, faTrash } from '@fortawesome/free-solid-svg-icons';
 
 /**
- * Sidebar controls for the Audio Workstation.
+ * Loop Points tab content for the Audio Workstation.
  *
- * Sections: Loop Mode, BPM, Loop Region, Save/Reset.
+ * Sections: Loop Mode, Loop Region, Save/Reset.
+ * BPM is managed from the transport bar in the arrangement view.
  * Pure presentation — all state is owned by AudioWorkstationTool.
  */
 export default function AudioWorkstationControls({
@@ -17,10 +18,6 @@ export default function AudioWorkstationControls({
   onLoopModeChange,
   loopStart,
   loopEnd,
-  bpm,
-  onBpmChange,
-  onDetectBpm,
-  isDetectingBpm,
   onClearRegion,
   onSave,
   onReset,
@@ -59,33 +56,6 @@ export default function AudioWorkstationControls({
             </button>
           ))}
         </div>
-      </div>
-
-      {/* BPM */}
-      <div className="rounded border border-border bg-surface-secondary p-4">
-        <h3 className="text-xs font-semibold text-content-secondary uppercase tracking-wider mb-3">BPM</h3>
-        <div className="flex items-center gap-2 mb-2">
-          <input
-            type="number"
-            min="1"
-            max="300"
-            value={bpm ?? ''}
-            onChange={(e) => {
-              const val = e.target.value === '' ? null : parseFloat(e.target.value);
-              onBpmChange(val);
-            }}
-            placeholder="--"
-            className="flex-1 w-full px-3 py-2 text-sm bg-surface-primary border border-border rounded-sm text-content-on-dark placeholder:text-content-secondary/40 focus:outline-none focus:border-border-active"
-          />
-        </div>
-        <button
-          onClick={onDetectBpm}
-          disabled={isDetectingBpm}
-          className="w-full flex items-center justify-center gap-2 px-3 py-2 text-xs font-medium rounded-sm border border-border text-content-secondary hover:border-border-active hover:text-content-on-dark transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
-        >
-          <FontAwesomeIcon icon={faWaveSquare} className="text-[10px]" />
-          {isDetectingBpm ? 'Detecting...' : 'Detect BPM'}
-        </button>
       </div>
 
       {/* Loop Region */}
