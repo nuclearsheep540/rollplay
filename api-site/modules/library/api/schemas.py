@@ -87,6 +87,12 @@ class MediaAssetResponse(BaseModel):
     effect_reverb_mix: Optional[float] = None
     effect_reverb_preset: Optional[str] = None
 
+    # Music-only loop/BPM fields
+    loop_start: Optional[float] = None
+    loop_end: Optional[float] = None
+    bpm: Optional[float] = None
+    loop_mode: Optional[str] = None
+
     # Image fields
     image_fit: Optional[str] = None
     aspect_ratio: Optional[str] = None
@@ -142,6 +148,10 @@ class UpdateAudioConfigRequest(BaseModel):
     effect_reverb_enabled: Optional[bool] = Field(None, description="Reverb enabled")
     effect_reverb_mix: Optional[float] = Field(None, ge=0.0, le=1.3, description="Reverb mix level")
     effect_reverb_preset: Optional[str] = Field(None, description="Reverb preset name")
+    loop_start: Optional[float] = Field(None, ge=0, description="Loop region start in seconds")
+    loop_end: Optional[float] = Field(None, ge=0, description="Loop region end in seconds")
+    bpm: Optional[float] = Field(None, gt=0, description="Beats per minute")
+    loop_mode: Optional[str] = Field(None, description="Loop mode: off, full, or region")
 
 
 # Aliases for backwards compatibility

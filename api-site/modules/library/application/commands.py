@@ -423,7 +423,11 @@ class UpdateAudioConfig:
         effect_lpf_mix: Optional[float] = None,
         effect_reverb_enabled: Optional[bool] = None,
         effect_reverb_mix: Optional[float] = None,
-        effect_reverb_preset: Optional[str] = None
+        effect_reverb_preset: Optional[str] = None,
+        loop_start: Optional[float] = None,
+        loop_end: Optional[float] = None,
+        bpm: Optional[float] = None,
+        loop_mode: Optional[str] = None
     ) -> Union[MusicAsset, SfxAsset]:
         """
         Update audio configuration for an audio asset.
@@ -472,6 +476,10 @@ class UpdateAudioConfig:
                 effect_reverb_enabled=effect_reverb_enabled,
                 effect_reverb_mix=effect_reverb_mix,
                 effect_reverb_preset=effect_reverb_preset,
+                loop_start=loop_start,
+                loop_end=loop_end,
+                bpm=bpm,
+                loop_mode=loop_mode,
             )
 
         asset.update_audio_config(**config_kwargs)

@@ -38,6 +38,10 @@ class AudioChannelState(ContractModel):
     # Channel-level state (persistent, survives track swaps)
     muted: bool = False
     soloed: bool = False
+    # Loop point configuration
+    loop_mode: Optional[str] = None        # "off" | "full" | "region" | None (legacy)
+    loop_start: Optional[float] = Field(default=None, ge=0)
+    loop_end: Optional[float] = Field(default=None, ge=0)
     # Runtime state (not persisted to PostgreSQL)
     playback_state: Literal["playing", "paused", "stopped"] = "stopped"
     started_at: Optional[float] = Field(default=None, ge=0)
@@ -50,4 +54,7 @@ class AudioTrackConfig(ContractModel):
     volume: Optional[float] = Field(default=None, ge=0.0, le=1.3)
     looping: Optional[bool] = None
     effects: AudioEffects = AudioEffects()
+    loop_mode: Optional[str] = None
+    loop_start: Optional[float] = Field(default=None, ge=0)
+    loop_end: Optional[float] = Field(default=None, ge=0)
     paused_elapsed: Optional[float] = Field(default=None, ge=0)

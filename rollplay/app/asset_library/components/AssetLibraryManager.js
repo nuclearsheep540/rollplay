@@ -238,7 +238,7 @@ export default function AssetLibraryManager({ user }) {
       items.push({
         label: 'Edit Loop Points',
         icon: <FontAwesomeIcon icon={faSliders} className="text-xs" />,
-        onClick: () => router.push(`/workshop/audio-workstation?asset_id=${asset.id}`),
+        onClick: () => router.push(`/workshop/audio-workstation?asset_id=${asset.id}&from=library`),
       })
     }
 

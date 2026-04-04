@@ -954,18 +954,23 @@ class WebsocketEvent():
 
                 if operation == "play":
                     ch = current_audio_state.get(track_id, {})
-                    channel_state = AudioChannelState(
-                        **{**ch,
-                           "filename": op.get("filename"),
-                           "asset_id": op.get("asset_id"),
-                           "s3_url": op.get("s3_url"),
-                           "volume": op.get("volume", 0.8),
-                           "looping": op.get("looping", True),
-                           "playback_state": "playing",
-                           "started_at": time.time(),
-                           "paused_elapsed": None,
-                           }
-                    )
+                    play_fields = {
+                        "filename": op.get("filename"),
+                        "asset_id": op.get("asset_id"),
+                        "s3_url": op.get("s3_url"),
+                        "volume": op.get("volume", 0.8),
+                        "looping": op.get("looping", True),
+                        "playback_state": "playing",
+                        "started_at": time.time(),
+                        "paused_elapsed": None,
+                    }
+                    if op.get("loop_mode") is not None:
+                        play_fields["loop_mode"] = op.get("loop_mode")
+                    if op.get("loop_start") is not None:
+                        play_fields["loop_start"] = op.get("loop_start")
+                    if op.get("loop_end") is not None:
+                        play_fields["loop_end"] = op.get("loop_end")
+                    channel_state = AudioChannelState(**{**ch, **play_fields})
                     GameService.update_audio_state(client_id, track_id, channel_state.model_dump())
 
                 elif operation == "stop":
@@ -1004,7 +1009,10 @@ class WebsocketEvent():
 
                 elif operation == "loop":
                     ch = current_audio_state.get(track_id, {}) if current_audio_state else {}
-                    channel_state = AudioChannelState(**{**ch, "looping": op.get("looping")})
+                    loop_update = {"looping": op.get("looping")}
+                    if op.get("loop_mode") is not None:
+                        loop_update["loop_mode"] = op.get("loop_mode")
+                    channel_state = AudioChannelState(**{**ch, **loop_update})
                     GameService.update_audio_state(client_id, track_id, channel_state.model_dump())
 
                 elif operation == "load":

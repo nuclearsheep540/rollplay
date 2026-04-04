@@ -141,6 +141,10 @@ class MediaAssetRepository:
                 existing.effect_reverb_enabled = aggregate.effect_reverb_enabled
                 existing.effect_reverb_mix = aggregate.effect_reverb_mix
                 existing.effect_reverb_preset = aggregate.effect_reverb_preset
+                existing.loop_start = aggregate.loop_start
+                existing.loop_end = aggregate.loop_end
+                existing.bpm = aggregate.bpm
+                existing.loop_mode = aggregate.loop_mode
 
             # Update sfx-specific fields if SfxAsset
             if isinstance(aggregate, SfxAsset) and isinstance(existing, SfxAssetModel):
@@ -197,7 +201,11 @@ class MediaAssetRepository:
                     effect_lpf_mix=aggregate.effect_lpf_mix,
                     effect_reverb_enabled=aggregate.effect_reverb_enabled,
                     effect_reverb_mix=aggregate.effect_reverb_mix,
-                    effect_reverb_preset=aggregate.effect_reverb_preset
+                    effect_reverb_preset=aggregate.effect_reverb_preset,
+                    loop_start=aggregate.loop_start,
+                    loop_end=aggregate.loop_end,
+                    bpm=aggregate.bpm,
+                    loop_mode=aggregate.loop_mode
                 )
             elif isinstance(aggregate, SfxAsset):
                 model = SfxAssetModel(
@@ -304,7 +312,11 @@ class MediaAssetRepository:
                 effect_lpf_mix=model.effect_lpf_mix,
                 effect_reverb_enabled=model.effect_reverb_enabled,
                 effect_reverb_mix=model.effect_reverb_mix,
-                effect_reverb_preset=model.effect_reverb_preset
+                effect_reverb_preset=model.effect_reverb_preset,
+                loop_start=model.loop_start,
+                loop_end=model.loop_end,
+                bpm=model.bpm,
+                loop_mode=model.loop_mode
             )
 
         # If it's a SfxAssetModel, promote to SfxAsset with audio fields

@@ -58,6 +58,8 @@ export default function VerticalChannelStrip({
   onToggleSend,
   // Loop toggle (channel strips only)
   isLooping = true,
+  loopMode = null,
+  hasLoopRegion = false,
   onLoopToggle,
   // Reverb preset (effect strips only)
   reverbPreset = 'room',
@@ -222,15 +224,25 @@ export default function VerticalChannelStrip({
         {isChannel ? (
           <>
             <button
-              onClick={() => onLoopToggle?.(trackId, !isLooping)}
+              onClick={() => {
+                // Three-state cycle: off → full → region (if available) → off
+                const current = loopMode || (isLooping ? 'full' : 'off');
+                let next;
+                if (current === 'off') next = 'full';
+                else if (current === 'full' && hasLoopRegion) next = 'region';
+                else next = 'off';
+                onLoopToggle?.(trackId, next !== 'off', next);
+              }}
               className={`w-full h-5 rounded text-[11px] font-bold transition-colors ${
-                isLooping
-                  ? 'bg-rose-600 text-white'
-                  : 'bg-gray-700 text-gray-500 hover:bg-gray-600'
+                loopMode === 'region'
+                  ? 'bg-amber-600 text-white'
+                  : isLooping
+                    ? 'bg-rose-600 text-white'
+                    : 'bg-gray-700 text-gray-500 hover:bg-gray-600'
               } ${disabledClass}`}
-              title={isLooping ? 'Disable looping' : 'Enable looping'}
+              title={loopMode === 'region' ? 'Loop region' : isLooping ? 'Looping (full)' : 'Loop off'}
             >
-              LOOP
+              {loopMode === 'region' ? 'RGN' : 'LOOP'}
             </button>
             {['eq', 'reverb'].map(bus => (
               <button

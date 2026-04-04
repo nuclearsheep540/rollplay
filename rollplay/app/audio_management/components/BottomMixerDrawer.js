@@ -107,13 +107,14 @@ export default function BottomMixerDrawer({
     }]);
   }, [channelEffects, sendRemoteAudioBatch]);
 
-  // Loop toggle handler — toggles looping and broadcasts
-  const handleLoopToggle = useCallback((trackId, looping) => {
+  // Loop toggle handler — supports three-state cycle (off/full/region)
+  const handleLoopToggle = useCallback((trackId, looping, loopMode) => {
     onLoopToggle?.(trackId, looping);
     sendRemoteAudioBatch?.([{
       trackId,
       operation: 'loop',
       looping,
+      loop_mode: loopMode,
     }]);
   }, [onLoopToggle, sendRemoteAudioBatch]);
 
@@ -176,6 +177,8 @@ export default function BottomMixerDrawer({
                 sends={effects}
                 onToggleSend={handleToggleSend}
                 isLooping={trackState.looping ?? true}
+                loopMode={trackState.loop_mode || null}
+                hasLoopRegion={trackState.loop_start != null && trackState.loop_end != null}
                 onLoopToggle={handleLoopToggle}
                 isMuted={mutedChannels[trackId] || false}
                 isSoloed={soloedChannels[trackId] || false}
