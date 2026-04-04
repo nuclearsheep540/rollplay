@@ -29,7 +29,7 @@ async function fetchAssetById(assetId) {
   return response.json();
 }
 
-const TRACK_COUNT = 6;
+const TRACK_COUNT = 1;
 const emptyTrack = (index) => ({
   index,
   asset: null,
@@ -195,8 +195,8 @@ export default function AudioWorkstationTool({ initialAssetId }) {
       container,
       waveColor: '#B5ADA6',
       progressColor: '#37322F',
-      cursorColor: '#F7F4F3',
-      cursorWidth: 1,
+      cursorColor: 'transparent',
+      cursorWidth: 0,
       barWidth: 2,
       barGap: 1,
       barRadius: 1,
@@ -341,18 +341,16 @@ export default function AudioWorkstationTool({ initialAssetId }) {
     }
   }, [tracks, preview]);
 
-  // Start rAF loop syncing engine playback time to WaveSurfer cursor
+  // Start rAF loop syncing engine playback time to React state (drives unified playhead)
   const startCursorSync = useCallback((trackIndex) => {
     const channel = preview.getChannel(trackIndex);
-    const ws = wavesurferRefs.current[trackIndex];
-    if (!channel || !ws) return;
+    if (!channel) return;
 
     const tick = () => {
       if (channel.playbackState !== 'playing') {
         cursorSyncRefs.current[trackIndex] = null;
         return;
       }
-      ws.setTime(channel.currentTime);
       setCurrentTime(channel.currentTime);
       cursorSyncRefs.current[trackIndex] = requestAnimationFrame(tick);
     };
@@ -395,10 +393,8 @@ export default function AudioWorkstationTool({ initialAssetId }) {
 
   const handleStop = useCallback(() => {
     const channel = preview.getChannel(activeTrackIndex);
-    const ws = wavesurferRefs.current[activeTrackIndex];
     channel?.stop();
     stopCursorSync(activeTrackIndex);
-    ws?.setTime(0);
     setIsPlaying(false);
     setCurrentTime(0);
   }, [activeTrackIndex, preview, stopCursorSync]);
@@ -416,8 +412,6 @@ export default function AudioWorkstationTool({ initialAssetId }) {
       stopCursorSync(activeTrackIndex);
       setIsPlaying(false);
       setCurrentTime(0);
-      const ws = wavesurferRefs.current[activeTrackIndex];
-      ws?.setTime(0);
     };
     channel.on('ended', onEnded);
     return () => channel.off('ended', onEnded);
@@ -740,7 +734,7 @@ export default function AudioWorkstationTool({ initialAssetId }) {
           </div>
         ) : (
           /* ── Arrangement View — 6 track lanes (always visible) ──────────── */
-          <div className="flex-1 min-h-0 overflow-auto">
+          <div className="flex-1 min-h-0 overflow-auto relative">
             {tracks.map((track, i) => {
               const isActive = i === activeTrackIndex;
               const hasAsset = track.asset !== null;
@@ -756,7 +750,10 @@ export default function AudioWorkstationTool({ initialAssetId }) {
                     backgroundColor: hasAsset ? COLORS.onyx : `${COLORS.onyx}80`,
                     height: `${trackHeight}px`,
                   }}
-                  onClick={() => setActiveTrackIndex(i)}
+                  onClick={() => {
+                    setActiveTrackIndex(i);
+                    if (!hasAsset) setShowImportModal(true);
+                  }}
                 >
                   {/* Track header */}
                   <div
@@ -793,20 +790,28 @@ export default function AudioWorkstationTool({ initialAssetId }) {
                   {/* Waveform area */}
                   <div className="flex-1 min-w-0 relative">
                     {hasAsset ? (
-                      <div
-                        ref={(el) => { waveformRefs.current[i] = el; }}
-                        className="w-full h-full"
-                      />
+                      <>
+                        <div
+                          ref={(el) => { waveformRefs.current[i] = el; }}
+                          className="w-full h-full"
+                        />
+                        {/* Unified playhead — rendered on every loaded track, same position */}
+                        {duration > 0 && (
+                          <div
+                            className="absolute top-0 bottom-0 pointer-events-none z-20"
+                            style={{
+                              left: `${(currentTime / duration) * 100}%`,
+                              width: '1px',
+                              backgroundColor: COLORS.smoke,
+                            }}
+                          />
+                        )}
+                      </>
                     ) : (
                       <div className="w-full h-full flex items-center justify-center">
-                        {isActive && (
-                          <button
-                            onClick={(e) => { e.stopPropagation(); setShowImportModal(true); }}
-                            className="text-sm text-content-secondary"
-                          >
-                            + Import
-                          </button>
-                        )}
+                        <span className="text-sm text-content-secondary">
+                          Click to import a track
+                        </span>
                       </div>
                     )}
                   </div>
