@@ -35,36 +35,63 @@ const TABS = [
   { id: 'loop-points', label: 'LOOP POINTS' },
 ];
 
+const TRACK_COUNT = 6;
+const emptyTrack = (index) => ({
+  index,
+  asset: null,
+  loopMode: 'full',
+  loopStart: null,
+  loopEnd: null,
+  bpm: null,
+  saved: { loopMode: 'full', loopStart: null, loopEnd: null, bpm: null },
+});
+
 export default function AudioWorkstationTool({ initialAssetId }) {
   const assetManager = useAssetManager();
-  const [selectedAsset, setSelectedAsset] = useState(null);
+  const [tracks, setTracks] = useState(() => Array.from({ length: TRACK_COUNT }, (_, i) => emptyTrack(i)));
+  const [activeTrackIndex, setActiveTrackIndex] = useState(0);
   const [loadingAsset, setLoadingAsset] = useState(false);
   const [saveSuccess, setSaveSuccess] = useState(false);
   const [activeTab, setActiveTab] = useState('arrangement');
   const [showImportModal, setShowImportModal] = useState(false);
-  const [menuOpen, setMenuOpen] = useState(null); // 'file' | null
-
-  // Draft state — local edits before save
-  const [loopMode, setLoopMode] = useState('full');
-  const [loopStart, setLoopStart] = useState(null);
-  const [loopEnd, setLoopEnd] = useState(null);
-  const [bpm, setBpm] = useState(null);
+  const [menuOpen, setMenuOpen] = useState(null); // 'file' | 'edit' | null
   const [isDetectingBpm, setIsDetectingBpm] = useState(false);
 
-  // Saved state reference — for detecting changes and reset
-  const savedStateRef = useRef({ loopMode: 'full', loopStart: null, loopEnd: null, bpm: null });
+  // Convenience accessors for the active track
+  const activeTrack = tracks[activeTrackIndex];
+  const selectedAsset = activeTrack?.asset;
+  const loopMode = activeTrack?.loopMode ?? 'full';
+  const loopStart = activeTrack?.loopStart ?? null;
+  const loopEnd = activeTrack?.loopEnd ?? null;
+  const bpm = activeTrack?.bpm ?? null;
 
-  // WaveSurfer refs
-  const waveformRef = useRef(null);
-  const wavesurferRef = useRef(null);
-  const regionsRef = useRef(null);
+  const setActiveTrackField = useCallback((field, value) => {
+    setTracks(prev => prev.map((t, i) => i === activeTrackIndex ? { ...t, [field]: value } : t));
+  }, [activeTrackIndex]);
+
+  const setLoopMode = (v) => setActiveTrackField('loopMode', v);
+  const setLoopStart = (v) => setActiveTrackField('loopStart', v);
+  const setLoopEnd = (v) => setActiveTrackField('loopEnd', v);
+  const setBpm = (v) => setActiveTrackField('bpm', v);
+
+  const hasChanges = (
+    loopMode !== activeTrack?.saved.loopMode ||
+    loopStart !== activeTrack?.saved.loopStart ||
+    loopEnd !== activeTrack?.saved.loopEnd ||
+    bpm !== activeTrack?.saved.bpm
+  );
+
+  // Per-track WaveSurfer refs (keyed by track index)
+  const waveformRefs = useRef({});
+  const wavesurferRefs = useRef({});
+  const regionsRefs = useRef({});
   const [isPlaying, setIsPlaying] = useState(false);
   const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState(0);
 
   // Zoom state
-  const [hZoom, setHZoom] = useState(1);       // horizontal zoom level (minPxPerSec multiplier)
-  const [trackHeight, setTrackHeight] = useState(120); // vertical track height in px
+  const [hZoom, setHZoom] = useState(0);
+  const [trackHeight, setTrackHeight] = useState(120);
 
   // Preview hook — single-channel engine for audition through effects
   const preview = useWorkshopPreview();
@@ -83,7 +110,7 @@ export default function AudioWorkstationTool({ initialAssetId }) {
     const handleKeyDown = (e) => {
       if (e.code === 'Space') {
         e.preventDefault();
-        wavesurferRef.current?.playPause();
+        wavesurferRefs.current[activeTrackIndex]?.playPause();
       }
     };
     window.addEventListener('keydown', handleKeyDown);
@@ -97,28 +124,25 @@ export default function AudioWorkstationTool({ initialAssetId }) {
     return 'full';
   };
 
-  const initDraftFromAsset = (asset) => {
+  const initTrackFromAsset = useCallback((trackIndex, asset) => {
     const mode = resolveLoopMode(asset);
-    setLoopMode(mode);
-    setLoopStart(asset.loop_start ?? null);
-    setLoopEnd(asset.loop_end ?? null);
-    setBpm(asset.bpm ?? null);
-    savedStateRef.current = {
+    setTracks(prev => prev.map((t, i) => i === trackIndex ? {
+      ...t,
+      asset,
       loopMode: mode,
       loopStart: asset.loop_start ?? null,
       loopEnd: asset.loop_end ?? null,
       bpm: asset.bpm ?? null,
-    };
-  };
+      saved: {
+        loopMode: mode,
+        loopStart: asset.loop_start ?? null,
+        loopEnd: asset.loop_end ?? null,
+        bpm: asset.bpm ?? null,
+      },
+    } : t));
+  }, []);
 
-  const hasChanges = (
-    loopMode !== savedStateRef.current.loopMode ||
-    loopStart !== savedStateRef.current.loopStart ||
-    loopEnd !== savedStateRef.current.loopEnd ||
-    bpm !== savedStateRef.current.bpm
-  );
-
-  // ── Import asset ─────────────────────────────────────────────────────────
+  // ── Import asset into next available track ────────────────────────────────
   const importAsset = useCallback(async (assetId) => {
     setLoadingAsset(true);
     setSaveSuccess(false);
@@ -130,165 +154,189 @@ export default function AudioWorkstationTool({ initialAssetId }) {
       return;
     }
 
-    setSelectedAsset(assetData);
-    initDraftFromAsset(assetData);
+    // Find next empty track slot
+    const targetIndex = tracks.findIndex(t => t.asset === null);
+    if (targetIndex === -1) {
+      console.warn('All track slots are full');
+      setLoadingAsset(false);
+      setShowImportModal(false);
+      return;
+    }
+
+    initTrackFromAsset(targetIndex, assetData);
+    setActiveTrackIndex(targetIndex);
     setLoadingAsset(false);
     setShowImportModal(false);
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [tracks, initTrackFromAsset]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Auto-import from deep-link (Library → Edit Loop Points)
   useEffect(() => {
-    if (initialAssetId && !selectedAsset) {
+    if (initialAssetId && tracks.every(t => t.asset === null)) {
       importAsset(initialAssetId);
     }
   }, [initialAssetId]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // ── WaveSurfer initialization ────────────────────────────────────────────
-  useEffect(() => {
-    if (!selectedAsset?.s3_url || !waveformRef.current) return;
+  // ── WaveSurfer initialization per track ──────────────────────────────────
+  // Creates/destroys a WaveSurfer instance when a track gets an asset
+  const initWaveSurferForTrack = useCallback(async (trackIndex, asset) => {
+    const container = waveformRefs.current[trackIndex];
+    if (!container || !asset?.s3_url) return;
 
-    let ws = null;
-    let regions = null;
-
-    const initWaveSurfer = async () => {
-      await preview.init();
-      preview.initFromAsset(selectedAsset);
-
-      ws = WaveSurfer.create({
-        container: waveformRef.current,
-        waveColor: '#B5ADA6',
-        progressColor: '#37322F',
-        cursorColor: '#F7F4F3',
-        cursorWidth: 1,
-        barWidth: 2,
-        barGap: 1,
-        barRadius: 1,
-        height: 'auto',
-        normalize: true,
-        backend: 'WebAudio',
-        minPxPerSec: hZoom,
-      });
-
-      regions = ws.registerPlugin(RegionsPlugin.create());
-      regionsRef.current = regions;
-
-      const blob = await assetManager.download(selectedAsset.s3_url, selectedAsset.file_size, selectedAsset.id);
-      ws.loadBlob(blob);
-
-      ws.on('ready', async () => {
-        setDuration(ws.getDuration());
-        if (selectedAsset.loop_start != null && selectedAsset.loop_end != null) {
-          regions.addRegion({
-            start: selectedAsset.loop_start,
-            end: selectedAsset.loop_end,
-            color: 'rgba(181, 173, 166, 0.15)',
-            drag: true,
-            resize: true,
-          });
-        }
-
-        // Auto-detect BPM if the asset doesn't have one stored
-        if (selectedAsset.bpm == null) {
-          setIsDetectingBpm(true);
-          try {
-            const decodedData = ws.getDecodedData();
-            if (decodedData) {
-              const detected = await detectBpm(decodedData);
-              if (detected) {
-                setBpm(detected);
-                // Persist immediately so it's available next time
-                await authFetch(`/api/library/${selectedAsset.id}/audio-config`, {
-                  method: 'PATCH',
-                  headers: { 'Content-Type': 'application/json' },
-                  body: JSON.stringify({ bpm: detected }),
-                });
-              }
-            }
-          } catch (error) {
-            console.warn('Auto BPM detection failed:', error);
-          } finally {
-            setIsDetectingBpm(false);
-          }
-        }
-      });
-
-      ws.on('timeupdate', (time) => setCurrentTime(time));
-      ws.on('play', () => setIsPlaying(true));
-      ws.on('pause', () => setIsPlaying(false));
-      ws.on('finish', () => setIsPlaying(false));
-
-      regions.on('region-updated', (region) => {
-        setLoopStart(parseFloat(region.start.toFixed(3)));
-        setLoopEnd(parseFloat(region.end.toFixed(3)));
-      });
-
-      regions.enableDragSelection({
-        color: 'rgba(181, 173, 166, 0.15)',
-      });
-
-      regions.on('region-created', (region) => {
-        const allRegions = regions.getRegions();
-        for (const r of allRegions) {
-          if (r.id !== region.id) r.remove();
-        }
-        setLoopStart(parseFloat(region.start.toFixed(3)));
-        setLoopEnd(parseFloat(region.end.toFixed(3)));
-      });
-
-      wavesurferRef.current = ws;
-    };
-
-    initWaveSurfer();
-
-    return () => {
-      if (ws) {
-        ws.destroy();
-        wavesurferRef.current = null;
-        regionsRef.current = null;
-      }
-      preview.destroy();
-      setIsPlaying(false);
-      setCurrentTime(0);
-      setDuration(0);
-    };
-  }, [selectedAsset?.id, selectedAsset?.s3_url]); // eslint-disable-line react-hooks/exhaustive-deps
-
-  // ── Sync horizontal zoom to WaveSurfer ────────────────────────────────────
-  useEffect(() => {
-    if (wavesurferRef.current) {
-      wavesurferRef.current.zoom(hZoom);
+    // Destroy existing instance for this track
+    if (wavesurferRefs.current[trackIndex]) {
+      wavesurferRefs.current[trackIndex].destroy();
+      wavesurferRefs.current[trackIndex] = null;
+      regionsRefs.current[trackIndex] = null;
     }
+
+    await preview.init();
+    preview.initFromAsset(asset);
+
+    const ws = WaveSurfer.create({
+      container,
+      waveColor: '#B5ADA6',
+      progressColor: '#37322F',
+      cursorColor: '#F7F4F3',
+      cursorWidth: 1,
+      barWidth: 2,
+      barGap: 1,
+      barRadius: 1,
+      height: trackHeight,
+      normalize: true,
+      backend: 'WebAudio',
+      minPxPerSec: hZoom || undefined,
+    });
+
+    const regions = ws.registerPlugin(RegionsPlugin.create());
+    wavesurferRefs.current[trackIndex] = ws;
+    regionsRefs.current[trackIndex] = regions;
+
+    const blob = await assetManager.download(asset.s3_url, asset.file_size, asset.id);
+    ws.loadBlob(blob);
+
+    ws.on('ready', async () => {
+      setDuration(ws.getDuration());
+
+      if (asset.loop_start != null && asset.loop_end != null) {
+        regions.addRegion({
+          start: asset.loop_start,
+          end: asset.loop_end,
+          color: 'rgba(181, 173, 166, 0.15)',
+          drag: true,
+          resize: true,
+        });
+      }
+
+      // Auto-detect BPM if the asset doesn't have one stored
+      if (asset.bpm == null) {
+        setIsDetectingBpm(true);
+        try {
+          const decodedData = ws.getDecodedData();
+          if (decodedData) {
+            const detected = await detectBpm(decodedData);
+            if (detected) {
+              setTracks(prev => prev.map((t, i) => i === trackIndex ? { ...t, bpm: detected } : t));
+              await authFetch(`/api/library/${asset.id}/audio-config`, {
+                method: 'PATCH',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ bpm: detected }),
+              });
+            }
+          }
+        } catch (error) {
+          console.warn('Auto BPM detection failed:', error);
+        } finally {
+          setIsDetectingBpm(false);
+        }
+      }
+    });
+
+    ws.on('timeupdate', (time) => setCurrentTime(time));
+    ws.on('play', () => setIsPlaying(true));
+    ws.on('pause', () => setIsPlaying(false));
+    ws.on('finish', () => setIsPlaying(false));
+
+    regions.on('region-updated', (region) => {
+      setTracks(prev => prev.map((t, i) => i === trackIndex ? {
+        ...t,
+        loopStart: parseFloat(region.start.toFixed(3)),
+        loopEnd: parseFloat(region.end.toFixed(3)),
+      } : t));
+    });
+
+    regions.enableDragSelection({ color: 'rgba(181, 173, 166, 0.15)' });
+
+    regions.on('region-created', (region) => {
+      const allRegions = regions.getRegions();
+      for (const r of allRegions) {
+        if (r.id !== region.id) r.remove();
+      }
+      setTracks(prev => prev.map((t, i) => i === trackIndex ? {
+        ...t,
+        loopStart: parseFloat(region.start.toFixed(3)),
+        loopEnd: parseFloat(region.end.toFixed(3)),
+      } : t));
+    });
+  }, [trackHeight, hZoom]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Trigger WaveSurfer init when a track gets an asset
+  useEffect(() => {
+    tracks.forEach((track, i) => {
+      if (track.asset && !wavesurferRefs.current[i]) {
+        initWaveSurferForTrack(i, track.asset);
+      }
+    });
+  }, [tracks.map(t => t.asset?.id).join(',')]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Cleanup all WaveSurfer instances on unmount
+  useEffect(() => {
+    return () => {
+      Object.values(wavesurferRefs.current).forEach(ws => ws?.destroy());
+      wavesurferRefs.current = {};
+      regionsRefs.current = {};
+      preview.destroy();
+    };
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // ── Sync zoom to all WaveSurfer instances ────────────────────────────────
+  useEffect(() => {
+    Object.values(wavesurferRefs.current).forEach(ws => {
+      if (ws) ws.zoom(hZoom);
+    });
   }, [hZoom]);
 
-  // ── Transport controls ───────────────────────────────────────────────────
+  useEffect(() => {
+    Object.values(wavesurferRefs.current).forEach(ws => {
+      if (ws) ws.setOptions({ height: trackHeight });
+    });
+  }, [trackHeight]);
+
+  // ── Transport controls (operate on active track) ─────────────────────────
   const handlePlayPause = useCallback(() => {
-    wavesurferRef.current?.playPause();
-  }, []);
+    wavesurferRefs.current[activeTrackIndex]?.playPause();
+  }, [activeTrackIndex]);
 
   const handleStop = useCallback(() => {
-    wavesurferRef.current?.stop();
+    wavesurferRefs.current[activeTrackIndex]?.stop();
     setIsPlaying(false);
     setCurrentTime(0);
-  }, []);
+  }, [activeTrackIndex]);
 
-  // ── BPM detection ────────────────────────────────────────────────────────
+  // ── BPM detection (active track) ─────────────────────────────────────────
   const handleDetectBpm = useCallback(async () => {
-    const ws = wavesurferRef.current;
+    const ws = wavesurferRefs.current[activeTrackIndex];
     if (!ws || !selectedAsset) return;
     setIsDetectingBpm(true);
     console.log(`🎵 BPM detect started — current value: ${bpm ?? 'none'}, asset: ${selectedAsset.filename}`);
     try {
       const decodedData = ws.getDecodedData();
       if (!decodedData) {
-        console.warn('🎵 BPM detect: no decoded data available from WaveSurfer');
+        console.warn('🎵 BPM detect: no decoded data available');
         return;
       }
-      console.log(`🎵 BPM detect: analysing ${decodedData.duration.toFixed(1)}s of audio (${decodedData.sampleRate}Hz, ${decodedData.numberOfChannels}ch)`);
       const detected = await detectBpm(decodedData);
-      console.log(`🎵 BPM detect result: ${detected ?? 'null (no clear beat found)'} (was: ${bpm ?? 'none'})`);
-      // Optimistically update UI
+      console.log(`🎵 BPM detect result: ${detected ?? 'null (no clear beat)'} (was: ${bpm ?? 'none'})`);
       setBpm(detected);
-      // Persist to backend
       if (detected) {
         await authFetch(`/api/library/${selectedAsset.id}/audio-config`, {
           method: 'PATCH',
@@ -302,14 +350,14 @@ export default function AudioWorkstationTool({ initialAssetId }) {
     } finally {
       setIsDetectingBpm(false);
     }
-  }, [selectedAsset, bpm]);
+  }, [activeTrackIndex, selectedAsset, bpm]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleClearRegion = useCallback(() => {
-    regionsRef.current?.clearRegions();
+    regionsRefs.current[activeTrackIndex]?.clearRegions();
     setLoopStart(null);
     setLoopEnd(null);
     if (loopMode === 'region') setLoopMode('full');
-  }, [loopMode]);
+  }, [activeTrackIndex, loopMode]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleSave = async () => {
     if (!selectedAsset) return;
@@ -319,8 +367,12 @@ export default function AudioWorkstationTool({ initialAssetId }) {
         assetId: selectedAsset.id,
         audioConfig: { loop_start: loopStart, loop_end: loopEnd, bpm, loop_mode: loopMode },
       });
-      setSelectedAsset(prev => ({ ...prev, ...updatedAsset }));
-      savedStateRef.current = { loopMode, loopStart, loopEnd, bpm };
+      // Update both asset and saved state on the active track
+      setTracks(prev => prev.map((t, i) => i === activeTrackIndex ? {
+        ...t,
+        asset: { ...t.asset, ...updatedAsset },
+        saved: { loopMode, loopStart, loopEnd, bpm },
+      } : t));
       setSaveSuccess(true);
       setTimeout(() => setSaveSuccess(false), 3000);
     } catch {
@@ -329,12 +381,13 @@ export default function AudioWorkstationTool({ initialAssetId }) {
   };
 
   const handleReset = useCallback(() => {
-    const saved = savedStateRef.current;
+    const saved = activeTrack?.saved;
+    if (!saved) return;
     setLoopMode(saved.loopMode);
     setLoopStart(saved.loopStart);
     setLoopEnd(saved.loopEnd);
     setBpm(saved.bpm);
-    const regions = regionsRef.current;
+    const regions = regionsRefs.current[activeTrackIndex];
     if (regions) {
       regions.clearRegions();
       if (saved.loopStart != null && saved.loopEnd != null) {
@@ -347,11 +400,11 @@ export default function AudioWorkstationTool({ initialAssetId }) {
         });
       }
     }
-  }, []);
+  }, [activeTrackIndex, activeTrack]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Render ───────────────────────────────────────────────────────────────
   return (
-    <div className="flex flex-col h-full border border-border bg-surface-primary overflow-hidden">
+    <div className="flex flex-col h-full border border-border bg-surface-secondary overflow-hidden">
       {/* ── Menu Bar ──────────────────────────────────────────────────────── */}
       <div className="flex items-center gap-0 border-b border-border text-xs select-none" style={{ backgroundColor: '#B5ADA6', color: '#0B0A09' }}>
         <div className="relative">
@@ -520,8 +573,8 @@ export default function AudioWorkstationTool({ initialAssetId }) {
           {/* Horizontal zoom (time) */}
           <FontAwesomeIcon icon={faArrowsLeftRight} className="text-xs text-content-secondary mr-0.5" />
           <button
-            onClick={() => setHZoom(prev => Math.max(1, prev / 2))}
-            disabled={!selectedAsset || hZoom <= 1}
+            onClick={() => setHZoom(prev => prev <= 10 ? 0 : prev / 2)}
+            disabled={!selectedAsset || hZoom === 0}
             className="flex items-center justify-center w-7 h-7 rounded-sm transition-colors disabled:opacity-30 hover:opacity-60"
             title="Zoom out (time)"
             style={{ color: COLORS.smoke }}
@@ -529,7 +582,7 @@ export default function AudioWorkstationTool({ initialAssetId }) {
             <FontAwesomeIcon icon={faMagnifyingGlassMinus} className="text-sm" />
           </button>
           <button
-            onClick={() => setHZoom(prev => Math.min(512, prev * 2))}
+            onClick={() => setHZoom(prev => prev === 0 ? 10 : Math.min(500, prev * 2))}
             disabled={!selectedAsset}
             className="flex items-center justify-center w-7 h-7 rounded-sm hover:text-content-secondary transition-colors disabled:opacity-30"
             title="Zoom in (time)"
@@ -544,7 +597,7 @@ export default function AudioWorkstationTool({ initialAssetId }) {
           <FontAwesomeIcon icon={faArrowsUpDown} className="text-xs text-content-secondary mr-0.5" />
           <button
             onClick={() => setTrackHeight(prev => Math.max(60, prev - 40))}
-            disabled={!selectedAsset || trackHeight <= 60}
+            disabled={trackHeight <= 60}
             className="flex items-center justify-center w-7 h-7 rounded-sm hover:text-content-secondary transition-colors disabled:opacity-30"
             title="Decrease track height"
             style={{ color: COLORS.smoke }}
@@ -553,7 +606,7 @@ export default function AudioWorkstationTool({ initialAssetId }) {
           </button>
           <button
             onClick={() => setTrackHeight(prev => Math.min(400, prev + 40))}
-            disabled={!selectedAsset}
+            disabled={trackHeight >= 400}
             className="flex items-center justify-center w-7 h-7 rounded-sm hover:text-content-secondary transition-colors disabled:opacity-30"
             title="Increase track height"
             style={{ color: COLORS.smoke }}
@@ -605,57 +658,75 @@ export default function AudioWorkstationTool({ initialAssetId }) {
             <div className="text-sm text-content-secondary">Loading track...</div>
           </div>
         ) : activeTab === 'arrangement' ? (
-          /* ── Arrangement View ──────────────────────────────────────────── */
-          selectedAsset ? (
-            <div className="flex-1 min-h-0 overflow-auto">
-              {/* Track lane */}
-              <div className="flex" style={{ height: `${trackHeight}px` }}>
-                {/* Track header */}
-                <div className="w-40 flex-shrink-0 border-r border-border bg-surface-secondary px-3 py-3 flex flex-col gap-2 sticky left-0 z-10">
-                  <div className="text-[11px] font-bold text-content-on-dark uppercase tracking-wide truncate">
-                    {selectedAsset.filename?.replace(/\.[^.]+$/, '') || 'Untitled'}
-                  </div>
-                  <div className="text-[10px] text-content-secondary font-mono">01</div>
-                  <div className="flex items-center gap-1 mt-1">
-                    <button className="w-6 h-5 rounded text-[10px] font-bold bg-border/40 text-content-secondary hover:bg-border hover:text-content-on-dark transition-colors">
-                      S
-                    </button>
-                    <button className="w-6 h-5 rounded text-[10px] font-bold bg-border/40 text-content-secondary hover:bg-border hover:text-content-on-dark transition-colors">
-                      M
-                    </button>
-                  </div>
-                </div>
+          /* ── Arrangement View — 6 track lanes ────────────────────────────── */
+          <div className="flex-1 min-h-0 overflow-auto">
+            {/* Track lanes */}
+            {tracks.map((track, i) => {
+              const isActive = i === activeTrackIndex;
+              const hasAsset = track.asset !== null;
+              const trackName = hasAsset
+                ? (track.asset.filename?.replace(/\.[^.]+$/, '') || 'Untitled')
+                : `Track ${String(i + 1).padStart(2, '0')}`;
 
-                {/* Waveform area */}
-                <div className="flex-1 min-w-0 relative">
-                  {/* Timeline ruler */}
-                  <div className="h-6 border-b border-border bg-surface-secondary/50 flex items-end">
-                    <TimelineRuler duration={duration} />
+              return (
+                <div
+                  key={i}
+                  className="flex border-b border-border cursor-pointer"
+                  style={{
+                    backgroundColor: hasAsset ? COLORS.onyx : `${COLORS.onyx}80`,
+                    height: `${trackHeight}px`,
+                  }}
+                  onClick={() => setActiveTrackIndex(i)}
+                >
+                  {/* Track header */}
+                  <div
+                    className={`w-40 flex-shrink-0 border-r px-3 py-3 flex flex-col gap-1 sticky left-0 z-10 ${
+                      isActive ? 'border-border-active' : 'border-border'
+                    }`}
+                    style={{ backgroundColor: hasAsset ? COLORS.carbon : `${COLORS.carbon}80` }}
+                  >
+                    <div className="text-[11px] font-bold uppercase tracking-wide truncate text-content-on-dark">
+                      {trackName}
+                    </div>
+                    <div className="text-[10px] font-mono text-content-secondary">
+                      {String(i + 1).padStart(2, '0')}
+                    </div>
+                    {hasAsset && (
+                      <div className="flex items-center gap-1 mt-1">
+                        <button className="w-6 h-5 rounded text-[10px] font-bold bg-border/40 text-content-secondary hover:bg-border hover:text-content-on-dark transition-colors">
+                          S
+                        </button>
+                        <button className="w-6 h-5 rounded text-[10px] font-bold bg-border/40 text-content-secondary hover:bg-border hover:text-content-on-dark transition-colors">
+                          M
+                        </button>
+                      </div>
+                    )}
                   </div>
-                  {/* Waveform */}
-                  <div className="absolute top-6 left-0 right-0 bottom-0">
-                    <div ref={waveformRef} className="w-full h-full" />
+
+                  {/* Waveform area */}
+                  <div className="flex-1 min-w-0 relative">
+                    {hasAsset ? (
+                      <div
+                        ref={(el) => { waveformRefs.current[i] = el; }}
+                        className="w-full h-full"
+                      />
+                    ) : (
+                      <div className="w-full h-full flex items-center justify-center">
+                        {isActive && (
+                          <button
+                            onClick={(e) => { e.stopPropagation(); setShowImportModal(true); }}
+                            className="text-sm text-content-secondary"
+                          >
+                            + Import
+                          </button>
+                        )}
+                      </div>
+                    )}
                   </div>
                 </div>
-              </div>
-            </div>
-          ) : (
-            /* Empty state */
-            <div className="flex-1 flex flex-col items-center justify-center gap-4" style={{ color: '#0B0A09' }}>
-              <div className="text-sm">No track loaded</div>
-              <button
-                onClick={() => setShowImportModal(true)}
-                className="flex items-center gap-2 px-4 py-2 text-xs font-medium rounded-sm border border-border hover:border-border-active hover:text-content-on-dark transition-colors"
-                style={{ color: '#0B0A09' }}
-              >
-                <FontAwesomeIcon icon={faFileImport} className="text-[10px]" />
-                Import Asset
-              </button>
-              <div className="text-[10px] mt-2" style={{ color: '#0B0A09', opacity: 0.5 }}>
-                Or use File &gt; Import Asset from the menu bar
-              </div>
-            </div>
-          )
+              );
+            })}
+          </div>
         ) : activeTab === 'loop-points' ? (
           /* ── Loop Points View ──────────────────────────────────────────── */
           selectedAsset ? (
