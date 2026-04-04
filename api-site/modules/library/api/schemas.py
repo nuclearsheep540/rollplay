@@ -12,7 +12,7 @@ from uuid import UUID
 from pydantic import BaseModel, Field
 
 from modules.library.domain.media_asset_type import MediaAssetType
-from shared_contracts.cine import CineConfig
+from shared_contracts.cine import MotionConfig, VisualOverlay
 
 
 class UploadUrlResponse(BaseModel):
@@ -88,11 +88,13 @@ class MediaAssetResponse(BaseModel):
     effect_reverb_preset: Optional[str] = None
 
     # Image fields
-    display_mode: Optional[str] = None
+    image_fit: Optional[str] = None
     aspect_ratio: Optional[str] = None
+    display_mode: Optional[str] = None
     image_position_x: Optional[float] = None
     image_position_y: Optional[float] = None
-    cine_config: Optional[CineConfig] = None
+    visual_overlays: Optional[list] = None
+    motion: Optional[dict] = None
 
     class Config:
         from_attributes = True
@@ -117,12 +119,14 @@ class UpdateGridConfigRequest(BaseModel):
 
 
 class UpdateImageConfigRequest(BaseModel):
-    """Request to update image display configuration"""
-    display_mode: Optional[str] = Field(None, description="Display mode: float, wrap, letterbox, or cine")
-    aspect_ratio: Optional[str] = Field(None, description="Aspect ratio preset for letterbox/cine")
+    """Request to update image configuration"""
+    image_fit: Optional[str] = Field(None, description="Image fit: float, wrap, or letterbox")
+    aspect_ratio: Optional[str] = Field(None, description="Aspect ratio preset for letterbox")
+    display_mode: Optional[str] = Field(None, description="Display mode: standard or cine")
     image_position_x: Optional[float] = Field(None, ge=0.0, le=100.0, description="Image position X within frame (0-100%)")
     image_position_y: Optional[float] = Field(None, ge=0.0, le=100.0, description="Image position Y within frame (0-100%)")
-    cine_config: Optional[CineConfig] = Field(None, description="Cinematic config (workshop-authored)")
+    visual_overlays: Optional[List[VisualOverlay]] = Field(None, description="Visual overlay stack")
+    motion: Optional[MotionConfig] = Field(None, description="Motion effects config")
 
 
 class UpdateAudioConfigRequest(BaseModel):

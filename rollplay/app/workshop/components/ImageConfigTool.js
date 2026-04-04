@@ -3,7 +3,9 @@
 
 'use client'
 
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useCallback } from 'react';
+import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
+import { faExpand } from '@fortawesome/free-solid-svg-icons';
 import { authFetch } from '@/app/shared/utils/authFetch';
 import AssetPicker from './AssetPicker';
 import ImageDisplayControls from './ImageDisplayControls';
@@ -21,14 +23,27 @@ export default function ImageConfigTool({ selectedAssetId, onAssetSelect }) {
   const [loadingAsset, setLoadingAsset] = useState(false);
   const [saveSuccess, setSaveSuccess] = useState(false);
 
-  // Local draft state for config editing
-  const [displayMode, setDisplayMode] = useState('float');
+  // Local draft state — split into orthogonal concerns
+  const [imageFit, setImageFit] = useState('float');
   const [aspectRatio, setAspectRatio] = useState(null);
+  const [displayMode, setDisplayMode] = useState('standard');
   const [imagePositionX, setImagePositionX] = useState(null);
   const [imagePositionY, setImagePositionY] = useState(null);
-  const [cineConfig, setCineConfig] = useState(null);
+  const [visualOverlays, setVisualOverlays] = useState(null);
+  const [motion, setMotion] = useState(null);
 
+  const [fullscreenPreview, setFullscreenPreview] = useState(false);
   const updateMutation = useUpdateImageConfig();
+
+  const handleFullscreenClose = useCallback(() => setFullscreenPreview(false), []);
+
+  // Close fullscreen preview on Escape key
+  useEffect(() => {
+    if (!fullscreenPreview) return;
+    const handleKeyDown = (e) => { if (e.key === 'Escape') setFullscreenPreview(false); };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [fullscreenPreview]);
 
   // Fetch asset when URL-driven selectedAssetId changes
   useEffect(() => {
@@ -57,11 +72,16 @@ export default function ImageConfigTool({ selectedAssetId, onAssetSelect }) {
       }
 
       setSelectedAsset(assetData);
-      setDisplayMode(assetData.display_mode || 'float');
+      // Legacy compat: old assets may have image_fit as display_mode
+      const fit = assetData.image_fit || assetData.display_mode || 'float';
+      setImageFit(fit === 'cine' ? 'letterbox' : fit);
       setAspectRatio(assetData.aspect_ratio || null);
+      const dm = assetData.display_mode;
+      setDisplayMode(dm === 'standard' || dm === 'cine' ? dm : 'standard');
       setImagePositionX(assetData.image_position_x ?? null);
       setImagePositionY(assetData.image_position_y ?? null);
-      setCineConfig(assetData.cine_config || null);
+      setVisualOverlays(assetData.visual_overlays || null);
+      setMotion(assetData.motion || null);
       setLoadingAsset(false);
     }
 
@@ -76,11 +96,13 @@ export default function ImageConfigTool({ selectedAssetId, onAssetSelect }) {
       const updatedAsset = await updateMutation.mutateAsync({
         assetId: selectedAsset.id,
         imageConfig: {
+          image_fit: imageFit,
           display_mode: displayMode,
-          aspect_ratio: (displayMode === 'letterbox' || displayMode === 'cine') ? aspectRatio : null,
+          aspect_ratio: imageFit === 'letterbox' ? aspectRatio : null,
           image_position_x: imagePositionX,
           image_position_y: imagePositionY,
-          cine_config: cineConfig,
+          visual_overlays: visualOverlays,
+          motion: motion,
         },
       });
       setSelectedAsset(prev => ({ ...prev, ...updatedAsset }));
@@ -99,22 +121,28 @@ export default function ImageConfigTool({ selectedAssetId, onAssetSelect }) {
         file_path: selectedAsset.s3_url,
         filename: selectedAsset.filename,
         original_filename: selectedAsset.filename,
-        display_mode: cineConfig ? 'cine' : displayMode,
-        aspect_ratio: (displayMode === 'letterbox' || displayMode === 'cine') ? aspectRatio : null,
+        image_fit: imageFit,
+        display_mode: displayMode,
+        aspect_ratio: imageFit === 'letterbox' ? aspectRatio : null,
         image_position_x: imagePositionX,
         image_position_y: imagePositionY,
-        cine_config: cineConfig,
+        visual_overlays: visualOverlays,
+        motion: motion,
       },
     };
-  }, [selectedAsset?.s3_url, selectedAsset?.filename, displayMode, aspectRatio, imagePositionX, imagePositionY, cineConfig]);
+  }, [selectedAsset?.s3_url, selectedAsset?.filename, imageFit, displayMode, aspectRatio, imagePositionX, imagePositionY, visualOverlays, motion]);
 
   // Track whether config has changed from saved state
+  const savedFit = selectedAsset?.image_fit || 'float';
+  const savedMode = selectedAsset?.display_mode || 'standard';
   const hasChanges = selectedAsset && (
-    displayMode !== (selectedAsset.display_mode || 'float')
+    imageFit !== savedFit
+    || displayMode !== savedMode
     || aspectRatio !== (selectedAsset.aspect_ratio || null)
     || imagePositionX !== (selectedAsset.image_position_x ?? null)
     || imagePositionY !== (selectedAsset.image_position_y ?? null)
-    || JSON.stringify(cineConfig) !== JSON.stringify(selectedAsset.cine_config || null)
+    || JSON.stringify(visualOverlays) !== JSON.stringify(selectedAsset.visual_overlays || null)
+    || JSON.stringify(motion) !== JSON.stringify(selectedAsset.motion || null)
   );
 
   return (
@@ -126,22 +154,47 @@ export default function ImageConfigTool({ selectedAssetId, onAssetSelect }) {
       ) : selectedAsset ? (
         <div className="flex-1 min-h-0 flex gap-6">
           {/* Image Preview Area */}
-          <div className="flex-1 min-w-0 relative rounded-sm overflow-hidden border border-border bg-surface-primary">
+          <div className="flex-1 min-w-0 relative rounded-sm overflow-hidden border border-border bg-surface-primary group">
             <ImageDisplay activeImage={previewImage} />
+            <button
+              onClick={() => setFullscreenPreview(true)}
+              className="absolute top-2 right-2 z-20 p-2 rounded bg-black/50 text-white/70 hover:text-white hover:bg-black/70 transition-opacity opacity-0 group-hover:opacity-100"
+              title="Fullscreen preview"
+              aria-label="Open fullscreen preview"
+            >
+              <FontAwesomeIcon icon={faExpand} className="text-sm" />
+            </button>
           </div>
+
+          {/* Fullscreen Preview Overlay — click anywhere to close */}
+          {fullscreenPreview && (
+            <div
+              onClick={handleFullscreenClose}
+              className="fixed inset-0 z-50 bg-black cursor-pointer"
+            >
+              <ImageDisplay activeImage={previewImage} />
+              <div className="absolute bottom-6 left-1/2 -translate-x-1/2 text-white/40 text-xs pointer-events-none">
+                Click anywhere to close
+              </div>
+            </div>
+          )}
 
           {/* Controls Sidebar */}
           <div className="w-72 flex-shrink-0 overflow-y-auto">
             <ImageDisplayControls
-              displayMode={displayMode}
+              imageFit={imageFit}
               aspectRatio={aspectRatio}
+              displayMode={displayMode}
               imagePositionX={imagePositionX}
               imagePositionY={imagePositionY}
-              cineConfig={cineConfig}
-              onDisplayModeChange={setDisplayMode}
+              visualOverlays={visualOverlays}
+              motion={motion}
+              onImageFitChange={setImageFit}
               onAspectRatioChange={setAspectRatio}
+              onDisplayModeChange={setDisplayMode}
               onImagePositionChange={(x, y) => { setImagePositionX(x); setImagePositionY(y); }}
-              onCineConfigChange={setCineConfig}
+              onVisualOverlaysChange={setVisualOverlays}
+              onMotionChange={setMotion}
               onSave={handleSave}
               isSaving={updateMutation.isPending}
               saveSuccess={saveSuccess}

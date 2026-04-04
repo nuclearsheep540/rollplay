@@ -8,7 +8,7 @@
 import { Suspense, useRef } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
-import { faArrowLeft, faRightFromBracket } from '@fortawesome/free-solid-svg-icons'
+import { faArrowLeft, faRightFromBracket, faHouse } from '@fortawesome/free-solid-svg-icons'
 import SiteHeader from '@/app/shared/components/SiteHeader'
 import NotificationBell from '@/app/shared/components/NotificationBell'
 import { useAuth } from '@/app/dashboard/hooks/useAuth'
@@ -77,13 +77,24 @@ function ImageConfigContent() {
               Configure display modes and cinematic effects for your images
             </p>
           </div>
-          <button
-            onClick={() => router.back()}
-            className="flex items-center gap-2 px-4 py-2 text-sm font-medium rounded-sm border border-border text-content-primary hover:bg-surface-secondary hover:text-content-on-dark transition-colors"
-          >
-            <FontAwesomeIcon icon={faArrowLeft} className="text-xs" />
-            <span>{backLabel}</span>
-          </button>
+          <div className="flex items-center gap-2">
+            {selectedAssetId && (
+              <button
+                onClick={() => router.push('/dashboard')}
+                className="flex items-center gap-2 px-4 py-2 text-sm font-medium rounded-sm border border-border text-content-primary hover:bg-surface-secondary hover:text-content-on-dark transition-colors"
+              >
+                <FontAwesomeIcon icon={faHouse} className="text-xs" />
+                <span>Dashboard</span>
+              </button>
+            )}
+            <button
+              onClick={() => router.back()}
+              className="flex items-center gap-2 px-4 py-2 text-sm font-medium rounded-sm border border-border text-content-primary hover:bg-surface-secondary hover:text-content-on-dark transition-colors"
+            >
+              <FontAwesomeIcon icon={faArrowLeft} className="text-xs" />
+              <span>{backLabel}</span>
+            </button>
+          </div>
         </div>
 
         <div className="flex-1 min-h-0">

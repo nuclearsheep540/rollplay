@@ -12,7 +12,7 @@ from modules.library.domain.asset_aggregate import MediaAssetAggregate
 from modules.library.domain.map_asset_aggregate import MapAsset
 from modules.library.domain.music_asset_aggregate import MusicAsset
 from modules.library.domain.sfx_asset_aggregate import SfxAsset
-from modules.library.domain.cine_config import CineConfig as DomainCineConfig
+from modules.library.domain.cine_config import MotionConfig as DomainMotionConfig
 from modules.library.domain.image_asset_aggregate import ImageAsset
 from modules.library.domain.media_asset_type import MediaAssetType
 from modules.library.repositories.asset_repository import MediaAssetRepository
@@ -496,18 +496,16 @@ class UpdateImageConfig:
         self,
         asset_id: UUID,
         user_id: UUID,
-        display_mode: Optional[str] = None,
+        image_fit: Optional[str] = None,
         aspect_ratio: Optional[str] = None,
+        display_mode: Optional[str] = None,
         image_position_x: Optional[float] = None,
         image_position_y: Optional[float] = None,
-        # cine_config uses a sentinel because it has three valid states:
-        # "UNSET" = field omitted (don't touch), None = explicitly clear, object = set.
-        # The simpler fields above only need two states (None = don't touch, value = set)
-        # because they're never explicitly cleared via the API.
-        cine_config="UNSET"
+        visual_overlays="UNSET",
+        motion="UNSET",
     ) -> ImageAsset:
         """
-        Update display configuration for an image asset.
+        Update image configuration.
 
         Returns:
             Updated ImageAsset
@@ -530,20 +528,24 @@ class UpdateImageConfig:
             check_asset_in_active_session(asset.campaign_ids, self.session_repository)
 
         asset.update_image_config(
+            image_fit=image_fit,
             display_mode=display_mode,
             aspect_ratio=aspect_ratio,
             image_position_x=image_position_x,
-            image_position_y=image_position_y
+            image_position_y=image_position_y,
         )
 
-        if cine_config != "UNSET":
-            if cine_config is not None:
-                domain_cine = DomainCineConfig.from_dict(cine_config.model_dump())
-                domain_cine.validate()
-                asset.cine_config = domain_cine
-            else:
-                asset.cine_config = None
+        if visual_overlays != "UNSET":
+            asset.visual_overlays = visual_overlays
             # updated_at already set by update_image_config() above
+
+        if motion != "UNSET":
+            if motion is not None:
+                domain_motion = DomainMotionConfig.from_dict(motion)
+                domain_motion.validate()
+                asset.motion = domain_motion
+            else:
+                asset.motion = None
 
         self.repository.save(asset)
         return asset

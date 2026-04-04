@@ -62,8 +62,10 @@ class ImageService:
             if existing:
                 existing_ic = existing.get("image_config", {})
                 incoming_ic = image_settings.image_config.model_dump()
-                # Merge: existing display config wins over incoming defaults.
-                # Use `is not None` checks (not truthiness) so explicit clears are preserved.
+                # Merge: existing runtime config wins over incoming defaults.
+                # visual_overlays + motion are workshop-authored — always use fresh incoming.
+                if existing_ic.get("image_fit") is not None:
+                    incoming_ic["image_fit"] = existing_ic["image_fit"]
                 if existing_ic.get("display_mode") is not None:
                     incoming_ic["display_mode"] = existing_ic["display_mode"]
                 if existing_ic.get("aspect_ratio") is not None:
@@ -72,8 +74,6 @@ class ImageService:
                     incoming_ic["image_position_x"] = existing_ic["image_position_x"]
                 if existing_ic.get("image_position_y") is not None:
                     incoming_ic["image_position_y"] = existing_ic["image_position_y"]
-                if existing_ic.get("cine_config") is not None:
-                    incoming_ic["cine_config"] = existing_ic["cine_config"]
                 image_settings.image_config = ImageConfig(**incoming_ic)
 
             # Deactivate any existing active images for this room
@@ -151,15 +151,18 @@ class ImageService:
             logger.error(f"Failed to clear active image for room {room_id}: {e}")
             return False
 
-    def update_image_config(self, room_id: str, display_mode: str = None, aspect_ratio: str = None,
-                            image_position_x: float = None, image_position_y: float = None) -> bool:
-        """Update display config on the active image for a room (config-only, no re-save)"""
+    def update_image_config(self, room_id: str, image_fit: str = None, display_mode: str = None,
+                            aspect_ratio: str = None, image_position_x: float = None,
+                            image_position_y: float = None) -> bool:
+        """Update image config on the active image for a room (runtime adjustments only)"""
         if self.collection is None:
             logger.error("No database connection available for image service")
             return False
 
         try:
             update_fields = {}
+            if image_fit is not None:
+                update_fields["image_config.image_fit"] = image_fit
             if display_mode is not None:
                 update_fields["image_config.display_mode"] = display_mode
             if aspect_ratio is not None:
@@ -168,8 +171,8 @@ class ImageService:
                 update_fields["image_config.image_position_x"] = image_position_x
             if image_position_y is not None:
                 update_fields["image_config.image_position_y"] = image_position_y
-            # Clear aspect_ratio when switching away from letterbox/cine
-            if display_mode and display_mode not in ("letterbox", "cine"):
+            # Clear aspect_ratio when switching away from letterbox
+            if image_fit and image_fit != "letterbox":
                 update_fields["image_config.aspect_ratio"] = None
 
             if not update_fields:
@@ -189,6 +192,20 @@ class ImageService:
 
         except Exception as e:
             logger.error(f"Failed to update image config for room {room_id}: {e}")
+            return False
+
+    def delete_room_images(self, room_id: str) -> bool:
+        """Delete all image documents for a room (session-end cleanup)."""
+        if self.collection is None:
+            logger.error("No database connection available for image service")
+            return False
+
+        try:
+            result = self.collection.delete_many({"room_id": room_id})
+            logger.info(f"🖼️ Deleted {result.deleted_count} image docs for room {room_id}")
+            return True
+        except Exception as e:
+            logger.error(f"Failed to delete images for room {room_id}: {e}")
             return False
 
     def get_active_display(self, room_id: str) -> Optional[str]:

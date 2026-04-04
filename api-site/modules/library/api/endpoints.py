@@ -109,11 +109,13 @@ def _to_media_asset_response(asset, s3_service: S3Service = None) -> MediaAssetR
         )
     elif isinstance(asset, ImageAsset):
         fields.update(
-            display_mode=asset.display_mode,
+            image_fit=asset.image_fit,
             aspect_ratio=asset.aspect_ratio,
+            display_mode=asset.display_mode,
             image_position_x=asset.image_position_x,
             image_position_y=asset.image_position_y,
-            cine_config=asset.cine_config.to_dict() if asset.cine_config else None,
+            visual_overlays=asset.visual_overlays,
+            motion=asset.motion.to_dict() if asset.motion else None,
         )
 
     return MediaAssetResponse(**fields)
@@ -496,23 +498,23 @@ async def update_image_config(
     try:
         command = UpdateImageConfig(repo, session_repo)
 
-        # Only forward cine_config when the client explicitly included it in the
-        # request body.  Omitted fields default to None in the Pydantic model, which
-        # is indistinguishable from an explicit null — so we use model_fields_set to
-        # tell them apart and pass the "UNSET" sentinel when the field was omitted.
-        cine_arg = request.cine_config if "cine_config" in request.model_fields_set else "UNSET"
+        # Use model_fields_set sentinel pattern for fields that can be explicitly cleared
+        overlays_arg = request.visual_overlays if "visual_overlays" in request.model_fields_set else "UNSET"
+        motion_arg = request.motion if "motion" in request.model_fields_set else "UNSET"
 
         asset = command.execute(
             asset_id=asset_id,
             user_id=current_user.id,
+            image_fit=request.image_fit,
             display_mode=request.display_mode,
             aspect_ratio=request.aspect_ratio,
             image_position_x=request.image_position_x,
             image_position_y=request.image_position_y,
-            cine_config=cine_arg
+            visual_overlays=overlays_arg,
+            motion=motion_arg,
         )
 
-        logger.info(f"Updated image config for asset {asset_id}: mode={asset.display_mode}, ratio={asset.aspect_ratio}")
+        logger.info(f"Updated image config for asset {asset_id}: fit={asset.image_fit}, mode={asset.display_mode}")
 
         return _to_media_asset_response(asset, s3_service)
 

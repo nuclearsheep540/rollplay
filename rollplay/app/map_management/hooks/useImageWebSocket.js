@@ -51,7 +51,7 @@ export const useImageWebSocket = (webSocket, isConnected, roomId, thisPlayer, im
 
   const handleImageConfigUpdate = useCallback((data) => {
     console.log("🖼️ Image config updated:", data);
-    const { display_mode, aspect_ratio, image_position_x, image_position_y, updated_by } = data;
+    const { image_fit, display_mode, aspect_ratio, image_position_x, image_position_y, updated_by } = data;
     const handlers = eventHandlersRef.current;
 
     if (handlers && handlers.setActiveImage) {
@@ -63,6 +63,7 @@ export const useImageWebSocket = (webSocket, isConnected, roomId, thisPlayer, im
           ...prev,
           image_config: {
             ...prevIc,
+            image_fit: image_fit ?? prevIc.image_fit,
             display_mode: display_mode ?? prevIc.display_mode,
             aspect_ratio: aspect_ratio !== undefined ? aspect_ratio : prevIc.aspect_ratio,
             image_position_x: image_position_x !== undefined ? image_position_x : prevIc.image_position_x,
@@ -70,7 +71,7 @@ export const useImageWebSocket = (webSocket, isConnected, roomId, thisPlayer, im
           },
         };
       });
-      console.log(`🖼️ Image config updated by ${updated_by}: mode=${display_mode}, ratio=${aspect_ratio}`);
+      console.log(`🖼️ Image config updated by ${updated_by}: fit=${image_fit}, mode=${display_mode}`);
     }
   }, []);
 
@@ -138,16 +139,16 @@ export const useImageWebSocket = (webSocket, isConnected, roomId, thisPlayer, im
     }));
   };
 
-  const sendImageConfigUpdate = ({ display_mode, aspect_ratio, image_position_x, image_position_y }) => {
+  const sendImageConfigUpdate = ({ image_fit, display_mode, aspect_ratio, image_position_x, image_position_y }) => {
     if (!webSocket || !isConnected) {
       console.warn('❌ Cannot send image config update - WebSocket not connected');
       return;
     }
 
-    console.log('🖼️ Sending image config update:', { display_mode, aspect_ratio, image_position_x, image_position_y });
+    console.log('🖼️ Sending image config update:', { image_fit, display_mode, aspect_ratio, image_position_x, image_position_y });
     webSocket.send(JSON.stringify({
       event_type: 'image_config_update',
-      data: { display_mode, aspect_ratio, image_position_x, image_position_y }
+      data: { image_fit, display_mode, aspect_ratio, image_position_x, image_position_y }
     }));
   };
 

@@ -20,7 +20,8 @@ export default function ImageSelectionSection({
   onSelectImage,
   roomId,
   campaignId,
-  currentImage
+  currentImage,
+  isStaged = false,
 }) {
   const [showUpload, setShowUpload] = useState(false);
   const [selectedFile, setSelectedFile] = useState(null);
@@ -300,6 +301,8 @@ export default function ImageSelectionSection({
                 className={`flex items-center gap-2 p-2 rounded border transition-all ${
                   !hasUrl
                     ? 'border-gray-700 opacity-50 cursor-not-allowed'
+                    : isActive && isStaged
+                    ? 'border-amber-500 bg-amber-900/20 cursor-pointer'
                     : isActive
                     ? 'border-green-500 bg-green-900/20 cursor-pointer'
                     : 'border-gray-600 hover:border-sky-500 hover:bg-sky-900/10 cursor-pointer'
@@ -312,8 +315,17 @@ export default function ImageSelectionSection({
                     <span className="text-gray-500 text-xs">IMG</span>
                   )}
                 </div>
-                <p className="flex-1 text-xs text-gray-200 truncate">{asset.filename}</p>
-                {isActive && <span className="text-green-400 text-xs">Active</span>}
+                <div className="flex-1 min-w-0">
+                  <p className="text-xs text-gray-200 truncate">{asset.filename}</p>
+                  {asset.display_mode === 'cine' && (
+                    <span className="text-[10px] text-amber-400">🎬 Cine — hides player UI</span>
+                  )}
+                </div>
+                {isActive && (
+                  <span className={`text-xs flex-shrink-0 ${isStaged ? 'text-amber-400' : 'text-green-400'}`}>
+                    {isStaged ? 'Preview' : 'Active'}
+                  </span>
+                )}
               </div>
             );
           })}

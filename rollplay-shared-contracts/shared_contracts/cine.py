@@ -1,7 +1,7 @@
 # Copyright (C) 2025 Matthew Davey
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-"""Cine boundary schemas for cinematic image configuration.
+"""Visual effects boundary schemas for image configuration.
 
 Thin ETL layer mirroring the domain value objects in
 api-site/modules/library/domain/. No business logic here —
@@ -21,7 +21,7 @@ class FilmGrainOverlay(ContractModel):
     type: Literal["film_grain"] = "film_grain"
     enabled: bool = True
     opacity: float = Field(default=0.5, ge=0.0, le=1.0)
-    style: str = "vintage"  # "vintage" | "grain" | "light_particles"
+    style: str = "vintage"
     blend_mode: str = "overlay"
 
 
@@ -41,15 +41,19 @@ VisualOverlay = Annotated[
 ]
 
 
-class CineConfig(ContractModel):
-    """Structured cinematic configuration for image assets.
+class HandHeldMotion(ContractModel):
+    """Hand-held camera drift — constant looping motion through random waypoints."""
 
-    Workshop-authored, read-only at runtime. Passed through
-    to api-game via ETL on the ImageConfig contract.
-    """
+    enabled: bool = True
+    track_points: int = Field(default=4, ge=2, le=30)
+    distance: int = Field(default=10, ge=2, le=20)
+    speed: int = Field(default=3, ge=1, le=15)
+    x_bias: int = Field(default=0, ge=-100, le=100)
+    randomness: int = Field(default=0, ge=0, le=100)
 
-    visual_overlays: List[VisualOverlay] = []
-    hide_player_ui: bool = True
-    transition: Optional[Any] = None  # Placeholder
+
+class MotionConfig(ContractModel):
+    """Motion section — houses movement-based effects."""
+
+    hand_held: Optional[HandHeldMotion] = None
     ken_burns: Optional[Any] = None  # Placeholder
-    text_overlays: Optional[Any] = None  # Placeholder

@@ -111,8 +111,16 @@ export default function MapGridTool({ selectedAssetId, onAssetSelect }) {
   // Grid config is passed separately via the gridConfig prop.
   const activeMapForDisplay = useMemo(() => {
     if (!selectedAsset) return null;
-    return { file_path: selectedAsset.s3_url };
-  }, [selectedAsset?.s3_url]);
+    return {
+      filename: selectedAsset.filename,
+      map_config: {
+        file_path: selectedAsset.s3_url,
+        file_size: selectedAsset.file_size,
+        asset_id: selectedAsset.id,
+        filename: selectedAsset.filename,
+      },
+    };
+  }, [selectedAsset?.s3_url, selectedAsset?.file_size, selectedAsset?.id, selectedAsset?.filename]);
 
   return (
     <div className="flex flex-col h-full">

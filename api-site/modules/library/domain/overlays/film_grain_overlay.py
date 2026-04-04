@@ -14,7 +14,7 @@ from .overlay import Overlay
 
 
 VALID_GRAIN_BLEND_MODES = {"overlay", "screen", "soft-light", "multiply", "luminosity"}
-VALID_GRAIN_STYLES = {"vintage", "grain", "light_particles"}
+VALID_GRAIN_STYLES = {"vintage", "grain", "light_particles", "lens_flare_leak", "bokeh_light_glow", "sun_glow"}
 
 
 @dataclass

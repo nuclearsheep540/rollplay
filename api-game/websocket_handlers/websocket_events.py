@@ -1363,11 +1363,13 @@ class WebsocketEvent():
                 filename=ic_data.get("filename", "unknown.jpg"),
                 original_filename=ic_data.get("original_filename", ic_data.get("filename", "unknown.jpg")),
                 file_path=ic_data.get("file_path", ""),
-                display_mode=ic_data.get("display_mode", "float"),
+                image_fit=ic_data.get("image_fit", "float"),
+                display_mode=ic_data.get("display_mode", "standard"),
                 aspect_ratio=ic_data.get("aspect_ratio"),
                 image_position_x=ic_data.get("image_position_x"),
                 image_position_y=ic_data.get("image_position_y"),
-                cine_config=ic_data.get("cine_config"),
+                visual_overlays=ic_data.get("visual_overlays"),
+                motion=ic_data.get("motion"),
             )
             image_settings = ImageSettings(
                 room_id=room_id,
@@ -1456,8 +1458,9 @@ class WebsocketEvent():
 
     @staticmethod
     async def image_config_update(websocket, data, event_data, user_id, client_id, manager):
-        """Update display config on the active image (lightweight, no re-save of full image)"""
+        """Update image config on the active image (lightweight, no re-save of full image)"""
         room_id = client_id
+        image_fit = event_data.get("image_fit")
         display_mode = event_data.get("display_mode")
         aspect_ratio = event_data.get("aspect_ratio")
         image_position_x = event_data.get("image_position_x")
@@ -1469,10 +1472,11 @@ class WebsocketEvent():
         try:
             success = image_service.update_image_config(
                 room_id,
+                image_fit=image_fit,
                 display_mode=display_mode,
                 aspect_ratio=aspect_ratio,
                 image_position_x=image_position_x,
-                image_position_y=image_position_y
+                image_position_y=image_position_y,
             )
 
             if success:
@@ -1481,14 +1485,15 @@ class WebsocketEvent():
                 broadcast_message = {
                     "event_type": "image_config_update",
                     "data": {
-                        "display_mode": saved_ic.get("display_mode", "float") if saved_image else display_mode,
+                        "image_fit": saved_ic.get("image_fit", "float") if saved_image else image_fit,
+                        "display_mode": saved_ic.get("display_mode", "standard") if saved_image else display_mode,
                         "aspect_ratio": saved_ic.get("aspect_ratio") if saved_image else aspect_ratio,
                         "image_position_x": saved_ic.get("image_position_x") if saved_image else image_position_x,
                         "image_position_y": saved_ic.get("image_position_y") if saved_image else image_position_y,
                         "updated_by": user_id
                     }
                 }
-                print(f"🖼️ Image config updated for room {room_id}: mode={display_mode}, ratio={aspect_ratio}")
+                print(f"🖼️ Image config updated for room {room_id}: fit={image_fit}, mode={display_mode}")
                 return WebsocketEventResult(broadcast_message=broadcast_message)
             else:
                 return WebsocketEventResult(broadcast_message={"info": "No image config updated"})
