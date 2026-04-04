@@ -1,5 +1,5 @@
 {
-  "latest": "0.43.0",
+  "latest": "0.44.0",
   "releases": {
     "0.27.1": {
       "date": "2026-03-10",
@@ -384,6 +384,21 @@
         "app": "0.29.0",
         "api_site": "0.23.0",
         "api_game": "0.17.0",
+        "api_auth": "0.3.0",
+        "nginx": "0.5.0",
+        "postgres": "0.1.10",
+        "mongo": "0.4.2",
+        "certbot": "0.1.4"
+      }
+    },
+    "0.44.0": {
+      "date": "2026-04-04",
+      "commit": "196c399",
+      "description": "CINE refactor and Hand Held motion effects",
+      "services": {
+        "app": "0.30.0",
+        "api_site": "0.24.0",
+        "api_game": "0.18.0",
         "api_auth": "0.3.0",
         "nginx": "0.5.0",
         "postgres": "0.1.10",
