@@ -8,6 +8,8 @@ import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import {
   faPlay, faPause, faStop, faRepeat,
   faFileImport, faFloppyDisk, faArrowRotateLeft,
+  faMagnifyingGlassPlus, faMagnifyingGlassMinus,
+  faArrowsLeftRight, faArrowsUpDown,
 } from '@fortawesome/free-solid-svg-icons';
 import { authFetch } from '@/app/shared/utils/authFetch';
 import AssetPicker from './AssetPicker';
@@ -16,6 +18,7 @@ import { useUpdateAudioConfig } from '../hooks/useUpdateAudioConfig';
 import { useWorkshopPreview } from '../hooks/useWorkshopPreview';
 import { detectBpm } from '../utils/detectBpm';
 import { useAssetManager } from '@/app/shared/providers/AssetDownloadManager';
+import { COLORS } from '@/app/styles/colorTheme';
 import WaveSurfer from 'wavesurfer.js';
 import RegionsPlugin from 'wavesurfer.js/dist/plugins/regions.esm.js';
 
@@ -58,6 +61,10 @@ export default function AudioWorkstationTool({ initialAssetId }) {
   const [isPlaying, setIsPlaying] = useState(false);
   const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState(0);
+
+  // Zoom state
+  const [hZoom, setHZoom] = useState(1);       // horizontal zoom level (minPxPerSec multiplier)
+  const [trackHeight, setTrackHeight] = useState(120); // vertical track height in px
 
   // Preview hook — single-channel engine for audition through effects
   const preview = useWorkshopPreview();
@@ -159,6 +166,7 @@ export default function AudioWorkstationTool({ initialAssetId }) {
         height: 'auto',
         normalize: true,
         backend: 'WebAudio',
+        minPxPerSec: hZoom,
       });
 
       regions = ws.registerPlugin(RegionsPlugin.create());
@@ -244,6 +252,13 @@ export default function AudioWorkstationTool({ initialAssetId }) {
       setDuration(0);
     };
   }, [selectedAsset?.id, selectedAsset?.s3_url]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // ── Sync horizontal zoom to WaveSurfer ────────────────────────────────────
+  useEffect(() => {
+    if (wavesurferRef.current) {
+      wavesurferRef.current.zoom(hZoom);
+    }
+  }, [hZoom]);
 
   // ── Transport controls ───────────────────────────────────────────────────
   const handlePlayPause = useCallback(() => {
@@ -384,6 +399,30 @@ export default function AudioWorkstationTool({ initialAssetId }) {
             </div>
           )}
         </div>
+        <div className="relative">
+          <button
+            onClick={(e) => { e.stopPropagation(); setMenuOpen(menuOpen === 'edit' ? null : 'edit'); }}
+            className={`px-4 py-2 font-medium transition-colors ${
+              menuOpen === 'edit'
+                ? 'opacity-70'
+                : 'hover:opacity-70'
+            }`}
+            style={{ color: '#0B0A09' }}
+          >
+            Edit
+          </button>
+          {menuOpen === 'edit' && (
+            <div className="absolute top-full left-0 z-50 min-w-[200px] py-1 border border-border shadow-lg" style={{ backgroundColor: '#B5ADA6', color: '#0B0A09' }}>
+              <button
+                disabled
+                className="w-full flex items-center gap-3 px-4 py-2 text-xs opacity-30 cursor-not-allowed"
+                style={{ color: '#0B0A09' }}
+              >
+                Create Multi-Track Mix
+              </button>
+            </div>
+          )}
+        </div>
       </div>
 
       {/* ── Transport Bar ─────────────────────────────────────────────────── */}
@@ -473,6 +512,56 @@ export default function AudioWorkstationTool({ initialAssetId }) {
           {loopMode === 'region' ? 'RGN' : loopMode === 'full' ? 'FULL' : 'OFF'}
         </button>
 
+        {/* Divider */}
+        <div className="w-px h-6 bg-border" />
+
+        {/* Zoom controls */}
+        <div className="flex items-center gap-1">
+          {/* Horizontal zoom (time) */}
+          <FontAwesomeIcon icon={faArrowsLeftRight} className="text-xs text-content-secondary mr-0.5" />
+          <button
+            onClick={() => setHZoom(prev => Math.max(1, prev / 2))}
+            disabled={!selectedAsset || hZoom <= 1}
+            className="flex items-center justify-center w-7 h-7 rounded-sm transition-colors disabled:opacity-30 hover:opacity-60"
+            title="Zoom out (time)"
+            style={{ color: COLORS.smoke }}
+          >
+            <FontAwesomeIcon icon={faMagnifyingGlassMinus} className="text-sm" />
+          </button>
+          <button
+            onClick={() => setHZoom(prev => Math.min(512, prev * 2))}
+            disabled={!selectedAsset}
+            className="flex items-center justify-center w-7 h-7 rounded-sm hover:text-content-secondary transition-colors disabled:opacity-30"
+            title="Zoom in (time)"
+            style={{ color: COLORS.smoke }}
+          >
+            <FontAwesomeIcon icon={faMagnifyingGlassPlus} className="text-sm" />
+          </button>
+
+          <div className="w-px h-4 bg-border mx-0.5" />
+
+          {/* Vertical zoom (track height) */}
+          <FontAwesomeIcon icon={faArrowsUpDown} className="text-xs text-content-secondary mr-0.5" />
+          <button
+            onClick={() => setTrackHeight(prev => Math.max(60, prev - 40))}
+            disabled={!selectedAsset || trackHeight <= 60}
+            className="flex items-center justify-center w-7 h-7 rounded-sm hover:text-content-secondary transition-colors disabled:opacity-30"
+            title="Decrease track height"
+            style={{ color: COLORS.smoke }}
+          >
+            <FontAwesomeIcon icon={faMagnifyingGlassMinus} className="text-sm" />
+          </button>
+          <button
+            onClick={() => setTrackHeight(prev => Math.min(400, prev + 40))}
+            disabled={!selectedAsset}
+            className="flex items-center justify-center w-7 h-7 rounded-sm hover:text-content-secondary transition-colors disabled:opacity-30"
+            title="Increase track height"
+            style={{ color: COLORS.smoke }}
+          >
+            <FontAwesomeIcon icon={faMagnifyingGlassPlus} className="text-sm" />
+          </button>
+        </div>
+
         {/* Track name — right-aligned */}
         {selectedAsset && (
           <div className="ml-auto text-xs text-content-secondary truncate max-w-[200px]">
@@ -518,11 +607,11 @@ export default function AudioWorkstationTool({ initialAssetId }) {
         ) : activeTab === 'arrangement' ? (
           /* ── Arrangement View ──────────────────────────────────────────── */
           selectedAsset ? (
-            <div className="flex-1 min-h-0 flex flex-col">
+            <div className="flex-1 min-h-0 overflow-auto">
               {/* Track lane */}
-              <div className="h-[120px] flex">
+              <div className="flex" style={{ height: `${trackHeight}px` }}>
                 {/* Track header */}
-                <div className="w-40 flex-shrink-0 border-r border-border bg-surface-secondary px-3 py-3 flex flex-col gap-2">
+                <div className="w-40 flex-shrink-0 border-r border-border bg-surface-secondary px-3 py-3 flex flex-col gap-2 sticky left-0 z-10">
                   <div className="text-[11px] font-bold text-content-on-dark uppercase tracking-wide truncate">
                     {selectedAsset.filename?.replace(/\.[^.]+$/, '') || 'Untitled'}
                   </div>
