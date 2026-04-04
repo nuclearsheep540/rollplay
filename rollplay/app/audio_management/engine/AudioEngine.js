@@ -4,7 +4,7 @@
 import EventEmitter from './EventEmitter';
 import AudioChannel from './AudioChannel';
 import StereoMeter from './StereoMeter';
-import { EngineState, DEFAULT_VOLUME, RAMP_TIME } from './constants';
+import { EngineState, DEFAULT_VOLUME } from './constants';
 
 /**
  * AudioEngine — core orchestrator for the audio system.
@@ -283,6 +283,20 @@ export default class AudioEngine extends EventEmitter {
 
   clearBuffer(cacheKey) {
     this._buffers.delete(cacheKey);
+  }
+
+  /**
+   * Store an externally-decoded AudioBuffer in the cache.
+   *
+   * Used when the consumer loads audio through a custom pipeline
+   * (e.g. AssetDownloadManager with progress tracking) and decodes
+   * using engine.context.decodeAudioData() directly.
+   *
+   * @param {string} cacheKey
+   * @param {AudioBuffer} buffer
+   */
+  storeBuffer(cacheKey, buffer) {
+    this._buffers.set(cacheKey, buffer);
   }
 
   clearAllBuffers() {
