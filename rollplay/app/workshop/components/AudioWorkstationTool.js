@@ -6,7 +6,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import {
-  faPlay, faPause, faStop, faRepeat,
+  faPlay, faPause, faStop, faRepeat, faStepBackward, faStepForward,
   faFileImport, faFloppyDisk, faArrowRotateLeft,
   faMagnifyingGlassPlus, faMagnifyingGlassMinus,
   faArrowsLeftRight, faArrowsUpDown,
@@ -103,13 +103,17 @@ export default function AudioWorkstationTool({ initialAssetId }) {
     return () => window.removeEventListener('click', handleClick);
   }, [menuOpen]);
 
-  // Spacebar → play/pause (uses a ref to always call the latest handler)
+  // Keyboard hotkeys (refs to always call the latest handlers)
   const handlePlayPauseRef = useRef(() => {});
+  const handleRewindRef = useRef(() => {});
   useEffect(() => {
     const handleKeyDown = (e) => {
       if (e.code === 'Space') {
         e.preventDefault();
         handlePlayPauseRef.current();
+      } else if (e.code === 'Enter') {
+        e.preventDefault();
+        handleRewindRef.current();
       }
     };
     window.addEventListener('keydown', handleKeyDown);
@@ -386,7 +390,7 @@ export default function AudioWorkstationTool({ initialAssetId }) {
     }
   }, [activeTrackIndex, preview, applyLoopConfigToChannel, startCursorSync, stopCursorSync]);
 
-  // Keep spacebar ref in sync
+  // Keep keyboard hotkey refs in sync
   useEffect(() => {
     handlePlayPauseRef.current = handlePlayPause;
   }, [handlePlayPause]);
@@ -398,6 +402,61 @@ export default function AudioWorkstationTool({ initialAssetId }) {
     setIsPlaying(false);
     setCurrentTime(0);
   }, [activeTrackIndex, preview, stopCursorSync]);
+
+  // Seek to a specific time, preserving playback state
+  const seekTo = useCallback(async (time) => {
+    const channel = preview.getChannel(activeTrackIndex);
+    const buffer = audioBuffersRef.current[activeTrackIndex];
+    if (!channel || !buffer) return;
+
+    const clamped = Math.max(0, Math.min(time, buffer.duration));
+    const wasPlaying = channel.playbackState === 'playing';
+
+    if (wasPlaying) {
+      channel.stop();
+      stopCursorSync(activeTrackIndex);
+      applyLoopConfigToChannel(activeTrackIndex);
+      await channel.play(buffer, { offset: clamped });
+      startCursorSync(activeTrackIndex);
+    } else {
+      // Paused/stopped — just update the cursor visually
+      channel.stop();
+    }
+    setCurrentTime(clamped);
+  }, [activeTrackIndex, preview, applyLoopConfigToChannel, startCursorSync, stopCursorSync]);
+
+  // Step backward — jump to previous marker (loop_end, loop_start, or 0)
+  const handleStepBackward = useCallback(() => {
+    const t = currentTime;
+    const stops = [0];
+    if (loopStart != null) stops.push(loopStart);
+    if (loopEnd != null) stops.push(loopEnd);
+    stops.sort((a, b) => a - b);
+    // Find largest stop that is < currentTime (use small epsilon to escape exact match)
+    const target = stops.filter(s => s < t - 0.01).pop() ?? 0;
+    seekTo(target);
+  }, [currentTime, loopStart, loopEnd, seekTo]);
+
+  // Step forward — jump to next marker (loop_start, loop_end, or duration)
+  const handleStepForward = useCallback(() => {
+    const t = currentTime;
+    const stops = [];
+    if (loopStart != null) stops.push(loopStart);
+    if (loopEnd != null) stops.push(loopEnd);
+    if (duration > 0) stops.push(duration);
+    stops.sort((a, b) => a - b);
+    const target = stops.find(s => s > t + 0.01) ?? duration;
+    seekTo(target);
+  }, [currentTime, loopStart, loopEnd, duration, seekTo]);
+
+  // Rewind to start, preserving playback state
+  const handleRewind = useCallback(() => {
+    seekTo(0);
+  }, [seekTo]);
+
+  useEffect(() => {
+    handleRewindRef.current = handleRewind;
+  }, [handleRewind]);
 
   // Apply loop config whenever the user changes it (live update while playing)
   useEffect(() => {
@@ -609,15 +668,33 @@ export default function AudioWorkstationTool({ initialAssetId }) {
             onClick={handleStop}
             disabled={!selectedAsset}
             className="flex items-center justify-center w-8 h-8 rounded-sm text-content-secondary hover:text-content-on-dark transition-colors disabled:opacity-30"
+            title="Stop"
           >
             <FontAwesomeIcon icon={faStop} className="text-xs" />
+          </button>
+          <button
+            onClick={handleStepBackward}
+            disabled={!selectedAsset}
+            className="flex items-center justify-center w-8 h-8 rounded-sm text-content-secondary hover:text-content-on-dark transition-colors disabled:opacity-30"
+            title="Step backward (to previous marker)"
+          >
+            <FontAwesomeIcon icon={faStepBackward} className="text-xs" />
           </button>
           <button
             onClick={handlePlayPause}
             disabled={!selectedAsset}
             className="flex items-center justify-center w-9 h-9 rounded-sm text-content-on-dark hover:text-content-secondary transition-colors disabled:opacity-30"
+            title="Play / Pause (Space)"
           >
             <FontAwesomeIcon icon={isPlaying ? faPause : faPlay} className="text-sm" />
+          </button>
+          <button
+            onClick={handleStepForward}
+            disabled={!selectedAsset}
+            className="flex items-center justify-center w-8 h-8 rounded-sm text-content-secondary hover:text-content-on-dark transition-colors disabled:opacity-30"
+            title="Step forward (to next marker)"
+          >
+            <FontAwesomeIcon icon={faStepForward} className="text-xs" />
           </button>
         </div>
 
