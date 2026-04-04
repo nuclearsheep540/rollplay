@@ -125,8 +125,8 @@ class UpdateImageConfigRequest(BaseModel):
     display_mode: Optional[str] = Field(None, description="Display mode: standard or cine")
     image_position_x: Optional[float] = Field(None, ge=0.0, le=100.0, description="Image position X within frame (0-100%)")
     image_position_y: Optional[float] = Field(None, ge=0.0, le=100.0, description="Image position Y within frame (0-100%)")
-    visual_overlays: Optional[list] = Field(None, description="Visual overlay stack")
-    motion: Optional[dict] = Field(None, description="Motion effects config")
+    visual_overlays: Optional[List[VisualOverlay]] = Field(None, description="Visual overlay stack")
+    motion: Optional[MotionConfig] = Field(None, description="Motion effects config")
 
 
 class UpdateAudioConfigRequest(BaseModel):

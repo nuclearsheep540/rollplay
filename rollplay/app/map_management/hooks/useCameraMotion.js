@@ -22,7 +22,7 @@ let idCounter = 0;
  * @keyframes rule into <head>, and returns a style object to apply to
  * the <img> element.
  *
- * @param {Object|null} handHeldConfig - Hand-held motion config from cine_config.motion.hand_held
+ * @param {Object|null} handHeldConfig - Hand-held motion config from image_config.motion.hand_held
  * @returns {{ style: Object }} Style object to spread onto the <img> element
  */
 export function useCameraMotion(handHeldConfig) {

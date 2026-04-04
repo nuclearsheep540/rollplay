@@ -21,6 +21,38 @@ def upgrade() -> None:
     op.add_column('image_assets', sa.Column('image_fit', sa.String(length=20), nullable=True))
     op.add_column('image_assets', sa.Column('visual_overlays', postgresql.JSONB(astext_type=sa.Text()), nullable=True))
     op.add_column('image_assets', sa.Column('motion', postgresql.JSONB(astext_type=sa.Text()), nullable=True))
+
+    # Backfill image_fit from old display_mode (float/wrap/letterbox were fit values)
+    op.execute(sa.text("""
+        UPDATE image_assets
+        SET image_fit = display_mode
+        WHERE display_mode IN ('float', 'wrap', 'letterbox', 'cine')
+    """))
+
+    # Coerce legacy 'cine' image_fit to 'letterbox' (cine was always letterbox + hide UI)
+    op.execute(sa.text("""
+        UPDATE image_assets
+        SET image_fit = 'letterbox'
+        WHERE image_fit = 'cine'
+    """))
+
+    # Coerce display_mode to new standard/cine enum
+    op.execute(sa.text("""
+        UPDATE image_assets
+        SET display_mode = CASE
+            WHEN display_mode = 'cine' THEN 'cine'
+            ELSE 'standard'
+        END
+    """))
+
+    # Extract overlays and motion from cine_config before dropping it
+    op.execute(sa.text("""
+        UPDATE image_assets
+        SET visual_overlays = cine_config -> 'visual_overlays',
+            motion = cine_config -> 'motion'
+        WHERE cine_config IS NOT NULL
+    """))
+
     op.drop_column('image_assets', 'cine_config')
     # ### end Alembic commands ###
 

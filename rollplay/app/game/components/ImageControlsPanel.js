@@ -1,7 +1,7 @@
 /* Copyright (C) 2025 Matthew Davey */
 /* SPDX-License-Identifier: GPL-3.0-or-later */
 
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import {
   DM_CHILD,
   DM_CHILD_LAST,
@@ -42,6 +42,7 @@ export default function ImageControlsPanel({
   const [isImageExpanded, setIsImageExpanded] = useState(true);
   const [isDisplayExpanded, setIsDisplayExpanded] = useState(false);
   const [stagedImage, setStagedImage] = useState(null);
+  const preStagedImageRef = useRef(null);
 
   // Original server state captured when Display Settings is opened — for cancel/revert
   const [originalFit, setOriginalFit] = useState(null);
@@ -72,6 +73,9 @@ export default function ImageControlsPanel({
   );
 
   const handleImageSelection = (imageData) => {
+    if (!stagedImage) {
+      preStagedImageRef.current = activeImage || null;
+    }
     setStagedImage(imageData);
     if (setActiveImage) {
       setActiveImage(imageData);
@@ -82,13 +86,15 @@ export default function ImageControlsPanel({
     if (!stagedImage || !sendImageLoad) return;
     sendImageLoad(stagedImage);
     setStagedImage(null);
+    preStagedImageRef.current = null;
   };
 
   const cancelStagedImage = () => {
     setStagedImage(null);
     if (setActiveImage) {
-      setActiveImage(null);
+      setActiveImage(preStagedImageRef.current);
     }
+    preStagedImageRef.current = null;
   };
 
   // Optimistic preview helpers

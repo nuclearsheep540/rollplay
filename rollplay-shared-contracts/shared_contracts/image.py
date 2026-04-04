@@ -33,7 +33,9 @@ class ImageConfig(ContractModel):
     @field_validator('display_mode', mode='before')
     @classmethod
     def coerce_display_mode(cls, v):
-        return v if v is not None else "standard"
+        if v in ("standard", "cine"):
+            return v
+        return "standard"
 
     aspect_ratio: Optional[str] = None  # e.g. "2.39:1", "16:9" — only for letterbox
     image_position_x: Optional[float] = None  # 0–100%

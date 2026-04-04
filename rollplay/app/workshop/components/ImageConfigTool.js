@@ -76,7 +76,8 @@ export default function ImageConfigTool({ selectedAssetId, onAssetSelect }) {
       const fit = assetData.image_fit || assetData.display_mode || 'float';
       setImageFit(fit === 'cine' ? 'letterbox' : fit);
       setAspectRatio(assetData.aspect_ratio || null);
-      setDisplayMode(assetData.display_mode === 'cine' ? 'cine' : (assetData.display_mode || 'standard'));
+      const dm = assetData.display_mode;
+      setDisplayMode(dm === 'standard' || dm === 'cine' ? dm : 'standard');
       setImagePositionX(assetData.image_position_x ?? null);
       setImagePositionY(assetData.image_position_y ?? null);
       setVisualOverlays(assetData.visual_overlays || null);
