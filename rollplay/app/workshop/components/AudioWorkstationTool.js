@@ -20,8 +20,7 @@ import { useWorkshopPreview } from '../hooks/useWorkshopPreview';
 import { detectBpm } from '../utils/detectBpm';
 import { useAssetManager } from '@/app/shared/providers/AssetDownloadManager';
 import { COLORS } from '@/app/styles/colorTheme';
-import WaveSurfer from 'wavesurfer.js';
-import RegionsPlugin from 'wavesurfer.js/dist/plugins/regions.esm.js';
+import WaveformCanvas from './WaveformCanvas';
 
 async function fetchAssetById(assetId) {
   const response = await authFetch(`/api/library/${assetId}`, { method: 'GET' });
@@ -30,7 +29,9 @@ async function fetchAssetById(assetId) {
 }
 
 const MAX_TRACKS = 6;
+let trackIdCounter = 0;
 const emptyTrack = (index) => ({
+  id: `track_${trackIdCounter++}`,
   index,
   asset: null,
   loopMode: 'full',
@@ -85,14 +86,10 @@ export default function AudioWorkstationTool({ initialAssetId }) {
     if (tracks.length < 2) addTrack();
   }, [tracks.length, addTrack]);
 
-  // Per-track WaveSurfer refs (keyed by track index)
-  const waveformRefs = useRef({});
   // Decoded audio buffers per track — fed to engine channels for actual playback
   const audioBuffersRef = useRef({});
   // Cursor sync rAF ids per track
   const cursorSyncRefs = useRef({});
-  const wavesurferRefs = useRef({});
-  const regionsRefs = useRef({});
   const [isPlaying, setIsPlaying] = useState(false);
   const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState(0);
@@ -203,108 +200,6 @@ export default function AudioWorkstationTool({ initialAssetId }) {
     } : t));
   }, []);
 
-  // ── WaveSurfer initialization per track ──────────────────────────────────
-  // Creates/destroys a WaveSurfer instance when a track gets an asset.
-  // Called from importAsset after a rAF to ensure the DOM container exists.
-  const initWaveSurferForTrack = useCallback(async (trackIndex, asset) => {
-    const container = waveformRefs.current[trackIndex];
-    if (!container || !asset?.s3_url) return;
-
-    // Destroy existing instance for this track
-    if (wavesurferRefs.current[trackIndex]) {
-      wavesurferRefs.current[trackIndex].destroy();
-      wavesurferRefs.current[trackIndex] = null;
-      regionsRefs.current[trackIndex] = null;
-    }
-
-    const ws = WaveSurfer.create({
-      container,
-      waveColor: '#B5ADA6',
-      progressColor: '#37322F',
-      cursorColor: 'transparent',
-      cursorWidth: 0,
-      interact: false,
-      barWidth: 2,
-      barGap: 1,
-      barRadius: 1,
-      height: trackHeight,
-      normalize: true,
-      backend: 'WebAudio',
-      minPxPerSec: pxPerSec || undefined,
-    });
-
-    // Mute WaveSurfer — audio comes from AudioEngine, WaveSurfer is visual-only
-    ws.setVolume(0);
-
-    const regions = ws.registerPlugin(RegionsPlugin.create());
-    wavesurferRefs.current[trackIndex] = ws;
-    regionsRefs.current[trackIndex] = regions;
-
-    const blob = await assetManager.download(asset.s3_url, asset.file_size, asset.id);
-    ws.loadBlob(blob);
-
-    ws.on('ready', async () => {
-      setDuration(ws.getDuration());
-
-      if (asset.loop_start != null && asset.loop_end != null) {
-        regions.addRegion({
-          start: asset.loop_start,
-          end: asset.loop_end,
-          color: 'rgba(181, 173, 166, 0.15)',
-          drag: true,
-          resize: true,
-        });
-      }
-
-      // Auto-detect BPM if the asset doesn't have one stored
-      if (asset.bpm == null) {
-        setIsDetectingBpm(true);
-        try {
-          const decodedData = ws.getDecodedData();
-          if (decodedData) {
-            const detected = await detectBpm(decodedData);
-            if (detected) {
-              setTracks(prev => prev.map((t, i) => i === trackIndex ? { ...t, bpm: detected } : t));
-              await authFetch(`/api/library/${asset.id}/audio-config`, {
-                method: 'PATCH',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ bpm: detected }),
-              });
-            }
-          }
-        } catch (error) {
-          console.warn('Auto BPM detection failed:', error);
-        } finally {
-          setIsDetectingBpm(false);
-        }
-      }
-    });
-
-    // WaveSurfer is visual-only; playback state + time come from the engine channel
-
-    regions.on('region-updated', (region) => {
-      setTracks(prev => prev.map((t, i) => i === trackIndex ? {
-        ...t,
-        loopStart: parseFloat(region.start.toFixed(3)),
-        loopEnd: parseFloat(region.end.toFixed(3)),
-      } : t));
-    });
-
-    regions.enableDragSelection({ color: 'rgba(181, 173, 166, 0.15)' });
-
-    regions.on('region-created', (region) => {
-      const allRegions = regions.getRegions();
-      for (const r of allRegions) {
-        if (r.id !== region.id) r.remove();
-      }
-      setTracks(prev => prev.map((t, i) => i === trackIndex ? {
-        ...t,
-        loopStart: parseFloat(region.start.toFixed(3)),
-        loopEnd: parseFloat(region.end.toFixed(3)),
-      } : t));
-    });
-  }, [trackHeight, pxPerSec]); // eslint-disable-line react-hooks/exhaustive-deps
-
   // ── Import asset into next available track ────────────────────────────────
   const importAsset = useCallback(async (assetId) => {
     setLoadingAsset(true);
@@ -339,6 +234,27 @@ export default function AudioWorkstationTool({ initialAssetId }) {
         const arrayBuffer = await blob.arrayBuffer();
         const audioBuffer = await engine.context.decodeAudioData(arrayBuffer);
         audioBuffersRef.current[targetIndex] = audioBuffer;
+        setDuration(audioBuffer.duration);
+
+        // Auto-detect BPM if the asset doesn't have one stored
+        if (assetData.bpm == null) {
+          setIsDetectingBpm(true);
+          try {
+            const detected = await detectBpm(audioBuffer);
+            if (detected) {
+              setTracks(prev => prev.map((t, i) => i === targetIndex ? { ...t, bpm: detected } : t));
+              await authFetch(`/api/library/${assetData.id}/audio-config`, {
+                method: 'PATCH',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ bpm: detected }),
+              });
+            }
+          } catch (err) {
+            console.warn('Auto BPM detection failed:', err);
+          } finally {
+            setIsDetectingBpm(false);
+          }
+        }
       }
     } catch (error) {
       console.warn(`Failed to decode audio buffer for track ${targetIndex}:`, error);
@@ -346,12 +262,7 @@ export default function AudioWorkstationTool({ initialAssetId }) {
 
     setLoadingAsset(false);
     setShowImportModal(false);
-
-    // Init WaveSurfer after React renders the new track's DOM container (visual only)
-    requestAnimationFrame(() => {
-      initWaveSurferForTrack(targetIndex, assetData);
-    });
-  }, [tracks, initTrackFromAsset, initWaveSurferForTrack, preview, assetManager]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [tracks, initTrackFromAsset, preview, assetManager]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Auto-import from deep-link (Library → Edit Loop Points)
   useEffect(() => {
@@ -360,32 +271,15 @@ export default function AudioWorkstationTool({ initialAssetId }) {
     }
   }, [initialAssetId]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Cleanup all WaveSurfer instances + cursor sync loops on unmount
+  // Cleanup cursor sync loops + engine on unmount
   useEffect(() => {
     return () => {
-      Object.values(wavesurferRefs.current).forEach(ws => ws?.destroy());
       Object.values(cursorSyncRefs.current).forEach(id => id && cancelAnimationFrame(id));
-      wavesurferRefs.current = {};
-      regionsRefs.current = {};
       cursorSyncRefs.current = {};
       audioBuffersRef.current = {};
       preview.destroy();
     };
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
-
-  // ── Sync WaveSurfer zoom to shared pxPerSec ──────────────────────────────
-  useEffect(() => {
-    if (pxPerSec <= 0) return;
-    Object.values(wavesurferRefs.current).forEach(ws => {
-      if (ws) ws.zoom(pxPerSec);
-    });
-  }, [pxPerSec]);
-
-  useEffect(() => {
-    Object.values(wavesurferRefs.current).forEach(ws => {
-      if (ws) ws.setOptions({ height: trackHeight });
-    });
-  }, [trackHeight]);
 
   // ── Engine channel helpers ────────────────────────────────────────────────
   const applyLoopConfigToChannel = useCallback((trackIndex) => {
@@ -534,10 +428,14 @@ export default function AudioWorkstationTool({ initialAssetId }) {
     seekTo(target);
   }, [currentTime, loopStart, loopEnd, duration, seekTo]);
 
-  // Rewind to start, preserving playback state
+  // Rewind playhead to start — stops all playback, resets visual position
   const handleRewind = useCallback(() => {
-    seekTo(0);
-  }, [seekTo]);
+    const engine = preview.engine.current;
+    if (engine) engine.stopAll();
+    tracks.forEach((_, i) => stopCursorSync(i));
+    setIsPlaying(false);
+    setCurrentTime(0);
+  }, [tracks, preview, stopCursorSync]);
 
   useEffect(() => {
     handleRewindRef.current = handleRewind;
@@ -561,20 +459,13 @@ export default function AudioWorkstationTool({ initialAssetId }) {
     return () => channel.off('ended', onEnded);
   }, [activeTrackIndex, preview, stopCursorSync]);
 
-  // ── BPM detection (active track) ─────────────────────────────────────────
+  // ── BPM detection (active track) — reads from audioBuffersRef, not WaveSurfer
   const handleDetectBpm = useCallback(async () => {
-    const ws = wavesurferRefs.current[activeTrackIndex];
-    if (!ws || !selectedAsset) return;
+    const buffer = audioBuffersRef.current[activeTrackIndex];
+    if (!buffer || !selectedAsset) return;
     setIsDetectingBpm(true);
-    console.log(`🎵 BPM detect started — current value: ${bpm ?? 'none'}, asset: ${selectedAsset.filename}`);
     try {
-      const decodedData = ws.getDecodedData();
-      if (!decodedData) {
-        console.warn('🎵 BPM detect: no decoded data available');
-        return;
-      }
-      const detected = await detectBpm(decodedData);
-      console.log(`🎵 BPM detect result: ${detected ?? 'null (no clear beat)'} (was: ${bpm ?? 'none'})`);
+      const detected = await detectBpm(buffer);
       setBpm(detected);
       if (detected) {
         await authFetch(`/api/library/${selectedAsset.id}/audio-config`, {
@@ -582,21 +473,19 @@ export default function AudioWorkstationTool({ initialAssetId }) {
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ bpm: detected }),
         });
-        console.log(`🎵 BPM ${detected} persisted to backend`);
       }
     } catch (error) {
-      console.warn('🎵 BPM detection failed:', error);
+      console.warn('BPM detection failed:', error);
     } finally {
       setIsDetectingBpm(false);
     }
-  }, [activeTrackIndex, selectedAsset, bpm]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [activeTrackIndex, selectedAsset]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleClearRegion = useCallback(() => {
-    regionsRefs.current[activeTrackIndex]?.clearRegions();
     setLoopStart(null);
     setLoopEnd(null);
     if (loopMode === 'region') setLoopMode('full');
-  }, [activeTrackIndex, loopMode]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [loopMode]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleSave = async () => {
     if (!selectedAsset) return;
@@ -640,20 +529,7 @@ export default function AudioWorkstationTool({ initialAssetId }) {
     setLoopStart(saved.loopStart);
     setLoopEnd(saved.loopEnd);
     setBpm(saved.bpm);
-    const regions = regionsRefs.current[activeTrackIndex];
-    if (regions) {
-      regions.clearRegions();
-      if (saved.loopStart != null && saved.loopEnd != null) {
-        regions.addRegion({
-          start: saved.loopStart,
-          end: saved.loopEnd,
-          color: 'rgba(181, 173, 166, 0.15)',
-          drag: true,
-          resize: true,
-        });
-      }
-    }
-  }, [activeTrackIndex, activeTrack]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [activeTrack]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Render ───────────────────────────────────────────────────────────────
   return (
@@ -969,7 +845,7 @@ export default function AudioWorkstationTool({ initialAssetId }) {
 
                 return (
                   <div
-                    key={i}
+                    key={track.id}
                     className="flex border-b border-border cursor-pointer"
                     style={{
                       backgroundColor: hasAsset ? COLORS.onyx : `${COLORS.onyx}80`,
@@ -1021,10 +897,7 @@ export default function AudioWorkstationTool({ initialAssetId }) {
                       style={{ width: contentWidth > 0 ? `${contentWidth}px` : '100%', height: '100%' }}
                     >
                       {hasAsset ? (
-                        <div
-                          ref={(el) => { waveformRefs.current[i] = el; }}
-                          className="w-full h-full"
-                        />
+                        <WaveformCanvas audioBuffer={audioBuffersRef.current[i]} />
                       ) : (
                         <div className="w-full h-full flex items-center justify-center">
                           <span className="text-sm text-content-secondary">
