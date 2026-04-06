@@ -730,3 +730,17 @@ Extend `remote_audio_batch` to pass `loop_mode`, `loop_start`, `loop_end`.
 17. **Loop toggle** — mixer cycles off/full/region
 18. **Backward compat** — existing assets work
 19. **`npm run build`** — clean
+
+---
+
+## Future: Engine Transport API + Game Channel Cue Migration
+
+### Context
+
+The AudioEngine currently has no transport-level controls (`stopAll`, `pauseAll`, `resumeAll`). The game's "Stop All" button in the Channel Cue works via a WebSocket batch roundtrip — sends `{ operation: 'stop' }` for every track ID, server broadcasts, all clients process individually. This works but is indirect.
+
+### Action items
+
+1. **Add `stopAll()`, `pauseAll()`, `resumeAll()` to `AudioEngine`** — simple iteration over channels. The Workshop DAW uses these for its transport controls.
+2. **Migrate game Channel Cue "Stop All"** — currently in `AudioMixerPanel.js:378-390`, uses `sendRemoteAudioBatch` with stop ops for every track. After adding engine methods, the DM's local playback can stop instantly via `engine.stopAll()` while the WebSocket broadcast handles remote clients. This removes the latency of the roundtrip for the DM who clicked the button.
+3. **Consider `playAll(buffers)` for synchronized multi-track start** — the Workshop needs to start all loaded tracks simultaneously from the same arrangement position. The engine could accept a map of `{ channelId: { buffer, offset } }` and schedule all `source.start()` calls at the same `audioContext.currentTime` for sample-accurate sync.

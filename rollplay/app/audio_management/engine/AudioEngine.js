@@ -205,6 +205,29 @@ export default class AudioEngine extends EventEmitter {
     return Array.from(this._channels.keys());
   }
 
+  // ── Transport (all channels) ─────────────────────────────────────────────
+
+  /** Stop all channels (preserves channels, just halts playback). */
+  stopAll() {
+    for (const channel of this._channels.values()) {
+      channel.stop();
+    }
+  }
+
+  /** Pause all currently playing channels. */
+  pauseAll() {
+    for (const channel of this._channels.values()) {
+      if (channel.playbackState === 'playing') channel.pause();
+    }
+  }
+
+  /** Resume all paused channels. */
+  async resumeAll() {
+    for (const channel of this._channels.values()) {
+      if (channel.playbackState === 'paused') await channel.resume();
+    }
+  }
+
   /**
    * Recompute mute/solo gains across all channels.
    * Called when any channel's mute or solo state changes.

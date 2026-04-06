@@ -458,7 +458,17 @@ export default class AudioChannel extends EventEmitter {
 
       const elapsed = ctx.currentTime - this._startTime + this._pausedTime;
 
-      if (this._loopMode !== LoopMode.OFF && this._duration > 0) {
+      if (this._loopMode === LoopMode.REGION && this._loopRegion && this._duration > 0) {
+        // Region loop — native source.loopStart/loopEnd wraps between [start, end]
+        // Mirror that wrap in our time tracking so the UI matches the audio
+        const { start, end } = this._loopRegion;
+        if (elapsed < end) {
+          this._currentTime = elapsed;
+        } else {
+          const regionLen = end - start;
+          this._currentTime = start + ((elapsed - end) % regionLen);
+        }
+      } else if (this._loopMode !== LoopMode.OFF && this._duration > 0) {
         this._currentTime = elapsed % this._duration;
       } else {
         this._currentTime = Math.min(elapsed, this._duration);

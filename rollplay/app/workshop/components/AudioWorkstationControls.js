@@ -4,14 +4,13 @@
 'use client'
 
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
-import { faRepeat, faRotateRight, faBan, faFloppyDisk, faArrowRotateLeft, faTrash } from '@fortawesome/free-solid-svg-icons';
+import { faRepeat, faRotateRight, faBan, faTrash } from '@fortawesome/free-solid-svg-icons';
 
 /**
- * Loop Points tab content for the Audio Workstation.
+ * Loop Points drawer content for the Audio Workstation.
  *
- * Sections: Loop Mode, Loop Region, Save/Reset.
+ * Auto-saves on every change — no explicit save button.
  * BPM is managed from the transport bar in the arrangement view.
- * Pure presentation — all state is owned by AudioWorkstationTool.
  */
 export default function AudioWorkstationControls({
   loopMode,
@@ -19,12 +18,9 @@ export default function AudioWorkstationControls({
   loopStart,
   loopEnd,
   onClearRegion,
-  onSave,
-  onReset,
   isSaving,
   saveSuccess,
   error,
-  hasChanges,
 }) {
   const hasRegion = loopStart != null && loopEnd != null;
 
@@ -88,28 +84,9 @@ export default function AudioWorkstationControls({
         )}
       </div>
 
-      {/* Save / Reset */}
-      <div className="flex gap-2">
-        <button
-          onClick={onReset}
-          disabled={!hasChanges || isSaving}
-          className="flex-1 flex items-center justify-center gap-2 px-3 py-2.5 text-xs font-medium rounded-sm border border-border text-content-secondary hover:border-border-active hover:text-content-on-dark transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
-        >
-          <FontAwesomeIcon icon={faArrowRotateLeft} className="text-[10px]" />
-          Reset
-        </button>
-        <button
-          onClick={onSave}
-          disabled={!hasChanges || isSaving}
-          className={`flex-1 flex items-center justify-center gap-2 px-3 py-2.5 text-xs font-medium rounded-sm border transition-colors disabled:opacity-30 disabled:cursor-not-allowed ${
-            saveSuccess
-              ? 'bg-feedback-success/20 border-feedback-success text-feedback-success'
-              : 'bg-interactive-active border-border-active text-content-on-dark hover:opacity-90'
-          }`}
-        >
-          <FontAwesomeIcon icon={faFloppyDisk} className="text-[10px]" />
-          {isSaving ? 'Saving...' : saveSuccess ? 'Saved' : 'Save'}
-        </button>
+      {/* Save status indicator */}
+      <div className="text-[10px] text-content-secondary px-1">
+        {isSaving ? 'Saving...' : saveSuccess ? 'Saved' : 'Changes save automatically'}
       </div>
 
       {error && (
