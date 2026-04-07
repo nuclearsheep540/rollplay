@@ -927,6 +927,8 @@ export default function AudioWorkstationTool({ initialAssetId }) {
                           duration={audioBuffersRef.current[i]?.duration || 0}
                           regionStart={track.loopStart}
                           regionEnd={track.loopEnd}
+                          regionEditEnabled={loopDrawerOpen && isActive}
+                          scrollContainerRef={arrangementScrollRef}
                           onRegionChange={(start, end) => {
                             setTracks(prev => prev.map((t, idx) => idx === i ? {
                               ...t,

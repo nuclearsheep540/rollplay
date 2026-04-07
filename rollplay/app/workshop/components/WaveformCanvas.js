@@ -7,16 +7,14 @@ import { useRef, useEffect, useState, useCallback, memo } from 'react';
 import { COLORS } from '@/app/styles/colorTheme';
 
 /**
- * Renders a static waveform from a decoded AudioBuffer onto a canvas.
- * Supports click-and-drag to create/modify a loop region overlay.
+ * Renders a waveform from a decoded AudioBuffer.
  *
- * Props:
- *   audioBuffer   — decoded AudioBuffer
- *   duration      — track duration in seconds (for pixel↔time conversion)
- *   regionStart   — loop region start in seconds (or null)
- *   regionEnd     — loop region end in seconds (or null)
- *   onRegionChange(start, end) — called when user drags a new region
- *   color         — waveform fill color
+ * Uses virtual rendering — the canvas stays viewport-sized and only draws
+ * the samples currently visible based on scroll position. This avoids
+ * creating enormous canvases at high zoom levels.
+ *
+ * Supports click-and-drag to create loop regions (when regionEditEnabled)
+ * or horizontal pan scrolling (default).
  */
 export default memo(function WaveformCanvas({
   audioBuffer,
@@ -24,31 +22,26 @@ export default memo(function WaveformCanvas({
   regionStart = null,
   regionEnd = null,
   onRegionChange,
+  regionEditEnabled = false,
+  scrollContainerRef = null,
   color = COLORS.silver,
 }) {
   const canvasRef = useRef(null);
   const containerRef = useRef(null);
-  const [renderKey, setRenderKey] = useState(0);
+  const monoRef = useRef(null);        // Cached mono-mixed samples
+  const monoBufferIdRef = useRef(null); // Track which buffer was mixed
 
   // Drag state for creating regions
   const [dragging, setDragging] = useState(false);
-  const [dragStart, setDragStart] = useState(null); // px
-  const [dragEnd, setDragEnd] = useState(null);     // px
+  const [dragStart, setDragStart] = useState(null);
+  const [dragEnd, setDragEnd] = useState(null);
 
-  // ── Draw waveform ──────────────────────────────────────────────────────
+  // ── Cache mono mix ─────────────────────────────────────────────────────
   useEffect(() => {
-    const canvas = canvasRef.current;
-    if (!canvas || !audioBuffer) return;
-
-    const ctx = canvas.getContext('2d');
-    const dpr = window.devicePixelRatio || 1;
-    const rect = canvas.getBoundingClientRect();
-    const width = rect.width;
-    const height = rect.height;
-
-    canvas.width = width * dpr;
-    canvas.height = height * dpr;
-    ctx.scale(dpr, dpr);
+    if (!audioBuffer) { monoRef.current = null; monoBufferIdRef.current = null; return; }
+    // Only remix if the buffer changed
+    const bufferId = `${audioBuffer.length}_${audioBuffer.sampleRate}_${audioBuffer.numberOfChannels}`;
+    if (monoBufferIdRef.current === bufferId) return;
 
     const numChannels = audioBuffer.numberOfChannels;
     const length = audioBuffer.length;
@@ -62,71 +55,148 @@ export default memo(function WaveformCanvas({
     const scale = 1 / numChannels;
     for (let i = 0; i < length; i++) samples[i] *= scale;
 
-    const samplesPerPixel = Math.floor(length / width) || 1;
-    const midY = height / 2;
+    monoRef.current = samples;
+    monoBufferIdRef.current = bufferId;
+  }, [audioBuffer]);
 
-    ctx.clearRect(0, 0, width, height);
+  // ── Draw waveform (visible portion only) ───────────────────────────────
+  const draw = useCallback(() => {
+    const canvas = canvasRef.current;
+    const container = containerRef.current;
+    const samples = monoRef.current;
+    if (!canvas || !container || !samples || !duration) return;
+
+    const ctx = canvas.getContext('2d');
+    const dpr = window.devicePixelRatio || 1;
+
+    // Canvas is sized to the VISIBLE area (container's viewport), not the full content width
+    const visibleWidth = container.clientWidth;
+    const visibleHeight = container.clientHeight;
+    if (visibleWidth === 0 || visibleHeight === 0) return;
+
+    canvas.width = visibleWidth * dpr;
+    canvas.height = visibleHeight * dpr;
+    ctx.scale(dpr, dpr);
+
+    // Figure out which portion of the waveform is visible based on scroll
+    const scrollEl = scrollContainerRef?.current;
+    const parentEl = container.parentElement; // the explicit-width content div
+    const contentWidth = parentEl?.clientWidth || visibleWidth;
+    const scrollLeft = scrollEl ? scrollEl.scrollLeft : 0;
+
+    // The container is positioned inside the content row. Its offset from the content start
+    // is its offsetLeft. The visible window within the content is [scrollLeft, scrollLeft + visibleWidth].
+    const containerOffset = container.offsetLeft || 0;
+    const visibleStartPx = Math.max(0, scrollLeft - containerOffset);
+    const visibleEndPx = Math.min(contentWidth, scrollLeft - containerOffset + visibleWidth);
+
+    // Convert to sample range
+    const totalSamples = samples.length;
+    const samplesPerPx = totalSamples / contentWidth;
+    const sampleStart = Math.floor(visibleStartPx * samplesPerPx);
+    const sampleEnd = Math.ceil(visibleEndPx * samplesPerPx);
+
+    const midY = visibleHeight / 2;
+    ctx.clearRect(0, 0, visibleWidth, visibleHeight);
     ctx.fillStyle = color;
+
+    // Draw the waveform for the visible pixel range
+    const pxCount = visibleWidth;
+    const samplesPerVisiblePx = (sampleEnd - sampleStart) / pxCount;
 
     ctx.beginPath();
     ctx.moveTo(0, midY);
 
-    for (let x = 0; x < width; x++) {
-      const start = x * samplesPerPixel;
-      const end = Math.min(start + samplesPerPixel, length);
+    // Upper envelope
+    for (let px = 0; px < pxCount; px++) {
+      const s = Math.floor(sampleStart + px * samplesPerVisiblePx);
+      const e = Math.min(Math.floor(sampleStart + (px + 1) * samplesPerVisiblePx), totalSamples);
       let max = 0;
-      for (let i = start; i < end; i++) {
+      for (let i = s; i < e; i++) {
         if (samples[i] > max) max = samples[i];
       }
-      ctx.lineTo(x, midY - max * midY);
+      ctx.lineTo(px, midY - max * midY);
     }
 
-    for (let x = width - 1; x >= 0; x--) {
-      const start = x * samplesPerPixel;
-      const end = Math.min(start + samplesPerPixel, length);
+    // Lower envelope (right to left)
+    for (let px = pxCount - 1; px >= 0; px--) {
+      const s = Math.floor(sampleStart + px * samplesPerVisiblePx);
+      const e = Math.min(Math.floor(sampleStart + (px + 1) * samplesPerVisiblePx), totalSamples);
       let min = 0;
-      for (let i = start; i < end; i++) {
+      for (let i = s; i < e; i++) {
         if (samples[i] < min) min = samples[i];
       }
-      ctx.lineTo(x, midY - min * midY);
+      ctx.lineTo(px, midY - min * midY);
     }
 
     ctx.closePath();
     ctx.fill();
-  }, [audioBuffer, color, renderKey]);
+  }, [duration, color, scrollContainerRef]);
 
-  // ── Resize observer ────────────────────────────────────────────────────
+  // Redraw on buffer change
+  useEffect(() => {
+    draw();
+  }, [audioBuffer, draw]);
+
+  // Redraw on scroll (virtual rendering)
+  useEffect(() => {
+    const scrollEl = scrollContainerRef?.current;
+    if (!scrollEl) return;
+    const onScroll = () => draw();
+    scrollEl.addEventListener('scroll', onScroll);
+    return () => scrollEl.removeEventListener('scroll', onScroll);
+  }, [scrollContainerRef, draw]);
+
+  // Redraw on resize
   const lastSizeRef = useRef({ w: 0, h: 0 });
   useEffect(() => {
-    const canvas = canvasRef.current;
-    if (!canvas) return;
+    const container = containerRef.current;
+    if (!container) return;
     const observer = new ResizeObserver(([entry]) => {
       const w = Math.round(entry.contentRect.width);
       const h = Math.round(entry.contentRect.height);
       if (w !== lastSizeRef.current.w || h !== lastSizeRef.current.h) {
         lastSizeRef.current = { w, h };
-        setRenderKey(k => k + 1);
+        draw();
       }
     });
-    observer.observe(canvas);
+    observer.observe(container);
     return () => observer.disconnect();
-  }, []);
+  }, [draw]);
 
-  // ── Drag to create region ──────────────────────────────────────────────
+  // ── Drag: region select (when enabled) or horizontal pan (default) ────
   const pxToTime = useCallback((px) => {
     const el = containerRef.current;
-    if (!el || !duration) return 0;
-    return Math.max(0, Math.min(duration, (px / el.clientWidth) * duration));
-  }, [duration]);
+    const parentEl = el?.parentElement;
+    if (!el || !parentEl || !duration) return 0;
+    const contentWidth = parentEl.clientWidth;
+    const scrollEl = scrollContainerRef?.current;
+    const scrollLeft = scrollEl ? scrollEl.scrollLeft : 0;
+    const containerOffset = el.offsetLeft || 0;
+    // px is relative to the visible canvas; convert to content position then to time
+    const contentPx = scrollLeft - containerOffset + px;
+    return Math.max(0, Math.min(duration, (contentPx / contentWidth) * duration));
+  }, [duration, scrollContainerRef]);
 
   const handleMouseDown = useCallback((e) => {
-    if (!duration) return;
-    const rect = containerRef.current.getBoundingClientRect();
-    const x = e.clientX - rect.left;
-    setDragging(true);
-    setDragStart(x);
-    setDragEnd(x);
-  }, [duration]);
+    if (regionEditEnabled) {
+      if (!duration) return;
+      const rect = containerRef.current.getBoundingClientRect();
+      const x = e.clientX - rect.left;
+      setDragging(true);
+      setDragStart(x);
+      setDragEnd(x);
+    } else {
+      const scrollEl = scrollContainerRef?.current;
+      if (!scrollEl) return;
+      const startX = e.clientX;
+      const startScroll = scrollEl.scrollLeft;
+      const onMove = (ev) => { scrollEl.scrollLeft = startScroll + (startX - ev.clientX); };
+      const onUp = () => { window.removeEventListener('mousemove', onMove); window.removeEventListener('mouseup', onUp); };
+      window.addEventListener('mousemove', onMove);
+      window.addEventListener('mouseup', onUp);
+    }
+  }, [regionEditEnabled, duration, scrollContainerRef]);
 
   const handleMouseMove = useCallback((e) => {
     if (!dragging) return;
@@ -136,74 +206,73 @@ export default memo(function WaveformCanvas({
   }, [dragging]);
 
   const handleMouseUp = useCallback(() => {
-    if (!dragging || dragStart == null || dragEnd == null) {
-      setDragging(false);
-      return;
-    }
-
+    if (!dragging || dragStart == null || dragEnd == null) { setDragging(false); return; }
     const t1 = pxToTime(dragStart);
     const t2 = pxToTime(dragEnd);
     const start = Math.min(t1, t2);
     const end = Math.max(t1, t2);
-
     setDragging(false);
     setDragStart(null);
     setDragEnd(null);
-
-    // Only commit if the region is at least 0.1s wide (prevents accidental clicks)
     if (end - start > 0.1 && onRegionChange) {
       onRegionChange(parseFloat(start.toFixed(3)), parseFloat(end.toFixed(3)));
     }
   }, [dragging, dragStart, dragEnd, pxToTime, onRegionChange]);
 
-  // Global mouse listeners for drag (so dragging outside the element still works)
   useEffect(() => {
     if (!dragging) return;
     const onMove = (e) => handleMouseMove(e);
     const onUp = () => handleMouseUp();
     window.addEventListener('mousemove', onMove);
     window.addEventListener('mouseup', onUp);
-    return () => {
-      window.removeEventListener('mousemove', onMove);
-      window.removeEventListener('mouseup', onUp);
-    };
+    return () => { window.removeEventListener('mousemove', onMove); window.removeEventListener('mouseup', onUp); };
   }, [dragging, handleMouseMove, handleMouseUp]);
 
-  // ── Compute region overlay positions ───────────────────────────────────
-  const containerWidth = containerRef.current?.clientWidth || 1;
+  // ── Region overlay positions ───────────────────────────────────────────
+  // These are relative to the full content width, converted to visible canvas px
+  const getRegionPx = () => {
+    const el = containerRef.current;
+    const parentEl = el?.parentElement;
+    if (!el || !parentEl || !duration) return null;
+    if (regionStart == null || regionEnd == null) return null;
+    const contentWidth = parentEl.clientWidth;
+    const scrollEl = scrollContainerRef?.current;
+    const scrollLeft = scrollEl ? scrollEl.scrollLeft : 0;
+    const containerOffset = el.offsetLeft || 0;
+    const rStartPx = (regionStart / duration) * contentWidth - scrollLeft + containerOffset;
+    const rEndPx = (regionEnd / duration) * contentWidth - scrollLeft + containerOffset;
+    const visibleWidth = el.clientWidth;
+    const left = Math.max(0, rStartPx);
+    const right = Math.min(visibleWidth, rEndPx);
+    if (right <= left) return null;
+    return { left, width: right - left };
+  };
 
-  // Active drag region (while dragging)
-  const dragLeft = dragging && dragStart != null && dragEnd != null
-    ? Math.min(dragStart, dragEnd) : null;
-  const dragWidth = dragging && dragStart != null && dragEnd != null
-    ? Math.abs(dragEnd - dragStart) : null;
+  const regionPx = getRegionPx();
 
-  // Committed region (from props)
-  const regionLeft = regionStart != null && duration > 0
-    ? (regionStart / duration) * containerWidth : null;
-  const regionWidth = regionStart != null && regionEnd != null && duration > 0
-    ? ((regionEnd - regionStart) / duration) * containerWidth : null;
+  // Drag overlay
+  const dragLeft = dragging && dragStart != null && dragEnd != null ? Math.min(dragStart, dragEnd) : null;
+  const dragWidth = dragging && dragStart != null && dragEnd != null ? Math.abs(dragEnd - dragStart) : null;
 
   return (
     <div
       ref={containerRef}
       className="relative w-full h-full"
       onMouseDown={handleMouseDown}
-      style={{ cursor: duration ? 'crosshair' : 'default' }}
+      style={{ cursor: regionEditEnabled ? 'crosshair' : duration ? 'grab' : 'default' }}
     >
       <canvas
         ref={canvasRef}
-        className="w-full h-full"
-        style={{ display: 'block' }}
+        style={{ display: 'block', width: '100%', height: '100%' }}
       />
 
       {/* Committed region overlay */}
-      {regionLeft != null && regionWidth != null && !dragging && (
+      {regionPx && !dragging && (
         <div
           className="absolute top-0 bottom-0 pointer-events-none"
           style={{
-            left: `${regionLeft}px`,
-            width: `${regionWidth}px`,
+            left: `${regionPx.left}px`,
+            width: `${regionPx.width}px`,
             backgroundColor: 'rgba(59, 130, 246, 0.15)',
             borderLeft: '1px solid rgba(59, 130, 246, 0.5)',
             borderRight: '1px solid rgba(59, 130, 246, 0.5)',
