@@ -6,7 +6,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import {
-  faPlay, faPause, faStop, faRepeat, faStepBackward, faStepForward,
+  faPlay, faPause, faStop, faStepBackward, faStepForward,
   faFileImport, faFloppyDisk, faArrowRotateLeft,
   faMagnifyingGlassPlus, faMagnifyingGlassMinus,
   faArrowsLeftRight, faArrowsUpDown,
@@ -90,8 +90,12 @@ export default function AudioWorkstationTool({ initialAssetId }) {
   const audioBuffersRef = useRef({});
   // Cursor sync rAF ids per track
   const cursorSyncRefs = useRef({});
+  // Direct DOM refs for playhead + timecode (updated imperatively, no React re-renders)
+  const playheadRef = useRef(null);
+  const timecodeRef = useRef(null);
+  const currentTimeRef = useRef(0);
   const [isPlaying, setIsPlaying] = useState(false);
-  const [currentTime, setCurrentTime] = useState(0);
+  const [, forceUpdate] = useState(0);
   const [duration, setDuration] = useState(0);
 
   // Zoom state
@@ -308,7 +312,15 @@ export default function AudioWorkstationTool({ initialAssetId }) {
         return;
       }
       const time = channel.currentTime;
-      setCurrentTime(time);
+      currentTimeRef.current = time;
+
+      // Update playhead + timecode DOM directly (no React re-render)
+      if (playheadRef.current) {
+        playheadRef.current.style.left = `${HEADER_WIDTH + time * pxPerSecRef.current}px`;
+      }
+      if (timecodeRef.current) {
+        timecodeRef.current.textContent = formatTimecode(time);
+      }
 
       // Follow mode auto-scroll — keep playhead in view
       const scrollEl = arrangementScrollRef.current;
@@ -379,7 +391,9 @@ export default function AudioWorkstationTool({ initialAssetId }) {
     if (engine) engine.stopAll();
     tracks.forEach((_, i) => stopCursorSync(i));
     setIsPlaying(false);
-    setCurrentTime(0);
+    currentTimeRef.current = 0;
+    if (playheadRef.current) playheadRef.current.style.left = `${HEADER_WIDTH}px`;
+    if (timecodeRef.current) timecodeRef.current.textContent = formatTimecode(0);
   }, [tracks, preview, stopCursorSync]);
 
   // Seek to a specific time, preserving playback state
@@ -401,24 +415,25 @@ export default function AudioWorkstationTool({ initialAssetId }) {
       // Paused/stopped — just update the cursor visually
       channel.stop();
     }
-    setCurrentTime(clamped);
+    currentTimeRef.current = clamped;
+    if (playheadRef.current) playheadRef.current.style.left = `${HEADER_WIDTH + clamped * pxPerSecRef.current}px`;
+    if (timecodeRef.current) timecodeRef.current.textContent = formatTimecode(clamped);
   }, [activeTrackIndex, preview, applyLoopConfigToChannel, startCursorSync, stopCursorSync]);
 
   // Step backward — jump to previous marker (loop_end, loop_start, or 0)
   const handleStepBackward = useCallback(() => {
-    const t = currentTime;
+    const t = currentTimeRef.current;
     const stops = [0];
     if (loopStart != null) stops.push(loopStart);
     if (loopEnd != null) stops.push(loopEnd);
     stops.sort((a, b) => a - b);
-    // Find largest stop that is < currentTime (use small epsilon to escape exact match)
     const target = stops.filter(s => s < t - 0.01).pop() ?? 0;
     seekTo(target);
-  }, [currentTime, loopStart, loopEnd, seekTo]);
+  }, [loopStart, loopEnd, seekTo]);
 
   // Step forward — jump to next marker (loop_start, loop_end, or duration)
   const handleStepForward = useCallback(() => {
-    const t = currentTime;
+    const t = currentTimeRef.current;
     const stops = [];
     if (loopStart != null) stops.push(loopStart);
     if (loopEnd != null) stops.push(loopEnd);
@@ -426,7 +441,7 @@ export default function AudioWorkstationTool({ initialAssetId }) {
     stops.sort((a, b) => a - b);
     const target = stops.find(s => s > t + 0.01) ?? duration;
     seekTo(target);
-  }, [currentTime, loopStart, loopEnd, duration, seekTo]);
+  }, [loopStart, loopEnd, duration, seekTo]);
 
   // Rewind playhead to start — stops all playback, resets visual position
   const handleRewind = useCallback(() => {
@@ -434,7 +449,9 @@ export default function AudioWorkstationTool({ initialAssetId }) {
     if (engine) engine.stopAll();
     tracks.forEach((_, i) => stopCursorSync(i));
     setIsPlaying(false);
-    setCurrentTime(0);
+    currentTimeRef.current = 0;
+    if (playheadRef.current) playheadRef.current.style.left = `${HEADER_WIDTH}px`;
+    if (timecodeRef.current) timecodeRef.current.textContent = formatTimecode(0);
   }, [tracks, preview, stopCursorSync]);
 
   useEffect(() => {
@@ -453,7 +470,9 @@ export default function AudioWorkstationTool({ initialAssetId }) {
     const onEnded = () => {
       stopCursorSync(activeTrackIndex);
       setIsPlaying(false);
-      setCurrentTime(0);
+      currentTimeRef.current = 0;
+    if (playheadRef.current) playheadRef.current.style.left = `${HEADER_WIDTH}px`;
+    if (timecodeRef.current) timecodeRef.current.textContent = formatTimecode(0);
     };
     channel.on('ended', onEnded);
     return () => channel.off('ended', onEnded);
@@ -683,37 +702,9 @@ export default function AudioWorkstationTool({ initialAssetId }) {
         <div className="flex flex-col items-center">
           <span className="text-[9px] uppercase tracking-wider text-content-secondary">Position</span>
           <span className="text-sm font-mono font-bold text-content-on-dark">
-            {formatTimecode(currentTime)}
+            <span ref={timecodeRef}>{formatTimecode(0)}</span>
           </span>
         </div>
-
-        {/* Divider */}
-        <div className="w-px h-6 bg-border" />
-
-        {/* Loop mode indicator */}
-        <button
-          onClick={() => {
-            const current = loopMode;
-            const hasRegion = loopStart != null && loopEnd != null;
-            let next;
-            if (current === 'off') next = 'full';
-            else if (current === 'full' && hasRegion) next = 'region';
-            else next = 'off';
-            setLoopMode(next);
-          }}
-          disabled={!selectedAsset}
-          className={`flex items-center gap-1.5 px-2 py-1 rounded-sm text-xs font-medium transition-colors disabled:opacity-30 ${
-            loopMode === 'off'
-              ? 'text-content-secondary'
-              : loopMode === 'region'
-                ? 'text-amber-400'
-                : 'text-content-on-dark'
-          }`}
-          title={`Loop: ${loopMode}`}
-        >
-          <FontAwesomeIcon icon={faRepeat} className="text-[10px]" />
-          {loopMode === 'region' ? 'RGN' : loopMode === 'full' ? 'FULL' : 'OFF'}
-        </button>
 
         {/* Divider */}
         <div className="w-px h-6 bg-border" />
@@ -874,15 +865,49 @@ export default function AudioWorkstationTool({ initialAssetId }) {
                       </div>
                       {hasAsset && (
                         <div className="flex items-center gap-1 mt-1">
-                          <button className="w-6 h-5 rounded text-[10px] font-bold bg-border/40 text-content-secondary hover:bg-border hover:text-content-on-dark transition-colors">
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              const ch = preview.getChannel(i);
+                              if (!ch) return;
+                              ch.setSoloed(!ch.soloed);
+                              const engine = preview.engine.current;
+                              if (engine) engine.updateMuteSoloState();
+                              forceUpdate(n => n + 1);
+                            }}
+                            className={`w-6 h-5 rounded text-[10px] font-bold transition-colors ${
+                              preview.getChannel(i)?.soloed
+                                ? 'bg-yellow-500 text-black'
+                                : 'bg-border/40 text-content-secondary hover:bg-border hover:text-content-on-dark'
+                            }`}
+                          >
                             S
                           </button>
-                          <button className="w-6 h-5 rounded text-[10px] font-bold bg-border/40 text-content-secondary hover:bg-border hover:text-content-on-dark transition-colors">
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              const ch = preview.getChannel(i);
+                              if (!ch) return;
+                              ch.setMuted(!ch.muted);
+                              const engine = preview.engine.current;
+                              if (engine) engine.updateMuteSoloState();
+                              forceUpdate(n => n + 1);
+                            }}
+                            className={`w-6 h-5 rounded text-[10px] font-bold transition-colors ${
+                              preview.getChannel(i)?.muted
+                                ? 'bg-red-600 text-white'
+                                : 'bg-border/40 text-content-secondary hover:bg-border hover:text-content-on-dark'
+                            }`}
+                          >
                             M
                           </button>
                           <button
                             onClick={(e) => { e.stopPropagation(); setActiveTrackIndex(i); setLoopDrawerOpen(prev => !prev); }}
-                            className="w-6 h-5 rounded flex items-center justify-center bg-border/40 text-content-secondary hover:bg-border hover:text-content-on-dark transition-colors"
+                            className={`w-6 h-5 rounded flex items-center justify-center transition-colors ${
+                              track.loopMode === 'region'
+                                ? 'bg-blue-600 text-white'
+                                : 'bg-border/40 text-content-secondary hover:bg-border hover:text-content-on-dark'
+                            }`}
                             title="Toggle loop points drawer"
                           >
                             <FontAwesomeIcon icon={faArrowsLeftRightToLine} className="text-xs" />
@@ -897,7 +922,19 @@ export default function AudioWorkstationTool({ initialAssetId }) {
                       style={{ width: contentWidth > 0 ? `${contentWidth}px` : '100%', height: '100%' }}
                     >
                       {hasAsset ? (
-                        <WaveformCanvas audioBuffer={audioBuffersRef.current[i]} />
+                        <WaveformCanvas
+                          audioBuffer={audioBuffersRef.current[i]}
+                          duration={audioBuffersRef.current[i]?.duration || 0}
+                          regionStart={track.loopStart}
+                          regionEnd={track.loopEnd}
+                          onRegionChange={(start, end) => {
+                            setTracks(prev => prev.map((t, idx) => idx === i ? {
+                              ...t,
+                              loopStart: start,
+                              loopEnd: end,
+                            } : t));
+                          }}
+                        />
                       ) : (
                         <div className="w-full h-full flex items-center justify-center">
                           <span className="text-sm text-content-secondary">
@@ -931,17 +968,16 @@ export default function AudioWorkstationTool({ initialAssetId }) {
               )}
             </div>
 
-            {/* Unified playhead — positioned in px, spans from ruler through all tracks */}
-            {duration > 0 && pxPerSec > 0 && (
-              <div
-                className="absolute top-0 bottom-0 pointer-events-none z-40"
-                style={{
-                  left: `${HEADER_WIDTH + currentTime * pxPerSec}px`,
-                  width: '1px',
-                  backgroundColor: COLORS.smoke,
-                }}
-              />
-            )}
+            {/* Unified playhead — positioned imperatively via ref, no re-renders */}
+            <div
+              ref={playheadRef}
+              className="absolute top-0 bottom-0 pointer-events-none z-40"
+              style={{
+                left: `${HEADER_WIDTH}px`,
+                width: '1px',
+                backgroundColor: COLORS.smoke,
+              }}
+            />
           </div>
         )}
 
