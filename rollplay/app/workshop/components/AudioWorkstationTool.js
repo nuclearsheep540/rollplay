@@ -821,7 +821,7 @@ export default function AudioWorkstationTool({ initialAssetId }) {
                   className="flex-shrink-0 border-r border-border sticky left-0 z-10"
                   style={{ width: `${HEADER_WIDTH}px`, backgroundColor: COLORS.smoke }}
                 />
-                <div className="flex-1 relative" style={{ minWidth: `${contentWidth}px` }}>
+                <div className="relative flex-shrink-0" style={{ width: contentWidth > 0 ? `${contentWidth}px` : '100%' }}>
                   <TimelineRuler duration={duration} pxPerSec={pxPerSec} />
                 </div>
               </div>

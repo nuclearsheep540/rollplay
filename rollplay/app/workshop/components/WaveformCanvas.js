@@ -9,13 +9,17 @@ import { COLORS } from '@/app/styles/colorTheme';
 /**
  * Renders a waveform from a decoded AudioBuffer.
  *
- * Uses virtual rendering — the canvas stays viewport-sized and only draws
- * the samples currently visible based on scroll position. This avoids
- * creating enormous canvases at high zoom levels.
- *
- * Supports click-and-drag to create loop regions (when regionEditEnabled)
- * or horizontal pan scrolling (default).
+ * Performance strategy (informed by MDN canvas optimization + HN discussion):
+ * 1. Pre-compute min/max peaks per pixel once (the expensive part)
+ * 2. Render to a single offscreen canvas (capped at 8192px for GPU safety)
+ * 3. No scroll listeners or redraws — the canvas sits in the DOM at full
+ *    content width and scrolls naturally with the container, same as the ruler.
+ *    For content wider than 8192px, CSS transform scales the offscreen image.
+ * 4. Alpha disabled, integer coordinates, batched path operations.
  */
+
+const MAX_CANVAS_WIDTH = 8192;
+
 export default memo(function WaveformCanvas({
   audioBuffer,
   duration = 0,
@@ -28,19 +32,18 @@ export default memo(function WaveformCanvas({
 }) {
   const canvasRef = useRef(null);
   const containerRef = useRef(null);
-  const monoRef = useRef(null);        // Cached mono-mixed samples
-  const monoBufferIdRef = useRef(null); // Track which buffer was mixed
+  const monoRef = useRef(null);
+  const monoBufferIdRef = useRef(null);
+  const drawnKeyRef = useRef(null);
 
-  // Drag state for creating regions
   const [dragging, setDragging] = useState(false);
   const [dragStart, setDragStart] = useState(null);
   const [dragEnd, setDragEnd] = useState(null);
 
-  // ── Cache mono mix ─────────────────────────────────────────────────────
+  // ── Cache mono mix (once per buffer) ───────────────────────────────────
   useEffect(() => {
     if (!audioBuffer) { monoRef.current = null; monoBufferIdRef.current = null; return; }
-    // Only remix if the buffer changed
-    const bufferId = `${audioBuffer.length}_${audioBuffer.sampleRate}_${audioBuffer.numberOfChannels}`;
+    const bufferId = `${audioBuffer.length}_${audioBuffer.sampleRate}`;
     if (monoBufferIdRef.current === bufferId) return;
 
     const numChannels = audioBuffer.numberOfChannels;
@@ -48,106 +51,90 @@ export default memo(function WaveformCanvas({
     const samples = new Float32Array(length);
     for (let ch = 0; ch < numChannels; ch++) {
       const data = audioBuffer.getChannelData(ch);
-      for (let i = 0; i < length; i++) {
-        samples[i] += data[i];
-      }
+      for (let i = 0; i < length; i++) samples[i] += data[i];
     }
-    const scale = 1 / numChannels;
-    for (let i = 0; i < length; i++) samples[i] *= scale;
+    if (numChannels > 1) {
+      const scale = 1 / numChannels;
+      for (let i = 0; i < length; i++) samples[i] *= scale;
+    }
 
     monoRef.current = samples;
     monoBufferIdRef.current = bufferId;
+    drawnKeyRef.current = null; // Force redraw
   }, [audioBuffer]);
 
-  // ── Draw waveform (visible portion only) ───────────────────────────────
+  // ── Draw waveform to canvas ────────────────────────────────────────────
+  // Canvas sits in the DOM at contentWidth (or MAX_CANVAS_WIDTH, whichever
+  // is smaller). It scrolls naturally with the parent — no JS scroll handling.
   const draw = useCallback(() => {
     const canvas = canvasRef.current;
     const container = containerRef.current;
     const samples = monoRef.current;
-    if (!canvas || !container || !samples || !duration) return;
+    if (!canvas || !container || !samples) return;
 
-    const ctx = canvas.getContext('2d');
+    const contentWidth = container.clientWidth;
+    const height = container.clientHeight;
+    if (contentWidth <= 0 || height <= 0) return;
+
+    const drawKey = `${monoBufferIdRef.current}_${contentWidth}_${height}`;
+    if (drawnKeyRef.current === drawKey) return; // Already drawn at this size
+    drawnKeyRef.current = drawKey;
+
+    // Canvas width: full content width if it fits, otherwise cap + scale via CSS
+    const canvasWidth = Math.min(contentWidth, MAX_CANVAS_WIDTH);
     const dpr = window.devicePixelRatio || 1;
 
-    // Canvas is sized to the VISIBLE area (container's viewport), not the full content width
-    const visibleWidth = container.clientWidth;
-    const visibleHeight = container.clientHeight;
-    if (visibleWidth === 0 || visibleHeight === 0) return;
+    canvas.width = canvasWidth * dpr;
+    canvas.height = height * dpr;
+    canvas.style.width = `${contentWidth}px`;
+    canvas.style.height = `${height}px`;
 
-    canvas.width = visibleWidth * dpr;
-    canvas.height = visibleHeight * dpr;
-    ctx.scale(dpr, dpr);
+    const ctx = canvas.getContext('2d', { alpha: false });
+    ctx.scale(dpr * (canvasWidth / contentWidth) > 0 ? (canvasWidth * dpr) / (contentWidth * dpr) * dpr : dpr, dpr);
 
-    // Figure out which portion of the waveform is visible based on scroll
-    const scrollEl = scrollContainerRef?.current;
-    const parentEl = container.parentElement; // the explicit-width content div
-    const contentWidth = parentEl?.clientWidth || visibleWidth;
-    const scrollLeft = scrollEl ? scrollEl.scrollLeft : 0;
+    // Simpler: just scale so drawing coords are in contentWidth space
+    ctx.resetTransform();
+    ctx.scale((canvasWidth * dpr) / contentWidth, dpr);
 
-    // The container is positioned inside the content row. Its offset from the content start
-    // is its offsetLeft. The visible window within the content is [scrollLeft, scrollLeft + visibleWidth].
-    const containerOffset = container.offsetLeft || 0;
-    const visibleStartPx = Math.max(0, scrollLeft - containerOffset);
-    const visibleEndPx = Math.min(contentWidth, scrollLeft - containerOffset + visibleWidth);
-
-    // Convert to sample range
     const totalSamples = samples.length;
-    const samplesPerPx = totalSamples / contentWidth;
-    const sampleStart = Math.floor(visibleStartPx * samplesPerPx);
-    const sampleEnd = Math.ceil(visibleEndPx * samplesPerPx);
+    const midY = height / 2;
 
-    const midY = visibleHeight / 2;
-    ctx.clearRect(0, 0, visibleWidth, visibleHeight);
+    // Background
+    ctx.fillStyle = 'transparent';
+    ctx.clearRect(0, 0, contentWidth, height);
+
+    // Waveform — compute min/max per pixel and draw filled shape
     ctx.fillStyle = color;
-
-    // Draw the waveform for the visible pixel range
-    const pxCount = visibleWidth;
-    const samplesPerVisiblePx = (sampleEnd - sampleStart) / pxCount;
-
     ctx.beginPath();
-    ctx.moveTo(0, midY);
+    ctx.moveTo(0, midY | 0);
+
+    const samplesPerPx = totalSamples / contentWidth;
 
     // Upper envelope
-    for (let px = 0; px < pxCount; px++) {
-      const s = Math.floor(sampleStart + px * samplesPerVisiblePx);
-      const e = Math.min(Math.floor(sampleStart + (px + 1) * samplesPerVisiblePx), totalSamples);
+    for (let px = 0; px < contentWidth; px++) {
+      const s = (px * samplesPerPx) | 0;
+      const e = Math.min(((px + 1) * samplesPerPx) | 0, totalSamples);
       let max = 0;
-      for (let i = s; i < e; i++) {
-        if (samples[i] > max) max = samples[i];
-      }
-      ctx.lineTo(px, midY - max * midY);
+      for (let i = s; i < e; i++) { if (samples[i] > max) max = samples[i]; }
+      ctx.lineTo(px, (midY - max * midY) | 0);
     }
 
     // Lower envelope (right to left)
-    for (let px = pxCount - 1; px >= 0; px--) {
-      const s = Math.floor(sampleStart + px * samplesPerVisiblePx);
-      const e = Math.min(Math.floor(sampleStart + (px + 1) * samplesPerVisiblePx), totalSamples);
+    for (let px = contentWidth - 1; px >= 0; px--) {
+      const s = (px * samplesPerPx) | 0;
+      const e = Math.min(((px + 1) * samplesPerPx) | 0, totalSamples);
       let min = 0;
-      for (let i = s; i < e; i++) {
-        if (samples[i] < min) min = samples[i];
-      }
-      ctx.lineTo(px, midY - min * midY);
+      for (let i = s; i < e; i++) { if (samples[i] < min) min = samples[i]; }
+      ctx.lineTo(px, (midY - min * midY) | 0);
     }
 
     ctx.closePath();
     ctx.fill();
-  }, [duration, color, scrollContainerRef]);
+  }, [color]);
 
-  // Redraw on buffer change
-  useEffect(() => {
-    draw();
-  }, [audioBuffer, draw]);
+  // Draw on buffer change or container resize
+  useEffect(() => { draw(); }, [audioBuffer, draw]);
 
-  // Redraw on scroll (virtual rendering)
-  useEffect(() => {
-    const scrollEl = scrollContainerRef?.current;
-    if (!scrollEl) return;
-    const onScroll = () => draw();
-    scrollEl.addEventListener('scroll', onScroll);
-    return () => scrollEl.removeEventListener('scroll', onScroll);
-  }, [scrollContainerRef, draw]);
-
-  // Redraw on resize
   const lastSizeRef = useRef({ w: 0, h: 0 });
   useEffect(() => {
     const container = containerRef.current;
@@ -157,6 +144,7 @@ export default memo(function WaveformCanvas({
       const h = Math.round(entry.contentRect.height);
       if (w !== lastSizeRef.current.w || h !== lastSizeRef.current.h) {
         lastSizeRef.current = { w, h };
+        drawnKeyRef.current = null;
         draw();
       }
     });
@@ -164,19 +152,15 @@ export default memo(function WaveformCanvas({
     return () => observer.disconnect();
   }, [draw]);
 
-  // ── Drag: region select (when enabled) or horizontal pan (default) ────
-  const pxToTime = useCallback((px) => {
+  // ── Drag: region select or pan ─────────────────────────────────────────
+  const pxToTime = useCallback((clientX) => {
     const el = containerRef.current;
-    const parentEl = el?.parentElement;
-    if (!el || !parentEl || !duration) return 0;
-    const contentWidth = parentEl.clientWidth;
-    const scrollEl = scrollContainerRef?.current;
-    const scrollLeft = scrollEl ? scrollEl.scrollLeft : 0;
-    const containerOffset = el.offsetLeft || 0;
-    // px is relative to the visible canvas; convert to content position then to time
-    const contentPx = scrollLeft - containerOffset + px;
-    return Math.max(0, Math.min(duration, (contentPx / contentWidth) * duration));
-  }, [duration, scrollContainerRef]);
+    if (!el || !duration) return 0;
+    const rect = el.getBoundingClientRect();
+    const px = clientX - rect.left;
+    const contentWidth = el.clientWidth;
+    return Math.max(0, Math.min(duration, (px / contentWidth) * duration));
+  }, [duration]);
 
   const handleMouseDown = useCallback((e) => {
     if (regionEditEnabled) {
@@ -201,14 +185,13 @@ export default memo(function WaveformCanvas({
   const handleMouseMove = useCallback((e) => {
     if (!dragging) return;
     const rect = containerRef.current.getBoundingClientRect();
-    const x = Math.max(0, Math.min(e.clientX - rect.left, rect.width));
-    setDragEnd(x);
+    setDragEnd(Math.max(0, Math.min(e.clientX - rect.left, rect.width)));
   }, [dragging]);
 
   const handleMouseUp = useCallback(() => {
     if (!dragging || dragStart == null || dragEnd == null) { setDragging(false); return; }
-    const t1 = pxToTime(dragStart);
-    const t2 = pxToTime(dragEnd);
+    const t1 = pxToTime(containerRef.current.getBoundingClientRect().left + dragStart);
+    const t2 = pxToTime(containerRef.current.getBoundingClientRect().left + dragEnd);
     const start = Math.min(t1, t2);
     const end = Math.max(t1, t2);
     setDragging(false);
@@ -228,31 +211,14 @@ export default memo(function WaveformCanvas({
     return () => { window.removeEventListener('mousemove', onMove); window.removeEventListener('mouseup', onUp); };
   }, [dragging, handleMouseMove, handleMouseUp]);
 
-  // ── Region overlay positions ───────────────────────────────────────────
-  // These are relative to the full content width, converted to visible canvas px
-  const getRegionPx = () => {
-    const el = containerRef.current;
-    const parentEl = el?.parentElement;
-    if (!el || !parentEl || !duration) return null;
-    if (regionStart == null || regionEnd == null) return null;
-    const contentWidth = parentEl.clientWidth;
-    const scrollEl = scrollContainerRef?.current;
-    const scrollLeft = scrollEl ? scrollEl.scrollLeft : 0;
-    const containerOffset = el.offsetLeft || 0;
-    const rStartPx = (regionStart / duration) * contentWidth - scrollLeft + containerOffset;
-    const rEndPx = (regionEnd / duration) * contentWidth - scrollLeft + containerOffset;
-    const visibleWidth = el.clientWidth;
-    const left = Math.max(0, rStartPx);
-    const right = Math.min(visibleWidth, rEndPx);
-    if (right <= left) return null;
-    return { left, width: right - left };
-  };
+  // ── Region overlay (positioned in content space, scrolls naturally) ────
+  const containerWidth = containerRef.current?.clientWidth || 1;
+  const regionLeft = regionStart != null && duration > 0 ? (regionStart / duration) * containerWidth : null;
+  const regionWidth = regionStart != null && regionEnd != null && duration > 0
+    ? ((regionEnd - regionStart) / duration) * containerWidth : null;
 
-  const regionPx = getRegionPx();
-
-  // Drag overlay
   const dragLeft = dragging && dragStart != null && dragEnd != null ? Math.min(dragStart, dragEnd) : null;
-  const dragWidth = dragging && dragStart != null && dragEnd != null ? Math.abs(dragEnd - dragStart) : null;
+  const dragW = dragging && dragStart != null && dragEnd != null ? Math.abs(dragEnd - dragStart) : null;
 
   return (
     <div
@@ -266,13 +232,12 @@ export default memo(function WaveformCanvas({
         style={{ display: 'block', width: '100%', height: '100%' }}
       />
 
-      {/* Committed region overlay */}
-      {regionPx && !dragging && (
+      {regionLeft != null && regionWidth != null && !dragging && (
         <div
           className="absolute top-0 bottom-0 pointer-events-none"
           style={{
-            left: `${regionPx.left}px`,
-            width: `${regionPx.width}px`,
+            left: `${regionLeft}px`,
+            width: `${regionWidth}px`,
             backgroundColor: 'rgba(59, 130, 246, 0.15)',
             borderLeft: '1px solid rgba(59, 130, 246, 0.5)',
             borderRight: '1px solid rgba(59, 130, 246, 0.5)',
@@ -280,13 +245,12 @@ export default memo(function WaveformCanvas({
         />
       )}
 
-      {/* Active drag region overlay */}
-      {dragLeft != null && dragWidth != null && (
+      {dragLeft != null && dragW != null && (
         <div
           className="absolute top-0 bottom-0 pointer-events-none"
           style={{
             left: `${dragLeft}px`,
-            width: `${dragWidth}px`,
+            width: `${dragW}px`,
             backgroundColor: 'rgba(59, 130, 246, 0.2)',
           }}
         />
