@@ -541,7 +541,7 @@ class UpdateImageConfig:
 
         if motion != "UNSET":
             if motion is not None:
-                domain_motion = DomainMotionConfig.from_dict(motion)
+                domain_motion = DomainMotionConfig.from_dict(motion.model_dump())
                 domain_motion.validate()
                 asset.motion = domain_motion
             else:
