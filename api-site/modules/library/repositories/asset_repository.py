@@ -155,7 +155,7 @@ class MediaAssetRepository:
                 existing.display_mode = aggregate.display_mode
                 existing.image_position_x = aggregate.image_position_x
                 existing.image_position_y = aggregate.image_position_y
-                existing.visual_overlays = [o if isinstance(o, dict) else o.to_dict() for o in aggregate.visual_overlays] if aggregate.visual_overlays else None
+                existing.visual_overlays = [overlay if isinstance(overlay, dict) else overlay.model_dump() for overlay in aggregate.visual_overlays] if aggregate.visual_overlays else None
                 existing.motion = aggregate.motion.to_dict() if aggregate.motion else None
         else:
             # Create new - determine which model to use
@@ -228,7 +228,7 @@ class MediaAssetRepository:
                     display_mode=aggregate.display_mode,
                     image_position_x=aggregate.image_position_x,
                     image_position_y=aggregate.image_position_y,
-                    visual_overlays=[o if isinstance(o, dict) else o.to_dict() for o in aggregate.visual_overlays] if aggregate.visual_overlays else None,
+                    visual_overlays=[overlay if isinstance(overlay, dict) else overlay.model_dump() for overlay in aggregate.visual_overlays] if aggregate.visual_overlays else None,
                     motion=aggregate.motion.to_dict() if aggregate.motion else None,
                 )
             else:
