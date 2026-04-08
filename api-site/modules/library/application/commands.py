@@ -536,7 +536,13 @@ class UpdateImageConfig:
         )
 
         if visual_overlays != "UNSET":
-            asset.visual_overlays = visual_overlays
+            if visual_overlays is not None:
+                asset.visual_overlays = [
+                    overlay.model_dump() if hasattr(overlay, 'model_dump') else overlay
+                    for overlay in visual_overlays
+                ]
+            else:
+                asset.visual_overlays = None
             # updated_at already set by update_image_config() above
 
         if motion != "UNSET":
