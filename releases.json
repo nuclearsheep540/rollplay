@@ -1,5 +1,5 @@
 {
-  "latest": "0.44.0",
+  "latest": "0.44.1",
   "releases": {
     "0.27.1": {
       "date": "2026-03-10",
@@ -398,6 +398,21 @@
       "services": {
         "app": "0.30.0",
         "api_site": "0.24.0",
+        "api_game": "0.18.0",
+        "api_auth": "0.3.0",
+        "nginx": "0.5.0",
+        "postgres": "0.1.10",
+        "mongo": "0.4.2",
+        "certbot": "0.1.4"
+      }
+    },
+    "0.44.1": {
+      "date": "2026-04-08",
+      "commit": "94e4f2a",
+      "description": "Fixed pydantic model issue missing a model dump",
+      "services": {
+        "app": "0.30.0",
+        "api_site": "0.24.1",
         "api_game": "0.18.0",
         "api_auth": "0.3.0",
         "nginx": "0.5.0",
