@@ -119,6 +119,7 @@ def _to_media_asset_response(asset, s3_service: S3Service = None) -> MediaAssetR
             loop_end=asset.loop_end,
             bpm=asset.bpm,
             loop_mode=asset.loop_mode,
+            time_signature=asset.time_signature,
         )
     elif isinstance(asset, SfxAsset):
         fields.update(
@@ -632,7 +633,8 @@ async def update_audio_config(
             loop_start=request.loop_start,
             loop_end=request.loop_end,
             bpm=request.bpm,
-            loop_mode=request.loop_mode
+            loop_mode=request.loop_mode,
+            time_signature=request.time_signature
         )
 
         logger.info(f"Updated audio config for asset {asset_id}: {asset.get_audio_config()}")

@@ -145,6 +145,7 @@ class MediaAssetRepository:
                 existing.loop_end = aggregate.loop_end
                 existing.bpm = aggregate.bpm
                 existing.loop_mode = aggregate.loop_mode
+                existing.time_signature = aggregate.time_signature
 
             # Update sfx-specific fields if SfxAsset
             if isinstance(aggregate, SfxAsset) and isinstance(existing, SfxAssetModel):
@@ -205,7 +206,8 @@ class MediaAssetRepository:
                     loop_start=aggregate.loop_start,
                     loop_end=aggregate.loop_end,
                     bpm=aggregate.bpm,
-                    loop_mode=aggregate.loop_mode
+                    loop_mode=aggregate.loop_mode,
+                    time_signature=aggregate.time_signature
                 )
             elif isinstance(aggregate, SfxAsset):
                 model = SfxAssetModel(
@@ -316,7 +318,8 @@ class MediaAssetRepository:
                 loop_start=model.loop_start,
                 loop_end=model.loop_end,
                 bpm=model.bpm,
-                loop_mode=model.loop_mode
+                loop_mode=model.loop_mode,
+                time_signature=model.time_signature
             )
 
         # If it's a SfxAssetModel, promote to SfxAsset with audio fields

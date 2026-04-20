@@ -9,6 +9,7 @@ import {
   faPlus, faPen, faTrash, faXmark, faSliders,
 } from '@fortawesome/free-solid-svg-icons';
 import AssetPicker from './AssetPicker';
+import FileMenuBar from './FileMenuBar';
 import {
   useListPresets, useCreatePreset, useUpdatePreset, useDeletePreset,
 } from '../hooks/usePresets';
@@ -203,7 +204,17 @@ export default function AudioPresetsTool({ onMix }) {
   }, [selectedPreset, deletePreset]);
 
   return (
-    <div className="flex h-full border border-border bg-surface-secondary overflow-hidden">
+    <div className="flex flex-col h-full border border-border bg-surface-secondary overflow-hidden">
+      <FileMenuBar
+        items={[
+          {
+            label: 'Create New Preset',
+            icon: faPlus,
+            onClick: () => { setNewPresetName(''); setShowCreateModal(true); },
+          },
+        ]}
+      />
+      <div className="flex flex-1 min-h-0">
       {/* ── Left pane: preset list ─────────────────────────────────────── */}
       <div
         className="flex-shrink-0 w-64 border-r border-border flex flex-col"
@@ -213,14 +224,6 @@ export default function AudioPresetsTool({ onMix }) {
           <h2 className="text-xs font-bold uppercase tracking-wider text-content-on-dark">
             Presets
           </h2>
-          <button
-            onClick={() => { setNewPresetName(''); setShowCreateModal(true); }}
-            className="flex items-center gap-1 text-[10px] uppercase tracking-wider text-content-secondary hover:text-content-on-dark transition-colors"
-            title="New preset"
-          >
-            <FontAwesomeIcon icon={faPlus} className="text-[10px]" />
-            New
-          </button>
         </div>
 
         <div className="flex-1 overflow-y-auto">
@@ -391,6 +394,7 @@ export default function AudioPresetsTool({ onMix }) {
             </div>
           </>
         )}
+      </div>
       </div>
 
       {/* ── Create modal ──────────────────────────────────────────────── */}

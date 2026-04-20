@@ -92,6 +92,7 @@ class MediaAssetResponse(BaseModel):
     loop_end: Optional[float] = None
     bpm: Optional[float] = None
     loop_mode: Optional[str] = None
+    time_signature: Optional[str] = None
 
     # Image fields
     image_fit: Optional[str] = None
@@ -151,7 +152,8 @@ class UpdateAudioConfigRequest(BaseModel):
     loop_start: Optional[float] = Field(None, ge=0, description="Loop region start in seconds")
     loop_end: Optional[float] = Field(None, ge=0, description="Loop region end in seconds")
     bpm: Optional[float] = Field(None, gt=0, description="Beats per minute")
-    loop_mode: Optional[str] = Field(None, description="Loop mode: off, full, or region")
+    loop_mode: Optional[str] = Field(None, description="Loop mode: off, full, continuous, or region")
+    time_signature: Optional[str] = Field(None, description="Time signature: 2/4, 3/4, 4/4, 5/4, 6/8, 7/8, or 12/8")
 
 
 # Aliases for backwards compatibility

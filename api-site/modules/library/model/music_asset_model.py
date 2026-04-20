@@ -50,7 +50,8 @@ class MusicAssetModel(MediaAsset):
     loop_start = Column(Float, nullable=True)       # seconds
     loop_end = Column(Float, nullable=True)          # seconds
     bpm = Column(Float, nullable=True)               # beats per minute
-    loop_mode = Column(String, nullable=True)        # "off" | "full" | "region"
+    loop_mode = Column(String, nullable=True)        # "off" | "full" | "continuous" | "region"
+    time_signature = Column(String(8), nullable=True)  # "4/4" etc. — beat grid rendering
 
     __mapper_args__ = {
         'polymorphic_identity': MediaAssetType.MUSIC,

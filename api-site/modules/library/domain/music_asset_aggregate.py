@@ -46,6 +46,10 @@ class MusicAsset(MediaAssetAggregate):
     loop_end: Optional[float] = None
     bpm: Optional[float] = None
     loop_mode: Optional[str] = None
+    # Time signature string like "4/4" / "3/4" / "6/8". Used by the Loop
+    # Editor to render beat+bar grid lines and to snap loop bounds to
+    # beats. Does not affect playback — purely an editor hint.
+    time_signature: Optional[str] = None
 
     @classmethod
     def create(
@@ -70,7 +74,8 @@ class MusicAsset(MediaAssetAggregate):
         loop_start: Optional[float] = None,
         loop_end: Optional[float] = None,
         bpm: Optional[float] = None,
-        loop_mode: Optional[str] = None
+        loop_mode: Optional[str] = None,
+        time_signature: Optional[str] = None
     ) -> "MusicAsset":
         """
         Factory method to create a new music asset.
@@ -108,7 +113,8 @@ class MusicAsset(MediaAssetAggregate):
             loop_start=loop_start,
             loop_end=loop_end,
             bpm=bpm,
-            loop_mode=loop_mode
+            loop_mode=loop_mode,
+            time_signature=time_signature
         )
 
     @classmethod
@@ -129,7 +135,8 @@ class MusicAsset(MediaAssetAggregate):
         loop_start: Optional[float] = None,
         loop_end: Optional[float] = None,
         bpm: Optional[float] = None,
-        loop_mode: Optional[str] = None
+        loop_mode: Optional[str] = None,
+        time_signature: Optional[str] = None
     ) -> "MusicAsset":
         """
         Promote a base MediaAssetAggregate to MusicAsset.
@@ -161,7 +168,8 @@ class MusicAsset(MediaAssetAggregate):
             loop_start=loop_start,
             loop_end=loop_end,
             bpm=bpm,
-            loop_mode=loop_mode
+            loop_mode=loop_mode,
+            time_signature=time_signature
         )
 
     def update_audio_config(
@@ -180,7 +188,8 @@ class MusicAsset(MediaAssetAggregate):
         loop_start: Optional[float] = None,
         loop_end: Optional[float] = None,
         bpm: Optional[float] = None,
-        loop_mode: Optional[str] = None
+        loop_mode: Optional[str] = None,
+        time_signature: Optional[str] = None
     ) -> None:
         """
         Update audio configuration.
@@ -262,6 +271,14 @@ class MusicAsset(MediaAssetAggregate):
                 raise ValueError("bpm must be > 0")
             self.bpm = bpm
 
+        if time_signature is not None:
+            valid_time_signatures = {"2/4", "3/4", "4/4", "5/4", "6/8", "7/8", "12/8"}
+            if time_signature not in valid_time_signatures:
+                raise ValueError(
+                    f"time_signature must be one of {valid_time_signatures}"
+                )
+            self.time_signature = time_signature
+
         self.updated_at = datetime.utcnow()
 
     def has_audio_config(self) -> bool:
@@ -296,6 +313,7 @@ class MusicAsset(MediaAssetAggregate):
             "loop_end": self.loop_end,
             "bpm": self.bpm,
             "loop_mode": self.loop_mode,
+            "time_signature": self.time_signature,
         }
 
     def build_effects_for_game(self) -> AudioEffects:

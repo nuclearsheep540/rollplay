@@ -3,12 +3,13 @@
 
 'use client'
 
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
-import { faPlay, faStop } from '@fortawesome/free-solid-svg-icons';
+import { faPlay, faStop, faFolderOpen, faXmark, faFileCircleXmark } from '@fortawesome/free-solid-svg-icons';
 import { MixerStrips } from '@/app/audio_management/components';
 import { useListPresets } from '../hooks/usePresets';
 import { useWorkshopMixEngine } from '../hooks/useWorkshopMixEngine';
+import FileMenuBar from './FileMenuBar';
 import { COLORS } from '@/app/styles/colorTheme';
 
 /**
@@ -22,6 +23,7 @@ import { COLORS } from '@/app/styles/colorTheme';
  */
 export default function MixEditorTab({ selectedPresetId, onSelectPreset }) {
   const { data: presets = [], isLoading } = useListPresets();
+  const [showOpenModal, setShowOpenModal] = useState(false);
 
   const selectedPreset = useMemo(
     () => presets.find(p => p.id === selectedPresetId) ?? null,
@@ -32,32 +34,37 @@ export default function MixEditorTab({ selectedPresetId, onSelectPreset }) {
 
   return (
     <div className="flex flex-col h-full border border-border bg-surface-secondary overflow-hidden">
-      {/* Preset picker bar */}
+      <FileMenuBar
+        items={[
+          {
+            label: 'Open Preset',
+            icon: faFolderOpen,
+            onClick: () => setShowOpenModal(true),
+            disabled: isLoading || presets.length === 0,
+          },
+          {
+            label: 'Close Preset',
+            icon: faFileCircleXmark,
+            onClick: () => onSelectPreset(null),
+            disabled: !selectedPreset,
+          },
+        ]}
+      />
+
+      {/* Context bar — active preset + transport */}
       <div className="flex items-center gap-3 px-4 py-3 border-b border-border bg-surface-secondary flex-shrink-0">
         <span className="text-xs font-bold uppercase tracking-wider text-content-on-dark">
           Preset:
         </span>
-        <select
-          value={selectedPresetId ?? ''}
-          onChange={(e) => onSelectPreset(e.target.value || null)}
-          disabled={isLoading || presets.length === 0}
-          className="px-3 py-1.5 text-sm bg-surface-primary border border-border rounded-sm focus:outline-none focus:border-border-active"
-          style={{ color: COLORS.onyx }}
-        >
-          <option value="">
-            {isLoading
-              ? 'Loading...'
+        <span className="text-sm text-content-on-dark truncate">
+          {isLoading
+            ? 'Loading…'
+            : selectedPreset
+              ? selectedPreset.name
               : presets.length === 0
                 ? 'No presets — create one in the Presets tab'
-                : 'Select a preset...'}
-          </option>
-          {presets.map(preset => (
-            <option key={preset.id} value={preset.id}>
-              {preset.name}
-              {preset.slots.length > 0 ? ` (${preset.slots.length})` : ''}
-            </option>
-          ))}
-        </select>
+                : 'No preset open — File → Open Preset'}
+        </span>
         {selectedPreset && (
           <>
             <div className="flex items-center gap-1.5 ml-auto">
@@ -90,7 +97,7 @@ export default function MixEditorTab({ selectedPresetId, onSelectPreset }) {
         {!selectedPreset ? (
           <div className="h-full flex items-center justify-center">
             <div className="text-sm text-content-secondary">
-              Pick a preset above to mix.
+              Pick a preset via File → Open Preset to start mixing.
             </div>
           </div>
         ) : (
@@ -120,6 +127,69 @@ export default function MixEditorTab({ selectedPresetId, onSelectPreset }) {
           </div>
         )}
       </div>
+
+      {/* Open Preset modal */}
+      {showOpenModal && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center"
+          style={{ backgroundColor: 'rgba(11, 10, 9, 0.8)' }}
+          onClick={() => setShowOpenModal(false)}
+        >
+          <div
+            className="w-full max-w-md max-h-[70vh] rounded border border-border bg-surface-secondary p-6 overflow-y-auto"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-sm font-bold text-content-on-dark uppercase tracking-wider">
+                Open Preset
+              </h2>
+              <button
+                onClick={() => setShowOpenModal(false)}
+                className="text-content-secondary hover:text-content-on-dark"
+                aria-label="Close"
+              >
+                <FontAwesomeIcon icon={faXmark} className="text-sm" />
+              </button>
+            </div>
+            {presets.length === 0 ? (
+              <div className="text-xs text-content-secondary py-4">
+                No presets yet. Create one in the Presets tab.
+              </div>
+            ) : (
+              <ul className="flex flex-col gap-1">
+                {presets.map(preset => {
+                  const isActive = preset.id === selectedPresetId;
+                  return (
+                    <li key={preset.id}>
+                      <button
+                        onClick={() => {
+                          onSelectPreset(preset.id);
+                          setShowOpenModal(false);
+                        }}
+                        className="w-full text-left px-3 py-2 rounded-sm border border-border transition-colors"
+                        style={{
+                          backgroundColor: isActive ? COLORS.smoke : 'transparent',
+                          color: isActive ? COLORS.onyx : COLORS.smoke,
+                        }}
+                      >
+                        <div className="text-sm" style={{ fontWeight: isActive ? 600 : 500 }}>
+                          {preset.name}
+                        </div>
+                        <div
+                          className="text-[10px] mt-0.5"
+                          style={{ color: isActive ? COLORS.graphite : COLORS.silver }}
+                        >
+                          {preset.slots.length} {preset.slots.length === 1 ? 'track' : 'tracks'}
+                        </div>
+                      </button>
+                    </li>
+                  );
+                })}
+              </ul>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 }

@@ -429,7 +429,8 @@ class UpdateAudioConfig:
         loop_start: Optional[float] = None,
         loop_end: Optional[float] = None,
         bpm: Optional[float] = None,
-        loop_mode: Optional[str] = None
+        loop_mode: Optional[str] = None,
+        time_signature: Optional[str] = None
     ) -> Union[MusicAsset, SfxAsset]:
         """
         Update audio configuration for an audio asset.
@@ -482,6 +483,7 @@ class UpdateAudioConfig:
                 loop_end=loop_end,
                 bpm=bpm,
                 loop_mode=loop_mode,
+                time_signature=time_signature,
             )
 
         asset.update_audio_config(**config_kwargs)

@@ -18,6 +18,7 @@ import AudioWorkstationControls from './AudioWorkstationControls';
 import WaveformViewer from './WaveformViewer';
 import AudioPresetsTool from './AudioPresetsTool';
 import MixEditorTab from './MixEditorTab';
+import FileMenuBar from './FileMenuBar';
 import { useUpdateAudioConfig } from '../hooks/useUpdateAudioConfig';
 import { useWorkshopPreview } from '../hooks/useWorkshopPreview';
 import { detectBpm } from '../utils/detectBpm';
@@ -116,9 +117,12 @@ function LoopEditor({ initialAssetId }) {
   const [loopStart, setLoopStart] = useState(null);
   const [loopEnd, setLoopEnd] = useState(null);
   const [bpm, setBpm] = useState(null);
+  const [timeSignature, setTimeSignature] = useState('4/4');
   const [savedConfig, setSavedConfig] = useState({
-    loopMode: 'full', loopStart: null, loopEnd: null, bpm: null,
+    loopMode: 'full', loopStart: null, loopEnd: null, bpm: null, timeSignature: '4/4',
   });
+  // Per-session preference — snap loop region drag to beat grid.
+  const [snapToBeats, setSnapToBeats] = useState(false);
 
   // ── UI state ────────────────────────────────────────────────────────────
   const [loadingAsset, setLoadingAsset] = useState(false);
@@ -132,7 +136,6 @@ function LoopEditor({ initialAssetId }) {
   const [loopDrawerOverride, setLoopDrawerOverride] = useState(null);
   const loopDrawerDerivedOpen = loopMode !== 'off';
   const loopDrawerOpen = loopDrawerOverride !== null ? loopDrawerOverride : loopDrawerDerivedOpen;
-  const [menuOpen, setMenuOpen] = useState(null); // 'file' | null
   const [isDetectingBpm, setIsDetectingBpm] = useState(false);
 
   // ── Playback state ──────────────────────────────────────────────────────
@@ -150,16 +153,9 @@ function LoopEditor({ initialAssetId }) {
     loopMode !== savedConfig.loopMode ||
     loopStart !== savedConfig.loopStart ||
     loopEnd !== savedConfig.loopEnd ||
-    bpm !== savedConfig.bpm
+    bpm !== savedConfig.bpm ||
+    timeSignature !== savedConfig.timeSignature
   );
-
-  // ── Close menu on outside click ─────────────────────────────────────────
-  useEffect(() => {
-    if (!menuOpen) return;
-    const handleClick = () => setMenuOpen(null);
-    window.addEventListener('click', handleClick);
-    return () => window.removeEventListener('click', handleClick);
-  }, [menuOpen]);
 
   // ── Import asset flow ───────────────────────────────────────────────────
   const importAsset = useCallback(async (assetId) => {
@@ -174,16 +170,19 @@ function LoopEditor({ initialAssetId }) {
     }
 
     const mode = resolveLoopMode(assetData);
+    const sig = assetData.time_signature || '4/4';
     setSelectedAsset(assetData);
     setLoopMode(mode);
     setLoopStart(assetData.loop_start ?? null);
     setLoopEnd(assetData.loop_end ?? null);
     setBpm(assetData.bpm ?? null);
+    setTimeSignature(sig);
     setSavedConfig({
       loopMode: mode,
       loopStart: assetData.loop_start ?? null,
       loopEnd: assetData.loop_end ?? null,
       bpm: assetData.bpm ?? null,
+      timeSignature: sig,
     });
 
     // Clear any drawer override from the previous session — drawer
@@ -413,21 +412,28 @@ function LoopEditor({ initialAssetId }) {
     try {
       await updateMutation.mutateAsync({
         assetId: selectedAsset.id,
-        audioConfig: { loop_start: loopStart, loop_end: loopEnd, bpm, loop_mode: loopMode },
+        audioConfig: {
+          loop_start: loopStart,
+          loop_end: loopEnd,
+          bpm,
+          loop_mode: loopMode,
+          time_signature: timeSignature,
+        },
       });
-      setSavedConfig({ loopMode, loopStart, loopEnd, bpm });
+      setSavedConfig({ loopMode, loopStart, loopEnd, bpm, timeSignature });
       setSaveSuccess(true);
       setTimeout(() => setSaveSuccess(false), 3000);
     } catch {
       // Error surfaced via updateMutation.error
     }
-  }, [selectedAsset, loopMode, loopStart, loopEnd, bpm, updateMutation]);
+  }, [selectedAsset, loopMode, loopStart, loopEnd, bpm, timeSignature, updateMutation]);
 
   const handleReset = useCallback(() => {
     setLoopMode(savedConfig.loopMode);
     setLoopStart(savedConfig.loopStart);
     setLoopEnd(savedConfig.loopEnd);
     setBpm(savedConfig.bpm);
+    setTimeSignature(savedConfig.timeSignature);
   }, [savedConfig]);
 
   const handleClearRegion = useCallback(() => {
@@ -446,7 +452,7 @@ function LoopEditor({ initialAssetId }) {
     return () => {
       if (autoSaveTimerRef.current) clearTimeout(autoSaveTimerRef.current);
     };
-  }, [loopMode, loopStart, loopEnd, selectedAsset?.id]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [loopMode, loopStart, loopEnd, timeSignature, selectedAsset?.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Zoom ────────────────────────────────────────────────────────────────
   const zoomInH = () => setPxPerSec(p => Math.min(MAX_PX_PER_SEC, p * H_ZOOM_STEP));
@@ -458,51 +464,13 @@ function LoopEditor({ initialAssetId }) {
   return (
     <div className="flex flex-col h-full border border-border bg-surface-secondary overflow-hidden">
       {/* ── Menu Bar ────────────────────────────────────────────────────── */}
-      <div className="flex items-center gap-0 border-b border-border text-xs select-none" style={{ backgroundColor: '#B5ADA6', color: '#0B0A09' }}>
-        <div className="relative">
-          <button
-            onClick={(e) => { e.stopPropagation(); setMenuOpen(menuOpen === 'file' ? null : 'file'); }}
-            className={`px-4 py-2 font-medium transition-colors ${
-              menuOpen === 'file' ? 'opacity-70' : 'hover:opacity-70'
-            }`}
-            style={{ color: '#0B0A09' }}
-          >
-            File
-          </button>
-          {menuOpen === 'file' && (
-            <div className="absolute top-full left-0 z-50 min-w-[180px] py-1 border border-border shadow-lg" style={{ backgroundColor: '#B5ADA6', color: '#0B0A09' }}>
-              <button
-                onClick={() => { setMenuOpen(null); setShowImportModal(true); }}
-                className="w-full flex items-center gap-3 px-4 py-2 text-xs hover:bg-surface-secondary transition-colors"
-                style={{ color: '#0B0A09' }}
-                onMouseEnter={(e) => e.currentTarget.style.color = '#F7F4F3'}
-                onMouseLeave={(e) => e.currentTarget.style.color = '#0B0A09'}
-              >
-                <FontAwesomeIcon icon={faFileImport} className="text-[10px] w-3" />
-                Import Asset
-              </button>
-              <button
-                onClick={() => { setMenuOpen(null); handleSave(); }}
-                disabled={!hasChanges || !selectedAsset}
-                className="w-full flex items-center gap-3 px-4 py-2 text-xs hover:bg-surface-secondary hover:text-content-on-dark transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
-                style={{ color: '#0B0A09' }}
-              >
-                <FontAwesomeIcon icon={faFloppyDisk} className="text-[10px] w-3" />
-                Save
-              </button>
-              <button
-                onClick={() => { setMenuOpen(null); handleReset(); }}
-                disabled={!hasChanges}
-                className="w-full flex items-center gap-3 px-4 py-2 text-xs hover:bg-surface-secondary hover:text-content-on-dark transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
-                style={{ color: '#0B0A09' }}
-              >
-                <FontAwesomeIcon icon={faArrowRotateLeft} className="text-[10px] w-3" />
-                Revert Changes
-              </button>
-            </div>
-          )}
-        </div>
-      </div>
+      <FileMenuBar
+        items={[
+          { label: 'Open Asset', icon: faFileImport, onClick: () => setShowImportModal(true) },
+          { label: 'Save', icon: faFloppyDisk, onClick: handleSave, disabled: !hasChanges || !selectedAsset },
+          { label: 'Revert Changes', icon: faArrowRotateLeft, onClick: handleReset, disabled: !hasChanges },
+        ]}
+      />
 
       {/* ── Transport Bar ───────────────────────────────────────────────── */}
       <div className="flex items-center gap-5 px-4 py-2 border-b border-border bg-surface-secondary">
@@ -530,6 +498,38 @@ function LoopEditor({ initialAssetId }) {
             {isDetectingBpm ? '...' : 'Detect'}
           </button>
         </div>
+
+        {/* Time signature */}
+        <div className="flex flex-col items-center">
+          <span className="text-[9px] uppercase tracking-wider text-content-secondary">Sig</span>
+          <select
+            value={timeSignature}
+            onChange={(e) => setTimeSignature(e.target.value)}
+            disabled={!selectedAsset}
+            className="text-sm font-mono font-bold bg-transparent border-none outline-none text-content-on-dark disabled:opacity-30 cursor-pointer"
+            style={{ color: 'inherit' }}
+          >
+            {['2/4', '3/4', '4/4', '5/4', '6/8', '7/8', '12/8'].map(sig => (
+              <option key={sig} value={sig} style={{ color: COLORS.onyx }}>
+                {sig}
+              </option>
+            ))}
+          </select>
+        </div>
+
+        <div className="w-px h-6 bg-border" />
+
+        {/* Snap toggle — local, per-session */}
+        <button
+          onClick={() => setSnapToBeats(prev => !prev)}
+          disabled={!selectedAsset || !bpm}
+          className={`flex items-center gap-1.5 px-2 py-1 rounded-sm text-xs font-medium transition-colors disabled:opacity-30 ${
+            snapToBeats ? 'text-content-on-dark' : 'text-content-secondary hover:text-content-on-dark'
+          }`}
+          title={snapToBeats ? 'Snap loop region to beats — ON' : 'Snap loop region to beats — OFF'}
+        >
+          SNAP
+        </button>
 
         <div className="w-px h-6 bg-border" />
 
@@ -688,6 +688,9 @@ function LoopEditor({ initialAssetId }) {
               }}
               onSeek={seekTo}
               height={waveHeight}
+              bpm={bpm}
+              timeSignature={timeSignature}
+              snapToBeats={snapToBeats}
             />
           </div>
         )}
