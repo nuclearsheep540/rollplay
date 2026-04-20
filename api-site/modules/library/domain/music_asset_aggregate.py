@@ -225,7 +225,13 @@ class MusicAsset(MediaAssetAggregate):
             self.effect_reverb_preset = effect_reverb_preset
 
         if loop_mode is not None:
-            valid_modes = {"off", "full", "region"}
+            # "continuous": play from 0 on first start, then loop between loop
+            #   points (the pre-loop portion plays as an intro).
+            # "region": strictly within the loop region — playback from stopped
+            #   state snaps to loop_start; pre-region audio never plays.
+            # Historical "region" meant "continuous" semantics; a data migration
+            # renames legacy values to preserve behaviour.
+            valid_modes = {"off", "full", "continuous", "region"}
             if loop_mode not in valid_modes:
                 raise ValueError(f"loop_mode must be one of {valid_modes}")
             self.loop_mode = loop_mode

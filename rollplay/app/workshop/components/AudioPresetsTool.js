@@ -3,11 +3,10 @@
 
 'use client'
 
-import { useState, useEffect, useMemo, useCallback } from 'react';
+import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import {
-  faPlus, faPen, faTrash, faFloppyDisk, faArrowRotateLeft,
-  faXmark, faSliders,
+  faPlus, faPen, faTrash, faXmark, faSliders,
 } from '@fortawesome/free-solid-svg-icons';
 import AssetPicker from './AssetPicker';
 import {
@@ -19,6 +18,32 @@ import { COLORS } from '@/app/styles/colorTheme';
 
 function emptySavedShape() {
   return { name: '', slots: [] };
+}
+
+function formatDuration(seconds) {
+  if (seconds == null || isNaN(seconds)) return '—';
+  const mins = Math.floor(seconds / 60);
+  const secs = Math.floor(seconds % 60);
+  return `${mins}:${secs.toString().padStart(2, '0')}`;
+}
+
+function formatLoopLabel(asset) {
+  if (!asset) return '';
+  const mode = asset.loop_mode || (asset.default_looping === false ? 'off' : 'full');
+  if (mode === 'off') return 'Loop off';
+  if (mode === 'continuous') {
+    if (asset.loop_start != null && asset.loop_end != null) {
+      return `Continuous ${formatDuration(asset.loop_start)}–${formatDuration(asset.loop_end)}`;
+    }
+    return 'Continuous';
+  }
+  if (mode === 'region') {
+    if (asset.loop_start != null && asset.loop_end != null) {
+      return `Region ${formatDuration(asset.loop_start)}–${formatDuration(asset.loop_end)}`;
+    }
+    return 'Region loop';
+  }
+  return 'Full loop';
 }
 
 export default function AudioPresetsTool({ onMix }) {
@@ -103,36 +128,37 @@ export default function AudioPresetsTool({ onMix }) {
     });
   }, []);
 
-  // ── Save / revert ───────────────────────────────────────────────────────
-  const handleSave = useCallback(async () => {
+  // ── Auto-save ───────────────────────────────────────────────────────────
+  // Slot edits debounce-commit to the server. Rename is modal-driven and
+  // saves explicitly via handleRename, so this effect only watches slot
+  // changes — no double-save when the modal fires.
+  const autoSaveTimerRef = useRef(null);
+  const commitSlots = useCallback(async () => {
     if (!selectedPreset) return;
+    const slotsChanged =
+      editorSlots.length !== savedSnapshot.slots.length ||
+      editorSlots.some(s => {
+        const prev = savedSnapshot.slots.find(x => x.channel_id === s.channel_id);
+        return !prev || prev.music_asset_id !== s.music_asset_id;
+      });
+    if (!slotsChanged) return;
     setErrorMsg(null);
     try {
-      const body = {};
-      if (editorName !== savedSnapshot.name) body.name = editorName;
-
-      const slotsChanged =
-        editorSlots.length !== savedSnapshot.slots.length ||
-        editorSlots.some(s => {
-          const prev = savedSnapshot.slots.find(x => x.channel_id === s.channel_id);
-          return !prev || prev.music_asset_id !== s.music_asset_id;
-        });
-      if (slotsChanged) body.slots = editorSlots;
-
-      if (!body.name && !body.slots) return;
-
-      await updatePreset.mutateAsync({ presetId: selectedPreset.id, ...body });
-      setSavedSnapshot({ name: editorName, slots: editorSlots.map(s => ({ ...s })) });
+      await updatePreset.mutateAsync({ presetId: selectedPreset.id, slots: editorSlots });
+      setSavedSnapshot(prev => ({ ...prev, slots: editorSlots.map(s => ({ ...s })) }));
     } catch (err) {
       setErrorMsg(err?.message || 'Failed to save preset');
     }
-  }, [selectedPreset, editorName, editorSlots, savedSnapshot, updatePreset]);
+  }, [selectedPreset, editorSlots, savedSnapshot, updatePreset]);
 
-  const handleRevert = useCallback(() => {
-    setEditorName(savedSnapshot.name);
-    setEditorSlots(savedSnapshot.slots.map(s => ({ ...s })));
-    setErrorMsg(null);
-  }, [savedSnapshot]);
+  useEffect(() => {
+    if (!selectedPreset) return;
+    if (autoSaveTimerRef.current) clearTimeout(autoSaveTimerRef.current);
+    autoSaveTimerRef.current = setTimeout(() => commitSlots(), 500);
+    return () => {
+      if (autoSaveTimerRef.current) clearTimeout(autoSaveTimerRef.current);
+    };
+  }, [editorSlots, selectedPreset, commitSlots]);
 
   // ── Create / rename / delete presets ────────────────────────────────────
   const handleCreate = useCallback(async () => {
@@ -211,16 +237,26 @@ export default function AudioPresetsTool({ onMix }) {
                 <button
                   key={preset.id}
                   onClick={() => setSelectedId(preset.id)}
-                  className={`w-full text-left px-4 py-3 border-b border-border/40 transition-colors ${
-                    isSelected ? 'bg-surface-secondary' : 'hover:bg-surface-secondary/50'
-                  }`}
+                  className="group w-full text-left px-4 py-3 border-b border-border/40 transition-colors"
+                  style={{
+                    backgroundColor: isSelected ? COLORS.smoke : 'transparent',
+                  }}
                 >
-                  <div className={`text-sm font-medium ${
-                    isSelected ? 'text-content-on-dark' : 'text-content-primary'
-                  }`}>
+                  <div
+                    className="text-sm truncate transition-colors"
+                    style={{
+                      color: isSelected ? COLORS.onyx : COLORS.smoke,
+                      fontWeight: isSelected ? 600 : 500,
+                    }}
+                  >
                     {preset.name}
                   </div>
-                  <div className="text-[10px] text-content-secondary mt-0.5">
+                  <div
+                    className="text-[10px] mt-0.5 transition-colors"
+                    style={{
+                      color: isSelected ? COLORS.graphite : COLORS.silver,
+                    }}
+                  >
                     {preset.slots.length} {preset.slots.length === 1 ? 'track' : 'tracks'}
                   </div>
                 </button>
@@ -255,9 +291,13 @@ export default function AudioPresetsTool({ onMix }) {
                 </button>
               </div>
               <div className="flex items-center gap-2">
-                {hasChanges && (
-                  <span className="text-[10px] text-content-secondary mr-2">Modified</span>
-                )}
+                <span className="text-[10px] uppercase tracking-wider text-content-secondary mr-2">
+                  {updatePreset.isPending
+                    ? 'Saving…'
+                    : hasChanges
+                      ? 'Pending…'
+                      : 'Saved'}
+                </span>
                 {onMix && (
                   <button
                     onClick={() => onMix(selectedPreset.id)}
@@ -268,22 +308,6 @@ export default function AudioPresetsTool({ onMix }) {
                     Mix
                   </button>
                 )}
-                <button
-                  onClick={handleRevert}
-                  disabled={!hasChanges}
-                  className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-sm border border-border text-content-secondary hover:border-border-active hover:text-content-on-dark transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
-                >
-                  <FontAwesomeIcon icon={faArrowRotateLeft} className="text-[10px]" />
-                  Revert
-                </button>
-                <button
-                  onClick={handleSave}
-                  disabled={!hasChanges || updatePreset.isPending}
-                  className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-sm bg-interactive-active border border-border-active text-content-on-dark hover:opacity-80 transition-opacity disabled:opacity-30 disabled:cursor-not-allowed"
-                >
-                  <FontAwesomeIcon icon={faFloppyDisk} className="text-[10px]" />
-                  {updatePreset.isPending ? 'Saving...' : 'Save'}
-                </button>
                 <button
                   onClick={handleDelete}
                   className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-sm border border-border text-feedback-error hover:border-feedback-error transition-colors"
@@ -328,9 +352,13 @@ export default function AudioPresetsTool({ onMix }) {
                               <div className="text-sm text-content-on-dark truncate">
                                 {asset?.filename ?? '(missing asset)'}
                               </div>
-                              <div className="text-[10px] text-content-secondary font-mono truncate">
-                                {slot.music_asset_id}
-                              </div>
+                              {asset && (
+                                <div className="text-[10px] text-content-secondary truncate flex items-center gap-2 mt-0.5">
+                                  <span>{formatDuration(asset.duration_seconds)}</span>
+                                  <span className="opacity-40">·</span>
+                                  <span>{formatLoopLabel(asset)}</span>
+                                </div>
+                              )}
                             </div>
                             <div className="flex items-center gap-2">
                               <button

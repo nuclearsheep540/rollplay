@@ -25,16 +25,16 @@ import { useAssetManager } from '@/app/shared/providers/AssetDownloadManager';
 import { COLORS } from '@/app/styles/colorTheme';
 
 const TABS = [
-  { id: 'track', label: 'Track Editor' },
+  { id: 'loop', label: 'Loop Editor' },
   { id: 'presets', label: 'Presets' },
   { id: 'mix', label: 'Mix Editor' },
 ];
 
-// Top-level shell: tab bar swaps between the per-asset editor (TrackEditor),
+// Top-level shell: tab bar swaps between the per-asset loop editor,
 // the preset editor (AudioPresetsTool), and the standalone mix editor
 // (MixEditorTab). Presets hotlink into Mix via `onMix(presetId)`.
 export default function AudioWorkstationTool({ initialAssetId }) {
-  const [activeTab, setActiveTab] = useState('track');
+  const [activeTab, setActiveTab] = useState('loop');
   const [mixPresetId, setMixPresetId] = useState(null);
 
   const openMix = (presetId) => {
@@ -66,7 +66,7 @@ export default function AudioWorkstationTool({ initialAssetId }) {
         })}
       </div>
       <div className="flex-1 min-h-0">
-        {activeTab === 'track' && <TrackEditor initialAssetId={initialAssetId} />}
+        {activeTab === 'loop' && <LoopEditor initialAssetId={initialAssetId} />}
         {activeTab === 'presets' && <AudioPresetsTool onMix={openMix} />}
         {activeTab === 'mix' && (
           <MixEditorTab
@@ -98,10 +98,14 @@ async function fetchAssetById(assetId) {
 function resolveLoopMode(asset) {
   if (asset?.loop_mode) return asset.loop_mode;
   if (asset?.default_looping === false) return 'off';
+  // Legacy fallback: if the asset has a region saved but no explicit mode,
+  // the intent is to loop within that region — default to `continuous`
+  // (intro + loop), not `full` (whole-track loop that ignores the region).
+  if (asset?.loop_start != null && asset?.loop_end != null) return 'continuous';
   return 'full';
 }
 
-function TrackEditor({ initialAssetId }) {
+function LoopEditor({ initialAssetId }) {
   const assetManager = useAssetManager();
   const preview = useWorkshopPreview();
   const updateMutation = useUpdateAudioConfig();
@@ -120,7 +124,14 @@ function TrackEditor({ initialAssetId }) {
   const [loadingAsset, setLoadingAsset] = useState(false);
   const [saveSuccess, setSaveSuccess] = useState(false);
   const [showImportModal, setShowImportModal] = useState(false);
-  const [loopDrawerOpen, setLoopDrawerOpen] = useState(false);
+  // Drawer visibility is derived from the loop mode by default — if the
+  // track is in a region-based mode, the drawer is where you'd edit those
+  // points, so it opens. The user can still explicitly override for the
+  // current session via the LOOP button / close affordance; that override
+  // resets to `null` (follow the mode) on asset import.
+  const [loopDrawerOverride, setLoopDrawerOverride] = useState(null);
+  const loopDrawerDerivedOpen = loopMode !== 'off';
+  const loopDrawerOpen = loopDrawerOverride !== null ? loopDrawerOverride : loopDrawerDerivedOpen;
   const [menuOpen, setMenuOpen] = useState(null); // 'file' | null
   const [isDetectingBpm, setIsDetectingBpm] = useState(false);
 
@@ -174,6 +185,10 @@ function TrackEditor({ initialAssetId }) {
       loopEnd: assetData.loop_end ?? null,
       bpm: assetData.bpm ?? null,
     });
+
+    // Clear any drawer override from the previous session — drawer
+    // visibility now follows the newly-imported asset's loop mode.
+    setLoopDrawerOverride(null);
 
     // Decode into the engine's AudioContext so effects apply during preview
     await preview.init();
@@ -234,12 +249,13 @@ function TrackEditor({ initialAssetId }) {
   const applyLoopConfigToChannel = useCallback(() => {
     const channel = preview.channel.current;
     if (!channel) return;
-    if (loopMode === 'region' && loopStart != null && loopEnd != null) {
-      channel.setLoopMode('region');
+    // Region bounds are independent of mode — push them to the engine
+    // whenever we have them. Both `continuous` and `region` modes need
+    // the native source.loopStart/loopEnd wired up.
+    if (loopStart != null && loopEnd != null) {
       channel.setLoopRegion(loopStart, loopEnd);
-    } else {
-      channel.setLoopMode(loopMode);
     }
+    channel.setLoopMode(loopMode);
   }, [loopMode, loopStart, loopEnd, preview]);
 
   // Live-apply loop config while playing or paused
@@ -565,16 +581,18 @@ function TrackEditor({ initialAssetId }) {
 
         <div className="w-px h-6 bg-border" />
 
-        {/* Loop drawer toggle */}
+        {/* Loop drawer toggle — sets an explicit override on top of the
+            loop-mode-derived default, so the button behaves as expected
+            regardless of which mode the track is currently in. */}
         <button
-          onClick={() => setLoopDrawerOpen(prev => !prev)}
+          onClick={() => setLoopDrawerOverride(!loopDrawerOpen)}
           disabled={!selectedAsset}
           className={`flex items-center gap-1.5 px-2 py-1 rounded-sm text-xs font-medium transition-colors disabled:opacity-30 ${
             loopDrawerOpen ? 'text-content-on-dark' : 'text-content-secondary hover:text-content-on-dark'
           }`}
           title="Loop points"
         >
-          <FontAwesomeIcon icon={faArrowsLeftRightToLine} className="text-xs" />
+          <FontAwesomeIcon icon={faArrowsLeftRightToLine} className="text-lg" />
           LOOP
         </button>
 
@@ -682,7 +700,7 @@ function TrackEditor({ initialAssetId }) {
                 Loop Points — {selectedAsset.filename}
               </div>
               <button
-                onClick={() => setLoopDrawerOpen(false)}
+                onClick={() => setLoopDrawerOverride(false)}
                 className="text-[10px] text-content-secondary hover:text-content-on-dark transition-colors uppercase tracking-wider"
               >
                 Close

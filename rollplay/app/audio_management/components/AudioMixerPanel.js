@@ -8,7 +8,7 @@
 import React, { useState, useEffect, useCallback, useMemo, useRef, memo } from 'react';
 import AudioTrackSelector from './AudioTrackSelector';
 import SfxSoundboard from './SfxSoundboard';
-import { PlaybackState, ChannelType, DEFAULT_EFFECTS } from '../types';
+import { PlaybackState, ChannelType, DEFAULT_EFFECTS, BGM_CHANNELS } from '../types';
 import { useListPresets } from '@/app/workshop/hooks/usePresets';
 import { useAssets } from '@/app/asset_library/hooks/useAssets';
 import {
@@ -162,47 +162,62 @@ export default function AudioMixerPanel({
     const preset = presets.find(p => p.id === presetId);
     if (!preset || !sendRemoteAudioBatch) return;
 
-    // Build one batch of load-ops from the preset's slots. Config for each
-    // operation comes from the asset itself — the preset only decides
-    // *which asset plays where*.
+    // A preset defines the WHOLE mixer state, not just the channels it
+    // populates. So iterate every BGM channel: those the preset fills get
+    // a `load` op, the rest get `clear` — otherwise stale tracks from the
+    // previous preset/custom session would linger on unused channels.
+    const filledSlotsById = new Map(
+      preset.slots.map(s => [s.channel_id, s])
+    );
+
     const ops = [];
-    for (const slot of preset.slots) {
-      const asset = musicAssetsById.get(slot.music_asset_id);
-      if (!asset) continue; // asset deleted since preset was saved — skip
+    for (const { id: channelId } of BGM_CHANNELS) {
+      const slot = filledSlotsById.get(channelId);
+      if (slot) {
+        const asset = musicAssetsById.get(slot.music_asset_id);
+        if (!asset) continue; // asset deleted since preset was saved — skip
 
-      const effects = (
-        asset.effect_hpf_enabled !== undefined ||
-        asset.effect_lpf_enabled !== undefined ||
-        asset.effect_reverb_enabled !== undefined
-      )
-        ? {
-            eq: asset.effect_eq_enabled || false,
-            hpf: asset.effect_hpf_enabled || false,
-            hpf_mix: asset.effect_hpf_mix ?? DEFAULT_EFFECTS.hpf.mix,
-            lpf: asset.effect_lpf_enabled || false,
-            lpf_mix: asset.effect_lpf_mix ?? DEFAULT_EFFECTS.lpf.mix,
-            reverb: asset.effect_reverb_enabled || false,
-            reverb_mix: asset.effect_reverb_mix ?? DEFAULT_EFFECTS.reverb.mix,
-            reverb_preset: asset.effect_reverb_preset || 'room',
-          }
-        : {};
+        const effects = (
+          asset.effect_hpf_enabled !== undefined ||
+          asset.effect_lpf_enabled !== undefined ||
+          asset.effect_reverb_enabled !== undefined
+        )
+          ? {
+              eq: asset.effect_eq_enabled || false,
+              hpf: asset.effect_hpf_enabled || false,
+              hpf_mix: asset.effect_hpf_mix ?? DEFAULT_EFFECTS.hpf.mix,
+              lpf: asset.effect_lpf_enabled || false,
+              lpf_mix: asset.effect_lpf_mix ?? DEFAULT_EFFECTS.lpf.mix,
+              reverb: asset.effect_reverb_enabled || false,
+              reverb_mix: asset.effect_reverb_mix ?? DEFAULT_EFFECTS.reverb.mix,
+              reverb_preset: asset.effect_reverb_preset || 'room',
+            }
+          : {};
 
-      // Apply locally for immediate responsiveness; backend broadcast
-      // reconciles with any saved per-channel config from MongoDB.
-      if (loadAssetIntoChannel) {
-        loadAssetIntoChannel(slot.channel_id, asset);
+        // Apply locally for immediate responsiveness; backend broadcast
+        // reconciles with any saved per-channel config from MongoDB.
+        if (loadAssetIntoChannel) {
+          loadAssetIntoChannel(channelId, asset);
+        }
+
+        ops.push({
+          trackId: channelId,
+          operation: 'load',
+          filename: asset.filename,
+          asset_id: asset.id,
+          s3_url: asset.s3_url,
+          volume: asset.default_volume ?? 0.8,
+          looping: asset.default_looping ?? true,
+          effects,
+        });
+      } else {
+        // Channel not in this preset — mirror handleBgmClear: reset local
+        // state and tell the backend to clear the slot.
+        if (loadAssetIntoChannel) {
+          loadAssetIntoChannel(channelId, { id: null, filename: null, s3_url: null });
+        }
+        ops.push({ trackId: channelId, operation: 'clear' });
       }
-
-      ops.push({
-        trackId: slot.channel_id,
-        operation: 'load',
-        filename: asset.filename,
-        asset_id: asset.id,
-        s3_url: asset.s3_url,
-        volume: asset.default_volume ?? 0.8,
-        looping: asset.default_looping ?? true,
-        effects,
-      });
     }
 
     if (ops.length > 0) sendRemoteAudioBatch(ops);

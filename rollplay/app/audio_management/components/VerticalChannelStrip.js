@@ -224,25 +224,27 @@ export default function VerticalChannelStrip({
         {isChannel ? (
           <>
             <button
-              onClick={() => {
-                // Three-state cycle: off → full → region (if available) → off
-                const current = loopMode || (isLooping ? 'full' : 'off');
-                let next;
-                if (current === 'off') next = 'full';
-                else if (current === 'full' && hasLoopRegion) next = 'region';
-                else next = 'off';
-                onLoopToggle?.(trackId, next !== 'off', next);
-              }}
+              onClick={() => onLoopToggle?.(trackId)}
               className={`w-full h-5 rounded text-[11px] font-bold transition-colors ${
                 loopMode === 'region'
                   ? 'bg-amber-600 text-white'
-                  : isLooping
-                    ? 'bg-rose-600 text-white'
-                    : 'bg-gray-700 text-gray-500 hover:bg-gray-600'
+                  : loopMode === 'continuous'
+                    ? 'bg-sky-600 text-white'
+                    : isLooping
+                      ? 'bg-rose-600 text-white'
+                      : 'bg-gray-700 text-gray-500 hover:bg-gray-600'
               } ${disabledClass}`}
-              title={loopMode === 'region' ? 'Loop region' : isLooping ? 'Looping (full)' : 'Loop off'}
+              title={
+                loopMode === 'region' ? 'Loop — strictly within region'
+                : loopMode === 'continuous' ? 'Loop — intro then region'
+                : isLooping ? 'Loop — full track'
+                : 'Loop off'
+              }
             >
-              {loopMode === 'region' ? 'RGN' : 'LOOP'}
+              {loopMode === 'region' ? 'REGION'
+                : loopMode === 'continuous' ? 'CONT'
+                : isLooping ? 'LOOP'
+                : 'OFF'}
             </button>
             {['eq', 'reverb'].map(bus => (
               <button

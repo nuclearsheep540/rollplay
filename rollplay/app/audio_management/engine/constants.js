@@ -22,9 +22,21 @@ export const EngineState = {
 };
 
 // ── Loop modes ───────────────────────────────────────────────────────────────
+//
+// OFF        — no looping; the track plays once and stops.
+// FULL       — loop the entire buffer end-to-end.
+// CONTINUOUS — play from 0 on first start; once playback reaches the loop
+//              region end it wraps to loop region start and keeps looping
+//              forever. The pre-loop portion plays as an intro.
+//              (Matches the SFZ/SoundFont `loop_continuous` convention —
+//              a.k.a. "sustain loop with intro".)
+// REGION     — strictly within the loop region. Playback from a stopped
+//              state snaps to loopStart; subsequent wraps behave the same
+//              as CONTINUOUS. Pre-region audio never plays.
 export const LoopMode = {
   OFF: 'off',
   FULL: 'full',
+  CONTINUOUS: 'continuous',
   REGION: 'region',
 };
 

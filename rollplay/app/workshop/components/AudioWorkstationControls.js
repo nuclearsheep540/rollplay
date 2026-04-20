@@ -4,7 +4,7 @@
 'use client'
 
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
-import { faRepeat, faRotateRight, faBan, faTrash } from '@fortawesome/free-solid-svg-icons';
+import { faRepeat, faRotateRight, faBan, faTrash, faArrowsSpin } from '@fortawesome/free-solid-svg-icons';
 
 /**
  * Loop Points drawer content for the Audio Workstation.
@@ -33,6 +33,7 @@ export default function AudioWorkstationControls({
           {[
             { mode: 'off', label: 'Off', icon: faBan },
             { mode: 'full', label: 'Full', icon: faRepeat },
+            { mode: 'continuous', label: 'Continuous', icon: faArrowsSpin, disabled: !hasRegion },
             { mode: 'region', label: 'Region', icon: faRotateRight, disabled: !hasRegion },
           ].map(({ mode, label, icon, disabled }) => (
             <button

@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: GPL-3.0-or-later
  */
 
-import React, { useCallback } from 'react';
+import React, { useCallback, useEffect, useRef } from 'react';
 import VerticalChannelStrip from './VerticalChannelStrip';
 import FilterKnob from './FilterKnob';
 import { DEFAULT_EFFECTS } from '../types';
@@ -80,9 +80,29 @@ export function MixerStrips({
     onEffectsChange?.(trackId, { ...currentEffects, [`${effectName}_mix`]: mixLevel });
   }, [channelEffects, onEffectsChange]);
 
-  const handleLoopToggle = useCallback((trackId, looping, loopMode) => {
-    onLoopCommit?.(trackId, looping, loopMode);
-  }, [onLoopCommit]);
+  // Loop button on a channel strip is a binary toggle — Off ↔ "the loop
+  // mode this track is configured with". We remember the last non-off
+  // mode per track so toggling back on restores the DM's intent (they
+  // saved this track with continuous or region looping; tapping the
+  // button shouldn't forget which). Falls back to 'full' if we've never
+  // seen anything other than 'off'.
+  const lastNonOffModeRef = useRef({});
+  useEffect(() => {
+    for (const [id, state] of Object.entries(trackStates)) {
+      if (state?.loop_mode && state.loop_mode !== 'off') {
+        lastNonOffModeRef.current[id] = state.loop_mode;
+      }
+    }
+  }, [trackStates]);
+
+  const handleLoopToggle = useCallback((trackId) => {
+    const current = trackStates[trackId]?.loop_mode
+      || (trackStates[trackId]?.looping === false ? 'off' : 'full');
+    const next = current === 'off'
+      ? (lastNonOffModeRef.current[trackId] || 'full')
+      : 'off';
+    onLoopCommit?.(trackId, next !== 'off', next);
+  }, [trackStates, onLoopCommit]);
 
   return (
     <>

@@ -144,11 +144,16 @@ export default class AudioChannel extends EventEmitter {
       this._buffer = buffer;
       this._duration = buffer.duration;
 
-      // Configure looping
+      // Configure looping. Both CONTINUOUS and REGION set native
+      // loopStart/loopEnd; the distinction is only which offset we pass
+      // to source.start() below.
       const shouldLoop = this._loopMode !== LoopMode.OFF;
       source.loop = shouldLoop;
 
-      if (this._loopMode === LoopMode.REGION && this._loopRegion) {
+      const isRegionLoop =
+        (this._loopMode === LoopMode.CONTINUOUS || this._loopMode === LoopMode.REGION) &&
+        this._loopRegion;
+      if (isRegionLoop) {
         source.loopStart = this._loopRegion.start;
         source.loopEnd = this._loopRegion.end;
       }
@@ -181,8 +186,18 @@ export default class AudioChannel extends EventEmitter {
         this._effectChain.gainNode.gain.value = targetVolume;
       }
 
-      // Start playback
-      const offset = options.offset ?? 0;
+      // Start playback. In strict REGION mode, clamp the offset into the
+      // region so we never hear pre-region audio — that's what makes
+      // "region" distinct from "continuous". CONTINUOUS respects the
+      // caller's offset so the intro plays on first start.
+      let offset = options.offset ?? 0;
+      if (
+        this._loopMode === LoopMode.REGION &&
+        this._loopRegion &&
+        (offset < this._loopRegion.start || offset >= this._loopRegion.end)
+      ) {
+        offset = this._loopRegion.start;
+      }
       if (options.syncStartTime) {
         source.start(options.syncStartTime, offset);
       } else {
@@ -280,7 +295,9 @@ export default class AudioChannel extends EventEmitter {
    * @private
    */
   _computeCurrentTimeFromElapsed(elapsed) {
-    if (this._loopMode === LoopMode.REGION && this._loopRegion && this._duration > 0) {
+    const usesRegion =
+      this._loopMode === LoopMode.CONTINUOUS || this._loopMode === LoopMode.REGION;
+    if (usesRegion && this._loopRegion && this._duration > 0) {
       const { start, end } = this._loopRegion;
       if (elapsed < end) return elapsed;
       const regionLen = end - start;
@@ -327,7 +344,8 @@ export default class AudioChannel extends EventEmitter {
     const shouldLoop = mode !== LoopMode.OFF;
     this._source.loop = shouldLoop;
 
-    if (mode === LoopMode.REGION && this._loopRegion) {
+    const usesRegion = mode === LoopMode.CONTINUOUS || mode === LoopMode.REGION;
+    if (usesRegion && this._loopRegion) {
       this._source.loopStart = this._loopRegion.start;
       this._source.loopEnd = this._loopRegion.end;
     } else if (mode === LoopMode.FULL) {
@@ -336,12 +354,15 @@ export default class AudioChannel extends EventEmitter {
     }
 
     if (this._playbackState !== PlaybackState.PLAYING) return;
-    // Keep position continuous. If we just switched into region mode and
-    // the current position is outside it, native WebAudio will snap to
-    // loopStart on the next sample — mirror that.
+    // Keep position continuous. If we just switched into a region-based
+    // mode and the current position is outside the region, native
+    // WebAudio will snap to loopStart on the next sample — mirror that.
+    // REGION (strict) additionally clamps when position is below start.
     let target = prevPosition;
-    if (mode === LoopMode.REGION && this._loopRegion && prevPosition >= this._loopRegion.end) {
-      target = this._loopRegion.start;
+    if (usesRegion && this._loopRegion) {
+      const { start, end } = this._loopRegion;
+      if (prevPosition >= end) target = start;
+      if (mode === LoopMode.REGION && prevPosition < start) target = start;
     }
     this._reanchorPlayhead(target);
   }
@@ -351,13 +372,15 @@ export default class AudioChannel extends EventEmitter {
     this._loopRegion = { start, end };
 
     if (!this._source) return;
-    if (this._loopMode === LoopMode.REGION) {
+    const usesRegion =
+      this._loopMode === LoopMode.CONTINUOUS || this._loopMode === LoopMode.REGION;
+    if (usesRegion) {
       this._source.loop = true;
       this._source.loopStart = start;
       this._source.loopEnd = end;
     }
 
-    if (this._playbackState !== PlaybackState.PLAYING || this._loopMode !== LoopMode.REGION) return;
+    if (this._playbackState !== PlaybackState.PLAYING || !usesRegion) return;
     // Re-anchor so a region resize doesn't rewrite our elapsed-derived
     // currentTime. Native snaps to loopStart when position >= loopEnd.
     const target = prevPosition >= end ? start : prevPosition;

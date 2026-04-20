@@ -3,7 +3,7 @@
 
 'use client'
 
-import { useRef, useEffect, useImperativeHandle, forwardRef } from 'react';
+import { useRef, useEffect, useImperativeHandle, forwardRef, useState } from 'react';
 import WaveSurfer from 'wavesurfer.js';
 import RegionsPlugin from 'wavesurfer.js/dist/plugins/regions.esm.js';
 import { COLORS } from '@/app/styles/colorTheme';
@@ -33,6 +33,11 @@ const WaveformViewer = forwardRef(function WaveformViewer({
   const currentRegionRef = useRef(null);
   const onRegionChangeRef = useRef(onRegionChange);
   const onSeekRef = useRef(onSeek);
+  // Bumped at the end of the build effect to signal that the WaveSurfer
+  // instance + regions plugin are ready. The region/drag effects depend
+  // on this so they re-run once the plugin exists — otherwise they fire
+  // before build completes, see a null plugin ref, and silently bail.
+  const [pluginBuildId, setPluginBuildId] = useState(0);
 
   // Keep callback refs current without forcing rebuilds
   useEffect(() => { onRegionChangeRef.current = onRegionChange; }, [onRegionChange]);
@@ -101,6 +106,9 @@ const WaveformViewer = forwardRef(function WaveformViewer({
     };
     regions.on('region-created', onRegionCreated);
 
+    // Wake up the region-apply effect now that the plugin is in place.
+    setPluginBuildId(id => id + 1);
+
     return () => {
       ws.un('interaction', onInteraction);
       regions.un('region-updated', onRegionUpdate);
@@ -141,7 +149,7 @@ const WaveformViewer = forwardRef(function WaveformViewer({
         color: regionColor,
       });
     }
-  }, [regionStart, regionEnd, regionEditEnabled, regionColor]);
+  }, [regionStart, regionEnd, regionEditEnabled, regionColor, pluginBuildId]);
 
   // ── Toggle drag-to-create on enable/disable ────────────────────────────
   useEffect(() => {
@@ -154,7 +162,7 @@ const WaveformViewer = forwardRef(function WaveformViewer({
     return () => {
       if (typeof cleanup === 'function') cleanup();
     };
-  }, [regionEditEnabled, regionColor]);
+  }, [regionEditEnabled, regionColor, pluginBuildId]);
 
   return (
     <div className="w-full h-full relative">
