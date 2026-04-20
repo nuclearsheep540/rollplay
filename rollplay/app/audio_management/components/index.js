@@ -11,5 +11,5 @@ export { default as AudioTrack } from './AudioTrack';
 export { default as AudioTrackSelector } from './AudioTrackSelector';
 export { default as SfxSoundboard } from './SfxSoundboard';
 export { default as ChannelEffects } from './ChannelEffects';
-export { default as BottomMixerDrawer } from './BottomMixerDrawer';
+export { default as BottomMixerDrawer, MixerStrips } from './BottomMixerDrawer';
 export { default as VerticalChannelStrip } from './VerticalChannelStrip';

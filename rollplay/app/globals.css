@@ -825,7 +825,8 @@ body {
   overflow: visible;
 }
 
-.bottom-mixer-drawer .drawer-content {
+.bottom-mixer-drawer .drawer-content,
+.mixer-strips-layout {
   height: 100%;
   display: flex;
   flex-direction: row;

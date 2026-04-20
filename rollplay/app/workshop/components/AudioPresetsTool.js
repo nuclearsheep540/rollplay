@@ -7,7 +7,7 @@ import { useState, useEffect, useMemo, useCallback } from 'react';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import {
   faPlus, faPen, faTrash, faFloppyDisk, faArrowRotateLeft,
-  faXmark,
+  faXmark, faSliders,
 } from '@fortawesome/free-solid-svg-icons';
 import AssetPicker from './AssetPicker';
 import {
@@ -21,7 +21,7 @@ function emptySavedShape() {
   return { name: '', slots: [] };
 }
 
-export default function AudioPresetsTool() {
+export default function AudioPresetsTool({ onMix }) {
   const { data: presets = [], isLoading: presetsLoading } = useListPresets();
   const { data: musicAssets = [] } = useAssets({ assetType: 'music' });
   const createPreset = useCreatePreset();
@@ -257,6 +257,16 @@ export default function AudioPresetsTool() {
               <div className="flex items-center gap-2">
                 {hasChanges && (
                   <span className="text-[10px] text-content-secondary mr-2">Modified</span>
+                )}
+                {onMix && (
+                  <button
+                    onClick={() => onMix(selectedPreset.id)}
+                    className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-sm border border-border text-content-secondary hover:border-border-active hover:text-content-on-dark transition-colors"
+                    title="Open in Mix Editor"
+                  >
+                    <FontAwesomeIcon icon={faSliders} className="text-[10px]" />
+                    Mix
+                  </button>
                 )}
                 <button
                   onClick={handleRevert}

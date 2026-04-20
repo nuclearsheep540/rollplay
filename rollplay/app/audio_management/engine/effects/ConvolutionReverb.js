@@ -11,11 +11,14 @@ import { REVERB_PRESETS } from '../presets';
  * Uses a ConvolverNode with runtime-generated impulse responses (exponentially
  * decaying stereo white noise). No static WAV files needed.
  *
- * Signal path (managed by EffectChain):
- *   postEqNode → convolver → makeupGain (3x) → wetGain → sendMuteGain → output
+ * DSP-only: this effect owns the convolver + makeup gain. The "mixer strip"
+ * responsibilities — wet fader, mute gate, metering — live on a companion
+ * SendChannel registered with the engine. EffectChain wires the SendChannel
+ * up when the chain is built; this class only needs to know the channel's
+ * reference to drive volume from its enabled/mix state.
  *
- * When enabled: wetGain = mix level.
- * When disabled: wetGain = 0.0.
+ * Signal path:
+ *   postInsertNode → convolver → makeupGain → [SendChannel handles the rest]
  *
  * Presets change the impulse response buffer (duration + decay rate).
  */
@@ -33,18 +36,12 @@ export default class ConvolutionReverb extends AudioEffect {
     this._makeupGain = ctx.createGain();
     this._makeupGain.gain.value = REVERB_MAKEUP_GAIN;
 
-    // Wet gain — controlled by mix level
-    this._wetGain = ctx.createGain();
-    this._wetGain.gain.value = 0.0; // Disabled by default
-
-    // Mute gate — for mute/solo to control the send independently
-    this._sendMuteGain = ctx.createGain();
-    this._sendMuteGain.gain.value = 1.0;
-
-    // Internal chain: convolver → makeupGain → wetGain → sendMuteGain
+    // Internal DSP wiring: convolver → makeupGain (end of this effect's output)
     this._convolver.connect(this._makeupGain);
-    this._makeupGain.connect(this._wetGain);
-    this._wetGain.connect(this._sendMuteGain);
+
+    // SendChannel reference — set by EffectChain after it's registered
+    // with the engine. Volume follows enabled/mix state.
+    this._sendChannel = null;
   }
 
   get name() { return 'reverb'; }
@@ -53,19 +50,34 @@ export default class ConvolutionReverb extends AudioEffect {
   /** ConvolverNode — exposed for EffectChain wiring. */
   get convolver() { return this._convolver; }
 
-  /** Send mute gain — for mute/solo control by EffectChain. */
-  get sendMuteGain() { return this._sendMuteGain; }
+  /** Makeup gain — end of this effect's DSP; SendChannel takes signal from here. */
+  get outputNode() { return this._makeupGain; }
 
-  /** Wet gain node — exposed for metering taps. */
-  get wetGain() { return this._wetGain; }
+  /**
+   * Wet gain — surfaces the companion SendChannel's fader node.
+   * Exposed for direct AudioParam animation (e.g. cue crossfades ramping
+   * the wet signal in proportion with the dry path, without fighting the
+   * smoothed setMix ramp).
+   */
+  get wetGain() { return this._sendChannel?.gainNode ?? null; }
 
   get preset() { return this._preset; }
 
+  /** Set by EffectChain once the companion SendChannel is built. */
+  set sendChannel(channel) {
+    this._sendChannel = channel;
+    // Sync the channel to current enabled/mix state
+    if (channel) {
+      channel.setVolume(this._enabled ? this._mix : 0);
+    }
+  }
+  get sendChannel() { return this._sendChannel; }
+
   connect(inputNode, outputNode) {
     super.connect(inputNode, outputNode);
-    // Send wiring: input taps signal → convolver chain → output
+    // Tap post-insert signal into the convolver. Downstream of makeupGain
+    // is the SendChannel, wired separately by EffectChain.
     inputNode.connect(this._convolver);
-    this._sendMuteGain.connect(outputNode);
   }
 
   disconnect() {
@@ -73,30 +85,22 @@ export default class ConvolutionReverb extends AudioEffect {
     try {
       this._convolver.disconnect();
       this._makeupGain.disconnect();
-      this._wetGain.disconnect();
-      this._sendMuteGain.disconnect();
     } catch (_) {}
-    // Rewire internal chain for when reconnected
+    // Keep the internal convolver → makeupGain wire so reconnection works
     this._convolver.connect(this._makeupGain);
-    this._makeupGain.connect(this._wetGain);
-    this._wetGain.connect(this._sendMuteGain);
     super.disconnect();
   }
 
   setEnabled(enabled) {
     super.setEnabled(enabled);
-    const now = this._ctx.currentTime;
-    const targetGain = enabled ? this._mix : 0.0;
-    this._wetGain.gain.setValueAtTime(this._wetGain.gain.value, now);
-    this._wetGain.gain.linearRampToValueAtTime(targetGain, now + RAMP_TIME);
+    // Drive the SendChannel's fader: enabled → current mix; disabled → 0
+    this._sendChannel?.setVolume(enabled ? this._mix : 0);
   }
 
   setMix(value) {
     super.setMix(value);
     if (!this._enabled) return;
-    const now = this._ctx.currentTime;
-    this._wetGain.gain.setValueAtTime(this._wetGain.gain.value, now);
-    this._wetGain.gain.linearRampToValueAtTime(value, now + RAMP_TIME);
+    this._sendChannel?.setVolume(value);
   }
 
   setParam(name, value) {
@@ -107,39 +111,17 @@ export default class ConvolutionReverb extends AudioEffect {
     }
   }
 
-  /**
-   * Set the send mute gain (for mute/solo control).
-   * This is independent of enabled/mix — it's a channel-level gate.
-   */
-  setSendMuted(muted) {
-    const now = this._ctx.currentTime;
-    this._sendMuteGain.gain.setValueAtTime(
-      this._sendMuteGain.gain.value, now
-    );
-    this._sendMuteGain.gain.linearRampToValueAtTime(
-      muted ? 0.0 : 1.0, now + RAMP_TIME
-    );
-  }
-
   destroy() {
-    // Route through this.disconnect() so _connected flips to false before
-    // super.destroy() later re-invokes disconnect() — otherwise that second
-    // call would run against nulled-out nodes and throw.
     this.disconnect();
     this._convolver = null;
     this._makeupGain = null;
-    this._wetGain = null;
-    this._sendMuteGain = null;
+    this._sendChannel = null;
     super.destroy();
   }
 
   /**
    * Generate a reverb impulse response AudioBuffer at runtime.
    * Exponentially decaying stereo white noise — no static files needed.
-   *
-   * @param {AudioContext} ctx
-   * @param {string} presetName - Key into REVERB_PRESETS
-   * @returns {AudioBuffer}
    */
   static createImpulseResponse(ctx, presetName) {
     const preset = REVERB_PRESETS[presetName] || REVERB_PRESETS.room;

@@ -17,6 +17,7 @@ import AssetPicker from './AssetPicker';
 import AudioWorkstationControls from './AudioWorkstationControls';
 import WaveformViewer from './WaveformViewer';
 import AudioPresetsTool from './AudioPresetsTool';
+import MixEditorTab from './MixEditorTab';
 import { useUpdateAudioConfig } from '../hooks/useUpdateAudioConfig';
 import { useWorkshopPreview } from '../hooks/useWorkshopPreview';
 import { detectBpm } from '../utils/detectBpm';
@@ -26,14 +27,21 @@ import { COLORS } from '@/app/styles/colorTheme';
 const TABS = [
   { id: 'track', label: 'Track Editor' },
   { id: 'presets', label: 'Presets' },
+  { id: 'mix', label: 'Mix Editor' },
 ];
 
-// Top-level shell: tab bar swaps between the per-asset editor (TrackEditor)
-// and the preset editor (AudioPresetsTool). Both surfaces live inside one
-// Workshop tool because they operate on the same domain — authoring audio
-// for later in-game use. The in-game mixer only *consumes* presets.
+// Top-level shell: tab bar swaps between the per-asset editor (TrackEditor),
+// the preset editor (AudioPresetsTool), and the standalone mix editor
+// (MixEditorTab). Presets hotlink into Mix via `onMix(presetId)`.
 export default function AudioWorkstationTool({ initialAssetId }) {
   const [activeTab, setActiveTab] = useState('track');
+  const [mixPresetId, setMixPresetId] = useState(null);
+
+  const openMix = (presetId) => {
+    setMixPresetId(presetId);
+    setActiveTab('mix');
+  };
+
   return (
     <div className="flex flex-col h-full">
       <div
@@ -58,9 +66,14 @@ export default function AudioWorkstationTool({ initialAssetId }) {
         })}
       </div>
       <div className="flex-1 min-h-0">
-        {activeTab === 'track'
-          ? <TrackEditor initialAssetId={initialAssetId} />
-          : <AudioPresetsTool />}
+        {activeTab === 'track' && <TrackEditor initialAssetId={initialAssetId} />}
+        {activeTab === 'presets' && <AudioPresetsTool onMix={openMix} />}
+        {activeTab === 'mix' && (
+          <MixEditorTab
+            selectedPresetId={mixPresetId}
+            onSelectPreset={setMixPresetId}
+          />
+        )}
       </div>
     </div>
   );

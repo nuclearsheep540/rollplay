@@ -193,6 +193,25 @@ export default class AudioEngine extends EventEmitter {
     return this._channels.get(id) || null;
   }
 
+  /**
+   * Register an externally-constructed channel (e.g. a SendChannel built by
+   * an EffectChain). The engine does not take ownership of the lifecycle —
+   * the creator is responsible for calling destroy(). The engine's only
+   * job is to surface it in the channel registry so updateMuteSoloState
+   * sees it like any other channel.
+   */
+  registerChannel(channel) {
+    if (!channel || !channel.id) return;
+    if (this._channels.has(channel.id)) {
+      throw new Error(`Channel '${channel.id}' already exists`);
+    }
+    this._channels.set(channel.id, channel);
+  }
+
+  unregisterChannel(id) {
+    this._channels.delete(id);
+  }
+
   removeChannel(id) {
     const channel = this._channels.get(id);
     if (channel) {
@@ -229,33 +248,39 @@ export default class AudioEngine extends EventEmitter {
   }
 
   /**
-   * Recompute mute/solo gains across all channels.
-   * Called when any channel's mute or solo state changes.
+   * Recompute mute/solo gains across every registered channel — primary
+   * channels AND bus-return sends (e.g. reverb) — with one formula.
+   *
+   * A send is treated as a full mixer channel (it has its own muted/soloed
+   * flags, fader, and meter), but carries a `parent` reference so the
+   * engine can cascade the parent's state:
+   *
+   *   effectiveMuted(ch)  = ch.muted  || ch.parent?.muted
+   *   effectiveSoloed(ch) = ch.soloed || ch.parent?.soloed
+   *
+   * Result:
+   *   - Mute a primary channel  → its sends silence too (cascade)
+   *   - Mute a send only        → its primary dry path keeps playing
+   *   - Solo a primary channel  → its sends play too, others silenced
+   *   - Solo a send only        → all dry paths silenced, only that send plays
    */
   updateMuteSoloState() {
-    const anySoloed = Array.from(this._channels.values()).some(ch => ch.soloed);
+    const effectiveMuted = (ch) => !!(ch.muted || ch.parent?.muted);
+    const effectiveSoloed = (ch) => !!(ch.soloed || ch.parent?.soloed);
+
+    const anySoloed = Array.from(this._channels.values()).some(effectiveSoloed);
 
     for (const channel of this._channels.values()) {
+      const isMuted = effectiveMuted(channel);
+      const isSoloed = effectiveSoloed(channel);
       let gain;
       if (anySoloed) {
-        gain = channel.soloed ? 1.0 : 0.0;
+        gain = (isSoloed && !isMuted) ? 1.0 : 0.0;
       } else {
-        gain = channel.muted ? 0.0 : 1.0;
+        gain = isMuted ? 0.0 : 1.0;
       }
-      channel.applyMuteGain(gain);
-
-      // Update reverb send mute for this channel
-      const reverb = channel.effectChain?.getEffect('reverb');
-      if (reverb) {
-        const effectMuted = channel.muted;
-        let sendGain;
-        if (anySoloed) {
-          // Reverb send follows channel solo state
-          sendGain = channel.soloed ? 1.0 : 0.0;
-        } else {
-          sendGain = effectMuted ? 0.0 : 1.0;
-        }
-        reverb.setSendMuted(sendGain === 0.0);
+      if (typeof channel.applyMuteGain === 'function') {
+        channel.applyMuteGain(gain);
       }
     }
   }

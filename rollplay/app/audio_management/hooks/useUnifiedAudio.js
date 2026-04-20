@@ -225,45 +225,27 @@ export const useUnifiedAudio = () => {
     setSoloedChannels(prev => ({ ...prev, [channelId]: soloed }));
   }, []);
 
-  // Recompute muteGainNode values whenever mute/solo state changes.
-  // Delegates to engine.updateMuteSoloState() after syncing mute/solo flags
-  // to engine channels.
+  // Forward mute/solo state into the engine. Both primary channels and
+  // their bus-return sends (e.g. `${trackId}_reverb`) are registered
+  // channels in the engine's registry, so this reduces to: "for each
+  // key in the state map, find the channel by id and set its flags".
+  // The engine's updateMuteSoloState then reconciles everything — dry
+  // paths, sends, and the parent-cascade — in one pass.
   useEffect(() => {
     const engine = engineRef.current;
     if (!engine) return;
 
-    for (const trackId of BGM_CHANNEL_IDS) {
-      const channel = engine.getChannel(trackId);
+    const ids = new Set([
+      ...Object.keys(mutedChannels),
+      ...Object.keys(soloedChannels),
+      ...BGM_CHANNEL_IDS,
+    ]);
+
+    for (const id of ids) {
+      const channel = engine.getChannel(id);
       if (!channel) continue;
-      channel.setMuted(mutedChannels[trackId] || false);
-      channel.setSoloed(soloedChannels[trackId] || false);
-    }
-
-    // Reverb send mute/solo — engine handles this via updateMuteSoloState,
-    // but we also need per-effect mute/solo via composite keys (e.g. "audio_channel_A_reverb").
-    // The engine's updateMuteSoloState handles channel mute cascading to reverb sends.
-    // For independent effect strip mute/solo, we handle it separately here.
-    const anySoloed = Object.values(soloedChannels).some(Boolean);
-
-    for (const trackId of BGM_CHANNEL_IDS) {
-      const channel = engine.getChannel(trackId);
-      if (!channel?.effectChain) continue;
-
-      const reverb = channel.effectChain.getEffect('reverb');
-      if (!reverb) continue;
-
-      const channelMuted = mutedChannels[trackId] || false;
-      const effectId = `${trackId}_reverb`;
-      const effectMuted = mutedChannels[effectId] || false;
-      const effectSoloed = soloedChannels[effectId] || false;
-
-      let gain;
-      if (anySoloed) {
-        gain = (effectSoloed && !effectMuted) ? 1.0 : 0.0;
-      } else {
-        gain = (channelMuted || effectMuted) ? 0.0 : 1.0;
-      }
-      reverb.setSendMuted(gain === 0.0);
+      channel.setMuted(mutedChannels[id] || false);
+      channel.setSoloed(soloedChannels[id] || false);
     }
 
     engine.updateMuteSoloState();

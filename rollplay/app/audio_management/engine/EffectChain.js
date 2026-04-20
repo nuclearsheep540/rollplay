@@ -5,6 +5,7 @@ import HighPassFilter from './effects/HighPassFilter';
 import LowPassFilter from './effects/LowPassFilter';
 import ConvolutionReverb from './effects/ConvolutionReverb';
 import StereoMeter from './StereoMeter';
+import SendChannel from './SendChannel';
 import { DEFAULT_EFFECTS } from './presets';
 
 /**
@@ -44,7 +45,20 @@ export default class EffectChain {
     this._effects = new Map();
     this._bypassed = false;
 
-    const { effects = [], outputNode, metering = true } = config;
+    const {
+      effects = [],
+      outputNode,
+      metering = true,
+      // The following are required when the chain has send effects (reverb etc.)
+      // because the companion SendChannel needs engine registration and a parent ref.
+      engine = null,
+      parent = null,
+      channelId = null,
+    } = config;
+
+    this._engine = engine;
+    this._parent = parent;
+    this._channelId = channelId;
 
     // ── Input node — sources connect here ──────────────────────────────────
     this._inputNode = ctx.createGain();
@@ -97,26 +111,38 @@ export default class EffectChain {
     }
 
     // ── Send effects (pre-fader, post-insert) ──────────────────────────────
-    // Each send taps from postInsertNode and routes to outputNode via its own wet path.
+    // Each send is a SendChannel in its own right — registered with the engine
+    // so it shows up in the same mute/solo reconciliation loop as primary
+    // channels. The effect contributes DSP (convolver/makeup); the SendChannel
+    // owns the fader, mute gate, and metering — so from the mixer's point of
+    // view a "reverb send" is a peer of an audio channel, not a second-class
+    // sub-component.
     const sends = effects
       .filter(name => EFFECT_REGISTRY[name] && this._getEffectType(name) === 'send');
 
-    this._sendMeters = new Map();
+    this._sendChannels = new Map();
 
     for (const name of sends) {
       const effect = this._createEffect(name);
 
-      // Create a metering chain for this send's wet path
-      if (metering) {
-        const sendMeter = new StereoMeter(ctx);
-        this._sendMeters.set(name, sendMeter);
+      // Wire the post-insert tap into the effect's DSP
+      effect.connect(this._postInsertNode, outputNode);
 
-        // Wire: postInsert → [send effect] → sendMeter → output
-        effect.connect(this._postInsertNode, sendMeter.inputNode);
-        sendMeter.outputNode.connect(outputNode);
-      } else {
-        effect.connect(this._postInsertNode, outputNode);
+      // Create the companion SendChannel whose input is the effect's DSP output
+      const sendId = channelId ? `${channelId}_${name}` : `send_${name}`;
+      const sendChannel = new SendChannel(engine, sendId, {
+        inputNode: effect.outputNode,
+        outputNode,
+        metering,
+        parent,
+      });
+
+      if (engine && typeof engine.registerChannel === 'function') {
+        engine.registerChannel(sendChannel);
       }
+
+      effect.sendChannel = sendChannel;
+      this._sendChannels.set(name, sendChannel);
     }
 
     // ── Bypass path ────────────────────────────────────────────────────────
@@ -150,13 +176,28 @@ export default class EffectChain {
   }
 
   /**
-   * Get analysers for a specific effect's send metering.
+   * Get analysers for a specific send's metering. Forwards to the
+   * companion SendChannel since metering now lives there.
    * Returns { left, right } or null.
    */
   getSendAnalysers(effectName) {
-    const meter = this._sendMeters.get(effectName);
-    if (!meter) return null;
-    return { left: meter.analyserL, right: meter.analyserR };
+    const channel = this._sendChannels?.get(effectName);
+    if (!channel) return null;
+    return channel.getAnalysers();
+  }
+
+  /** All effects attached to this chain, for uniform iteration by the engine. */
+  get effects() {
+    return Array.from(this._effects.values());
+  }
+
+  /** All send channels owned by this chain. */
+  get sendChannels() {
+    return Array.from(this._sendChannels?.values() ?? []);
+  }
+
+  getSendChannel(effectName) {
+    return this._sendChannels?.get(effectName) ?? null;
   }
 
   /**
@@ -270,8 +311,13 @@ export default class EffectChain {
     this._effects.clear();
 
     if (this._meter) this._meter.destroy();
-    for (const meter of this._sendMeters.values()) meter.destroy();
-    this._sendMeters.clear();
+    for (const sendChannel of this._sendChannels?.values() ?? []) {
+      if (this._engine && typeof this._engine.unregisterChannel === 'function') {
+        this._engine.unregisterChannel(sendChannel.id);
+      }
+      sendChannel.destroy();
+    }
+    this._sendChannels?.clear();
 
     // Recreate with new context — constructor handles all wiring
     // This is a lightweight approach: we store the config and rebuild.
@@ -295,10 +341,13 @@ export default class EffectChain {
       this._meter = null;
     }
 
-    for (const meter of this._sendMeters.values()) {
-      meter.destroy();
+    for (const sendChannel of this._sendChannels?.values() ?? []) {
+      if (this._engine && typeof this._engine.unregisterChannel === 'function') {
+        this._engine.unregisterChannel(sendChannel.id);
+      }
+      sendChannel.destroy();
     }
-    this._sendMeters.clear();
+    this._sendChannels?.clear();
 
     try {
       this._inputNode.disconnect();
@@ -308,6 +357,8 @@ export default class EffectChain {
     } catch (_) {}
 
     this._ctx = null;
+    this._engine = null;
+    this._parent = null;
   }
 
   // ── Private helpers ──────────────────────────────────────────────────────
