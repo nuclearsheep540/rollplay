@@ -37,6 +37,7 @@ try:
     from modules.library.model.music_asset_model import MusicAssetModel
     from modules.library.model.sfx_asset_model import SfxAssetModel
     from modules.library.model.image_asset_model import ImageAssetModel
+    from modules.library.model.preset_model import PresetModel
     print("Models imported successfully")
 except ImportError as e:
     print(f"Error importing models: {e}")

@@ -122,12 +122,10 @@ export default class ConvolutionReverb extends AudioEffect {
   }
 
   destroy() {
-    try {
-      this._convolver.disconnect();
-      this._makeupGain.disconnect();
-      this._wetGain.disconnect();
-      this._sendMuteGain.disconnect();
-    } catch (_) {}
+    // Route through this.disconnect() so _connected flips to false before
+    // super.destroy() later re-invokes disconnect() — otherwise that second
+    // call would run against nulled-out nodes and throw.
+    this.disconnect();
     this._convolver = null;
     this._makeupGain = null;
     this._wetGain = null;

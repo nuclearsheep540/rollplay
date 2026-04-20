@@ -233,9 +233,7 @@ export default class AudioChannel extends EventEmitter {
 
     const ctx = this._engine.context;
     const elapsed = ctx.currentTime - this._startTime + this._pausedTime;
-    this._currentTime = this._loopMode !== LoopMode.OFF && this._duration > 0
-      ? elapsed % this._duration
-      : Math.min(elapsed, this._duration);
+    this._currentTime = this._computeCurrentTimeFromElapsed(elapsed);
 
     this._stopSource();
     this._stopTimeTracking();
@@ -244,8 +242,51 @@ export default class AudioChannel extends EventEmitter {
     const prevState = this._playbackState;
     this._playbackState = PlaybackState.PAUSED;
     this.emit('statechange', { from: prevState, to: PlaybackState.PAUSED });
+    // Emit the paused position so UIs (e.g. Workshop cursor) can reconcile
+    this.emit('timeupdate', {
+      currentTime: this._currentTime,
+      duration: this._duration,
+      remaining: Math.max(0, this._duration - this._currentTime),
+    });
 
     return true;
+  }
+
+  /**
+   * Seek to a position while paused or stopped. Updates playhead without
+   * restarting playback. Use play({offset}) to seek while playing.
+   * @param {number} time - Target position in seconds
+   */
+  seek(time) {
+    if (this._playbackState === PlaybackState.PLAYING) return false;
+    const duration = this._duration || this._buffer?.duration || 0;
+    const clamped = duration > 0 ? Math.max(0, Math.min(time, duration)) : Math.max(0, time);
+    this._currentTime = clamped;
+    this._pausedTime = clamped;
+    this.emit('timeupdate', {
+      currentTime: clamped,
+      duration,
+      remaining: Math.max(0, duration - clamped),
+    });
+    return true;
+  }
+
+  /**
+   * Map elapsed source time to user-facing currentTime, accounting for
+   * native loopStart/loopEnd wrap in region mode.
+   * @private
+   */
+  _computeCurrentTimeFromElapsed(elapsed) {
+    if (this._loopMode === LoopMode.REGION && this._loopRegion && this._duration > 0) {
+      const { start, end } = this._loopRegion;
+      if (elapsed < end) return elapsed;
+      const regionLen = end - start;
+      return regionLen > 0 ? start + ((elapsed - end) % regionLen) : start;
+    }
+    if (this._loopMode !== LoopMode.OFF && this._duration > 0) {
+      return elapsed % this._duration;
+    }
+    return Math.min(elapsed, this._duration);
   }
 
   /**
@@ -276,32 +317,48 @@ export default class AudioChannel extends EventEmitter {
 
   setLoopMode(mode) {
     if (!Object.values(LoopMode).includes(mode)) return;
+    const prevPosition = this._currentTime;
     this._loopMode = mode;
 
-    // If currently playing, restart with new loop setting
-    if (this._source && this._playbackState === PlaybackState.PLAYING) {
-      const shouldLoop = mode !== LoopMode.OFF;
-      this._source.loop = shouldLoop;
+    if (!this._source) return;
+    const shouldLoop = mode !== LoopMode.OFF;
+    this._source.loop = shouldLoop;
 
-      if (mode === LoopMode.REGION && this._loopRegion) {
-        this._source.loopStart = this._loopRegion.start;
-        this._source.loopEnd = this._loopRegion.end;
-      } else if (mode === LoopMode.FULL) {
-        this._source.loopStart = 0;
-        this._source.loopEnd = 0; // 0 means end of buffer
-      }
+    if (mode === LoopMode.REGION && this._loopRegion) {
+      this._source.loopStart = this._loopRegion.start;
+      this._source.loopEnd = this._loopRegion.end;
+    } else if (mode === LoopMode.FULL) {
+      this._source.loopStart = 0;
+      this._source.loopEnd = 0; // 0 means end of buffer
     }
+
+    if (this._playbackState !== PlaybackState.PLAYING) return;
+    // Keep position continuous. If we just switched into region mode and
+    // the current position is outside it, native WebAudio will snap to
+    // loopStart on the next sample — mirror that.
+    let target = prevPosition;
+    if (mode === LoopMode.REGION && this._loopRegion && prevPosition >= this._loopRegion.end) {
+      target = this._loopRegion.start;
+    }
+    this._reanchorPlayhead(target);
   }
 
   setLoopRegion(start, end) {
+    const prevPosition = this._currentTime;
     this._loopRegion = { start, end };
 
-    // Apply to running source if in region mode
-    if (this._source && this._loopMode === LoopMode.REGION) {
+    if (!this._source) return;
+    if (this._loopMode === LoopMode.REGION) {
       this._source.loop = true;
       this._source.loopStart = start;
       this._source.loopEnd = end;
     }
+
+    if (this._playbackState !== PlaybackState.PLAYING || this._loopMode !== LoopMode.REGION) return;
+    // Re-anchor so a region resize doesn't rewrite our elapsed-derived
+    // currentTime. Native snaps to loopStart when position >= loopEnd.
+    const target = prevPosition >= end ? start : prevPosition;
+    this._reanchorPlayhead(target);
   }
 
   clearLoopRegion() {
@@ -312,6 +369,21 @@ export default class AudioChannel extends EventEmitter {
       this._source.loopStart = 0;
       this._source.loopEnd = 0;
     }
+  }
+
+  /**
+   * Reset the elapsed-clock anchor so that the derived currentTime equals
+   * `position` right now, and stays continuous from there. Use whenever
+   * the time-derivation formula changes shape mid-playback (region resize,
+   * loop-mode switch).
+   * @private
+   */
+  _reanchorPlayhead(position) {
+    const ctx = this._engine?.context;
+    if (!ctx) return;
+    this._startTime = ctx.currentTime;
+    this._pausedTime = position;
+    this._currentTime = position;
   }
 
   // ── Mute / Solo ──────────────────────────────────────────────────────────
@@ -441,6 +513,7 @@ export default class AudioChannel extends EventEmitter {
 
     if (prevState !== PlaybackState.STOPPED) {
       this.emit('statechange', { from: prevState, to: PlaybackState.STOPPED });
+      this.emit('timeupdate', { currentTime: 0, duration: 0, remaining: 0 });
     }
   }
 
@@ -457,28 +530,17 @@ export default class AudioChannel extends EventEmitter {
       if (!ctx) return;
 
       const elapsed = ctx.currentTime - this._startTime + this._pausedTime;
+      this._currentTime = this._computeCurrentTimeFromElapsed(elapsed);
 
-      if (this._loopMode === LoopMode.REGION && this._loopRegion && this._duration > 0) {
-        // Region loop — native source.loopStart/loopEnd wraps between [start, end]
-        // Mirror that wrap in our time tracking so the UI matches the audio
-        const { start, end } = this._loopRegion;
-        if (elapsed < end) {
-          this._currentTime = elapsed;
-        } else {
-          const regionLen = end - start;
-          this._currentTime = start + ((elapsed - end) % regionLen);
-        }
-      } else if (this._loopMode !== LoopMode.OFF && this._duration > 0) {
-        this._currentTime = elapsed % this._duration;
-      } else {
-        this._currentTime = Math.min(elapsed, this._duration);
-
-        // Auto-stop non-looping tracks (as safety net alongside source.onended)
-        if (elapsed >= this._duration && this._duration > 0) {
-          this._doStop();
-          this.emit('ended', { channelId: this._id });
-          return;
-        }
+      // Auto-stop non-looping tracks (safety net alongside source.onended)
+      if (
+        this._loopMode === LoopMode.OFF &&
+        this._duration > 0 &&
+        elapsed >= this._duration
+      ) {
+        this._doStop();
+        this.emit('ended', { channelId: this._id });
+        return;
       }
 
       // Throttle event emission

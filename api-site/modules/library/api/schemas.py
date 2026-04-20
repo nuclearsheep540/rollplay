@@ -157,3 +157,42 @@ class UpdateAudioConfigRequest(BaseModel):
 # Aliases for backwards compatibility
 AssetResponse = MediaAssetResponse
 AssetListResponse = MediaAssetListResponse
+
+
+# ── Preset schemas ───────────────────────────────────────────────────────────
+
+class PresetSlotSchema(BaseModel):
+    """A single channel → asset assignment within a preset."""
+    channel_id: str = Field(..., min_length=1, max_length=64, description="Mixer channel identifier")
+    music_asset_id: UUID = Field(..., description="Music asset to load into this channel")
+
+
+class PresetResponse(BaseModel):
+    """A preset (DM-scoped mixer configuration)."""
+    id: str
+    user_id: str
+    name: str
+    slots: List[PresetSlotSchema]
+    created_at: datetime
+    updated_at: Optional[datetime] = None
+
+    class Config:
+        from_attributes = True
+
+
+class PresetListResponse(BaseModel):
+    """List response wrapper for presets."""
+    presets: List[PresetResponse]
+    total: int
+
+
+class CreatePresetRequest(BaseModel):
+    """Create a new preset."""
+    name: str = Field(..., min_length=1, max_length=64, description="Preset name")
+    slots: List[PresetSlotSchema] = Field(default_factory=list, description="Channel slots")
+
+
+class UpdatePresetRequest(BaseModel):
+    """Update an existing preset. Either rename, replace slots, or both."""
+    name: Optional[str] = Field(None, min_length=1, max_length=64, description="New name (optional)")
+    slots: Optional[List[PresetSlotSchema]] = Field(None, description="New slots (optional)")

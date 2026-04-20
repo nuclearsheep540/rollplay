@@ -37,3 +37,18 @@ export const REVERB_PRESETS = {
 export const EFFECT_STRIP_DEFS = [
   { key: 'reverb', label: 'RVB', color: 'purple' },
 ];
+
+// Canonical BGM channel layout. Shared between:
+//   - the in-game mixer (useUnifiedAudio initial state)
+//   - the Workshop preset editor (slot rows)
+//   - the preset-load path (WebSocket batch trackIds)
+// These IDs MUST match the keys in useUnifiedAudio's remoteTrackStates
+// initial state, otherwise preset loads won't resolve to real channels.
+export const BGM_CHANNELS = [
+  { id: 'audio_channel_A', label: 'A' },
+  { id: 'audio_channel_B', label: 'B' },
+  { id: 'audio_channel_C', label: 'C' },
+  { id: 'audio_channel_D', label: 'D' },
+  { id: 'audio_channel_E', label: 'E' },
+  { id: 'audio_channel_F', label: 'F' },
+];
