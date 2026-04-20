@@ -113,15 +113,26 @@ const WaveformViewer = forwardRef(function WaveformViewer({
     };
     ws.on('interaction', onInteraction);
 
+    // During drag we forward raw values so the visible region tracks the
+    // mouse. Snapping happens in `region-update-end` (drop) only — simpler
+    // and matches the default behaviour in Reaper/Logic/Ableton.
     const onRegionUpdate = (region) => {
+      if (region.id !== REGION_ID) return;
+      if (!onRegionChangeRef.current) return;
+      onRegionChangeRef.current(region.start, region.end);
+    };
+    regions.on('region-updated', onRegionUpdate);
+
+    const onRegionUpdateEnd = (region) => {
       if (region.id !== REGION_ID) return;
       if (!onRegionChangeRef.current) return;
       const start = snapToBeat(region.start, bpmRef.current, snapToBeatsRef.current);
       const end = snapToBeat(region.end, bpmRef.current, snapToBeatsRef.current);
       onRegionChangeRef.current(start, end);
     };
-    regions.on('region-updated', onRegionUpdate);
+    regions.on('region-update-end', onRegionUpdateEnd);
 
+    // Drag-to-create fires once on release — always snap if enabled.
     const onRegionCreated = (region) => {
       if (region.id === REGION_ID) return;
       const start = snapToBeat(region.start, bpmRef.current, snapToBeatsRef.current);
