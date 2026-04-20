@@ -173,6 +173,7 @@ const WaveformViewer = forwardRef(function WaveformViewer({
       ws.un('redraw', onRedraw);
       ws.un('zoom', onRedraw);
       regions.un('region-updated', onRegionUpdate);
+      regions.un('region-update-end', onRegionUpdateEnd);
       regions.un('region-created', onRegionCreated);
       try { svg.remove(); } catch {}
       try { ws.destroy(); } catch {}

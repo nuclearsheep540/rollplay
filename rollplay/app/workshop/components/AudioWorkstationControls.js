@@ -17,6 +17,8 @@ export default function AudioWorkstationControls({
   onLoopModeChange,
   loopStart,
   loopEnd,
+  bpm,
+  timeSignature,
   onClearRegion,
   isSaving,
   saveSuccess,
@@ -64,10 +66,16 @@ export default function AudioWorkstationControls({
               <div>
                 <div className="text-[10px] text-content-secondary uppercase mb-1">Start</div>
                 <div className="text-sm text-content-on-dark font-mono">{formatTime(loopStart)}</div>
+                <div className="text-[10px] text-content-secondary/70 font-mono mt-0.5">
+                  {formatBarBeat(loopStart, bpm, timeSignature)}
+                </div>
               </div>
               <div>
                 <div className="text-[10px] text-content-secondary uppercase mb-1">End</div>
                 <div className="text-sm text-content-on-dark font-mono">{formatTime(loopEnd)}</div>
+                <div className="text-[10px] text-content-secondary/70 font-mono mt-0.5">
+                  {formatBarBeat(loopEnd, bpm, timeSignature)}
+                </div>
               </div>
             </div>
             <button
@@ -102,4 +110,21 @@ function formatTime(seconds) {
   const mins = Math.floor(seconds / 60);
   const secs = seconds % 60;
   return `${mins}:${secs.toFixed(2).padStart(5, '0')}`;
+}
+
+// Render a bar.beat label assuming t=0 is bar 1, beat 1. BPM + time
+// signature drive the grid; without BPM we can't compute bars so we
+// fall back to a dash.
+function formatBarBeat(seconds, bpm, timeSignature) {
+  if (seconds == null || !bpm || bpm <= 0) return '— · —';
+  const beatSeconds = 60 / bpm;
+  const beatsPerBar = (() => {
+    if (!timeSignature || typeof timeSignature !== 'string') return 4;
+    const top = parseInt(timeSignature.split('/')[0], 10);
+    return Number.isFinite(top) && top > 0 ? top : 4;
+  })();
+  const totalBeats = seconds / beatSeconds;
+  const bar = Math.floor(totalBeats / beatsPerBar) + 1;
+  const beatInBar = (totalBeats % beatsPerBar) + 1;
+  return `Bar ${bar} · Beat ${beatInBar.toFixed(2)}`;
 }

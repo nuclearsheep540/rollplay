@@ -11,6 +11,7 @@ import {
   faMagnifyingGlassPlus, faMagnifyingGlassMinus,
   faArrowsLeftRight, faArrowsUpDown,
   faArrowsLeftRightToLine,
+  faMagnet,
 } from '@fortawesome/free-solid-svg-icons';
 import { authFetch } from '@/app/shared/utils/authFetch';
 import AssetPicker from './AssetPicker';
@@ -506,11 +507,11 @@ function LoopEditor({ initialAssetId }) {
             value={timeSignature}
             onChange={(e) => setTimeSignature(e.target.value)}
             disabled={!selectedAsset}
-            className="text-sm font-mono font-bold bg-transparent border-none outline-none text-content-on-dark disabled:opacity-30 cursor-pointer"
-            style={{ color: 'inherit' }}
+            className="text-sm font-mono font-bold bg-transparent border-none outline-none disabled:opacity-30 cursor-pointer"
+            style={{ color: COLORS.smoke }}
           >
             {['2/4', '3/4', '4/4', '5/4', '6/8', '7/8', '12/8'].map(sig => (
-              <option key={sig} value={sig} style={{ color: COLORS.onyx }}>
+              <option key={sig} value={sig} style={{ color: COLORS.onyx, backgroundColor: COLORS.smoke }}>
                 {sig}
               </option>
             ))}
@@ -526,9 +527,13 @@ function LoopEditor({ initialAssetId }) {
           className={`flex items-center gap-1.5 px-2 py-1 rounded-sm text-xs font-medium transition-colors disabled:opacity-30 ${
             snapToBeats ? 'text-content-on-dark' : 'text-content-secondary hover:text-content-on-dark'
           }`}
-          title={snapToBeats ? 'Snap loop region to beats — ON' : 'Snap loop region to beats — OFF'}
+          title="Snap loop region to the beat grid"
         >
-          SNAP
+          <FontAwesomeIcon icon={faMagnet} className="text-[10px]" />
+          <span className="uppercase tracking-wider">Snap to grid:</span>
+          <span className="uppercase tracking-wider font-bold">
+            {snapToBeats ? 'ON' : 'OFF'}
+          </span>
         </button>
 
         <div className="w-px h-6 bg-border" />
@@ -698,23 +703,28 @@ function LoopEditor({ initialAssetId }) {
         {/* ── Loop Points Drawer ──────────────────────────────────────── */}
         {loopDrawerOpen && selectedAsset && (
           <div className="flex-shrink-0 border-t border-border-active bg-surface-secondary max-h-[50%] overflow-y-auto">
-            <div className="flex items-center justify-between px-4 py-2 border-b border-border">
-              <div className="text-[11px] font-bold uppercase tracking-wider text-content-on-dark">
-                Loop Points — {selectedAsset.filename}
+            {/* Header — constrained to match the body column */}
+            <div className="mx-auto w-full" style={{ maxWidth: 'min(80vw, 1200px)' }}>
+              <div className="flex items-center justify-between px-4 py-2 border-b border-border">
+                <div className="text-[11px] font-bold uppercase tracking-wider text-content-on-dark">
+                  Loop Points — {selectedAsset.filename}
+                </div>
+                <button
+                  onClick={() => setLoopDrawerOverride(false)}
+                  className="text-[10px] text-content-secondary hover:text-content-on-dark transition-colors uppercase tracking-wider"
+                >
+                  Close
+                </button>
               </div>
-              <button
-                onClick={() => setLoopDrawerOverride(false)}
-                className="text-[10px] text-content-secondary hover:text-content-on-dark transition-colors uppercase tracking-wider"
-              >
-                Close
-              </button>
             </div>
-            <div className="p-4">
+            <div className="p-4 mx-auto w-full" style={{ maxWidth: 'min(80vw, 1200px)' }}>
               <AudioWorkstationControls
                 loopMode={loopMode}
                 onLoopModeChange={setLoopMode}
                 loopStart={loopStart}
                 loopEnd={loopEnd}
+                bpm={bpm}
+                timeSignature={timeSignature}
                 onClearRegion={handleClearRegion}
                 isSaving={updateMutation.isPending}
                 saveSuccess={saveSuccess}
