@@ -71,6 +71,9 @@ export function useWorkshopMixEngine(preset) {
   const [mutedChannels, setMutedChannels] = useState({});
   const [soloedChannels, setSoloedChannels] = useState({});
   const [masterVolume, setMasterVolume] = useState(1.0);
+  // channelId → assetId currently being downloaded for that slot. Strip
+  // UI uses this to look up byte-level progress via useAssetDownloadProgress.
+  const [loadingAssetByChannel, setLoadingAssetByChannel] = useState({});
   const masterAnalysersRef = useRef(null);
 
   // Pending PATCH queue per asset → merged + debounced
@@ -157,6 +160,7 @@ export function useWorkshopMixEngine(preset) {
           setTrackStates(nextTrackStates);
           setTrackAnalysers(nextAnalysers);
           setChannelEffects(nextEffects);
+          setLoadingAssetByChannel({});
         }
         return;
       }
@@ -169,6 +173,10 @@ export function useWorkshopMixEngine(preset) {
         const asset = await fetchAssetById(slot.music_asset_id);
         if (!asset || cancelled) continue;
 
+        // Mark this channel as currently loading — strip UI subscribes
+        // to per-asset download progress via assetId and renders a bar.
+        setLoadingAssetByChannel(prev => ({ ...prev, [slot.channel_id]: asset.id }));
+
         // Decode buffer
         let buffer = null;
         try {
@@ -177,9 +185,21 @@ export function useWorkshopMixEngine(preset) {
           buffer = await engine.context.decodeAudioData(arrayBuffer);
         } catch (err) {
           console.warn(`Failed to decode asset ${asset.id}:`, err);
+          setLoadingAssetByChannel(prev => {
+            const next = { ...prev };
+            delete next[slot.channel_id];
+            return next;
+          });
           continue;
         }
         if (cancelled) return;
+
+        // Download + decode complete — clear loading state for this channel
+        setLoadingAssetByChannel(prev => {
+          const next = { ...prev };
+          delete next[slot.channel_id];
+          return next;
+        });
 
         const channel = engine.createChannel(slot.channel_id, CHANNEL_PRESETS.BGM);
         const engineConfig = assetToEngineConfig(asset);
@@ -438,6 +458,7 @@ export function useWorkshopMixEngine(preset) {
     soloedChannels,
     masterAnalysers: masterAnalysersRef,
     masterVolume,
+    loadingAssetByChannel,
     // Commands
     setTrackVolume,
     onVolumeCommit,

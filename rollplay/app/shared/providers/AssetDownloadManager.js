@@ -48,9 +48,15 @@ export function AssetDownloadProvider({ children }) {
     let inflightTotal = 0;
     let inflightLoaded = 0;
 
-    for (const entry of inflight.values()) {
+    // Per-cacheKey snapshot for components that want to show progress on
+    // a specific asset (e.g. a mixer channel strip showing 34% while its
+    // track is being downloaded). Frozen snapshot — consumers compare
+    // by reference-identity across renders, so we rebuild each tick.
+    const byKey = {};
+    for (const [key, entry] of inflight.entries()) {
       inflightTotal += entry.totalBytes;
       inflightLoaded += entry.loadedBytes;
+      byKey[key] = { loadedBytes: entry.loadedBytes, totalBytes: entry.totalBytes };
     }
 
     return {
@@ -62,6 +68,7 @@ export function AssetDownloadProvider({ children }) {
       totalCount: cached + inflight.size,
       cachedCount: cached,
       cachedSize: cachedSizeRef.current,
+      byKey,
     };
   }, []);
 
@@ -269,6 +276,25 @@ export function useAssetProgress() {
   const ctx = useContext(AssetDownloadContext);
   if (!ctx) throw new Error('useAssetProgress must be used within <AssetDownloadProvider>');
   return ctx.progress;
+}
+
+/**
+ * Hook for per-asset progress (byte-level).
+ *
+ * Pass the same `cacheKey` used when calling `manager.download(...)` — in
+ * practice, this is the `assetId` everywhere in the codebase. Returns the
+ * current `{ loadedBytes, totalBytes }` for that asset while it's in
+ * flight, or `null` when not currently downloading (either idle or
+ * already cached).
+ *
+ * Re-renders are driven by the same rAF-throttled progress state the
+ * global indicator uses, so this is cheap even with many subscribers.
+ */
+export function useAssetDownloadProgress(cacheKey) {
+  const ctx = useContext(AssetDownloadContext);
+  if (!ctx) throw new Error('useAssetDownloadProgress must be used within <AssetDownloadProvider>');
+  if (!cacheKey) return null;
+  return ctx.progress.byKey?.[cacheKey] ?? null;
 }
 
 /**

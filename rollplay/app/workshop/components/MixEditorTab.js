@@ -127,6 +127,7 @@ export default function MixEditorTab({ selectedPresetId, onSelectPreset }) {
               soloedChannels={mix.soloedChannels}
               setChannelMuted={mix.setChannelMuted}
               setChannelSoloed={mix.setChannelSoloed}
+              loadingAssetByChannel={mix.loadingAssetByChannel}
               masterAnalysers={mix.masterAnalysers}
               masterVolume={mix.masterVolume}
               onMasterVolumeChange={mix.onMasterVolumeChange}

@@ -47,6 +47,10 @@ export function MixerStrips({
   masterVolume = 1.0,
   onMasterVolumeChange,
   onMasterVolumeCommit,
+  // Per-channel download state — assetId currently downloading, or undefined.
+  // When set, the channel strip renders a byte-level progress overlay that
+  // subscribes to AssetDownloadManager for updates.
+  loadingAssetByChannel = {},
 }) {
   const bgmChannels = Object.keys(trackStates)
     .filter(id => id.startsWith('audio_channel_'))
@@ -154,6 +158,7 @@ export function MixerStrips({
                   isSoloed={soloedChannels[trackId] || false}
                   onMuteToggle={() => setChannelMuted?.(trackId, !mutedChannels[trackId])}
                   onSoloToggle={() => setChannelSoloed?.(trackId, !soloedChannels[trackId])}
+                  loadingAssetId={loadingAssetByChannel[trackId] || null}
                 />
 
                 {/* EQ strip — shown when EQ is toggled on */}

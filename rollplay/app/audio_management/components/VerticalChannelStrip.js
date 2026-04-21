@@ -8,6 +8,7 @@ import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { faPlay, faPause, faStop } from '@fortawesome/free-solid-svg-icons';
 import { PlaybackState } from '../types';
 import { MAX_VOLUME } from '../engine/constants';
+import { useAssetDownloadProgress } from '@/app/shared/providers/AssetDownloadManager';
 
 // ── Fader taper ────────────────────────────────────────────────────────────
 // The slider is dB-linear: equal travel = equal dB change. Gain nodes expect
@@ -92,6 +93,9 @@ export default function VerticalChannelStrip({
   reverbPreset = 'room',
   onReverbPresetChange,
   trackId,
+  // Asset currently downloading for this strip — when set, the strip
+  // renders a progress overlay driven by the shared download manager.
+  loadingAssetId = null,
 }) {
   const {
     playbackState = PlaybackState.STOPPED,
@@ -116,6 +120,10 @@ export default function VerticalChannelStrip({
   // Latching clip indicator — only rendered on the master strip, but the
   // detection runs in the meter tick. Stays lit until the user clicks.
   const [clipped, setClipped] = useState(false);
+
+  // Byte-level progress for the asset currently downloading into this
+  // strip. Null when no download is in flight for this channel.
+  const downloadProgress = useAssetDownloadProgress(loadingAssetId);
 
   // Cleanup debounce on unmount
   useEffect(() => {
@@ -291,12 +299,42 @@ export default function VerticalChannelStrip({
     .filter(db => db >= FADER_DB_MIN && db <= FADER_DB_MAX)
     .map(db => ({ db, pct: ((db - FADER_DB_MIN) / FADER_DB_RANGE) * 100 }));
 
+  // Download overlay: dim the strip and render a progress bar while the
+  // channel's asset is downloading. Derived pct falls back to a
+  // staged/indeterminate bar when totalBytes is unknown.
+  const downloadPct = downloadProgress && downloadProgress.totalBytes > 0
+    ? Math.min(100, (downloadProgress.loadedBytes / downloadProgress.totalBytes) * 100)
+    : null;
+
   return (
-    <div className={`flex flex-col items-center h-full ${stripWidth} flex-shrink-0 gap-1`}>
+    <div className={`relative flex flex-col items-center h-full ${stripWidth} flex-shrink-0 gap-1`}>
       {/* Strip type label */}
       <div className="w-full text-center text-xs font-bold py-1 bg-gray-700 text-gray-300">
         {label}
       </div>
+
+      {/* Download progress overlay — covers the strip while the asset is
+          being downloaded. Does not block pointer events on the controls
+          beneath (they're disabled anyway by channelDisabled until the
+          trackState is populated). */}
+      {downloadProgress && (
+        <div className="absolute inset-0 z-10 flex flex-col items-center justify-center gap-2 bg-black/60 pointer-events-none rounded-sm">
+          <div className="text-[10px] font-mono text-white/80 uppercase tracking-wider">
+            Loading
+          </div>
+          <div className="w-[70%] h-1 bg-white/20 rounded-full overflow-hidden">
+            <div
+              className="h-full bg-green-500 transition-[width] duration-150 ease-linear"
+              style={{ width: downloadPct != null ? `${downloadPct}%` : '33%' }}
+            />
+          </div>
+          {downloadPct != null && (
+            <div className="text-[10px] font-mono text-white/60">
+              {Math.round(downloadPct)}%
+            </div>
+          )}
+        </div>
+      )}
 
       {/* All controls — single flex-col, one gap-1 rule governs all spacing */}
       <div className="w-full px-1 flex flex-col gap-1">
