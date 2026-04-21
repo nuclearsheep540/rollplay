@@ -9,13 +9,17 @@ import { useLayoutEffect, useRef, useState } from 'react'
 import { TabGroup, TabList, Tab } from '@headlessui/react'
 import { COLORS } from '@/app/styles/colorTheme'
 
-// Active-tab highlight — thicker than the base rule (3 px vs 1 px)
-// *and* lighter (graphite vs onyx), so it reads as a deliberate accent
-// rather than a random brighter spot. Width is measured from the active
-// label at runtime (see `measure()` below) so the highlight tracks the
-// label's actual rendered width.
+// Active-tab highlight — thicker than the base rule (3 px vs 2 px)
+// and painted as a gold-to-ink gradient, so the centre glows against
+// the otherwise monochrome onyx palette and the ends blend back into
+// the base rule. Width is measured from the active label at runtime
+// (see `measure()` below) so the highlight tracks the label's actual
+// rendered width.
 const HIGHLIGHT_THICKNESS = 3
-const HIGHLIGHT_COLOR = COLORS.graphite
+// Warm ornamental gold — matches the tone we used when the nav had a
+// gilded character. Flanked by the onyx ink at each end so the
+// highlight "fades into" the base rule.
+const HIGHLIGHT_GOLD = '#b08a3e'
 
 // Ornamentation tone — matches the page's primary dark text colour
 // (onyx) so the nav reads as part of the type system rather than a
@@ -85,13 +89,17 @@ export default function TabNav({ tabs, activeTab, onTabChange }) {
               inactive diamond's page-bg fill covers the rule where it
               sits, creating the visual break. */}
           <div
-            className="absolute h-[1px] pointer-events-none"
+            className="absolute h-[2px] pointer-events-none"
             style={{
               left: 0,
               right: 0,
-              // pb-6 = 1.5rem; + 9 px lifts the line to the diamond
-              // centre (18 px diamond, half = 9).
-              bottom: 'calc(1.5rem + 9px)',
+              // pb-6 = 1.5rem; + 8 px places the 2 px rule's centre on
+              // the diamond centre (18 px diamond, half = 9 → centre is
+              // 9 px above the diamond's outer bottom, which equals the
+              // TabList content-box bottom = 1.5rem + 0 px; for a 2 px
+              // rule, we offset by 9 − 1 = 8 so the rule's midline
+              // lands exactly there).
+              bottom: 'calc(1.5rem + 8px)',
               backgroundColor: INK,
               maskImage:
                 'linear-gradient(to right, transparent 0%, black 6%, black 94%, transparent 100%)',
@@ -101,19 +109,20 @@ export default function TabNav({ tabs, activeTab, onTabChange }) {
           />
 
           {/* Active-tab highlight — positioned + sized from a runtime
-              measurement of the active label. `left` and `width` both
-              transition, so switching tabs produces a slide + stretch
-              between positions. Soft-faded at the ends to echo the
-              base rule's tapered terminals. */}
+              measurement of the active label. Soft-faded at the ends
+              to echo the base rule's tapered terminals. */}
           <div
             aria-hidden="true"
-            className="absolute pointer-events-none transition-[left,width] duration-300 ease-out"
+            className="absolute pointer-events-none"
             style={{
               left: `${highlight.left}px`,
               width: `${highlight.width}px`,
-              bottom: `calc(1.5rem + 9.5px - ${HIGHLIGHT_THICKNESS / 2}px)`,
+              bottom: `calc(1.5rem + 9px - ${HIGHLIGHT_THICKNESS / 2}px)`,
               height: `${HIGHLIGHT_THICKNESS}px`,
-              backgroundColor: HIGHLIGHT_COLOR,
+              // Gold glow in the middle, ink at the ends — the bar
+              // "lights up" at the label's centre and blends back into
+              // the onyx base rule as it approaches the label's edges.
+              background: `linear-gradient(to right, ${INK} 0%, ${HIGHLIGHT_GOLD} 25%, ${HIGHLIGHT_GOLD} 75%, ${INK} 100%)`,
               maskImage:
                 'linear-gradient(to right, transparent 0%, black 12%, black 88%, transparent 100%)',
               WebkitMaskImage:
@@ -125,7 +134,7 @@ export default function TabNav({ tabs, activeTab, onTabChange }) {
             {tabs.map((tab, i) => (
               <Tab
                 key={tab.id}
-                className="group relative z-10 flex flex-col items-center gap-3 outline-none cursor-pointer"
+                className="group relative z-10 flex flex-col items-center gap-2.5 outline-none cursor-pointer"
               >
                 {({ selected, hover, focus }) => {
                   const isActiveLike = selected
@@ -136,47 +145,48 @@ export default function TabNav({ tabs, activeTab, onTabChange }) {
                           0.75 inactive, 0.9 hover/focus, 1 active. */}
                       <span
                         ref={(el) => { labelRefs.current[i] = el }}
-                        className="text-lg font-[family-name:var(--font-metamorphous)] uppercase tracking-[0.22em] transition-colors duration-200"
+                        className="text-xl font-[family-name:var(--font-metamorphous)] uppercase transition-colors duration-200"
                         style={{
-                          color: INK,
-                          opacity: isActiveLike ? 1 : (hover || focus) ? 0.9 : 0.75,
+                          // Active tab reads in onyx (full ink);
+                          // everything else drops to graphite, a
+                          // warm mid-grey. Hovering an inactive tab
+                          // intensifies to full opacity so the user
+                          // still gets clear interactive feedback.
+                          color: isActiveLike ? INK : COLORS.graphite,
+                          opacity: isActiveLike ? 1 : (hover || focus) ? 1 : 0.85,
                           // Metamorphous ships a single weight (400). To
                           // nudge the visual weight up without loading
-                          // another font file, paint a thin stroke in the
-                          // same ink — reads as a half-weight step toward
-                          // semibold. Kept subtle (0.4 px) so letterforms
-                          // don't lose their hand-drawn quality.
-                          WebkitTextStroke: `0.4px ${INK}`,
+                          // another font file, paint a thin stroke in
+                          // the same colour as the fill — reads as a
+                          // half-weight step toward semibold. Kept
+                          // subtle (0.4 px) so letterforms don't lose
+                          // their hand-drawn quality.
+                          WebkitTextStroke: `0.4px ${isActiveLike ? INK : COLORS.graphite}`,
                         }}
                       >
                         {tab.label}
                       </span>
-                      {/* Diamond pip sits on the rule. Inactive:
-                          stroke-only rhombus filled with page bg (covers
-                          the rule underneath). Active: filled onyx with a
-                          page-bg inner jewel-dot — reads as a carved
-                          nail-head / stamped pip. Hover/focus gets a
-                          subtle scale bump. */}
+                      {/* Diamond pip sits on the rule — hollow
+                          rhombus filled with page bg (covers the
+                          rule underneath). The active tab gets a
+                          small onyx centre-dot; all other states are
+                          plain. Same colours + size in every state —
+                          only the dot presence + highlight-line
+                          gradient differentiate selected from not. */}
                       <svg
                         width="18"
                         height="18"
                         viewBox="0 0 22 22"
-                        className="transition-transform duration-200 ease-out"
-                        style={{
-                          transform: isActiveLike
-                            ? 'scale(1.35)'
-                            : (hover || focus) ? 'scale(1.1)' : 'scale(1)',
-                        }}
                       >
                         <polygon
                           points="11,1.5 20.5,11 11,20.5 1.5,11"
-                          fill={isActiveLike ? INK : PAGE_BG}
+                          fill={PAGE_BG}
                           stroke={INK}
                           strokeWidth="2"
                           strokeLinejoin="miter"
                         />
                         {isActiveLike && (
-                          <circle cx="11" cy="11" r="1.8" fill={PAGE_BG} />
+                          <circle cx="11" cy="11" r="1.8" fill={INK} />
                         )}
                       </svg>
                     </>
