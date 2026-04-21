@@ -630,7 +630,7 @@ export default function CampaignManager({ user, onExpandedChange, inviteCampaign
       left: 0,
       width: '100%',
       height: 350,
-      borderColor: THEME.borderDefault,
+      outlineColor: THEME.borderDefault,
       duration,
       ease,
     })
@@ -676,7 +676,7 @@ export default function CampaignManager({ user, onExpandedChange, inviteCampaign
         left: leftOffset,
         width: viewportWidth,
         height: 600,
-        borderColor: THEME.borderActive,
+        outlineColor: THEME.borderActive,
         duration,
         ease,
         overwrite: 'auto',
@@ -715,7 +715,7 @@ export default function CampaignManager({ user, onExpandedChange, inviteCampaign
       left: 0,
       width: '100%',
       height: 350,
-      borderColor: INVITED_BORDER_DEFAULT,
+      outlineColor: INVITED_BORDER_DEFAULT,
       duration,
       ease,
     })
@@ -750,7 +750,7 @@ export default function CampaignManager({ user, onExpandedChange, inviteCampaign
         left: leftOffset,
         width: viewportWidth,
         height: 600,
-        borderColor: THEME.borderActive,
+        outlineColor: THEME.borderActive,
         duration,
         ease,
         overwrite: 'auto',
@@ -835,9 +835,9 @@ export default function CampaignManager({ user, onExpandedChange, inviteCampaign
         <div
           className="space-y-4"
           style={{
-            paddingLeft: selectedInvitedCampaign ? '0' : 'clamp(0.5rem, 2.5vw, 3.5rem)',
-            paddingRight: selectedInvitedCampaign ? '0' : 'clamp(0.5rem, 2.5vw, 3.5rem)',
-            transition: isResizing ? 'none' : 'padding 200ms ease-in-out'
+            // Constant padding — same rationale as the main section.
+            paddingLeft: 'clamp(0.5rem, 2.5vw, 3.5rem)',
+            paddingRight: 'clamp(0.5rem, 2.5vw, 3.5rem)',
           }}
         >
           {/* Only show header when no invited campaign is selected */}
@@ -868,7 +868,7 @@ export default function CampaignManager({ user, onExpandedChange, inviteCampaign
                     <HeroBackground
                       ref={invitedCampaignCardRef}
                       campaign={campaign}
-                      className="rounded-sm overflow-visible cursor-pointer border-2"
+                      className="rounded-sm overflow-visible cursor-pointer"
                       data-invited-card={campaign.id}
                       style={{
                         position: 'relative',
@@ -876,7 +876,10 @@ export default function CampaignManager({ user, onExpandedChange, inviteCampaign
                         width: '100%',
                         height: '350px',
                         backgroundColor: COLORS.carbon,
-                        borderColor: '#16a34a',
+                        // Outline not border — see main-tile comment
+                        // for why (prevents 2 px content shift).
+                        outline: '2px solid',
+                        outlineColor: '#16a34a',
                       }}
                       onClick={() => toggleInvitedCampaignDetails(campaign)}
                     >
@@ -1102,10 +1105,13 @@ export default function CampaignManager({ user, onExpandedChange, inviteCampaign
       <div
         className="space-y-4"
         style={{
-          paddingLeft: selectedCampaign ? '0' : 'clamp(0.5rem, 2.5vw, 3.5rem)',
-          paddingRight: selectedCampaign ? '0' : 'clamp(0.5rem, 2.5vw, 3.5rem)',
-          // Disable padding transition during window resize for instant updates
-          transition: isResizing ? 'none' : 'padding 200ms ease-in-out'
+          // Constant padding in both states. The card itself bleeds
+          // full-viewport via GSAP on expand, so we don't need to
+          // transition the outer padding to zero — and doing so caused
+          // a subtle bleed miscalc because GSAP read `wrapperRect.left`
+          // while the CSS padding transition was still in flight.
+          paddingLeft: 'clamp(0.5rem, 2.5vw, 3.5rem)',
+          paddingRight: 'clamp(0.5rem, 2.5vw, 3.5rem)',
         }}
       >
         <div className="space-y-4">
@@ -1144,14 +1150,22 @@ export default function CampaignManager({ user, onExpandedChange, inviteCampaign
                     ref={campaignCardRef}
                     campaign={campaign}
                     fallback="/campaign-tile-bg.png"
-                    className="rounded-sm overflow-visible cursor-pointer border-2"
+                    className="rounded-sm overflow-visible cursor-pointer"
                     data-campaign-card={campaign.id}
                     style={{
                       position: 'relative',
                       left: 0,
                       width: '100%',
                       height: '350px',
-                      borderColor: THEME.borderDefault,
+                      // Outline sits outside the content-box, so the
+                      // card's inner dimensions stay exactly equal to
+                      // its width/height. Using a border (which is
+                      // inside the content-box under box-sizing:
+                      // border-box) created a 2 px content shift
+                      // between the 1410 px collapsed width and the
+                      // 100 vw expanded width.
+                      outline: '2px solid',
+                      outlineColor: THEME.borderDefault,
                     }}
                     onClick={() => toggleCampaignDetails(campaign)}
                   >
