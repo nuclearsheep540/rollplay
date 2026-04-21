@@ -644,12 +644,6 @@ export default function CampaignManager({ user, onExpandedChange, inviteCampaign
 
       `}</style>
 
-      {/* Header */}
-      <div className="mb-8">
-        <h1 className="text-4xl font-bold font-[family-name:var(--font-metamorphous)]" style={{color: THEME.textBold}}>Campaign Management</h1>
-        <p className="mt-2" style={{color: THEME.textPrimary}}>Organize your adventures and game sessions</p>
-      </div>
-
       {/* Error Message */}
       {(error || queryError) && (
         <div className="px-4 py-3 rounded-sm border" style={{backgroundColor: '#991b1b', borderColor: '#dc2626', color: '#fca5a5'}}>
@@ -978,7 +972,13 @@ export default function CampaignManager({ user, onExpandedChange, inviteCampaign
                   className="w-full relative"
                   style={{
                     marginBottom: isSelected ? '0' : '3rem',
-                    maxWidth: isSelected ? 'none' : '1600px'
+                    // Cap collapsed tile width to 1410 px and centre
+                    // horizontally. When a tile is selected/expanded it
+                    // fills the parent so the hero background can bleed
+                    // full-viewport, so no cap + no auto margins then.
+                    maxWidth: isSelected ? 'none' : '1410px',
+                    marginLeft: isSelected ? undefined : 'auto',
+                    marginRight: isSelected ? undefined : 'auto',
                   }}
                 >
                   {/* Campaign Card with expanding background */}
@@ -1540,7 +1540,10 @@ export default function CampaignManager({ user, onExpandedChange, inviteCampaign
 
             {/* Create Campaign Template Tile - Only render when no campaign is selected */}
             {!selectedCampaign && (
-              <div className="w-full" style={{ maxWidth: '1600px' }}>
+              <div
+                className="w-full"
+                style={{ maxWidth: '1410px', marginLeft: 'auto', marginRight: 'auto' }}
+              >
                 <button
                   onClick={() => { setCampaignForm({ title: '', description: '', heroImage: '/campaign-tile-bg.png', heroImageAssetId: null, sessionName: '', editingCampaign: null }); setCampaignFormOpen(true) }}
                   className="aspect-[16/4] w-full relative rounded-sm overflow-hidden"
