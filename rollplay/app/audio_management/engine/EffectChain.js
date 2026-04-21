@@ -83,13 +83,29 @@ export default class EffectChain {
       .filter(name => EFFECT_REGISTRY[name] && this._getEffectType(name) === 'insert')
       .map(name => this._createEffect(name));
 
+    // Each insert effect's `connect(inputNode, outputNode)` hard-wires its
+    // filter to the given outputNode. If we chain by passing
+    // `_postInsertNode` as every effect's outputNode, earlier effects
+    // leak a direct wire to `_postInsertNode` in parallel with the
+    // serial chain — postInsert sums the signal twice, producing
+    // ~+6 dB of gain and an incorrect combined filter response.
+    //
+    // Fix: give every non-terminal insert a dedicated intermediate gain
+    // node as its outputNode. Only the last insert connects directly to
+    // `_postInsertNode`. Strictly serial: input → insert1 → g1 →
+    // insert2 → g2 → ... → postInsertNode. Intermediate gains are
+    // unity passthroughs (no DSP cost) and are tracked for teardown.
+    this._insertStageNodes = [];
     let prevOutput = this._inputNode;
-    for (const effect of inserts) {
-      effect.connect(prevOutput, this._postInsertNode);
-      // For chained inserts: each insert takes from prev output node.
-      // Since BiquadFilter.connect(output) works additively, we need to
-      // wire them sequentially through their internal nodes.
-      prevOutput = effect.node; // Use the filter's output directly
+    for (let i = 0; i < inserts.length; i++) {
+      const effect = inserts[i];
+      const isLast = i === inserts.length - 1;
+      const stageOutput = isLast
+        ? this._postInsertNode
+        : ctx.createGain();
+      effect.connect(prevOutput, stageOutput);
+      if (!isLast) this._insertStageNodes.push(stageOutput);
+      prevOutput = stageOutput;
     }
 
     // If no inserts, connect input directly to postInsert
@@ -351,6 +367,10 @@ export default class EffectChain {
       this._postInsertNode.disconnect();
       this._gainNode.disconnect();
       this._muteGain.disconnect();
+      for (const stage of this._insertStageNodes ?? []) {
+        try { stage.disconnect(); } catch (_) {}
+      }
+      this._insertStageNodes = [];
     } catch (_) {}
 
     this._ctx = null;

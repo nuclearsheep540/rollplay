@@ -183,7 +183,11 @@ export default function AudioMixerPanel({
           asset.effect_reverb_enabled !== undefined
         )
           ? {
-              eq: asset.effect_eq_enabled || false,
+              // Match channelStateAdapter's eq derivation: respect an
+              // explicit true/false, but treat unset as "EQ active when
+              // HPF or LPF is on" so assets configured pre-EQ-flag don't
+              // silently lose their filters during preset load.
+              eq: asset.effect_eq_enabled ?? !!(asset.effect_hpf_enabled || asset.effect_lpf_enabled),
               hpf: asset.effect_hpf_enabled || false,
               hpf_mix: asset.effect_hpf_mix ?? DEFAULT_EFFECTS.hpf.mix,
               lpf: asset.effect_lpf_enabled || false,
@@ -200,16 +204,24 @@ export default function AudioMixerPanel({
           loadAssetIntoChannel(channelId, asset);
         }
 
-        ops.push({
+        // Derive loop_mode so the batch op carries the full loop intent.
+        // `looping` (boolean) is kept for legacy receivers but is now
+        // driven off the mode — the engine uses loop_mode as truth.
+        const loopMode = asset.loop_mode ?? ((asset.default_looping ?? true) ? 'full' : 'off');
+        const op = {
           trackId: channelId,
           operation: 'load',
           filename: asset.filename,
           asset_id: asset.id,
           s3_url: asset.s3_url,
           volume: asset.default_volume ?? 0.8,
-          looping: asset.default_looping ?? true,
+          looping: loopMode !== 'off',
+          loop_mode: loopMode,
           effects,
-        });
+        };
+        if (asset.loop_start != null) op.loop_start = asset.loop_start;
+        if (asset.loop_end != null) op.loop_end = asset.loop_end;
+        ops.push(op);
       } else {
         // Channel not in this preset — mirror handleBgmClear: reset local
         // state and tell the backend to clear the slot.

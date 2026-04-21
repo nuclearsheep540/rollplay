@@ -57,6 +57,7 @@ const WaveformViewer = forwardRef(function WaveformViewer({
   const onSeekRef = useRef(onSeek);
   const snapToBeatsRef = useRef(snapToBeats);
   const bpmRef = useRef(bpm);
+  const timeSignatureRef = useRef(timeSignature);
   // Bumped at the end of the build effect to signal that the WaveSurfer
   // instance + regions plugin are ready.
   const [pluginBuildId, setPluginBuildId] = useState(0);
@@ -66,6 +67,7 @@ const WaveformViewer = forwardRef(function WaveformViewer({
   useEffect(() => { onSeekRef.current = onSeek; }, [onSeek]);
   useEffect(() => { snapToBeatsRef.current = snapToBeats; }, [snapToBeats]);
   useEffect(() => { bpmRef.current = bpm; }, [bpm]);
+  useEffect(() => { timeSignatureRef.current = timeSignature; }, [timeSignature]);
 
   useImperativeHandle(ref, () => ({
     setTime: (seconds) => {
@@ -239,6 +241,10 @@ const WaveformViewer = forwardRef(function WaveformViewer({
   }, [regionEditEnabled, regionColor, pluginBuildId]);
 
   // ── Beat / bar grid ────────────────────────────────────────────────────
+  // Reads bpm / timeSignature from refs — the WaveSurfer `redraw` and
+  // `zoom` handlers are registered in the build effect (deps:
+  // [audioBuffer]) so they close over an older drawGrid. Using refs
+  // guarantees the latest values even when the handler closure is stale.
   function drawGrid() {
     const svg = gridSvgRef.current;
     const ws = wavesurferRef.current;
@@ -247,8 +253,10 @@ const WaveformViewer = forwardRef(function WaveformViewer({
     // Clear existing contents
     while (svg.firstChild) svg.removeChild(svg.firstChild);
 
+    const bpmValue = bpmRef.current;
+    const timeSig = timeSignatureRef.current;
     const duration = ws.getDuration ? ws.getDuration() : (audioBuffer?.duration ?? 0);
-    if (!bpm || bpm <= 0 || !duration || duration <= 0) return;
+    if (!bpmValue || bpmValue <= 0 || !duration || duration <= 0) return;
 
     const wrapper = typeof ws.getWrapper === 'function' ? ws.getWrapper() : null;
     if (!wrapper) return;
@@ -261,8 +269,8 @@ const WaveformViewer = forwardRef(function WaveformViewer({
     svg.setAttribute('height', totalHeight);
 
     const pxPerSec = totalWidth / duration;
-    const beatSeconds = 60 / bpm;
-    const beatsPerBar = parseBeatsPerBar(timeSignature);
+    const beatSeconds = 60 / bpmValue;
+    const beatsPerBar = parseBeatsPerBar(timeSig);
     const totalBeats = Math.ceil(duration / beatSeconds);
 
     // Alternate bar shading first (behind lines)
