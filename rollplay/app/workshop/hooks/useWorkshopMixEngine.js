@@ -8,7 +8,7 @@ import { AudioEngine } from '@/app/audio_management/engine';
 import { CHANNEL_PRESETS, DEFAULT_EFFECTS as ENGINE_DEFAULT_EFFECTS } from '@/app/audio_management/engine/presets';
 import { DEFAULT_VOLUME } from '@/app/audio_management/engine/constants';
 import { assetToEngineConfig, engineToApiPayload } from '@/app/audio_management/adapters/assetAdapter';
-import { BGM_CHANNELS, DEFAULT_EFFECTS, PlaybackState } from '@/app/audio_management/types';
+import { BGM_CHANNELS, PlaybackState } from '@/app/audio_management/types';
 import { useAssetManager } from '@/app/shared/providers/AssetDownloadManager';
 import { authFetch } from '@/app/shared/utils/authFetch';
 
@@ -359,12 +359,17 @@ export function useWorkshopMixEngine(preset) {
     engine.updateMuteSoloState();
   }, [mutedChannels, soloedChannels]);
 
-  // ── Master volume (local listening only — not persisted) ───────────────
+  // ── Master volume ───────────────────────────────────────────────────────
+  // Workshop has no broadcast/local split, so we route to the broadcast
+  // node (_masterGain) rather than _localGain. This matters for metering:
+  // _masterMeter sits *between* the two gain stages, so only _masterGain
+  // changes are reflected on the master RMS meter. Using _localGain would
+  // attenuate the audible signal without moving the needle.
   const onMasterVolumeChange = useCallback((v) => {
     setMasterVolume(v);
-    engineRef.current?.setLocalVolume?.(v);
+    engineRef.current?.setMasterVolume?.(v);
   }, []);
-  const onMasterVolumeCommit = useCallback(() => { /* no-op: local only */ }, []);
+  const onMasterVolumeCommit = useCallback(() => { /* no-op: Workshop master isn't persisted */ }, []);
 
   // ── Global transport (play all / stop all) ──────────────────────────────
   const onPlayAll = useCallback(() => {

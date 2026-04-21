@@ -7,15 +7,39 @@ import React, { useRef, useEffect } from 'react';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { faPlay, faPause, faStop } from '@fortawesome/free-solid-svg-icons';
 import { PlaybackState } from '../types';
+import { MAX_VOLUME } from '../engine/constants';
 
-// RMS → dB → percentage for meter display
-const DB_FLOOR = -60;
+// ── Meter scaling ──────────────────────────────────────────────────────────
+// Floor tightened from −60 → −48 dB so the meter visually distinguishes
+// "moderately hot" from "pinning" — at −60 a signal at −20 dB still filled
+// two-thirds of the bar, which made all meters look hot regardless of level.
+const DB_FLOOR = -48;
 const DB_CEIL = 0;
 function rmsToPct(rms) {
   if (rms < 0.001) return 0;
   const dB = 20 * Math.log10(rms);
   const clamped = Math.max(DB_FLOOR, Math.min(DB_CEIL, dB));
   return ((clamped - DB_FLOOR) / (DB_CEIL - DB_FLOOR)) * 100;
+}
+
+// ── Fader taper ────────────────────────────────────────────────────────────
+// The slider is dB-linear: equal travel = equal dB change. Gain nodes expect
+// linear amplitude, so we convert on the boundary only.
+// Range is −60 dB → MAX_VOLUME (in dB). The floor (−60 dB = gain ≈ 0.001) is
+// effectively silent; the ceiling is whatever MAX_VOLUME permits.
+const FADER_DB_MIN = -60;
+const FADER_DB_MAX = 20 * Math.log10(MAX_VOLUME); // ≈ +2.28 dB at MAX_VOLUME=1.3
+const FADER_DB_RANGE = FADER_DB_MAX - FADER_DB_MIN;
+
+function linearToDb(linear) {
+  if (!linear || linear <= 0) return FADER_DB_MIN;
+  const dB = 20 * Math.log10(linear);
+  return Math.max(FADER_DB_MIN, Math.min(FADER_DB_MAX, dB));
+}
+
+function dbToLinear(dB) {
+  if (dB <= FADER_DB_MIN) return 0;
+  return Math.min(MAX_VOLUME, Math.pow(10, dB / 20));
 }
 
 // Helper: format remaining seconds → -MM:SS
@@ -78,6 +102,7 @@ export default function VerticalChannelStrip({
   const meterRRef = useRef(null);
   const lastColorLRef = useRef(null);
   const lastColorRRef = useRef(null);
+  const dbReadoutRef = useRef(null);
   const rafRef = useRef(null);
   const volumeDebounceTimer = useRef(null);
 
@@ -118,6 +143,10 @@ export default function VerticalChannelStrip({
       }
     };
 
+    // Throttle dB readout text updates to ~10 Hz — any faster and the
+    // number is unreadable, plus fewer DOM writes.
+    let readoutFrame = 0;
+
     const tick = () => {
       rafRef.current = requestAnimationFrame(tick);
 
@@ -131,6 +160,18 @@ export default function VerticalChannelStrip({
 
       applyMeter(meterLRef, lastColorLRef, rmsToPct(smoothL));
       applyMeter(meterRRef, lastColorRRef, rmsToPct(smoothR));
+
+      // Numeric dB readout — peak of L/R, throttled to ~10 Hz. Useful for
+      // debugging fader/meter/taper accuracy against the pip labels.
+      if (dbReadoutRef.current && (++readoutFrame % 6) === 0) {
+        const peak = Math.max(smoothL, smoothR);
+        if (peak < 0.001) {
+          dbReadoutRef.current.textContent = '-∞';
+        } else {
+          const dB = 20 * Math.log10(peak);
+          dbReadoutRef.current.textContent = dB.toFixed(1);
+        }
+      }
     };
 
     tick();
@@ -161,19 +202,17 @@ export default function VerticalChannelStrip({
   // All controls always render for layout consistency — visibility applied per-row.
   // This ensures the fader container is always the same height, so pip lines align.
   const showMeters = !isEffect || !!(analysers?.left && analysers?.right);
-  const faderMax = '1.3';
-  const faderMaxNum = 1.3;
 
-  // dB pip marks — position as percentage from bottom of fader
-  const dbPips = [
-    { db: 0, gain: 1.0 },
-    { db: -3, gain: 0.708 },
-    { db: -6, gain: 0.501 },
-    { db: -10, gain: 0.316 },
-    { db: -20, gain: 0.1 },
-  ]
-    .map(({ db, gain }) => ({ db, pct: (gain / faderMaxNum) * 100 }))
-    .filter(({ pct }) => pct <= 100 && pct >= 0);
+  // Fader expresses dB directly. Slider handle position = dB-linear so the
+  // pip labels sit at their true fractional dB position — no more
+  // "everything below −20 dB squashed into 8% of the strip."
+  const faderDb = linearToDb(volume);
+
+  // dB pip marks — position as percentage from bottom of fader, equal-
+  // spaced in dB. Filtered to anything within the slider's dB range.
+  const dbPips = [0, -3, -6, -10, -20, -30, -40]
+    .filter(db => db >= FADER_DB_MIN && db <= FADER_DB_MAX)
+    .map(db => ({ db, pct: ((db - FADER_DB_MIN) / FADER_DB_RANGE) * 100 }));
 
   return (
     <div className={`flex flex-col items-center h-full ${stripWidth} flex-shrink-0 gap-1`}>
@@ -335,22 +374,32 @@ export default function VerticalChannelStrip({
             </div>
           ))}
         </div>
-        {/* Fader — absolutely positioned over the meters, thumb overlaps them */}
+        {/* Fader — absolutely positioned over the meters, thumb overlaps them.
+            Slider value is dB; converted to linear gain on the way out so
+            callers (engine, PATCH adapter) still receive amplitude. */}
         <input
           type="range"
-          min="0.0"
-          max={faderMax}
-          step="0.01"
-          value={volume}
-          onChange={(e) => handleVolumeChange(parseFloat(e.target.value))}
-          onMouseUp={(e) => handleVolumeRelease(parseFloat(e.target.value))}
-          onTouchEnd={(e) => handleVolumeRelease(parseFloat(e.target.value))}
+          min={FADER_DB_MIN}
+          max={FADER_DB_MAX}
+          step="0.1"
+          value={faderDb}
+          onChange={(e) => handleVolumeChange(dbToLinear(parseFloat(e.target.value)))}
+          onMouseUp={(e) => handleVolumeRelease(dbToLinear(parseFloat(e.target.value)))}
+          onTouchEnd={(e) => handleVolumeRelease(dbToLinear(parseFloat(e.target.value)))}
           className="vertical-fader"
         />
       </div>
 
       {/* Footer — fixed height across all strip types for fader alignment */}
-      <div className="w-full text-center px-1 pb-1 h-[28px] flex flex-col justify-end">
+      <div className="w-full text-center px-1 pb-1 h-[28px] flex flex-col justify-end gap-0.5">
+        {/* dB readout — peak of L/R meters, ~10 Hz update. Hidden on strips
+            without meters (empty channels). */}
+        {showMeters && (
+          <div className="text-[9px] leading-none text-white/50 font-mono">
+            <span ref={dbReadoutRef}>-∞</span>
+            <span className="text-white/30"> dB</span>
+          </div>
+        )}
         {stripType === 'channel' && filename && (
           <div className="text-xs text-gray-200 font-mono">
             {formatTimeRemaining(remaining != null ? remaining : duration - currentTime)}
