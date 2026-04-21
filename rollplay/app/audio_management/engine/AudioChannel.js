@@ -84,8 +84,6 @@ export default class AudioChannel extends EventEmitter {
   get muted() { return this._muted; }
   get soloed() { return this._soloed; }
   get effectChain() { return this._effectChain; }
-  // Symmetry with SendChannel — primary channels have no parent and are not sends.
-  get parent() { return null; }
   get isSend() { return false; }
 
   /**
@@ -507,11 +505,9 @@ export default class AudioChannel extends EventEmitter {
       effects: this._config.effects || [],
       outputNode: masterNode,
       metering: this._config.metering ?? true,
-      // Engine + parent passed through so send effects can register
-      // their companion SendChannels in the engine's channel registry
-      // with a parent ref for mute/solo cascade.
+      // Engine is needed so send effects can register their companion
+      // SendChannels in the engine's channel registry as peers.
       engine: this._engine,
-      parent: this,
       channelId: this._id,
     });
   }

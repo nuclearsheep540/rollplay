@@ -49,15 +49,13 @@ export default class EffectChain {
       effects = [],
       outputNode,
       metering = true,
-      // The following are required when the chain has send effects (reverb etc.)
-      // because the companion SendChannel needs engine registration and a parent ref.
+      // Engine is needed when the chain has send effects — their companion
+      // SendChannel registers itself in the engine's channel registry.
       engine = null,
-      parent = null,
       channelId = null,
     } = config;
 
     this._engine = engine;
-    this._parent = parent;
     this._channelId = channelId;
 
     // ── Input node — sources connect here ──────────────────────────────────
@@ -134,7 +132,6 @@ export default class EffectChain {
         inputNode: effect.outputNode,
         outputNode,
         metering,
-        parent,
       });
 
       if (engine && typeof engine.registerChannel === 'function') {
@@ -358,7 +355,6 @@ export default class EffectChain {
 
     this._ctx = null;
     this._engine = null;
-    this._parent = null;
   }
 
   // ── Private helpers ──────────────────────────────────────────────────────

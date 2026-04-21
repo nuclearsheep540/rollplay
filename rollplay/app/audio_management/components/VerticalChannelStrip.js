@@ -9,21 +9,6 @@ import { faPlay, faPause, faStop } from '@fortawesome/free-solid-svg-icons';
 import { PlaybackState } from '../types';
 import { MAX_VOLUME } from '../engine/constants';
 
-// ── Meter scaling ──────────────────────────────────────────────────────────
-// Floor matches the fader's dB range (−60) so the bar fill and pip labels
-// agree on where quiet signals live — a signal at −40 dB fills the same
-// fractional height as the fader's "−40" pip label sits at. Ceiling stays
-// at 0 dBFS because that's the clip threshold; signals above 0 pin at
-// the top and the master strip's CLIP indicator fires.
-const DB_FLOOR = -60;
-const DB_CEIL = 0;
-function rmsToPct(rms) {
-  if (rms < 0.001) return 0;
-  const dB = 20 * Math.log10(rms);
-  const clamped = Math.max(DB_FLOOR, Math.min(DB_CEIL, dB));
-  return ((clamped - DB_FLOOR) / (DB_CEIL - DB_FLOOR)) * 100;
-}
-
 // ── Fader taper ────────────────────────────────────────────────────────────
 // The slider is dB-linear: equal travel = equal dB change. Gain nodes expect
 // linear amplitude, so we convert on the boundary only.
@@ -32,6 +17,22 @@ function rmsToPct(rms) {
 const FADER_DB_MIN = -60;
 const FADER_DB_MAX = 20 * Math.log10(MAX_VOLUME); // ≈ +3.52 dB at MAX_VOLUME=1.5
 const FADER_DB_RANGE = FADER_DB_MAX - FADER_DB_MIN;
+
+// ── Meter scaling ──────────────────────────────────────────────────────────
+// Meter floor and ceiling match the fader's dB range exactly so the bar
+// fill and pip labels agree at every height — a signal at any dB fills
+// the same fractional height as the fader's pip label at that dB. CLIP
+// still fires at 0 dBFS (peak >= 1.0), which now lines up visually with
+// the 0 dB pip, and signals between 0 and +3.5 dB show as bar extending
+// above the 0 pip (the fader's boost region).
+const DB_FLOOR = FADER_DB_MIN;
+const DB_CEIL = FADER_DB_MAX;
+function rmsToPct(rms) {
+  if (rms < 0.001) return 0;
+  const dB = 20 * Math.log10(rms);
+  const clamped = Math.max(DB_FLOOR, Math.min(DB_CEIL, dB));
+  return ((clamped - DB_FLOOR) / (DB_CEIL - DB_FLOOR)) * 100;
+}
 
 function linearToDb(linear) {
   if (!linear || linear <= 0) return FADER_DB_MIN;

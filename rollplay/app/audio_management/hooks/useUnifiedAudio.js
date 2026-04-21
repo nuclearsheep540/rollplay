@@ -227,10 +227,10 @@ export const useUnifiedAudio = () => {
 
   // Forward mute/solo state into the engine. Both primary channels and
   // their bus-return sends (e.g. `${trackId}_reverb`) are registered
-  // channels in the engine's registry, so this reduces to: "for each
-  // key in the state map, find the channel by id and set its flags".
-  // The engine's updateMuteSoloState then reconciles everything — dry
-  // paths, sends, and the parent-cascade — in one pass.
+  // peer channels in the engine's registry, so this reduces to: "for
+  // each key in the state map, find the channel by id and set its
+  // flags". The engine's updateMuteSoloState recomputes gain uniformly
+  // across all channels with no parent/child semantics.
   useEffect(() => {
     const engine = engineRef.current;
     if (!engine) return;

@@ -319,11 +319,8 @@ export function useWorkshopMixEngine(preset) {
   }, [schedulePatch]);
 
   // ── Mute / solo ─────────────────────────────────────────────────────────
-  // Setters only touch state. A reconciliation effect below pushes the
-  // combined state into the engine — this is how the game hook does it,
-  // and it's the only way to correctly handle reverb-send composite IDs
-  // (e.g. 'audio_channel_A_reverb' — not a real engine channel, it's a
-  // per-effect sub-mute on the primary channel's reverb effect).
+  // Setters write the React state. A reconciliation effect below forwards
+  // the combined state into the engine for every registered channel.
   const setChannelMuted = useCallback((trackId, muted) => {
     setMutedChannels(prev => ({ ...prev, [trackId]: muted }));
   }, []);
@@ -332,10 +329,9 @@ export function useWorkshopMixEngine(preset) {
     setSoloedChannels(prev => ({ ...prev, [trackId]: soloed }));
   }, []);
 
-  // Forward mute/solo state into the engine — sends (e.g. `${id}_reverb`)
-  // are first-class channels in the engine's registry, so the resolution
-  // is just "look up by id, set flags". The engine owns the cascade and
-  // gain computation.
+  // Forward mute/solo state into the engine. Sends (`${id}_reverb`) are
+  // first-class peer channels in the engine's registry — same lookup as
+  // the primary channels.
   useEffect(() => {
     const engine = engineRef.current;
     if (!engine) return;

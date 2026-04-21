@@ -248,31 +248,22 @@ export default class AudioEngine extends EventEmitter {
   }
 
   /**
-   * Recompute mute/solo gains across every registered channel — primary
-   * channels AND bus-return sends (e.g. reverb) — with one formula.
+   * Recompute mute/solo gains across every registered channel.
    *
-   * A send is treated as a full mixer channel (it has its own muted/soloed
-   * flags, fader, and meter), but carries a `parent` reference so the
-   * engine can cascade the parent's state:
-   *
-   *   effectiveMuted(ch)  = ch.muted  || ch.parent?.muted
-   *   effectiveSoloed(ch) = ch.soloed || ch.parent?.soloed
-   *
-   * Result:
-   *   - Mute a primary channel  → its sends silence too (cascade)
-   *   - Mute a send only        → its primary dry path keeps playing
-   *   - Solo a primary channel  → its sends play too, others silenced
-   *   - Solo a send only        → all dry paths silenced, only that send plays
+   * Every channel is independent — primary AudioChannels and SendChannels
+   * are peers in the registry. Muting or soloing one has no effect on any
+   * other channel's flags. The send tap is pre-mute on the audio channel
+   * that feeds it, so soloing only a reverb send produces a wet-only
+   * signal while the dry paths are silenced; soloing a primary channel
+   * plays that channel dry only (to hear reverb along with the dry, the
+   * user also solos the reverb send — one explicit click).
    */
   updateMuteSoloState() {
-    const effectiveMuted = (ch) => !!(ch.muted || ch.parent?.muted);
-    const effectiveSoloed = (ch) => !!(ch.soloed || ch.parent?.soloed);
-
-    const anySoloed = Array.from(this._channels.values()).some(effectiveSoloed);
+    const anySoloed = Array.from(this._channels.values()).some(ch => !!ch.soloed);
 
     for (const channel of this._channels.values()) {
-      const isMuted = effectiveMuted(channel);
-      const isSoloed = effectiveSoloed(channel);
+      const isMuted = !!channel.muted;
+      const isSoloed = !!channel.soloed;
       let gain;
       if (anySoloed) {
         gain = (isSoloed && !isMuted) ? 1.0 : 0.0;

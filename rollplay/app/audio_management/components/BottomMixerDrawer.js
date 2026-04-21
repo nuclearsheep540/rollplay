@@ -207,9 +207,13 @@ export function MixerStrips({
                   </div>
                 )}
 
-                {/* Reverb effect strip — only shown when reverb is enabled */}
+                {/* Reverb effect strip — only shown when reverb is enabled.
+                    Sends are peer channels — mute/solo state is independent
+                    of the audio channel that feeds them. */}
                 {effects.reverb && (() => {
                   const reverbId = `${trackId}_reverb`;
+                  const sendMuted = mutedChannels[reverbId] || false;
+                  const sendSoloed = soloedChannels[reverbId] || false;
                   return (
                     <VerticalChannelStrip
                       key={reverbId}
@@ -221,10 +225,10 @@ export function MixerStrips({
                       volume={effects.reverb_mix ?? DEFAULT_EFFECTS.reverb.mix}
                       onVolumeChange={(vol) => handleEffectMixChange(trackId, 'reverb', vol)}
                       onVolumeChangeDebounced={(vol) => handleEffectMixChangeDebounced(trackId, 'reverb', vol)}
-                      isMuted={mutedChannels[reverbId] || false}
-                      isSoloed={soloedChannels[reverbId] || false}
-                      onMuteToggle={() => setChannelMuted?.(reverbId, !mutedChannels[reverbId])}
-                      onSoloToggle={() => setChannelSoloed?.(reverbId, !soloedChannels[reverbId])}
+                      isMuted={sendMuted}
+                      isSoloed={sendSoloed}
+                      onMuteToggle={() => setChannelMuted?.(reverbId, !sendMuted)}
+                      onSoloToggle={() => setChannelSoloed?.(reverbId, !sendSoloed)}
                       reverbPreset={effects.reverb_preset || 'room'}
                       onReverbPresetChange={(preset) => {
                         const updatedEffects = { ...effects, reverb_preset: preset };

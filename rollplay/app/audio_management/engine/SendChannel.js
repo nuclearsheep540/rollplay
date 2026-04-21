@@ -8,17 +8,12 @@ import { DEFAULT_VOLUME, RAMP_TIME } from './constants';
 /**
  * SendChannel — a bus return (e.g. reverb wet mix) exposed as a first-class
  * mixer-strip. Shares the mute/solo/fader/meter surface of AudioChannel so
- * the engine's reconciliation logic can treat primary channels and sends
- * uniformly.
+ * the engine's reconciliation logic treats every channel uniformly — sends
+ * are peers, not children of whichever audio channel happens to feed them.
  *
  * Pure destination: receives signal from an upstream node (the effect's
  * wet-path output) and routes it through fader → mute gate → metering →
- * output. No source, no buffer, no play/pause — playback lives on the
- * parent AudioChannel whose signal feeds this send.
- *
- * A `parent` reference is kept for mute/solo cascade: muting or soloing
- * the parent channel propagates to its sends, without sends being able
- * to unmute themselves against the parent's wishes.
+ * output. No source, no buffer, no play/pause.
  */
 export default class SendChannel extends EventEmitter {
   /**
@@ -28,13 +23,11 @@ export default class SendChannel extends EventEmitter {
    * @param {AudioNode} options.inputNode - Upstream source (effect's wet-path output)
    * @param {AudioNode} options.outputNode - Downstream destination (master gain)
    * @param {boolean} options.metering - Whether to create stereo metering
-   * @param {import('./AudioChannel').default} options.parent - Primary channel this send belongs to
    */
-  constructor(engine, id, { inputNode, outputNode, metering = true, parent = null }) {
+  constructor(engine, id, { inputNode, outputNode, metering = true }) {
     super();
     this._engine = engine;
     this._id = id;
-    this._parent = parent;
 
     this._muted = false;
     this._soloed = false;
@@ -70,9 +63,8 @@ export default class SendChannel extends EventEmitter {
     this._outputNode = outputNode;
   }
 
-  // ── Identity / relations ──────────────────────────────────────────────
+  // ── Identity ──────────────────────────────────────────────────────────
   get id() { return this._id; }
-  get parent() { return this._parent; }
   get isSend() { return true; }
 
   // ── Mixer strip interface (shared with AudioChannel) ──────────────────
@@ -119,7 +111,6 @@ export default class SendChannel extends EventEmitter {
     }
     this.removeAllListeners();
     this._engine = null;
-    this._parent = null;
     this._inputNode = null;
     this._outputNode = null;
   }
