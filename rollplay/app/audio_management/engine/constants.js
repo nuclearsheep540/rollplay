@@ -76,7 +76,7 @@ export const RAMP_TIME = 0.02; // 20ms to avoid clicks on parameter changes
 export const REVERB_MAKEUP_GAIN = 3.0; // Fixed boost to compensate for convolution attenuation
 
 // ── Volume ───────────────────────────────────────────────────────────────────
-export const MAX_VOLUME = 1.3; // Allow slight boost above unity
+export const MAX_VOLUME = 1.5; // +3.52 dB headroom — slightly above "+3 dB" so the pip label sits cleanly inside range
 export const DEFAULT_VOLUME = 0.8;
 
 // ── Metering ─────────────────────────────────────────────────────────────────

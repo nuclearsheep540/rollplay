@@ -202,8 +202,8 @@ class MusicAsset(MediaAssetAggregate):
             self.duration_seconds = duration_seconds
 
         if default_volume is not None:
-            if not 0.0 <= default_volume <= 1.3:
-                raise ValueError("default_volume must be between 0.0 and 1.3")
+            if not 0.0 <= default_volume <= 1.5:
+                raise ValueError("default_volume must be between 0.0 and 1.5")
             self.default_volume = default_volume
 
         if default_looping is not None:

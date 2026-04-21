@@ -10,10 +10,12 @@ import { PlaybackState } from '../types';
 import { MAX_VOLUME } from '../engine/constants';
 
 // ── Meter scaling ──────────────────────────────────────────────────────────
-// Floor tightened from −60 → −48 dB so the meter visually distinguishes
-// "moderately hot" from "pinning" — at −60 a signal at −20 dB still filled
-// two-thirds of the bar, which made all meters look hot regardless of level.
-const DB_FLOOR = -48;
+// Floor matches the fader's dB range (−60) so the bar fill and pip labels
+// agree on where quiet signals live — a signal at −40 dB fills the same
+// fractional height as the fader's "−40" pip label sits at. Ceiling stays
+// at 0 dBFS because that's the clip threshold; signals above 0 pin at
+// the top and the master strip's CLIP indicator fires.
+const DB_FLOOR = -60;
 const DB_CEIL = 0;
 function rmsToPct(rms) {
   if (rms < 0.001) return 0;
@@ -28,7 +30,7 @@ function rmsToPct(rms) {
 // Range is −60 dB → MAX_VOLUME (in dB). The floor (−60 dB = gain ≈ 0.001) is
 // effectively silent; the ceiling is whatever MAX_VOLUME permits.
 const FADER_DB_MIN = -60;
-const FADER_DB_MAX = 20 * Math.log10(MAX_VOLUME); // ≈ +2.28 dB at MAX_VOLUME=1.3
+const FADER_DB_MAX = 20 * Math.log10(MAX_VOLUME); // ≈ +3.52 dB at MAX_VOLUME=1.5
 const FADER_DB_RANGE = FADER_DB_MAX - FADER_DB_MIN;
 
 function linearToDb(linear) {
@@ -125,8 +127,13 @@ export default function VerticalChannelStrip({
   useEffect(() => {
     if (!analysers?.left || !analysers?.right) return;
 
-    const dataL = new Uint8Array(analysers.left.frequencyBinCount);
-    const dataR = new Uint8Array(analysers.right.frequencyBinCount);
+    // Float32 time-domain data gives full-precision samples in [-1, 1]
+    // (values can exceed ±1 when a signal is about to clip). Byte data
+    // was 8-bit quantized, which put the meter's noise floor around
+    // −53 dBFS and made any signal between −50 dB and silence look
+    // identical. Float reads cleanly down to ~−100 dBFS and below.
+    const dataL = new Float32Array(analysers.left.fftSize);
+    const dataR = new Float32Array(analysers.right.fftSize);
 
     // ── RMS smoothing ────────────────────────────────────────────────────
     // Higher coefficient = slower, calmer bars. 0.9 gives ~160 ms time
@@ -148,8 +155,7 @@ export default function VerticalChannelStrip({
     const computeRms = (data) => {
       let sum = 0;
       for (let i = 0; i < data.length; i++) {
-        const norm = (data[i] - 128) / 128;
-        sum += norm * norm;
+        sum += data[i] * data[i];
       }
       return Math.sqrt(sum / data.length);
     };
@@ -157,8 +163,8 @@ export default function VerticalChannelStrip({
     const computePeak = (data) => {
       let max = 0;
       for (let i = 0; i < data.length; i++) {
-        const norm = Math.abs((data[i] - 128) / 128);
-        if (norm > max) max = norm;
+        const abs = Math.abs(data[i]);
+        if (abs > max) max = abs;
       }
       return max;
     };
@@ -198,8 +204,8 @@ export default function VerticalChannelStrip({
       rafRef.current = requestAnimationFrame(tick);
       const now = performance.now();
 
-      analysers.left.getByteTimeDomainData(dataL);
-      analysers.right.getByteTimeDomainData(dataR);
+      analysers.left.getFloatTimeDomainData(dataL);
+      analysers.right.getFloatTimeDomainData(dataR);
 
       // RMS bar — heavily smoothed for calm visuals
       const rmsL = computeRms(dataL);
@@ -209,7 +215,7 @@ export default function VerticalChannelStrip({
       applyMeter(meterLRef, lastColorLRef, rmsToPct(lastL));
       applyMeter(meterRRef, lastColorRRef, rmsToPct(lastR));
 
-      // Peak line + numeric readout — raw sample-level peak, held for 2s
+      // Peak line + numeric readout — raw sample-level peak, held for 3s
       const peakL = computePeak(dataL);
       const peakR = computePeak(dataR);
       if (peakL > heldPeakL || now - peakTimeL > PEAK_HOLD_MS) {
@@ -223,11 +229,11 @@ export default function VerticalChannelStrip({
       applyPeakLine(peakLineLRef, lastPeakColorLRef, rmsToPct(heldPeakL));
       applyPeakLine(peakLineRRef, lastPeakColorRRef, rmsToPct(heldPeakR));
 
-      // Clip detection (master strip only). Byte-quantized samples top out
-      // at ≈0.992 for +1.0 and reach 1.0 for −1.0 — so 0.99 conservatively
-      // catches any sample that hit or exceeded 0 dBFS. Latching; cleared
-      // only by the user clicking the indicator.
-      if (stripType === 'master' && (peakL >= 0.99 || peakR >= 0.99)) {
+      // Clip detection (master strip only). Float samples can legitimately
+      // exceed ±1.0 before the destination's implicit clipper — any such
+      // sample is a real clip. 1.0 is the strict threshold. Latching;
+      // cleared only by the user clicking the indicator.
+      if (stripType === 'master' && (peakL >= 1.0 || peakR >= 1.0)) {
         setClipped(true);
       }
 
@@ -280,7 +286,7 @@ export default function VerticalChannelStrip({
 
   // dB pip marks — position as percentage from bottom of fader, equal-
   // spaced in dB. Filtered to anything within the slider's dB range.
-  const dbPips = [0, -3, -6, -10, -20, -30, -40]
+  const dbPips = [3, 0, -3, -6, -10, -20, -30, -40, -50]
     .filter(db => db >= FADER_DB_MIN && db <= FADER_DB_MAX)
     .map(db => ({ db, pct: ((db - FADER_DB_MIN) / FADER_DB_RANGE) * 100 }));
 
@@ -431,7 +437,7 @@ export default function VerticalChannelStrip({
       </div>
 
       {/* Vertical fader + L/R meters — meters drive layout, fader overlaid */}
-      <div className={`flex-1 relative flex items-stretch justify-center gap-[2px] w-full min-h-0 ${channelDisabled ? disabledClass : ''}`}>
+      <div className={`flex-1 relative flex items-stretch justify-center gap-[2px] w-full min-h-0 mt-2 ${channelDisabled ? disabledClass : ''}`}>
         {/* L meter — container holds background, child fill uses GPU-composited scaleY.
             Peak line sits on top, positioned via bottom:X%. */}
         {showMeters && (

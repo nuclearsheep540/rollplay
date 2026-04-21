@@ -19,7 +19,7 @@ class AudioEffects(ContractModel):
     lpf: bool = False
     lpf_mix: float = Field(default=0.5, ge=0.0, le=1.0)
     reverb: bool = False
-    reverb_mix: float = Field(default=0.5, ge=0.0, le=1.3)
+    reverb_mix: float = Field(default=0.5, ge=0.0, le=1.5)
     reverb_preset: str = "room"
 
 
@@ -32,7 +32,7 @@ class AudioChannelState(ContractModel):
     s3_url: Optional[str] = None
     file_size: Optional[int] = None
     # Playback config (persistent)
-    volume: float = Field(default=0.8, ge=0.0, le=1.3)
+    volume: float = Field(default=0.8, ge=0.0, le=1.5)
     looping: bool = True
     effects: AudioEffects = AudioEffects()
     # Channel-level state (persistent, survives track swaps)
@@ -51,7 +51,7 @@ class AudioChannelState(ContractModel):
 class AudioTrackConfig(ContractModel):
     """Stashed config for a track swapped out of a channel. Keyed by asset_id."""
 
-    volume: Optional[float] = Field(default=None, ge=0.0, le=1.3)
+    volume: Optional[float] = Field(default=None, ge=0.0, le=1.5)
     looping: Optional[bool] = None
     effects: AudioEffects = AudioEffects()
     loop_mode: Optional[str] = None
