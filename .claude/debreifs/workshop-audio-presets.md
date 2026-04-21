@@ -3,7 +3,7 @@
 **Plan file:** `.claude/plans/workshop-audio-presets.md` (supersedes Part B of `.claude/plans/daw-audio-engine-refactor.md`)
 **Branch:** `unified_audio_refactor` (uncommitted — not yet rebased/merged into `main`)
 **Period:** 2026-02 → 2026-04-20
-**Status:** All planned parts (A–D) shipped. Significant scope added beyond plan: Mix Editor tab (Part E), `SendChannel` first-class refactor, beat/bar grid + time signature, file-menu unification, continuous loop mode.
+**Status:** All planned parts (A–D) shipped. Significant scope added beyond plan: Mix Editor tab (Part E), `SendChannel` first-class refactor, beat/bar grid + time signature, file-menu unification, continuous loop mode. Second-wave polish landed on the mixer (§8): dB-linear faders, peak metering + CLIP, meter/fader scale alignment, float-precision analyser, mute/solo simplified to strict peer channels, +3 dB headroom, per-channel download progress, reset-mix action.
 
 ---
 
@@ -135,6 +135,8 @@ First cut: the "Loop" drawer opened/closed on a UI-only boolean. User feedback: 
 
 **Impact:** Game mixer's reverb solo/mute now works. Mix Editor gets the same behaviour for free.
 
+> **Superseded by §8.5.** The parent cascade was removed in the polish pass. `SendChannel` remains a first-class peer channel in the engine registry, but no longer carries a `parent` reference, and `updateMuteSoloState` treats every channel as strictly independent. The "DAW-like cascade" turned out to be the wrong default for Rollplay's audience — they want "solo this one thing" to mean exactly that.
+
 ### D3: New loop mode `continuous` (not in plan)
 
 **Plan said:** Loop modes: off, full, region. (Plan assumed two looped modes.)
@@ -199,15 +201,16 @@ First cut: the "Loop" drawer opened/closed on a UI-only boolean. User feedback: 
 ```
 AudioEngine
 ├── AudioContext
-├── channels: Map<id, AudioChannel | SendChannel>
+├── channels: Map<id, AudioChannel | SendChannel>  (peer registry, no parent/child)
 │     AudioChannel
 │       BufferSource → fader → muteGain → EffectChain → splitter → meters
 │                                                                → send taps → SendChannel inputs
-│     SendChannel  (first-class, mute/solo/fader/meter)
+│     SendChannel  (peer channel — own mute/solo/fader/meter)
 │       inputBus → fader → muteGain → EffectChain → meter
-├── updateMuteSoloState()  — single uniform pass, parent cascade for sends
+├── updateMuteSoloState()  — single uniform pass: gain = f(ch.muted, ch.soloed, anySoloed)
 └── seek/play/stop/pause/loop-mode handling on AudioChannel
 ```
+Every channel is independent. Muting or soloing one has no effect on any other channel's flags. See §8.5 for the rationale and the evolution away from the original parent-cascade design.
 
 ### Preset data flow
 ```
@@ -243,6 +246,85 @@ Preset rows never cross the site↔game boundary. The mixer always reads fresh a
 | Commit the `WaveformCanvas.js` deletion in a clean commit (currently implicit in the big revert) | Deferred to rebase |
 | Verify two-DM isolation on presets (user A can't see user B's presets) | Backend enforces via `user_id` filter; needs manual check |
 | Sessions on `main` with old `loop_mode = 'region'` | Migration renames safe; but re-confirm on DB inspection |
+
+---
+
+## 8. Audio Mixer Polish Pass
+
+A second wave of work landed on the Mix Editor after the feature initially shipped — all UX refinements and engine clean-up, no new surface area. Captured here for completeness; each item is small on its own but together they make the mixer feel like a real DAW tool rather than "a row of sliders."
+
+### 8.1 dB-linear fader taper
+
+**Before:** `<input type="range" min=0 max=1.3>` — linear amplitude. Net effect: every pip below −20 dB was crammed into the bottom 8% of the strip; the quiet end of the fader had no useful resolution.
+
+**After:** slider value is dB (`−60 → +3.52 dB`). Component converts dB → linear gain on the way out (`10^(dB/20)`) and linear → dB on the way in (`20·log10(v)`). Pips are now equal-spaced in dB space. Hands and eyes agree — moving the handle the same distance always changes the level by the same dB amount.
+
+Files: [VerticalChannelStrip.js](rollplay/app/audio_management/components/VerticalChannelStrip.js).
+
+### 8.2 Meter scale aligned to fader range
+
+**Initial polish:** tightened `DB_FLOOR` from −60 to −48 to give loud signals more vertical presence. This worked for "hot vs cold" but created a second-order problem: the bar fill scale (`−48 → 0`) no longer matched the fader pip scale (`−60 → +3.52`), so the same dB was at different strip heights depending on which you read it against.
+
+**Final:** `DB_FLOOR = FADER_DB_MIN` and `DB_CEIL = FADER_DB_MAX`. Bar fill height and fader pip labels agree at every dB. A signal at −20 dB fills the bar to the same fractional height that the `−20` pip label sits at. CLIP fires when the bar reaches the `0` pip, not at the top of the strip.
+
+Pip set expanded to `[+3, 0, −3, −6, −10, −20, −30, −40, −50]` including the boost region.
+
+### 8.3 Peak metering + CLIP indicator
+
+Added a proper peak layer on top of the existing RMS bar:
+- **Raw sample-level peak** (not derived from RMS). `computePeak(data) = max(|s|)` runs alongside `computeRms(data)` on every tick.
+- **Peak hold**: 3-second latch then snap back to current peak. Peak line is a 2 px horizontal bar positioned via `bottom: X%`, colour tracks the current threshold band (green/yellow/red).
+- **Numeric readout** on each strip — throttled to 10 Hz, shows the held peak in dB (or `−∞` below floor). Invaluable for sanity-checking fader/meter/taper calibration against the pip scale.
+- **CLIP indicator** (master strip only): latching red tile in the transport-row slot that lights whenever a peak sample reaches ±1.0 (0 dBFS). Click-to-clear. No animation — solid red is the alert.
+
+### 8.4 Float time-domain data (meter noise-floor fix)
+
+Was using `getByteTimeDomainData` — 8-bit quantisation puts a hard noise floor at ~−48 to −53 dBFS. This made every signal below −40 dB look the same on the meter (all reading back as "noise floor"), and caused one session's "meter isn't responding to the fader" confusion.
+
+Fix: `getFloatTimeDomainData` into a `Float32Array(fftSize)`. Full-precision samples in `[-1, 1]` (values above ±1 are legitimate pre-clipper overshoot). Meter noise floor effectively goes away; fader changes are visible all the way down to silence. Clip detection also became more honest (`peak >= 1.0` exactly, no byte-quantisation fudge factor).
+
+### 8.5 Mute/solo reverted to strict peer-channel semantics (undoes D2's cascade)
+
+D2 originally gave `SendChannel` a `parent` reference and cascaded the parent's mute/solo state down to its sends (the DAW convention). On reflection, this was wrong for Rollplay's audience:
+- The target users aren't audio pros trained on "solo a channel → hear dry + reverb tail."
+- Cascade semantics leaked into the UI: soloing the parent lit up the send's solo button, which the user couldn't directly override without tri-state plumbing we then had to add.
+- Once tri-state was in, the behaviour fought itself and the code grew complex for a default most users wouldn't recognise as desirable.
+
+**Shipped:** deleted the cascade. `SendChannel` keeps its first-class peer status in the engine registry (D2's core claim), but no longer has a `parent` field, and `updateMuteSoloState` uses uniform `!!ch.muted` / `!!ch.soloed` reads. Every channel is strictly independent. Soloing channel A plays only A's dry; to hear A's reverb too, solo the send explicitly (one extra click, honest UX).
+
+Removed: `SendChannel._parent`, `AudioChannel.parent` symmetry getter, `parent` param on `EffectChain` / `SendChannel` constructors, tri-state `muted` / `soloed` support in setters, the "effective state" computation in `BottomMixerDrawer`, and every stale comment about cascades in the engine / hooks.
+
+### 8.6 +3 dB headroom on the faders (`MAX_VOLUME` 1.3 → 1.5)
+
+The fader previously capped at linear gain 1.3 (+2.28 dB). With the dB-linear taper, the top of the strip became unlabelled headroom that users couldn't tell existed. Bumping `MAX_VOLUME` to 1.5 gives a clean `+3 dB` pip at the top of the strip (with the real ceiling at +3.52 dB, comfortably above the label).
+
+Backend constraints raised to match — `le=1.3` → `le=1.5` in:
+- [shared_contracts/audio.py](rollplay-shared-contracts/shared_contracts/audio.py) — `AudioEffects.reverb_mix`, `AudioChannelState.volume`, `AudioTrackConfig.volume`
+- [api-site/modules/library/api/schemas.py](api-site/modules/library/api/schemas.py) — `default_volume`, `effect_reverb_mix`
+- [music_asset_aggregate.py](api-site/modules/library/domain/music_asset_aggregate.py), [sfx_asset_aggregate.py](api-site/modules/library/domain/sfx_asset_aggregate.py) — validator range + error message
+
+`hpf_mix` / `lpf_mix` stay at `le=1.0` — those are wet/dry ratios, not gains, so they don't track `MAX_VOLUME`.
+
+**Deploy note:** api-game needs a rebuild for the shared-contracts bump; otherwise values >1.3 from api-site fail Pydantic validation in the WebSocket batch handler (silent-failure class flagged in the prior BGM mixer debrief).
+
+### 8.7 Master-strip topology fix (Workshop only)
+
+Workshop Mix Editor's master fader was writing to `engine.setLocalVolume()` (= `_localGain`, which sits **after** `_masterMeter`). The fader audibly attenuated the signal but the master meter didn't move, because the meter measured the pre-`localGain` signal. Routed Workshop to `engine.setMasterVolume()` (= `_masterGain`, pre-meter) instead. In-game behaviour untouched — the live game still needs the broadcast/local split for DM-synced master volume.
+
+### 8.8 Reset mix action
+
+Added a `faSliders` "Reset mix" button in the Mix Editor transport row, next to Play all / Stop all. Resets every loaded channel's `default_volume` to 0.8 and applies `DEFAULT_EFFECTS` (HPF/LPF/reverb disabled, default mix levels, `room` reverb preset). Loop points, BPM, and time signature are untouched — those are intrinsic to how the asset plays, not mix-bus config. Changes persist via the same debounced PATCH path as regular fader moves.
+
+### 8.9 Per-channel download progress + parallel loads
+
+While preset assets were downloading, channel strips previously sat empty with no feedback. Added a per-channel byte-level progress overlay, reusing the existing `AssetDownloadManager` streaming reader:
+
+- **Manager extension** ([AssetDownloadManager.js](rollplay/app/shared/providers/AssetDownloadManager.js)) — `readProgress` now also publishes a `byKey: {[cacheKey]: {loadedBytes, totalBytes}}` snapshot alongside the aggregate. New hook `useAssetDownloadProgress(cacheKey)` subscribes to a specific asset's progress. Same rAF throttling as the global indicator.
+- **Hook state** ([useWorkshopMixEngine.js](rollplay/app/workshop/hooks/useWorkshopMixEngine.js)) — new `loadingAssetByChannel: {[channelId]: assetId}`, set before download, cleared after decode (or failure).
+- **Strip overlay** ([VerticalChannelStrip.js](rollplay/app/audio_management/components/VerticalChannelStrip.js)) — new `loadingAssetId` prop. When set, renders an absolute overlay (dark backdrop, "Loading" label, progress bar, percentage) that subscribes to the hook. Falls back to indeterminate sliver when `totalBytes` is unknown.
+- **Parallel downloads** — the preset-load loop changed from sequential `for...of + await` to `Promise.all(preset.slots.map(async (slot) => {...}))`. Each task owns its own `channel_id`, so there are no shared-state races, and the manager already dedupes concurrent downloads of the same asset.
+
+Deliberately deferred: persistent `IndexedDB`-backed cache. Would save repeat S3 bandwidth but is out of scope for this pass (the user chose scope-down). See §7 for the follow-up.
 
 ---
 
@@ -306,6 +388,18 @@ From CLAUDE.md but worth re-stating because I nearly forgot in the preset comman
 
 ### L15: The plan is a starting point, not a spec.
 The original plan said "new Workshop tile" — shipped as a tab. Said "Save/Revert buttons" — shipped auto-save. Said "BPM only" — shipped BPM + time-sig + grid + snap. Every one of these diversions was right, each was defensible, and each is in Section 4. **Debrief every diversion** — that's what makes the plan + debrief pair useful to future-me.
+
+### L16: The "DAW convention" isn't always the right default for your audience.
+The original SendChannel cascade (D2) was modelled on Ableton/Logic/Reaper — soloing a channel plays its sends too. Felt safe because it's what pros expect. But our users aren't pros, and every time the cascade ran, it made the UI dishonest or forced us into tri-state override plumbing. The user's instruction: *"each channel is a first-class channel. There's no reason a channel should feel like a parent/child, the only thing we do is group channels under the same track ID and a send is receiving a signal from somewhere else, but really — does that make it a child?"* The answer was no. **When the DAW behaviour forces extra complexity to explain to your users, it's the wrong default.**
+
+### L17: `getByteTimeDomainData` has a ~−50 dB noise floor. Use `getFloatTimeDomainData` for real meters.
+8-bit quantisation on time-domain samples means values near zero are indistinguishable from the ±1 LSB noise. A signal at −55 dBFS reads back the same as silence. For any meter that claims to be accurate below −40 dB, use float. Same analyser, different read method, `Float32Array(fftSize)` buffer.
+
+### L18: Two scales on the same visual space must share range.
+The meter fill scale and the fader pip scale occupied the same vertical strip but used different dB ranges. Eyes compare them against each other, so the same dB reads at different heights. Result: CLIP appeared to fire at +3 dB because the bar was visually above the 0 pip when it hit 0 dBFS. Rule: **if two scales share physical space, they must share their domain. Derive one from the other (`DB_CEIL = FADER_DB_MAX`) rather than setting them independently.**
+
+### L19: Reuse existing infrastructure before inventing new state.
+The per-channel download progress overlay needed byte-level feedback per asset. Rather than plumbing new progress signals through the engine, the `AssetDownloadManager` already had `inflightRef` with exactly the right shape — just needed to publish a per-key snapshot alongside the existing aggregate. 20 lines in the manager + a new hook, and every consumer gets cheap per-asset progress for free. **Before adding state, check what the nearest already-tracked state actually contains.**
 
 ---
 
