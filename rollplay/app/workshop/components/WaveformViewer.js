@@ -45,6 +45,8 @@ const WaveformViewer = forwardRef(function WaveformViewer({
   bpm = null,
   timeSignature = '4/4',
   snapToBeats = false,
+  // Auto-scroll the waveform to keep the playhead in view (WaveSurfer default).
+  followPlayhead = true,
 }, ref) {
   const containerRef = useRef(null);
   const wavesurferRef = useRef(null);
@@ -102,6 +104,7 @@ const WaveformViewer = forwardRef(function WaveformViewer({
       barGap: 1,
       barRadius: 2,
       barAlign: '',
+      autoScroll: followPlayhead,
     });
 
     const regions = ws.registerPlugin(RegionsPlugin.create());
@@ -192,6 +195,13 @@ const WaveformViewer = forwardRef(function WaveformViewer({
       ws.setOptions({ height, waveColor, progressColor, cursorColor });
     } catch {}
   }, [height, waveColor, progressColor, cursorColor]);
+
+  // Toggle WaveSurfer's autoScroll when the user flips the follow button.
+  useEffect(() => {
+    const ws = wavesurferRef.current;
+    if (!ws) return;
+    try { ws.setOptions({ autoScroll: followPlayhead }); } catch {}
+  }, [followPlayhead]);
 
   // ── Reflect region props onto the WaveSurfer region ────────────────────
   useEffect(() => {

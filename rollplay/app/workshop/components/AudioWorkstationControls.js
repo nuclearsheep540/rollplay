@@ -33,16 +33,16 @@ export default function AudioWorkstationControls({
         <h3 className="text-xs font-semibold text-content-secondary uppercase tracking-wider mb-3">Loop Mode</h3>
         <div className="flex gap-1.5">
           {[
-            { mode: 'off', label: 'Off', icon: faBan },
-            { mode: 'full', label: 'Full', icon: faRepeat },
-            { mode: 'continuous', label: 'Continuous', icon: faArrowsSpin, disabled: !hasRegion },
-            { mode: 'region', label: 'Region', icon: faRotateRight, disabled: !hasRegion },
-          ].map(({ mode, label, icon, disabled }) => (
+            { mode: 'off', label: 'Off', icon: faBan, description: 'Play once, no loop' },
+            { mode: 'full', label: 'Full', icon: faRepeat, description: 'Loop the whole track' },
+            { mode: 'continuous', label: 'Continuous', icon: faArrowsSpin, disabled: !hasRegion, description: 'Play intro, then loop region' },
+            { mode: 'region', label: 'Region', icon: faRotateRight, disabled: !hasRegion, description: 'Strictly inside the region' },
+          ].map(({ mode, label, icon, disabled, description }) => (
             <button
               key={mode}
               onClick={() => !disabled && onLoopModeChange(mode)}
               disabled={disabled}
-              className={`flex-1 flex items-center justify-center gap-1.5 px-3 py-2 text-xs font-medium rounded-sm border transition-colors ${
+              className={`flex-1 flex flex-col items-center justify-start gap-1 px-3 py-2 text-xs font-medium rounded-sm border transition-colors ${
                 loopMode === mode
                   ? 'bg-interactive-active border-border-active text-content-on-dark'
                   : disabled
@@ -50,8 +50,21 @@ export default function AudioWorkstationControls({
                     : 'bg-surface-primary border-border text-content-secondary hover:border-border-active hover:text-content-on-dark'
               }`}
             >
-              <FontAwesomeIcon icon={icon} className="text-[10px]" />
-              {label}
+              <div className="flex items-center justify-center gap-1.5">
+                <FontAwesomeIcon icon={icon} className="text-[10px]" />
+                <span>{label}</span>
+              </div>
+              <div
+                className={`text-[10px] leading-tight text-center ${
+                  loopMode === mode
+                    ? 'text-content-secondary'
+                    : disabled
+                      ? 'text-content-secondary/40'
+                      : 'text-content-secondary/70'
+                }`}
+              >
+                {description}
+              </div>
             </button>
           ))}
         </div>

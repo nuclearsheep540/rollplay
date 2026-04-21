@@ -12,6 +12,8 @@ import {
   faArrowsLeftRight, faArrowsUpDown,
   faArrowsLeftRightToLine,
   faMagnet,
+  faPersonWalkingArrowLoopLeft,
+  faPersonWalkingDashedLineArrowRight,
 } from '@fortawesome/free-solid-svg-icons';
 import { authFetch } from '@/app/shared/utils/authFetch';
 import AssetPicker from './AssetPicker';
@@ -124,6 +126,9 @@ function LoopEditor({ initialAssetId }) {
   });
   // Per-session preference — snap loop region drag to beat grid.
   const [snapToBeats, setSnapToBeats] = useState(false);
+  // Per-session preference — auto-scroll the waveform to keep the playhead
+  // in view. True matches WaveSurfer's default behaviour.
+  const [followPlayhead, setFollowPlayhead] = useState(true);
 
   // ── UI state ────────────────────────────────────────────────────────────
   const [loadingAsset, setLoadingAsset] = useState(false);
@@ -163,6 +168,17 @@ function LoopEditor({ initialAssetId }) {
     setLoadingAsset(true);
     setSaveSuccess(false);
     updateMutation.reset();
+
+    // Reset the engine channel. Without this, a previously-paused track
+    // leaves the channel in PAUSED state holding a reference to the old
+    // buffer; the next Play click would call channel.resume() which
+    // replays the channel's internal _buffer (the *previous* asset),
+    // not whatever is now in audioBufferRef.current. Stopping here
+    // flips the channel to STOPPED so subsequent Play takes the fresh
+    // path through channel.play(audioBufferRef.current).
+    preview.channel.current?.stop();
+    audioBufferRef.current = null;
+    setIsPlaying(false);
 
     const assetData = await fetchAssetById(assetId);
     if (!assetData) {
@@ -390,14 +406,19 @@ function LoopEditor({ initialAssetId }) {
     setIsDetectingBpm(true);
     try {
       const detected = await detectBpm(buffer);
-      setBpm(detected);
+      // Guard: a null result means the analyser couldn't find a clear
+      // beat. Keep whatever BPM is already set rather than wiping it —
+      // detection failing shouldn't destroy good data.
       if (detected) {
+        setBpm(detected);
         await authFetch(`/api/library/${selectedAsset.id}/audio-config`, {
           method: 'PATCH',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ bpm: detected }),
         });
         setSavedConfig(prev => ({ ...prev, bpm: detected }));
+      } else {
+        console.warn('BPM detection returned no clear beat — leaving current value untouched');
       }
     } catch (error) {
       console.warn('BPM detection failed:', error);
@@ -453,7 +474,7 @@ function LoopEditor({ initialAssetId }) {
     return () => {
       if (autoSaveTimerRef.current) clearTimeout(autoSaveTimerRef.current);
     };
-  }, [loopMode, loopStart, loopEnd, timeSignature, selectedAsset?.id]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [loopMode, loopStart, loopEnd, bpm, timeSignature, selectedAsset?.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Zoom ────────────────────────────────────────────────────────────────
   const zoomInH = () => setPxPerSec(p => Math.min(MAX_PX_PER_SEC, p * H_ZOOM_STEP));
@@ -520,24 +541,6 @@ function LoopEditor({ initialAssetId }) {
 
         <div className="w-px h-6 bg-border" />
 
-        {/* Snap toggle — local, per-session */}
-        <button
-          onClick={() => setSnapToBeats(prev => !prev)}
-          disabled={!selectedAsset || !bpm}
-          className={`flex items-center gap-1.5 px-2 py-1 rounded-sm text-xs font-medium transition-colors disabled:opacity-30 ${
-            snapToBeats ? 'text-content-on-dark' : 'text-content-secondary hover:text-content-on-dark'
-          }`}
-          title="Snap loop region to the beat grid"
-        >
-          <FontAwesomeIcon icon={faMagnet} className="text-[10px]" />
-          <span className="uppercase tracking-wider">Snap to grid:</span>
-          <span className="uppercase tracking-wider font-bold">
-            {snapToBeats ? 'ON' : 'OFF'}
-          </span>
-        </button>
-
-        <div className="w-px h-6 bg-border" />
-
         {/* Transport controls */}
         <div className="flex items-center gap-1.5">
           <button
@@ -599,6 +602,41 @@ function LoopEditor({ initialAssetId }) {
         >
           <FontAwesomeIcon icon={faArrowsLeftRightToLine} className="text-lg" />
           LOOP
+        </button>
+
+        {/* Snap toggle — local, per-session */}
+        <button
+          onClick={() => setSnapToBeats(prev => !prev)}
+          disabled={!selectedAsset || !bpm}
+          className={`flex items-center gap-1.5 px-2 py-1 rounded-sm text-xs font-medium transition-colors disabled:opacity-30 ${
+            snapToBeats ? 'text-content-on-dark' : 'text-content-secondary hover:text-content-on-dark'
+          }`}
+          title="Snap loop region to the beat grid"
+        >
+          <FontAwesomeIcon icon={faMagnet} className="text-lg" />
+          <span className="uppercase tracking-wider">Snap to grid:</span>
+          <span className="uppercase tracking-wider font-bold">
+            {snapToBeats ? 'ON' : 'OFF'}
+          </span>
+        </button>
+
+        {/* Follow playhead toggle */}
+        <button
+          onClick={() => setFollowPlayhead(prev => !prev)}
+          disabled={!selectedAsset}
+          className={`flex items-center gap-1.5 px-2 py-1 rounded-sm text-xs font-medium transition-colors disabled:opacity-30 ${
+            followPlayhead ? 'text-content-on-dark' : 'text-content-secondary hover:text-content-on-dark'
+          }`}
+          title={followPlayhead ? 'Following playhead' : 'Playhead can leave view'}
+        >
+          <FontAwesomeIcon
+            icon={followPlayhead ? faPersonWalkingArrowLoopLeft : faPersonWalkingDashedLineArrowRight}
+            className="text-lg"
+          />
+          <span className="uppercase tracking-wider">Follow:</span>
+          <span className="uppercase tracking-wider font-bold">
+            {followPlayhead ? 'ON' : 'OFF'}
+          </span>
         </button>
 
         <div className="w-px h-6 bg-border" />
@@ -696,6 +734,7 @@ function LoopEditor({ initialAssetId }) {
               bpm={bpm}
               timeSignature={timeSignature}
               snapToBeats={snapToBeats}
+              followPlayhead={followPlayhead}
             />
           </div>
         )}
