@@ -37,36 +37,47 @@ export default function AudioWorkstationControls({
             { mode: 'full', label: 'Full', icon: faRepeat, description: 'Loop the whole track' },
             { mode: 'continuous', label: 'Continuous', icon: faArrowsSpin, disabled: !hasRegion, description: 'Play intro, then loop region' },
             { mode: 'region', label: 'Region', icon: faRotateRight, disabled: !hasRegion, description: 'Strictly inside the region' },
-          ].map(({ mode, label, icon, disabled, description }) => (
-            <button
-              key={mode}
-              onClick={() => !disabled && onLoopModeChange(mode)}
-              disabled={disabled}
-              className={`flex-1 flex flex-col items-center justify-start gap-1 px-3 py-2 text-xs font-medium rounded-sm border transition-colors ${
-                loopMode === mode
-                  ? 'bg-interactive-active border-border-active text-content-on-dark'
-                  : disabled
-                    ? 'bg-surface-primary/40 border-border/20 text-content-secondary/30 cursor-not-allowed'
-                    : 'bg-surface-primary border-border text-content-secondary hover:border-border-active hover:text-content-on-dark'
-              }`}
-            >
-              <div className="flex items-center justify-center gap-1.5">
-                <FontAwesomeIcon icon={icon} className="text-[10px]" />
-                <span>{label}</span>
-              </div>
-              <div
-                className={`text-[10px] leading-tight text-center ${
-                  loopMode === mode
-                    ? 'text-content-secondary'
+          ].map(({ mode, label, icon, disabled, description }) => {
+            const isSelected = loopMode === mode;
+            const title = disabled
+              ? 'Drag on the waveform to set a loop region first'
+              : description;
+            return (
+              <button
+                key={mode}
+                onClick={() => !disabled && onLoopModeChange(mode)}
+                disabled={disabled}
+                title={title}
+                className={`flex-1 flex flex-col items-center justify-start gap-1 px-3 py-2 text-xs font-medium rounded-sm border transition-colors ${
+                  isSelected
+                    // Selected: highlighted pill — light bg + dark text, stands out on the dark card.
+                    ? 'bg-surface-primary border-border-active text-content-primary'
                     : disabled
-                      ? 'text-content-secondary/40'
-                      : 'text-content-secondary/70'
+                      // Disabled: same colour treatment as default — only cursor + subtext
+                      // signal the disabled state (and the red "Requires a loop region" line).
+                      ? 'border-border text-content-secondary cursor-not-allowed'
+                      // Default: inherits card's dark surface, muted light text; hover brightens.
+                      : 'border-border text-content-secondary hover:border-border-active hover:text-content-on-dark'
                 }`}
               >
-                {description}
-              </div>
-            </button>
-          ))}
+                <div className="flex items-center justify-center gap-1.5">
+                  <FontAwesomeIcon icon={icon} className="text-[10px]" />
+                  <span>{label}</span>
+                </div>
+                <div
+                  className={`text-[10px] leading-tight text-center ${
+                    isSelected
+                      ? 'text-content-primary/60'
+                      : disabled
+                        ? 'text-feedback-error/80 font-semibold'
+                        : 'text-content-secondary/70'
+                  }`}
+                >
+                  {disabled ? 'Requires a loop region' : description}
+                </div>
+              </button>
+            );
+          })}
         </div>
       </div>
 
