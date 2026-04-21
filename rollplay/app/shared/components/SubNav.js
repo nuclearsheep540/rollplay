@@ -27,7 +27,7 @@ export default function SubNav({
   const router = useRouter()
 
   return (
-    <nav className="flex-shrink-0 bg-surface-secondary">
+    <nav className="flex-shrink-0">
       {mode === 'tabs' ? (
         <TabNav tabs={tabs} activeTab={activeTab} onTabChange={onTabChange} />
       ) : (

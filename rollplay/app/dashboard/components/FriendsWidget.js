@@ -266,7 +266,7 @@ export default function FriendsWidget({ user, isStandalone = false }) {
           <div className="border-t border-border-subtle p-4 flex-shrink-0">
             <Button
               variant="primary"
-              onClick={() => router.push('/dashboard?tab=account')}
+              onClick={() => router.push('/account')}
             >
               <FontAwesomeIcon icon={faUserPlus} className="mr-2" />
               Add Friend

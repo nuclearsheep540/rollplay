@@ -7,39 +7,42 @@
 
 import { useRouter, useSearchParams } from 'next/navigation'
 import { useEffect } from 'react'
-import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
-import { faRightFromBracket } from '@fortawesome/free-solid-svg-icons'
-import NotificationBell from '../../shared/components/NotificationBell'
-import SiteHeader from '../../shared/components/SiteHeader'
 import SubNav from '../../shared/components/SubNav'
-import { THEME } from '@/app/styles/colorTheme'
 
+/**
+ * Dashboard-specific shell — just the tab nav + main content. The page
+ * chrome (site header, auth bootstrap, event subscription) lives in
+ * `app/(authenticated)/layout.js`, which wraps every authenticated page.
+ */
 export default function DashboardLayout({
   children,
   activeSection,
   setActiveSection,
-  onLogout,
-  user,
-  toasts = [],
-  onDismissToast,
-  isChildExpanded = false
+  isChildExpanded = false,
 }) {
   const router = useRouter()
   const searchParams = useSearchParams()
 
-  // Tab configuration - Campaigns, Characters, Library, and Account
+  // Tab configuration — visible nav items. Account isn't here any more:
+  // it lives as an icon in the authenticated layout's header alongside
+  // logout and notifications, since it's a user-profile surface rather
+  // than a content tab. Market is the upcoming campaign-sharing feature.
   const tabs = [
     { id: 'campaigns', label: 'Campaigns' },
     { id: 'characters', label: 'Characters' },
     { id: 'library', label: 'Library' },
     { id: 'workshop', label: 'Workshop' },
-    { id: 'account', label: 'Account' }
+    { id: 'market', label: 'Market' },
   ]
+
+  // Valid `?tab=` values on the dashboard. Account lives at its own
+  // `/account` route now, so it's not a dashboard tab.
+  const VALID_TABS = ['characters', 'campaigns', 'library', 'workshop', 'market']
 
   // Initialize activeSection from URL parameter - run only once on mount
   useEffect(() => {
     const tabParam = searchParams.get('tab')
-    if (tabParam && ['characters', 'campaigns', 'library', 'workshop', 'account'].includes(tabParam)) {
+    if (tabParam && VALID_TABS.includes(tabParam)) {
       setActiveSection(tabParam)
     } else if (!tabParam) {
       // If no tab parameter, set default and update URL
@@ -64,24 +67,7 @@ export default function DashboardLayout({
   }
 
   return (
-    <div className="h-screen flex flex-col" style={{backgroundColor: THEME.bgPrimary, color: THEME.textPrimary}}>
-      {/* Site Header */}
-      <SiteHeader>
-        <NotificationBell
-          userId={user?.id}
-          toasts={toasts}
-          onDismissToast={onDismissToast}
-        />
-        <button
-          onClick={onLogout}
-          aria-label="Logout"
-          style={{color: THEME.textSecondary}}
-          className="hover:opacity-80 transition-opacity"
-        >
-          <FontAwesomeIcon icon={faRightFromBracket} className="h-7 w-7" />
-        </button>
-      </SiteHeader>
-
+    <>
       {/* Tab Navigation */}
       <SubNav
         mode="tabs"
@@ -97,6 +83,6 @@ export default function DashboardLayout({
       >
         {children}
       </main>
-    </div>
+    </>
   )
 }
