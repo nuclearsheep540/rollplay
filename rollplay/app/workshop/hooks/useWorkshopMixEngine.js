@@ -5,7 +5,8 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { AudioEngine } from '@/app/audio_management/engine';
-import { CHANNEL_PRESETS } from '@/app/audio_management/engine/presets';
+import { CHANNEL_PRESETS, DEFAULT_EFFECTS as ENGINE_DEFAULT_EFFECTS } from '@/app/audio_management/engine/presets';
+import { DEFAULT_VOLUME } from '@/app/audio_management/engine/constants';
 import { assetToEngineConfig, engineToApiPayload } from '@/app/audio_management/adapters/assetAdapter';
 import { BGM_CHANNELS, DEFAULT_EFFECTS, PlaybackState } from '@/app/audio_management/types';
 import { useAssetManager } from '@/app/shared/providers/AssetDownloadManager';
@@ -385,6 +386,48 @@ export function useWorkshopMixEngine(preset) {
     }
   }, []);
 
+  // Reset every loaded channel's level + effect config back to engine
+  // defaults. Loop points, BPM, and time signature are untouched — those
+  // are intrinsic to how the asset plays, not mix-bus config.
+  const onResetAll = useCallback(() => {
+    const defaultEffects = {
+      hpf: ENGINE_DEFAULT_EFFECTS.hpf.enabled,
+      hpf_mix: ENGINE_DEFAULT_EFFECTS.hpf.mix,
+      lpf: ENGINE_DEFAULT_EFFECTS.lpf.enabled,
+      lpf_mix: ENGINE_DEFAULT_EFFECTS.lpf.mix,
+      reverb: ENGINE_DEFAULT_EFFECTS.reverb.enabled,
+      reverb_mix: ENGINE_DEFAULT_EFFECTS.reverb.mix,
+      reverb_preset: ENGINE_DEFAULT_EFFECTS.reverb.preset,
+      eq: false,
+    };
+
+    const nextTrackStates = {};
+    const nextEffects = {};
+
+    for (const [channelId, entry] of channelsRef.current) {
+      if (!entry?.channel) continue;
+      entry.channel.setVolume(DEFAULT_VOLUME);
+      if (entry.channel.effectChain) {
+        entry.channel.effectChain.applyEffects(defaultEffects);
+      }
+      nextTrackStates[channelId] = { volume: DEFAULT_VOLUME };
+      nextEffects[channelId] = { ...defaultEffects };
+      schedulePatch(entry.asset.id, {
+        default_volume: DEFAULT_VOLUME,
+        ...engineToApiPayload({ effects: defaultEffects }),
+      });
+    }
+
+    setTrackStates(prev => {
+      const merged = { ...prev };
+      for (const [id, patch] of Object.entries(nextTrackStates)) {
+        merged[id] = { ...merged[id], ...patch };
+      }
+      return merged;
+    });
+    setChannelEffects(prev => ({ ...prev, ...nextEffects }));
+  }, [schedulePatch]);
+
   return {
     // State
     trackStates,
@@ -402,6 +445,7 @@ export function useWorkshopMixEngine(preset) {
     onStop,
     onPlayAll,
     onStopAll,
+    onResetAll,
     onLoopCommit,
     applyChannelEffects,
     setEffectMixLevel,

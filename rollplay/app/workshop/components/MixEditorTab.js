@@ -5,7 +5,7 @@
 
 import { useMemo, useState } from 'react';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
-import { faPlay, faStop, faFolderOpen, faXmark, faFileCircleXmark } from '@fortawesome/free-solid-svg-icons';
+import { faPlay, faStop, faFolderOpen, faXmark, faFileCircleXmark, faSliders } from '@fortawesome/free-solid-svg-icons';
 import { MixerStrips } from '@/app/audio_management/components';
 import { useListPresets } from '../hooks/usePresets';
 import { useWorkshopMixEngine } from '../hooks/useWorkshopMixEngine';
@@ -83,6 +83,14 @@ export default function MixEditorTab({ selectedPresetId, onSelectPreset }) {
               >
                 <FontAwesomeIcon icon={faStop} className="text-[10px]" />
                 Stop all
+              </button>
+              <button
+                onClick={mix.onResetAll}
+                className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-sm border border-border text-content-secondary hover:border-border-active hover:text-content-on-dark transition-colors"
+                title="Reset levels, EQ, and reverb to defaults on every loaded channel"
+              >
+                <FontAwesomeIcon icon={faSliders} className="text-[10px]" />
+                Reset mix
               </button>
             </div>
             <span className="text-[10px] uppercase tracking-wider text-content-secondary">
