@@ -18,19 +18,29 @@ from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 
-from modules.library.dependencies.providers import get_media_asset_repository
+from modules.library.dependencies.providers import get_media_asset_repository, get_preset_repository
 from modules.library.repositories.asset_repository import MediaAssetRepository
+from modules.library.repositories.preset_repository import PresetRepository
 from modules.campaign.dependencies.providers import campaign_repository
 from modules.campaign.repositories.campaign_repository import CampaignRepository
 from modules.session.dependencies.providers import get_session_repository
 from modules.session.repositories.session_repository import SessionRepository
 from modules.library.domain.media_asset_type import MediaAssetType
-from modules.library.application.commands import ConfirmUpload, DeleteMediaAsset, AssociateWithCampaign, RenameMediaAsset, ChangeAssetType, UpdateGridConfig, UpdateAudioConfig, UpdateImageConfig, AssetInUseError
+from modules.library.application.commands import (
+    ConfirmUpload, DeleteMediaAsset, AssociateWithCampaign, RenameMediaAsset,
+    ChangeAssetType, UpdateGridConfig, UpdateAudioConfig, UpdateImageConfig, AssetInUseError,
+    CreatePreset, RenamePreset, UpdatePresetSlots, DeletePreset,
+    PresetNameConflictError, PresetNotFoundError, InvalidPresetAssetError,
+)
 from modules.library.domain.map_asset_aggregate import MapAsset
 from modules.library.domain.music_asset_aggregate import MusicAsset
 from modules.library.domain.sfx_asset_aggregate import SfxAsset
 from modules.library.domain.image_asset_aggregate import ImageAsset
-from modules.library.application.queries import GetMediaAssetsByUser, GetMediaAssetsByCampaign
+from modules.library.domain.preset_aggregate import PresetAggregate, PresetSlot
+from modules.library.application.queries import (
+    GetMediaAssetsByUser, GetMediaAssetsByCampaign,
+    GetPresetById, ListPresetsForUser,
+)
 from .schemas import (
     UploadUrlResponse,
     ConfirmUploadRequest,
@@ -41,7 +51,11 @@ from .schemas import (
     UpdateGridConfigRequest,
     UpdateImageConfigRequest,
     UpdateAudioConfigRequest,
-    MediaAssetListResponse
+    MediaAssetListResponse,
+    PresetResponse,
+    PresetListResponse,
+    CreatePresetRequest,
+    UpdatePresetRequest,
 )
 from modules.user.domain.user_aggregate import UserAggregate
 from shared.dependencies.auth import get_current_user_from_token
@@ -100,6 +114,11 @@ def _to_media_asset_response(asset, s3_service: S3Service = None) -> MediaAssetR
             effect_reverb_enabled=asset.effect_reverb_enabled,
             effect_reverb_mix=asset.effect_reverb_mix,
             effect_reverb_preset=asset.effect_reverb_preset,
+            loop_start=asset.loop_start,
+            loop_end=asset.loop_end,
+            bpm=asset.bpm,
+            loop_mode=asset.loop_mode,
+            time_signature=asset.time_signature,
         )
     elif isinstance(asset, SfxAsset):
         fields.update(
@@ -253,6 +272,137 @@ async def list_media_assets(
         logger.error(f"List media assets error: {e}")
         raise HTTPException(status_code=500, detail="Failed to list media assets")
 
+
+# ── Presets ──────────────────────────────────────────────────────────────────
+# Registered BEFORE /{asset_id} so FastAPI doesn't try to parse "presets" as
+# an asset UUID (Starlette routing is first-match-wins, no literal priority).
+
+@router.get("/presets", response_model=PresetListResponse)
+async def list_presets(
+    current_user: UserAggregate = Depends(get_current_user_from_token),
+    preset_repo: PresetRepository = Depends(get_preset_repository),
+) -> PresetListResponse:
+    """List the current DM's presets."""
+    try:
+        query = ListPresetsForUser(preset_repo)
+        presets = query.execute(current_user.id)
+        responses = [PresetResponse.model_validate(p) for p in presets]
+        return PresetListResponse(presets=responses, total=len(responses))
+    except Exception as e:
+        logger.error(f"List presets error: {e}")
+        raise HTTPException(status_code=500, detail="Failed to list presets")
+
+
+@router.get("/presets/{preset_id}", response_model=PresetResponse)
+async def get_preset(
+    preset_id: UUID,
+    current_user: UserAggregate = Depends(get_current_user_from_token),
+    preset_repo: PresetRepository = Depends(get_preset_repository),
+) -> PresetResponse:
+    """Fetch a single preset (must be owned by the requester)."""
+    query = GetPresetById(preset_repo)
+    preset = query.execute(preset_id, current_user.id)
+    if not preset:
+        raise HTTPException(status_code=404, detail="Preset not found")
+    return PresetResponse.model_validate(preset)
+
+
+@router.post("/presets", response_model=PresetResponse, status_code=201)
+async def create_preset(
+    body: CreatePresetRequest,
+    current_user: UserAggregate = Depends(get_current_user_from_token),
+    preset_repo: PresetRepository = Depends(get_preset_repository),
+    asset_repo: MediaAssetRepository = Depends(get_media_asset_repository),
+) -> PresetResponse:
+    """Create a new preset for the current user."""
+    try:
+        command = CreatePreset(preset_repo, asset_repo)
+        preset = command.execute(
+            user_id=current_user.id,
+            name=body.name,
+            slots=[PresetSlot(channel_id=s.channel_id, music_asset_id=s.music_asset_id) for s in body.slots],
+        )
+        return PresetResponse.model_validate(preset)
+    except PresetNameConflictError as e:
+        raise HTTPException(status_code=409, detail=str(e))
+    except InvalidPresetAssetError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Create preset error: {e}")
+        raise HTTPException(status_code=500, detail="Failed to create preset")
+
+
+@router.patch("/presets/{preset_id}", response_model=PresetResponse)
+async def update_preset(
+    preset_id: UUID,
+    body: UpdatePresetRequest,
+    current_user: UserAggregate = Depends(get_current_user_from_token),
+    preset_repo: PresetRepository = Depends(get_preset_repository),
+    asset_repo: MediaAssetRepository = Depends(get_media_asset_repository),
+) -> PresetResponse:
+    """Rename, replace slots, or both. Body may contain name, slots, or both."""
+    if body.name is None and body.slots is None:
+        raise HTTPException(status_code=400, detail="Must provide name or slots to update")
+
+    try:
+        preset: Optional[PresetAggregate] = None
+
+        if body.slots is not None:
+            cmd = UpdatePresetSlots(preset_repo, asset_repo)
+            preset = cmd.execute(
+                preset_id=preset_id,
+                user_id=current_user.id,
+                slots=[PresetSlot(channel_id=s.channel_id, music_asset_id=s.music_asset_id) for s in body.slots],
+            )
+
+        if body.name is not None:
+            cmd = RenamePreset(preset_repo)
+            preset = cmd.execute(
+                preset_id=preset_id,
+                user_id=current_user.id,
+                name=body.name,
+            )
+
+        return PresetResponse.model_validate(preset)
+    except PresetNotFoundError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except PresetNameConflictError as e:
+        raise HTTPException(status_code=409, detail=str(e))
+    except InvalidPresetAssetError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Update preset error: {e}")
+        raise HTTPException(status_code=500, detail="Failed to update preset")
+
+
+@router.delete("/presets/{preset_id}", status_code=204)
+async def delete_preset(
+    preset_id: UUID,
+    current_user: UserAggregate = Depends(get_current_user_from_token),
+    preset_repo: PresetRepository = Depends(get_preset_repository),
+) -> None:
+    """Delete a preset owned by the current user."""
+    try:
+        command = DeletePreset(preset_repo)
+        command.execute(preset_id=preset_id, user_id=current_user.id)
+    except PresetNotFoundError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Delete preset error: {e}")
+        raise HTTPException(status_code=500, detail="Failed to delete preset")
+
+
+# ── Media asset detail / mutation routes ─────────────────────────────────────
 
 @router.get("/{asset_id}", response_model=MediaAssetResponse)
 async def get_media_asset(
@@ -460,7 +610,12 @@ async def update_audio_config(
             effect_lpf_mix=request.effect_lpf_mix,
             effect_reverb_enabled=request.effect_reverb_enabled,
             effect_reverb_mix=request.effect_reverb_mix,
-            effect_reverb_preset=request.effect_reverb_preset
+            effect_reverb_preset=request.effect_reverb_preset,
+            loop_start=request.loop_start,
+            loop_end=request.loop_end,
+            bpm=request.bpm,
+            loop_mode=request.loop_mode,
+            time_signature=request.time_signature
         )
 
         logger.info(f"Updated audio config for asset {asset_id}: {asset.get_audio_config()}")

@@ -41,6 +41,16 @@ class MusicAsset(MediaAssetAggregate):
     effect_reverb_mix: Optional[float] = None
     effect_reverb_preset: Optional[str] = None
 
+    # Loop point / BPM configuration
+    loop_start: Optional[float] = None
+    loop_end: Optional[float] = None
+    bpm: Optional[float] = None
+    loop_mode: Optional[str] = None
+    # Time signature string like "4/4" / "3/4" / "6/8". Used by the Loop
+    # Editor to render beat+bar grid lines and to snap loop bounds to
+    # beats. Does not affect playback — purely an editor hint.
+    time_signature: Optional[str] = None
+
     @classmethod
     def create(
         cls,
@@ -60,7 +70,12 @@ class MusicAsset(MediaAssetAggregate):
         effect_lpf_mix: Optional[float] = None,
         effect_reverb_enabled: Optional[bool] = None,
         effect_reverb_mix: Optional[float] = None,
-        effect_reverb_preset: Optional[str] = None
+        effect_reverb_preset: Optional[str] = None,
+        loop_start: Optional[float] = None,
+        loop_end: Optional[float] = None,
+        bpm: Optional[float] = None,
+        loop_mode: Optional[str] = None,
+        time_signature: Optional[str] = None
     ) -> "MusicAsset":
         """
         Factory method to create a new music asset.
@@ -94,7 +109,12 @@ class MusicAsset(MediaAssetAggregate):
             effect_lpf_mix=effect_lpf_mix,
             effect_reverb_enabled=effect_reverb_enabled,
             effect_reverb_mix=effect_reverb_mix,
-            effect_reverb_preset=effect_reverb_preset
+            effect_reverb_preset=effect_reverb_preset,
+            loop_start=loop_start,
+            loop_end=loop_end,
+            bpm=bpm,
+            loop_mode=loop_mode,
+            time_signature=time_signature
         )
 
     @classmethod
@@ -111,7 +131,12 @@ class MusicAsset(MediaAssetAggregate):
         effect_lpf_mix: Optional[float] = None,
         effect_reverb_enabled: Optional[bool] = None,
         effect_reverb_mix: Optional[float] = None,
-        effect_reverb_preset: Optional[str] = None
+        effect_reverb_preset: Optional[str] = None,
+        loop_start: Optional[float] = None,
+        loop_end: Optional[float] = None,
+        bpm: Optional[float] = None,
+        loop_mode: Optional[str] = None,
+        time_signature: Optional[str] = None
     ) -> "MusicAsset":
         """
         Promote a base MediaAssetAggregate to MusicAsset.
@@ -139,7 +164,12 @@ class MusicAsset(MediaAssetAggregate):
             effect_lpf_mix=effect_lpf_mix,
             effect_reverb_enabled=effect_reverb_enabled,
             effect_reverb_mix=effect_reverb_mix,
-            effect_reverb_preset=effect_reverb_preset
+            effect_reverb_preset=effect_reverb_preset,
+            loop_start=loop_start,
+            loop_end=loop_end,
+            bpm=bpm,
+            loop_mode=loop_mode,
+            time_signature=time_signature
         )
 
     def update_audio_config(
@@ -154,7 +184,12 @@ class MusicAsset(MediaAssetAggregate):
         effect_lpf_mix: Optional[float] = None,
         effect_reverb_enabled: Optional[bool] = None,
         effect_reverb_mix: Optional[float] = None,
-        effect_reverb_preset: Optional[str] = None
+        effect_reverb_preset: Optional[str] = None,
+        loop_start: Optional[float] = None,
+        loop_end: Optional[float] = None,
+        bpm: Optional[float] = None,
+        loop_mode: Optional[str] = None,
+        time_signature: Optional[str] = None
     ) -> None:
         """
         Update audio configuration.
@@ -167,8 +202,8 @@ class MusicAsset(MediaAssetAggregate):
             self.duration_seconds = duration_seconds
 
         if default_volume is not None:
-            if not 0.0 <= default_volume <= 1.3:
-                raise ValueError("default_volume must be between 0.0 and 1.3")
+            if not 0.0 <= default_volume <= 1.5:
+                raise ValueError("default_volume must be between 0.0 and 1.5")
             self.default_volume = default_volume
 
         if default_looping is not None:
@@ -198,6 +233,52 @@ class MusicAsset(MediaAssetAggregate):
         if effect_reverb_preset is not None:
             self.effect_reverb_preset = effect_reverb_preset
 
+        if loop_mode is not None:
+            # "continuous": play from 0 on first start, then loop between loop
+            #   points (the pre-loop portion plays as an intro).
+            # "region": strictly within the loop region — playback from stopped
+            #   state snaps to loop_start; pre-region audio never plays.
+            # Historical "region" meant "continuous" semantics; a data migration
+            # renames legacy values to preserve behaviour.
+            valid_modes = {"off", "full", "continuous", "region"}
+            if loop_mode not in valid_modes:
+                raise ValueError(f"loop_mode must be one of {valid_modes}")
+            self.loop_mode = loop_mode
+
+        if loop_start is not None:
+            if loop_start < 0:
+                raise ValueError("loop_start must be >= 0")
+            self.loop_start = loop_start
+
+        if loop_end is not None:
+            if loop_end < 0:
+                raise ValueError("loop_end must be >= 0")
+            self.loop_end = loop_end
+
+        # Cross-field validation: loop_start must be < loop_end when both are set
+        effective_start = loop_start if loop_start is not None else self.loop_start
+        effective_end = loop_end if loop_end is not None else self.loop_end
+        if effective_start is not None and effective_end is not None:
+            if effective_start >= effective_end:
+                raise ValueError("loop_start must be less than loop_end")
+            # Validate against duration when known
+            effective_duration = duration_seconds if duration_seconds is not None else self.duration_seconds
+            if effective_duration is not None and effective_end > effective_duration:
+                raise ValueError("loop_end must be <= duration_seconds")
+
+        if bpm is not None:
+            if bpm <= 0:
+                raise ValueError("bpm must be > 0")
+            self.bpm = bpm
+
+        if time_signature is not None:
+            valid_time_signatures = {"2/4", "3/4", "4/4", "5/4", "6/8", "7/8", "12/8"}
+            if time_signature not in valid_time_signatures:
+                raise ValueError(
+                    f"time_signature must be one of {valid_time_signatures}"
+                )
+            self.time_signature = time_signature
+
         self.updated_at = datetime.utcnow()
 
     def has_audio_config(self) -> bool:
@@ -210,6 +291,8 @@ class MusicAsset(MediaAssetAggregate):
             or self.effect_hpf_enabled is not None
             or self.effect_lpf_enabled is not None
             or self.effect_reverb_enabled is not None
+            or self.loop_mode is not None
+            or self.bpm is not None
         )
 
     def get_audio_config(self) -> dict:
@@ -226,6 +309,11 @@ class MusicAsset(MediaAssetAggregate):
             "effect_reverb_enabled": self.effect_reverb_enabled,
             "effect_reverb_mix": self.effect_reverb_mix,
             "effect_reverb_preset": self.effect_reverb_preset,
+            "loop_start": self.loop_start,
+            "loop_end": self.loop_end,
+            "bpm": self.bpm,
+            "loop_mode": self.loop_mode,
+            "time_signature": self.time_signature,
         }
 
     def build_effects_for_game(self) -> AudioEffects:
@@ -259,4 +347,12 @@ class MusicAsset(MediaAssetAggregate):
             kwargs["volume"] = self.default_volume
         if self.default_looping is not None:
             kwargs["looping"] = self.default_looping
+        # Loop point fields — populate when set, backward-compat looping from loop_mode
+        if self.loop_mode is not None:
+            kwargs["loop_mode"] = self.loop_mode
+            kwargs["looping"] = self.loop_mode != "off"
+        if self.loop_start is not None:
+            kwargs["loop_start"] = self.loop_start
+        if self.loop_end is not None:
+            kwargs["loop_end"] = self.loop_end
         return AudioChannelState(**kwargs)

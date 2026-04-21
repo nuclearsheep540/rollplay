@@ -22,9 +22,9 @@ const TOOLS = [
   {
     id: 'audio',
     label: 'Audio Workstation',
-    description: 'Loop points, BPM, and waveforms',
+    description: 'Loop points, BPM, presets, and waveforms',
     icon: faMusic,
-    enabled: false,
+    enabled: true,
   },
   {
     id: 'npcs',

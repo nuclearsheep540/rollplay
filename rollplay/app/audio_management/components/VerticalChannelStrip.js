@@ -3,19 +3,47 @@
  * SPDX-License-Identifier: GPL-3.0-or-later
  */
 
-import React, { useRef, useEffect } from 'react';
+import React, { useRef, useEffect, useState } from 'react';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { faPlay, faPause, faStop } from '@fortawesome/free-solid-svg-icons';
 import { PlaybackState } from '../types';
+import { MAX_VOLUME } from '../engine/constants';
+import { useAssetDownloadProgress } from '@/app/shared/providers/AssetDownloadManager';
 
-// RMS → dB → percentage for meter display
-const DB_FLOOR = -60;
-const DB_CEIL = 0;
+// ── Fader taper ────────────────────────────────────────────────────────────
+// The slider is dB-linear: equal travel = equal dB change. Gain nodes expect
+// linear amplitude, so we convert on the boundary only.
+// Range is −60 dB → MAX_VOLUME (in dB). The floor (−60 dB = gain ≈ 0.001) is
+// effectively silent; the ceiling is whatever MAX_VOLUME permits.
+const FADER_DB_MIN = -60;
+const FADER_DB_MAX = 20 * Math.log10(MAX_VOLUME); // ≈ +3.52 dB at MAX_VOLUME=1.5
+const FADER_DB_RANGE = FADER_DB_MAX - FADER_DB_MIN;
+
+// ── Meter scaling ──────────────────────────────────────────────────────────
+// Meter floor and ceiling match the fader's dB range exactly so the bar
+// fill and pip labels agree at every height — a signal at any dB fills
+// the same fractional height as the fader's pip label at that dB. CLIP
+// still fires at 0 dBFS (peak >= 1.0), which now lines up visually with
+// the 0 dB pip, and signals between 0 and +3.5 dB show as bar extending
+// above the 0 pip (the fader's boost region).
+const DB_FLOOR = FADER_DB_MIN;
+const DB_CEIL = FADER_DB_MAX;
 function rmsToPct(rms) {
   if (rms < 0.001) return 0;
   const dB = 20 * Math.log10(rms);
   const clamped = Math.max(DB_FLOOR, Math.min(DB_CEIL, dB));
   return ((clamped - DB_FLOOR) / (DB_CEIL - DB_FLOOR)) * 100;
+}
+
+function linearToDb(linear) {
+  if (!linear || linear <= 0) return FADER_DB_MIN;
+  const dB = 20 * Math.log10(linear);
+  return Math.max(FADER_DB_MIN, Math.min(FADER_DB_MAX, dB));
+}
+
+function dbToLinear(dB) {
+  if (dB <= FADER_DB_MIN) return 0;
+  return Math.min(MAX_VOLUME, Math.pow(10, dB / 20));
 }
 
 // Helper: format remaining seconds → -MM:SS
@@ -58,11 +86,16 @@ export default function VerticalChannelStrip({
   onToggleSend,
   // Loop toggle (channel strips only)
   isLooping = true,
+  loopMode = null,
+  hasLoopRegion = false,
   onLoopToggle,
   // Reverb preset (effect strips only)
   reverbPreset = 'room',
   onReverbPresetChange,
   trackId,
+  // Asset currently downloading for this strip — when set, the strip
+  // renders a progress overlay driven by the shared download manager.
+  loadingAssetId = null,
 }) {
   const {
     playbackState = PlaybackState.STOPPED,
@@ -76,8 +109,21 @@ export default function VerticalChannelStrip({
   const meterRRef = useRef(null);
   const lastColorLRef = useRef(null);
   const lastColorRRef = useRef(null);
+  const peakLineLRef = useRef(null);
+  const peakLineRRef = useRef(null);
+  const lastPeakColorLRef = useRef(null);
+  const lastPeakColorRRef = useRef(null);
+  const dbReadoutRef = useRef(null);
   const rafRef = useRef(null);
   const volumeDebounceTimer = useRef(null);
+
+  // Latching clip indicator — only rendered on the master strip, but the
+  // detection runs in the meter tick. Stays lit until the user clicks.
+  const [clipped, setClipped] = useState(false);
+
+  // Byte-level progress for the asset currently downloading into this
+  // strip. Null when no download is in flight for this channel.
+  const downloadProgress = useAssetDownloadProgress(loadingAssetId);
 
   // Cleanup debounce on unmount
   useEffect(() => {
@@ -90,25 +136,56 @@ export default function VerticalChannelStrip({
   useEffect(() => {
     if (!analysers?.left || !analysers?.right) return;
 
-    const dataL = new Uint8Array(analysers.left.frequencyBinCount);
-    const dataR = new Uint8Array(analysers.right.frequencyBinCount);
+    // Float32 time-domain data gives full-precision samples in [-1, 1]
+    // (values can exceed ±1 when a signal is about to clip). Byte data
+    // was 8-bit quantized, which put the meter's noise floor around
+    // −53 dBFS and made any signal between −50 dB and silence look
+    // identical. Float reads cleanly down to ~−100 dBFS and below.
+    const dataL = new Float32Array(analysers.left.fftSize);
+    const dataR = new Float32Array(analysers.right.fftSize);
+
+    // ── RMS smoothing ────────────────────────────────────────────────────
+    // Higher coefficient = slower, calmer bars. 0.9 gives ~160 ms time
+    // constant — enough to tame transient jitter without laggy visuals.
+    const RMS_SMOOTHING = 0.9;
     let lastL = 0;
     let lastR = 0;
+
+    // ── Peak hold state ──────────────────────────────────────────────────
+    // The peak indicator tracks the *raw* sample-level peak (unsmoothed)
+    // so it catches transients the RMS window averages away. Holds for
+    // HOLD_MS then snaps down to the current peak.
+    const PEAK_HOLD_MS = 3000;
+    let heldPeakL = 0;
+    let heldPeakR = 0;
+    let peakTimeL = 0;
+    let peakTimeR = 0;
 
     const computeRms = (data) => {
       let sum = 0;
       for (let i = 0; i < data.length; i++) {
-        const norm = (data[i] - 128) / 128;
-        sum += norm * norm;
+        sum += data[i] * data[i];
       }
       return Math.sqrt(sum / data.length);
     };
+
+    const computePeak = (data) => {
+      let max = 0;
+      for (let i = 0; i < data.length; i++) {
+        const abs = Math.abs(data[i]);
+        if (abs > max) max = abs;
+      }
+      return max;
+    };
+
+    const peakColor = (pct) =>
+      pct >= 90 ? '#FF0000' : pct >= 70 ? '#FFD700' : '#04AA6D';
 
     // GPU-composited meter update: scaleY is a transform (compositor-only, no repaint).
     // Color only updates when the threshold band changes (rare), not every frame.
     const applyMeter = (ref, colorRef, pct) => {
       if (!ref.current) return;
-      const color = pct >= 90 ? '#FF0000' : pct >= 70 ? '#FFD700' : '#04AA6D';
+      const color = peakColor(pct);
       ref.current.style.transform = `scaleY(${pct / 100})`;
       if (color !== colorRef.current) {
         ref.current.style.backgroundColor = color;
@@ -116,19 +193,70 @@ export default function VerticalChannelStrip({
       }
     };
 
+    // Peak line: absolutely positioned 2px line, placed via `bottom: X%`.
+    // Color tracks the threshold band at the peak's level — green/yellow/red.
+    const applyPeakLine = (ref, colorRef, pct) => {
+      if (!ref.current) return;
+      const color = peakColor(pct);
+      ref.current.style.bottom = `${pct}%`;
+      if (color !== colorRef.current) {
+        ref.current.style.backgroundColor = color;
+        colorRef.current = color;
+      }
+    };
+
+    // Throttle dB readout text updates to ~10 Hz — any faster and the
+    // number is unreadable, plus fewer DOM writes.
+    let readoutFrame = 0;
+
     const tick = () => {
       rafRef.current = requestAnimationFrame(tick);
+      const now = performance.now();
 
-      analysers.left.getByteTimeDomainData(dataL);
-      analysers.right.getByteTimeDomainData(dataR);
+      analysers.left.getFloatTimeDomainData(dataL);
+      analysers.right.getFloatTimeDomainData(dataR);
 
-      const smoothL = lastL * 0.8 + computeRms(dataL) * 0.2;
-      const smoothR = lastR * 0.8 + computeRms(dataR) * 0.2;
-      lastL = smoothL;
-      lastR = smoothR;
+      // RMS bar — heavily smoothed for calm visuals
+      const rmsL = computeRms(dataL);
+      const rmsR = computeRms(dataR);
+      lastL = lastL * RMS_SMOOTHING + rmsL * (1 - RMS_SMOOTHING);
+      lastR = lastR * RMS_SMOOTHING + rmsR * (1 - RMS_SMOOTHING);
+      applyMeter(meterLRef, lastColorLRef, rmsToPct(lastL));
+      applyMeter(meterRRef, lastColorRRef, rmsToPct(lastR));
 
-      applyMeter(meterLRef, lastColorLRef, rmsToPct(smoothL));
-      applyMeter(meterRRef, lastColorRRef, rmsToPct(smoothR));
+      // Peak line + numeric readout — raw sample-level peak, held for 3s
+      const peakL = computePeak(dataL);
+      const peakR = computePeak(dataR);
+      if (peakL > heldPeakL || now - peakTimeL > PEAK_HOLD_MS) {
+        heldPeakL = peakL;
+        peakTimeL = now;
+      }
+      if (peakR > heldPeakR || now - peakTimeR > PEAK_HOLD_MS) {
+        heldPeakR = peakR;
+        peakTimeR = now;
+      }
+      applyPeakLine(peakLineLRef, lastPeakColorLRef, rmsToPct(heldPeakL));
+      applyPeakLine(peakLineRRef, lastPeakColorRRef, rmsToPct(heldPeakR));
+
+      // Clip detection (master strip only). Float samples can legitimately
+      // exceed ±1.0 before the destination's implicit clipper — any such
+      // sample is a real clip. 1.0 is the strict threshold. Latching;
+      // cleared only by the user clicking the indicator.
+      if (stripType === 'master' && (peakL >= 1.0 || peakR >= 1.0)) {
+        setClipped(true);
+      }
+
+      // Numeric readout — held peak of L/R, throttled to ~10 Hz. Cross-check
+      // fader taper / summing against the pip scale.
+      if (dbReadoutRef.current && (++readoutFrame % 6) === 0) {
+        const peak = Math.max(heldPeakL, heldPeakR);
+        if (peak < 0.001) {
+          dbReadoutRef.current.textContent = '-∞';
+        } else {
+          const dB = 20 * Math.log10(peak);
+          dbReadoutRef.current.textContent = dB.toFixed(1);
+        }
+      }
     };
 
     tick();
@@ -159,30 +287,72 @@ export default function VerticalChannelStrip({
   // All controls always render for layout consistency — visibility applied per-row.
   // This ensures the fader container is always the same height, so pip lines align.
   const showMeters = !isEffect || !!(analysers?.left && analysers?.right);
-  const faderMax = '1.3';
-  const faderMaxNum = 1.3;
 
-  // dB pip marks — position as percentage from bottom of fader
-  const dbPips = [
-    { db: 0, gain: 1.0 },
-    { db: -3, gain: 0.708 },
-    { db: -6, gain: 0.501 },
-    { db: -10, gain: 0.316 },
-    { db: -20, gain: 0.1 },
-  ]
-    .map(({ db, gain }) => ({ db, pct: (gain / faderMaxNum) * 100 }))
-    .filter(({ pct }) => pct <= 100 && pct >= 0);
+  // Fader expresses dB directly. Slider handle position = dB-linear so the
+  // pip labels sit at their true fractional dB position — no more
+  // "everything below −20 dB squashed into 8% of the strip."
+  const faderDb = linearToDb(volume);
+
+  // dB pip marks — position as percentage from bottom of fader, equal-
+  // spaced in dB. Filtered to anything within the slider's dB range.
+  const dbPips = [3, 0, -3, -6, -10, -20, -30, -40, -50]
+    .filter(db => db >= FADER_DB_MIN && db <= FADER_DB_MAX)
+    .map(db => ({ db, pct: ((db - FADER_DB_MIN) / FADER_DB_RANGE) * 100 }));
+
+  // Download overlay: dim the strip and render a progress bar while the
+  // channel's asset is downloading. Derived pct falls back to a
+  // staged/indeterminate bar when totalBytes is unknown.
+  const downloadPct = downloadProgress && downloadProgress.totalBytes > 0
+    ? Math.min(100, (downloadProgress.loadedBytes / downloadProgress.totalBytes) * 100)
+    : null;
 
   return (
-    <div className={`flex flex-col items-center h-full ${stripWidth} flex-shrink-0 gap-1`}>
+    <div className={`relative flex flex-col items-center h-full ${stripWidth} flex-shrink-0 gap-1`}>
       {/* Strip type label */}
       <div className="w-full text-center text-xs font-bold py-1 bg-gray-700 text-gray-300">
         {label}
       </div>
 
+      {/* Download progress overlay — covers the strip while the asset is
+          being downloaded. Does not block pointer events on the controls
+          beneath (they're disabled anyway by channelDisabled until the
+          trackState is populated). */}
+      {downloadProgress && (
+        <div className="absolute inset-0 z-10 flex flex-col items-center justify-center gap-2 bg-black/80 pointer-events-none rounded-sm px-2">
+          <div className="text-[11px] font-semibold font-mono text-white uppercase tracking-wider">
+            Loading
+          </div>
+          <div className="w-full h-1.5 bg-white/15 rounded-full overflow-hidden">
+            <div
+              className="h-full bg-green-500 transition-[width] duration-150 ease-linear"
+              style={{ width: downloadPct != null ? `${downloadPct}%` : '33%' }}
+            />
+          </div>
+          <div className="text-xs font-mono text-white tabular-nums">
+            {downloadPct != null ? `${Math.round(downloadPct)}%` : '···'}
+          </div>
+        </div>
+      )}
+
       {/* All controls — single flex-col, one gap-1 rule governs all spacing */}
       <div className="w-full px-1 flex flex-col gap-1">
-        {/* Transport — invisible on non-channel strips */}
+        {/* Transport row — transport buttons on channel strips, CLIP
+            indicator on master, invisible placeholder on effect strips.
+            Kept as one row so meter / fader alignment matches across strips. */}
+        {stripType === 'master' ? (
+          <button
+            onClick={() => setClipped(false)}
+            disabled={!clipped}
+            className={`w-full h-5 rounded text-[11px] font-bold tracking-wider transition-colors ${
+              clipped
+                ? 'bg-red-600 text-white hover:bg-red-500 cursor-pointer'
+                : 'bg-gray-800 text-gray-600 border border-gray-700 cursor-default'
+            }`}
+            title={clipped ? 'Master clipped — click to clear' : 'Clip indicator (0 dBFS or over)'}
+          >
+            CLIP
+          </button>
+        ) : (
         <div className={`flex gap-1 ${isChannel ? disabledClass : 'invisible'}`}>
           {playbackState === PlaybackState.PLAYING ? (
             <button
@@ -218,19 +388,32 @@ export default function VerticalChannelStrip({
             <FontAwesomeIcon icon={faStop} size="xs" />
           </button>
         </div>
+        )}
         {/* Middle 3 buttons — content varies by strip type, always 3 rows for layout */}
         {isChannel ? (
           <>
             <button
-              onClick={() => onLoopToggle?.(trackId, !isLooping)}
+              onClick={() => onLoopToggle?.(trackId)}
               className={`w-full h-5 rounded text-[11px] font-bold transition-colors ${
-                isLooping
-                  ? 'bg-rose-600 text-white'
-                  : 'bg-gray-700 text-gray-500 hover:bg-gray-600'
+                loopMode === 'region'
+                  ? 'bg-amber-600 text-white'
+                  : loopMode === 'continuous'
+                    ? 'bg-sky-600 text-white'
+                    : isLooping
+                      ? 'bg-rose-600 text-white'
+                      : 'bg-gray-700 text-gray-500 hover:bg-gray-600'
               } ${disabledClass}`}
-              title={isLooping ? 'Disable looping' : 'Enable looping'}
+              title={
+                loopMode === 'region' ? 'Loop — strictly within region'
+                : loopMode === 'continuous' ? 'Loop — intro then region'
+                : isLooping ? 'Loop — full track'
+                : 'Loop off'
+              }
             >
-              LOOP
+              {loopMode === 'region' ? 'REGION'
+                : loopMode === 'continuous' ? 'CONT'
+                : isLooping ? 'LOOP'
+                : 'OFF'}
             </button>
             {['eq', 'reverb'].map(bus => (
               <button
@@ -291,11 +474,13 @@ export default function VerticalChannelStrip({
       </div>
 
       {/* Vertical fader + L/R meters — meters drive layout, fader overlaid */}
-      <div className={`flex-1 relative flex items-stretch justify-center gap-[2px] w-full min-h-0 ${channelDisabled ? disabledClass : ''}`}>
-        {/* L meter — container holds background, child fill uses GPU-composited scaleY */}
+      <div className={`flex-1 relative flex items-stretch justify-center gap-[2px] w-full min-h-0 mt-2 ${channelDisabled ? disabledClass : ''}`}>
+        {/* L meter — container holds background, child fill uses GPU-composited scaleY.
+            Peak line sits on top, positioned via bottom:X%. */}
         {showMeters && (
           <div className="w-[6px] rounded-sm bg-slate-800 flex-shrink-0 relative overflow-hidden">
             <div ref={meterLRef} className="absolute inset-0 will-change-transform origin-bottom" style={{ backgroundColor: '#04AA6D', transform: 'scaleY(0)' }} />
+            <div ref={peakLineLRef} className="absolute inset-x-0 h-[2px] pointer-events-none" style={{ backgroundColor: '#04AA6D', bottom: '0%' }} />
           </div>
         )}
         {/* Center track spacer (visible when no meters, e.g. effect strips) */}
@@ -304,6 +489,7 @@ export default function VerticalChannelStrip({
         {showMeters && (
           <div className="w-[6px] rounded-sm bg-slate-800 flex-shrink-0 relative overflow-hidden">
             <div ref={meterRRef} className="absolute inset-0 will-change-transform origin-bottom" style={{ backgroundColor: '#04AA6D', transform: 'scaleY(0)' }} />
+            <div ref={peakLineRRef} className="absolute inset-x-0 h-[2px] pointer-events-none" style={{ backgroundColor: '#04AA6D', bottom: '0%' }} />
           </div>
         )}
         {/* dB pip lines — absolutely positioned over meters */}
@@ -321,22 +507,32 @@ export default function VerticalChannelStrip({
             </div>
           ))}
         </div>
-        {/* Fader — absolutely positioned over the meters, thumb overlaps them */}
+        {/* Fader — absolutely positioned over the meters, thumb overlaps them.
+            Slider value is dB; converted to linear gain on the way out so
+            callers (engine, PATCH adapter) still receive amplitude. */}
         <input
           type="range"
-          min="0.0"
-          max={faderMax}
-          step="0.01"
-          value={volume}
-          onChange={(e) => handleVolumeChange(parseFloat(e.target.value))}
-          onMouseUp={(e) => handleVolumeRelease(parseFloat(e.target.value))}
-          onTouchEnd={(e) => handleVolumeRelease(parseFloat(e.target.value))}
+          min={FADER_DB_MIN}
+          max={FADER_DB_MAX}
+          step="0.1"
+          value={faderDb}
+          onChange={(e) => handleVolumeChange(dbToLinear(parseFloat(e.target.value)))}
+          onMouseUp={(e) => handleVolumeRelease(dbToLinear(parseFloat(e.target.value)))}
+          onTouchEnd={(e) => handleVolumeRelease(dbToLinear(parseFloat(e.target.value)))}
           className="vertical-fader"
         />
       </div>
 
       {/* Footer — fixed height across all strip types for fader alignment */}
-      <div className="w-full text-center px-1 pb-1 h-[28px] flex flex-col justify-end">
+      <div className="w-full text-center px-1 pb-1 h-[28px] flex flex-col justify-end gap-0.5">
+        {/* dB readout — peak of L/R meters, ~10 Hz update. Hidden on strips
+            without meters (empty channels). */}
+        {showMeters && (
+          <div className="text-[9px] leading-none text-white/50 font-mono">
+            <span ref={dbReadoutRef}>-∞</span>
+            <span className="text-white/30"> dB</span>
+          </div>
+        )}
         {stripType === 'channel' && filename && (
           <div className="text-xs text-gray-200 font-mono">
             {formatTimeRemaining(remaining != null ? remaining : duration - currentTime)}

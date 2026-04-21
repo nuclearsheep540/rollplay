@@ -6,37 +6,55 @@
 'use client'
 
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { PlaybackState, ChannelType, DEFAULT_EFFECTS, REVERB_PRESETS } from '../types';
+import { PlaybackState, ChannelType, DEFAULT_EFFECTS } from '../types';
 import { useAssetManager } from '@/app/shared/providers/AssetDownloadManager';
+import AudioEngine from '../engine/AudioEngine';
+import { CHANNEL_PRESETS } from '../engine/presets';
+import { LoopMode } from '../engine/constants';
 
-// Logarithmic frequency mapping for filter faders (0.0–1.0 → Hz)
-// HPF: 0.0 = 20Hz (minimal cut), 1.0 = 5000Hz (aggressive cut)
-const mapHpfFrequency = (faderValue) => {
-  const minLog = Math.log(20);
-  const maxLog = Math.log(5000);
-  return Math.exp(minLog + faderValue * (maxLog - minLog));
-};
-// LPF: 0.0 = 200Hz (aggressive cut), 1.0 = 20000Hz (minimal cut)
-// Inverted so fader-up = brighter (less cut)
-const mapLpfFrequency = (faderValue) => {
-  const minLog = Math.log(200);
-  const maxLog = Math.log(20000);
-  return Math.exp(minLog + faderValue * (maxLog - minLog));
-};
+// ── Channel ID constants ────────────────────────────────────────────────────
+const BGM_CHANNEL_IDS = ['audio_channel_A', 'audio_channel_B', 'audio_channel_C', 'audio_channel_D', 'audio_channel_E', 'audio_channel_F'];
+const SFX_SLOT_COUNT = 9;
 
 /**
  * Unified Audio System for Tabletop Tavern
- * 
+ *
  * Handles TWO types of audio:
  * 1. LOCAL AUDIO: Hardcoded app sounds (dice rolls, combat start, UI feedback)
  *    - Triggered by client-side events
  *    - Uses HTML5 Audio for simplicity
- * 
+ *
  * 2. REMOTE AUDIO: DM-controlled audio (BGM, custom SFX)
  *    - Triggered by WebSocket events from DM
- *    - Uses Web Audio API for precise mixing
- * 
- * Both audio types respect the master volume slider
+ *    - Uses Web Audio API via AudioEngine for precise mixing
+ *
+ * Both audio types respect the master volume slider.
+ *
+ * ── Engine delegation vs hook ownership ──────────────────────────────────────
+ *
+ * DELEGATED TO ENGINE:
+ *   - AudioContext creation/lifecycle          → engine.init(), engine.context
+ *   - Master chain (masterGain, localGain)     → engine.setMasterVolume(), engine.setLocalVolume()
+ *   - Master metering                          → engine.getMasterAnalysers()
+ *   - Buffer cache                             → engine.storeBuffer(), engine.getBuffer()
+ *   - Per-channel gain/mute/effect nodes       → channel.effectChain
+ *   - Per-channel stereo metering              → channel.getAnalysers(), channel.getSendAnalysers()
+ *   - Channel creation                         → engine.createChannel()
+ *   - Mute/solo recomputation                  → engine.updateMuteSoloState()
+ *
+ * KEPT IN HOOK:
+ *   - All React state (useState, useRef for state mirroring)
+ *   - Batch state accumulator (startStateBatch / flushStateBatch)
+ *   - WebSocket event integration patterns
+ *   - Network sync (started_at JIT offset calculation)
+ *   - Pending play queue (before unlock)
+ *   - Visibility recovery
+ *   - Server state sync (syncAudioState)
+ *   - SFX soundboard React state
+ *   - Local audio (HTML5 elements)
+ *   - Fade transitions (rAF-based with proportional reverb send fading)
+ *   - Play/resume operation locking
+ *   - Time tracking (via engine channel events, formatted and throttled identically)
  */
 
 export const useUnifiedAudio = () => {
@@ -46,7 +64,10 @@ export const useUnifiedAudio = () => {
 
   // Callback to clear pending operations when tracks auto-stop
   const clearPendingOperationCallbackRef = useRef(null);
-  
+
+  // ── AudioEngine instance (created once, lives for hook lifetime) ──────────
+  const engineRef = useRef(null);
+
   // Local listening volume (per-client, localStorage-persisted, private)
   const [masterVolume, setMasterVolume] = useState(() => {
     if (typeof window !== 'undefined') {
@@ -67,19 +88,14 @@ export const useUnifiedAudio = () => {
   // =====================================
   // LOCAL AUDIO SYSTEM (HTML5 Audio)
   // =====================================
+  // Kept in the hook — HTML5 Audio is outside engine scope.
   const localAudioElements = useRef({});
 
-  // Initialize local audio elements
   useEffect(() => {
     if (typeof window !== 'undefined') {
       localAudioElements.current = {
         combatStart: new Audio('/audio/sword.mp3'),
-        // Add more local sounds here as needed
-        // diceRoll: new Audio('/audio/dice-roll.mp3'),
-        // seatClick: new Audio('/audio/seat-click.mp3'),
       };
-
-      // Preload and set volume for local audio
       Object.values(localAudioElements.current).forEach(audio => {
         if (audio) {
           audio.preload = 'auto';
@@ -89,7 +105,6 @@ export const useUnifiedAudio = () => {
     }
   }, []);
 
-  // Update local audio volumes when master volume changes
   useEffect(() => {
     Object.values(localAudioElements.current).forEach(audio => {
       if (audio) {
@@ -98,20 +113,17 @@ export const useUnifiedAudio = () => {
     });
   }, [masterVolume]);
 
-  // Play local audio (for hardcoded events)
   const playLocalSFX = (soundName, volume = null) => {
     if (!isAudioUnlocked) {
       console.warn('Audio not unlocked yet - cannot play local audio');
       return;
     }
-
     const audio = localAudioElements.current[soundName];
     if (audio) {
       try {
         audio.volume = volume !== null ? volume * masterVolume : masterVolume;
         audio.currentTime = 0;
         audio.play().catch(e => console.warn('Local audio play failed:', e));
-        console.log(`🔊 Playing local audio: ${soundName}`);
       } catch (error) {
         console.warn(`Failed to play local audio ${soundName}:`, error);
       }
@@ -121,51 +133,39 @@ export const useUnifiedAudio = () => {
   };
 
   // =====================================
-  // REMOTE AUDIO SYSTEM (Web Audio API)
+  // REMOTE AUDIO SYSTEM (Web Audio API via AudioEngine)
   // =====================================
-  const audioContextRef = useRef(null);
-  const masterGainRef = useRef(null);  // Broadcast master level (DM-controlled, synced to all clients)
-  const localGainRef = useRef(null);   // Per-client listening level (private, localStorage-persisted)
-  const remoteTrackGainsRef = useRef({});
-  const remoteTrackInputNodesRef = useRef({}); // Pre-fader input nodes for BGM channels (effect sends tap here)
-  const remoteTrackMuteGainsRef = useRef({});
-  const remoteTrackAnalysersRef = useRef({});
-  const audioBuffersRef = useRef({});
-  const activeSourcesRef = useRef({});
-  const trackTimersRef = useRef({}); // Store timing info for each track
-  const resumeOperationsRef = useRef({}); // Track active resume operations to prevent duplicates
-  const playOperationsRef = useRef({}); // Track active play operations to prevent duplicates
-  const pendingPlayOpsRef = useRef([]); // Queue play ops when AudioContext is suspended (non-DM players)
-  const pendingAudioStateRef = useRef(null); // Store audio_state from initial_state for post-unlock reconciliation
+
+  // Refs for play/resume operation locking (kept in hook — game-specific concurrency)
+  const resumeOperationsRef = useRef({});
+  const playOperationsRef = useRef({});
+  const pendingPlayOpsRef = useRef([]);
+  const pendingAudioStateRef = useRef(null);
   const [audioSyncComplete, setAudioSyncComplete] = useState(false);
-  const unlockInProgressRef = useRef(false); // Prevent overlapping unlockAudio calls
+  const unlockInProgressRef = useRef(false);
+
+  // Track timing info (kept in hook — rAF-based time tracking with throttled React state updates)
+  const trackTimersRef = useRef({});
 
   // Remote track states (for DM-controlled BGM audio)
-  // Channels start empty — DM loads audio from asset library via AudioTrackSelector
-  // SFX is handled separately by the lightweight soundboard system below
   const [remoteTrackStates, setRemoteTrackStatesRaw] = useState({
-    audio_channel_A: { playbackState: PlaybackState.STOPPED, volume: 0.8, filename: null, asset_id: null, s3_url: null, type: ChannelType.BGM, channelGroup: ChannelType.BGM, track: 'A', currentTime: 0, duration: 0, looping: true },
-    audio_channel_B: { playbackState: PlaybackState.STOPPED, volume: 0.8, filename: null, asset_id: null, s3_url: null, type: ChannelType.BGM, channelGroup: ChannelType.BGM, track: 'B', currentTime: 0, duration: 0, looping: true },
-    audio_channel_C: { playbackState: PlaybackState.STOPPED, volume: 0.8, filename: null, asset_id: null, s3_url: null, type: ChannelType.BGM, channelGroup: ChannelType.BGM, track: 'C', currentTime: 0, duration: 0, looping: true },
-    audio_channel_D: { playbackState: PlaybackState.STOPPED, volume: 0.8, filename: null, asset_id: null, s3_url: null, type: ChannelType.BGM, channelGroup: ChannelType.BGM, track: 'D', currentTime: 0, duration: 0, looping: true },
-    audio_channel_E: { playbackState: PlaybackState.STOPPED, volume: 0.8, filename: null, asset_id: null, s3_url: null, type: ChannelType.BGM, channelGroup: ChannelType.BGM, track: 'E', currentTime: 0, duration: 0, looping: true },
-    audio_channel_F: { playbackState: PlaybackState.STOPPED, volume: 0.8, filename: null, asset_id: null, s3_url: null, type: ChannelType.BGM, channelGroup: ChannelType.BGM, track: 'F', currentTime: 0, duration: 0, looping: true },
+    audio_channel_A: { playbackState: PlaybackState.STOPPED, volume: 0.8, filename: null, asset_id: null, s3_url: null, type: ChannelType.BGM, channelGroup: ChannelType.BGM, track: 'A', currentTime: 0, duration: 0, looping: true, loop_mode: null, loop_start: null, loop_end: null },
+    audio_channel_B: { playbackState: PlaybackState.STOPPED, volume: 0.8, filename: null, asset_id: null, s3_url: null, type: ChannelType.BGM, channelGroup: ChannelType.BGM, track: 'B', currentTime: 0, duration: 0, looping: true, loop_mode: null, loop_start: null, loop_end: null },
+    audio_channel_C: { playbackState: PlaybackState.STOPPED, volume: 0.8, filename: null, asset_id: null, s3_url: null, type: ChannelType.BGM, channelGroup: ChannelType.BGM, track: 'C', currentTime: 0, duration: 0, looping: true, loop_mode: null, loop_start: null, loop_end: null },
+    audio_channel_D: { playbackState: PlaybackState.STOPPED, volume: 0.8, filename: null, asset_id: null, s3_url: null, type: ChannelType.BGM, channelGroup: ChannelType.BGM, track: 'D', currentTime: 0, duration: 0, looping: true, loop_mode: null, loop_start: null, loop_end: null },
+    audio_channel_E: { playbackState: PlaybackState.STOPPED, volume: 0.8, filename: null, asset_id: null, s3_url: null, type: ChannelType.BGM, channelGroup: ChannelType.BGM, track: 'E', currentTime: 0, duration: 0, looping: true, loop_mode: null, loop_start: null, loop_end: null },
+    audio_channel_F: { playbackState: PlaybackState.STOPPED, volume: 0.8, filename: null, asset_id: null, s3_url: null, type: ChannelType.BGM, channelGroup: ChannelType.BGM, track: 'F', currentTime: 0, duration: 0, looping: true, loop_mode: null, loop_start: null, loop_end: null },
   });
 
-  // Refs mirroring state for use in event listeners (avoids re-registering on every state change)
+  // Ref mirror for use in event listeners (avoids re-registering on every state change)
   const remoteTrackStatesRef = useRef(remoteTrackStates);
   useEffect(() => { remoteTrackStatesRef.current = remoteTrackStates; }, [remoteTrackStates]);
 
   // Batch accumulator — when active, setRemoteTrackStates calls accumulate
   // into the ref instead of firing individually. flushBatch() applies them
-  // as one atomic state update. Used by handleRemoteAudioBatch so that
-  // parallel play/stop operations produce a single re-render.
+  // as one atomic state update. Used by handleRemoteAudioBatch.
   const batchAccumulatorRef = useRef(null);
 
-  // All internal code uses setRemoteTrackStates (the batched version).
-  // In normal mode it delegates to the raw setter immediately.
-  // In batch mode (startStateBatch → flushStateBatch) it accumulates
-  // updates and applies them as one atomic state transition.
   const setRemoteTrackStates = useCallback((updater) => {
     if (batchAccumulatorRef.current !== null) {
       if (typeof updater === 'function') {
@@ -198,13 +198,8 @@ export const useUnifiedAudio = () => {
   // =====================================
   // SFX SOUNDBOARD (Lightweight fire-and-forget)
   // =====================================
-  // Shares AudioContext + MasterGain with BGM, but uses a simpler path:
-  // BufferSource → SlotGainNode → MasterGainNode → destination
-  // No AnalyserNodes, no RAF time tracking, no pause/resume state machine.
-  const SFX_SLOT_COUNT = 9;
-  const sfxSlotGainsRef = useRef({});
-  const sfxSlotSourcesRef = useRef({});
-  const sfxSlotBuffersRef = useRef({});
+  // SFX uses engine channels with CHANNEL_PRESETS.SFX for playback.
+  // React state is kept in the hook for UI.
 
   const [sfxSlots, setSfxSlots] = useState(() =>
     Array.from({ length: SFX_SLOT_COUNT }, (_, i) => ({
@@ -219,8 +214,8 @@ export const useUnifiedAudio = () => {
   );
 
   // Per-channel mute/solo state (channel-level, not asset-level — survives track swaps)
-  const [mutedChannels, setMutedChannels] = useState({});   // { audio_channel_A: true, ... }
-  const [soloedChannels, setSoloedChannels] = useState({}); // { audio_channel_B: true, ... }
+  const [mutedChannels, setMutedChannels] = useState({});
+  const [soloedChannels, setSoloedChannels] = useState({});
 
   const setChannelMuted = useCallback((channelId, muted) => {
     setMutedChannels(prev => ({ ...prev, [channelId]: muted }));
@@ -230,59 +225,37 @@ export const useUnifiedAudio = () => {
     setSoloedChannels(prev => ({ ...prev, [channelId]: soloed }));
   }, []);
 
-  // Recompute muteGainNode values whenever mute/solo state changes.
-  // Channel mute/solo cascades to that channel's effect sends.
-  // Effect strips have independent mute/solo via composite keys (e.g. "audio_channel_A_hpf").
-  // All strips (channels + effect returns) participate in the same solo group.
+  // Forward mute/solo state into the engine. Both primary channels and
+  // their bus-return sends (e.g. `${trackId}_reverb`) are registered
+  // peer channels in the engine's registry, so this reduces to: "for
+  // each key in the state map, find the channel by id and set its
+  // flags". The engine's updateMuteSoloState recomputes gain uniformly
+  // across all channels with no parent/child semantics.
   useEffect(() => {
-    const anySoloed = Object.values(soloedChannels).some(Boolean);
+    const engine = engineRef.current;
+    if (!engine) return;
 
-    // Channel dry paths
-    for (const [trackId, muteGain] of Object.entries(remoteTrackMuteGainsRef.current)) {
-      const isMuted = mutedChannels[trackId] || false;
-      const isSoloed = soloedChannels[trackId] || false;
-      let gain;
-      if (anySoloed) {
-        gain = isSoloed ? 1.0 : 0.0;
-      } else {
-        gain = isMuted ? 0.0 : 1.0;
-      }
-      muteGain.gain.setValueAtTime(gain, muteGain.context.currentTime);
+    const ids = new Set([
+      ...Object.keys(mutedChannels),
+      ...Object.keys(soloedChannels),
+      ...BGM_CHANNEL_IDS,
+    ]);
+
+    for (const id of ids) {
+      const channel = engine.getChannel(id);
+      if (!channel) continue;
+      channel.setMuted(mutedChannels[id] || false);
+      channel.setSoloed(soloedChannels[id] || false);
     }
 
-    // Reverb send paths — only reverb has a sendMuteGain (HPF/LPF are inline inserts, no mute gate)
-    for (const [trackId, inserts] of Object.entries(channelInsertEffectsRef.current)) {
-      const channelMuted = mutedChannels[trackId] || false;
-
-      const sendMuteGain = inserts.reverb?.sendMuteGain;
-      if (!sendMuteGain) continue;
-
-      const effectId = `${trackId}_reverb`;
-      const effectMuted = mutedChannels[effectId] || false;
-      const effectSoloed = soloedChannels[effectId] || false;
-
-      let gain;
-      if (anySoloed) {
-        gain = (effectSoloed && !effectMuted) ? 1.0 : 0.0;
-      } else {
-        gain = (channelMuted || effectMuted) ? 0.0 : 1.0;
-      }
-      sendMuteGain.gain.setValueAtTime(gain, sendMuteGain.context.currentTime);
-    }
+    engine.updateMuteSoloState();
   }, [mutedChannels, soloedChannels]);
 
-  // Active fade transitions state
-  const [activeFades, setActiveFades] = useState({}); // { trackId: { type, startTime, duration, startGain, targetGain, operation } }
-  const activeFadeRafsRef = useRef({}); // { [trackId]: animationId } — rAF IDs stored outside state to avoid per-frame re-renders
+  // Active fade transitions state (kept in hook — rAF-based with proportional reverb send fading)
+  const [activeFades, setActiveFades] = useState({});
+  const activeFadeRafsRef = useRef({});
 
-  // Per-channel insert effects — each channel owns its own HPF, LPF, Reverb instances
-  // { audio_channel_A: { hpf: { effectNode, wetGain }, lpf: {...}, reverb: {...} }, ... }
-  const channelInsertEffectsRef = useRef({});
-  // Master output analysers for master strip metering
-  const masterAnalysersRef = useRef(null);
-  // Cached reverb impulse response AudioBuffer (shared across per-channel ConvolverNodes)
-  const impulseResponseBufferRef = useRef(null);
-  // Per-channel effect state — enabled flags + mix levels
+  // Per-channel effect state — enabled flags + mix levels (React state for UI)
   const [channelEffects, setChannelEffects] = useState(() => {
     const effects = {};
     ['A', 'B', 'C', 'D', 'E', 'F'].forEach(ch => {
@@ -303,221 +276,93 @@ export const useUnifiedAudio = () => {
   const channelEffectsRef = useRef(channelEffects);
   useEffect(() => { channelEffectsRef.current = channelEffects; }, [channelEffects]);
 
-  // Create a stereo metering chain: upmix → splitter → [L,R analysers] → merger
-  // Reusable for BGM channels, effect buses, and master output
-  const createStereoMeteringChain = (ctx) => {
-    const upmix = ctx.createGain();
-    upmix.channelCount = 2;
-    upmix.channelCountMode = 'explicit';
-    upmix.channelInterpretation = 'speakers';
+  // Analyser refs — built from engine channels, exposed as refs for consumers.
+  // remoteTrackAnalysers includes both dry path and reverb return analysers.
+  const remoteTrackAnalysersRef = useRef({});
+  const masterAnalysersRef = useRef(null);
 
-    const splitter = ctx.createChannelSplitter(2);
-    const merger = ctx.createChannelMerger(2);
-    const analyserL = ctx.createAnalyser();
-    const analyserR = ctx.createAnalyser();
-    analyserL.fftSize = 256;
-    analyserL.smoothingTimeConstant = 0.8;
-    analyserR.fftSize = 256;
-    analyserR.smoothingTimeConstant = 0.8;
+  // ── Helper: build analyser refs from engine channels ──────────────────────
+  const rebuildAnalyserRefs = () => {
+    const engine = engineRef.current;
+    if (!engine) return;
 
-    upmix.connect(splitter);
-    splitter.connect(analyserL, 0);
-    splitter.connect(analyserR, 1);
-    analyserL.connect(merger, 0, 0);
-    analyserR.connect(merger, 0, 1);
-
-    return { upmix, splitter, analyserL, analyserR, merger };
-  };
-
-  // Generate a reverb impulse response AudioBuffer at runtime.
-  // Exponentially decaying stereo white noise — no static files needed.
-  const createImpulseResponse = (ctx, duration, decay) => {
-    const length = Math.floor(ctx.sampleRate * duration);
-    const impulse = ctx.createBuffer(2, length, ctx.sampleRate);
-    for (let ch = 0; ch < 2; ch++) {
-      const data = impulse.getChannelData(ch);
-      for (let i = 0; i < length; i++) {
-        data[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / length, decay);
+    for (const trackId of BGM_CHANNEL_IDS) {
+      const channel = engine.getChannel(trackId);
+      if (!channel) continue;
+      // Dry path analysers
+      const dryAnalysers = channel.getAnalysers();
+      if (dryAnalysers) {
+        remoteTrackAnalysersRef.current[trackId] = dryAnalysers;
+      }
+      // Reverb return analysers (composite key)
+      const reverbAnalysers = channel.getSendAnalysers('reverb');
+      if (reverbAnalysers) {
+        remoteTrackAnalysersRef.current[`${trackId}_reverb`] = reverbAnalysers;
       }
     }
-    return impulse;
+
+    // Master analysers
+    masterAnalysersRef.current = engine.getMasterAnalysers();
   };
 
-  // Initialize Web Audio API for remote tracks
-  const initializeWebAudio = async () => {
-    if (!audioContextRef.current || audioContextRef.current.state === 'closed') {
-      try {
-        audioContextRef.current = new (window.AudioContext || window.webkitAudioContext)();
-        const ctx = audioContextRef.current;
-
-        // Create broadcast master gain node (DM-controlled, synced to all clients)
-        masterGainRef.current = ctx.createGain();
-        masterGainRef.current.gain.value = broadcastMasterVolume;
-
-        // Create local listening gain node (per-client, private)
-        localGainRef.current = ctx.createGain();
-        localGainRef.current.gain.value = masterVolume;
-
-        // Chain: channels → masterGain (broadcast) → metering → localGain (local) → destination
-        // Metering reflects broadcast level, unaffected by local listening volume
-        const masterMetering = createStereoMeteringChain(ctx);
-        masterGainRef.current.connect(masterMetering.upmix);
-        masterMetering.merger.connect(localGainRef.current);
-        localGainRef.current.connect(ctx.destination);
-        masterAnalysersRef.current = { left: masterMetering.analyserL, right: masterMetering.analyserR };
-
-        // ── Shared reverb impulse response buffer (reused by all per-channel ConvolverNodes) ──
-        const defaultPreset = REVERB_PRESETS[DEFAULT_EFFECTS.reverb.preset] || REVERB_PRESETS.room;
-        impulseResponseBufferRef.current = createImpulseResponse(ctx, defaultPreset.duration, defaultPreset.decay);
-
-        // ── Per-channel gain nodes, metering, and insert effects ──
-        Object.keys(remoteTrackStates).forEach(trackId => {
-          const gainNode = ctx.createGain();
-
-          // Mute gain node (solo/mute gate)
-          const muteGainNode = ctx.createGain();
-          muteGainNode.gain.value = 1.0;
-
-          // Stereo metering chain
-          const metering = createStereoMeteringChain(ctx);
-
-          gainNode.gain.value = remoteTrackStates[trackId]?.volume || 1.0;
-          remoteTrackGainsRef.current[trackId] = gainNode;
-          remoteTrackAnalysersRef.current[trackId] = { left: metering.analyserL, right: metering.analyserR };
-
-          // BGM channels: HPF/LPF as inline inserts, reverb as post-EQ pre-fader send
-          //
-          // Signal chain:
-          //   source → inputNode → hpfNode → lpfNode → postEqNode → gainNode (fader) → muteGain → metering → master
-          //                                                        → convolver → reverbWetGain → reverbSendMuteGain → master
-          //
-          // HPF/LPF are always inline — "disabled" = pass-all frequency (HPF 20Hz, LPF 20kHz).
-          // Their strip faders control cutoff frequency.
-          // Reverb is a pre-fader post-EQ send — its strip fader controls wet/dry mix.
-          if (trackId.startsWith('audio_channel_')) {
-            // Pre-fader input node — sources connect here
-            const inputNode = ctx.createGain();
-            inputNode.gain.value = 1.0;
-            remoteTrackInputNodesRef.current[trackId] = inputNode;
-
-            // HPF insert (inline) — disabled = 20Hz (passes all audible)
-            const hpfNode = ctx.createBiquadFilter();
-            hpfNode.type = 'highpass';
-            hpfNode.frequency.value = 20; // pass-all by default
-            hpfNode.Q.value = 0.707;
-
-            // LPF insert (inline) — disabled = 20kHz (passes all audible)
-            const lpfNode = ctx.createBiquadFilter();
-            lpfNode.type = 'lowpass';
-            lpfNode.frequency.value = 20000; // pass-all by default
-            lpfNode.Q.value = 0.707;
-
-            // Post-EQ fan-out node — after inserts, before fader and reverb send
-            const postEqNode = ctx.createGain();
-            postEqNode.gain.value = 1.0;
-
-            // Inline insert chain: inputNode → HPF → LPF → postEqNode
-            inputNode.connect(hpfNode);
-            hpfNode.connect(lpfNode);
-            lpfNode.connect(postEqNode);
-
-            // Dry path: postEqNode → gainNode (fader) → muteGain → metering → master
-            postEqNode.connect(gainNode);
-            gainNode.connect(muteGainNode);
-            muteGainNode.connect(metering.upmix);
-            metering.merger.connect(masterGainRef.current);
-            remoteTrackMuteGainsRef.current[trackId] = muteGainNode;
-
-            // Reverb send: postEqNode → convolver → reverbWetGain → reverbSendMuteGain → master
-            // Pre-fader, post-EQ — reverb receives the EQ-shaped signal
-            const convolver = ctx.createConvolver();
-            convolver.buffer = impulseResponseBufferRef.current;
-            const reverbMakeupGain = ctx.createGain();
-            reverbMakeupGain.gain.value = 3.0; // fixed 3x boost to compensate for convolution attenuation
-            const reverbWetGain = ctx.createGain();
-            reverbWetGain.gain.value = 0.0; // disabled by default
-            const reverbSendMuteGain = ctx.createGain();
-            reverbSendMuteGain.gain.value = 1.0;
-            // Reverb metering chain (stereo)
-            const reverbMetering = createStereoMeteringChain(ctx);
-
-            postEqNode.connect(convolver);
-            convolver.connect(reverbMakeupGain);
-            reverbMakeupGain.connect(reverbWetGain);
-            reverbWetGain.connect(reverbSendMuteGain);
-            reverbSendMuteGain.connect(reverbMetering.upmix);
-            reverbMetering.merger.connect(masterGainRef.current);
-
-            // Store reverb analysers with composite key
-            remoteTrackAnalysersRef.current[`${trackId}_reverb`] = {
-              left: reverbMetering.analyserL,
-              right: reverbMetering.analyserR,
-            };
-
-            channelInsertEffectsRef.current[trackId] = {
-              hpf: { effectNode: hpfNode },
-              lpf: { effectNode: lpfNode },
-              postEqNode,
-              reverb: { effectNode: convolver, makeupGain: reverbMakeupGain, wetGain: reverbWetGain, sendMuteGain: reverbSendMuteGain },
-            };
-          } else {
-            // Non-BGM tracks: simple gain → muteGain → metering → master
-            gainNode.connect(muteGainNode);
-            muteGainNode.connect(metering.upmix);
-            metering.merger.connect(masterGainRef.current);
-            remoteTrackMuteGainsRef.current[trackId] = muteGainNode;
-          }
-        });
-
-        // Create lightweight gain nodes for SFX soundboard slots (no analysers, no effects)
-        for (let i = 0; i < SFX_SLOT_COUNT; i++) {
-          const slotGain = ctx.createGain();
-          slotGain.connect(masterGainRef.current);
-          slotGain.gain.value = 0.8;
-          sfxSlotGainsRef.current[`sfx_slot_${i}`] = slotGain;
-        }
-
-        console.log('🎵 Web Audio API initialized for remote tracks + SFX soundboard + effects chains');
-        return true;
-      } catch (error) {
-        console.warn('Web Audio API initialization failed:', error);
-        return false;
-      }
-    }
-    return true;
-  };
-
-  // Eagerly initialize AudioContext on mount (creates in 'suspended' state).
-  // This allows loadRemoteAudioBuffer to decode audio even before user interaction,
-  // fixing the bug where non-DM players can't load remote audio buffers.
+  // ── Engine initialization ─────────────────────────────────────────────────
+  // Eagerly create AudioEngine on mount (creates AudioContext in 'suspended' state).
+  // This allows loadRemoteAudioBuffer to decode audio even before user interaction.
   useEffect(() => {
-    if (typeof window !== 'undefined' && !audioContextRef.current) {
-      initializeWebAudio();
-      console.log('🎵 AudioContext eagerly initialized (suspended state)');
-    }
+    if (typeof window === 'undefined') return;
+    if (engineRef.current) return;
+
+    const engine = new AudioEngine();
+    engineRef.current = engine;
+
+    const initEngine = async () => {
+      await engine.init();
+
+      // Create 6 BGM channels with full effect chain
+      for (const trackId of BGM_CHANNEL_IDS) {
+        engine.createChannel(trackId, CHANNEL_PRESETS.BGM);
+      }
+
+      // Create SFX slot channels (lightweight, no effects)
+      for (let i = 0; i < SFX_SLOT_COUNT; i++) {
+        engine.createChannel(`sfx_slot_${i}`, CHANNEL_PRESETS.SFX);
+      }
+
+      // Set initial volumes
+      engine.setMasterVolume(broadcastMasterVolume);
+      engine.setLocalVolume(masterVolume);
+
+      // Build analyser refs for consumers
+      rebuildAnalyserRefs();
+
+      console.log('Web Audio API initialized via AudioEngine for remote tracks + SFX soundboard + effects chains');
+    };
+
+    initEngine();
   }, []);
 
-  // Load remote audio buffer
+  // Load remote audio buffer — uses assetManager.download() for progress tracking,
+  // then decodes via engine.context and stores in engine's buffer cache.
   const loadRemoteAudioBuffer = async (url, trackId, assetId) => {
-    if (!audioContextRef.current || audioContextRef.current.state === 'closed') {
-      await initializeWebAudio();
-    }
-    if (!audioContextRef.current) {
-      console.warn('⚠️ loadRemoteAudioBuffer: AudioContext is null — cannot decode audio');
+    const engine = engineRef.current;
+    if (!engine?.context || engine.context.state === 'closed') {
+      console.warn('loadRemoteAudioBuffer: AudioContext is null or closed — cannot decode audio');
       return null;
     }
 
+    // Check engine buffer cache first
+    const cacheKey = `${trackId}_${assetId || url}`;
+    const cached = engine.getBuffer(cacheKey);
+    if (cached) return cached;
+
     try {
-      console.log(`📁 Loading remote audio buffer: ${url}`);
       const blob = await assetManager.download(url, undefined, assetId);
       const arrayBuffer = await blob.arrayBuffer();
-      const audioBuffer = await audioContextRef.current.decodeAudioData(arrayBuffer);
-
-      audioBuffersRef.current[`${trackId}_${url}`] = audioBuffer;
-      console.log(`✅ Loaded remote audio buffer for ${trackId}: ${url}`);
+      const audioBuffer = await engine.context.decodeAudioData(arrayBuffer);
+      engine.storeBuffer(cacheKey, audioBuffer);
       return audioBuffer;
     } catch (error) {
-      console.warn(`❌ Failed to load remote audio: ${url}`, error);
+      console.warn(`Failed to load remote audio: ${url}`, error);
       return null;
     }
   };
@@ -525,8 +370,9 @@ export const useUnifiedAudio = () => {
   // =====================================
   // FADE TRANSITION FUNCTIONS
   // =====================================
-  
-  // Start a fade transition for a track
+  // Kept in the hook — the engine's fade is simpler; the hook's rAF-based fade
+  // with proportional reverb send fading and TRANSITIONING state is more sophisticated.
+
   const startFade = (trackId, type, duration, startGain, targetGain, operation) => {
     // Cancel any existing fade for this track
     if (activeFadeRafsRef.current[trackId]) {
@@ -536,20 +382,18 @@ export const useUnifiedAudio = () => {
 
     const startTime = performance.now();
 
-    // Capture the reverb send's current wet gain at fade start so we can
-    // scale it proportionally alongside the channel fader. This ensures
-    // the send fades in lockstep with the dry signal rather than staying
-    // at full level and cutting abruptly on stop.
-    const inserts = channelInsertEffectsRef.current[trackId];
-    const reverbWetGainAtStart = inserts?.reverb?.wetGain?.gain?.value ?? 0;
-    // For fade-ins, wet gain starts at 0 — we need the target level to scale toward
+    // Capture reverb send state for proportional fading.
+    // Read the wet gain from the engine channel's reverb effect.
+    const engine = engineRef.current;
+    const channel = engine?.getChannel(trackId);
+    const reverb = channel?.effectChain?.getEffect('reverb');
+    const reverbWetGainAtStart = reverb?.wetGain?.gain?.value ?? 0;
+
     const effects = channelEffectsRef.current[trackId];
     const reverbEnabled = effects?.reverb ?? false;
     const reverbTargetLevel = reverbEnabled
       ? (effects?.reverb_mix ?? DEFAULT_EFFECTS.reverb.mix)
       : 0;
-
-    console.log(`🌊 Starting ${type} fade for ${trackId}: ${startGain} → ${targetGain} over ${duration}ms`);
 
     // Set state ONCE at fade start — this is the only state update until fade ends
     setActiveFades(prev => ({
@@ -557,7 +401,7 @@ export const useUnifiedAudio = () => {
       [trackId]: { type, startTime, duration, startGain, targetGain, operation }
     }));
 
-    // Mark track as transitioning
+    // Mark track as transitioning (TRANSITIONING state used by mixer UI)
     setRemoteTrackStates(prev => ({
       ...prev,
       [trackId]: { ...prev[trackId], playbackState: PlaybackState.TRANSITIONING }
@@ -567,17 +411,15 @@ export const useUnifiedAudio = () => {
     const animate = (currentTime) => {
       const elapsed = currentTime - startTime;
       const progress = Math.min(elapsed / duration, 1.0);
-
-      // Calculate current gain using linear interpolation
       const currentGain = startGain + (targetGain - startGain) * progress;
 
-      // Apply gain to channel fader (dry path)
-      if (remoteTrackGainsRef.current[trackId]) {
-        remoteTrackGainsRef.current[trackId].gain.value = currentGain;
+      // Apply gain to channel fader via engine channel's gainNode
+      if (channel?.effectChain?.gainNode) {
+        channel.effectChain.gainNode.gain.value = currentGain;
       }
 
       // Fade reverb send in proportion alongside the dry signal
-      if (inserts?.reverb?.wetGain) {
+      if (reverb?.wetGain) {
         let fadeRatio;
         if (type === 'out') {
           fadeRatio = startGain > 0 ? currentGain / startGain : 0;
@@ -587,31 +429,26 @@ export const useUnifiedAudio = () => {
           fadeRatio = 1;
         }
         fadeRatio = Math.min(Math.max(fadeRatio, 0), 1);
-        // Fade-out: scale down from current level. Fade-in: scale up toward target level.
         const reverbBase = type === 'in' ? reverbTargetLevel : reverbWetGainAtStart;
-        inserts.reverb.wetGain.gain.value = reverbBase * fadeRatio;
+        reverb.wetGain.gain.value = reverbBase * fadeRatio;
       }
 
       if (progress < 1.0) {
-        // Continue animation — store rAF ID in ref, not state
         activeFadeRafsRef.current[trackId] = requestAnimationFrame(animate);
       } else {
         // Fade complete
-        console.log(`✅ Fade ${type} complete for ${trackId}`);
         delete activeFadeRafsRef.current[trackId];
 
-        // Remove from active fades — second and final state update
         setActiveFades(prev => {
           const newFades = { ...prev };
           delete newFades[trackId];
           return newFades;
         });
 
-        // Set final playback state
         if (type === 'out') {
           setTimeout(() => {
             stopRemoteTrack(trackId);
-          }, 50); // Small delay to ensure fade is visually complete
+          }, 50);
         } else if (type === 'in') {
           setRemoteTrackStates(prev => ({
             ...prev,
@@ -621,77 +458,45 @@ export const useUnifiedAudio = () => {
       }
     };
 
-    // Start the animation — store rAF ID in ref
     activeFadeRafsRef.current[trackId] = requestAnimationFrame(animate);
   };
-  
-  // Cancel an active fade (for interruptions)
+
   const cancelFade = (trackId) => {
-    // Cancel the rAF from the ref
     if (activeFadeRafsRef.current[trackId]) {
       cancelAnimationFrame(activeFadeRafsRef.current[trackId]);
       delete activeFadeRafsRef.current[trackId];
     }
-    // Remove from state (if entry exists)
     setActiveFades(prev => {
-      if (!prev[trackId]) return prev; // no-op if already removed
+      if (!prev[trackId]) return prev;
       const newFades = { ...prev };
       delete newFades[trackId];
       return newFades;
     });
-    console.log(`🚫 Cancelled fade for ${trackId}`);
   };
 
-  // Play remote track (triggered by WebSocket events)
+  // ── Playback: play remote track ───────────────────────────────────────────
+  // Delegates AudioBuffer source creation to engine channels, but keeps all
+  // game-specific logic (operation locking, pending queue, JIT sync, React state).
   const playRemoteTrack = async (trackId, audioFile, loop = true, volume = null, resumeFromTime = null, completeTrackState = null, skipBufferLoad = false, syncStartTime = null, fade = false, fadeDuration = 1000) => {
     const operationId = `${trackId}_${Date.now()}`;
-    console.log(`🎵 [${operationId}] Attempting to play remote track: ${trackId} - ${audioFile}`);
-    
+    const engine = engineRef.current;
+
     // Check if a play operation is already in progress for this track
     if (playOperationsRef.current[trackId]) {
-      console.warn(`⚠️ [${operationId}] Play operation already in progress for ${trackId}, ignoring duplicate`);
+      console.warn(`Play operation already in progress for ${trackId}, ignoring duplicate`);
       return false;
     }
-    
-    // Mark this track as having an active play operation
-    playOperationsRef.current[trackId] = operationId;
-    console.log(`🔒 [${operationId}] Locked play operation for ${trackId}`);
-    
-    try {
-      console.log(
-        `🔧 Audio state - isUnlocked: ${isAudioUnlocked}, ` +
-        `audioContext: ${audioContextRef.current ? 'exists' : 'null'}, ` +
-        `state: ${audioContextRef.current?.state}`
-      );
-  
-      // Debug the pause state detection
-      const currentTrackState = remoteTrackStates[trackId];
-      console.log(`🔍 Track state for ${trackId}:`, currentTrackState);
-      console.log(
-        `🔍 Playback state: ${currentTrackState?.playbackState}, ` +
-        `currentTime=${currentTrackState?.currentTime}`
-      );
-  
-      // Reinitialize if context was closed (e.g. React strict mode remount)
-      if (
-        !audioContextRef.current ||
-        audioContextRef.current.state === 'closed'
-      ) {
-        await initializeWebAudio();
-      }
 
+    playOperationsRef.current[trackId] = operationId;
+
+    try {
       // Check if Web Audio context exists, is unlocked, and the user has clicked the gate overlay
       if (
-        !audioContextRef.current ||
-        audioContextRef.current.state === 'suspended' ||
+        !engine?.context ||
+        engine.context.state === 'suspended' ||
         !isAudioUnlockedRef.current
       ) {
-        console.warn('🕐 Audio not ready — queueing play operation for unlock');
-        console.log(
-          '💡 User needs to interact with the page to unlock audio ' +
-          '(click volume slider, sit in seat, etc.)'
-        );
-        // Queue the play operation — will be drained when unlockAudio() runs
+        console.warn('Audio not ready — queueing play operation for unlock');
         pendingPlayOpsRef.current.push({
           trackId, audioFile, loop, volume, completeTrackState, skipBufferLoad,
           resumeFromTime,
@@ -709,98 +514,58 @@ export const useUnifiedAudio = () => {
         }));
         return false;
       }
-  
-      // Ensure the context is initialized
-      await initializeWebAudio();
-  
-      // Stop any existing source for this track
-      if (activeSourcesRef.current[trackId]) {
-        try {
-          activeSourcesRef.current[trackId].stop();
-          console.log(
-            `🛑 Stopped existing source for ${trackId} before starting new one`
-          );
-        } catch (e) {
-          console.warn(
-            `Warning: Could not stop existing source for ${trackId}:`,
-            e
-          );
-        }
-        delete activeSourcesRef.current[trackId];
+
+      const channel = engine.getChannel(trackId);
+      if (!channel) {
+        console.warn(`No engine channel found for ${trackId}`);
+        return false;
       }
-  
-      // Clean up any existing timer
+
+      // Stop any existing source for this track via engine channel
+      channel._stopSource();
+      channel._cancelFade();
+      channel._stopTimeTracking();
+
+      // Clean up any existing hook-level timer
       if (trackTimersRef.current[trackId]) {
         delete trackTimersRef.current[trackId];
-        console.log(`🧹 Cleaned up existing timer for ${trackId}`);
       }
-  
+
       // Load (or reuse) the AudioBuffer
-      // Use asset_id for stable cache key (S3 URLs change on each presign), fall back to filename
       const trackState = remoteTrackStates[trackId];
       const assetId = completeTrackState?.asset_id || trackState?.asset_id;
       const bufferKey = `${trackId}_${assetId || audioFile}`;
-      let audioBuffer = audioBuffersRef.current[bufferKey];
+      let audioBuffer = engine.getBuffer(bufferKey);
 
-      // Resolve audio URL: prefer S3 URL from track state, fall back to /audio/ path
+      // Resolve audio URL
       const audioUrl = completeTrackState?.s3_url || trackState?.s3_url || `/audio/${audioFile}`;
 
       if (skipBufferLoad) {
-        console.log(`⚡ [${operationId}] Skipping buffer load (synchronized playback) - using pre-loaded buffer`);
         if (!audioBuffer) {
-          console.error(`❌ [${operationId}] Expected pre-loaded buffer not found for ${trackId}`);
+          console.error(`Expected pre-loaded buffer not found for ${trackId}`);
           return false;
         }
       } else if (!audioBuffer) {
-        console.log(
-          `📁 [${operationId}] Loading remote audio buffer: ${audioUrl}`
-        );
         audioBuffer = await loadRemoteAudioBuffer(audioUrl, trackId, assetId);
         if (!audioBuffer) return false;
-        audioBuffersRef.current[bufferKey] = audioBuffer;
-      } else {
-        console.log(
-          `♻️ [${operationId}] Using cached audio buffer for ${trackId}`
-        );
       }
-  
-      // Create and configure the BufferSource
-      const source = audioContextRef.current.createBufferSource();
-      source.buffer = audioBuffer;
-  
-      // Determine looping - prefer complete track state if provided, then passed parameter
+
+      // Determine looping
       const trackType = completeTrackState?.type || remoteTrackStates[trackId]?.type;
-      const shouldLoop =
-        trackType === 'sfx'
-          ? false
-          : completeTrackState?.looping ?? loop; // Use complete state first, then fallback to parameter
-      source.loop = shouldLoop;
-      
-      console.log(`🔄 Loop determination: trackType=${trackType}, completeState.looping=${completeTrackState?.looping}, fallback.loop=${loop}, final.shouldLoop=${shouldLoop}`);
-  
-      // Connect source to pre-fader input node (BGM channels) or directly to gain node (others)
-      // BGM channels use inputNode so effect sends tap the signal pre-fader
-      const connectNode = remoteTrackInputNodesRef.current[trackId] || remoteTrackGainsRef.current[trackId];
-      source.connect(connectNode);
-  
+      const shouldLoop = trackType === 'sfx' ? false : (completeTrackState?.looping ?? loop);
+
       // Compute resume offset
       let startOffset;
       let resumeFromPause = false;
-      const NETWORK_COMPENSATION = 0.4; // seconds to subtract for network/processing latency
+      const NETWORK_COMPENSATION = 0.4;
 
       if (completeTrackState?.started_at && resumeFromTime === null) {
-        // JIT offset calculation from started_at (late-joiner sync / visibility recovery)
-        // Calculating at the last moment eliminates drift from buffer loading and context creation
         const elapsed = (Date.now() / 1000) - completeTrackState.started_at;
         const compensated = Math.max(0, elapsed - NETWORK_COMPENSATION);
         startOffset = shouldLoop
           ? (compensated % audioBuffer.duration)
           : Math.min(compensated, audioBuffer.duration);
-        resumeFromPause = true; // treat JIT sync like a resume (timer needs the offset)
-        console.log(
-          `🎯 [${operationId}] JIT offset: elapsed=${elapsed.toFixed(2)}s, ` +
-          `compensated=${compensated.toFixed(2)}s, offset=${startOffset.toFixed(2)}s`
-        );
+        resumeFromPause = true;
       } else {
         resumeFromPause =
           resumeFromTime !== null ||
@@ -812,28 +577,90 @@ export const useUnifiedAudio = () => {
             : resumeFromPause
             ? remoteTrackStates[trackId].currentTime
             : 0;
-        console.log(
-          `🔍 Resume logic: resumeFromTime=${resumeFromTime}, ` +
-          `resumeFromPause=${resumeFromPause}, startOffset=${startOffset}` +
-          `${syncStartTime ? `, syncStartTime=${syncStartTime}` : ''}`
-        );
       }
 
-      // Start playback (synchronized if syncStartTime provided)
+      // Configure channel loop mode — support region looping from asset config
+      const effectiveLoopMode = completeTrackState?.loop_mode;
+      if (effectiveLoopMode === 'region' && completeTrackState?.loop_start != null && completeTrackState?.loop_end != null) {
+        channel.setLoopMode(LoopMode.REGION);
+        channel.setLoopRegion(completeTrackState.loop_start, completeTrackState.loop_end);
+      } else {
+        channel.setLoopMode(shouldLoop ? LoopMode.FULL : LoopMode.OFF);
+      }
+
+      // Create and configure the BufferSource directly (we need hook-level
+      // timer control, so we manage the source ourselves rather than using channel.play())
+      const ctx = engine.context;
+      const source = ctx.createBufferSource();
+      source.buffer = audioBuffer;
+
+      // Apply loop config to source node
+      if (effectiveLoopMode === 'region' && completeTrackState?.loop_start != null && completeTrackState?.loop_end != null) {
+        source.loop = true;
+        source.loopStart = completeTrackState.loop_start;
+        source.loopEnd = completeTrackState.loop_end;
+      } else {
+        source.loop = shouldLoop;
+      }
+
+      // Connect source to channel's effect chain input
+      if (!channel.effectChain) {
+        // Effect chain should exist but rebuild defensively
+        channel.rebuild();
+        if (!channel.effectChain) return false;
+      }
+      source.connect(channel.effectChain.inputNode);
+
+      // Store source on channel for proper lifecycle management
+      channel._source = source;
+      channel._buffer = audioBuffer;
+      channel._duration = audioBuffer.duration;
+
+      // Handle source ending (non-looping tracks)
+      source.onended = () => {
+        if (channel._source !== source) return;
+        if (!shouldLoop) {
+          channel._source = null;
+          delete trackTimersRef.current[trackId];
+          setRemoteTrackStates((prev) => ({
+            ...prev,
+            [trackId]: {
+              ...prev[trackId],
+              playbackState: PlaybackState.STOPPED,
+              currentTime: 0,
+              duration: 0,
+              remaining: null
+            }
+          }));
+
+          // Clear ALL pending operations for this track when it auto-stops
+          if (clearPendingOperationCallbackRef.current) {
+            clearPendingOperationCallbackRef.current(`play_${trackId}`);
+            clearPendingOperationCallbackRef.current(`pause_${trackId}`);
+            clearPendingOperationCallbackRef.current(`stop_${trackId}`);
+            clearPendingOperationCallbackRef.current(`loop_${trackId}`);
+          }
+        }
+      };
+
+      // Volume
+      const finalVolume = volume !== null ? volume : remoteTrackStates[trackId]?.volume ?? 0.7;
+
+      if (fade) {
+        channel.effectChain.gainNode.gain.value = 0;
+      } else {
+        channel.effectChain.gainNode.gain.value = finalVolume;
+      }
+
+      // Start playback
       if (syncStartTime) {
         source.start(syncStartTime, startOffset);
-        console.log(`🎵 [${operationId}] Scheduled synchronized start at audio time ${syncStartTime}`);
       } else {
         source.start(0, startOffset);
-        console.log(`🎵 [${operationId}] Started immediately`);
       }
-      activeSourcesRef.current[trackId] = source;
-  
-      // Grab duration from the buffer
-      const duration = audioBuffer.duration;
-  
+
       // Update React state
-      const finalVolume = volume !== null ? volume : remoteTrackStates[trackId]?.volume ?? 0.7;
+      const duration = audioBuffer.duration;
       setRemoteTrackStates((prev) => ({
         ...prev,
         [trackId]: {
@@ -845,61 +672,41 @@ export const useUnifiedAudio = () => {
           duration
         }
       }));
-      
+
       // Handle fade-in if requested
       if (fade) {
-        console.log(`🌊 Starting fade-in for ${trackId}`);
-        // Cancel any existing fade for this track first
         cancelFade(trackId);
-        // Set initial gain to 0 and fade to target volume
-        if (remoteTrackGainsRef.current[trackId]) {
-          remoteTrackGainsRef.current[trackId].gain.value = 0;
-        }
         startFade(trackId, 'in', fadeDuration, 0, finalVolume, 'play');
-      } else if (remoteTrackGainsRef.current[trackId]) {
-        // Set volume immediately for non-fade playback
-        remoteTrackGainsRef.current[trackId].gain.value = finalVolume;
       }
-  
-      // Set up our time‐update loop
-      const startTime = audioContextRef.current.currentTime;
+
+      // Set up hook-level time-update loop (rAF-based, throttled to 100ms)
+      const playStartTime = ctx.currentTime;
       const pausedTime = resumeFromPause ? startOffset : 0;
 
-      // DEBUG: Log timer setup to compare with source.start offset
-      console.log(`⏱️ TIMER SETUP: startOffset=${startOffset}, pausedTime=${pausedTime}, resumeFromPause=${resumeFromPause}`);
-
       trackTimersRef.current[trackId] = {
-        startTime,
+        startTime: playStartTime,
         pausedTime,
         duration,
         loop: shouldLoop,
-        lastUpdateTime: startTime
+        lastUpdateTime: playStartTime
       };
-  
+
       const updateTime = () => {
         const timer = trackTimersRef.current[trackId];
-        if (!timer || activeSourcesRef.current[trackId] !== source) {
-          return; // track stopped or replaced
-        }
-  
-        const elapsed =
-          audioContextRef.current.currentTime -
-          timer.startTime +
-          timer.pausedTime;
-  
+        if (!timer || channel._source !== source) return;
+
+        const elapsed = ctx.currentTime - timer.startTime + timer.pausedTime;
+
         let currentTime;
         let keepUpdating = true;
-  
+
         if (timer.loop && timer.duration > 0) {
           currentTime = elapsed % timer.duration;
         } else {
           currentTime = Math.min(elapsed, timer.duration);
           if (elapsed >= timer.duration && timer.duration > 0) {
-            console.log(`⏹️ ${trackId} finished, auto-stopping`);
-            try {
-              source.stop();
-            } catch (_) {}
-            delete activeSourcesRef.current[trackId];
+            try { source.stop(); } catch (_) {}
+            channel._source = null;
             delete trackTimersRef.current[trackId];
             setRemoteTrackStates((prev) => ({
               ...prev,
@@ -911,23 +718,20 @@ export const useUnifiedAudio = () => {
                 remaining: null
               }
             }));
-            
-            // Clear ALL pending operations for this track when it auto-stops
+
             if (clearPendingOperationCallbackRef.current) {
               clearPendingOperationCallbackRef.current(`play_${trackId}`);
               clearPendingOperationCallbackRef.current(`pause_${trackId}`);
               clearPendingOperationCallbackRef.current(`stop_${trackId}`);
               clearPendingOperationCallbackRef.current(`loop_${trackId}`);
             }
-            
             keepUpdating = false;
           }
         }
-  
+
         if (keepUpdating) {
-          // Throttle updates to avoid excessive re-renders (only update if time changed significantly)
           const timeDiff = Math.abs(currentTime - (timer.lastUpdateTime || 0));
-          if (timeDiff > 0.1) { // Only update every 100ms
+          if (timeDiff > 0.1) {
             timer.lastUpdateTime = currentTime;
             setRemoteTrackStates((prev) => ({
               ...prev,
@@ -942,48 +746,37 @@ export const useUnifiedAudio = () => {
           requestAnimationFrame(updateTime);
         }
       };
-  
+
       requestAnimationFrame(updateTime);
-  
-      console.log(
-        `▶️ Playing remote ${trackId}: ${audioFile} (loop: ${shouldLoop})`
-      );
       return true;
     } catch (error) {
       console.warn(`Failed to play remote ${trackId}:`, error);
       return false;
     } finally {
-      // Always release the play operation lock
       if (playOperationsRef.current[trackId] === operationId) {
         delete playOperationsRef.current[trackId];
-        console.log(
-          `🔓 [${operationId}] Unlocked play operation for ${trackId}`
-        );
       }
     }
   };
+
+  // ── Stop remote track ─────────────────────────────────────────────────────
   const stopRemoteTrack = (trackId, fade = false, fadeDuration = 1000) => {
-    if (activeSourcesRef.current[trackId]) {
+    const engine = engineRef.current;
+    const channel = engine?.getChannel(trackId);
+
+    if (channel?._source) {
       try {
         if (fade) {
-          console.log(`🌊 Starting fade-out for ${trackId}`);
-          // Cancel any existing fade for this track first
           cancelFade(trackId);
-          // Get current gain and fade to 0
-          const currentGain = remoteTrackGainsRef.current[trackId]?.gain.value || 0;
+          const currentGain = channel.effectChain?.gainNode?.gain?.value || 0;
           startFade(trackId, 'out', fadeDuration, currentGain, 0, 'stop');
-          // Note: actual stop() will be called by the fade completion handler
         } else {
           // Immediate stop
-          activeSourcesRef.current[trackId].stop();
-          delete activeSourcesRef.current[trackId];
-          
-          // Clean up timer
+          try { channel._source.stop(); } catch (_) {}
+          channel._source = null;
           delete trackTimersRef.current[trackId];
-          
-          // Cancel any active fade
           cancelFade(trackId);
-          
+
           setRemoteTrackStates(prev => ({
             ...prev,
             [trackId]: {
@@ -994,8 +787,6 @@ export const useUnifiedAudio = () => {
               remaining: null
             }
           }));
-
-          console.log(`⏹️ Stopped remote ${trackId}`);
         }
       } catch (error) {
         console.warn(`Failed to stop remote ${trackId}:`, error);
@@ -1003,26 +794,28 @@ export const useUnifiedAudio = () => {
     }
   };
 
-  // Pause remote track (preserves playhead position)
+  // ── Pause remote track ────────────────────────────────────────────────────
   const pauseRemoteTrack = (trackId) => {
-    if (activeSourcesRef.current[trackId] && trackTimersRef.current[trackId]) {
+    const engine = engineRef.current;
+    const channel = engine?.getChannel(trackId);
+    const ctx = engine?.context;
+
+    if (channel?._source && trackTimersRef.current[trackId]) {
       try {
-        // Calculate current position before stopping
         const timer = trackTimersRef.current[trackId];
-        const elapsed = audioContextRef.current.currentTime - timer.startTime + timer.pausedTime;
-        
+        const elapsed = ctx.currentTime - timer.startTime + timer.pausedTime;
+
         let currentTime;
         if (timer.loop && timer.duration > 0) {
           currentTime = elapsed % timer.duration;
         } else {
           currentTime = Math.min(elapsed, timer.duration);
         }
-        
+
         // Stop the source
-        activeSourcesRef.current[trackId].stop();
-        delete activeSourcesRef.current[trackId];
-        
-        // Update state to paused with preserved position
+        try { channel._source.stop(); } catch (_) {}
+        channel._source = null;
+
         setRemoteTrackStates(prev => ({
           ...prev,
           [trackId]: {
@@ -1033,7 +826,6 @@ export const useUnifiedAudio = () => {
           }
         }));
 
-        console.log(`⏸️ Paused remote ${trackId} at ${currentTime.toFixed(2)}s`);
         return true;
       } catch (error) {
         console.warn(`Failed to pause remote ${trackId}:`, error);
@@ -1043,175 +835,140 @@ export const useUnifiedAudio = () => {
     return false;
   };
 
-  // Toggle remote track looping (SFX tracks are hardcoded to false)
+  // ── Toggle remote track looping ───────────────────────────────────────────
   const toggleRemoteTrackLooping = (trackId, looping) => {
-    // SFX tracks cannot be looped
     const trackType = remoteTrackStates[trackId]?.type;
     if (trackType === 'sfx') {
-      console.warn('🚫 SFX tracks cannot be looped - ignoring toggle request');
+      console.warn('SFX tracks cannot be looped - ignoring toggle request');
       return;
     }
-    
-    // Check if track is currently playing BEFORE updating state
-    // Prioritize actual audio state over potentially stale React state
-    const hasActiveSource = !!activeSourcesRef.current[trackId];
+
+    const engine = engineRef.current;
+    const channel = engine?.getChannel(trackId);
+    const ctx = engine?.context;
+    const hasActiveSource = !!channel?._source;
     const currentState = remoteTrackStates[trackId];
-    const playbackState = currentState?.playbackState;
-    const wasPlaying = hasActiveSource; // If there's an active source, consider it playing
-    
-    console.log(`🔄 Toggle loop for ${trackId}: ${looping ? 'enabled' : 'disabled'}`);
-    console.log(`🔍 Debug state: hasActiveSource=${hasActiveSource}, playbackState=${playbackState}, wasPlaying=${wasPlaying}`);
-    
-    // Update the state
+
     setRemoteTrackStates(prev => ({
       ...prev,
-      [trackId]: {
-        ...prev[trackId],
-        looping
-      }
+      [trackId]: { ...prev[trackId], looping }
     }));
-    
-    // If track was playing, restart it with new loop setting while preserving playback position
-    if (wasPlaying && currentState) {
+
+    if (hasActiveSource && currentState) {
       const { filename } = currentState;
-      
-      console.log(`🔄 Restarting ${trackId} with looping ${looping ? 'enabled' : 'disabled'} (preserving position)`);
-      
-      // Get the actual current volume from the Web Audio gain node (not React state)
-      const actualVolume = remoteTrackGainsRef.current[trackId]?.gain.value || currentState.volume;
-      console.log(`🔊 Preserving actual volume: ${actualVolume} (state volume: ${currentState.volume})`);
-      
+      const actualVolume = channel?.effectChain?.gainNode?.gain?.value || currentState.volume;
+
       // Calculate current playback position before stopping
       let currentPlaybackTime = 0;
       const timer = trackTimersRef.current[trackId];
-      if (timer && audioContextRef.current) {
-        const elapsed = audioContextRef.current.currentTime - timer.startTime + timer.pausedTime;
+      if (timer && ctx) {
+        const elapsed = ctx.currentTime - timer.startTime + timer.pausedTime;
         if (timer.loop && timer.duration > 0) {
           currentPlaybackTime = elapsed % timer.duration;
         } else {
           currentPlaybackTime = Math.min(elapsed, timer.duration);
         }
-        console.log(`📍 Preserving playback position: ${currentPlaybackTime.toFixed(2)}s`);
       }
-      
+
       // Stop current playback
       try {
-        activeSourcesRef.current[trackId].stop();
-        delete activeSourcesRef.current[trackId];
+        channel._source.stop();
+        channel._source = null;
         delete trackTimersRef.current[trackId];
       } catch (e) {
         console.warn(`Warning stopping ${trackId} for loop change:`, e);
       }
-      
-      // Restart with new loop setting and preserved position - create complete track state
+
       const completeTrackState = {
         ...currentState,
         looping,
         channelId: trackId,
         filename,
-        volume: actualVolume // Use the actual Web Audio volume, not React state
+        volume: actualVolume
       };
-      
-      // Restart immediately - no delay needed
+
       playRemoteTrack(trackId, filename, looping, actualVolume, currentPlaybackTime, completeTrackState);
     }
-    
-    console.log(`🔄 Set remote ${trackId} looping to ${looping ? 'enabled' : 'disabled'}`);
   };
-
 
   // Set callback to clear pending operations when tracks auto-stop
   const setClearPendingOperationCallback = (callback) => {
     clearPendingOperationCallbackRef.current = callback;
   };
 
-  // Set remote track volume
+  // ── Set remote track volume ───────────────────────────────────────────────
+  // Writes to the engine channel's gain node; updates React state.
   const setRemoteTrackVolume = (trackId, volume) => {
-    if (remoteTrackGainsRef.current[trackId]) {
-      remoteTrackGainsRef.current[trackId].gain.value = volume;
-      setRemoteTrackStates(prev => ({
-        ...prev,
-        [trackId]: {
-          ...prev[trackId],
-          volume
-        }
-      }));
-      // Removed logging to avoid confusion with WebSocket debouncing
-      // Only WebSocket sends should be logged for clarity
+    const engine = engineRef.current;
+    const channel = engine?.getChannel(trackId);
+    if (channel?.effectChain?.gainNode) {
+      channel.effectChain.gainNode.gain.value = volume;
     }
+    setRemoteTrackStates(prev => ({
+      ...prev,
+      [trackId]: { ...prev[trackId], volume }
+    }));
   };
 
-  // Update local listening volume (per-client)
+  // ── Update local listening volume (per-client) ────────────────────────────
+  // Delegates to engine.setLocalVolume().
   useEffect(() => {
-    if (localGainRef.current) {
-      localGainRef.current.gain.value = masterVolume;
+    if (engineRef.current) {
+      engineRef.current.setLocalVolume(masterVolume);
     }
-
-    // Save to localStorage
     if (typeof window !== 'undefined') {
       localStorage.setItem('rollplay_master_volume', masterVolume.toString());
     }
   }, [masterVolume]);
 
-  // Update broadcast master volume (DM-controlled, synced to all clients)
+  // ── Update broadcast master volume (DM-controlled) ────────────────────────
+  // Delegates to engine.setMasterVolume().
   useEffect(() => {
-    if (masterGainRef.current) {
-      masterGainRef.current.gain.value = broadcastMasterVolume;
+    if (engineRef.current) {
+      engineRef.current.setMasterVolume(broadcastMasterVolume);
     }
   }, [broadcastMasterVolume]);
 
-  // ── Shared unlock helpers ────────────────────────────────────────────
-  // These are called by both unlockDesktop and unlockMobile strategies.
+  // ── Shared unlock helpers ─────────────────────────────────────────────────
 
-  // Re-apply channel effects to current Web Audio nodes.
-  // syncAudioState populates channelEffects React state before unlock,
-  // so re-applying ensures the audio graph matches the stored state.
+  // Re-apply channel effects to engine channels after unlock.
   const reapplyEffects = () => {
     for (const [trackId, effects] of Object.entries(channelEffects)) {
-      if (channelInsertEffectsRef.current[trackId]) {
+      const channel = engineRef.current?.getChannel(trackId);
+      if (channel?.effectChain) {
         applyChannelEffects(trackId, effects);
-        console.log(`🔄 Re-applied effects for ${trackId}`);
       }
     }
   };
 
-  // Drain play operations that were queued while context was suspended.
-  // On mobile: these are the syncAudioState → playRemoteTrack calls that
-  // couldn't play because the context was suspended.
-  // On desktop: typically empty (context was running), but handled for safety.
+  // Drain play operations queued while context was suspended.
   const drainPendingOps = async () => {
     const pending = pendingPlayOpsRef.current;
     pendingPlayOpsRef.current = [];
     if (pending.length === 0) return;
 
-    console.log(`🔓 Draining ${pending.length} pending play operation(s)...`);
     for (const op of pending) {
       let offset = op.resumeFromTime ?? null;
-      // If started_at is available, let playRemoteTrack do JIT offset calculation
       if (op.completeTrackState?.started_at) {
         offset = null;
       } else if (offset != null && op.queuedAt) {
-        // Non-sync operations (DM resume etc.) — recalculate for wait time
         const waitSeconds = (Date.now() - op.queuedAt) / 1000;
         offset = offset + waitSeconds;
         if (op.loop) {
           const assetId = op.completeTrackState?.asset_id;
           const bufferKey = `${op.trackId}_${assetId || op.audioFile}`;
-          const buffer = audioBuffersRef.current[bufferKey];
+          const buffer = engineRef.current?.getBuffer(bufferKey);
           if (buffer) {
             offset = offset % buffer.duration;
           }
         }
-        console.log(`🕐 Recalculated offset for ${op.trackId}: ${op.resumeFromTime?.toFixed(1)}s → ${offset.toFixed(1)}s (waited ${waitSeconds.toFixed(1)}s)`);
       }
       await playRemoteTrack(op.trackId, op.audioFile, op.loop, op.volume, offset, op.completeTrackState, op.skipBufferLoad);
     }
-    console.log('✅ All pending play operations drained');
   };
 
   // Reconcile: start any channels from pendingAudioStateRef that should be
-  // playing but have no active source. Catches the race where the user clicked
-  // "Enter Session" before syncAudioState finished loading all buffers.
+  // playing but have no active source.
   const reconcileAudioState = async () => {
     const pendingState = pendingAudioStateRef.current;
     if (!pendingState) return;
@@ -1223,42 +980,33 @@ export const useUnifiedAudio = () => {
       if (channelState.playback_state !== 'playing' || !channelState.started_at) continue;
       if (channelId.startsWith('sfx_slot_')) continue;
 
-      // Skip channels that already have an active source
-      if (activeSourcesRef.current[channelId]) continue;
+      const channel = engineRef.current?.getChannel(channelId);
+      if (channel?._source) continue;
 
-      console.log(`🔄 Reconciling ${channelId} — should be playing but has no active source`);
       const audioUrl = channelState.s3_url || `/audio/${channelState.filename}`;
       const assetId = channelState.asset_id || channelState.filename;
       const bufferKey = `${channelId}_${assetId}`;
-      let buffer = audioBuffersRef.current[bufferKey];
+      let buffer = engineRef.current?.getBuffer(bufferKey);
 
       if (!buffer) {
         buffer = await loadRemoteAudioBuffer(audioUrl, channelId, channelState.asset_id);
-        if (buffer) audioBuffersRef.current[bufferKey] = buffer;
       }
 
       if (buffer) {
         const elapsed = (Date.now() / 1000) - channelState.started_at;
         if (!channelState.looping && elapsed >= buffer.duration) continue;
 
-        // playRemoteTrack will do JIT offset calc from started_at
         await playRemoteTrack(channelId, channelState.filename, channelState.looping,
           channelState.volume, null, { ...channelState, channelId }, true);
       }
     }
   };
 
-  // ── Desktop unlock strategy ────────────────────────────────────────
-  // The eager-init AudioContext started 'running' (desktop browsers allow
-  // this when the origin has prior user interaction). syncAudioState may
-  // have already started real playback on this context. We keep it alive
-  // — no close, no recreate, no silent MP3.
+  // ── Desktop unlock strategy ───────────────────────────────────────────────
   const unlockDesktop = async () => {
-    console.log('🖥️ Desktop unlock — keeping existing AudioContext');
-
-    // Defensive: resume if somehow suspended
-    if (audioContextRef.current?.state === 'suspended') {
-      await audioContextRef.current.resume();
+    const engine = engineRef.current;
+    if (engine?.context?.state === 'suspended') {
+      await engine.context.resume();
     }
 
     isAudioUnlockedRef.current = true;
@@ -1268,56 +1016,62 @@ export const useUnifiedAudio = () => {
     await reconcileAudioState();
   };
 
-  // ── Mobile unlock strategy ─────────────────────────────────────────
-  // On iOS the eager-init context is 'suspended' — it can decode audio
-  // but cannot produce output. We must:
-  //   1. Activate the iOS audio session (base64 silent MP3 within gesture)
-  //   2. Close the stale context
-  //   3. Create a fresh context within the gesture
+  // ── Mobile unlock strategy ────────────────────────────────────────────────
+  // On iOS the eager-init context is 'suspended'. We must close + recreate
+  // within a user gesture. The engine handles the heavy lifting via its
+  // _unlockMobile path, but we need post-unlock reconciliation here.
   const unlockMobile = async () => {
-    console.log('📱 Mobile unlock — close/recreate AudioContext within gesture');
+    const engine = engineRef.current;
 
-    // 1. Activate iOS audio session via HTML5 Audio.play() within user gesture.
-    //    Uses inline base64 MP3 — no network fetch, preserving the gesture timing
-    //    window for both Safari (needs MP3) and Chrome iOS (needs no network delay).
+    // 1. Activate iOS audio session via HTML5 Audio.play() within user gesture
     const silentAudio = new Audio('data:audio/mp3;base64,SUQzBAAAAAAAIlRTU0UAAAAOAAADTGF2ZjYxLjcuMTAwAAAAAAAAAAAAAAD/+0DAAAAAAAAAAAAAAAAAAAAAAABJbmZvAAAADwAAAAUAAAK+AGhoaGhoaGhoaGhoaGhoaGhoaGiOjo6Ojo6Ojo6Ojo6Ojo6Ojo6OjrS0tLS0tLS0tLS0tLS0tLS0tLS02tra2tra2tra2tra2tra2tra2tr//////////////////////////wAAAABMYXZjNjEuMTkAAAAAAAAAAAAAAAAkAwYAAAAAAAACvhC6DYoAAAAAAP/7EMQAA8AAAaQAAAAgAAA0gAAABExBTUUzLjEwMFVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVV//sQxCmDwAABpAAAACAAADSAAAAEVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVX/+xDEUwPAAAGkAAAAIAAANIAAAARVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVf/7EMR8g8AAAaQAAAAgAAA0gAAABFVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVV//sQxKYDwAABpAAAACAAADSAAAAEVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVU=');
     silentAudio.volume = 0;
     await silentAudio.play().catch((err) => {
-      console.warn('⚠️ silentAudio.play() rejected:', err);
+      console.warn('silentAudio.play() rejected:', err);
     });
-    console.log('✅ HTML5 audio session activated');
 
-    // 2. Close the eager-init context — it can never produce audio on iOS.
-    //    AudioBuffers in audioBuffersRef are context-independent (raw PCM)
-    //    and survive this replacement.
-    if (audioContextRef.current && audioContextRef.current.state !== 'closed') {
-      console.log('🔄 Closing stale eager-init AudioContext...');
-      await audioContextRef.current.close();
+    // 2. Close the eager-init context. AudioBuffers in engine cache survive (raw PCM).
+    if (engine.context && engine.context.state !== 'closed') {
+      await engine.context.close();
     }
-    audioContextRef.current = null;
 
-    // 3. Clear stale refs — sources died with the old context.
-    //    On iOS these should be empty (context was suspended, nothing played),
-    //    but clear defensively in case of edge cases.
-    activeSourcesRef.current = {};
+    // 3. Clear stale source refs on all channels
+    for (const channel of engine.channels.values()) {
+      channel._stopSource();
+      channel._stopTimeTracking();
+    }
     trackTimersRef.current = {};
     playOperationsRef.current = {};
 
-    // 4. Create fresh AudioContext + full audio graph within user gesture.
-    console.log('🎵 Creating fresh Web Audio context within gesture...');
-    const webAudioSuccess = await initializeWebAudio();
-    if (!webAudioSuccess) {
-      throw new Error('Failed to initialize Web Audio API');
+    // 4. Create fresh AudioContext + full audio graph within user gesture
+    const contextOptions = {};
+    if (engine._options?.sampleRate) contextOptions.sampleRate = engine._options.sampleRate;
+    if (engine._options?.latencyHint) contextOptions.latencyHint = engine._options.latencyHint;
+
+    engine._ctx = new (window.AudioContext || window.webkitAudioContext)(contextOptions);
+
+    // 5. Rebuild master chain
+    if (engine._masterMeter) engine._masterMeter.destroy();
+    engine._buildMasterChain();
+
+    // Restore volume levels
+    engine.setMasterVolume(broadcastMasterVolume);
+    engine.setLocalVolume(masterVolume);
+
+    // 6. Rebuild all channel effect chains
+    for (const channel of engine.channels.values()) {
+      channel.rebuild();
     }
 
-    // 5. Resume if still suspended (defensive — context created within a
-    //    gesture should start 'running', but resume() is harmless if already running).
-    if (audioContextRef.current?.state === 'suspended') {
-      console.log('🔄 Resuming suspended Web Audio context...');
-      await audioContextRef.current.resume();
+    // 7. Rebuild analyser refs
+    rebuildAnalyserRefs();
+
+    // 8. Resume if still suspended
+    if (engine.context?.state === 'suspended') {
+      await engine.context.resume();
     }
 
-    // 6. Mark unlocked + finish
+    // 9. Mark unlocked + finish
     isAudioUnlockedRef.current = true;
     setIsAudioUnlocked(true);
     reapplyEffects();
@@ -1325,20 +1079,15 @@ export const useUnifiedAudio = () => {
     await reconcileAudioState();
   };
 
-  // ── Unlock orchestrator ────────────────────────────────────────────
-  // Picks the right strategy based on AudioContext state. No UA sniffing —
-  // the context state is the authoritative signal:
-  //   'running'   → desktop (keep context, sources stay alive)
-  //   'suspended' → mobile/iOS (close + recreate within gesture)
+  // ── Unlock orchestrator ───────────────────────────────────────────────────
   const unlockAudio = async () => {
     if (unlockInProgressRef.current) {
-      console.log('🔓 Audio unlock already in progress, skipping');
       return false;
     }
     unlockInProgressRef.current = true;
     try {
-      const contextState = audioContextRef.current?.state;
-      console.log(`🔓 Audio unlock — context state: ${contextState}`);
+      const engine = engineRef.current;
+      const contextState = engine?.context?.state;
 
       if (contextState === 'running') {
         await unlockDesktop();
@@ -1346,7 +1095,7 @@ export const useUnifiedAudio = () => {
         await unlockMobile();
       }
 
-      console.log('🔊 Audio system unlocked successfully');
+      console.log('Audio system unlocked successfully');
       return true;
     } catch (error) {
       console.warn('Audio unlock failed:', error);
@@ -1356,200 +1105,82 @@ export const useUnifiedAudio = () => {
     }
   };
 
-  // Resume remote track from paused position
+  // ── Resume remote track from paused position ──────────────────────────────
   const resumeRemoteTrack = async (trackId) => {
-    console.log(`🔄 Resume requested for ${trackId}`);
-    
-    // Check if a resume operation is already in progress for this track
     if (resumeOperationsRef.current[trackId]) {
-      console.warn(`⚠️ Resume operation already in progress for ${trackId}, ignoring duplicate`);
+      console.warn(`Resume operation already in progress for ${trackId}, ignoring duplicate`);
       return false;
     }
-    
-    // Mark this track as having an active resume operation
+
     resumeOperationsRef.current[trackId] = true;
-    
-    console.log(`🔍 Current remoteTrackStates:`, remoteTrackStates);
-    
+
     try {
-      // Use a callback to get the most current state
       return await new Promise((resolve) => {
         setRemoteTrackStates(currentState => {
           const trackState = currentState[trackId];
-          console.log(`🔍 Current state for ${trackId}:`, trackState);
-          
           if (!trackState) {
-            console.warn(`❌ No track state found for ${trackId}`);
             resolve(false);
-            return currentState; // Don't modify state
+            return currentState;
           }
-          
+
           if (trackState.playbackState !== PlaybackState.PAUSED) {
-            console.warn(`❌ Track ${trackId} is not paused (state=${trackState.playbackState}), cannot resume`);
             resolve(false);
-            return currentState; // Don't modify state
+            return currentState;
           }
-          
+
           const { filename, currentTime, looping, volume } = trackState;
-          console.log(`🔄 Resuming ${trackId} from ${currentTime}s`);
-
-          // DEBUG: Log exactly what we're passing to playRemoteTrack
-          console.log(`📤 RESUME: calling playRemoteTrack with currentTime=${currentTime} for ${trackId}`);
-
-          // Call playRemoteTrack with the explicit resume time
           playRemoteTrack(trackId, filename, looping, volume, currentTime).then(resolve);
-          
-          return currentState; // Don't modify state here, playRemoteTrack will do it
+          return currentState;
         });
       });
     } finally {
-      // Clear the resume operation flag when done
       delete resumeOperationsRef.current[trackId];
     }
   };
 
-  // Apply effect toggles to a BGM channel's insert/send effects.
-  // HPF/LPF are inline inserts — toggle changes frequency (pass-all vs configured).
-  // Reverb is a send — toggle ramps wet gain to mix level or 0.0.
-  // Accepts: { hpf: true/false, lpf: true/false, reverb: true/false, hpf_mix: 0.5, reverb_mix: 0.6, ... }
+  // ── Apply effect toggles to a BGM channel ─────────────────────────────────
+  // Delegates to the engine channel's EffectChain.applyEffects() for the actual
+  // Web Audio parameter changes. Keeps React state in sync for UI.
   const applyChannelEffects = useCallback((trackId, effects) => {
-    // Always update React state so UI toggles reflect correct values immediately,
-    // even if Web Audio chains aren't ready yet (e.g. during initial sync)
+    // Always update React state so UI toggles reflect correct values immediately
     setChannelEffects(prev => ({
       ...prev,
       [trackId]: { ...prev[trackId], ...effects },
     }));
 
-    const inserts = channelInsertEffectsRef.current[trackId];
-    if (!inserts) return;
+    const engine = engineRef.current;
+    const channel = engine?.getChannel(trackId);
+    if (!channel?.effectChain) return;
 
-    const ctx = audioContextRef.current;
-    if (!ctx) return;
+    // Build the merged state for applyEffects
+    const mergedState = { ...channelEffectsRef.current[trackId], ...effects };
 
-    const RAMP_TIME = 0.02; // 20ms to avoid clicks
-    const now = ctx.currentTime;
+    // Delegate to engine EffectChain.applyEffects()
+    channel.effectChain.applyEffects(mergedState);
 
-    // Resolve the effective eq state after merging incoming effects
-    const mergedState = { ...channelEffects[trackId], ...effects };
-    const eqActive = mergedState.eq ?? false;
+    // Reverb preset change is handled by EffectChain.applyEffects → reverb.setParam('preset', ...)
+  }, []);
 
-    // EQ master bypass — when eq toggles, re-evaluate both filters against stored state
-    if (effects.eq !== undefined) {
-      const hpfEnabled = mergedState.hpf ?? false;
-      const hpfMix = mergedState.hpf_mix ?? DEFAULT_EFFECTS.hpf.mix;
-      const hpfTarget = (eqActive && hpfEnabled) ? mapHpfFrequency(hpfMix) : 20;
-      inserts.hpf.effectNode.frequency.setValueAtTime(inserts.hpf.effectNode.frequency.value, now);
-      inserts.hpf.effectNode.frequency.linearRampToValueAtTime(hpfTarget, now + RAMP_TIME);
-
-      const lpfEnabled = mergedState.lpf ?? false;
-      const lpfMix = mergedState.lpf_mix ?? DEFAULT_EFFECTS.lpf.mix;
-      const lpfTarget = (eqActive && lpfEnabled) ? mapLpfFrequency(lpfMix) : 20000;
-      inserts.lpf.effectNode.frequency.setValueAtTime(inserts.lpf.effectNode.frequency.value, now);
-      inserts.lpf.effectNode.frequency.linearRampToValueAtTime(lpfTarget, now + RAMP_TIME);
-    }
-
-    // HPF insert — only apply if eq bypass is active
-    if (effects.hpf !== undefined && effects.eq === undefined) {
-      const enabled = typeof effects.hpf === 'boolean' ? effects.hpf : !!effects.hpf;
-      const mixLevel = effects.hpf_mix ?? channelEffects[trackId]?.hpf_mix ?? DEFAULT_EFFECTS.hpf.mix;
-      const targetFreq = (eqActive && enabled) ? mapHpfFrequency(mixLevel) : 20;
-      inserts.hpf.effectNode.frequency.setValueAtTime(inserts.hpf.effectNode.frequency.value, now);
-      inserts.hpf.effectNode.frequency.linearRampToValueAtTime(targetFreq, now + RAMP_TIME);
-    }
-    // HPF frequency update from fader — only apply if eq active and hpf enabled
-    if (effects.hpf_mix !== undefined && effects.hpf === undefined && effects.eq === undefined) {
-      const isEnabled = channelEffects[trackId]?.hpf ?? false;
-      if (eqActive && isEnabled) {
-        const targetFreq = mapHpfFrequency(effects.hpf_mix);
-        inserts.hpf.effectNode.frequency.setValueAtTime(inserts.hpf.effectNode.frequency.value, now);
-        inserts.hpf.effectNode.frequency.linearRampToValueAtTime(targetFreq, now + RAMP_TIME);
-      }
-    }
-
-    // LPF insert — only apply if eq bypass is active
-    if (effects.lpf !== undefined && effects.eq === undefined) {
-      const enabled = typeof effects.lpf === 'boolean' ? effects.lpf : !!effects.lpf;
-      const mixLevel = effects.lpf_mix ?? channelEffects[trackId]?.lpf_mix ?? DEFAULT_EFFECTS.lpf.mix;
-      const targetFreq = (eqActive && enabled) ? mapLpfFrequency(mixLevel) : 20000;
-      inserts.lpf.effectNode.frequency.setValueAtTime(inserts.lpf.effectNode.frequency.value, now);
-      inserts.lpf.effectNode.frequency.linearRampToValueAtTime(targetFreq, now + RAMP_TIME);
-    }
-    // LPF frequency update from fader — only apply if eq active and lpf enabled
-    if (effects.lpf_mix !== undefined && effects.lpf === undefined && effects.eq === undefined) {
-      const isEnabled = channelEffects[trackId]?.lpf ?? false;
-      if (eqActive && isEnabled) {
-        const targetFreq = mapLpfFrequency(effects.lpf_mix);
-        inserts.lpf.effectNode.frequency.setValueAtTime(inserts.lpf.effectNode.frequency.value, now);
-        inserts.lpf.effectNode.frequency.linearRampToValueAtTime(targetFreq, now + RAMP_TIME);
-      }
-    }
-
-    // Reverb send — toggle ramps wet gain
-    if (effects.reverb !== undefined) {
-      const enabled = typeof effects.reverb === 'boolean' ? effects.reverb : !!effects.reverb;
-      const mixLevel = effects.reverb_mix ?? channelEffects[trackId]?.reverb_mix ?? DEFAULT_EFFECTS.reverb.mix;
-      const targetGain = enabled ? mixLevel : 0.0;
-      inserts.reverb.wetGain.gain.setValueAtTime(inserts.reverb.wetGain.gain.value, now);
-      inserts.reverb.wetGain.gain.linearRampToValueAtTime(targetGain, now + RAMP_TIME);
-    }
-    // Reverb mix level update from fader — only apply if enabled
-    if (effects.reverb_mix !== undefined && effects.reverb === undefined) {
-      const isEnabled = channelEffects[trackId]?.reverb ?? false;
-      if (isEnabled) {
-        inserts.reverb.wetGain.gain.setValueAtTime(inserts.reverb.wetGain.gain.value, now);
-        inserts.reverb.wetGain.gain.linearRampToValueAtTime(effects.reverb_mix, now + RAMP_TIME);
-      }
-    }
-
-    // Reverb preset change — regenerate impulse response buffer on the channel's ConvolverNode
-    if (effects.reverb_preset !== undefined) {
-      const currentPreset = inserts.reverb.currentPreset || 'room';
-      if (effects.reverb_preset !== currentPreset) {
-        const presetConfig = REVERB_PRESETS[effects.reverb_preset] || REVERB_PRESETS.room;
-        inserts.reverb.effectNode.buffer = createImpulseResponse(ctx, presetConfig.duration, presetConfig.decay);
-        inserts.reverb.currentPreset = effects.reverb_preset;
-      }
-    }
-  }, [channelEffects]);
-
-  // Set the mix level for a specific effect on a specific channel.
-  // HPF/LPF: fader controls cutoff frequency (via logarithmic mapping).
-  // Reverb: fader controls wet gain level.
+  // ── Set effect mix level ──────────────────────────────────────────────────
+  // Delegates to engine channel's EffectChain.
   const setEffectMixLevel = useCallback((trackId, effectName, mixLevel) => {
     setChannelEffects(prev => ({
       ...prev,
       [trackId]: { ...prev[trackId], [`${effectName}_mix`]: mixLevel },
     }));
 
-    const inserts = channelInsertEffectsRef.current[trackId];
-    if (!inserts?.[effectName]) return;
+    const engine = engineRef.current;
+    const channel = engine?.getChannel(trackId);
+    if (!channel?.effectChain) return;
 
-    const ctx = audioContextRef.current;
-    if (!ctx) return;
-
-    const isEnabled = channelEffects[trackId]?.[effectName] ?? false;
+    const isEnabled = channelEffectsRef.current[trackId]?.[effectName] ?? false;
     if (!isEnabled) return;
 
-    const now = ctx.currentTime;
+    channel.effectChain.setEffectMix(effectName, mixLevel);
+  }, []);
 
-    if (effectName === 'hpf') {
-      const targetFreq = mapHpfFrequency(mixLevel);
-      inserts.hpf.effectNode.frequency.setValueAtTime(inserts.hpf.effectNode.frequency.value, now);
-      inserts.hpf.effectNode.frequency.linearRampToValueAtTime(targetFreq, now + 0.02);
-    } else if (effectName === 'lpf') {
-      const targetFreq = mapLpfFrequency(mixLevel);
-      inserts.lpf.effectNode.frequency.setValueAtTime(inserts.lpf.effectNode.frequency.value, now);
-      inserts.lpf.effectNode.frequency.linearRampToValueAtTime(targetFreq, now + 0.02);
-    } else if (effectName === 'reverb') {
-      inserts.reverb.wetGain.gain.setValueAtTime(inserts.reverb.wetGain.gain.value, now);
-      inserts.reverb.wetGain.gain.linearRampToValueAtTime(mixLevel, now + 0.02);
-    }
-  }, [channelEffects]);
-
-  // Cleanup function to stop all audio (called on unmount)
+  // ── Cleanup ───────────────────────────────────────────────────────────────
   const cleanupAllAudio = useCallback(() => {
-    console.log('🧹 Cleaning up all audio on unmount...');
-
     // Stop all local audio elements
     Object.values(localAudioElements.current).forEach(audio => {
       if (audio) {
@@ -1562,105 +1193,67 @@ export const useUnifiedAudio = () => {
       }
     });
 
-    // Stop all remote audio sources
-    Object.keys(activeSourcesRef.current).forEach(trackId => {
-      try {
-        if (activeSourcesRef.current[trackId]) {
-          activeSourcesRef.current[trackId].stop();
-        }
-      } catch (e) {
-        console.warn(`Error stopping remote track ${trackId}:`, e);
-      }
+    // Cancel all active fades
+    Object.keys(activeFadeRafsRef.current).forEach(trackId => {
+      cancelAnimationFrame(activeFadeRafsRef.current[trackId]);
     });
+    activeFadeRafsRef.current = {};
 
-    // Stop all SFX soundboard sources
-    Object.keys(sfxSlotSourcesRef.current).forEach(trackId => {
-      try {
-        if (sfxSlotSourcesRef.current[trackId]) {
-          sfxSlotSourcesRef.current[trackId].stop();
-        }
-      } catch (e) {
-        console.warn(`Error stopping SFX slot ${trackId}:`, e);
-      }
-    });
-
-    // Clear all refs
-    activeSourcesRef.current = {};
+    // Clear hook-level tracking
     trackTimersRef.current = {};
     resumeOperationsRef.current = {};
     playOperationsRef.current = {};
-    sfxSlotSourcesRef.current = {};
 
-    // Clear insert effect refs
-    channelInsertEffectsRef.current = {};
-    remoteTrackInputNodesRef.current = {};
-    masterAnalysersRef.current = null;
-    impulseResponseBufferRef.current = null;
-
-    // Cancel all active fades
-    Object.keys(activeFades).forEach(trackId => {
-      if (activeFades[trackId]?.animationId) {
-        cancelAnimationFrame(activeFades[trackId].animationId);
-      }
-    });
-
-    // Close audio context
-    if (audioContextRef.current && audioContextRef.current.state !== 'closed') {
-      audioContextRef.current.close().then(() => {
-        console.log('✅ Audio context closed');
-      }).catch(e => {
-        console.warn('Error closing audio context:', e);
-      });
+    // Destroy engine (stops all channels, clears buffers, closes context)
+    if (engineRef.current) {
+      engineRef.current.destroy();
+      engineRef.current = null;
     }
 
-    console.log('✅ All audio cleanup complete');
-  }, [activeFades]);
+    // Clear analyser refs
+    remoteTrackAnalysersRef.current = {};
+    masterAnalysersRef.current = null;
+  }, []);
 
+  // ── Visibility recovery ───────────────────────────────────────────────────
   // Recover audio playback after page visibility change (phone lock, tab switch)
   useEffect(() => {
     if (typeof document === 'undefined') return;
 
     const handleVisibilityChange = async () => {
       if (document.visibilityState !== 'visible') return;
-      if (!isAudioUnlocked || !audioContextRef.current) return;
+      if (!isAudioUnlocked || !engineRef.current?.context) return;
 
-      console.log('👁️ Page became visible — checking audio recovery...');
+      const ctx = engineRef.current.context;
 
       // Resume AudioContext if it was suspended/interrupted by OS
-      if (audioContextRef.current.state === 'suspended') {
+      if (ctx.state === 'suspended') {
         try {
-          await audioContextRef.current.resume();
-          console.log('✅ AudioContext resumed after visibility change');
+          await ctx.resume();
         } catch (e) {
-          console.warn('❌ Failed to resume AudioContext:', e);
+          console.warn('Failed to resume AudioContext:', e);
           return;
         }
       }
 
-      if (audioContextRef.current.state !== 'running') {
-        console.warn('⚠️ AudioContext not running after resume attempt:', audioContextRef.current.state);
-        return;
-      }
+      if (ctx.state !== 'running') return;
 
       // Check each track that should be playing but has a dead/missing source
       const currentStates = { ...remoteTrackStatesRef.current };
       for (const [trackId, trackState] of Object.entries(currentStates)) {
         if (trackState.playbackState !== PlaybackState.PLAYING) continue;
 
-        // Check if source is still alive
-        const source = activeSourcesRef.current[trackId];
-        if (source && trackTimersRef.current[trackId]) continue; // Source + timer alive, likely fine
+        const channel = engineRef.current.getChannel(trackId);
+        if (channel?._source && trackTimersRef.current[trackId]) continue;
 
         const { filename, s3_url, asset_id, volume, looping, currentTime: lastKnownTime, duration } = trackState;
         if (!filename) continue;
 
-        // Restart from last known position
         let offset = lastKnownTime || 0;
         if (looping && duration > 0) {
           offset = offset % duration;
         }
 
-        console.log(`🔄 Restarting ${trackId} at offset ${offset.toFixed(1)}s after visibility recovery`);
         await playRemoteTrack(trackId, filename, looping, volume, offset, {
           asset_id, s3_url, looping
         }, false);
@@ -1668,7 +1261,8 @@ export const useUnifiedAudio = () => {
 
       // Re-apply channel effects to ensure audio graph is correct
       for (const [trackId, effects] of Object.entries(channelEffectsRef.current)) {
-        if (channelInsertEffectsRef.current[trackId]) {
+        const channel = engineRef.current?.getChannel(trackId);
+        if (channel?.effectChain) {
           applyChannelEffects(trackId, effects);
         }
       }
@@ -1678,30 +1272,43 @@ export const useUnifiedAudio = () => {
     return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
   }, [isAudioUnlocked]);
 
-  // Sync audio state from server (called on initial_state for late-joiners)
+  // ── Sync audio state from server ──────────────────────────────────────────
+  // Called on initial_state for late-joiners. Kept in hook — game/WebSocket logic.
   const syncAudioState = async (audioState) => {
     if (!audioState || typeof audioState !== 'object') return;
 
-    // Store for post-unlock reconciliation (handles race where user clicks
-    // "Enter Session" before buffer loads finish — unlockAudio can re-sync)
     pendingAudioStateRef.current = audioState;
 
-    console.log('🔄 Syncing audio state from server:', Object.keys(audioState));
+    const engine = engineRef.current;
 
-    // Ensure audio graph exists before syncing effects — on re-entry, the eager
-    // init useEffect may not have fired yet when the WebSocket initial_state arrives.
-    if (!audioContextRef.current || audioContextRef.current.state === 'closed') {
-      await initializeWebAudio();
+    // Ensure engine exists and has a context
+    if (!engine?.context || engine.context.state === 'closed') {
+      // Engine should have been initialized on mount, but be defensive
+      if (engine) {
+        await engine.init();
+        // Recreate channels if needed
+        for (const trackId of BGM_CHANNEL_IDS) {
+          if (!engine.getChannel(trackId)) {
+            engine.createChannel(trackId, CHANNEL_PRESETS.BGM);
+          }
+        }
+        for (let i = 0; i < SFX_SLOT_COUNT; i++) {
+          const sfxId = `sfx_slot_${i}`;
+          if (!engine.getChannel(sfxId)) {
+            engine.createChannel(sfxId, CHANNEL_PRESETS.SFX);
+          }
+        }
+        rebuildAnalyserRefs();
+      }
     }
 
     // Restore broadcast master volume if present
     if (audioState.__master_volume !== undefined) {
       setBroadcastMasterVolume(audioState.__master_volume);
-      console.log(`🔊 Sync: restored broadcast master volume to ${audioState.__master_volume}`);
     }
 
     for (const [channelId, channelState] of Object.entries(audioState)) {
-      if (channelId === '__master_volume') continue; // Already handled above
+      if (channelId === '__master_volume') continue;
       if (!channelState || !channelState.filename) continue;
 
       // SFX soundboard slots — restore loaded asset only (no playback sync for one-shots)
@@ -1721,12 +1328,8 @@ export const useUnifiedAudio = () => {
 
         // Pre-load buffer for instant playback
         if (channelState.s3_url) {
-          const buffer = await loadRemoteAudioBuffer(channelState.s3_url, channelId, channelState.asset_id);
-          if (buffer) {
-            sfxSlotBuffersRef.current[`${channelId}_${channelState.asset_id || channelState.filename}`] = buffer;
-          }
+          await loadRemoteAudioBuffer(channelState.s3_url, channelId, channelState.asset_id);
         }
-        console.log(`🔊 Sync: restored SFX slot ${slotIndex} — ${channelState.filename}`);
         continue;
       }
 
@@ -1748,18 +1351,16 @@ export const useUnifiedAudio = () => {
       // Restore effects state if present
       if (channelState.effects) {
         const syncEffects = { ...channelState.effects };
-        // Backward compat: old sessions without eq field — derive from hpf || lpf
         if (syncEffects.eq === undefined) {
           syncEffects.eq = !!(syncEffects.hpf || syncEffects.lpf);
         }
-        // Backward compat: old sessions without reverb_preset — default to 'room'
         if (syncEffects.reverb !== undefined && syncEffects.reverb_preset === undefined) {
           syncEffects.reverb_preset = 'room';
         }
         applyChannelEffects(channelId, syncEffects);
       }
 
-      // Restore mute/solo state if present (channel-level, from MongoDB)
+      // Restore mute/solo state
       if (channelState.muted) {
         setMutedChannels(prev => ({ ...prev, [channelId]: true }));
       }
@@ -1768,25 +1369,12 @@ export const useUnifiedAudio = () => {
       }
 
       if (playback_state === 'playing' && started_at) {
-        // Load buffer and start playback at calculated offset
         const audioUrl = s3_url || `/audio/${filename}`;
         const buffer = await loadRemoteAudioBuffer(audioUrl, channelId, asset_id);
 
         if (buffer) {
-          // Store buffer with stable key
-          const bufferKey = `${channelId}_${asset_id || filename}`;
-          audioBuffersRef.current[bufferKey] = buffer;
-
-          // If non-looping track has already finished, don't play
           const elapsed = (Date.now() / 1000) - started_at;
-          if (!looping && elapsed >= buffer.duration) {
-            console.log(`⏹️ Sync: ${channelId} has already finished (non-looping)`);
-            continue;
-          }
-
-          // Pass resumeFromTime=null so playRemoteTrack calculates offset JIT
-          // from started_at (in completeTrackState) right before source.start()
-          console.log(`▶️ Sync: starting ${channelId} (elapsed: ${elapsed.toFixed(1)}s, duration: ${buffer.duration.toFixed(1)}s)`);
+          if (!looping && elapsed >= buffer.duration) continue;
 
           await playRemoteTrack(channelId, filename, looping, volume, null, {
             ...channelState,
@@ -1794,22 +1382,12 @@ export const useUnifiedAudio = () => {
           }, true);
         }
       } else if (playback_state === 'paused' && paused_elapsed != null) {
-        // Load buffer to get duration for normalizing paused position
         const audioUrl = s3_url || `/audio/${filename}`;
         const buffer = await loadRemoteAudioBuffer(audioUrl, channelId, asset_id);
 
-        // For looping tracks, normalize paused_elapsed within buffer duration
-        // (server stores raw elapsed time which can exceed buffer length after multiple loops)
         let normalizedTime = paused_elapsed;
         if (buffer && looping && buffer.duration > 0 && paused_elapsed > buffer.duration) {
           normalizedTime = paused_elapsed % buffer.duration;
-          console.log(`🔄 Sync: wrapped paused position ${paused_elapsed.toFixed(1)}s → ${normalizedTime.toFixed(1)}s (buffer: ${buffer.duration.toFixed(1)}s)`);
-        }
-
-        // Cache buffer for future resume
-        if (buffer) {
-          const bufferKey = `${channelId}_${asset_id || filename}`;
-          audioBuffersRef.current[bufferKey] = buffer;
         }
 
         setRemoteTrackStates(prev => ({
@@ -1822,45 +1400,36 @@ export const useUnifiedAudio = () => {
             remaining: null,
           }
         }));
-        console.log(`⏸️ Sync: ${channelId} paused at ${normalizedTime.toFixed(1)}s`);
       }
-      // "stopped" channels with filename are already handled by the metadata update above
     }
 
-    // If audio is already unlocked, sync succeeded with running context —
-    // no need for post-unlock reconciliation
     if (isAudioUnlocked) {
       pendingAudioStateRef.current = null;
     }
 
     setAudioSyncComplete(true);
-    console.log('✅ Audio state sync complete');
   };
 
-  // Load an asset from the library into a channel (DM selects via AudioTrackSelector)
-  // Volume and effects travel with the audio file — restored from session config (via backend)
-  // or falling back to asset-level defaults for first-time loads.
-  // System-level guarantee: if the asset changes (including to null for clear),
-  // stop the current audio source so no orphaned playback continues.
+  // ── Load asset into channel ───────────────────────────────────────────────
   const loadAssetIntoChannel = (channelId, asset) => {
     const volume = asset.default_volume ?? 0.8;
+    const engine = engineRef.current;
+    const channel = engine?.getChannel(channelId);
 
     setRemoteTrackStates(prev => {
       const prevAssetId = prev[channelId]?.asset_id;
       const newAssetId = asset.id ?? null;
 
       // Stop currently playing source when the asset changes
-      if (prevAssetId !== newAssetId) {
-        if (activeSourcesRef.current[channelId]) {
-          try { activeSourcesRef.current[channelId].stop(); } catch (_) {}
-          delete activeSourcesRef.current[channelId];
-        }
+      if (prevAssetId !== newAssetId && channel?._source) {
+        try { channel._source.stop(); } catch (_) {}
+        channel._source = null;
         delete trackTimersRef.current[channelId];
         cancelFade(channelId);
       }
 
-      if (remoteTrackGainsRef.current[channelId]) {
-        remoteTrackGainsRef.current[channelId].gain.value = volume;
+      if (channel?.effectChain?.gainNode) {
+        channel.effectChain.gainNode.gain.value = volume;
       }
 
       return {
@@ -1871,7 +1440,6 @@ export const useUnifiedAudio = () => {
           asset_id: newAssetId,
           s3_url: asset.s3_url,
           volume,
-          // Reset playback state when asset changes
           ...(prevAssetId !== newAssetId ? {
             playbackState: PlaybackState.STOPPED,
             currentTime: 0,
@@ -1881,16 +1449,14 @@ export const useUnifiedAudio = () => {
       };
     });
 
-    // Apply effects — full state from backend broadcast or asset-level defaults from PostgreSQL.
+    // Apply effects
     if (asset.effects && typeof asset.effects === 'object') {
-      // Backend broadcast carries full effects object
       const syncEffects = { ...asset.effects };
       if (syncEffects.eq === undefined) {
         syncEffects.eq = !!(syncEffects.hpf || syncEffects.lpf);
       }
       applyChannelEffects(channelId, syncEffects);
     } else if (asset.effect_hpf_enabled !== undefined || asset.effect_lpf_enabled !== undefined || asset.effect_reverb_enabled !== undefined) {
-      // DM's local load — asset has individual fields from PostgreSQL
       applyChannelEffects(channelId, {
         eq: asset.effect_eq_enabled || false,
         hpf: asset.effect_hpf_enabled || false,
@@ -1902,7 +1468,6 @@ export const useUnifiedAudio = () => {
         reverb_preset: asset.effect_reverb_preset || 'room',
       });
     } else {
-      // No effects data — apply all-off defaults
       applyChannelEffects(channelId, {
         eq: false,
         hpf: false,
@@ -1915,131 +1480,170 @@ export const useUnifiedAudio = () => {
   // =====================================
   // SFX SOUNDBOARD FUNCTIONS
   // =====================================
+  // Uses engine channels with CHANNEL_PRESETS.SFX for playback.
 
-  // Load an asset into a soundboard slot and pre-fetch its buffer
-  // Volume travels with the audio file — use the asset's default_volume
   const loadSfxSlot = async (slotIndex, asset) => {
     const volume = asset.default_volume ?? 0.8;
     const trackId = `sfx_slot_${slotIndex}`;
-    if (sfxSlotGainsRef.current[trackId]) {
-      sfxSlotGainsRef.current[trackId].gain.value = volume;
+    const engine = engineRef.current;
+    const channel = engine?.getChannel(trackId);
+    if (channel) {
+      channel.setVolume(volume);
     }
     setSfxSlots(prev => prev.map((s, i) =>
       i === slotIndex ? { ...s, asset_id: asset.id, filename: asset.filename, s3_url: asset.s3_url, volume } : s
     ));
-    console.log(`🔊 Loaded SFX "${asset.filename}" into slot ${slotIndex} (volume: ${volume})`);
 
     // Pre-fetch buffer for instant trigger response
     if (asset.s3_url) {
-      const buffer = await loadRemoteAudioBuffer(asset.s3_url, trackId, asset.id);
-      if (buffer) {
-        sfxSlotBuffersRef.current[`${trackId}_${asset.id || asset.filename}`] = buffer;
-        console.log(`✅ Pre-loaded SFX buffer for slot ${slotIndex}`);
-      }
+      await loadRemoteAudioBuffer(asset.s3_url, trackId, asset.id);
     }
   };
 
-  // Fire-and-forget SFX playback
   const playSfxSlot = async (slotIndex) => {
     const slot = sfxSlots[slotIndex];
-    if (!slot?.s3_url || !audioContextRef.current) return false;
+    const engine = engineRef.current;
+    if (!slot?.s3_url || !engine?.context) return false;
 
     // If context is suspended, drop silently — one-shot SFX would be stale by unlock time
-    if (audioContextRef.current.state === 'suspended') {
-      console.warn(`🔇 SFX slot ${slotIndex} dropped — AudioContext suspended`);
+    if (engine.context.state === 'suspended') {
+      console.warn(`SFX slot ${slotIndex} dropped — AudioContext suspended`);
       return false;
     }
 
     const trackId = `sfx_slot_${slotIndex}`;
+    const channel = engine.getChannel(trackId);
+    if (!channel) return false;
 
     // Re-trigger: stop any currently playing source on this slot
-    if (sfxSlotSourcesRef.current[trackId]) {
-      try { sfxSlotSourcesRef.current[trackId].stop(); } catch (_) {}
-      delete sfxSlotSourcesRef.current[trackId];
-    }
+    channel._stopSource();
 
-    // Load or reuse buffer (keyed by asset_id for stable caching)
+    // Load or reuse buffer
     const bufferKey = `${trackId}_${slot.asset_id || slot.filename}`;
-    let buffer = sfxSlotBuffersRef.current[bufferKey];
+    let buffer = engine.getBuffer(bufferKey);
     if (!buffer) {
       buffer = await loadRemoteAudioBuffer(slot.s3_url, trackId, slot.asset_id);
       if (!buffer) return false;
-      sfxSlotBuffersRef.current[bufferKey] = buffer;
     }
 
-    // Ensure slot gain node exists
-    if (!sfxSlotGainsRef.current[trackId]) {
-      console.warn(`⚠️ SFX gain node missing for ${trackId} — reinitializing`);
-      const slotGain = audioContextRef.current.createGain();
-      slotGain.connect(masterGainRef.current);
-      slotGain.gain.value = slot.volume;
-      sfxSlotGainsRef.current[trackId] = slotGain;
+    // Ensure effect chain exists
+    if (!channel.effectChain) {
+      channel.rebuild();
+      if (!channel.effectChain) return false;
     }
 
-    // Create source, connect to slot gain, play
-    const source = audioContextRef.current.createBufferSource();
+    // Create source, connect to channel's effect chain, play
+    const ctx = engine.context;
+    const source = ctx.createBufferSource();
     source.buffer = buffer;
     source.loop = false;
-    source.connect(sfxSlotGainsRef.current[trackId]);
+    source.connect(channel.effectChain.inputNode);
     source.start(0);
-    sfxSlotSourcesRef.current[trackId] = source;
+    channel._source = source;
+
+    // Set volume on channel
+    if (channel.effectChain.gainNode) {
+      channel.effectChain.gainNode.gain.value = slot.volume;
+    }
 
     // Mark as playing, auto-clear when done
     setSfxSlots(prev => prev.map((s, i) => i === slotIndex ? { ...s, isPlaying: true } : s));
     source.onended = () => {
-      delete sfxSlotSourcesRef.current[trackId];
+      if (channel._source === source) {
+        channel._source = null;
+      }
       setSfxSlots(prev => prev.map((s, i) => i === slotIndex ? { ...s, isPlaying: false } : s));
     };
 
-    console.log(`🔊 Playing SFX slot ${slotIndex}: ${slot.filename}`);
     return true;
   };
 
-  // Immediate stop for a soundboard slot
   const stopSfxSlot = (slotIndex) => {
     const trackId = `sfx_slot_${slotIndex}`;
-    if (sfxSlotSourcesRef.current[trackId]) {
-      try { sfxSlotSourcesRef.current[trackId].stop(); } catch (_) {}
-      delete sfxSlotSourcesRef.current[trackId];
+    const channel = engineRef.current?.getChannel(trackId);
+    if (channel?._source) {
+      channel._stopSource();
     }
     setSfxSlots(prev => prev.map((s, i) => i === slotIndex ? { ...s, isPlaying: false } : s));
   };
 
-  // Per-slot volume control
   const setSfxSlotVolume = (slotIndex, volume) => {
     const trackId = `sfx_slot_${slotIndex}`;
-    if (sfxSlotGainsRef.current[trackId]) {
-      sfxSlotGainsRef.current[trackId].gain.value = volume;
+    const channel = engineRef.current?.getChannel(trackId);
+    if (channel?.effectChain?.gainNode) {
+      channel.effectChain.gainNode.gain.value = volume;
     }
     setSfxSlots(prev => prev.map((s, i) => i === slotIndex ? { ...s, volume } : s));
   };
 
-  // Clear a soundboard slot — stop playback, reset state, drop cached buffer
   const clearSfxSlot = (slotIndex) => {
     const trackId = `sfx_slot_${slotIndex}`;
-
-    // Stop any playing source
-    if (sfxSlotSourcesRef.current[trackId]) {
-      try { sfxSlotSourcesRef.current[trackId].stop(); } catch (_) {}
-      delete sfxSlotSourcesRef.current[trackId];
+    const channel = engineRef.current?.getChannel(trackId);
+    if (channel?._source) {
+      channel._stopSource();
     }
 
-    // Drop cached buffer for this slot (keys are `sfx_slot_N_assetId`)
-    Object.keys(sfxSlotBuffersRef.current).forEach(key => {
-      if (key.startsWith(`${trackId}_`)) {
-        delete sfxSlotBuffersRef.current[key];
+    // Drop cached buffer for this slot
+    const engine = engineRef.current;
+    if (engine) {
+      // Clear any buffers with this slot prefix
+      for (const key of engine._buffers.keys()) {
+        if (key.startsWith(`${trackId}_`)) {
+          engine.clearBuffer(key);
+        }
       }
-    });
+    }
 
-    // Reset slot state
     setSfxSlots(prev => prev.map((s, i) =>
       i === slotIndex
         ? { ...s, asset_id: null, filename: null, s3_url: null, isPlaying: false }
         : s
     ));
-
-    console.log(`🗑️ Cleared SFX slot ${slotIndex}`);
   };
+
+  // ── Compatibility refs ────────────────────────────────────────────────────
+  // Some consumers access audioContextRef and audioBuffersRef directly.
+  // Provide thin wrappers that delegate to engine.
+  const audioContextRef = useRef(null);
+  const audioBuffersRef = useRef(null);
+
+  // Keep audioContextRef in sync with engine context
+  useEffect(() => {
+    const engine = engineRef.current;
+    if (engine?.context) {
+      audioContextRef.current = engine.context;
+    }
+  });
+
+  // Proxy audioBuffersRef to engine's buffer cache
+  if (!audioBuffersRef.current) {
+    audioBuffersRef.current = new Proxy({}, {
+      get(_, key) {
+        return engineRef.current?.getBuffer(key) ?? undefined;
+      },
+      set(_, key, value) {
+        engineRef.current?.storeBuffer(key, value);
+        return true;
+      },
+      has(_, key) {
+        return engineRef.current?.hasBuffer(key) ?? false;
+      },
+      deleteProperty(_, key) {
+        engineRef.current?.clearBuffer(key);
+        return true;
+      },
+      ownKeys() {
+        if (!engineRef.current?._buffers) return [];
+        return Array.from(engineRef.current._buffers.keys());
+      },
+      getOwnPropertyDescriptor(_, key) {
+        if (engineRef.current?.hasBuffer(key)) {
+          return { configurable: true, enumerable: true, value: engineRef.current.getBuffer(key) };
+        }
+        return undefined;
+      },
+    });
+  }
 
   return {
     // Audio state

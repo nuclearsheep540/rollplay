@@ -5,6 +5,9 @@
 
 'use client'
 
+import Link from 'next/link'
+import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
+import { faHouse } from '@fortawesome/free-solid-svg-icons'
 import { THEME, COLORS } from '@/app/styles/colorTheme'
 
 /**
@@ -27,8 +30,19 @@ export default function SiteHeader({ children }) {
         <span>TABLETOP</span><span style={{ color: COLORS.silver }}>TAVERN</span>
       </div>
 
-      {/* Right side nav area */}
+      {/* Right side nav area — Home is rendered here globally so every
+          authenticated page gets it without page-level plumbing; the rest
+          (notifications, logout, etc.) is passed in as children per-page. */}
       <nav className="flex items-center gap-8">
+        <Link
+          href="/dashboard"
+          aria-label="Home"
+          title="Home"
+          className="hover:opacity-80 transition-opacity"
+          style={{ color: THEME.textSecondary }}
+        >
+          <FontAwesomeIcon icon={faHouse} className="h-7 w-7" />
+        </Link>
         {children}
       </nav>
     </header>

@@ -8,7 +8,9 @@
 import React, { useState, useEffect, useCallback, useMemo, useRef, memo } from 'react';
 import AudioTrackSelector from './AudioTrackSelector';
 import SfxSoundboard from './SfxSoundboard';
-import { PlaybackState, ChannelType, DEFAULT_EFFECTS } from '../types';
+import { PlaybackState, ChannelType, DEFAULT_EFFECTS, BGM_CHANNELS } from '../types';
+import { useListPresets } from '@/app/workshop/hooks/usePresets';
+import { useAssets } from '@/app/asset_library/hooks/useAssets';
 import {
   DM_CHILD,
   PANEL_CHILD,
@@ -141,6 +143,97 @@ export default function AudioMixerPanel({
     }
     sendRemoteAudioBatch?.([{ trackId: channelId, operation: 'clear' }]);
   }, [loadAssetIntoChannel, sendRemoteAudioBatch]);
+
+  // ── Presets (read-only in-game) ─────────────────────────────────────────
+  // The DM authors presets in Workshop → Audio Presets. The game surface
+  // only lists + loads them; no mutation.
+  const { data: presets = [] } = useListPresets();
+  const { data: musicAssets = [] } = useAssets({ assetType: 'music' });
+  const [selectedPresetId, setSelectedPresetId] = useState('');
+
+  const musicAssetsById = useMemo(() => {
+    const map = new Map();
+    for (const a of musicAssets) map.set(a.id, a);
+    return map;
+  }, [musicAssets]);
+
+  const handleLoadPreset = useCallback((presetId) => {
+    if (!presetId) return;
+    const preset = presets.find(p => p.id === presetId);
+    if (!preset || !sendRemoteAudioBatch) return;
+
+    // A preset defines the WHOLE mixer state, not just the channels it
+    // populates. So iterate every BGM channel: those the preset fills get
+    // a `load` op, the rest get `clear` — otherwise stale tracks from the
+    // previous preset/custom session would linger on unused channels.
+    const filledSlotsById = new Map(
+      preset.slots.map(s => [s.channel_id, s])
+    );
+
+    const ops = [];
+    for (const { id: channelId } of BGM_CHANNELS) {
+      const slot = filledSlotsById.get(channelId);
+      if (slot) {
+        const asset = musicAssetsById.get(slot.music_asset_id);
+        if (!asset) continue; // asset deleted since preset was saved — skip
+
+        const effects = (
+          asset.effect_hpf_enabled !== undefined ||
+          asset.effect_lpf_enabled !== undefined ||
+          asset.effect_reverb_enabled !== undefined
+        )
+          ? {
+              // Match channelStateAdapter's eq derivation: respect an
+              // explicit true/false, but treat unset as "EQ active when
+              // HPF or LPF is on" so assets configured pre-EQ-flag don't
+              // silently lose their filters during preset load.
+              eq: asset.effect_eq_enabled ?? !!(asset.effect_hpf_enabled || asset.effect_lpf_enabled),
+              hpf: asset.effect_hpf_enabled || false,
+              hpf_mix: asset.effect_hpf_mix ?? DEFAULT_EFFECTS.hpf.mix,
+              lpf: asset.effect_lpf_enabled || false,
+              lpf_mix: asset.effect_lpf_mix ?? DEFAULT_EFFECTS.lpf.mix,
+              reverb: asset.effect_reverb_enabled || false,
+              reverb_mix: asset.effect_reverb_mix ?? DEFAULT_EFFECTS.reverb.mix,
+              reverb_preset: asset.effect_reverb_preset || 'room',
+            }
+          : {};
+
+        // Apply locally for immediate responsiveness; backend broadcast
+        // reconciles with any saved per-channel config from MongoDB.
+        if (loadAssetIntoChannel) {
+          loadAssetIntoChannel(channelId, asset);
+        }
+
+        // Derive loop_mode so the batch op carries the full loop intent.
+        // `looping` (boolean) is kept for legacy receivers but is now
+        // driven off the mode — the engine uses loop_mode as truth.
+        const loopMode = asset.loop_mode ?? ((asset.default_looping ?? true) ? 'full' : 'off');
+        const op = {
+          trackId: channelId,
+          operation: 'load',
+          filename: asset.filename,
+          asset_id: asset.id,
+          s3_url: asset.s3_url,
+          volume: asset.default_volume ?? 0.8,
+          looping: loopMode !== 'off',
+          loop_mode: loopMode,
+          effects,
+        };
+        if (asset.loop_start != null) op.loop_start = asset.loop_start;
+        if (asset.loop_end != null) op.loop_end = asset.loop_end;
+        ops.push(op);
+      } else {
+        // Channel not in this preset — mirror handleBgmClear: reset local
+        // state and tell the backend to clear the slot.
+        if (loadAssetIntoChannel) {
+          loadAssetIntoChannel(channelId, { id: null, filename: null, s3_url: null });
+        }
+        ops.push({ trackId: channelId, operation: 'clear' });
+      }
+    }
+
+    if (ops.length > 0) sendRemoteAudioBatch(ops);
+  }, [presets, musicAssetsById, sendRemoteAudioBatch, loadAssetIntoChannel]);
 
   // Collect asset IDs currently loaded in any BGM channel (for filtering the selection modal)
   const loadedAssetIds = useMemo(() => {
@@ -448,29 +541,53 @@ export default function AudioMixerPanel({
   return (
     <div className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden flex flex-col">
 
-          {/* Preset Section */}
+          {/* Preset Section — load DM's pre-configured mixer layouts.
+              CRUD happens in Workshop → Audio Presets; the game is read-only. */}
           <div className={DM_CHILD}>
             <div className="flex items-center gap-3">
               <span className="text-white font-medium">Preset:</span>
 
               <select
-                value="Default"
-                disabled
-                className={`${DM_CHILD} bg-slate-800 text-gray-100 cursor-not-allowed`}
+                value={selectedPresetId}
+                onChange={(e) => {
+                  const id = e.target.value;
+                  setSelectedPresetId(id);
+                  if (id) handleLoadPreset(id);
+                  // Selecting "" from the dropdown clears the preset
+                  // without touching what's currently loaded, so the DM
+                  // can take manual control of the mixer.
+                }}
+                disabled={presets.length === 0}
+                className={`${DM_CHILD} bg-slate-800 text-gray-100 ${presets.length === 0 ? 'cursor-not-allowed opacity-60' : ''}`}
               >
-                <option value="Default">Default</option>
+                <option value="">
+                  {selectedPresetId
+                    ? 'Clear preset (custom mode)'
+                    : presets.length === 0
+                      ? 'No presets — create in Workshop'
+                      : 'Select a preset...'}
+                </option>
+                {presets.map(preset => (
+                  <option key={preset.id} value={preset.id}>
+                    {preset.name}
+                  </option>
+                ))}
               </select>
             </div>
           </div>
 
-          {/* Track Selector — load audio from asset library */}
-          <AudioTrackSelector
-            remoteTrackStates={remoteTrackStates}
-            onAssetSelected={handleAssetSelected}
-            onClear={handleBgmClear}
-            loadedAssetIds={loadedAssetIds}
-            campaignId={campaignId}
-          />
+          {/* Track Selector — hidden while a preset is active so presets
+              stay the source of truth. Clear the preset to resume manual
+              per-track editing. */}
+          {!selectedPresetId && (
+            <AudioTrackSelector
+              remoteTrackStates={remoteTrackStates}
+              onAssetSelected={handleAssetSelected}
+              onClear={handleBgmClear}
+              loadedAssetIds={loadedAssetIds}
+              campaignId={campaignId}
+            />
+          )}
 
           {/* DJ Cue System - Show when multiple BGM channels are available */}
           {bgmChannels.length > 1 && (

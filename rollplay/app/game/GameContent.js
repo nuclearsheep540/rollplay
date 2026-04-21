@@ -2124,17 +2124,27 @@ export default function GameContent() {
         <BottomMixerDrawer
           isOpen={isMixerOpen}
           onToggle={() => setIsMixerOpen(prev => !prev)}
-          remoteTrackStates={remoteTrackStates}
-          remoteTrackAnalysers={remoteTrackAnalysers}
-          setRemoteTrackVolume={setRemoteTrackVolume}
-          sendRemoteAudioBatch={sendRemoteAudioBatch}
+          trackStates={remoteTrackStates}
+          trackAnalysers={remoteTrackAnalysers}
+          setTrackVolume={setRemoteTrackVolume}
+          onVolumeCommit={(trackId, volume) => sendRemoteAudioBatch?.([{
+            trackId, operation: 'volume', volume,
+          }])}
           onPlay={handleMixerPlay}
           onPause={handleMixerPause}
           onStop={handleMixerStop}
-          onLoopToggle={toggleRemoteTrackLooping}
+          onLoopCommit={(trackId, looping, loopMode) => {
+            toggleRemoteTrackLooping?.(trackId, looping);
+            sendRemoteAudioBatch?.([{
+              trackId, operation: 'loop', looping, loop_mode: loopMode,
+            }]);
+          }}
           channelEffects={channelEffects}
           applyChannelEffects={applyChannelEffects}
           setEffectMixLevel={setEffectMixLevel}
+          onEffectsChange={(trackId, effects) => sendRemoteAudioBatch?.([{
+            trackId, operation: 'effects', effects,
+          }])}
           mutedChannels={mutedChannels}
           soloedChannels={soloedChannels}
           setChannelMuted={setChannelMuted}
@@ -2142,6 +2152,9 @@ export default function GameContent() {
           masterAnalysers={masterAnalysers}
           masterVolume={broadcastMasterVolume}
           onMasterVolumeChange={setBroadcastMasterVolume}
+          onMasterVolumeCommit={(volume) => sendRemoteAudioBatch?.([{
+            trackId: 'master', operation: 'master_volume', volume,
+          }])}
         />
       )}
 

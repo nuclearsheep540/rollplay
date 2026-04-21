@@ -87,6 +87,13 @@ class MediaAssetResponse(BaseModel):
     effect_reverb_mix: Optional[float] = None
     effect_reverb_preset: Optional[str] = None
 
+    # Music-only loop/BPM fields
+    loop_start: Optional[float] = None
+    loop_end: Optional[float] = None
+    bpm: Optional[float] = None
+    loop_mode: Optional[str] = None
+    time_signature: Optional[str] = None
+
     # Image fields
     image_fit: Optional[str] = None
     aspect_ratio: Optional[str] = None
@@ -132,7 +139,7 @@ class UpdateImageConfigRequest(BaseModel):
 class UpdateAudioConfigRequest(BaseModel):
     """Request to update audio playback configuration"""
     duration_seconds: Optional[float] = Field(None, ge=0, description="Track duration in seconds")
-    default_volume: Optional[float] = Field(None, ge=0.0, le=1.3, description="Default playback volume")
+    default_volume: Optional[float] = Field(None, ge=0.0, le=1.5, description="Default playback volume")
     default_looping: Optional[bool] = Field(None, description="Default loop behavior")
     effect_eq_enabled: Optional[bool] = Field(None, description="EQ master bypass")
     effect_hpf_enabled: Optional[bool] = Field(None, description="High-pass filter enabled")
@@ -140,10 +147,61 @@ class UpdateAudioConfigRequest(BaseModel):
     effect_lpf_enabled: Optional[bool] = Field(None, description="Low-pass filter enabled")
     effect_lpf_mix: Optional[float] = Field(None, ge=0.0, le=1.0, description="LPF mix level")
     effect_reverb_enabled: Optional[bool] = Field(None, description="Reverb enabled")
-    effect_reverb_mix: Optional[float] = Field(None, ge=0.0, le=1.3, description="Reverb mix level")
+    effect_reverb_mix: Optional[float] = Field(None, ge=0.0, le=1.5, description="Reverb mix level")
     effect_reverb_preset: Optional[str] = Field(None, description="Reverb preset name")
+    loop_start: Optional[float] = Field(None, ge=0, description="Loop region start in seconds")
+    loop_end: Optional[float] = Field(None, ge=0, description="Loop region end in seconds")
+    bpm: Optional[float] = Field(None, gt=0, description="Beats per minute")
+    loop_mode: Optional[str] = Field(None, description="Loop mode: off, full, continuous, or region")
+    time_signature: Optional[str] = Field(None, description="Time signature: 2/4, 3/4, 4/4, 5/4, 6/8, 7/8, or 12/8")
 
 
 # Aliases for backwards compatibility
 AssetResponse = MediaAssetResponse
 AssetListResponse = MediaAssetListResponse
+
+
+# ── Preset schemas ───────────────────────────────────────────────────────────
+
+class PresetSlotSchema(BaseModel):
+    """A single channel → asset assignment within a preset."""
+    channel_id: str = Field(..., min_length=1, max_length=64, description="Mixer channel identifier")
+    music_asset_id: UUID = Field(..., description="Music asset to load into this channel")
+
+    class Config:
+        from_attributes = True  # Auto-hydrate from PresetSlot domain objects
+
+
+class PresetResponse(BaseModel):
+    """A preset (DM-scoped mixer configuration)."""
+    # UUID fields mirror the aggregate's types so `model_validate(preset)`
+    # works without manual stringification. Pydantic serialises UUIDs as
+    # strings in the JSON response, so the wire format matches a bare
+    # `str` declaration — but the hydration path is now automatic.
+    id: UUID
+    user_id: UUID
+    name: str
+    slots: List[PresetSlotSchema]
+    created_at: datetime
+    updated_at: Optional[datetime] = None
+
+    class Config:
+        from_attributes = True
+
+
+class PresetListResponse(BaseModel):
+    """List response wrapper for presets."""
+    presets: List[PresetResponse]
+    total: int
+
+
+class CreatePresetRequest(BaseModel):
+    """Create a new preset."""
+    name: str = Field(..., min_length=1, max_length=64, description="Preset name")
+    slots: List[PresetSlotSchema] = Field(default_factory=list, description="Channel slots")
+
+
+class UpdatePresetRequest(BaseModel):
+    """Update an existing preset. Either rename, replace slots, or both."""
+    name: Optional[str] = Field(None, min_length=1, max_length=64, description="New name (optional)")
+    slots: Optional[List[PresetSlotSchema]] = Field(None, description="New slots (optional)")

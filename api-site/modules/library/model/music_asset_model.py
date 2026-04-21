@@ -46,6 +46,13 @@ class MusicAssetModel(MediaAsset):
     effect_reverb_mix = Column(Float, nullable=True)
     effect_reverb_preset = Column(String, nullable=True)
 
+    # Loop point / BPM configuration — asset-level defaults for DAW
+    loop_start = Column(Float, nullable=True)       # seconds
+    loop_end = Column(Float, nullable=True)          # seconds
+    bpm = Column(Float, nullable=True)               # beats per minute
+    loop_mode = Column(String, nullable=True)        # "off" | "full" | "continuous" | "region"
+    time_signature = Column(String(8), nullable=True)  # "4/4" etc. — beat grid rendering
+
     __mapper_args__ = {
         'polymorphic_identity': MediaAssetType.MUSIC,
     }

@@ -10,7 +10,7 @@ import WorkshopToolNav from './WorkshopToolNav';
 const TOOL_ROUTES = {
   maps: '/workshop/map-config?from=map-config',
   images: '/workshop/image-config?from=image-config',
-  // audio: '/workshop/audio-workstation',
+  audio: '/workshop/audio-workstation?from=audio-workstation',
   // npcs: '/workshop/npc-barracks',
   // scenes: '/workshop/scene-builder',
 };

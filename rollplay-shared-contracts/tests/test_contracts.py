@@ -55,6 +55,9 @@ class TestAudioRoundTrip:
             effects=AudioEffects(hpf=True),
             muted=True,
             soloed=False,
+            loop_mode="region",
+            loop_start=5.0,
+            loop_end=30.0,
             playback_state="playing",
             started_at=1000.0,
         )
@@ -70,6 +73,9 @@ class TestAudioRoundTrip:
             volume=0.6,
             looping=True,
             effects=AudioEffects(reverb=True),
+            loop_mode="continuous",
+            loop_start=2.5,
+            loop_end=12.0,
             paused_elapsed=45.2,
         )
         assert AudioTrackConfig.model_validate(config.model_dump()) == config
@@ -377,8 +383,9 @@ class TestCharacterShapeConformance:
 
 class TestAudioConstraints:
     def test_volume_rejects_above_max(self):
+        # Fader ceiling is 1.5 (= +3.52 dB). Anything above should reject.
         with pytest.raises(ValidationError):
-            AudioChannelState(volume=1.4)
+            AudioChannelState(volume=1.6)
 
     def test_volume_rejects_below_min(self):
         with pytest.raises(ValidationError):
@@ -386,7 +393,7 @@ class TestAudioConstraints:
 
     def test_volume_accepts_boundary_values(self):
         assert AudioChannelState(volume=0.0).volume == 0.0
-        assert AudioChannelState(volume=1.3).volume == 1.3
+        assert AudioChannelState(volume=1.5).volume == 1.5
 
     def test_playback_state_rejects_invalid(self):
         with pytest.raises(ValidationError):
@@ -398,7 +405,15 @@ class TestAudioConstraints:
 
     def test_track_config_volume_rejects_above_max(self):
         with pytest.raises(ValidationError):
-            AudioTrackConfig(volume=1.4)
+            AudioTrackConfig(volume=1.6)
+
+    def test_reverb_mix_accepts_boundary(self):
+        # Reverb mix tracks the same fader ceiling as volume (1.5 = +3.52 dB).
+        assert AudioEffects(reverb_mix=1.5).reverb_mix == 1.5
+
+    def test_reverb_mix_rejects_above_max(self):
+        with pytest.raises(ValidationError):
+            AudioEffects(reverb_mix=1.6)
 
 
 class TestMapConstraints:

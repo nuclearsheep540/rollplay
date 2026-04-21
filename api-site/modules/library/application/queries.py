@@ -10,7 +10,9 @@ from uuid import UUID
 
 from modules.library.domain.asset_aggregate import MediaAssetAggregate
 from modules.library.domain.media_asset_type import MediaAssetType
+from modules.library.domain.preset_aggregate import PresetAggregate
 from modules.library.repositories.asset_repository import MediaAssetRepository
+from modules.library.repositories.preset_repository import PresetRepository
 
 
 class GetMediaAssetsByUser:
@@ -74,3 +76,26 @@ class GetMediaAssetsByCampaign:
             return self.repository.get_by_campaign_id_and_type(campaign_id, asset_type)
         else:
             return self.repository.get_by_campaign_id(campaign_id)
+
+
+class GetPresetById:
+    """Get a preset owned by a user."""
+
+    def __init__(self, repository: PresetRepository):
+        self.repository = repository
+
+    def execute(self, preset_id: UUID, user_id: UUID) -> Optional[PresetAggregate]:
+        preset = self.repository.get_by_id(preset_id)
+        if preset is None or preset.user_id != user_id:
+            return None
+        return preset
+
+
+class ListPresetsForUser:
+    """List all presets owned by a user, newest first."""
+
+    def __init__(self, repository: PresetRepository):
+        self.repository = repository
+
+    def execute(self, user_id: UUID) -> List[PresetAggregate]:
+        return self.repository.list_for_user(user_id)

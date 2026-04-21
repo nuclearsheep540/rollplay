@@ -825,7 +825,8 @@ body {
   overflow: visible;
 }
 
-.bottom-mixer-drawer .drawer-content {
+.bottom-mixer-drawer .drawer-content,
+.mixer-strips-layout {
   height: 100%;
   display: flex;
   flex-direction: row;
@@ -922,13 +923,16 @@ body {
   appearance: none;
   /* Browser swaps axes under writing-mode: vertical-lr.
      Declare wide×thin — browser renders as horizontal thumb. */
-  width: calc(22px * var(--ui-scale));
-  height: calc(6px * var(--ui-scale));
+  width: calc(24px * var(--ui-scale));
+  height: calc(10px * var(--ui-scale));
   background: #F7F4F3;
   border-radius: calc(1px * var(--ui-scale));
   cursor: pointer;
-  /* Center thumb over the L/R meters */
-  transform: translateX(-50%);
+  /* translateX centers horizontally over the 1px track. translateY
+     offsets by half the thumb's own height so its vertical center
+     (not its top edge) sits on the value position — matches real-world
+     mixer behaviour. */
+  transform: translate(-50%, -50%);
   box-shadow: 0 0 3px rgba(0, 0, 0, 0.6);
 }
 
@@ -941,12 +945,14 @@ body {
 .vertical-fader::-moz-range-thumb {
   /* Browser swaps axes under writing-mode: vertical-lr.
      Declare wide×thin — browser renders as horizontal thumb. */
-  width: calc(22px * var(--ui-scale));
-  height: calc(6px * var(--ui-scale));
+  width: calc(24px * var(--ui-scale));
+  height: calc(10px * var(--ui-scale));
   background: #F7F4F3;
   border-radius: calc(1px * var(--ui-scale));
   border: none;
   cursor: pointer;
+  /* Same center-on-value offset as the webkit thumb. */
+  transform: translate(0, -50%);
   box-shadow: 0 0 3px rgba(0, 0, 0, 0.6);
 }
 

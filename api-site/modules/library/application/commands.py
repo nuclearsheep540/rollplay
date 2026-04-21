@@ -16,6 +16,8 @@ from modules.library.domain.cine_config import MotionConfig as DomainMotionConfi
 from modules.library.domain.image_asset_aggregate import ImageAsset
 from modules.library.domain.media_asset_type import MediaAssetType
 from modules.library.repositories.asset_repository import MediaAssetRepository
+from modules.library.repositories.preset_repository import PresetRepository
+from modules.library.domain.preset_aggregate import PresetAggregate, PresetSlot
 from modules.session.repositories.session_repository import SessionRepository
 from modules.session.domain.session_aggregate import SessionStatus
 from shared.services.s3_service import S3Service
@@ -423,7 +425,12 @@ class UpdateAudioConfig:
         effect_lpf_mix: Optional[float] = None,
         effect_reverb_enabled: Optional[bool] = None,
         effect_reverb_mix: Optional[float] = None,
-        effect_reverb_preset: Optional[str] = None
+        effect_reverb_preset: Optional[str] = None,
+        loop_start: Optional[float] = None,
+        loop_end: Optional[float] = None,
+        bpm: Optional[float] = None,
+        loop_mode: Optional[str] = None,
+        time_signature: Optional[str] = None
     ) -> Union[MusicAsset, SfxAsset]:
         """
         Update audio configuration for an audio asset.
@@ -472,6 +479,11 @@ class UpdateAudioConfig:
                 effect_reverb_enabled=effect_reverb_enabled,
                 effect_reverb_mix=effect_reverb_mix,
                 effect_reverb_preset=effect_reverb_preset,
+                loop_start=loop_start,
+                loop_end=loop_end,
+                bpm=bpm,
+                loop_mode=loop_mode,
+                time_signature=time_signature,
             )
 
         asset.update_audio_config(**config_kwargs)
@@ -555,3 +567,129 @@ class UpdateImageConfig:
 
         self.repository.save(asset)
         return asset
+
+
+class PresetNameConflictError(Exception):
+    """Raised when a preset name is already taken by the same user."""
+    pass
+
+
+class PresetNotFoundError(Exception):
+    """Raised when a preset cannot be found or does not belong to the requester."""
+    pass
+
+
+class InvalidPresetAssetError(Exception):
+    """Raised when a preset slot references an asset that doesn't exist or isn't a music asset."""
+    pass
+
+
+def _validate_preset_slots(
+    slots: list,
+    user_id: UUID,
+    asset_repository: MediaAssetRepository,
+) -> list:
+    """
+    Resolve and validate a list of PresetSlot entries: every referenced asset
+    must exist, belong to the user, and be a music asset.
+    """
+    validated: list = []
+    for slot in slots:
+        asset = asset_repository.get_by_id(slot.music_asset_id)
+        if not asset:
+            raise InvalidPresetAssetError(f"Music asset {slot.music_asset_id} not found")
+        if asset.user_id != user_id:
+            raise InvalidPresetAssetError(f"Asset {slot.music_asset_id} is not owned by user")
+        # Accept MusicAsset subtype (polymorphic load returns the right type)
+        if not isinstance(asset, MusicAsset):
+            raise InvalidPresetAssetError(
+                f"Asset {slot.music_asset_id} is not a music asset"
+            )
+        validated.append(slot)
+    return validated
+
+
+class CreatePreset:
+    """Create a new preset for a user."""
+
+    def __init__(
+        self,
+        preset_repository: PresetRepository,
+        asset_repository: MediaAssetRepository,
+    ):
+        self.presets = preset_repository
+        self.assets = asset_repository
+
+    def execute(
+        self,
+        user_id: UUID,
+        name: str,
+        slots: list,
+    ) -> PresetAggregate:
+        validated_slots = _validate_preset_slots(slots, user_id, self.assets)
+        preset = PresetAggregate.create(user_id=user_id, name=name, slots=validated_slots)
+
+        if self.presets.name_exists_for_user(user_id, preset.name):
+            raise PresetNameConflictError(
+                f"A preset named '{preset.name}' already exists"
+            )
+
+        return self.presets.save(preset)
+
+
+class RenamePreset:
+    """Rename an existing preset."""
+
+    def __init__(self, preset_repository: PresetRepository):
+        self.presets = preset_repository
+
+    def execute(self, preset_id: UUID, user_id: UUID, name: str) -> PresetAggregate:
+        preset = self.presets.get_by_id(preset_id)
+        if not preset or preset.user_id != user_id:
+            raise PresetNotFoundError(f"Preset {preset_id} not found")
+
+        preset.rename(name)
+        if self.presets.name_exists_for_user(user_id, preset.name, exclude_id=preset.id):
+            raise PresetNameConflictError(
+                f"A preset named '{preset.name}' already exists"
+            )
+        return self.presets.save(preset)
+
+
+class UpdatePresetSlots:
+    """Bulk replace the slot list on an existing preset."""
+
+    def __init__(
+        self,
+        preset_repository: PresetRepository,
+        asset_repository: MediaAssetRepository,
+    ):
+        self.presets = preset_repository
+        self.assets = asset_repository
+
+    def execute(
+        self,
+        preset_id: UUID,
+        user_id: UUID,
+        slots: list,
+    ) -> PresetAggregate:
+        preset = self.presets.get_by_id(preset_id)
+        if not preset or preset.user_id != user_id:
+            raise PresetNotFoundError(f"Preset {preset_id} not found")
+
+        validated_slots = _validate_preset_slots(slots, user_id, self.assets)
+        preset.replace_slots(validated_slots)
+        return self.presets.save(preset)
+
+
+class DeletePreset:
+    """Delete a preset owned by the requester."""
+
+    def __init__(self, preset_repository: PresetRepository):
+        self.presets = preset_repository
+
+    def execute(self, preset_id: UUID, user_id: UUID) -> None:
+        preset = self.presets.get_by_id(preset_id)
+        if not preset or preset.user_id != user_id:
+            raise PresetNotFoundError(f"Preset {preset_id} not found")
+        self.presets.delete(preset_id)
