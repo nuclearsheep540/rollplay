@@ -182,6 +182,26 @@ api-site/
 3. **Create Command or Query** — orchestrate in application layer (command calls aggregate methods, not the other way around)
 4. **Add API Endpoint** — inject repository via `Depends()`, create command, call `execute()`
 
+### DTOs and `schemas.py` — Let Pydantic do its job
+
+**`schemas.py`** holds Pydantic DTO *declarations* — field types, constraints, `Optional[...]`. **`endpoints.py`** holds request handling. The boundary between them is where Pydantic earns its keep.
+
+**Rule:** DTO construction has two shapes; pick based on whether you're enriching or just mapping.
+
+- **Pure field-for-field mapping** (aggregate's attributes match the response's fields): declare `from_attributes = True` on the response's `Config` and return `SchemaName.model_validate(aggregate)` directly from the endpoint. No helper function. Pydantic handles nested hydration (child schemas with `from_attributes = True`) and type coercion (UUID → str) automatically.
+
+- **Mapping + enrichment** (response includes data from other aggregates, signed S3 URLs, computed fields, etc.): keep a `_to_<thing>_response(aggregate, *repos, *services)` helper at the top of `endpoints.py`. This is what `_to_campaign_response(campaign, user_repo, s3_service)` is doing — it's performing a join the aggregate can't do on its own.
+
+**Never put construction logic inside `schemas.py`** (no `@classmethod from_aggregate(...)`). The codebase's convention is that schemas.py is declarations only; enrichment helpers live in `endpoints.py` next to the consumer.
+
+**Heuristic:** if your `_to_<thing>_response` helper is just copying fields from an aggregate (especially if the response already has `from_attributes = True`), delete the helper and call `model_validate(aggregate)`. The helper is dead weight.
+
+**Gotcha — Pydantic v2 does NOT auto-coerce `UUID → str`.** Declaring `id: str` on a response and calling `model_validate(aggregate)` where `aggregate.id: UUID` raises a validation error. Two fixes:
+- **Preferred:** declare the response field as `UUID` to match the aggregate. Pydantic's JSON serialiser stringifies UUIDs automatically on output, so the wire format is unchanged.
+- **Alternative:** keep `id: str` and write a manual helper that does `id=str(aggregate.id)` — this is why the `campaign` and `user` modules still have `_to_<thing>_response` helpers even though `from_attributes = True` is set. They pre-date the cleaner UUID-typed approach, but work.
+
+Same applies to any non-trivial type mismatch (e.g. `datetime` → ISO string). Mirror the aggregate's types in the response; Pydantic does the serialisation. Only diverge when the wire format genuinely needs to differ from the domain's internal representation.
+
 ### Domain Events Pattern
 
 Events are defined as static factory methods in `domain/*_events.py` files within each module. They return `EventConfig` instances — a typed domain contract in `modules/events/domain/event_config.py`.

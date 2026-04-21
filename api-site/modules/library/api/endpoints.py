@@ -52,7 +52,6 @@ from .schemas import (
     UpdateImageConfigRequest,
     UpdateAudioConfigRequest,
     MediaAssetListResponse,
-    PresetSlotSchema,
     PresetResponse,
     PresetListResponse,
     CreatePresetRequest,
@@ -278,24 +277,6 @@ async def list_media_assets(
 # Registered BEFORE /{asset_id} so FastAPI doesn't try to parse "presets" as
 # an asset UUID (Starlette routing is first-match-wins, no literal priority).
 
-def _preset_to_response(preset: PresetAggregate) -> PresetResponse:
-    return PresetResponse(
-        id=str(preset.id),
-        user_id=str(preset.user_id),
-        name=preset.name,
-        slots=[
-            PresetSlotSchema(channel_id=s.channel_id, music_asset_id=s.music_asset_id)
-            for s in preset.slots
-        ],
-        created_at=preset.created_at,
-        updated_at=preset.updated_at,
-    )
-
-
-def _request_slots_to_domain(slots: list) -> list:
-    return [PresetSlot(channel_id=s.channel_id, music_asset_id=s.music_asset_id) for s in slots]
-
-
 @router.get("/presets", response_model=PresetListResponse)
 async def list_presets(
     current_user: UserAggregate = Depends(get_current_user_from_token),
@@ -305,7 +286,7 @@ async def list_presets(
     try:
         query = ListPresetsForUser(preset_repo)
         presets = query.execute(current_user.id)
-        responses = [_preset_to_response(p) for p in presets]
+        responses = [PresetResponse.model_validate(p) for p in presets]
         return PresetListResponse(presets=responses, total=len(responses))
     except Exception as e:
         logger.error(f"List presets error: {e}")
@@ -323,7 +304,7 @@ async def get_preset(
     preset = query.execute(preset_id, current_user.id)
     if not preset:
         raise HTTPException(status_code=404, detail="Preset not found")
-    return _preset_to_response(preset)
+    return PresetResponse.model_validate(preset)
 
 
 @router.post("/presets", response_model=PresetResponse, status_code=201)
@@ -339,9 +320,9 @@ async def create_preset(
         preset = command.execute(
             user_id=current_user.id,
             name=body.name,
-            slots=_request_slots_to_domain(body.slots),
+            slots=[PresetSlot(channel_id=s.channel_id, music_asset_id=s.music_asset_id) for s in body.slots],
         )
-        return _preset_to_response(preset)
+        return PresetResponse.model_validate(preset)
     except PresetNameConflictError as e:
         raise HTTPException(status_code=409, detail=str(e))
     except InvalidPresetAssetError as e:
@@ -375,7 +356,7 @@ async def update_preset(
             preset = cmd.execute(
                 preset_id=preset_id,
                 user_id=current_user.id,
-                slots=_request_slots_to_domain(body.slots),
+                slots=[PresetSlot(channel_id=s.channel_id, music_asset_id=s.music_asset_id) for s in body.slots],
             )
 
         if body.name is not None:
@@ -386,7 +367,7 @@ async def update_preset(
                 name=body.name,
             )
 
-        return _preset_to_response(preset)
+        return PresetResponse.model_validate(preset)
     except PresetNotFoundError as e:
         raise HTTPException(status_code=404, detail=str(e))
     except PresetNameConflictError as e:

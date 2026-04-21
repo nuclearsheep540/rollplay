@@ -168,11 +168,18 @@ class PresetSlotSchema(BaseModel):
     channel_id: str = Field(..., min_length=1, max_length=64, description="Mixer channel identifier")
     music_asset_id: UUID = Field(..., description="Music asset to load into this channel")
 
+    class Config:
+        from_attributes = True  # Auto-hydrate from PresetSlot domain objects
+
 
 class PresetResponse(BaseModel):
     """A preset (DM-scoped mixer configuration)."""
-    id: str
-    user_id: str
+    # UUID fields mirror the aggregate's types so `model_validate(preset)`
+    # works without manual stringification. Pydantic serialises UUIDs as
+    # strings in the JSON response, so the wire format matches a bare
+    # `str` declaration — but the hydration path is now automatic.
+    id: UUID
+    user_id: UUID
     name: str
     slots: List[PresetSlotSchema]
     created_at: datetime
