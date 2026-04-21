@@ -318,21 +318,19 @@ export default function VerticalChannelStrip({
           beneath (they're disabled anyway by channelDisabled until the
           trackState is populated). */}
       {downloadProgress && (
-        <div className="absolute inset-0 z-10 flex flex-col items-center justify-center gap-2 bg-black/60 pointer-events-none rounded-sm">
-          <div className="text-[10px] font-mono text-white/80 uppercase tracking-wider">
+        <div className="absolute inset-0 z-10 flex flex-col items-center justify-center gap-2 bg-black/80 pointer-events-none rounded-sm px-2">
+          <div className="text-[11px] font-semibold font-mono text-white uppercase tracking-wider">
             Loading
           </div>
-          <div className="w-[70%] h-1 bg-white/20 rounded-full overflow-hidden">
+          <div className="w-full h-1.5 bg-white/15 rounded-full overflow-hidden">
             <div
               className="h-full bg-green-500 transition-[width] duration-150 ease-linear"
               style={{ width: downloadPct != null ? `${downloadPct}%` : '33%' }}
             />
           </div>
-          {downloadPct != null && (
-            <div className="text-[10px] font-mono text-white/60">
-              {Math.round(downloadPct)}%
-            </div>
-          )}
+          <div className="text-xs font-mono text-white tabular-nums">
+            {downloadPct != null ? `${Math.round(downloadPct)}%` : '···'}
+          </div>
         </div>
       )}
 

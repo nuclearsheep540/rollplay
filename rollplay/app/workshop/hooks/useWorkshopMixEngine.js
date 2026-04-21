@@ -165,17 +165,26 @@ export function useWorkshopMixEngine(preset) {
         return;
       }
 
-      // Build up new channels for each slot
-      for (const slot of preset.slots) {
+      // Load every slot in parallel — each task owns its own channel_id
+      // so there are no write conflicts on the shared accumulator maps,
+      // and the asset download manager deduplicates concurrent downloads
+      // of the same asset automatically.
+      await Promise.all(preset.slots.map(async (slot) => {
         if (cancelled) return;
-        if (!BGM_CHANNELS.find(c => c.id === slot.channel_id)) continue;
+        if (!BGM_CHANNELS.find(c => c.id === slot.channel_id)) return;
 
         const asset = await fetchAssetById(slot.music_asset_id);
-        if (!asset || cancelled) continue;
+        if (!asset || cancelled) return;
 
         // Mark this channel as currently loading — strip UI subscribes
         // to per-asset download progress via assetId and renders a bar.
         setLoadingAssetByChannel(prev => ({ ...prev, [slot.channel_id]: asset.id }));
+
+        const clearLoading = () => setLoadingAssetByChannel(prev => {
+          const next = { ...prev };
+          delete next[slot.channel_id];
+          return next;
+        });
 
         // Decode buffer
         let buffer = null;
@@ -185,21 +194,12 @@ export function useWorkshopMixEngine(preset) {
           buffer = await engine.context.decodeAudioData(arrayBuffer);
         } catch (err) {
           console.warn(`Failed to decode asset ${asset.id}:`, err);
-          setLoadingAssetByChannel(prev => {
-            const next = { ...prev };
-            delete next[slot.channel_id];
-            return next;
-          });
-          continue;
+          clearLoading();
+          return;
         }
-        if (cancelled) return;
+        if (cancelled) { clearLoading(); return; }
 
-        // Download + decode complete — clear loading state for this channel
-        setLoadingAssetByChannel(prev => {
-          const next = { ...prev };
-          delete next[slot.channel_id];
-          return next;
-        });
+        clearLoading();
 
         const channel = engine.createChannel(slot.channel_id, CHANNEL_PRESETS.BGM);
         const engineConfig = assetToEngineConfig(asset);
@@ -250,7 +250,7 @@ export function useWorkshopMixEngine(preset) {
         };
         channel.on('timeupdate', onTimeUpdate);
         channel.on('statechange', onStateChange);
-      }
+      }));
 
       if (!cancelled) {
         setTrackStates(nextTrackStates);
