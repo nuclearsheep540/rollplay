@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: GPL-3.0-or-later
  */
 
-import React, { useRef, useEffect } from 'react';
+import React, { useRef, useEffect, useState } from 'react';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { faPlay, faPause, faStop } from '@fortawesome/free-solid-svg-icons';
 import { PlaybackState } from '../types';
@@ -110,6 +110,10 @@ export default function VerticalChannelStrip({
   const rafRef = useRef(null);
   const volumeDebounceTimer = useRef(null);
 
+  // Latching clip indicator — only rendered on the master strip, but the
+  // detection runs in the meter tick. Stays lit until the user clicks.
+  const [clipped, setClipped] = useState(false);
+
   // Cleanup debounce on unmount
   useEffect(() => {
     return () => {
@@ -135,7 +139,7 @@ export default function VerticalChannelStrip({
     // The peak indicator tracks the *raw* sample-level peak (unsmoothed)
     // so it catches transients the RMS window averages away. Holds for
     // HOLD_MS then snaps down to the current peak.
-    const PEAK_HOLD_MS = 2000;
+    const PEAK_HOLD_MS = 3000;
     let heldPeakL = 0;
     let heldPeakR = 0;
     let peakTimeL = 0;
@@ -219,6 +223,14 @@ export default function VerticalChannelStrip({
       applyPeakLine(peakLineLRef, lastPeakColorLRef, rmsToPct(heldPeakL));
       applyPeakLine(peakLineRRef, lastPeakColorRRef, rmsToPct(heldPeakR));
 
+      // Clip detection (master strip only). Byte-quantized samples top out
+      // at ≈0.992 for +1.0 and reach 1.0 for −1.0 — so 0.99 conservatively
+      // catches any sample that hit or exceeded 0 dBFS. Latching; cleared
+      // only by the user clicking the indicator.
+      if (stripType === 'master' && (peakL >= 0.99 || peakR >= 0.99)) {
+        setClipped(true);
+      }
+
       // Numeric readout — held peak of L/R, throttled to ~10 Hz. Cross-check
       // fader taper / summing against the pip scale.
       if (dbReadoutRef.current && (++readoutFrame % 6) === 0) {
@@ -281,7 +293,23 @@ export default function VerticalChannelStrip({
 
       {/* All controls — single flex-col, one gap-1 rule governs all spacing */}
       <div className="w-full px-1 flex flex-col gap-1">
-        {/* Transport — invisible on non-channel strips */}
+        {/* Transport row — transport buttons on channel strips, CLIP
+            indicator on master, invisible placeholder on effect strips.
+            Kept as one row so meter / fader alignment matches across strips. */}
+        {stripType === 'master' ? (
+          <button
+            onClick={() => setClipped(false)}
+            disabled={!clipped}
+            className={`w-full h-5 rounded text-[11px] font-bold tracking-wider transition-colors ${
+              clipped
+                ? 'bg-red-600 text-white hover:bg-red-500 cursor-pointer'
+                : 'bg-gray-800 text-gray-600 border border-gray-700 cursor-default'
+            }`}
+            title={clipped ? 'Master clipped — click to clear' : 'Clip indicator (0 dBFS or over)'}
+          >
+            CLIP
+          </button>
+        ) : (
         <div className={`flex gap-1 ${isChannel ? disabledClass : 'invisible'}`}>
           {playbackState === PlaybackState.PLAYING ? (
             <button
@@ -317,6 +345,7 @@ export default function VerticalChannelStrip({
             <FontAwesomeIcon icon={faStop} size="xs" />
           </button>
         </div>
+        )}
         {/* Middle 3 buttons — content varies by strip type, always 3 rows for layout */}
         {isChannel ? (
           <>
