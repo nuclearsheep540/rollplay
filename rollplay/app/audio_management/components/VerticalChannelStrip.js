@@ -102,6 +102,10 @@ export default function VerticalChannelStrip({
   const meterRRef = useRef(null);
   const lastColorLRef = useRef(null);
   const lastColorRRef = useRef(null);
+  const peakLineLRef = useRef(null);
+  const peakLineRRef = useRef(null);
+  const lastPeakColorLRef = useRef(null);
+  const lastPeakColorRRef = useRef(null);
   const dbReadoutRef = useRef(null);
   const rafRef = useRef(null);
   const volumeDebounceTimer = useRef(null);
@@ -119,8 +123,23 @@ export default function VerticalChannelStrip({
 
     const dataL = new Uint8Array(analysers.left.frequencyBinCount);
     const dataR = new Uint8Array(analysers.right.frequencyBinCount);
+
+    // ── RMS smoothing ────────────────────────────────────────────────────
+    // Higher coefficient = slower, calmer bars. 0.9 gives ~160 ms time
+    // constant — enough to tame transient jitter without laggy visuals.
+    const RMS_SMOOTHING = 0.9;
     let lastL = 0;
     let lastR = 0;
+
+    // ── Peak hold state ──────────────────────────────────────────────────
+    // The peak indicator tracks the *raw* sample-level peak (unsmoothed)
+    // so it catches transients the RMS window averages away. Holds for
+    // HOLD_MS then snaps down to the current peak.
+    const PEAK_HOLD_MS = 2000;
+    let heldPeakL = 0;
+    let heldPeakR = 0;
+    let peakTimeL = 0;
+    let peakTimeR = 0;
 
     const computeRms = (data) => {
       let sum = 0;
@@ -131,12 +150,36 @@ export default function VerticalChannelStrip({
       return Math.sqrt(sum / data.length);
     };
 
+    const computePeak = (data) => {
+      let max = 0;
+      for (let i = 0; i < data.length; i++) {
+        const norm = Math.abs((data[i] - 128) / 128);
+        if (norm > max) max = norm;
+      }
+      return max;
+    };
+
+    const peakColor = (pct) =>
+      pct >= 90 ? '#FF0000' : pct >= 70 ? '#FFD700' : '#04AA6D';
+
     // GPU-composited meter update: scaleY is a transform (compositor-only, no repaint).
     // Color only updates when the threshold band changes (rare), not every frame.
     const applyMeter = (ref, colorRef, pct) => {
       if (!ref.current) return;
-      const color = pct >= 90 ? '#FF0000' : pct >= 70 ? '#FFD700' : '#04AA6D';
+      const color = peakColor(pct);
       ref.current.style.transform = `scaleY(${pct / 100})`;
+      if (color !== colorRef.current) {
+        ref.current.style.backgroundColor = color;
+        colorRef.current = color;
+      }
+    };
+
+    // Peak line: absolutely positioned 2px line, placed via `bottom: X%`.
+    // Color tracks the threshold band at the peak's level — green/yellow/red.
+    const applyPeakLine = (ref, colorRef, pct) => {
+      if (!ref.current) return;
+      const color = peakColor(pct);
+      ref.current.style.bottom = `${pct}%`;
       if (color !== colorRef.current) {
         ref.current.style.backgroundColor = color;
         colorRef.current = color;
@@ -149,22 +192,37 @@ export default function VerticalChannelStrip({
 
     const tick = () => {
       rafRef.current = requestAnimationFrame(tick);
+      const now = performance.now();
 
       analysers.left.getByteTimeDomainData(dataL);
       analysers.right.getByteTimeDomainData(dataR);
 
-      const smoothL = lastL * 0.8 + computeRms(dataL) * 0.2;
-      const smoothR = lastR * 0.8 + computeRms(dataR) * 0.2;
-      lastL = smoothL;
-      lastR = smoothR;
+      // RMS bar — heavily smoothed for calm visuals
+      const rmsL = computeRms(dataL);
+      const rmsR = computeRms(dataR);
+      lastL = lastL * RMS_SMOOTHING + rmsL * (1 - RMS_SMOOTHING);
+      lastR = lastR * RMS_SMOOTHING + rmsR * (1 - RMS_SMOOTHING);
+      applyMeter(meterLRef, lastColorLRef, rmsToPct(lastL));
+      applyMeter(meterRRef, lastColorRRef, rmsToPct(lastR));
 
-      applyMeter(meterLRef, lastColorLRef, rmsToPct(smoothL));
-      applyMeter(meterRRef, lastColorRRef, rmsToPct(smoothR));
+      // Peak line + numeric readout — raw sample-level peak, held for 2s
+      const peakL = computePeak(dataL);
+      const peakR = computePeak(dataR);
+      if (peakL > heldPeakL || now - peakTimeL > PEAK_HOLD_MS) {
+        heldPeakL = peakL;
+        peakTimeL = now;
+      }
+      if (peakR > heldPeakR || now - peakTimeR > PEAK_HOLD_MS) {
+        heldPeakR = peakR;
+        peakTimeR = now;
+      }
+      applyPeakLine(peakLineLRef, lastPeakColorLRef, rmsToPct(heldPeakL));
+      applyPeakLine(peakLineRRef, lastPeakColorRRef, rmsToPct(heldPeakR));
 
-      // Numeric dB readout — peak of L/R, throttled to ~10 Hz. Useful for
-      // debugging fader/meter/taper accuracy against the pip labels.
+      // Numeric readout — held peak of L/R, throttled to ~10 Hz. Cross-check
+      // fader taper / summing against the pip scale.
       if (dbReadoutRef.current && (++readoutFrame % 6) === 0) {
-        const peak = Math.max(smoothL, smoothR);
+        const peak = Math.max(heldPeakL, heldPeakR);
         if (peak < 0.001) {
           dbReadoutRef.current.textContent = '-∞';
         } else {
@@ -345,10 +403,12 @@ export default function VerticalChannelStrip({
 
       {/* Vertical fader + L/R meters — meters drive layout, fader overlaid */}
       <div className={`flex-1 relative flex items-stretch justify-center gap-[2px] w-full min-h-0 ${channelDisabled ? disabledClass : ''}`}>
-        {/* L meter — container holds background, child fill uses GPU-composited scaleY */}
+        {/* L meter — container holds background, child fill uses GPU-composited scaleY.
+            Peak line sits on top, positioned via bottom:X%. */}
         {showMeters && (
           <div className="w-[6px] rounded-sm bg-slate-800 flex-shrink-0 relative overflow-hidden">
             <div ref={meterLRef} className="absolute inset-0 will-change-transform origin-bottom" style={{ backgroundColor: '#04AA6D', transform: 'scaleY(0)' }} />
+            <div ref={peakLineLRef} className="absolute inset-x-0 h-[2px] pointer-events-none" style={{ backgroundColor: '#04AA6D', bottom: '0%' }} />
           </div>
         )}
         {/* Center track spacer (visible when no meters, e.g. effect strips) */}
@@ -357,6 +417,7 @@ export default function VerticalChannelStrip({
         {showMeters && (
           <div className="w-[6px] rounded-sm bg-slate-800 flex-shrink-0 relative overflow-hidden">
             <div ref={meterRRef} className="absolute inset-0 will-change-transform origin-bottom" style={{ backgroundColor: '#04AA6D', transform: 'scaleY(0)' }} />
+            <div ref={peakLineRRef} className="absolute inset-x-0 h-[2px] pointer-events-none" style={{ backgroundColor: '#04AA6D', bottom: '0%' }} />
           </div>
         )}
         {/* dB pip lines — absolutely positioned over meters */}
