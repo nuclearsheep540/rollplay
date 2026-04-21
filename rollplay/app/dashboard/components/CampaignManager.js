@@ -7,6 +7,8 @@
 
 import { useState, useEffect, useRef, useMemo } from 'react'
 import { useRouter } from 'next/navigation'
+import gsap from 'gsap'
+import { useGSAP } from '@gsap/react'
 import Modal from '@/app/shared/components/Modal'
 import Spinner from '@/app/shared/components/Spinner'
 import PauseSessionModal from './PauseSessionModal'
@@ -112,8 +114,11 @@ export default function CampaignManager({ user, onExpandedChange, inviteCampaign
   const gameSessionsPanelRef = useRef(null)
   const campaignCardRef = useRef(null)
   const invitedCampaignCardRef = useRef(null)
-  const [drawerTop, setDrawerTop] = useState(null)
-  const [invitedDrawerTop, setInvitedDrawerTop] = useState(null)
+  // Scope ref for useGSAP — every data-attribute-tagged animation
+  // target lives inside this container.
+  const rootRef = useRef(null)
+  // Both drawers' min-height is now driven imperatively via gsap.set;
+  // no React state needed for either drawer's dimensions.
 
   // ── Individual modal target states (non-null = open) ──
   const [deleteCampaignTarget, setDeleteCampaignTarget] = useState(null)
@@ -518,66 +523,73 @@ export default function CampaignManager({ user, onExpandedChange, inviteCampaign
     onExpandedChange?.(!!selectedCampaign || !!selectedInvitedCampaign)
   }, [selectedCampaign, selectedInvitedCampaign, onExpandedChange])
 
-  // Calculate drawer top position (distance from viewport top to where drawer starts)
-  // This allows us to use CSS calc(100vh - drawerTop) for perfect viewport filling
+  // Live-update the main drawer's min-height as the user scrolls or
+  // resizes, so it always fills from the card's bottom to the viewport
+  // bottom. This ran through React state + `calc(100vh - drawerTop)`
+  // before; now we push values straight to the DOM via gsap.set (instant
+  // snap, no tween), which side-steps CSS transition interpolation on
+  // rapid scroll ticks and matches the GSAP-owned animation path.
   useEffect(() => {
-    const calculateDrawerTop = () => {
-      if (selectedCampaign && campaignCardRef.current) {
-        // Get card's position relative to the viewport
-        const cardRect = campaignCardRef.current.getBoundingClientRect()
-        // The drawer starts at the bottom of the card
-        setDrawerTop(cardRect.bottom)
-      } else {
-        setDrawerTop(null)
-      }
+    if (!selectedCampaign) return
+
+    const updateDrawerMinHeight = () => {
+      if (!rootRef.current || !campaignCardRef.current) return
+      const drawer = rootRef.current.querySelector(
+        `[data-campaign-sessions-drawer="${selectedCampaign.id}"]`
+      )
+      if (!drawer) return
+      // Don't interfere with the expand/collapse tween in flight.
+      if (gsap.isTweening(drawer)) return
+      const cardRect = campaignCardRef.current.getBoundingClientRect()
+      const minHeight = Math.max(0, window.innerHeight - cardRect.bottom)
+      gsap.set(drawer, { minHeight })
     }
 
-    // Calculate immediately
-    calculateDrawerTop()
-
-    // The scroll-to-top animation uses 'smooth' behavior which takes time
-    // We need to recalculate after the scroll completes and layout settles
-    // Use multiple timeouts to catch different timing scenarios
-    const timeouts = [50, 150, 300, 500].map(delay =>
-      setTimeout(calculateDrawerTop, delay)
+    // Scroll-to-top uses smooth behaviour, so recalc a few times after
+    // the layout settles.
+    const timeouts = [50, 150, 300, 500].map((delay) =>
+      setTimeout(updateDrawerMinHeight, delay)
     )
 
-    window.addEventListener('resize', calculateDrawerTop)
-    // Also listen for scroll events in case the user scrolls during expansion
+    window.addEventListener('resize', updateDrawerMinHeight)
     const mainContainer = document.getElementById('dashboard-main')
-    mainContainer?.addEventListener('scroll', calculateDrawerTop)
+    mainContainer?.addEventListener('scroll', updateDrawerMinHeight)
 
     return () => {
-      window.removeEventListener('resize', calculateDrawerTop)
-      mainContainer?.removeEventListener('scroll', calculateDrawerTop)
+      window.removeEventListener('resize', updateDrawerMinHeight)
+      mainContainer?.removeEventListener('scroll', updateDrawerMinHeight)
       timeouts.forEach(clearTimeout)
     }
   }, [selectedCampaign])
 
-  // Calculate invited drawer top position
+  // Live min-height update for the invited drawer — same imperative
+  // gsap.set approach as the main drawer above.
   useEffect(() => {
-    const calculateInvitedDrawerTop = () => {
-      if (selectedInvitedCampaign && invitedCampaignCardRef.current) {
-        const cardRect = invitedCampaignCardRef.current.getBoundingClientRect()
-        setInvitedDrawerTop(cardRect.bottom)
-      } else {
-        setInvitedDrawerTop(null)
-      }
+    if (!selectedInvitedCampaign) return
+
+    const updateInvitedDrawerMinHeight = () => {
+      if (!rootRef.current || !invitedCampaignCardRef.current) return
+      const drawer = rootRef.current.querySelector(
+        `[data-invited-drawer="${selectedInvitedCampaign.id}"]`
+      )
+      if (!drawer) return
+      if (gsap.isTweening(drawer)) return
+      const cardRect = invitedCampaignCardRef.current.getBoundingClientRect()
+      const minHeight = Math.max(0, window.innerHeight - cardRect.bottom)
+      gsap.set(drawer, { minHeight })
     }
 
-    calculateInvitedDrawerTop()
-
-    const timeouts = [50, 150, 300, 500].map(delay =>
-      setTimeout(calculateInvitedDrawerTop, delay)
+    const timeouts = [50, 150, 300, 500].map((delay) =>
+      setTimeout(updateInvitedDrawerMinHeight, delay)
     )
 
-    window.addEventListener('resize', calculateInvitedDrawerTop)
+    window.addEventListener('resize', updateInvitedDrawerMinHeight)
     const mainContainer = document.getElementById('dashboard-main')
-    mainContainer?.addEventListener('scroll', calculateInvitedDrawerTop)
+    mainContainer?.addEventListener('scroll', updateInvitedDrawerMinHeight)
 
     return () => {
-      window.removeEventListener('resize', calculateInvitedDrawerTop)
-      mainContainer?.removeEventListener('scroll', calculateInvitedDrawerTop)
+      window.removeEventListener('resize', updateInvitedDrawerMinHeight)
+      mainContainer?.removeEventListener('scroll', updateInvitedDrawerMinHeight)
       timeouts.forEach(clearTimeout)
     }
   }, [selectedInvitedCampaign])
@@ -589,6 +601,173 @@ export default function CampaignManager({ user, onExpandedChange, inviteCampaign
     }
   }, [])
 
+  // ── GSAP: main campaign tile expand/collapse ──────────────────────────
+  // The card is the single animated element: it grows from 350 px
+  // collapsed to 600 px expanded, and bleeds horizontally from its
+  // 1410 px wrapper out to the full viewport. The sessions drawer
+  // below tweens in lock-step (left / width / min-height / max-height /
+  // border-width). Card border colour flips to "active" on select.
+  //
+  // Data attributes are used instead of refs because each element
+  // lives inside `campaigns.map()` — collecting one ref per iteration
+  // would take extra plumbing.
+  useGSAP(() => {
+    const scope = rootRef.current
+    if (!scope) return
+
+    const duration = 0.32
+    const ease = 'power2.inOut'
+    const id = selectedCampaign?.id
+
+    // Collapse every card / drawer back to their collapsed defaults
+    // first. (No-op for ones already collapsed.) `onComplete` flips
+    // the drawer's visibility / pointer-events *after* the tween so
+    // the element stays rendered throughout the collapse animation —
+    // previously these were flipped synchronously by React on state
+    // change, which made the collapse appear instant because the DOM
+    // hid itself before GSAP could animate it.
+    gsap.to(scope.querySelectorAll('[data-campaign-card]'), {
+      left: 0,
+      width: '100%',
+      height: 350,
+      borderColor: THEME.borderDefault,
+      duration,
+      ease,
+    })
+    gsap.to(scope.querySelectorAll('[data-campaign-sessions-drawer]'), {
+      left: '0%',
+      width: '100%',
+      minHeight: 0,
+      maxHeight: 0,
+      borderWidth: 0,
+      duration,
+      ease,
+      onComplete() { gsap.set(this.targets(), { visibility: 'hidden', pointerEvents: 'none' }) },
+    })
+
+    if (id) {
+      const card = scope.querySelector(`[data-campaign-card="${id}"]`)
+      const drawer = scope.querySelector(`[data-campaign-sessions-drawer="${id}"]`)
+
+      gsap.set(drawer, { visibility: 'visible', pointerEvents: 'auto' })
+
+      // Pixel targets for the horizontal card bleed. The wrapper is
+      // capped at 1410 px and centred; the card slides left by the
+      // wrapper's viewport offset and widens to fill the viewport.
+      const wrapper = card?.parentElement
+      const wrapperRect = wrapper?.getBoundingClientRect()
+      const viewportWidth = window.innerWidth
+      const leftOffset = wrapperRect ? -wrapperRect.left : 0
+
+      // Drawer fills from the expanded card's bottom to the viewport
+      // bottom. Card will tween to 600 px tall — use the *expanded*
+      // bottom here, not the current (still-collapsed) one, or the
+      // drawer starts too high and overlaps the growing card.
+      const cardRect = card?.getBoundingClientRect()
+      const expandedBottom = cardRect ? cardRect.top + 600 : 0
+      const drawerMinHeight = cardRect ? Math.max(0, window.innerHeight - expandedBottom) : 0
+
+      // `overwrite: 'auto'` — tells GSAP to kill any in-flight tween
+      // affecting the same properties on these targets. Necessary
+      // because the collapse-all tweens above run simultaneously on
+      // this same element; without overwrite they'd fight the expand
+      // tween and the element would never visibly grow.
+      gsap.to(card, {
+        left: leftOffset,
+        width: viewportWidth,
+        height: 600,
+        borderColor: THEME.borderActive,
+        duration,
+        ease,
+        overwrite: 'auto',
+      })
+      gsap.to(drawer, {
+        left: 'calc(50% - 50vw)',
+        width: '100vw',
+        minHeight: drawerMinHeight,
+        // Large enough to be effectively unbounded — content inside has
+        // its own overflow handling.
+        maxHeight: Math.max(drawerMinHeight * 10, 10000),
+        borderWidth: 2,
+        duration,
+        ease,
+        overwrite: 'auto',
+      })
+    }
+  }, { dependencies: [selectedCampaign?.id], scope: rootRef })
+
+  // ── GSAP: invited campaign tile expand/collapse ──────────────────────
+  // Mirror of the main tile animation above — only the border-colour
+  // default differs (invited tiles use a green accent, main tiles use
+  // the standard neutral). Two useGSAP blocks rather than one so each
+  // has its own dependency and won't re-tween the other set on state
+  // changes that don't affect it.
+  useGSAP(() => {
+    const scope = rootRef.current
+    if (!scope) return
+
+    const duration = 0.32
+    const ease = 'power2.inOut'
+    const id = selectedInvitedCampaign?.id
+    const INVITED_BORDER_DEFAULT = '#16a34a'
+
+    gsap.to(scope.querySelectorAll('[data-invited-card]'), {
+      left: 0,
+      width: '100%',
+      height: 350,
+      borderColor: INVITED_BORDER_DEFAULT,
+      duration,
+      ease,
+    })
+    gsap.to(scope.querySelectorAll('[data-invited-drawer]'), {
+      left: '0%',
+      width: '100%',
+      minHeight: 0,
+      maxHeight: 0,
+      borderWidth: 0,
+      duration,
+      ease,
+      onComplete() { gsap.set(this.targets(), { visibility: 'hidden', pointerEvents: 'none' }) },
+    })
+
+    if (id) {
+      const card = scope.querySelector(`[data-invited-card="${id}"]`)
+      const drawer = scope.querySelector(`[data-invited-drawer="${id}"]`)
+
+      gsap.set(drawer, { visibility: 'visible', pointerEvents: 'auto' })
+
+      const wrapper = card?.parentElement
+      const wrapperRect = wrapper?.getBoundingClientRect()
+      const viewportWidth = window.innerWidth
+      const leftOffset = wrapperRect ? -wrapperRect.left : 0
+
+      const cardRect = card?.getBoundingClientRect()
+      const expandedBottom = cardRect ? cardRect.top + 600 : 0
+      const drawerMinHeight = cardRect ? Math.max(0, window.innerHeight - expandedBottom) : 0
+
+      // overwrite: 'auto' — see main-tile block above for rationale.
+      gsap.to(card, {
+        left: leftOffset,
+        width: viewportWidth,
+        height: 600,
+        borderColor: THEME.borderActive,
+        duration,
+        ease,
+        overwrite: 'auto',
+      })
+      gsap.to(drawer, {
+        left: 'calc(50% - 50vw)',
+        width: '100vw',
+        minHeight: drawerMinHeight,
+        maxHeight: Math.max(drawerMinHeight * 10, 10000),
+        borderWidth: 2,
+        duration,
+        ease,
+        overwrite: 'auto',
+      })
+    }
+  }, { dependencies: [selectedInvitedCampaign?.id], scope: rootRef })
+
   if (loading) {
     return (
       <div className="flex items-center justify-center p-8">
@@ -599,7 +778,7 @@ export default function CampaignManager({ user, onExpandedChange, inviteCampaign
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6" ref={rootRef}>
       {/* CSS for animations */}
       <style jsx>{`
         @keyframes gradient-x {
@@ -677,73 +856,44 @@ export default function CampaignManager({ user, onExpandedChange, inviteCampaign
                     className="w-full relative"
                     style={{
                       marginBottom: isSelected ? '0' : '3rem',
-                      maxWidth: isSelected ? 'none' : '1600px'
+                      // Wrapper stays capped at 1410 px in both states —
+                      // the card itself bleeds horizontally when expanded.
+                      maxWidth: '1410px',
+                      marginLeft: 'auto',
+                      marginRight: 'auto',
                     }}
                   >
-                    {/* Invited Campaign Card - Expandable */}
+                    {/* Invited Campaign Card — the single animated
+                        element (mirror of main-tile pattern). */}
                     <HeroBackground
                       ref={invitedCampaignCardRef}
                       campaign={campaign}
-                      className="w-full relative rounded-sm overflow-visible cursor-pointer border-2"
+                      className="rounded-sm overflow-visible cursor-pointer border-2"
+                      data-invited-card={campaign.id}
                       style={{
-                        aspectRatio: isSelected ? 'unset' : '16/4',
-                        minHeight: '200px',
+                        position: 'relative',
+                        left: 0,
+                        width: '100%',
+                        height: '350px',
                         backgroundColor: COLORS.carbon,
-                        borderColor: isSelected ? THEME.borderActive : '#16a34a',
-                        transition: isResizing ? 'none' : 'border-color 200ms ease-in-out'
+                        borderColor: '#16a34a',
                       }}
                       onClick={() => toggleInvitedCampaignDetails(campaign)}
                     >
-                      {/* Expanding background layer */}
-                      <HeroBackground
-                        campaign={campaign}
-                        className="absolute pointer-events-none"
-                        style={{
-                          left: isSelected ? 'calc(50% - 50vw)' : '0',
-                          right: isSelected ? 'calc(50% - 50vw)' : '0',
-                          top: 0,
-                          height: isSelected ? 'calc(100% + 8px)' : '100%',
-                          backgroundColor: COLORS.carbon,
-                          borderRadius: '0.125rem',
-                          borderBottomLeftRadius: isSelected ? '0' : '0.125rem',
-                          borderBottomRightRadius: isSelected ? '0' : '0.125rem',
-                          zIndex: isSelected ? 0 : -1,
-                          transition: isResizing
-                            ? 'none'
-                            : isSelected
-                              ? 'left 200ms ease-in-out, right 200ms ease-in-out, border-radius 200ms ease-in-out'
-                              : 'left 200ms ease-in-out, right 200ms ease-in-out, border-radius 200ms ease-in-out, z-index 0ms 200ms'
-                        }}
-                      >
-                        {/* Background overlay */}
-                        <div
-                          className="absolute inset-0"
-                          style={{
-                            backgroundColor: `${COLORS.onyx}B3`,
-                            borderRadius: '0.125rem',
-                            borderBottomLeftRadius: isSelected ? '0' : '0.125rem',
-                            borderBottomRightRadius: isSelected ? '0' : '0.125rem'
-                          }}
-                        />
-                      </HeroBackground>
-
-                      {/* Solid overlay for text readability */}
+                      {/* Darkening overlay for text readability */}
                       <div
                         className="absolute inset-0 rounded-sm"
-                        style={{
-                          backgroundColor: `${COLORS.onyx}B3`,
-                          zIndex: isSelected ? -1 : 0
-                        }}
+                        style={{ backgroundColor: `${COLORS.onyx}B3` }}
                       />
 
-                      {/* Content container */}
+                      {/* Content container — always absolute-inset,
+                          capped at the same 1410 px centred frame. */}
                       <div
-                        className="flex flex-col justify-between p-6"
+                        className="flex flex-col justify-between p-6 absolute inset-0"
                         style={{
-                          position: isSelected ? 'relative' : 'absolute',
-                          inset: isSelected ? 'unset' : 0,
-                          minHeight: isSelected ? 'max(calc(200px - 3rem), calc(25vw - 3rem))' : 'auto',
-                          maxWidth: isSelected ? '1600px' : 'none',
+                          maxWidth: '1410px',
+                          marginLeft: 'auto',
+                          marginRight: 'auto',
                           zIndex: 1
                         }}
                       >
@@ -807,35 +957,39 @@ export default function CampaignManager({ user, onExpandedChange, inviteCampaign
                       </div>
                     </HeroBackground>
 
-                    {/* Invited Campaign Detail Panel - Expands to full viewport width */}
+                    {/* Invited Campaign Detail Panel — GSAP-animated
+                        (mirror of main drawer). Collapsed defaults here;
+                        useGSAP block tweens on selection change. */}
                     <div
                       className="relative"
+                      data-invited-drawer={campaign.id}
                       style={{
-                        left: isSelected ? 'calc(50% - 50vw)' : '0',
+                        left: '0',
                         backgroundColor: THEME.bgPanel,
                         borderColor: THEME.borderSubtle,
-                        borderWidth: isSelected ? '2px' : '0px',
+                        borderWidth: '0px',
                         borderStyle: 'solid',
-                        width: isSelected ? '100vw' : '100%',
-                        minHeight: isSelected && invitedDrawerTop !== null
-                          ? `calc(100vh - ${invitedDrawerTop}px)`
-                          : '0px',
-                        maxHeight: isSelected ? 'none' : '0px',
+                        width: '100%',
+                        minHeight: '0px',
+                        maxHeight: '0px',
                         overflow: 'hidden',
                         borderRadius: '0.125rem',
                         borderTopLeftRadius: '0',
                         borderTopRightRadius: '0',
-                        transition: isResizing ? 'none' : 'left 200ms ease-in-out, width 200ms ease-in-out, min-height 200ms ease-in-out, max-height 200ms ease-in-out, border-width 200ms ease-in-out',
-                        pointerEvents: isSelected ? 'auto' : 'none',
-                        visibility: isSelected ? 'visible' : 'hidden'
+                        // visibility + pointer-events owned by GSAP:
+                        // flipped visible/auto before expand, back to
+                        // hidden/none after collapse.
+                        pointerEvents: 'none',
+                        visibility: 'hidden',
                       }}
                     >
                       {/* Content wrapper */}
                       <div
                         className="pt-[calc(1rem+16px)] sm:pt-[calc(2rem+16px)] md:pt-[calc(2.5rem+16px)] pb-[calc(1rem+16px)] sm:pb-[calc(2rem+16px)] md:pb-[calc(2.5rem+16px)] px-[calc(1rem+12px)] sm:px-[calc(2rem+12px)] md:px-[calc(2.5rem+12px)]"
                       >
-                        {/* Inner content constrained to max-width */}
-                        <div style={{ maxWidth: '1600px' }}>
+                        {/* Inner content constrained to the same 1410 px
+                            centred frame as the rest of the campaigns UI. */}
+                        <div style={{ maxWidth: '1410px', marginLeft: 'auto', marginRight: 'auto' }}>
                           <div className="flex items-center justify-between mb-4">
                             <h3 className="text-xl font-semibold font-[family-name:var(--font-metamorphous)]" style={{color: THEME.textOnDark}}>
                               Campaign Details
@@ -972,83 +1126,51 @@ export default function CampaignManager({ user, onExpandedChange, inviteCampaign
                   className="w-full relative"
                   style={{
                     marginBottom: isSelected ? '0' : '3rem',
-                    // Cap collapsed tile width to 1410 px and centre
-                    // horizontally. When a tile is selected/expanded it
-                    // fills the parent so the hero background can bleed
-                    // full-viewport, so no cap + no auto margins then.
-                    maxWidth: isSelected ? 'none' : '1410px',
-                    marginLeft: isSelected ? undefined : 'auto',
-                    marginRight: isSelected ? undefined : 'auto',
+                    // Wrapper stays capped at 1410 px in both states —
+                    // the card itself bleeds horizontally when expanded
+                    // (GSAP-animated), so the wrapper's layout footprint
+                    // never changes.
+                    maxWidth: '1410px',
+                    marginLeft: 'auto',
+                    marginRight: 'auto',
                   }}
                 >
-                  {/* Campaign Card with expanding background */}
+                  {/* Campaign Card — the single animated element.
+                      Border colour + card dimensions (height / left /
+                      width) are tweened by the `useGSAP` block above.
+                      Defaults here are the collapsed state; GSAP
+                      tweens them on selection change. */}
                   <HeroBackground
                     ref={campaignCardRef}
                     campaign={campaign}
                     fallback="/campaign-tile-bg.png"
-                    className="w-full relative rounded-sm overflow-visible cursor-pointer border-2"
+                    className="rounded-sm overflow-visible cursor-pointer border-2"
+                    data-campaign-card={campaign.id}
                     style={{
-                      aspectRatio: isSelected ? 'unset' : '16/4',
-                      minHeight: '200px',
-                      borderColor: selectedCampaign?.id === campaign.id ? THEME.borderActive : THEME.borderDefault,
-                      transition: isResizing ? 'none' : 'border-color 200ms ease-in-out'
+                      position: 'relative',
+                      left: 0,
+                      width: '100%',
+                      height: '350px',
+                      borderColor: THEME.borderDefault,
                     }}
                     onClick={() => toggleCampaignDetails(campaign)}
                   >
-                    {/* Expanding background layer - extends to full viewport width when selected */}
-                    <HeroBackground
-                      campaign={campaign}
-                      fallback="/campaign-tile-bg.png"
-                      className="absolute pointer-events-none"
-                      style={{
-                        left: selectedCampaign?.id === campaign.id ? 'calc(50% - 50vw)' : '0',
-                        right: selectedCampaign?.id === campaign.id ? 'calc(50% - 50vw)' : '0',
-                        top: 0,
-                        height: selectedCampaign?.id === campaign.id ? 'calc(100% + 8px)' : '100%',
-                        borderRadius: '0.125rem',
-                        borderBottomLeftRadius: selectedCampaign?.id === campaign.id ? '0' : '0.125rem',
-                        borderBottomRightRadius: selectedCampaign?.id === campaign.id ? '0' : '0.125rem',
-                        zIndex: selectedCampaign?.id === campaign.id ? 0 : -1,
-                        transition: isResizing
-                          ? 'none'
-                          : selectedCampaign?.id === campaign.id
-                            ? 'left 200ms ease-in-out, right 200ms ease-in-out, border-radius 200ms ease-in-out'
-                            : 'left 200ms ease-in-out, right 200ms ease-in-out, border-radius 200ms ease-in-out, z-index 0ms 200ms'
-                      }}
-                    >
-                      {/* Background overlay */}
-                      <div
-                        className="absolute inset-0"
-                        style={{
-                          backgroundColor: `${COLORS.onyx}B3`,
-                          borderRadius: '0.125rem',
-                          borderBottomLeftRadius: selectedCampaign?.id === campaign.id ? '0' : '0.125rem',
-                          borderBottomRightRadius: selectedCampaign?.id === campaign.id ? '0' : '0.125rem'
-                        }}
-                      />
-                    </HeroBackground>
-
-                    {/* Solid overlay for text readability */}
+                    {/* Darkening overlay for text readability */}
                     <div
                       className="absolute inset-0 rounded-sm"
-                      style={{
-                        backgroundColor: `${COLORS.onyx}B3`,
-                        zIndex: selectedCampaign?.id === campaign.id ? -1 : 0
-                      }}
+                      style={{ backgroundColor: `${COLORS.onyx}B3` }}
                     />
 
-                    {/* Content container - drives height when selected, constrained when collapsed */}
+                    {/* Content container — always absolute-inset, with
+                        the same 1410 px centred cap in both states so
+                        text position and line length stay consistent
+                        across the state transition. */}
                     <div
-                      className="flex flex-col justify-between p-6"
+                      className="flex flex-col justify-between p-6 absolute inset-0"
                       style={{
-                        // When collapsed: absolute to stay within aspect-ratio bounds
-                        // When selected: relative so content can grow the card, with min-height to fill the card
-                        position: isSelected ? 'relative' : 'absolute',
-                        inset: isSelected ? 'unset' : 0,
-                        // When selected, fill at least the card's min-height so justify-between pushes metadata down
-                        minHeight: isSelected ? 'max(calc(200px - 3rem), calc(25vw - 3rem))' : 'auto',
-                        // Constrain content width on wide screens when expanded
-                        maxWidth: isSelected ? '1600px' : 'none',
+                        maxWidth: '1410px',
+                        marginLeft: 'auto',
+                        marginRight: 'auto',
                         zIndex: 1
                       }}
                     >
@@ -1108,39 +1230,41 @@ export default function CampaignManager({ user, onExpandedChange, inviteCampaign
                     </div>
                   </HeroBackground>
 
-                  {/* Game Sessions Detail Panel - Expands to full viewport width */}
+                  {/* Game Sessions Detail Panel — GSAP (see useGSAP
+                      block above) animates left, width, min-height,
+                      max-height, and border-width between the collapsed
+                      defaults below and the expanded values on selection. */}
                   <div
                     ref={gameSessionsPanelRef}
                     className="relative"
+                    data-campaign-sessions-drawer={campaign.id}
                     style={{
-                      left: selectedCampaign?.id === campaign.id ? 'calc(50% - 50vw)' : '0',
+                      left: '0',
                       backgroundColor: THEME.bgPanel,
                       borderColor: THEME.borderSubtle,
-                      borderWidth: selectedCampaign?.id === campaign.id ? '2px' : '0px',
+                      borderWidth: '0px',
                       borderStyle: 'solid',
-                      width: selectedCampaign?.id === campaign.id ? '100vw' : '100%',
-                      // Use calc(100vh - drawerTop) to fill exactly to viewport bottom
-                      // This approach uses the measured position for precise filling
-                      minHeight: selectedCampaign?.id === campaign.id && drawerTop !== null
-                        ? `calc(100vh - ${drawerTop}px)`
-                        : '0px',
-                      maxHeight: selectedCampaign?.id === campaign.id ? 'none' : '0px',
+                      width: '100%',
+                      minHeight: '0px',
+                      maxHeight: '0px',
                       overflow: 'hidden',
                       borderRadius: '0.125rem',
-                      borderTopLeftRadius: '0', // No top radius to connect with campaign tile
+                      borderTopLeftRadius: '0',
                       borderTopRightRadius: '0',
-                      // Disable transitions during window resize for instant layout updates
-                      transition: isResizing ? 'none' : 'left 200ms ease-in-out, width 200ms ease-in-out, min-height 200ms ease-in-out, max-height 200ms ease-in-out, border-width 200ms ease-in-out',
-                      pointerEvents: selectedCampaign?.id === campaign.id ? 'auto' : 'none',
-                      visibility: selectedCampaign?.id === campaign.id ? 'visible' : 'hidden'
+                      // visibility + pointer-events owned by GSAP:
+                      // flipped visible/auto before expand, back to
+                      // hidden/none after collapse.
+                      pointerEvents: 'none',
+                      visibility: 'hidden',
                     }}
                   >
                     {/* Content wrapper */}
                     <div
                       className="pt-[calc(1rem+16px)] sm:pt-[calc(2rem+16px)] md:pt-[calc(2.5rem+16px)] pb-[calc(1rem+16px)] sm:pb-[calc(2rem+16px)] md:pb-[calc(2.5rem+16px)] px-[calc(1rem+12px)] sm:px-[calc(2rem+12px)] md:px-[calc(2.5rem+12px)]"
                     >
-                      {/* Inner content constrained to max-width for readability on wide screens */}
-                      <div style={{ maxWidth: '1600px' }}>
+                      {/* Inner content constrained to the same 1410 px
+                          centred frame as the rest of the campaigns UI. */}
+                      <div style={{ maxWidth: '1410px', marginLeft: 'auto', marginRight: 'auto' }}>
                       <div className="flex items-center justify-between mb-4">
                         <h3 className="text-xl font-semibold font-[family-name:var(--font-metamorphous)]" style={{color: THEME.textOnDark}}>
                           Campaign Sessions
