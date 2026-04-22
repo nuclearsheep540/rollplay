@@ -71,40 +71,37 @@ export default function TabNav({ tabs, activeTab, onTabChange }) {
   }, [activeIdx])
 
   return (
-    <div className="w-full">
+    // `overflow-x-hidden` contains the 100 vw dark panel bleed so it
+    // can't spawn a page-level horizontal scrollbar.
+    <div className="w-full overflow-x-hidden">
       <TabGroup
         selectedIndex={selectedIndex === -1 ? 0 : selectedIndex}
         onChange={(index) => onTabChange(tabs[index].id)}
       >
         {/* Container is capped at 1410 px to match the dashboard's
-            content frame — both the base rule and the highlight are
-            positioned relative to this frame. */}
+            content frame — the highlight bar's measurement + the
+            labels are positioned relative to this frame. The dark
+            panel underneath bleeds past it to the viewport edges. */}
         <div
           ref={containerRef}
           className="relative mx-auto max-w-[1410px] pt-4 pb-6 px-6"
         >
-          {/* Base rule — spans the container width (max 1410 px),
-              faded at both ends so the terminals don't read as hard
-              cuts. Sits behind the diamonds on the z-axis; each
-              inactive diamond's page-bg fill covers the rule where it
-              sits, creating the visual break. */}
+          {/* Dark nav panel — bleeds full viewport, bottom edge
+              aligned with where the old onyx rule sat (`1.5rem + 9 px`
+              above container outer bottom = the diamond centre). That
+              sharp bottom edge now replaces the rule as the divider
+              between the nav and content below. Diamonds straddle the
+              edge: upper half inside the dark panel, lower half hanging
+              below on the cream page background. */}
           <div
-            className="absolute h-[2px] pointer-events-none"
+            aria-hidden="true"
+            className="absolute pointer-events-none"
             style={{
-              left: 0,
-              right: 0,
-              // pb-6 = 1.5rem; + 8 px places the 2 px rule's centre on
-              // the diamond centre (18 px diamond, half = 9 → centre is
-              // 9 px above the diamond's outer bottom, which equals the
-              // TabList content-box bottom = 1.5rem + 0 px; for a 2 px
-              // rule, we offset by 9 − 1 = 8 so the rule's midline
-              // lands exactly there).
-              bottom: 'calc(1.5rem + 8px)',
-              backgroundColor: INK,
-              maskImage:
-                'linear-gradient(to right, transparent 0%, black 6%, black 94%, transparent 100%)',
-              WebkitMaskImage:
-                'linear-gradient(to right, transparent 0%, black 6%, black 94%, transparent 100%)',
+              left: 'calc(50% - 50vw)',
+              width: '100vw',
+              top: 0,
+              bottom: 'calc(1.5rem + 9px)',
+              backgroundColor: COLORS.carbon,
             }}
           />
 
@@ -119,10 +116,11 @@ export default function TabNav({ tabs, activeTab, onTabChange }) {
               width: `${highlight.width}px`,
               bottom: `calc(1.5rem + 9px - ${HIGHLIGHT_THICKNESS / 2}px)`,
               height: `${HIGHLIGHT_THICKNESS}px`,
-              // Gold glow in the middle, ink at the ends — the bar
-              // "lights up" at the label's centre and blends back into
-              // the onyx base rule as it approaches the label's edges.
-              background: `linear-gradient(to right, ${INK} 0%, ${HIGHLIGHT_GOLD} 25%, ${HIGHLIGHT_GOLD} 75%, ${INK} 100%)`,
+              // Gold glow in the middle fading to transparent at the
+              // ends — reads as a bloom sitting on the dark panel's
+              // bottom edge, straddling the boundary between panel
+              // and page.
+              background: `linear-gradient(to right, transparent 0%, ${HIGHLIGHT_GOLD} 25%, ${HIGHLIGHT_GOLD} 75%, transparent 100%)`,
               maskImage:
                 'linear-gradient(to right, transparent 0%, black 12%, black 88%, transparent 100%)',
               WebkitMaskImage:
@@ -147,12 +145,14 @@ export default function TabNav({ tabs, activeTab, onTabChange }) {
                         ref={(el) => { labelRefs.current[i] = el }}
                         className="text-xl font-[family-name:var(--font-metamorphous)] uppercase transition-colors duration-200"
                         style={{
-                          // Active tab reads in onyx (full ink);
-                          // everything else drops to graphite, a
-                          // warm mid-grey. Hovering an inactive tab
-                          // intensifies to full opacity so the user
-                          // still gets clear interactive feedback.
-                          color: isActiveLike ? INK : COLORS.graphite,
+                          // Labels now sit on a dark panel, so the
+                          // palette flips: smoke (cream) for active,
+                          // silver for inactive — mirror of the
+                          // onyx/graphite pairing that worked on the
+                          // light bg. Hovering an inactive tab
+                          // intensifies to full opacity for clear
+                          // interactive feedback.
+                          color: isActiveLike ? COLORS.smoke : COLORS.silver,
                           opacity: isActiveLike ? 1 : (hover || focus) ? 1 : 0.85,
                           // Metamorphous ships a single weight (400). To
                           // nudge the visual weight up without loading
@@ -161,7 +161,7 @@ export default function TabNav({ tabs, activeTab, onTabChange }) {
                           // half-weight step toward semibold. Kept
                           // subtle (0.4 px) so letterforms don't lose
                           // their hand-drawn quality.
-                          WebkitTextStroke: `0.4px ${isActiveLike ? INK : COLORS.graphite}`,
+                          WebkitTextStroke: `0.4px ${isActiveLike ? COLORS.smoke : COLORS.silver}`,
                         }}
                       >
                         {tab.label}
