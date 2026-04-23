@@ -9,13 +9,14 @@ import { useLayoutEffect, useRef, useState } from 'react'
 import { TabGroup, TabList, Tab } from '@headlessui/react'
 import { COLORS } from '@/app/styles/colorTheme'
 
-// Active-tab highlight — thicker than the base rule (3 px vs 2 px)
-// and painted as a gold-to-ink gradient, so the centre glows against
-// the otherwise monochrome onyx palette and the ends blend back into
-// the base rule. Width is measured from the active label at runtime
-// (see `measure()` below) so the highlight tracks the label's actual
-// rendered width.
+// Active-tab highlight — a gold-glow bar under the selected tab.
+// Every tab slot gets the same width (tabs use `flex-1`), so the
+// highlight's own width is a constant fraction of the slot — the bar
+// looks identical on every tab, just at a different x-position.
 const HIGHLIGHT_THICKNESS = 3
+// Highlight spans the full tab slot width — matches the slot edge to
+// edge so adjacent tabs' highlights would touch if both were active.
+const HIGHLIGHT_WIDTH_RATIO = 1.0
 // Warm ornamental gold — matches the tone we used when the nav had a
 // gilded character. Flanked by the onyx ink at each end so the
 // highlight "fades into" the base rule.
@@ -33,10 +34,11 @@ const PAGE_BG = COLORS.smoke
 
 /**
  * Accessible tab navigation built on Headless UI TabGroup — rendered as
- * a frieze: a thin onyx rule runs under the nav, fading at both ends,
- * with diamond pips piercing it and labels sitting above. The active
- * tab is marked by a graphite highlight that matches the label's width
- * and slides between positions on selection change.
+ * a dark frieze with diamond pips straddling its bottom edge and labels
+ * sitting above. Tabs share the nav width equally (flex-1), so the
+ * active-tab highlight — a gold-glow bar under the selected label — is
+ * the same length on every tab, just re-positioned when the selection
+ * changes.
  *
  * Provides: role="tablist" / role="tab", arrow key navigation,
  * aria-selected on active tab.
@@ -49,9 +51,11 @@ export default function TabNav({ tabs, activeTab, onTabChange }) {
   const selectedIndex = tabs.findIndex((t) => t.id === activeTab)
   const activeIdx = selectedIndex === -1 ? 0 : selectedIndex
 
-  // Refs + state for measuring the active label. `justify-around` with
-  // unequal label widths doesn't give predictable geometric centres, so
-  // we measure the DOM directly on mount, activeIdx change, and resize.
+  // Refs + state for measuring the active tab. We measure the *tab's*
+  // bounding rect (not the label) so every tab produces the same
+  // highlight width — since tabs use `flex-1`, every tab slot has
+  // identical geometry. The label ref walks up to its parent Tab
+  // button via `parentElement`.
   const containerRef = useRef(null)
   const labelRefs = useRef([])
   const [highlight, setHighlight] = useState({ left: 0, width: 0 })
@@ -60,10 +64,13 @@ export default function TabNav({ tabs, activeTab, onTabChange }) {
     function measure() {
       const container = containerRef.current
       const label = labelRefs.current[activeIdx]
-      if (!container || !label) return
+      const tab = label?.parentElement
+      if (!container || !tab) return
       const c = container.getBoundingClientRect()
-      const l = label.getBoundingClientRect()
-      setHighlight({ left: l.left - c.left, width: l.width })
+      const t = tab.getBoundingClientRect()
+      const width = t.width * HIGHLIGHT_WIDTH_RATIO
+      const tabCenterX = (t.left - c.left) + (t.width / 2)
+      setHighlight({ left: tabCenterX - width / 2, width })
     }
     measure()
     window.addEventListener('resize', measure)
@@ -89,7 +96,7 @@ export default function TabNav({ tabs, activeTab, onTabChange }) {
           // diamond pips — which overhang the panel's bottom edge and
           // intentionally overlap the tile — paint on top of the
           // tile's hero rather than being covered by it.
-          className="relative z-10 mx-auto max-w-[1410px] pt-4 px-6"
+          className="relative z-10 mx-auto max-w-[1410px] pt-3 px-6"
         >
           {/* Dark nav panel — bleeds full viewport. Bottom edge sits
               at the container's outer bottom, which is also where the
@@ -140,11 +147,16 @@ export default function TabNav({ tabs, activeTab, onTabChange }) {
             }}
           />
 
-          <TabList className="relative flex items-end justify-around">
+          <TabList className="relative flex items-end">
             {tabs.map((tab, i) => (
               <Tab
                 key={tab.id}
-                className="group relative z-10 flex flex-col items-center gap-2.5 outline-none cursor-pointer"
+                // `flex-1` gives every tab equal share of the TabList
+                // width — label + diamond stay centred inside their
+                // slot via `items-center`. Uniform slot geometry means
+                // the highlight bar below measures to the same width
+                // regardless of which tab is active.
+                className="group relative z-10 flex-1 flex flex-col items-center gap-0 outline-none cursor-pointer"
               >
                 {({ selected, hover, focus }) => {
                   const isActiveLike = selected
@@ -185,18 +197,30 @@ export default function TabNav({ tabs, activeTab, onTabChange }) {
                           plain. Same colours + size in every state —
                           only the dot presence + highlight-line
                           gradient differentiate selected from not. */}
-                      {/* `top: 9px` relative shift moves the diamond
-                          down without affecting Tab's flex layout, so
-                          its centre lands on the container's outer
-                          bottom (= panel/tile boundary). Top half in
-                          the dark panel, bottom half hanging below,
-                          painted over the tile via the container's
-                          `z-10`. */}
+                      {/* Two tricks keep the diamond's visual centre
+                          exactly on the container's outer bottom (=
+                          panel/tile boundary) while making the nav
+                          shorter:
+                          - `marginBottom: -4px` pulls the Tab's
+                            content-bottom 4 px into the diamond's
+                            layout footprint, so the container ends up
+                            4 px shorter than the diamond's layout
+                            height would imply.
+                          - `top: 5px` shifts the diamond visually
+                            down by (9 − 4) = 5 px. Combined with the
+                            margin trick, the visual centre lands at
+                            the new (shorter) container outer bottom.
+                          Net: nav 4 px shorter, straddle geometry
+                          preserved. */}
                       <svg
                         width="18"
                         height="18"
                         viewBox="0 0 22 22"
-                        style={{ position: 'relative', top: '9px' }}
+                        style={{
+                          position: 'relative',
+                          top: '5px',
+                          marginBottom: '-4px',
+                        }}
                       >
                         <polygon
                           points="11,1.5 20.5,11 11,20.5 1.5,11"
