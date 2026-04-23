@@ -21,7 +21,7 @@ function AccountContent() {
   return (
     <main
       id="account-main"
-      className="flex-1 flex flex-col pt-4 sm:pt-8 md:pt-10 px-4 sm:px-8 md:px-10 overflow-x-hidden overflow-y-auto pb-8"
+      className="flex-1 flex flex-col pt-4 sm:pt-8 md:pt-10 px-4 sm:px-8 md:px-10 overflow-x-hidden overflow-y-auto overscroll-none pb-8"
     >
       <section>
         <SocialManager user={user} onUserUpdate={setUser} />

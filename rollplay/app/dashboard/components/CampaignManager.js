@@ -619,10 +619,19 @@ export default function CampaignManager({ user, onExpandedChange, inviteCampaign
     const ease = 'power2.inOut'
     const id = selectedCampaign?.id
 
-    // Collapse every card / drawer back to their collapsed defaults
-    // first. (No-op for ones already collapsed.) `onComplete` flips
-    // the drawer's visibility / pointer-events *after* the tween so
-    // the element stays rendered throughout the collapse animation —
+    // Upward-bleed amount — matches the dashboard's padding-top so
+    // the expanded hero reaches right up to the tab nav. Measured
+    // dynamically from the current computed style so responsive
+    // breakpoints (pt-4 / sm:pt-8 / md:pt-10) are honoured.
+    const mainEl = document.getElementById('dashboard-main')
+    const bleedUp = mainEl
+      ? parseFloat(window.getComputedStyle(mainEl).paddingTop) || 0
+      : 0
+
+    // Collapse every card / drawer / content back to their collapsed
+    // defaults first. (No-op for ones already collapsed.) `onComplete`
+    // flips the drawer's visibility / pointer-events *after* the tween
+    // so the element stays rendered throughout the collapse animation —
     // previously these were flipped synchronously by React on state
     // change, which made the collapse appear instant because the DOM
     // hid itself before GSAP could animate it.
@@ -630,7 +639,16 @@ export default function CampaignManager({ user, onExpandedChange, inviteCampaign
       left: 0,
       width: '100%',
       height: 350,
+      marginTop: 0,
       outlineColor: THEME.borderDefault,
+      duration,
+      ease,
+    })
+    // Content returns to filling the card (top: 0) on collapse. When
+    // expanded it gets offset by `bleedUp` so the card's upward-bleed
+    // zone shows hero only, not repositioned text.
+    gsap.to(scope.querySelectorAll('[data-campaign-content]'), {
+      top: 0,
       duration,
       ease,
     })
@@ -647,6 +665,7 @@ export default function CampaignManager({ user, onExpandedChange, inviteCampaign
 
     if (id) {
       const card = scope.querySelector(`[data-campaign-card="${id}"]`)
+      const content = scope.querySelector(`[data-campaign-content="${id}"]`)
       const drawer = scope.querySelector(`[data-campaign-sessions-drawer="${id}"]`)
 
       gsap.set(drawer, { visibility: 'visible', pointerEvents: 'auto' })
@@ -654,15 +673,20 @@ export default function CampaignManager({ user, onExpandedChange, inviteCampaign
       // Pixel targets for the horizontal card bleed. The wrapper is
       // capped at 1410 px and centred; the card slides left by the
       // wrapper's viewport offset and widens to fill the viewport.
+      // The 2 px overrun on each side compensates for a sub-pixel
+      // rounding quirk where `window.innerWidth` can return 1 px less
+      // than the actual viewport width on some displays — without it,
+      // there's a 1 px cream gap on the right edge of the hero.
       const wrapper = card?.parentElement
       const wrapperRect = wrapper?.getBoundingClientRect()
-      const viewportWidth = window.innerWidth
-      const leftOffset = wrapperRect ? -wrapperRect.left : 0
+      const viewportWidth = window.innerWidth + 4
+      const leftOffset = wrapperRect ? -wrapperRect.left - 2 : 0
 
       // Drawer fills from the expanded card's bottom to the viewport
-      // bottom. Card will tween to 600 px tall — use the *expanded*
-      // bottom here, not the current (still-collapsed) one, or the
-      // drawer starts too high and overlaps the growing card.
+      // bottom. The card's bottom position is *unchanged* by the
+      // upward bleed (height grows by `bleedUp`, margin-top goes
+      // negative by the same amount), so we still use `top + 600` for
+      // the expanded-bottom calc.
       const cardRect = card?.getBoundingClientRect()
       const expandedBottom = cardRect ? cardRect.top + 600 : 0
       const drawerMinHeight = cardRect ? Math.max(0, window.innerHeight - expandedBottom) : 0
@@ -675,8 +699,20 @@ export default function CampaignManager({ user, onExpandedChange, inviteCampaign
       gsap.to(card, {
         left: leftOffset,
         width: viewportWidth,
-        height: 600,
+        // Grow height by the bleed amount so the card's bottom stays
+        // put while the top extends upward.
+        height: 600 + bleedUp,
+        marginTop: -bleedUp,
         outlineColor: THEME.borderActive,
+        duration,
+        ease,
+        overwrite: 'auto',
+      })
+      // Shift the content downward by `bleedUp` so only the upper
+      // bleed zone shows hero image; the text block's y-position
+      // stays where it was before expansion.
+      gsap.to(content, {
+        top: bleedUp,
         duration,
         ease,
         overwrite: 'auto',
@@ -711,11 +747,23 @@ export default function CampaignManager({ user, onExpandedChange, inviteCampaign
     const id = selectedInvitedCampaign?.id
     const INVITED_BORDER_DEFAULT = '#16a34a'
 
+    // Upward-bleed amount — same rationale as main tile above.
+    const mainEl = document.getElementById('dashboard-main')
+    const bleedUp = mainEl
+      ? parseFloat(window.getComputedStyle(mainEl).paddingTop) || 0
+      : 0
+
     gsap.to(scope.querySelectorAll('[data-invited-card]'), {
       left: 0,
       width: '100%',
       height: 350,
+      marginTop: 0,
       outlineColor: INVITED_BORDER_DEFAULT,
+      duration,
+      ease,
+    })
+    gsap.to(scope.querySelectorAll('[data-invited-content]'), {
+      top: 0,
       duration,
       ease,
     })
@@ -732,14 +780,18 @@ export default function CampaignManager({ user, onExpandedChange, inviteCampaign
 
     if (id) {
       const card = scope.querySelector(`[data-invited-card="${id}"]`)
+      const content = scope.querySelector(`[data-invited-content="${id}"]`)
       const drawer = scope.querySelector(`[data-invited-drawer="${id}"]`)
 
       gsap.set(drawer, { visibility: 'visible', pointerEvents: 'auto' })
 
+      // See main-tile block above for the +4 / −2 overrun rationale
+      // (covers a sub-pixel rounding quirk that otherwise leaves a
+      // 1 px cream gap on the hero's right edge).
       const wrapper = card?.parentElement
       const wrapperRect = wrapper?.getBoundingClientRect()
-      const viewportWidth = window.innerWidth
-      const leftOffset = wrapperRect ? -wrapperRect.left : 0
+      const viewportWidth = window.innerWidth + 4
+      const leftOffset = wrapperRect ? -wrapperRect.left - 2 : 0
 
       const cardRect = card?.getBoundingClientRect()
       const expandedBottom = cardRect ? cardRect.top + 600 : 0
@@ -749,8 +801,15 @@ export default function CampaignManager({ user, onExpandedChange, inviteCampaign
       gsap.to(card, {
         left: leftOffset,
         width: viewportWidth,
-        height: 600,
+        height: 600 + bleedUp,
+        marginTop: -bleedUp,
         outlineColor: THEME.borderActive,
+        duration,
+        ease,
+        overwrite: 'auto',
+      })
+      gsap.to(content, {
+        top: bleedUp,
         duration,
         ease,
         overwrite: 'auto',
@@ -889,11 +948,20 @@ export default function CampaignManager({ user, onExpandedChange, inviteCampaign
                         style={{ backgroundColor: `${COLORS.onyx}B3` }}
                       />
 
-                      {/* Content container — always absolute-inset,
-                          capped at the same 1410 px centred frame. */}
+                      {/* Content container — absolute, filling the
+                          card by default. See main-tile content for
+                          the upward-bleed rationale: on expand `top`
+                          is tweened to the dashboard's padding-top
+                          value so the hero fills the bleed zone
+                          while text stays in its original position. */}
                       <div
-                        className="flex flex-col justify-between p-6 absolute inset-0"
+                        data-invited-content={campaign.id}
+                        className="flex flex-col justify-between p-6 absolute"
                         style={{
+                          top: 0,
+                          right: 0,
+                          bottom: 0,
+                          left: 0,
                           maxWidth: '1410px',
                           marginLeft: 'auto',
                           marginRight: 'auto',
@@ -1175,13 +1243,23 @@ export default function CampaignManager({ user, onExpandedChange, inviteCampaign
                       style={{ backgroundColor: `${COLORS.onyx}B3` }}
                     />
 
-                    {/* Content container — always absolute-inset, with
-                        the same 1410 px centred cap in both states so
-                        text position and line length stay consistent
-                        across the state transition. */}
+                    {/* Content container — absolute, filling the card
+                        by default (top/right/bottom/left = 0). Same
+                        1410 px centred cap in both states so text
+                        position and line length stay consistent
+                        across the state transition. When the card
+                        bleeds upward on expand, the `top` is tweened
+                        to the bleed amount so content stays anchored
+                        at the card's lower portion — the upper bleed
+                        zone shows hero only. */}
                     <div
-                      className="flex flex-col justify-between p-6 absolute inset-0"
+                      data-campaign-content={campaign.id}
+                      className="flex flex-col justify-between p-6 absolute"
                       style={{
+                        top: 0,
+                        right: 0,
+                        bottom: 0,
+                        left: 0,
                         maxWidth: '1410px',
                         marginLeft: 'auto',
                         marginRight: 'auto',

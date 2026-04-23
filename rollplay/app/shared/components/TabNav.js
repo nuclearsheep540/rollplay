@@ -84,23 +84,32 @@ export default function TabNav({ tabs, activeTab, onTabChange }) {
             panel underneath bleeds past it to the viewport edges. */}
         <div
           ref={containerRef}
-          className="relative mx-auto max-w-[1410px] pt-4 pb-6 px-6"
+          // `z-10` raises the whole nav above sibling elements in the
+          // page (notably the expanded campaign tile below) so the
+          // diamond pips — which overhang the panel's bottom edge and
+          // intentionally overlap the tile — paint on top of the
+          // tile's hero rather than being covered by it.
+          className="relative z-10 mx-auto max-w-[1410px] pt-4 px-6"
         >
-          {/* Dark nav panel — bleeds full viewport, bottom edge
-              aligned with where the old onyx rule sat (`1.5rem + 9 px`
-              above container outer bottom = the diamond centre). That
-              sharp bottom edge now replaces the rule as the divider
-              between the nav and content below. Diamonds straddle the
-              edge: upper half inside the dark panel, lower half hanging
-              below on the cream page background. */}
+          {/* Dark nav panel — bleeds full viewport. Bottom edge sits
+              at the container's outer bottom, which is also where the
+              main content area begins below. That sharp bottom edge
+              replaces the old onyx rule as the divider between the
+              nav and the content below. Diamonds straddle the edge
+              (see their `top: 9px` offset below): upper halves inside
+              the panel, lower halves hanging over the tile via the
+              `z-10` above.
+              The 2 px overflow on each side compensates for a sub-px
+              rounding quirk where `100vw` computes to 1 px less than
+              the actual viewport width on some displays. */}
           <div
             aria-hidden="true"
             className="absolute pointer-events-none"
             style={{
-              left: 'calc(50% - 50vw)',
-              width: '100vw',
+              left: 'calc(50% - 50vw - 2px)',
+              width: 'calc(100vw + 4px)',
               top: 0,
-              bottom: 'calc(1.5rem + 9px)',
+              bottom: 0,
               backgroundColor: COLORS.carbon,
             }}
           />
@@ -114,7 +123,10 @@ export default function TabNav({ tabs, activeTab, onTabChange }) {
             style={{
               left: `${highlight.left}px`,
               width: `${highlight.width}px`,
-              bottom: `calc(1.5rem + 9px - ${HIGHLIGHT_THICKNESS / 2}px)`,
+              // Centred on the container's outer bottom — same y as
+              // the dark panel's bottom edge and the diamond centres
+              // (after the 9 px downward shift applied on the SVGs).
+              bottom: `calc(0px - ${HIGHLIGHT_THICKNESS / 2}px)`,
               height: `${HIGHLIGHT_THICKNESS}px`,
               // Gold glow in the middle fading to transparent at the
               // ends — reads as a bloom sitting on the dark panel's
@@ -173,10 +185,18 @@ export default function TabNav({ tabs, activeTab, onTabChange }) {
                           plain. Same colours + size in every state —
                           only the dot presence + highlight-line
                           gradient differentiate selected from not. */}
+                      {/* `top: 9px` relative shift moves the diamond
+                          down without affecting Tab's flex layout, so
+                          its centre lands on the container's outer
+                          bottom (= panel/tile boundary). Top half in
+                          the dark panel, bottom half hanging below,
+                          painted over the tile via the container's
+                          `z-10`. */}
                       <svg
                         width="18"
                         height="18"
                         viewBox="0 0 22 22"
+                        style={{ position: 'relative', top: '9px' }}
                       >
                         <polygon
                           points="11,1.5 20.5,11 11,20.5 1.5,11"
