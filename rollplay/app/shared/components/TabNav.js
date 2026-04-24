@@ -13,7 +13,7 @@ import { COLORS } from '@/app/styles/colorTheme'
 // Every tab slot gets the same width (tabs use `flex-1`), so the
 // highlight's own width is a constant fraction of the slot — the bar
 // looks identical on every tab, just at a different x-position.
-const HIGHLIGHT_THICKNESS = 3
+const HIGHLIGHT_THICKNESS = 4
 // Highlight spans the full tab slot width — matches the slot edge to
 // edge so adjacent tabs' highlights would touch if both were active.
 const HIGHLIGHT_WIDTH_RATIO = 1.0
@@ -22,11 +22,6 @@ const HIGHLIGHT_WIDTH_RATIO = 1.0
 // highlight "fades into" the base rule.
 const HIGHLIGHT_GOLD = '#b08a3e'
 
-// Ornamentation tone — matches the page's primary dark text colour
-// (onyx) so the nav reads as part of the type system rather than a
-// decorative accent. Active state is filled; inactive is stroke-only
-// with reduced opacity.
-const INK = COLORS.onyx
 // Matches the page background (`smoke`). Used as the diamond's fill in
 // its inactive ("hollow") state so the diamond visually punches a gap
 // in the rule running behind it.
@@ -220,18 +215,31 @@ export default function TabNav({ tabs, activeTab, onTabChange }) {
                           position: 'relative',
                           top: '5px',
                           marginBottom: '-4px',
+                          // Scale up the active diamond for emphasis.
+                          // `transform` keeps the layout footprint
+                          // identical so the nav height doesn't
+                          // jump — the straddle geometry just grows
+                          // symmetrically around the visual centre.
+                          transform: isActiveLike ? 'scale(1.35)' : undefined,
+                          transformOrigin: 'center',
+                          // Stacked drop-shadows on the SVG follow the
+                          // polygon's alpha silhouette, so the glow is
+                          // diamond-shaped rather than a generic round
+                          // halo. Three tiers: tight inner bloom, mid
+                          // halo, wide ambient — each fading in alpha
+                          // as they grow to keep the falloff smooth.
+                          filter: isActiveLike
+                            ? `drop-shadow(0 0 6px rgba(176, 138, 62, 0.55)) drop-shadow(0 0 8px rgba(176, 138, 62, 0.55)) drop-shadow(0 0 18px rgba(176, 138, 62, 0.3))`
+                            : undefined,
                         }}
                       >
                         <polygon
                           points="11,1.5 20.5,11 11,20.5 1.5,11"
-                          fill={PAGE_BG}
-                          stroke={INK}
-                          strokeWidth="2"
+                          fill={isActiveLike ? HIGHLIGHT_GOLD : PAGE_BG}
+                          stroke={COLORS.carbon}
+                          strokeWidth="3"
                           strokeLinejoin="miter"
                         />
-                        {isActiveLike && (
-                          <circle cx="11" cy="11" r="1.8" fill={INK} />
-                        )}
                       </svg>
                     </>
                   )
