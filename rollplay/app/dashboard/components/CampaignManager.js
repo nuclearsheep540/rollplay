@@ -22,7 +22,6 @@ import S3Image from '@/app/shared/components/S3Image'
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
 import {
   faGear,
-  faGamepad,
   faTrash,
   faCheck,
   faXmark,
@@ -32,7 +31,9 @@ import {
   faRightToBracket,
   faUserPlus,
   faUserMinus,
-  faRightFromBracket
+  faRightFromBracket,
+  faUserShield,
+  faFolderOpen,
 } from '@fortawesome/free-solid-svg-icons'
 import { COLORS, THEME } from '@/app/styles/colorTheme'
 import { Button, Badge } from './shared/Button'
@@ -44,6 +45,81 @@ import { useCreateCampaign, useUpdateCampaign, useDeleteCampaign, useAcceptInvit
 import { useCreateSession, useStartSession, usePauseSession, useFinishSession, useDeleteSession } from '../hooks/mutations/useSessionMutations'
 import { useReleaseCharacter } from '../hooks/mutations/useCharacterMutations'
 import { useAssets } from '@/app/asset_library/hooks/useAssets'
+import { useCampaignAssetsMetadata } from '@/app/asset_library/hooks/useCampaignAssetsMetadata'
+
+/**
+ * Format a byte count into a human-friendly string (B / KB / MB / GB).
+ * Null/zero inputs render as "0 B" rather than "Unknown" because this
+ * is used in a templated meta grid where empty values would feel like
+ * missing data; "0 B" is an honest zero.
+ */
+function formatBytes(bytes) {
+  if (!bytes) return '0 B'
+  if (bytes < 1024) return `${bytes} B`
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`
+  if (bytes < 1024 * 1024 * 1024) return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
+  return `${(bytes / (1024 * 1024 * 1024)).toFixed(2)} GB`
+}
+
+/**
+ * Player-card left-edge action slot. Renders one of two variants at a
+ * fixed width so every card's left end shares the same visual shape:
+ *
+ *   • DM — non-interactive amber marker when the member is the host.
+ *     "DM" text rotated -90° reads vertically up the left edge, keeping
+ *     the slot narrow without losing the badge.
+ *   • Remove — destructive red icon button when the viewer is the host
+ *     and the member is not.
+ *   • (nothing) — for non-host viewers, returns null so the card
+ *     simply has no left sibling.
+ *
+ * Kept as a local component rather than a shared one since the colours
+ * + border-right separator are tuned specifically to the campaign
+ * player-list card.
+ */
+function PlayerCardAction({ isDm, canRemove, onRemove }) {
+  const baseClass = 'relative z-10 flex-shrink-0 w-10 flex items-center justify-center'
+  const borderRight = `1px solid ${THEME.borderSubtle}`
+
+  if (isDm) {
+    return (
+      <div
+        style={{
+          color: '#fbbf24',
+          backgroundColor: 'rgba(251, 191, 36, 0.1)',
+          borderRight,
+        }}
+        className={baseClass}
+      >
+        <span
+          className="text-xs font-semibold tracking-widest"
+          style={{ transform: 'rotate(-90deg)' }}
+        >
+          DM
+        </span>
+      </div>
+    )
+  }
+
+  if (canRemove) {
+    return (
+      <button
+        onClick={onRemove}
+        title="Remove player"
+        style={{
+          color: '#dc2626',
+          backgroundColor: 'rgba(220, 38, 38, 0.1)',
+          borderRight,
+        }}
+        className={`${baseClass} hover:opacity-80`}
+      >
+        <FontAwesomeIcon icon={faUserMinus} className="h-3.5 w-3.5" />
+      </button>
+    )
+  }
+
+  return null
+}
 
 export default function CampaignManager({ user, onExpandedChange, inviteCampaignId, clearInviteCampaignId, expandCampaignId, clearExpandCampaignId, showToast }) {
   const router = useRouter()
@@ -73,6 +149,15 @@ export default function CampaignManager({ user, onExpandedChange, inviteCampaign
   const selectedCampaign = useMemo(
     () => campaigns.find(c => c.id === selectedCampaignId) ?? null,
     [campaigns, selectedCampaignId]
+  )
+
+  // Fetch aggregated asset metadata (count + total bytes) for the
+  // currently expanded campaign. Disabled when nothing's selected so
+  // we don't burn a request for the collapsed list. Collapsed cards
+  // render a "—" placeholder; expanded shows real values.
+  const { data: selectedCampaignAssetsMeta } = useCampaignAssetsMetadata(
+    selectedCampaignId,
+    { enabled: !!selectedCampaignId }
   )
 
   const [selectedInvitedCampaignId, setSelectedInvitedCampaignId] = useState(null)
@@ -107,7 +192,6 @@ export default function CampaignManager({ user, onExpandedChange, inviteCampaign
 
   // ── UI-only state ──
   const [error, setError] = useState(null)
-  const [isResizing, setIsResizing] = useState(false)
   const [showCharacterModal, setShowCharacterModal] = useState(false)
   const [characterModalCampaign, setCharacterModalCampaign] = useState(null)
 
@@ -493,72 +577,44 @@ export default function CampaignManager({ user, onExpandedChange, inviteCampaign
     }
   }, [selectedCampaign, loading])
 
-  // Detect window resize and temporarily disable transitions
-  useEffect(() => {
-    let resizeTimer
-    let isActuallyResizing = false
-
-    const handleResize = () => {
-      if (!isActuallyResizing) {
-        isActuallyResizing = true
-        setIsResizing(true)
-      }
-
-      clearTimeout(resizeTimer)
-      resizeTimer = setTimeout(() => {
-        setIsResizing(false)
-        isActuallyResizing = false
-      }, 100)
-    }
-
-    window.addEventListener('resize', handleResize)
-    return () => {
-      window.removeEventListener('resize', handleResize)
-      clearTimeout(resizeTimer)
-    }
-  }, [])
-
   // Notify parent when expanded state changes (either drawer)
   useEffect(() => {
     onExpandedChange?.(!!selectedCampaign || !!selectedInvitedCampaign)
   }, [selectedCampaign, selectedInvitedCampaign, onExpandedChange])
 
-  // Live-update the main drawer's min-height as the user scrolls or
-  // resizes, so it always fills from the card's bottom to the viewport
-  // bottom. This ran through React state + `calc(100vh - drawerTop)`
-  // before; now we push values straight to the DOM via gsap.set (instant
-  // snap, no tween), which side-steps CSS transition interpolation on
-  // rapid scroll ticks and matches the GSAP-owned animation path.
+  // Live-sync the `bleedUp`-dependent values that CSS calc() can't
+  // express on its own. The card's width / left / height are handled
+  // by the calc() strings written in the expand tween's `onComplete`
+  // (see useGSAP below) — those auto-track `100vw` / `100vh` without
+  // JS. But `bleedUp` (the dashboard's responsive padding-top) does
+  // change at breakpoints, so we re-read it on resize and re-apply
+  // the two places it lands: the card's `marginTop` and the content
+  // div's `top`.
   useEffect(() => {
     if (!selectedCampaign) return
 
-    const updateDrawerMinHeight = () => {
+    const syncBleedUp = () => {
       if (!rootRef.current || !campaignCardRef.current) return
-      const drawer = rootRef.current.querySelector(
-        `[data-campaign-sessions-drawer="${selectedCampaign.id}"]`
+      const card = campaignCardRef.current
+
+      const mainEl = document.getElementById('dashboard-main')
+      const bleedUp = mainEl
+        ? parseFloat(window.getComputedStyle(mainEl).paddingTop) || 0
+        : 0
+
+      card.style.marginTop = `${-bleedUp}px`
+
+      const content = rootRef.current.querySelector(
+        `[data-campaign-content="${selectedCampaign.id}"]`
       )
-      if (!drawer) return
-      // Don't interfere with the expand/collapse tween in flight.
-      if (gsap.isTweening(drawer)) return
-      const cardRect = campaignCardRef.current.getBoundingClientRect()
-      const minHeight = Math.max(0, window.innerHeight - cardRect.bottom)
-      gsap.set(drawer, { minHeight })
+      if (content) {
+        content.style.top = `${bleedUp}px`
+      }
     }
 
-    // Scroll-to-top uses smooth behaviour, so recalc a few times after
-    // the layout settles.
-    const timeouts = [50, 150, 300, 500].map((delay) =>
-      setTimeout(updateDrawerMinHeight, delay)
-    )
-
-    window.addEventListener('resize', updateDrawerMinHeight)
-    const mainContainer = document.getElementById('dashboard-main')
-    mainContainer?.addEventListener('scroll', updateDrawerMinHeight)
-
+    window.addEventListener('resize', syncBleedUp)
     return () => {
-      window.removeEventListener('resize', updateDrawerMinHeight)
-      mainContainer?.removeEventListener('scroll', updateDrawerMinHeight)
-      timeouts.forEach(clearTimeout)
+      window.removeEventListener('resize', syncBleedUp)
     }
   }, [selectedCampaign])
 
@@ -658,6 +714,7 @@ export default function CampaignManager({ user, onExpandedChange, inviteCampaign
       minHeight: 0,
       maxHeight: 0,
       borderWidth: 0,
+      borderTopWidth: 0,
       duration,
       ease,
       onComplete() { gsap.set(this.targets(), { visibility: 'hidden', pointerEvents: 'none' }) },
@@ -682,31 +739,57 @@ export default function CampaignManager({ user, onExpandedChange, inviteCampaign
       const viewportWidth = window.innerWidth + 4
       const leftOffset = wrapperRect ? -wrapperRect.left - 2 : 0
 
-      // Drawer fills from the expanded card's bottom to the viewport
-      // bottom. The card's bottom position is *unchanged* by the
-      // upward bleed (height grows by `bleedUp`, margin-top goes
-      // negative by the same amount), so we still use `top + 600` for
-      // the expanded-bottom calc.
+      // Hero card fills the viewport on expand. `visibleHeight` is the
+      // height the user actually sees (from the card's natural top
+      // down to the viewport bottom, floored at 600 px as the
+      // minimum). The rendered card height is `visibleHeight +
+      // bleedUp` because the card also bleeds up by `bleedUp` via
+      // negative margin-top; GSAP tweens both properties together so
+      // the bottom edge lands exactly at the viewport bottom.
       const cardRect = card?.getBoundingClientRect()
-      const expandedBottom = cardRect ? cardRect.top + 600 : 0
-      const drawerMinHeight = cardRect ? Math.max(0, window.innerHeight - expandedBottom) : 0
+      const naturalCardTop = cardRect ? cardRect.top : 0
+      const visibleHeight = Math.max(600, window.innerHeight - naturalCardTop)
+      // Drawer sits *below* the hero now — the user scrolls down to
+      // reach it rather than having it fill the space between hero's
+      // bottom and viewport bottom. Its height is fixed to what a
+      // single CTA row needs (a touch more on small viewports where
+      // the buttons may wrap).
+      const drawerHeightTarget = 120
 
       // `overwrite: 'auto'` — tells GSAP to kill any in-flight tween
       // affecting the same properties on these targets. Necessary
       // because the collapse-all tweens above run simultaneously on
       // this same element; without overwrite they'd fight the expand
       // tween and the element would never visibly grow.
+      //
+      // Hand-off pattern for viewport-reactive dimensions: GSAP tweens
+      // pixel-to-pixel for a smooth expand, then `onComplete` swaps
+      // the captured pixel values for CSS `calc()` + viewport units
+      // so the browser takes over resize tracking. Without this,
+      // resizing the window after expand leaves the card stuck at
+      // whatever pixel values GSAP captured at expand time — the
+      // pre-GSAP implementation avoided this by expressing these
+      // values as `calc(100vw - ...)` / `calc(100vh - ...)` directly.
       gsap.to(card, {
         left: leftOffset,
         width: viewportWidth,
         // Grow height by the bleed amount so the card's bottom stays
         // put while the top extends upward.
-        height: 600 + bleedUp,
+        height: visibleHeight + bleedUp,
         marginTop: -bleedUp,
         outlineColor: THEME.borderActive,
         duration,
         ease,
         overwrite: 'auto',
+        onComplete: () => {
+          card.style.left = 'calc(50% - 50vw - 2px)'
+          card.style.width = 'calc(100vw + 4px)'
+          // `naturalTop` (the wrapper's page-relative top) is measured
+          // once; the browser reruns the calc on viewport height
+          // change so the card always fills down to the viewport
+          // bottom, floored at 600 px.
+          card.style.height = `max(${600 + bleedUp}px, calc(100vh - ${naturalCardTop}px + ${bleedUp}px))`
+        },
       })
       // Shift the content downward by `bleedUp` so only the upper
       // bleed zone shows hero image; the text block's y-position
@@ -720,11 +803,15 @@ export default function CampaignManager({ user, onExpandedChange, inviteCampaign
       gsap.to(drawer, {
         left: 'calc(50% - 50vw)',
         width: '100vw',
-        minHeight: drawerMinHeight,
-        // Large enough to be effectively unbounded — content inside has
-        // its own overflow handling.
-        maxHeight: Math.max(drawerMinHeight * 10, 10000),
+        minHeight: drawerHeightTarget,
+        maxHeight: drawerHeightTarget * 3,
         borderWidth: 2,
+        // Top border stays at 0 — the drawer sits directly under the
+        // card's bottom outline, and a 2 px top border in a different
+        // colour from the outline reads as a visible seam. Keeping
+        // the top flush lets the card's outline be the only line at
+        // the boundary.
+        borderTopWidth: 0,
         duration,
         ease,
         overwrite: 'auto',
@@ -1191,6 +1278,13 @@ export default function CampaignManager({ user, onExpandedChange, inviteCampaign
               const activeSessions = campaignSessions.filter(session =>
                 session.status === 'active' || session.status === 'starting' || session.status === 'stopping'
               )
+              // Domain enforces at most one non-finished session per campaign —
+              // display this single "current" session in the hero's right column
+              // with inline controls. If none exists, show a Create Session CTA
+              // (host only) instead.
+              const currentSession = campaignSessions.find(session =>
+                ['inactive', 'active', 'starting', 'stopping', 'paused'].includes(session.status?.toLowerCase())
+              )
 
               const isSelected = selectedCampaign?.id === campaign.id
 
@@ -1243,6 +1337,24 @@ export default function CampaignManager({ user, onExpandedChange, inviteCampaign
                       style={{ backgroundColor: `${COLORS.onyx}B3` }}
                     />
 
+                    {/* Bottom gradient fade — only visible when the
+                        card is expanded. Transitions the hero's lower
+                        edge into the drawer's panel colour so the
+                        seam feels like one continuous surface and
+                        subtly hints that there's more content below
+                        the fold (the CTA drawer). */}
+                    {isSelected && (
+                      <div
+                        aria-hidden="true"
+                        className="absolute left-0 right-0 bottom-0 pointer-events-none rounded-b-sm"
+                        style={{
+                          height: '120px',
+                          background: `linear-gradient(to bottom, transparent 0%, ${THEME.bgPanel} 100%)`,
+                          zIndex: 0,
+                        }}
+                      />
+                    )}
+
                     {/* Content container — absolute, filling the card
                         by default (top/right/bottom/left = 0). Same
                         1410 px centred cap in both states so text
@@ -1254,7 +1366,7 @@ export default function CampaignManager({ user, onExpandedChange, inviteCampaign
                         zone shows hero only. */}
                     <div
                       data-campaign-content={campaign.id}
-                      className="flex flex-col justify-between p-6 absolute"
+                      className="flex flex-col p-6 absolute"
                       style={{
                         top: 0,
                         right: 0,
@@ -1266,57 +1378,320 @@ export default function CampaignManager({ user, onExpandedChange, inviteCampaign
                         zIndex: 1
                       }}
                     >
-                        {/* Top Row - Title and Action Buttons */}
-                        <div className="flex items-start justify-between gap-4">
-                        <div className="flex-1 min-w-0">
-                          <h4 className="text-3xl font-[family-name:var(--font-metamorphous)] mb-1 drop-shadow-lg" style={{color: THEME.textOnDark}}>
-                            {campaign.title || 'Unnamed Campaign'}
-                          </h4>
-                        </div>
-
-                        {/* Action Buttons - Top Right (fixed width container to prevent layout shift) */}
-                        <div className="flex gap-2 flex-shrink-0" style={{minWidth: '160px'}}>
-                          {/* Active game indicator - always reserves space */}
-                          <div style={{ visibility: activeSessions.length > 0 ? 'visible' : 'hidden' }}>
-                            <Badge variant="success" size="lg" pulse={activeSessions.length > 0}>
-                              Game In Session
-                            </Badge>
-                          </div>
-
+                      {/* Title row — title stays centred (stable
+                          position across collapsed + expanded), "Game
+                          In Session" badge sits flush-right. The
+                          left-side spacer balances the badge's width
+                          so the title remains optically centred. */}
+                      <div className="flex items-center gap-3 mb-4 flex-shrink-0">
+                        <div className="flex-1" />
+                        <h4 className="text-3xl font-[family-name:var(--font-metamorphous)] drop-shadow-lg text-center" style={{color: THEME.textOnDark}}>
+                          {campaign.title || 'Unnamed Campaign'}
+                        </h4>
+                        <div className="flex-1 flex justify-end" style={{ visibility: activeSessions.length > 0 ? 'visible' : 'hidden' }}>
+                          <Badge variant="success" size="md" pulse={activeSessions.length > 0}>
+                            Game In Session
+                          </Badge>
                         </div>
                       </div>
 
-                      {/* Description - full width, below title row */}
-                      {campaign.description && (
-                        <div className="text-base drop-shadow-md mt-2 max-w-full sm:max-w-[70%]">
-                          <p
-                            style={{
-                              color: THEME.textAccent,
-                              whiteSpace: 'pre-line',
-                              display: isSelected ? 'block' : '-webkit-box',
-                              WebkitLineClamp: isSelected ? 'unset' : 3,
-                              WebkitBoxOrient: isSelected ? 'unset' : 'vertical',
-                              overflow: 'hidden'
-                            }}
-                          >
-                            {campaign.description}
-                          </p>
-                        </div>
-                      )}
-
-                      {/* Middle - Spacer with responsive minimum gap */}
-                      <div className="flex-1" style={{ minHeight: 'max(1rem, 2vh)' }}></div>
-
-                      {/* Bottom Row - Campaign Metadata */}
-                      <div className="flex items-center justify-between">
-                        <div className="text-sm drop-shadow" style={{color: THEME.textOnDark}}>
-                          <span>Created: {campaign.created_at ? new Date(campaign.created_at).toLocaleDateString() : 'Unknown'}</span>
-                          {campaignSessions.length > 0 && campaignSessions[0].name && (
-                            <>
-                              <span className="mx-2">•</span>
-                              <span>{campaignSessions[0].name}</span>
-                            </>
+                      {/* Two-column body: description + meta on the
+                          left, current session + players on the right.
+                          `min-h-0` on both columns enables their
+                          interior scrollable areas (description on
+                          left, players list on right) to take up the
+                          slack instead of overflowing the card. */}
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-6 flex-1 min-h-0">
+                        {/* LEFT — description (expanded only) and meta */}
+                        <div className="flex flex-col gap-4 min-h-0">
+                          {isSelected && campaign.description && (
+                            <div
+                              className="text-base drop-shadow-md overflow-y-auto"
+                              style={{
+                                color: THEME.textAccent,
+                                whiteSpace: 'pre-line',
+                              }}
+                            >
+                              {campaign.description}
+                            </div>
                           )}
+                          <div className="text-sm drop-shadow space-y-1 mt-auto" style={{color: THEME.textOnDark}}>
+                            <div>
+                              <span style={{color: THEME.textSecondary}}>Created: </span>
+                              {campaign.created_at ? new Date(campaign.created_at).toLocaleDateString() : 'Unknown'}
+                            </div>
+                            <div>
+                              <span style={{color: THEME.textSecondary}}>Last played: </span>
+                              {campaign.last_played_at ? new Date(campaign.last_played_at).toLocaleDateString() : 'Never'}
+                            </div>
+                            <div>
+                              <span style={{color: THEME.textSecondary}}>Assets: </span>
+                              {isSelected && selectedCampaignAssetsMeta
+                                ? `${selectedCampaignAssetsMeta.asset_count} · ${formatBytes(selectedCampaignAssetsMeta.total_file_size)}`
+                                : '—'}
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* RIGHT — current session + players. Inline
+                            controls for the single "current" session
+                            sit next to its name; players list sits
+                            below with the Invite button right-aligned
+                            in the section header.
+                            Whole column's interior hides in the
+                            collapsed preview — the grid slot stays
+                            reserved so the transition doesn't reflow
+                            the layout, but the content only paints
+                            once the card is expanded. */}
+                        <div className="flex flex-col gap-4 min-h-0">
+                          {isSelected && (<>
+                          {/* Current Session */}
+                          <div className="flex-shrink-0">
+                            <h3 className="text-lg font-semibold font-[family-name:var(--font-metamorphous)] mb-2 drop-shadow" style={{color: THEME.textOnDark}}>
+                              Current Session
+                            </h3>
+                            {currentSession ? (
+                              <div
+                                className="flex items-center justify-between gap-2 p-3 rounded-sm border relative overflow-hidden"
+                                style={{backgroundColor: THEME.bgSecondary, borderColor: THEME.borderSubtle}}
+                                onClick={(e) => e.stopPropagation()}
+                              >
+                                {/* Starting-state overlay — diagonal blue
+                                    stripes sliding across the card while
+                                    the session is transitioning from
+                                    inactive → active. Pointer-transparent
+                                    and horizontally masked so the stripes
+                                    fade toward the right edge, leaving the
+                                    action buttons unobscured. */}
+                                {(currentSession.status === 'starting' || (startSessionMutation.isPending && startSessionMutation.variables === currentSession.id)) && (
+                                  <div
+                                    className="absolute inset-0 pointer-events-none"
+                                    style={{
+                                      background: `linear-gradient(
+                                        -45deg,
+                                        transparent 0%,
+                                        transparent 15%,
+                                        rgba(59, 130, 246, 0.45) 15%,
+                                        rgba(59, 130, 246, 0.45) 20%,
+                                        transparent 20%,
+                                        transparent 35%,
+                                        rgba(59, 130, 246, 0.45) 35%,
+                                        rgba(59, 130, 246, 0.45) 40%,
+                                        transparent 40%,
+                                        transparent 55%,
+                                        rgba(59, 130, 246, 0.45) 55%,
+                                        rgba(59, 130, 246, 0.45) 60%,
+                                        transparent 60%,
+                                        transparent 75%,
+                                        rgba(59, 130, 246, 0.45) 75%,
+                                        rgba(59, 130, 246, 0.45) 80%,
+                                        transparent 80%,
+                                        transparent 100%
+                                      )`,
+                                      backgroundSize: '300% 300%',
+                                      animation: 'stripe-slide 1.5s linear infinite',
+                                      maskImage: 'linear-gradient(to right, black 0%, rgba(0,0,0,0.8) 15%, rgba(0,0,0,0.5) 30%, rgba(0,0,0,0.2) 45%, transparent 65%)',
+                                      WebkitMaskImage: 'linear-gradient(to right, black 0%, rgba(0,0,0,0.8) 15%, rgba(0,0,0,0.5) 30%, rgba(0,0,0,0.2) 45%, transparent 65%)',
+                                    }}
+                                  />
+                                )}
+                                <div className="min-w-0 flex-1 relative">
+                                  <p className="font-medium truncate" style={{color: THEME.textOnDark}}>
+                                    {currentSession.name || 'Game Session'}
+                                  </p>
+                                  <p className="text-sm" style={{color: THEME.textSecondary}}>
+                                    Status: <span className="font-medium" style={{
+                                      color: currentSession.status === 'active' ? '#16a34a' :
+                                             (currentSession.status === 'starting' || (startSessionMutation.isPending && startSessionMutation.variables === currentSession.id)) ? '#3b82f6' :
+                                             currentSession.status === 'inactive' ? THEME.textSecondary :
+                                             '#fbbf24'
+                                    }}>
+                                      {(currentSession.status === 'starting' || (startSessionMutation.isPending && startSessionMutation.variables === currentSession.id))
+                                        ? 'Starting'
+                                        : currentSession.status.charAt(0).toUpperCase() + currentSession.status.slice(1)}
+                                    </span>
+                                  </p>
+                                </div>
+                                <div className="flex gap-2 flex-shrink-0">
+                                  {currentSession.status === 'active' ? (
+                                    <>
+                                      <Button variant="success" size="sm" onClick={() => enterGame(currentSession)}>
+                                        <FontAwesomeIcon icon={faRightToBracket} className="mr-2" />Enter
+                                      </Button>
+                                      {campaign.host_id === user.id && (
+                                        <button
+                                          onClick={() => promptPauseSession(currentSession)}
+                                          disabled={pauseSessionMutation.isPending && pauseSessionMutation.variables === currentSession.id}
+                                          className="px-3 py-1.5 rounded-sm border transition-all text-sm font-medium flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                                          style={{backgroundColor: COLORS.silver, color: THEME.textPrimary, borderColor: COLORS.smoke}}
+                                          title="Pause Session"
+                                        >
+                                          <FontAwesomeIcon icon={faPause} />
+                                        </button>
+                                      )}
+                                    </>
+                                  ) : (currentSession.status === 'starting' || currentSession.status === 'inactive') && campaign.host_id === user.id ? (
+                                    <>
+                                      <Button
+                                        variant="success"
+                                        size="sm"
+                                        onClick={() => startGame(currentSession.id)}
+                                        disabled={(startSessionMutation.isPending && startSessionMutation.variables === currentSession.id) || activeSessions.length > 0 || currentSession.status === 'starting'}
+                                      >
+                                        <FontAwesomeIcon icon={faPlay} className="mr-2" />Start
+                                      </Button>
+                                      <button
+                                        onClick={() => promptFinishSession(currentSession)}
+                                        disabled={(finishSessionMutation.isPending && finishSessionMutation.variables === currentSession.id) || currentSession.status === 'starting'}
+                                        className="px-3 py-1.5 rounded-sm border transition-all text-sm font-medium flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                                        style={{backgroundColor: '#991b1b', color: COLORS.smoke, borderColor: '#dc2626'}}
+                                        title="Finish Session"
+                                      >
+                                        <FontAwesomeIcon icon={faXmark} />
+                                      </button>
+                                    </>
+                                  ) : null}
+                                </div>
+                              </div>
+                            ) : campaign.host_id === user.id ? (
+                              <button
+                                onClick={(e) => { e.stopPropagation(); openCreateGameModal(campaign.id) }}
+                                className="w-full flex items-center gap-3 p-3 rounded-sm border-2 border-dashed transition-all hover:border-opacity-100"
+                                style={{backgroundColor: `${THEME.bgSecondary}80`, borderColor: `${THEME.borderActive}60`}}
+                              >
+                                <FontAwesomeIcon icon={faPlus} className="text-xl" style={{color: THEME.textAccent}} />
+                                <span className="font-medium text-sm" style={{color: THEME.textOnDark}}>Create new session</span>
+                              </button>
+                            ) : (
+                              <p className="text-sm italic p-3" style={{color: THEME.textSecondary}}>
+                                No active session
+                              </p>
+                            )}
+                          </div>
+
+                          {/* Players + Invite — fixed 2×5 grid of
+                              "seats". Always renders 10 slots;
+                              occupied seats show the member, vacant
+                              seats render as muted "Empty" tiles.
+                              Keeps the visual footprint consistent
+                              regardless of campaign size and gives
+                              the invite action a clearer context
+                              (you're filling remaining seats). */}
+                          <div className="flex flex-col flex-1 min-h-0">
+                            <div className="flex items-center justify-between mb-2 flex-shrink-0">
+                              <h3 className="text-lg font-semibold font-[family-name:var(--font-metamorphous)] drop-shadow" style={{color: THEME.textOnDark}}>
+                                Players
+                              </h3>
+                              <button
+                                onClick={(e) => { e.stopPropagation(); setInviteModalCampaignId(campaign.id) }}
+                                className="flex items-center gap-1.5 px-2.5 py-1 rounded-sm border text-xs transition-all hover:opacity-80"
+                                style={{backgroundColor: 'transparent', color: COLORS.smoke, borderColor: THEME.borderSubtle}}
+                              >
+                                <FontAwesomeIcon icon={faUserPlus} className="h-3 w-3" />
+                                <span>Invite</span>
+                              </button>
+                            </div>
+
+                            <div
+                              className="grid grid-cols-2 gap-1.5 overflow-y-auto pr-1"
+                              onClick={(e) => e.stopPropagation()}
+                            >
+                              {Array.from({ length: 10 }, (_, slotIdx) => {
+                                const member = campaign.members?.[slotIdx]
+                                if (!member) {
+                                  return (
+                                    <div
+                                      key={`empty-${slotIdx}`}
+                                      className="flex items-center justify-center px-3 py-4 rounded-sm border border-dashed"
+                                      style={{
+                                        backgroundColor: `${THEME.bgSecondary}40`,
+                                        borderColor: THEME.borderSubtle,
+                                      }}
+                                    >
+                                      <span className="text-sm italic" style={{color: THEME.textSecondary}}>{slotIdx + 1}</span>
+                                    </div>
+                                  )
+                                }
+                                // Second line: role-specific descriptor for
+                                // DM/mod/spectator (who don't hold a
+                                // character), or the player's character
+                                // summary if they've selected one.
+                                const characterLine = member.is_host
+                                  ? 'Dungeon Master'
+                                  : member.campaign_role === 'mod'
+                                    ? 'Moderator'
+                                    : member.character_id
+                                      ? `${member.character_name} · Lv ${member.character_level} ${member.character_class}`
+                                      : 'No character selected'
+                                return (
+                                  <div
+                                    key={member.user_id}
+                                    className="flex items-stretch justify-between rounded-sm border overflow-hidden relative"
+                                    style={{backgroundColor: THEME.bgSecondary, borderColor: THEME.borderSubtle}}
+                                  >
+                                    {/* Hero-image wedge — angled reveal of
+                                        the default character portrait on
+                                        the card's right side, with a dark
+                                        gradient perpendicular to the
+                                        slope so the text on the left
+                                        stays readable. Same pattern as
+                                        the workshop tool cards. Swap
+                                        `/heroes.png` for a per-character
+                                        portrait once character image
+                                        uploads exist. */}
+                                    <div
+                                      aria-hidden="true"
+                                      className="absolute top-0 bottom-0 right-0 pointer-events-none bg-cover bg-center"
+                                      style={{
+                                        // Div now wraps just the wedge's
+                                        // bounding box (right 42 % of the
+                                        // card) so `bg-cover` fits the
+                                        // character image to the wedge
+                                        // region instead of the whole
+                                        // card. Clip-path coords + gradient
+                                        // stops re-expressed in this
+                                        // local frame.
+                                        width: '42%',
+                                        clipPath: 'polygon(33% 0, 100% 0, 100% 100%, 0 100%)',
+                                        backgroundImage: `linear-gradient(105deg, rgba(0, 0, 0, 0.55) 15%, transparent 45%), url('/heroes.png')`,
+                                      }}
+                                    />
+                                    <PlayerCardAction
+                                      isDm={member.is_host}
+                                      canRemove={!member.is_host && campaign.host_id === user.id}
+                                      onRemove={() => setRemovePlayerTarget({ campaign, member })}
+                                    />
+                                    <div className="relative z-10 flex flex-col gap-0.5 min-w-0 flex-1 justify-center px-3 py-2">
+                                      {/* Top line: username + role badges
+                                          (DM badge lives in the left-edge
+                                          sibling instead; only MOD shows
+                                          inline for now). */}
+                                      <div className="flex items-center gap-2 min-w-0">
+                                        <p className="font-medium text-sm truncate drop-shadow" style={{color: THEME.textOnDark}}>
+                                          {member.username}
+                                        </p>
+                                        {member.campaign_role === 'mod' && (
+                                          <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded-sm flex-shrink-0" style={{backgroundColor: '#1e3a5f', color: '#93c5fd'}}>MOD</span>
+                                        )}
+                                      </div>
+                                      {/* Bottom line: character meta or
+                                          role descriptor (italic + muted
+                                          when no character is selected). */}
+                                      <p
+                                        className={`text-xs truncate drop-shadow${!member.character_id && !member.is_host && member.campaign_role !== 'mod' ? ' italic' : ''}`}
+                                        style={{
+                                          color: member.character_id ? THEME.textAccent : THEME.textSecondary,
+                                        }}
+                                      >
+                                        {characterLine}
+                                      </p>
+                                    </div>
+                                  </div>
+                                )
+                              })}
+                            </div>
+                          </div>
+                          </>)}
                         </div>
                       </div>
                     </div>
@@ -1350,387 +1725,84 @@ export default function CampaignManager({ user, onExpandedChange, inviteCampaign
                       visibility: 'hidden',
                     }}
                   >
-                    {/* Content wrapper */}
-                    <div
-                      className="pt-[calc(1rem+16px)] sm:pt-[calc(2rem+16px)] md:pt-[calc(2.5rem+16px)] pb-[calc(1rem+16px)] sm:pb-[calc(2rem+16px)] md:pb-[calc(2.5rem+16px)] px-[calc(1rem+12px)] sm:px-[calc(2rem+12px)] md:px-[calc(2.5rem+12px)]"
-                    >
-                      {/* Inner content constrained to the same 1410 px
-                          centred frame as the rest of the campaigns UI. */}
+                    {/* Drawer content — trimmed to a footer-strip of
+                        campaign-level CTAs. All per-session and
+                        per-member surfaces moved into the hero card
+                        above. */}
+                    <div className="py-6 px-[calc(1rem+12px)] sm:px-[calc(2rem+12px)] md:px-[calc(2.5rem+12px)]">
                       <div style={{ maxWidth: '1410px', marginLeft: 'auto', marginRight: 'auto' }}>
-                      <div className="flex items-center justify-between mb-4">
-                        <h3 className="text-xl font-semibold font-[family-name:var(--font-metamorphous)]" style={{color: THEME.textOnDark}}>
-                          Campaign Sessions
-                        </h3>
-                        <button
-                          onClick={() => setSelectedCampaignId(null)}
-                          className="transition-colors text-sm"
-                          style={{color: THEME.textSecondary}}
-                        >
-                          <FontAwesomeIcon icon={faXmark} className="mr-1" />
-                          Close
-                        </button>
-                      </div>
-
-                      <div className="space-y-3">
-                        {/* Create Session Template - Only show if user is host and no non-finished sessions exist */}
-                        {campaign.host_id === user.id && !campaignSessions.some(g => ['inactive', 'active', 'starting', 'stopping'].includes(g.status?.toLowerCase())) && (
-                          <button
-                            onClick={() => openCreateGameModal(campaign.id)}
-                            className="w-full flex items-center justify-between p-4 rounded-sm border-2 border-dashed transition-all hover:border-opacity-100"
-                            style={{
-                              backgroundColor: `${THEME.bgSecondary}80`,
-                              borderColor: `${THEME.borderActive}60`,
-                              opacity: 0.7
-                            }}
-                            title="Create New Session"
-                          >
-                            <div className="flex items-center gap-3">
-                              <FontAwesomeIcon icon={faPlus} className="text-2xl" style={{color: THEME.textAccent}} />
-                              <div className="text-left">
-                                <p className="font-medium" style={{color: THEME.textOnDark}}>Create New Session</p>
-                                <p className="text-sm" style={{color: THEME.textSecondary}}>
-                                  Click to add a game session
-                                </p>
-                              </div>
-                            </div>
-                          </button>
-                        )}
-
-                        {campaignSessions.length === 0 && campaign.host_id !== user.id && (
-                          <p className="text-sm py-4 text-center" style={{color: THEME.textSecondary}}>No game sessions yet.</p>
-                        )}
-
-                        {campaignSessions.length > 0 && (
-                          <div className="space-y-2">
-                            {campaignSessions.map((game) => (
-                              <div
-                                key={game.id}
-                                className="flex items-center justify-between p-4 rounded-sm border relative overflow-hidden"
-                                style={{backgroundColor: THEME.bgSecondary, borderColor: THEME.borderSubtle}}
+                        {campaign.host_id === user.id ? (
+                          <div className="flex flex-wrap items-center gap-3 justify-between">
+                            <div className="flex flex-wrap items-center gap-3">
+                              {/* Configure */}
+                              <button
+                                onClick={() => {
+                                  const campaignSessionsLocal = allSessions.filter(s => s.campaign_id === selectedCampaign.id)
+                                  const curr = campaignSessionsLocal.find(s => s.status !== 'finished')
+                                  setCampaignForm({
+                                    editingCampaign: selectedCampaign,
+                                    title: selectedCampaign.title,
+                                    description: selectedCampaign.description || '',
+                                    heroImage: selectedCampaign.hero_image_asset ? null : (selectedCampaign.hero_image || '/campaign-tile-bg.png'),
+                                    heroImageAssetId: selectedCampaign.hero_image_asset?.asset_id || null,
+                                    sessionName: curr?.name || ''
+                                  })
+                                  setCampaignFormOpen(true)
+                                }}
+                                className="flex items-center gap-2 px-3 h-10 rounded-sm transition-all border"
+                                style={{backgroundColor: THEME.bgSecondary, color: COLORS.smoke, borderColor: THEME.borderActive}}
                               >
-                                {/* Starting animation overlay */}
-                                {(game.status === 'starting' || startSessionMutation.isPending && startSessionMutation.variables === game.id) && (
-                                  <div
-                                    className="absolute inset-0 pointer-events-none"
-                                    style={{
-                                      background: `linear-gradient(
-                                        -45deg,
-                                        transparent 0%,
-                                        transparent 15%,
-                                        rgba(59, 130, 246, 0.45) 15%,
-                                        rgba(59, 130, 246, 0.45) 20%,
-                                        transparent 20%,
-                                        transparent 35%,
-                                        rgba(59, 130, 246, 0.45) 35%,
-                                        rgba(59, 130, 246, 0.45) 40%,
-                                        transparent 40%,
-                                        transparent 55%,
-                                        rgba(59, 130, 246, 0.45) 55%,
-                                        rgba(59, 130, 246, 0.45) 60%,
-                                        transparent 60%,
-                                        transparent 75%,
-                                        rgba(59, 130, 246, 0.45) 75%,
-                                        rgba(59, 130, 246, 0.45) 80%,
-                                        transparent 80%,
-                                        transparent 100%
-                                      )`,
-                                      backgroundSize: '300% 300%',
-                                      animation: 'stripe-slide 1.5s linear infinite',
-                                      maskImage: 'linear-gradient(to right, black 0%, rgba(0,0,0,0.8) 15%, rgba(0,0,0,0.5) 30%, rgba(0,0,0,0.2) 45%, transparent 65%)',
-                                      WebkitMaskImage: 'linear-gradient(to right, black 0%, rgba(0,0,0,0.8) 15%, rgba(0,0,0,0.5) 30%, rgba(0,0,0,0.2) 45%, transparent 65%)',
-                                    }}
-                                  />
-                                )}
-                                <div>
-                                  <p className="font-medium" style={{color: THEME.textOnDark}}>{game.name || 'Game Session'}</p>
-                                  <p className="text-sm" style={{color: THEME.textSecondary}}>
-                                    Status: <span className="font-medium" style={{
-                                      color: game.status === 'active' ? '#16a34a' :
-                                             (game.status === 'starting' || startSessionMutation.isPending && startSessionMutation.variables === game.id) ? '#3b82f6' :
-                                             game.status === 'inactive' ? THEME.textSecondary :
-                                             '#fbbf24'
-                                    }}>
-                                      {(game.status === 'starting' || startSessionMutation.isPending && startSessionMutation.variables === game.id) ? 'Starting' : game.status.charAt(0).toUpperCase() + game.status.slice(1)}
-                                    </span>
-                                  </p>
-                                </div>
+                                <FontAwesomeIcon icon={faGear} className="h-4 w-4" />
+                                <span className="text-sm font-medium">Configure</span>
+                              </button>
 
-                                {/* Action Buttons */}
-                                <div className="flex gap-2">
-                                  {game.status === 'active' ? (
-                                    <>
-                                      <Button
-                                        variant="success"
-                                        size="md"
-                                        onClick={() => enterGame(game)}
-                                      >
-                                        <FontAwesomeIcon icon={faRightToBracket} className="mr-2" />
-                                        Enter
-                                      </Button>
-                                      {/* Only show host actions if user is the campaign host */}
-                                      {campaign.host_id === user.id && (
-                                        <button
-                                          onClick={() => promptPauseSession(game)}
-                                          disabled={pauseSessionMutation.isPending && pauseSessionMutation.variables === game.id}
-                                          className="px-4 py-2 rounded-sm border transition-all text-sm font-medium flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
-                                          style={{backgroundColor: COLORS.silver, color: THEME.textPrimary, borderColor: COLORS.smoke}}
-                                          title="Pause Session"
-                                        >
-                                          {pauseSessionMutation.isPending && pauseSessionMutation.variables === game.id ? (
-                                            <>
-                                              <div className="animate-spin rounded-full h-3 w-3 border-b-2 border-gray-800"></div>
-                                              Pausing...
-                                            </>
-                                          ) : (
-                                            <>
-                                              <FontAwesomeIcon icon={faPause} />
-                                              Pause
-                                            </>
-                                          )}
-                                        </button>
-                                      )}
-                                    </>
-                                  ) : (game.status === 'starting' || game.status === 'inactive') && campaign.host_id === user.id ? (
-                                    /* Show game actions for host - disabled when starting */
-                                    <>
-                                      <Button
-                                        variant="success"
-                                        size="md"
-                                        onClick={() => startGame(game.id)}
-                                        disabled={startSessionMutation.isPending && startSessionMutation.variables === game.id || activeSessions.length > 0 || game.status === 'starting'}
-                                      >
-                                        <FontAwesomeIcon icon={faPlay} className="mr-2" />
-                                        Start
-                                      </Button>
-                                      <button
-                                        onClick={() => promptFinishSession(game)}
-                                        disabled={finishSessionMutation.isPending && finishSessionMutation.variables === game.id || game.status === 'starting'}
-                                        className="px-4 py-2 rounded-sm border transition-all text-sm font-medium flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
-                                        style={{backgroundColor: '#991b1b', color: COLORS.smoke, borderColor: '#dc2626'}}
-                                        title="Finish Session Permanently"
-                                      >
-                                        {finishSessionMutation.isPending && finishSessionMutation.variables === game.id ? (
-                                          <>
-                                            <div className="animate-spin rounded-full h-3 w-3 border-b-2 border-white"></div>
-                                            Finishing...
-                                          </>
-                                        ) : (
-                                          <>
-                                            <FontAwesomeIcon icon={faXmark} />
-                                            Finish
-                                          </>
-                                        )}
-                                      </button>
-                                    </>
-                                  ) : game.status === 'finished' && campaign.host_id === user.id ? (
-                                    /* Show delete button for finished sessions (host only) */
-                                    <Button
-                                      variant="danger"
-                                      size="md"
-                                      onClick={() => openDeleteSessionModal(game)}
-                                      disabled={deleteSessionMutation.isPending && deleteSessionMutation.variables === game.id}
-                                    >
-                                      {deleteSessionMutation.isPending && deleteSessionMutation.variables === game.id ? (
-                                        <>
-                                          <div className="animate-spin rounded-full h-3 w-3 border-b-2 border-white mr-2"></div>
-                                          Deleting...
-                                        </>
-                                      ) : (
-                                        <>
-                                          <FontAwesomeIcon icon={faTrash} className="mr-2" />
-                                          Delete
-                                        </>
-                                      )}
-                                    </Button>
-                                  ) : null}
-                                </div>
-                              </div>
-                            ))}
-                          </div>
-                        )}
+                              {/* Set Moderator (templated) */}
+                              <button
+                                onClick={() => { /* TODO: wire to moderator picker modal */ }}
+                                className="flex items-center gap-2 px-3 h-10 rounded-sm transition-all border"
+                                style={{backgroundColor: THEME.bgSecondary, color: COLORS.smoke, borderColor: THEME.borderActive}}
+                              >
+                                <FontAwesomeIcon icon={faUserShield} className="h-4 w-4" />
+                                <span className="text-sm font-medium">Set Moderator</span>
+                              </button>
 
-                        {/* Campaign Members Section */}
-                        <div className="mt-8 pt-6 border-t" style={{borderColor: THEME.borderSubtle}}>
-                          <h3 className="text-xl font-semibold font-[family-name:var(--font-metamorphous)] mb-4" style={{color: THEME.textOnDark}}>
-                            Campaign Members
-                          </h3>
-                          <button
-                            onClick={() => setInviteModalCampaignId(selectedCampaign.id)}
-                            className="flex items-center gap-2 px-3 h-10 rounded-sm transition-all border mb-4"
-                            style={{backgroundColor: THEME.bgSecondary, color: COLORS.smoke, borderColor: THEME.borderActive}}
-                          >
-                            <FontAwesomeIcon icon={faUserPlus} className="h-4 w-4" />
-                            <span className="text-sm font-medium">Add Members</span>
-                          </button>
+                              {/* View Assets — routes to library tab with
+                                  a campaign query param. The library view's
+                                  filter-by-campaign surface hasn't been
+                                  built yet; the param is in place so
+                                  that change is a read-side-only update. */}
+                              <button
+                                onClick={() => router.push(`/dashboard?tab=library&campaign=${campaign.id}`)}
+                                className="flex items-center gap-2 px-3 h-10 rounded-sm transition-all border"
+                                style={{backgroundColor: THEME.bgSecondary, color: COLORS.smoke, borderColor: THEME.borderActive}}
+                              >
+                                <FontAwesomeIcon icon={faFolderOpen} className="h-4 w-4" />
+                                <span className="text-sm font-medium">View Assets</span>
+                              </button>
 
-                          {/* Loading State */}
-                          {!campaign.members && (
-                            <div className="flex items-center justify-center py-4">
-                              <div className="animate-spin rounded-full h-5 w-5 border-b-2"
-                                   style={{borderColor: THEME.borderActive}}></div>
-                              <span className="ml-2 text-sm" style={{color: THEME.textSecondary}}>
-                                Loading members...
-                              </span>
+                              {/* Delete */}
+                              <button
+                                onClick={() => promptDeleteCampaign(selectedCampaign)}
+                                disabled={deleteCampaignMutation.isPending}
+                                className="flex items-center gap-2 px-3 h-10 rounded-sm transition-all border disabled:opacity-50 disabled:cursor-not-allowed"
+                                style={{backgroundColor: '#991b1b', color: COLORS.smoke, borderColor: '#dc2626'}}
+                              >
+                                <FontAwesomeIcon icon={faTrash} className="h-4 w-4" />
+                                <span className="text-sm font-medium">Delete Campaign</span>
+                              </button>
                             </div>
-                          )}
 
-                          {/* Empty State */}
-                          {campaign.members?.length === 0 && (
-                            <p className="text-sm py-4 text-center" style={{color: THEME.textSecondary}}>
-                              No members yet. Invite players to join your campaign.
-                            </p>
-                          )}
-
-                          {/* Members Grid - 3 columns */}
-                          {campaign.members && campaign.members.length > 0 && (
-                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-                              {campaign.members.map((member) => (
-                                <div
-                                  key={member.user_id}
-                                  className="flex flex-col p-3 rounded-sm border relative"
-                                  style={{
-                                    backgroundColor: THEME.bgSecondary,
-                                    borderColor: THEME.borderSubtle
-                                  }}
-                                >
-                                  {/* Remove button - only for host viewing non-host members */}
-                                  {campaign.host_id === user.id && !member.is_host && (
-                                    <button
-                                      onClick={() => setRemovePlayerTarget({ campaign, member })}
-                                      className="absolute top-0 right-0 bottom-0 px-3 flex items-center rounded-r-sm hover:bg-red-900/50 transition-colors"
-                                      title="Remove player from campaign"
-                                      style={{ color: '#dc2626' }}
-                                    >
-                                      <FontAwesomeIcon icon={faUserMinus} className="h-5 w-5" />
-                                    </button>
-                                  )}
-
-                                  {/* Username */}
-                                  <div className="flex items-center gap-2 mb-1">
-                                    <p className="font-medium" style={{color: THEME.textOnDark}}>
-                                      {member.username}
-                                    </p>
-                                  </div>
-
-                                  {/* Character info */}
-                                  {member.character_id ? (
-                                    <div>
-                                      <p className="text-sm" style={{color: THEME.textAccent}}>
-                                        {member.character_name} - Level {member.character_level} {member.character_race} {member.character_class}
-                                      </p>
-                                      {/* Release button - only for current user */}
-                                      {member.user_id === user.id && !member.is_host && (
-                                        <button
-                                          onClick={() => handleReleaseCharacter(campaign)}
-                                          disabled={releaseCharacterMutation.isPending && releaseCharacterMutation.variables === campaign.id || hasActiveSession(campaign.id)}
-                                          className="mt-2 text-xs px-2 py-1 rounded-sm border transition-all disabled:opacity-50 disabled:cursor-not-allowed"
-                                          style={{
-                                            backgroundColor: 'transparent',
-                                            color: '#f59e0b',
-                                            borderColor: '#f59e0b'
-                                          }}
-                                          title={hasActiveSession(campaign.id) ? 'Cannot release while session is active' : 'Release character from campaign'}
-                                        >
-                                          {releaseCharacterMutation.isPending && releaseCharacterMutation.variables === campaign.id ? 'Releasing...' : 'Release Character'}
-                                        </button>
-                                      )}
-                                    </div>
-                                  ) : (
-                                    <div>
-                                      {member.is_host ? (
-                                        // Host/DM doesn't need a character - show Dungeon Master pill
-                                        <span
-                                          className="text-sm px-2 py-1 rounded-sm font-semibold"
-                                          style={{
-                                            backgroundColor: '#854d0e',
-                                            color: '#fef3c7',
-                                            borderColor: '#fbbf24',
-                                            border: '1px solid'
-                                          }}
-                                        >
-                                          Dungeon Master
-                                        </span>
-                                      ) : member.campaign_role === 'mod' ? (
-                                        <span
-                                          className="text-sm px-2 py-1 rounded-sm font-semibold"
-                                          style={{
-                                            backgroundColor: '#1e3a5f',
-                                            color: '#93c5fd',
-                                            borderColor: '#3b82f6',
-                                            border: '1px solid'
-                                          }}
-                                        >
-                                          Moderator
-                                        </span>
-                                      ) : member.user_id === user.id && member.campaign_role === 'spectator' ? (
-                                        <button
-                                          onClick={() => handleSelectCharacter(campaign)}
-                                          className="text-sm px-2 py-1 rounded-sm border transition-all hover:opacity-80 font-semibold"
-                                          style={{
-                                            backgroundColor: THEME.textOnDark,
-                                            color: THEME.textPrimary,
-                                            borderColor: THEME.textOnDark
-                                          }}
-                                        >
-                                          Select Character
-                                        </button>
-                                      ) : (
-                                        <p className="text-sm italic" style={{color: THEME.textSecondary}}>
-                                          No character selected
-                                        </p>
-                                      )}
-                                    </div>
-                                  )}
-                                </div>
-                              ))}
-                            </div>
-                          )}
-                        </div>
-
-                        {/* Campaign Controls Section - Only show for host */}
-                        {campaign.host_id === user.id && (
-                          <div className="mt-8 pt-6 border-t" style={{borderColor: THEME.borderSubtle}}>
-                            <h3 className="text-xl font-semibold font-[family-name:var(--font-metamorphous)] mb-4" style={{color: THEME.textOnDark}}>
-                              Campaign Controls
-                            </h3>
-                              <div className="flex gap-4">
-                                <button
-                                  onClick={() => {
-                                    // Find current session from allSessions (status !== 'finished')
-                                    const campaignSessions = allSessions.filter(s => s.campaign_id === selectedCampaign.id)
-                                    const currentSession = campaignSessions.find(s => s.status !== 'finished')
-                                    setCampaignForm({
-                                      editingCampaign: selectedCampaign,
-                                      title: selectedCampaign.title,
-                                      description: selectedCampaign.description || '',
-                                      heroImage: selectedCampaign.hero_image_asset ? null : (selectedCampaign.hero_image || '/campaign-tile-bg.png'),
-                                      heroImageAssetId: selectedCampaign.hero_image_asset?.asset_id || null,
-                                      sessionName: currentSession?.name || ''
-                                    })
-                                    setCampaignFormOpen(true)
-                                  }}
-                                  className="flex items-center gap-2 px-3 h-10 rounded-sm transition-all border"
-                                  style={{backgroundColor: THEME.bgSecondary, color: COLORS.smoke, borderColor: THEME.borderActive}}
-                                >
-                                  <FontAwesomeIcon icon={faGear} className="h-4 w-4" />
-                                  <span className="text-sm font-medium">Configure</span>
-                                </button>
-                                <button
-                                  onClick={() => promptDeleteCampaign(selectedCampaign)}
-                                  disabled={deleteCampaignMutation.isPending}
-                                  className="flex items-center gap-2 px-3 h-10 rounded-sm transition-all border disabled:opacity-50 disabled:cursor-not-allowed"
-                                  style={{backgroundColor: '#991b1b', color: COLORS.smoke, borderColor: '#dc2626'}}
-                                >
-                                  <FontAwesomeIcon icon={faTrash} className="h-4 w-4" />
-                                  <span className="text-sm font-medium">Delete Campaign</span>
-                                </button>
-                              </div>
+                            <button
+                              onClick={() => setSelectedCampaignId(null)}
+                              className="transition-colors text-sm flex items-center"
+                              style={{color: THEME.textSecondary}}
+                            >
+                              <FontAwesomeIcon icon={faXmark} className="mr-1" />
+                              Close
+                            </button>
                           </div>
-                        )}
-
-                        {/* Leave Campaign Button - Only show for non-host members */}
-                        {campaign.host_id !== user.id && (
-                          <div className="mt-8 pt-6 border-t" style={{borderColor: THEME.borderSubtle}}>
+                        ) : (
+                          <div className="flex items-center justify-between gap-3">
                             <button
                               onClick={() => setLeaveCampaignTarget(campaign)}
                               className="px-4 py-2 rounded-sm border transition-all text-sm font-medium flex items-center gap-2 hover:bg-red-900/50"
@@ -1743,9 +1815,16 @@ export default function CampaignManager({ user, onExpandedChange, inviteCampaign
                               <FontAwesomeIcon icon={faRightFromBracket} />
                               Leave Campaign
                             </button>
+                            <button
+                              onClick={() => setSelectedCampaignId(null)}
+                              className="transition-colors text-sm flex items-center"
+                              style={{color: THEME.textSecondary}}
+                            >
+                              <FontAwesomeIcon icon={faXmark} className="mr-1" />
+                              Close
+                            </button>
                           </div>
                         )}
-                      </div>
                       </div>
                     </div>
 

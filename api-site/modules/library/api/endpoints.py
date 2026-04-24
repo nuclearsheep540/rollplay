@@ -52,6 +52,7 @@ from .schemas import (
     UpdateImageConfigRequest,
     UpdateAudioConfigRequest,
     MediaAssetListResponse,
+    CampaignAssetsMetadataResponse,
     PresetResponse,
     PresetListResponse,
     CreatePresetRequest,
@@ -271,6 +272,31 @@ async def list_media_assets(
     except Exception as e:
         logger.error(f"List media assets error: {e}")
         raise HTTPException(status_code=500, detail="Failed to list media assets")
+
+
+@router.get("/campaigns/{campaign_id}/metadata", response_model=CampaignAssetsMetadataResponse)
+async def get_campaign_assets_metadata(
+    campaign_id: UUID,
+    current_user: UserAggregate = Depends(get_current_user_from_token),
+    repo: MediaAssetRepository = Depends(get_media_asset_repository),
+    campaign_repo: CampaignRepository = Depends(campaign_repository),
+) -> CampaignAssetsMetadataResponse:
+    """
+    Return aggregated metadata (count + total bytes) for the assets
+    associated with a campaign. Members-only — same access guard as the
+    campaign-filtered list endpoint above.
+    """
+    campaign = campaign_repo.get_by_id(campaign_id)
+    if not campaign or not campaign.is_member(current_user.id):
+        raise HTTPException(status_code=403, detail="Access denied - only campaign members can view campaign asset metadata")
+
+    assets = GetMediaAssetsByCampaign(repo).execute(campaign_id)
+
+    return CampaignAssetsMetadataResponse(
+        campaign_id=campaign_id,
+        asset_count=len(assets),
+        total_file_size=sum(a.file_size or 0 for a in assets),
+    )
 
 
 # ── Presets ──────────────────────────────────────────────────────────────────
