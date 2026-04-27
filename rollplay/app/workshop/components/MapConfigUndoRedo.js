@@ -3,16 +3,21 @@
 
 'use client';
 
+import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
+import { faRotateLeft, faRotateRight } from '@fortawesome/free-solid-svg-icons';
+
 const isMac = typeof navigator !== 'undefined'
   && /Mac|iPod|iPhone|iPad/.test(navigator.platform || '');
 const UNDO_HINT = isMac ? '⌘Z' : 'Ctrl+Z';
 const REDO_HINT = isMac ? '⇧⌘Z' : 'Ctrl+Shift+Z';
 
 /**
- * Two text buttons in the top context bar — undo + redo. Styled to
- * exactly match the Dashboard/Back navigation buttons that sit beside
- * them, so they read as part of the same bar. Tooltips name the
- * action so users can step back deliberately.
+ * Undo / Redo buttons for the top context bar.
+ *
+ * Mirrors the Dashboard / Back button structure exactly (flex layout,
+ * gap-2, FA icon + label span, same padding and border classes) so the
+ * icon renders the same way it does for those — that pattern is proven
+ * to work in this app, so we don't reinvent the wheel here.
  */
 export default function MapConfigUndoRedo({
   canUndo,
@@ -29,11 +34,7 @@ export default function MapConfigUndoRedo({
     ? `Redo: ${peekRedoLabel}  (${REDO_HINT})`
     : `Nothing to redo  (${REDO_HINT})`;
 
-  // Mirror Dashboard/Back exactly: same padding, same border, same
-  // text colour. Only difference: opacity dims when disabled.
-  // Using the HTML `disabled` attribute is fine here because the
-  // foreground is plain text — no SVG sizing weirdness like before.
-  const baseCls = 'px-2.5 py-1 text-xs rounded-sm border border-border text-content-on-dark hover:bg-surface-elevated transition-colors disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-transparent';
+  const baseCls = 'flex items-center gap-2 px-2.5 py-1 rounded-sm border border-border text-content-on-dark hover:bg-surface-elevated transition-colors disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-transparent';
 
   return (
     <>
@@ -46,7 +47,8 @@ export default function MapConfigUndoRedo({
           aria-label={undoTitle}
           className={baseCls}
         >
-          Undo
+          <FontAwesomeIcon icon={faRotateLeft} className="text-[10px]" />
+          <span className="text-xs">Undo</span>
         </button>
         <button
           type="button"
@@ -56,7 +58,8 @@ export default function MapConfigUndoRedo({
           aria-label={redoTitle}
           className={baseCls}
         >
-          Redo
+          <FontAwesomeIcon icon={faRotateRight} className="text-[10px]" />
+          <span className="text-xs">Redo</span>
         </button>
       </div>
       {/* Vertical separator so undo/redo reads as its own group, distinct
