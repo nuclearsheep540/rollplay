@@ -71,6 +71,7 @@ class MediaAssetResponse(BaseModel):
     grid_offset_y: Optional[int] = None
     grid_line_color: Optional[str] = None
     grid_cell_size: Optional[float] = None
+    fog_config: Optional[dict] = None  # { mask, mask_width, mask_height, version }
 
     # Audio fields (music + sfx)
     duration_seconds: Optional[float] = None
@@ -134,6 +135,19 @@ class UpdateGridConfigRequest(BaseModel):
     grid_offset_y: Optional[int] = Field(None, description="Whole-grid Y shift (image px)")
     grid_line_color: Optional[str] = Field(None, description="Grid line colour hex e.g. '#d1d5db'")
     grid_cell_size: Optional[float] = Field(None, ge=8, le=500, description="Cell size in native image pixels")
+
+
+class UpdateFogConfigRequest(BaseModel):
+    """Request to update map fog-of-war mask.
+
+    Atomic full-replace: the entire mask is provided on every update.
+    Pass mask=None to clear all fog. Per-pixel alpha in the PNG encodes
+    the actual fog shape — width/height are just bitmap bounds.
+    """
+    mask: Optional[str] = Field(None, min_length=1, description="Base64 PNG data URL or null to clear")
+    mask_width: Optional[int] = Field(None, ge=1, description="Bitmap width in pixels")
+    mask_height: Optional[int] = Field(None, ge=1, description="Bitmap height in pixels")
+    version: Optional[int] = Field(None, ge=1, description="Schema version (default 1)")
 
 
 class UpdateImageConfigRequest(BaseModel):

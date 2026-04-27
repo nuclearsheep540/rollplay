@@ -9,7 +9,7 @@ Uses SQLAlchemy joined table inheritance pattern.
 """
 
 from sqlalchemy import Column, Integer, Float, ForeignKey, String
-from sqlalchemy.dialects.postgresql import UUID
+from sqlalchemy.dialects.postgresql import JSONB, UUID
 
 from modules.library.model.asset_model import MediaAsset
 from modules.library.domain.media_asset_type import MediaAssetType
@@ -39,6 +39,11 @@ class MapAssetModel(MediaAsset):
     grid_offset_y = Column(Integer, nullable=True)
     grid_line_color = Column(String(20), nullable=True)  # hex colour e.g. "#d1d5db"
     grid_cell_size = Column(Float, nullable=True)  # absolute cell size in native image pixels
+
+    # Fog of war mask - NULL means no fog painted yet
+    # Shape: { mask: data-url string, mask_width: int, mask_height: int, version: int }
+    # See shared_contracts.map.FogConfig for the canonical contract.
+    fog_config = Column(JSONB, nullable=True)
 
     __mapper_args__ = {
         'polymorphic_identity': MediaAssetType.MAP,  # Enum value, not string

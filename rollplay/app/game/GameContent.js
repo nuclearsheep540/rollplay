@@ -28,6 +28,7 @@ import Modal from '@/app/shared/components/Modal';
 import { useWebSocket } from './hooks/useWebSocket';
 import { useUnifiedAudio } from '../audio_management';
 import { MapDisplay, useMapWebSocket, ImageDisplay, useImageWebSocket, useGridConfig } from '../map_management';
+import { useFogEngine, registerFogHandlers, createFogSendFunctions } from '../fog_management';
 import MapOverlayPanel from './components/MapOverlayPanel';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { faVolumeHigh, faVolumeXmark, faRightToBracket, faEye, faUpRightAndDownLeftFromCenter, faDownLeftAndUpRightToCenter, faCloudArrowDown, faRulerHorizontal, faUsers, faBookOpen } from '@fortawesome/free-solid-svg-icons';
@@ -222,6 +223,13 @@ export default function GameContent() {
   const [isMapLocked, setIsMapLocked] = useState(false);
   const [gridInspect, setGridInspect] = useState(false);
   const [gridInspectMode, setGridInspectMode] = useState('hold'); // 'hold' | 'toggle'
+
+  // Fog of war — engine owns the canvas (off-React, no flicker on re-render).
+  // Single instance lives at GameContent level so it outlives panel toggles
+  // and is shared between the map display (renders fog) and the DM panel
+  // (paints fog).
+  const fog = useFogEngine();
+  const [fogPaintMode, setFogPaintMode] = useState(false);
 
   // Shift key → grid inspect (hold mode: down=on, up=off; toggle mode: down=flip)
   useEffect(() => {
@@ -1172,6 +1180,47 @@ export default function GameContent() {
     sendMapRequest,
   } = useMapWebSocket(webSocket, isConnected, roomId, thisUserId, mapContext, registerHandler);
 
+  // Fog of war — register WS handler and build send function alongside map.
+  // Fog state never round-trips through React: incoming masks go straight
+  // into the engine canvas (decode-then-swap, no flicker).
+  useEffect(() => {
+    if (!registerHandler || !fog.engine) return;
+    return registerFogHandlers({ registerHandler, engine: fog.engine });
+  }, [registerHandler, fog.engine]);
+
+  const fogSenders = useMemo(
+    () => createFogSendFunctions(webSocket, isConnected),
+    [webSocket, isConnected]
+  );
+
+  // Hydrate the engine from the active map's persisted fog when the map
+  // loads or changes (cold→hot via ETL on session start, then live updates).
+  // Spread-don't-reconstruct: the engine consumes the whole serialised
+  // shape, so contract additions round-trip without cherry-picking.
+  useEffect(() => {
+    if (!fog.engine) return;
+    const incoming = activeMap?.map_config?.fog_config;
+    if (incoming?.mask) {
+      fog.loadDataUrl(incoming.mask);
+    } else {
+      fog.loadDataUrl(null); // clear if a new map has no fog
+    }
+  }, [activeMap?.map_config?.asset_id, activeMap?.map_config?.fog_config?.version, fog.engine]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // DM "Update fog" handler — serialises the engine canvas and broadcasts
+  const handleFogUpdate = useCallback(() => {
+    const filename = activeMap?.map_config?.filename;
+    if (!filename || !fog.engine) return;
+    fogSenders.sendFogUpdate(filename, fog.serialize());
+  }, [activeMap?.map_config?.filename, fog, fogSenders]);
+
+  const handleFogClearBroadcast = useCallback(() => {
+    const filename = activeMap?.map_config?.filename;
+    if (!filename || !fog.engine) return;
+    fog.clear();
+    fogSenders.sendFogUpdate(filename, null);
+  }, [activeMap?.map_config?.filename, fog, fogSenders]);
+
   // Image management WebSocket hook
   const imageContext = {
     setActiveImage,
@@ -1978,6 +2027,11 @@ export default function GameContent() {
                   sendMapLoad={sendMapLoad}
                   sendMapClear={sendMapClear}
                   onTuningModeChange={setTuningMode}
+                  fog={fog}
+                  fogPaintMode={fogPaintMode}
+                  setFogPaintMode={setFogPaintMode}
+                  onFogUpdate={handleFogUpdate}
+                  onFogClearBroadcast={handleFogClearBroadcast}
                 />
               )}
               {activeRightDrawer === 'image' && isDM && (
@@ -2047,11 +2101,13 @@ export default function GameContent() {
               onMapImageChange={handleMapImageChange}
               liveGridOpacity={grid.gridOpacity}
               gridConfig={effectiveGridConfig}
-              isMapLocked={isMapLocked}
+              isMapLocked={isMapLocked || (isDM && fogPaintMode)}
               gridInspect={gridInspect}
               offsetX={grid.offset.x}
               offsetY={grid.offset.y}
               onImageLoad={setMapNaturalDimensions}
+              fogEngine={fog.engine}
+              fogPaintMode={isDM && fogPaintMode}
             />
           )}
 

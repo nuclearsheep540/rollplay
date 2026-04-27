@@ -7,6 +7,7 @@
 
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import GridOverlay from './GridOverlay';
+import { FogCanvasLayer } from '@/app/fog_management';
 import { useAssetDownload } from '@/app/shared/providers/AssetDownloadManager';
 
 const clamp = (val, min, max) => Math.min(max, Math.max(min, val));
@@ -28,6 +29,8 @@ const MapDisplay = ({
   offsetX = 0,
   offsetY = 0,
   onImageLoad = null, // fires with { naturalWidth, naturalHeight } when map image loads
+  fogEngine = null,    // FogEngine instance (shared across game runtime)
+  fogPaintMode = false, // when true, fog layer captures pointer events for DM painting
 }) => {
   const mapImageRef = useRef(null);
   const containerRef = useRef(null);
@@ -225,7 +228,7 @@ const MapDisplay = ({
         </div>
       )}
 
-      {/* Transformed content — map image and grid overlay pan/zoom together */}
+      {/* Transformed content — map image, fog overlay, and grid pan/zoom together */}
       <div ref={contentRef} style={contentTransform}>
         <img
           ref={mapImageRef}
@@ -237,6 +240,15 @@ const MapDisplay = ({
             if (onImageLoad) onImageLoad({ naturalWidth: img.naturalWidth, naturalHeight: img.naturalHeight });
           }}
         />
+
+        {/* Fog of war — sits between the map image and the grid. */}
+        {fogEngine && mapLoaded && (
+          <FogCanvasLayer
+            engine={fogEngine}
+            mapImageRef={mapImageRef}
+            paintMode={fogPaintMode}
+          />
+        )}
 
         {showGrid && (
           <GridOverlay

@@ -30,6 +30,28 @@ class GridConfig(ContractModel):
     grid_cell_size: Optional[float] = None  # Absolute cell size in native image pixels; None = not yet tuned
 
 
+class FogConfig(ContractModel):
+    """Fog of war mask for a map.
+
+    The mask is a base64-encoded PNG data URL (with the
+    `data:image/png;base64,` prefix). Alpha channel is meaningful:
+    opaque pixels are fog, transparent pixels are revealed. Complex
+    fog shapes (holes, disconnected regions, soft edges) are
+    encoded entirely in the per-pixel alpha pattern —
+    mask_width/mask_height are just the rectangular bounds of the
+    bitmap, not a geometric description.
+
+    Resolution is chosen by the painter (typically 25–50% of the
+    map's native dimensions); the renderer scales the mask to the
+    map image's display size on the client.
+    """
+
+    mask: Optional[str] = Field(default=None, min_length=1)  # data URL
+    mask_width: Optional[int] = Field(default=None, ge=1)
+    mask_height: Optional[int] = Field(default=None, ge=1)
+    version: int = 1
+
+
 class MapConfig(ContractModel):
     """Map state for ETL boundary (session start/end)."""
 
@@ -39,4 +61,5 @@ class MapConfig(ContractModel):
     file_path: str = Field(..., min_length=1)  # Presigned S3 URL
     file_size: Optional[int] = None  # Size in bytes
     grid_config: Optional[GridConfig] = None
+    fog_config: Optional[FogConfig] = None
     map_image_config: Optional[Dict[str, Any]] = None  # Opaque to contracts, owned by frontend

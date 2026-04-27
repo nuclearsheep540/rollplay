@@ -399,6 +399,52 @@ class UpdateGridConfig:
         return asset
 
 
+class UpdateFogConfig:
+    """
+    Replace the fog-of-war mask on a map asset (atomic full-replace).
+
+    The mask is a base64 PNG data URL whose alpha channel encodes the
+    fog shape; mask=None clears all fog. Per the codebase's atomic-state
+    rule, we never patch individual fields — the bitmap and its
+    dimensions must always agree.
+    """
+
+    def __init__(self, repository: MediaAssetRepository, session_repository: SessionRepository = None):
+        self.repository = repository
+        self.session_repository = session_repository
+
+    def execute(
+        self,
+        asset_id: UUID,
+        user_id: UUID,
+        mask: Optional[str] = None,
+        mask_width: Optional[int] = None,
+        mask_height: Optional[int] = None,
+        version: Optional[int] = None,
+    ) -> MapAsset:
+        asset = self.repository.get_by_id(asset_id)
+        if not asset:
+            raise ValueError(f"Media asset {asset_id} not found")
+
+        if not asset.is_owned_by(user_id):
+            raise ValueError("Cannot modify media asset owned by another user")
+
+        if not isinstance(asset, MapAsset):
+            raise ValueError("Fog configuration only applies to map assets")
+
+        if self.session_repository:
+            check_asset_in_active_session(asset.campaign_ids, self.session_repository)
+
+        asset.update_fog_config(
+            mask=mask,
+            mask_width=mask_width,
+            mask_height=mask_height,
+            version=version,
+        )
+        self.repository.save(asset)
+        return asset
+
+
 class UpdateAudioConfig:
     """
     Update audio configuration for a music or SFX asset.

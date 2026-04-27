@@ -372,6 +372,7 @@ class StartSession:
             file_path=fresh_url,
             file_size=map_asset.file_size,
             grid_config=map_asset.build_grid_config_for_game() if isinstance(map_asset, MapAsset) else None,
+            fog_config=map_asset.build_fog_config_for_game() if isinstance(map_asset, MapAsset) else None,
         )
 
     @staticmethod
@@ -694,16 +695,21 @@ async def _extract_and_sync_game_state(
             map_asset_id = final_state.map_state.asset_id
             map_config = {"asset_id": map_asset_id}
 
-            # Sync grid config back to MapAsset (ETL: hot → cold)
-            if final_state.map_state.grid_config and asset_repo:
+            # Sync grid + fog config back to MapAsset (ETL: hot → cold)
+            if asset_repo and (final_state.map_state.grid_config or final_state.map_state.fog_config is not None):
                 try:
                     map_asset = asset_repo.get_by_id(UUID(map_asset_id))
                     if map_asset and isinstance(map_asset, MapAsset):
-                        map_asset.update_grid_config_from_game(final_state.map_state.grid_config)
+                        if final_state.map_state.grid_config:
+                            map_asset.update_grid_config_from_game(final_state.map_state.grid_config)
+                        # Fog persists explicit None as "cleared" — only call when the
+                        # runtime actually carried a fog value through the session.
+                        if hasattr(final_state.map_state, "fog_config"):
+                            map_asset.update_fog_config_from_game(final_state.map_state.fog_config)
                         asset_repo.save(map_asset)
-                        logger.info(f"Synced grid config back to MapAsset {map_asset_id}")
+                        logger.info(f"Synced grid+fog config back to MapAsset {map_asset_id}")
                 except Exception as e:
-                    logger.warning(f"Failed to sync grid config for map {map_asset_id}: {e}")
+                    logger.warning(f"Failed to sync map config for {map_asset_id}: {e}")
         logger.info(f"Extracted map config: {'has map' if map_config else 'no active map'}")
 
         # Extract image config (asset_id + display config for session persistence)

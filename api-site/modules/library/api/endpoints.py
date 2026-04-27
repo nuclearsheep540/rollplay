@@ -28,7 +28,7 @@ from modules.session.repositories.session_repository import SessionRepository
 from modules.library.domain.media_asset_type import MediaAssetType
 from modules.library.application.commands import (
     ConfirmUpload, DeleteMediaAsset, AssociateWithCampaign, RenameMediaAsset,
-    ChangeAssetType, UpdateGridConfig, UpdateAudioConfig, UpdateImageConfig, AssetInUseError,
+    ChangeAssetType, UpdateGridConfig, UpdateFogConfig, UpdateAudioConfig, UpdateImageConfig, AssetInUseError,
     CreatePreset, RenamePreset, UpdatePresetSlots, DeletePreset,
     PresetNameConflictError, PresetNotFoundError, InvalidPresetAssetError,
 )
@@ -49,6 +49,7 @@ from .schemas import (
     RenameRequest,
     ChangeTypeRequest,
     UpdateGridConfigRequest,
+    UpdateFogConfigRequest,
     UpdateImageConfigRequest,
     UpdateAudioConfigRequest,
     MediaAssetListResponse,
@@ -101,6 +102,7 @@ def _to_media_asset_response(asset, s3_service: S3Service = None) -> MediaAssetR
             grid_offset_y=asset.grid_offset_y,
             grid_line_color=asset.grid_line_color,
             grid_cell_size=asset.grid_cell_size,
+            fog_config=asset.fog_config,
         )
     elif isinstance(asset, MusicAsset):
         fields.update(
@@ -610,6 +612,55 @@ async def update_grid_config(
     except Exception as e:
         logger.error(f"Update grid config error: {e}")
         raise HTTPException(status_code=500, detail="Failed to update grid configuration")
+
+
+@router.patch("/{asset_id}/fog", response_model=MediaAssetResponse)
+async def update_fog_config(
+    asset_id: UUID,
+    request: UpdateFogConfigRequest,
+    current_user: UserAggregate = Depends(get_current_user_from_token),
+    repo: MediaAssetRepository = Depends(get_media_asset_repository),
+    session_repo: SessionRepository = Depends(get_session_repository),
+    s3_service: S3Service = Depends(get_s3_service)
+) -> MediaAssetResponse:
+    """
+    Replace the fog-of-war mask on a map asset (atomic full-replace).
+
+    The mask is a base64 PNG data URL whose alpha channel encodes the
+    fog shape. Pass mask=null to clear. The map's persistent fog state
+    is reloaded into the next live session via ETL.
+    """
+    try:
+        command = UpdateFogConfig(repo, session_repo)
+        asset = command.execute(
+            asset_id=asset_id,
+            user_id=current_user.id,
+            mask=request.mask,
+            mask_width=request.mask_width,
+            mask_height=request.mask_height,
+            version=request.version,
+        )
+
+        # Avoid logging the full mask payload — only the shape metadata.
+        logger.info(
+            f"Updated fog config for map {asset_id}: "
+            f"painted={asset.has_fog_config()} "
+            f"size={request.mask_width}x{request.mask_height}"
+        )
+
+        return _to_media_asset_response(asset, s3_service)
+
+    except AssetInUseError as e:
+        logger.warning(f"Update fog config blocked (in-use): {e}")
+        raise HTTPException(status_code=409, detail=str(e))
+    except ValueError as e:
+        logger.warning(f"Update fog config failed: {e}")
+        raise HTTPException(status_code=400, detail=str(e))
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Update fog config error: {e}")
+        raise HTTPException(status_code=500, detail="Failed to update fog configuration")
 
 
 @router.patch("/{asset_id}/audio-config", response_model=MediaAssetResponse)

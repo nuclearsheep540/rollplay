@@ -168,6 +168,47 @@ class MapService:
             logger.error(f"Failed to update map config for room {room_id}: {e}")
             return False
     
+    def update_fog_config(self, room_id: str, filename: str,
+                          fog_config: Optional[Dict[str, Any]]) -> bool:
+        """Replace the fog-of-war mask on the active map for a room.
+
+        Atomic: writes the entire fog_config object (or None to clear)
+        in a single $set on `map_config.fog_config`. The bitmap and
+        its dimensions must always agree, so we never patch sub-fields
+        independently.
+        """
+        if self.collection is None:
+            logger.error("No database connection available")
+            return False
+
+        try:
+            existing_map = self.collection.find_one(
+                {"room_id": room_id, "map_config.filename": filename, "active": True}
+            )
+            if not existing_map:
+                logger.error(f"❌ No active map found for room {room_id}, filename {filename}")
+                return False
+
+            # Don't log the full mask payload — just the metadata.
+            meta = (
+                f"{fog_config.get('mask_width')}x{fog_config.get('mask_height')} "
+                f"v{fog_config.get('version')}"
+                if fog_config else "cleared"
+            )
+            logger.info(f"🌫️  Updating fog_config for room {room_id} ({filename}): {meta}")
+
+            result = self.collection.update_one(
+                {"room_id": room_id, "map_config.filename": filename, "active": True},
+                {"$set": {"map_config.fog_config": fog_config}}
+            )
+
+            logger.info(f"✅ Fog update result - matched: {result.matched_count}, modified: {result.modified_count}")
+            return result.matched_count > 0
+
+        except Exception as e:
+            logger.error(f"Failed to update fog config for room {room_id}: {e}")
+            return False
+
     def update_complete_map(self, room_id: str, updated_map: Dict[str, Any]) -> bool:
         """Replace entire map object atomically"""
         if self.collection is None:

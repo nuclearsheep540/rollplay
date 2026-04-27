@@ -13,7 +13,7 @@ from shared_contracts.character import DungeonMaster, PlayerCharacter, SessionUs
 from shared_contracts.display import ActiveDisplayType
 from shared_contracts.cine import ColorFilterOverlay, FilmGrainOverlay, HandHeldMotion, MotionConfig
 from shared_contracts.image import ImageConfig
-from shared_contracts.map import GridColorMode, GridConfig, MapConfig
+from shared_contracts.map import FogConfig, GridColorMode, GridConfig, MapConfig
 from shared_contracts.session import (
     PlayerState,
     SessionEndFinalState,
@@ -108,6 +108,45 @@ class TestMapRoundTrip:
             file_path="https://s3.example.com/dungeon.png",
             grid_config=GridConfig(),
             map_image_config={"brightness": 1.2, "contrast": 0.9},
+        )
+        assert MapConfig.model_validate(config.model_dump()) == config
+
+    def test_fog_config_defaults_round_trip(self):
+        config = FogConfig()
+        assert FogConfig.model_validate(config.model_dump()) == config
+        assert config.mask is None
+        assert config.version == 1
+
+    def test_fog_config_round_trip(self):
+        config = FogConfig(
+            mask="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNgAAIAAAUAAen63NgAAAAASUVORK5CYII=",
+            mask_width=512,
+            mask_height=384,
+            version=2,
+        )
+        assert FogConfig.model_validate(config.model_dump()) == config
+
+    def test_fog_config_rejects_unknown_fields(self):
+        with pytest.raises(ValidationError):
+            FogConfig(mask="data:image/png;base64,abc", strokes=[])
+
+    def test_fog_config_rejects_zero_dimensions(self):
+        with pytest.raises(ValidationError):
+            FogConfig(mask_width=0)
+        with pytest.raises(ValidationError):
+            FogConfig(mask_height=0)
+
+    def test_map_config_with_fog_round_trip(self):
+        config = MapConfig(
+            asset_id="map-1",
+            filename="dungeon.png",
+            file_path="https://s3.example.com/dungeon.png",
+            grid_config=GridConfig(),
+            fog_config=FogConfig(
+                mask="data:image/png;base64,iVBORw0KGgo=",
+                mask_width=256,
+                mask_height=256,
+            ),
         )
         assert MapConfig.model_validate(config.model_dump()) == config
 

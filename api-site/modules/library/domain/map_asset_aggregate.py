@@ -10,10 +10,10 @@ Grid configuration is stored on the asset itself, making it reusable across camp
 
 from dataclasses import dataclass
 from datetime import datetime
-from typing import List, Optional, Union
+from typing import Any, Dict, List, Optional, Union
 from uuid import UUID, uuid4
 
-from shared_contracts.map import GridColorMode, GridConfig
+from shared_contracts.map import FogConfig, GridColorMode, GridConfig
 
 from modules.library.domain.asset_aggregate import MediaAssetAggregate
 from modules.library.domain.media_asset_type import MediaAssetType
@@ -35,6 +35,7 @@ class MapAsset(MediaAssetAggregate):
     grid_offset_y: Optional[int] = None
     grid_line_color: Optional[str] = None
     grid_cell_size: Optional[float] = None
+    fog_config: Optional[Dict[str, Any]] = None  # { mask, mask_width, mask_height, version }
 
     @classmethod
     def create(
@@ -87,7 +88,8 @@ class MapAsset(MediaAssetAggregate):
         grid_offset_x: Optional[int] = None,
         grid_offset_y: Optional[int] = None,
         grid_line_color: Optional[str] = None,
-        grid_cell_size: Optional[float] = None
+        grid_cell_size: Optional[float] = None,
+        fog_config: Optional[Dict[str, Any]] = None,
     ) -> "MapAsset":
         """
         Promote a base MediaAssetAggregate to MapAsset.
@@ -111,7 +113,8 @@ class MapAsset(MediaAssetAggregate):
             grid_offset_x=grid_offset_x,
             grid_offset_y=grid_offset_y,
             grid_line_color=grid_line_color,
-            grid_cell_size=grid_cell_size
+            grid_cell_size=grid_cell_size,
+            fog_config=fog_config,
         )
 
     def update_grid_config(
@@ -227,3 +230,61 @@ class MapAsset(MediaAssetAggregate):
         self.grid_height = None
         self.grid_opacity = None
         self.updated_at = datetime.utcnow()
+
+    # ── Fog of war ──────────────────────────────────────────────────────
+
+    def update_fog_config(
+        self,
+        mask: Optional[str] = None,
+        mask_width: Optional[int] = None,
+        mask_height: Optional[int] = None,
+        version: Optional[int] = None,
+    ) -> None:
+        """Replace the fog mask atomically. Pass mask=None to clear.
+
+        The mask is a data URL (PNG, base64) — its alpha channel encodes
+        the fog shape. We replace the whole config object on every call
+        rather than patching individual fields, because the bitmap and
+        its dimensions must always agree.
+        """
+        if mask is None:
+            self.fog_config = None
+        else:
+            self.fog_config = {
+                "mask": mask,
+                "mask_width": mask_width,
+                "mask_height": mask_height,
+                "version": version if version is not None else 1,
+            }
+        self.updated_at = datetime.utcnow()
+
+    def has_fog_config(self) -> bool:
+        return self.fog_config is not None and bool(self.fog_config.get("mask"))
+
+    def get_fog_config(self) -> Optional[Dict[str, Any]]:
+        return self.fog_config
+
+    def build_fog_config_for_game(self) -> Optional[FogConfig]:
+        """Build the fog contract for the api-game ETL boundary.
+
+        Returns None if no fog has been painted, so the contract layer
+        can omit `fog_config` entirely on session start.
+        """
+        if not self.has_fog_config():
+            return None
+        return FogConfig.model_validate(self.fog_config)
+
+    def update_fog_config_from_game(self, game_fog_config: Optional[FogConfig]) -> None:
+        """Inverse of build_fog_config_for_game(). Persists the final
+        runtime fog state back onto the asset on session end. None means
+        the runtime cleared the fog — propagate that to PSQL.
+        """
+        if game_fog_config is None:
+            self.update_fog_config(mask=None)
+            return
+        self.update_fog_config(
+            mask=game_fog_config.mask,
+            mask_width=game_fog_config.mask_width,
+            mask_height=game_fog_config.mask_height,
+            version=game_fog_config.version,
+        )

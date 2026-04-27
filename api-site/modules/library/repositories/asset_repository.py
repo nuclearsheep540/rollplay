@@ -149,6 +149,7 @@ class MediaAssetRepository:
                 existing.grid_offset_y = aggregate.grid_offset_y
                 existing.grid_line_color = aggregate.grid_line_color
                 existing.grid_cell_size = aggregate.grid_cell_size
+                existing.fog_config = aggregate.fog_config
 
             # Update music-specific fields if MusicAsset
             if isinstance(aggregate, MusicAsset) and isinstance(existing, MusicAssetModel):
@@ -202,7 +203,8 @@ class MediaAssetRepository:
                     grid_offset_x=aggregate.grid_offset_x,
                     grid_offset_y=aggregate.grid_offset_y,
                     grid_line_color=aggregate.grid_line_color,
-                    grid_cell_size=aggregate.grid_cell_size
+                    grid_cell_size=aggregate.grid_cell_size,
+                    fog_config=aggregate.fog_config,
                 )
             elif isinstance(aggregate, MusicAsset):
                 model = MusicAssetModel(
@@ -309,7 +311,7 @@ class MediaAssetRepository:
             updated_at=model.updated_at
         )
 
-        # If it's a MapAssetModel, promote to MapAsset with grid fields
+        # If it's a MapAssetModel, promote to MapAsset with grid + fog fields
         if isinstance(model, MapAssetModel):
             return MapAsset.from_base(
                 base,
@@ -319,7 +321,8 @@ class MediaAssetRepository:
                 grid_offset_x=model.grid_offset_x,
                 grid_offset_y=model.grid_offset_y,
                 grid_line_color=model.grid_line_color,
-                grid_cell_size=model.grid_cell_size
+                grid_cell_size=model.grid_cell_size,
+                fog_config=model.fog_config,
             )
 
         # If it's a MusicAssetModel, promote to MusicAsset with audio fields

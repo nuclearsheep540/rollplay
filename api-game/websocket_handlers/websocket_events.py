@@ -1305,6 +1305,45 @@ class WebsocketEvent():
             return WebsocketEventResult(broadcast_message={"error": f"Failed to update map config: {str(e)}"})
     
     @staticmethod
+    async def fog_config_update(websocket, data, event_data, user_id, client_id, manager):
+        """Replace the fog-of-war mask on the active map (atomic full-replace).
+
+        Payload shape:
+            { filename: str, fog_config: { mask, mask_width, mask_height, version } | null }
+
+        fog_config=None clears the fog. Per the codebase's atomic state
+        rule, the full mask travels in a single message; players replace
+        their canvas in one paint to honour the no-flicker contract.
+        """
+        room_id = client_id
+        filename = event_data.get("filename")
+        fog_config = event_data.get("fog_config")
+
+        if not room_id or not filename:
+            print(f"❌ Invalid fog config update: missing room_id or filename")
+            return WebsocketEventResult(broadcast_message={"error": "Invalid fog config update"})
+
+        try:
+            success = map_service.update_fog_config(room_id, filename, fog_config)
+            if success:
+                broadcast = {
+                    "event_type": "fog_config_update",
+                    "data": {
+                        "filename": filename,
+                        "fog_config": fog_config,
+                        "updated_by": user_id,
+                    },
+                }
+                return WebsocketEventResult(broadcast_message=broadcast)
+            else:
+                print(f"❌ No fog config updated for room {room_id} (no active map)")
+                return WebsocketEventResult(broadcast_message={"info": "No fog config updated"})
+
+        except Exception as e:
+            print(f"❌ Error updating fog config for room {room_id}: {e}")
+            return WebsocketEventResult(broadcast_message={"error": f"Failed to update fog config: {str(e)}"})
+
+    @staticmethod
     async def map_request(websocket, data, event_data, user_id, client_id, manager):
         """Request current active map (for new players joining)"""
         room_id = client_id  # Use client_id as room_id
