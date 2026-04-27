@@ -11,6 +11,15 @@ import React from 'react';
  * Pure presentational: receives state + callbacks, never reaches into
  * the engine directly. Layout is intentionally lightweight so it slots
  * cleanly into either the in-game DM drawer or the workshop preview.
+ *
+ * `showModeToggle` controls whether the paint/reveal toggle buttons
+ * render here. In contexts where a tool palette already owns mode
+ * selection (the workshop's left toolbar), set this to false so the
+ * panel stays focused on brush + bulk ops + save/discard.
+ *
+ * `showEnableToggle` controls the "enable painting" gate — same idea:
+ * when the host already owns paint-mode activation (a tool palette
+ * implies it), drop the gate.
  */
 export default function FogPaintControls({
   paintMode = false,
@@ -25,13 +34,15 @@ export default function FogPaintControls({
   onUpdate = null,
   onResetToServer = null,  // discard local edits, reload from last known server state
   disabled = false,
+  showModeToggle = true,
+  showEnableToggle = true,
 }) {
   return (
     <div className="space-y-2">
       {/* Paint mode toggle — gates pointer events on the canvas.
           Active state uses solid amber fill + ring; inactive uses an
           outlined neutral so it's unambiguous which state we're in. */}
-      {onPaintModeToggle && (
+      {showEnableToggle && onPaintModeToggle && (
         <button
           type="button"
           onClick={() => onPaintModeToggle(!paintMode)}
@@ -49,6 +60,7 @@ export default function FogPaintControls({
       {/* Paint vs Reveal — exclusive selection. Active gets a saturated
           fill in its mode colour (rose for paint, sky for reveal) plus
           a ring; inactive is just an outline so the choice is obvious. */}
+      {showModeToggle && (
       <div className="flex gap-2">
         <button
           type="button"
@@ -77,6 +89,7 @@ export default function FogPaintControls({
           🩹  Reveal
         </button>
       </div>
+      )}
 
       {/* Brush size slider */}
       <label className="block text-xs text-rose-200/80">
