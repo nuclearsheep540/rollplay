@@ -25,18 +25,6 @@ export default function WorkshopManager({ user }) {
 
   return (
     <div className="flex flex-col h-full">
-      {/* Header */}
-      <div className="flex items-center justify-between mb-8">
-        <div>
-          <h1 className="text-4xl font-bold font-[family-name:var(--font-metamorphous)] text-content-bold">
-            Workshop
-          </h1>
-          <p className="mt-2 text-content-primary">
-            Prepare and configure your assets before game sessions
-          </p>
-        </div>
-      </div>
-
       {/* Tool grid */}
       <WorkshopToolNav activeTool={null} onToolChange={handleToolSelect} />
     </div>

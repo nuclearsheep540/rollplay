@@ -554,12 +554,6 @@ export default function CharacterManager({ user, onExpandedChange }) {
 
   return (
     <div className="flex flex-col h-full">
-      {/* Header - flex-shrink-0 to maintain size, reduced margin when expanded */}
-      <div className={`flex-shrink-0 ${selectedCharacter ? 'mb-4' : 'mb-8'}`}>
-        <h1 className="text-4xl font-bold font-[family-name:var(--font-metamorphous)]" style={{color: THEME.textBold}}>Character Management</h1>
-        <p className="mt-2" style={{color: THEME.textPrimary}}>Create and manage your adventurers</p>
-      </div>
-
       {/* Loading/Error states */}
       {loading && renderLoading()}
       {!loading && error && renderError()}

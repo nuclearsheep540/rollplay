@@ -8,7 +8,7 @@ MediaAsset Repository - Data access layer for MediaAsset aggregate
 from typing import List, Optional, Union
 from uuid import UUID
 from sqlalchemy.orm import Session as DbSession, with_polymorphic
-from sqlalchemy import any_
+from sqlalchemy import any_, func
 
 from modules.library.model.asset_model import MediaAsset as MediaAssetModel
 from modules.library.model.map_asset_model import MapAssetModel
@@ -19,6 +19,7 @@ import logging
 
 from modules.library.domain.cine_config import MotionConfig
 from modules.library.domain.asset_aggregate import MediaAssetAggregate
+from modules.library.domain.asset_metadata import CampaignAssetsMetadata
 from modules.library.domain.map_asset_aggregate import MapAsset
 from modules.library.domain.music_asset_aggregate import MusicAsset
 from modules.library.domain.sfx_asset_aggregate import SfxAsset
@@ -70,6 +71,27 @@ class MediaAssetRepository:
             .all()
         )
         return [self._model_to_aggregate(model) for model in models]
+
+    def get_campaign_assets_metadata(self, campaign_id: UUID) -> CampaignAssetsMetadata:
+        """Aggregate count + total file size for assets associated with a
+        campaign. Computed via `SELECT COUNT(id), SUM(file_size)` so no
+        rows are materialised in Python — returns a single domain value
+        object regardless of how many assets are linked to the campaign.
+        `COALESCE(SUM(...), 0)` covers the empty-set case where SUM
+        would otherwise return NULL.
+        """
+        result = (
+            self.db.query(
+                func.count(MediaAssetModel.id),
+                func.coalesce(func.sum(MediaAssetModel.file_size), 0),
+            )
+            .filter(MediaAssetModel.campaign_ids.any(campaign_id))
+            .first()
+        )
+        return CampaignAssetsMetadata(
+            asset_count=result[0] or 0,
+            total_file_size=int(result[1] or 0),
+        )
 
     def get_by_campaign_id_and_type(
         self,

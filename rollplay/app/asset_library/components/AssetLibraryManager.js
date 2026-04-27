@@ -261,18 +261,6 @@ export default function AssetLibraryManager({ user }) {
 
   return (
     <div className="flex flex-col h-full">
-      {/* Header */}
-      <div className="flex items-center justify-between mb-8">
-        <div>
-          <h1 className="text-4xl font-bold font-[family-name:var(--font-metamorphous)] text-content-bold">
-            Asset Library
-          </h1>
-          <p className="mt-2 text-content-primary">
-            Manage your media assets and domain objects for game sessions
-          </p>
-        </div>
-      </div>
-
       {/* Category Tabs (Top Level) */}
       <div className="flex items-center mb-4">
         <div className="flex gap-4">

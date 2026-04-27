@@ -5,10 +5,35 @@
 
 'use client'
 
+import { useLayoutEffect, useRef, useState } from 'react'
 import { TabGroup, TabList, Tab } from '@headlessui/react'
+import { COLORS } from '@/app/styles/colorTheme'
+
+// Active-tab highlight — a gold-glow bar under the selected tab.
+// Every tab slot gets the same width (tabs use `flex-1`), so the
+// highlight's own width is a constant fraction of the slot — the bar
+// looks identical on every tab, just at a different x-position.
+const HIGHLIGHT_THICKNESS = 4
+// Highlight spans the full tab slot width — matches the slot edge to
+// edge so adjacent tabs' highlights would touch if both were active.
+const HIGHLIGHT_WIDTH_RATIO = 1.0
+// Warm ornamental gold — matches the tone we used when the nav had a
+// gilded character. Flanked by the onyx ink at each end so the
+// highlight "fades into" the base rule.
+const HIGHLIGHT_GOLD = '#b08a3e'
+
+// Matches the page background (`smoke`). Used as the diamond's fill in
+// its inactive ("hollow") state so the diamond visually punches a gap
+// in the rule running behind it.
+const PAGE_BG = COLORS.smoke
 
 /**
- * Accessible tab navigation built on Headless UI TabGroup.
+ * Accessible tab navigation built on Headless UI TabGroup — rendered as
+ * a dark frieze with diamond pips straddling its bottom edge and labels
+ * sitting above. Tabs share the nav width equally (flex-1), so the
+ * active-tab highlight — a gold-glow bar under the selected label — is
+ * the same length on every tab, just re-positioned when the selection
+ * changes.
  *
  * Provides: role="tablist" / role="tab", arrow key navigation,
  * aria-selected on active tab.
@@ -19,22 +44,211 @@ import { TabGroup, TabList, Tab } from '@headlessui/react'
  */
 export default function TabNav({ tabs, activeTab, onTabChange }) {
   const selectedIndex = tabs.findIndex((t) => t.id === activeTab)
+  const activeIdx = selectedIndex === -1 ? 0 : selectedIndex
+
+  // Refs + state for measuring the active tab. We measure the *tab's*
+  // bounding rect (not the label) so every tab produces the same
+  // highlight width — since tabs use `flex-1`, every tab slot has
+  // identical geometry. The label ref walks up to its parent Tab
+  // button via `parentElement`.
+  const containerRef = useRef(null)
+  const labelRefs = useRef([])
+  const [highlight, setHighlight] = useState({ left: 0, width: 0 })
+
+  useLayoutEffect(() => {
+    function measure() {
+      const container = containerRef.current
+      const label = labelRefs.current[activeIdx]
+      const tab = label?.parentElement
+      if (!container || !tab) return
+      const c = container.getBoundingClientRect()
+      const t = tab.getBoundingClientRect()
+      const width = t.width * HIGHLIGHT_WIDTH_RATIO
+      const tabCenterX = (t.left - c.left) + (t.width / 2)
+      setHighlight({ left: tabCenterX - width / 2, width })
+    }
+    measure()
+    window.addEventListener('resize', measure)
+    return () => window.removeEventListener('resize', measure)
+  }, [activeIdx])
 
   return (
-    <TabGroup
-      selectedIndex={selectedIndex === -1 ? 0 : selectedIndex}
-      onChange={(index) => onTabChange(tabs[index].id)}
-    >
-      <TabList className="flex border-b border-border">
-        {tabs.map((tab) => (
-          <Tab
-            key={tab.id}
-            className="flex-1 py-4 px-6 text-base font-[family-name:var(--font-metamorphous)] border-b-2 transition-all duration-200 outline-none text-content-secondary border-transparent data-[selected]:text-content-on-dark data-[selected]:border-border-active data-[hover]:text-content-on-dark"
-          >
-            {tab.label}
-          </Tab>
-        ))}
-      </TabList>
-    </TabGroup>
+    // `overflow-x-hidden` contains the 100 vw dark panel bleed so it
+    // can't spawn a page-level horizontal scrollbar.
+    <div className="w-full overflow-x-hidden">
+      <TabGroup
+        selectedIndex={selectedIndex === -1 ? 0 : selectedIndex}
+        onChange={(index) => onTabChange(tabs[index].id)}
+      >
+        {/* Container is capped at 1410 px to match the dashboard's
+            content frame — the highlight bar's measurement + the
+            labels are positioned relative to this frame. The dark
+            panel underneath bleeds past it to the viewport edges. */}
+        <div
+          ref={containerRef}
+          // `z-10` raises the whole nav above sibling elements in the
+          // page (notably the expanded campaign tile below) so the
+          // diamond pips — which overhang the panel's bottom edge and
+          // intentionally overlap the tile — paint on top of the
+          // tile's hero rather than being covered by it.
+          className="relative z-10 mx-auto max-w-[1410px] pt-3 px-6"
+        >
+          {/* Dark nav panel — bleeds full viewport. Bottom edge sits
+              at the container's outer bottom, which is also where the
+              main content area begins below. That sharp bottom edge
+              replaces the old onyx rule as the divider between the
+              nav and the content below. Diamonds straddle the edge
+              (see their `top: 9px` offset below): upper halves inside
+              the panel, lower halves hanging over the tile via the
+              `z-10` above.
+              The 2 px overflow on each side compensates for a sub-px
+              rounding quirk where `100vw` computes to 1 px less than
+              the actual viewport width on some displays. */}
+          <div
+            aria-hidden="true"
+            className="absolute pointer-events-none"
+            style={{
+              left: 'calc(50% - 50vw - 2px)',
+              width: 'calc(100vw + 4px)',
+              top: 0,
+              bottom: 0,
+              backgroundColor: COLORS.carbon,
+            }}
+          />
+
+          {/* Active-tab highlight — positioned + sized from a runtime
+              measurement of the active label. Soft-faded at the ends
+              to echo the base rule's tapered terminals. */}
+          <div
+            aria-hidden="true"
+            className="absolute pointer-events-none"
+            style={{
+              left: `${highlight.left}px`,
+              width: `${highlight.width}px`,
+              // Centred on the container's outer bottom — same y as
+              // the dark panel's bottom edge and the diamond centres
+              // (after the 9 px downward shift applied on the SVGs).
+              bottom: `calc(0px - ${HIGHLIGHT_THICKNESS / 2}px)`,
+              height: `${HIGHLIGHT_THICKNESS}px`,
+              // Gold glow in the middle fading to transparent at the
+              // ends — reads as a bloom sitting on the dark panel's
+              // bottom edge, straddling the boundary between panel
+              // and page.
+              background: `linear-gradient(to right, transparent 0%, ${HIGHLIGHT_GOLD} 25%, ${HIGHLIGHT_GOLD} 75%, transparent 100%)`,
+              maskImage:
+                'linear-gradient(to right, transparent 0%, black 12%, black 88%, transparent 100%)',
+              WebkitMaskImage:
+                'linear-gradient(to right, transparent 0%, black 12%, black 88%, transparent 100%)',
+            }}
+          />
+
+          <TabList className="relative flex items-end">
+            {tabs.map((tab, i) => (
+              <Tab
+                key={tab.id}
+                // `flex-1` gives every tab equal share of the TabList
+                // width — label + diamond stay centred inside their
+                // slot via `items-center`. Uniform slot geometry means
+                // the highlight bar below measures to the same width
+                // regardless of which tab is active.
+                className="group relative z-10 flex-1 flex flex-col items-center gap-0 outline-none cursor-pointer"
+              >
+                {({ selected, hover, focus }) => {
+                  const isActiveLike = selected
+                  return (
+                    <>
+                      {/* Label sits above the rule. Opacity steps are
+                          tuned to read as assertive nav, not decoration:
+                          0.75 inactive, 0.9 hover/focus, 1 active. */}
+                      <span
+                        ref={(el) => { labelRefs.current[i] = el }}
+                        className="text-xl font-[family-name:var(--font-metamorphous)] uppercase transition-colors duration-200"
+                        style={{
+                          // Labels now sit on a dark panel, so the
+                          // palette flips: smoke (cream) for active,
+                          // silver for inactive — mirror of the
+                          // onyx/graphite pairing that worked on the
+                          // light bg. Hovering an inactive tab
+                          // intensifies to full opacity for clear
+                          // interactive feedback.
+                          color: isActiveLike ? COLORS.smoke : COLORS.silver,
+                          opacity: isActiveLike ? 1 : (hover || focus) ? 1 : 0.85,
+                          // Metamorphous ships a single weight (400). To
+                          // nudge the visual weight up without loading
+                          // another font file, paint a thin stroke in
+                          // the same colour as the fill — reads as a
+                          // half-weight step toward semibold. Kept
+                          // subtle (0.4 px) so letterforms don't lose
+                          // their hand-drawn quality.
+                          WebkitTextStroke: `0.4px ${isActiveLike ? COLORS.smoke : COLORS.silver}`,
+                        }}
+                      >
+                        {tab.label}
+                      </span>
+                      {/* Diamond pip sits on the rule — hollow
+                          rhombus filled with page bg (covers the
+                          rule underneath). The active tab gets a
+                          small onyx centre-dot; all other states are
+                          plain. Same colours + size in every state —
+                          only the dot presence + highlight-line
+                          gradient differentiate selected from not. */}
+                      {/* Two tricks keep the diamond's visual centre
+                          exactly on the container's outer bottom (=
+                          panel/tile boundary) while making the nav
+                          shorter:
+                          - `marginBottom: -4px` pulls the Tab's
+                            content-bottom 4 px into the diamond's
+                            layout footprint, so the container ends up
+                            4 px shorter than the diamond's layout
+                            height would imply.
+                          - `top: 5px` shifts the diamond visually
+                            down by (9 − 4) = 5 px. Combined with the
+                            margin trick, the visual centre lands at
+                            the new (shorter) container outer bottom.
+                          Net: nav 4 px shorter, straddle geometry
+                          preserved. */}
+                      <svg
+                        width="18"
+                        height="18"
+                        viewBox="0 0 22 22"
+                        style={{
+                          position: 'relative',
+                          top: '5px',
+                          marginBottom: '-4px',
+                          // Scale up the active diamond for emphasis.
+                          // `transform` keeps the layout footprint
+                          // identical so the nav height doesn't
+                          // jump — the straddle geometry just grows
+                          // symmetrically around the visual centre.
+                          transform: isActiveLike ? 'scale(1.35)' : undefined,
+                          transformOrigin: 'center',
+                          // Stacked drop-shadows on the SVG follow the
+                          // polygon's alpha silhouette, so the glow is
+                          // diamond-shaped rather than a generic round
+                          // halo. Three tiers: tight inner bloom, mid
+                          // halo, wide ambient — each fading in alpha
+                          // as they grow to keep the falloff smooth.
+                          filter: isActiveLike
+                            ? `drop-shadow(0 0 6px rgba(176, 138, 62, 0.55)) drop-shadow(0 0 8px rgba(176, 138, 62, 0.55)) drop-shadow(0 0 18px rgba(176, 138, 62, 0.3))`
+                            : undefined,
+                        }}
+                      >
+                        <polygon
+                          points="11,1.5 20.5,11 11,20.5 1.5,11"
+                          fill={isActiveLike ? HIGHLIGHT_GOLD : PAGE_BG}
+                          stroke={COLORS.carbon}
+                          strokeWidth="3"
+                          strokeLinejoin="miter"
+                        />
+                      </svg>
+                    </>
+                  )
+                }}
+              </Tab>
+            ))}
+          </TabList>
+        </div>
+      </TabGroup>
+    </div>
   )
 }

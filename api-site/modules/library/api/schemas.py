@@ -114,6 +114,17 @@ class MediaAssetListResponse(BaseModel):
     total: int
 
 
+class CampaignAssetsMetadataResponse(BaseModel):
+    """Aggregated metadata for a campaign's asset library — count and
+    total bytes across all assets associated with the campaign. Used by
+    the dashboard campaign hero to surface "N assets · X MB" without
+    pulling the full asset list.
+    """
+    campaign_id: UUID
+    asset_count: int = Field(..., ge=0, description="Number of assets linked to the campaign")
+    total_file_size: int = Field(..., ge=0, description="Sum of asset file sizes in bytes")
+
+
 class UpdateGridConfigRequest(BaseModel):
     """Request to update map grid configuration"""
     grid_width: Optional[int] = Field(None, ge=1, le=1000, description="Grid width in cells")
