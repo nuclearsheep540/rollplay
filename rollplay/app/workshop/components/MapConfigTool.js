@@ -3,13 +3,14 @@
 
 'use client'
 
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
-import { faArrowLeft, faHouse, faFileImport, faFloppyDisk, faArrowRotateLeft } from '@fortawesome/free-solid-svg-icons';
+import { faArrowLeft, faHouse, faFileImport, faFloppyDisk } from '@fortawesome/free-solid-svg-icons';
 import { useRouter } from 'next/navigation';
 import { authFetch } from '@/app/shared/utils/authFetch';
 import AssetPicker from './AssetPicker';
 import MapConfigToolbar from './MapConfigToolbar';
+import MapConfigUndoRedo from './MapConfigUndoRedo';
 import WorkshopGridControls from './WorkshopGridControls';
 import FileMenuBar from './FileMenuBar';
 import { MapDisplay } from '@/app/map_management';
@@ -17,6 +18,7 @@ import { useGridConfig } from '@/app/map_management/hooks/useGridConfig';
 import { useUpdateGridConfig } from '../hooks/useUpdateGridConfig';
 import { useUpdateFogConfig } from '../hooks/useUpdateFogConfig';
 import { useFogEngine, FogPaintControls } from '@/app/fog_management';
+import { useActionHistory } from '@/app/shared/hooks/useActionHistory';
 
 const VALID_TOOLS = ['move', 'grid', 'paint', 'erase'];
 
@@ -24,6 +26,27 @@ async function fetchAssetById(assetId) {
   const response = await authFetch(`/api/library/${assetId}`, { method: 'GET' });
   if (!response.ok) return null;
   return response.json();
+}
+
+// Pull the same flat grid shape that grid.toFlatConfig() produces and
+// the /grid PATCH endpoint accepts. Symmetric before/after for undo.
+function extractGridFlat(asset) {
+  if (!asset) return null;
+  return {
+    grid_width: asset.grid_width ?? null,
+    grid_height: asset.grid_height ?? null,
+    grid_cell_size: asset.grid_cell_size ?? null,
+    grid_offset_x: asset.grid_offset_x ?? null,
+    grid_offset_y: asset.grid_offset_y ?? null,
+    grid_opacity: asset.grid_opacity ?? null,
+    grid_line_color: asset.grid_line_color ?? null,
+  };
+}
+
+// Pull the FogConfig contract shape from the asset response. null when
+// the map has no saved fog (so undo back to "no fog" round-trips).
+function extractFog(asset) {
+  return asset?.fog_config ?? null;
 }
 
 /**
@@ -65,6 +88,68 @@ export default function MapConfigTool({
 
   const tool = VALID_TOOLS.includes(activeTool) ? activeTool : 'move';
 
+  // ── Action history (undo/redo) ─────────────────────────────────────
+  // Two action kinds with different semantics:
+  //   save_grid  — server PATCH + local sync. Created on Save Grid click.
+  //   fog_stroke — local canvas swap only, no server. Created on every
+  //                stroke / fill / clear in the fog tool.
+  // Fog "Save" is a server commit, intentionally not in the history.
+  // The strokes are the undo unit; the save just publishes the current
+  // canvas state.
+  const handlers = useMemo(() => ({
+    save_grid: {
+      apply: async (payload) => {
+        if (!payload) {
+          throw new Error('save_grid: clearing grid is not yet supported');
+        }
+        const updated = await gridUpdateMutation.mutateAsync({
+          assetId: selectedAsset?.id,
+          gridConfig: payload,
+        });
+        grid.initFromConfig(payload);
+        setSelectedAsset(prev => ({ ...prev, ...updated }));
+      },
+    },
+    fog_stroke: {
+      // payload is a base64 PNG data URL — the snapshot to restore.
+      apply: async (payload) => {
+        await fog.loadDataUrl(payload);
+        // Always mark dirty after an undo/redo: the canvas now diverges
+        // from whatever the last server commit was, even if it happens
+        // to coincide. Easier to enable "Save Fog" defensively than to
+        // track equality with the server snapshot.
+        if (fog.engine) fog.engine.setDirty(true);
+      },
+    },
+  }), [selectedAsset?.id, grid, fog, gridUpdateMutation]);
+
+  const history = useActionHistory({ handlers, capacity: 10 });
+
+  // Subscribe to the engine's strokeend event. Each completed stroke
+  // (or fill/clear bulk op) produces a typed `fog_stroke` action with
+  // before/after canvas snapshots.
+  useEffect(() => {
+    if (!fog.engine) return;
+    const onStrokeEnd = ({ before, after, kind }) => {
+      const labelByKind = {
+        paint: 'Paint stroke',
+        erase: 'Reveal stroke',
+        fill: 'Fill all',
+        clear: 'Clear all',
+        stroke: 'Fog stroke',
+      };
+      history.push({
+        kind: 'fog_stroke',
+        label: labelByKind[kind] || 'Fog stroke',
+        timestamp: Date.now(),
+        before,
+        after,
+      });
+    };
+    fog.engine.on('strokeend', onStrokeEnd);
+    return () => fog.engine.off('strokeend', onStrokeEnd);
+  }, [fog.engine, history]);
+
   // ── Asset loading ──────────────────────────────────────────────────
 
   useEffect(() => {
@@ -75,6 +160,7 @@ export default function MapConfigTool({
       setFogSaveSuccess(false);
       gridUpdateMutation.reset();
       fogUpdateMutation.reset();
+      history.clear();
       return;
     }
     if (selectedAsset?.id === selectedAssetId) return;
@@ -87,6 +173,7 @@ export default function MapConfigTool({
       setFogSaveSuccess(false);
       gridUpdateMutation.reset();
       fogUpdateMutation.reset();
+      history.clear(); // a different asset means a different history
 
       const assetData = await fetchAssetById(selectedAssetId);
       if (cancelled) return;
@@ -142,24 +229,41 @@ export default function MapConfigTool({
   }, [tool]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Save handlers ──────────────────────────────────────────────────
+  // Each successful save pushes a typed action to history with both
+  // sides captured (before = pre-save server state, after = post-save).
+  // Undo replays `before` via the matching handler; redo replays `after`.
 
   const handleGridSave = async () => {
     if (!selectedAsset) return;
     setGridSaveSuccess(false);
+    const before = extractGridFlat(selectedAsset);
+    const after = grid.toFlatConfig();
     try {
       const updatedAsset = await gridUpdateMutation.mutateAsync({
         assetId: selectedAsset.id,
-        gridConfig: grid.toFlatConfig(),
+        gridConfig: after,
       });
       setSelectedAsset(prev => ({ ...prev, ...updatedAsset }));
       setGridSaveSuccess(true);
       setTimeout(() => setGridSaveSuccess(false), 3000);
-    } catch {}
+      history.push({
+        kind: 'save_grid',
+        label: `Save grid (${after.grid_width}×${after.grid_height})`,
+        timestamp: Date.now(),
+        before,
+        after: extractGridFlat(updatedAsset),
+      });
+    } catch (err) {
+      // eslint-disable-next-line no-console
+      console.error('[mapconfig] grid save failed:', err);
+    }
   };
 
   const handleFogSave = async () => {
     if (!selectedAsset || !fog.engine) return;
     setFogSaveSuccess(false);
+    // Save is a server commit only — strokes are the undo unit, so
+    // this intentionally does not push to history.
     try {
       const updatedAsset = await fogUpdateMutation.mutateAsync({
         assetId: selectedAsset.id,
@@ -168,13 +272,32 @@ export default function MapConfigTool({
       setSelectedAsset(prev => ({ ...prev, ...updatedAsset }));
       setFogSaveSuccess(true);
       setTimeout(() => setFogSaveSuccess(false), 3000);
-    } catch {}
+    } catch (err) {
+      // eslint-disable-next-line no-console
+      console.error('[mapconfig] fog save failed:', err);
+    }
   };
 
-  const handleFogResetToServer = async () => {
-    const remoteMask = selectedAsset?.fog_config?.mask;
-    await fog.loadDataUrl(remoteMask || null);
-  };
+  // ── Keyboard shortcuts: ⌘Z / ⇧⌘Z (Ctrl on non-mac) ─────────────────
+
+  const handleUndoClick = useCallback(() => { history.undo(); }, [history]);
+  const handleRedoClick = useCallback(() => { history.redo(); }, [history]);
+
+  useEffect(() => {
+    const onKey = (e) => {
+      // Ignore when typing in form fields — the editor in those
+      // contexts owns Cmd+Z (e.g. text undo inside a color hex input).
+      const tag = (document.activeElement?.tagName || '').toLowerCase();
+      if (tag === 'input' || tag === 'textarea' || document.activeElement?.isContentEditable) return;
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'z') {
+        e.preventDefault();
+        if (e.shiftKey) handleRedoClick();
+        else handleUndoClick();
+      }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [handleUndoClick, handleRedoClick]);
 
   // ── Derived state for the preview ──────────────────────────────────
 
@@ -211,12 +334,6 @@ export default function MapConfigTool({
       onClick: handleFogSave,
       disabled: !isFogTool || !selectedAsset || !fog.isDirty || fogUpdateMutation.isPending,
     },
-    {
-      label: 'Discard Fog Changes',
-      icon: faArrowRotateLeft,
-      onClick: handleFogResetToServer,
-      disabled: !isFogTool || !selectedAsset || !fog.isDirty,
-    },
   ];
 
   // ── Render ─────────────────────────────────────────────────────────
@@ -251,6 +368,9 @@ export default function MapConfigTool({
         backLabel={backLabel}
         fileMenuItems={fileMenuItems}
         title={selectedAsset.filename}
+        history={history}
+        onUndo={handleUndoClick}
+        onRedo={handleRedoClick}
       />
 
       <div className="flex-1 min-h-0 flex">
@@ -316,7 +436,8 @@ export default function MapConfigTool({
                 onClear={fog.clear}
                 onFillAll={fog.fillAll}
                 onUpdate={handleFogSave}
-                onResetToServer={handleFogResetToServer}
+                /* No onResetToServer — the workshop's Discard role is
+                   replaced by the global undo at the top of the tool. */
                 disabled={fogUpdateMutation.isPending}
               />
               {fogSaveSuccess && (
@@ -340,7 +461,7 @@ export default function MapConfigTool({
 
 // ── Top bar ──────────────────────────────────────────────────────────
 
-function TopBar({ onBack, backLabel, fileMenuItems, title }) {
+function TopBar({ onBack, backLabel, fileMenuItems, title, history, onUndo, onRedo }) {
   const router = useRouter();
   return (
     <>
@@ -355,6 +476,16 @@ function TopBar({ onBack, backLabel, fileMenuItems, title }) {
           )}
         </div>
         <div className="flex items-center gap-2">
+          {history && (
+            <MapConfigUndoRedo
+              canUndo={history.canUndo}
+              canRedo={history.canRedo}
+              onUndo={onUndo}
+              onRedo={onRedo}
+              peekUndoLabel={history.peekUndoLabel}
+              peekRedoLabel={history.peekRedoLabel}
+            />
+          )}
           <button
             onClick={() => router.push('/dashboard')}
             className="flex items-center gap-2 px-2.5 py-1 rounded-sm border border-border text-content-secondary hover:bg-surface-elevated hover:text-content-on-dark transition-colors"

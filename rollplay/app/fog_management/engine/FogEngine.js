@@ -37,6 +37,8 @@ export default class FogEngine extends EventEmitter {
     this._brushSize = DEFAULT_BRUSH_PX;
     this._mode = 'paint'; // 'paint' | 'erase'
     this._isDirty = false;
+    this._strokeBefore = null;     // snapshot at beginStroke()
+    this._strokeKindHint = null;   // descriptive label set on beginStroke
   }
 
   // ── Read-only state ────────────────────────────────────────────────
@@ -139,11 +141,48 @@ export default class FogEngine extends EventEmitter {
     ctx.restore();
   }
 
+  // ── Stroke lifecycle (for undo/redo) ──────────────────────────────
+
+  /**
+   * Mark the start of a discrete user action (a stroke, a fill, a
+   * clear). Captures a "before" snapshot the matching endStroke() can
+   * pair with. Calling beginStroke() while one is already in progress
+   * is a no-op so nested calls don't lose the original baseline.
+   */
+  beginStroke(kindHint = 'stroke') {
+    if (!this._canvas) return;
+    if (this._strokeBefore) return;        // already mid-stroke
+    this._strokeBefore = this.toDataUrl();
+    this._strokeKindHint = kindHint;
+  }
+
+  /**
+   * Mark the end of a discrete user action. Emits 'strokeend' with the
+   * before/after canvas snapshots so subscribers (undo history) can
+   * push a typed action. Returns the snapshot pair, or null if no
+   * stroke was open or the canvas didn't actually change.
+   */
+  endStroke() {
+    if (!this._canvas || !this._strokeBefore) return null;
+    const before = this._strokeBefore;
+    const after = this.toDataUrl();
+    const kind = this._strokeKindHint || 'stroke';
+    this._strokeBefore = null;
+    this._strokeKindHint = null;
+    if (before === after) return null;     // no-op stroke (click without drag, etc.)
+    const payload = { before, after, kind };
+    this.emit('strokeend', payload);
+    return payload;
+  }
+
   // ── Bulk ops ──────────────────────────────────────────────────────
+  // Bulk ops are auto-wrapped in begin/end so they emit strokeend like
+  // a normal user stroke. Subscribers don't need to special-case them.
 
   /** Cover the whole map in opaque fog. */
   fillAll() {
     if (!this._ctx) return;
+    this.beginStroke('fill');
     const ctx = this._ctx;
     ctx.save();
     ctx.globalCompositeOperation = 'source-over';
@@ -152,13 +191,26 @@ export default class FogEngine extends EventEmitter {
     ctx.restore();
     this._isDirty = true;
     this.emit('change');
+    this.endStroke();
   }
 
   /** Wipe the canvas to fully transparent (no fog anywhere). */
   clear() {
     if (!this._ctx) return;
+    this.beginStroke('clear');
     this._ctx.clearRect(0, 0, this._canvas.width, this._canvas.height);
     this._isDirty = true;
+    this.emit('change');
+    this.endStroke();
+  }
+
+  /**
+   * Force isDirty to a specific value. Used when undo/redo swaps the
+   * canvas to a snapshot — the resulting state may or may not match
+   * the last server commit, so the caller decides.
+   */
+  setDirty(value) {
+    this._isDirty = !!value;
     this.emit('change');
   }
 

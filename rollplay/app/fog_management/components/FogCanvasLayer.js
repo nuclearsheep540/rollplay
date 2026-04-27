@@ -97,6 +97,10 @@ export default function FogCanvasLayer({
     const point = screenToMask(e.clientX, e.clientY);
     if (!point) return;
     try { wrapperRef.current.setPointerCapture(e.pointerId); } catch {}
+    // Open a stroke on the engine BEFORE the first dab — the engine
+    // captures a "before" snapshot here that pairs with the snapshot
+    // taken on endStroke. The undo system listens for `strokeend`.
+    engine.beginStroke(engine.mode); // 'paint' or 'erase' as the kind hint
     isPaintingRef.current = true;
     lastPointRef.current = point;
     engine.paintStroke([point]);
@@ -117,7 +121,8 @@ export default function FogCanvasLayer({
     isPaintingRef.current = false;
     lastPointRef.current = null;
     try { wrapperRef.current.releasePointerCapture(e.pointerId); } catch {}
-  }, []);
+    if (engine) engine.endStroke(); // emits 'strokeend' for the undo subscriber
+  }, [engine]);
 
   // Render the wrapper unconditionally — even at 0×0 — so the ref is
   // attached on first render and the mount-canvas effect can append the
