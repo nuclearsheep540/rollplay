@@ -713,8 +713,15 @@ export default function CampaignManager({ user, onExpandedChange, inviteCampaign
       width: '100%',
       minHeight: 0,
       maxHeight: 0,
-      borderWidth: 0,
+      // Explicit per-side widths instead of the `borderWidth`
+      // shorthand — GSAP can clobber individual side overrides when
+      // both shorthand + per-side are tweened together (the `2`
+      // shorthand was leaking onto the top, leaving a thin lighter
+      // border line at the hero/drawer seam).
       borderTopWidth: 0,
+      borderRightWidth: 0,
+      borderBottomWidth: 0,
+      borderLeftWidth: 0,
       duration,
       ease,
       onComplete() { gsap.set(this.targets(), { visibility: 'hidden', pointerEvents: 'none' }) },
@@ -805,13 +812,15 @@ export default function CampaignManager({ user, onExpandedChange, inviteCampaign
         width: '100vw',
         minHeight: drawerHeightTarget,
         maxHeight: drawerHeightTarget * 3,
-        borderWidth: 2,
-        // Top border stays at 0 — the drawer sits directly under the
-        // card's bottom outline, and a 2 px top border in a different
-        // colour from the outline reads as a visible seam. Keeping
-        // the top flush lets the card's outline be the only line at
-        // the boundary.
+        // Explicit per-side widths — using the `borderWidth: 2`
+        // shorthand alongside `borderTopWidth: 0` caused GSAP to
+        // write the shorthand AFTER the per-side override, leaving a
+        // 2 px top border in `borderSubtle` colour visible at the
+        // seam. Per-side properties only ⇒ no shorthand conflict.
         borderTopWidth: 0,
+        borderRightWidth: 2,
+        borderBottomWidth: 2,
+        borderLeftWidth: 2,
         duration,
         ease,
         overwrite: 'auto',
@@ -1338,18 +1347,26 @@ export default function CampaignManager({ user, onExpandedChange, inviteCampaign
                     />
 
                     {/* Bottom gradient fade — only visible when the
-                        card is expanded. Transitions the hero's lower
-                        edge into the drawer's panel colour so the
-                        seam feels like one continuous surface and
-                        subtly hints that there's more content below
-                        the fold (the CTA drawer). */}
+                        card is expanded. Fades the hero's lower edge
+                        into the drawer's panel colour (`bgPanel` =
+                        `#1F1F1F`) so the seam reads as one continuous
+                        surface and subtly hints there's content below
+                        the fold (the CTA drawer).
+                        Using `rgba(31, 31, 31, 0)` rather than
+                        `transparent` for the start stop — the
+                        `transparent` keyword resolves to transparent
+                        *black*, which makes the interpolation walk
+                        through pure black in the middle of the fade
+                        and reads as a darker hump rather than a clean
+                        fade. Keeping the same hue throughout keeps
+                        the alpha curve clean. */}
                     {isSelected && (
                       <div
                         aria-hidden="true"
                         className="absolute left-0 right-0 bottom-0 pointer-events-none rounded-b-sm"
                         style={{
                           height: '120px',
-                          background: `linear-gradient(to bottom, transparent 0%, ${THEME.bgPanel} 100%)`,
+                          background: 'linear-gradient(to bottom, rgba(31, 31, 31, 0) 0%, #1F1F1F 100%)',
                           zIndex: 0,
                         }}
                       />
@@ -1718,7 +1735,15 @@ export default function CampaignManager({ user, onExpandedChange, inviteCampaign
                       borderRadius: '0.125rem',
                       borderTopLeftRadius: '0',
                       borderTopRightRadius: '0',
-                      // visibility + pointer-events owned by GSAP:
+                      // The dashboard's page background is `smoke`
+                      // (light cream) — the dark hero + drawer are
+                      // surfaces sitting on top. A 1 px sub-pixel gap
+                      // between them shows the cream page bg through
+                      // and reads as a lighter hairline at the seam.
+                      // Pull the drawer up slightly so its bg overlaps
+                      // the card's bottom and absorbs any rounding
+                      // gap.
+                      marginTop: '-2px',
                       // flipped visible/auto before expand, back to
                       // hidden/none after collapse.
                       pointerEvents: 'none',
