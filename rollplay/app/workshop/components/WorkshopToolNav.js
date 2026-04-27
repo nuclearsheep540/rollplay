@@ -2,22 +2,14 @@
 /* SPDX-License-Identifier: GPL-3.0-or-later */
 
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
-import { faMap, faImage, faMusic, faShieldHalved, faClapperboard, faCloud } from '@fortawesome/free-solid-svg-icons';
+import { faMap, faImage, faMusic, faShieldHalved, faClapperboard } from '@fortawesome/free-solid-svg-icons';
 
 const TOOLS = [
   {
     id: 'maps',
     label: 'Map Config',
-    description: 'Grid overlays and alignment',
+    description: 'Grid overlays, fog of war, and alignment',
     icon: faMap,
-    image: '/ui/map_config.webp',
-    enabled: true,
-  },
-  {
-    id: 'fog',
-    label: 'Fog Mask',
-    description: 'Paint and reveal fog of war on your maps',
-    icon: faCloud,
     image: '/ui/map_config.webp',
     enabled: true,
   },

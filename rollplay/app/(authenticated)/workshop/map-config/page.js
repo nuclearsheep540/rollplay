@@ -10,6 +10,12 @@ import { useRouter, useSearchParams } from 'next/navigation'
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
 import { faArrowLeft, faHouse } from '@fortawesome/free-solid-svg-icons'
 import MapGridTool from '@/app/workshop/components/MapGridTool'
+import FogMaskTool from '@/app/workshop/components/FogMaskTool'
+
+const SUBTOOLS = [
+  { id: 'grid', label: 'Grid' },
+  { id: 'fog', label: 'Fog of War' },
+]
 
 // Site chrome (header, auth gate, WebSocket subscription, Suspense for
 // useSearchParams) is provided by the (authenticated) route group's
@@ -18,6 +24,9 @@ export default function MapConfigPage() {
   const router = useRouter()
   const searchParams = useSearchParams()
   const selectedAssetId = searchParams.get('asset_id')
+  const subtool = SUBTOOLS.some(t => t.id === searchParams.get('tool'))
+    ? searchParams.get('tool')
+    : 'grid'
 
   // Capture the entry point once on mount (library vs workshop navigation)
   const entryFromRef = useRef(null)
@@ -25,22 +34,23 @@ export default function MapConfigPage() {
     entryFromRef.current = searchParams.get('from') || 'workshop'
   }
 
-  // Back label is contextual:
-  //   Index view (no asset selected) → "Workshop" (back to tool grid)
-  //   Detail view from workshop      → "Map Config" (back to index)
-  //   Detail view from library       → "Library" (back to library)
   const backLabel = !selectedAssetId
     ? 'Workshop'
     : entryFromRef.current === 'library' ? 'Library' : 'Map Config'
 
-  // URL is the source of truth for asset selection.
+  // URL is the source of truth for both asset and subtool selection.
   // Browser back/forward navigates between states naturally.
   const handleAssetSelect = (assetId) => {
     if (assetId) {
-      router.push(`/workshop/map-config?asset_id=${assetId}`)
+      router.push(`/workshop/map-config?asset_id=${assetId}&tool=${subtool}`)
     } else {
       router.push('/workshop/map-config')
     }
+  }
+
+  const handleSubtoolChange = (toolId) => {
+    if (!selectedAssetId) return
+    router.push(`/workshop/map-config?asset_id=${selectedAssetId}&tool=${toolId}`)
   }
 
   return (
@@ -51,7 +61,7 @@ export default function MapConfigPage() {
             Map Config
           </h1>
           <p className="mt-1 text-sm text-content-primary">
-            Configure grid overlays and alignment for your maps
+            Configure grids, alignment, and fog of war for your maps
           </p>
         </div>
         <div className="flex items-center gap-2">
@@ -74,11 +84,42 @@ export default function MapConfigPage() {
         </div>
       </div>
 
+      {/* Subtool tabs only appear once a map has been picked — picking
+          an asset is shared between the grid and fog tools, so the
+          tabs only make sense in the per-asset detail view. */}
+      {selectedAssetId && (
+        <div className="mb-4 flex items-center gap-1 border-b border-border">
+          {SUBTOOLS.map((t) => {
+            const active = t.id === subtool
+            return (
+              <button
+                key={t.id}
+                onClick={() => handleSubtoolChange(t.id)}
+                className={`px-4 py-2 text-sm font-medium rounded-t-sm border-b-2 transition-colors ${
+                  active
+                    ? 'border-border-active text-content-on-dark'
+                    : 'border-transparent text-content-secondary hover:text-content-on-dark'
+                }`}
+              >
+                {t.label}
+              </button>
+            )
+          })}
+        </div>
+      )}
+
       <div className="flex-1 min-h-0">
-        <MapGridTool
-          selectedAssetId={selectedAssetId}
-          onAssetSelect={handleAssetSelect}
-        />
+        {subtool === 'fog' ? (
+          <FogMaskTool
+            selectedAssetId={selectedAssetId}
+            onAssetSelect={handleAssetSelect}
+          />
+        ) : (
+          <MapGridTool
+            selectedAssetId={selectedAssetId}
+            onAssetSelect={handleAssetSelect}
+          />
+        )}
       </div>
     </main>
   )
