@@ -242,6 +242,17 @@ class RenameMediaAsset:
 class ChangeAssetType:
     """
     Change a media asset's type tag (e.g. map <-> image).
+
+    This is a transactional joined-table row migration:
+      - The asset_type column on media_assets flips to the new type.
+      - The old subtype joined-row (e.g. image_assets) is DELETEd.
+      - A fresh subtype joined-row (e.g. map_assets) is INSERTed.
+    All in one DB transaction.
+
+    Subtype-specific config (grid_width on a map, image_fit on an image,
+    audio loop points, etc.) is **intentionally discarded** on type
+    change — semantically the user is saying this is a different kind
+    of asset now. Callers should not assume those fields survive.
     """
 
     def __init__(self, repository: MediaAssetRepository, session_repository: SessionRepository = None):
@@ -258,7 +269,10 @@ class ChangeAssetType:
             new_type: The new asset type
 
         Returns:
-            Updated MediaAssetAggregate
+            Freshly-loaded MediaAssetAggregate of the new type. The
+            in-memory aggregate that existed before this call is stale
+            (still the old Python subclass) — discard it and use the
+            return value.
 
         Raises:
             ValueError: If asset not found, not owned by user, or invalid type change
@@ -274,10 +288,27 @@ class ChangeAssetType:
         if self.session_repository:
             check_asset_in_active_session(asset.campaign_ids, self.session_repository)
 
-        asset.change_type(new_type)
-        self.repository.save(asset)
+        # Coerce + content-type validation. change_type() also mutates
+        # the in-memory aggregate, but we discard that aggregate and
+        # refetch below so the mutation is harmless.
+        if isinstance(new_type, str):
+            new_type = MediaAssetType(new_type)
 
-        return asset
+        old_type = asset.asset_type
+        if old_type == new_type:
+            return asset  # no-op; callers can rely on idempotency
+
+        asset.change_type(new_type)  # raises ValueError on incompatible content type
+
+        # Atomic SQL row migration — see MediaAssetRepository.change_subtype
+        self.repository.change_subtype(asset_id, old_type, new_type)
+
+        # Refetch so the returned aggregate has the correct Python
+        # subclass and a clean default subtype-field state.
+        refreshed = self.repository.get_by_id(asset_id)
+        if not refreshed:
+            raise ValueError(f"Media asset {asset_id} disappeared mid-change")
+        return refreshed
 
 
 class AssociateWithCampaign:

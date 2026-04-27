@@ -8,7 +8,7 @@ MediaAsset Repository - Data access layer for MediaAsset aggregate
 from typing import List, Optional, Union
 from uuid import UUID
 from sqlalchemy.orm import Session as DbSession, with_polymorphic
-from sqlalchemy import any_, func
+from sqlalchemy import any_, func, text
 
 from modules.library.model.asset_model import MediaAsset as MediaAssetModel
 from modules.library.model.map_asset_model import MapAssetModel
@@ -27,6 +27,16 @@ from modules.library.domain.image_asset_aggregate import ImageAsset
 from modules.library.domain.media_asset_type import MediaAssetType
 
 logger = logging.getLogger(__name__)
+
+
+# Each polymorphic identity → its joined-table name. Drives the row-migration
+# done by change_subtype when an asset's type tag is changed.
+_SUBTYPE_TABLES = {
+    MediaAssetType.MAP: 'map_assets',
+    MediaAssetType.MUSIC: 'music_assets',
+    MediaAssetType.SFX: 'sfx_assets',
+    MediaAssetType.IMAGE: 'image_assets',
+}
 
 
 class MediaAssetRepository:
@@ -280,6 +290,60 @@ class MediaAssetRepository:
 
         self.db.commit()
         return aggregate.id
+
+    def change_subtype(
+        self,
+        asset_id: UUID,
+        old_type: MediaAssetType,
+        new_type: MediaAssetType,
+    ) -> None:
+        """Migrate joined-table rows when an asset's type tag changes.
+
+        Three SQL statements committed in one transaction:
+          1. UPDATE media_assets SET asset_type = :new
+          2. DELETE FROM <old_subtype>_assets WHERE id = :id
+          3. INSERT INTO <new_subtype>_assets (id) VALUES (:id)
+
+        Subtype-specific data (grid config on a map, image_fit on an
+        image, loop points on a music asset, etc.) is intentionally
+        discarded — semantically the user has reclassified the asset
+        and the per-type config no longer applies.
+
+        Caller must refetch the asset afterwards: the in-memory
+        aggregate is still the *old* Python subclass, but a fresh
+        get_by_id() returns one of the new type via polymorphic
+        dispatch.
+        """
+        if old_type == new_type:
+            return
+
+        old_table = _SUBTYPE_TABLES.get(old_type)
+        new_table = _SUBTYPE_TABLES.get(new_type)
+
+        # Use ON CONFLICT in the INSERT so a (rare) pre-existing
+        # destination row is left untouched rather than failing the
+        # whole transaction. Cleanup of any such stragglers is a
+        # separate audit concern.
+        self.db.execute(
+            text("UPDATE media_assets SET asset_type = :new WHERE id = :id"),
+            {'new': new_type.value, 'id': asset_id},
+        )
+        if old_table:
+            self.db.execute(
+                text(f"DELETE FROM {old_table} WHERE id = :id"),
+                {'id': asset_id},
+            )
+        if new_table:
+            self.db.execute(
+                text(f"INSERT INTO {new_table} (id) VALUES (:id) ON CONFLICT (id) DO NOTHING"),
+                {'id': asset_id},
+            )
+        self.db.commit()
+        logger.info(
+            f"change_subtype: asset {asset_id} migrated "
+            f"{old_type.value} → {new_type.value} "
+            f"(rows: -{old_table or '∅'} +{new_table or '∅'})"
+        )
 
     def delete(self, asset_id: UUID) -> bool:
         """Delete media asset by ID"""
