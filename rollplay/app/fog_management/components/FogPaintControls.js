@@ -28,32 +28,37 @@ export default function FogPaintControls({
 }) {
   return (
     <div className="space-y-2">
-      {/* Paint mode toggle — gates pointer events on the canvas */}
+      {/* Paint mode toggle — gates pointer events on the canvas.
+          Active state uses solid amber fill + ring; inactive uses an
+          outlined neutral so it's unambiguous which state we're in. */}
       {onPaintModeToggle && (
         <button
           type="button"
           onClick={() => onPaintModeToggle(!paintMode)}
           disabled={disabled}
-          className={`w-full text-sm rounded px-3 py-2 border transition-all duration-100 ${
+          className={`w-full text-sm rounded px-3 py-2 border-2 transition-all duration-100 ${
             paintMode
-              ? 'bg-amber-500/30 border-amber-400/60 text-amber-100'
-              : 'bg-rose-900/50 border-rose-400/50 text-rose-100 hover:brightness-125'
+              ? 'bg-amber-500 border-amber-300 text-slate-900 font-semibold shadow-md ring-2 ring-amber-400/60'
+              : 'bg-transparent border-slate-500 text-slate-300 hover:border-slate-400 hover:text-slate-100'
           } disabled:opacity-50 disabled:cursor-not-allowed`}
         >
-          {paintMode ? '✏️  Painting active — click to disable' : '🎨  Enable painting'}
+          {paintMode ? '✏️  Painting active — click to disable' : '🎨  Click to enable painting'}
         </button>
       )}
 
-      {/* Paint vs Erase */}
+      {/* Paint vs Reveal — exclusive selection. Active gets a saturated
+          fill in its mode colour (rose for paint, sky for reveal) plus
+          a ring; inactive is just an outline so the choice is obvious. */}
       <div className="flex gap-2">
         <button
           type="button"
           onClick={() => onModeChange && onModeChange('paint')}
           disabled={disabled || !paintMode}
-          className={`flex-1 text-sm rounded px-3 py-2 border transition-all duration-100 ${
+          aria-pressed={mode === 'paint'}
+          className={`flex-1 text-sm rounded px-3 py-2 border-2 transition-all duration-100 ${
             mode === 'paint'
-              ? 'bg-rose-500/30 border-rose-400/60 text-rose-100'
-              : 'bg-rose-900/30 border-rose-400/30 text-rose-200 hover:brightness-125'
+              ? 'bg-rose-600 border-rose-300 text-white font-semibold shadow-md ring-2 ring-rose-400/60'
+              : 'bg-transparent border-slate-500 text-slate-300 hover:border-rose-400 hover:text-rose-200'
           } disabled:opacity-50 disabled:cursor-not-allowed`}
         >
           ☁️  Paint fog
@@ -62,10 +67,11 @@ export default function FogPaintControls({
           type="button"
           onClick={() => onModeChange && onModeChange('erase')}
           disabled={disabled || !paintMode}
-          className={`flex-1 text-sm rounded px-3 py-2 border transition-all duration-100 ${
+          aria-pressed={mode === 'erase'}
+          className={`flex-1 text-sm rounded px-3 py-2 border-2 transition-all duration-100 ${
             mode === 'erase'
-              ? 'bg-sky-500/30 border-sky-400/60 text-sky-100'
-              : 'bg-rose-900/30 border-rose-400/30 text-rose-200 hover:brightness-125'
+              ? 'bg-sky-600 border-sky-300 text-white font-semibold shadow-md ring-2 ring-sky-400/60'
+              : 'bg-transparent border-slate-500 text-slate-300 hover:border-sky-400 hover:text-sky-200'
           } disabled:opacity-50 disabled:cursor-not-allowed`}
         >
           🩹  Reveal

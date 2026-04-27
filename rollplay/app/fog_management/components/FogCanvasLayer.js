@@ -119,7 +119,12 @@ export default function FogCanvasLayer({
     try { wrapperRef.current.releasePointerCapture(e.pointerId); } catch {}
   }, []);
 
-  if (!imgDims.w || !imgDims.h) return null;
+  // Render the wrapper unconditionally — even at 0×0 — so the ref is
+  // attached on first render and the mount-canvas effect can append the
+  // engine canvas immediately. Conditionally returning null here would
+  // strand the canvas off-DOM forever, because the [engine] mount effect
+  // doesn't re-run when imgDims later become non-zero.
+  const ready = imgDims.w > 0 && imgDims.h > 0;
 
   return (
     <div
@@ -129,10 +134,14 @@ export default function FogCanvasLayer({
         top: '50%',
         left: '50%',
         transform: 'translate(-50%, -50%)',
-        width: imgDims.w,
-        height: imgDims.h,
-        pointerEvents: paintMode ? 'auto' : 'none',
+        width: imgDims.w || 0,
+        height: imgDims.h || 0,
+        pointerEvents: paintMode && ready ? 'auto' : 'none',
         cursor: paintMode ? 'crosshair' : 'default',
+        // touch-action:none is what flips React's onPointerDown listener
+        // from passive to active so e.preventDefault() actually works
+        // and the browser doesn't try to scroll/pan during a paint stroke.
+        touchAction: 'none',
         zIndex: 2,
       }}
       onPointerDown={handlePointerDown}

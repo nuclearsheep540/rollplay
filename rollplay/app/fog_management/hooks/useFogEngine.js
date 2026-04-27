@@ -69,11 +69,22 @@ export function useFogEngine({ width = 1024, height = 1024 } = {}) {
   }, []);
 
   const setMode = useCallback((m) => {
-    if (engineRef.current) engineRef.current.setMode(m);
+    const eng = engineRef.current;
+    if (!eng) return;
+    eng.setMode(m);
+    // Read back from the engine so React state matches the canonical
+    // value even if the 'modechange' event listener hasn't fired yet
+    // (or no-op'd because the value was already current).
+    setModeState(eng.mode);
   }, []);
 
   const setBrushSize = useCallback((px) => {
-    if (engineRef.current) engineRef.current.setBrushSize(px);
+    const eng = engineRef.current;
+    if (!eng) return;
+    eng.setBrushSize(px);
+    // Engine clamps to [MIN, MAX] and rounds — read back so the slider
+    // reflects the post-clamp value, not whatever the input emitted.
+    setBrushSizeState(eng.brushSize);
   }, []);
 
   const clear = useCallback(() => {
@@ -93,6 +104,28 @@ export function useFogEngine({ width = 1024, height = 1024 } = {}) {
     return engineRef.current ? engineRef.current.serialize() : null;
   }, []);
 
+  /**
+   * Resize the engine canvas to match the map's aspect ratio. Long
+   * edge is clamped to maxEdge px so the PNG payload stays small —
+   * the mask is rendered scaled to the map's display size on the
+   * client, so resolution matters only for fog-edge sharpness.
+   *
+   * No-ops if the engine is already at the target dimensions or if
+   * the inputs are invalid. Engine.resize() preserves any existing
+   * painted content via drawImage scaling.
+   */
+  const fitToMap = useCallback((naturalWidth, naturalHeight, maxEdge = 1024) => {
+    const eng = engineRef.current;
+    if (!eng || !naturalWidth || !naturalHeight) return;
+    const longEdge = Math.max(naturalWidth, naturalHeight);
+    const ratio = longEdge > maxEdge ? maxEdge / longEdge : 1;
+    const w = Math.max(1, Math.round(naturalWidth * ratio));
+    const h = Math.max(1, Math.round(naturalHeight * ratio));
+    if (w === eng.width && h === eng.height) return;
+    eng.resize(w, h);
+    setMaskDims({ width: w, height: h });
+  }, []);
+
   return {
     engine: engineRef.current,
     mode,
@@ -105,5 +138,6 @@ export function useFogEngine({ width = 1024, height = 1024 } = {}) {
     fillAll,
     loadDataUrl,
     serialize,
+    fitToMap,
   };
 }

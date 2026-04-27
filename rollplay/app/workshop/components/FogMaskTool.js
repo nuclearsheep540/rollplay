@@ -125,6 +125,15 @@ export default function FogMaskTool({ selectedAssetId, onAssetSelect }) {
               isMapLocked={paintMode}
               fogEngine={fog.engine}
               fogPaintMode={paintMode}
+              onImageLoad={({ naturalWidth, naturalHeight }) => {
+                // Match the engine canvas to the map's aspect ratio so
+                // CSS-stretching doesn't deform brush dabs into ellipses.
+                // Skip when an existing mask already dictates the canvas
+                // dimensions (loadFromDataUrl resizes to that on its own).
+                if (!selectedAsset?.fog_config?.mask) {
+                  fog.fitToMap(naturalWidth, naturalHeight);
+                }
+              }}
             />
           </div>
 

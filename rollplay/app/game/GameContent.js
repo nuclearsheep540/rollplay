@@ -1207,6 +1207,16 @@ export default function GameContent() {
     }
   }, [activeMap?.map_config?.asset_id, activeMap?.map_config?.fog_config?.version, fog.engine]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // Match fog canvas aspect ratio to the active map. Without this, a
+  // square 1024×1024 default canvas gets CSS-stretched to fit the map's
+  // actual aspect, deforming brush strokes into ellipses. Skip when an
+  // existing mask already pinned the canvas size on load.
+  useEffect(() => {
+    if (!fog.engine || !mapNaturalDimensions) return;
+    if (activeMap?.map_config?.fog_config?.mask) return;
+    fog.fitToMap(mapNaturalDimensions.naturalWidth, mapNaturalDimensions.naturalHeight);
+  }, [mapNaturalDimensions, activeMap?.map_config?.asset_id, fog]); // eslint-disable-line react-hooks/exhaustive-deps
+
   // DM "Update fog" handler — serialises the engine canvas and broadcasts
   const handleFogUpdate = useCallback(() => {
     const filename = activeMap?.map_config?.filename;
