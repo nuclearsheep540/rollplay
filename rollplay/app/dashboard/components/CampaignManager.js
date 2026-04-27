@@ -106,6 +106,7 @@ function PlayerCardAction({ isDm, canRemove, onRemove }) {
       <button
         onClick={onRemove}
         title="Remove player"
+        aria-label="Remove player"
         style={{
           color: '#dc2626',
           backgroundColor: 'rgba(220, 38, 38, 0.1)',
@@ -1542,6 +1543,7 @@ export default function CampaignManager({ user, onExpandedChange, inviteCampaign
                                           className="px-3 py-1.5 rounded-sm border transition-all text-sm font-medium flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
                                           style={{backgroundColor: COLORS.silver, color: THEME.textPrimary, borderColor: COLORS.smoke}}
                                           title="Pause Session"
+                                          aria-label="Pause Session"
                                         >
                                           <FontAwesomeIcon icon={faPause} />
                                         </button>
@@ -1563,6 +1565,7 @@ export default function CampaignManager({ user, onExpandedChange, inviteCampaign
                                         className="px-3 py-1.5 rounded-sm border transition-all text-sm font-medium flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
                                         style={{backgroundColor: '#991b1b', color: COLORS.smoke, borderColor: '#dc2626'}}
                                         title="Finish Session"
+                                        aria-label="Finish Session"
                                       >
                                         <FontAwesomeIcon icon={faXmark} />
                                       </button>

@@ -7,9 +7,12 @@ import { authFetch } from '@/app/shared/utils/authFetch'
 /**
  * Query hook for fetching aggregated asset metadata for a campaign —
  * count and total file size across all assets associated with the
- * campaign. Returns `null` while disabled or the campaign id is
- * missing so consumers can render a "—" placeholder without branching
- * on loading state.
+ * campaign.
+ *
+ * Returns the bare TanStack Query result. When disabled or the
+ * campaign id is missing, the query does not run and `data` is
+ * `undefined` (TanStack default — not `null`); consumers should branch
+ * on truthiness rather than a strict `=== null` check.
  *
  * @param {string|null} campaignId - Campaign to read metadata for
  * @param {Object} options

@@ -285,17 +285,23 @@ async def get_campaign_assets_metadata(
     Return aggregated metadata (count + total bytes) for the assets
     associated with a campaign. Members-only — same access guard as the
     campaign-filtered list endpoint above.
+
+    Implementation note: delegates to
+    `repo.get_campaign_assets_metadata`, which runs a single SQL
+    aggregate query (`COUNT` + `SUM`) and returns a domain value
+    object. No asset rows are materialised in Python regardless of
+    library size.
     """
     campaign = campaign_repo.get_by_id(campaign_id)
     if not campaign or not campaign.is_member(current_user.id):
         raise HTTPException(status_code=403, detail="Access denied - only campaign members can view campaign asset metadata")
 
-    assets = GetMediaAssetsByCampaign(repo).execute(campaign_id)
+    metadata = repo.get_campaign_assets_metadata(campaign_id)
 
     return CampaignAssetsMetadataResponse(
         campaign_id=campaign_id,
-        asset_count=len(assets),
-        total_file_size=sum(a.file_size or 0 for a in assets),
+        asset_count=metadata.asset_count,
+        total_file_size=metadata.total_file_size,
     )
 
 
