@@ -1,5 +1,5 @@
 {
-  "latest": "0.45.0",
+  "latest": "0.45.1",
   "releases": {
     "0.27.1": {
       "date": "2026-03-10",
@@ -443,6 +443,21 @@
       "services": {
         "app": "0.31.0",
         "api_site": "0.25.0",
+        "api_game": "0.19.0",
+        "api_auth": "0.3.0",
+        "nginx": "0.6.0",
+        "postgres": "0.1.10",
+        "mongo": "0.4.2",
+        "certbot": "0.1.4"
+      }
+    },
+    "0.45.1": {
+      "date": "2026-04-27",
+      "commit": "910a8b8",
+      "description": "Workshop Buttons + Campaign GSAP & Layout",
+      "services": {
+        "app": "0.31.1",
+        "api_site": "0.25.1",
         "api_game": "0.19.0",
         "api_auth": "0.3.0",
         "nginx": "0.6.0",
