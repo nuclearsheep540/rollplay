@@ -147,7 +147,13 @@ export default function FogCanvasLayer({
         // from passive to active so e.preventDefault() actually works
         // and the browser doesn't try to scroll/pan during a paint stroke.
         touchAction: 'none',
-        zIndex: 2,
+        // Sit above GridOverlay (z=5 / z=20 in edit mode). The grid
+        // SVG has pointerEvents:'all' for hover-cell info and would
+        // otherwise eat clicks meant for fog painting. The wrapper's
+        // own pointerEvents flips to 'none' when paintMode is off, so
+        // grid hover still works in non-paint contexts. The fog canvas
+        // is mostly transparent so the grid remains visible underneath.
+        zIndex: 25,
       }}
       onPointerDown={handlePointerDown}
       onPointerMove={handlePointerMove}

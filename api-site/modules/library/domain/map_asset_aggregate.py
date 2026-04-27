@@ -13,7 +13,7 @@ from datetime import datetime
 from typing import Any, Dict, List, Optional, Union
 from uuid import UUID, uuid4
 
-from shared_contracts.map import FogConfig, GridColorMode, GridConfig
+from shared_contracts.map import FogConfig, GridColorMode, GridConfig, MapConfig
 
 from modules.library.domain.asset_aggregate import MediaAssetAggregate
 from modules.library.domain.media_asset_type import MediaAssetType
@@ -288,3 +288,43 @@ class MapAsset(MediaAssetAggregate):
             mask_height=game_fog_config.mask_height,
             version=game_fog_config.version,
         )
+
+    # ── Contract projection (the single source of truth for ETL) ────────
+
+    def to_contract(self, file_path: str) -> MapConfig:
+        """Project this aggregate to the MapConfig contract for the
+        api-game boundary. Single source of truth for which aggregate
+        fields populate which contract fields — adding a new MapConfig
+        field updates this method and every consumer (cold→hot ETL,
+        future ETL-like callers) benefits automatically.
+
+        Pydantic's `extra='forbid'` makes shape drift fail loudly here
+        rather than silently dropping a field downstream.
+        """
+        return MapConfig.model_validate({
+            "asset_id":          str(self.id),
+            "filename":          self.filename,
+            "original_filename": self.filename,
+            "file_path":         file_path,
+            "file_size":         self.file_size,
+            "grid_config":       self.build_grid_config_for_game(),
+            "fog_config":        self.build_fog_config_for_game(),
+        })
+
+    def update_from_contract(self, contract: MapConfig) -> None:
+        """Apply a MapConfig (final session state) back onto this aggregate.
+        Inverse of to_contract(). Same single-source-of-truth role for
+        the hot→cold direction at session end.
+
+        Note: this is the *owner* path for fog — null means "the runtime
+        cleared the fog, persist that". Surfaces that merely chaperone
+        a MapConfig (e.g. WS map_load) need to apply the preserve rule
+        themselves before calling this.
+        """
+        if contract is None:
+            return
+        if contract.grid_config is not None:
+            self.update_grid_config_from_game(contract.grid_config)
+        # Fog: pass through as-is. None propagates as a clear, matching
+        # update_fog_config_from_game's owner semantics.
+        self.update_fog_config_from_game(contract.fog_config)

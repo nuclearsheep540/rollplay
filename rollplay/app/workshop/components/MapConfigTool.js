@@ -5,7 +5,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
-import { faArrowLeft, faHouse, faFileImport, faFloppyDisk } from '@fortawesome/free-solid-svg-icons';
+import { faArrowLeft, faHouse, faFileImport, faFloppyDisk, faCheckDouble } from '@fortawesome/free-solid-svg-icons';
 import { useRouter } from 'next/navigation';
 import { authFetch } from '@/app/shared/utils/authFetch';
 import AssetPicker from './AssetPicker';
@@ -320,8 +320,27 @@ export default function MapConfigTool({
 
   // ── Top menu items ─────────────────────────────────────────────────
 
+  // "Save All Settings" commits both grid and fog in sequence. Grid
+  // always PATCHes (it doesn't track dirty client-side); fog skips its
+  // PATCH when nothing was painted since the last save. Either side
+  // can fail independently — we intentionally don't wrap them so a
+  // grid 409 doesn't block the fog save (or vice versa).
+  const handleSaveAll = async () => {
+    if (!selectedAsset) return;
+    await handleGridSave();
+    if (fog.isDirty) await handleFogSave();
+  };
+
+  const anySavePending = gridUpdateMutation.isPending || fogUpdateMutation.isPending;
+
   const fileMenuItems = [
     { label: 'Open Asset', icon: faFileImport, onClick: () => onAssetSelect(null) },
+    {
+      label: 'Save All Settings',
+      icon: faCheckDouble,
+      onClick: handleSaveAll,
+      disabled: !selectedAsset || anySavePending,
+    },
     {
       label: 'Save Grid',
       icon: faFloppyDisk,

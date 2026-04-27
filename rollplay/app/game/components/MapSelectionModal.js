@@ -136,16 +136,35 @@ export default function MapSelectionSection({
   };
 
   const handleMapSelect = (asset) => {
-    const { id, s3_url, filename, ...rest } = asset;
+    // Build a MapConfig-shaped payload (see shared_contracts/map.py).
+    // We deliberately do NOT spread the whole asset response: it
+    // contains many fields (user_id, s3_key, asset_type, audio_*,
+    // image_*, flat grid_*) that aren't part of the MapConfig
+    // contract — Pydantic's extra='forbid' on the api-game side
+    // refuses unknown keys, and rightly so. If a new MapConfig
+    // field is added, name it explicitly here.
+    //
+    // Note: the asset's grid is stored as flat fields (grid_width,
+    // grid_height, …) which don't match the nested GridConfig
+    // contract shape; api-game preserves grid_config from MongoDB
+    // per-room, so we leave it unset here and let the DM configure
+    // it in-session if needed (or rely on cold→hot ETL on session
+    // start, which uses the full to_contract path on api-site).
     const mapSettings = {
       room_id: roomId,
       uploaded_by: "dm",
       map_config: {
-        asset_id: id,
-        filename,
-        original_filename: filename,
-        file_path: s3_url,
-        ...rest,
+        asset_id: asset.id,
+        filename: asset.filename,
+        original_filename: asset.filename,
+        file_path: asset.s3_url,
+        file_size: asset.file_size,
+        // Fog config IS already in MapConfig shape on the asset
+        // response (nested {mask, mask_width, mask_height, version}),
+        // so it can pass through directly. null is a valid value
+        // and means "no asset-prep fog" — api-game's preserve rule
+        // falls back to in-room state if the DM had painted any.
+        fog_config: asset.fog_config ?? null,
       },
     };
     onSelectMap(mapSettings);

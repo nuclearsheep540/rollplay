@@ -58,15 +58,21 @@ export function useFogEngine({ width = 1024, height = 1024 } = {}) {
     };
   }, []);
 
-  // Dispose engine on unmount
-  useEffect(() => {
-    return () => {
-      if (engineRef.current) {
-        engineRef.current.destroy();
-        engineRef.current = null;
-      }
-    };
-  }, []);
+  // Intentionally NO explicit dispose effect.
+  //
+  // Calling engine.destroy() in an unmount cleanup breaks under React
+  // Strict Mode in dev: the fake-unmount cycle runs the cleanup, the
+  // engine gets destroyed and the ref nulled, and then the subscription
+  // effect's re-setup reads `engineRef.current === null` and returns
+  // without subscribing. The next render lazy-creates a fresh engine,
+  // but it lives without listeners, so `isDirty` never reflects paint
+  // events and the Save button stays "No changes" forever.
+  //
+  // The engine has no DOM resources to free explicitly — its canvas is
+  // an off-DOM HTMLCanvasElement and gets garbage-collected with the
+  // ref when the hook truly unmounts. Worst case (route change without
+  // unmounting the hook host) is a one-engine-per-mount leak for the
+  // page lifetime, which is harmless at this scale (~3MB per canvas).
 
   const setMode = useCallback((m) => {
     const eng = engineRef.current;

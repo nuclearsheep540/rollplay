@@ -352,7 +352,11 @@ class StartSession:
     def _restore_map_config(
         session: SessionEntity, asset_lookup: dict, url_map: dict
     ) -> Optional[MapConfig]:
-        """Restore map config from PostgreSQL domain aggregate (cold → hot)."""
+        """Restore map config from PostgreSQL domain aggregate (cold → hot).
+
+        Field translation is owned by MapAsset.to_contract() — see
+        map_asset_aggregate.py. This command stays orchestration-only.
+        """
         if not session.map_config or not session.map_config.get("asset_id"):
             return None
         map_asset_id = session.map_config["asset_id"]
@@ -360,20 +364,15 @@ class StartSession:
         if not map_asset:
             logger.warning(f"Cannot restore map: asset {map_asset_id} not in campaign")
             return None
+        if not isinstance(map_asset, MapAsset):
+            logger.warning(f"Asset {map_asset_id} is not a MapAsset; cannot restore")
+            return None
         fresh_url = url_map.get(map_asset.s3_key)
         if not fresh_url:
             logger.warning(f"Cannot restore map: asset {map_asset_id} has no presigned URL")
             return None
-        logger.info(f"Restoring map: {map_asset.filename} with grid config")
-        return MapConfig(
-            asset_id=map_asset_id,
-            filename=map_asset.filename,
-            original_filename=map_asset.filename,
-            file_path=fresh_url,
-            file_size=map_asset.file_size,
-            grid_config=map_asset.build_grid_config_for_game() if isinstance(map_asset, MapAsset) else None,
-            fog_config=map_asset.build_fog_config_for_game() if isinstance(map_asset, MapAsset) else None,
-        )
+        logger.info(f"Restoring map: {map_asset.filename}")
+        return map_asset.to_contract(file_path=fresh_url)
 
     @staticmethod
     def _restore_image_config(
@@ -695,19 +694,17 @@ async def _extract_and_sync_game_state(
             map_asset_id = final_state.map_state.asset_id
             map_config = {"asset_id": map_asset_id}
 
-            # Sync grid + fog config back to MapAsset (ETL: hot → cold)
-            if asset_repo and (final_state.map_state.grid_config or final_state.map_state.fog_config is not None):
+            # Sync map state back to MapAsset (ETL: hot → cold).
+            # Field translation is owned by MapAsset.update_from_contract()
+            # — see map_asset_aggregate.py. New MapConfig fields land
+            # there and flow through automatically.
+            if asset_repo and final_state.map_state:
                 try:
                     map_asset = asset_repo.get_by_id(UUID(map_asset_id))
                     if map_asset and isinstance(map_asset, MapAsset):
-                        if final_state.map_state.grid_config:
-                            map_asset.update_grid_config_from_game(final_state.map_state.grid_config)
-                        # Fog persists explicit None as "cleared" — only call when the
-                        # runtime actually carried a fog value through the session.
-                        if hasattr(final_state.map_state, "fog_config"):
-                            map_asset.update_fog_config_from_game(final_state.map_state.fog_config)
+                        map_asset.update_from_contract(final_state.map_state)
                         asset_repo.save(map_asset)
-                        logger.info(f"Synced grid+fog config back to MapAsset {map_asset_id}")
+                        logger.info(f"Synced map state back to MapAsset {map_asset_id}")
                 except Exception as e:
                     logger.warning(f"Failed to sync map config for {map_asset_id}: {e}")
         logger.info(f"Extracted map config: {'has map' if map_config else 'no active map'}")

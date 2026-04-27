@@ -53,7 +53,31 @@ class FogConfig(ContractModel):
 
 
 class MapConfig(ContractModel):
-    """Map state for ETL boundary (session start/end)."""
+    """Map state for ETL boundary (session start/end) and the runtime
+    map_load WebSocket event.
+
+    `null` semantics for the optional fields (grid_config, fog_config,
+    map_image_config) depend on the surface carrying this contract:
+
+      • At ETL boundaries (cold→hot, hot→cold): null is meaningful and
+        means "the user has no value for this field" — the value is
+        applied as-is to runtime state or persisted as cleared.
+
+      • At map_load (runtime "switch active map"): null means "no
+        signal", and the receiver (api-game) preserves any existing
+        in-room value for that field. See _merge_preserved_map_fields
+        in api-game/websocket_handlers/websocket_events.py.
+
+      • At field-specific events (fog_config_update, PATCH /fog) the
+        field is its own contract; null there is the explicit clear
+        signal.
+
+    When adding a new optional MapConfig field, update:
+      - MapAsset.to_contract / update_from_contract  (api-site domain)
+      - _merge_preserved_map_fields                   (api-game WS)
+    The contract's `extra="forbid"` config makes any spelling drift
+    on the wire raise immediately rather than silently dropping.
+    """
 
     asset_id: str = Field(..., min_length=1)
     filename: str = Field(..., min_length=1)
