@@ -42,6 +42,9 @@ export default function FogRegionStack({
   mapImageRef,
   fogOpacity = 1.0,
   cursorRef = null,
+  // Optional ref the parent reads to gate keyboard shortcuts (e.g. the
+  // spacebar pan override skips entirely while a stroke is in flight).
+  paintingRef = null,
 }) {
   const wrapperRef = useRef(null);
   const isPaintingRef = useRef(false);
@@ -147,9 +150,10 @@ export default function FogRegionStack({
     try { wrapperRef.current.setPointerCapture(e.pointerId); } catch {}
     activeEngine.beginStroke(activeEngine.mode);
     isPaintingRef.current = true;
+    if (paintingRef) paintingRef.current = true;
     lastPointRef.current = point;
     activeEngine.paintStroke([point]);
-  }, [paintMode, activeEngine, screenToMask]);
+  }, [paintMode, activeEngine, screenToMask, paintingRef]);
 
   const handlePointerMove = useCallback((e) => {
     if (!paintMode || !activeEngine) return;
@@ -166,10 +170,11 @@ export default function FogRegionStack({
   const handlePointerUp = useCallback((e) => {
     if (!isPaintingRef.current) return;
     isPaintingRef.current = false;
+    if (paintingRef) paintingRef.current = false;
     lastPointRef.current = null;
     try { wrapperRef.current.releasePointerCapture(e.pointerId); } catch {}
     if (activeEngine) activeEngine.endStroke();
-  }, [activeEngine]);
+  }, [activeEngine, paintingRef]);
 
   const handlePointerEnter = useCallback((e) => {
     if (!paintMode) return;
