@@ -112,6 +112,25 @@ const FOG_HIDE_COLOR = 'rgba(20, 20, 30, 0.05)';
 const FOG_HIDE_FEATHER_PX = 20;
 const FOG_TEXTURE_DILATE_PX = 30;
 
+// While painting/erasing, the entire fog overlay is knocked back so the
+// DM can see the map underneath their strokes. Multiplied with the
+// caller-provided fogOpacity (we take the min, so the painter view is
+// never MORE opaque than the player view). Higher = more fog visible
+// while editing; lower = more map visible. 0.5 means "fog at half
+// strength while painting". Bump toward 0.7–0.8 if the current setting
+// reads as too faint to see what you're painting.
+const FOG_PAINT_MODE_OPACITY = 0.8;
+
+// Brush cursor — Photoshop-style ring that tracks the pointer and
+// matches the current brush diameter. Native CSS `cursor: url()` caps
+// around 32px on most platforms, so we hide the native cursor and
+// render a div instead. mix-blend-mode 'difference' inverts against
+// whatever's behind it, so the ring stays visible over light or dark
+// areas of the map without picking a colour by hand.
+const BRUSH_CURSOR_BORDER = '1px solid rgba(255, 255, 255, 0.9)';
+const BRUSH_CURSOR_OUTLINE_SHADOW = '0 0 0 1px rgba(0, 0, 0, 0.6)';
+const BRUSH_CURSOR_BLEND_MODE = 'difference';
+
 export default function FogCanvasLayer({
   engine,
   mapImageRef,
@@ -121,6 +140,7 @@ export default function FogCanvasLayer({
   const wrapperRef = useRef(null);
   const hideRef = useRef(null);
   const textureRef = useRef(null);
+  const cursorRef = useRef(null);
   // Offscreen scratch canvases — hold blurred copies of the engine
   // canvas, used as the per-layer masks. Lazily created on first sync.
   // hideMaskCanvasRef: light blur for the soft hide-layer edge.
@@ -274,6 +294,49 @@ export default function FogCanvasLayer({
     };
   }, [engine]);
 
+  // Position the brush-cursor ring at (clientX, clientY) and size it
+  // to match the current brush diameter. Direct DOM mutation rather
+  // than React state — fires per-pointer-move, would shred React's
+  // scheduler if it caused re-renders.
+  const updateBrushCursor = useCallback((clientX, clientY) => {
+    const cursor = cursorRef.current;
+    const wrapper = wrapperRef.current;
+    if (!cursor || !wrapper || !engine) return;
+    const rect = wrapper.getBoundingClientRect();
+    if (rect.width === 0 || engine.width === 0) return;
+    const scale = rect.width / engine.width;
+    const dia = engine.brushSize * scale;
+    cursor.style.width = `${dia}px`;
+    cursor.style.height = `${dia}px`;
+    cursor.style.left = `${clientX - rect.left}px`;
+    cursor.style.top = `${clientY - rect.top}px`;
+    cursor.style.display = 'block';
+  }, [engine]);
+
+  const hideBrushCursor = useCallback(() => {
+    if (cursorRef.current) cursorRef.current.style.display = 'none';
+  }, []);
+
+  // React to brush size changes from the controls — re-render the
+  // cursor at its last position with the new diameter (so the user
+  // gets immediate visual feedback when they drag the size slider,
+  // even before they next move the pointer).
+  useEffect(() => {
+    if (!engine) return;
+    const onBrushChange = () => {
+      const cursor = cursorRef.current;
+      const wrapper = wrapperRef.current;
+      if (!cursor || !wrapper || engine.width === 0) return;
+      const rect = wrapper.getBoundingClientRect();
+      const scale = rect.width / engine.width;
+      const dia = engine.brushSize * scale;
+      cursor.style.width = `${dia}px`;
+      cursor.style.height = `${dia}px`;
+    };
+    engine.on('brushchange', onBrushChange);
+    return () => engine.off('brushchange', onBrushChange);
+  }, [engine]);
+
   const handlePointerDown = useCallback((e) => {
     if (!paintMode || !engine) return;
     e.preventDefault();
@@ -291,14 +354,18 @@ export default function FogCanvasLayer({
   }, [paintMode, engine, screenToMask]);
 
   const handlePointerMove = useCallback((e) => {
-    if (!paintMode || !engine || !isPaintingRef.current) return;
+    if (!paintMode || !engine) return;
+    // Update the brush-cursor ring on every move — even when not
+    // actively painting — so the DM sees the brush size as they hover.
+    updateBrushCursor(e.clientX, e.clientY);
+    if (!isPaintingRef.current) return;
     const point = screenToMask(e.clientX, e.clientY);
     if (!point) return;
     const last = lastPointRef.current;
     if (last && Math.hypot(point.x - last.x, point.y - last.y) < 0.5) return;
     engine.paintStroke([last, point]);
     lastPointRef.current = point;
-  }, [paintMode, engine, screenToMask]);
+  }, [paintMode, engine, screenToMask, updateBrushCursor]);
 
   const handlePointerUp = useCallback((e) => {
     if (!isPaintingRef.current) return;
@@ -307,6 +374,15 @@ export default function FogCanvasLayer({
     try { wrapperRef.current.releasePointerCapture(e.pointerId); } catch {}
     if (engine) engine.endStroke(); // emits 'strokeend' for the undo subscriber
   }, [engine]);
+
+  const handlePointerEnter = useCallback((e) => {
+    if (!paintMode) return;
+    updateBrushCursor(e.clientX, e.clientY);
+  }, [paintMode, updateBrushCursor]);
+
+  const handlePointerLeave = useCallback(() => {
+    hideBrushCursor();
+  }, [hideBrushCursor]);
 
   // Render the wrapper unconditionally — even at 0×0 — so the ref is
   // attached on first render and the mount-canvas effect can append the
@@ -353,7 +429,9 @@ export default function FogCanvasLayer({
         width: imgDims.w || 0,
         height: imgDims.h || 0,
         pointerEvents: paintMode && ready ? 'auto' : 'none',
-        cursor: paintMode ? 'crosshair' : 'default',
+        // Hide the native cursor in paint mode — we render our own
+        // brush-size ring below that the user actually wants to see.
+        cursor: paintMode ? 'none' : 'default',
         // touch-action:none is what flips React's onPointerDown listener
         // from passive to active so e.preventDefault() actually works
         // and the browser doesn't try to scroll/pan during a paint stroke.
@@ -365,7 +443,7 @@ export default function FogCanvasLayer({
         // grid hover still works in non-paint contexts. The fog canvas
         // is mostly transparent so the grid remains visible underneath.
         zIndex: 25,
-        opacity: paintMode ? Math.min(0.5, fogOpacity) : fogOpacity,
+        opacity: paintMode ? Math.min(FOG_PAINT_MODE_OPACITY, fogOpacity) : fogOpacity,
         // No mix-blend-mode at the wrapper level any more. The hide
         // layer needs NORMAL blending against the map (so it actually
         // hides), while the texture layer needs SCREEN blending (so
@@ -376,7 +454,27 @@ export default function FogCanvasLayer({
       onPointerMove={handlePointerMove}
       onPointerUp={handlePointerUp}
       onPointerCancel={handlePointerUp}
+      onPointerEnter={handlePointerEnter}
+      onPointerLeave={handlePointerLeave}
     >
+      {/* Brush-size cursor ring. Hidden by default (display:none); the
+          pointermove handler shows + positions + sizes it. Lives at the
+          top of the wrapper so it sits above hide + texture layers. */}
+      <div
+        ref={cursorRef}
+        aria-hidden="true"
+        style={{
+          position: 'absolute',
+          display: 'none',
+          pointerEvents: 'none',
+          borderRadius: '50%',
+          border: BRUSH_CURSOR_BORDER,
+          boxShadow: BRUSH_CURSOR_OUTLINE_SHADOW,
+          mixBlendMode: BRUSH_CURSOR_BLEND_MODE,
+          transform: 'translate(-50%, -50%)',
+          zIndex: 100,
+        }}
+      />
       {/* Boundary displacement filter — feTurbulence generates a 2D
           noise field; feDisplacementMap uses its R/G channels to push
           each pixel of the masked fog up to FOG_DISPLACE_SCALE px in
