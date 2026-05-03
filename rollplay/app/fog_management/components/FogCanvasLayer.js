@@ -530,14 +530,7 @@ export default function FogCanvasLayer({
               numOctaves={FOG_DISPLACE_OCTAVES}
               seed="3"
               result="noise"
-            >
-              <animate
-                attributeName="baseFrequency"
-                values={`${FOG_DISPLACE_FREQUENCY};${FOG_DISPLACE_FREQUENCY * 1.15};${FOG_DISPLACE_FREQUENCY}`}
-                dur="14s"
-                repeatCount="indefinite"
-              />
-            </feTurbulence>
+            />
             <feDisplacementMap
               in="SourceGraphic"
               in2="noise"
