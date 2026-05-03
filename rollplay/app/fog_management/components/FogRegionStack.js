@@ -145,6 +145,14 @@ export default function FogRegionStack({
     if (!paintMode || !activeEngine) return;
     e.preventDefault();
     e.stopPropagation();
+    // Painting "claims" focus — blur any previously-focused control
+    // (e.g. a region opacity slider) so subsequent keyboard shortcuts
+    // (spacebar pan override, etc.) aren't gated by the input-focus guard.
+    const active = document.activeElement;
+    if (active && typeof active.blur === 'function'
+        && (active.tagName === 'INPUT' || active.tagName === 'TEXTAREA')) {
+      active.blur();
+    }
     const point = screenToMask(e.clientX, e.clientY);
     if (!point) return;
     try { wrapperRef.current.setPointerCapture(e.pointerId); } catch {}

@@ -287,7 +287,6 @@ const MapDisplay = ({
       ref={containerRef}
       className={`map-display-active ${className}`}
       style={{ ...baseStyles, opacity: mapLoaded ? 1 : 0.5 }}
-      onWheel={handleWheel}
       onPointerDown={handlePointerDown}
       onPointerMove={handlePointerMove}
       onPointerUp={handlePointerUp}
