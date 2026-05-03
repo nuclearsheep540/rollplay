@@ -70,8 +70,8 @@ export default function FogRegionLabels({
   // { [regionId]: { x: 0..1, y: 0..1 } | null }
   const [centroids, setCentroids] = useState({});
 
-  // Match the wrapper to the rendered map size — same pattern as
-  // FogCanvasLayer so the overlay tracks pan/zoom transform.
+  // Match the wrapper to the rendered map size so the overlay tracks
+  // pan/zoom transform.
   useEffect(() => {
     const img = mapImageRef?.current;
     if (!img) return;

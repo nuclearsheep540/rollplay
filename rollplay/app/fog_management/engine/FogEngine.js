@@ -296,10 +296,10 @@ export default class FogEngine extends EventEmitter {
       mask: this.toDataUrl(),
       mask_width: this._canvas.width,
       mask_height: this._canvas.height,
-      // Defaults mirror the constants in FogCanvasLayer.js. The hook
-      // (useFogRegions) is the source of truth for the latest values
-      // when an engine represents a real tracked region; this serialize
-      // fallback only kicks in when the engine is used standalone.
+      // The hook (useFogRegions) is the source of truth for these
+      // values when an engine represents a real tracked region; this
+      // serialize fallback only kicks in when the engine is used
+      // standalone.
       hide_feather_px: 20,
       texture_dilate_px: 30,
       opacity: 1.0,

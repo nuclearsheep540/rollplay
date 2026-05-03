@@ -8,9 +8,9 @@ import React from 'react';
 /**
  * RegionParamsEditor — sliders for the active region's render params.
  *
- * Two sliders, both edits live (FogCanvasLayer's mask-sync useEffect
- * has hideFeatherPx + textureDilatePx in deps so changes re-render
- * within a frame):
+ * Two sliders, both edits live (the hide layer / shared texture layer
+ * each have hideFeatherPx / textureDilatePx in their mask-sync deps,
+ * so changes re-render within a frame):
  *
  *   • Feather — single magnitude that scales BOTH hide_feather_px and
  *     texture_dilate_px proportionally from their defaults. 1.0 = the
@@ -26,9 +26,9 @@ import React from 'react';
  * user-tunable; the colour was hand-tuned and uniformity is desired).
  */
 
-// Reference defaults the magnitude slider scales from. Keep in sync
-// with DEFAULT_HIDE_FEATHER_PX / DEFAULT_TEXTURE_DILATE_PX in
-// FogCanvasLayer.js — the same values land via the contract defaults.
+// Reference defaults the magnitude slider scales from. Mirror the
+// per-region defaults that the contract / useFogRegions hook seed onto
+// new regions.
 const FEATHER_BASE_HIDE = 20;
 const FEATHER_BASE_DILATE = 30;
 const FEATHER_MAGNITUDE_MAX = 2;

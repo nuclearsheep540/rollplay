@@ -3,41 +3,36 @@
 
 'use client';
 
-import React from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 
-import FogCanvasLayer from './FogCanvasLayer';
+import FogHideLayer from './FogHideLayer';
+import FogSharedTextureLayer from './FogSharedTextureLayer';
+
+// Painter-mode knock-back. While paintMode is on the visible fog drops
+// by this factor so the DM can see the map underneath their strokes.
+// Applied to the wrapper so it dims hide + texture together.
+const FOG_PAINTER_KNOCKBACK = 0.7;
 
 /**
- * FogRegionStack — renders one FogCanvasLayer per enabled fog region.
+ * FogRegionStack — composites N fog regions into one shared canvas.
  *
- * Each region carries its own painted alpha mask + render params
- * (hide_feather_px, texture_dilate_px, opacity). This component just
- * iterates and mounts one FogCanvasLayer instance per region, passing
- * the per-region engine + params.
+ * Owns:
+ *  - The pointer-event wrapper (sized to the map image). Routes paint
+ *    events to the active region's engine.
+ *  - The brush cursor lifecycle (positions/sizes a cursor div mounted
+ *    by MapDisplay outside the pan/zoom transform).
  *
- * Compositing is handled by the DOM: each FogCanvasLayer renders a
- * hide layer + texture layer; stacked layers from overlapping enabled
- * regions naturally compose into denser fog (two hide layers stack =
- * darker; texture layers screen-blend with each other).
+ * Renders:
+ *  - One FogHideLayer per enabled region (per-region opacity, mask
+ *    sourced from that region's engine).
+ *  - One FogSharedTextureLayer (singleton — owns the GIF tiles and
+ *    SVG filter; its mask is a union of all enabled regions' alphas
+ *    weighted by per-region opacity).
  *
- * paintMode is true on the *active* region only — DM strokes only
- * land in the region they're currently painting into. Disabled regions
- * are skipped entirely (no engine work, no DOM cost).
- *
- * Props:
- *   regions         — the FogRegion list (metadata + per-region params)
- *   getEngine(id)   — resolves a region id to its FogEngine instance.
- *                     Typically `(id) => useFogRegions().enginesRef.current.get(id)`,
- *                     but the hook surfaces this via its `activeEngine`
- *                     accessor and a per-region map; callers pass a
- *                     resolver so the stack stays decoupled from any
- *                     particular state container.
- *   activeRegionId  — region currently receiving paint events; null
- *                     means "no painting happening anywhere".
- *   paintMode       — global paint-mode flag; the active region renders
- *                     with paintMode=true only when this is also true.
- *   mapImageRef     — the map <img> ref, used for sizing.
- *   fogOpacity      — applied uniformly across all regions.
+ * Per-region settings (opacity, hide_feather_px, texture_dilate_px)
+ * are all preserved: hide layers apply opacity and feather directly;
+ * the texture layer encodes opacity and dilate into the union mask
+ * compositor.
  */
 export default function FogRegionStack({
   regions = [],
@@ -46,29 +41,184 @@ export default function FogRegionStack({
   paintMode = false,
   mapImageRef,
   fogOpacity = 1.0,
+  cursorRef = null,
+  cursorContainerRef = null,
 }) {
+  const wrapperRef = useRef(null);
+  const rafPendingRef = useRef(false);
+  const isPaintingRef = useRef(false);
+  const lastPointRef = useRef(null);
+  const [imgDims, setImgDims] = useState({ w: 0, h: 0 });
+
+  const activeEngine = activeRegionId ? getEngine?.(activeRegionId) : null;
+
+  // Track image rendered size — wrapper must match the visible map so
+  // pointer-event capture and cursor positioning use the right rect.
+  useEffect(() => {
+    const img = mapImageRef?.current;
+    if (!img) return;
+    const update = () => setImgDims({ w: img.clientWidth, h: img.clientHeight });
+    update();
+    if (typeof ResizeObserver !== 'undefined') {
+      const ro = new ResizeObserver(update);
+      ro.observe(img);
+      return () => ro.disconnect();
+    }
+    window.addEventListener('resize', update);
+    return () => window.removeEventListener('resize', update);
+  }, [mapImageRef]);
+
+  const screenToMask = useCallback((clientX, clientY) => {
+    const wrapper = wrapperRef.current;
+    if (!wrapper || !activeEngine) return null;
+    const rect = wrapper.getBoundingClientRect();
+    if (rect.width === 0 || rect.height === 0) return null;
+    const xRatio = (clientX - rect.left) / rect.width;
+    const yRatio = (clientY - rect.top) / rect.height;
+    return {
+      x: Math.max(0, Math.min(activeEngine.width, xRatio * activeEngine.width)),
+      y: Math.max(0, Math.min(activeEngine.height, yRatio * activeEngine.height)),
+    };
+  }, [activeEngine]);
+
+  // Cursor div lives outside the pan/zoom transform (sibling of
+  // contentRef in MapDisplay). cursorContainerRef is its offset parent.
+  // Both size and position math use screen pixels — wrapper's bounding
+  // rect is post-transform so wrapperRect.width / engine.width gives
+  // the correct screen-pixel diameter.
+  const updateBrushCursor = useCallback((clientX, clientY) => {
+    const cursor = cursorRef?.current;
+    const container = cursorContainerRef?.current;
+    const wrapper = wrapperRef.current;
+    if (!cursor || !container || !wrapper || !activeEngine) return;
+    const wrapperRect = wrapper.getBoundingClientRect();
+    if (wrapperRect.width === 0 || activeEngine.width === 0) return;
+    const containerRect = container.getBoundingClientRect();
+    const dia = activeEngine.brushSize * (wrapperRect.width / activeEngine.width);
+    cursor.style.width = `${dia}px`;
+    cursor.style.height = `${dia}px`;
+    cursor.style.left = `${clientX - containerRect.left}px`;
+    cursor.style.top = `${clientY - containerRect.top}px`;
+    cursor.style.display = 'block';
+  }, [activeEngine, cursorRef, cursorContainerRef]);
+
+  const hideBrushCursor = useCallback(() => {
+    if (cursorRef?.current) cursorRef.current.style.display = 'none';
+  }, [cursorRef]);
+
+  // Mirror brush size changes from controls onto the cursor div, so
+  // the user gets immediate visual feedback when dragging the size
+  // slider (even before they next move the pointer).
+  useEffect(() => {
+    if (!activeEngine || !cursorRef) return;
+    const onBrushChange = () => {
+      const cursor = cursorRef.current;
+      const wrapper = wrapperRef.current;
+      if (!cursor || !wrapper || activeEngine.width === 0) return;
+      const wrapperRect = wrapper.getBoundingClientRect();
+      if (wrapperRect.width === 0) return;
+      const dia = activeEngine.brushSize * (wrapperRect.width / activeEngine.width);
+      cursor.style.width = `${dia}px`;
+      cursor.style.height = `${dia}px`;
+    };
+    activeEngine.on('brushchange', onBrushChange);
+    return () => activeEngine.off('brushchange', onBrushChange);
+  }, [activeEngine, cursorRef]);
+
+  const handlePointerDown = useCallback((e) => {
+    if (!paintMode || !activeEngine) return;
+    e.preventDefault();
+    e.stopPropagation();
+    const point = screenToMask(e.clientX, e.clientY);
+    if (!point) return;
+    try { wrapperRef.current.setPointerCapture(e.pointerId); } catch {}
+    activeEngine.beginStroke(activeEngine.mode);
+    isPaintingRef.current = true;
+    lastPointRef.current = point;
+    activeEngine.paintStroke([point]);
+  }, [paintMode, activeEngine, screenToMask]);
+
+  const handlePointerMove = useCallback((e) => {
+    if (!paintMode || !activeEngine) return;
+    updateBrushCursor(e.clientX, e.clientY);
+    if (!isPaintingRef.current) return;
+    const point = screenToMask(e.clientX, e.clientY);
+    if (!point) return;
+    const last = lastPointRef.current;
+    if (last && Math.hypot(point.x - last.x, point.y - last.y) < 0.5) return;
+    activeEngine.paintStroke([last, point]);
+    lastPointRef.current = point;
+  }, [paintMode, activeEngine, screenToMask, updateBrushCursor]);
+
+  const handlePointerUp = useCallback((e) => {
+    if (!isPaintingRef.current) return;
+    isPaintingRef.current = false;
+    lastPointRef.current = null;
+    try { wrapperRef.current.releasePointerCapture(e.pointerId); } catch {}
+    if (activeEngine) activeEngine.endStroke();
+  }, [activeEngine]);
+
+  const handlePointerEnter = useCallback((e) => {
+    if (!paintMode) return;
+    updateBrushCursor(e.clientX, e.clientY);
+  }, [paintMode, updateBrushCursor]);
+
+  const handlePointerLeave = useCallback(() => {
+    hideBrushCursor();
+  }, [hideBrushCursor]);
+
   if (!regions.length || !getEngine) return null;
 
+  const ready = imgDims.w > 0 && imgDims.h > 0;
+  const hasEnabledRegion = regions.some((r) => r.enabled);
+
   return (
-    <>
+    <div
+      ref={wrapperRef}
+      style={{
+        position: 'absolute',
+        top: '50%',
+        left: '50%',
+        transform: 'translate(-50%, -50%)',
+        width: imgDims.w || 0,
+        height: imgDims.h || 0,
+        pointerEvents: paintMode && ready ? 'auto' : 'none',
+        cursor: paintMode ? 'none' : 'default',
+        touchAction: 'none',
+        // Wrapper opacity = global fogOpacity × painter knock-back. Per-
+        // region opacity is applied per-layer (hide layer directly, texture
+        // layer via union mask weighting), so it's intentionally NOT in
+        // this product.
+        opacity: fogOpacity * (paintMode ? FOG_PAINTER_KNOCKBACK : 1),
+        zIndex: 25,
+      }}
+      onPointerDown={handlePointerDown}
+      onPointerMove={handlePointerMove}
+      onPointerUp={handlePointerUp}
+      onPointerCancel={handlePointerUp}
+      onPointerEnter={handlePointerEnter}
+      onPointerLeave={handlePointerLeave}
+    >
       {regions.map((region) => {
         if (!region.enabled) return null;
         const engine = getEngine(region.id);
         if (!engine) return null;
-        const isActive = region.id === activeRegionId;
         return (
-          <FogCanvasLayer
+          <FogHideLayer
             key={region.id}
             engine={engine}
-            mapImageRef={mapImageRef}
-            paintMode={paintMode && isActive}
-            fogOpacity={fogOpacity}
             hideFeatherPx={region.hide_feather_px}
-            textureDilatePx={region.texture_dilate_px}
             opacity={region.opacity}
           />
         );
       })}
-    </>
+      {hasEnabledRegion && (
+        <FogSharedTextureLayer
+          regions={regions}
+          getEngine={getEngine}
+          imgDims={imgDims}
+        />
+      )}
+    </div>
   );
 }

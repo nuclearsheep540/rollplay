@@ -24,7 +24,6 @@ export {
 
 // Components
 export {
-  FogCanvasLayer,
   FogRegionStack,
   FogRegionLabels,
   FogPaintControls,

@@ -7,7 +7,7 @@
 
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import GridOverlay from './GridOverlay';
-import { FogCanvasLayer, FogRegionStack, FogRegionLabels } from '@/app/fog_management';
+import { FogRegionStack, FogRegionLabels } from '@/app/fog_management';
 import { useAssetDownload } from '@/app/shared/providers/AssetDownloadManager';
 
 const clamp = (val, min, max) => Math.min(max, Math.max(min, val));
@@ -29,12 +29,10 @@ const MapDisplay = ({
   offsetX = 0,
   offsetY = 0,
   onImageLoad = null, // fires with { naturalWidth, naturalHeight } when map image loads
-  fogEngine = null,    // FogEngine instance (legacy single-region — superseded by fogRegions when both passed)
   fogPaintMode = false, // when true, fog layer captures pointer events for DM painting
-  // Multi-region fog rendering. When `fogRegions` is provided the
-  // stack renders one FogCanvasLayer per enabled region; `fogEngine`
-  // is ignored. The stack composites by DOM stacking — overlapping
-  // enabled regions read as denser fog.
+  // Multi-region fog rendering. The stack renders N hide layers + 1
+  // shared texture layer, with per-region opacity / feather / dilate
+  // preserved through a union mask compositor.
   fogRegions = null,         // array of FogRegion dicts (id, name, enabled, role, params)
   fogGetEngine = null,       // (regionId) => FogEngine — typically from useFogRegions().getEngine
   fogActiveRegionId = null,  // region currently receiving paint events
@@ -42,6 +40,11 @@ const MapDisplay = ({
 }) => {
   const mapImageRef = useRef(null);
   const containerRef = useRef(null);
+  // Brush cursor lives OUTSIDE contentRef's pan/zoom transform so its
+  // compositing layer doesn't invalidate every time the fog repaints.
+  // FogRegionStack mutates this div's style on each pointer move via
+  // the cursorRef prop.
+  const fogCursorRef = useRef(null);
 
   // Download map image through asset manager for progressive byte tracking
   const mc = activeMap?.map_config;
@@ -260,6 +263,8 @@ const MapDisplay = ({
             activeRegionId={fogActiveRegionId}
             paintMode={fogPaintMode}
             mapImageRef={mapImageRef}
+            cursorRef={fogCursorRef}
+            cursorContainerRef={containerRef}
           />
         )}
         {mapLoaded && fogRegions && fogGetEngine && fogShowRegionLabels && (
@@ -269,14 +274,6 @@ const MapDisplay = ({
             mapImageRef={mapImageRef}
           />
         )}
-        {mapLoaded && !fogRegions && fogEngine && (
-          <FogCanvasLayer
-            engine={fogEngine}
-            mapImageRef={mapImageRef}
-            paintMode={fogPaintMode}
-          />
-        )}
-
         {showGrid && (
           <GridOverlay
             gridConfig={(isEditMode && gridConfig) ? gridConfig : (activeMap?.map_config?.grid_config || null)}
@@ -292,6 +289,28 @@ const MapDisplay = ({
           />
         )}
       </div>
+
+      {/* Brush cursor — lifted out of the fog wrapper so its
+          compositing layer is independent of fog repaints. Lives in
+          containerRef's coordinate space (screen pixels, no transform).
+          Hidden by default; FogRegionStack mutates style on pointer
+          events. mix-blend-mode 'difference' still inverts against the
+          map paint underneath. */}
+      <div
+        ref={fogCursorRef}
+        aria-hidden="true"
+        style={{
+          position: 'absolute',
+          display: 'none',
+          pointerEvents: 'none',
+          borderRadius: '50%',
+          border: '1px solid rgba(255, 255, 255, 0.9)',
+          boxShadow: '0 0 0 1px rgba(0, 0, 0, 0.6)',
+          mixBlendMode: 'difference',
+          transform: 'translate(-50%, -50%)',
+          zIndex: 100,
+        }}
+      />
 
       {/* Future: Position markers will be added here */}
     </div>
