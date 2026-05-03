@@ -138,14 +138,16 @@ export default function FogPaintControls({
             Discard
           </button>
         )}
-        <button
-          type="button"
-          onClick={onUpdate}
-          disabled={disabled || !onUpdate || !isDirty}
-          className="flex-1 text-sm rounded px-3 py-2 border bg-emerald-700 border-emerald-500 text-emerald-100 hover:brightness-125 disabled:opacity-50 disabled:cursor-not-allowed"
-        >
-          {isDirty ? 'Update fog →' : 'No changes'}
-        </button>
+        {onUpdate && (
+          <button
+            type="button"
+            onClick={onUpdate}
+            disabled={disabled || !isDirty}
+            className="flex-1 text-sm rounded px-3 py-2 border bg-emerald-700 border-emerald-500 text-emerald-100 hover:brightness-125 disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            {isDirty ? 'Update fog →' : 'No changes'}
+          </button>
+        )}
       </div>
     </div>
   );

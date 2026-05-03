@@ -58,7 +58,7 @@ const FOG_TEXTURE_URL = '/ui/fog_loop_2.gif';
 // Tile count grows roughly with 1 / (1 − overlap)², so 0.9 is ~4× the
 // cost of 0.8. Keep FOG_OVERLAP_FRACTION sensible (0.6–0.85).
 const FOG_TILE_SIZE_PX = 960;
-const FOG_OVERLAP_FRACTION = 0.5;
+const FOG_OVERLAP_FRACTION = 0.7;
 const FOG_STRIDE_PX = Math.max(1, Math.round(FOG_TILE_SIZE_PX * (1 - FOG_OVERLAP_FRACTION)));
 
 // Blend mode used both tile-against-tile (inside the masked composite)
@@ -84,7 +84,7 @@ const FOG_BLEND_MODE = 'screen';
 //   falloff rather than a hard line. 0 disables feathering.
 const FOG_DISPLACE_FREQUENCY = 0.005;
 const FOG_DISPLACE_OCTAVES = 1;
-const FOG_DISPLACE_SCALE = 64;
+const FOG_DISPLACE_SCALE = 32;
 const FOG_FEATHER_PX = 6;
 
 // Two-layer fog composition:
@@ -108,7 +108,7 @@ const FOG_FEATHER_PX = 6;
 //   mask, in mask-space pixels. Bigger = wisps drift further past the
 //   revealed edge before fading. Combined with FOG_DISPLACE_SCALE this
 //   controls how "blown" the fog looks beyond the painted area.
-const FOG_HIDE_COLOR = 'rgba(20, 20, 30, 0.95)';
+const FOG_HIDE_COLOR = 'rgba(20, 20, 30, 0.05)';
 const FOG_HIDE_FEATHER_PX = 20;
 const FOG_TEXTURE_DILATE_PX = 30;
 

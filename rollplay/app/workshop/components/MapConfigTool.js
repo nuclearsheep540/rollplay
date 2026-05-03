@@ -3,7 +3,7 @@
 
 'use client'
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { faArrowLeft, faHouse, faFileImport, faFloppyDisk, faCheckDouble } from '@fortawesome/free-solid-svg-icons';
 import { useRouter } from 'next/navigation';
@@ -149,6 +149,45 @@ export default function MapConfigTool({
     fog.engine.on('strokeend', onStrokeEnd);
     return () => fog.engine.off('strokeend', onStrokeEnd);
   }, [fog.engine, history]);
+
+  // Auto-save: every completed stroke triggers a debounced PATCH so the
+  // workshop has a Photoshop-style "always saved" feel — no Update button
+  // to remember in this context. The game runtime intentionally still
+  // uses the manual Update button (the WS broadcast is a deliberate act).
+  //
+  // Refs let the stable listener read the latest selected asset / fog /
+  // mutation without re-binding on every render. Debounce coalesces fast
+  // bursts of strokes into one PATCH and avoids out-of-order requests
+  // overwriting newer state with older.
+  const selectedAssetRef = useRef(null);
+  const fogRef = useRef(null);
+  const fogMutationRef = useRef(null);
+  selectedAssetRef.current = selectedAsset;
+  fogRef.current = fog;
+  fogMutationRef.current = fogUpdateMutation;
+
+  useEffect(() => {
+    if (!fog.engine) return;
+    let timer = null;
+    const onStrokeEndAutoSave = () => {
+      const asset = selectedAssetRef.current;
+      const f = fogRef.current;
+      const mutation = fogMutationRef.current;
+      if (!asset || !f || !mutation) return;
+      clearTimeout(timer);
+      timer = setTimeout(() => {
+        mutation.mutate({
+          assetId: asset.id,
+          fogConfig: f.serialize(),
+        });
+      }, 250);
+    };
+    fog.engine.on('strokeend', onStrokeEndAutoSave);
+    return () => {
+      fog.engine.off('strokeend', onStrokeEndAutoSave);
+      clearTimeout(timer);
+    };
+  }, [fog.engine]);
 
   // ── Asset loading ──────────────────────────────────────────────────
 
@@ -454,7 +493,9 @@ export default function MapConfigTool({
                 isDirty={fog.isDirty}
                 onClear={fog.clear}
                 onFillAll={fog.fillAll}
-                onUpdate={handleFogSave}
+                /* No onUpdate in workshop — strokes auto-save via the
+                   strokeend subscription above. The game runtime still
+                   passes onUpdate so its manual button shows. */
                 /* No onResetToServer — the workshop's Discard role is
                    replaced by the global undo at the top of the tool. */
                 disabled={fogUpdateMutation.isPending}
