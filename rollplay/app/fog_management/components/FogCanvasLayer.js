@@ -316,18 +316,30 @@ export default function FogCanvasLayer({
   // to match the current brush diameter. Direct DOM mutation rather
   // than React state — fires per-pointer-move, would shred React's
   // scheduler if it caused re-renders.
+  //
+  // Coordinate gotcha: the cursor div lives INSIDE the wrapper, which
+  // sits inside MapDisplay's pan/zoom-transformed contentRef. Pixel
+  // values written into cursor.style.left/width/etc. are wrapper-local
+  // (pre-transform); the parent transform then scales them. So we use
+  // wrapper.offsetWidth (natural, transform-free) for the scale and
+  // convert mouse coords via the screen-space ratio. getBoundingClientRect
+  // is still correct for the *ratio* because it returns post-transform
+  // dimensions on both sides of the divide.
   const updateBrushCursor = useCallback((clientX, clientY) => {
     const cursor = cursorRef.current;
     const wrapper = wrapperRef.current;
     if (!cursor || !wrapper || !engine) return;
     const rect = wrapper.getBoundingClientRect();
-    if (rect.width === 0 || engine.width === 0) return;
-    const scale = rect.width / engine.width;
-    const dia = engine.brushSize * scale;
+    const naturalW = wrapper.offsetWidth;
+    const naturalH = wrapper.offsetHeight;
+    if (rect.width === 0 || naturalW === 0 || engine.width === 0) return;
+    const xRatio = (clientX - rect.left) / rect.width;
+    const yRatio = (clientY - rect.top) / rect.height;
+    const dia = engine.brushSize * (naturalW / engine.width);
     cursor.style.width = `${dia}px`;
     cursor.style.height = `${dia}px`;
-    cursor.style.left = `${clientX - rect.left}px`;
-    cursor.style.top = `${clientY - rect.top}px`;
+    cursor.style.left = `${xRatio * naturalW}px`;
+    cursor.style.top = `${yRatio * naturalH}px`;
     cursor.style.display = 'block';
   }, [engine]);
 
@@ -345,9 +357,12 @@ export default function FogCanvasLayer({
       const cursor = cursorRef.current;
       const wrapper = wrapperRef.current;
       if (!cursor || !wrapper || engine.width === 0) return;
-      const rect = wrapper.getBoundingClientRect();
-      const scale = rect.width / engine.width;
-      const dia = engine.brushSize * scale;
+      // Use the wrapper's natural width, not the transformed bounding
+      // rect — same reason as updateBrushCursor: cursor.style.width is
+      // pre-transform, parent zoom scales it again at render time.
+      const naturalW = wrapper.offsetWidth;
+      if (naturalW === 0) return;
+      const dia = engine.brushSize * (naturalW / engine.width);
       cursor.style.width = `${dia}px`;
       cursor.style.height = `${dia}px`;
     };
