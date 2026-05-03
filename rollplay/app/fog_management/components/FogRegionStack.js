@@ -42,10 +42,8 @@ export default function FogRegionStack({
   mapImageRef,
   fogOpacity = 1.0,
   cursorRef = null,
-  cursorContainerRef = null,
 }) {
   const wrapperRef = useRef(null);
-  const rafPendingRef = useRef(false);
   const isPaintingRef = useRef(false);
   const lastPointRef = useRef(null);
   const [imgDims, setImgDims] = useState({ w: 0, h: 0 });
@@ -81,26 +79,41 @@ export default function FogRegionStack({
     };
   }, [activeEngine]);
 
-  // Cursor div lives outside the pan/zoom transform (sibling of
-  // contentRef in MapDisplay). cursorContainerRef is its offset parent.
-  // Both size and position math use screen pixels — wrapper's bounding
-  // rect is post-transform so wrapperRect.width / engine.width gives
-  // the correct screen-pixel diameter.
+  // The cursor div lives as a sibling of this wrapper, inside contentRef,
+  // so it inherits the same pan/zoom transform. Position is computed in
+  // contentRef-local CSS pixels (cursor's offsetParent), with the parent
+  // transform's scale factor derived from wrapper's bounding-rect-vs-
+  // offsetWidth ratio. Size uses the wrapper's natural width too, so
+  // both dimensions are pre-transform CSS pixels — the parent scale
+  // applies uniformly at render time.
+  //
+  // Cursor and paint share wrapperRef + the same parent transform, so
+  // they cannot drift relative to each other regardless of how contentRef
+  // is panned/scaled.
   const updateBrushCursor = useCallback((clientX, clientY) => {
     const cursor = cursorRef?.current;
-    const container = cursorContainerRef?.current;
     const wrapper = wrapperRef.current;
-    if (!cursor || !container || !wrapper || !activeEngine) return;
+    if (!cursor || !wrapper || !activeEngine) return;
+    // parentNode (not offsetParent) — offsetParent returns null when
+    // the cursor is `display: none`, which is its initial state. The
+    // cursor's parentNode is contentRef (cursor is a sibling of the
+    // fog wrapper, both children of contentRef).
+    const op = cursor.parentNode;
+    if (!op) return;
+    const oprect = op.getBoundingClientRect();
     const wrapperRect = wrapper.getBoundingClientRect();
-    if (wrapperRect.width === 0 || activeEngine.width === 0) return;
-    const containerRect = container.getBoundingClientRect();
-    const dia = activeEngine.brushSize * (wrapperRect.width / activeEngine.width);
+    const naturalW = wrapper.offsetWidth;
+    if (wrapperRect.width === 0 || naturalW === 0 || activeEngine.width === 0) return;
+    // Parent transform scale factor. wrapper's CSS width = naturalW;
+    // its on-screen width = wrapperRect.width = naturalW × scale.
+    const scale = wrapperRect.width / naturalW;
+    const dia = activeEngine.brushSize * (naturalW / activeEngine.width);
     cursor.style.width = `${dia}px`;
     cursor.style.height = `${dia}px`;
-    cursor.style.left = `${clientX - containerRect.left}px`;
-    cursor.style.top = `${clientY - containerRect.top}px`;
+    cursor.style.left = `${(clientX - oprect.left) / scale}px`;
+    cursor.style.top = `${(clientY - oprect.top) / scale}px`;
     cursor.style.display = 'block';
-  }, [activeEngine, cursorRef, cursorContainerRef]);
+  }, [activeEngine, cursorRef]);
 
   const hideBrushCursor = useCallback(() => {
     if (cursorRef?.current) cursorRef.current.style.display = 'none';
@@ -115,9 +128,9 @@ export default function FogRegionStack({
       const cursor = cursorRef.current;
       const wrapper = wrapperRef.current;
       if (!cursor || !wrapper || activeEngine.width === 0) return;
-      const wrapperRect = wrapper.getBoundingClientRect();
-      if (wrapperRect.width === 0) return;
-      const dia = activeEngine.brushSize * (wrapperRect.width / activeEngine.width);
+      const naturalW = wrapper.offsetWidth;
+      if (naturalW === 0) return;
+      const dia = activeEngine.brushSize * (naturalW / activeEngine.width);
       cursor.style.width = `${dia}px`;
       cursor.style.height = `${dia}px`;
     };

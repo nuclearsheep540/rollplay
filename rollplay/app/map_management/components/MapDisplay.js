@@ -40,10 +40,12 @@ const MapDisplay = ({
 }) => {
   const mapImageRef = useRef(null);
   const containerRef = useRef(null);
-  // Brush cursor lives OUTSIDE contentRef's pan/zoom transform so its
-  // compositing layer doesn't invalidate every time the fog repaints.
-  // FogRegionStack mutates this div's style on each pointer move via
-  // the cursorRef prop.
+  // Brush cursor lives as a SIBLING of the fog wrapper inside contentRef.
+  // It still inherits the pan/zoom transform (so coords stay aligned with
+  // the wrapper paint uses for screenToMask), but its compositing layer
+  // is independent from the fog wrapper's — so fog repaints don't invalidate
+  // it the way they did when the cursor was nested inside the wrapper.
+  // FogRegionStack mutates this div's style on each pointer move via cursorRef.
   const fogCursorRef = useRef(null);
 
   // Download map image through asset manager for progressive byte tracking
@@ -264,9 +266,29 @@ const MapDisplay = ({
             paintMode={fogPaintMode}
             mapImageRef={mapImageRef}
             cursorRef={fogCursorRef}
-            cursorContainerRef={containerRef}
           />
         )}
+
+        {/* Brush cursor — sibling of the fog wrapper, inside contentRef.
+            Inherits pan/zoom so its CSS coords share the wrapper's frame
+            (cursor and paint can't drift). Has its own compositing layer
+            via mix-blend-mode, independent of the fog wrapper's repaints.
+            Hidden by default; FogRegionStack mutates style on pointer events. */}
+        <div
+          ref={fogCursorRef}
+          aria-hidden="true"
+          style={{
+            position: 'absolute',
+            display: 'none',
+            pointerEvents: 'none',
+            borderRadius: '50%',
+            border: '1px solid rgba(255, 255, 255, 0.9)',
+            boxShadow: '0 0 0 1px rgba(0, 0, 0, 0.6)',
+            mixBlendMode: 'difference',
+            transform: 'translate(-50%, -50%)',
+            zIndex: 26,
+          }}
+        />
         {mapLoaded && fogRegions && fogGetEngine && fogShowRegionLabels && (
           <FogRegionLabels
             regions={fogRegions}
@@ -289,28 +311,6 @@ const MapDisplay = ({
           />
         )}
       </div>
-
-      {/* Brush cursor — lifted out of the fog wrapper so its
-          compositing layer is independent of fog repaints. Lives in
-          containerRef's coordinate space (screen pixels, no transform).
-          Hidden by default; FogRegionStack mutates style on pointer
-          events. mix-blend-mode 'difference' still inverts against the
-          map paint underneath. */}
-      <div
-        ref={fogCursorRef}
-        aria-hidden="true"
-        style={{
-          position: 'absolute',
-          display: 'none',
-          pointerEvents: 'none',
-          borderRadius: '50%',
-          border: '1px solid rgba(255, 255, 255, 0.9)',
-          boxShadow: '0 0 0 1px rgba(0, 0, 0, 0.6)',
-          mixBlendMode: 'difference',
-          transform: 'translate(-50%, -50%)',
-          zIndex: 100,
-        }}
-      />
 
       {/* Future: Position markers will be added here */}
     </div>
