@@ -28,4 +28,5 @@ export {
   FogRegionStack,
   FogPaintControls,
   RegionListPanel,
+  RegionParamsEditor,
 } from './components';

@@ -17,7 +17,12 @@ import { MapDisplay } from '@/app/map_management';
 import { useGridConfig } from '@/app/map_management/hooks/useGridConfig';
 import { useUpdateGridConfig } from '../hooks/useUpdateGridConfig';
 import { useUpdateFogConfig } from '../hooks/useUpdateFogConfig';
-import { useFogRegions, FogPaintControls, RegionListPanel } from '@/app/fog_management';
+import {
+  useFogRegions,
+  FogPaintControls,
+  RegionListPanel,
+  RegionParamsEditor,
+} from '@/app/fog_management';
 import { useActionHistory } from '@/app/shared/hooks/useActionHistory';
 
 const VALID_TOOLS = ['move', 'grid', 'paint', 'erase'];
@@ -181,6 +186,10 @@ export default function MapConfigTool({
   const selectedAssetRef = useRef(null);
   const fogRef = useRef(null);
   const fogMutationRef = useRef(null);
+  // Suppresses metadata auto-save while loadFromConfig is repopulating
+  // regions from the server. Without this, the load itself looks like
+  // a "regions changed" event and immediately echoes back as a save.
+  const isLoadingFogRef = useRef(false);
   selectedAssetRef.current = selectedAsset;
   fogRef.current = fog;
   fogMutationRef.current = fogUpdateMutation;
@@ -211,6 +220,26 @@ export default function MapConfigTool({
       clearTimeout(timer);
     };
   }, [fog.engine]);
+
+  // Metadata auto-save: region rename / toggle / add / delete / param
+  // slider changes don't fire strokeend, so they need their own debounce
+  // path. Watches fog.regions; gated by isLoadingFogRef so that the
+  // initial load of an asset isn't itself treated as a user mutation.
+  useEffect(() => {
+    if (isLoadingFogRef.current) return;
+    const asset = selectedAssetRef.current;
+    const f = fogRef.current;
+    const mutation = fogMutationRef.current;
+    if (!asset || !f || !mutation) return;
+    const timer = setTimeout(() => {
+      const regions = f.serialize();
+      mutation.mutate({
+        assetId: asset.id,
+        regions: regions && regions.length ? regions : null,
+      });
+    }, 250);
+    return () => clearTimeout(timer);
+  }, [fog.regions]);
 
   // ── Asset loading ──────────────────────────────────────────────────
 
@@ -259,7 +288,15 @@ export default function MapConfigTool({
       // Hydrate all fog regions from the persisted config. The hook
       // creates one engine per region and loads each mask. Empty fog
       // (fresh map) hydrates to a single implicit "Default" region.
-      await fog.loadFromConfig(assetData.fog_config);
+      // Gate the metadata auto-save effect for the duration of the
+      // load so it doesn't echo the just-loaded regions straight back
+      // to the server.
+      isLoadingFogRef.current = true;
+      try {
+        await fog.loadFromConfig(assetData.fog_config);
+      } finally {
+        isLoadingFogRef.current = false;
+      }
 
       setLoadingAsset(false);
     }
@@ -519,6 +556,14 @@ export default function MapConfigTool({
                 onRenameRegion={(id, name) => fog.updateRegion(id, { name })}
                 onToggleEnabled={fog.setRegionEnabled}
               />
+              {fog.activeRegion && (
+                <RegionParamsEditor
+                  region={fog.activeRegion}
+                  onChange={(field, value) =>
+                    fog.updateRegion(fog.activeId, { [field]: value })
+                  }
+                />
+              )}
               <div className="text-[11px] uppercase tracking-wider text-content-secondary">
                 {tool === 'paint' ? 'Painting fog' : 'Revealing (erasing fog)'}
                 {fog.activeRegion && (
