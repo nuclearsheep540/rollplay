@@ -91,15 +91,27 @@ export function useFogRegions({ width = 1024, height = 1024, initialConfig = nul
   brushSizeRef.current = brushSize;
   modeRef.current = mode;
 
+  // Mirror of maskDims for engine creation: createEngine needs the
+  // current map dims, but the closure-captured `width, height` props
+  // are the hook's defaults (1024×1024). Without this, regions added
+  // AFTER fitToMap would get square 1024² engines while region 1 had
+  // already been resized to match the map — drift in the shared
+  // texture's union mask compositor (it doesn't stretch per-region
+  // masks, so smaller canvases don't fill the union).
+  const maskDimsRef = useRef({ width, height });
+  maskDimsRef.current = maskDims;
+
   // Helper: create a FogEngine pre-configured with the current tool
-  // state. Used everywhere we instantiate one — keeps brush/mode in
-  // lockstep across all engines from the start.
+  // state and at the current map dims. Used everywhere we instantiate
+  // one — keeps brush/mode/dims in lockstep across all engines from
+  // the start.
   const createEngine = useCallback(() => {
-    const eng = new FogEngine({ width, height });
+    const dims = maskDimsRef.current;
+    const eng = new FogEngine({ width: dims.width, height: dims.height });
     eng.setBrushSize(brushSizeRef.current);
     eng.setMode(modeRef.current);
     return eng;
-  }, [width, height]);
+  }, []);
 
   const getOrCreateEngine = useCallback((regionId) => {
     if (typeof window === 'undefined') return null;
@@ -244,21 +256,28 @@ export function useFogRegions({ width = 1024, height = 1024, initialConfig = nul
   }, [regions]);
 
   /**
-   * Resize the active engine's canvas to match the map's aspect ratio.
-   * Same logic as useFogEngine — applies only to the region currently
-   * being painted; other engines keep their existing dimensions.
+   * Resize ALL engines' canvases to match the map's aspect ratio.
+   * Resizing every engine (not just the active one) keeps the shared
+   * texture layer's union compositor honest — its union canvas is
+   * sized to the first enabled engine and `drawImage` doesn't stretch,
+   * so a region with mismatched dims would leak into the wrong area.
+   * `engine.resize` preserves existing painted content via scratch-and-
+   * redraw.
    */
   const fitToMap = useCallback((naturalWidth, naturalHeight, maxEdge = 1024) => {
-    const eng = activeId ? enginesRef.current.get(activeId) : null;
-    if (!eng || !naturalWidth || !naturalHeight) return;
+    if (!naturalWidth || !naturalHeight) return;
     const longEdge = Math.max(naturalWidth, naturalHeight);
     const ratio = longEdge > maxEdge ? maxEdge / longEdge : 1;
     const w = Math.max(1, Math.round(naturalWidth * ratio));
     const h = Math.max(1, Math.round(naturalHeight * ratio));
-    if (w === eng.width && h === eng.height) return;
-    eng.resize(w, h);
-    setMaskDims({ width: w, height: h });
-  }, [activeId]);
+    let changed = false;
+    for (const eng of enginesRef.current.values()) {
+      if (w === eng.width && h === eng.height) continue;
+      eng.resize(w, h);
+      changed = true;
+    }
+    if (changed) setMaskDims({ width: w, height: h });
+  }, []);
 
   // ── Region CRUD ────────────────────────────────────────────────────
 
