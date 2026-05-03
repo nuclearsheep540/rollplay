@@ -13,6 +13,7 @@ from pydantic import BaseModel, Field
 
 from modules.library.domain.media_asset_type import MediaAssetType
 from shared_contracts.cine import MotionConfig, VisualOverlay
+from shared_contracts.map import FogRegion
 
 
 class UploadUrlResponse(BaseModel):
@@ -138,16 +139,19 @@ class UpdateGridConfigRequest(BaseModel):
 
 
 class UpdateFogConfigRequest(BaseModel):
-    """Request to update map fog-of-war mask.
+    """Request to update map fog-of-war regions list.
 
-    Atomic full-replace: the entire mask is provided on every update.
-    Pass mask=None to clear all fog. Per-pixel alpha in the PNG encodes
-    the actual fog shape — width/height are just bitmap bounds.
+    Atomic full-replace: the entire regions list is provided on every
+    update. Pass regions=None or [] to clear all fog. Each region
+    carries its own mask + render params (feather, dilate, etc.).
+
+    Per-region partial updates (toggle, rename, etc.) are handled by
+    dedicated endpoints — see the regions feature plan.
     """
-    mask: Optional[str] = Field(None, min_length=1, description="Base64 PNG data URL or null to clear")
-    mask_width: Optional[int] = Field(None, ge=1, description="Bitmap width in pixels")
-    mask_height: Optional[int] = Field(None, ge=1, description="Bitmap height in pixels")
-    version: Optional[int] = Field(None, ge=1, description="Schema version (default 1)")
+    regions: Optional[List[FogRegion]] = Field(
+        None,
+        description="Full regions list (atomic replace) or null to clear",
+    )
 
 
 class UpdateImageConfigRequest(BaseModel):

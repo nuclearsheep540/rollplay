@@ -1193,35 +1193,40 @@ export default function GameContent() {
     [webSocket, isConnected]
   );
 
-  // Hydrate the engine from the active map's persisted fog when the map
-  // loads or changes (cold→hot via ETL on session start, then live updates).
-  // Spread-don't-reconstruct: the engine consumes the whole serialised
-  // shape, so contract additions round-trip without cherry-picking.
+  // Hydrate the engine from the active map's first region when the map
+  // loads or changes (cold→hot via ETL on session start, then live
+  // updates). Step-1 reads regions[0] only; multi-region rendering
+  // lands later via FogRegionStack.
   useEffect(() => {
     if (!fog.engine) return;
-    const incoming = activeMap?.map_config?.fog_config;
-    if (incoming?.mask) {
-      fog.loadDataUrl(incoming.mask);
-    } else {
-      fog.loadDataUrl(null); // clear if a new map has no fog
-    }
+    const firstRegion = activeMap?.map_config?.fog_config?.regions?.[0] ?? null;
+    fog.loadRegion(firstRegion);
   }, [activeMap?.map_config?.asset_id, activeMap?.map_config?.fog_config?.version, fog.engine]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Match fog canvas aspect ratio to the active map. Without this, a
   // square 1024×1024 default canvas gets CSS-stretched to fit the map's
   // actual aspect, deforming brush strokes into ellipses. Skip when an
-  // existing mask already pinned the canvas size on load.
+  // existing region already pinned the canvas size on load.
   useEffect(() => {
     if (!fog.engine || !mapNaturalDimensions) return;
-    if (activeMap?.map_config?.fog_config?.mask) return;
+    const hasPaintedRegion = activeMap?.map_config?.fog_config?.regions?.some(
+      (r) => r.mask
+    );
+    if (hasPaintedRegion) return;
     fog.fitToMap(mapNaturalDimensions.naturalWidth, mapNaturalDimensions.naturalHeight);
   }, [mapNaturalDimensions, activeMap?.map_config?.asset_id, fog]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // DM "Update fog" handler — serialises the engine canvas and broadcasts
+  // DM "Update fog" handler — serialises the engine as a single region
+  // and broadcasts the full v2 fog_config. Multi-region runtime updates
+  // (toggle, per-region paint) come in step 5+.
   const handleFogUpdate = useCallback(() => {
     const filename = activeMap?.map_config?.filename;
     if (!filename || !fog.engine) return;
-    fogSenders.sendFogUpdate(filename, fog.serialize());
+    const region = fog.serialize();
+    const fogConfig = region
+      ? { version: 2, regions: [region] }
+      : null;
+    fogSenders.sendFogUpdate(filename, fogConfig);
   }, [activeMap?.map_config?.filename, fog, fogSenders]);
 
   const handleFogClearBroadcast = useCallback(() => {

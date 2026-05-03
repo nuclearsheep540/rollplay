@@ -55,6 +55,7 @@ export default class FogEngine extends EventEmitter {
     this._strokeKindHint = null;   // descriptive label set on beginStroke
     this._stamp = null;            // prebuilt soft-brush canvas, cached per brush size
     this._stampSize = 0;
+    this._regionId = null;         // FogRegion.id captured on loadFromRegion(); round-trips on serialize()
   }
 
   // Build a radial-gradient brush stamp once per brush-size change. The
@@ -273,18 +274,49 @@ export default class FogEngine extends EventEmitter {
   }
 
   /**
-   * Build the fog_config payload for the network — matches the
-   * shared_contracts.map.FogConfig shape (mask, mask_width,
-   * mask_height, version).
+   * Build a FogRegion dict for the network — matches the
+   * shared_contracts.map.FogRegion shape. The engine represents one
+   * region (one mask + one set of render params); consumers wrap it in
+   * a regions list when sending to the API or broadcasting via WS.
+   *
+   * The region id is captured from loadFromRegion() and round-trips
+   * through saves so the same region updates on subsequent strokes
+   * rather than each save creating a new region. Falls back to
+   * 'default' for fresh canvases that haven't loaded an existing
+   * region (step 4+ will replace this with proper UUIDs once the
+   * multi-region UI lands).
    */
   serialize() {
     if (!this._canvas) return null;
     return {
+      id: this._regionId || 'default',
+      name: 'Default',
+      enabled: true,
+      role: 'prepped',
       mask: this.toDataUrl(),
       mask_width: this._canvas.width,
       mask_height: this._canvas.height,
-      version: 1,
+      // Defaults mirror the constants in FogCanvasLayer.js. Per-region
+      // editing of these values is wired up later (step 7).
+      hide_feather_px: 20,
+      texture_dilate_px: 30,
+      paint_mode_opacity: 0.7,
     };
+  }
+
+  /**
+   * Hydrate the engine from a FogRegion (or null to clear). Captures
+   * the region id so subsequent serialize() calls round-trip the same
+   * id rather than minting a new one.
+   */
+  async loadFromRegion(region) {
+    if (!region) {
+      this._regionId = null;
+      await this.loadFromDataUrl(null);
+      return;
+    }
+    this._regionId = region.id || null;
+    await this.loadFromDataUrl(region.mask || null);
   }
 
   /**

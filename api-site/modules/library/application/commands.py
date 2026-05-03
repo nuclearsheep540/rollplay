@@ -5,7 +5,7 @@
 MediaAsset Commands - Write operations for media asset management
 """
 
-from typing import Optional, Union
+from typing import Any, Dict, List, Optional, Union
 from uuid import UUID
 
 from modules.library.domain.asset_aggregate import MediaAssetAggregate
@@ -432,12 +432,13 @@ class UpdateGridConfig:
 
 class UpdateFogConfig:
     """
-    Replace the fog-of-war mask on a map asset (atomic full-replace).
+    Replace the fog-of-war regions list on a map asset (atomic full-replace).
 
-    The mask is a base64 PNG data URL whose alpha channel encodes the
-    fog shape; mask=None clears all fog. Per the codebase's atomic-state
-    rule, we never patch individual fields — the bitmap and its
-    dimensions must always agree.
+    Each region in the list owns its own alpha-mask PNG plus render
+    params (feather, dilate, etc.). Pass regions=None or [] to clear
+    all fog. Per the codebase's atomic-state rule, the entire regions
+    list is replaced on every call — partial updates are the per-
+    region endpoints' job (commands TBD in a later step).
     """
 
     def __init__(self, repository: MediaAssetRepository, session_repository: SessionRepository = None):
@@ -448,10 +449,7 @@ class UpdateFogConfig:
         self,
         asset_id: UUID,
         user_id: UUID,
-        mask: Optional[str] = None,
-        mask_width: Optional[int] = None,
-        mask_height: Optional[int] = None,
-        version: Optional[int] = None,
+        regions: Optional[List[Dict[str, Any]]] = None,
     ) -> MapAsset:
         asset = self.repository.get_by_id(asset_id)
         if not asset:
@@ -466,12 +464,7 @@ class UpdateFogConfig:
         if self.session_repository:
             check_asset_in_active_session(asset.campaign_ids, self.session_repository)
 
-        asset.update_fog_config(
-            mask=mask,
-            mask_width=mask_width,
-            mask_height=mask_height,
-            version=version,
-        )
+        asset.update_fog_config(regions=regions)
         self.repository.save(asset)
         return asset
 

@@ -624,28 +624,34 @@ async def update_fog_config(
     s3_service: S3Service = Depends(get_s3_service)
 ) -> MediaAssetResponse:
     """
-    Replace the fog-of-war mask on a map asset (atomic full-replace).
+    Replace the fog-of-war regions list on a map asset (atomic full-replace).
 
-    The mask is a base64 PNG data URL whose alpha channel encodes the
-    fog shape. Pass mask=null to clear. The map's persistent fog state
-    is reloaded into the next live session via ETL.
+    Each region in the list owns its own alpha-mask PNG plus render
+    params (feather, dilate, etc.). Pass regions=null or [] to clear
+    all fog. The map's persistent fog state is reloaded into the next
+    live session via ETL.
     """
     try:
+        # Convert FogRegion contract instances to plain dicts for the
+        # aggregate's storage layer (which keeps things JSONB-shaped).
+        region_dicts = (
+            [r.model_dump() for r in request.regions]
+            if request.regions is not None
+            else None
+        )
         command = UpdateFogConfig(repo, session_repo)
         asset = command.execute(
             asset_id=asset_id,
             user_id=current_user.id,
-            mask=request.mask,
-            mask_width=request.mask_width,
-            mask_height=request.mask_height,
-            version=request.version,
+            regions=region_dicts,
         )
 
-        # Avoid logging the full mask payload — only the shape metadata.
+        # Avoid logging full mask payloads — only the shape metadata.
+        region_count = len(request.regions) if request.regions else 0
         logger.info(
             f"Updated fog config for map {asset_id}: "
             f"painted={asset.has_fog_config()} "
-            f"size={request.mask_width}x{request.mask_height}"
+            f"regions={region_count}"
         )
 
         return _to_media_asset_response(asset, s3_service)

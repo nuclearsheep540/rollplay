@@ -3,11 +3,17 @@
 
 """Map and grid boundary schemas for the ETL between api-site and api-game."""
 
-from typing import Any, Dict, Optional
+from typing import Any, Dict, List, Literal, Optional
 
 from pydantic import Field
 
 from .base import ContractModel
+
+
+# Fog regions soft-cap. The renderer composites one hide+texture pair
+# per enabled region; cost scales linearly. 12 is roomy for typical use
+# and bounded for performance.
+FOG_REGIONS_MAX = 12
 
 
 class GridColorMode(ContractModel):
@@ -30,26 +36,61 @@ class GridConfig(ContractModel):
     grid_cell_size: Optional[float] = None  # Absolute cell size in native image pixels; None = not yet tuned
 
 
-class FogConfig(ContractModel):
-    """Fog of war mask for a map.
+class FogRegion(ContractModel):
+    """One independent fog area on a map.
+
+    Each region owns its own painted alpha mask plus the render
+    parameters that previously lived as file-level constants in
+    FogCanvasLayer.js. Multiple enabled regions composite naturally
+    via DOM stacking — overlapping enabled regions read as denser fog
+    because two hide layers stack.
+
+    Roles:
+      • 'prepped' — pre-painted strategic area; toggled at runtime.
+      • 'live'    — the always-present scratch region for ad-hoc paint
+        during play. Exactly one 'live' region per map.
 
     The mask is a base64-encoded PNG data URL (with the
     `data:image/png;base64,` prefix). Alpha channel is meaningful:
     opaque pixels are fog, transparent pixels are revealed. Complex
-    fog shapes (holes, disconnected regions, soft edges) are
-    encoded entirely in the per-pixel alpha pattern —
-    mask_width/mask_height are just the rectangular bounds of the
-    bitmap, not a geometric description.
-
-    Resolution is chosen by the painter (typically 25–50% of the
-    map's native dimensions); the renderer scales the mask to the
-    map image's display size on the client.
+    fog shapes (holes, disconnected regions, soft edges) are encoded
+    entirely in the per-pixel alpha pattern — mask_width/mask_height
+    are the bitmap bounds, not a geometric description.
     """
 
+    id: str = Field(..., min_length=1)
+    name: str = Field(default="Region", min_length=1, max_length=64)
+    enabled: bool = Field(default=True)
+    role: Literal["prepped", "live"] = Field(default="prepped")
     mask: Optional[str] = Field(default=None, min_length=1)  # data URL
     mask_width: Optional[int] = Field(default=None, ge=1)
     mask_height: Optional[int] = Field(default=None, ge=1)
-    version: int = 1
+
+    # Render params — were FOG_* constants in FogCanvasLayer.js.
+    # FOG_HIDE_COLOR stays a file-level constant (consistent fog tone
+    # across the map; not user-tunable). Only feather, dilate, and the
+    # painter's knock-back opacity are region-editable.
+    hide_feather_px: int = Field(default=20, ge=0, le=200)
+    texture_dilate_px: int = Field(default=30, ge=0, le=200)
+    paint_mode_opacity: float = Field(default=0.7, ge=0.0, le=1.0)
+
+
+class FogConfig(ContractModel):
+    """Fog of war state for a map — a list of independent regions.
+
+    Each FogRegion owns its own mask + render params. The renderer
+    composites enabled regions in DOM order; per-region mask shapes
+    define what's hidden, and overlapping regions naturally read as
+    denser fog.
+
+    `regions` is capped at FOG_REGIONS_MAX entries. The list may be
+    empty (no fog painted yet); a 'live' region is appended by the
+    aggregate on first read so every active map has a scratch surface
+    for ad-hoc paint during play.
+    """
+
+    regions: List[FogRegion] = Field(default_factory=list, max_length=FOG_REGIONS_MAX)
+    version: int = 2
 
 
 class MapConfig(ContractModel):

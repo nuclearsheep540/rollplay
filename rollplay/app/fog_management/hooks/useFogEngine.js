@@ -106,6 +106,13 @@ export function useFogEngine({ width = 1024, height = 1024 } = {}) {
     return Promise.resolve();
   }, []);
 
+  // Load from a FogRegion — captures the region id so subsequent saves
+  // round-trip the same id rather than minting a new one each stroke.
+  const loadRegion = useCallback((region) => {
+    if (engineRef.current) return engineRef.current.loadFromRegion(region);
+    return Promise.resolve();
+  }, []);
+
   const serialize = useCallback(() => {
     return engineRef.current ? engineRef.current.serialize() : null;
   }, []);
@@ -143,6 +150,7 @@ export function useFogEngine({ width = 1024, height = 1024 } = {}) {
     clear,
     fillAll,
     loadDataUrl,
+    loadRegion,
     serialize,
     fitToMap,
   };

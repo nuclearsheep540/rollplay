@@ -170,12 +170,12 @@ class MapService:
     
     def update_fog_config(self, room_id: str, filename: str,
                           fog_config: Optional[Dict[str, Any]]) -> bool:
-        """Replace the fog-of-war mask on the active map for a room.
+        """Replace the fog-of-war regions list on the active map for a room.
 
-        Atomic: writes the entire fog_config object (or None to clear)
-        in a single $set on `map_config.fog_config`. The bitmap and
-        its dimensions must always agree, so we never patch sub-fields
-        independently.
+        v2 fog_config shape: { "version": 2, "regions": [FogRegion, ...] }
+        or None to clear all fog. Atomic full-replace — writes the entire
+        fog_config object in a single $set on `map_config.fog_config`.
+        Per-region partial updates are deferred to dedicated WS events.
         """
         if self.collection is None:
             logger.error("No database connection available")
@@ -189,9 +189,9 @@ class MapService:
                 logger.error(f"❌ No active map found for room {room_id}, filename {filename}")
                 return False
 
-            # Don't log the full mask payload — just the metadata.
+            # Don't log the full mask payloads — just region count + version.
             meta = (
-                f"{fog_config.get('mask_width')}x{fog_config.get('mask_height')} "
+                f"regions={len(fog_config.get('regions', []))} "
                 f"v{fog_config.get('version')}"
                 if fog_config else "cleared"
             )

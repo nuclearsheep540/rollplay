@@ -13,7 +13,7 @@ from datetime import datetime
 from typing import Any, Dict, List, Optional, Union
 from uuid import UUID, uuid4
 
-from shared_contracts.map import FogConfig, GridColorMode, GridConfig, MapConfig
+from shared_contracts.map import FOG_REGIONS_MAX, FogConfig, FogRegion, GridColorMode, GridConfig, MapConfig
 
 from modules.library.domain.asset_aggregate import MediaAssetAggregate
 from modules.library.domain.media_asset_type import MediaAssetType
@@ -35,7 +35,10 @@ class MapAsset(MediaAssetAggregate):
     grid_offset_y: Optional[int] = None
     grid_line_color: Optional[str] = None
     grid_cell_size: Optional[float] = None
-    fog_config: Optional[Dict[str, Any]] = None  # { mask, mask_width, mask_height, version }
+    # v2 shape: { "version": 2, "regions": [FogRegion, ...] } or None.
+    # See FogConfig / FogRegion in shared_contracts.map for the field
+    # schema. None means "no fog ever painted on this map".
+    fog_config: Optional[Dict[str, Any]] = None
 
     @classmethod
     def create(
@@ -232,61 +235,133 @@ class MapAsset(MediaAssetAggregate):
         self.updated_at = datetime.utcnow()
 
     # ── Fog of war ──────────────────────────────────────────────────────
+    #
+    # Fog is a list of independent regions. Each region owns its own
+    # alpha mask + render params (feather, dilate, etc.). At runtime,
+    # enabled regions composite by DOM stacking — overlapping regions
+    # read as denser fog. Cap of FOG_REGIONS_MAX (12) per the contract.
+    #
+    # Region helpers below (add/update/delete/toggle) are the granular
+    # path used by per-region endpoints (step 5+). update_fog_config()
+    # is the atomic full-list replace path used by the existing PATCH
+    # /fog endpoint.
 
     def update_fog_config(
         self,
-        mask: Optional[str] = None,
-        mask_width: Optional[int] = None,
-        mask_height: Optional[int] = None,
-        version: Optional[int] = None,
+        regions: Optional[List[Dict[str, Any]]] = None,
     ) -> None:
-        """Replace the fog mask atomically. Pass mask=None to clear.
+        """Atomic full replace of the regions list.
 
-        The mask is a data URL (PNG, base64) — its alpha channel encodes
-        the fog shape. We replace the whole config object on every call
-        rather than patching individual fields, because the bitmap and
-        its dimensions must always agree.
+        Pass regions=None or [] to clear all fog. Each region dict is
+        validated against the FogRegion contract before storage —
+        unknown fields raise, missing required fields raise.
         """
-        if mask is None:
+        if regions is None or len(regions) == 0:
             self.fog_config = None
         else:
-            self.fog_config = {
-                "mask": mask,
-                "mask_width": mask_width,
-                "mask_height": mask_height,
-                "version": version if version is not None else 1,
-            }
+            if len(regions) > FOG_REGIONS_MAX:
+                raise ValueError(
+                    f"Cannot have more than {FOG_REGIONS_MAX} fog regions"
+                )
+            validated = [FogRegion.model_validate(r).model_dump() for r in regions]
+            self.fog_config = {"version": 2, "regions": validated}
         self.updated_at = datetime.utcnow()
 
     def has_fog_config(self) -> bool:
-        return self.fog_config is not None and bool(self.fog_config.get("mask"))
+        """True if any region has a populated mask. Empty regions
+        (just metadata, no painted alpha) don't count."""
+        if not self.fog_config:
+            return False
+        regions = self.fog_config.get("regions", [])
+        return any(r.get("mask") for r in regions)
 
     def get_fog_config(self) -> Optional[Dict[str, Any]]:
+        """Return the v2 fog config dict (or None if no fog ever set)."""
         return self.fog_config
 
-    def build_fog_config_for_game(self) -> Optional[FogConfig]:
-        """Build the fog contract for the api-game ETL boundary.
+    def get_fog_regions(self) -> List[Dict[str, Any]]:
+        """Return the regions list, empty when no fog configured."""
+        if not self.fog_config:
+            return []
+        return list(self.fog_config.get("regions", []))
 
-        Returns None if no fog has been painted, so the contract layer
+    def add_fog_region(
+        self,
+        name: str = "Region",
+        role: str = "prepped",
+    ) -> Dict[str, Any]:
+        """Append a new region with default render params; return it."""
+        regions = self.get_fog_regions()
+        if len(regions) >= FOG_REGIONS_MAX:
+            raise ValueError(
+                f"Cannot have more than {FOG_REGIONS_MAX} fog regions"
+            )
+        new_region = FogRegion(
+            id=uuid4().hex, name=name, role=role,  # type: ignore[arg-type]
+        ).model_dump()
+        regions.append(new_region)
+        self.fog_config = {"version": 2, "regions": regions}
+        self.updated_at = datetime.utcnow()
+        return new_region
+
+    def update_fog_region(self, region_id: str, **fields: Any) -> Dict[str, Any]:
+        """Partial update of one region. Keys must match FogRegion
+        fields. Returns the updated region dict.
+        """
+        regions = self.get_fog_regions()
+        for i, r in enumerate(regions):
+            if r.get("id") == region_id:
+                merged = {**r, **fields}
+                regions[i] = FogRegion.model_validate(merged).model_dump()
+                self.fog_config = {"version": 2, "regions": regions}
+                self.updated_at = datetime.utcnow()
+                return regions[i]
+        raise ValueError(f"Region {region_id} not found")
+
+    def delete_fog_region(self, region_id: str) -> None:
+        """Remove a region. Raises if region's role is 'live' (the
+        live region is structural — every map keeps one for ad-hoc
+        paint at runtime).
+        """
+        regions = self.get_fog_regions()
+        for i, r in enumerate(regions):
+            if r.get("id") == region_id:
+                if r.get("role") == "live":
+                    raise ValueError("Cannot delete the live region")
+                del regions[i]
+                self.updated_at = datetime.utcnow()
+                self.fog_config = (
+                    {"version": 2, "regions": regions} if regions else None
+                )
+                return
+        raise ValueError(f"Region {region_id} not found")
+
+    def toggle_fog_region(self, region_id: str, enabled: bool) -> Dict[str, Any]:
+        """Set the enabled flag on a region; returns updated region."""
+        return self.update_fog_region(region_id, enabled=enabled)
+
+    def build_fog_config_for_game(self) -> Optional[FogConfig]:
+        """Build the v2 FogConfig contract for the api-game ETL boundary.
+
+        Returns None if no fog has been touched, so the contract layer
         can omit `fog_config` entirely on session start.
         """
-        if not self.has_fog_config():
+        if not self.fog_config:
             return None
         return FogConfig.model_validate(self.fog_config)
 
-    def update_fog_config_from_game(self, game_fog_config: Optional[FogConfig]) -> None:
+    def update_fog_config_from_game(
+        self, game_fog_config: Optional[FogConfig]
+    ) -> None:
         """Inverse of build_fog_config_for_game(). Persists the final
-        runtime fog state back onto the asset on session end. None means
-        the runtime cleared the fog — propagate that to PSQL.
+        runtime fog state back onto the asset on session end. None
+        means the runtime cleared the fog — propagate that to PSQL.
         """
         if game_fog_config is None:
-            self.update_fog_config(mask=None)
+            self.update_fog_config(regions=None)
             return
         self.update_fog_config(
-            mask=game_fog_config.mask,
-            mask_width=game_fog_config.mask_width,
-            mask_height=game_fog_config.mask_height,
-            version=game_fog_config.version,
+            regions=[r.model_dump() for r in game_fog_config.regions]
         )
 
     # ── Contract projection (the single source of truth for ETL) ────────

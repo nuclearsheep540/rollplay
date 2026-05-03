@@ -12,14 +12,13 @@
 /**
  * Apply an incoming fog_config_update to the local engine.
  *
- * Honours the no-flicker contract: if the payload carries a mask, the
- * engine decodes it before swapping. If fog_config is null/undefined,
- * the local fog is cleared.
+ * Honours the no-flicker contract: if the payload carries a region with
+ * a mask, the engine decodes it before swapping. If fog_config is
+ * null/undefined or has no regions, the local fog is cleared.
  *
- * Spread-don't-reconstruct (per feedback_field_drift.md): we never
- * cherry-pick fields out of fog_config — the whole object is passed
- * through, so new optional fields added to the contract continue to
- * round-trip without code changes.
+ * Step-1 reads regions[0] only — single-region rendering. Multi-region
+ * compositing (FogRegionStack) lands later; the protocol is already
+ * v2-shaped so the WS contract doesn't need a follow-up break.
  */
 export const handleRemoteFogUpdate = async (data, { engine }) => {
   if (!engine) {
@@ -27,15 +26,16 @@ export const handleRemoteFogUpdate = async (data, { engine }) => {
     return;
   }
   const fogConfig = data?.fog_config;
-  if (!fogConfig || !fogConfig.mask) {
-    await engine.loadFromDataUrl(null); // clears
+  const firstRegion = fogConfig?.regions?.[0] ?? null;
+  if (!firstRegion || !firstRegion.mask) {
+    await engine.loadFromRegion(null); // clears + nulls the captured id
     console.log('☁️ Remote fog cleared');
     return;
   }
   try {
-    await engine.loadFromDataUrl(fogConfig.mask);
+    await engine.loadFromRegion(firstRegion);
     console.log(
-      `☁️ Remote fog applied: ${fogConfig.mask_width}x${fogConfig.mask_height} v${fogConfig.version}`
+      `☁️ Remote fog applied: ${firstRegion.mask_width}x${firstRegion.mask_height} (region ${firstRegion.id})`
     );
   } catch (err) {
     console.error('☁️ Failed to apply remote fog mask:', err);
@@ -56,7 +56,7 @@ export const createFogSendFunctions = (webSocket, isConnected) => {
       console.warn('☁️ Cannot send fog update — missing filename');
       return false;
     }
-    // fogConfig may be null (clear) or { mask, mask_width, mask_height, version }
+    // fogConfig may be null (clear) or { version: 2, regions: [...] }
     webSocket.send(JSON.stringify({
       event_type: 'fog_config_update',
       data: { filename, fog_config: fogConfig },

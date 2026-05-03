@@ -5,24 +5,23 @@ import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { authFetch } from '@/app/shared/utils/authFetch';
 
 /**
- * TanStack mutation for saving the fog mask via PATCH /api/library/{id}/fog.
+ * TanStack mutation for saving the fog regions list via
+ * PATCH /api/library/{id}/fog.
  *
- * Expects the serialised engine payload (matches FogConfig contract):
- *   { mask, mask_width, mask_height, version }
- *
- * Pass `fogConfig: null` to clear the saved fog.
+ * Expects an array of FogRegion dicts — one per region. Step-1
+ * frontend passes a single-element list (the one mask the engine
+ * holds); multi-region UI lands later. Pass `regions: null` (or `[]`)
+ * to clear all fog server-side.
  */
 export function useUpdateFogConfig() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: async ({ assetId, fogConfig }) => {
-      // Sending null clears the fog server-side; the request body still
-      // needs to be a valid object — we explicitly pass mask=null in
-      // that case so the request payload is well-formed.
-      const body = fogConfig
-        ? { ...fogConfig }
-        : { mask: null, mask_width: null, mask_height: null };
+    mutationFn: async ({ assetId, regions }) => {
+      // The endpoint accepts { regions: [...] | null }. Null clears all
+      // fog; we send the regions list verbatim — the contract validates
+      // each region's shape server-side.
+      const body = { regions: regions && regions.length ? regions : null };
 
       const response = await authFetch(`/api/library/${assetId}/fog`, {
         method: 'PATCH',

@@ -404,9 +404,10 @@ export default function MapControlsPanel({
                 onFillAll={fog.fillAll}
                 onUpdate={onFogUpdate}
                 onResetToServer={() => {
-                  // Reload the last-known server fog from activeMap (if any)
-                  const remoteMask = activeMap?.map_config?.fog_config?.mask;
-                  fog.loadDataUrl(remoteMask || null);
+                  // Reload the last-known server region from activeMap (if any).
+                  // Step-1 single-region read; multi-region UI later.
+                  const firstRegion = activeMap?.map_config?.fog_config?.regions?.[0] ?? null;
+                  fog.loadRegion(firstRegion);
                 }}
               />
               <div className="text-[10px] text-rose-200/60 mt-2">

@@ -13,7 +13,7 @@ from shared_contracts.character import DungeonMaster, PlayerCharacter, SessionUs
 from shared_contracts.display import ActiveDisplayType
 from shared_contracts.cine import ColorFilterOverlay, FilmGrainOverlay, HandHeldMotion, MotionConfig
 from shared_contracts.image import ImageConfig
-from shared_contracts.map import FogConfig, GridColorMode, GridConfig, MapConfig
+from shared_contracts.map import FOG_REGIONS_MAX, FogConfig, FogRegion, GridColorMode, GridConfig, MapConfig
 from shared_contracts.session import (
     PlayerState,
     SessionEndFinalState,
@@ -114,27 +114,98 @@ class TestMapRoundTrip:
     def test_fog_config_defaults_round_trip(self):
         config = FogConfig()
         assert FogConfig.model_validate(config.model_dump()) == config
-        assert config.mask is None
-        assert config.version == 1
+        assert config.regions == []
+        assert config.version == 2
 
-    def test_fog_config_round_trip(self):
-        config = FogConfig(
+    def test_fog_region_defaults_round_trip(self):
+        region = FogRegion(id="r1")
+        assert FogRegion.model_validate(region.model_dump()) == region
+        assert region.name == "Region"
+        assert region.enabled is True
+        assert region.role == "prepped"
+        assert region.mask is None
+        assert region.hide_feather_px == 20
+        assert region.texture_dilate_px == 30
+        assert region.paint_mode_opacity == 0.7
+
+    def test_fog_region_round_trip_full(self):
+        region = FogRegion(
+            id="abc123",
+            name="Throne Room",
+            enabled=False,
+            role="prepped",
             mask="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNgAAIAAAUAAen63NgAAAAASUVORK5CYII=",
             mask_width=512,
             mask_height=384,
-            version=2,
+            hide_feather_px=40,
+            texture_dilate_px=80,
+            paint_mode_opacity=0.5,
+        )
+        assert FogRegion.model_validate(region.model_dump()) == region
+
+    def test_fog_region_role_must_be_prepped_or_live(self):
+        # Intentionally invalid input to test Pydantic's runtime check.
+        with pytest.raises(ValidationError):
+            FogRegion(id="r1", role="invalid")  # type: ignore[arg-type]
+        # Both valid values accepted
+        FogRegion(id="r1", role="prepped")
+        FogRegion(id="r2", role="live")
+
+    def test_fog_region_rejects_unknown_fields(self):
+        with pytest.raises(ValidationError):
+            FogRegion(id="r1", strokes=[])  # type: ignore[call-arg]
+
+    def test_fog_region_rejects_zero_dimensions(self):
+        with pytest.raises(ValidationError):
+            FogRegion(id="r1", mask_width=0)
+        with pytest.raises(ValidationError):
+            FogRegion(id="r1", mask_height=0)
+
+    def test_fog_region_rejects_out_of_range_params(self):
+        with pytest.raises(ValidationError):
+            FogRegion(id="r1", hide_feather_px=-1)
+        with pytest.raises(ValidationError):
+            FogRegion(id="r1", hide_feather_px=201)
+        with pytest.raises(ValidationError):
+            FogRegion(id="r1", texture_dilate_px=-1)
+        with pytest.raises(ValidationError):
+            FogRegion(id="r1", paint_mode_opacity=1.5)
+
+    def test_fog_config_with_regions_round_trip(self):
+        config = FogConfig(
+            regions=[
+                FogRegion(
+                    id="r1",
+                    name="North Cave",
+                    mask="data:image/png;base64,iVBORw0KGgo=",
+                    mask_width=256,
+                    mask_height=256,
+                ),
+                FogRegion(
+                    id="r2",
+                    name="South Crypt",
+                    enabled=False,
+                ),
+                FogRegion(
+                    id="live",
+                    name="Live",
+                    role="live",
+                ),
+            ]
         )
         assert FogConfig.model_validate(config.model_dump()) == config
 
+    def test_fog_config_caps_regions_at_max(self):
+        # FOG_REGIONS_MAX entries must be accepted
+        regions = [FogRegion(id=f"r{i}") for i in range(FOG_REGIONS_MAX)]
+        FogConfig(regions=regions)
+        # One over the cap rejected
+        with pytest.raises(ValidationError):
+            FogConfig(regions=regions + [FogRegion(id="overflow")])
+
     def test_fog_config_rejects_unknown_fields(self):
         with pytest.raises(ValidationError):
-            FogConfig(mask="data:image/png;base64,abc", strokes=[])
-
-    def test_fog_config_rejects_zero_dimensions(self):
-        with pytest.raises(ValidationError):
-            FogConfig(mask_width=0)
-        with pytest.raises(ValidationError):
-            FogConfig(mask_height=0)
+            FogConfig(regions=[], strokes=[])  # type: ignore[call-arg]
 
     def test_map_config_with_fog_round_trip(self):
         config = MapConfig(
@@ -143,9 +214,15 @@ class TestMapRoundTrip:
             file_path="https://s3.example.com/dungeon.png",
             grid_config=GridConfig(),
             fog_config=FogConfig(
-                mask="data:image/png;base64,iVBORw0KGgo=",
-                mask_width=256,
-                mask_height=256,
+                regions=[
+                    FogRegion(
+                        id="r1",
+                        name="Default",
+                        mask="data:image/png;base64,iVBORw0KGgo=",
+                        mask_width=256,
+                        mask_height=256,
+                    ),
+                ],
             ),
         )
         assert MapConfig.model_validate(config.model_dump()) == config

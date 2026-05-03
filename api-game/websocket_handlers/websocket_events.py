@@ -1329,14 +1329,16 @@ class WebsocketEvent():
     
     @staticmethod
     async def fog_config_update(websocket, data, event_data, user_id, client_id, manager):
-        """Replace the fog-of-war mask on the active map (atomic full-replace).
+        """Replace the fog-of-war regions list on the active map (atomic full-replace).
 
         Payload shape:
-            { filename: str, fog_config: { mask, mask_width, mask_height, version } | null }
+            { filename: str, fog_config: { version: 2, regions: [...] } | null }
 
-        fog_config=None clears the fog. Per the codebase's atomic state
-        rule, the full mask travels in a single message; players replace
-        their canvas in one paint to honour the no-flicker contract.
+        fog_config=None clears all fog. Per the codebase's atomic state
+        rule, the full regions list travels in a single message; players
+        replace their canvases in one paint to honour the no-flicker
+        contract. Per-region partial updates (toggle, paint a single
+        region) are dedicated WS events — not yet implemented.
         """
         room_id = client_id
         filename = event_data.get("filename")

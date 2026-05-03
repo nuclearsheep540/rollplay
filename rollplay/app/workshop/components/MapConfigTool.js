@@ -176,9 +176,12 @@ export default function MapConfigTool({
       if (!asset || !f || !mutation) return;
       clearTimeout(timer);
       timer = setTimeout(() => {
+        // Step-1 frontend serialises the engine as a single FogRegion;
+        // multi-region UI lands later (the API accepts a list).
+        const region = f.serialize();
         mutation.mutate({
           assetId: asset.id,
-          fogConfig: f.serialize(),
+          regions: region ? [region] : null,
         });
       }, 250);
     };
@@ -233,12 +236,10 @@ export default function MapConfigTool({
         grid_line_color: assetData.grid_line_color,
       });
 
-      // Hydrate the fog engine from the persisted mask (if any)
-      if (assetData.fog_config?.mask) {
-        await fog.loadDataUrl(assetData.fog_config.mask);
-      } else {
-        await fog.loadDataUrl(null);
-      }
+      // Hydrate the fog engine from the persisted region (if any).
+      // Step-1 reads the first region; multi-region selection comes later.
+      const firstRegion = assetData.fog_config?.regions?.[0] ?? null;
+      await fog.loadRegion(firstRegion);
 
       setLoadingAsset(false);
     }
@@ -304,9 +305,10 @@ export default function MapConfigTool({
     // Save is a server commit only — strokes are the undo unit, so
     // this intentionally does not push to history.
     try {
+      const region = fog.serialize();
       const updatedAsset = await fogUpdateMutation.mutateAsync({
         assetId: selectedAsset.id,
-        fogConfig: fog.serialize(),
+        regions: region ? [region] : null,
       });
       setSelectedAsset(prev => ({ ...prev, ...updatedAsset }));
       setFogSaveSuccess(true);
@@ -445,7 +447,12 @@ export default function MapConfigTool({
             offsetY={grid.offset.y}
             onImageLoad={(dims) => {
               setNaturalDimensions(dims);
-              if (!selectedAsset?.fog_config?.mask) {
+              // Only fit-to-map for fresh assets — if any region already
+              // has a painted mask, its dimensions are already baked in.
+              const hasPaintedRegion = selectedAsset?.fog_config?.regions?.some(
+                (r) => r.mask
+              );
+              if (!hasPaintedRegion) {
                 fog.fitToMap(dims.naturalWidth, dims.naturalHeight);
               }
             }}

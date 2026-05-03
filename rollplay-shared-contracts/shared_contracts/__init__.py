@@ -10,7 +10,7 @@ from .character import DungeonMaster, PlayerCharacter, SessionUser
 from .cine import ColorFilterOverlay, FilmGrainOverlay, HandHeldMotion, MotionConfig, VisualOverlay
 from .display import ActiveDisplayType
 from .image import ImageConfig
-from .map import FogConfig, GridColorMode, GridConfig, MapConfig
+from .map import FOG_REGIONS_MAX, FogConfig, FogRegion, GridColorMode, GridConfig, MapConfig
 from .session import (
     PlayerState,
     SessionEndFinalState,
@@ -31,7 +31,9 @@ __all__ = [
     "PlayerCharacter",
     "SessionUser",
     "ActiveDisplayType",
+    "FOG_REGIONS_MAX",
     "FogConfig",
+    "FogRegion",
     "GridColorMode",
     "GridConfig",
     "ImageConfig",
