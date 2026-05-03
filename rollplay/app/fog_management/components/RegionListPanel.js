@@ -126,29 +126,27 @@ function RegionRow({
         className="cursor-pointer"
         title={region.enabled ? 'Hide this region' : 'Show this region'}
       />
-      <button
-        type="button"
-        onClick={() => !editing && onSetActive()}
-        onDoubleClick={() => !isLive && setEditing(true)}
-        className="flex-1 min-w-0 text-left truncate"
-        title={isActive ? 'Currently active (paint target)' : 'Click to activate'}
-      >
-        {editing ? (
-          <input
-            ref={inputRef}
-            type="text"
-            value={draft}
-            onChange={(e) => setDraft(e.target.value)}
-            onBlur={commitRename}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter') commitRename();
-              if (e.key === 'Escape') cancelRename();
-            }}
-            onClick={(e) => e.stopPropagation()}
-            maxLength={64}
-            className="w-full bg-slate-900 border border-slate-600 rounded px-1.5 py-0.5 text-xs"
-          />
-        ) : (
+      {editing ? (
+        <input
+          ref={inputRef}
+          type="text"
+          value={draft}
+          onChange={(e) => setDraft(e.target.value)}
+          onBlur={commitRename}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') commitRename();
+            if (e.key === 'Escape') cancelRename();
+          }}
+          maxLength={64}
+          className="flex-1 min-w-0 bg-slate-900 border border-slate-600 rounded px-1.5 py-0.5 text-xs"
+        />
+      ) : (
+        <button
+          type="button"
+          onClick={onSetActive}
+          className="flex-1 min-w-0 text-left truncate"
+          title={isActive ? 'Currently active (paint target)' : 'Click to activate'}
+        >
           <span className="truncate">
             {region.name}
             {isLive && (
@@ -157,8 +155,22 @@ function RegionRow({
               </span>
             )}
           </span>
-        )}
-      </button>
+        </button>
+      )}
+      {!editing && (
+        <button
+          type="button"
+          onClick={(e) => {
+            e.stopPropagation();
+            setEditing(true);
+          }}
+          className="opacity-0 group-hover:opacity-100 text-rose-200/70 hover:text-rose-100 px-1"
+          title="Rename region"
+          aria-label={`Rename region ${region.name}`}
+        >
+          ✎
+        </button>
+      )}
       {!isLive && !editing && (
         <button
           type="button"

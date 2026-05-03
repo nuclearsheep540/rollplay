@@ -2124,6 +2124,8 @@ export default function GameContent() {
               fogGetEngine={fog.getEngine}
               fogActiveRegionId={fog.activeId}
               fogPaintMode={isDM && fogPaintMode}
+              // DM-only region labels at runtime. Players never see them.
+              fogShowRegionLabels={isDM}
             />
           )}
 

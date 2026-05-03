@@ -7,7 +7,7 @@
 
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import GridOverlay from './GridOverlay';
-import { FogCanvasLayer, FogRegionStack } from '@/app/fog_management';
+import { FogCanvasLayer, FogRegionStack, FogRegionLabels } from '@/app/fog_management';
 import { useAssetDownload } from '@/app/shared/providers/AssetDownloadManager';
 
 const clamp = (val, min, max) => Math.min(max, Math.max(min, val));
@@ -38,6 +38,7 @@ const MapDisplay = ({
   fogRegions = null,         // array of FogRegion dicts (id, name, enabled, role, params)
   fogGetEngine = null,       // (regionId) => FogEngine — typically from useFogRegions().getEngine
   fogActiveRegionId = null,  // region currently receiving paint events
+  fogShowRegionLabels = false, // overlay region names at the centroid of each painted alpha (DM-only)
 }) => {
   const mapImageRef = useRef(null);
   const containerRef = useRef(null);
@@ -258,6 +259,13 @@ const MapDisplay = ({
             getEngine={fogGetEngine}
             activeRegionId={fogActiveRegionId}
             paintMode={fogPaintMode}
+            mapImageRef={mapImageRef}
+          />
+        )}
+        {mapLoaded && fogRegions && fogGetEngine && fogShowRegionLabels && (
+          <FogRegionLabels
+            regions={fogRegions}
+            getEngine={fogGetEngine}
             mapImageRef={mapImageRef}
           />
         )}

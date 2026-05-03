@@ -518,6 +518,9 @@ export default function MapConfigTool({
             fogGetEngine={fog.getEngine}
             fogActiveRegionId={fog.activeId}
             fogPaintMode={isFogTool}
+            // Workshop is a DM-authoring surface — always label regions
+            // so the DM can see which painted area is which.
+            fogShowRegionLabels={isFogTool}
             showGrid={isGridTool || isMoveTool}
           />
         </div>

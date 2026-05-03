@@ -26,6 +26,7 @@ export {
 export {
   FogCanvasLayer,
   FogRegionStack,
+  FogRegionLabels,
   FogPaintControls,
   RegionListPanel,
   RegionParamsEditor,

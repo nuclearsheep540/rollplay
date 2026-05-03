@@ -3,6 +3,7 @@
 
 export { default as FogCanvasLayer } from './FogCanvasLayer';
 export { default as FogRegionStack } from './FogRegionStack';
+export { default as FogRegionLabels } from './FogRegionLabels';
 export { default as FogPaintControls } from './FogPaintControls';
 export { default as RegionListPanel } from './RegionListPanel';
 export { default as RegionParamsEditor } from './RegionParamsEditor';
