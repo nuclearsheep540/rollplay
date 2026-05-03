@@ -25,7 +25,7 @@ const FOG_REGIONS_MAX = 12;
  *
  * Storage shape (matches shared_contracts.map.FogRegion):
  *   { id, name, enabled, role, mask, mask_width, mask_height,
- *     hide_feather_px, texture_dilate_px, paint_mode_opacity }
+ *     hide_feather_px, texture_dilate_px, opacity }
  *
  * Engines live outside React state in a Map<regionId, FogEngine>; only
  * region metadata + activeId flow through useState. Engines are reused
@@ -42,7 +42,7 @@ const DEFAULT_REGION_DEFAULTS = {
   mask_height: null,
   hide_feather_px: 20,
   texture_dilate_px: 30,
-  paint_mode_opacity: 0.7,
+  opacity: 1.0,
 };
 
 function makeDefaultRegion() {
@@ -75,23 +75,41 @@ export function useFogRegions({ width = 1024, height = 1024, initialConfig = nul
   // when a region is removed.
   const enginesRef = useRef(new Map());
 
-  // Mirror of the active engine's state for React consumers. Same shape
-  // as useFogEngine returned, so callers can swap hooks with minimal
-  // change.
+  // Tool state — brush size and mode belong to the user's painting
+  // tool, not to any one region. Lives in React state at the hook
+  // level; setBrushSize/setMode push to every engine in the pool so
+  // switching active region doesn't surface stale per-engine values.
   const [mode, setModeState] = useState('paint');
   const [brushSize, setBrushSizeState] = useState(40);
   const [isDirty, setIsDirty] = useState(false);
   const [maskDims, setMaskDims] = useState({ width, height });
 
+  // Refs so engine-creation paths can read the latest tool state
+  // without depending on every callback in their closure deps.
+  const brushSizeRef = useRef(brushSize);
+  const modeRef = useRef(mode);
+  brushSizeRef.current = brushSize;
+  modeRef.current = mode;
+
+  // Helper: create a FogEngine pre-configured with the current tool
+  // state. Used everywhere we instantiate one — keeps brush/mode in
+  // lockstep across all engines from the start.
+  const createEngine = useCallback(() => {
+    const eng = new FogEngine({ width, height });
+    eng.setBrushSize(brushSizeRef.current);
+    eng.setMode(modeRef.current);
+    return eng;
+  }, [width, height]);
+
   const getOrCreateEngine = useCallback((regionId) => {
     if (typeof window === 'undefined') return null;
     let eng = enginesRef.current.get(regionId);
     if (!eng) {
-      eng = new FogEngine({ width, height });
+      eng = createEngine();
       enginesRef.current.set(regionId, eng);
     }
     return eng;
-  }, [width, height]);
+  }, [createEngine]);
 
   // Ensure each region has an engine; dispose engines whose regions
   // were removed. Runs whenever regions change (add/remove flows).
@@ -105,10 +123,10 @@ export function useFogRegions({ width = 1024, height = 1024, initialConfig = nul
     }
     for (const r of regions) {
       if (!map.has(r.id)) {
-        map.set(r.id, new FogEngine({ width, height }));
+        map.set(r.id, createEngine());
       }
     }
-  }, [regions, width, height]);
+  }, [regions, createEngine]);
 
   // Subscribe to the active engine so its state surfaces into React.
   // Re-binds when the active id changes — different engine, fresh
@@ -117,9 +135,9 @@ export function useFogRegions({ width = 1024, height = 1024, initialConfig = nul
     const eng = activeId ? enginesRef.current.get(activeId) : null;
     if (!eng) return;
 
-    // Snapshot current values into React state
-    setModeState(eng.mode);
-    setBrushSizeState(eng.brushSize);
+    // Sync only mask state from the new active region — tool state
+    // (brush size, mode) is hook-owned and shared across engines, so
+    // switching regions must NOT overwrite it from the engine.
     setIsDirty(eng.isDirty);
     setMaskDims({ width: eng.width, height: eng.height });
 
@@ -128,39 +146,42 @@ export function useFogRegions({ width = 1024, height = 1024, initialConfig = nul
       setIsDirty(false);
       if (!cleared && w && h) setMaskDims({ width: w, height: h });
     };
-    const onBrush = ({ brushSize: bs }) => setBrushSizeState(bs);
-    const onModeCh = ({ mode: m }) => setModeState(m);
 
     eng.on('change', onChange);
     eng.on('load', onLoad);
-    eng.on('brushchange', onBrush);
-    eng.on('modechange', onModeCh);
 
     return () => {
       eng.off('change', onChange);
       eng.off('load', onLoad);
-      eng.off('brushchange', onBrush);
-      eng.off('modechange', onModeCh);
     };
   }, [activeId]);
 
-  // ── Paint ops, all targeting the active engine ──────────────────────
+  // ── Paint ops ───────────────────────────────────────────────────────
+  //
+  // Brush size and mode are tool-level (the workshop's painting tool),
+  // NOT per-region. We push to every engine in the pool so switching
+  // active region doesn't surface a different engine's stale brush
+  // state. Per-region state is just the mask + render params; the
+  // brush belongs to the user's tool, not the surface.
 
   const activeEngine = activeId ? enginesRef.current.get(activeId) ?? null : null;
 
   const setMode = useCallback((m) => {
-    const eng = activeId ? enginesRef.current.get(activeId) : null;
-    if (!eng) return;
-    eng.setMode(m);
-    setModeState(eng.mode);
-  }, [activeId]);
+    for (const eng of enginesRef.current.values()) {
+      eng.setMode(m);
+    }
+    setModeState(m);
+  }, []);
 
   const setBrushSize = useCallback((px) => {
-    const eng = activeId ? enginesRef.current.get(activeId) : null;
-    if (!eng) return;
-    eng.setBrushSize(px);
-    setBrushSizeState(eng.brushSize);
-  }, [activeId]);
+    let normalized = null;
+    for (const eng of enginesRef.current.values()) {
+      eng.setBrushSize(px);
+      // Engine clamps to [MIN, MAX]; capture the post-clamp value once.
+      if (normalized === null) normalized = eng.brushSize;
+    }
+    if (normalized !== null) setBrushSizeState(normalized);
+  }, []);
 
   const clear = useCallback(() => {
     const eng = activeId ? enginesRef.current.get(activeId) : null;
@@ -272,7 +293,7 @@ export function useFogRegions({ width = 1024, height = 1024, initialConfig = nul
       mask_height: null,
       hide_feather_px: DEFAULT_REGION_DEFAULTS.hide_feather_px,
       texture_dilate_px: DEFAULT_REGION_DEFAULTS.texture_dilate_px,
-      paint_mode_opacity: DEFAULT_REGION_DEFAULTS.paint_mode_opacity,
+      opacity: DEFAULT_REGION_DEFAULTS.opacity,
     };
     let added = false;
     setRegions((prev) => {
@@ -281,10 +302,10 @@ export function useFogRegions({ width = 1024, height = 1024, initialConfig = nul
       return [...prev, newRegion];
     });
     if (!added) return null;
-    enginesRef.current.set(id, new FogEngine({ width, height }));
+    enginesRef.current.set(id, createEngine());
     setActiveId(id);
     return newRegion;
-  }, [width, height]);
+  }, [createEngine]);
 
   /**
    * Remove a region. The 'live' region is structural — every map

@@ -11,9 +11,9 @@ import FogCanvasLayer from './FogCanvasLayer';
  * FogRegionStack — renders one FogCanvasLayer per enabled fog region.
  *
  * Each region carries its own painted alpha mask + render params
- * (hide_feather_px, texture_dilate_px, paint_mode_opacity). This
- * component just iterates and mounts one FogCanvasLayer instance per
- * region, passing the per-region engine + params.
+ * (hide_feather_px, texture_dilate_px, opacity). This component just
+ * iterates and mounts one FogCanvasLayer instance per region, passing
+ * the per-region engine + params.
  *
  * Compositing is handled by the DOM: each FogCanvasLayer renders a
  * hide layer + texture layer; stacked layers from overlapping enabled
@@ -65,7 +65,7 @@ export default function FogRegionStack({
             fogOpacity={fogOpacity}
             hideFeatherPx={region.hide_feather_px}
             textureDilatePx={region.texture_dilate_px}
-            paintModeOpacity={region.paint_mode_opacity}
+            opacity={region.opacity}
           />
         );
       })}

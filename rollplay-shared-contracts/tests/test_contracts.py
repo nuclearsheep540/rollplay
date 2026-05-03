@@ -126,7 +126,7 @@ class TestMapRoundTrip:
         assert region.mask is None
         assert region.hide_feather_px == 20
         assert region.texture_dilate_px == 30
-        assert region.paint_mode_opacity == 0.7
+        assert region.opacity == 1.0
 
     def test_fog_region_round_trip_full(self):
         region = FogRegion(
@@ -139,7 +139,7 @@ class TestMapRoundTrip:
             mask_height=384,
             hide_feather_px=40,
             texture_dilate_px=80,
-            paint_mode_opacity=0.5,
+            opacity=0.5,
         )
         assert FogRegion.model_validate(region.model_dump()) == region
 
@@ -169,7 +169,7 @@ class TestMapRoundTrip:
         with pytest.raises(ValidationError):
             FogRegion(id="r1", texture_dilate_px=-1)
         with pytest.raises(ValidationError):
-            FogRegion(id="r1", paint_mode_opacity=1.5)
+            FogRegion(id="r1", opacity=1.5)
 
     def test_fog_config_with_regions_round_trip(self):
         config = FogConfig(

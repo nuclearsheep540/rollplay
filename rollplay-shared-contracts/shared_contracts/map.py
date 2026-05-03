@@ -69,10 +69,10 @@ class FogRegion(ContractModel):
     # Render params — were FOG_* constants in FogCanvasLayer.js.
     # FOG_HIDE_COLOR stays a file-level constant (consistent fog tone
     # across the map; not user-tunable). Only feather, dilate, and the
-    # painter's knock-back opacity are region-editable.
+    # region's overall opacity are region-editable.
     hide_feather_px: int = Field(default=20, ge=0, le=200)
     texture_dilate_px: int = Field(default=30, ge=0, le=200)
-    paint_mode_opacity: float = Field(default=0.7, ge=0.0, le=1.0)
+    opacity: float = Field(default=1.0, ge=0.0, le=1.0)
 
 
 class FogConfig(ContractModel):

@@ -117,12 +117,16 @@ const FOG_HIDE_COLOR = 'rgba(20, 20, 30, 0.05)';
 const DEFAULT_HIDE_FEATHER_PX = 20;
 const DEFAULT_TEXTURE_DILATE_PX = 30;
 
-// Default for the paintModeOpacity prop (per-region). While painting,
-// the entire fog overlay is knocked back so the DM can see the map
-// underneath. Multiplied with the caller-provided fogOpacity via min()
-// so the painter view is never MORE opaque than the player view.
-// Higher = more fog visible while editing; lower = more map visible.
-const DEFAULT_PAINT_MODE_OPACITY = 0.8;
+// Default for the per-region opacity prop. Always applied — multiplied
+// with the global fogOpacity. 1.0 means "fully opaque region"; lower
+// values let the map show through proportionally.
+const DEFAULT_REGION_OPACITY = 1.0;
+
+// Painter-mode knock-back. Fixed file constant (not user-tunable):
+// while paintMode is on, the visible fog drops by this factor so the
+// DM can see the map underneath their strokes. Applied multiplicatively
+// on top of the per-region opacity.
+const FOG_PAINTER_KNOCKBACK = 0.7;
 
 // Brush cursor — Photoshop-style ring that tracks the pointer and
 // matches the current brush diameter. Native CSS `cursor: url()` caps
@@ -145,7 +149,7 @@ export default function FogCanvasLayer({
   // same behaviour without passing anything explicitly.
   hideFeatherPx = DEFAULT_HIDE_FEATHER_PX,
   textureDilatePx = DEFAULT_TEXTURE_DILATE_PX,
-  paintModeOpacity = DEFAULT_PAINT_MODE_OPACITY,
+  opacity = DEFAULT_REGION_OPACITY,
 }) {
   const wrapperRef = useRef(null);
   const hideRef = useRef(null);
@@ -457,7 +461,12 @@ export default function FogCanvasLayer({
         // grid hover still works in non-paint contexts. The fog canvas
         // is mostly transparent so the grid remains visible underneath.
         zIndex: 25,
-        opacity: paintMode ? Math.min(paintModeOpacity, fogOpacity) : fogOpacity,
+        // Final wrapper opacity = region opacity × global fogOpacity ×
+        // painter knock-back (in paintMode only). The region opacity
+        // applies always — players see it too — so it doubles as a
+        // dimming knob for prepped regions. The knock-back is a fixed
+        // constant for visual consistency while painting.
+        opacity: opacity * fogOpacity * (paintMode ? FOG_PAINTER_KNOCKBACK : 1),
         // No mix-blend-mode at the wrapper level any more. The hide
         // layer needs NORMAL blending against the map (so it actually
         // hides), while the texture layer needs SCREEN blending (so
