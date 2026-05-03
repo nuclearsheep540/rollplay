@@ -11,6 +11,20 @@ const MAX_BRUSH_PX = 500;
 
 const FOG_FILL = 'rgba(0, 0, 0, 1)';
 
+// Brush hardness — inner fraction of the brush radius that's fully
+// opaque; the outer (1 − hardness) is a linear alpha falloff to 0.
+// 1.0 = perfect hard disc; 0.7 = solid core with a 30%-of-radius rim
+// of partial alpha. Applies to both paint and erase since the rim
+// produces partial-alpha pixels that source-over (paint) or
+// destination-out (erase) both handle correctly.
+const BRUSH_HARDNESS = 0.0;
+
+// Distance between successive dabs along a stroke, as a fraction of
+// brush diameter. Smaller = smoother (more dabs, more cost). 0.25
+// gives heavy overlap so strokes are continuous and the soft rim is
+// preserved at every position along the line.
+const STAMP_SPACING_FRACTION = 0.25;
+
 /**
  * FogEngine — pure-JS owner of a fog-of-war bitmap.
  *
@@ -39,6 +53,35 @@ export default class FogEngine extends EventEmitter {
     this._isDirty = false;
     this._strokeBefore = null;     // snapshot at beginStroke()
     this._strokeKindHint = null;   // descriptive label set on beginStroke
+    this._stamp = null;            // prebuilt soft-brush canvas, cached per brush size
+    this._stampSize = 0;
+  }
+
+  // Build a radial-gradient brush stamp once per brush-size change. The
+  // inner BRUSH_HARDNESS fraction of the radius is fully opaque; the
+  // outer rim falls off to alpha 0. drawImage of this stamp under
+  // 'source-over' paints fog with a soft edge; under 'destination-out'
+  // it erases with the same soft edge — partial alpha is preserved by
+  // both composite ops, which is what gives reveals their natural
+  // boundary instead of a cookie-cutter disc.
+  _rebuildStamp() {
+    if (typeof document === 'undefined') return;
+    const radius = this._brushSize / 2;
+    const size = Math.max(2, Math.ceil(this._brushSize));
+    const stamp = document.createElement('canvas');
+    stamp.width = size;
+    stamp.height = size;
+    const ctx = stamp.getContext('2d');
+    const cx = size / 2;
+    const cy = size / 2;
+    const innerR = radius * BRUSH_HARDNESS;
+    const grad = ctx.createRadialGradient(cx, cy, innerR, cx, cy, radius);
+    grad.addColorStop(0, 'rgba(0,0,0,1)');
+    grad.addColorStop(1, 'rgba(0,0,0,0)');
+    ctx.fillStyle = grad;
+    ctx.fillRect(0, 0, size, size);
+    this._stamp = stamp;
+    this._stampSize = size;
   }
 
   // ── Read-only state ────────────────────────────────────────────────
@@ -56,6 +99,7 @@ export default class FogEngine extends EventEmitter {
     const next = Math.max(MIN_BRUSH_PX, Math.min(MAX_BRUSH_PX, Math.round(px)));
     if (next === this._brushSize) return;
     this._brushSize = next;
+    this._stamp = null; // invalidate cache; will rebuild lazily on next stroke
     this.emit('brushchange', { brushSize: next });
   }
 
@@ -97,32 +141,40 @@ export default class FogEngine extends EventEmitter {
 
   /**
    * Paint or erase a polyline of points. Used for continuous strokes
-   * — the wrapper interpolates between successive pointer events so
-   * fast drags don't leave gaps. Honours the current mode.
+   * — pointer events arrive as 2-point segments (last + current); fast
+   * drags get walked at STAMP_SPACING_FRACTION × diameter so the soft
+   * rim is preserved at every step instead of being smeared by a single
+   * thick stroke. Honours the current mode.
    */
   paintStroke(points) {
     if (!this._ctx || !points || points.length === 0) return;
+    if (!this._stamp) this._rebuildStamp();
+    if (!this._stamp) return;
     const ctx = this._ctx;
+    const stamp = this._stamp;
+    const half = this._stampSize / 2;
+    const spacing = Math.max(1, this._brushSize * STAMP_SPACING_FRACTION);
+
     ctx.save();
     ctx.globalCompositeOperation =
       this._mode === 'erase' ? 'destination-out' : 'source-over';
-    ctx.strokeStyle = FOG_FILL;
-    ctx.fillStyle = FOG_FILL;
-    ctx.lineWidth = this._brushSize;
-    ctx.lineCap = 'round';
-    ctx.lineJoin = 'round';
 
-    if (points.length === 1) {
-      ctx.beginPath();
-      ctx.arc(points[0].x, points[0].y, this._brushSize / 2, 0, Math.PI * 2);
-      ctx.fill();
-    } else {
-      ctx.beginPath();
-      ctx.moveTo(points[0].x, points[0].y);
-      for (let i = 1; i < points.length; i++) {
-        ctx.lineTo(points[i].x, points[i].y);
+    ctx.drawImage(stamp, points[0].x - half, points[0].y - half);
+
+    for (let i = 1; i < points.length; i++) {
+      const a = points[i - 1];
+      const b = points[i];
+      const dx = b.x - a.x;
+      const dy = b.y - a.y;
+      const dist = Math.hypot(dx, dy);
+      if (dist > 0) {
+        const steps = Math.floor(dist / spacing);
+        for (let s = 1; s <= steps; s++) {
+          const t = (s * spacing) / dist;
+          ctx.drawImage(stamp, a.x + dx * t - half, a.y + dy * t - half);
+        }
       }
-      ctx.stroke();
+      ctx.drawImage(stamp, b.x - half, b.y - half);
     }
     ctx.restore();
     this._isDirty = true;
@@ -130,14 +182,14 @@ export default class FogEngine extends EventEmitter {
   }
 
   _applyDab(x, y, mode) {
+    if (!this._stamp) this._rebuildStamp();
+    if (!this._stamp) return;
     const ctx = this._ctx;
+    const half = this._stampSize / 2;
     ctx.save();
     ctx.globalCompositeOperation =
       mode === 'erase' ? 'destination-out' : 'source-over';
-    ctx.fillStyle = FOG_FILL;
-    ctx.beginPath();
-    ctx.arc(x, y, this._brushSize / 2, 0, Math.PI * 2);
-    ctx.fill();
+    ctx.drawImage(this._stamp, x - half, y - half);
     ctx.restore();
   }
 
