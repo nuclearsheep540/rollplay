@@ -16,10 +16,16 @@ export { FogEngine, EventEmitter } from './engine';
 // Hooks + WS helpers
 export {
   useFogEngine,
+  useFogRegions,
   handleRemoteFogUpdate,
   createFogSendFunctions,
   registerFogHandlers,
 } from './hooks';
 
 // Components
-export { FogCanvasLayer, FogPaintControls } from './components';
+export {
+  FogCanvasLayer,
+  FogRegionStack,
+  FogPaintControls,
+  RegionListPanel,
+} from './components';

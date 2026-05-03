@@ -404,10 +404,10 @@ export default function MapControlsPanel({
                 onFillAll={fog.fillAll}
                 onUpdate={onFogUpdate}
                 onResetToServer={() => {
-                  // Reload the last-known server region from activeMap (if any).
-                  // Step-1 single-region read; multi-region UI later.
-                  const firstRegion = activeMap?.map_config?.fog_config?.regions?.[0] ?? null;
-                  fog.loadRegion(firstRegion);
+                  // Reload all regions from the last-known server state.
+                  // useFogRegions hydrates each engine from its region's
+                  // mask; multi-region active-selection UI lands later.
+                  fog.loadFromConfig(activeMap?.map_config?.fog_config);
                 }}
               />
               <div className="text-[10px] text-rose-200/60 mt-2">

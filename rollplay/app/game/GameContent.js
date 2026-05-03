@@ -28,7 +28,7 @@ import Modal from '@/app/shared/components/Modal';
 import { useWebSocket } from './hooks/useWebSocket';
 import { useUnifiedAudio } from '../audio_management';
 import { MapDisplay, useMapWebSocket, ImageDisplay, useImageWebSocket, useGridConfig } from '../map_management';
-import { useFogEngine, registerFogHandlers, createFogSendFunctions } from '../fog_management';
+import { useFogRegions, registerFogHandlers, createFogSendFunctions } from '../fog_management';
 import MapOverlayPanel from './components/MapOverlayPanel';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { faVolumeHigh, faVolumeXmark, faRightToBracket, faEye, faUpRightAndDownLeftFromCenter, faDownLeftAndUpRightToCenter, faCloudArrowDown, faRulerHorizontal, faUsers, faBookOpen } from '@fortawesome/free-solid-svg-icons';
@@ -228,7 +228,7 @@ export default function GameContent() {
   // Single instance lives at GameContent level so it outlives panel toggles
   // and is shared between the map display (renders fog) and the DM panel
   // (paints fog).
-  const fog = useFogEngine();
+  const fog = useFogRegions();
   const [fogPaintMode, setFogPaintMode] = useState(false);
 
   // Shift key → grid inspect (hold mode: down=on, up=off; toggle mode: down=flip)
@@ -1193,20 +1193,19 @@ export default function GameContent() {
     [webSocket, isConnected]
   );
 
-  // Hydrate the engine from the active map's first region when the map
+  // Hydrate ALL regions from the active map's fog config when the map
   // loads or changes (cold→hot via ETL on session start, then live
-  // updates). Step-1 reads regions[0] only; multi-region rendering
-  // lands later via FogRegionStack.
+  // updates). useFogRegions creates one engine per region and loads
+  // each mask; empty fog hydrates to an implicit "Default" region.
   useEffect(() => {
     if (!fog.engine) return;
-    const firstRegion = activeMap?.map_config?.fog_config?.regions?.[0] ?? null;
-    fog.loadRegion(firstRegion);
+    fog.loadFromConfig(activeMap?.map_config?.fog_config);
   }, [activeMap?.map_config?.asset_id, activeMap?.map_config?.fog_config?.version, fog.engine]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Match fog canvas aspect ratio to the active map. Without this, a
-  // square 1024×1024 default canvas gets CSS-stretched to fit the map's
-  // actual aspect, deforming brush strokes into ellipses. Skip when an
-  // existing region already pinned the canvas size on load.
+  // Match the active region's canvas aspect ratio to the map. Without
+  // this, a square 1024×1024 default canvas gets CSS-stretched to fit
+  // the map's actual aspect, deforming brush strokes into ellipses.
+  // Skip when an existing region already pinned canvas size on load.
   useEffect(() => {
     if (!fog.engine || !mapNaturalDimensions) return;
     const hasPaintedRegion = activeMap?.map_config?.fog_config?.regions?.some(
@@ -1216,15 +1215,15 @@ export default function GameContent() {
     fog.fitToMap(mapNaturalDimensions.naturalWidth, mapNaturalDimensions.naturalHeight);
   }, [mapNaturalDimensions, activeMap?.map_config?.asset_id, fog]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // DM "Update fog" handler — serialises the engine as a single region
-  // and broadcasts the full v2 fog_config. Multi-region runtime updates
-  // (toggle, per-region paint) come in step 5+.
+  // DM "Update fog" handler — serialises ALL regions and broadcasts
+  // the full v2 fog_config. Multi-region runtime updates (toggle,
+  // per-region paint) come in step 5+.
   const handleFogUpdate = useCallback(() => {
     const filename = activeMap?.map_config?.filename;
     if (!filename || !fog.engine) return;
-    const region = fog.serialize();
-    const fogConfig = region
-      ? { version: 2, regions: [region] }
+    const regions = fog.serialize();
+    const fogConfig = regions && regions.length
+      ? { version: 2, regions }
       : null;
     fogSenders.sendFogUpdate(filename, fogConfig);
   }, [activeMap?.map_config?.filename, fog, fogSenders]);
@@ -2121,7 +2120,9 @@ export default function GameContent() {
               offsetX={grid.offset.x}
               offsetY={grid.offset.y}
               onImageLoad={setMapNaturalDimensions}
-              fogEngine={fog.engine}
+              fogRegions={fog.regions}
+              fogGetEngine={fog.getEngine}
+              fogActiveRegionId={fog.activeId}
               fogPaintMode={isDM && fogPaintMode}
             />
           )}

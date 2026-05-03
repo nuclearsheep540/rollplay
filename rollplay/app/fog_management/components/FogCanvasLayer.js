@@ -95,31 +95,34 @@ const FOG_FEATHER_PX = 6;
 //      on top of the hide layer; uses a DILATED copy of the mask so
 //      wisps extend past the hide edge into the revealed area.
 //
-// FOG_HIDE_COLOR: the occluding fill. Slight blue tint reads as deep
-//   shadow rather than ink-black. Drop alpha below ~0.85 and map shapes
-//   start showing through.
-// FOG_HIDE_FEATHER_PX: blur radius applied to the hide mask, in mask-
-//   space pixels. Softens the brush boundary so the hide-to-reveal
-//   transition has a smoke-like falloff rather than a stamp edge.
-//   Bigger = softer edge but lower peak alpha at the centre, which is
-//   why we follow up with a contrast multiply to keep the interior
-//   solid.
-// FOG_TEXTURE_DILATE_PX: how far the texture mask extends past the hide
-//   mask, in mask-space pixels. Bigger = wisps drift further past the
-//   revealed edge before fading. Combined with FOG_DISPLACE_SCALE this
-//   controls how "blown" the fog looks beyond the painted area.
+// FOG_HIDE_COLOR stays a constant — uniform fog tone across regions,
+// not user-tunable (the colour was hand-tuned and consistency was an
+// explicit design call).
+//
+// The two below are *defaults* for the per-region render params. Each
+// region overrides them via props (hideFeatherPx, textureDilatePx)
+// once the multi-region UI lands; until then a single FogCanvasLayer
+// reads these defaults.
+//   • hideFeatherPx: blur radius applied to the hide mask, in mask-
+//     space pixels. Softens the brush boundary so the hide-to-reveal
+//     transition has a smoke-like falloff rather than a stamp edge.
+//     Bigger = softer edge but lower peak alpha at the centre, which
+//     is why the mask sync follows up with a contrast multiply to
+//     keep the interior solid.
+//   • textureDilatePx: how far the texture mask extends past the hide
+//     mask, in mask-space pixels. Bigger = wisps drift further past
+//     the revealed edge before fading. Combined with FOG_DISPLACE_SCALE
+//     this controls how "blown" the fog looks beyond the painted area.
 const FOG_HIDE_COLOR = 'rgba(20, 20, 30, 0.05)';
-const FOG_HIDE_FEATHER_PX = 20;
-const FOG_TEXTURE_DILATE_PX = 30;
+const DEFAULT_HIDE_FEATHER_PX = 20;
+const DEFAULT_TEXTURE_DILATE_PX = 30;
 
-// While painting/erasing, the entire fog overlay is knocked back so the
-// DM can see the map underneath their strokes. Multiplied with the
-// caller-provided fogOpacity (we take the min, so the painter view is
-// never MORE opaque than the player view). Higher = more fog visible
-// while editing; lower = more map visible. 0.5 means "fog at half
-// strength while painting". Bump toward 0.7–0.8 if the current setting
-// reads as too faint to see what you're painting.
-const FOG_PAINT_MODE_OPACITY = 0.8;
+// Default for the paintModeOpacity prop (per-region). While painting,
+// the entire fog overlay is knocked back so the DM can see the map
+// underneath. Multiplied with the caller-provided fogOpacity via min()
+// so the painter view is never MORE opaque than the player view.
+// Higher = more fog visible while editing; lower = more map visible.
+const DEFAULT_PAINT_MODE_OPACITY = 0.8;
 
 // Brush cursor — Photoshop-style ring that tracks the pointer and
 // matches the current brush diameter. Native CSS `cursor: url()` caps
@@ -136,6 +139,13 @@ export default function FogCanvasLayer({
   mapImageRef,
   paintMode = false,
   fogOpacity = 1.0,
+  // Per-region render params — sourced from FogRegion fields when this
+  // layer renders one of N regions in a stack. Default to the file-
+  // level constants so single-region callers (current state) get the
+  // same behaviour without passing anything explicitly.
+  hideFeatherPx = DEFAULT_HIDE_FEATHER_PX,
+  textureDilatePx = DEFAULT_TEXTURE_DILATE_PX,
+  paintModeOpacity = DEFAULT_PAINT_MODE_OPACITY,
 }) {
   const wrapperRef = useRef(null);
   const hideRef = useRef(null);
@@ -209,10 +219,10 @@ export default function FogCanvasLayer({
   // one mask regen per frame.
   //
   // Two URLs:
-  //   • hideUrl — engine canvas blurred lightly (FOG_HIDE_FEATHER_PX),
+  //   • hideUrl — engine canvas blurred lightly by hideFeatherPx,
   //     contrast-restored. Soft brush boundary while keeping a solid
   //     interior so the hide colour fully occludes the map.
-  //   • textureUrl — engine canvas blurred heavily (FOG_TEXTURE_DILATE_PX),
+  //   • textureUrl — engine canvas blurred heavily by textureDilatePx,
   //     contrast-restored. The texture layer's mask extends past the
   //     hide edge so wisps drift into the revealed area.
   //
@@ -220,6 +230,10 @@ export default function FogCanvasLayer({
   // outward and softens the falloff; contrast steepens it back up to
   // keep peak alpha near 1.0 in the interior. The difference between
   // hide and texture is just the blur radius.
+  //
+  // hideFeatherPx / textureDilatePx are in deps so changing them
+  // (e.g. via per-region prop updates from a region-stack parent)
+  // immediately re-renders the masks at the new feather/dilate.
   useEffect(() => {
     if (!engine) return;
 
@@ -245,14 +259,14 @@ export default function FogCanvasLayer({
       const canvas = engine.canvas;
       if (!canvas) return;
 
-      const hideUrl = renderMaskCanvas(hideMaskCanvasRef, FOG_HIDE_FEATHER_PX, 2);
+      const hideUrl = renderMaskCanvas(hideMaskCanvasRef, hideFeatherPx, 2);
       const hide = hideRef.current;
       if (hide && hideUrl) {
         hide.style.maskImage = hideUrl;
         hide.style.webkitMaskImage = hideUrl;
       }
 
-      const textureUrl = renderMaskCanvas(dilatedCanvasRef, FOG_TEXTURE_DILATE_PX, 2);
+      const textureUrl = renderMaskCanvas(dilatedCanvasRef, textureDilatePx, 2);
       const tex = textureRef.current;
       if (tex && textureUrl) {
         tex.style.maskImage = textureUrl;
@@ -279,7 +293,7 @@ export default function FogCanvasLayer({
       engine.off('change', onChange);
       engine.off('load', onChange);
     };
-  }, [engine]);
+  }, [engine, hideFeatherPx, textureDilatePx]);
 
   const screenToMask = useCallback((clientX, clientY) => {
     const wrapper = wrapperRef.current;
@@ -443,7 +457,7 @@ export default function FogCanvasLayer({
         // grid hover still works in non-paint contexts. The fog canvas
         // is mostly transparent so the grid remains visible underneath.
         zIndex: 25,
-        opacity: paintMode ? Math.min(FOG_PAINT_MODE_OPACITY, fogOpacity) : fogOpacity,
+        opacity: paintMode ? Math.min(paintModeOpacity, fogOpacity) : fogOpacity,
         // No mix-blend-mode at the wrapper level any more. The hide
         // layer needs NORMAL blending against the map (so it actually
         // hides), while the texture layer needs SCREEN blending (so

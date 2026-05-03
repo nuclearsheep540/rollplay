@@ -7,7 +7,7 @@
 
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import GridOverlay from './GridOverlay';
-import { FogCanvasLayer } from '@/app/fog_management';
+import { FogCanvasLayer, FogRegionStack } from '@/app/fog_management';
 import { useAssetDownload } from '@/app/shared/providers/AssetDownloadManager';
 
 const clamp = (val, min, max) => Math.min(max, Math.max(min, val));
@@ -29,8 +29,15 @@ const MapDisplay = ({
   offsetX = 0,
   offsetY = 0,
   onImageLoad = null, // fires with { naturalWidth, naturalHeight } when map image loads
-  fogEngine = null,    // FogEngine instance (shared across game runtime)
+  fogEngine = null,    // FogEngine instance (legacy single-region — superseded by fogRegions when both passed)
   fogPaintMode = false, // when true, fog layer captures pointer events for DM painting
+  // Multi-region fog rendering. When `fogRegions` is provided the
+  // stack renders one FogCanvasLayer per enabled region; `fogEngine`
+  // is ignored. The stack composites by DOM stacking — overlapping
+  // enabled regions read as denser fog.
+  fogRegions = null,         // array of FogRegion dicts (id, name, enabled, role, params)
+  fogGetEngine = null,       // (regionId) => FogEngine — typically from useFogRegions().getEngine
+  fogActiveRegionId = null,  // region currently receiving paint events
 }) => {
   const mapImageRef = useRef(null);
   const containerRef = useRef(null);
@@ -241,8 +248,20 @@ const MapDisplay = ({
           }}
         />
 
-        {/* Fog of war — sits between the map image and the grid. */}
-        {fogEngine && mapLoaded && (
+        {/* Fog of war — sits between the map image and the grid.
+            Prefer the multi-region stack when callers provide it;
+            fall back to the legacy single-engine path otherwise so
+            existing call sites that haven't migrated keep working. */}
+        {mapLoaded && fogRegions && fogGetEngine && (
+          <FogRegionStack
+            regions={fogRegions}
+            getEngine={fogGetEngine}
+            activeRegionId={fogActiveRegionId}
+            paintMode={fogPaintMode}
+            mapImageRef={mapImageRef}
+          />
+        )}
+        {mapLoaded && !fogRegions && fogEngine && (
           <FogCanvasLayer
             engine={fogEngine}
             mapImageRef={mapImageRef}

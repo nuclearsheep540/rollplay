@@ -17,7 +17,7 @@ import { MapDisplay } from '@/app/map_management';
 import { useGridConfig } from '@/app/map_management/hooks/useGridConfig';
 import { useUpdateGridConfig } from '../hooks/useUpdateGridConfig';
 import { useUpdateFogConfig } from '../hooks/useUpdateFogConfig';
-import { useFogEngine, FogPaintControls } from '@/app/fog_management';
+import { useFogRegions, FogPaintControls, RegionListPanel } from '@/app/fog_management';
 import { useActionHistory } from '@/app/shared/hooks/useActionHistory';
 
 const VALID_TOOLS = ['move', 'grid', 'paint', 'erase'];
@@ -82,7 +82,7 @@ export default function MapConfigTool({
   const [fogSaveSuccess, setFogSaveSuccess] = useState(false);
 
   const grid = useGridConfig();
-  const fog = useFogEngine();
+  const fog = useFogRegions();
   const gridUpdateMutation = useUpdateGridConfig();
   const fogUpdateMutation = useUpdateFogConfig();
 
@@ -111,25 +111,44 @@ export default function MapConfigTool({
       },
     },
     fog_stroke: {
-      // payload is a base64 PNG data URL — the snapshot to restore.
+      // payload is `{ regionId, dataUrl }` — the snapshot to restore
+      // and which region produced it. Region-scoped: undo/redo loads
+      // into the engine that recorded the stroke, not whichever region
+      // happens to be active now. Active focus follows so the user
+      // sees the change visually as the in-focus layer.
       apply: async (payload) => {
-        await fog.loadDataUrl(payload);
+        const regionId = payload?.regionId;
+        const dataUrl = payload?.dataUrl ?? null;
+        const eng = regionId ? fog.getEngine(regionId) : fog.engine;
+        if (!eng) return;
+        await eng.loadFromDataUrl(dataUrl);
         // Always mark dirty after an undo/redo: the canvas now diverges
         // from whatever the last server commit was, even if it happens
         // to coincide. Easier to enable "Save Fog" defensively than to
         // track equality with the server snapshot.
-        if (fog.engine) fog.engine.setDirty(true);
+        eng.setDirty(true);
+        if (regionId && regionId !== fog.activeId) {
+          fog.setActiveRegion(regionId);
+        }
       },
     },
   }), [selectedAsset?.id, grid, fog, gridUpdateMutation]);
 
   const history = useActionHistory({ handlers, capacity: 10 });
 
-  // Subscribe to the engine's strokeend event. Each completed stroke
-  // (or fill/clear bulk op) produces a typed `fog_stroke` action with
-  // before/after canvas snapshots.
+  // Subscribe to the active engine's strokeend event. Each completed
+  // stroke (or fill/clear bulk op) produces a typed `fog_stroke` action
+  // tagged with the active region's id, so undo/redo can target the
+  // right engine even after the user switches active regions.
+  //
+  // The closure captures fog.activeId at effect-run time. Switching
+  // active regions updates fog.engine (active-engine reference), so the
+  // effect re-runs and rebinds with the new id. During an in-flight
+  // stroke this can't happen — the layer's pointer-capture means the
+  // panel can't receive a click while the user is mid-drag.
   useEffect(() => {
     if (!fog.engine) return;
+    const regionId = fog.activeId;
     const onStrokeEnd = ({ before, after, kind }) => {
       const labelByKind = {
         paint: 'Paint stroke',
@@ -142,13 +161,13 @@ export default function MapConfigTool({
         kind: 'fog_stroke',
         label: labelByKind[kind] || 'Fog stroke',
         timestamp: Date.now(),
-        before,
-        after,
+        before: { regionId, dataUrl: before },
+        after: { regionId, dataUrl: after },
       });
     };
     fog.engine.on('strokeend', onStrokeEnd);
     return () => fog.engine.off('strokeend', onStrokeEnd);
-  }, [fog.engine, history]);
+  }, [fog.engine, fog.activeId, history]);
 
   // Auto-save: every completed stroke triggers a debounced PATCH so the
   // workshop has a Photoshop-style "always saved" feel — no Update button
@@ -176,12 +195,13 @@ export default function MapConfigTool({
       if (!asset || !f || !mutation) return;
       clearTimeout(timer);
       timer = setTimeout(() => {
-        // Step-1 frontend serialises the engine as a single FogRegion;
-        // multi-region UI lands later (the API accepts a list).
-        const region = f.serialize();
+        // useFogRegions.serialize() emits the full regions list; pass
+        // it through to the API mutation. Single-region behaviour is
+        // a special case — one region with id 'default'.
+        const regions = f.serialize();
         mutation.mutate({
           assetId: asset.id,
-          regions: region ? [region] : null,
+          regions: regions && regions.length ? regions : null,
         });
       }, 250);
     };
@@ -236,10 +256,10 @@ export default function MapConfigTool({
         grid_line_color: assetData.grid_line_color,
       });
 
-      // Hydrate the fog engine from the persisted region (if any).
-      // Step-1 reads the first region; multi-region selection comes later.
-      const firstRegion = assetData.fog_config?.regions?.[0] ?? null;
-      await fog.loadRegion(firstRegion);
+      // Hydrate all fog regions from the persisted config. The hook
+      // creates one engine per region and loads each mask. Empty fog
+      // (fresh map) hydrates to a single implicit "Default" region.
+      await fog.loadFromConfig(assetData.fog_config);
 
       setLoadingAsset(false);
     }
@@ -305,10 +325,10 @@ export default function MapConfigTool({
     // Save is a server commit only — strokes are the undo unit, so
     // this intentionally does not push to history.
     try {
-      const region = fog.serialize();
+      const regions = fog.serialize();
       const updatedAsset = await fogUpdateMutation.mutateAsync({
         assetId: selectedAsset.id,
-        regions: region ? [region] : null,
+        regions: regions && regions.length ? regions : null,
       });
       setSelectedAsset(prev => ({ ...prev, ...updatedAsset }));
       setFogSaveSuccess(true);
@@ -457,7 +477,9 @@ export default function MapConfigTool({
               }
             }}
             isMapLocked={isFogTool}
-            fogEngine={fog.engine}
+            fogRegions={fog.regions}
+            fogGetEngine={fog.getEngine}
+            fogActiveRegionId={fog.activeId}
             fogPaintMode={isFogTool}
             showGrid={isGridTool || isMoveTool}
           />
@@ -486,9 +508,24 @@ export default function MapConfigTool({
           )}
 
           {isFogTool && (
-            <div className="p-3 space-y-3">
+            <div className="p-3 space-y-4">
+              <RegionListPanel
+                regions={fog.regions}
+                activeId={fog.activeId}
+                maxRegions={fog.maxRegions}
+                onSetActive={fog.setActiveRegion}
+                onAddRegion={fog.addRegion}
+                onDeleteRegion={fog.deleteRegion}
+                onRenameRegion={(id, name) => fog.updateRegion(id, { name })}
+                onToggleEnabled={fog.setRegionEnabled}
+              />
               <div className="text-[11px] uppercase tracking-wider text-content-secondary">
                 {tool === 'paint' ? 'Painting fog' : 'Revealing (erasing fog)'}
+                {fog.activeRegion && (
+                  <span className="ml-1.5 text-content-on-dark normal-case font-normal">
+                    in <em>{fog.activeRegion.name}</em>
+                  </span>
+                )}
               </div>
               <FogPaintControls
                 paintMode={true}
