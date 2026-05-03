@@ -10,12 +10,15 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
  * to overlay the map image.
  *
  * Layer composition (back-to-front inside the wrapper):
- *   1. <div> textured with FOG_TEXTURE_URL (animated GIF), tiled at
- *      natural size — this is the visible fog.
- *   2. CSS mask on that <div> sourced from the engine canvas's alpha,
- *      so the texture only shows where fog has been painted.
+ *   1. Hide layer — solid-coloured div (FOG_HIDE_COLOR), masked by the
+ *      engine canvas's alpha as drawn. Occludes the map.
+ *   2. Texture layer — GIF tiles + displacement filter, masked by a
+ *      DILATED copy of the engine canvas. Sits on top of the hide
+ *      layer with mix-blend-mode: screen so wisps lift the dark hide
+ *      colour. The dilation lets wisps drift past the hide edge into
+ *      the revealed area without compromising what's hidden.
  *   3. The engine <canvas> itself, mounted but visually hidden — it's
- *      the source of truth for paint/erase, not the visible surface.
+ *      the source of truth for paint/erase, not a visible surface.
  *
  * The animated GIF can't be painted into a canvas (drawImage captures
  * a single frame), so the texture has to live as a DOM background. The
@@ -54,8 +57,8 @@ const FOG_TEXTURE_URL = '/ui/fog_loop_2.gif';
 //
 // Tile count grows roughly with 1 / (1 − overlap)², so 0.9 is ~4× the
 // cost of 0.8. Keep FOG_OVERLAP_FRACTION sensible (0.6–0.85).
-const FOG_TILE_SIZE_PX = 1280;
-const FOG_OVERLAP_FRACTION = 0.6;
+const FOG_TILE_SIZE_PX = 960;
+const FOG_OVERLAP_FRACTION = 0.5;
 const FOG_STRIDE_PX = Math.max(1, Math.round(FOG_TILE_SIZE_PX * (1 - FOG_OVERLAP_FRACTION)));
 
 // Blend mode used both tile-against-tile (inside the masked composite)
@@ -84,6 +87,31 @@ const FOG_DISPLACE_OCTAVES = 1;
 const FOG_DISPLACE_SCALE = 64;
 const FOG_FEATHER_PX = 6;
 
+// Two-layer fog composition:
+//   1. Hide layer  — solid-coloured div, masked by the painted alpha as
+//      drawn. Its only job is to occlude the map. Reliable hiding,
+//      because the colour doesn't depend on the GIF's dark areas.
+//   2. Texture layer — GIF tiles + displacement + feather. Decoration
+//      on top of the hide layer; uses a DILATED copy of the mask so
+//      wisps extend past the hide edge into the revealed area.
+//
+// FOG_HIDE_COLOR: the occluding fill. Slight blue tint reads as deep
+//   shadow rather than ink-black. Drop alpha below ~0.85 and map shapes
+//   start showing through.
+// FOG_HIDE_FEATHER_PX: blur radius applied to the hide mask, in mask-
+//   space pixels. Softens the brush boundary so the hide-to-reveal
+//   transition has a smoke-like falloff rather than a stamp edge.
+//   Bigger = softer edge but lower peak alpha at the centre, which is
+//   why we follow up with a contrast multiply to keep the interior
+//   solid.
+// FOG_TEXTURE_DILATE_PX: how far the texture mask extends past the hide
+//   mask, in mask-space pixels. Bigger = wisps drift further past the
+//   revealed edge before fading. Combined with FOG_DISPLACE_SCALE this
+//   controls how "blown" the fog looks beyond the painted area.
+const FOG_HIDE_COLOR = 'rgba(20, 20, 30, 0.95)';
+const FOG_HIDE_FEATHER_PX = 20;
+const FOG_TEXTURE_DILATE_PX = 30;
+
 export default function FogCanvasLayer({
   engine,
   mapImageRef,
@@ -91,7 +119,15 @@ export default function FogCanvasLayer({
   fogOpacity = 1.0,
 }) {
   const wrapperRef = useRef(null);
+  const hideRef = useRef(null);
   const textureRef = useRef(null);
+  // Offscreen scratch canvases — hold blurred copies of the engine
+  // canvas, used as the per-layer masks. Lazily created on first sync.
+  // hideMaskCanvasRef: light blur for the soft hide-layer edge.
+  // dilatedCanvasRef: heavier blur to extend the texture mask past the
+  // hide edge so wisps drift outward.
+  const hideMaskCanvasRef = useRef(null);
+  const dilatedCanvasRef = useRef(null);
   const rafPendingRef = useRef(false);
   const isPaintingRef = useRef(false);
   const lastPointRef = useRef(null);
@@ -145,22 +181,63 @@ export default function FogCanvasLayer({
     }
   }, [fogOpacity]);
 
-  // Mask sync — encode the canvas to a data URL and apply it as the
-  // textured div's CSS mask whenever the engine changes. Synchronous
-  // toDataURL (vs the previous async toBlob) ensures the mask lands in
-  // the SAME frame as the paint stroke — no lag, no losing the path
-  // mid-drag. rAF-throttling collapses bursts of change events from a
-  // fast drag into at most one mask regen per frame.
+  // Mask sync — encode the canvas to data URLs and apply them as CSS
+  // masks on both fog layers whenever the engine changes. Synchronous
+  // toDataURL ensures the mask lands in the SAME frame as the paint
+  // stroke — no lag, no losing the path mid-drag. rAF-throttling
+  // collapses bursts of change events from a fast drag into at most
+  // one mask regen per frame.
+  //
+  // Two URLs:
+  //   • hideUrl — engine canvas blurred lightly (FOG_HIDE_FEATHER_PX),
+  //     contrast-restored. Soft brush boundary while keeping a solid
+  //     interior so the hide colour fully occludes the map.
+  //   • textureUrl — engine canvas blurred heavily (FOG_TEXTURE_DILATE_PX),
+  //     contrast-restored. The texture layer's mask extends past the
+  //     hide edge so wisps drift into the revealed area.
+  //
+  // Both passes use the same blur+contrast trick: blur extends alpha
+  // outward and softens the falloff; contrast steepens it back up to
+  // keep peak alpha near 1.0 in the interior. The difference between
+  // hide and texture is just the blur radius.
   useEffect(() => {
     if (!engine) return;
 
+    const renderMaskCanvas = (ref, blurPx, contrast) => {
+      const src = engine.canvas;
+      if (!src) return null;
+      let dst = ref.current;
+      if (!dst) {
+        dst = document.createElement('canvas');
+        ref.current = dst;
+      }
+      if (dst.width !== src.width) dst.width = src.width;
+      if (dst.height !== src.height) dst.height = src.height;
+      const ctx = dst.getContext('2d');
+      ctx.clearRect(0, 0, dst.width, dst.height);
+      ctx.filter = `blur(${blurPx}px) contrast(${contrast})`;
+      ctx.drawImage(src, 0, 0);
+      ctx.filter = 'none';
+      return `url(${dst.toDataURL('image/png')})`;
+    };
+
     const updateMask = () => {
       const canvas = engine.canvas;
+      if (!canvas) return;
+
+      const hideUrl = renderMaskCanvas(hideMaskCanvasRef, FOG_HIDE_FEATHER_PX, 2);
+      const hide = hideRef.current;
+      if (hide && hideUrl) {
+        hide.style.maskImage = hideUrl;
+        hide.style.webkitMaskImage = hideUrl;
+      }
+
+      const textureUrl = renderMaskCanvas(dilatedCanvasRef, FOG_TEXTURE_DILATE_PX, 2);
       const tex = textureRef.current;
-      if (!canvas || !tex) return;
-      const cssUrl = `url(${canvas.toDataURL('image/png')})`;
-      tex.style.maskImage = cssUrl;
-      tex.style.webkitMaskImage = cssUrl;
+      if (tex && textureUrl) {
+        tex.style.maskImage = textureUrl;
+        tex.style.webkitMaskImage = textureUrl;
+      }
     };
 
     const onChange = () => {
@@ -289,14 +366,11 @@ export default function FogCanvasLayer({
         // is mostly transparent so the grid remains visible underneath.
         zIndex: 25,
         opacity: paintMode ? Math.min(0.5, fogOpacity) : fogOpacity,
-        // Screen-blend the entire fog layer's composite output against
-        // the map image sibling inside contentRef. Has to live here on
-        // the wrapper, not on inner elements: the wrapper creates its
-        // own stacking context (z-index, transform), so any blend mode
-        // applied INSIDE the wrapper only sees the wrapper's empty
-        // backdrop, never the map. From the wrapper itself, the blend
-        // reaches the parent stacking context where the map lives.
-        mixBlendMode: FOG_BLEND_MODE,
+        // No mix-blend-mode at the wrapper level any more. The hide
+        // layer needs NORMAL blending against the map (so it actually
+        // hides), while the texture layer needs SCREEN blending (so
+        // wisps lift the dark hide-layer below). Those goals conflict
+        // at the wrapper level — split per-layer below.
       }}
       onPointerDown={handlePointerDown}
       onPointerMove={handlePointerMove}
@@ -341,13 +415,41 @@ export default function FogCanvasLayer({
         </defs>
       </svg>
 
+      {/* Hide layer — solid colour, masked by the painted alpha. Its
+          only job is to occlude the map. Sits beneath the texture
+          layer so the texture's screen blend lifts the dark hide colour
+          where wisps are bright, leaving deep shadow where wisps are
+          dark. Mounts unconditionally; updateMask() applies maskImage. */}
+      <div
+        ref={hideRef}
+        aria-hidden="true"
+        style={{
+          position: 'absolute',
+          inset: 0,
+          pointerEvents: 'none',
+          backgroundColor: FOG_HIDE_COLOR,
+          maskRepeat: 'no-repeat',
+          maskSize: '100% 100%',
+          maskMode: 'alpha',
+          WebkitMaskRepeat: 'no-repeat',
+          WebkitMaskSize: '100% 100%',
+        }}
+      />
+
       {/* On a single element, CSS applies `filter` BEFORE `mask`, so a
           filter on the masked div would jitter the GIF tiles but the
           mask would still cut a clean edge through the result. We need
           the filter to operate on the POST-MASK output, so we put the
-          mask on textureRef and the filter on a parent wrapper around
-          it. The displacement then warps the already-masked alpha edge,
-          giving the wispy boundary we actually want. */}
+          mask on textureRef and the filter on this parent wrapper. The
+          displacement then warps the already-masked alpha edge, giving
+          the wispy boundary we want.
+
+          mix-blend-mode lives here (not on the wrapper) so the texture
+          layer screen-blends with the hide layer underneath: bright
+          wisps lift the dark hide colour to mid-bright, dark wisps stay
+          dark. In the dilated overhang region (where the hide layer is
+          transparent), the texture screens against the map directly,
+          giving a "fog drifting past the edge" feel. */}
       <div
         aria-hidden="true"
         style={{
@@ -355,6 +457,7 @@ export default function FogCanvasLayer({
           inset: 0,
           pointerEvents: 'none',
           filter: 'url(#fog-displace)',
+          mixBlendMode: FOG_BLEND_MODE,
         }}
       >
         <div
