@@ -3,7 +3,7 @@
 
 'use client';
 
-import React, { useEffect, useMemo, useRef } from 'react';
+import React, { useLayoutEffect, useMemo, useRef } from 'react';
 
 import { renderMaskCanvas } from '../utils/renderMaskCanvas';
 
@@ -74,25 +74,22 @@ export default function FogSharedTextureLayer({
   // Subscribe to every enabled engine's change/load. On any fire, rAF-
   // throttle a union-mask rebuild. Resubscribes when the enabled set
   // or per-region params change.
-  useEffect(() => {
+  //
+  // useLayoutEffect (not useEffect) so the priming `rebuildUnion()` at
+  // the end runs synchronously after DOM mutations and BEFORE the
+  // browser's first paint. The component mounts only when its parent
+  // has confirmed everything is ready (imgDims set, at least one
+  // enabled region has an engine), so the textureRef and the first
+  // engine's canvas are both guaranteed valid here.
+  useLayoutEffect(() => {
     const subscriptions = [];
 
     const rebuildUnion = () => {
       const tex = textureRef.current;
       if (!tex) return;
-
-      // Pick reference dimensions from the first enabled engine. All
-      // engines share canvas size by construction (engine.fitToMap()
-      // is called with the same map image for every region), so any
-      // one is a valid reference.
       const firstEngine = getEngine(enabledRegions[0]?.id);
       const refCanvas = firstEngine?.canvas;
-      if (!refCanvas) {
-        // No engines / not painted yet — clear mask, texture invisible.
-        tex.style.maskImage = '';
-        tex.style.webkitMaskImage = '';
-        return;
-      }
+      if (!refCanvas) return;
 
       // Initialise / resize union canvas.
       let union = unionCanvasRef.current;
@@ -180,8 +177,6 @@ export default function FogSharedTextureLayer({
     }
     return out;
   }, [imgDims?.w, imgDims?.h]);
-
-  if (!imgDims?.w || !imgDims?.h) return null;
 
   return (
     <div

@@ -195,8 +195,13 @@ export default function FogRegionStack({
 
   if (!regions.length || !getEngine) return null;
 
+  // Single source of truth for "everything needed to render fog is in
+  // place". Children are mounted only when ready holds, so each layer's
+  // lifecycle is straightforward: mount with valid preconditions, prime
+  // its mask once via useLayoutEffect, run normally. No transitional
+  // mounted-but-not-really-ready states with refs that haven't attached.
   const ready = imgDims.w > 0 && imgDims.h > 0;
-  const hasEnabledRegion = regions.some((r) => r.enabled);
+  const hasEnabledEngine = ready && regions.some((r) => r.enabled && !!getEngine(r.id));
 
   return (
     <div
@@ -225,7 +230,7 @@ export default function FogRegionStack({
       onPointerEnter={handlePointerEnter}
       onPointerLeave={handlePointerLeave}
     >
-      {regions.map((region) => {
+      {ready && regions.map((region) => {
         if (!region.enabled) return null;
         const engine = getEngine(region.id);
         if (!engine) return null;
@@ -238,7 +243,7 @@ export default function FogRegionStack({
           />
         );
       })}
-      {hasEnabledRegion && (
+      {hasEnabledEngine && (
         <FogSharedTextureLayer
           regions={regions}
           getEngine={getEngine}
