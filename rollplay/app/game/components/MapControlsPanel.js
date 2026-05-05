@@ -9,7 +9,7 @@ import {
   DM_ARROW,
   ACTIVE_BACKGROUND,
 } from '../../styles/constants';
-import { FogPaintControls } from '@/app/fog_management';
+import { FogPaintControls, RegionListPanel, RegionParamsEditor } from '@/app/fog_management';
 import MapSelectionSection from './MapSelectionModal';
 
 // Component to read actual image file dimensions
@@ -391,7 +391,33 @@ export default function MapControlsPanel({
             </div>
           </button>
           {isFogExpanded && (
-            <div className="ml-2 mr-2 mb-3 p-3 bg-rose-950/30 border border-rose-400/30 rounded">
+            <div className="ml-2 mr-2 mb-3 p-3 bg-rose-950/30 border border-rose-400/30 rounded space-y-3">
+              <RegionListPanel
+                regions={fog.regions}
+                activeId={fog.activeId}
+                maxRegions={fog.maxRegions}
+                onSetActive={fog.setActiveRegion}
+                onAddRegion={fog.addRegion}
+                onDeleteRegion={fog.deleteRegion}
+                onRenameRegion={(id, name) => fog.updateRegion(id, { name })}
+                onToggleEnabled={fog.setRegionEnabled}
+              />
+              {fog.activeRegion && (
+                <RegionParamsEditor
+                  region={fog.activeRegion}
+                  onChange={(field, value) =>
+                    fog.updateRegion(fog.activeId, { [field]: value })
+                  }
+                />
+              )}
+              <div className="text-[11px] uppercase tracking-wider text-rose-200/70">
+                {fog.mode === 'paint' ? 'Painting fog' : 'Revealing (erasing fog)'}
+                {fog.activeRegion && (
+                  <span className="ml-1.5 text-content-on-dark normal-case font-normal">
+                    in <em>{fog.activeRegion.name}</em>
+                  </span>
+                )}
+              </div>
               <FogPaintControls
                 paintMode={fogPaintMode}
                 onPaintModeToggle={setFogPaintMode}
@@ -404,9 +430,9 @@ export default function MapControlsPanel({
                 onFillAll={fog.fillAll}
                 onUpdate={onFogUpdate}
                 onResetToServer={() => {
-                  // Reload all regions from the last-known server state.
-                  // useFogRegions hydrates each engine from its region's
-                  // mask; multi-region active-selection UI lands later.
+                  // Reload all regions from the last-known server state via
+                  // the multi-region hydrator — each engine's mask is
+                  // restored from the asset's saved fog_config.
                   fog.loadFromConfig(activeMap?.map_config?.fog_config);
                 }}
               />

@@ -10,35 +10,30 @@
  */
 
 /**
- * Apply an incoming fog_config_update to the local engine.
+ * Apply an incoming fog_config_update to the local fog state.
  *
- * Honours the no-flicker contract: if the payload carries a region with
- * a mask, the engine decodes it before swapping. If fog_config is
- * null/undefined or has no regions, the local fog is cleared.
+ * Defers to `fog.loadFromConfig` so the full multi-region payload is
+ * hydrated atomically — every region's engine gets its mask applied,
+ * region metadata (enabled, opacity, feather, etc.) updates, and stale
+ * engines for removed regions are dropped. Honours the no-flicker
+ * contract via the engine's decode-then-swap loadFromDataUrl.
  *
- * Step-1 reads regions[0] only — single-region rendering. Multi-region
- * compositing (FogRegionStack) lands later; the protocol is already
- * v2-shaped so the WS contract doesn't need a follow-up break.
+ * Pass `loadFromConfig` (the bound method from useFogRegions) rather
+ * than a raw engine; the handler doesn't need to know about the
+ * engine pool internals.
  */
-export const handleRemoteFogUpdate = async (data, { engine }) => {
-  if (!engine) {
-    console.warn('☁️ Received fog_config_update but no engine available');
+export const handleRemoteFogUpdate = async (data, { loadFromConfig }) => {
+  if (!loadFromConfig) {
+    console.warn('☁️ Received fog_config_update but no loadFromConfig available');
     return;
   }
-  const fogConfig = data?.fog_config;
-  const firstRegion = fogConfig?.regions?.[0] ?? null;
-  if (!firstRegion || !firstRegion.mask) {
-    await engine.loadFromRegion(null); // clears + nulls the captured id
-    console.log('☁️ Remote fog cleared');
-    return;
-  }
+  const fogConfig = data?.fog_config ?? null;
   try {
-    await engine.loadFromRegion(firstRegion);
-    console.log(
-      `☁️ Remote fog applied: ${firstRegion.mask_width}x${firstRegion.mask_height} (region ${firstRegion.id})`
-    );
+    await loadFromConfig(fogConfig);
+    const regionCount = fogConfig?.regions?.length ?? 0;
+    console.log(`☁️ Remote fog applied: ${regionCount} region(s)`);
   } catch (err) {
-    console.error('☁️ Failed to apply remote fog mask:', err);
+    console.error('☁️ Failed to apply remote fog config:', err);
   }
 };
 
@@ -73,9 +68,9 @@ export const createFogSendFunctions = (webSocket, isConnected) => {
  *
  * Returns a single cleanup function to unsubscribe.
  */
-export const registerFogHandlers = ({ registerHandler, engine }) => {
+export const registerFogHandlers = ({ registerHandler, loadFromConfig }) => {
   if (!registerHandler) return () => {};
   return registerHandler('fog_config_update', (data) =>
-    handleRemoteFogUpdate(data, { engine })
+    handleRemoteFogUpdate(data, { loadFromConfig })
   );
 };

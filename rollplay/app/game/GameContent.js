@@ -1181,12 +1181,14 @@ export default function GameContent() {
   } = useMapWebSocket(webSocket, isConnected, roomId, thisUserId, mapContext, registerHandler);
 
   // Fog of war — register WS handler and build send function alongside map.
-  // Fog state never round-trips through React: incoming masks go straight
-  // into the engine canvas (decode-then-swap, no flicker).
+  // Fog state never round-trips through React: incoming configs flow into
+  // useFogRegions.loadFromConfig which hydrates each region's engine via
+  // decode-then-swap (no flicker), updates region metadata, and disposes
+  // engines for regions that are no longer present.
   useEffect(() => {
-    if (!registerHandler || !fog.engine) return;
-    return registerFogHandlers({ registerHandler, engine: fog.engine });
-  }, [registerHandler, fog.engine]);
+    if (!registerHandler) return;
+    return registerFogHandlers({ registerHandler, loadFromConfig: fog.loadFromConfig });
+  }, [registerHandler, fog.loadFromConfig]);
 
   const fogSenders = useMemo(
     () => createFogSendFunctions(webSocket, isConnected),
@@ -1194,13 +1196,20 @@ export default function GameContent() {
   );
 
   // Hydrate ALL regions from the active map's fog config when the map
-  // loads or changes (cold→hot via ETL on session start, then live
-  // updates). useFogRegions creates one engine per region and loads
-  // each mask; empty fog hydrates to an implicit "Default" region.
+  // changes (cold→hot via ETL on session start). Mirrors the workshop's
+  // hydration pattern — fires ONLY on asset change, never on local
+  // state changes. Local edits (add region, toggle, paint) must not
+  // re-trigger this effect; if they did, they'd be wiped by the stale
+  // server config until the DM hits "Update fog" and the broadcast
+  // round-trips.
+  //
+  // Live remote updates are applied separately by the WS handler
+  // (registerFogHandlers above), which calls fog.loadFromConfig
+  // directly with the new payload — that path doesn't go through
+  // activeMap state.
   useEffect(() => {
-    if (!fog.engine) return;
     fog.loadFromConfig(activeMap?.map_config?.fog_config);
-  }, [activeMap?.map_config?.asset_id, activeMap?.map_config?.fog_config?.version, fog.engine]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [activeMap?.map_config?.asset_id]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Match the active region's canvas aspect ratio to the map. Without
   // this, a square 1024×1024 default canvas gets CSS-stretched to fit
@@ -1213,7 +1222,7 @@ export default function GameContent() {
     );
     if (hasPaintedRegion) return;
     fog.fitToMap(mapNaturalDimensions.naturalWidth, mapNaturalDimensions.naturalHeight);
-  }, [mapNaturalDimensions, activeMap?.map_config?.asset_id, fog]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [mapNaturalDimensions, activeMap?.map_config?.asset_id, fog.fitToMap]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // DM "Update fog" handler — serialises ALL regions and broadcasts
   // the full v2 fog_config. Multi-region runtime updates (toggle,
