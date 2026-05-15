@@ -13,3 +13,4 @@ httpx==0.27.0 # Async HTTP client for api-game calls
 pytest==8.0.0 # Testing framework
 sentry-sdk[fastapi]==1.45.1
 boto3==1.35.0  # AWS S3 SDK for asset storage
+livekit-api==0.8.2  # LiveKit server SDK for AccessToken minting (sandbox/stream)
