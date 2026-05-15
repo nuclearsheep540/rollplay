@@ -7,6 +7,7 @@ import React, { useCallback, useEffect, useRef, useState } from 'react';
 
 import FogHideLayer from './FogHideLayer';
 import FogSharedTextureLayer from './FogSharedTextureLayer';
+import { useRenderTracker } from '@/app/shared/utils/renderTracker';
 
 // Painter-mode knock-back. While paintMode is on the visible fog drops
 // by this factor so the DM can see the map underneath their strokes.
@@ -46,6 +47,7 @@ export default function FogRegionStack({
   // spacebar pan override skips entirely while a stroke is in flight).
   paintingRef = null,
 }) {
+  useRenderTracker('FogRegionStack');
   const wrapperRef = useRef(null);
   const isPaintingRef = useRef(false);
   const lastPointRef = useRef(null);

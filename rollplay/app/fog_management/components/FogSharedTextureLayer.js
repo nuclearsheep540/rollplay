@@ -6,8 +6,32 @@
 import React, { useLayoutEffect, useMemo, useRef } from 'react';
 
 import { renderMaskCanvas } from '../utils/renderMaskCanvas';
+import { useRenderTracker } from '@/app/shared/utils/renderTracker';
 
 const FOG_TEXTURE_URL = '/ui/fog_loop_2.gif';
+
+// ── Perf isolation toggles (dev only) ────────────────────────────────
+// Flip these and reload to A/B test which part of the fog texture
+// pipeline is costing budget. See .claude-plans/runtime-perf-investigation.md
+// "Refined open hypotheses" for the procedure.
+//
+//   FOG_DEBUG_NO_GIF      — skip the animated GIF, use a solid fill so
+//                           the SVG filter has static input. Tests
+//                           whether GIF frame advancement is what
+//                           triggers per-frame filter recomputation.
+//   FOG_DEBUG_NO_FILTER   — drop `filter: url(#fog-displace)`. Tests
+//                           whether the SVG filter chain itself is
+//                           expensive (regardless of input animation).
+//   FOG_DEBUG_NO_BLEND    — set `mix-blend-mode: normal` everywhere
+//                           inside the texture layer. Tests whether
+//                           the blend modes are forcing constant
+//                           compositor work.
+//
+// Visual will be wrong with any of these on — that's expected. We're
+// measuring fps delta, not visual quality. Revert when done.
+const FOG_DEBUG_NO_GIF = true;
+const FOG_DEBUG_NO_FILTER = false;
+const FOG_DEBUG_NO_BLEND = false;
 
 // Tile grid: matches the GIF's natural pixel size so each tile renders
 // unscaled; tiles overlap by FOG_OVERLAP_FRACTION and screen-blend with
@@ -50,6 +74,7 @@ export default function FogSharedTextureLayer({
   getEngine,
   imgDims,
 }) {
+  useRenderTracker('FogSharedTextureLayer');
   const textureRef = useRef(null);
   const unionCanvasRef = useRef(null);
   // Per-region scratch canvases for the blur+contrast step. Map keyed
@@ -219,8 +244,8 @@ export default function FogSharedTextureLayer({
           position: 'absolute',
           inset: 0,
           pointerEvents: 'none',
-          filter: 'url(#fog-displace)',
-          mixBlendMode: FOG_BLEND_MODE,
+          filter: FOG_DEBUG_NO_FILTER ? 'none' : 'url(#fog-displace)',
+          mixBlendMode: FOG_DEBUG_NO_BLEND ? 'normal' : FOG_BLEND_MODE,
         }}
       >
         <div
@@ -247,10 +272,11 @@ export default function FogSharedTextureLayer({
                 top: `${t.y}px`,
                 width: `${FOG_TILE_SIZE_PX}px`,
                 height: `${FOG_TILE_SIZE_PX}px`,
-                backgroundImage: `url(${FOG_TEXTURE_URL})`,
+                backgroundImage: FOG_DEBUG_NO_GIF ? 'none' : `url(${FOG_TEXTURE_URL})`,
+                backgroundColor: FOG_DEBUG_NO_GIF ? 'rgba(255, 255, 255, 0.4)' : undefined,
                 backgroundSize: `${FOG_TILE_SIZE_PX}px ${FOG_TILE_SIZE_PX}px`,
                 backgroundRepeat: 'no-repeat',
-                mixBlendMode: FOG_BLEND_MODE,
+                mixBlendMode: FOG_DEBUG_NO_BLEND ? 'normal' : FOG_BLEND_MODE,
               }}
             />
           ))}

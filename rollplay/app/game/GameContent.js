@@ -31,8 +31,10 @@ import { MapDisplay, useMapWebSocket, ImageDisplay, useImageWebSocket, useGridCo
 import { useFogRegions, registerFogHandlers, createFogSendFunctions } from '../fog_management';
 import MapOverlayPanel from './components/MapOverlayPanel';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
-import { faVolumeHigh, faVolumeXmark, faRightToBracket, faEye, faUpRightAndDownLeftFromCenter, faDownLeftAndUpRightToCenter, faCloudArrowDown, faRulerHorizontal, faUsers, faBookOpen } from '@fortawesome/free-solid-svg-icons';
+import { faVolumeHigh, faVolumeXmark, faRightToBracket, faEye, faUpRightAndDownLeftFromCenter, faDownLeftAndUpRightToCenter, faCloudArrowDown, faRulerHorizontal, faUsers, faBookOpen, faGauge } from '@fortawesome/free-solid-svg-icons';
 import { faCloud } from '@fortawesome/free-regular-svg-icons';
+import PerfOverlay from '@/app/shared/components/PerfOverlay';
+import { useRenderTracker } from '@/app/shared/utils/renderTracker';
 import { useFullscreen } from './hooks/useFullscreen';
 import MapSafeArea from './components/MapSafeArea';
 import Drawer from './components/Drawer';
@@ -170,6 +172,18 @@ export default function GameContent() {
   const [showVolumeSlider, setShowVolumeSlider] = useState(false);
   const [showScaleMenu, setShowScaleMenu] = useState(false);
   const [showAssetInfo, setShowAssetInfo] = useState(true);
+  // Dev-only perf overlay (FPS, frame time, render counts). Persists
+  // across reloads via localStorage so toggling stays put while iterating.
+  const [showPerfOverlay, setShowPerfOverlay] = useState(() => {
+    if (typeof window === 'undefined') return false;
+    if (process.env.NODE_ENV === 'production') return false;
+    return window.localStorage.getItem('rollplay.perfOverlay') === '1';
+  });
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    window.localStorage.setItem('rollplay.perfOverlay', showPerfOverlay ? '1' : '0');
+  }, [showPerfOverlay]);
+  useRenderTracker('GameContent');
   const volumeRef = useRef(null);
   const scaleRef = useRef(null);
 
@@ -1873,6 +1887,20 @@ export default function GameContent() {
               )}
             </div>
 
+            {/* Dev-only Perf overlay toggle (FPS, frame time, render counts) */}
+            {process.env.NODE_ENV !== 'production' && (
+              <button
+                onClick={() => setShowPerfOverlay((v) => !v)}
+                className="fullscreen-btn"
+                title={showPerfOverlay ? 'Hide perf overlay' : 'Show perf overlay'}
+                aria-label="Toggle perf overlay"
+                aria-pressed={showPerfOverlay}
+                style={showPerfOverlay ? { color: '#4ade80' } : undefined}
+              >
+                <FontAwesomeIcon icon={faGauge} />
+              </button>
+            )}
+
             {/* Fullscreen Toggle */}
             <button
               onClick={toggleFullscreen}
@@ -2424,6 +2452,10 @@ export default function GameContent() {
           reason={sessionEndedData.reason}
         />
       )}
+
+      {/* Dev-only perf overlay (toggled from the top nav). Mounted at
+          the runtime root so it sits above all drawers and modals. */}
+      <PerfOverlay visible={showPerfOverlay} />
     </div>
   );
 }

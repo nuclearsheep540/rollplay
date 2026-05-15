@@ -5,6 +5,7 @@
 
 import React, { useRef, useEffect } from 'react';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
+import { useRenderTracker } from '@/app/shared/utils/renderTracker';
 import { faPlay, faPause, faStop } from '@fortawesome/free-solid-svg-icons';
 import { PlaybackState } from '../types';
 import {
@@ -63,6 +64,7 @@ export default function AudioTrack({
   effects = {},
   onToggleEffect = null,
 }) {
+  useRenderTracker('AudioTrack');
   const { trackId, type, icon, label, analysers, isRouted, track, isDisabled } = config;
   const {
     playbackState = PlaybackState.STOPPED,

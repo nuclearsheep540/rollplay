@@ -9,6 +9,7 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import GridOverlay from './GridOverlay';
 import { FogRegionStack, FogRegionLabels } from '@/app/fog_management';
 import { useAssetDownload } from '@/app/shared/providers/AssetDownloadManager';
+import { useRenderTracker } from '@/app/shared/utils/renderTracker';
 
 const clamp = (val, min, max) => Math.min(max, Math.max(min, val));
 
@@ -38,6 +39,7 @@ const MapDisplay = ({
   fogActiveRegionId = null,  // region currently receiving paint events
   fogShowRegionLabels = false, // overlay region names at the centroid of each painted alpha (DM-only)
 }) => {
+  useRenderTracker('MapDisplay');
   const mapImageRef = useRef(null);
   const containerRef = useRef(null);
   // Brush cursor lives as a SIBLING of the fog wrapper inside contentRef.

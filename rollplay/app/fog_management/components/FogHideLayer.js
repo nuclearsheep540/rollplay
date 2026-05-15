@@ -6,6 +6,7 @@
 import React, { useEffect, useRef } from 'react';
 
 import { renderMaskUrl } from '../utils/renderMaskCanvas';
+import { useRenderTracker } from '@/app/shared/utils/renderTracker';
 
 const FOG_HIDE_COLOR = 'rgba(20, 20, 30, 0.05)';
 
@@ -24,6 +25,7 @@ export default function FogHideLayer({
   hideFeatherPx,
   opacity = 1.0,
 }) {
+  useRenderTracker('FogHideLayer');
   const divRef = useRef(null);
   const maskCanvasRef = useRef(null);
   const rafPendingRef = useRef(false);
