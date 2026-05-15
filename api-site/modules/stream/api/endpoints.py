@@ -1,11 +1,13 @@
 # Copyright (C) 2025 Matthew Davey
 # SPDX-License-Identifier: GPL-3.0-or-later
 
+import hmac
 import os
 import uuid
 
 from fastapi import APIRouter, HTTPException
 from livekit import api
+from pydantic import BaseModel
 
 router = APIRouter()
 
@@ -14,6 +16,14 @@ LIVEKIT_API_SECRET = os.environ.get("LIVEKIT_API_SECRET")
 LIVEKIT_URL = os.environ.get("LIVEKIT_URL")
 
 DEFAULT_ROOM = "sandbox-main"
+
+# Gate for /sandbox/stream/broadcast. Anyone who knows STREAM_PASS can
+# publish screen-share to the LiveKit project. Set it in .env.
+BROADCAST_PASSWORD = os.environ.get("STREAM_PASS")
+
+
+class PublisherTokenRequest(BaseModel):
+    password: str
 
 
 def _require_credentials() -> None:
@@ -101,6 +111,32 @@ async def delete_ingress(ingress_id: str):
         await lkapi.aclose()
 
     return {"deleted": ingress_id}
+
+
+@router.post("/publisher-token")
+async def publisher_token(request: PublisherTokenRequest):
+    """Mint a publisher AccessToken for the browser broadcaster page.
+    Requires the shared password to keep public abuse out."""
+    _require_credentials()
+    expected = BROADCAST_PASSWORD
+    if not expected:
+        raise HTTPException(status_code=503, detail="STREAM_PASS not configured on the server")
+    if not hmac.compare_digest(request.password, expected):
+        raise HTTPException(status_code=403, detail="Invalid password")
+
+    token = (
+        api.AccessToken(LIVEKIT_API_KEY, LIVEKIT_API_SECRET)
+        .with_identity(f"publisher-{uuid.uuid4().hex[:8]}")
+        .with_grants(
+            api.VideoGrants(
+                room_join=True,
+                room=DEFAULT_ROOM,
+                can_publish=True,
+                can_subscribe=False,
+            )
+        )
+    )
+    return {"token": token.to_jwt(), "room": DEFAULT_ROOM}
 
 
 @router.get("/viewer-token")

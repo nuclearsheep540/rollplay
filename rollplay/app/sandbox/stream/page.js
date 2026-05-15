@@ -191,6 +191,10 @@ export default function SandboxIndex() {
 
       <ul style={{ listStyle: 'none', padding: 0, lineHeight: 2 }}>
         <li>
+          <Link href="/sandbox/stream/broadcast" style={styles.link}>/sandbox/stream/broadcast</Link>
+          <span style={{ ...styles.muted, marginLeft: '1rem' }}>— browser broadcaster (publish screen share)</span>
+        </li>
+        <li>
           <Link href="/sandbox/stream/watch" style={styles.link}>/sandbox/stream/watch</Link>
           <span style={{ ...styles.muted, marginLeft: '1rem' }}>— viewer page (share with watchers)</span>
         </li>
