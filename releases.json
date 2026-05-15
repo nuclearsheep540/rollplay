@@ -1,5 +1,5 @@
 {
-  "latest": "0.46.0",
+  "latest": "0.46.1",
   "releases": {
     "0.27.1": {
       "date": "2026-03-10",
@@ -472,6 +472,21 @@
       "description": "added a screenshare",
       "services": {
         "app": "0.32.0",
+        "api_site": "0.26.0",
+        "api_game": "0.19.0",
+        "api_auth": "0.3.0",
+        "nginx": "0.7.0",
+        "postgres": "0.1.10",
+        "mongo": "0.4.2",
+        "certbot": "0.1.4"
+      }
+    },
+    "0.46.1": {
+      "date": "2026-05-15",
+      "commit": "4100d16",
+      "description": "fix dockerfile",
+      "services": {
+        "app": "0.32.1",
         "api_site": "0.26.0",
         "api_game": "0.19.0",
         "api_auth": "0.3.0",
