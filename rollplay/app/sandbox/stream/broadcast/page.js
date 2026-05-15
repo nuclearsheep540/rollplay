@@ -21,14 +21,14 @@ const LIVEKIT_URL = process.env.NEXT_PUBLIC_LIVEKIT_URL
 const ROOM_OPTIONS = {
   publishDefaults: {
     screenShareEncoding: {
-      maxBitrate: 5_000_000,
+      maxBitrate: 12_000_000,
       maxFramerate: 30,
     },
   },
 }
 
 const SCREEN_SHARE_CAPTURE = {
-  resolution: { width: 1920, height: 1080, frameRate: 30 },
+  resolution: { width: 2560, height: 1440, frameRate: 30 },
   audio: true,
 }
 
