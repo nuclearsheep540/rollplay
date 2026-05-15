@@ -29,17 +29,19 @@ const FOG_TEXTURE_URL = '/ui/fog_loop_2.gif';
 //
 // Visual will be wrong with any of these on — that's expected. We're
 // measuring fps delta, not visual quality. Revert when done.
-const FOG_DEBUG_NO_GIF = true;
+const FOG_DEBUG_NO_GIF = false;
 const FOG_DEBUG_NO_FILTER = false;
 const FOG_DEBUG_NO_BLEND = false;
 
-// Tile grid: matches the GIF's natural pixel size so each tile renders
-// unscaled; tiles overlap by FOG_OVERLAP_FRACTION and screen-blend with
-// each other for a denser, less-repetitive look. Single shared grid
-// means only ONE filter pipeline runs regardless of region count.
+// GIF natural pixel size. The texture div uses two background-image
+// layers of this GIF, both `background-repeat: repeat`, with the
+// second offset by 50% in x/y to break up the tile pattern, then
+// blended together via `background-blend-mode: screen`. This replaces
+// an earlier "88 separate tile divs with mix-blend-mode" pattern that
+// was forcing 88 paint regions + 88 compositing layers per frame
+// advance of the animated GIF — see .claude-plans/runtime-perf-investigation.md
+// for the perf trace that motivated this change.
 const FOG_TILE_SIZE_PX = 960;
-const FOG_OVERLAP_FRACTION = 0.7;
-const FOG_STRIDE_PX = Math.max(1, Math.round(FOG_TILE_SIZE_PX * (1 - FOG_OVERLAP_FRACTION)));
 
 const FOG_BLEND_MODE = 'screen';
 
@@ -72,6 +74,10 @@ const FOG_FEATHER_PX = 6;
 export default function FogSharedTextureLayer({
   regions = [],
   getEngine,
+  // imgDims prop retained for parent compatibility; no longer used
+  // internally now that the tile grid has been replaced with two
+  // background-image layers (CSS handles tiling via background-repeat).
+  // eslint-disable-next-line no-unused-vars
   imgDims,
 }) {
   useRenderTracker('FogSharedTextureLayer');
@@ -183,25 +189,6 @@ export default function FogSharedTextureLayer({
     };
   }, [enabledRegions, getEngine]);
 
-  // Tile grid covering the visible map area. The grid extends BEYOND
-  // (0, 0) into negative coordinates by `overlapTiles` positions so the
-  // top-left corner gets the same overlap density as the interior;
-  // without it points near (0, 0) are reached by only one tile while
-  // interior points are reached by many, giving a "fog shifted away"
-  // look at the corners. Same logic at bottom-right via `+ overlapTiles`.
-  const fogTiles = useMemo(() => {
-    if (!imgDims?.w || !imgDims?.h) return [];
-    const overlapTiles = Math.max(0, Math.ceil(FOG_TILE_SIZE_PX / FOG_STRIDE_PX) - 1);
-    const cols = Math.ceil(imgDims.w / FOG_STRIDE_PX);
-    const rows = Math.ceil(imgDims.h / FOG_STRIDE_PX);
-    const out = [];
-    for (let r = -overlapTiles; r <= rows; r++) {
-      for (let c = -overlapTiles; c <= cols; c++) {
-        out.push({ x: c * FOG_STRIDE_PX, y: r * FOG_STRIDE_PX });
-      }
-    }
-    return out;
-  }, [imgDims?.w, imgDims?.h]);
 
   return (
     <div
@@ -250,6 +237,7 @@ export default function FogSharedTextureLayer({
       >
         <div
           ref={textureRef}
+          aria-hidden="true"
           style={{
             position: 'absolute',
             inset: 0,
@@ -260,27 +248,22 @@ export default function FogSharedTextureLayer({
             maskMode: 'alpha',
             WebkitMaskRepeat: 'no-repeat',
             WebkitMaskSize: '100% 100%',
+            // Two background-image layers, both the same GIF (browser
+            // fetches/decodes once), tiled via background-repeat. Second
+            // layer offset by half a tile in x/y to break up the visible
+            // repeat pattern. background-blend-mode: screen blends the
+            // two layers within this element — approximates the old
+            // 88-tile mix-blend density without 88 paint regions.
+            backgroundImage: FOG_DEBUG_NO_GIF
+              ? 'none'
+              : `url(${FOG_TEXTURE_URL}), url(${FOG_TEXTURE_URL})`,
+            backgroundColor: FOG_DEBUG_NO_GIF ? 'rgba(255, 255, 255, 0.4)' : undefined,
+            backgroundSize: `${FOG_TILE_SIZE_PX}px ${FOG_TILE_SIZE_PX}px, ${FOG_TILE_SIZE_PX}px ${FOG_TILE_SIZE_PX}px`,
+            backgroundPosition: `0 0, ${FOG_TILE_SIZE_PX / 2}px ${FOG_TILE_SIZE_PX / 2}px`,
+            backgroundRepeat: 'repeat, repeat',
+            backgroundBlendMode: FOG_DEBUG_NO_BLEND ? 'normal' : 'screen',
           }}
-        >
-          {fogTiles.map((t, i) => (
-            <div
-              key={i}
-              aria-hidden="true"
-              style={{
-                position: 'absolute',
-                left: `${t.x}px`,
-                top: `${t.y}px`,
-                width: `${FOG_TILE_SIZE_PX}px`,
-                height: `${FOG_TILE_SIZE_PX}px`,
-                backgroundImage: FOG_DEBUG_NO_GIF ? 'none' : `url(${FOG_TEXTURE_URL})`,
-                backgroundColor: FOG_DEBUG_NO_GIF ? 'rgba(255, 255, 255, 0.4)' : undefined,
-                backgroundSize: `${FOG_TILE_SIZE_PX}px ${FOG_TILE_SIZE_PX}px`,
-                backgroundRepeat: 'no-repeat',
-                mixBlendMode: FOG_DEBUG_NO_BLEND ? 'normal' : FOG_BLEND_MODE,
-              }}
-            />
-          ))}
-        </div>
+        />
       </div>
     </div>
   );
