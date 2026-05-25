@@ -244,6 +244,10 @@ export default function GameContent() {
   // (paints fog).
   const fog = useFogRegions();
   const [fogPaintMode, setFogPaintMode] = useState(false);
+  // DM-only "peek through fog" toggle. When on, the fog wrapper drops
+  // to 50% opacity locally for this DM only — players still see fog at
+  // full opacity because this state is never broadcast over WebSocket.
+  const [fogPeekThrough, setFogPeekThrough] = useState(false);
 
   // Shift key → grid inspect (hold mode: down=on, up=off; toggle mode: down=flip)
   useEffect(() => {
@@ -2081,6 +2085,8 @@ export default function GameContent() {
                   fog={fog}
                   fogPaintMode={fogPaintMode}
                   setFogPaintMode={setFogPaintMode}
+                  fogPeekThrough={fogPeekThrough}
+                  setFogPeekThrough={setFogPeekThrough}
                   onFogUpdate={handleFogUpdate}
                   onFogClearBroadcast={handleFogClearBroadcast}
                 />
@@ -2161,6 +2167,7 @@ export default function GameContent() {
               fogGetEngine={fog.getEngine}
               fogActiveRegionId={fog.activeId}
               fogPaintMode={isDM && fogPaintMode}
+              fogOpacity={isDM && fogPeekThrough ? 0.5 : 1.0}
               // DM-only region labels at runtime. Players never see them.
               fogShowRegionLabels={isDM}
             />

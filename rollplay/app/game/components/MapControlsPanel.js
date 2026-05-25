@@ -71,6 +71,8 @@ export default function MapControlsPanel({
   fog = null,
   fogPaintMode = false,
   setFogPaintMode = null,
+  fogPeekThrough = false,
+  setFogPeekThrough = null,
   onFogUpdate = null,
   onFogClearBroadcast = null,
 }) {
@@ -418,6 +420,15 @@ export default function MapControlsPanel({
                   </span>
                 )}
               </div>
+              <label className="flex items-center gap-2 text-xs text-rose-100/90 cursor-pointer select-none">
+                <input
+                  type="checkbox"
+                  checked={fogPeekThrough}
+                  onChange={(e) => setFogPeekThrough?.(e.target.checked)}
+                  className="cursor-pointer"
+                />
+                <span>Peek through fog (DM only, 50% opacity)</span>
+              </label>
               <FogPaintControls
                 paintMode={fogPaintMode}
                 onPaintModeToggle={setFogPaintMode}

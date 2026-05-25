@@ -85,6 +85,11 @@ export default function MapConfigTool({
   const [naturalDimensions, setNaturalDimensions] = useState(null);
   const [gridSaveSuccess, setGridSaveSuccess] = useState(false);
   const [fogSaveSuccess, setFogSaveSuccess] = useState(false);
+  // Workshop "peek through fog" toggle — when on, the fog wrapper drops
+  // to 50% opacity so the DM can see the map underneath while
+  // configuring regions. Replaces the previous hardcoded knockback that
+  // was permanently on whenever the fog tool was active.
+  const [fogPeekThrough, setFogPeekThrough] = useState(false);
 
   const grid = useGridConfig();
   const fog = useFogRegions();
@@ -518,6 +523,7 @@ export default function MapConfigTool({
             fogGetEngine={fog.getEngine}
             fogActiveRegionId={fog.activeId}
             fogPaintMode={isFogTool}
+            fogOpacity={fogPeekThrough ? 0.5 : 1.0}
             // Workshop is a DM-authoring surface — always label regions
             // so the DM can see which painted area is which.
             fogShowRegionLabels={isFogTool}
@@ -575,6 +581,15 @@ export default function MapConfigTool({
                   </span>
                 )}
               </div>
+              <label className="flex items-center gap-2 text-xs text-content-on-dark cursor-pointer select-none">
+                <input
+                  type="checkbox"
+                  checked={fogPeekThrough}
+                  onChange={(e) => setFogPeekThrough(e.target.checked)}
+                  className="cursor-pointer"
+                />
+                <span>Peek through fog (50% opacity)</span>
+              </label>
               <FogPaintControls
                 paintMode={true}
                 mode={fog.mode}

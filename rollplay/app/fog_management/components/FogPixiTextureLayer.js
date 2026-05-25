@@ -20,7 +20,7 @@ const MAX_REGIONS = 12;
 // the previous layer used — kept here for visual parity.
 const MASK_CONTRAST = 2;
 
-const FOG_BLEND_MODE = 'screen';
+const FOG_BLEND_MODE = 'normal';
 
 const VERT_SRC = `#version 300 es
 in vec2 aPosition;
@@ -269,15 +269,15 @@ export default function FogPixiTextureLayer({
         resources: {
           fogUniforms: {
             uTime: { value: 0, type: 'f32' },
-            uNoiseScale: { value: 3.0, type: 'f32' },
-            uDriftSpeed: { value: 0.08, type: 'f32' },
-            uWarpAmount: { value: 0.06, type: 'f32' },
+            uNoiseScale: { value: 4.0, type: 'f32' },
+            uDriftSpeed: { value: 0.05, type: 'f32' },
+            uWarpAmount: { value: 0.03, type: 'f32' },
             // Gap-closing curve exponent. Values < 1 lift thin-wisp
             // pixels toward dense ones, merging wisps and reducing
             // visible gaps. 1.0 disables. 0.6 is a moderate first
             // pass; push toward 0.4 for more closure, toward 0.8 for
             // less.
-            uGapClose: { value: 0.1, type: 'f32' },
+            uGapClose: { value: 0.15, type: 'f32' },
             // Tonal variation: thinner wisps tint toward the darker
             // grey (30% black ≈ rgb(0.7)), denser wisps toward the
             // lighter grey (10% black ≈ rgb(0.9)). Both still light
@@ -380,7 +380,12 @@ export default function FogPixiTextureLayer({
 
     const liveIds = new Set(enabledRegions.map((r) => r.id));
 
-    // Drop regions that are no longer enabled.
+    // Collect orphaned textures here and defer their destruction until
+    // AFTER the rebind loop below. If we destroy a texture's source
+    // while it's still bound to one of the shader's sampler slots, Pixi
+    // v8 invalidates the resource group internals and subsequent reads
+    // of `shader.resources.fogUniforms` come back null.
+    const pendingDestroy = [];
     for (const [id, state] of regionStateRef.current) {
       if (liveIds.has(id)) continue;
       const engine = getEngine?.(id);
@@ -388,9 +393,7 @@ export default function FogPixiTextureLayer({
         engine.off('change', state.onChange);
         engine.off('load', state.onChange);
       }
-      // Only destroy textures we created ourselves; pad source is owned
-      // by the mount effect.
-      if (state.texture) state.texture.destroy(true);
+      if (state.texture) pendingDestroy.push(state.texture);
       regionStateRef.current.delete(id);
     }
 
@@ -462,6 +465,12 @@ export default function FogPixiTextureLayer({
     }
 
     fogUniforms.uMaskCount = enabledRegions.length;
+
+    // Now that every sampler slot points at a live source (either a
+    // kept region's source or padSource), it's safe to destroy the
+    // textures whose sources were previously bound. Passing `true`
+    // reclaims the GPU memory their CanvasSources held.
+    for (const tex of pendingDestroy) tex.destroy(true);
   }, [pixiReady, enabledRegions, getEngine]);
 
   // Pause/resume ticker on document visibilitychange. The animation IS

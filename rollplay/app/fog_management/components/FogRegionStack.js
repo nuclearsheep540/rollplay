@@ -9,11 +9,6 @@ import FogHideLayer from './FogHideLayer';
 import FogPixiTextureLayer from './FogPixiTextureLayer';
 import { useRenderTracker } from '@/app/shared/utils/renderTracker';
 
-// Painter-mode knock-back. While paintMode is on the visible fog drops
-// by this factor so the DM can see the map underneath their strokes.
-// Applied to the wrapper so it dims hide + texture together.
-const FOG_PAINTER_KNOCKBACK = 0.7;
-
 /**
  * FogRegionStack — composites N fog regions into one shared canvas.
  *
@@ -218,11 +213,11 @@ export default function FogRegionStack({
         pointerEvents: paintMode && ready ? 'auto' : 'none',
         cursor: paintMode ? 'none' : 'default',
         touchAction: 'none',
-        // Wrapper opacity = global fogOpacity × painter knock-back. Per-
-        // region opacity is applied per-layer (hide layer directly, texture
-        // layer via union mask weighting), so it's intentionally NOT in
-        // this product.
-        opacity: fogOpacity * (paintMode ? FOG_PAINTER_KNOCKBACK : 1),
+        // Wrapper opacity = global fogOpacity. Per-region opacity is
+        // applied per-layer (hide layer directly, texture layer via
+        // union mask weighting), so it's intentionally NOT in this
+        // product. Callers drive fogOpacity via their own "peek" toggles.
+        opacity: fogOpacity,
         zIndex: 25,
       }}
       onPointerDown={handlePointerDown}

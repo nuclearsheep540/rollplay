@@ -31,6 +31,7 @@ const MapDisplay = ({
   offsetY = 0,
   onImageLoad = null, // fires with { naturalWidth, naturalHeight } when map image loads
   fogPaintMode = false, // when true, fog layer captures pointer events for DM painting
+  fogOpacity = 1.0,     // global opacity multiplier on the fog wrapper; callers use this for "peek" toggles
   // Multi-region fog rendering. The stack renders N hide layers + 1
   // shared texture layer, with per-region opacity / feather / dilate
   // preserved through a union mask compositor.
@@ -323,6 +324,7 @@ const MapDisplay = ({
             getEngine={fogGetEngine}
             activeRegionId={fogActiveRegionId}
             paintMode={fogPaintMode && !panOverride}
+            fogOpacity={fogOpacity}
             mapImageRef={mapImageRef}
             cursorRef={fogCursorRef}
             paintingRef={fogPaintingRef}
