@@ -45,9 +45,11 @@ class MapAssetModel(MediaAsset):
     grid_line_color = Column(String(20), nullable=True)  # hex colour e.g. "#d1d5db"
     grid_cell_size = Column(Float, nullable=True)  # absolute cell size in native image pixels
 
-    # Fog of war mask - NULL means no fog painted yet
-    # Shape: { mask: data-url string, mask_width: int, mask_height: int, version: int }
-    # See shared_contracts.map.FogConfig for the canonical contract.
+    # Fog of war config - NULL means no fog configured for this map.
+    # Shape: FogConfig v2 — { version: 2, regions: [FogRegion, ...] }
+    # where each FogRegion carries its own mask data-URL plus per-region
+    # render params. See shared_contracts.map.FogConfig for the canonical
+    # contract.
     fog_config = Column(JSONB, nullable=True)
 
     __mapper_args__ = {

@@ -71,6 +71,17 @@ export function useFogRegions({ width = 1024, height = 1024, initialConfig = nul
   const [regions, setRegions] = useState(() => regionsFromConfig(initialConfig));
   const [activeId, setActiveId] = useState(() => regions[0]?.id ?? null);
 
+  // Mirror of `regions` for synchronous reads inside event handlers.
+  // React 18+ batches setState calls inside event handlers and the
+  // functional updater (`setRegions(prev => ...)`) may run later, so any
+  // code that needs to make a decision based on the current regions
+  // list must read from this ref instead of relying on a flag mutated
+  // inside an updater. Event handlers also update this ref synchronously
+  // before calling setRegions so subsequent reads (or another handler
+  // firing later in the same tick) see the new value immediately.
+  const regionsRef = useRef(regions);
+  regionsRef.current = regions;
+
   // Engine pool. One FogEngine per region id; created lazily, destroyed
   // when a region is removed.
   const enginesRef = useRef(new Map());
@@ -301,6 +312,11 @@ export function useFogRegions({ width = 1024, height = 1024, initialConfig = nul
    * one render).
    */
   const addRegion = useCallback((opts = {}) => {
+    // Decide synchronously from the ref so we never depend on flags
+    // mutated inside a setRegions updater (those updaters run later
+    // in React 18+ batched event handlers).
+    const current = regionsRef.current;
+    if (current.length >= FOG_REGIONS_MAX) return null;
     const id = generateRegionId();
     const newRegion = {
       id,
@@ -314,13 +330,11 @@ export function useFogRegions({ width = 1024, height = 1024, initialConfig = nul
       texture_dilate_px: DEFAULT_REGION_DEFAULTS.texture_dilate_px,
       opacity: DEFAULT_REGION_DEFAULTS.opacity,
     };
-    let added = false;
-    setRegions((prev) => {
-      if (prev.length >= FOG_REGIONS_MAX) return prev;
-      added = true;
-      return [...prev, newRegion];
-    });
-    if (!added) return null;
+    const next = [...current, newRegion];
+    // Keep the ref ahead of React's commit so a second addRegion call
+    // in the same tick (e.g. rapid clicks) sees the new length.
+    regionsRef.current = next;
+    setRegions(next);
     enginesRef.current.set(id, createEngine());
     setActiveId(id);
     return newRegion;
@@ -334,22 +348,20 @@ export function useFogRegions({ width = 1024, height = 1024, initialConfig = nul
    * (or null when the list goes empty).
    */
   const deleteRegion = useCallback((regionId) => {
-    let removed = false;
-    let nextActive = null;
-    setRegions((prev) => {
-      const target = prev.find((r) => r.id === regionId);
-      if (!target) return prev;
-      if (target.role === 'live') {
-        // eslint-disable-next-line no-console
-        console.warn('[useFogRegions] cannot delete the live region');
-        return prev;
-      }
-      const next = prev.filter((r) => r.id !== regionId);
-      removed = true;
-      nextActive = next[0]?.id ?? null;
-      return next;
-    });
-    if (!removed) return;
+    // Decide synchronously from the ref — see addRegion for the rationale
+    // (don't rely on flags mutated inside setRegions updaters).
+    const current = regionsRef.current;
+    const target = current.find((r) => r.id === regionId);
+    if (!target) return;
+    if (target.role === 'live') {
+      // eslint-disable-next-line no-console
+      console.warn('[useFogRegions] cannot delete the live region');
+      return;
+    }
+    const next = current.filter((r) => r.id !== regionId);
+    const nextActive = next[0]?.id ?? null;
+    regionsRef.current = next;
+    setRegions(next);
     enginesRef.current.delete(regionId);
     setActiveId((prev) => (prev === regionId ? nextActive : prev));
   }, []);

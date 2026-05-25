@@ -61,6 +61,12 @@ uniform float uGapClose;
 uniform float uAlphaFloor;
 uniform vec3 uFogTintThin;
 uniform vec3 uFogTintDense;
+// Hide layer — a flat dark colour rendered under the wisps to occlude
+// the map. Lives in the shader (rather than a separate DOM layer) so
+// the mask uploads stay on the GPU and there's no toDataURL/PNG-encode
+// cost on every paint event.
+uniform vec3 uHideColor;
+uniform float uHideOpacity;
 uniform int uMaskCount;
 uniform float uMaskOpacities[${MAX_REGIONS}];
 
@@ -143,11 +149,24 @@ void main() {
   float alpha = max(n, uAlphaFloor) * unionMask;
 
   // Tonal variation within wisps: thinner parts get the darker grey
-  // tint, denser parts get the lighter grey. Output is premultiplied
-  // alpha for correct compositing under mix-blend-mode: normal.
+  // tint, denser parts get the lighter grey.
   vec3 tint = mix(uFogTintThin, uFogTintDense, colorMix);
 
-  finalColor = vec4(tint * alpha, alpha);
+  // Wisp output (premultiplied alpha).
+  vec3 wispRGB = tint * alpha;
+  float wispA = alpha;
+
+  // Hide layer — flat dark colour underlay. Gated by unionMask so
+  // per-region opacity (already baked into unionMask via uMaskOpacities)
+  // flows through automatically.
+  float hideA = uHideOpacity * unionMask;
+  vec3 hideRGB = uHideColor * hideA;
+
+  // Composite wisps OVER the hide layer (Porter-Duff "over" on
+  // premultiplied data).
+  vec3 finalRGB = wispRGB + hideRGB * (1.0 - wispA);
+  float finalA = wispA + hideA * (1.0 - wispA);
+  finalColor = vec4(finalRGB, finalA);
 }
 `;
 
@@ -299,6 +318,13 @@ export default function FogPixiTextureLayer({
             // via colour rather than alpha.
             uFogTintThin: { value: new Float32Array([0.7, 0.7, 0.7]), type: 'vec3<f32>' },
             uFogTintDense: { value: new Float32Array([0.9, 0.9, 0.9]), type: 'vec3<f32>' },
+            // Hide-layer colour and opacity. Near-black cool tint at
+            // low opacity, rendered under the wisps in the shader to
+            // obscure the map. Per-region opacity is already baked into
+            // unionMask so a single global colour/opacity pair is
+            // sufficient — no per-region array.
+            uHideColor: { value: new Float32Array([0.078, 0.078, 0.118]), type: 'vec3<f32>' },
+            uHideOpacity: { value: 0.05, type: 'f32' },
             uMaskCount: { value: 0, type: 'i32' },
             uMaskOpacities: {
               value: new Float32Array(MAX_REGIONS),

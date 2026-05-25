@@ -72,7 +72,7 @@ class MediaAssetResponse(BaseModel):
     grid_offset_y: Optional[int] = None
     grid_line_color: Optional[str] = None
     grid_cell_size: Optional[float] = None
-    fog_config: Optional[dict] = None  # { mask, mask_width, mask_height, version }
+    fog_config: Optional[dict] = None  # FogConfig v2 — { version: 2, regions: [...] }. See shared_contracts.map.FogConfig.
 
     # Audio fields (music + sfx)
     duration_seconds: Optional[float] = None

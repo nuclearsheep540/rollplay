@@ -77,7 +77,19 @@ export function readRenderStats() {
     // last 10s" even when the component hasn't rendered recently. If
     // we relied on bump() for trimming, a one-shot render's timestamp
     // would survive forever.
-    while (arr.length && arr[0] < cutoff10s) arr.shift();
+    //
+    // Timestamps are monotonically increasing (bump() always appends),
+    // so we can binary-search for the first non-stale index and splice
+    // off the prefix in a single pass — O(log n + n) instead of the
+    // O(k × n) cost of repeated `arr.shift()` calls.
+    let lo = 0;
+    let hi = arr.length;
+    while (lo < hi) {
+      const mid = (lo + hi) >>> 1;
+      if (arr[mid] < cutoff10s) lo = mid + 1;
+      else hi = mid;
+    }
+    if (lo > 0) arr.splice(0, lo);
     let count1s = 0;
     for (let i = arr.length - 1; i >= 0; i--) {
       if (arr[i] >= cutoff1s) count1s++;

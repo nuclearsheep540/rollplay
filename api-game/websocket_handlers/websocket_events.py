@@ -1199,8 +1199,9 @@ class WebsocketEvent():
             # Pydantic's `extra='forbid'` makes shape drift fail loudly.
             map_config = MapConfig.model_validate({
                 **mc_data,
-                "grid_config": preserved["grid_config"],
-                "fog_config":  preserved["fog_config"],
+                "grid_config":      preserved["grid_config"],
+                "fog_config":       preserved["fog_config"],
+                "map_image_config": preserved["map_image_config"],
             })
             map_settings = MapSettings(
                 room_id=room_id,

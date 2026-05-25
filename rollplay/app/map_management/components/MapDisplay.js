@@ -315,9 +315,8 @@ const MapDisplay = ({
         />
 
         {/* Fog of war — sits between the map image and the grid.
-            Prefer the multi-region stack when callers provide it;
-            fall back to the legacy single-engine path otherwise so
-            existing call sites that haven't migrated keep working. */}
+            Renders only when the caller provides both the regions list
+            and the engine accessor. */}
         {mapLoaded && fogRegions && fogGetEngine && (
           <FogRegionStack
             regions={fogRegions}

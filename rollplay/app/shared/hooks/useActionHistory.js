@@ -64,11 +64,15 @@ export function useActionHistory({ handlers, capacity = 10 } = {}) {
     }
     redoRef.current = []; // any new action invalidates redo
     sync();
-    // eslint-disable-next-line no-console
-    console.log(
-      `[history] push ${action.kind} — history=${historyRef.current.length} redo=${redoRef.current.length}`,
-      action,
-    );
+    // Dev-only trace. Skipped entirely in production builds; also drops
+    // the action payload itself so large blobs (e.g. fog mask data URLs)
+    // don't get serialised into console output.
+    if (process.env.NODE_ENV !== 'production') {
+      // eslint-disable-next-line no-console
+      console.log(
+        `[history] push ${action.kind} — history=${historyRef.current.length} redo=${redoRef.current.length}`,
+      );
+    }
   }, [capacity, sync]);
 
   const apply = useCallback(async (action, direction) => {

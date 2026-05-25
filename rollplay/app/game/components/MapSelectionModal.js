@@ -159,11 +159,12 @@ export default function MapSelectionSection({
         original_filename: asset.filename,
         file_path: asset.s3_url,
         file_size: asset.file_size,
-        // Fog config IS already in MapConfig shape on the asset
-        // response (nested {mask, mask_width, mask_height, version}),
-        // so it can pass through directly. null is a valid value
-        // and means "no asset-prep fog" — api-game's preserve rule
-        // falls back to in-room state if the DM had painted any.
+        // Fog config is already in MapConfig shape on the asset
+        // response — FogConfig v2 ({ version: 2, regions: [...] }), see
+        // shared_contracts.map.FogConfig — so it passes through
+        // directly. null is a valid value and means "no asset-prep
+        // fog" — api-game's preserve rule falls back to in-room state
+        // if the DM had painted any.
         fog_config: asset.fog_config ?? null,
       },
     };

@@ -5,7 +5,6 @@
 
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 
-import FogHideLayer from './FogHideLayer';
 import FogPixiTextureLayer from './FogPixiTextureLayer';
 import { useRenderTracker } from '@/app/shared/utils/renderTracker';
 
@@ -19,16 +18,16 @@ import { useRenderTracker } from '@/app/shared/utils/renderTracker';
  *    by MapDisplay outside the pan/zoom transform).
  *
  * Renders:
- *  - One FogHideLayer per enabled region (per-region opacity, mask
- *    sourced from that region's engine).
  *  - One FogPixiTextureLayer (singleton — PixiJS-based procedural fog
  *    shader; consumes every enabled region's engine canvas as a GPU
- *    texture and composites them in-shader).
+ *    texture and composites them in-shader, plus a built-in hide layer
+ *    underneath the wisps).
  *
- * Per-region settings (opacity, hide_feather_px, texture_dilate_px)
- * are all preserved: hide layers apply opacity and feather directly;
- * the texture layer reads per-region opacities into a uniform array
- * and routes the dilate-blurred mask into the matching sampler slot.
+ * Per-region opacity and texture_dilate_px are preserved by the texture
+ * layer: opacity flows into a uniform array, the dilate-blurred mask
+ * goes into the matching sampler slot. The legacy hide_feather_px
+ * region field is no longer used since the hide layer was folded into
+ * the Pixi shader (mask gradient is driven by texture_dilate_px alone).
  */
 export default function FogRegionStack({
   regions = [],
@@ -227,19 +226,6 @@ export default function FogRegionStack({
       onPointerEnter={handlePointerEnter}
       onPointerLeave={handlePointerLeave}
     >
-      {ready && regions.map((region) => {
-        if (!region.enabled) return null;
-        const engine = getEngine(region.id);
-        if (!engine) return null;
-        return (
-          <FogHideLayer
-            key={region.id}
-            engine={engine}
-            hideFeatherPx={region.hide_feather_px}
-            opacity={region.opacity}
-          />
-        );
-      })}
       {hasEnabledEngine && (
         <FogPixiTextureLayer
           regions={regions}

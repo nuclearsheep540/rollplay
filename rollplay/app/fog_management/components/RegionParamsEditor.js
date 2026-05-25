@@ -8,43 +8,39 @@ import React from 'react';
 /**
  * RegionParamsEditor — sliders for the active region's render params.
  *
- * Two sliders, both edits live (the hide layer / shared texture layer
- * each have hideFeatherPx / textureDilatePx in their mask-sync deps,
- * so changes re-render within a frame):
- *
- *   • Feather — single magnitude that scales BOTH hide_feather_px and
- *     texture_dilate_px proportionally from their defaults. 1.0 = the
- *     factory feather; 0.0 = no feather (sharp brush edge); 2.0 =
- *     double-soft. Internally stored as the two underlying contract
- *     fields so future advanced controls could split them.
+ *   • Feather — magnitude that scales texture_dilate_px from its
+ *     default. 1.0 = the factory dilate; 0.0 = no feather (sharp brush
+ *     edge); 2.0 = double-soft.
  *
  *   • Fog Region Opacity — applies to the region always. 1.0 fully
  *     occludes (subject to the global fogOpacity); lower values let
  *     the map show through proportionally.
  *
- * Hide colour stays a global file-level constant (intentionally not
- * user-tunable; the colour was hand-tuned and uniformity is desired).
+ * Hide colour stays a global file-level constant in the Pixi shader
+ * (intentionally not user-tunable; the colour was hand-tuned and
+ * uniformity is desired). The legacy `hide_feather_px` region field is
+ * preserved in the FogRegion contract for backwards compatibility with
+ * stored configs but is no longer read by anything — the Pixi shader's
+ * built-in hide layer reuses the texture_dilate gradient.
  */
 
-// Reference defaults the magnitude slider scales from. Mirror the
-// per-region defaults that the contract / useFogRegions hook seed onto
+// Reference default the magnitude slider scales from. Mirrors the
+// per-region default that the contract / useFogRegions hook seed onto
 // new regions.
-const FEATHER_BASE_HIDE = 20;
 const FEATHER_BASE_DILATE = 30;
 const FEATHER_MAGNITUDE_MAX = 2;
 
 export default function RegionParamsEditor({ region, onChange, disabled = false }) {
   if (!region) return null;
 
-  // Derive the magnitude from the live hide_feather_px (texture_dilate
-  // tracks proportionally; either would work, hide is the canonical
-  // source). Round to 2dp so the slider tick lines up.
-  const magnitude = Math.round((region.hide_feather_px / FEATHER_BASE_HIDE) * 100) / 100;
+  // Derive the magnitude from the live texture_dilate_px (the only
+  // remaining feather source since the hide layer was folded into the
+  // Pixi shader). Round to 2dp so the slider tick lines up.
+  const magnitude = Math.round((region.texture_dilate_px / FEATHER_BASE_DILATE) * 100) / 100;
 
   const handleFeather = (e) => {
     if (disabled) return;
     const m = Number(e.target.value);
-    onChange?.('hide_feather_px', Math.round(FEATHER_BASE_HIDE * m));
     onChange?.('texture_dilate_px', Math.round(FEATHER_BASE_DILATE * m));
   };
 
@@ -75,7 +71,7 @@ export default function RegionParamsEditor({ region, onChange, disabled = false 
           onChange={handleFeather}
           disabled={disabled}
           className="w-full mt-1 accent-rose-500"
-          title="Edge softness multiplier. 1.0 = default; 0.0 = sharp; 2.0 = double-soft. Scales both occlusion edge feather and texture wisp overhang together."
+          title="Edge softness multiplier. 1.0 = default; 0.0 = sharp; 2.0 = double-soft. Controls how far the fog mask blurs past the painted area."
         />
       </label>
 

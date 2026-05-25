@@ -5,8 +5,12 @@
 
 import * as Sentry from '@sentry/nextjs';
 
-const isProd = (process.env.NEXT_PUBLIC_ENVIRONMENT || process.env.NODE_ENV) === 'prod'
-  || process.env.NODE_ENV === 'production';
+// Normalise the env value so both `prod` and `production` (and any
+// case variant) count as production. Without this, setting
+// NEXT_PUBLIC_ENVIRONMENT to "production" would silently disable
+// Sentry — including in actual production deployments.
+const env = (process.env.NEXT_PUBLIC_ENVIRONMENT || process.env.NODE_ENV || '').trim().toLowerCase();
+const isProd = env === 'prod' || env === 'production';
 
 Sentry.init({
   dsn: process.env.NEXT_PUBLIC_SENTRY_DSN,
