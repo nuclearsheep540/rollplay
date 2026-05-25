@@ -7,7 +7,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 Rollplay is a virtual D&D/tabletop gaming platform called "Tabletop Tavern" that enables real-time multiplayer dice rolling and campaign management. The application supports room creation, party management, DM tools, initiative tracking, and comprehensive adventure logging.
 
 ## Plan Files
-When in plan mode, write plan files to the repository working directory `./.claude-plans/` rather than the default `~/.claude/plans/` location. This keeps plans version-controlled alongside the codebase, enabling:
+When in plan mode, write plan files to the repository working directory `./.claude/plans/` rather than the default `~/.claude/plans/` location. This keeps plans version-controlled alongside the codebase, enabling:
 - Audit trail of "what we intended" vs "what we implemented"
 - Plan files committed with related code changes
 - Project history that includes planning decisions

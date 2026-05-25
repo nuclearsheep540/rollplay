@@ -36,6 +36,7 @@ services:
         SENTRY_PROJECT: ${SENTRY_PROJECT_NEXTJS}
         SENTRY_AUTH_TOKEN: ${SENTRY_AUTH_TOKEN}
         NEXT_PUBLIC_RELEASE: ${RELEASE}
+        NEXT_PUBLIC_LIVEKIT_URL: ${NEXT_PUBLIC_LIVEKIT_URL}
 
   mongo:
     image: ghcr.io/nuclearsheep540/rollplay/db:${mongo}
