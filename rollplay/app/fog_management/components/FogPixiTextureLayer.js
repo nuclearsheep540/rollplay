@@ -57,6 +57,8 @@ uniform float uTime;
 uniform float uNoiseScale;
 uniform float uDriftSpeed;
 uniform float uWarpAmount;
+uniform vec3 uFogWarmColor;
+uniform vec3 uFogCoolColor;
 uniform int uMaskCount;
 uniform float uMaskOpacities[${MAX_REGIONS}];
 
@@ -108,11 +110,15 @@ void main() {
 
   vec2 sampleUV = uv + warp;
 
-  float n =
+  float rawNoise =
       snoise(sampleUV * uNoiseScale)        * 0.6
     + snoise(sampleUV * uNoiseScale * 2.0)  * 0.3
     + snoise(sampleUV * uNoiseScale * 4.0)  * 0.1;
-  n = clamp(n * 0.5 + 0.5, 0.0, 1.0);
+  // colorMix uses the unbiased noise so we get the full 0..1 range for
+  // the warm/cool tint blend — otherwise the +0.9 density bias would
+  // saturate it near 1.0 everywhere.
+  float colorMix = clamp(rawNoise * 0.5 + 0.5, 0.0, 1.0);
+  float n = clamp(rawNoise * 0.5 + 0.8, 0.0, 1.0);
 
   float unionMask = 0.0;
   for (int i = 0; i < ${MAX_REGIONS}; i++) {
@@ -122,7 +128,12 @@ void main() {
 
   float intensity = n * unionMask;
 
-  finalColor = vec4(intensity, intensity, intensity, intensity);
+  // Tonal variation within wisps: denser parts (high colorMix) lean
+  // cool, thinner parts lean warm. Output is premultiplied for the
+  // screen blend mode so the map lifts toward the tint at peak intensity.
+  vec3 tint = mix(uFogWarmColor, uFogCoolColor, colorMix);
+
+  finalColor = vec4(tint * intensity, intensity);
 }
 `;
 
@@ -254,6 +265,12 @@ export default function FogPixiTextureLayer({
             uNoiseScale: { value: 3.0, type: 'f32' },
             uDriftSpeed: { value: 0.08, type: 'f32' },
             uWarpAmount: { value: 0.06, type: 'f32' },
+            // Tonal variation: thinner wisps tint toward warm cream,
+            // denser wisps toward cool blue-white. Subtle deviations
+            // from pure white so the fog identity stays "fog", not
+            // "coloured smoke". Tunable per taste.
+            uFogWarmColor: { value: new Float32Array([1.0, 0.97, 0.90]), type: 'vec3<f32>' },
+            uFogCoolColor: { value: new Float32Array([0.88, 0.92, 1.0]), type: 'vec3<f32>' },
             uMaskCount: { value: 0, type: 'i32' },
             uMaskOpacities: {
               value: new Float32Array(MAX_REGIONS),
