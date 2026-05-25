@@ -7,6 +7,7 @@ import React, { useCallback, useEffect, useRef } from 'react';
 import VerticalChannelStrip from './VerticalChannelStrip';
 import FilterKnob from './FilterKnob';
 import { DEFAULT_EFFECTS } from '../types';
+import { useRenderTracker } from '@/app/shared/utils/renderTracker';
 
 /**
  * MixerStrips — the pure rendering of BGM channel strips + per-channel
@@ -51,7 +52,13 @@ export function MixerStrips({
   // When set, the channel strip renders a byte-level progress overlay that
   // subscribes to AssetDownloadManager for updates.
   loadingAssetByChannel = {},
+  // Drawer open state — gates the per-strip meter rAF so we don't burn
+  // GPU paint on meters the user can't see (drawer translateY-100% off
+  // screen). Audio playback is unaffected; only the visual feedback loop
+  // pauses.
+  isOpen = true,
 }) {
+  useRenderTracker('MixerStrips');
   const bgmChannels = Object.keys(trackStates)
     .filter(id => id.startsWith('audio_channel_'))
     .sort();
@@ -134,6 +141,7 @@ export function MixerStrips({
                 <VerticalChannelStrip
                   stripType="channel"
                   label="TRK"
+                  isOpen={isOpen}
                   trackId={trackId}
                   trackState={trackState}
                   analysers={trackAnalysers[trackId]}
@@ -224,6 +232,7 @@ export function MixerStrips({
                       key={reverbId}
                       stripType="effect"
                       label="RVB"
+                      isOpen={isOpen}
                       trackId={trackId}
                       footerLabel="Mix"
                       analysers={trackAnalysers[reverbId]}
@@ -262,6 +271,7 @@ export function MixerStrips({
           <VerticalChannelStrip
             stripType="master"
             label="OUT"
+            isOpen={isOpen}
             trackId="master"
             analysers={masterAnalysers?.current || null}
             volume={masterVolume}
@@ -282,6 +292,7 @@ export function MixerStrips({
  * strip grid. Workshop uses `<MixerStrips>` directly without this chrome.
  */
 export default function BottomMixerDrawer({ isOpen, onToggle, ...mixerProps }) {
+  useRenderTracker('BottomMixerDrawer');
   return (
     <div
       className="bottom-mixer-drawer"
@@ -294,7 +305,7 @@ export default function BottomMixerDrawer({ isOpen, onToggle, ...mixerProps }) {
         AUDIO MIXER
       </button>
       <div className="drawer-content">
-        <MixerStrips {...mixerProps} />
+        <MixerStrips {...mixerProps} isOpen={isOpen} />
       </div>
     </div>
   );

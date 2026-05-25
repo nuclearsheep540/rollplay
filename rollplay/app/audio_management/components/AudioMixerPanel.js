@@ -11,6 +11,7 @@ import SfxSoundboard from './SfxSoundboard';
 import { PlaybackState, ChannelType, DEFAULT_EFFECTS, BGM_CHANNELS } from '../types';
 import { useListPresets } from '@/app/workshop/hooks/usePresets';
 import { useAssets } from '@/app/asset_library/hooks/useAssets';
+import { useRenderTracker } from '@/app/shared/utils/renderTracker';
 import {
   DM_CHILD,
   PANEL_CHILD,
@@ -94,6 +95,8 @@ export default function AudioMixerPanel({
 }) {
   
 
+
+  useRenderTracker('AudioMixerPanel');
 
   // Track pending audio operations to disable buttons
   const [pendingOperations, setPendingOperations] = useState(new Set());

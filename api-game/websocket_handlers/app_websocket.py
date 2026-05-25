@@ -319,6 +319,17 @@ def register_websocket_routes(app: FastAPI):
                     )
                     broadcast_message = result.broadcast_message
 
+                elif event_type == "fog_config_update":
+                    result = await WebsocketEvent.fog_config_update(
+                        websocket=websocket,
+                        data=data,
+                        event_data=event_data,
+                        user_id=user_id,
+                        client_id=client_id,
+                        manager=manager
+                    )
+                    broadcast_message = result.broadcast_message
+
                 elif event_type == "map_request":
                     result = await WebsocketEvent.map_request(
                         websocket=websocket,

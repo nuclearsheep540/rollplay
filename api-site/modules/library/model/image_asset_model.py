@@ -19,16 +19,17 @@ class ImageAssetModel(MediaAsset):
     """
     ImageAsset entity - extends MediaAsset with display configuration.
 
-    Joined table inheritance: image_assets.id references media_assets.id
-    Display config is stored here, not in the base table, because it only
-    applies to image assets.
+    Joined table inheritance: image_assets.id references media_assets.id.
+    The PK/FK column is mapped to `_subtype_pk` so it doesn't shadow the
+    inherited `.id` from the base mapper — see MapAssetModel for rationale.
     """
     __tablename__ = 'image_assets'
 
-    id = Column(
+    _subtype_pk = Column(
+        'id',
         UUID(as_uuid=True),
         ForeignKey('media_assets.id', ondelete='CASCADE'),
-        primary_key=True
+        primary_key=True,
     )
 
     # Image fit — how the image fills the frame

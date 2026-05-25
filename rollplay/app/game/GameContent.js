@@ -28,10 +28,13 @@ import Modal from '@/app/shared/components/Modal';
 import { useWebSocket } from './hooks/useWebSocket';
 import { useUnifiedAudio } from '../audio_management';
 import { MapDisplay, useMapWebSocket, ImageDisplay, useImageWebSocket, useGridConfig } from '../map_management';
+import { useFogRegions, registerFogHandlers, createFogSendFunctions } from '../fog_management';
 import MapOverlayPanel from './components/MapOverlayPanel';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
-import { faVolumeHigh, faVolumeXmark, faRightToBracket, faEye, faUpRightAndDownLeftFromCenter, faDownLeftAndUpRightToCenter, faCloudArrowDown, faRulerHorizontal, faUsers, faBookOpen } from '@fortawesome/free-solid-svg-icons';
+import { faVolumeHigh, faVolumeXmark, faRightToBracket, faEye, faUpRightAndDownLeftFromCenter, faDownLeftAndUpRightToCenter, faCloudArrowDown, faRulerHorizontal, faUsers, faBookOpen, faGauge } from '@fortawesome/free-solid-svg-icons';
 import { faCloud } from '@fortawesome/free-regular-svg-icons';
+import PerfOverlay from '@/app/shared/components/PerfOverlay';
+import { useRenderTracker } from '@/app/shared/utils/renderTracker';
 import { useFullscreen } from './hooks/useFullscreen';
 import MapSafeArea from './components/MapSafeArea';
 import Drawer from './components/Drawer';
@@ -169,6 +172,18 @@ export default function GameContent() {
   const [showVolumeSlider, setShowVolumeSlider] = useState(false);
   const [showScaleMenu, setShowScaleMenu] = useState(false);
   const [showAssetInfo, setShowAssetInfo] = useState(true);
+  // Dev-only perf overlay (FPS, frame time, render counts). Persists
+  // across reloads via localStorage so toggling stays put while iterating.
+  const [showPerfOverlay, setShowPerfOverlay] = useState(() => {
+    if (typeof window === 'undefined') return false;
+    if (process.env.NODE_ENV === 'production') return false;
+    return window.localStorage.getItem('rollplay.perfOverlay') === '1';
+  });
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    window.localStorage.setItem('rollplay.perfOverlay', showPerfOverlay ? '1' : '0');
+  }, [showPerfOverlay]);
+  useRenderTracker('GameContent');
   const volumeRef = useRef(null);
   const scaleRef = useRef(null);
 
@@ -222,6 +237,17 @@ export default function GameContent() {
   const [isMapLocked, setIsMapLocked] = useState(false);
   const [gridInspect, setGridInspect] = useState(false);
   const [gridInspectMode, setGridInspectMode] = useState('hold'); // 'hold' | 'toggle'
+
+  // Fog of war — engine owns the canvas (off-React, no flicker on re-render).
+  // Single instance lives at GameContent level so it outlives panel toggles
+  // and is shared between the map display (renders fog) and the DM panel
+  // (paints fog).
+  const fog = useFogRegions();
+  const [fogPaintMode, setFogPaintMode] = useState(false);
+  // DM-only "peek through fog" toggle. When on, the fog wrapper drops
+  // to 50% opacity locally for this DM only — players still see fog at
+  // full opacity because this state is never broadcast over WebSocket.
+  const [fogPeekThrough, setFogPeekThrough] = useState(false);
 
   // Shift key → grid inspect (hold mode: down=on, up=off; toggle mode: down=flip)
   useEffect(() => {
@@ -1172,6 +1198,70 @@ export default function GameContent() {
     sendMapRequest,
   } = useMapWebSocket(webSocket, isConnected, roomId, thisUserId, mapContext, registerHandler);
 
+  // Fog of war — register WS handler and build send function alongside map.
+  // Fog state never round-trips through React: incoming configs flow into
+  // useFogRegions.loadFromConfig which hydrates each region's engine via
+  // decode-then-swap (no flicker), updates region metadata, and disposes
+  // engines for regions that are no longer present.
+  useEffect(() => {
+    if (!registerHandler) return;
+    return registerFogHandlers({ registerHandler, loadFromConfig: fog.loadFromConfig });
+  }, [registerHandler, fog.loadFromConfig]);
+
+  const fogSenders = useMemo(
+    () => createFogSendFunctions(webSocket, isConnected),
+    [webSocket, isConnected]
+  );
+
+  // Hydrate ALL regions from the active map's fog config when the map
+  // changes (cold→hot via ETL on session start). Mirrors the workshop's
+  // hydration pattern — fires ONLY on asset change, never on local
+  // state changes. Local edits (add region, toggle, paint) must not
+  // re-trigger this effect; if they did, they'd be wiped by the stale
+  // server config until the DM hits "Update fog" and the broadcast
+  // round-trips.
+  //
+  // Live remote updates are applied separately by the WS handler
+  // (registerFogHandlers above), which calls fog.loadFromConfig
+  // directly with the new payload — that path doesn't go through
+  // activeMap state.
+  useEffect(() => {
+    fog.loadFromConfig(activeMap?.map_config?.fog_config);
+  }, [activeMap?.map_config?.asset_id]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Match the active region's canvas aspect ratio to the map. Without
+  // this, a square 1024×1024 default canvas gets CSS-stretched to fit
+  // the map's actual aspect, deforming brush strokes into ellipses.
+  // Skip when an existing region already pinned canvas size on load.
+  useEffect(() => {
+    if (!fog.engine || !mapNaturalDimensions) return;
+    const hasPaintedRegion = activeMap?.map_config?.fog_config?.regions?.some(
+      (r) => r.mask
+    );
+    if (hasPaintedRegion) return;
+    fog.fitToMap(mapNaturalDimensions.naturalWidth, mapNaturalDimensions.naturalHeight);
+  }, [mapNaturalDimensions, activeMap?.map_config?.asset_id, fog.fitToMap]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // DM "Update fog" handler — serialises ALL regions and broadcasts
+  // the full v2 fog_config. Multi-region runtime updates (toggle,
+  // per-region paint) come in step 5+.
+  const handleFogUpdate = useCallback(() => {
+    const filename = activeMap?.map_config?.filename;
+    if (!filename || !fog.engine) return;
+    const regions = fog.serialize();
+    const fogConfig = regions && regions.length
+      ? { version: 2, regions }
+      : null;
+    fogSenders.sendFogUpdate(filename, fogConfig);
+  }, [activeMap?.map_config?.filename, fog, fogSenders]);
+
+  const handleFogClearBroadcast = useCallback(() => {
+    const filename = activeMap?.map_config?.filename;
+    if (!filename || !fog.engine) return;
+    fog.clear();
+    fogSenders.sendFogUpdate(filename, null);
+  }, [activeMap?.map_config?.filename, fog, fogSenders]);
+
   // Image management WebSocket hook
   const imageContext = {
     setActiveImage,
@@ -1801,6 +1891,20 @@ export default function GameContent() {
               )}
             </div>
 
+            {/* Dev-only Perf overlay toggle (FPS, frame time, render counts) */}
+            {process.env.NODE_ENV !== 'production' && (
+              <button
+                onClick={() => setShowPerfOverlay((v) => !v)}
+                className="fullscreen-btn"
+                title={showPerfOverlay ? 'Hide perf overlay' : 'Show perf overlay'}
+                aria-label="Toggle perf overlay"
+                aria-pressed={showPerfOverlay}
+                style={showPerfOverlay ? { color: '#4ade80' } : undefined}
+              >
+                <FontAwesomeIcon icon={faGauge} />
+              </button>
+            )}
+
             {/* Fullscreen Toggle */}
             <button
               onClick={toggleFullscreen}
@@ -1978,6 +2082,13 @@ export default function GameContent() {
                   sendMapLoad={sendMapLoad}
                   sendMapClear={sendMapClear}
                   onTuningModeChange={setTuningMode}
+                  fog={fog}
+                  fogPaintMode={fogPaintMode}
+                  setFogPaintMode={setFogPaintMode}
+                  fogPeekThrough={fogPeekThrough}
+                  setFogPeekThrough={setFogPeekThrough}
+                  onFogUpdate={handleFogUpdate}
+                  onFogClearBroadcast={handleFogClearBroadcast}
                 />
               )}
               {activeRightDrawer === 'image' && isDM && (
@@ -2047,11 +2158,18 @@ export default function GameContent() {
               onMapImageChange={handleMapImageChange}
               liveGridOpacity={grid.gridOpacity}
               gridConfig={effectiveGridConfig}
-              isMapLocked={isMapLocked}
+              isMapLocked={isMapLocked || (isDM && fogPaintMode)}
               gridInspect={gridInspect}
               offsetX={grid.offset.x}
               offsetY={grid.offset.y}
               onImageLoad={setMapNaturalDimensions}
+              fogRegions={fog.regions}
+              fogGetEngine={fog.getEngine}
+              fogActiveRegionId={fog.activeId}
+              fogPaintMode={isDM && fogPaintMode}
+              fogOpacity={isDM && fogPeekThrough ? 0.5 : 1.0}
+              // DM-only region labels at runtime. Players never see them.
+              fogShowRegionLabels={isDM}
             />
           )}
 
@@ -2341,6 +2459,10 @@ export default function GameContent() {
           reason={sessionEndedData.reason}
         />
       )}
+
+      {/* Dev-only perf overlay (toggled from the top nav). Mounted at
+          the runtime root so it sits above all drawers and modals. */}
+      <PerfOverlay visible={showPerfOverlay} />
     </div>
   );
 }

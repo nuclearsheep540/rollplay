@@ -13,6 +13,7 @@ from pydantic import BaseModel, Field
 
 from modules.library.domain.media_asset_type import MediaAssetType
 from shared_contracts.cine import MotionConfig, VisualOverlay
+from shared_contracts.map import FogRegion
 
 
 class UploadUrlResponse(BaseModel):
@@ -71,6 +72,7 @@ class MediaAssetResponse(BaseModel):
     grid_offset_y: Optional[int] = None
     grid_line_color: Optional[str] = None
     grid_cell_size: Optional[float] = None
+    fog_config: Optional[dict] = None  # FogConfig v2 — { version: 2, regions: [...] }. See shared_contracts.map.FogConfig.
 
     # Audio fields (music + sfx)
     duration_seconds: Optional[float] = None
@@ -134,6 +136,22 @@ class UpdateGridConfigRequest(BaseModel):
     grid_offset_y: Optional[int] = Field(None, description="Whole-grid Y shift (image px)")
     grid_line_color: Optional[str] = Field(None, description="Grid line colour hex e.g. '#d1d5db'")
     grid_cell_size: Optional[float] = Field(None, ge=8, le=500, description="Cell size in native image pixels")
+
+
+class UpdateFogConfigRequest(BaseModel):
+    """Request to update map fog-of-war regions list.
+
+    Atomic full-replace: the entire regions list is provided on every
+    update. Pass regions=None or [] to clear all fog. Each region
+    carries its own mask + render params (feather, dilate, etc.).
+
+    Per-region partial updates (toggle, rename, etc.) are handled by
+    dedicated endpoints — see the regions feature plan.
+    """
+    regions: Optional[List[FogRegion]] = Field(
+        None,
+        description="Full regions list (atomic replace) or null to clear",
+    )
 
 
 class UpdateImageConfigRequest(BaseModel):

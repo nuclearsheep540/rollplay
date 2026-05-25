@@ -24,6 +24,33 @@ map_service = MapService()
 image_service = ImageService()
 
 
+def _merge_preserved_map_fields(incoming: dict, existing: dict) -> Dict[str, Any]:
+    """Decide which value to use for the chaperoned (cargo) MapConfig
+    fields when handling a runtime event that *carries* map state but
+    isn't the owner of those fields.
+
+    Rule: incoming-null means "I have no signal for this field, keep
+    what's already there". An owner-style endpoint (PATCH /fog,
+    fog_config_update WS event) does NOT use this helper — null there
+    is the explicit clear signal.
+
+    Surfaces that should use this helper:
+      • map_load        — switching active map; fog/grid are cargo
+      • (any future "switch state" event that carries MapConfig)
+
+    Surfaces that should NOT:
+      • fog_config_update — fog is the subject; null = clear
+      • EndSession ETL    — null = "user cleared this on purpose"
+    """
+    out: Dict[str, Any] = {}
+    for field in ("grid_config", "fog_config", "map_image_config"):
+        value = incoming.get(field)
+        if value is None:
+            value = existing.get(field)  # preserve existing when chaperone is silent
+        out[field] = value
+    return out
+
+
 class WebsocketEventResult:
     """Result object for WebSocket event handlers"""
 
@@ -1152,33 +1179,30 @@ class WebsocketEvent():
         
         try:
             # Frontend sends nested shape: { room_id, uploaded_by, map_config: { ... } }
-            mc_data = map_data.get("map_config", map_data)
+            mc_data = map_data.get("map_config", map_data) or {}
 
-            # Check if this map already exists with grid config (nested shape)
+            # Look up the room's existing doc for this map (if any). When
+            # the DM cycles between maps in a session, in-session edits
+            # are preserved per-map — switching to map B and back to map A
+            # restores A's painted fog and tweaked grid.
             existing_map = map_service.collection.find_one(
                 {"room_id": room_id, "map_config.filename": mc_data.get("filename")}
             ) if map_service.collection is not None else None
+            existing_mc = existing_map.get("map_config", {}) if existing_map else {}
 
-            grid_config_to_use = None
-            if existing_map:
-                existing_mc = existing_map.get("map_config", {})
-                if existing_mc.get("grid_config"):
-                    grid_config_to_use = existing_mc["grid_config"]
-                    print(f"🗺️ Using existing grid config for map {mc_data.get('filename')}: {grid_config_to_use}")
-                else:
-                    print(f"🗺️ No existing grid config for map {mc_data.get('filename')} - map will have no grid until DM sets one")
-            else:
-                print(f"🗺️ No existing map doc for {mc_data.get('filename')} - map will have no grid until DM sets one")
+            preserved = _merge_preserved_map_fields(incoming=mc_data, existing=existing_mc)
 
-            # Create MapConfig from websocket data, then wrap in MapSettings
-            map_config = MapConfig(
-                asset_id=mc_data.get("asset_id", ""),
-                filename=mc_data.get("filename", "unknown.jpg"),
-                original_filename=mc_data.get("original_filename", mc_data.get("filename", "unknown.jpg")),
-                file_path=mc_data.get("file_path", ""),
-                grid_config=grid_config_to_use,
-                map_image_config=mc_data.get("map_image_config"),
-            )
+            # Build MapConfig via passthrough: take everything the frontend
+            # sent, layer in the merged-preserved values for the cargo
+            # fields, validate. Any new MapConfig field added later is
+            # forwarded automatically — no field list to keep in sync.
+            # Pydantic's `extra='forbid'` makes shape drift fail loudly.
+            map_config = MapConfig.model_validate({
+                **mc_data,
+                "grid_config":      preserved["grid_config"],
+                "fog_config":       preserved["fog_config"],
+                "map_image_config": preserved["map_image_config"],
+            })
             map_settings = MapSettings(
                 room_id=room_id,
                 uploaded_by=user_id,
@@ -1304,6 +1328,47 @@ class WebsocketEvent():
             print(f"❌ Error updating map config for room {room_id}: {e}")
             return WebsocketEventResult(broadcast_message={"error": f"Failed to update map config: {str(e)}"})
     
+    @staticmethod
+    async def fog_config_update(websocket, data, event_data, user_id, client_id, manager):
+        """Replace the fog-of-war regions list on the active map (atomic full-replace).
+
+        Payload shape:
+            { filename: str, fog_config: { version: 2, regions: [...] } | null }
+
+        fog_config=None clears all fog. Per the codebase's atomic state
+        rule, the full regions list travels in a single message; players
+        replace their canvases in one paint to honour the no-flicker
+        contract. Per-region partial updates (toggle, paint a single
+        region) are dedicated WS events — not yet implemented.
+        """
+        room_id = client_id
+        filename = event_data.get("filename")
+        fog_config = event_data.get("fog_config")
+
+        if not room_id or not filename:
+            print(f"❌ Invalid fog config update: missing room_id or filename")
+            return WebsocketEventResult(broadcast_message={"error": "Invalid fog config update"})
+
+        try:
+            success = map_service.update_fog_config(room_id, filename, fog_config)
+            if success:
+                broadcast = {
+                    "event_type": "fog_config_update",
+                    "data": {
+                        "filename": filename,
+                        "fog_config": fog_config,
+                        "updated_by": user_id,
+                    },
+                }
+                return WebsocketEventResult(broadcast_message=broadcast)
+            else:
+                print(f"❌ No fog config updated for room {room_id} (no active map)")
+                return WebsocketEventResult(broadcast_message={"info": "No fog config updated"})
+
+        except Exception as e:
+            print(f"❌ Error updating fog config for room {room_id}: {e}")
+            return WebsocketEventResult(broadcast_message={"error": f"Failed to update fog config: {str(e)}"})
+
     @staticmethod
     async def map_request(websocket, data, event_data, user_id, client_id, manager):
         """Request current active map (for new players joining)"""

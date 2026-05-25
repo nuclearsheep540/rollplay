@@ -19,16 +19,17 @@ class MusicAssetModel(MediaAsset):
     """
     MusicAsset entity - extends MediaAsset with playback configuration.
 
-    Joined table inheritance: music_assets.id references media_assets.id
-    Audio config is stored here, not in the base table, because it only
-    applies to music assets.
+    Joined table inheritance: music_assets.id references media_assets.id.
+    The PK/FK column is mapped to `_subtype_pk` so it doesn't shadow the
+    inherited `.id` from the base mapper — see MapAssetModel for rationale.
     """
     __tablename__ = 'music_assets'
 
-    id = Column(
+    _subtype_pk = Column(
+        'id',
         UUID(as_uuid=True),
         ForeignKey('media_assets.id', ondelete='CASCADE'),
-        primary_key=True
+        primary_key=True,
     )
 
     # Audio playback configuration — NULL means not yet configured by user

@@ -5,7 +5,7 @@
 MediaAsset Commands - Write operations for media asset management
 """
 
-from typing import Optional, Union
+from typing import Any, Dict, List, Optional, Union
 from uuid import UUID
 
 from modules.library.domain.asset_aggregate import MediaAssetAggregate
@@ -242,6 +242,17 @@ class RenameMediaAsset:
 class ChangeAssetType:
     """
     Change a media asset's type tag (e.g. map <-> image).
+
+    This is a transactional joined-table row migration:
+      - The asset_type column on media_assets flips to the new type.
+      - The old subtype joined-row (e.g. image_assets) is DELETEd.
+      - A fresh subtype joined-row (e.g. map_assets) is INSERTed.
+    All in one DB transaction.
+
+    Subtype-specific config (grid_width on a map, image_fit on an image,
+    audio loop points, etc.) is **intentionally discarded** on type
+    change — semantically the user is saying this is a different kind
+    of asset now. Callers should not assume those fields survive.
     """
 
     def __init__(self, repository: MediaAssetRepository, session_repository: SessionRepository = None):
@@ -258,7 +269,10 @@ class ChangeAssetType:
             new_type: The new asset type
 
         Returns:
-            Updated MediaAssetAggregate
+            Freshly-loaded MediaAssetAggregate of the new type. The
+            in-memory aggregate that existed before this call is stale
+            (still the old Python subclass) — discard it and use the
+            return value.
 
         Raises:
             ValueError: If asset not found, not owned by user, or invalid type change
@@ -274,10 +288,27 @@ class ChangeAssetType:
         if self.session_repository:
             check_asset_in_active_session(asset.campaign_ids, self.session_repository)
 
-        asset.change_type(new_type)
-        self.repository.save(asset)
+        # Coerce + content-type validation. change_type() also mutates
+        # the in-memory aggregate, but we discard that aggregate and
+        # refetch below so the mutation is harmless.
+        if isinstance(new_type, str):
+            new_type = MediaAssetType(new_type)
 
-        return asset
+        old_type = asset.asset_type
+        if old_type == new_type:
+            return asset  # no-op; callers can rely on idempotency
+
+        asset.change_type(new_type)  # raises ValueError on incompatible content type
+
+        # Atomic SQL row migration — see MediaAssetRepository.change_subtype
+        self.repository.change_subtype(asset_id, old_type, new_type)
+
+        # Refetch so the returned aggregate has the correct Python
+        # subclass and a clean default subtype-field state.
+        refreshed = self.repository.get_by_id(asset_id)
+        if not refreshed:
+            raise ValueError(f"Media asset {asset_id} disappeared mid-change")
+        return refreshed
 
 
 class AssociateWithCampaign:
@@ -395,6 +426,45 @@ class UpdateGridConfig:
             grid_cell_size=grid_cell_size
         )
 
+        self.repository.save(asset)
+        return asset
+
+
+class UpdateFogConfig:
+    """
+    Replace the fog-of-war regions list on a map asset (atomic full-replace).
+
+    Each region in the list owns its own alpha-mask PNG plus render
+    params (feather, dilate, etc.). Pass regions=None or [] to clear
+    all fog. Per the codebase's atomic-state rule, the entire regions
+    list is replaced on every call — partial updates are the per-
+    region endpoints' job (commands TBD in a later step).
+    """
+
+    def __init__(self, repository: MediaAssetRepository, session_repository: SessionRepository = None):
+        self.repository = repository
+        self.session_repository = session_repository
+
+    def execute(
+        self,
+        asset_id: UUID,
+        user_id: UUID,
+        regions: Optional[List[Dict[str, Any]]] = None,
+    ) -> MapAsset:
+        asset = self.repository.get_by_id(asset_id)
+        if not asset:
+            raise ValueError(f"Media asset {asset_id} not found")
+
+        if not asset.is_owned_by(user_id):
+            raise ValueError("Cannot modify media asset owned by another user")
+
+        if not isinstance(asset, MapAsset):
+            raise ValueError("Fog configuration only applies to map assets")
+
+        if self.session_repository:
+            check_asset_in_active_session(asset.campaign_ids, self.session_repository)
+
+        asset.update_fog_config(regions=regions)
         self.repository.save(asset)
         return asset
 

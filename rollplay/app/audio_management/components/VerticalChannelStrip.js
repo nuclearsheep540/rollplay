@@ -9,6 +9,7 @@ import { faPlay, faPause, faStop } from '@fortawesome/free-solid-svg-icons';
 import { PlaybackState } from '../types';
 import { MAX_VOLUME } from '../engine/constants';
 import { useAssetDownloadProgress } from '@/app/shared/providers/AssetDownloadManager';
+import { useRenderTracker } from '@/app/shared/utils/renderTracker';
 
 // ── Fader taper ────────────────────────────────────────────────────────────
 // The slider is dB-linear: equal travel = equal dB change. Gain nodes expect
@@ -64,6 +65,14 @@ export default function VerticalChannelStrip({
   stripType = 'channel',
   label,
   footerLabel,
+  // Drawer-open gate. When false, the meter rAF loop is suspended —
+  // there's no point reading analyser data and writing meter DOM if
+  // the strip is offscreen (drawer translateY-100%). Audio playback,
+  // looping, reverb, routing, and time-tracking are unaffected; only
+  // the visual meter feedback pauses. Note: master clip latch also
+  // pauses while the drawer is closed (acceptable trade — clip is
+  // only meaningful when the user can see the indicator).
+  isOpen = true,
   // Audio state (channel strips)
   trackState = {},
   analysers,
@@ -97,6 +106,7 @@ export default function VerticalChannelStrip({
   // renders a progress overlay driven by the shared download manager.
   loadingAssetId = null,
 }) {
+  useRenderTracker('VerticalChannelStrip');
   const {
     playbackState = PlaybackState.STOPPED,
     filename,
@@ -135,6 +145,11 @@ export default function VerticalChannelStrip({
   // Stereo RMS meter loop (vertical)
   useEffect(() => {
     if (!analysers?.left || !analysers?.right) return;
+    // Skip the meter loop entirely when the drawer is closed — every
+    // tick reads analyser data and writes inline styles to the meter
+    // bars (forcing paint), and that paint cost adds up across all
+    // strips even though they're translated offscreen.
+    if (!isOpen) return;
 
     // Float32 time-domain data gives full-precision samples in [-1, 1]
     // (values can exceed ±1 when a signal is about to clip). Byte data
@@ -261,7 +276,7 @@ export default function VerticalChannelStrip({
 
     tick();
     return () => cancelAnimationFrame(rafRef.current);
-  }, [analysers]);
+  }, [analysers, isOpen]);
 
   const handleVolumeChange = (newVol) => {
     onVolumeChange?.(newVol);

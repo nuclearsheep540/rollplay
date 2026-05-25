@@ -7,7 +7,9 @@
 
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import GridOverlay from './GridOverlay';
+import { FogRegionStack, FogRegionLabels } from '@/app/fog_management';
 import { useAssetDownload } from '@/app/shared/providers/AssetDownloadManager';
+import { useRenderTracker } from '@/app/shared/utils/renderTracker';
 
 const clamp = (val, min, max) => Math.min(max, Math.max(min, val));
 
@@ -28,9 +30,38 @@ const MapDisplay = ({
   offsetX = 0,
   offsetY = 0,
   onImageLoad = null, // fires with { naturalWidth, naturalHeight } when map image loads
+  fogPaintMode = false, // when true, fog layer captures pointer events for DM painting
+  fogOpacity = 1.0,     // global opacity multiplier on the fog wrapper; callers use this for "peek" toggles
+  // Multi-region fog rendering. The stack renders N hide layers + 1
+  // shared texture layer, with per-region opacity / feather / dilate
+  // preserved through a union mask compositor.
+  fogRegions = null,         // array of FogRegion dicts (id, name, enabled, role, params)
+  fogGetEngine = null,       // (regionId) => FogEngine — typically from useFogRegions().getEngine
+  fogActiveRegionId = null,  // region currently receiving paint events
+  fogShowRegionLabels = false, // overlay region names at the centroid of each painted alpha (DM-only)
 }) => {
+  useRenderTracker('MapDisplay');
   const mapImageRef = useRef(null);
   const containerRef = useRef(null);
+  // Brush cursor lives as a SIBLING of the fog wrapper inside contentRef.
+  // It still inherits the pan/zoom transform (so coords stay aligned with
+  // the wrapper paint uses for screenToMask), but its compositing layer
+  // is independent from the fog wrapper's — so fog repaints don't invalidate
+  // it the way they did when the cursor was nested inside the wrapper.
+  // FogRegionStack mutates this div's style on each pointer move via cursorRef.
+  const fogCursorRef = useRef(null);
+  // Mirrors FogRegionStack's stroke-active state. Read by the spacebar
+  // pan-override listener so a press that arrives mid-stroke is ignored
+  // entirely (no override, no flicker).
+  const fogPaintingRef = useRef(false);
+  // Photoshop-style spacebar override: while held, overlays release pointer
+  // events and the map's pan handlers take over regardless of active tool.
+  const [panOverride, setPanOverride] = useState(false);
+
+  // Effective lock — the spacebar override beats `isMapLocked` so users
+  // can pan even while a tool (e.g. fog paint) has locked the map. All
+  // pan/wheel handlers and the cursor logic check this derived value.
+  const effectiveLocked = isMapLocked && !panOverride;
 
   // Download map image through asset manager for progressive byte tracking
   const mc = activeMap?.map_config;
@@ -57,7 +88,7 @@ const MapDisplay = ({
 
   // Zoom-to-point wheel handler — supports mouse scroll and trackpad pinch (ctrlKey)
   const handleWheel = useCallback((e) => {
-    if (isMapLocked) return;
+    if (effectiveLocked) return;
     e.preventDefault();
     const raw    = e.deltaMode === 1 ? e.deltaY * 20 : e.deltaY; // line mode → px
     const delta  = clamp(raw, -200, 200);
@@ -76,7 +107,7 @@ const MapDisplay = ({
     viewRef.current = next;
     applyTransform();
     setViewTransform(next); // sync React state for info overlay
-  }, [isMapLocked, applyTransform]);
+  }, [effectiveLocked, applyTransform]);
 
   // Attach wheel handler as non-passive native listener so preventDefault()
   // actually stops page scroll on Mac trackpads (React onWheel is passive).
@@ -87,16 +118,62 @@ const MapDisplay = ({
     return () => el.removeEventListener('wheel', handleWheel);
   }, [handleWheel]);
 
+  // Spacebar = temporary grab/pan override (Photoshop convention). While
+  // held, overlays release pointer events and the existing map pan
+  // handlers receive them. Mid-stroke presses are ignored entirely so
+  // the user can finish a paint stroke without the tool flipping under
+  // them. Window blur clears the override to avoid stuck pan-mode after
+  // alt-tabbing away.
+  useEffect(() => {
+    const isInputFocused = () => {
+      const el = document.activeElement;
+      if (!el) return false;
+      if (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA') return true;
+      if (el.getAttribute && el.getAttribute('contenteditable') === 'true') return true;
+      return false;
+    };
+    const onKeyDown = (e) => {
+      if (e.code !== 'Space') return;
+      if (e.repeat) return;
+      if (isInputFocused()) return;
+      if (fogPaintingRef.current) return;
+      e.preventDefault();
+      setPanOverride(true);
+    };
+    const onKeyUp = (e) => {
+      if (e.code !== 'Space') return;
+      setPanOverride(false);
+    };
+    const onBlur = () => setPanOverride(false);
+    document.addEventListener('keydown', onKeyDown);
+    document.addEventListener('keyup', onKeyUp);
+    window.addEventListener('blur', onBlur);
+    return () => {
+      document.removeEventListener('keydown', onKeyDown);
+      document.removeEventListener('keyup', onKeyUp);
+      window.removeEventListener('blur', onBlur);
+    };
+  }, []);
+
+  // While override is on, the fog wrapper has pointer-events: none, so
+  // pointerLeave never fires and the brush ring would stay stuck on
+  // screen at its last position. Hide it explicitly on engage.
+  useEffect(() => {
+    if (panOverride && fogCursorRef.current) {
+      fogCursorRef.current.style.display = 'none';
+    }
+  }, [panOverride]);
+
   const handlePointerDown = useCallback((e) => {
-    if (isMapLocked) return;
+    if (effectiveLocked) return;
     activePointers.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
     e.currentTarget.setPointerCapture(e.pointerId);
     setIsDragging(true);
     e.preventDefault();
-  }, [isMapLocked]);
+  }, [effectiveLocked]);
 
   const handlePointerMove = useCallback((e) => {
-    if (isMapLocked || activePointers.current.size === 0) return;
+    if (effectiveLocked || activePointers.current.size === 0) return;
 
     const prevPos = activePointers.current.get(e.pointerId);
     activePointers.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
@@ -135,7 +212,7 @@ const MapDisplay = ({
       }
       lastPinch.current = { dist, midX, midY };
     }
-  }, [isMapLocked, applyTransform]);
+  }, [effectiveLocked, applyTransform]);
 
   const handlePointerUp = useCallback((e) => {
     activePointers.current.delete(e.pointerId);
@@ -164,7 +241,7 @@ const MapDisplay = ({
     zIndex: 1,
     backgroundColor: '#1a1a2e',
     overflow: 'hidden',
-    cursor: !isMapLocked ? (isDragging ? 'grabbing' : 'grab') : 'default',
+    cursor: !effectiveLocked ? (isDragging ? 'grabbing' : 'grab') : 'default',
     touchAction: 'none',
     overscrollBehavior: 'contain'
   };
@@ -213,7 +290,6 @@ const MapDisplay = ({
       ref={containerRef}
       className={`map-display-active ${className}`}
       style={{ ...baseStyles, opacity: mapLoaded ? 1 : 0.5 }}
-      onWheel={handleWheel}
       onPointerDown={handlePointerDown}
       onPointerMove={handlePointerMove}
       onPointerUp={handlePointerUp}
@@ -225,7 +301,7 @@ const MapDisplay = ({
         </div>
       )}
 
-      {/* Transformed content — map image and grid overlay pan/zoom together */}
+      {/* Transformed content — map image, fog overlay, and grid pan/zoom together */}
       <div ref={contentRef} style={contentTransform}>
         <img
           ref={mapImageRef}
@@ -238,6 +314,49 @@ const MapDisplay = ({
           }}
         />
 
+        {/* Fog of war — sits between the map image and the grid.
+            Renders only when the caller provides both the regions list
+            and the engine accessor. */}
+        {mapLoaded && fogRegions && fogGetEngine && (
+          <FogRegionStack
+            regions={fogRegions}
+            getEngine={fogGetEngine}
+            activeRegionId={fogActiveRegionId}
+            paintMode={fogPaintMode && !panOverride}
+            fogOpacity={fogOpacity}
+            mapImageRef={mapImageRef}
+            cursorRef={fogCursorRef}
+            paintingRef={fogPaintingRef}
+          />
+        )}
+
+        {/* Brush cursor — sibling of the fog wrapper, inside contentRef.
+            Inherits pan/zoom so its CSS coords share the wrapper's frame
+            (cursor and paint can't drift). Has its own compositing layer
+            via mix-blend-mode, independent of the fog wrapper's repaints.
+            Hidden by default; FogRegionStack mutates style on pointer events. */}
+        <div
+          ref={fogCursorRef}
+          aria-hidden="true"
+          style={{
+            position: 'absolute',
+            display: 'none',
+            pointerEvents: 'none',
+            borderRadius: '50%',
+            border: '1px solid rgba(255, 255, 255, 0.9)',
+            boxShadow: '0 0 0 1px rgba(0, 0, 0, 0.6)',
+            mixBlendMode: 'difference',
+            transform: 'translate(-50%, -50%)',
+            zIndex: 26,
+          }}
+        />
+        {mapLoaded && fogRegions && fogGetEngine && fogShowRegionLabels && (
+          <FogRegionLabels
+            regions={fogRegions}
+            getEngine={fogGetEngine}
+            mapImageRef={mapImageRef}
+          />
+        )}
         {showGrid && (
           <GridOverlay
             gridConfig={(isEditMode && gridConfig) ? gridConfig : (activeMap?.map_config?.grid_config || null)}

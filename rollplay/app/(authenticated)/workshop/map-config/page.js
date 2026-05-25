@@ -7,17 +7,22 @@
 
 import { useRef } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
-import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
-import { faArrowLeft, faHouse } from '@fortawesome/free-solid-svg-icons'
-import MapGridTool from '@/app/workshop/components/MapGridTool'
+import MapConfigTool from '@/app/workshop/components/MapConfigTool'
+
+const VALID_TOOLS = ['move', 'grid', 'paint', 'erase']
 
 // Site chrome (header, auth gate, WebSocket subscription, Suspense for
 // useSearchParams) is provided by the (authenticated) route group's
-// layout — this page only owns its tool content + tool-header row.
+// layout — this page is intentionally chrome-free so MapConfigTool's
+// Photoshop-style top menu bar reads as the workspace's own chrome,
+// matching the audio workstation pattern.
 export default function MapConfigPage() {
   const router = useRouter()
   const searchParams = useSearchParams()
   const selectedAssetId = searchParams.get('asset_id')
+  const tool = VALID_TOOLS.includes(searchParams.get('tool'))
+    ? searchParams.get('tool')
+    : 'move'
 
   // Capture the entry point once on mount (library vs workshop navigation)
   const entryFromRef = useRef(null)
@@ -25,61 +30,36 @@ export default function MapConfigPage() {
     entryFromRef.current = searchParams.get('from') || 'workshop'
   }
 
-  // Back label is contextual:
-  //   Index view (no asset selected) → "Workshop" (back to tool grid)
-  //   Detail view from workshop      → "Map Config" (back to index)
-  //   Detail view from library       → "Library" (back to library)
   const backLabel = !selectedAssetId
     ? 'Workshop'
     : entryFromRef.current === 'library' ? 'Library' : 'Map Config'
 
-  // URL is the source of truth for asset selection.
-  // Browser back/forward navigates between states naturally.
+  // URL is the source of truth for both asset and tool selection.
   const handleAssetSelect = (assetId) => {
     if (assetId) {
-      router.push(`/workshop/map-config?asset_id=${assetId}`)
+      router.push(`/workshop/map-config?asset_id=${assetId}&tool=${tool}`)
     } else {
       router.push('/workshop/map-config')
     }
   }
 
-  return (
-    <main className="flex-1 flex flex-col min-h-0 px-4 sm:px-8 md:px-10 pt-6 pb-4">
-      <div className="flex items-center justify-between mb-6">
-        <div>
-          <h1 className="text-3xl font-bold font-[family-name:var(--font-metamorphous)] text-content-bold">
-            Map Config
-          </h1>
-          <p className="mt-1 text-sm text-content-primary">
-            Configure grid overlays and alignment for your maps
-          </p>
-        </div>
-        <div className="flex items-center gap-2">
-          {selectedAssetId && (
-            <button
-              onClick={() => router.push('/dashboard')}
-              className="flex items-center gap-2 px-4 py-2 text-sm font-medium rounded-sm border border-border text-content-primary hover:bg-surface-secondary hover:text-content-on-dark transition-colors"
-            >
-              <FontAwesomeIcon icon={faHouse} className="text-xs" />
-              <span>Dashboard</span>
-            </button>
-          )}
-          <button
-            onClick={() => router.back()}
-            className="flex items-center gap-2 px-4 py-2 text-sm font-medium rounded-sm border border-border text-content-primary hover:bg-surface-secondary hover:text-content-on-dark transition-colors"
-          >
-            <FontAwesomeIcon icon={faArrowLeft} className="text-xs" />
-            <span>{backLabel}</span>
-          </button>
-        </div>
-      </div>
+  const handleToolChange = (toolId) => {
+    if (!selectedAssetId) return
+    router.push(`/workshop/map-config?asset_id=${selectedAssetId}&tool=${toolId}`)
+  }
 
-      <div className="flex-1 min-h-0">
-        <MapGridTool
-          selectedAssetId={selectedAssetId}
-          onAssetSelect={handleAssetSelect}
-        />
-      </div>
+  const handleBack = () => router.back()
+
+  return (
+    <main className="flex-1 min-h-0">
+      <MapConfigTool
+        selectedAssetId={selectedAssetId}
+        activeTool={tool}
+        onAssetSelect={handleAssetSelect}
+        onToolChange={handleToolChange}
+        backLabel={backLabel}
+        onBack={handleBack}
+      />
     </main>
   )
 }

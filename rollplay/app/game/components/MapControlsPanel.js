@@ -9,6 +9,7 @@ import {
   DM_ARROW,
   ACTIVE_BACKGROUND,
 } from '../../styles/constants';
+import { FogPaintControls, RegionListPanel, RegionParamsEditor } from '@/app/fog_management';
 import MapSelectionSection from './MapSelectionModal';
 
 // Component to read actual image file dimensions
@@ -67,8 +68,16 @@ export default function MapControlsPanel({
   sendMapLoad = null,
   sendMapClear = null,
   onTuningModeChange = null,
+  fog = null,
+  fogPaintMode = false,
+  setFogPaintMode = null,
+  fogPeekThrough = false,
+  setFogPeekThrough = null,
+  onFogUpdate = null,
+  onFogClearBroadcast = null,
 }) {
   const [isDimensionsExpanded, setIsDimensionsExpanded] = useState(false);
+  const [isFogExpanded, setIsFogExpanded] = useState(false);
 
   // Store original server opacity when entering edit mode
   const [originalServerOpacity, setOriginalServerOpacity] = useState(null);
@@ -369,6 +378,92 @@ export default function MapControlsPanel({
             </div>
           </div>
         )}
+
+      {/* Fog of War — collapsible, DM-only, requires an active map */}
+      {fog && activeMap && (
+        <>
+          <button
+            className={DM_CHILD}
+            onClick={() => setIsFogExpanded(prev => !prev)}
+            aria-expanded={isFogExpanded}
+          >
+            <div className="flex items-center justify-between">
+              <span>☁️  Fog of War</span>
+              <span className={DM_ARROW}>{isFogExpanded ? '▼' : '▶'}</span>
+            </div>
+          </button>
+          {isFogExpanded && (
+            <div className="ml-2 mr-2 mb-3 p-3 bg-rose-950/30 border border-rose-400/30 rounded space-y-3">
+              <RegionListPanel
+                regions={fog.regions}
+                activeId={fog.activeId}
+                maxRegions={fog.maxRegions}
+                onSetActive={fog.setActiveRegion}
+                onAddRegion={fog.addRegion}
+                onDeleteRegion={fog.deleteRegion}
+                onRenameRegion={(id, name) => fog.updateRegion(id, { name })}
+                onToggleEnabled={fog.setRegionEnabled}
+              />
+              {fog.activeRegion && (
+                <RegionParamsEditor
+                  region={fog.activeRegion}
+                  onChange={(field, value) =>
+                    fog.updateRegion(fog.activeId, { [field]: value })
+                  }
+                />
+              )}
+              <div className="text-[11px] uppercase tracking-wider text-rose-200/70">
+                {fog.mode === 'paint' ? 'Painting fog' : 'Revealing (erasing fog)'}
+                {fog.activeRegion && (
+                  <span className="ml-1.5 text-content-on-dark normal-case font-normal">
+                    in <em>{fog.activeRegion.name}</em>
+                  </span>
+                )}
+              </div>
+              <label className="flex items-center gap-2 text-xs text-rose-100/90 cursor-pointer select-none">
+                <input
+                  type="checkbox"
+                  checked={fogPeekThrough}
+                  onChange={(e) => setFogPeekThrough?.(e.target.checked)}
+                  className="cursor-pointer"
+                />
+                <span>Peek through fog (DM only, 50% opacity)</span>
+              </label>
+              <FogPaintControls
+                paintMode={fogPaintMode}
+                onPaintModeToggle={setFogPaintMode}
+                mode={fog.mode}
+                onModeChange={fog.setMode}
+                brushSize={fog.brushSize}
+                onBrushSizeChange={fog.setBrushSize}
+                isDirty={fog.isDirty}
+                onClear={fog.clear}
+                onFillAll={fog.fillAll}
+                onUpdate={onFogUpdate}
+                onResetToServer={() => {
+                  // Reload all regions from the last-known server state via
+                  // the multi-region hydrator — each engine's mask is
+                  // restored from the asset's saved fog_config.
+                  fog.loadFromConfig(activeMap?.map_config?.fog_config);
+                }}
+              />
+              <div className="text-[10px] text-rose-200/60 mt-2">
+                Click <em>Update fog</em> to broadcast your changes. Players
+                see the new fog atomically — no flicker on the swap.
+              </div>
+              {onFogClearBroadcast && (
+                <button
+                  type="button"
+                  onClick={onFogClearBroadcast}
+                  className="mt-2 w-full text-xs rounded px-2 py-1.5 border bg-rose-900/30 border-rose-400/40 text-rose-200 hover:brightness-125"
+                >
+                  Clear &amp; broadcast (reveal map for everyone)
+                </button>
+              )}
+            </div>
+          )}
+        </>
+      )}
     </div>
   );
 }

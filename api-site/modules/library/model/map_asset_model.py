@@ -9,7 +9,7 @@ Uses SQLAlchemy joined table inheritance pattern.
 """
 
 from sqlalchemy import Column, Integer, Float, ForeignKey, String
-from sqlalchemy.dialects.postgresql import UUID
+from sqlalchemy.dialects.postgresql import JSONB, UUID
 
 from modules.library.model.asset_model import MediaAsset
 from modules.library.domain.media_asset_type import MediaAssetType
@@ -19,16 +19,21 @@ class MapAssetModel(MediaAsset):
     """
     MapAsset entity - extends MediaAsset with grid configuration.
 
-    Joined table inheritance: map_assets.id references media_assets.id
-    Grid config is stored here, not in the base table, because it only
-    applies to map assets.
+    Joined table inheritance: map_assets.id references media_assets.id.
+    The PK/FK column is mapped to the Python attribute `_subtype_pk` so
+    it doesn't shadow the inherited `.id` from the base mapper. That way
+    `instance.id` always resolves to `media_assets.id` (guaranteed real),
+    regardless of whether the LEFT JOIN to map_assets returned a row.
+    Without this aliasing, a type-changed asset with no `map_assets` row
+    would surface as `.id == None` and break callers downstream.
     """
     __tablename__ = 'map_assets'
 
-    id = Column(
+    _subtype_pk = Column(
+        'id',
         UUID(as_uuid=True),
         ForeignKey('media_assets.id', ondelete='CASCADE'),
-        primary_key=True
+        primary_key=True,
     )
 
     # Grid configuration - NULL means not yet configured by user
@@ -39,6 +44,13 @@ class MapAssetModel(MediaAsset):
     grid_offset_y = Column(Integer, nullable=True)
     grid_line_color = Column(String(20), nullable=True)  # hex colour e.g. "#d1d5db"
     grid_cell_size = Column(Float, nullable=True)  # absolute cell size in native image pixels
+
+    # Fog of war config - NULL means no fog configured for this map.
+    # Shape: FogConfig v2 — { version: 2, regions: [FogRegion, ...] }
+    # where each FogRegion carries its own mask data-URL plus per-region
+    # render params. See shared_contracts.map.FogConfig for the canonical
+    # contract.
+    fog_config = Column(JSONB, nullable=True)
 
     __mapper_args__ = {
         'polymorphic_identity': MediaAssetType.MAP,  # Enum value, not string

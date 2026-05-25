@@ -8,7 +8,7 @@ const TOOLS = [
   {
     id: 'maps',
     label: 'Map Config',
-    description: 'Grid overlays and alignment',
+    description: 'Grid overlays, fog of war, and alignment',
     icon: faMap,
     image: '/ui/map_config.webp',
     enabled: true,
