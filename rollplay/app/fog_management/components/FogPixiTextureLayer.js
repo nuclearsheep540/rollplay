@@ -277,7 +277,7 @@ export default function FogPixiTextureLayer({
           fogUniforms: {
             uTime: { value: 0, type: 'f32' },
             uNoiseScale: { value: 4.0, type: 'f32' },
-            uDriftSpeed: { value: 0.05, type: 'f32' },
+            uDriftSpeed: { value: 0.15, type: 'f32' },
             uWarpAmount: { value: 0.03, type: 'f32' },
             // Gap-closing curve exponent. Values < 1 lift thin-wisp
             // pixels toward dense ones, merging wisps and reducing
@@ -292,7 +292,7 @@ export default function FogPixiTextureLayer({
             // narrow the alpha range — e.g. 0.85 caps minimum alpha
             // at 0.85, preserving a little "breathing" while still
             // largely covering the map. Mask-edge falloff is unaffected.
-            uAlphaFloor: { value: 0.95, type: 'f32' },
+            uAlphaFloor: { value: 0.97, type: 'f32' },
             // Tonal variation: thinner wisps tint toward the darker
             // grey, denser wisps toward the lighter grey. Together
             // with uAlphaFloor=1.0 these carry the entire wispy look
