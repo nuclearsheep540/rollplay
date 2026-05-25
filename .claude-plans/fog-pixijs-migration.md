@@ -280,6 +280,10 @@ After Phase 4 integration:
   - [ ] No visible seams or grid patterns.
   - [ ] Animation feels organic, not mechanical.
   - [ ] Mask edges feather correctly per region's `hide_feather_px` / `texture_dilate_px`.
+- **Pixi v8 API behaviour to confirm (open questions from the build)**:
+  - [ ] **Sampler resource hot-swap.** `FogPixiTextureLayer` reassigns `shader.resources[\`uMask${i}\`] = newSource` when regions are added/removed/reordered. Verify that when a 2nd region is enabled, its painted area renders fog — if not, the rebinding isn't triggering a draw-time re-bind. Fallback: render the union mask into a single `RenderTexture` and bind that as one sampler.
+  - [ ] **Uniform array in-place mutation.** Per-region opacity is pushed via `uMaskOpacities[idx] = r.opacity` (mutating the Float32Array). Verify that dragging a region's opacity slider visibly changes that region's fog intensity in real time — if not, Pixi isn't picking up the in-place mutation. Fix: reassign the whole `Float32Array` (or whichever uniform-group update API v8 expects).
+  - [ ] **Visual tuning.** Initial uniform values are first guesses: `uNoiseScale: 3.0`, `uDriftSpeed: 0.08`, `uWarpAmount: 0.06`. After functional verification, side-by-side against a screenshot of the old GIF look and dial in. These are tunable without rebuilding the shader (uniforms only).
 
 ## File touch summary (this plan)
 

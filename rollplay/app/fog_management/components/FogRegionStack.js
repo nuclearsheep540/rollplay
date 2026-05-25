@@ -6,7 +6,7 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 
 import FogHideLayer from './FogHideLayer';
-import FogSharedTextureLayer from './FogSharedTextureLayer';
+import FogPixiTextureLayer from './FogPixiTextureLayer';
 import { useRenderTracker } from '@/app/shared/utils/renderTracker';
 
 // Painter-mode knock-back. While paintMode is on the visible fog drops
@@ -26,14 +26,14 @@ const FOG_PAINTER_KNOCKBACK = 0.7;
  * Renders:
  *  - One FogHideLayer per enabled region (per-region opacity, mask
  *    sourced from that region's engine).
- *  - One FogSharedTextureLayer (singleton — owns the GIF tiles and
- *    SVG filter; its mask is a union of all enabled regions' alphas
- *    weighted by per-region opacity).
+ *  - One FogPixiTextureLayer (singleton — PixiJS-based procedural fog
+ *    shader; consumes every enabled region's engine canvas as a GPU
+ *    texture and composites them in-shader).
  *
  * Per-region settings (opacity, hide_feather_px, texture_dilate_px)
  * are all preserved: hide layers apply opacity and feather directly;
- * the texture layer encodes opacity and dilate into the union mask
- * compositor.
+ * the texture layer reads per-region opacities into a uniform array
+ * and routes the dilate-blurred mask into the matching sampler slot.
  */
 export default function FogRegionStack({
   regions = [],
@@ -246,7 +246,7 @@ export default function FogRegionStack({
         );
       })}
       {hasEnabledEngine && (
-        <FogSharedTextureLayer
+        <FogPixiTextureLayer
           regions={regions}
           getEngine={getEngine}
           imgDims={imgDims}
