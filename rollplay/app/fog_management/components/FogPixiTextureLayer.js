@@ -58,6 +58,7 @@ uniform float uNoiseScale;
 uniform float uDriftSpeed;
 uniform float uWarpAmount;
 uniform float uGapClose;
+uniform float uAlphaFloor;
 uniform vec3 uFogTintThin;
 uniform vec3 uFogTintDense;
 uniform int uMaskCount;
@@ -132,15 +133,21 @@ void main() {
     unionMask = max(unionMask, sampleMaskAlpha(i, uv));
   }
 
-  float intensity = n * unionMask;
+  // Alpha floor: clamp the per-pixel alpha to at least uAlphaFloor in
+  // painted areas. At 1.0, the fog is fully opaque inside the painted
+  // mask (wisp variation is carried entirely by tint colour). At 0.0,
+  // alpha tracks noise directly (the original behaviour, where deep
+  // noise dips let the map peek through). unionMask is preserved as the
+  // outer multiplier so edge falloff at the painted-region boundary
+  // still soft-feathers.
+  float alpha = max(n, uAlphaFloor) * unionMask;
 
   // Tonal variation within wisps: thinner parts get the darker grey
   // tint, denser parts get the lighter grey. Output is premultiplied
-  // for the screen blend mode so the map lifts toward the tint at peak
-  // intensity.
+  // alpha for correct compositing under mix-blend-mode: normal.
   vec3 tint = mix(uFogTintThin, uFogTintDense, colorMix);
 
-  finalColor = vec4(tint * intensity, intensity);
+  finalColor = vec4(tint * alpha, alpha);
 }
 `;
 
@@ -278,10 +285,18 @@ export default function FogPixiTextureLayer({
             // pass; push toward 0.4 for more closure, toward 0.8 for
             // less.
             uGapClose: { value: 0.15, type: 'f32' },
+            // Per-pixel alpha floor in painted areas. 1.0 = fog is
+            // fully opaque (wispy character carried entirely by tint
+            // colour variation). 0.0 = alpha tracks noise directly
+            // (deep noise dips let the map peek through). Mid values
+            // narrow the alpha range — e.g. 0.85 caps minimum alpha
+            // at 0.85, preserving a little "breathing" while still
+            // largely covering the map. Mask-edge falloff is unaffected.
+            uAlphaFloor: { value: 0.95, type: 'f32' },
             // Tonal variation: thinner wisps tint toward the darker
-            // grey (30% black ≈ rgb(0.7)), denser wisps toward the
-            // lighter grey (10% black ≈ rgb(0.9)). Both still light
-            // enough to lift the map under screen blend.
+            // grey, denser wisps toward the lighter grey. Together
+            // with uAlphaFloor=1.0 these carry the entire wispy look
+            // via colour rather than alpha.
             uFogTintThin: { value: new Float32Array([0.7, 0.7, 0.7]), type: 'vec3<f32>' },
             uFogTintDense: { value: new Float32Array([0.9, 0.9, 0.9]), type: 'vec3<f32>' },
             uMaskCount: { value: 0, type: 'i32' },
