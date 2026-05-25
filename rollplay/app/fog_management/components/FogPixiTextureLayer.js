@@ -57,6 +57,7 @@ uniform float uTime;
 uniform float uNoiseScale;
 uniform float uDriftSpeed;
 uniform float uWarpAmount;
+uniform float uGapClose;
 uniform vec3 uFogTintThin;
 uniform vec3 uFogTintDense;
 uniform int uMaskCount;
@@ -115,10 +116,15 @@ void main() {
     + snoise(sampleUV * uNoiseScale * 2.0)  * 0.3
     + snoise(sampleUV * uNoiseScale * 4.0)  * 0.1;
   // colorMix uses the unbiased noise so we get the full 0..1 range for
-  // the warm/cool tint blend — otherwise the +0.9 density bias would
-  // saturate it near 1.0 everywhere.
+  // the tint blend — otherwise the density bias would saturate it
+  // near 1.0 everywhere.
   float colorMix = clamp(rawNoise * 0.5 + 0.5, 0.0, 1.0);
   float n = clamp(rawNoise * 0.5 + 0.8, 0.0, 1.0);
+  // Gap-closing curve: pow(n, < 1) lifts thin-wisp values toward dense
+  // ones, leaving fully-dense pixels unchanged. Net effect: wisps merge
+  // together with fewer "no-fog" gaps between them. Lower exponent =
+  // more aggressive closing; 1.0 disables the curve.
+  n = pow(n, uGapClose);
 
   float unionMask = 0.0;
   for (int i = 0; i < ${MAX_REGIONS}; i++) {
@@ -266,6 +272,12 @@ export default function FogPixiTextureLayer({
             uNoiseScale: { value: 3.0, type: 'f32' },
             uDriftSpeed: { value: 0.08, type: 'f32' },
             uWarpAmount: { value: 0.06, type: 'f32' },
+            // Gap-closing curve exponent. Values < 1 lift thin-wisp
+            // pixels toward dense ones, merging wisps and reducing
+            // visible gaps. 1.0 disables. 0.6 is a moderate first
+            // pass; push toward 0.4 for more closure, toward 0.8 for
+            // less.
+            uGapClose: { value: 0.1, type: 'f32' },
             // Tonal variation: thinner wisps tint toward the darker
             // grey (30% black ≈ rgb(0.7)), denser wisps toward the
             // lighter grey (10% black ≈ rgb(0.9)). Both still light
