@@ -57,8 +57,8 @@ uniform float uTime;
 uniform float uNoiseScale;
 uniform float uDriftSpeed;
 uniform float uWarpAmount;
-uniform vec3 uFogWarmColor;
-uniform vec3 uFogCoolColor;
+uniform vec3 uFogTintThin;
+uniform vec3 uFogTintDense;
 uniform int uMaskCount;
 uniform float uMaskOpacities[${MAX_REGIONS}];
 
@@ -128,10 +128,11 @@ void main() {
 
   float intensity = n * unionMask;
 
-  // Tonal variation within wisps: denser parts (high colorMix) lean
-  // cool, thinner parts lean warm. Output is premultiplied for the
-  // screen blend mode so the map lifts toward the tint at peak intensity.
-  vec3 tint = mix(uFogWarmColor, uFogCoolColor, colorMix);
+  // Tonal variation within wisps: thinner parts get the darker grey
+  // tint, denser parts get the lighter grey. Output is premultiplied
+  // for the screen blend mode so the map lifts toward the tint at peak
+  // intensity.
+  vec3 tint = mix(uFogTintThin, uFogTintDense, colorMix);
 
   finalColor = vec4(tint * intensity, intensity);
 }
@@ -265,12 +266,12 @@ export default function FogPixiTextureLayer({
             uNoiseScale: { value: 3.0, type: 'f32' },
             uDriftSpeed: { value: 0.08, type: 'f32' },
             uWarpAmount: { value: 0.06, type: 'f32' },
-            // Tonal variation: thinner wisps tint toward warm cream,
-            // denser wisps toward cool blue-white. Subtle deviations
-            // from pure white so the fog identity stays "fog", not
-            // "coloured smoke". Tunable per taste.
-            uFogWarmColor: { value: new Float32Array([1.0, 0.97, 0.90]), type: 'vec3<f32>' },
-            uFogCoolColor: { value: new Float32Array([0.88, 0.92, 1.0]), type: 'vec3<f32>' },
+            // Tonal variation: thinner wisps tint toward the darker
+            // grey (30% black ≈ rgb(0.7)), denser wisps toward the
+            // lighter grey (10% black ≈ rgb(0.9)). Both still light
+            // enough to lift the map under screen blend.
+            uFogTintThin: { value: new Float32Array([0.7, 0.7, 0.7]), type: 'vec3<f32>' },
+            uFogTintDense: { value: new Float32Array([0.9, 0.9, 0.9]), type: 'vec3<f32>' },
             uMaskCount: { value: 0, type: 'i32' },
             uMaskOpacities: {
               value: new Float32Array(MAX_REGIONS),
