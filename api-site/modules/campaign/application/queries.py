@@ -98,25 +98,23 @@ class GetCampaignMembers:
             # Get character locked to THIS campaign (not just any character owned by user)
             character = (
                 self.db.query(Character)
-                .options(
-                    selectinload(Character.class_entries).joinedload(CharacterClassEntry.dnd_class)
-                )
+                .options(selectinload(Character.class_entries))
                 .filter(
                     and_(
                         Character.user_id == member_id,
-                        Character.active_campaign == campaign_id,
+                        Character.active_in_campaign_id == campaign_id,
                         Character.is_deleted == False
                     )
                 )
                 .first()
             )
 
-            # Format multi-class
+            # Format multi-class as "Barbarian / Rogue" (code title-cased).
             character_class_str = None
             if character and character.class_entries:
-                character_class_str = ' / '.join([
-                    entry.dnd_class.name for entry in character.class_entries
-                ])
+                character_class_str = ' / '.join(
+                    entry.class_code.replace("_", " ").title() for entry in character.class_entries
+                )
 
             members.append({
                 'user_id': str(user.id),
@@ -127,7 +125,10 @@ class GetCampaignMembers:
                 'character_name': character.character_name if character else None,
                 'character_level': character.level if character else None,
                 'character_class': character_class_str,
-                'character_race': character.character_race if character else None,
+                'character_race': (
+                    character.species_code.replace("_", " ").title()
+                    if character and character.species_code else None
+                ),
                 'is_host': role == CampaignRole.DM
             })
 

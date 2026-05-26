@@ -29,7 +29,14 @@ def configure_mappers():
     """
     # Import all ORM models to register them with SQLAlchemy
     from modules.user.model.user_model import User
+    from modules.characters.model.edition_model import Edition
     from modules.characters.model.character_model import Character
+    from modules.characters.model.character_class_model import CharacterClassEntry
+    from modules.characters.model.character_ability_model import CharacterAbilityScore
+    from modules.characters.model.character_save_model import CharacterSaveProficiency
+    from modules.characters.model.character_skill_model import CharacterSkillProficiency
+    from modules.characters.model.character_feat_model import CharacterFeatAcquisition
+    from modules.characters.model.character_choices_log_model import CharacterChoiceLog
     from modules.campaign.model.campaign_model import Campaign
     from modules.campaign.model.session_model import Session
     from modules.friendship.model.friendship_model import FriendshipModel

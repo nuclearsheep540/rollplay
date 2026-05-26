@@ -8,10 +8,14 @@ from sqlalchemy.orm import relationship
 from shared.dependencies.db import Base
 
 
-class CharacterAbilityScore(Base):
-    """One row per ability for each character — final score after origin bonuses."""
+class CharacterSaveProficiency(Base):
+    """One row per ability the character has saving-throw proficiency in.
 
-    __tablename__ = "character_ability_scores"
+    Saving throw proficiencies are granted by class (typically 2 per class at
+    level 1) and occasionally by feats. Existence of a row means proficient.
+    """
+
+    __tablename__ = "character_save_proficiencies"
 
     character_id = Column(
         UUID(as_uuid=True),
@@ -19,14 +23,12 @@ class CharacterAbilityScore(Base):
         primary_key=True,
     )
     ability_id = Column(Integer, ForeignKey("dnd_abilities.id"), primary_key=True)
-    score = Column(Integer, nullable=False)
-    origin_bonus = Column(Integer, nullable=False, default=0, server_default="0")
 
-    character = relationship("Character", back_populates="ability_score_entries")
+    character = relationship("Character", back_populates="save_proficiency_entries")
     dnd_ability = relationship("DndAbility")
 
     def __repr__(self):
         return (
-            f"<CharacterAbilityScore(character_id={self.character_id}, "
-            f"ability_id={self.ability_id}, score={self.score})>"
+            f"<CharacterSaveProficiency(character_id={self.character_id}, "
+            f"ability_id={self.ability_id})>"
         )
