@@ -17,7 +17,7 @@ export function useCharacters({ enabled = true } = {}) {
   return useQuery({
     queryKey: ['characters'],
     queryFn: async () => {
-      const response = await authFetch('/api/characters/', {
+      const response = await authFetch('/api/characters/me', {
         credentials: 'include',
       })
 

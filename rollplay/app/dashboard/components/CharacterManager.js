@@ -46,7 +46,7 @@ export default function CharacterManager({ user, onExpandedChange }) {
   const fetchCharacters = async () => {
     try {
       setLoading(true)
-      const response = await authFetch('/api/characters/', {
+      const response = await authFetch('/api/characters/me', {
         method: 'GET',
         headers: {
           'Content-Type': 'application/json',
