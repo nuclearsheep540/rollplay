@@ -33,6 +33,7 @@ def _make_character(**overrides) -> CharacterAggregate:
         id=uuid4(),
         user_id=uuid4(),
         edition_id=1,
+        edition_code="srd_5_2_1",
         active_campaign=None,
         character_name="Tester",
         species_code="human",

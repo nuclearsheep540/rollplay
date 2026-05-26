@@ -21,6 +21,7 @@ init_sentry()
 from modules.user.api.endpoints import router as user_router
 from modules.campaign.api.endpoints import router as campaign_router
 from modules.characters.api.endpoints import router as characters_router
+from modules.characters.api.edition_endpoints import router as editions_router
 from modules.session.api.endpoints import router as session_router
 from modules.friendship.api.endpoints import router as friendship_router
 from modules.events.api.notification_endpoints import router as notification_router
@@ -70,6 +71,7 @@ app.add_middleware(
 app.include_router(user_router, prefix="/api/users")
 app.include_router(campaign_router, prefix="/api/campaigns")
 app.include_router(characters_router, prefix="/api/characters")
+app.include_router(editions_router, prefix="/api/editions", tags=["editions"])
 app.include_router(session_router, prefix="/api/sessions")
 app.include_router(friendship_router, prefix="/api/friendships")
 app.include_router(notification_router, prefix="/api/notifications")

@@ -134,7 +134,21 @@ class CampaignRepository:
             self._sync_members(campaign_model, aggregate)
 
         else:
-            # Create new campaign
+            # Create new campaign. edition_id defaults to the first active
+            # edition until Phase 2 plumbs it through CampaignAggregate; we
+            # only ship one edition in 5.5e land so this is the right answer.
+            from modules.characters.model.edition_model import Edition  # local import; avoids circular dep at module load
+            default_edition_id = (
+                self.db.query(Edition.id)
+                .filter(Edition.is_active == True)  # noqa: E712
+                .order_by(Edition.id)
+                .scalar()
+            )
+            if default_edition_id is None:
+                raise RuntimeError(
+                    "Cannot create campaign — no active editions seeded. "
+                    "Run the character_v2_schema migration."
+                )
             campaign_model = CampaignModel(
                 id=aggregate.id,
                 title=aggregate.title,
@@ -142,8 +156,9 @@ class CampaignRepository:
                 hero_image=aggregate.hero_image,
                 hero_image_asset_id=aggregate.hero_image_asset_id,
                 created_by=aggregate.created_by,
+                edition_id=default_edition_id,
                 created_at=aggregate.created_at,
-                updated_at=aggregate.updated_at
+                updated_at=aggregate.updated_at,
             )
             self.db.add(campaign_model)
 

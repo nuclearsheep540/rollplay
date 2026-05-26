@@ -139,6 +139,7 @@ class CharacterAggregate:
     id: Optional[UUID]
     user_id: UUID
     edition_id: int
+    edition_code: str
     active_campaign: Optional[UUID]
 
     # Identity / origin
@@ -190,6 +191,7 @@ class CharacterAggregate:
         *,
         user_id: UUID,
         edition_id: int,
+        edition_code: str,
         character_name: str,
     ) -> "CharacterAggregate":
         """Open a new draft character — only the minimum fields are required.
@@ -206,6 +208,7 @@ class CharacterAggregate:
             id=None,
             user_id=user_id,
             edition_id=edition_id,
+            edition_code=edition_code,
             active_campaign=None,
             character_name=character_name.strip(),
             species_code="",

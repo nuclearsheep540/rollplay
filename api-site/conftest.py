@@ -49,6 +49,14 @@ from modules.characters.model.character_skill_model import CharacterSkillProfici
 from modules.characters.model.character_feat_model import CharacterFeatAcquisition as _CFA  # noqa: F401
 from modules.characters.model.character_choices_log_model import CharacterChoiceLog as _CCL  # noqa: F401
 from modules.characters.model.dnd_ability_model import DndAbility as _DndAbility  # noqa: F401
+# Cross-aggregate model imports so SQLite create_all sees every FK target in
+# its initial metadata pass.
+from modules.library.model.asset_model import MediaAsset as _MediaAsset  # noqa: F401
+from modules.library.model.map_asset_model import MapAssetModel as _MapAssetModel  # noqa: F401
+from modules.library.model.music_asset_model import MusicAssetModel as _MusicAssetModel  # noqa: F401
+from modules.library.model.sfx_asset_model import SfxAssetModel as _SfxAssetModel  # noqa: F401
+from modules.library.model.image_asset_model import ImageAssetModel as _ImageAssetModel  # noqa: F401
+from modules.events.model.notification_model import Notification as _Notification  # noqa: F401
 from modules.user.repositories.user_repository import UserRepository
 from modules.session.repositories.session_repository import SessionRepository
 from modules.characters.repositories.character_repository import CharacterRepository
@@ -250,10 +258,12 @@ def create_campaign(campaign_repo: CampaignRepository):
         campaign = create_campaign(host_id=user.id, title="Test Campaign")
     """
     def _create_campaign(host_id: uuid.UUID, title: str = "Test Campaign", description: str = "Test Description"):
+        # CampaignAggregate.create uses ``created_by``; the older fixture passed
+        # ``host_id`` which never matched the constructor's keyword.
         campaign = CampaignAggregate.create(
             title=title,
             description=description,
-            host_id=host_id
+            created_by=host_id,
         )
         campaign_repo.save(campaign)
         return campaign
@@ -306,6 +316,7 @@ def create_character(character_repo: CharacterRepository, seed_default_edition):
             id=None,
             user_id=user_id,
             edition_id=edition_id,
+            edition_code="srd_5_2_1",
             active_campaign=None,
             character_name=name,
             species_code=species_code,

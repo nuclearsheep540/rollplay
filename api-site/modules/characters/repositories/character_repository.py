@@ -119,10 +119,12 @@ class CharacterRepository:
             for e in model.feat_entries or []
         ]
 
+        edition_code = model.edition.code if model.edition is not None else ""
         return CharacterAggregate(
             id=model.id,
             user_id=model.user_id,
             edition_id=model.edition_id,
+            edition_code=edition_code,
             active_campaign=model.active_in_campaign_id,
             character_name=model.character_name,
             species_code=model.species_code,

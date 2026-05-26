@@ -28,6 +28,7 @@ def _make(user_id, edition_id, **overrides) -> CharacterAggregate:
         id=None,
         user_id=user_id,
         edition_id=edition_id,
+        edition_code="srd_5_2_1",
         active_campaign=None,
         character_name="Rolfin",
         species_code="dwarf",
