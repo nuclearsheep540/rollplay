@@ -14,3 +14,5 @@ pytest==8.0.0 # Testing framework
 sentry-sdk[fastapi]==1.45.1
 boto3==1.35.0  # AWS S3 SDK for asset storage
 livekit-api==0.8.2  # LiveKit server SDK for AccessToken minting (sandbox/stream)
+mistune==3.0.2  # Markdown AST parser used by scripts/parse_srd.py
+beautifulsoup4==4.12.3  # HTML table parser used by scripts/parse_srd.py

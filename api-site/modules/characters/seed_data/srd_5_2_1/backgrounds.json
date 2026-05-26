@@ -1,0 +1,70 @@
+{
+  "backgrounds": [
+    {
+      "ability_scores": [
+        "intelligence",
+        "wisdom",
+        "charisma"
+      ],
+      "code": "acolyte",
+      "equipment_text": "_Choose A or B:_ (A) Calligrapher's Supplies, Book (prayers), Holy Symbol, Parchment (10 sheets), Robe, 8 GP; or (B) 50 GP",
+      "name": "Acolyte",
+      "origin_feat_code": "magic_initiate",
+      "skill_proficiencies": [
+        "insight",
+        "religion"
+      ],
+      "tool_proficiency": "Calligrapher's Supplies"
+    },
+    {
+      "ability_scores": [
+        "dexterity",
+        "constitution",
+        "intelligence"
+      ],
+      "code": "criminal",
+      "equipment_text": "_Choose A or B:_ (A) 2 Daggers, Thieves' Tools, Crowbar, 2 Pouches, Traveler's Clothes, 16 GP; or (B) 50 GP",
+      "name": "Criminal",
+      "origin_feat_code": "alert",
+      "skill_proficiencies": [
+        "sleight_of_hand",
+        "stealth"
+      ],
+      "tool_proficiency": "Thieves' Tools"
+    },
+    {
+      "ability_scores": [
+        "constitution",
+        "intelligence",
+        "wisdom"
+      ],
+      "code": "sage",
+      "equipment_text": "_Choose A or B:_ (A) Quarterstaff, Calligrapher's Supplies, Book (history), Parchment (8 sheets), Robe, 8 GP; or (B) 50 GP",
+      "name": "Sage",
+      "origin_feat_code": "magic_initiate",
+      "skill_proficiencies": [
+        "arcana",
+        "history"
+      ],
+      "tool_proficiency": "Calligrapher's Supplies"
+    },
+    {
+      "ability_scores": [
+        "strength",
+        "dexterity",
+        "constitution"
+      ],
+      "code": "soldier",
+      "equipment_text": "_Choose A or B:_ (A) Spear, Shortbow, 20 Arrows, Gaming Set (same as above), Healer's Kit, Quiver, Traveler's Clothes, 14 GP; or (B) 50 GP",
+      "name": "Soldier",
+      "origin_feat_code": "savage_attacker",
+      "skill_proficiencies": [
+        "athletics",
+        "intimidation"
+      ],
+      "tool_proficiency": "_Choose one kind of_ Gaming Set (see \"Equipment\")"
+    }
+  ],
+  "edition": "srd_5_2_1",
+  "schema_version": 1
+}
