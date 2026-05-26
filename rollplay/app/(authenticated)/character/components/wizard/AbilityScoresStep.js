@@ -14,7 +14,8 @@ import {
   POINT_BUY_MIN,
   calculatePointsSpent,
   getDefaultPointBuyScores,
-} from '@/app/character/utils/pointBuyCalculations'
+} from '../../utils/pointBuyCalculations'
+import { rollAbilityScoresDetailed } from '../../utils/diceRolling'
 
 import StepFooter from './StepFooter'
 
@@ -30,6 +31,7 @@ const ABILITIES = [
 const MODES = [
   { id: 'point_buy', label: 'Point-buy (27)' },
   { id: 'standard_array', label: 'Standard array' },
+  { id: 'rolled', label: 'Roll 4d6 drop lowest' },
   { id: 'manual', label: 'Manual entry' },
 ]
 
@@ -53,6 +55,12 @@ export default function AbilityScoresStep({ draft, onSave, onSaveHpAc, onBack, o
   const [ac, setAc] = useState(draft.ac > 1 ? draft.ac : 10)
   const [error, setError] = useState(null)
   const [saving, setSaving] = useState(false)
+
+  // For the "Roll 4d6 drop lowest" mode: per-ability roll details so the cell
+  // can show the underlying dice + which die was dropped. ``rollDetails`` is
+  // null until the player clicks Roll for the first time.
+  const [rollDetails, setRollDetails] = useState(null)
+  const hasRolled = rollDetails != null
 
   const pointBuy = useMemo(() => {
     try {
@@ -79,12 +87,24 @@ export default function AbilityScoresStep({ draft, onSave, onSaveHpAc, onBack, o
         next[ability] = nextValue
         return next
       }
+      // Rolled mode is read-only after roll — values come strictly from
+      // the dice. Re-roll to get a different set.
       return curr
     })
   }
 
   const handleStandardArrayPick = (ability, value) => {
     setScores((curr) => ({ ...curr, [ability]: value }))
+  }
+
+  // One-click roll: generate 6 batches of 4d6-drop-lowest and assign them
+  // directly to STR/DEX/CON/INT/WIS/CHA in order. Player can then tweak via
+  // the +/- steppers (handled by the manual-mode path, which we widen to
+  // accept rolled values up to 18 below).
+  const handleRollAll = () => {
+    const result = rollAbilityScoresDetailed('4d6-drop-lowest')
+    setScores(result.scores)
+    setRollDetails(result.details)
   }
 
   const standardArrayState = useMemo(() => {
@@ -113,6 +133,10 @@ export default function AbilityScoresStep({ draft, onSave, onSaveHpAc, onBack, o
     }
     if (mode === 'standard_array' && !validStandardArray) {
       setError('Assign each standard-array value to exactly one ability.')
+      return
+    }
+    if (mode === 'rolled' && !hasRolled) {
+      setError('Roll your scores before continuing.')
       return
     }
     setSaving(true)
@@ -181,10 +205,33 @@ export default function AbilityScoresStep({ draft, onSave, onSaveHpAc, onBack, o
         </p>
       )}
 
+      {mode === 'rolled' && (
+        <div className="rounded-sm border p-3 flex items-center justify-between" style={{
+          borderColor: THEME.borderSubtle,
+          backgroundColor: `${COLORS.smoke}05`,
+        }}>
+          <p className="text-xs" style={{ color: THEME.textSecondary }}>
+            {hasRolled
+              ? 'Each ability got one 4d6-drop-lowest roll. Re-roll to get a new set, or switch modes to edit manually.'
+              : 'Click Roll to assign one 4d6-drop-lowest result to each ability.'}
+          </p>
+          <button
+            type="button"
+            onClick={handleRollAll}
+            className="ml-3 px-3 py-1 rounded-sm text-sm font-semibold whitespace-nowrap"
+            style={{ backgroundColor: COLORS.silver, color: COLORS.onyx }}
+          >
+            {hasRolled ? 'Re-roll all' : 'Roll dice →'}
+          </button>
+        </div>
+      )}
+
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
         {ABILITIES.map((ab) => {
-          const value = scores[ab.code] ?? 10
-          const mod = modifier(value)
+          const rawValue = scores[ab.code]
+          const value = rawValue ?? (mode === 'rolled' && !hasRolled ? null : 10)
+          const mod = value != null ? modifier(value) : null
+          const detail = mode === 'rolled' ? rollDetails?.[ab.code] : null
           return (
             <div
               key={ab.code}
@@ -194,11 +241,18 @@ export default function AbilityScoresStep({ draft, onSave, onSaveHpAc, onBack, o
               <div>
                 <div className="text-xs uppercase" style={{ color: THEME.textSecondary }}>{ab.label}</div>
                 <div className="text-xl font-bold" style={{ color: THEME.textOnDark }}>
-                  {value}
-                  <span className="ml-2 text-sm" style={{ color: THEME.textSecondary }}>
-                    ({mod >= 0 ? '+' : ''}{mod})
-                  </span>
+                  {value ?? '—'}
+                  {mod != null && (
+                    <span className="ml-2 text-sm" style={{ color: THEME.textSecondary }}>
+                      ({mod >= 0 ? '+' : ''}{mod})
+                    </span>
+                  )}
                 </div>
+                {detail && (
+                  <div className="mt-1 text-[10px]" style={{ color: THEME.textSecondary }}>
+                    Rolled {detail.rolls.join(', ')} (drop <span className="line-through">{detail.dropped}</span>)
+                  </div>
+                )}
               </div>
               {mode === 'standard_array' ? (
                 <select
@@ -218,7 +272,12 @@ export default function AbilityScoresStep({ draft, onSave, onSaveHpAc, onBack, o
                     </option>
                   ))}
                 </select>
+              ) : mode === 'rolled' ? (
+                // No editor — rolled scores are set by handleRollAll and only
+                // change when the player clicks Re-roll all.
+                null
               ) : (
+                // Point-buy + manual modes share the +/- stepper.
                 <div className="flex items-center gap-1">
                   <button
                     type="button"
@@ -298,7 +357,8 @@ export default function AbilityScoresStep({ draft, onSave, onSaveHpAc, onBack, o
         nextDisabled={
           saving ||
           (mode === 'point_buy' && !pointBuy.valid) ||
-          (mode === 'standard_array' && !validStandardArray)
+          (mode === 'standard_array' && !validStandardArray) ||
+          (mode === 'rolled' && !hasRolled)
         }
         nextLabel={saving ? 'Saving…' : 'Next →'}
       />

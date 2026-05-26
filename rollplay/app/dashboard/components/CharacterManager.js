@@ -20,7 +20,6 @@ import { COLORS, THEME } from '@/app/styles/colorTheme'
 import Modal from '@/app/shared/components/Modal'
 import Spinner from '@/app/shared/components/Spinner'
 import { Button } from './shared/Button'
-import CharacterEditPanel from './CharacterEditPanel'
 import { useDeleteCharacter } from '../hooks/mutations/useCharacterMutations'
 
 export default function CharacterManager({ user, onExpandedChange }) {
@@ -603,17 +602,11 @@ export default function CharacterManager({ user, onExpandedChange }) {
           <div className="flex h-full" style={{ maxWidth: '1600px', width: '100%' }}>
             {/* Left side: Selected character hero card */}
             {selectedCharacter && renderSelectedCard()}
-            {/* Right side: Stats panel OR Edit panel */}
-            {selectedCharacter && (isEditing ? (
-              <CharacterEditPanel
-                character={selectedCharacter}
-                onSave={handleEditSave}
-                onCancel={exitEditMode}
-                isCloneMode={isCloneMode}
-              />
-            ) : (
-              renderStatsPanel()
-            ))}
+            {/* Right side: Stats panel. Inline edit was removed with the
+                v1 schema rewrite — finalised characters now redirect to
+                the read-only /character/{id} sheet, drafts resume in the
+                wizard at /character/create?id=… */}
+            {selectedCharacter && renderStatsPanel()}
           </div>
         </div>
       </div>

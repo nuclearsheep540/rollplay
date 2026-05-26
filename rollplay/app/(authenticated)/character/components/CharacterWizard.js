@@ -80,6 +80,15 @@ export default function CharacterWizard() {
     }
   }, [draftIdFromUrl, draft?.id])
 
+  // Once a draft is finalised, redirect to the read-only sheet. Done in an
+  // effect rather than during render so we don't trigger a router setState
+  // from within another component's render phase.
+  useEffect(() => {
+    if (draft && !draft.is_draft) {
+      router.replace(`/character/${draft.id}`)
+    }
+  }, [draft?.id, draft?.is_draft, router])
+
   // Wrap PATCH-style mutations with the autosave state machine. ``persistStep``
   // returns the server's fresh response (so callers can read derived fields).
   const persistStep = async (step, payload) => {
@@ -142,9 +151,9 @@ export default function CharacterWizard() {
     )
   }
 
-  // Once a draft is finalised, redirect to the read-only sheet.
+  // While the redirect-after-finalize effect runs, render nothing — the next
+  // tick will replace this view with the read-only sheet.
   if (draft && !draft.is_draft) {
-    router.replace(`/character/${draft.id}`)
     return null
   }
 

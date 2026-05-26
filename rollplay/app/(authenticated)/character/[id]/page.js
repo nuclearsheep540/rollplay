@@ -5,6 +5,7 @@
 
 'use client'
 
+import { useEffect } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 
 import { THEME, COLORS } from '@/app/styles/colorTheme'
@@ -17,6 +18,14 @@ export default function CharacterDetailPage() {
   const params = useParams()
   const id = params?.id
   const { data: character, isLoading, isError, error } = useCharacterDraft(id)
+
+  // Redirect drafts back into the wizard. Effect (not render-time) so we don't
+  // call router.replace during another component's render phase.
+  useEffect(() => {
+    if (character?.is_draft) {
+      router.replace(`/character/create?id=${character.id}`)
+    }
+  }, [character?.id, character?.is_draft, router])
 
   if (isLoading) {
     return (
@@ -38,9 +47,9 @@ export default function CharacterDetailPage() {
     return null
   }
 
-  // Drafts redirect into the wizard; the finalised view is read-only.
+  // Drafts redirect into the wizard via the effect above; render nothing
+  // while the navigation lands.
   if (character.is_draft) {
-    router.replace(`/character/create?id=${character.id}`)
     return null
   }
 
