@@ -23,6 +23,7 @@ const QK = {
   myCharacters: ['characters', 'me'],
   character: (id) => ['character', id],
   levelUp: (id) => ['character', id, 'level-up'],
+  campaignParty: (id) => ['campaign', id, 'party'],
 }
 
 async function call(path, init = {}) {
@@ -124,6 +125,23 @@ export function useLevelUpPreview(characterId, enabled = false) {
     enabled: Boolean(characterId) && enabled,
     // Always refetch when the modal opens — preview reflects current XP / level.
     staleTime: 0,
+  })
+}
+
+/**
+ * Read-only party view for the active campaign session — every finalised
+ * character locked to this campaign. Backend gates on campaign membership
+ * (DM + accepted players), so this works for both the DM SHEETS panel and
+ * any future player-side party view.
+ */
+export function useCampaignParty(campaignId) {
+  return useQuery({
+    queryKey: QK.campaignParty(campaignId),
+    queryFn: () => call(`/api/campaigns/${campaignId}/party`),
+    enabled: Boolean(campaignId),
+    // 15-second stale time — character state changes infrequently in-session,
+    // and the user can re-open the tab to force a refetch via window focus.
+    staleTime: 15_000,
   })
 }
 
