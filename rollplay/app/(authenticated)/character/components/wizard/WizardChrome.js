@@ -37,6 +37,11 @@ function SaveIndicator({ state }) {
   )
 }
 
+/**
+ * One stage indicator row in the vertical stage column on the right side
+ * of the wizard. Label sits on the LEFT of the numbered dot — labels are
+ * right-aligned via the parent column so the numbers line up vertically.
+ */
 function StepDot({ step, isCurrent, isComplete, onClick, clickable }) {
   const bg = isCurrent
     ? COLORS.silver
@@ -44,28 +49,50 @@ function StepDot({ step, isCurrent, isComplete, onClick, clickable }) {
     ? COLORS.graphite
     : 'transparent'
   const border = isCurrent || isComplete ? COLORS.silver : THEME.borderDefault
-  const text = isCurrent || isComplete ? THEME.textBold : THEME.textSecondary
+  const dotText = isCurrent || isComplete ? THEME.textBold : THEME.textSecondary
 
   return (
     <button
       type="button"
       disabled={!clickable}
       onClick={onClick}
-      className="flex items-center gap-2 px-1 disabled:cursor-default"
+      className="flex items-center gap-3 disabled:cursor-default w-full justify-end"
     >
       <span
-        className="inline-flex h-6 w-6 items-center justify-center rounded-full border text-xs font-semibold"
-        style={{ backgroundColor: bg, borderColor: border, color: text }}
-      >
-        {isComplete ? '✓' : step.idx + 1}
-      </span>
-      <span
         className="text-sm whitespace-nowrap"
-        style={{ color: isCurrent ? THEME.textBold : THEME.textSecondary, fontWeight: isCurrent ? 600 : 400 }}
+        style={{
+          color: isCurrent ? COLORS.onyx : THEME.textSecondary,
+          fontWeight: isCurrent ? 600 : 400,
+        }}
       >
         {step.label}
       </span>
+      <span
+        className="inline-flex h-6 w-6 items-center justify-center rounded-full border text-xs font-semibold shrink-0"
+        style={{ backgroundColor: bg, borderColor: border, color: dotText }}
+      >
+        {isComplete ? '✓' : step.idx + 1}
+      </span>
     </button>
+  )
+}
+
+// Vertical separator between stacked stage indicators — three small dots
+// stacked under the number column, muted so the active indicator stays the
+// eye-catcher. Each dot lives in a ``w-6`` span (matching the numbered
+// dot's width) aligned to the right edge of the stage column, so the dot
+// centres line up vertically with the numbered-dot centres above and below.
+function StepSeparator() {
+  return (
+    <div
+      aria-hidden="true"
+      className="flex flex-col items-end gap-0.5 select-none py-1"
+      style={{ color: THEME.borderDefault }}
+    >
+      <span className="w-6 text-center text-[10px] leading-none">·</span>
+      <span className="w-6 text-center text-[10px] leading-none">·</span>
+      <span className="w-6 text-center text-[10px] leading-none">·</span>
+    </div>
   )
 }
 
@@ -104,7 +131,7 @@ function NameHeader({ value, onRename }) {
   }
 
   return (
-    <div className="flex items-center gap-2 min-w-0">
+    <div className="flex items-center gap-3 min-w-0">
       <input
         ref={inputRef}
         type="text"
@@ -124,9 +151,9 @@ function NameHeader({ value, onRename }) {
         }}
         placeholder="Character name"
         aria-label="Character name"
-        className="flex-1 min-w-0 bg-transparent border-0 border-b text-2xl font-bold font-[family-name:var(--font-metamorphous)] focus:outline-none focus:ring-0 transition-colors py-1 -mb-px"
+        className="flex-1 min-w-0 bg-transparent border-0 border-b text-3xl font-bold font-[family-name:var(--font-metamorphous)] focus:outline-none focus:ring-0 transition-colors py-1 -mb-px"
         style={{
-          color: THEME.textOnDark,
+          color: THEME.textBold,
           borderBottomColor: editing ? COLORS.silver : 'transparent',
         }}
       />
@@ -134,10 +161,10 @@ function NameHeader({ value, onRename }) {
         type="button"
         onClick={startEdit}
         aria-label="Edit character name"
-        className="shrink-0 p-2 rounded hover:bg-white/5 transition-colors"
-        style={{ color: editing ? COLORS.silver : THEME.textSecondary }}
+        className="shrink-0 p-2 rounded hover:bg-black/5 transition-colors"
+        style={{ color: editing ? COLORS.onyx : THEME.textSecondary }}
       >
-        <FontAwesomeIcon icon={faPenToSquare} className="h-4 w-4" />
+        <FontAwesomeIcon icon={faPenToSquare} className="h-5 w-5" />
       </button>
     </div>
   )
@@ -182,34 +209,18 @@ export default function WizardChrome({
         />
       </div>
 
-      {/* Right: scrollable wizard column. */}
-      <div className="flex-1 overflow-y-auto">
+      {/* Middle: scrollable wizard column (name header + step body). */}
+      <div className="flex-1 overflow-y-auto min-w-0">
         <div className="mx-auto max-w-3xl px-4 py-8 sm:px-8">
-          {/* Persistent name header + progress strip share one card so the
-              name reads as the primary identity affordance for the whole form. */}
-          <div className="mb-6 rounded-sm border px-4 py-3 space-y-3" style={{
-            backgroundColor: COLORS.carbon,
-            borderColor: THEME.borderSubtle,
-          }}>
-            <div className="flex items-center justify-between gap-3">
-              <div className="flex-1 min-w-0">
-                <NameHeader value={characterName} onRename={onRename} />
-              </div>
-              <SaveIndicator state={saveState} />
+          {/* Standalone name header — no card, larger heading. Save
+              indicator sits to its right so the user sees mutation feedback
+              next to the most-edited field. */}
+          <header className="mb-6 flex items-center justify-between gap-4">
+            <div className="flex-1 min-w-0">
+              <NameHeader value={characterName} onRename={onRename} />
             </div>
-            <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
-              {steps.map((s, idx) => (
-                <StepDot
-                  key={s.id}
-                  step={{ ...s, idx }}
-                  isCurrent={idx === currentIdx}
-                  isComplete={idx < currentIdx}
-                  clickable={Boolean(draftId) && idx <= currentIdx}
-                  onClick={() => onJumpStep(s.id)}
-                />
-              ))}
-            </div>
-          </div>
+            <SaveIndicator state={saveState} />
+          </header>
 
           {/* Step body */}
           <div
@@ -225,6 +236,31 @@ export default function WizardChrome({
           </p>
         </div>
       </div>
+
+      {/* Right: vertical stage column. ``flex items-center`` on the nav
+          itself vertically centres the stages list within the full pane
+          height (the nav stretches to fill the main row's cross-axis by
+          default). Labels right-aligned; numbered dots in a tidy column. */}
+      <nav
+        aria-label="Wizard progress"
+        className="shrink-0 flex items-center pr-6 pl-2"
+        style={{ width: '13rem' }}
+      >
+        <div className="flex flex-col items-end w-full">
+          {steps.map((s, idx) => (
+            <span key={s.id} className="contents">
+              {idx > 0 && <StepSeparator />}
+              <StepDot
+                step={{ ...s, idx }}
+                isCurrent={idx === currentIdx}
+                isComplete={idx < currentIdx}
+                clickable={Boolean(draftId) && idx <= currentIdx}
+                onClick={() => onJumpStep(s.id)}
+              />
+            </span>
+          ))}
+        </div>
+      </nav>
     </main>
   )
 }
