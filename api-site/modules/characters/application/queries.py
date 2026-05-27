@@ -24,18 +24,3 @@ class GetCharactersByUser:
 
     def execute(self, user_id: UUID) -> List[CharacterAggregate]:
         return self.repository.get_by_user_id(user_id)
-
-
-class GetCampaignParty:
-    """Read every finalised character locked to a campaign — used by the runtime
-    Character tab (player sees own) and the DM read-only party view.
-    """
-
-    def __init__(self, repository: CharacterRepository):
-        self.repository = repository
-
-    def execute(self, campaign_id: UUID) -> List[CharacterAggregate]:
-        return [
-            c for c in self.repository.get_by_active_campaign(campaign_id)
-            if not c.is_draft
-        ]

@@ -16,18 +16,23 @@ export default function StepFooter({
 }) {
   return (
     <div className="flex justify-between items-center pt-4 border-t" style={{ borderColor: THEME.borderSubtle }}>
-      <button
-        type="button"
-        onClick={onBack}
-        className="px-4 py-2 rounded-sm border text-sm"
-        style={{
-          backgroundColor: 'transparent',
-          borderColor: THEME.borderDefault,
-          color: THEME.textOnDark,
-        }}
-      >
-        {backLabel}
-      </button>
+      {onBack ? (
+        <button
+          type="button"
+          onClick={onBack}
+          className="px-4 py-2 rounded-sm border text-sm"
+          style={{
+            backgroundColor: 'transparent',
+            borderColor: THEME.borderDefault,
+            color: THEME.textOnDark,
+          }}
+        >
+          {backLabel}
+        </button>
+      ) : (
+        // Empty spacer so the Next button stays right-aligned via justify-between.
+        <span />
+      )}
       <button
         type="button"
         onClick={onNext}

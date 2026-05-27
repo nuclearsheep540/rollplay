@@ -188,7 +188,11 @@ class CharacterAggregate:
     updated_at: datetime
     is_deleted: bool = False
 
-    # Uploaded avatar. ``None`` ⇒ frontend shows the default /heroes.png.
+    # Library MediaAsset (asset_type='image') the character uses as its
+    # avatar. ``None`` ⇒ frontend shows the default /heroes.png. We also stash
+    # ``avatar_s3_key`` so the response builder can produce a presigned URL
+    # without re-querying the asset row; the repository sets it on load.
+    avatar_asset_id: Optional[UUID] = None
     avatar_s3_key: Optional[str] = None
 
     # -------------------------------------------------------------- factory
@@ -272,9 +276,16 @@ class CharacterAggregate:
         self.creation_step = step
         self._touch()
 
-    def set_avatar(self, s3_key: Optional[str]) -> None:
-        """Attach (or clear) the uploaded avatar S3 key."""
-        self.avatar_s3_key = s3_key
+    def set_avatar_asset(self, asset_id: Optional[UUID]) -> None:
+        """Attach (or clear) the library asset used as this character's avatar.
+
+        ``avatar_s3_key`` is reset here — the repository repopulates it on the
+        next read via the eager-loaded ``MediaAsset`` row, and the response
+        builder uses whichever one it has.
+        """
+        self.avatar_asset_id = asset_id
+        if asset_id is None:
+            self.avatar_s3_key = None
         self._touch()
 
     # -------------------------------------------------------------- ownership / locking

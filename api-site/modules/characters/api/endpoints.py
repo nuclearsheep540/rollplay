@@ -10,12 +10,10 @@ skills) live in edition_endpoints.py.
 from typing import List, Optional
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, status
 
 from modules.characters.api.schemas import (
     AsiChoice,
-    AvatarConfirmRequest,
-    AvatarUploadUrlResponse,
     CharacterResponse,
     CreateDraftRequest,
     DerivedSaveModifier,
@@ -25,6 +23,7 @@ from modules.characters.api.schemas import (
     LevelUpPreview,
     LevelUpRequest,
     RuntimePatchRequest,
+    SetAvatarRequest,
     UpdateDraftRequest,
 )
 from modules.characters.application.commands import (
@@ -52,8 +51,8 @@ from modules.characters.domain.character_aggregate import (
 )
 from modules.characters.repositories.character_repository import CharacterRepository
 from modules.characters.repositories.edition_repository import EditionRepository
-from modules.user.dependencies.providers import user_repository as get_user_repository
-from modules.user.repositories.user_repository import UserRepository
+from modules.library.dependencies.providers import get_media_asset_repository
+from modules.library.repositories.asset_repository import MediaAssetRepository
 from shared.dependencies.auth import get_current_user_id
 from shared.rulesets.registry import RulesetRegistry
 from shared.services.s3_service import S3Service, get_s3_service
@@ -271,6 +270,7 @@ async def update_draft(
         "background": request.background,
         "ability_scores": request.ability_scores,
         "hp_ac": request.hp_ac,
+        "rename": request.rename,
     }
     payload_model = payload_map.get(request.step)
     if payload_model is None:
@@ -349,84 +349,32 @@ async def delete_character(
 
 
 # --------------------------------------------------------------------------- #
-# Avatar upload — 3-step S3 presigned-URL flow
+# Avatar — point the character at a library MediaAsset (asset_type='image')
 # --------------------------------------------------------------------------- #
 
 
-def _resolve_account_handle(user_id: UUID, user_repo: UserRepository) -> str:
-    """Return ``{account_name}#{account_tag}`` for the user, or raise.
-
-    The wizard ensures users set an account name before reaching the upload
-    step, but we double-check here so a stray API caller can't slip an
-    incomplete handle into the S3 keyspace.
-    """
-    user = user_repo.get_by_id(user_id)
-    if user is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
-    if not user.account_name or not user.account_tag:
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail="Set your account name before uploading avatars",
-        )
-    return f"{user.account_name}#{user.account_tag}"
-
-
-@router.get("/{character_id}/avatar/upload-url", response_model=AvatarUploadUrlResponse)
-async def get_avatar_upload_url(
+@router.patch("/{character_id}/avatar", response_model=CharacterResponse)
+async def set_character_avatar(
     character_id: UUID,
-    filename: str = Query(..., description="Original filename, e.g. portrait.png"),
-    content_type: str = Query(..., description="MIME type, e.g. image/png"),
+    request: SetAvatarRequest,
     user_id: UUID = Depends(get_current_user_id),
     character_repo: CharacterRepository = Depends(get_character_repository),
-    user_repo: UserRepository = Depends(get_user_repository),
-    s3_service: S3Service = Depends(get_s3_service),
-):
-    """Step 1 of avatar upload — generate a presigned PUT URL.
-
-    Owner-only. The key is scoped to ``{account_handle}/{character_id}/`` so
-    confirm-step validation can verify the upload landed in the right place.
-    """
-    character = character_repo.get_by_id(character_id)
-    if character is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Character not found")
-    if not character.is_owned_by(user_id):
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Only the owner can upload an avatar for this character",
-        )
-    account_handle = _resolve_account_handle(user_id, user_repo)
-    key = S3Service.generate_character_avatar_key(
-        account_handle=account_handle,
-        character_id=str(character_id),
-        filename=filename,
-    )
-    upload_url = s3_service.generate_upload_url(key, content_type)
-    return AvatarUploadUrlResponse(upload_url=upload_url, key=key)
-
-
-@router.post("/{character_id}/avatar/confirm", response_model=CharacterResponse)
-async def confirm_avatar_upload(
-    character_id: UUID,
-    request: AvatarConfirmRequest,
-    user_id: UUID = Depends(get_current_user_id),
-    character_repo: CharacterRepository = Depends(get_character_repository),
-    user_repo: UserRepository = Depends(get_user_repository),
+    asset_repo: MediaAssetRepository = Depends(get_media_asset_repository),
     registry: RulesetRegistry = Depends(get_ruleset_registry),
     s3_service: S3Service = Depends(get_s3_service),
 ):
-    """Step 3 of avatar upload — confirm the S3 PUT landed, persist the key.
+    """Set or clear the character's avatar.
 
-    Validates ownership AND that the key starts with the expected
-    ``{account_handle}/{character_id}/`` prefix (so a caller can't claim
-    someone else's S3 object as their avatar).
+    Owner-only. ``asset_id=null`` clears the avatar; otherwise the asset must
+    exist, be owned by the same user, and be image-type. The upload itself
+    goes through the standard asset-library 3-step flow — this endpoint
+    just links the existing asset to the character.
     """
-    account_handle = _resolve_account_handle(user_id, user_repo)
     try:
-        character = SetCharacterAvatar(character_repo).execute(
+        character = SetCharacterAvatar(character_repo, asset_repo).execute(
             character_id=character_id,
             user_id=user_id,
-            account_handle=account_handle,
-            key=request.key,
+            asset_id=request.asset_id,
         )
         return _to_character_response(character, registry, s3_service)
     except (ValueError, PermissionError) as exc:

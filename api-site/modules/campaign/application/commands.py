@@ -292,10 +292,17 @@ class AcceptCampaignInvite:
                         auto_added_to_session_ids.append(session_id)
                         logger.info(f"✅ Auto-added late-joining player {player_id} to active session {session_id}")
 
-                    # Sync player_name to api-game so they don't show as UUID
+                    # Sync player_name + campaign_role to api-game. The role is
+                    # always SPECTATOR right after accept_invite (character not
+                    # yet selected) — passing it explicitly so MongoDB's
+                    # player_metadata carries it for runtime checks.
                     if session.active_game_id:
+                        role = campaign.get_role(player_id)
                         await self._sync_player_to_game(
-                            session.active_game_id, player_id, player_name
+                            session.active_game_id,
+                            player_id,
+                            player_name,
+                            role.value if role else "spectator",
                         )
 
         # Broadcast notification event to host
@@ -313,13 +320,22 @@ class AcceptCampaignInvite:
         return campaign
 
     @staticmethod
-    async def _sync_player_to_game(game_id: str, player_id: UUID, player_name: str):
-        """Notify api-game about a new player so they appear by name, not UUID."""
+    async def _sync_player_to_game(game_id: str, player_id: UUID, player_name: str, campaign_role: str):
+        """Notify api-game about a new player so they appear by name, not UUID.
+
+        ``campaign_role`` is the user's role in the campaign at sync time —
+        api-game stores it on ``player_metadata[user_id]`` so the runtime can
+        derive spectator/player/mod status without re-asking api-site.
+        """
         try:
             async with httpx.AsyncClient() as client:
                 response = await client.put(
                     f"http://api-game:8081/game/{game_id}/player/character",
-                    json={"user_id": str(player_id), "player_name": player_name},
+                    json={
+                        "user_id": str(player_id),
+                        "player_name": player_name,
+                        "campaign_role": campaign_role,
+                    },
                     timeout=5.0
                 )
                 if response.status_code == 200:
@@ -589,6 +605,16 @@ class SelectCharacterForCampaign:
         # If already locked to THIS campaign, nothing to do
         if character.active_campaign == campaign_id:
             return character
+
+        # Invariant: one active character per (user, campaign). Release any
+        # character this user already has locked to this campaign before
+        # locking the new one — otherwise the swap leaves two locked rows
+        # and downstream queries (.first()/find) become non-deterministic.
+        for existing in self.character_repo.get_by_active_campaign(campaign_id):
+            if existing.user_id == user_id and existing.id != character.id:
+                existing.unlock_from_campaign()
+                self.character_repo.save(existing)
+                logger.info(f"Released previous character {existing.id} for user {user_id} in campaign {campaign_id}")
 
         # Lock character to campaign
         character.lock_to_campaign(campaign_id)

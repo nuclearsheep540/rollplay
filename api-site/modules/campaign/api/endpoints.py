@@ -41,8 +41,6 @@ from modules.campaign.application.commands import (
 )
 from modules.characters.repositories.character_repository import CharacterRepository
 from modules.characters.dependencies.providers import get_character_repository, get_ruleset_registry
-from modules.characters.application.queries import GetCampaignParty
-from modules.characters.api.schemas import CharacterResponse
 from shared.rulesets.registry import RulesetRegistry
 from modules.session.application.commands import CreateSession
 from modules.campaign.application.queries import (
@@ -590,36 +588,6 @@ async def get_campaign_members(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=str(e)
         )
-
-
-@router.get("/{campaign_id}/party", response_model=List[CharacterResponse])
-async def get_campaign_party(
-    campaign_id: UUID,
-    user_id: UUID = Depends(get_current_user_id),
-    campaign_repo: CampaignRepository = Depends(campaign_repository),
-    character_repo: CharacterRepository = Depends(get_character_repository),
-    registry: RulesetRegistry = Depends(get_ruleset_registry),
-    s3_service: S3Service = Depends(get_s3_service),
-):
-    """Read-only party view — every finalised character locked to this campaign.
-
-    Used by the runtime Character tab (player sees own sheet) and the DM
-    read-only party panel. Authorization: requester must be a member of the
-    campaign (DM or player).
-    """
-    campaign = campaign_repo.get_by_id(campaign_id)
-    if campaign is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Campaign not found")
-    if not campaign.is_member(user_id):
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Only campaign members can view the party",
-        )
-    # Late import to avoid a circular reference between campaign endpoints and
-    # the character endpoints response-builder helper.
-    from modules.characters.api.endpoints import _to_character_response
-    characters = GetCampaignParty(character_repo).execute(campaign_id)
-    return [_to_character_response(c, registry, s3_service) for c in characters]
 
 
 # Character selection endpoints

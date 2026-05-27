@@ -26,7 +26,6 @@ import LobbyPanel from './components/LobbyPanel';
 import DiceActionPanel from './components/DiceActionPanel'; // NEW IMPORT
 import CharacterSheet from './components/CharacterSheet';
 import LevelUpModal from './components/LevelUpModal';
-import PartySheetPanel from './components/PartySheetPanel';
 import { useMyCharacterForCampaign } from './hooks/useCharacterRuntime';
 import Modal from '@/app/shared/components/Modal';
 import { useWebSocket } from './hooks/useWebSocket';
@@ -49,12 +48,10 @@ import { useGatePreload } from './hooks/useGatePreload';
 // Tab configuration for left drawer.
 // CHARACTER is filtered out at render time for seats that don't have a
 // finalised character on this campaign (DMs, spectators, players who
-// haven't picked a character yet). SHEETS is the read-only party view —
-// every campaign member can see it for coordination.
+// haven't picked a character yet).
 const LEFT_DRAWER_TABS = [
   { id: 'party', label: 'PARTY' },
   { id: 'character', label: 'CHARACTER', playerOnly: true },
-  { id: 'sheets', label: 'SHEETS' },
   { id: 'log', label: 'LOG' },
 ];
 
@@ -2061,13 +2058,6 @@ export default function GameContent() {
             userId={thisUserId}
             onRoll={handlePlayerDiceRoll}
             onOpenLevelUp={() => setLevelUpModalOpen(true)}
-          />
-        )}
-
-        {activeLeftDrawer === 'sheets' && (
-          <PartySheetPanel
-            campaignId={campaignId}
-            onRoll={handlePlayerDiceRoll}
           />
         )}
 

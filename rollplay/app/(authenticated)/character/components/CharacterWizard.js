@@ -15,42 +15,51 @@ import {
   useUpdateDraft,
 } from '../hooks/useCharacterDraft'
 import { useEditions } from '../hooks/useReferenceData'
-import { useUploadCharacterAvatar } from '../hooks/useUploadCharacterAvatar'
+import { useSetCharacterAvatar } from '../hooks/useSetCharacterAvatar'
 import { THEME, COLORS } from '@/app/styles/colorTheme'
 
+import CharacterAvatarPickerModal from './CharacterAvatarPickerModal'
 import WizardChrome from './wizard/WizardChrome'
-import EditionStep from './wizard/EditionStep'
-import IdentityStep from './wizard/IdentityStep'
+import SpeciesStep from './wizard/SpeciesStep'
 import ClassStep from './wizard/ClassStep'
 import BackgroundStep from './wizard/BackgroundStep'
 import AbilityScoresStep from './wizard/AbilityScoresStep'
 import ReviewStep from './wizard/ReviewStep'
 
+// Edition was dropped as a user-facing step — only one edition exists today,
+// and the wizard auto-creates a draft against it on mount. Name lives in the
+// persistent header (rename step), so 'species' is now the first step in
+// the strip.
 const STEPS = [
-  { id: 'edition', label: 'Edition' },
-  { id: 'identity', label: 'Identity' },
+  { id: 'species', label: 'Species' },
   { id: 'class', label: 'Class' },
   { id: 'background', label: 'Background' },
   { id: 'ability_scores', label: 'Ability Scores' },
   { id: 'review', label: 'Review' },
 ]
 
+// The backend's creation_step uses the legacy 'identity' name for what the
+// wizard now labels 'Species'. Map both ways so server-stored progress
+// resolves to the new step ids.
+function normaliseServerStep(serverStep) {
+  if (serverStep === 'identity') return 'species'
+  return serverStep
+}
+
 /**
  * Resume the wizard on whatever step the server thinks the draft is at,
- * falling back to the first incomplete step. Closing the tab and coming back
- * should land the user where they left off.
+ * falling back to the first incomplete step.
  */
 function deriveInitialStep(draft) {
-  if (!draft) return 'edition'
+  if (!draft) return 'species'
   if (!draft.is_draft) return 'review'
-  const fromServer = draft.creation_step
+  const fromServer = normaliseServerStep(draft.creation_step)
   if (fromServer) {
-    // Map server-side step (after the LAST completed step) to the next-to-show.
     const after = STEPS.findIndex((s) => s.id === fromServer)
     if (after >= 0 && after < STEPS.length - 1) return STEPS[after + 1].id
   }
-  // Server-side step may be null on a brand-new draft.
-  if (!draft.species_code) return 'identity'
+  // Server may have a null creation_step on a brand-new auto-created draft.
+  if (!draft.species_code) return 'species'
   if (!draft.class_entries?.length) return 'class'
   if (!draft.background_code) return 'background'
   return 'ability_scores'
@@ -72,18 +81,41 @@ export default function CharacterWizard() {
   // ``draft?.id`` (not ``draftIdFromUrl``) so the hook re-binds the moment the
   // server hands back a freshly-created draft, even before the URL search-param
   // sync settles.
-  const uploadAvatar = useUploadCharacterAvatar(draft?.id ?? draftIdFromUrl)
+  const setAvatarMutation = useSetCharacterAvatar(draft?.id ?? draftIdFromUrl)
 
-  const [currentStep, setCurrentStep] = useState('edition')
+  const [currentStep, setCurrentStep] = useState('species')
   const [saveState, setSaveState] = useState('idle') // 'idle' | 'saving' | 'saved' | 'error'
+  const [avatarPickerOpen, setAvatarPickerOpen] = useState(false)
   const [avatarError, setAvatarError] = useState(null)
+
+  // Auto-create a draft the first time the wizard mounts with no ?id. Only
+  // one edition exists today so we pick it without asking; the user can
+  // rename via the persistent header. Once created, the URL gains ?id=… and
+  // future renders use the existing draft.
+  useEffect(() => {
+    if (draftIdFromUrl) return
+    if (createDraft.isPending) return
+    const editionCode = editions?.[0]?.code
+    if (!editionCode) return
+    createDraft.mutate(
+      { editionCode, name: 'Unnamed character' },
+      {
+        onSuccess: (created) => {
+          const params = new URLSearchParams({ id: created.id })
+          if (returnCampaignId) params.set('return_campaign', returnCampaignId)
+          router.replace(`/character/create?${params.toString()}`)
+        },
+      },
+    )
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [draftIdFromUrl, editions?.[0]?.code])
 
   // Sync wizard step with the server's view of the draft on load / reload.
   useEffect(() => {
     if (draftIdFromUrl && draft) {
       setCurrentStep(deriveInitialStep(draft))
     } else if (!draftIdFromUrl) {
-      setCurrentStep('edition')
+      setCurrentStep('species')
     }
   }, [draftIdFromUrl, draft?.id])
 
@@ -113,95 +145,54 @@ export default function CharacterWizard() {
     }
   }
 
-  const handleEditionPicked = async ({ editionCode, name }) => {
-    // First "next" creates the draft on the server, putting an id in the URL.
-    const created = await createDraft.mutateAsync({ editionCode, name })
-    setSaveState('saved')
-    const params = new URLSearchParams({ id: created.id })
-    if (returnCampaignId) params.set('return_campaign', returnCampaignId)
-    router.replace(`/character/create?${params.toString()}`)
-    setCurrentStep('identity')
+  /**
+   * Open the avatar picker. The mount-time effect above auto-creates a draft
+   * before the user can click anything, but if the draft still isn't ready
+   * (e.g. editions list hasn't loaded yet) we hold the click harmlessly.
+   */
+  const handleOpenAvatarPicker = () => {
+    if (!draft) return
+    setAvatarError(null)
+    setAvatarPickerOpen(true)
   }
 
   /**
-   * Avatar can be uploaded at any time — even before the player has clicked
-   * Start on the Edition step. If no draft exists yet we silently auto-create
-   * one with placeholder defaults (the player can rename on Edition / Identity
-   * later), then upload the file. From the user's POV: pick file → done.
+   * Persistent name header writes through the ``rename`` draft step — server
+   * doesn't bump creation_step for renames so the resume pointer stays
+   * pointing at the user's last real wizard step.
    */
-  const handleAvatarFileChosen = async (file) => {
-    setAvatarError(null)
-    try {
-      // Lazily ensure a draft. ``draft`` (from the query cache) is the source
-      // of truth — ``draftIdFromUrl`` may lag for a render cycle right after
-      // create. Either way, once this resolves we have a real character id.
-      let activeDraft = draft
-      if (!activeDraft) {
-        const editionCode = editions?.[0]?.code ?? 'srd_5_2_1'
-        activeDraft = await createDraft.mutateAsync({
-          editionCode,
-          name: 'Unnamed character',
-        })
-        const params = new URLSearchParams({ id: activeDraft.id })
-        if (returnCampaignId) params.set('return_campaign', returnCampaignId)
-        router.replace(`/character/create?${params.toString()}`)
-      }
-      // Hook is bound to draft?.id at render time; if we just auto-created the
-      // draft, the hook is still bound to undefined this render. Call the
-      // mutation function directly with the fresh id by re-running through the
-      // characterId-scoped path. Easiest is to do the same 3 HTTP calls inline.
-      await uploadDirectly(activeDraft.id, file)
-    } catch (err) {
-      setAvatarError(err.message || 'Avatar upload failed')
-    }
+  const handleRename = async (newName) => {
+    const trimmed = (newName || '').trim()
+    if (!trimmed || trimmed === draft?.character_name) return
+    await persistStep('rename', { name: trimmed })
   }
 
-  // Direct-call avatar upload that doesn't rely on the React-bound hook's
-  // closure over characterId — used when the draft was created on this same
-  // event so we have its id but the hook hasn't re-rendered yet.
-  const uploadDirectly = async (characterId, file) => {
-    // Reuses the same 3-step contract the hook follows. authFetch is on the
-    // window via the shared util used everywhere; we go through fetch wrappers
-    // for parity with the rest of the app.
-    const { authFetch } = await import('@/app/shared/utils/authFetch')
-    const qs = new URLSearchParams({
-      filename: file.name,
-      content_type: file.type || 'application/octet-stream',
-    })
-    const urlRes = await authFetch(
-      `/api/characters/${characterId}/avatar/upload-url?${qs}`,
-      { credentials: 'include' },
-    )
-    const urlBody = await urlRes.json().catch(() => ({}))
-    if (!urlRes.ok) {
-      throw new Error(urlBody?.detail || 'Could not get upload URL')
+  const handleAvatarAssetChosen = async (assetId) => {
+    setAvatarError(null)
+    // Read the current character id off either the cache-backed draft or the
+    // URL — they converge within a tick of createDraft resolving.
+    const characterId = draft?.id ?? draftIdFromUrl
+    if (!characterId) {
+      setAvatarError('Character not yet ready — try again in a moment')
+      return
     }
-    const { upload_url, key } = urlBody
-
-    const putRes = await fetch(upload_url, {
-      method: 'PUT',
-      headers: { 'Content-Type': file.type || 'application/octet-stream' },
-      body: file,
-    })
-    if (!putRes.ok) {
-      throw new Error(`Upload to S3 failed (${putRes.status})`)
-    }
-
-    const confirmRes = await authFetch(
-      `/api/characters/${characterId}/avatar/confirm`,
-      {
-        method: 'POST',
+    try {
+      // ``mutateAsync`` re-binds via the hook's closure; if we just auto-created
+      // the draft this same event the hook is still bound to undefined. PATCH
+      // through authFetch directly so we can target the fresh id reliably.
+      const { authFetch } = await import('@/app/shared/utils/authFetch')
+      const res = await authFetch(`/api/characters/${characterId}/avatar`, {
+        method: 'PATCH',
         credentials: 'include',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ key }),
-      },
-    )
-    const confirmBody = await confirmRes.json().catch(() => ({}))
-    if (!confirmRes.ok) {
-      throw new Error(confirmBody?.detail || 'Confirm step failed')
+        body: JSON.stringify({ asset_id: assetId }),
+      })
+      const body = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error(body?.detail || 'Failed to set avatar')
+      await draftQuery.refetch()
+    } catch (err) {
+      setAvatarError(err.message || 'Failed to set avatar')
     }
-    // Force a re-fetch so derived response (incl. presigned avatar_url) lands.
-    await draftQuery.refetch()
   }
 
   const handleAdvance = (stepId) => () => setCurrentStep(stepId)
@@ -252,6 +243,21 @@ export default function CharacterWizard() {
     )
   }
 
+  // First visit (no URL id): the auto-create effect is firing in the
+  // background. Show a stub until the new draft id lands in the URL,
+  // otherwise we'd render the wizard with ``draft === undefined`` and step
+  // components would crash on missing fields.
+  if (!draftIdFromUrl) {
+    return (
+      <div
+        className="flex-1 flex items-center justify-center"
+        style={{ color: THEME.textSecondary }}
+      >
+        Setting up your character…
+      </div>
+    )
+  }
+
   // While the redirect-after-finalize effect runs, render nothing — the next
   // tick will replace this view with the read-only sheet.
   if (draft && !draft.is_draft) {
@@ -259,32 +265,29 @@ export default function CharacterWizard() {
   }
 
   return (
+    <>
     <WizardChrome
       steps={STEPS}
       currentStep={currentStep}
       onJumpStep={(id) => draft && setCurrentStep(id)}
       saveState={saveState}
       draftId={draft?.id}
+      characterName={draft?.character_name ?? ''}
+      onRename={handleRename}
       avatarUrl={draft?.avatar_url}
-      avatarIsUploading={createDraft.isPending || uploadAvatar.isPending}
+      avatarIsBusy={createDraft.isPending || setAvatarMutation.isPending}
       avatarError={avatarError}
-      onAvatarFileChosen={handleAvatarFileChosen}
+      onOpenAvatarPicker={handleOpenAvatarPicker}
     >
-      {currentStep === 'edition' && (
-        <EditionStep
-          editions={editions ?? []}
-          initialName={draft?.character_name ?? ''}
-          initialEditionCode={draft?.edition_code}
-          isCreating={createDraft.isPending}
-          onSubmit={handleEditionPicked}
-        />
-      )}
-
-      {currentStep === 'identity' && draft && (
-        <IdentityStep
+      {currentStep === 'species' && draft && (
+        <SpeciesStep
           draft={draft}
+          // Wire contract is still step='identity' — the backend handler
+          // is unchanged; only the wizard's label moved to 'Species'.
           onSave={(payload) => persistStep('identity', payload)}
-          onBack={handleBack}
+          // First step in the new lineup — Back has nowhere to go, so
+          // pass null and StepFooter skips rendering it.
+          onBack={null}
           onNext={handleAdvance('class')}
         />
       )}
@@ -327,5 +330,12 @@ export default function CharacterWizard() {
         />
       )}
     </WizardChrome>
+
+    <CharacterAvatarPickerModal
+      open={avatarPickerOpen}
+      onClose={() => setAvatarPickerOpen(false)}
+      onSelect={handleAvatarAssetChosen}
+    />
+    </>
   )
 }

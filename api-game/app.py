@@ -786,23 +786,29 @@ async def update_player_character(room_id: str, character_data: dict):
         # Update the character in room metadata
         GameService.update_player_character(room_id, character_data)
 
-        # Broadcast character change to all clients via WebSocket
-        player_name = character_data.get("player_name", "unknown")
-        character_name = character_data.get("character_name", "unknown")
+        # Broadcast character change to all clients via WebSocket. Forward the
+        # merged record from MongoDB rather than the inbound delta so the event
+        # carries every field clients need (including campaign_role for the
+        # spectator-derivation effect). Frontend handler merges fields.
+        refreshed = GameService.get_room(room_id) or {}
+        merged = (refreshed.get("player_metadata") or {}).get(character_data.get("user_id", "")) or character_data
+        player_name = merged.get("player_name", "unknown")
+        character_name = merged.get("character_name", "unknown")
 
         change_message = {
             "event_type": "player_character_changed",
             "data": {
-                "user_id": character_data.get("user_id"),
+                "user_id": merged.get("user_id"),
                 "player_name": player_name,
-                "character_id": character_data.get("character_id"),
+                "campaign_role": merged.get("campaign_role"),
+                "character_id": merged.get("character_id"),
                 "character_name": character_name,
-                "character_class": character_data.get("character_class"),
-                "character_race": character_data.get("character_race"),
-                "level": character_data.get("level"),
-                "hp_current": character_data.get("hp_current"),
-                "hp_max": character_data.get("hp_max"),
-                "ac": character_data.get("ac")
+                "character_class": merged.get("character_class"),
+                "character_race": merged.get("character_race"),
+                "level": merged.get("level"),
+                "hp_current": merged.get("hp_current"),
+                "hp_max": merged.get("hp_max"),
+                "ac": merged.get("ac"),
             }
         }
 

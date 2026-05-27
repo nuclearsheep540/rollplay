@@ -138,17 +138,16 @@ class CharacterResponse(BaseModel):
 
 
 # --------------------------------------------------------------------------- #
-# Avatar upload (3-step S3 presigned-URL flow, same pattern as the library)
+# Avatar — references a library MediaAsset (asset_type='image')
 # --------------------------------------------------------------------------- #
 
 
-class AvatarUploadUrlResponse(BaseModel):
-    upload_url: str = Field(..., description="Presigned PUT URL for direct S3 upload")
-    key: str = Field(..., description="S3 key to send back via /avatar/confirm")
-
-
-class AvatarConfirmRequest(BaseModel):
-    key: str = Field(..., description="S3 key returned by /avatar/upload-url after the PUT succeeded")
+class SetAvatarRequest(BaseModel):
+    """Body for PATCH /characters/{id}/avatar — null clears the avatar."""
+    asset_id: Optional[UUID] = Field(
+        default=None,
+        description="MediaAsset.id of an existing image asset, or null to clear",
+    )
 
 
 # --------------------------------------------------------------------------- #
@@ -202,7 +201,14 @@ class HpAcStepPayload(BaseModel):
     ac: int = Field(ge=1, le=50)
 
 
-StepName = Literal["identity", "class", "background", "ability_scores", "hp_ac"]
+class RenameStepPayload(BaseModel):
+    """Name-only update from the persistent name input in the wizard header."""
+    name: str = Field(min_length=1, max_length=50)
+
+
+StepName = Literal[
+    "identity", "class", "background", "ability_scores", "hp_ac", "rename"
+]
 
 
 class UpdateDraftRequest(BaseModel):
@@ -212,6 +218,7 @@ class UpdateDraftRequest(BaseModel):
     background: Optional[BackgroundStepPayload] = None
     ability_scores: Optional[AbilityScoresStepPayload] = None
     hp_ac: Optional[HpAcStepPayload] = None
+    rename: Optional[RenameStepPayload] = None
 
     model_config = ConfigDict(populate_by_name=True)
 

@@ -96,11 +96,15 @@ class UpdateCharacterDraft:
             "background": self._apply_background,
             "ability_scores": self._apply_ability_scores,
             "hp_ac": self._apply_hp_ac,
+            "rename": self._apply_rename,
         }.get(step)
         if handler is None:
             raise ValueError(f"Unknown draft step '{step}'")
         handler(character, edition_code, payload)
-        character.set_creation_step(step)
+        # ``rename`` is orthogonal to wizard progress — the user can rename
+        # at any point without resetting the resumed-step pointer.
+        if step != "rename":
+            character.set_creation_step(step)
         self.repository.save(character)
         return character
 
@@ -238,6 +242,18 @@ class UpdateCharacterDraft:
         character.hp_current = character.hp_max
         character.ac = int(payload["ac"])
 
+    # ------------------------------------------------------------ rename
+
+    def _apply_rename(self, character, edition_code, payload):
+        """Name-only update from the wizard's persistent name header."""
+        name = (payload.get("name") or "").strip()
+        if not name:
+            raise ValueError("Character name is required")
+        if len(name) > 50:
+            raise ValueError("Character name too long (max 50)")
+        character.character_name = name
+        # Don't bump creation_step — rename is orthogonal to wizard progress.
+
 
 class FinalizeCharacterDraft:
     """POST /api/characters/draft/{id}/finalize — flip is_draft=False after validation."""
@@ -274,31 +290,45 @@ class DiscardCharacterDraft:
 
 
 class SetCharacterAvatar:
-    """POST /api/characters/{id}/avatar/confirm — persist the S3 key after upload.
+    """PATCH /api/characters/{id}/avatar — point the character at a library asset.
 
-    The endpoint sanity-checks ownership and that the key matches the
-    character's expected ``{account_handle}/{character_id}/`` prefix (so a
-    player can't claim someone else's S3 object as their character avatar).
+    The asset must exist, be owned by the same user, and be image-type.
+    Uploading itself goes through the asset library's standard 3-step flow;
+    this command just links the asset to the character.
     """
 
-    def __init__(self, repository: CharacterRepository):
+    def __init__(
+        self,
+        repository: CharacterRepository,
+        asset_repository,
+    ):
         self.repository = repository
+        self.asset_repository = asset_repository
 
     def execute(
-        self, *, character_id: UUID, user_id: UUID, account_handle: str, key: str
+        self, *, character_id: UUID, user_id: UUID, asset_id: Optional[UUID]
     ) -> CharacterAggregate:
         character = self.repository.get_by_id(character_id)
         if character is None:
             raise ValueError(f"Character {character_id} not found")
         if not character.is_owned_by(user_id):
             raise PermissionError("Only the owner can update this character's avatar")
-        expected_prefix = f"{account_handle}/{character_id}/"
-        if not key.startswith(expected_prefix):
-            raise PermissionError(
-                f"Avatar key does not belong to this character "
-                f"(expected prefix {expected_prefix!r})"
-            )
-        character.set_avatar(key)
+
+        if asset_id is not None:
+            asset = self.asset_repository.get_by_id(asset_id)
+            if asset is None:
+                raise ValueError(f"Asset {asset_id} not found")
+            if asset.user_id != user_id:
+                raise PermissionError("Asset does not belong to this user")
+            # MediaAssetType is the enum the asset aggregate carries; compare
+            # via ``.value`` so we don't import the enum here.
+            asset_type_str = getattr(asset.asset_type, "value", asset.asset_type)
+            if asset_type_str != "image":
+                raise ValueError(
+                    f"Avatar must reference an 'image' asset (got {asset_type_str!r})"
+                )
+
+        character.set_avatar_asset(asset_id)
         self.repository.save(character)
         return character
 

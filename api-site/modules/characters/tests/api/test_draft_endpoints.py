@@ -331,6 +331,61 @@ class TestBackgroundBonusesSurviveAbilityScoresStep:
         assert body["ability_scores"]["intelligence"] == 13
 
 
+class TestRename:
+    """``rename`` is a tiny name-only step bound to the persistent name
+    header in the wizard. It doesn't bump creation_step."""
+
+    def test_rename_updates_name_without_touching_creation_step(self, client, auth_as, owner):
+        auth_as(owner.id)
+        draft = client.post(
+            "/api/characters/draft",
+            json={"edition_code": "srd_5_2_1", "name": "Old Name"},
+        ).json()
+        original_step = draft["creation_step"]
+
+        response = client.patch(
+            f"/api/characters/draft/{draft['id']}",
+            json={"step": "rename", "rename": {"name": "New Name"}},
+        )
+        assert response.status_code == 200, response.text
+        body = response.json()
+        assert body["character_name"] == "New Name"
+        # rename is orthogonal to wizard step progression.
+        assert body["creation_step"] == original_step
+
+    def test_blank_name_rejected(self, client, auth_as, owner):
+        auth_as(owner.id)
+        draft = client.post(
+            "/api/characters/draft",
+            json={"edition_code": "srd_5_2_1", "name": "Solid"},
+        ).json()
+        # Empty string fails the schema's min_length=1 → 422.
+        response = client.patch(
+            f"/api/characters/draft/{draft['id']}",
+            json={"step": "rename", "rename": {"name": ""}},
+        )
+        assert response.status_code == 422
+        # Whitespace-only passes min_length but the handler strips + rejects → 400.
+        response = client.patch(
+            f"/api/characters/draft/{draft['id']}",
+            json={"step": "rename", "rename": {"name": "   "}},
+        )
+        assert response.status_code == 400
+
+    def test_only_owner_can_rename(self, client, auth_as, owner, other):
+        auth_as(owner.id)
+        draft = client.post(
+            "/api/characters/draft",
+            json={"edition_code": "srd_5_2_1", "name": "Mine"},
+        ).json()
+        auth_as(other.id)
+        response = client.patch(
+            f"/api/characters/draft/{draft['id']}",
+            json={"step": "rename", "rename": {"name": "Hijacked"}},
+        )
+        assert response.status_code == 403
+
+
 class TestFinalize:
     def _seed_complete(self, client, auth_as, owner):
         draft = _create_draft(client, auth_as, owner)

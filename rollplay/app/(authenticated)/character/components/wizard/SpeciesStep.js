@@ -13,10 +13,9 @@ import { THEME, COLORS } from '@/app/styles/colorTheme'
 import { useEditionSpecies } from '../../hooks/useReferenceData'
 import StepFooter from './StepFooter'
 
-export default function IdentityStep({ draft, onSave, onBack, onNext }) {
+export default function SpeciesStep({ draft, onSave, onBack, onNext }) {
   const { data: speciesList, isLoading } = useEditionSpecies(draft.edition_code)
   const [speciesCode, setSpeciesCode] = useState(draft.species_code || '')
-  const [name, setName] = useState(draft.character_name || '')
   const [extraLanguages, setExtraLanguages] = useState([])
   const [error, setError] = useState(null)
   const [saving, setSaving] = useState(false)
@@ -58,9 +57,11 @@ export default function IdentityStep({ draft, onSave, onBack, onNext }) {
     }
     setSaving(true)
     try {
+      // Name now lives in the persistent header (rename step), so this
+      // payload is species + languages only. Wire contract stays
+      // step='identity' since the backend handler key is unchanged.
       await onSave({
         species_code: speciesCode,
-        name: name.trim() || undefined,
         chosen_languages: validExtras,
       })
       onNext()
@@ -79,31 +80,13 @@ export default function IdentityStep({ draft, onSave, onBack, onNext }) {
     <div className="space-y-6">
       <header>
         <h2 className="text-xl font-semibold" style={{ color: THEME.textOnDark }}>
-          Identity & species
+          Species
         </h2>
         <p className="mt-1 text-sm" style={{ color: THEME.textSecondary }}>
           Your species determines speed, size, default languages and a handful
           of innate traits.
         </p>
       </header>
-
-      <div>
-        <label className="block text-sm font-medium mb-1" style={{ color: THEME.textSecondary }}>
-          Character name
-        </label>
-        <input
-          type="text"
-          maxLength={50}
-          value={name}
-          onChange={(e) => setName(e.target.value)}
-          className="w-full px-3 py-2 border rounded-sm focus:outline-none focus:ring-1"
-          style={{
-            backgroundColor: THEME.bgSecondary,
-            borderColor: THEME.borderDefault,
-            color: THEME.textOnDark,
-          }}
-        />
-      </div>
 
       <Combobox
         label="Species"

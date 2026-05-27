@@ -63,9 +63,18 @@ class Character(Base):
     is_draft = Column(Boolean, nullable=False, default=True, server_default="true")
     creation_step = Column(String(30), nullable=True)
 
-    # S3 key for the uploaded avatar. NULL ⇒ frontend renders /heroes.png default.
-    # Key shape: {account_name}#{account_tag}/{character_id}/{unique_id}_{filename}
-    avatar_s3_key = Column(String(255), nullable=True)
+    # FK to the MediaAsset (asset_type='image') used as this character's
+    # avatar. NULL ⇒ frontend renders /heroes.png default. SET NULL on the
+    # asset side so deleting an image from the library doesn't cascade-delete
+    # the character — just unlinks it.
+    avatar_asset_id = Column(
+        UUID(as_uuid=True),
+        ForeignKey("media_assets.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+
+    # Eager-load the avatar asset (joined load — tiny one-row hop).
+    avatar_asset = relationship("MediaAsset", foreign_keys=[avatar_asset_id], lazy="joined")
 
     created_at = Column(DateTime(timezone=True), nullable=False)
     updated_at = Column(DateTime(timezone=True), nullable=False)
