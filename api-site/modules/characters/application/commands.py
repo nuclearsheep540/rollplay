@@ -86,8 +86,14 @@ class UpdateCharacterDraft:
             raise ValueError(f"Character {character_id} not found")
         if not character.is_owned_by(user_id):
             raise PermissionError("Only the owner can update this draft")
-        if not character.is_draft:
-            raise ValueError("Character is finalised — use the runtime endpoint instead")
+        # Lock policy (matches DeleteCharacter): characters claimed by a
+        # campaign can't be edited via the wizard. Release from the campaign
+        # first. Drafts are never locked, so the create flow is unaffected;
+        # finalised-but-unclaimed characters become editable via this path.
+        if character.is_locked():
+            raise ValueError(
+                "Character is locked to a campaign — release it before editing"
+            )
 
         edition_code = character.edition_code
         handler = {

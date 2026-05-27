@@ -96,6 +96,12 @@ export default function CharacterWizard() {
   const [saveState, setSaveState] = useState('idle') // 'idle' | 'saving' | 'saved' | 'error'
   const [avatarPickerOpen, setAvatarPickerOpen] = useState(false)
   const [avatarError, setAvatarError] = useState(null)
+  // Set when the user clicks Finalize in this session — gates the
+  // post-finalize blank-render so the wizard doesn't briefly show
+  // finalised-character data before the route push lands. Edit-mode entries
+  // (loading an already-finalised character via ?id=…) leave this false,
+  // so the wizard renders normally for editing.
+  const [justFinalised, setJustFinalised] = useState(false)
 
   // Auto-create a draft the first time the wizard mounts with no ?id. Only
   // one edition exists today so we pick it without asking; the user can
@@ -127,17 +133,6 @@ export default function CharacterWizard() {
       setCurrentStep('species')
     }
   }, [draftIdFromUrl, draft?.id])
-
-  // Once a draft is finalised, redirect to the read-only sheet. Done in an
-  // effect rather than during render so we don't trigger a router setState
-  // from within another component's render phase.
-  // Skip when `return_campaign` is set — handleFinalize routes back to the
-  // dashboard drawer instead, and we don't want this effect to race ahead.
-  useEffect(() => {
-    if (draft && !draft.is_draft && !returnCampaignId) {
-      router.replace(`/character/${draft.id}`)
-    }
-  }, [draft?.id, draft?.is_draft, returnCampaignId, router])
 
   // Wrap PATCH-style mutations with the autosave state machine. ``persistStep``
   // returns the server's fresh response (so callers can read derived fields).
@@ -247,6 +242,7 @@ export default function CharacterWizard() {
   const handleFinalize = async () => {
     try {
       const finalised = await finalizeDraft.mutateAsync()
+      setJustFinalised(true)
       if (returnCampaignId) {
         try {
           sessionStorage.setItem('openCharacterModalForCampaign', returnCampaignId)
@@ -307,8 +303,10 @@ export default function CharacterWizard() {
   }
 
   // While the redirect-after-finalize effect runs, render nothing — the next
-  // tick will replace this view with the read-only sheet.
-  if (draft && !draft.is_draft) {
+  // tick will replace this view with the dashboard drawer. Scoped to
+  // ``justFinalised`` so edit-mode entries (?id=… targeting an already
+  // finalised character) render the wizard for editing instead of bailing.
+  if (draft && !draft.is_draft && justFinalised) {
     return null
   }
 

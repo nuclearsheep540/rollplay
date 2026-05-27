@@ -13,6 +13,7 @@ import {
   faTrash,
   faLock,
   faPlus,
+  faPenToSquare,
 } from '@fortawesome/free-solid-svg-icons'
 import { COLORS, THEME } from '@/app/styles/colorTheme'
 import Modal from '@/app/shared/components/Modal'
@@ -387,17 +388,30 @@ export default function CharacterManager({
       // this surface read darker than the wizard. No left border either:
       // the wedge avatar pane provides the visual division on its own.
       <div className="flex-1 p-6 overflow-y-auto">
-        {/* Drawer chrome — Close on the right, Delete on the left so the
-            destructive action stays away from the dismiss target. */}
+        {/* Drawer chrome — Close on the right, Edit + Delete on the left.
+            Edit reuses the wizard via ?id=… (same surface as create); the
+            backend's lock check (active_campaign) gates whether the PATCHes
+            land, so we disable the button locally for the same condition
+            to avoid a click-then-error round-trip. */}
         <div className="flex items-center justify-between mb-6">
-          <Button
-            variant="danger"
-            onClick={() => handleDeleteClick(selectedCharacter)}
-            disabled={selectedCharacter.active_game}
-          >
-            <FontAwesomeIcon icon={faTrash} className="mr-2" />
-            Delete
-          </Button>
+          <div className="flex items-center gap-3">
+            <Button
+              variant="primary"
+              onClick={() => router.push(`/character/create?id=${selectedCharacter.id}`)}
+              disabled={Boolean(selectedCharacter.active_campaign)}
+            >
+              <FontAwesomeIcon icon={faPenToSquare} className="mr-2" />
+              Edit
+            </Button>
+            <Button
+              variant="danger"
+              onClick={() => handleDeleteClick(selectedCharacter)}
+              disabled={Boolean(selectedCharacter.active_campaign)}
+            >
+              <FontAwesomeIcon icon={faTrash} className="mr-2" />
+              Delete
+            </Button>
+          </div>
           <button
             onClick={() => {
               setSelectedCharacter(null)
