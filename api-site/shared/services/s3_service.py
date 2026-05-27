@@ -162,6 +162,33 @@ class S3Service:
         safe_filename = "".join(c for c in filename if c.isalnum() or c in ".-_")
         return f"{asset_type}/{user_id}/{unique_id}_{safe_filename}"
 
+    @staticmethod
+    def generate_character_avatar_key(
+        account_handle: str, character_id: str, filename: str
+    ) -> str:
+        """Build the S3 key for a character avatar upload.
+
+        Pattern: ``{account_handle}/{character_id}/{unique_id}_{filename}`` —
+        chosen so a human browsing the bucket can navigate by user handle.
+        ``account_handle`` is the player's ``{account_name}#{account_tag}``
+        (e.g. ``foobar#1234``). The ``#`` is allowed in S3 keys; it shows
+        as-is in the S3 console and boto3 URL-encodes it to ``%23`` when
+        building presigned URLs.
+
+        Args:
+            account_handle: ``{account_name}#{account_tag}`` (must be set).
+            character_id: UUID of the character the avatar belongs to.
+            filename: Original filename from the upload picker.
+
+        Returns:
+            Unique S3 key.
+        """
+        if not account_handle:
+            raise ValueError("account_handle is required (user must have set an account name)")
+        unique_id = uuid.uuid4().hex[:8]
+        safe_filename = "".join(c for c in filename if c.isalnum() or c in ".-_")
+        return f"{account_handle}/{character_id}/{unique_id}_{safe_filename}"
+
 
 # Dependency injection helper
 _s3_service: Optional[S3Service] = None

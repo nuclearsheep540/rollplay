@@ -7,6 +7,8 @@
 
 import { THEME, COLORS } from '@/app/styles/colorTheme'
 
+import CharacterAvatarPane from '../CharacterAvatarPane'
+
 const SRD_ATTRIBUTION =
   'Content from D&D SRD 5.2.1, © Wizards of the Coast, used under CC BY 4.0.'
 
@@ -69,56 +71,81 @@ export default function WizardChrome({
   onJumpStep,
   saveState,
   draftId,
+  avatarUrl,
+  avatarIsUploading,
+  avatarError,
+  onAvatarFileChosen,
   children,
 }) {
   const currentIdx = steps.findIndex((s) => s.id === currentStep)
 
   return (
+    // Two-column layout, each filling the viewport below the authenticated
+    // layout's SiteHeader. Avatar pane fixed at ~33vw on the left with a
+    // forward-slash wedge eating into its right edge; wizard content fills
+    // the remaining space on the right.
     <main
-      className="flex-1 overflow-y-auto"
+      className="flex-1 flex min-h-0 overflow-hidden"
       style={{ backgroundColor: THEME.bgPrimary, color: THEME.textPrimary }}
     >
-      <div className="mx-auto max-w-4xl px-4 py-8 sm:px-8">
-        {/* Progress strip */}
-        <div className="mb-6 rounded-sm border px-4 py-3" style={{
-          backgroundColor: COLORS.carbon,
-          borderColor: THEME.borderSubtle,
-        }}>
-          <div className="flex items-center justify-between gap-3">
-            <h1
-              className="text-2xl font-bold font-[family-name:var(--font-metamorphous)]"
-              style={{ color: THEME.textOnDark }}
-            >
-              Character Creation
-            </h1>
-            <SaveIndicator state={saveState} />
-          </div>
-          <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-2">
-            {steps.map((s, idx) => (
-              <StepDot
-                key={s.id}
-                step={{ ...s, idx }}
-                isCurrent={idx === currentIdx}
-                isComplete={idx < currentIdx}
-                clickable={Boolean(draftId) && idx <= currentIdx}
-                onClick={() => onJumpStep(s.id)}
-              />
-            ))}
-          </div>
-        </div>
+      {/* Left: avatar pane. Width set in vw so it scales smoothly across
+          viewports. (Responsive narrow-screen guard removed because the
+          Tailwind ``lg:block`` utility wasn't being JIT-compiled until a
+          dev-server restart; if a tablet/mobile layout is needed later,
+          re-introduce with an inline media query or restart-safe approach.) */}
+      <div className="shrink-0" style={{ width: '33vw' }}>
+        <CharacterAvatarPane
+          avatarUrl={avatarUrl}
+          isUploading={avatarIsUploading}
+          error={avatarError}
+          onFileChosen={onAvatarFileChosen}
+        />
+      </div>
 
-        {/* Step body */}
-        <div
-          className="rounded-sm border p-6 sm:p-8"
-          style={{ backgroundColor: COLORS.carbon, borderColor: THEME.borderSubtle, color: THEME.textOnDark }}
-        >
-          {children}
-        </div>
+      {/* Right: scrollable wizard column. */}
+      <div className="flex-1 overflow-y-auto">
+        <div className="mx-auto max-w-3xl px-4 py-8 sm:px-8">
+          {/* Progress strip */}
+          <div className="mb-6 rounded-sm border px-4 py-3" style={{
+            backgroundColor: COLORS.carbon,
+            borderColor: THEME.borderSubtle,
+          }}>
+            <div className="flex items-center justify-between gap-3">
+              <h1
+                className="text-2xl font-bold font-[family-name:var(--font-metamorphous)]"
+                style={{ color: THEME.textOnDark }}
+              >
+                Character Creation
+              </h1>
+              <SaveIndicator state={saveState} />
+            </div>
+            <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-2">
+              {steps.map((s, idx) => (
+                <StepDot
+                  key={s.id}
+                  step={{ ...s, idx }}
+                  isCurrent={idx === currentIdx}
+                  isComplete={idx < currentIdx}
+                  clickable={Boolean(draftId) && idx <= currentIdx}
+                  onClick={() => onJumpStep(s.id)}
+                />
+              ))}
+            </div>
+          </div>
 
-        {/* SRD attribution */}
-        <p className="mt-4 text-xs text-center" style={{ color: THEME.textPrimary, opacity: 0.6 }}>
-          {SRD_ATTRIBUTION}
-        </p>
+          {/* Step body */}
+          <div
+            className="rounded-sm border p-6 sm:p-8"
+            style={{ backgroundColor: COLORS.carbon, borderColor: THEME.borderSubtle, color: THEME.textOnDark }}
+          >
+            {children}
+          </div>
+
+          {/* SRD attribution */}
+          <p className="mt-4 text-xs text-center" style={{ color: THEME.textPrimary, opacity: 0.6 }}>
+            {SRD_ATTRIBUTION}
+          </p>
+        </div>
       </div>
     </main>
   )

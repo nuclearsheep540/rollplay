@@ -129,8 +129,26 @@ class CharacterResponse(BaseModel):
     display_name: str
     derived: DerivedStats
 
+    # Presigned GET URL for the uploaded avatar — short-lived. ``None`` ⇒
+    # frontend renders the /heroes.png default.
+    avatar_url: Optional[str] = None
+
     created_at: datetime
     updated_at: datetime
+
+
+# --------------------------------------------------------------------------- #
+# Avatar upload (3-step S3 presigned-URL flow, same pattern as the library)
+# --------------------------------------------------------------------------- #
+
+
+class AvatarUploadUrlResponse(BaseModel):
+    upload_url: str = Field(..., description="Presigned PUT URL for direct S3 upload")
+    key: str = Field(..., description="S3 key to send back via /avatar/confirm")
+
+
+class AvatarConfirmRequest(BaseModel):
+    key: str = Field(..., description="S3 key returned by /avatar/upload-url after the PUT succeeded")
 
 
 # --------------------------------------------------------------------------- #

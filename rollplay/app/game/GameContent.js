@@ -293,6 +293,10 @@ export default function GameContent() {
 
   // Campaign metadata for overlay (fetched from api-site when campaignId is set)
   const [campaignMeta, setCampaignMeta] = useState(null);
+  // { [user_id]: username } — same source the campaign drawer uses, so names
+  // are consistent across dashboard and game runtime. Populated from the
+  // /api/campaigns/{id} response, which now embeds the full member list.
+  const [campaignMembersById, setCampaignMembersById] = useState({});
 
   // Current user's character locked to THIS campaign. Drives the CHARACTER
   // tab visibility and content. Returns ``undefined`` (not null) until the
@@ -688,6 +692,11 @@ export default function GameContent() {
             heroImage: data.hero_image,
             heroImageAsset: data.hero_image_asset || null,
           });
+          const membersById = {};
+          for (const m of (data.members || [])) {
+            membersById[m.user_id] = m.username;
+          }
+          setCampaignMembersById(membersById);
         }
       })
       .catch(err => console.warn('⚠️ Campaign metadata fetch error:', err));
@@ -2337,13 +2346,18 @@ export default function GameContent() {
 
       {/* Loading Gate Overlay — full-screen themed loading screen */}
       {gateVisible && (() => {
-        const seated = gameSeats.filter(s => s.userId !== 'empty').map(s => ({ name: s.playerName, connected: true }));
-        const inLobby = lobbyUsers.filter(u => u.status === 'connected').map(u => ({ name: u.name, connected: true }));
-        const pendingLobby = lobbyUsers.filter(u => u.status !== 'connected').map(u => ({ name: u.name, connected: false }));
-        const seenNames = new Set();
+        // Resolve names off the campaign members lookup (same source the
+        // dashboard drawer uses). Fall back to live MongoDB-sourced metadata
+        // and then to whatever the WebSocket gave us — never to a raw UUID.
+        const nameFor = (userId, fallback) =>
+          campaignMembersById[userId] || playerMetadata[userId]?.player_name || fallback || '';
+        const seated = gameSeats.filter(s => s.userId !== 'empty').map(s => ({ userId: s.userId, name: nameFor(s.userId, s.playerName), connected: true }));
+        const inLobby = lobbyUsers.filter(u => u.status === 'connected').map(u => ({ userId: u.user_id, name: nameFor(u.user_id, u.name), connected: true }));
+        const pendingLobby = lobbyUsers.filter(u => u.status !== 'connected').map(u => ({ userId: u.user_id, name: nameFor(u.user_id, u.name), connected: false }));
+        const seenIds = new Set();
         const fellowship = [...seated, ...inLobby, ...pendingLobby].filter(p => {
-          if (seenNames.has(p.name)) return false;
-          seenNames.add(p.name);
+          if (seenIds.has(p.userId)) return false;
+          seenIds.add(p.userId);
           return true;
         });
 

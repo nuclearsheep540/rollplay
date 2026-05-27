@@ -638,15 +638,16 @@ class SelectCharacterForCampaign:
             user = self.user_repo.get_by_id(user_id)
             player_name = user.screen_name if user else ""
 
-        class_names = [ci.character_class.value for ci in character.character_classes]
+        class_names = [entry.class_code for entry in character.class_entries]
 
         character_data = {
             "user_id": str(user_id),
             "player_name": player_name,
+            "campaign_role": "player",
             "character_id": str(character.id),
             "character_name": character.character_name,
             "character_class": class_names,
-            "character_race": character.character_race.value,
+            "character_race": character.species_code,
             "level": character.level,
             "hp_current": character.hp_current,
             "hp_max": character.hp_max,

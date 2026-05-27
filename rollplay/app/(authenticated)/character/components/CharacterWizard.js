@@ -15,6 +15,7 @@ import {
   useUpdateDraft,
 } from '../hooks/useCharacterDraft'
 import { useEditions } from '../hooks/useReferenceData'
+import { useUploadCharacterAvatar } from '../hooks/useUploadCharacterAvatar'
 import { THEME, COLORS } from '@/app/styles/colorTheme'
 
 import WizardChrome from './wizard/WizardChrome'
@@ -68,9 +69,14 @@ export default function CharacterWizard() {
   const createDraft = useCreateDraft()
   const updateDraft = useUpdateDraft(draftIdFromUrl)
   const finalizeDraft = useFinalizeDraft(draftIdFromUrl)
+  // ``draft?.id`` (not ``draftIdFromUrl``) so the hook re-binds the moment the
+  // server hands back a freshly-created draft, even before the URL search-param
+  // sync settles.
+  const uploadAvatar = useUploadCharacterAvatar(draft?.id ?? draftIdFromUrl)
 
   const [currentStep, setCurrentStep] = useState('edition')
   const [saveState, setSaveState] = useState('idle') // 'idle' | 'saving' | 'saved' | 'error'
+  const [avatarError, setAvatarError] = useState(null)
 
   // Sync wizard step with the server's view of the draft on load / reload.
   useEffect(() => {
@@ -115,6 +121,87 @@ export default function CharacterWizard() {
     if (returnCampaignId) params.set('return_campaign', returnCampaignId)
     router.replace(`/character/create?${params.toString()}`)
     setCurrentStep('identity')
+  }
+
+  /**
+   * Avatar can be uploaded at any time — even before the player has clicked
+   * Start on the Edition step. If no draft exists yet we silently auto-create
+   * one with placeholder defaults (the player can rename on Edition / Identity
+   * later), then upload the file. From the user's POV: pick file → done.
+   */
+  const handleAvatarFileChosen = async (file) => {
+    setAvatarError(null)
+    try {
+      // Lazily ensure a draft. ``draft`` (from the query cache) is the source
+      // of truth — ``draftIdFromUrl`` may lag for a render cycle right after
+      // create. Either way, once this resolves we have a real character id.
+      let activeDraft = draft
+      if (!activeDraft) {
+        const editionCode = editions?.[0]?.code ?? 'srd_5_2_1'
+        activeDraft = await createDraft.mutateAsync({
+          editionCode,
+          name: 'Unnamed character',
+        })
+        const params = new URLSearchParams({ id: activeDraft.id })
+        if (returnCampaignId) params.set('return_campaign', returnCampaignId)
+        router.replace(`/character/create?${params.toString()}`)
+      }
+      // Hook is bound to draft?.id at render time; if we just auto-created the
+      // draft, the hook is still bound to undefined this render. Call the
+      // mutation function directly with the fresh id by re-running through the
+      // characterId-scoped path. Easiest is to do the same 3 HTTP calls inline.
+      await uploadDirectly(activeDraft.id, file)
+    } catch (err) {
+      setAvatarError(err.message || 'Avatar upload failed')
+    }
+  }
+
+  // Direct-call avatar upload that doesn't rely on the React-bound hook's
+  // closure over characterId — used when the draft was created on this same
+  // event so we have its id but the hook hasn't re-rendered yet.
+  const uploadDirectly = async (characterId, file) => {
+    // Reuses the same 3-step contract the hook follows. authFetch is on the
+    // window via the shared util used everywhere; we go through fetch wrappers
+    // for parity with the rest of the app.
+    const { authFetch } = await import('@/app/shared/utils/authFetch')
+    const qs = new URLSearchParams({
+      filename: file.name,
+      content_type: file.type || 'application/octet-stream',
+    })
+    const urlRes = await authFetch(
+      `/api/characters/${characterId}/avatar/upload-url?${qs}`,
+      { credentials: 'include' },
+    )
+    const urlBody = await urlRes.json().catch(() => ({}))
+    if (!urlRes.ok) {
+      throw new Error(urlBody?.detail || 'Could not get upload URL')
+    }
+    const { upload_url, key } = urlBody
+
+    const putRes = await fetch(upload_url, {
+      method: 'PUT',
+      headers: { 'Content-Type': file.type || 'application/octet-stream' },
+      body: file,
+    })
+    if (!putRes.ok) {
+      throw new Error(`Upload to S3 failed (${putRes.status})`)
+    }
+
+    const confirmRes = await authFetch(
+      `/api/characters/${characterId}/avatar/confirm`,
+      {
+        method: 'POST',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ key }),
+      },
+    )
+    const confirmBody = await confirmRes.json().catch(() => ({}))
+    if (!confirmRes.ok) {
+      throw new Error(confirmBody?.detail || 'Confirm step failed')
+    }
+    // Force a re-fetch so derived response (incl. presigned avatar_url) lands.
+    await draftQuery.refetch()
   }
 
   const handleAdvance = (stepId) => () => setCurrentStep(stepId)
@@ -178,6 +265,10 @@ export default function CharacterWizard() {
       onJumpStep={(id) => draft && setCurrentStep(id)}
       saveState={saveState}
       draftId={draft?.id}
+      avatarUrl={draft?.avatar_url}
+      avatarIsUploading={createDraft.isPending || uploadAvatar.isPending}
+      avatarError={avatarError}
+      onAvatarFileChosen={handleAvatarFileChosen}
     >
       {currentStep === 'edition' && (
         <EditionStep

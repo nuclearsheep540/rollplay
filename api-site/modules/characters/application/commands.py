@@ -273,6 +273,36 @@ class DiscardCharacterDraft:
         return self.repository.delete(character_id)
 
 
+class SetCharacterAvatar:
+    """POST /api/characters/{id}/avatar/confirm — persist the S3 key after upload.
+
+    The endpoint sanity-checks ownership and that the key matches the
+    character's expected ``{account_handle}/{character_id}/`` prefix (so a
+    player can't claim someone else's S3 object as their character avatar).
+    """
+
+    def __init__(self, repository: CharacterRepository):
+        self.repository = repository
+
+    def execute(
+        self, *, character_id: UUID, user_id: UUID, account_handle: str, key: str
+    ) -> CharacterAggregate:
+        character = self.repository.get_by_id(character_id)
+        if character is None:
+            raise ValueError(f"Character {character_id} not found")
+        if not character.is_owned_by(user_id):
+            raise PermissionError("Only the owner can update this character's avatar")
+        expected_prefix = f"{account_handle}/{character_id}/"
+        if not key.startswith(expected_prefix):
+            raise PermissionError(
+                f"Avatar key does not belong to this character "
+                f"(expected prefix {expected_prefix!r})"
+            )
+        character.set_avatar(key)
+        self.repository.save(character)
+        return character
+
+
 class DeleteCharacter:
     """DELETE /api/characters/{id} — soft-delete a finalised character.
 

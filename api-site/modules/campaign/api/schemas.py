@@ -45,6 +45,20 @@ class HeroImageAssetInfo(BaseModel):
     filename: Optional[str] = None
 
 
+class CampaignMemberResponse(BaseModel):
+    """Campaign member with character details"""
+    user_id: str
+    username: str  # screen_name or email
+    account_tag: Optional[str] = None
+    campaign_role: str  # dm, player, spectator, mod
+    character_id: Optional[str] = None
+    character_name: Optional[str] = None
+    character_level: Optional[int] = None
+    character_class: Optional[str] = None  # Multi-class formatted
+    character_race: Optional[str] = None
+    is_host: bool = False  # Kept for frontend backward compat (true when role=dm)
+
+
 class CampaignResponse(BaseModel):
     """Full campaign response with sessions - used for detail view"""
     id: str
@@ -60,6 +74,7 @@ class CampaignResponse(BaseModel):
     invited_player_ids: List[str] = []
     player_ids: List[str] = []
     member_ids: List[str] = []  # All joined members regardless of role (excludes INVITED)
+    members: List[CampaignMemberResponse] = []  # Full member detail (username + character)
     total_sessions: int = 0
     active_sessions: int = 0
     invited_count: int = 0
@@ -105,17 +120,3 @@ class CampaignSetRoleResponse(BaseModel):
     campaign_id: str
     target_user_id: str
     new_role: str
-
-
-class CampaignMemberResponse(BaseModel):
-    """Campaign member with character details"""
-    user_id: str
-    username: str  # screen_name or email
-    account_tag: Optional[str] = None
-    campaign_role: str  # dm, player, spectator, mod
-    character_id: Optional[str] = None
-    character_name: Optional[str] = None
-    character_level: Optional[int] = None
-    character_class: Optional[str] = None  # Multi-class formatted
-    character_race: Optional[str] = None
-    is_host: bool = False  # Kept for frontend backward compat (true when role=dm)

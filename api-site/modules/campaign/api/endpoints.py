@@ -86,8 +86,13 @@ def _build_hero_image_asset_info(campaign: CampaignAggregate, s3_service: Option
     )
 
 
-def _to_campaign_response(campaign: CampaignAggregate, user_repo: Optional[UserRepository] = None, s3_service: Optional[S3Service] = None) -> CampaignResponse:
-    """Convert CampaignAggregate to CampaignResponse"""
+def _to_campaign_response(campaign: CampaignAggregate, user_repo: Optional[UserRepository] = None, s3_service: Optional[S3Service] = None, campaign_repo: Optional[CampaignRepository] = None, db: Optional[Session] = None) -> CampaignResponse:
+    """Convert CampaignAggregate to CampaignResponse.
+
+    Pass ``campaign_repo`` and ``db`` to populate the ``members`` list with full
+    username/character detail (same source the dashboard's member list uses).
+    Without them, ``members`` is left empty.
+    """
     # Campaign now only stores session_ids, not full session objects
     # Frontend should fetch sessions separately from /api/sessions/campaign/{id}
 
@@ -98,6 +103,11 @@ def _to_campaign_response(campaign: CampaignAggregate, user_repo: Optional[UserR
         dm_user = user_repo.get_by_id(dm_id)
         if dm_user:
             host_screen_name = dm_user.screen_name
+
+    members = []
+    if campaign_repo and db:
+        from modules.campaign.application.queries import GetCampaignMembers
+        members = GetCampaignMembers(campaign_repo, db).execute(campaign.id)
 
     return CampaignResponse(
         id=str(campaign.id),
@@ -113,6 +123,7 @@ def _to_campaign_response(campaign: CampaignAggregate, user_repo: Optional[UserR
         invited_player_ids=[str(pid) for pid in campaign.invited_player_ids],
         player_ids=[str(pid) for pid in campaign.player_ids],
         member_ids=[str(mid) for mid in campaign.get_all_member_ids()],
+        members=members,
         total_sessions=campaign.get_total_sessions(),
         active_sessions=0,  # TODO: Query session module for active count
         invited_count=campaign.get_invited_count(),
@@ -299,7 +310,8 @@ async def get_campaign(
     campaign_id: UUID,
     user_id: UUID = Depends(get_current_user_id),
     campaign_repo: CampaignRepository = Depends(campaign_repository),
-    s3_service: S3Service = Depends(get_s3_service)
+    s3_service: S3Service = Depends(get_s3_service),
+    db: Session = Depends(get_db),
 ):
     """Get campaign by ID with all sessions"""
     try:
@@ -319,7 +331,7 @@ async def get_campaign(
                 detail="Access denied - only campaign members can view campaign details"
             )
 
-        return _to_campaign_response(campaign, s3_service=s3_service)
+        return _to_campaign_response(campaign, s3_service=s3_service, campaign_repo=campaign_repo, db=db)
 
     except ValueError as e:
         raise HTTPException(
@@ -587,6 +599,7 @@ async def get_campaign_party(
     campaign_repo: CampaignRepository = Depends(campaign_repository),
     character_repo: CharacterRepository = Depends(get_character_repository),
     registry: RulesetRegistry = Depends(get_ruleset_registry),
+    s3_service: S3Service = Depends(get_s3_service),
 ):
     """Read-only party view — every finalised character locked to this campaign.
 
@@ -606,7 +619,7 @@ async def get_campaign_party(
     # the character endpoints response-builder helper.
     from modules.characters.api.endpoints import _to_character_response
     characters = GetCampaignParty(character_repo).execute(campaign_id)
-    return [_to_character_response(c, registry) for c in characters]
+    return [_to_character_response(c, registry, s3_service) for c in characters]
 
 
 # Character selection endpoints

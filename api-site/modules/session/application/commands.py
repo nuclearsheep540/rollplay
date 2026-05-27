@@ -260,7 +260,7 @@ class StartSession:
             character_contract = None
             character = self.character_repo.get_user_character_for_campaign(user_id, session.campaign_id)
             if character:
-                class_names = [class_info.character_class.value for class_info in character.character_classes]
+                class_names = [entry.class_code for entry in character.class_entries]
                 character_contract = PlayerCharacter(
                     user_id=str(user_id),
                     player_name=player_name,
@@ -268,7 +268,7 @@ class StartSession:
                     character_id=str(character.id),
                     character_name=character.character_name,
                     character_class=class_names,
-                    character_race=character.character_race.value,
+                    character_race=character.species_code,
                     level=character.level,
                     hp_current=character.hp_current,
                     hp_max=character.hp_max,

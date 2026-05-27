@@ -10,10 +10,12 @@ skills) live in edition_endpoints.py.
 from typing import List, Optional
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 
 from modules.characters.api.schemas import (
     AsiChoice,
+    AvatarConfirmRequest,
+    AvatarUploadUrlResponse,
     CharacterResponse,
     CreateDraftRequest,
     DerivedSaveModifier,
@@ -31,6 +33,7 @@ from modules.characters.application.commands import (
     DiscardCharacterDraft,
     FinalizeCharacterDraft,
     LevelUpCharacter,
+    SetCharacterAvatar,
     UpdateCharacterDraft,
     UpdateRuntimeState,
 )
@@ -49,8 +52,11 @@ from modules.characters.domain.character_aggregate import (
 )
 from modules.characters.repositories.character_repository import CharacterRepository
 from modules.characters.repositories.edition_repository import EditionRepository
+from modules.user.dependencies.providers import user_repository as get_user_repository
+from modules.user.repositories.user_repository import UserRepository
 from shared.dependencies.auth import get_current_user_id
 from shared.rulesets.registry import RulesetRegistry
+from shared.services.s3_service import S3Service, get_s3_service
 
 
 router = APIRouter()
@@ -105,10 +111,23 @@ def _build_derived_stats(
 
 
 def _to_character_response(
-    character: CharacterAggregate, registry: RulesetRegistry
+    character: CharacterAggregate,
+    registry: RulesetRegistry,
+    s3_service: Optional[S3Service] = None,
 ) -> CharacterResponse:
     """Compose the full sheet response, joining stored state with ruleset-derived values."""
     derived = _build_derived_stats(character, registry)
+    # Avatar URL — short-lived presigned GET. Null when no upload yet OR when
+    # this helper is called from a context that didn't inject s3_service
+    # (e.g. legacy callers); frontend treats null as "show /heroes.png".
+    avatar_url: Optional[str] = None
+    if character.avatar_s3_key and s3_service is not None:
+        try:
+            avatar_url = s3_service.generate_download_url(character.avatar_s3_key)
+        except Exception:
+            # Don't fail the whole sheet load over a transient S3 issue —
+            # frontend falls back to the default placeholder.
+            avatar_url = None
     return CharacterResponse(
         id=character.id,
         user_id=character.user_id,
@@ -161,6 +180,7 @@ def _to_character_response(
         creation_step=character.creation_step,
         display_name=character.get_display_name(),
         derived=derived,
+        avatar_url=avatar_url,
         created_at=character.created_at,
         updated_at=character.updated_at,
     )
@@ -183,10 +203,11 @@ async def list_my_characters(
     user_id: UUID = Depends(get_current_user_id),
     character_repo: CharacterRepository = Depends(get_character_repository),
     registry: RulesetRegistry = Depends(get_ruleset_registry),
+    s3_service: S3Service = Depends(get_s3_service),
 ):
     """Every character (draft or finalised) owned by the current user."""
     characters = GetCharactersByUser(character_repo).execute(user_id)
-    return [_to_character_response(c, registry) for c in characters]
+    return [_to_character_response(c, registry, s3_service) for c in characters]
 
 
 @router.get("/{character_id}", response_model=CharacterResponse)
@@ -195,6 +216,7 @@ async def get_character(
     user_id: UUID = Depends(get_current_user_id),
     character_repo: CharacterRepository = Depends(get_character_repository),
     registry: RulesetRegistry = Depends(get_ruleset_registry),
+    s3_service: S3Service = Depends(get_s3_service),
 ):
     character = GetCharacterById(character_repo).execute(character_id)
     if character is None:
@@ -205,7 +227,7 @@ async def get_character(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Only the owner can view this character directly",
         )
-    return _to_character_response(character, registry)
+    return _to_character_response(character, registry, s3_service)
 
 
 # --------------------------------------------------------------------------- #
@@ -220,13 +242,14 @@ async def create_draft(
     character_repo: CharacterRepository = Depends(get_character_repository),
     edition_repo: EditionRepository = Depends(get_edition_repository),
     registry: RulesetRegistry = Depends(get_ruleset_registry),
+    s3_service: S3Service = Depends(get_s3_service),
 ):
     try:
         command = CreateCharacterDraft(character_repo, edition_repo, registry)
         character = command.execute(
             user_id=user_id, edition_code=request.edition_code, name=request.name
         )
-        return _to_character_response(character, registry)
+        return _to_character_response(character, registry, s3_service)
     except (ValueError, KeyError) as exc:
         raise _http(exc)
 
@@ -238,6 +261,7 @@ async def update_draft(
     user_id: UUID = Depends(get_current_user_id),
     character_repo: CharacterRepository = Depends(get_character_repository),
     registry: RulesetRegistry = Depends(get_ruleset_registry),
+    s3_service: S3Service = Depends(get_s3_service),
 ):
     # Pick the payload that matches the declared step. The schema enforces shape;
     # the command enforces semantics (codes exist, picks match offered options).
@@ -262,7 +286,7 @@ async def update_draft(
             step=request.step,
             payload=payload_model.model_dump(by_alias=True),
         )
-        return _to_character_response(character, registry)
+        return _to_character_response(character, registry, s3_service)
     except (ValueError, KeyError, PermissionError) as exc:
         raise _http(exc)
 
@@ -273,11 +297,12 @@ async def finalize_draft(
     user_id: UUID = Depends(get_current_user_id),
     character_repo: CharacterRepository = Depends(get_character_repository),
     registry: RulesetRegistry = Depends(get_ruleset_registry),
+    s3_service: S3Service = Depends(get_s3_service),
 ):
     try:
         command = FinalizeCharacterDraft(character_repo)
         character = command.execute(character_id=character_id, user_id=user_id)
-        return _to_character_response(character, registry)
+        return _to_character_response(character, registry, s3_service)
     except (ValueError, PermissionError) as exc:
         raise _http(exc)
 
@@ -324,6 +349,91 @@ async def delete_character(
 
 
 # --------------------------------------------------------------------------- #
+# Avatar upload — 3-step S3 presigned-URL flow
+# --------------------------------------------------------------------------- #
+
+
+def _resolve_account_handle(user_id: UUID, user_repo: UserRepository) -> str:
+    """Return ``{account_name}#{account_tag}`` for the user, or raise.
+
+    The wizard ensures users set an account name before reaching the upload
+    step, but we double-check here so a stray API caller can't slip an
+    incomplete handle into the S3 keyspace.
+    """
+    user = user_repo.get_by_id(user_id)
+    if user is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
+    if not user.account_name or not user.account_tag:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Set your account name before uploading avatars",
+        )
+    return f"{user.account_name}#{user.account_tag}"
+
+
+@router.get("/{character_id}/avatar/upload-url", response_model=AvatarUploadUrlResponse)
+async def get_avatar_upload_url(
+    character_id: UUID,
+    filename: str = Query(..., description="Original filename, e.g. portrait.png"),
+    content_type: str = Query(..., description="MIME type, e.g. image/png"),
+    user_id: UUID = Depends(get_current_user_id),
+    character_repo: CharacterRepository = Depends(get_character_repository),
+    user_repo: UserRepository = Depends(get_user_repository),
+    s3_service: S3Service = Depends(get_s3_service),
+):
+    """Step 1 of avatar upload — generate a presigned PUT URL.
+
+    Owner-only. The key is scoped to ``{account_handle}/{character_id}/`` so
+    confirm-step validation can verify the upload landed in the right place.
+    """
+    character = character_repo.get_by_id(character_id)
+    if character is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Character not found")
+    if not character.is_owned_by(user_id):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Only the owner can upload an avatar for this character",
+        )
+    account_handle = _resolve_account_handle(user_id, user_repo)
+    key = S3Service.generate_character_avatar_key(
+        account_handle=account_handle,
+        character_id=str(character_id),
+        filename=filename,
+    )
+    upload_url = s3_service.generate_upload_url(key, content_type)
+    return AvatarUploadUrlResponse(upload_url=upload_url, key=key)
+
+
+@router.post("/{character_id}/avatar/confirm", response_model=CharacterResponse)
+async def confirm_avatar_upload(
+    character_id: UUID,
+    request: AvatarConfirmRequest,
+    user_id: UUID = Depends(get_current_user_id),
+    character_repo: CharacterRepository = Depends(get_character_repository),
+    user_repo: UserRepository = Depends(get_user_repository),
+    registry: RulesetRegistry = Depends(get_ruleset_registry),
+    s3_service: S3Service = Depends(get_s3_service),
+):
+    """Step 3 of avatar upload — confirm the S3 PUT landed, persist the key.
+
+    Validates ownership AND that the key starts with the expected
+    ``{account_handle}/{character_id}/`` prefix (so a caller can't claim
+    someone else's S3 object as their avatar).
+    """
+    account_handle = _resolve_account_handle(user_id, user_repo)
+    try:
+        character = SetCharacterAvatar(character_repo).execute(
+            character_id=character_id,
+            user_id=user_id,
+            account_handle=account_handle,
+            key=request.key,
+        )
+        return _to_character_response(character, registry, s3_service)
+    except (ValueError, PermissionError) as exc:
+        raise _http(exc)
+
+
+# --------------------------------------------------------------------------- #
 # Runtime
 # --------------------------------------------------------------------------- #
 
@@ -335,6 +445,7 @@ async def update_runtime(
     user_id: UUID = Depends(get_current_user_id),
     character_repo: CharacterRepository = Depends(get_character_repository),
     registry: RulesetRegistry = Depends(get_ruleset_registry),
+    s3_service: S3Service = Depends(get_s3_service),
 ):
     updates = request.model_dump(exclude_unset=True)
     if not updates:
@@ -347,7 +458,7 @@ async def update_runtime(
         character = command.execute(
             character_id=character_id, user_id=user_id, updates=updates
         )
-        return _to_character_response(character, registry)
+        return _to_character_response(character, registry, s3_service)
     except (ValueError, PermissionError) as exc:
         raise _http(exc)
 
@@ -363,6 +474,7 @@ async def preview_level_up(
     user_id: UUID = Depends(get_current_user_id),
     character_repo: CharacterRepository = Depends(get_character_repository),
     registry: RulesetRegistry = Depends(get_ruleset_registry),
+    s3_service: S3Service = Depends(get_s3_service),
 ):
     character = GetCharacterById(character_repo).execute(character_id)
     if character is None:
@@ -411,6 +523,7 @@ async def apply_level_up(
     user_id: UUID = Depends(get_current_user_id),
     character_repo: CharacterRepository = Depends(get_character_repository),
     registry: RulesetRegistry = Depends(get_ruleset_registry),
+    s3_service: S3Service = Depends(get_s3_service),
 ):
     try:
         command = LevelUpCharacter(character_repo, registry)
@@ -424,6 +537,6 @@ async def apply_level_up(
             feat_choice=request.feat_choice.model_dump() if request.feat_choice else None,
             skill_choices=request.skill_choices,
         )
-        return _to_character_response(character, registry)
+        return _to_character_response(character, registry, s3_service)
     except (ValueError, KeyError, PermissionError) as exc:
         raise _http(exc)

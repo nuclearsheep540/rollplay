@@ -157,6 +157,7 @@ class CharacterRepository:
             created_at=model.created_at,
             updated_at=model.updated_at,
             is_deleted=bool(model.is_deleted),
+            avatar_s3_key=model.avatar_s3_key,
         )
 
     # -------------------------------------------------------------- reads
@@ -225,6 +226,7 @@ class CharacterRepository:
                 languages=list(aggregate.languages),
                 is_draft=aggregate.is_draft,
                 creation_step=aggregate.creation_step,
+                avatar_s3_key=aggregate.avatar_s3_key,
                 created_at=aggregate.created_at,
                 updated_at=aggregate.updated_at,
                 is_deleted=aggregate.is_deleted,
@@ -261,6 +263,7 @@ class CharacterRepository:
             model.languages = list(aggregate.languages)
             model.is_draft = aggregate.is_draft
             model.creation_step = aggregate.creation_step
+            model.avatar_s3_key = aggregate.avatar_s3_key
             model.updated_at = aggregate.updated_at
             model.is_deleted = aggregate.is_deleted
             # Replace-style sync for all join tables — these are small and
