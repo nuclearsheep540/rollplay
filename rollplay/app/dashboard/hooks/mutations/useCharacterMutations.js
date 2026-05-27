@@ -60,65 +60,6 @@ export function useReleaseCharacter() {
   })
 }
 
-/**
- * Mutation hook for creating a character (clone flow).
- * Replaces: raw POST fetch in CharacterEditPanel
- */
-export function useCreateCharacter() {
-  const queryClient = useQueryClient()
-
-  return useMutation({
-    mutationFn: async (characterData) => {
-      const response = await authFetch('/api/characters/', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        credentials: 'include',
-        body: JSON.stringify(characterData),
-      })
-
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}))
-        throw errorData
-      }
-
-      return response.json()
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['campaigns'] })
-      queryClient.invalidateQueries({ queryKey: ['characters'] })
-    },
-  })
-}
-
-/**
- * Mutation hook for updating an existing character.
- * Replaces: raw PUT fetch in CharacterEditPanel
- */
-export function useUpdateCharacter() {
-  const queryClient = useQueryClient()
-
-  return useMutation({
-    mutationFn: async ({ characterId, characterData }) => {
-      const response = await authFetch(`/api/characters/${characterId}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        credentials: 'include',
-        body: JSON.stringify(characterData),
-      })
-
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}))
-        throw errorData
-      }
-
-      return response.json()
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['campaigns'] })
-      queryClient.invalidateQueries({ queryKey: ['characters'] })
-    },
-  })
-}
 
 /**
  * Mutation hook for deleting a character.

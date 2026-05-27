@@ -27,6 +27,7 @@ from modules.characters.api.schemas import (
 )
 from modules.characters.application.commands import (
     CreateCharacterDraft,
+    DeleteCharacter,
     DiscardCharacterDraft,
     FinalizeCharacterDraft,
     LevelUpCharacter,
@@ -291,6 +292,29 @@ async def discard_draft(
         if not success:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND, detail="Draft not found"
+            )
+    except (ValueError, PermissionError) as exc:
+        raise _http(exc)
+
+
+@router.delete("/{character_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_character(
+    character_id: UUID,
+    user_id: UUID = Depends(get_current_user_id),
+    character_repo: CharacterRepository = Depends(get_character_repository),
+):
+    """Soft-delete a finalised character. Drafts go through /draft/{id}.
+
+    Refuses while the character is locked to a campaign — owner must release
+    via the campaign endpoint first.
+    """
+    try:
+        success = DeleteCharacter(character_repo).execute(
+            character_id=character_id, user_id=user_id
+        )
+        if not success:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND, detail="Character not found"
             )
     except (ValueError, PermissionError) as exc:
         raise _http(exc)

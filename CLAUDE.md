@@ -142,25 +142,50 @@ api-site/
 │   │   ├── dependencies/providers.py
 │   │   ├── event_manager.py
 │   │   └── websocket_manager.py
-│   └── characters/                # Basic CRUD (minimal implementation)
+│   └── characters/                # Edition-aware characters (v2 schema)
 │       ├── api/
-│       │   ├── endpoints.py
+│       │   ├── endpoints.py            # Draft / runtime / level-up / me / {id} routes
+│       │   ├── edition_endpoints.py    # GET /api/editions, .../classes, /species, etc.
 │       │   └── schemas.py
 │       ├── application/
-│       │   ├── commands.py
-│       │   └── queries.py
-│       ├── domain/character_aggregate.py
-│       ├── model/character_model.py
-│       ├── repositories/character_repository.py
+│       │   ├── commands.py        # CreateCharacterDraft, UpdateCharacterDraft, FinalizeCharacterDraft, DiscardCharacterDraft, DeleteCharacter, UpdateRuntimeState, LevelUpCharacter
+│       │   └── queries.py         # GetCharacterById, GetCharactersByUser, GetCampaignParty
+│       ├── domain/character_aggregate.py  # CharacterAggregate + AbilityScores, ClassEntry, SkillProficiency, FeatAcquisition value objects
+│       ├── model/                 # SQLAlchemy: characters + 6 join tables + editions
+│       │   ├── edition_model.py
+│       │   ├── character_model.py
+│       │   ├── character_class_model.py
+│       │   ├── character_ability_model.py
+│       │   ├── character_save_model.py
+│       │   ├── character_skill_model.py
+│       │   ├── character_feat_model.py
+│       │   └── character_choices_log_model.py
+│       ├── repositories/
+│       │   ├── character_repository.py
+│       │   └── edition_repository.py
+│       ├── seed_data/srd_5_2_1/   # Parsed JSON: skills, feats, species, backgrounds, classes
 │       └── dependencies/providers.py
 ├── shared/
 │   ├── jwt_helper.py
 │   ├── error_handlers.py
 │   ├── services/s3_service.py
+│   ├── rulesets/                  # Edition-aware D&D rules math (loaded at boot)
+│   │   ├── models.py              # Pydantic shapes for the seed JSON (the schema authority)
+│   │   ├── registry.py            # RulesetRegistry singleton — loads + validates seed data
+│   │   ├── strategy.py            # RulesetStrategy abstract base
+│   │   └── dnd_2024.py            # Dnd2024Ruleset concrete: XP table, prof bonus, ASIs, modifiers
 │   └── dependencies/
 │       ├── auth.py                # get_current_user_from_token (JWT → UserAggregate)
 │       └── db.py                  # get_db(), engine setup
 ```
+
+### Reference data lives in JSON, not PostgreSQL
+
+Static D&D rules content (classes, species, backgrounds, feats, skills) is parsed once from the vendored SRD markdown via `api-site/scripts/parse_srd.py` and committed to `api-site/modules/characters/seed_data/<edition_code>/`. The app loads these files into `shared/rulesets/registry.py:RulesetRegistry` at FastAPI startup via the lifespan handler in `main.py`. Boot fails if any file is missing, fails Pydantic validation, or has dangling cross-refs.
+
+Character rows reference content by **stable string codes** (`class_code = "barbarian"`), not by FK — class/species/feat lookups go through the registry, not the database. Adding a new edition = drop a new directory under `seed_data/`, add a row to the `editions` table, register a `RulesetStrategy` subclass for the new edition_code. No schema migrations.
+
+Per-edition rules math (XP→level, proficiency bonus, ASI levels, skill/save modifiers) lives in `RulesetStrategy` subclasses keyed by edition code. The strategy is injected wherever derived stats need to be computed (`CharacterResponse.derived`, level-up preview, etc.).
 
 ### Cross-Aggregate Rules
 

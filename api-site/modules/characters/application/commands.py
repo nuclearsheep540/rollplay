@@ -272,6 +272,29 @@ class DiscardCharacterDraft:
         return self.repository.delete(character_id)
 
 
+class DeleteCharacter:
+    """DELETE /api/characters/{id} — soft-delete a finalised character.
+
+    Backs the dashboard's "Delete character" button. Owner-only, refuses when
+    the character is currently locked to a campaign (matches v1 behaviour:
+    you have to release first). Drafts go through DiscardCharacterDraft.
+    """
+
+    def __init__(self, repository: CharacterRepository):
+        self.repository = repository
+
+    def execute(self, *, character_id: UUID, user_id: UUID) -> bool:
+        character = self.repository.get_by_id(character_id)
+        if character is None:
+            return False
+        if not character.is_owned_by(user_id):
+            raise PermissionError("Only the owner can delete this character")
+        if character.is_draft:
+            raise ValueError("Use DELETE /draft/{id} to discard a draft")
+        # Repository.delete enforces can_be_deleted (rejects locked characters).
+        return self.repository.delete(character_id)
+
+
 # --------------------------------------------------------------------------- #
 # Runtime edits
 # --------------------------------------------------------------------------- #

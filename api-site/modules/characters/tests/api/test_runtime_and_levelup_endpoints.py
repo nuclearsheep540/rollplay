@@ -208,6 +208,38 @@ class TestListMe:
         assert {"Runner", "Second"}.issubset(names)
 
 
+class TestDeleteCharacter:
+    def test_owner_can_delete_finalised(self, client, auth_as, owner):
+        char = _finalize_a_character(client, auth_as, owner)
+        response = client.delete(f"/api/characters/{char['id']}")
+        assert response.status_code == 204
+        # GET should now 404 (soft-deleted rows hidden from reads).
+        assert client.get(f"/api/characters/{char['id']}").status_code == 404
+
+    def test_non_owner_forbidden(self, client, auth_as, owner, other):
+        char = _finalize_a_character(client, auth_as, owner)
+        auth_as(other.id)
+        response = client.delete(f"/api/characters/{char['id']}")
+        assert response.status_code == 403
+
+    def test_unknown_id_returns_404(self, client, auth_as, owner):
+        auth_as(owner.id)
+        response = client.delete(f"/api/characters/{uuid4()}")
+        assert response.status_code == 404
+
+    def test_delete_draft_via_finalised_endpoint_rejected(self, client, auth_as, owner):
+        # Drafts must go through /draft/{id} — the finalised endpoint refuses
+        # so the caller can't bypass the discard contract.
+        auth_as(owner.id)
+        create = client.post(
+            "/api/characters/draft",
+            json={"edition_code": "srd_5_2_1", "name": "Draft only"},
+        )
+        draft_id = create.json()["id"]
+        response = client.delete(f"/api/characters/{draft_id}")
+        assert response.status_code == 400
+
+
 class TestGetCharacter:
     def test_owner_can_get(self, client, auth_as, owner):
         char = _finalize_a_character(client, auth_as, owner)
