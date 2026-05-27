@@ -46,6 +46,15 @@ function normaliseServerStep(serverStep) {
   return serverStep
 }
 
+// Code → display label (e.g. ``ability_scores`` → ``Ability Scores``).
+// Server-side codes are snake_case lowercase; the wizard's subtitle uses
+// title-cased natural text. Kept local to avoid pulling another util in.
+function titleize(code) {
+  return (code ?? '')
+    .replace(/_/g, ' ')
+    .replace(/\b\w/g, (c) => c.toUpperCase())
+}
+
 /**
  * Resume the wizard on whatever step the server thinks the draft is at,
  * falling back to the first incomplete step.
@@ -167,6 +176,40 @@ export default function CharacterWizard() {
     await persistStep('rename', { name: trimmed })
   }
 
+  /**
+   * One-line character summary that builds up as the wizard fills in
+   * species → class → background. Lives under the name header so the
+   * player sees their build taking shape without bouncing between steps.
+   * Reflects the *saved* draft (server state) so it only refreshes when a
+   * step's Next button has actually committed.
+   */
+  const subtitle = useMemo(() => {
+    if (!draft) return ''
+    const speciesLabel = draft.species_code ? titleize(draft.species_code) : null
+    const classEntries = draft.class_entries ?? []
+    const hasClasses = classEntries.length > 0
+
+    // Class chunk: just the names, joined with " / " for multi-class. Per-
+    // class level is intentionally omitted — only the total ``Level X`` at
+    // the front of the line reflects level state.
+    let head = ''
+    if (hasClasses) {
+      const classChunk = classEntries
+        .map((e) => titleize(e.class_code))
+        .join(' / ')
+      head = speciesLabel
+        ? `Level ${draft.level} ${speciesLabel} ${classChunk}`
+        : `Level ${draft.level} ${classChunk}`
+    } else if (speciesLabel) {
+      head = speciesLabel
+    }
+
+    const bg = draft.background_code ? titleize(draft.background_code) : null
+    if (!head && !bg) return ''
+    if (head && bg) return `${head} - ${bg}`
+    return head || bg
+  }, [draft?.species_code, draft?.class_entries, draft?.background_code, draft?.level])
+
   const handleAvatarAssetChosen = async (assetId) => {
     setAvatarError(null)
     // Read the current character id off either the cache-backed draft or the
@@ -273,6 +316,7 @@ export default function CharacterWizard() {
       saveState={saveState}
       draftId={draft?.id}
       characterName={draft?.character_name ?? ''}
+      characterSubtitle={subtitle}
       onRename={handleRename}
       avatarUrl={draft?.avatar_url}
       avatarIsBusy={createDraft.isPending || setAvatarMutation.isPending}

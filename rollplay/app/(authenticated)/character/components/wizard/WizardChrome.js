@@ -177,6 +177,7 @@ export default function WizardChrome({
   saveState,
   draftId,
   characterName,
+  characterSubtitle,
   onRename,
   avatarUrl,
   avatarIsBusy,
@@ -217,11 +218,25 @@ export default function WizardChrome({
           {/* Standalone name header — no card, larger heading. Save
               indicator sits to its right so the user sees mutation feedback
               next to the most-edited field. */}
-          <header className="mb-6 flex items-center justify-between gap-4">
-            <div className="flex-1 min-w-0">
-              <NameHeader value={characterName} onRename={onRename} />
+          <header className="mb-6">
+            <div className="flex items-center justify-between gap-4">
+              <div className="flex-1 min-w-0">
+                <NameHeader value={characterName} onRename={onRename} />
+              </div>
+              <SaveIndicator state={saveState} />
             </div>
-            <SaveIndicator state={saveState} />
+            {/* Build-summary subtitle. Populates incrementally as the
+                wizard's species / class / background selections land on
+                the server. Empty by default (no draft state to summarise),
+                so the row simply collapses out of the layout. */}
+            {characterSubtitle && (
+              <p
+                className="mt-1 text-sm italic"
+                style={{ color: THEME.textSecondary }}
+              >
+                {characterSubtitle}
+              </p>
+            )}
           </header>
 
           {/* Step body */}
