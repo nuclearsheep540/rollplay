@@ -194,7 +194,10 @@ export default function CharacterManager({ user, onExpandedChange }) {
 
     try {
       setDeleteError(null)
-      await deleteCharacterMutation.mutateAsync(characterToDelete.id)
+      await deleteCharacterMutation.mutateAsync({
+        id: characterToDelete.id,
+        isDraft: Boolean(characterToDelete.is_draft),
+      })
       // Remove from local state for immediate UI feedback
       setCharacters(characters.filter(c => c.id !== characterToDelete.id))
       if (selectedCharacter?.id === characterToDelete.id) {

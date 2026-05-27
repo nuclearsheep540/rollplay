@@ -63,14 +63,24 @@ export function useReleaseCharacter() {
 
 /**
  * Mutation hook for deleting a character.
- * Replaces: raw fetch in CharacterManager
+ *
+ * Backend splits delete by lifecycle: finalised characters go through
+ * ``DELETE /api/characters/{id}`` (soft-delete, refuses if locked to a
+ * campaign), drafts go through ``DELETE /api/characters/draft/{id}`` (hard
+ * delete). Caller passes ``{ id, isDraft }`` so we hit the right endpoint;
+ * also accepts a bare id for back-compat with finalised-only callers.
  */
 export function useDeleteCharacter() {
   const queryClient = useQueryClient()
 
   return useMutation({
-    mutationFn: async (characterId) => {
-      const response = await authFetch(`/api/characters/${characterId}`, {
+    mutationFn: async (arg) => {
+      const characterId = typeof arg === 'object' ? arg.id : arg
+      const isDraft = typeof arg === 'object' ? Boolean(arg.isDraft) : false
+      const url = isDraft
+        ? `/api/characters/draft/${characterId}`
+        : `/api/characters/${characterId}`
+      const response = await authFetch(url, {
         method: 'DELETE',
         credentials: 'include',
       })
