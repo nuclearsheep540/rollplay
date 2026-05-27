@@ -177,6 +177,8 @@ def _to_character_response(
         languages=list(character.languages),
         is_draft=character.is_draft,
         creation_step=character.creation_step,
+        ability_score_method=character.ability_score_method,
+        ability_roll_details=character.ability_roll_details,
         display_name=character.get_display_name(),
         derived=derived,
         avatar_url=avatar_url,

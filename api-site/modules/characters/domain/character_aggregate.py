@@ -282,6 +282,27 @@ class CharacterAggregate:
         self.creation_step = step
         self._touch()
 
+    def set_ability_scores(
+        self,
+        scores: "AbilityScores",
+        *,
+        method: Optional[str] = None,
+        roll_details: Optional[dict] = None,
+    ) -> None:
+        """Replace base ability scores + track which method produced them.
+
+        ``method`` and ``roll_details`` are pure provenance — they don't change
+        any math, they just let the wizard resume on the right tab with the
+        original dice still visible. Pass ``method=None`` to leave existing
+        provenance alone (used by ASI / level-up paths that mutate scores
+        without re-running the creation-step picker).
+        """
+        self.ability_scores = scores
+        if method is not None:
+            self.ability_score_method = method
+            self.ability_roll_details = roll_details if method == "rolled" else None
+        self._touch()
+
     def set_avatar_asset(self, asset_id: Optional[UUID]) -> None:
         """Attach (or clear) the library asset used as this character's avatar.
 

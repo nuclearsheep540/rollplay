@@ -165,6 +165,12 @@ class CharacterRepository:
                 if model.avatar_asset is not None
                 else None
             ),
+            ability_score_method=model.ability_score_method,
+            ability_roll_details=(
+                dict(model.ability_roll_details)
+                if model.ability_roll_details is not None
+                else None
+            ),
         )
 
     # -------------------------------------------------------------- reads
@@ -234,6 +240,8 @@ class CharacterRepository:
                 is_draft=aggregate.is_draft,
                 creation_step=aggregate.creation_step,
                 avatar_asset_id=aggregate.avatar_asset_id,
+                ability_score_method=aggregate.ability_score_method,
+                ability_roll_details=aggregate.ability_roll_details,
                 created_at=aggregate.created_at,
                 updated_at=aggregate.updated_at,
                 is_deleted=aggregate.is_deleted,
@@ -271,6 +279,8 @@ class CharacterRepository:
             model.is_draft = aggregate.is_draft
             model.creation_step = aggregate.creation_step
             model.avatar_asset_id = aggregate.avatar_asset_id
+            model.ability_score_method = aggregate.ability_score_method
+            model.ability_roll_details = aggregate.ability_roll_details
             model.updated_at = aggregate.updated_at
             model.is_deleted = aggregate.is_deleted
             # Replace-style sync for all join tables — these are small and

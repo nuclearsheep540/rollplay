@@ -226,7 +226,7 @@ class UpdateCharacterDraft:
     # ------------------------------------------------------------ ability scores
 
     def _apply_ability_scores(self, character, edition_code, payload):
-        character.ability_scores = AbilityScores(
+        scores = AbilityScores(
             strength=int(payload["strength"]),
             dexterity=int(payload["dexterity"]),
             constitution=int(payload["constitution"]),
@@ -234,6 +234,9 @@ class UpdateCharacterDraft:
             wisdom=int(payload["wisdom"]),
             charisma=int(payload["charisma"]),
         )
+        method = payload.get("method")
+        roll_details = payload.get("roll_details")
+        character.set_ability_scores(scores, method=method, roll_details=roll_details)
 
     # ------------------------------------------------------------ hp_ac
 

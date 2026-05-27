@@ -41,17 +41,41 @@ function modifier(score) {
   return Math.floor((score - 10) / 2)
 }
 
-export default function AbilityScoresStep({ draft, onSave, onSaveHpAc, onBack, onNext }) {
-  const [mode, setMode] = useState('point_buy')
+// Reconstruct the per-ability score map from a stored roll_details object.
+function scoresFromRollDetails(details) {
+  const out = {}
+  for (const ab of ABILITIES) {
+    const detail = details?.[ab.code]
+    if (detail?.total != null) out[ab.code] = detail.total
+  }
+  return out
+}
 
+function emptyScores() {
+  return {
+    strength: undefined,
+    dexterity: undefined,
+    constitution: undefined,
+    intelligence: undefined,
+    wisdom: undefined,
+    charisma: undefined,
+  }
+}
+
+export default function AbilityScoresStep({ draft, onSave, onSaveHpAc, onBack, onNext }) {
   // Background bonuses live on the draft as a separate dict — they're never
   // included in our local ``scores`` state, which always tracks the BASE.
   // We add them back for display, send only base values on save.
   const originBonuses = draft.origin_ability_bonuses ?? {}
 
-  // Decompose final → base for the initial state. If the player has never
-  // touched the ability_scores step yet, default to point-buy starting values.
+  // Decompose final → base for the initial state. If the draft has stored
+  // roll details from a previous visit, prefer those (server is the source
+  // of truth for "the roll the player saw last time").
   const initial = useMemo(() => {
+    const rollDetails = draft.ability_roll_details
+    if (rollDetails && draft.ability_score_method === 'rolled') {
+      return scoresFromRollDetails(rollDetails)
+    }
     const final = draft.ability_scores
     if (final && Object.values(final).some((v) => v !== 10)) {
       const base = { ...final }
@@ -62,8 +86,11 @@ export default function AbilityScoresStep({ draft, onSave, onSaveHpAc, onBack, o
     }
     return getDefaultPointBuyScores()
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [draft.ability_scores])
+  }, [draft.ability_scores, draft.ability_roll_details, draft.ability_score_method])
 
+  // Resume in whichever mode the player last persisted. Default to point-buy
+  // for brand-new drafts (no method stored yet).
+  const [mode, setMode] = useState(draft.ability_score_method || 'point_buy')
   const [scores, setScores] = useState(initial)
   const [hpMax, setHpMax] = useState(draft.hp_max > 1 ? draft.hp_max : 10)
   const [ac, setAc] = useState(draft.ac > 1 ? draft.ac : 10)
@@ -71,9 +98,11 @@ export default function AbilityScoresStep({ draft, onSave, onSaveHpAc, onBack, o
   const [saving, setSaving] = useState(false)
 
   // For the "Roll 4d6 drop lowest" mode: per-ability roll details so the cell
-  // can show the underlying dice + which die was dropped. ``rollDetails`` is
-  // null until the player clicks Roll for the first time.
-  const [rollDetails, setRollDetails] = useState(null)
+  // can show the underlying dice + which die was dropped. This cache survives
+  // mode switches — switching to point-buy and back to rolled restores the
+  // exact dice the player saw before, instead of forcing a re-roll. Seeded
+  // from the draft so a hard refresh also restores.
+  const [rollDetails, setRollDetails] = useState(draft.ability_roll_details ?? null)
   const hasRolled = rollDetails != null
 
   const pointBuy = useMemo(() => {
@@ -112,47 +141,27 @@ export default function AbilityScoresStep({ draft, onSave, onSaveHpAc, onBack, o
   }
 
   // One-click roll: generate 6 batches of 4d6-drop-lowest and assign them
-  // directly to STR/DEX/CON/INT/WIS/CHA in order. Player can then tweak via
-  // the +/- steppers (handled by the manual-mode path, which we widen to
-  // accept rolled values up to 18 below).
+  // directly to STR/DEX/CON/INT/WIS/CHA in order. The roll details are
+  // cached locally; nothing is PATCHed until the player hits Next.
   const handleRollAll = () => {
     const result = rollAbilityScoresDetailed('4d6-drop-lowest')
     setScores(result.scores)
     setRollDetails(result.details)
   }
 
-  // Switching modes resets to that mode's canonical starting state so the
-  // player doesn't see stale values that violate the new mode's rules
-  // (e.g. a rolled 16 carried into point-buy reads as "spent 40/27").
-  // Manual is the exception — any 1..20 value is valid there, no reason
-  // to wipe what the player has.
+  // Switching modes reshapes the displayed scores to that mode's canonical
+  // starting state — point-buy defaults, empty for standard array, the
+  // cached roll for rolled (or empty if no roll yet). The roll-details cache
+  // is preserved across switches so the player can hop between modes and
+  // return to their rolled set without re-rolling.
   const handleModeChange = (newMode) => {
     if (newMode === mode) return
     if (newMode === 'point_buy') {
       setScores(getDefaultPointBuyScores())
-      setRollDetails(null)
     } else if (newMode === 'standard_array') {
-      setScores({
-        strength: undefined,
-        dexterity: undefined,
-        constitution: undefined,
-        intelligence: undefined,
-        wisdom: undefined,
-        charisma: undefined,
-      })
-      setRollDetails(null)
+      setScores(emptyScores())
     } else if (newMode === 'rolled') {
-      // Clear any non-rolled values so the player must click Roll to populate
-      // — keeps roll-detail provenance honest.
-      setScores({
-        strength: undefined,
-        dexterity: undefined,
-        constitution: undefined,
-        intelligence: undefined,
-        wisdom: undefined,
-        charisma: undefined,
-      })
-      setRollDetails(null)
+      setScores(rollDetails ? scoresFromRollDetails(rollDetails) : emptyScores())
     }
     // Manual: keep current values as-is (any 1..20 is valid).
     setMode(newMode)
@@ -193,9 +202,14 @@ export default function AbilityScoresStep({ draft, onSave, onSaveHpAc, onBack, o
     }
     setSaving(true)
     try {
-      // Two PATCHes — ability_scores first, then hp_ac. The wizard's
-      // autosave indicator flips to 'saved' between them.
-      await onSave(scores)
+      // Two PATCHes — ability_scores first, then hp_ac. ``method`` and
+      // (for rolled) ``roll_details`` go up so a refresh resumes on the
+      // same tab with the same dice still visible.
+      await onSave({
+        ...scores,
+        method: mode,
+        roll_details: mode === 'rolled' ? rollDetails : null,
+      })
       await onSaveHpAc({ hp_max: hpMax, ac })
       onNext()
     } catch (err) {

@@ -10,12 +10,15 @@ for character resource endpoints (draft, runtime, level-up, listing).
 """
 
 from datetime import datetime
-from typing import Dict, List, Literal, Optional
+from typing import Any, Dict, List, Literal, Optional
 from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field
 
 from shared.rulesets.models import AbilityCode, CodePattern
+
+
+AbilityScoreMethod = Literal["point_buy", "standard_array", "rolled", "manual"]
 
 
 # --------------------------------------------------------------------------- #
@@ -126,6 +129,12 @@ class CharacterResponse(BaseModel):
     is_draft: bool
     creation_step: Optional[str] = None
 
+    # Provenance for the ability_scores step — lets the wizard restore the
+    # mode the player last used (and the dice they rolled, if applicable)
+    # on resume or hard refresh.
+    ability_score_method: Optional[AbilityScoreMethod] = None
+    ability_roll_details: Optional[Dict[str, Any]] = None
+
     display_name: str
     derived: DerivedStats
 
@@ -187,6 +196,17 @@ class BackgroundStepPayload(BaseModel):
     ability_increases: List[BackgroundAbilityIncrease] = Field(min_length=2, max_length=3)
 
 
+class AbilityRollDetail(BaseModel):
+    """Per-ability breakdown of a 4d6-drop-lowest result.
+
+    Stored alongside the score so the wizard can re-display the dice on resume.
+    """
+    total: int = Field(ge=1, le=24)
+    rolls: List[int] = Field(min_length=3, max_length=4)
+    kept: List[int] = Field(min_length=3, max_length=3)
+    dropped: int = Field(ge=1, le=6)
+
+
 class AbilityScoresStepPayload(BaseModel):
     strength: int = Field(ge=1, le=20)
     dexterity: int = Field(ge=1, le=20)
@@ -194,6 +214,11 @@ class AbilityScoresStepPayload(BaseModel):
     intelligence: int = Field(ge=1, le=20)
     wisdom: int = Field(ge=1, le=20)
     charisma: int = Field(ge=1, le=20)
+    # Provenance — which mode the player used to arrive at these scores.
+    # Optional for backward compat with older clients; the wizard always sends it.
+    method: Optional[AbilityScoreMethod] = None
+    # Per-ability 4d6 breakdown — only meaningful when ``method == 'rolled'``.
+    roll_details: Optional[Dict[AbilityCode, AbilityRollDetail]] = None
 
 
 class HpAcStepPayload(BaseModel):
