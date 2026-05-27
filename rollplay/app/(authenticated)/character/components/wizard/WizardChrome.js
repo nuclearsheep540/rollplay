@@ -43,13 +43,16 @@ function SaveIndicator({ state }) {
  * right-aligned via the parent column so the numbers line up vertically.
  */
 function StepDot({ step, isCurrent, isComplete, onClick, clickable }) {
-  const bg = isCurrent
-    ? COLORS.silver
-    : isComplete
-    ? COLORS.graphite
-    : 'transparent'
+  // Active dot: silver fill on the graphite page makes it pop. Completed:
+  // hairline outline + check mark — no fill, since a graphite-filled dot
+  // would vanish into the graphite background.
+  const bg = isCurrent ? COLORS.silver : 'transparent'
   const border = isCurrent || isComplete ? COLORS.silver : THEME.borderDefault
-  const dotText = isCurrent || isComplete ? THEME.textBold : THEME.textSecondary
+  const dotText = isCurrent
+    ? COLORS.onyx
+    : isComplete
+    ? COLORS.silver
+    : THEME.textSecondary
 
   return (
     <button
@@ -61,7 +64,7 @@ function StepDot({ step, isCurrent, isComplete, onClick, clickable }) {
       <span
         className="text-sm whitespace-nowrap"
         style={{
-          color: isCurrent ? COLORS.onyx : THEME.textSecondary,
+          color: isCurrent ? THEME.textOnDark : THEME.textSecondary,
           fontWeight: isCurrent ? 600 : 400,
         }}
       >
@@ -87,7 +90,7 @@ function StepSeparator() {
     <div
       aria-hidden="true"
       className="flex flex-col items-end gap-0.5 select-none py-1"
-      style={{ color: THEME.borderDefault }}
+      style={{ color: COLORS.silver, opacity: 0.5 }}
     >
       <span className="w-6 text-center text-[10px] leading-none">·</span>
       <span className="w-6 text-center text-[10px] leading-none">·</span>
@@ -153,7 +156,7 @@ function NameHeader({ value, onRename }) {
         aria-label="Character name"
         className="flex-1 min-w-0 bg-transparent border-0 border-b text-3xl font-bold font-[family-name:var(--font-metamorphous)] focus:outline-none focus:ring-0 transition-colors py-1 -mb-px"
         style={{
-          color: THEME.textBold,
+          color: THEME.textOnDark,
           borderBottomColor: editing ? COLORS.silver : 'transparent',
         }}
       />
@@ -161,8 +164,8 @@ function NameHeader({ value, onRename }) {
         type="button"
         onClick={startEdit}
         aria-label="Edit character name"
-        className="shrink-0 p-2 rounded hover:bg-black/5 transition-colors"
-        style={{ color: editing ? COLORS.onyx : THEME.textSecondary }}
+        className="shrink-0 p-2 rounded hover:bg-white/10 transition-colors"
+        style={{ color: editing ? THEME.textOnDark : THEME.textSecondary }}
       >
         <FontAwesomeIcon icon={faPenToSquare} className="h-5 w-5" />
       </button>
@@ -194,7 +197,7 @@ export default function WizardChrome({
     // the remaining space on the right.
     <main
       className="flex-1 flex min-h-0 overflow-hidden"
-      style={{ backgroundColor: THEME.bgPrimary, color: THEME.textPrimary }}
+      style={{ backgroundColor: COLORS.graphite, color: THEME.textOnDark }}
     >
       {/* Left: avatar pane. Width set in vw so it scales smoothly across
           viewports. (Responsive narrow-screen guard removed because the
@@ -242,16 +245,16 @@ export default function WizardChrome({
             )}
           </header>
 
-          {/* Step body */}
-          <div
-            className="rounded-sm border p-6 sm:p-8"
-            style={{ backgroundColor: COLORS.carbon, borderColor: THEME.borderSubtle, color: THEME.textOnDark }}
-          >
+          {/* Step body — transparent so the graphite page colour shows
+              through. Step contents already use ``textOnDark`` and dark
+              ``bgSecondary`` inputs that pop against the slightly-lighter
+              graphite, so no extra panel chrome is needed here. */}
+          <div className="p-6 sm:p-8" style={{ color: THEME.textOnDark }}>
             {children}
           </div>
 
           {/* SRD attribution */}
-          <p className="mt-4 text-xs text-center" style={{ color: THEME.textPrimary, opacity: 0.6 }}>
+          <p className="mt-4 text-xs text-center" style={{ color: THEME.textOnDark, opacity: 0.5 }}>
             {SRD_ATTRIBUTION}
           </p>
         </div>

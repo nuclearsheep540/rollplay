@@ -60,10 +60,11 @@ export default function CharacterDetailPage() {
   return (
     // Same two-column shell as the wizard's WizardChrome: avatar pane on the
     // left at 33vw, sheet on the right filling the remaining width. Read-only
-    // — no edit affordances on the avatar or the sheet.
+    // — no edit affordances on the avatar or the sheet. Graphite page, no
+    // panel chrome — sheet content sits directly on the page background.
     <main
       className="flex-1 flex min-h-0 overflow-hidden"
-      style={{ backgroundColor: THEME.bgPrimary, color: THEME.textPrimary }}
+      style={{ backgroundColor: COLORS.graphite, color: THEME.textOnDark }}
     >
       <div className="shrink-0" style={{ width: '33vw' }}>
         <CharacterAvatarPane avatarUrl={character.avatar_url} readOnly />
@@ -76,26 +77,19 @@ export default function CharacterDetailPage() {
               type="button"
               onClick={() => router.push('/dashboard?tab=characters')}
               className="text-sm"
-              style={{ color: THEME.textPrimary }}
+              style={{ color: THEME.textOnDark }}
             >
               ← Back to characters
             </button>
           </div>
 
-          <div
-            className="rounded-sm border p-6 sm:p-8"
-            style={{
-              backgroundColor: COLORS.carbon,
-              borderColor: THEME.borderSubtle,
-              color: THEME.textOnDark,
-            }}
-          >
+          <div className="p-6 sm:p-8" style={{ color: THEME.textOnDark }}>
             <CharacterSheet character={character} />
           </div>
 
           <p
             className="mt-4 text-xs text-center"
-            style={{ color: THEME.textPrimary, opacity: 0.6 }}
+            style={{ color: THEME.textOnDark, opacity: 0.5 }}
           >
             {SRD_ATTRIBUTION}
           </p>
