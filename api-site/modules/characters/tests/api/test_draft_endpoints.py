@@ -248,6 +248,89 @@ class TestUpdateDraftBackground:
         assert response.status_code == 400
 
 
+class TestBackgroundBonusesSurviveAbilityScoresStep:
+    """Regression: previously the background step baked bonuses into
+    ability_scores, then the ability_scores step overwrote them and the
+    bonus was lost. Now they're stored separately and the response
+    surfaces final = base + bonus."""
+
+    def _seed_to_background(self, client, auth_as, owner):
+        auth_as(owner.id)
+        draft = client.post(
+            "/api/characters/draft",
+            json={"edition_code": "srd_5_2_1", "name": "BonusTest"},
+        ).json()
+        client.patch(f"/api/characters/draft/{draft['id']}", json={
+            "step": "class",
+            "class": {"classes": [{
+                "class_code": "barbarian", "level": 1, "is_primary": True,
+                "chosen_skills": ["athletics", "perception"],
+            }]},
+        })
+        # Sage grants Constitution / Intelligence / Wisdom as the three
+        # offered abilities. Pick +2 CON / +1 INT.
+        client.patch(f"/api/characters/draft/{draft['id']}", json={
+            "step": "background",
+            "background": {
+                "background_code": "sage",
+                "ability_increases": [
+                    {"ability": "constitution", "increase": 2},
+                    {"ability": "intelligence", "increase": 1},
+                ],
+            },
+        })
+        return draft
+
+    def test_background_bonuses_survive_ability_scores_overwrite(
+        self, client, auth_as, owner
+    ):
+        draft = self._seed_to_background(client, auth_as, owner)
+        # Player picks raw scores via manual/point-buy/whatever — server stores BASE.
+        response = client.patch(f"/api/characters/draft/{draft['id']}", json={
+            "step": "ability_scores",
+            "ability_scores": {
+                "strength": 15, "dexterity": 13, "constitution": 14,
+                "intelligence": 12, "wisdom": 10, "charisma": 8,
+            },
+        })
+        assert response.status_code == 200, response.text
+        body = response.json()
+        # Bonuses surface as a separate dict.
+        assert body["origin_ability_bonuses"] == {"constitution": 2, "intelligence": 1}
+        # ability_scores in the response is FINAL (base + bonus).
+        assert body["ability_scores"]["constitution"] == 16  # 14 base + 2
+        assert body["ability_scores"]["intelligence"] == 13  # 12 base + 1
+        # Untouched abilities have no bonus.
+        assert body["ability_scores"]["strength"] == 15
+
+    def test_switching_modes_doesnt_lose_bonuses(self, client, auth_as, owner):
+        # Mirror the user-reported bug: roll dice gives one set, then the
+        # player re-saves (a different mode would send a different payload).
+        # Bonuses must persist either way.
+        draft = self._seed_to_background(client, auth_as, owner)
+        # First save: rolled values
+        client.patch(f"/api/characters/draft/{draft['id']}", json={
+            "step": "ability_scores",
+            "ability_scores": {
+                "strength": 16, "dexterity": 14, "constitution": 12,
+                "intelligence": 10, "wisdom": 13, "charisma": 8,
+            },
+        })
+        # Second save: different (point-buy-style) values
+        response = client.patch(f"/api/characters/draft/{draft['id']}", json={
+            "step": "ability_scores",
+            "ability_scores": {
+                "strength": 15, "dexterity": 13, "constitution": 14,
+                "intelligence": 12, "wisdom": 10, "charisma": 8,
+            },
+        })
+        body = response.json()
+        # Bonuses still there after multiple ability_scores writes.
+        assert body["origin_ability_bonuses"] == {"constitution": 2, "intelligence": 1}
+        assert body["ability_scores"]["constitution"] == 16
+        assert body["ability_scores"]["intelligence"] == 13
+
+
 class TestFinalize:
     def _seed_complete(self, client, auth_as, owner):
         draft = _create_draft(client, auth_as, owner)

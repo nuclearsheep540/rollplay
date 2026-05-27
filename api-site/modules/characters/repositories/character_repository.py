@@ -76,11 +76,14 @@ class CharacterRepository:
         id_to_name = self._get_ability_id_to_name()
 
         scores_dict: Dict[str, int] = {}
+        origin_bonuses_dict: Dict[str, int] = {}
         for entry in model.ability_score_entries or []:
             name = id_to_name.get(entry.ability_id)
             if name is None:
                 continue
             scores_dict[name] = entry.score
+            if entry.origin_bonus:
+                origin_bonuses_dict[name] = entry.origin_bonus
         ability_scores = (
             AbilityScores.from_dict(scores_dict) if scores_dict else AbilityScores.default()
         )
@@ -131,6 +134,7 @@ class CharacterRepository:
             background_code=model.background_code,
             class_entries=class_entries,
             ability_scores=ability_scores,
+            origin_ability_bonuses=origin_bonuses_dict,
             save_proficiencies=save_codes,
             skills=skills,
             feats=feats,
@@ -292,6 +296,7 @@ class CharacterRepository:
                 is_primary=entry.is_primary,
             ))
         scores = aggregate.ability_scores.to_dict()
+        bonuses = aggregate.origin_ability_bonuses or {}
         for name, score in scores.items():
             ability_id = ability_lookup.get(name)
             if ability_id is None:
@@ -302,7 +307,7 @@ class CharacterRepository:
                 character_id=model.id,
                 ability_id=ability_id,
                 score=score,
-                origin_bonus=0,
+                origin_bonus=int(bonuses.get(name, 0)),
             ))
         for code in aggregate.save_proficiencies:
             ability_id = ability_lookup.get(code)

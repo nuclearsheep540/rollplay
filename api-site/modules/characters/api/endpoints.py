@@ -126,7 +126,10 @@ def _to_character_response(
             }
             for e in character.class_entries
         ],
-        ability_scores=character.ability_scores.to_dict(),
+        # API exposes FINAL scores (base + origin bonus). Wizard subtracts
+        # origin_ability_bonuses when it needs the editable base.
+        ability_scores=character.final_ability_scores_dict(),
+        origin_ability_bonuses=dict(character.origin_ability_bonuses or {}),
         save_proficiencies=sorted(character.save_proficiencies),
         skills=[
             {

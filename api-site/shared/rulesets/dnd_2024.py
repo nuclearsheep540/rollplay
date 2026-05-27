@@ -105,7 +105,7 @@ class Dnd2024Ruleset(RulesetStrategy):
 
     def level_up_hp_options(self, character: "CharacterAggregate", class_code: str) -> dict:
         hit_die = self.hit_die_for_class(class_code)
-        con_mod = _ability_modifier(character.ability_score("constitution"))
+        con_mod = _ability_modifier(character.final_ability_score("constitution"))
         # Average HP per 5e convention: (hit_die / 2) + 1, then + CON mod.
         average = (hit_die // 2) + 1 + con_mod
         max_roll = hit_die + con_mod
@@ -127,7 +127,7 @@ class Dnd2024Ruleset(RulesetStrategy):
 
     def compute_skill_modifier(self, character: "CharacterAggregate", skill_code: str) -> int:
         skill = self._registry.get_skill(self.edition_code, skill_code)
-        ability_score = character.ability_score(skill.ability)
+        ability_score = character.final_ability_score(skill.ability)
         mod = _ability_modifier(ability_score)
         prof_entries = [s for s in character.skills if s.skill_code == skill_code]
         if not prof_entries:
@@ -138,10 +138,10 @@ class Dnd2024Ruleset(RulesetStrategy):
         return mod + prof_bonus
 
     def compute_save_modifier(self, character: "CharacterAggregate", ability_code: str) -> int:
-        mod = _ability_modifier(character.ability_score(ability_code))
+        mod = _ability_modifier(character.final_ability_score(ability_code))
         if ability_code in character.save_proficiencies:
             mod += self.proficiency_bonus(character.level)
         return mod
 
     def compute_initiative(self, character: "CharacterAggregate") -> int:
-        return _ability_modifier(character.ability_score("dexterity"))
+        return _ability_modifier(character.final_ability_score("dexterity"))

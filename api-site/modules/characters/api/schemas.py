@@ -96,7 +96,12 @@ class CharacterResponse(BaseModel):
     background_code: str
 
     class_entries: List[ClassEntryDTO]
+    # ``ability_scores`` is the FINAL value per ability (base + origin bonus
+    # baked in). Runtime callers use this directly for modifier math.
+    # ``origin_ability_bonuses`` is the bonus dict so the wizard can subtract
+    # to find what the player rolled / picked.
     ability_scores: Dict[AbilityCode, int]
+    origin_ability_bonuses: Dict[AbilityCode, int] = {}
     save_proficiencies: List[AbilityCode]
     skills: List[SkillProficiencyDTO]
     feats: List[FeatAcquisitionDTO]

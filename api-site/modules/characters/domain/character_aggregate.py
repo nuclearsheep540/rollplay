@@ -150,8 +150,13 @@ class CharacterAggregate:
     # Class progression
     class_entries: list[ClassEntry]
 
-    # Stats
+    # Stats. ``ability_scores`` holds the *base* values the player rolled or
+    # picked; ``origin_ability_bonuses`` is the per-ability bonus granted by
+    # the background (and only the background, for now). Final score for any
+    # ability = ``ability_scores.get(code) + origin_ability_bonuses.get(code, 0)``
+    # — use :meth:`final_ability_score` everywhere math is involved.
     ability_scores: AbilityScores
+    origin_ability_bonuses: dict[str, int]
     save_proficiencies: frozenset[str]
     skills: list[SkillProficiency]
     feats: list[FeatAcquisition]
@@ -215,6 +220,7 @@ class CharacterAggregate:
             background_code="",
             class_entries=[],
             ability_scores=AbilityScores.default(),
+            origin_ability_bonuses={},
             save_proficiencies=frozenset(),
             skills=[],
             feats=[],
@@ -453,10 +459,12 @@ class CharacterAggregate:
                 raise KeyError(f"Unknown ability {ability!r}")
             if delta < 0:
                 raise ValueError("ASI deltas must be ≥ 0")
-            if new[ability] + delta > 20:
+            # Cap is on the *final* score (post background bonus), per 5.5e ASI rules.
+            current_final = new[ability] + self.origin_ability_bonuses.get(ability, 0)
+            if current_final + delta > 20:
                 raise ValueError(
                     f"ASI would push {ability} above 20 "
-                    f"(current {new[ability]} + {delta})"
+                    f"(current {current_final} + {delta})"
                 )
             new[ability] += delta
         self.ability_scores = AbilityScores.from_dict(new)
@@ -512,7 +520,19 @@ class CharacterAggregate:
     # -------------------------------------------------------------- queries
 
     def ability_score(self, ability_code: str) -> int:
+        """Base ability score — what the player rolled / picked.
+
+        For modifier math (skills, saves, HP gain, initiative) use
+        :meth:`final_ability_score` instead — that's where origin bonuses fold in.
+        """
         return self.ability_scores.get(ability_code)
+
+    def final_ability_score(self, ability_code: str) -> int:
+        """Base + origin bonus. Use this everywhere math is involved."""
+        return self.ability_scores.get(ability_code) + self.origin_ability_bonuses.get(ability_code, 0)
+
+    def final_ability_scores_dict(self) -> dict[str, int]:
+        return {code: self.final_ability_score(code) for code in ABILITY_CODES}
 
     def get_primary_class(self) -> Optional[ClassEntry]:
         if not self.class_entries:

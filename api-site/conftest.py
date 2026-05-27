@@ -323,6 +323,7 @@ def create_character(character_repo: CharacterRepository, seed_default_edition):
             background_code=background_code,
             class_entries=[ClassEntry(class_code=class_code, level=level, is_primary=True)],
             ability_scores=AbilityScores.default(),
+            origin_ability_bonuses={},
             save_proficiencies=frozenset(),
             skills=[],
             feats=[],

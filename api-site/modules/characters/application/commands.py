@@ -190,11 +190,12 @@ class UpdateCharacterDraft:
                 )
 
         character.background_code = bg.code
-        # Apply ability bumps to the base scores.
-        scores = character.ability_scores.to_dict()
-        for ab, delta in increases.items():
-            scores[ab] = min(20, scores[ab] + delta)
-        character.ability_scores = AbilityScores.from_dict(scores)
+        # Record the bonuses as a separate dict — DO NOT bake into ability_scores.
+        # The ability_scores step then overwrites the base scores without
+        # clobbering these, and the API response surfaces final = base + bonus.
+        character.origin_ability_bonuses = {
+            ab: int(delta) for ab, delta in increases.items()
+        }
 
         # Replace BACKGROUND-source skills with the background's two grants.
         # If the player already has a class/feat/species proficiency in one of
@@ -427,7 +428,7 @@ class LevelUpCharacter:
                     f"roll_value {roll_value} exceeds hit die d{hit_die} for "
                     f"class '{class_code}'"
                 )
-            con_mod = (character.ability_score("constitution") - 10) // 2
+            con_mod = (character.final_ability_score("constitution") - 10) // 2
             hp_gained = max(1, roll_value + con_mod)
         else:
             raise ValueError(f"Unknown hp_choice '{hp_choice}'")

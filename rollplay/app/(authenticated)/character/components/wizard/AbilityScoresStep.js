@@ -43,11 +43,25 @@ function modifier(score) {
 
 export default function AbilityScoresStep({ draft, onSave, onSaveHpAc, onBack, onNext }) {
   const [mode, setMode] = useState('point_buy')
-  // Start from whatever the draft has, falling back to all-8s for point-buy.
+
+  // Background bonuses live on the draft as a separate dict — they're never
+  // included in our local ``scores`` state, which always tracks the BASE.
+  // We add them back for display, send only base values on save.
+  const originBonuses = draft.origin_ability_bonuses ?? {}
+
+  // Decompose final → base for the initial state. If the player has never
+  // touched the ability_scores step yet, default to point-buy starting values.
   const initial = useMemo(() => {
-    const fromDraft = draft.ability_scores
-    if (fromDraft && Object.values(fromDraft).some((v) => v !== 10)) return fromDraft
+    const final = draft.ability_scores
+    if (final && Object.values(final).some((v) => v !== 10)) {
+      const base = { ...final }
+      for (const [ab, bonus] of Object.entries(originBonuses)) {
+        base[ab] = (base[ab] ?? 10) - (bonus ?? 0)
+      }
+      return base
+    }
     return getDefaultPointBuyScores()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [draft.ability_scores])
 
   const [scores, setScores] = useState(initial)
@@ -105,6 +119,44 @@ export default function AbilityScoresStep({ draft, onSave, onSaveHpAc, onBack, o
     const result = rollAbilityScoresDetailed('4d6-drop-lowest')
     setScores(result.scores)
     setRollDetails(result.details)
+  }
+
+  // Switching modes resets to that mode's canonical starting state so the
+  // player doesn't see stale values that violate the new mode's rules
+  // (e.g. a rolled 16 carried into point-buy reads as "spent 40/27").
+  // Manual is the exception — any 1..20 value is valid there, no reason
+  // to wipe what the player has.
+  const handleModeChange = (newMode) => {
+    if (newMode === mode) return
+    if (newMode === 'point_buy') {
+      setScores(getDefaultPointBuyScores())
+      setRollDetails(null)
+    } else if (newMode === 'standard_array') {
+      setScores({
+        strength: undefined,
+        dexterity: undefined,
+        constitution: undefined,
+        intelligence: undefined,
+        wisdom: undefined,
+        charisma: undefined,
+      })
+      setRollDetails(null)
+    } else if (newMode === 'rolled') {
+      // Clear any non-rolled values so the player must click Roll to populate
+      // — keeps roll-detail provenance honest.
+      setScores({
+        strength: undefined,
+        dexterity: undefined,
+        constitution: undefined,
+        intelligence: undefined,
+        wisdom: undefined,
+        charisma: undefined,
+      })
+      setRollDetails(null)
+    }
+    // Manual: keep current values as-is (any 1..20 is valid).
+    setMode(newMode)
+    setError(null)
   }
 
   const standardArrayState = useMemo(() => {
@@ -172,7 +224,7 @@ export default function AbilityScoresStep({ draft, onSave, onSaveHpAc, onBack, o
             <button
               key={m.id}
               type="button"
-              onClick={() => setMode(m.id)}
+              onClick={() => handleModeChange(m.id)}
               className="px-3 py-1.5 border rounded-sm text-sm"
               style={{
                 borderColor: mode === m.id ? COLORS.silver : THEME.borderDefault,
@@ -228,9 +280,11 @@ export default function AbilityScoresStep({ draft, onSave, onSaveHpAc, onBack, o
 
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
         {ABILITIES.map((ab) => {
-          const rawValue = scores[ab.code]
-          const value = rawValue ?? (mode === 'rolled' && !hasRolled ? null : 10)
-          const mod = value != null ? modifier(value) : null
+          const baseValue = scores[ab.code]
+          const showBase = baseValue ?? (mode === 'rolled' && !hasRolled ? null : 10)
+          const bonus = originBonuses[ab.code] ?? 0
+          const finalValue = showBase != null ? showBase + bonus : null
+          const mod = finalValue != null ? modifier(finalValue) : null
           const detail = mode === 'rolled' ? rollDetails?.[ab.code] : null
           return (
             <div
@@ -241,13 +295,19 @@ export default function AbilityScoresStep({ draft, onSave, onSaveHpAc, onBack, o
               <div>
                 <div className="text-xs uppercase" style={{ color: THEME.textSecondary }}>{ab.label}</div>
                 <div className="text-xl font-bold" style={{ color: THEME.textOnDark }}>
-                  {value ?? '—'}
+                  {finalValue ?? '—'}
                   {mod != null && (
                     <span className="ml-2 text-sm" style={{ color: THEME.textSecondary }}>
                       ({mod >= 0 ? '+' : ''}{mod})
                     </span>
                   )}
                 </div>
+                {bonus > 0 && showBase != null && (
+                  <div className="text-[10px]" style={{ color: THEME.textSecondary }}>
+                    base {showBase}{' '}
+                    <span style={{ color: COLORS.silver }}>+{bonus} bg</span>
+                  </div>
+                )}
                 {detail && (
                   <div className="mt-1 text-[10px]" style={{ color: THEME.textSecondary }}>
                     Rolled {detail.rolls.join(', ')} (drop <span className="line-through">{detail.dropped}</span>)
@@ -256,7 +316,7 @@ export default function AbilityScoresStep({ draft, onSave, onSaveHpAc, onBack, o
               </div>
               {mode === 'standard_array' ? (
                 <select
-                  value={STANDARD_ARRAY.includes(value) ? value : ''}
+                  value={STANDARD_ARRAY.includes(baseValue) ? baseValue : ''}
                   onChange={(e) => handleStandardArrayPick(ab.code, Number(e.target.value))}
                   className="px-2 py-1 border rounded-sm text-sm"
                   style={{
@@ -267,7 +327,7 @@ export default function AbilityScoresStep({ draft, onSave, onSaveHpAc, onBack, o
                 >
                   <option value="">—</option>
                   {STANDARD_ARRAY.map((v) => (
-                    <option key={v} value={v} disabled={STANDARD_ARRAY.includes(value) && value !== v && !standardArrayState.includes(v)}>
+                    <option key={v} value={v} disabled={STANDARD_ARRAY.includes(baseValue) && baseValue !== v && !standardArrayState.includes(v)}>
                       {v}
                     </option>
                   ))}

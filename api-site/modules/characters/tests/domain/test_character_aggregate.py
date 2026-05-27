@@ -30,6 +30,7 @@ def _make(**overrides) -> CharacterAggregate:
         background_code="soldier",
         class_entries=[ClassEntry("fighter", 1, True)],
         ability_scores=AbilityScores.default(),
+        origin_ability_bonuses={},
         save_proficiencies=frozenset(),
         skills=[],
         feats=[],

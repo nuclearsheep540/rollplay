@@ -38,6 +38,7 @@ def _make(user_id, edition_id, **overrides) -> CharacterAggregate:
             ClassEntry("rogue", 2, False),
         ],
         ability_scores=AbilityScores(16, 12, 14, 10, 13, 8),
+        origin_ability_bonuses={},
         save_proficiencies=frozenset({"strength", "constitution"}),
         skills=[
             SkillProficiency("athletics", "CLASS"),
