@@ -63,6 +63,10 @@ class Character(Base):
     is_draft = Column(Boolean, nullable=False, default=True, server_default="true")
     creation_step = Column(String(30), nullable=True)
 
+    # S3 key for the uploaded avatar. NULL ⇒ frontend renders /heroes.png default.
+    # Key shape: {account_name}#{account_tag}/{character_id}/{unique_id}_{filename}
+    avatar_s3_key = Column(String(255), nullable=True)
+
     created_at = Column(DateTime(timezone=True), nullable=False)
     updated_at = Column(DateTime(timezone=True), nullable=False)
     is_deleted = Column(Boolean, nullable=False, default=False, server_default="false")

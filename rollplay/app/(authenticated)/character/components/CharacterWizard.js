@@ -59,6 +59,7 @@ export default function CharacterWizard() {
   const router = useRouter()
   const searchParams = useSearchParams()
   const draftIdFromUrl = searchParams.get('id')
+  const returnCampaignId = searchParams.get('return_campaign')
 
   const { data: editions, isLoading: editionsLoading } = useEditions()
   const draftQuery = useCharacterDraft(draftIdFromUrl)
@@ -83,11 +84,13 @@ export default function CharacterWizard() {
   // Once a draft is finalised, redirect to the read-only sheet. Done in an
   // effect rather than during render so we don't trigger a router setState
   // from within another component's render phase.
+  // Skip when `return_campaign` is set — handleFinalize routes back to the
+  // dashboard drawer instead, and we don't want this effect to race ahead.
   useEffect(() => {
-    if (draft && !draft.is_draft) {
+    if (draft && !draft.is_draft && !returnCampaignId) {
       router.replace(`/character/${draft.id}`)
     }
-  }, [draft?.id, draft?.is_draft, router])
+  }, [draft?.id, draft?.is_draft, returnCampaignId, router])
 
   // Wrap PATCH-style mutations with the autosave state machine. ``persistStep``
   // returns the server's fresh response (so callers can read derived fields).
@@ -108,7 +111,9 @@ export default function CharacterWizard() {
     // First "next" creates the draft on the server, putting an id in the URL.
     const created = await createDraft.mutateAsync({ editionCode, name })
     setSaveState('saved')
-    router.replace(`/character/create?id=${created.id}`)
+    const params = new URLSearchParams({ id: created.id })
+    if (returnCampaignId) params.set('return_campaign', returnCampaignId)
+    router.replace(`/character/create?${params.toString()}`)
     setCurrentStep('identity')
   }
 
@@ -121,6 +126,15 @@ export default function CharacterWizard() {
   const handleFinalize = async () => {
     try {
       const finalised = await finalizeDraft.mutateAsync()
+      if (returnCampaignId) {
+        try {
+          sessionStorage.setItem('openCharacterModalForCampaign', returnCampaignId)
+        } catch (e) {
+          // sessionStorage blocked — modal won't auto-reopen, but the user lands on the right drawer.
+        }
+        router.push(`/dashboard?tab=campaigns&expand_campaign_id=${returnCampaignId}`)
+        return
+      }
       router.push(`/character/${finalised.id}`)
     } catch (err) {
       // Errors surface inside ReviewStep via the mutation hook.

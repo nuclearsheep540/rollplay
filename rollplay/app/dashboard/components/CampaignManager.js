@@ -1632,6 +1632,13 @@ export default function CampaignManager({ user, onExpandedChange, inviteCampaign
                                     </div>
                                   )
                                 }
+                                // The current user can click their own tile to
+                                // open the character-selection modal — picking
+                                // a character if they have none, or swapping
+                                // if they do. DMs/mods don't hold characters,
+                                // so the tile stays non-interactive for them.
+                                const isCurrentUser = member.user_id === user.id
+                                const canSelectCharacter = isCurrentUser && !member.is_host && member.campaign_role !== 'mod'
                                 // Second line: role-specific descriptor for
                                 // DM/mod/spectator (who don't hold a
                                 // character), or the player's character
@@ -1642,12 +1649,18 @@ export default function CampaignManager({ user, onExpandedChange, inviteCampaign
                                     ? 'Moderator'
                                     : member.character_id
                                       ? `${member.character_name} · Lv ${member.character_level} ${member.character_class}`
-                                      : 'No character selected'
+                                      : canSelectCharacter
+                                        ? 'Select a character →'
+                                        : 'No character selected'
                                 return (
                                   <div
                                     key={member.user_id}
-                                    className="flex items-stretch justify-between rounded-sm border overflow-hidden relative"
-                                    style={{backgroundColor: THEME.bgSecondary, borderColor: THEME.borderSubtle}}
+                                    onClick={canSelectCharacter ? () => handleSelectCharacter(campaign) : undefined}
+                                    className={`flex items-stretch justify-between rounded-sm border overflow-hidden relative ${canSelectCharacter ? 'cursor-pointer transition-all hover:opacity-90' : ''}`}
+                                    style={{
+                                      backgroundColor: THEME.bgSecondary,
+                                      borderColor: canSelectCharacter && !member.character_id ? THEME.borderActive : THEME.borderSubtle,
+                                    }}
                                   >
                                     {/* Hero-image wedge — angled reveal of
                                         the default character portrait on
@@ -2184,6 +2197,7 @@ export default function CampaignManager({ user, onExpandedChange, inviteCampaign
         <CharacterSelectionModal
           campaign={characterModalCampaign}
           characters={characters}
+          currentCharacterId={characterModalCampaign.members?.find(m => m.user_id === user.id)?.character_id ?? null}
           onClose={() => {
             setShowCharacterModal(false)
             setCharacterModalCampaign(null)

@@ -188,6 +188,9 @@ class CharacterAggregate:
     updated_at: datetime
     is_deleted: bool = False
 
+    # Uploaded avatar. ``None`` ⇒ frontend shows the default /heroes.png.
+    avatar_s3_key: Optional[str] = None
+
     # -------------------------------------------------------------- factory
 
     @classmethod
@@ -267,6 +270,11 @@ class CharacterAggregate:
 
     def set_creation_step(self, step: Optional[str]) -> None:
         self.creation_step = step
+        self._touch()
+
+    def set_avatar(self, s3_key: Optional[str]) -> None:
+        """Attach (or clear) the uploaded avatar S3 key."""
+        self.avatar_s3_key = s3_key
         self._touch()
 
     # -------------------------------------------------------------- ownership / locking
