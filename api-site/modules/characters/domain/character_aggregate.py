@@ -195,6 +195,12 @@ class CharacterAggregate:
     avatar_asset_id: Optional[UUID] = None
     avatar_s3_key: Optional[str] = None
 
+    # Provenance of the current ability_scores. Lets the wizard resume in the
+    # mode the player last used, and (for ``rolled``) re-display the original
+    # 4d6 breakdown instead of forcing a re-roll on refresh.
+    ability_score_method: Optional[str] = None
+    ability_roll_details: Optional[dict] = None
+
     # -------------------------------------------------------------- factory
 
     @classmethod

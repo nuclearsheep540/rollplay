@@ -12,7 +12,7 @@ from sqlalchemy import (
     SmallInteger,
     String,
 )
-from sqlalchemy.dialects.postgresql import ARRAY, UUID
+from sqlalchemy.dialects.postgresql import ARRAY, JSONB, UUID
 from sqlalchemy.orm import relationship
 
 from shared.dependencies.db import Base
@@ -62,6 +62,15 @@ class Character(Base):
 
     is_draft = Column(Boolean, nullable=False, default=True, server_default="true")
     creation_step = Column(String(30), nullable=True)
+
+    # Provenance of the current ability_scores: which mode the wizard used
+    # ('point_buy' / 'standard_array' / 'rolled' / 'manual'). NULL until the
+    # player completes the ability_scores step. ``ability_roll_details`` holds
+    # the per-ability 4d6 breakdown when ``method == 'rolled'`` so the wizard
+    # can re-display the original dice on resume / refresh without us having to
+    # re-roll (which would change the values).
+    ability_score_method = Column(String(20), nullable=True)
+    ability_roll_details = Column(JSONB, nullable=True)
 
     # FK to the MediaAsset (asset_type='image') used as this character's
     # avatar. NULL ⇒ frontend renders /heroes.png default. SET NULL on the
