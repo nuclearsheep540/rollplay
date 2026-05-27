@@ -7,16 +7,27 @@
 
 import { useEffect, useMemo, useState } from 'react'
 
-import Combobox from '@/app/shared/components/Combobox'
-import { THEME, COLORS } from '@/app/styles/colorTheme'
+import { THEME } from '@/app/styles/colorTheme'
 
 import { useEditionSpecies } from '../../hooks/useReferenceData'
+import SpeciesTile from './SpeciesTile'
 import StepFooter from './StepFooter'
 
 export default function SpeciesStep({ draft, onSave, onBack, onNext }) {
   const { data: speciesList, isLoading } = useEditionSpecies(draft.edition_code)
-  const [speciesCode, setSpeciesCode] = useState(draft.species_code || '')
+
+  // The chosen species (one). null/undefined ⇒ player hasn't selected yet, so
+  // the picker is auto-open. Hydrate from the draft on mount so refreshes
+  // resume on the correct selection.
+  const [speciesCode, setSpeciesCode] = useState(draft.species_code || null)
   const [extraLanguages, setExtraLanguages] = useState([])
+
+  // Picker visibility — open when no species is selected, hidden once one is
+  // picked. The selected tile remains expanded above; player can hit ✕ to
+  // clear and re-open the picker.
+  const [pickerOpen, setPickerOpen] = useState(() => !draft.species_code)
+  const [expandedInPicker, setExpandedInPicker] = useState(null)
+
   const [error, setError] = useState(null)
   const [saving, setSaving] = useState(false)
 
@@ -26,12 +37,7 @@ export default function SpeciesStep({ draft, onSave, onBack, onNext }) {
 
   const species = useMemo(
     () => speciesList?.find((s) => s.code === speciesCode),
-    [speciesList, speciesCode]
-  )
-
-  const speciesOptions = useMemo(
-    () => (speciesList ?? []).map((s) => ({ value: s.code, label: s.name })),
-    [speciesList]
+    [speciesList, speciesCode],
   )
 
   const languageChoiceCount = species?.language_choices?.count ?? 0
@@ -44,9 +50,21 @@ export default function SpeciesStep({ draft, onSave, onBack, onNext }) {
     })
   }
 
+  const handleSelectSpecies = (code) => {
+    setSpeciesCode(code)
+    setPickerOpen(false)
+    setExpandedInPicker(null)
+  }
+
+  const handleClearSpecies = () => {
+    setSpeciesCode(null)
+    setExtraLanguages([])
+    setPickerOpen(true)
+  }
+
   const handleNext = async () => {
     setError(null)
-    if (!speciesCode) {
+    if (!species) {
       setError('Pick a species before continuing.')
       return
     }
@@ -88,78 +106,55 @@ export default function SpeciesStep({ draft, onSave, onBack, onNext }) {
         </p>
       </header>
 
-      <Combobox
-        label="Species"
-        required
-        options={speciesOptions}
-        value={speciesCode}
-        onChange={setSpeciesCode}
-        placeholder="Search species…"
-      />
-
+      {/* Selected species — always rendered expanded with the language picker
+          (when this species offers extra picks) below the info body. */}
       {species && (
-        <div className="rounded-sm border p-4" style={{
-          borderColor: THEME.borderSubtle,
-          backgroundColor: `${COLORS.smoke}08`,
-        }}>
-          <div className="grid grid-cols-3 gap-3 text-sm">
-            <div>
-              <div style={{ color: THEME.textSecondary }} className="text-xs uppercase">Size</div>
-              <div style={{ color: THEME.textOnDark }}>{species.size}</div>
-            </div>
-            <div>
-              <div style={{ color: THEME.textSecondary }} className="text-xs uppercase">Speed</div>
-              <div style={{ color: THEME.textOnDark }}>{species.speed} ft</div>
-            </div>
-            <div>
-              <div style={{ color: THEME.textSecondary }} className="text-xs uppercase">Creature type</div>
-              <div style={{ color: THEME.textOnDark }}>{species.creature_type}</div>
-            </div>
-          </div>
+        <SpeciesTile
+          species={species}
+          mode="selected"
+          extraLanguages={extraLanguages}
+          onExtraLanguageChange={handleExtraLanguageChange}
+          onRemove={handleClearSpecies}
+        />
+      )}
 
-          <div className="mt-3">
-            <div style={{ color: THEME.textSecondary }} className="text-xs uppercase">Languages</div>
-            <div style={{ color: THEME.textOnDark }} className="text-sm">
-              {species.default_languages.join(', ') || '—'}
-            </div>
-          </div>
-
-          {languageChoiceCount > 0 && (
-            <div className="mt-3 space-y-2">
-              <div style={{ color: THEME.textSecondary }} className="text-xs uppercase">
-                Extra languages — choose {languageChoiceCount}
+      {/* Picker — open when no species is selected, or after the player clears
+          the current pick via the ✕. One selection only; selecting replaces
+          any previous choice. */}
+      {pickerOpen && (
+        <div className="space-y-2">
+          {species && (
+            <div className="flex items-center justify-between">
+              <div className="text-xs uppercase" style={{ color: THEME.textSecondary }}>
+                Change species
               </div>
-              {Array.from({ length: languageChoiceCount }).map((_, idx) => (
-                <input
-                  key={idx}
-                  type="text"
-                  value={extraLanguages[idx] ?? ''}
-                  onChange={(e) => handleExtraLanguageChange(idx, e.target.value)}
-                  placeholder={`Language ${idx + 1}`}
-                  className="w-full px-3 py-2 border rounded-sm focus:outline-none focus:ring-1 text-sm"
-                  style={{
-                    backgroundColor: THEME.bgSecondary,
-                    borderColor: THEME.borderDefault,
-                    color: THEME.textOnDark,
-                  }}
-                />
-              ))}
+              <button
+                type="button"
+                onClick={() => {
+                  setPickerOpen(false)
+                  setExpandedInPicker(null)
+                }}
+                className="text-xs px-2 py-1 rounded-sm border"
+                style={{
+                  borderColor: THEME.borderDefault,
+                  color: THEME.textOnDark,
+                  backgroundColor: 'transparent',
+                }}
+              >
+                Cancel
+              </button>
             </div>
           )}
-
-          {species.traits.length > 0 && (
-            <div className="mt-4">
-              <div style={{ color: THEME.textSecondary }} className="text-xs uppercase mb-2">Traits</div>
-              <ul className="space-y-2">
-                {species.traits.map((t) => (
-                  <li key={t.name} className="text-sm">
-                    <span className="font-semibold" style={{ color: THEME.textOnDark }}>{t.name}.</span>{' '}
-                    <span style={{ color: THEME.textSecondary }}>{t.description}</span>
-                  </li>
-                ))}
-              </ul>
-            </div>
-          )}
+          {(speciesList ?? []).map((sp) => (
+            <SpeciesTile
+              key={sp.code}
+              species={sp}
+              mode={expandedInPicker === sp.code ? 'expandedToPick' : 'collapsed'}
+              onExpand={() => setExpandedInPicker(sp.code)}
+              onCollapse={() => setExpandedInPicker(null)}
+              onSelect={() => handleSelectSpecies(sp.code)}
+            />
+          ))}
         </div>
       )}
 
@@ -169,7 +164,12 @@ export default function SpeciesStep({ draft, onSave, onBack, onNext }) {
         </div>
       )}
 
-      <StepFooter onBack={onBack} onNext={handleNext} nextDisabled={!speciesCode || saving} nextLabel={saving ? 'Saving…' : 'Next →'} />
+      <StepFooter
+        onBack={onBack}
+        onNext={handleNext}
+        nextDisabled={!species || saving}
+        nextLabel={saving ? 'Saving…' : 'Next →'}
+      />
     </div>
   )
 }
