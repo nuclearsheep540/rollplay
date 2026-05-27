@@ -5,7 +5,7 @@
 
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { authFetch } from '@/app/shared/utils/authFetch'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
@@ -36,6 +36,23 @@ export default function CharacterManager({ user, onExpandedChange }) {
   // Selection and resize state for horizontal scroll layout
   const [selectedCharacter, setSelectedCharacter] = useState(null)
   const [isResizing, setIsResizing] = useState(false)
+
+  // Native wheel listener (React's onWheel is passive, so preventDefault
+  // there is a no-op). Attaches non-passive so we can swallow the vertical
+  // scroll and convert it into horizontal — otherwise the page scrolls Y
+  // while the cards stay put.
+  const scrollRowRef = useRef(null)
+  useEffect(() => {
+    const el = scrollRowRef.current
+    if (!el) return
+    const onWheel = (e) => {
+      if (e.deltaY === 0) return
+      e.preventDefault()
+      el.scrollLeft += e.deltaY
+    }
+    el.addEventListener('wheel', onWheel, { passive: false })
+    return () => el.removeEventListener('wheel', onWheel)
+  }, [loading, error, selectedCharacter])
 
   // Edit mode state
   const [isEditing, setIsEditing] = useState(false)
@@ -232,10 +249,16 @@ export default function CharacterManager({ user, onExpandedChange }) {
     </div>
   )
 
-  // Card width constant - used by both character cards and create card
-  // Based on available height (~55vh after header/tabs/title/padding) * 9/16 aspect ratio
-  // Min 140px for very small screens, max 600px for large displays
-  const CARD_WIDTH = 'clamp(140px, calc(55vh * 0.5625), 600px)'
+  // Cards fill the scroll row's full height; width is derived from the
+  // 9:16 portrait aspect ratio. Min/max keep the cards usable on extreme
+  // viewports without re-introducing a fixed-width clamp.
+  const CARD_STYLE = {
+    height: '100%',
+    width: 'auto',
+    aspectRatio: '9/16',
+    minWidth: '140px',
+    maxWidth: '600px',
+  }
 
   // Render character card (9:16 portrait aspect ratio for modern devices)
   const renderCharacterCard = (char) => (
@@ -243,8 +266,7 @@ export default function CharacterManager({ user, onExpandedChange }) {
       key={char.id}
       className="flex-shrink-0 rounded-sm border-2 overflow-hidden cursor-pointer"
       style={{
-        width: CARD_WIDTH,
-        aspectRatio: '9/16',
+        ...CARD_STYLE,
         backgroundColor: THEME.bgPanel,
         borderColor: selectedCharacter?.id === char.id ? THEME.borderActive : THEME.borderDefault,
         transition: isResizing ? 'none' : 'border-color 200ms ease-in-out',
@@ -305,10 +327,7 @@ export default function CharacterManager({ user, onExpandedChange }) {
   const renderCreateCard = () => (
     <div
       className="flex-shrink-0 rounded-sm overflow-hidden"
-      style={{
-        width: CARD_WIDTH,
-        aspectRatio: '9/16'
-      }}
+      style={CARD_STYLE}
     >
       <button
         onClick={() => router.push('/character/create')}
@@ -566,7 +585,8 @@ export default function CharacterManager({ user, onExpandedChange }) {
         {/* Tile scroll area - hidden when expanded */}
         {!loading && !error && (
           <div
-            className="flex gap-4 overflow-x-auto h-full items-start"
+            ref={scrollRowRef}
+            className="flex gap-4 overflow-x-auto h-full items-stretch"
             style={{
               paddingLeft: 'clamp(0.5rem, 2.5vw, 3.5rem)',
               paddingRight: 'clamp(0.5rem, 2.5vw, 3.5rem)',
