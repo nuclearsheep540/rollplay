@@ -211,7 +211,9 @@ export default function WizardChrome({
 
       {/* Middle: scrollable wizard column (name header + step body). */}
       <div className="flex-1 overflow-y-auto min-w-0">
-        <div className="mx-auto max-w-3xl px-4 py-8 sm:px-8">
+        {/* Horizontal padding intentionally dropped so the step body card
+            stretches flush to the column edges. Vertical breathing room kept. */}
+        <div className="mx-auto max-w-3xl py-8">
           {/* Standalone name header — no card, larger heading. Save
               indicator sits to its right so the user sees mutation feedback
               next to the most-edited field. */}
