@@ -10,8 +10,12 @@ import { useParams, useRouter } from 'next/navigation'
 
 import { THEME, COLORS } from '@/app/styles/colorTheme'
 
+import CharacterAvatarPane from '../components/CharacterAvatarPane'
 import CharacterSheet from '../components/CharacterSheet'
 import { useCharacterDraft } from '../hooks/useCharacterDraft'
+
+const SRD_ATTRIBUTION =
+  'Content from D&D SRD 5.2.1, © Wizards of the Coast, used under CC BY 4.0.'
 
 export default function CharacterDetailPage() {
   const router = useRouter()
@@ -54,26 +58,47 @@ export default function CharacterDetailPage() {
   }
 
   return (
+    // Same two-column shell as the wizard's WizardChrome: avatar pane on the
+    // left at 33vw, sheet on the right filling the remaining width. Read-only
+    // — no edit affordances on the avatar or the sheet.
     <main
-      className="flex-1 overflow-y-auto"
+      className="flex-1 flex min-h-0 overflow-hidden"
       style={{ backgroundColor: THEME.bgPrimary, color: THEME.textPrimary }}
     >
-      <div className="mx-auto max-w-4xl px-4 py-8 sm:px-8">
-        <div className="mb-4">
-          <button
-            type="button"
-            onClick={() => router.push('/dashboard?tab=characters')}
-            className="text-sm"
-            style={{ color: THEME.textPrimary }}
+      <div className="shrink-0" style={{ width: '33vw' }}>
+        <CharacterAvatarPane avatarUrl={character.avatar_url} readOnly />
+      </div>
+
+      <div className="flex-1 overflow-y-auto min-w-0">
+        <div className="max-w-3xl pl-8 pr-6 py-8">
+          <div className="mb-4">
+            <button
+              type="button"
+              onClick={() => router.push('/dashboard?tab=characters')}
+              className="text-sm"
+              style={{ color: THEME.textPrimary }}
+            >
+              ← Back to characters
+            </button>
+          </div>
+
+          <div
+            className="rounded-sm border p-6 sm:p-8"
+            style={{
+              backgroundColor: COLORS.carbon,
+              borderColor: THEME.borderSubtle,
+              color: THEME.textOnDark,
+            }}
           >
-            ← Back to characters
-          </button>
-        </div>
-        <div
-          className="rounded-sm border p-6 sm:p-8"
-          style={{ backgroundColor: COLORS.carbon, borderColor: THEME.borderSubtle, color: THEME.textOnDark }}
-        >
-          <CharacterSheet character={character} />
+            <CharacterSheet character={character} />
+          </div>
+
+          <p
+            className="mt-4 text-xs text-center"
+            style={{ color: THEME.textPrimary, opacity: 0.6 }}
+          >
+            {SRD_ATTRIBUTION}
+          </p>
         </div>
       </div>
     </main>

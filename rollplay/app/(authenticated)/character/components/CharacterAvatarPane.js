@@ -33,12 +33,15 @@ const DEFAULT_AVATAR = '/heroes.png'
  * - ``isBusy`` — drives the dimmed/non-interactive state during the PATCH
  * - ``error`` — string from the wizard's mutation state
  * - ``onOpenPicker()`` — wizard handler that opens the avatar picker modal
+ * - ``readOnly`` — drops the edit affordances (pen icon, hover dim, click target)
+ *   for the finalised-character view
  */
 export default function CharacterAvatarPane({
   avatarUrl,
   isBusy = false,
   error = null,
   onOpenPicker,
+  readOnly = false,
 }) {
   const displayUrl = avatarUrl || DEFAULT_AVATAR
 
@@ -55,60 +58,64 @@ export default function CharacterAvatarPane({
       {/* Wedge-clipped image layer — single-element trick the workshop
           tool buttons use: background stacks the inner shadow over the
           avatar, clip-path carves the forward-slash wedge. The 20% knock-out
-          on hover hints that the wedge is clickable. */}
+          on hover hints that the wedge is clickable (skipped in read-only). */}
       <div
-        className="absolute inset-0 bg-cover bg-center pointer-events-none transition-opacity duration-150 group-hover:opacity-80 group-focus-within:opacity-80"
+        className={`absolute inset-0 bg-cover bg-center pointer-events-none transition-opacity duration-150 ${
+          readOnly ? '' : 'group-hover:opacity-80 group-focus-within:opacity-80'
+        }`}
         style={{
           clipPath: WEDGE_CLIP,
           backgroundImage: `${WEDGE_INNER_SHADOW}, url('${displayUrl}')`,
         }}
       />
 
-      {/* Full-pane click target. Keyboard-accessible via the native button
-          element. Always interactable (except during the PATCH round-trip);
-          the modal handles its own gating after that. */}
-      <button
-        type="button"
-        disabled={isBusy}
-        onClick={onOpenPicker}
-        className="absolute inset-0 z-10 flex items-center justify-center disabled:cursor-default"
-        style={{ clipPath: WEDGE_CLIP }}
-        aria-label="Change character avatar"
-      >
-        {/* Centred pen-to-square icon — the visual cue that the avatar is
-            editable. Translucent by default; hover/focus brings it forward
-            (with a soft dark backplate so it stays legible against busy
-            images). */}
-        <span
-          className="rounded-full p-5 transition-all duration-150 group-hover:bg-black/40 group-focus-within:bg-black/40"
-          style={{
-            backgroundColor: 'transparent',
-          }}
+      {!readOnly && (
+        // Full-pane click target. Keyboard-accessible via the native button
+        // element. Always interactable (except during the PATCH round-trip);
+        // the modal handles its own gating after that.
+        <button
+          type="button"
+          disabled={isBusy}
+          onClick={onOpenPicker}
+          className="absolute inset-0 z-10 flex items-center justify-center disabled:cursor-default"
+          style={{ clipPath: WEDGE_CLIP }}
+          aria-label="Change character avatar"
         >
-          <FontAwesomeIcon
-            icon={faPenToSquare}
-            className="h-10 w-10 transition-opacity duration-150 group-hover:opacity-100 group-focus-within:opacity-100"
-            style={{
-              color: COLORS.smoke,
-              opacity: isBusy ? 0.9 : 0.6,
-              filter: 'drop-shadow(0 1px 4px rgba(0,0,0,0.6))',
-            }}
-          />
-        </span>
-
-        {isBusy && (
+          {/* Centred pen-to-square icon — the visual cue that the avatar is
+              editable. Translucent by default; hover/focus brings it forward
+              (with a soft dark backplate so it stays legible against busy
+              images). */}
           <span
-            className="absolute bottom-6 left-1/2 -translate-x-1/2 rounded-sm border px-3 py-1 text-xs font-semibold backdrop-blur-sm"
+            className="rounded-full p-5 transition-all duration-150 group-hover:bg-black/40 group-focus-within:bg-black/40"
             style={{
-              backgroundColor: `${COLORS.onyx}AA`,
-              borderColor: COLORS.silver,
-              color: COLORS.smoke,
+              backgroundColor: 'transparent',
             }}
           >
-            Saving…
+            <FontAwesomeIcon
+              icon={faPenToSquare}
+              className="h-10 w-10 transition-opacity duration-150 group-hover:opacity-100 group-focus-within:opacity-100"
+              style={{
+                color: COLORS.smoke,
+                opacity: isBusy ? 0.9 : 0.6,
+                filter: 'drop-shadow(0 1px 4px rgba(0,0,0,0.6))',
+              }}
+            />
           </span>
-        )}
-      </button>
+
+          {isBusy && (
+            <span
+              className="absolute bottom-6 left-1/2 -translate-x-1/2 rounded-sm border px-3 py-1 text-xs font-semibold backdrop-blur-sm"
+              style={{
+                backgroundColor: `${COLORS.onyx}AA`,
+                borderColor: COLORS.silver,
+                color: COLORS.smoke,
+              }}
+            >
+              Saving…
+            </span>
+          )}
+        </button>
+      )}
 
       {error && (
         <div
