@@ -10,19 +10,24 @@ import { authFetch } from '@/app/shared/utils/authFetch'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
 import {
-  faPenToSquare,
   faTrash,
   faLock,
   faPlus,
-  faCopy
 } from '@fortawesome/free-solid-svg-icons'
 import { COLORS, THEME } from '@/app/styles/colorTheme'
 import Modal from '@/app/shared/components/Modal'
 import Spinner from '@/app/shared/components/Spinner'
 import { Button } from './shared/Button'
 import { useDeleteCharacter } from '../hooks/mutations/useCharacterMutations'
+import CharacterAvatarPane from '@/app/(authenticated)/character/components/CharacterAvatarPane'
+import CharacterSheet from '@/app/(authenticated)/character/components/CharacterSheet'
 
-export default function CharacterManager({ user, onExpandedChange }) {
+export default function CharacterManager({
+  user,
+  onExpandedChange,
+  expandCharacterId,
+  clearExpandCharacterId,
+}) {
   const router = useRouter()
   const searchParams = useSearchParams()
   const [characters, setCharacters] = useState([])
@@ -131,6 +136,20 @@ export default function CharacterManager({ user, onExpandedChange }) {
   useEffect(() => {
     onExpandedChange?.(!!selectedCharacter)
   }, [selectedCharacter, onExpandedChange])
+
+  // Auto-expand character from URL param (mirrors CampaignManager's
+  // expandCampaignId pattern). Fires once characters have loaded so the
+  // freshly-created character (set via /dashboard?expand_character_id=...)
+  // surfaces in its drawer instead of the tile row.
+  useEffect(() => {
+    if (expandCharacterId && !loading) {
+      const character = characters.find((c) => c.id === expandCharacterId)
+      if (character && selectedCharacter?.id !== character.id) {
+        setSelectedCharacter(character)
+      }
+      clearExpandCharacterId?.()
+    }
+  }, [expandCharacterId, characters, loading])
 
   // Reset expanded state on unmount
   useEffect(() => {
@@ -356,26 +375,29 @@ export default function CharacterManager({ user, onExpandedChange }) {
     </div>
   )
 
-  // Render stats panel (portrait-oriented, for side-by-side layout)
+  // Render stats panel — shares CharacterSheet with the /character/[id]
+  // read-only route so both surfaces show the exact same data. Drawer chrome
+  // (Close, Delete) lives here; sheet body is delegated.
   const renderStatsPanel = () => {
     if (!selectedCharacter) return null
 
     return (
-      <div
-        className="flex-1 p-6 overflow-y-auto"
-        style={{
-          backgroundColor: THEME.bgPanel,
-          borderLeft: `2px solid ${THEME.borderSubtle}`
-        }}
-      >
-        {/* Header with Close button */}
+      // Transparent — the drawer overlay paints the page colour. Avoids a
+      // double-painted layer (carbon under graphite) that previously made
+      // this surface read darker than the wizard. No left border either:
+      // the wedge avatar pane provides the visual division on its own.
+      <div className="flex-1 p-6 overflow-y-auto">
+        {/* Drawer chrome — Close on the right, Delete on the left so the
+            destructive action stays away from the dismiss target. */}
         <div className="flex items-center justify-between mb-6">
-          <h3
-            className="text-2xl font-semibold font-[family-name:var(--font-metamorphous)]"
-            style={{color: THEME.textOnDark}}
+          <Button
+            variant="danger"
+            onClick={() => handleDeleteClick(selectedCharacter)}
+            disabled={selectedCharacter.active_game}
           >
-            {selectedCharacter.character_name}
-          </h3>
+            <FontAwesomeIcon icon={faTrash} className="mr-2" />
+            Delete
+          </Button>
           <button
             onClick={() => {
               setSelectedCharacter(null)
@@ -385,190 +407,48 @@ export default function CharacterManager({ user, onExpandedChange }) {
             style={{
               color: THEME.textSecondary,
               borderColor: THEME.borderSubtle,
-              backgroundColor: THEME.bgSecondary
+              backgroundColor: THEME.bgSecondary,
             }}
           >
             Close
           </button>
         </div>
 
-        {/* Stats stacked vertically for portrait layout */}
-        <div className="space-y-6">
-          {/* Basic Info */}
-          <div className="space-y-3">
-            <h4 className="text-sm font-semibold uppercase" style={{color: THEME.textAccent}}>Basic Info</h4>
-            <div
-              className="p-4 rounded-sm border"
-              style={{backgroundColor: THEME.bgSecondary, borderColor: THEME.borderSubtle}}
-            >
-              <p className="text-lg" style={{color: THEME.textOnDark}}>
-                Level {selectedCharacter.level} {selectedCharacter.character_race}
-              </p>
-              <p style={{color: THEME.textSecondary}}>
-                {selectedCharacter.character_classes?.map(c => c.character_class).join(' / ') || 'No Class'}
-              </p>
-              {selectedCharacter.background && (
-                <p className="text-sm mt-2" style={{color: THEME.textSecondary}}>
-                  Background: {selectedCharacter.background}
-                </p>
-              )}
-            </div>
-          </div>
-
-          {/* Combat Stats */}
-          <div className="space-y-3">
-            <h4 className="text-sm font-semibold uppercase" style={{color: THEME.textAccent}}>Combat Stats</h4>
-            <div className="grid grid-cols-2 gap-4">
-              <div
-                className="p-4 rounded-sm border text-center"
-                style={{backgroundColor: THEME.bgSecondary, borderColor: THEME.borderSubtle}}
-              >
-                <p className="text-3xl font-bold" style={{color: THEME.textOnDark}}>
-                  {selectedCharacter.ac || 0}
-                </p>
-                <p className="text-sm" style={{color: THEME.textSecondary}}>AC</p>
-              </div>
-              <div
-                className="p-4 rounded-sm border text-center"
-                style={{backgroundColor: THEME.bgSecondary, borderColor: THEME.borderSubtle}}
-              >
-                <p className="text-3xl font-bold" style={{color: THEME.textOnDark}}>
-                  {selectedCharacter.hp_current || 0}/{selectedCharacter.hp_max || 0}
-                </p>
-                <p className="text-sm" style={{color: THEME.textSecondary}}>HP</p>
-              </div>
-            </div>
-          </div>
-
-          {/* Ability Scores - 2x3 grid for portrait */}
-          <div className="space-y-3">
-            <h4 className="text-sm font-semibold uppercase" style={{color: THEME.textAccent}}>Ability Scores</h4>
-            <div className="grid grid-cols-2 gap-3">
-              {['strength', 'dexterity', 'constitution', 'intelligence', 'wisdom', 'charisma'].map(ability => {
-                const score = selectedCharacter.ability_scores?.[ability] || 10
-                const modifier = Math.floor((score - 10) / 2)
-                const modifierStr = modifier >= 0 ? `+${modifier}` : `${modifier}`
-                return (<div
-                  key={ability}
-                  className="p-3 rounded-sm border text-center"
-                  style={{backgroundColor: THEME.bgSecondary, borderColor: THEME.borderSubtle}}
-                >
-                  <p className="text-xs uppercase mb-1" style={{color: THEME.textSecondary}}>
-                    {ability}
-                  </p>
-                  <p className="text-xl font-bold" style={{color: THEME.textOnDark}}>
-                    {modifierStr}
-                  </p>
-                  <p className="text-sm" style={{color: THEME.textSecondary}}>
-                    {score}
-                  </p>
-                </div>
-              )
-              })}
-            </div>
-          </div>
-
-          {/* Action Buttons */}
-          <div className="pt-6 border-t space-y-3" style={{borderTopColor: THEME.borderSubtle}}>
-            {/* Edit and Clone on same row */}
-            <div className="flex gap-3">
-              <Button
-                variant="primary"
-                className="flex-1 justify-center"
-                onClick={enterEditMode}
-              >
-                <FontAwesomeIcon icon={faPenToSquare} className="mr-2" />
-                Edit Character
-              </Button>
-              <Button
-                variant="primary"
-                className="flex-1 justify-center"
-                onClick={enterCloneMode}
-              >
-                <FontAwesomeIcon icon={faCopy} className="mr-2" />
-                Clone Character
-              </Button>
-            </div>
-            <Button
-              variant="danger"
-              className="w-full justify-center"
-              onClick={() => handleDeleteClick(selectedCharacter)}
-              disabled={selectedCharacter.active_game}
-            >
-              <FontAwesomeIcon icon={faTrash} className="mr-2" />
-              Delete Character
-            </Button>
-          </div>
-
-          {/* Created Date */}
-          <p className="text-xs" style={{color: THEME.textSecondary}}>
-            Created: {selectedCharacter.created_at ? new Date(selectedCharacter.created_at).toLocaleDateString() : 'Unknown'}
-          </p>
-        </div>
+        <CharacterSheet character={selectedCharacter} />
       </div>
     )
   }
 
-  // Render selected character card for expanded view (left side) - hero style, fills container
+  // Render the avatar pane on the left side of the expanded drawer — uses
+  // the same wedge-clipped pane as the wizard + read-only sheet, in
+  // ``readOnly`` mode (no edit affordances). The In-Game badge stays as a
+  // local overlay since it's drawer-specific context.
   const renderSelectedCard = () => {
     if (!selectedCharacter) return null
 
     const char = selectedCharacter
     return (
       <div
-        className="flex flex-col cursor-pointer"
+        className="relative flex flex-col"
         style={{
-          backgroundImage: 'url(/heroes.png)',
-          backgroundSize: 'cover',
-          backgroundPosition: 'center',
-          width: 'clamp(320px, 30vw, 800px)', // Scales with viewport, larger max for wide screens
+          width: 'clamp(320px, 30vw, 800px)',
           minWidth: 'clamp(320px, 30vw, 800px)',
-          height: '100%' // Fill parent height
-        }}
-        onClick={() => {
-          setSelectedCharacter(null)
-          onExpandedChange?.(false)
+          height: '100%',
         }}
       >
-        {/* Dark overlay for the entire card */}
-        <div
-          className="flex-1 w-full flex flex-col relative"
-          style={{
-            backgroundColor: `${COLORS.onyx}70`
-          }}
-        >
-          {/* In Game badge - top right */}
-          {char.active_game && (
-            <div className="absolute top-4 right-4 z-10">
-              <span
-                className="px-3 py-1.5 text-sm font-semibold rounded-sm border flex items-center gap-1.5"
-                style={{backgroundColor: '#16a34a', borderColor: '#22c55e', color: 'white'}}
-              >
-                <FontAwesomeIcon icon={faLock} className="text-sm" />
-                In Game
-              </span>
-            </div>
-          )}
+        <CharacterAvatarPane avatarUrl={char.avatar_url} readOnly />
 
-          {/* Spacer to push content to bottom */}
-          <div className="flex-1" />
-
-          {/* Name + Level at bottom with gradient fade */}
-          <div
-            className="p-6 flex flex-col justify-end"
-            style={{
-              background: `linear-gradient(to top, ${COLORS.onyx}E6 0%, ${COLORS.onyx}80 50%, transparent 100%)`,
-              minHeight: '120px'
-            }}
-          >
-            <h3 className="text-2xl font-[family-name:var(--font-metamorphous)]" style={{color: THEME.textOnDark}}>
-              {char.character_name || 'Unnamed'}
-            </h3>
-            <p className="text-base mt-1" style={{color: THEME.textSecondary}}>
-              Level {char.level || 1} {char.character_race || ''}
-            </p>
+        {char.active_game && (
+          <div className="absolute top-4 right-8 z-10">
+            <span
+              className="px-3 py-1.5 text-sm font-semibold rounded-sm border flex items-center gap-1.5"
+              style={{ backgroundColor: '#16a34a', borderColor: '#22c55e', color: 'white' }}
+            >
+              <FontAwesomeIcon icon={faLock} className="text-sm" />
+              In Game
+            </span>
           </div>
-        </div>
+        )}
       </div>
     )
   }
@@ -605,13 +485,16 @@ export default function CharacterManager({ user, onExpandedChange }) {
           </div>
         )}
 
-        {/* Expanded view - separate full-width overlay (like CampaignManager's drawer) */}
+        {/* Expanded view - separate full-width overlay (like CampaignManager's drawer).
+            Background matches the wizard / read-only sheet so the "view a
+            finalised character" surface reads as one consistent page colour
+            no matter which entry point the player came from. */}
         <div
           className="absolute top-0 bottom-0 flex"
           style={{
             left: selectedCharacter ? 'calc(50% - 50vw)' : '0',
             width: selectedCharacter ? '100vw' : '100%',
-            backgroundColor: THEME.bgPanel,
+            backgroundColor: COLORS.graphite,
             opacity: selectedCharacter ? 1 : 0,
             pointerEvents: selectedCharacter ? 'auto' : 'none',
             transition: isResizing

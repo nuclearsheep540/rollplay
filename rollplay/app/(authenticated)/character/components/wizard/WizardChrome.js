@@ -167,7 +167,7 @@ function NameHeader({ value, onRename }) {
         className="shrink-0 p-2 rounded hover:bg-white/10 transition-colors"
         style={{ color: editing ? THEME.textOnDark : THEME.textSecondary }}
       >
-        <FontAwesomeIcon icon={faPenToSquare} className="h-5 w-5" />
+        <FontAwesomeIcon icon={faPenToSquare} className="h-10 w-10" />
       </button>
     </div>
   )
