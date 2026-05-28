@@ -24,6 +24,9 @@ import HorizontalInitiativeTracker from './components/HorizontalInitiativeTracke
 import AdventureLog from './components/AdventureLog';
 import LobbyPanel from './components/LobbyPanel';
 import DiceActionPanel from './components/DiceActionPanel'; // NEW IMPORT
+import CharacterSheet from './components/CharacterSheet';
+import LevelUpModal from './components/LevelUpModal';
+import { useMyCharacterForCampaign } from './hooks/useCharacterRuntime';
 import Modal from '@/app/shared/components/Modal';
 import { useWebSocket } from './hooks/useWebSocket';
 import { useUnifiedAudio } from '../audio_management';
@@ -42,9 +45,13 @@ import GridTuningOverlay from '../map_management/components/GridTuningOverlay';
 import { useAssetProgress, useAssetDownload } from '@/app/shared/providers/AssetDownloadManager';
 import { useGatePreload } from './hooks/useGatePreload';
 
-// Tab configuration for left drawer
+// Tab configuration for left drawer.
+// CHARACTER is filtered out at render time for seats that don't have a
+// finalised character on this campaign (DMs, spectators, players who
+// haven't picked a character yet).
 const LEFT_DRAWER_TABS = [
   { id: 'party', label: 'PARTY' },
+  { id: 'character', label: 'CHARACTER', playerOnly: true },
   { id: 'log', label: 'LOG' },
 ];
 
@@ -283,6 +290,18 @@ export default function GameContent() {
 
   // Campaign metadata for overlay (fetched from api-site when campaignId is set)
   const [campaignMeta, setCampaignMeta] = useState(null);
+  // { [user_id]: username } — same source the campaign drawer uses, so names
+  // are consistent across dashboard and game runtime. Populated from the
+  // /api/campaigns/{id} response, which now embeds the full member list.
+  const [campaignMembersById, setCampaignMembersById] = useState({});
+
+  // Current user's character locked to THIS campaign. Drives the CHARACTER
+  // tab visibility and content. Returns ``undefined`` (not null) until the
+  // characters/me query resolves, so the tab is hidden during boot.
+  const { character: myCharacter } = useMyCharacterForCampaign(campaignId);
+
+  // Level-up modal open state — triggered from the XP CTA inside CharacterSheet.
+  const [levelUpModalOpen, setLevelUpModalOpen] = useState(false);
 
   // Hero image via AssetDownloadManager — cache hit if user came from dashboard
   const heroAsset = campaignMeta?.heroImageAsset;
@@ -340,6 +359,22 @@ export default function GameContent() {
       return !tab.dmOnly || isDM;
     });
   }, [canUseModeratorTools, isDM]);
+
+  // CHARACTER tab is only useful for seated players with a real character row.
+  const visibleLeftTabs = useMemo(() => {
+    return LEFT_DRAWER_TABS.filter((tab) => {
+      if (tab.playerOnly) return Boolean(myCharacter);
+      return true;
+    });
+  }, [myCharacter]);
+
+  // If the active left tab disappears (e.g. user just released their character),
+  // close the drawer rather than forcing an unrelated tab on them.
+  useEffect(() => {
+    if (!activeLeftDrawer) return;
+    const stillVisible = visibleLeftTabs.some((t) => t.id === activeLeftDrawer);
+    if (!stillVisible) setActiveLeftDrawer(null);
+  }, [visibleLeftTabs, activeLeftDrawer]);
 
   // Stable callbacks for grid/map config changes — passed to DMControlCenter useEffect deps
   const handleGridChange = useCallback((newGridConfig) => {
@@ -654,6 +689,11 @@ export default function GameContent() {
             heroImage: data.hero_image,
             heroImageAsset: data.hero_image_asset || null,
           });
+          const membersById = {};
+          for (const m of (data.members || [])) {
+            membersById[m.user_id] = m.username;
+          }
+          setCampaignMembersById(membersById);
         }
       })
       .catch(err => console.warn('⚠️ Campaign metadata fetch error:', err));
@@ -1968,10 +2008,10 @@ export default function GameContent() {
         )}
       </div>
 
-      {/* Left drawer — fixed-position, tabbed (PARTY / LOG) — hidden in cine mode for players */}
+      {/* Left drawer — fixed-position, tabbed (PARTY / CHARACTER / LOG) — hidden in cine mode for players */}
       {!cineHideUI && <Drawer
         side="left"
-        tabs={LEFT_DRAWER_TABS}
+        tabs={visibleLeftTabs}
         activeTab={activeLeftDrawer}
         onTabChange={setActiveLeftDrawer}
       >
@@ -2012,6 +2052,15 @@ export default function GameContent() {
           </>
         )}
 
+        {activeLeftDrawer === 'character' && myCharacter && (
+          <CharacterSheet
+            character={myCharacter}
+            userId={thisUserId}
+            onRoll={handlePlayerDiceRoll}
+            onOpenLevelUp={() => setLevelUpModalOpen(true)}
+          />
+        )}
+
         {activeLeftDrawer === 'log' && (
           <AdventureLog
             rollLog={filteredRollLog}
@@ -2021,6 +2070,15 @@ export default function GameContent() {
           />
         )}
       </Drawer>}
+
+      {/* Level-up modal — opens via the XP CTA inside the CHARACTER tab. */}
+      {myCharacter && (
+        <LevelUpModal
+          character={myCharacter}
+          open={levelUpModalOpen}
+          onClose={() => setLevelUpModalOpen(false)}
+        />
+      )}
 
       {/* Right drawer — fixed-position, outside grid flow — hidden in cine mode for players */}
       {!cineHideUI && (() => {
@@ -2278,13 +2336,18 @@ export default function GameContent() {
 
       {/* Loading Gate Overlay — full-screen themed loading screen */}
       {gateVisible && (() => {
-        const seated = gameSeats.filter(s => s.userId !== 'empty').map(s => ({ name: s.playerName, connected: true }));
-        const inLobby = lobbyUsers.filter(u => u.status === 'connected').map(u => ({ name: u.name, connected: true }));
-        const pendingLobby = lobbyUsers.filter(u => u.status !== 'connected').map(u => ({ name: u.name, connected: false }));
-        const seenNames = new Set();
+        // Resolve names off the campaign members lookup (same source the
+        // dashboard drawer uses). Fall back to live MongoDB-sourced metadata
+        // and then to whatever the WebSocket gave us — never to a raw UUID.
+        const nameFor = (userId, fallback) =>
+          campaignMembersById[userId] || playerMetadata[userId]?.player_name || fallback || '';
+        const seated = gameSeats.filter(s => s.userId !== 'empty').map(s => ({ userId: s.userId, name: nameFor(s.userId, s.playerName), connected: true }));
+        const inLobby = lobbyUsers.filter(u => u.status === 'connected').map(u => ({ userId: u.user_id, name: nameFor(u.user_id, u.name), connected: true }));
+        const pendingLobby = lobbyUsers.filter(u => u.status !== 'connected').map(u => ({ userId: u.user_id, name: nameFor(u.user_id, u.name), connected: false }));
+        const seenIds = new Set();
         const fellowship = [...seated, ...inLobby, ...pendingLobby].filter(p => {
-          if (seenNames.has(p.name)) return false;
-          seenNames.add(p.name);
+          if (seenIds.has(p.userId)) return false;
+          seenIds.add(p.userId);
           return true;
         });
 

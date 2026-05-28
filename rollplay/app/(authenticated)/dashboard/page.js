@@ -23,6 +23,7 @@ function DashboardContent() {
   const tabParam = searchParams.get('tab')
   const inviteCampaignId = searchParams.get('invite_campaign_id')
   const expandCampaignId = searchParams.get('expand_campaign_id')
+  const expandCharacterId = searchParams.get('expand_character_id')
   const [activeSection, setActiveSection] = useState(tabParam || 'campaigns')
   const [isChildExpanded, setIsChildExpanded] = useState(false)
   const [showInDevWarning, setShowInDevWarning] = useState(false)
@@ -77,6 +78,15 @@ function DashboardContent() {
     router.replace(newUrl)
   }
 
+  // Clear expand_character_id param from URL (called by CharacterManager
+  // after auto-expanding the matching drawer). Mirrors the campaigns flow.
+  const clearExpandCharacterId = () => {
+    const current = new URLSearchParams(searchParams.toString())
+    current.delete('expand_character_id')
+    const newUrl = current.toString() ? `/dashboard?${current.toString()}` : '/dashboard'
+    router.replace(newUrl)
+  }
+
   // Handle setup completion - update user state with new account info and screen name
   const handleSetupComplete = (accountResult, screenNameValue) => {
     if (user) {
@@ -118,7 +128,12 @@ function DashboardContent() {
       {/* Characters Section */}
       {activeSection === 'characters' && (
         <section className="flex-1 flex flex-col min-h-0">
-          <CharacterManager user={user} onExpandedChange={setIsChildExpanded} />
+          <CharacterManager
+            user={user}
+            onExpandedChange={setIsChildExpanded}
+            expandCharacterId={expandCharacterId}
+            clearExpandCharacterId={clearExpandCharacterId}
+          />
         </section>
       )}
 

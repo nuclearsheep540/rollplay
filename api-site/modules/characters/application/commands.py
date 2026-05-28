@@ -1,226 +1,563 @@
 # Copyright (C) 2025 Matthew Davey
 # SPDX-License-Identifier: GPL-3.0-or-later
 
+"""Character commands — draft lifecycle, runtime edits, level-up.
+
+Every command takes a CharacterRepository and (where edition-aware work is
+involved) a RulesetRegistry — the latter is how commands validate codes the
+caller provided and pull rules math via the strategy.
+"""
+
+from __future__ import annotations
+
 from datetime import datetime
-from typing import Optional, List, Dict
+from typing import Any, Dict, List, Optional
 from uuid import UUID
 
-from modules.characters.repositories.character_repository import CharacterRepository
-from modules.session.repositories.session_repository import SessionRepository
-from modules.characters.application.policies import assert_character_is_editable
 from modules.characters.domain.character_aggregate import (
-    CharacterAggregate,
     AbilityScores,
-    CharacterRace,
-    CharacterClass,
-    CharacterClassInfo,
-    CharacterBackground
+    CharacterAggregate,
+    ClassEntry,
+    FeatAcquisition,
+    SkillProficiency,
 )
+from modules.characters.repositories.character_repository import CharacterRepository
+from modules.characters.repositories.edition_repository import EditionRepository
+from shared.rulesets.registry import RulesetRegistry
 
 
-class CreateCharacter:
-    def __init__(self, repository: CharacterRepository):
-        self.repository = repository
+# --------------------------------------------------------------------------- #
+# Draft lifecycle
+# --------------------------------------------------------------------------- #
 
-    def execute(
+
+class CreateCharacterDraft:
+    """POST /api/characters/draft — opens a blank character row in draft state."""
+
+    def __init__(
         self,
-        user_id: UUID,
-        character_name: str,
-        character_classes: List[CharacterClassInfo],
-        character_race: CharacterRace,
-        background: Optional[CharacterBackground] = None,
-        level: int = 1,
-        ability_scores: Optional[AbilityScores] = None,
-        origin_ability_bonuses: Optional[dict] = None,
-        hp_max: int = 10,
-        hp_current: int = 10,
-        ac: int = 10
-    ) -> CharacterAggregate:
-        """Create a new character with multi-class support and D&D 2024 background bonuses"""
-        character = CharacterAggregate.create(
+        repository: CharacterRepository,
+        edition_repository: EditionRepository,
+        registry: RulesetRegistry,
+    ):
+        self.repository = repository
+        self.edition_repository = edition_repository
+        self.registry = registry
+
+    def execute(self, *, user_id: UUID, edition_code: str, name: str) -> CharacterAggregate:
+        edition = self.edition_repository.get_by_code(edition_code)
+        if edition is None or not edition.is_active:
+            raise ValueError(f"Unknown or inactive edition '{edition_code}'")
+        # Verify the registry has data for this edition (boot would have failed otherwise,
+        # but this surfaces a clear error if seed data drifts from the DB).
+        self.registry.list_classes(edition_code)
+        draft = CharacterAggregate.create_draft(
             user_id=user_id,
-            character_name=character_name,
-            character_classes=character_classes,  # List of classes
-            character_race=character_race,
-            background=background,  # D&D 2024
-            level=level,
-            ability_scores=ability_scores,
-            origin_ability_bonuses=origin_ability_bonuses,  # D&D 2024
-            active_campaign=None,
-            hp_max=hp_max,
-            hp_current=hp_current,
-            ac=ac
+            edition_id=edition.id,
+            edition_code=edition.code,
+            character_name=name,
         )
+        self.repository.save(draft)
+        return draft
 
-        self.repository.save(character)
-        return character
 
+class UpdateCharacterDraft:
+    """PATCH /api/characters/draft/{id} — dispatch one wizard step's payload.
 
-class UpdateAbilityScores:
-    """Update character ability scores"""
-    def __init__(self, repository: CharacterRepository, session_repository: SessionRepository):
+    Each step pushes the aggregate forward and recomputes any derived state
+    (species traits, save profs from class, skill grants from background, etc.)
+    rather than letting the caller hand-write those.
+    """
+
+    def __init__(self, repository: CharacterRepository, registry: RulesetRegistry):
         self.repository = repository
-        self.session_repository = session_repository
+        self.registry = registry
 
     def execute(
         self,
+        *,
         character_id: UUID,
         user_id: UUID,
-        ability_scores: AbilityScores
+        step: str,
+        payload: Dict[str, Any],
     ) -> CharacterAggregate:
-        """Update character's ability scores (for leveling, magic items)"""
         character = self.repository.get_by_id(character_id)
-        if not character:
+        if character is None:
             raise ValueError(f"Character {character_id} not found")
-
-        # Business rule: Only owner can update
         if not character.is_owned_by(user_id):
-            raise ValueError("Only character owner can update ability scores")
-
-        assert_character_is_editable(self.session_repository, character)
-
-        # Update via aggregate method
-        character.update_ability_scores(ability_scores)
-
-        # Save
-        self.repository.save(character)
-        return character
-
-
-class UpdateCharacter:
-    """Update existing character"""
-    def __init__(self, repository: CharacterRepository, session_repository: SessionRepository):
-        self.repository = repository
-        self.session_repository = session_repository
-
-    def execute(
-        self,
-        character_id: UUID,
-        user_id: UUID,
-        character_name: str,
-        character_classes: List[CharacterClassInfo],
-        character_race: CharacterRace,
-        level: int,
-        ability_scores: AbilityScores,
-        hp_max: int,
-        hp_current: int,
-        ac: int,
-        background: Optional[CharacterBackground] = None,
-        origin_ability_bonuses: Optional[Dict[str, int]] = None,
-    ) -> CharacterAggregate:
-        """Update an existing character with new values (supports multi-class)"""
-        # Fetch existing character
-        character = self.repository.get_by_id(character_id)
-        if not character:
-            raise ValueError(f"Character {character_id} not found")
-
-        # Business rule: Only owner can update
-        if not character.is_owned_by(user_id):
-            raise ValueError("Only character owner can update this character")
-
-        assert_character_is_editable(self.session_repository, character)
-
-        # Update via domain method (includes business rule validation)
-        character.update_character(
-            character_name=character_name,
-            character_classes=character_classes,  # List of classes
-            character_race=character_race,
-            level=level,
-            hp_max=hp_max,
-            hp_current=hp_current,
-            ac=ac
-        )
-
-        # Update ability scores separately (has its own method)
-        character.update_ability_scores(ability_scores)
-
-        # Update background and origin bonuses if provided
-        if background is not None:
-            character.background = background
-        if origin_ability_bonuses is not None:
-            character.origin_ability_bonuses = origin_ability_bonuses
-            character._validate_origin_bonuses()  # Re-run validation
-
-        # Save updated character
-        self.repository.save(character)
-        return character
-
-
-class CloneCharacter:
-    """Clone an existing character"""
-    def __init__(self, repository: CharacterRepository):
-        self.repository = repository
-
-    def execute(self, character_id: UUID, user_id: UUID) -> CharacterAggregate:
-        """Clone a character by creating a new copy with '(Copy)' appended to the name"""
-        # Fetch existing character
-        source_character = self.repository.get_by_id(character_id)
-        if not source_character:
-            raise ValueError(f"Character {character_id} not found")
-
-        # Business rule: Only owner can clone their own characters
-        if not source_character.is_owned_by(user_id):
-            raise ValueError("Only character owner can clone this character")
-
-        # Deep copy character classes to avoid shared references
-        cloned_classes = [
-            CharacterClassInfo(
-                character_class=class_info.character_class,
-                level=class_info.level
+            raise PermissionError("Only the owner can update this draft")
+        # Lock policy (matches DeleteCharacter): characters claimed by a
+        # campaign can't be edited via the wizard. Release from the campaign
+        # first. Drafts are never locked, so the create flow is unaffected;
+        # finalised-but-unclaimed characters become editable via this path.
+        if character.is_locked():
+            raise ValueError(
+                "Character is locked to a campaign — release it before editing"
             )
-            for class_info in source_character.character_classes
+
+        edition_code = character.edition_code
+        handler = {
+            "identity": self._apply_identity,
+            "class": self._apply_class,
+            "background": self._apply_background,
+            "ability_scores": self._apply_ability_scores,
+            "hp_ac": self._apply_hp_ac,
+            "rename": self._apply_rename,
+        }.get(step)
+        if handler is None:
+            raise ValueError(f"Unknown draft step '{step}'")
+        handler(character, edition_code, payload)
+        # ``rename`` is orthogonal to wizard progress — the user can rename
+        # at any point without resetting the resumed-step pointer.
+        if step != "rename":
+            character.set_creation_step(step)
+        self.repository.save(character)
+        return character
+
+    # ------------------------------------------------------------ identity
+
+    def _apply_identity(self, character, edition_code, payload):
+        species = self.registry.get_species(edition_code, payload["species_code"])
+        if payload.get("name"):
+            character.character_name = payload["name"].strip()
+        character.species_code = species.code
+        chosen = list(payload.get("chosen_languages", []))
+        languages = list(species.default_languages) + chosen
+        # Speed/size/languages flow straight from species definition.
+        character.apply_species_traits(
+            speed=species.speed, size=species.size, languages=languages
+        )
+
+    # ------------------------------------------------------------ class
+
+    def _apply_class(self, character, edition_code, payload):
+        picks = payload["classes"]
+        if not picks:
+            raise ValueError("class step needs at least one class")
+        new_entries: List[ClassEntry] = []
+        new_skills: List[SkillProficiency] = []
+        save_codes: set = set()
+        total_level = 0
+        seen: set = set()
+        for i, pick in enumerate(picks):
+            class_def = self.registry.get_class(edition_code, pick["class_code"])
+            if class_def.code in seen:
+                raise ValueError(f"Duplicate class '{class_def.code}'")
+            seen.add(class_def.code)
+            new_entries.append(ClassEntry(
+                class_code=class_def.code,
+                level=int(pick["level"]),
+                is_primary=bool(pick.get("is_primary", i == 0)),
+            ))
+            total_level += int(pick["level"])
+            # Skill picks — must be drawn from class's offered list and count must match.
+            chosen_skills = list(pick.get("chosen_skills", []))
+            allowed = set(class_def.skill_choices.source)
+            if any(s not in allowed for s in chosen_skills):
+                raise ValueError(
+                    f"Class '{class_def.code}' offers {sorted(allowed)} — "
+                    f"got {chosen_skills}"
+                )
+            # First class grants its full skill count; multi-classed entries grant
+            # the per-class subset that 5.5e defines (usually 0 — skipped here).
+            if i == 0 and len(chosen_skills) != class_def.skill_choices.count:
+                raise ValueError(
+                    f"Class '{class_def.code}' requires choosing "
+                    f"{class_def.skill_choices.count} skills, got {len(chosen_skills)}"
+                )
+            for sc in chosen_skills:
+                new_skills.append(SkillProficiency(skill_code=sc, source="CLASS"))
+            # Save proficiencies — only the primary class grants them (5.5e rule).
+            if i == 0:
+                save_codes.update(class_def.saving_throw_proficiencies)
+        if total_level > 20:
+            raise ValueError(f"Total class levels {total_level} exceeds 20")
+        character.class_entries = new_entries
+        character.level = total_level
+        # Replace any existing CLASS-source skills with the new picks; keep
+        # skills from other sources untouched.
+        non_class_skills = [s for s in character.skills if s.source != "CLASS"]
+        character.skills = non_class_skills + new_skills
+        character.set_save_proficiencies(save_codes)
+
+    # ------------------------------------------------------------ background
+
+    def _apply_background(self, character, edition_code, payload):
+        bg = self.registry.get_background(edition_code, payload["background_code"])
+        increases = {item["ability"]: int(item["increase"]) for item in payload["ability_increases"]}
+        total = sum(increases.values())
+        # 5.5e backgrounds grant +3 split as +2/+1 or +1/+1/+1 across the 3 ability options.
+        if total != 3:
+            raise ValueError(f"Background ability_increases must sum to 3 (got {total})")
+        valid_pattern = sorted(increases.values()) in ([1, 2], [1, 1, 1])
+        if not valid_pattern:
+            raise ValueError("Background bonuses must be +2/+1 or +1/+1/+1")
+        for ab, _ in increases.items():
+            if ab not in bg.ability_scores:
+                raise ValueError(
+                    f"Background '{bg.code}' only offers "
+                    f"{bg.ability_scores}, got {ab}"
+                )
+
+        character.background_code = bg.code
+        # Record the bonuses as a separate dict — DO NOT bake into ability_scores.
+        # The ability_scores step then overwrites the base scores without
+        # clobbering these, and the API response surfaces final = base + bonus.
+        character.origin_ability_bonuses = {
+            ab: int(delta) for ab, delta in increases.items()
+        }
+
+        # Replace BACKGROUND-source skills with the background's two grants.
+        # If the player already has a class/feat/species proficiency in one of
+        # the background's skills, skip the duplicate — the unique constraint
+        # would reject it and 5.5e expects the player to swap to a different
+        # skill in the UI before this row is written.
+        non_bg = [s for s in character.skills if s.source != "BACKGROUND"]
+        already_proficient = {s.skill_code for s in non_bg}
+        bg_skills = [
+            SkillProficiency(skill_code=sc, source="BACKGROUND")
+            for sc in bg.skill_proficiencies
+            if sc not in already_proficient
         ]
+        character.skills = non_bg + bg_skills
 
-        # Deep copy ability scores to avoid shared references
-        cloned_ability_scores = AbilityScores(
-            strength=source_character.ability_scores.strength,
-            dexterity=source_character.ability_scores.dexterity,
-            constitution=source_character.ability_scores.constitution,
-            intelligence=source_character.ability_scores.intelligence,
-            wisdom=source_character.ability_scores.wisdom,
-            charisma=source_character.ability_scores.charisma
+        # Replace BACKGROUND_ORIGIN feats with the background's origin feat.
+        character.feats = [f for f in character.feats if f.source != "BACKGROUND_ORIGIN"]
+        character.feats.append(FeatAcquisition(
+            feat_code=bg.origin_feat_code,
+            level=1,
+            source="BACKGROUND_ORIGIN",
+        ))
+
+    # ------------------------------------------------------------ ability scores
+
+    def _apply_ability_scores(self, character, edition_code, payload):
+        scores = AbilityScores(
+            strength=int(payload["strength"]),
+            dexterity=int(payload["dexterity"]),
+            constitution=int(payload["constitution"]),
+            intelligence=int(payload["intelligence"]),
+            wisdom=int(payload["wisdom"]),
+            charisma=int(payload["charisma"]),
         )
+        method = payload.get("method")
+        roll_details = payload.get("roll_details")
+        character.set_ability_scores(scores, method=method, roll_details=roll_details)
 
-        # Deep copy origin bonuses dict to avoid shared references
-        cloned_origin_bonuses = dict(source_character.origin_ability_bonuses) if source_character.origin_ability_bonuses else {}
+    # ------------------------------------------------------------ hp_ac
 
-        # Create new character with same data but new name
-        cloned_character = CharacterAggregate.create(
-            user_id=user_id,
-            character_name=f"{source_character.character_name} (Copy)",
-            character_classes=cloned_classes,
-            character_race=source_character.character_race,
-            background=source_character.background,
-            level=source_character.level,
-            ability_scores=cloned_ability_scores,
-            origin_ability_bonuses=cloned_origin_bonuses,
-            active_campaign=None,  # New character not in any game
-            hp_max=source_character.hp_max,
-            hp_current=source_character.hp_max,  # Reset to max HP
-            ac=source_character.ac
-        )
+    def _apply_hp_ac(self, character, edition_code, payload):
+        character.hp_max = int(payload["hp_max"])
+        character.hp_current = character.hp_max
+        character.ac = int(payload["ac"])
 
-        # Save and return new character
-        self.repository.save(cloned_character)
-        return cloned_character
+    # ------------------------------------------------------------ rename
+
+    def _apply_rename(self, character, edition_code, payload):
+        """Name-only update from the wizard's persistent name header."""
+        name = (payload.get("name") or "").strip()
+        if not name:
+            raise ValueError("Character name is required")
+        if len(name) > 50:
+            raise ValueError("Character name too long (max 50)")
+        character.character_name = name
+        # Don't bump creation_step — rename is orthogonal to wizard progress.
+
+
+class FinalizeCharacterDraft:
+    """POST /api/characters/draft/{id}/finalize — flip is_draft=False after validation."""
+
+    def __init__(self, repository: CharacterRepository):
+        self.repository = repository
+
+    def execute(self, *, character_id: UUID, user_id: UUID) -> CharacterAggregate:
+        character = self.repository.get_by_id(character_id)
+        if character is None:
+            raise ValueError(f"Character {character_id} not found")
+        if not character.is_owned_by(user_id):
+            raise PermissionError("Only the owner can finalise this draft")
+        character.finalize()
+        self.repository.save(character)
+        return character
+
+
+class DiscardCharacterDraft:
+    """DELETE /api/characters/draft/{id} — hard-deletes drafts only."""
+
+    def __init__(self, repository: CharacterRepository):
+        self.repository = repository
+
+    def execute(self, *, character_id: UUID, user_id: UUID) -> bool:
+        character = self.repository.get_by_id(character_id)
+        if character is None:
+            return False
+        if not character.is_owned_by(user_id):
+            raise PermissionError("Only the owner can discard this draft")
+        if not character.is_draft:
+            raise ValueError("Cannot discard a finalised character — use delete instead")
+        return self.repository.delete(character_id)
+
+
+class SetCharacterAvatar:
+    """PATCH /api/characters/{id}/avatar — point the character at a library asset.
+
+    The asset must exist, be owned by the same user, and be image-type.
+    Uploading itself goes through the asset library's standard 3-step flow;
+    this command just links the asset to the character.
+    """
+
+    def __init__(
+        self,
+        repository: CharacterRepository,
+        asset_repository,
+    ):
+        self.repository = repository
+        self.asset_repository = asset_repository
+
+    def execute(
+        self, *, character_id: UUID, user_id: UUID, asset_id: Optional[UUID]
+    ) -> CharacterAggregate:
+        character = self.repository.get_by_id(character_id)
+        if character is None:
+            raise ValueError(f"Character {character_id} not found")
+        if not character.is_owned_by(user_id):
+            raise PermissionError("Only the owner can update this character's avatar")
+
+        if asset_id is not None:
+            asset = self.asset_repository.get_by_id(asset_id)
+            if asset is None:
+                raise ValueError(f"Asset {asset_id} not found")
+            if asset.user_id != user_id:
+                raise PermissionError("Asset does not belong to this user")
+            # MediaAssetType is the enum the asset aggregate carries; compare
+            # via ``.value`` so we don't import the enum here.
+            asset_type_str = getattr(asset.asset_type, "value", asset.asset_type)
+            if asset_type_str != "image":
+                raise ValueError(
+                    f"Avatar must reference an 'image' asset (got {asset_type_str!r})"
+                )
+
+        character.set_avatar_asset(asset_id)
+        self.repository.save(character)
+        return character
 
 
 class DeleteCharacter:
+    """DELETE /api/characters/{id} — soft-delete a finalised character.
+
+    Backs the dashboard's "Delete character" button. Owner-only, refuses when
+    the character is currently locked to a campaign (matches v1 behaviour:
+    you have to release first). Drafts go through DiscardCharacterDraft.
+    """
+
     def __init__(self, repository: CharacterRepository):
         self.repository = repository
 
-    def execute(self, character_id: UUID, user_id: UUID) -> bool:
-        """Delete character (soft delete)"""
+    def execute(self, *, character_id: UUID, user_id: UUID) -> bool:
         character = self.repository.get_by_id(character_id)
-        if not character:
+        if character is None:
             return False
-
-        # Business rule: Only character owner can delete
         if not character.is_owned_by(user_id):
-            raise ValueError("Only the character owner can delete this character")
-
-        # Business rule: Check if character can be deleted
-        if not character.can_be_deleted():
-            raise ValueError("Cannot delete character - it may be in an active game")
-
+            raise PermissionError("Only the owner can delete this character")
+        if character.is_draft:
+            raise ValueError("Use DELETE /draft/{id} to discard a draft")
+        # Repository.delete enforces can_be_deleted (rejects locked characters).
         return self.repository.delete(character_id)
+
+
+# --------------------------------------------------------------------------- #
+# Runtime edits
+# --------------------------------------------------------------------------- #
+
+
+class UpdateRuntimeState:
+    """PATCH /api/characters/{id}/runtime — partial update of live-session state."""
+
+    def __init__(self, repository: CharacterRepository):
+        self.repository = repository
+
+    def execute(
+        self,
+        *,
+        character_id: UUID,
+        user_id: UUID,
+        updates: Dict[str, Any],
+    ) -> CharacterAggregate:
+        character = self.repository.get_by_id(character_id)
+        if character is None:
+            raise ValueError(f"Character {character_id} not found")
+        if not character.is_owned_by(user_id):
+            raise PermissionError("Only the owner can update runtime state")
+        if character.is_draft:
+            raise ValueError("Cannot edit runtime state of a draft character")
+
+        if "hp_current" in updates and updates["hp_current"] is not None:
+            new_hp = int(updates["hp_current"])
+            delta = new_hp - character.hp_current
+            if delta < 0:
+                character.take_damage(-delta)
+            else:
+                character.heal(delta)
+            # If the caller set HP explicitly above max, allow it (rare buffs):
+            character.hp_current = new_hp
+        if "hp_temp" in updates and updates["hp_temp"] is not None:
+            character.set_temp_hp(int(updates["hp_temp"]))
+        if "xp" in updates and updates["xp"] is not None:
+            new_xp = int(updates["xp"])
+            if new_xp < character.xp:
+                # Allow direct XP correction (e.g. DM rollback) without going through award.
+                character.xp = new_xp
+            else:
+                character.award_xp(new_xp - character.xp)
+        if "inspiration" in updates and updates["inspiration"] is not None:
+            character.set_inspiration(bool(updates["inspiration"]))
+        if "status_effects" in updates and updates["status_effects"] is not None:
+            # Whole-list replacement so the frontend can edit pills atomically.
+            character.status_effects = []
+            for s in updates["status_effects"]:
+                character.add_status(s)
+        if "death_save_successes" in updates and updates["death_save_successes"] is not None:
+            character.death_save_successes = int(updates["death_save_successes"])
+        if "death_save_failures" in updates and updates["death_save_failures"] is not None:
+            character.death_save_failures = int(updates["death_save_failures"])
+        if "is_alive" in updates and updates["is_alive"] is not None:
+            if updates["is_alive"]:
+                character.resurrect()
+            else:
+                character.mark_dead()
+        if "ac" in updates and updates["ac"] is not None:
+            character.ac = int(updates["ac"])
+
+        self.repository.save(character)
+        return character
+
+
+# --------------------------------------------------------------------------- #
+# Level-up
+# --------------------------------------------------------------------------- #
+
+
+class LevelUpCharacter:
+    """POST /api/characters/{id}/level-up — apply one level gain atomically."""
+
+    def __init__(self, repository: CharacterRepository, registry: RulesetRegistry):
+        self.repository = repository
+        self.registry = registry
+
+    def execute(
+        self,
+        *,
+        character_id: UUID,
+        user_id: UUID,
+        class_code: str,
+        hp_choice: str,
+        roll_value: Optional[int] = None,
+        asi_choice: Optional[Dict[str, Any]] = None,
+        feat_choice: Optional[Dict[str, Any]] = None,
+        skill_choices: Optional[List[str]] = None,
+    ) -> CharacterAggregate:
+        character = self.repository.get_by_id(character_id)
+        if character is None:
+            raise ValueError(f"Character {character_id} not found")
+        if not character.is_owned_by(user_id):
+            raise PermissionError("Only the owner can level up this character")
+        if character.is_draft:
+            raise ValueError("Cannot level up a draft character")
+
+        edition_code = character.edition_code
+        ruleset = self.registry.get_ruleset(edition_code)
+
+        if not character.can_level_up(ruleset):
+            raise ValueError(
+                f"Character has {character.xp} XP and is level {character.level} — "
+                "not yet eligible for level-up"
+            )
+        # Determine which class is gaining the level. Must already be in the
+        # progression (multi-classing into a new class is a separate flow).
+        entry = next((e for e in character.class_entries if e.class_code == class_code), None)
+        if entry is None:
+            raise ValueError(
+                f"Class '{class_code}' is not in this character's progression. "
+                "Multi-classing into a new class is a separate flow."
+            )
+        target_class_level = entry.level + 1
+        asi_levels = ruleset.asi_levels_for_class(class_code)
+        is_asi_level = target_class_level in asi_levels
+
+        # HP gain
+        hp_options = ruleset.level_up_hp_options(character, class_code)
+        if hp_choice == "average":
+            hp_gained = hp_options["average"]
+        elif hp_choice == "roll":
+            if roll_value is None or roll_value < 1:
+                raise ValueError("hp_choice='roll' requires a positive roll_value")
+            hit_die = ruleset.hit_die_for_class(class_code)
+            if roll_value > hit_die:
+                raise ValueError(
+                    f"roll_value {roll_value} exceeds hit die d{hit_die} for "
+                    f"class '{class_code}'"
+                )
+            con_mod = (character.final_ability_score("constitution") - 10) // 2
+            hp_gained = max(1, roll_value + con_mod)
+        else:
+            raise ValueError(f"Unknown hp_choice '{hp_choice}'")
+
+        character.apply_level_gain(class_code=class_code, hp_gained=hp_gained)
+
+        # Audit log: HP roll
+        self.repository.append_choice_log(
+            character_id=character.id,
+            level=character.level,
+            choice_type="HP_ROLL",
+            choice_data={
+                "class_code": class_code,
+                "choice": hp_choice,
+                "roll_value": roll_value,
+                "hp_gained": hp_gained,
+            },
+            created_at=datetime.utcnow(),
+        )
+
+        # ASI / feat — only if this class's new level is an ASI level
+        if is_asi_level:
+            if asi_choice and feat_choice:
+                raise ValueError("Pick either asi_choice OR feat_choice, not both")
+            if not asi_choice and not feat_choice:
+                raise ValueError("ASI level requires asi_choice or feat_choice")
+            if asi_choice:
+                increases = {k: int(v) for k, v in asi_choice["increases"].items()}
+                character.apply_asi(increases)
+                self.repository.append_choice_log(
+                    character_id=character.id,
+                    level=character.level,
+                    choice_type="ASI",
+                    choice_data={"increases": increases},
+                    created_at=datetime.utcnow(),
+                )
+            elif feat_choice:
+                feat_code = feat_choice["feat_code"]
+                # Sanity-check feat exists + character qualifies (delegated to ruleset).
+                self.registry.get_feat(edition_code, feat_code)
+                character.take_feat(feat_code, source="ASI")
+                self.repository.append_choice_log(
+                    character_id=character.id,
+                    level=character.level,
+                    choice_type="FEAT",
+                    choice_data={"feat_code": feat_code},
+                    created_at=datetime.utcnow(),
+                )
+
+        # Skill picks granted at this level (rare — class-feature-driven, e.g. Barbarian's Primal Knowledge at L3)
+        if skill_choices:
+            for sc in skill_choices:
+                character.add_skill_proficiency(sc, source="CLASS")
+            self.repository.append_choice_log(
+                character_id=character.id,
+                level=character.level,
+                choice_type="SKILL",
+                choice_data={"skill_codes": list(skill_choices)},
+                created_at=datetime.utcnow(),
+            )
+
+        self.repository.save(character)
+        return character

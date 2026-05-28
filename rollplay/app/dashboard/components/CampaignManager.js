@@ -1602,14 +1602,6 @@ export default function CampaignManager({ user, onExpandedChange, inviteCampaign
                               <h3 className="text-lg font-semibold font-[family-name:var(--font-metamorphous)] drop-shadow" style={{color: THEME.textOnDark}}>
                                 Players
                               </h3>
-                              <button
-                                onClick={(e) => { e.stopPropagation(); setInviteModalCampaignId(campaign.id) }}
-                                className="flex items-center gap-1.5 px-2.5 py-1 rounded-sm border text-xs transition-all hover:opacity-80"
-                                style={{backgroundColor: 'transparent', color: COLORS.smoke, borderColor: THEME.borderSubtle}}
-                              >
-                                <FontAwesomeIcon icon={faUserPlus} className="h-3 w-3" />
-                                <span>Invite</span>
-                              </button>
                             </div>
 
                             <div
@@ -1619,6 +1611,31 @@ export default function CampaignManager({ user, onExpandedChange, inviteCampaign
                               {Array.from({ length: 10 }, (_, slotIdx) => {
                                 const member = campaign.members?.[slotIdx]
                                 if (!member) {
+                                  // The first empty slot becomes the Invite CTA
+                                  // tile — same size + shape as a player tile,
+                                  // reads as "next available seat, click to
+                                  // invite". Remaining empties stay as plain
+                                  // numbered placeholders.
+                                  const memberCount = campaign.members?.length || 0
+                                  const isInviteSlot = slotIdx === memberCount
+                                  if (isInviteSlot) {
+                                    return (
+                                      <button
+                                        key={`invite-${slotIdx}`}
+                                        onClick={(e) => { e.stopPropagation(); setInviteModalCampaignId(campaign.id) }}
+                                        className="flex items-center justify-center gap-2 px-3 py-2 rounded-sm border border-dashed cursor-pointer transition-all hover:opacity-90"
+                                        style={{
+                                          backgroundColor: `${THEME.bgSecondary}80`,
+                                          borderColor: THEME.borderActive,
+                                          color: COLORS.smoke,
+                                          minHeight: '54px',
+                                        }}
+                                      >
+                                        <FontAwesomeIcon icon={faUserPlus} className="h-4 w-4" />
+                                        <span className="text-sm font-medium">Invite Player</span>
+                                      </button>
+                                    )
+                                  }
                                   return (
                                     <div
                                       key={`empty-${slotIdx}`}
@@ -1632,6 +1649,13 @@ export default function CampaignManager({ user, onExpandedChange, inviteCampaign
                                     </div>
                                   )
                                 }
+                                // The current user can click their own tile to
+                                // open the character-selection modal — picking
+                                // a character if they have none, or swapping
+                                // if they do. DMs/mods don't hold characters,
+                                // so the tile stays non-interactive for them.
+                                const isCurrentUser = member.user_id === user.id
+                                const canSelectCharacter = isCurrentUser && !member.is_host && member.campaign_role !== 'mod'
                                 // Second line: role-specific descriptor for
                                 // DM/mod/spectator (who don't hold a
                                 // character), or the player's character
@@ -1642,12 +1666,18 @@ export default function CampaignManager({ user, onExpandedChange, inviteCampaign
                                     ? 'Moderator'
                                     : member.character_id
                                       ? `${member.character_name} · Lv ${member.character_level} ${member.character_class}`
-                                      : 'No character selected'
+                                      : canSelectCharacter
+                                        ? 'Select a character →'
+                                        : 'No character selected'
                                 return (
                                   <div
                                     key={member.user_id}
-                                    className="flex items-stretch justify-between rounded-sm border overflow-hidden relative"
-                                    style={{backgroundColor: THEME.bgSecondary, borderColor: THEME.borderSubtle}}
+                                    onClick={canSelectCharacter ? () => handleSelectCharacter(campaign) : undefined}
+                                    className={`flex items-stretch justify-between rounded-sm border overflow-hidden relative ${canSelectCharacter ? 'cursor-pointer transition-all hover:opacity-90' : ''}`}
+                                    style={{
+                                      backgroundColor: THEME.bgSecondary,
+                                      borderColor: canSelectCharacter && !member.character_id ? THEME.borderActive : THEME.borderSubtle,
+                                    }}
                                   >
                                     {/* Hero-image wedge — angled reveal of
                                         the default character portrait on
@@ -2184,6 +2214,7 @@ export default function CampaignManager({ user, onExpandedChange, inviteCampaign
         <CharacterSelectionModal
           campaign={characterModalCampaign}
           characters={characters}
+          currentCharacterId={characterModalCampaign.members?.find(m => m.user_id === user.id)?.character_id ?? null}
           onClose={() => {
             setShowCharacterModal(false)
             setCharacterModalCampaign(null)

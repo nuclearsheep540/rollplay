@@ -162,7 +162,6 @@ class S3Service:
         safe_filename = "".join(c for c in filename if c.isalnum() or c in ".-_")
         return f"{asset_type}/{user_id}/{unique_id}_{safe_filename}"
 
-
 # Dependency injection helper
 _s3_service: Optional[S3Service] = None
 

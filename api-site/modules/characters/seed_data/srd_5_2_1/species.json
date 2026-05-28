@@ -1,0 +1,255 @@
+{
+  "edition": "srd_5_2_1",
+  "schema_version": 1,
+  "species": [
+    {
+      "code": "dragonborn",
+      "creature_type": "Humanoid",
+      "default_languages": [
+        "Common"
+      ],
+      "language_choices": null,
+      "name": "Dragonborn",
+      "size": "Medium",
+      "speed": 30,
+      "traits": [
+        {
+          "description": "Your lineage stems from a dragon progenitor. Choose the kind of dragon from the Draconic Ancestors table. Your choice affects your Breath Weapon and Damage Resistance traits as well as your appearance.",
+          "name": "Draconic Ancestry"
+        },
+        {
+          "description": "When you take the Attack action on your turn, you can replace one of your attacks with an exhalation of magical energy in either a 15-foot Cone or a 30-foot Line that is 5 feet wide (choose the shape each time). Each creature in that area must make a Dexterity saving throw (DC 8 plus your Constitution modifier and Proficiency Bonus). On a failed save, a creature takes 1d10 damage of the type determined by your Draconic Ancestry trait. On a successful save, a creature takes half as much damage. This damage increases by 1d10 when you reach character levels 5 (2d10), 11 (3d10), and 17 (4d10).",
+          "name": "Breath Weapon"
+        },
+        {
+          "description": "You have Resistance to the damage type determined by your Draconic Ancestry trait.",
+          "name": "Damage Resistance"
+        },
+        {
+          "description": "You have Darkvision with a range of 60 feet.",
+          "name": "Darkvision"
+        },
+        {
+          "description": "When you reach character level 5, you can channel draconic magic to give yourself temporary flight. As a Bonus Action, you sprout spectral wings on your back that last for 10 minutes or until you retract the wings (no action required) or have the Incapacitated condition. During that time, you have a Fly Speed equal to your Speed. Your wings appear to be made of the same energy as your Breath Weapon. Once you use this trait, you can't use it again until you finish a Long Rest.",
+          "name": "Draconic Flight"
+        }
+      ]
+    },
+    {
+      "code": "dwarf",
+      "creature_type": "Humanoid",
+      "default_languages": [
+        "Common"
+      ],
+      "language_choices": null,
+      "name": "Dwarf",
+      "size": "Medium",
+      "speed": 30,
+      "traits": [
+        {
+          "description": "You have Darkvision with a range of 120 feet.",
+          "name": "Darkvision"
+        },
+        {
+          "description": "You have Resistance to Poison damage. You also have Advantage on saving throws you make to avoid or end the Poisoned condition.",
+          "name": "Dwarven Resilience"
+        },
+        {
+          "description": "Your Hit Point maximum increases by 1, and it increases by 1 again whenever you gain a level.",
+          "name": "Dwarven Toughness"
+        },
+        {
+          "description": "As a Bonus Action, you gain Tremorsense with a range of 60 feet for 10 minutes. You must be on a stone surface or touching a stone surface to use this Tremorsense. The stone can be natural or worked.",
+          "name": "Stonecunning"
+        }
+      ]
+    },
+    {
+      "code": "elf",
+      "creature_type": "Humanoid",
+      "default_languages": [
+        "Common"
+      ],
+      "language_choices": null,
+      "name": "Elf",
+      "size": "Medium",
+      "speed": 30,
+      "traits": [
+        {
+          "description": "You have Darkvision with a range of 60 feet.",
+          "name": "Darkvision"
+        },
+        {
+          "description": "You are part of a lineage that grants you supernatural abilities. Choose a lineage from the Elven Lineages table. You gain the level 1 benefit of that lineage.",
+          "name": "Elven Lineage"
+        },
+        {
+          "description": "You have Advantage on saving throws you make to avoid or end the Charmed condition.",
+          "name": "Fey Ancestry"
+        },
+        {
+          "description": "You have proficiency in the Insight, Perception, or Survival skill.",
+          "name": "Keen Senses"
+        },
+        {
+          "description": "You don't need to sleep, and magic can't put you to sleep. You can finish a Long Rest in 4 hours if you spend those hours in a trancelike meditation, during which you retain consciousness.",
+          "name": "Trance"
+        }
+      ]
+    },
+    {
+      "code": "gnome",
+      "creature_type": "Humanoid",
+      "default_languages": [
+        "Common"
+      ],
+      "language_choices": null,
+      "name": "Gnome",
+      "size": "Small",
+      "speed": 30,
+      "traits": [
+        {
+          "description": "You have Darkvision with a range of 60 feet.",
+          "name": "Darkvision"
+        },
+        {
+          "description": "You have Advantage on Intelligence, Wisdom, and Charisma saving throws.",
+          "name": "Gnomish Cunning"
+        },
+        {
+          "description": "You are part of a lineage that grants you supernatural abilities. Choose one of the following options; whichever one you choose, Intelligence, Wisdom, or Charisma is your spellcasting ability for the spells you cast with this trait (choose the ability when you select the lineage):",
+          "name": "Gnomish Lineage"
+        }
+      ]
+    },
+    {
+      "code": "goliath",
+      "creature_type": "Humanoid",
+      "default_languages": [
+        "Common"
+      ],
+      "language_choices": null,
+      "name": "Goliath",
+      "size": "Medium",
+      "speed": 35,
+      "traits": [
+        {
+          "description": "You are descended from Giants. Choose one of the following benefits—a supernatural boon from your ancestry; you can use the chosen benefit a number of times equal to your Proficiency Bonus, and you regain all expended uses when you finish a Long Rest:",
+          "name": "Giant Ancestry"
+        },
+        {
+          "description": "Starting at character level 5, you can change your size to Large as a Bonus Action if you're in a big enough space. This transformation lasts for 10 minutes or until you end it (no action required). For that duration, you have Advantage on Strength checks, and your Speed increases by 10 feet. Once you use this trait, you can't use it again until you finish a Long Rest.",
+          "name": "Large Form"
+        },
+        {
+          "description": "You have Advantage on any ability check you make to end the Grappled condition. You also count as one size larger when determining your carrying capacity.",
+          "name": "Powerful Build"
+        }
+      ]
+    },
+    {
+      "code": "halfling",
+      "creature_type": "Humanoid",
+      "default_languages": [
+        "Common"
+      ],
+      "language_choices": null,
+      "name": "Halfling",
+      "size": "Small",
+      "speed": 30,
+      "traits": [
+        {
+          "description": "You have Advantage on saving throws you make to avoid or end the Frightened condition.",
+          "name": "Brave"
+        },
+        {
+          "description": "You can move through the space of any creature that is a size larger than you, but you can't stop in the same space.",
+          "name": "Halfling Nimbleness"
+        },
+        {
+          "description": "When you roll a 1 on the d20 of a D20 Test, you can reroll the die, and you must use the new roll.",
+          "name": "Luck"
+        },
+        {
+          "description": "You can take the Hide action even when you are obscured only by a creature that is at least one size larger than you.",
+          "name": "Naturally Stealthy"
+        }
+      ]
+    },
+    {
+      "code": "human",
+      "creature_type": "Humanoid",
+      "default_languages": [
+        "Common"
+      ],
+      "language_choices": null,
+      "name": "Human",
+      "size": "Small",
+      "speed": 30,
+      "traits": [
+        {
+          "description": "You gain Heroic Inspiration whenever you finish a Long Rest.",
+          "name": "Resourceful"
+        },
+        {
+          "description": "You gain proficiency in one skill of your choice.",
+          "name": "Skillful"
+        },
+        {
+          "description": "You gain an Origin feat of your choice (see \"Feats\"). Skilled is recommended.",
+          "name": "Versatile"
+        }
+      ]
+    },
+    {
+      "code": "orc",
+      "creature_type": "Humanoid",
+      "default_languages": [
+        "Common"
+      ],
+      "language_choices": null,
+      "name": "Orc",
+      "size": "Medium",
+      "speed": 30,
+      "traits": [
+        {
+          "description": "You can take the Dash action as a Bonus Action. When you do so, you gain a number of Temporary Hit Points equal to your Proficiency Bonus.",
+          "name": "Adrenaline Rush"
+        },
+        {
+          "description": "You have Darkvision with a range of 120 feet.",
+          "name": "Darkvision"
+        },
+        {
+          "description": "When you are reduced to 0 Hit Points but not killed outright, you can drop to 1 Hit Point instead. Once you use this trait, you can't do so again until you finish a Long Rest.",
+          "name": "Relentless Endurance"
+        }
+      ]
+    },
+    {
+      "code": "tiefling",
+      "creature_type": "Humanoid",
+      "default_languages": [
+        "Common"
+      ],
+      "language_choices": null,
+      "name": "Tiefling",
+      "size": "Small",
+      "speed": 30,
+      "traits": [
+        {
+          "description": "You have Darkvision with a range of 60 feet.",
+          "name": "Darkvision"
+        },
+        {
+          "description": "You are the recipient of a legacy that grants you supernatural abilities. Choose a legacy from the Fiendish Legacies table. You gain the level 1 benefit of the chosen legacy.",
+          "name": "Fiendish Legacy"
+        },
+        {
+          "description": "You know the _Thaumaturgy_ cantrip. When you cast it with this trait, the spell uses the same spellcasting ability you use for your Fiendish Legacy trait.",
+          "name": "Otherworldly Presence"
+        }
+      ]
+    }
+  ]
+}

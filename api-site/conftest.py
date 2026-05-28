@@ -38,6 +38,25 @@ from datetime import datetime, timezone
 
 from shared.dependencies.db import Base
 from modules.user.model.friend_code_model import FriendCode  # noqa: F401
+# Character v2 model imports — needed so Base.metadata sees every table
+# before SQLite create_all in the db_session fixture.
+from modules.characters.model.edition_model import Edition  # noqa: F401
+from modules.characters.model.character_model import Character as _CharacterModel  # noqa: F401
+from modules.characters.model.character_class_model import CharacterClassEntry as _CCE  # noqa: F401
+from modules.characters.model.character_ability_model import CharacterAbilityScore as _CAS  # noqa: F401
+from modules.characters.model.character_save_model import CharacterSaveProficiency as _CSP  # noqa: F401
+from modules.characters.model.character_skill_model import CharacterSkillProficiency as _CSkill  # noqa: F401
+from modules.characters.model.character_feat_model import CharacterFeatAcquisition as _CFA  # noqa: F401
+from modules.characters.model.character_choices_log_model import CharacterChoiceLog as _CCL  # noqa: F401
+from modules.characters.model.dnd_ability_model import DndAbility as _DndAbility  # noqa: F401
+# Cross-aggregate model imports so SQLite create_all sees every FK target in
+# its initial metadata pass.
+from modules.library.model.asset_model import MediaAsset as _MediaAsset  # noqa: F401
+from modules.library.model.map_asset_model import MapAssetModel as _MapAssetModel  # noqa: F401
+from modules.library.model.music_asset_model import MusicAssetModel as _MusicAssetModel  # noqa: F401
+from modules.library.model.sfx_asset_model import SfxAssetModel as _SfxAssetModel  # noqa: F401
+from modules.library.model.image_asset_model import ImageAssetModel as _ImageAssetModel  # noqa: F401
+from modules.events.model.notification_model import Notification as _Notification  # noqa: F401
 from modules.user.repositories.user_repository import UserRepository
 from modules.session.repositories.session_repository import SessionRepository
 from modules.characters.repositories.character_repository import CharacterRepository
@@ -45,7 +64,11 @@ from modules.friendship.repositories.friendship_repository import FriendshipRepo
 from modules.campaign.repositories.campaign_repository import CampaignRepository
 from modules.user.domain.user_aggregate import UserAggregate
 from modules.session.domain.session_aggregate import SessionEntity, SessionStatus
-from modules.characters.domain.character_aggregate import CharacterAggregate, CharacterClass, CharacterClassInfo, CharacterRace, AbilityScores
+from modules.characters.domain.character_aggregate import (
+    AbilityScores,
+    CharacterAggregate,
+    ClassEntry,
+)
 from modules.friendship.domain.friendship_aggregate import FriendshipAggregate
 from modules.campaign.domain.campaign_aggregate import CampaignAggregate
 
@@ -132,6 +155,41 @@ def db_session():
 
 
 @pytest.fixture
+def seed_dnd_abilities(db_session: Session) -> dict[str, int]:
+    """Seed the dnd_abilities lookup table for tests that touch character ability rows.
+
+    Returns a name → id map so test factories can populate join tables directly
+    without an extra round-trip.
+    """
+    from modules.characters.model.dnd_ability_model import DndAbility
+    names = ("strength", "dexterity", "constitution", "intelligence", "wisdom", "charisma")
+    mapping: dict[str, int] = {}
+    for name in names:
+        row = DndAbility(name=name)
+        db_session.add(row)
+        db_session.flush()
+        mapping[name] = row.id
+    db_session.commit()
+    return mapping
+
+
+@pytest.fixture
+def seed_default_edition(db_session: Session, seed_dnd_abilities) -> int:
+    """Seed the editions table with the default D&D 2024 row; return its id."""
+    from modules.characters.model.edition_model import Edition
+    edition = Edition(
+        code="srd_5_2_1",
+        name="D&D 2024 (5.5e)",
+        version="5.2.1",
+        is_active=True,
+    )
+    db_session.add(edition)
+    db_session.flush()
+    db_session.commit()
+    return edition.id
+
+
+@pytest.fixture
 def user_repo(db_session: Session):
     """User repository with test database"""
     return UserRepository(db_session)
@@ -200,10 +258,12 @@ def create_campaign(campaign_repo: CampaignRepository):
         campaign = create_campaign(host_id=user.id, title="Test Campaign")
     """
     def _create_campaign(host_id: uuid.UUID, title: str = "Test Campaign", description: str = "Test Description"):
+        # CampaignAggregate.create uses ``created_by``; the older fixture passed
+        # ``host_id`` which never matched the constructor's keyword.
         campaign = CampaignAggregate.create(
             title=title,
             description=description,
-            host_id=host_id
+            created_by=host_id,
         )
         campaign_repo.save(campaign)
         return campaign
@@ -233,39 +293,58 @@ def create_game(game_repo: SessionRepository):
 
 
 @pytest.fixture
-def create_character(character_repo: CharacterRepository):
+def create_character(character_repo: CharacterRepository, seed_default_edition):
     """
     Factory fixture to create test characters.
 
     Usage:
         character = create_character(user_id=user.id, name="Test Hero")
     """
+    edition_id = seed_default_edition
+
     def _create_character(
         user_id: uuid.UUID,
         name: str = "Test Character",
-        character_class: CharacterClass = CharacterClass.FIGHTER,
-        character_race: CharacterRace = CharacterRace.HUMAN,
-        level: int = 1
+        class_code: str = "fighter",
+        species_code: str = "human",
+        background_code: str = "soldier",
+        level: int = 1,
     ):
-        abilities = AbilityScores(
-            strength=10,
-            dexterity=10,
-            constitution=10,
-            intelligence=10,
-            wisdom=10,
-            charisma=10
-        )
-
-        character = CharacterAggregate.create(
-            active_campaign=None,  # New characters start unlocked
+        from datetime import datetime
+        now = datetime.utcnow()
+        character = CharacterAggregate(
+            id=None,
             user_id=user_id,
+            edition_id=edition_id,
+            edition_code="srd_5_2_1",
+            active_campaign=None,
             character_name=name,
-            character_classes=[CharacterClassInfo(character_class=character_class, level=level)],
-            character_race=character_race,
-            ability_scores=abilities,
+            species_code=species_code,
+            background_code=background_code,
+            class_entries=[ClassEntry(class_code=class_code, level=level, is_primary=True)],
+            ability_scores=AbilityScores.default(),
+            origin_ability_bonuses={},
+            save_proficiencies=frozenset(),
+            skills=[],
+            feats=[],
+            level=level,
+            xp=0,
             hp_max=10,
             hp_current=10,
-            ac=10
+            hp_temp=0,
+            ac=10,
+            death_save_successes=0,
+            death_save_failures=0,
+            inspiration=False,
+            status_effects=[],
+            is_alive=True,
+            speed=30,
+            size="Medium",
+            languages=["Common"],
+            is_draft=False,
+            creation_step=None,
+            created_at=now,
+            updated_at=now,
         )
         character_repo.save(character)
         return character

@@ -1,0 +1,96 @@
+{
+  "edition": "srd_5_2_1",
+  "schema_version": 1,
+  "skills": [
+    {
+      "ability": "dexterity",
+      "code": "acrobatics",
+      "name": "Acrobatics"
+    },
+    {
+      "ability": "wisdom",
+      "code": "animal_handling",
+      "name": "Animal Handling"
+    },
+    {
+      "ability": "intelligence",
+      "code": "arcana",
+      "name": "Arcana"
+    },
+    {
+      "ability": "strength",
+      "code": "athletics",
+      "name": "Athletics"
+    },
+    {
+      "ability": "charisma",
+      "code": "deception",
+      "name": "Deception"
+    },
+    {
+      "ability": "intelligence",
+      "code": "history",
+      "name": "History"
+    },
+    {
+      "ability": "wisdom",
+      "code": "insight",
+      "name": "Insight"
+    },
+    {
+      "ability": "charisma",
+      "code": "intimidation",
+      "name": "Intimidation"
+    },
+    {
+      "ability": "intelligence",
+      "code": "investigation",
+      "name": "Investigation"
+    },
+    {
+      "ability": "wisdom",
+      "code": "medicine",
+      "name": "Medicine"
+    },
+    {
+      "ability": "intelligence",
+      "code": "nature",
+      "name": "Nature"
+    },
+    {
+      "ability": "wisdom",
+      "code": "perception",
+      "name": "Perception"
+    },
+    {
+      "ability": "charisma",
+      "code": "performance",
+      "name": "Performance"
+    },
+    {
+      "ability": "charisma",
+      "code": "persuasion",
+      "name": "Persuasion"
+    },
+    {
+      "ability": "intelligence",
+      "code": "religion",
+      "name": "Religion"
+    },
+    {
+      "ability": "dexterity",
+      "code": "sleight_of_hand",
+      "name": "Sleight of Hand"
+    },
+    {
+      "ability": "dexterity",
+      "code": "stealth",
+      "name": "Stealth"
+    },
+    {
+      "ability": "wisdom",
+      "code": "survival",
+      "name": "Survival"
+    }
+  ]
+}

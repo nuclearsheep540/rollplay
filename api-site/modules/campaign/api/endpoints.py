@@ -40,7 +40,8 @@ from modules.campaign.application.commands import (
     SetMemberRole,
 )
 from modules.characters.repositories.character_repository import CharacterRepository
-from modules.characters.dependencies.providers import get_character_repository
+from modules.characters.dependencies.providers import get_character_repository, get_ruleset_registry
+from shared.rulesets.registry import RulesetRegistry
 from modules.session.application.commands import CreateSession
 from modules.campaign.application.queries import (
     GetUserCampaigns,
@@ -83,8 +84,13 @@ def _build_hero_image_asset_info(campaign: CampaignAggregate, s3_service: Option
     )
 
 
-def _to_campaign_response(campaign: CampaignAggregate, user_repo: Optional[UserRepository] = None, s3_service: Optional[S3Service] = None) -> CampaignResponse:
-    """Convert CampaignAggregate to CampaignResponse"""
+def _to_campaign_response(campaign: CampaignAggregate, user_repo: Optional[UserRepository] = None, s3_service: Optional[S3Service] = None, campaign_repo: Optional[CampaignRepository] = None, db: Optional[Session] = None) -> CampaignResponse:
+    """Convert CampaignAggregate to CampaignResponse.
+
+    Pass ``campaign_repo`` and ``db`` to populate the ``members`` list with full
+    username/character detail (same source the dashboard's member list uses).
+    Without them, ``members`` is left empty.
+    """
     # Campaign now only stores session_ids, not full session objects
     # Frontend should fetch sessions separately from /api/sessions/campaign/{id}
 
@@ -95,6 +101,11 @@ def _to_campaign_response(campaign: CampaignAggregate, user_repo: Optional[UserR
         dm_user = user_repo.get_by_id(dm_id)
         if dm_user:
             host_screen_name = dm_user.screen_name
+
+    members = []
+    if campaign_repo and db:
+        from modules.campaign.application.queries import GetCampaignMembers
+        members = GetCampaignMembers(campaign_repo, db).execute(campaign.id)
 
     return CampaignResponse(
         id=str(campaign.id),
@@ -110,6 +121,7 @@ def _to_campaign_response(campaign: CampaignAggregate, user_repo: Optional[UserR
         invited_player_ids=[str(pid) for pid in campaign.invited_player_ids],
         player_ids=[str(pid) for pid in campaign.player_ids],
         member_ids=[str(mid) for mid in campaign.get_all_member_ids()],
+        members=members,
         total_sessions=campaign.get_total_sessions(),
         active_sessions=0,  # TODO: Query session module for active count
         invited_count=campaign.get_invited_count(),
@@ -296,7 +308,8 @@ async def get_campaign(
     campaign_id: UUID,
     user_id: UUID = Depends(get_current_user_id),
     campaign_repo: CampaignRepository = Depends(campaign_repository),
-    s3_service: S3Service = Depends(get_s3_service)
+    s3_service: S3Service = Depends(get_s3_service),
+    db: Session = Depends(get_db),
 ):
     """Get campaign by ID with all sessions"""
     try:
@@ -316,7 +329,7 @@ async def get_campaign(
                 detail="Access denied - only campaign members can view campaign details"
             )
 
-        return _to_campaign_response(campaign, s3_service=s3_service)
+        return _to_campaign_response(campaign, s3_service=s3_service, campaign_repo=campaign_repo, db=db)
 
     except ValueError as e:
         raise HTTPException(

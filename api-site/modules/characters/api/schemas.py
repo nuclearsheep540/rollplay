@@ -1,117 +1,300 @@
 # Copyright (C) 2025 Matthew Davey
 # SPDX-License-Identifier: GPL-3.0-or-later
 
+"""
+Character API request + response schemas.
+
+Reference-data endpoints (Phase 2.1) return the Pydantic models from
+shared.rulesets.models directly — no separate DTO. The shapes below are only
+for character resource endpoints (draft, runtime, level-up, listing).
+"""
+
 from datetime import datetime
-from typing import Optional, Dict, List
-from pydantic import BaseModel, Field, validator
+from typing import Any, Dict, List, Literal, Optional
+from uuid import UUID
 
-from modules.characters.domain.character_aggregate import CharacterRace, CharacterClass, CharacterBackground
+from pydantic import BaseModel, ConfigDict, Field
 
-
-# REQUEST SCHEMAS
-
-class AbilityScoresRequest(BaseModel):
-    """Pydantic schema for ability scores input - D&D 5e cap at 20"""
-    strength: int = Field(..., ge=1, le=20, description="Strength score (1-20)")
-    dexterity: int = Field(..., ge=1, le=20, description="Dexterity score (1-20)")
-    constitution: int = Field(..., ge=1, le=20, description="Constitution score (1-20)")
-    intelligence: int = Field(..., ge=1, le=20, description="Intelligence score (1-20)")
-    wisdom: int = Field(..., ge=1, le=20, description="Wisdom score (1-20)")
-    charisma: int = Field(..., ge=1, le=20, description="Charisma score (1-20)")
+from shared.rulesets.models import AbilityCode, CodePattern
 
 
-class CharacterClassInfoRequest(BaseModel):
-    """
-    Request schema for a single character class with level.
-    Used for multi-class character support.
-    """
-    character_class: CharacterClass = Field(..., description="D&D 5e character class")
-    level: int = Field(..., ge=1, le=20, description="Level in this class (1-20)")
+AbilityScoreMethod = Literal["point_buy", "standard_array", "rolled", "manual"]
 
 
-class CharacterCreateRequest(BaseModel):
-    """
-    Request schema for character creation.
-
-    Supports multi-class characters (1-3 classes).
-    Only performs structural validation - business rules enforced in domain layer.
-    """
-    name: str = Field(..., min_length=1, max_length=50, description="Character name")
-    character_classes: List[CharacterClassInfoRequest] = Field(
-        ...,
-        min_items=1,
-        max_items=3,
-        description="Character classes (1-3 classes for multi-classing)"
-    )
-    character_race: CharacterRace = Field(..., description="D&D 5e character race")
-    background: Optional[CharacterBackground] = Field(None, description="D&D 2024 character background")
-    level: int = Field(1, ge=1, le=20, description="Total character level (1-20)")
-    hp_max: int = Field(1, ge=1, le=999, description="Character max hit points (1-999)")
-    hp_current: int = Field(1, ge=-100, le=999, description="Character current hit points (-100 to 999, negative for unconscious)")
-    ac: int = Field(1, ge=1, le=50, description="Character armour class (1-50)")
-    ability_scores: Optional[AbilityScoresRequest] = Field(
-        None,
-        description="Ability scores (defaults to 10 for all if omitted)"
-    )
-    origin_ability_bonuses: Optional[Dict[str, int]] = Field(
-        None,
-        description="D&D 2024 origin ability bonuses from background (e.g., {'strength': 2, 'constitution': 1})"
-    )
-
-    @validator('character_classes')
-    def validate_class_levels(cls, v, values):
-        """Validate that sum of class levels matches total level"""
-        if 'level' in values:
-            total_class_levels = sum(c.level for c in v)
-            if total_class_levels != values['level']:
-                raise ValueError(
-                    f"Sum of class levels ({total_class_levels}) must equal total character level ({values['level']})"
-                )
-        return v
-
-# TODO: this is DRY as AbilityScoresRequest is the same, refactor.
-class UpdateAbilityScoresRequest(BaseModel):
-    """Request schema for updating ability scores - all fields optional for partial updates"""
-    strength: Optional[int] = Field(None, ge=1, description="Strength score")
-    dexterity: Optional[int] = Field(None, ge=1, description="Dexterity score")
-    constitution: Optional[int] = Field(None, ge=1, description="Constitution score")
-    intelligence: Optional[int] = Field(None, ge=1, description="Intelligence score")
-    wisdom: Optional[int] = Field(None, ge=1, description="Wisdom score")
-    charisma: Optional[int] = Field(None, ge=1, description="Charisma score")
+# --------------------------------------------------------------------------- #
+# Edition list
+# --------------------------------------------------------------------------- #
 
 
-# RESPONSE SCHEMAS
+class EditionResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
 
-class CharacterClassInfoResponse(BaseModel):
-    """
-    Response schema for a single character class with level.
-    Used for multi-class character display.
-    """
-    character_class: str  # Enum value as string (e.g., "Fighter")
-    level: int
+    id: int
+    code: str
+    name: str
+    version: str
+    is_active: bool
+
+
+# --------------------------------------------------------------------------- #
+# Character sub-resources
+# --------------------------------------------------------------------------- #
+
+
+class ClassEntryDTO(BaseModel):
+    class_code: str = Field(pattern=CodePattern)
+    level: int = Field(ge=1, le=20)
+    is_primary: bool = False
+
+
+class SkillProficiencyDTO(BaseModel):
+    skill_code: str = Field(pattern=CodePattern)
+    source: Literal["CLASS", "BACKGROUND", "FEAT", "SPECIES"]
+    expertise: bool = False
+
+
+class FeatAcquisitionDTO(BaseModel):
+    feat_code: str = Field(pattern=CodePattern)
+    level: int = Field(ge=1, le=20)
+    source: Literal["BACKGROUND_ORIGIN", "ASI", "OTHER"]
+
+
+class DerivedSkillModifier(BaseModel):
+    skill_code: str
+    ability: AbilityCode
+    proficient: bool
+    expertise: bool
+    modifier: int
+
+
+class DerivedSaveModifier(BaseModel):
+    ability: AbilityCode
+    proficient: bool
+    modifier: int
+
+
+class DerivedStats(BaseModel):
+    """Ruleset-computed values surfaced alongside the stored character state."""
+
+    proficiency_bonus: int
+    initiative: int
+    saves: List[DerivedSaveModifier]
+    skills: List[DerivedSkillModifier]
+    next_level_xp: Optional[int] = None
+    pending_level_up: bool
+    pending_asi_count: int
 
 
 class CharacterResponse(BaseModel):
-    """
-    Character response schema - reused across all character endpoints.
+    """Full character sheet response — used by draft, runtime, listing, party endpoints."""
 
-    Supports multi-class characters with 1-3 classes.
-    Used for both list and detail views. Optimized for typical use case
-    where users have 3-10 characters with reasonable stats JSON size.
-    """
-    id: str
-    user_id: str
+    id: UUID
+    user_id: UUID
+    edition_id: int
+    edition_code: str
+    active_campaign: Optional[UUID] = None
+
     character_name: str
-    character_classes: List[CharacterClassInfoResponse]  # List of classes with levels
-    character_race: str   # Enum value as string
-    background: Optional[str] = None  # D&D 2024 background (enum value as string)
-    level: int  # Total character level (sum of all class levels)
-    ability_scores: Dict[str, int]  # Serialized AbilityScores
-    origin_ability_bonuses: Optional[Dict[str, int]] = None  # D&D 2024 origin bonuses
-    created_at: datetime
-    updated_at: datetime
-    display_name: str  # Formatted name with all classes (e.g., "Aragorn (Level 8 Fighter 5 / Ranger 3)")
+    species_code: str
+    background_code: str
+
+    class_entries: List[ClassEntryDTO]
+    # ``ability_scores`` is the FINAL value per ability (base + origin bonus
+    # baked in). Runtime callers use this directly for modifier math.
+    # ``origin_ability_bonuses`` is the bonus dict so the wizard can subtract
+    # to find what the player rolled / picked.
+    ability_scores: Dict[AbilityCode, int]
+    origin_ability_bonuses: Dict[AbilityCode, int] = {}
+    save_proficiencies: List[AbilityCode]
+    skills: List[SkillProficiencyDTO]
+    feats: List[FeatAcquisitionDTO]
+
+    level: int
+    xp: int
     hp_max: int
     hp_current: int
+    hp_temp: int
     ac: int
-    active_campaign: Optional[str] = None  # UUID of campaign character is locked to
+
+    death_save_successes: int
+    death_save_failures: int
+    inspiration: bool
+    status_effects: List[str]
+    is_alive: bool
+
+    speed: int
+    size: str
+    languages: List[str]
+
+    is_draft: bool
+    creation_step: Optional[str] = None
+
+    # Provenance for the ability_scores step — lets the wizard restore the
+    # mode the player last used (and the dice they rolled, if applicable)
+    # on resume or hard refresh.
+    ability_score_method: Optional[AbilityScoreMethod] = None
+    ability_roll_details: Optional[Dict[str, Any]] = None
+
+    display_name: str
+    derived: DerivedStats
+
+    # Presigned GET URL for the uploaded avatar — short-lived. ``None`` ⇒
+    # frontend renders the /heroes.png default.
+    avatar_url: Optional[str] = None
+
+    created_at: datetime
+    updated_at: datetime
+
+
+# --------------------------------------------------------------------------- #
+# Avatar — references a library MediaAsset (asset_type='image')
+# --------------------------------------------------------------------------- #
+
+
+class SetAvatarRequest(BaseModel):
+    """Body for PATCH /characters/{id}/avatar — null clears the avatar."""
+    asset_id: Optional[UUID] = Field(
+        default=None,
+        description="MediaAsset.id of an existing image asset, or null to clear",
+    )
+
+
+# --------------------------------------------------------------------------- #
+# Draft requests
+# --------------------------------------------------------------------------- #
+
+
+class CreateDraftRequest(BaseModel):
+    edition_code: str = Field(pattern=CodePattern)
+    name: str = Field(min_length=1, max_length=50)
+
+
+class IdentityStepPayload(BaseModel):
+    species_code: str = Field(pattern=CodePattern)
+    name: Optional[str] = Field(default=None, min_length=1, max_length=50)
+    chosen_languages: List[str] = Field(default_factory=list)
+
+
+class ClassPick(BaseModel):
+    class_code: str = Field(pattern=CodePattern)
+    level: int = Field(ge=1, le=20)
+    is_primary: bool = False
+    chosen_skills: List[str] = Field(default_factory=list)
+
+
+class ClassStepPayload(BaseModel):
+    classes: List[ClassPick] = Field(min_length=1, max_length=3)
+
+
+class BackgroundAbilityIncrease(BaseModel):
+    ability: AbilityCode
+    increase: int = Field(ge=1, le=2)
+
+
+class BackgroundStepPayload(BaseModel):
+    background_code: str = Field(pattern=CodePattern)
+    ability_increases: List[BackgroundAbilityIncrease] = Field(min_length=2, max_length=3)
+
+
+class AbilityRollDetail(BaseModel):
+    """Per-ability breakdown of a 4d6-drop-lowest result.
+
+    Stored alongside the score so the wizard can re-display the dice on resume.
+    """
+    total: int = Field(ge=1, le=24)
+    rolls: List[int] = Field(min_length=3, max_length=4)
+    kept: List[int] = Field(min_length=3, max_length=3)
+    dropped: int = Field(ge=1, le=6)
+
+
+class AbilityScoresStepPayload(BaseModel):
+    strength: int = Field(ge=1, le=20)
+    dexterity: int = Field(ge=1, le=20)
+    constitution: int = Field(ge=1, le=20)
+    intelligence: int = Field(ge=1, le=20)
+    wisdom: int = Field(ge=1, le=20)
+    charisma: int = Field(ge=1, le=20)
+    # Provenance — which mode the player used to arrive at these scores.
+    # Optional for backward compat with older clients; the wizard always sends it.
+    method: Optional[AbilityScoreMethod] = None
+    # Per-ability 4d6 breakdown — only meaningful when ``method == 'rolled'``.
+    roll_details: Optional[Dict[AbilityCode, AbilityRollDetail]] = None
+
+
+class HpAcStepPayload(BaseModel):
+    hp_max: int = Field(ge=1)
+    ac: int = Field(ge=1, le=50)
+
+
+class RenameStepPayload(BaseModel):
+    """Name-only update from the persistent name input in the wizard header."""
+    name: str = Field(min_length=1, max_length=50)
+
+
+StepName = Literal[
+    "identity", "class", "background", "ability_scores", "hp_ac", "rename"
+]
+
+
+class UpdateDraftRequest(BaseModel):
+    step: StepName
+    identity: Optional[IdentityStepPayload] = None
+    class_: Optional[ClassStepPayload] = Field(default=None, alias="class")
+    background: Optional[BackgroundStepPayload] = None
+    ability_scores: Optional[AbilityScoresStepPayload] = None
+    hp_ac: Optional[HpAcStepPayload] = None
+    rename: Optional[RenameStepPayload] = None
+
+    model_config = ConfigDict(populate_by_name=True)
+
+
+# --------------------------------------------------------------------------- #
+# Runtime endpoint
+# --------------------------------------------------------------------------- #
+
+
+class RuntimePatchRequest(BaseModel):
+    """Partial update of a character's live-session state."""
+
+    hp_current: Optional[int] = None
+    hp_temp: Optional[int] = Field(default=None, ge=0)
+    xp: Optional[int] = Field(default=None, ge=0)
+    inspiration: Optional[bool] = None
+    status_effects: Optional[List[str]] = None
+    death_save_successes: Optional[int] = Field(default=None, ge=0, le=3)
+    death_save_failures: Optional[int] = Field(default=None, ge=0, le=3)
+    is_alive: Optional[bool] = None
+    ac: Optional[int] = Field(default=None, ge=1, le=50)
+
+
+# --------------------------------------------------------------------------- #
+# Level-up endpoint
+# --------------------------------------------------------------------------- #
+
+
+class LevelUpPreview(BaseModel):
+    """What's available at the next level — driven by ruleset + character state."""
+
+    current_level: int
+    target_level: int
+    available_classes: List[str]  # which classes the player can put the level into
+    is_asi_level: Dict[str, bool]  # class_code → whether *this* class's next level is an ASI level
+    hp_options: Dict[str, Dict[str, int]]  # class_code → {average, max_roll}
+    qualifying_feats: List[str]  # feat codes the character qualifies for at next level
+
+
+class AsiChoice(BaseModel):
+    increases: Dict[AbilityCode, int]
+
+
+class FeatChoice(BaseModel):
+    feat_code: str = Field(pattern=CodePattern)
+
+
+class LevelUpRequest(BaseModel):
+    class_code: str = Field(pattern=CodePattern)
+    hp_choice: Literal["average", "roll"]
+    roll_value: Optional[int] = None
+    asi_choice: Optional[AsiChoice] = None
+    feat_choice: Optional[FeatChoice] = None
+    skill_choices: List[str] = Field(default_factory=list)

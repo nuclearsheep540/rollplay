@@ -1,22 +1,48 @@
 # Copyright (C) 2025 Matthew Davey
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-from dataclasses import dataclass, replace
+"""
+Character aggregate (v2) — code-based, edition-aware, draft-capable.
+
+The aggregate holds no ruleset math. It calls into a RulesetStrategy injected
+by the caller for anything that depends on edition rules (XP→level,
+proficiency bonus, modifier calculations). This keeps the aggregate clean and
+the strategy testable in isolation.
+"""
+
+from __future__ import annotations
+
+from dataclasses import dataclass, field
 from datetime import datetime
-from typing import Optional, Dict, List
+from typing import Iterable, Optional
 from uuid import UUID
-from enum import Enum
+
+
+ABILITY_CODES: tuple[str, ...] = (
+    "strength",
+    "dexterity",
+    "constitution",
+    "intelligence",
+    "wisdom",
+    "charisma",
+)
+
+SKILL_SOURCES: frozenset[str] = frozenset({"CLASS", "BACKGROUND", "FEAT", "SPECIES"})
+FEAT_SOURCES: frozenset[str] = frozenset({"BACKGROUND_ORIGIN", "ASI", "OTHER"})
+
+
+# --------------------------------------------------------------------------- #
+# Value objects
+# --------------------------------------------------------------------------- #
 
 
 @dataclass(frozen=True)
 class AbilityScores:
-    """
-    D&D 5e Ability Scores Value Object.
+    """Immutable set of the six core ability scores.
 
-    Immutable, validated set of six core abilities.
-
-    Business Rule: All ability scores must be between 1 and 30.
+    Validation: each score 1..30 (allows for late-level Primal Champion bumps).
     """
+
     strength: int
     dexterity: int
     constitution: int
@@ -25,567 +51,553 @@ class AbilityScores:
     charisma: int
 
     def __post_init__(self):
-        """Validate ability scores on creation"""
-        scores = {
-            'strength': self.strength,
-            'dexterity': self.dexterity,
-            'constitution': self.constitution,
-            'intelligence': self.intelligence,
-            'wisdom': self.wisdom,
-            'charisma': self.charisma
-        }
-        for ability, score in scores.items():
-            if not (1 <= score <= 20):
-                raise ValueError(f"{ability.capitalize()} score must be between 1 and 20 (got {score})")
+        for name in ABILITY_CODES:
+            v = getattr(self, name)
+            if not 1 <= v <= 30:
+                raise ValueError(f"{name} must be 1..30 (got {v})")
 
-    def update_score(self, **kwargs) -> 'AbilityScores':
-        """
-        Update specified ability scores, keeping others unchanged.
+    def get(self, ability_code: str) -> int:
+        if ability_code not in ABILITY_CODES:
+            raise KeyError(f"Unknown ability code: {ability_code!r}")
+        return getattr(self, ability_code)
 
-        Example:
-            new_scores = scores.update_score(intelligence=9, strength=16)
-
-        Validates that all scores remain between 1 and 30.
-        """
-        # Validation happens automatically in __post_init__ when replace() creates new instance
-        return replace(self, **kwargs)
-
-    def to_dict(self) -> Dict[str, int]:
-        """Serialize to dict for JSON storage in PostgreSQL"""
-        return {
-            "strength": self.strength,
-            "dexterity": self.dexterity,
-            "constitution": self.constitution,
-            "intelligence": self.intelligence,
-            "wisdom": self.wisdom,
-            "charisma": self.charisma
-        }
+    def to_dict(self) -> dict[str, int]:
+        return {name: getattr(self, name) for name in ABILITY_CODES}
 
     @classmethod
-    def from_dict(cls, data: Dict[str, int]) -> 'AbilityScores':
-        """Deserialize from dict (for ORM → Domain conversion)"""
-        return cls(
-            strength=data.get("strength", 1),
-            dexterity=data.get("dexterity", 1),
-            constitution=data.get("constitution", 1),
-            intelligence=data.get("intelligence", 1),
-            wisdom=data.get("wisdom", 1),
-            charisma=data.get("charisma", 1)
-        )
+    def from_dict(cls, data: dict[str, int]) -> "AbilityScores":
+        return cls(**{name: int(data.get(name, 10)) for name in ABILITY_CODES})
 
     @classmethod
-    def default(cls) -> 'AbilityScores':
-        """Default ability scores - all set to 1"""
-        return cls(
-            strength=1,
-            dexterity=1,
-            constitution=1,
-            intelligence=1,
-            wisdom=1,
-            charisma=1
-        )
-
-
-class CharacterRace(str, Enum):
-    """D&D 5e Player's Handbook races"""
-    HUMAN = "Human"
-    ELF = "Elf"
-    DWARF = "Dwarf"
-    HALFLING = "Halfling"
-    DRAGONBORN = "Dragonborn"
-    GNOME = "Gnome"
-    HALF_ELF = "Half-Elf"
-    HALF_ORC = "Half-Orc"
-    TIEFLING = "Tiefling"
-
-    def __str__(self) -> str:
-        return self.value
-
-
-class CharacterClass(str, Enum):
-    """D&D 5e Player's Handbook classes"""
-    BARBARIAN = "Barbarian"
-    BARD = "Bard"
-    CLERIC = "Cleric"
-    DRUID = "Druid"
-    FIGHTER = "Fighter"
-    MONK = "Monk"
-    PALADIN = "Paladin"
-    RANGER = "Ranger"
-    ROGUE = "Rogue"
-    SORCERER = "Sorcerer"
-    WARLOCK = "Warlock"
-    WIZARD = "Wizard"
-
-    def __str__(self) -> str:
-        return self.value
-
-
-class CharacterBackground(str, Enum):
-    """D&D 2024 Player's Handbook backgrounds"""
-    ACOLYTE = "Acolyte"
-    ARTISAN = "Artisan"
-    CHARLATAN = "Charlatan"
-    CRIMINAL = "Criminal"
-    ENTERTAINER = "Entertainer"
-    FARMER = "Farmer"
-    GUARD = "Guard"
-    GUIDE = "Guide"
-    HERMIT = "Hermit"
-    MERCHANT = "Merchant"
-    NOBLE = "Noble"
-    SAGE = "Sage"
-    SAILOR = "Sailor"
-    SCRIBE = "Scribe"
-    SOLDIER = "Soldier"
-    WAYFARER = "Wayfarer"
-
-    def __str__(self) -> str:
-        return self.value
+    def default(cls) -> "AbilityScores":
+        return cls(10, 10, 10, 10, 10, 10)
 
 
 @dataclass(frozen=True)
-class CharacterClassInfo:
-    """
-    Value object representing a character class with its level.
-
-    Used for multi-class support - each character can have 1-3 classes.
-    Example: Fighter (level 5), Rogue (level 3)
-    """
-    character_class: CharacterClass
+class ClassEntry:
+    """One row of a character's multi-class progression."""
+    class_code: str
     level: int
+    is_primary: bool = False
 
     def __post_init__(self):
-        """Validate class level"""
-        if self.level < 1:
-            raise ValueError(f"Class level must be at least 1 (got {self.level})")
-        if self.level > 20:
-            raise ValueError(f"Class level cannot exceed 20 (got {self.level})")
+        if not 1 <= self.level <= 20:
+            raise ValueError(f"Class level must be 1..20 (got {self.level})")
+
+
+@dataclass(frozen=True)
+class SkillProficiency:
+    """A skill proficiency the character has gained.
+
+    ``source`` says where it came from (CLASS / BACKGROUND / FEAT / SPECIES) —
+    used by the level-up wizard to undo grants and by the registry-validated
+    invariants below.
+    """
+    skill_code: str
+    source: str
+    expertise: bool = False
+
+    def __post_init__(self):
+        if self.source not in SKILL_SOURCES:
+            raise ValueError(
+                f"SkillProficiency.source must be one of {sorted(SKILL_SOURCES)} "
+                f"(got {self.source!r})"
+            )
+
+
+@dataclass(frozen=True)
+class FeatAcquisition:
+    """A feat the character has taken at a specific level."""
+    feat_code: str
+    level: int
+    source: str
+
+    def __post_init__(self):
+        if self.source not in FEAT_SOURCES:
+            raise ValueError(
+                f"FeatAcquisition.source must be one of {sorted(FEAT_SOURCES)} "
+                f"(got {self.source!r})"
+            )
+        if not 1 <= self.level <= 20:
+            raise ValueError(f"FeatAcquisition.level must be 1..20 (got {self.level})")
+
+
+# --------------------------------------------------------------------------- #
+# Aggregate
+# --------------------------------------------------------------------------- #
 
 
 @dataclass
 class CharacterAggregate:
+    """Aggregate root for one character.
+
+    Stays edition-agnostic: stores codes (class/species/background/skill/feat)
+    and lets the registry / ruleset strategy resolve them when math is needed.
     """
-    Character aggregate root - represents a player character in the game.
 
-    Characters are created by users and represent their in-game personas.
-
-    Locking:
-    - active_campaign: UUID of campaign character is locked to (can only be in one campaign at a time)
-    - is_alive: Whether character is alive (for D&D death mechanics)
-
-    D&D 2024 Origin:
-    - background: Character's background (provides feat + ability bonuses)
-    - origin_ability_bonuses: Dict of ability score bonuses from background (+2/+1 or +1/+1/+1)
-    """
+    # Identity
     id: Optional[UUID]
     user_id: UUID
+    edition_id: int
+    edition_code: str
+    active_campaign: Optional[UUID]
+
+    # Identity / origin
     character_name: str
-    character_classes: List[CharacterClassInfo]  # Changed from single class to list
-    character_race: CharacterRace
-    level: int  # Total character level (sum of all class levels)
+    species_code: str
+    background_code: str
+
+    # Class progression
+    class_entries: list[ClassEntry]
+
+    # Stats. ``ability_scores`` holds the *base* values the player rolled or
+    # picked; ``origin_ability_bonuses`` is the per-ability bonus granted by
+    # the background (and only the background, for now). Final score for any
+    # ability = ``ability_scores.get(code) + origin_ability_bonuses.get(code, 0)``
+    # — use :meth:`final_ability_score` everywhere math is involved.
     ability_scores: AbilityScores
-    created_at: datetime
-    updated_at: datetime
+    origin_ability_bonuses: dict[str, int]
+    save_proficiencies: frozenset[str]
+    skills: list[SkillProficiency]
+    feats: list[FeatAcquisition]
+
+    # Vitals
+    level: int
+    xp: int
     hp_max: int
     hp_current: int
+    hp_temp: int
     ac: int
-    background: Optional[CharacterBackground] = None  # D&D 2024: Character background
-    origin_ability_bonuses: Dict[str, int] = None  # D&D 2024: Ability bonuses from background
+
+    # Runtime state
+    death_save_successes: int
+    death_save_failures: int
+    inspiration: bool
+    status_effects: list[str]
+    is_alive: bool
+
+    # Species-derived
+    speed: int
+    size: str
+    languages: list[str]
+
+    # Lifecycle
+    is_draft: bool
+    creation_step: Optional[str]
+    created_at: datetime
+    updated_at: datetime
     is_deleted: bool = False
-    active_campaign: Optional[UUID] = None  # Campaign character is locked to
-    is_alive: bool = True  # Character alive status (D&D death mechanics)
 
-    def __post_init__(self):
-        """Validate multi-class and origin bonus rules on aggregate creation/modification"""
-        self._validate_multiclass()
-        self._validate_origin_bonuses()
+    # Library MediaAsset (asset_type='image') the character uses as its
+    # avatar. ``None`` ⇒ frontend shows the default /heroes.png. We also stash
+    # ``avatar_s3_key`` so the response builder can produce a presigned URL
+    # without re-querying the asset row; the repository sets it on load.
+    avatar_asset_id: Optional[UUID] = None
+    avatar_s3_key: Optional[str] = None
 
-    def _validate_multiclass(self):
-        """
-        Validate multi-class business rules.
+    # Provenance of the current ability_scores. Lets the wizard resume in the
+    # mode the player last used, and (for ``rolled``) re-display the original
+    # 4d6 breakdown instead of forcing a re-roll on refresh.
+    ability_score_method: Optional[str] = None
+    ability_roll_details: Optional[dict] = None
 
-        Rules:
-        - Must have at least 1 class
-        - Cannot have more than 3 classes
-        - Sum of class levels must equal total character level
-        - No duplicate classes
-        """
-        if not self.character_classes or len(self.character_classes) == 0:
-            raise ValueError("Character must have at least one class")
-
-        if len(self.character_classes) > 3:
-            raise ValueError("Character cannot have more than 3 classes")
-
-        # Validate total class levels match character level
-        total_class_levels = sum(c.level for c in self.character_classes)
-        if total_class_levels != self.level:
-            raise ValueError(
-                f"Sum of class levels ({total_class_levels}) must equal character level ({self.level})"
-            )
-
-        # Check for duplicate classes
-        class_names = [c.character_class for c in self.character_classes]
-        if len(class_names) != len(set(class_names)):
-            raise ValueError("Character cannot have duplicate classes")
-
-    def _validate_origin_bonuses(self):
-        """
-        Validate D&D 2024 origin ability bonuses business rules.
-
-        Rules:
-        - If origin_ability_bonuses provided, must sum to exactly 3 points
-        - Valid patterns: +2/+1 (two abilities) or +1/+1/+1 (three abilities)
-        - Ability names must be valid (str, dex, con, int, wis, cha)
-        - Cannot apply bonuses that would exceed max 20 for any ability
-        - Bonuses must be positive integers
-        """
-        if not self.origin_ability_bonuses:
-            # No bonuses provided is valid (optional field)
-            return
-
-        valid_abilities = {'strength', 'dexterity', 'constitution', 'intelligence', 'wisdom', 'charisma'}
-
-        # Validate ability names
-        for ability in self.origin_ability_bonuses.keys():
-            if ability not in valid_abilities:
-                raise ValueError(f"Invalid ability name '{ability}' in origin bonuses")
-
-        # Validate bonuses are positive integers
-        for ability, bonus in self.origin_ability_bonuses.items():
-            if not isinstance(bonus, int) or bonus < 0:
-                raise ValueError(f"Origin bonus for {ability} must be a positive integer (got {bonus})")
-
-        # Validate total points
-        total_bonus = sum(self.origin_ability_bonuses.values())
-        if total_bonus != 3:
-            raise ValueError(f"Origin ability bonuses must sum to exactly 3 points (got {total_bonus})")
-
-        # Validate no ability exceeds 20 after bonuses
-        for ability, bonus in self.origin_ability_bonuses.items():
-            base_score = getattr(self.ability_scores, ability)
-            final_score = base_score + bonus
-            if final_score > 20:
-                raise ValueError(
-                    f"{ability.capitalize()} would exceed max 20 with bonus "
-                    f"(base {base_score} + {bonus} = {final_score})"
-                )
+    # -------------------------------------------------------------- factory
 
     @classmethod
-    def create(
+    def create_draft(
         cls,
-        active_campaign: None,
-        user_id: UUID,  # owner
+        *,
+        user_id: UUID,
+        edition_id: int,
+        edition_code: str,
         character_name: str,
-        character_classes: List[CharacterClassInfo],  # Changed from single class
-        character_race: CharacterRace,
-        hp_max: int,
-        hp_current: int,
-        ac: int,
-        level: int = 1,
-        ability_scores: Optional[AbilityScores] = None,
-        background: Optional[CharacterBackground] = None,  # D&D 2024
-        origin_ability_bonuses: Optional[Dict[str, int]] = None,  # D&D 2024
-    ) -> 'CharacterAggregate':
-        """
-        Create new character with business rules validation.
+    ) -> "CharacterAggregate":
+        """Open a new draft character — only the minimum fields are required.
 
-        Business Rules:
-        - Character name must be provided and valid
-        - Character name max 50 characters
-        - Must have at least 1 class (validated by __post_init__)
-        - Character race must be provided
-        - Level must be between 1 and 20
-        - Must belong to a user
+        All other fields default to safe placeholders; subsequent draft updates
+        fill them in step by step until :meth:`finalize` is called.
         """
-        # Business rule: Character name must be provided and valid
         if not character_name or not character_name.strip():
             raise ValueError("Character name is required")
-
-        normalized_name = character_name.strip()
-        if len(normalized_name) > 50:
-            raise ValueError("Character name too long (max 50 characters)")
-
-        # Business rule: Character classes must be provided
-        if not character_classes or len(character_classes) == 0:
-            raise ValueError("Character must have at least one class")
-
-        # Business rule: Character race must be provided
-        if not character_race:
-            raise ValueError("Character race is required")
-
-        # Business rule: Level must be valid
-        if level < 1 or level > 20:
-            raise ValueError("Character level must be between 1 and 20")
-
-        # Business rule: Must belong to a user
-        if not user_id:
-            raise ValueError("Character must belong to a user")
-
-        # Default ability scores to 10 if not provided
-        if not ability_scores:
-            ability_scores = AbilityScores(
-                strength=10,
-                dexterity=10,
-                constitution=10,
-                intelligence=10,
-                wisdom=10,
-                charisma=10
-            )
-
-        now = datetime.now()
+        if len(character_name.strip()) > 50:
+            raise ValueError("Character name too long (max 50)")
+        now = datetime.utcnow()
         return cls(
-            id=None,  # Will be set by repository
+            id=None,
             user_id=user_id,
-            character_name=normalized_name,
-            character_classes=character_classes,  # Now a list
-            character_race=character_race,
-            level=level,
-            ability_scores=ability_scores,
+            edition_id=edition_id,
+            edition_code=edition_code,
+            active_campaign=None,
+            character_name=character_name.strip(),
+            species_code="",
+            background_code="",
+            class_entries=[],
+            ability_scores=AbilityScores.default(),
+            origin_ability_bonuses={},
+            save_proficiencies=frozenset(),
+            skills=[],
+            feats=[],
+            level=1,
+            xp=0,
+            hp_max=1,
+            hp_current=1,
+            hp_temp=0,
+            ac=10,
+            death_save_successes=0,
+            death_save_failures=0,
+            inspiration=False,
+            status_effects=[],
+            is_alive=True,
+            speed=0,
+            size="Medium",
+            languages=[],
+            is_draft=True,
+            creation_step="edition",
             created_at=now,
             updated_at=now,
-            background=background,  # D&D 2024
-            origin_ability_bonuses=origin_ability_bonuses or {},  # D&D 2024, default to empty dict
-            is_deleted=False,
-            active_campaign=None,  # New characters not locked to any campaign
-            is_alive=True,  # New characters start alive
-            hp_max=hp_max,
-            hp_current=hp_current,
-            ac=ac
         )
 
+    # -------------------------------------------------------------- finalize / draft
+
+    def finalize(self) -> None:
+        """Flip is_draft → False after confirming required fields are populated."""
+        if not self.is_draft:
+            return
+        missing: list[str] = []
+        if not self.species_code:
+            missing.append("species_code")
+        if not self.background_code:
+            missing.append("background_code")
+        if not self.class_entries:
+            missing.append("class_entries")
+        if self.hp_max < 1:
+            missing.append("hp_max")
+        if missing:
+            raise ValueError(f"Cannot finalize draft — missing: {', '.join(missing)}")
+        self.is_draft = False
+        self.creation_step = None
+        self._touch()
+
+    def set_creation_step(self, step: Optional[str]) -> None:
+        self.creation_step = step
+        self._touch()
+
+    def set_ability_scores(
+        self,
+        scores: "AbilityScores",
+        *,
+        method: Optional[str] = None,
+        roll_details: Optional[dict] = None,
+    ) -> None:
+        """Replace base ability scores + track which method produced them.
+
+        ``method`` and ``roll_details`` are pure provenance — they don't change
+        any math, they just let the wizard resume on the right tab with the
+        original dice still visible. Pass ``method=None`` to leave existing
+        provenance alone (used by ASI / level-up paths that mutate scores
+        without re-running the creation-step picker).
+        """
+        self.ability_scores = scores
+        if method is not None:
+            self.ability_score_method = method
+            self.ability_roll_details = roll_details if method == "rolled" else None
+        self._touch()
+
+    def set_avatar_asset(self, asset_id: Optional[UUID]) -> None:
+        """Attach (or clear) the library asset used as this character's avatar.
+
+        ``avatar_s3_key`` is reset here — the repository repopulates it on the
+        next read via the eager-loaded ``MediaAsset`` row, and the response
+        builder uses whichever one it has.
+        """
+        self.avatar_asset_id = asset_id
+        if asset_id is None:
+            self.avatar_s3_key = None
+        self._touch()
+
+    # -------------------------------------------------------------- ownership / locking
+
     def is_owned_by(self, user_id: UUID) -> bool:
-        """Check if character is owned by specific user"""
         return self.user_id == user_id
 
-    def get_final_ability_scores(self) -> Dict[str, int]:
-        """
-        Get final ability scores with origin bonuses applied.
-
-        Returns dict with base + origin bonus for each ability.
-        Example: {"strength": 17, "dexterity": 14, ...}
-        """
-        base_scores = self.ability_scores.to_dict()
-
-        if not self.origin_ability_bonuses:
-            return base_scores
-
-        final_scores = base_scores.copy()
-        for ability, bonus in self.origin_ability_bonuses.items():
-            final_scores[ability] = base_scores[ability] + bonus
-
-        return final_scores
-
-    def soft_delete(self):
-        """Soft delete the character"""
-        self.is_deleted = True
-
-    def can_be_deleted(self) -> bool:
-        """
-        Business rule: Characters cannot be deleted if locked to a campaign.
-        Must leave campaign first to unlock character before deletion.
-        """
-        return self.active_campaign is None
-
     def is_locked(self) -> bool:
-        """Check if character is locked to a campaign."""
         return self.active_campaign is not None
 
-    def get_display_name(self) -> str:
-        """Get formatted display name with all classes"""
-        if len(self.character_classes) == 1:
-            class_info = self.character_classes[0]
-            return f"{self.character_name} (Level {self.level} {class_info.character_class.value})"
-        else:
-            # Multi-class: "Name (Level 8 Fighter 5 / Rogue 3)"
-            class_parts = [f"{c.character_class.value} {c.level}" for c in self.character_classes]
-            return f"{self.character_name} (Level {self.level} {' / '.join(class_parts)})"
+    def can_be_deleted(self) -> bool:
+        return self.active_campaign is None
 
-    def get_primary_class(self) -> CharacterClass:
-        """
-        Get primary class (highest level class).
-
-        If multiple classes have the same level, returns the first one.
-        """
-        if not self.character_classes:
-            raise ValueError("Character has no classes")
-
-        primary = max(self.character_classes, key=lambda c: c.level)
-        return primary.character_class
-
-    def add_class(self, character_class: CharacterClass, class_level: int) -> None:
-        """
-        Add a new class (multi-classing).
-
-        Business Rules:
-        - Must be character level 3+ to multi-class
-        - Cannot exceed 3 classes
-        - Cannot have duplicate class
-        - Class level must be at least 1
-        - New total level (current + class_level) cannot exceed 20
-        """
-        # Business rule: Must be level 3+ to multi-class (D&D 5e standard)
-        if self.level < 3 and len(self.character_classes) >= 1:
-            raise ValueError("Character must be level 3+ to multi-class")
-
-        # Business rule: Cannot exceed 3 classes
-        if len(self.character_classes) >= 3:
-            raise ValueError("Character cannot have more than 3 classes")
-
-        # Business rule: Cannot have duplicate class
-        existing_classes = [c.character_class for c in self.character_classes]
-        if character_class in existing_classes:
-            raise ValueError(f"Character already has {character_class.value} class")
-
-        # Business rule: Class level must be valid
-        if class_level < 1:
-            raise ValueError("Class level must be at least 1")
-
-        # Business rule: Total level cannot exceed 20
-        new_total_level = self.level + class_level
-        if new_total_level > 20:
-            raise ValueError(f"Adding class would exceed max level 20 (new total: {new_total_level})")
-
-        # Add the class
-        new_class_info = CharacterClassInfo(character_class=character_class, level=class_level)
-        self.character_classes.append(new_class_info)
-        self.level = new_total_level
-        self.updated_at = datetime.now()
-
-    def remove_class(self, character_class: CharacterClass) -> None:
-        """
-        Remove a class from character.
-
-        Business Rules:
-        - Cannot remove last class (must have at least 1)
-        - Reduces total character level by removed class level
-        """
-        # Business rule: Cannot remove last class
-        if len(self.character_classes) <= 1:
-            raise ValueError("Cannot remove last class - character must have at least one class")
-
-        # Find the class to remove
-        class_to_remove = None
-        for class_info in self.character_classes:
-            if class_info.character_class == character_class:
-                class_to_remove = class_info
-                break
-
-        if not class_to_remove:
-            raise ValueError(f"Character does not have {character_class.value} class")
-
-        # Remove the class and adjust level
-        self.character_classes.remove(class_to_remove)
-        self.level -= class_to_remove.level
-        self.updated_at = datetime.now()
-
-    def update_ability_scores(self, new_scores: AbilityScores) -> None:
-        """
-        Update character's ability scores (for when user sets them via interface).
-
-        Business Rule: All ability scores validated by AbilityScores value object (1-30 range).
-        """
-        # Validation enforced by AbilityScores.__post_init__
-        self.ability_scores = new_scores
-        self.updated_at = datetime.now()
-
-    def update_character(
-        self,
-        character_name: Optional[str] = None,
-        character_classes: Optional[List[CharacterClassInfo]] = None,
-        character_race: Optional[CharacterRace] = None,
-        level: Optional[int] = None,
-        hp_max: Optional[int] = None,
-        hp_current: Optional[int] = None,
-        ac: Optional[int] = None
-    ) -> None:
-        """
-        Update character details with business rules validation.
-
-        All parameters are optional - only provided fields will be updated.
-
-        Business Rules:
-        - Character name must be valid and <= 50 characters
-        - Level must be between 1 and 20
-        - Character classes must be validated by _validate_multiclass()
-        - Character race must be valid if provided
-        """
-        if character_name is not None:
-            normalized_name = character_name.strip()
-            if not normalized_name:
-                raise ValueError("Character name cannot be empty")
-            if len(normalized_name) > 50:
-                raise ValueError("Character name too long (max 50 characters)")
-            self.character_name = normalized_name
-
-        if character_classes is not None:
-            if not character_classes or len(character_classes) == 0:
-                raise ValueError("Character must have at least one class")
-            self.character_classes = character_classes
-            # Revalidate multi-class rules
-            self._validate_multiclass()
-
-        if character_race is not None:
-            if not character_race:
-                raise ValueError("Character race is required")
-            self.character_race = character_race
-
-        if level is not None:
-            if level < 1 or level > 20:
-                raise ValueError("Character level must be between 1 and 20")
-            self.level = level
-            # Revalidate that class levels still match total level
-            self._validate_multiclass()
-
-        if hp_max is not None:
-            self.hp_max = hp_max
-
-        if hp_current is not None:
-            # you can have temporary hitpoints so current may exceed max
-            self.hp_current = hp_current
-
-        if ac is not None:
-            self.ac = ac
-
-        self.updated_at = datetime.now()
+    def soft_delete(self) -> None:
+        self.is_deleted = True
+        self._touch()
 
     def lock_to_campaign(self, campaign_id: UUID) -> None:
-        """
-        Lock character to a specific campaign.
-        Characters can only be locked to one campaign at a time.
-
-        Business Rules:
-        - Character must not already be locked
-        - Dead characters can still be locked (they remain in roster)
-        """
         if self.active_campaign is not None:
             raise ValueError(f"Character already locked to campaign {self.active_campaign}")
-
         self.active_campaign = campaign_id
-        self.updated_at = datetime.now()
+        self._touch()
 
     def unlock_from_campaign(self) -> None:
-        """
-        Unlock character from campaign.
-        Allows character to be used in another campaign or deleted.
-        """
         self.active_campaign = None
-        self.updated_at = datetime.now()
+        self._touch()
+
+    # -------------------------------------------------------------- vitals
+
+    def take_damage(self, amount: int) -> None:
+        if amount < 0:
+            raise ValueError("Damage amount must be ≥ 0")
+        remaining = amount
+        if self.hp_temp > 0:
+            absorbed = min(self.hp_temp, remaining)
+            self.hp_temp -= absorbed
+            remaining -= absorbed
+        if remaining > 0:
+            self.hp_current = max(0, self.hp_current - remaining)
+        if self.hp_current <= 0 and self.is_alive:
+            # Damage at 0 HP increments failures; massive damage = instant death
+            self.hp_current = 0
+        self._touch()
+
+    def heal(self, amount: int) -> None:
+        if amount < 0:
+            raise ValueError("Heal amount must be ≥ 0")
+        if self.hp_current <= 0:
+            # Restoring any HP wakes the character; death saves reset.
+            self.reset_death_saves()
+        self.hp_current = min(self.hp_max, self.hp_current + amount)
+        if self.hp_current > 0:
+            self.is_alive = True
+        self._touch()
+
+    def set_temp_hp(self, amount: int) -> None:
+        if amount < 0:
+            raise ValueError("Temp HP must be ≥ 0")
+        # 5e rule: temp HP doesn't stack — taking new temp HP replaces the existing.
+        self.hp_temp = amount
+        self._touch()
+
+    # -------------------------------------------------------------- death saves
+
+    def roll_death_save_success(self) -> None:
+        self.death_save_successes = min(3, self.death_save_successes + 1)
+        if self.death_save_successes >= 3:
+            self.hp_current = max(self.hp_current, 0)  # stabilised at 0 HP
+            self.reset_death_saves()
+        self._touch()
+
+    def roll_death_save_failure(self) -> None:
+        self.death_save_failures = min(3, self.death_save_failures + 1)
+        if self.death_save_failures >= 3:
+            self.mark_dead()
+        self._touch()
+
+    def reset_death_saves(self) -> None:
+        self.death_save_successes = 0
+        self.death_save_failures = 0
+        self._touch()
 
     def mark_dead(self) -> None:
-        """
-        Mark character as dead (D&D death mechanics).
-        Character remains locked to game, user must select new character.
-        """
         self.is_alive = False
         self.hp_current = 0
-        self.updated_at = datetime.now()
+        self.reset_death_saves()
+        self._touch()
 
     def resurrect(self) -> None:
-        """
-        Bring character back to life (resurrection spell, etc.).
-        """
         self.is_alive = True
-        self.hp_current = 1  # Revived with 1 HP
-        self.updated_at = datetime.now()
+        self.hp_current = max(1, self.hp_current)
+        self.reset_death_saves()
+        self._touch()
 
+    # -------------------------------------------------------------- status / inspiration
+
+    def set_inspiration(self, value: bool) -> None:
+        self.inspiration = bool(value)
+        self._touch()
+
+    def add_status(self, status: str) -> None:
+        status = status.strip()
+        if not status:
+            raise ValueError("Status text cannot be empty")
+        if status not in self.status_effects:
+            self.status_effects.append(status)
+            self._touch()
+
+    def remove_status(self, status: str) -> None:
+        try:
+            self.status_effects.remove(status)
+            self._touch()
+        except ValueError:
+            pass  # noop if absent
+
+    # -------------------------------------------------------------- XP / leveling
+
+    def award_xp(self, amount: int) -> None:
+        if amount < 0:
+            raise ValueError("XP awarded must be ≥ 0")
+        self.xp += amount
+        self._touch()
+
+    def can_level_up(self, ruleset) -> bool:
+        return ruleset.level_for_xp(self.xp) > self.level
+
+    def apply_level_gain(
+        self,
+        *,
+        class_code: str,
+        hp_gained: int,
+    ) -> None:
+        """Apply the mechanical outcome of one level-up.
+
+        Updates the matching class entry (or rejects if the class isn't in the
+        character's progression — multiclass adds go through a separate path).
+        Updates HP max and bumps total level. Feat/ASI choices are recorded
+        separately via :meth:`take_feat` and :meth:`apply_asi`.
+        """
+        if hp_gained < 1:
+            raise ValueError("HP gained must be ≥ 1")
+        if self.level >= 20:
+            raise ValueError("Already at max level")
+        entry = next((e for e in self.class_entries if e.class_code == class_code), None)
+        if entry is None:
+            raise ValueError(
+                f"Class '{class_code}' is not in this character's progression — "
+                "use add_class() for multi-classing"
+            )
+        idx = self.class_entries.index(entry)
+        self.class_entries[idx] = ClassEntry(
+            class_code=entry.class_code,
+            level=entry.level + 1,
+            is_primary=entry.is_primary,
+        )
+        self.level += 1
+        self.hp_max += hp_gained
+        self.hp_current = min(self.hp_max, self.hp_current + hp_gained)
+        self._touch()
+
+    def add_class(self, class_code: str, *, is_primary: bool = False) -> None:
+        """Multi-class into a new class at level 1."""
+        if any(e.class_code == class_code for e in self.class_entries):
+            raise ValueError(f"Character already has class '{class_code}'")
+        if len(self.class_entries) >= 3:
+            raise ValueError("Character cannot have more than 3 classes")
+        if self.level >= 20:
+            raise ValueError("Already at max level")
+        if is_primary:
+            self.class_entries = [
+                ClassEntry(e.class_code, e.level, False) for e in self.class_entries
+            ]
+        self.class_entries.append(ClassEntry(class_code, 1, is_primary))
+        self.level += 1
+        self._touch()
+
+    def apply_asi(self, increases: dict[str, int]) -> None:
+        """Apply an Ability Score Improvement: ``{"strength": 2}`` or ``{"str": 1, "con": 1}``.
+
+        Sum of values must equal 2 (the standard 5e ASI grant). Per-ability
+        increments are capped so a single ASI can't push past 20 (Primal
+        Champion uses a different path).
+        """
+        total = sum(increases.values())
+        if total != 2:
+            raise ValueError(f"ASI must distribute exactly 2 points (got {total})")
+        new = self.ability_scores.to_dict()
+        for ability, delta in increases.items():
+            if ability not in ABILITY_CODES:
+                raise KeyError(f"Unknown ability {ability!r}")
+            if delta < 0:
+                raise ValueError("ASI deltas must be ≥ 0")
+            # Cap is on the *final* score (post background bonus), per 5.5e ASI rules.
+            current_final = new[ability] + self.origin_ability_bonuses.get(ability, 0)
+            if current_final + delta > 20:
+                raise ValueError(
+                    f"ASI would push {ability} above 20 "
+                    f"(current {current_final} + {delta})"
+                )
+            new[ability] += delta
+        self.ability_scores = AbilityScores.from_dict(new)
+        self._touch()
+
+    def take_feat(self, feat_code: str, *, source: str, at_level: Optional[int] = None) -> None:
+        """Record a feat acquisition. Used at creation (BACKGROUND_ORIGIN) and at ASI."""
+        level = at_level if at_level is not None else self.level
+        self.feats.append(FeatAcquisition(feat_code=feat_code, level=level, source=source))
+        self._touch()
+
+    # -------------------------------------------------------------- skill management
+
+    def add_skill_proficiency(self, skill_code: str, source: str, *, expertise: bool = False) -> None:
+        existing = next((s for s in self.skills if s.skill_code == skill_code), None)
+        if existing is not None:
+            if existing.source != source or existing.expertise != expertise:
+                self.skills = [s for s in self.skills if s.skill_code != skill_code]
+                self.skills.append(SkillProficiency(skill_code, source, expertise))
+                self._touch()
+            return
+        self.skills.append(SkillProficiency(skill_code, source, expertise))
+        self._touch()
+
+    def remove_skill_proficiency(self, skill_code: str) -> None:
+        before = len(self.skills)
+        self.skills = [s for s in self.skills if s.skill_code != skill_code]
+        if len(self.skills) != before:
+            self._touch()
+
+    def set_save_proficiencies(self, ability_codes: Iterable[str]) -> None:
+        codes = frozenset(ability_codes)
+        for code in codes:
+            if code not in ABILITY_CODES:
+                raise KeyError(f"Unknown ability {code!r}")
+        self.save_proficiencies = codes
+        self._touch()
+
+    # -------------------------------------------------------------- species traits
+
+    def apply_species_traits(
+        self, *, speed: int, size: str, languages: list[str]
+    ) -> None:
+        if size not in {"Small", "Medium", "Large"}:
+            raise ValueError(f"Unknown size {size!r}")
+        if speed < 0:
+            raise ValueError("Speed cannot be negative")
+        self.speed = speed
+        self.size = size
+        self.languages = list(languages)
+        self._touch()
+
+    # -------------------------------------------------------------- queries
+
+    def ability_score(self, ability_code: str) -> int:
+        """Base ability score — what the player rolled / picked.
+
+        For modifier math (skills, saves, HP gain, initiative) use
+        :meth:`final_ability_score` instead — that's where origin bonuses fold in.
+        """
+        return self.ability_scores.get(ability_code)
+
+    def final_ability_score(self, ability_code: str) -> int:
+        """Base + origin bonus. Use this everywhere math is involved."""
+        return self.ability_scores.get(ability_code) + self.origin_ability_bonuses.get(ability_code, 0)
+
+    def final_ability_scores_dict(self) -> dict[str, int]:
+        return {code: self.final_ability_score(code) for code in ABILITY_CODES}
+
+    def get_primary_class(self) -> Optional[ClassEntry]:
+        if not self.class_entries:
+            return None
+        primary = next((e for e in self.class_entries if e.is_primary), None)
+        if primary is not None:
+            return primary
+        return max(self.class_entries, key=lambda e: e.level)
+
+    def get_display_name(self) -> str:
+        if not self.class_entries:
+            return self.character_name
+        if len(self.class_entries) == 1:
+            entry = self.class_entries[0]
+            return f"{self.character_name} (Level {self.level} {entry.class_code.title()})"
+        parts = [f"{e.class_code.title()} {e.level}" for e in self.class_entries]
+        return f"{self.character_name} (Level {self.level} {' / '.join(parts)})"
+
+    # -------------------------------------------------------------- internals
+
+    def _touch(self) -> None:
+        self.updated_at = datetime.utcnow()

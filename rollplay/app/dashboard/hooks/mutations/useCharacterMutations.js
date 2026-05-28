@@ -60,76 +60,27 @@ export function useReleaseCharacter() {
   })
 }
 
-/**
- * Mutation hook for creating a character (clone flow).
- * Replaces: raw POST fetch in CharacterEditPanel
- */
-export function useCreateCharacter() {
-  const queryClient = useQueryClient()
-
-  return useMutation({
-    mutationFn: async (characterData) => {
-      const response = await authFetch('/api/characters/', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        credentials: 'include',
-        body: JSON.stringify(characterData),
-      })
-
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}))
-        throw errorData
-      }
-
-      return response.json()
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['campaigns'] })
-      queryClient.invalidateQueries({ queryKey: ['characters'] })
-    },
-  })
-}
-
-/**
- * Mutation hook for updating an existing character.
- * Replaces: raw PUT fetch in CharacterEditPanel
- */
-export function useUpdateCharacter() {
-  const queryClient = useQueryClient()
-
-  return useMutation({
-    mutationFn: async ({ characterId, characterData }) => {
-      const response = await authFetch(`/api/characters/${characterId}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        credentials: 'include',
-        body: JSON.stringify(characterData),
-      })
-
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}))
-        throw errorData
-      }
-
-      return response.json()
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['campaigns'] })
-      queryClient.invalidateQueries({ queryKey: ['characters'] })
-    },
-  })
-}
 
 /**
  * Mutation hook for deleting a character.
- * Replaces: raw fetch in CharacterManager
+ *
+ * Backend splits delete by lifecycle: finalised characters go through
+ * ``DELETE /api/characters/{id}`` (soft-delete, refuses if locked to a
+ * campaign), drafts go through ``DELETE /api/characters/draft/{id}`` (hard
+ * delete). Caller passes ``{ id, isDraft }`` so we hit the right endpoint;
+ * also accepts a bare id for back-compat with finalised-only callers.
  */
 export function useDeleteCharacter() {
   const queryClient = useQueryClient()
 
   return useMutation({
-    mutationFn: async (characterId) => {
-      const response = await authFetch(`/api/characters/${characterId}`, {
+    mutationFn: async (arg) => {
+      const characterId = typeof arg === 'object' ? arg.id : arg
+      const isDraft = typeof arg === 'object' ? Boolean(arg.isDraft) : false
+      const url = isDraft
+        ? `/api/characters/draft/${characterId}`
+        : `/api/characters/${characterId}`
+      const response = await authFetch(url, {
         method: 'DELETE',
         credentials: 'include',
       })

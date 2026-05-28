@@ -144,54 +144,40 @@ export const handleSeatCountChange = (data, { setGameSeats, getCharacterData }) 
  */
 export const handlePlayerCharacterChanged = (data, { setGameSeats, setPlayerMetadata }) => {
   console.log("received player character change:", data);
-  const {
-    user_id,
-    player_name,
-    character_id,
-    character_name,
-    character_class,
-    character_race,
-    level,
-    hp_current,
-    hp_max,
-    ac
-  } = data;
+  const { user_id } = data;
+  if (!user_id) return;
 
-  const newCharData = {
-    user_id,
-    player_name,
-    character_id,
-    character_name,
-    character_class,
-    character_race,
-    level,
-    hp_current,
-    hp_max,
-    ac
-  };
-
-  // Update the seat that matches this userId with new character data
-  setGameSeats(prevSeats =>
-    prevSeats.map(seat => {
-      if (seat.userId === user_id) {
-        return {
-          ...seat,
-          playerName: player_name || seat.playerName,
-          characterData: newCharData
-        };
-      }
-      return seat;
-    })
+  // Merge incoming fields into existing metadata so partial events (e.g. a
+  // late-accept that only carries {user_id, player_name, campaign_role}) don't
+  // wipe character fields, and a full character sync doesn't wipe role. Mirror
+  // of the merge pattern api-game uses on its end of the PUT.
+  const incoming = Object.fromEntries(
+    Object.entries(data).filter(([, v]) => v !== null && v !== undefined)
   );
 
   if (setPlayerMetadata) {
-    setPlayerMetadata(prev => ({
-      ...prev,
-      [user_id]: newCharData
-    }));
+    setPlayerMetadata(prev => {
+      const merged = { ...(prev[user_id] || {}), ...incoming };
+      return { ...prev, [user_id]: merged };
+    });
   }
 
-  console.log(`✅ Updated character for ${user_id} (${player_name}) to ${character_name}`);
+  // Mirror the same merge into gameSeats so the party tile stays consistent
+  // with playerMetadata for this user. playerName comes from the merged record
+  // so we don't blank it out if the incoming delta omitted it.
+  setGameSeats(prevSeats =>
+    prevSeats.map(seat => {
+      if (seat.userId !== user_id) return seat;
+      const mergedChar = { ...(seat.characterData || {}), ...incoming };
+      return {
+        ...seat,
+        playerName: mergedChar.player_name || seat.playerName,
+        characterData: mergedChar,
+      };
+    })
+  );
+
+  console.log(`✅ Merged character update for ${user_id}`, incoming);
 };
 
 export const handlePlayerConnected = (data, {}) => {

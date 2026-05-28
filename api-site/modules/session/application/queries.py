@@ -11,7 +11,7 @@ from modules.session.api.schemas import SessionResponse, RosterPlayerResponse
 from modules.campaign.model.session_model import Session as SessionModel, SessionJoinedUser
 from modules.user.model.user_model import User
 from modules.characters.model.character_model import Character
-from modules.characters.model.character_class_model import CharacterClassEntry
+from modules.characters.model.character_class_model import CharacterClassEntry  # noqa: F401
 
 
 def _build_response(db: DbSession, model: SessionModel) -> SessionResponse:
@@ -33,7 +33,7 @@ def _build_response(db: DbSession, model: SessionModel) -> SessionResponse:
     ).outerjoin(
         Character, SessionJoinedUser.selected_character_id == Character.id
     ).options(
-        selectinload(Character.class_entries).joinedload(CharacterClassEntry.dnd_class)
+        selectinload(Character.class_entries)
     ).filter(
         SessionJoinedUser.session_id == model.id
     ).all()
@@ -45,7 +45,7 @@ def _build_response(db: DbSession, model: SessionModel) -> SessionResponse:
         character_class_str = None
         if character and character.class_entries:
             character_class_str = ' / '.join(
-                [entry.dnd_class.name for entry in character.class_entries]
+                entry.class_code.replace("_", " ").title() for entry in character.class_entries
             )
         roster.append(RosterPlayerResponse(
             user_id=user.id,
@@ -54,7 +54,10 @@ def _build_response(db: DbSession, model: SessionModel) -> SessionResponse:
             character_name=character.character_name if character else None,
             character_level=character.level if character else None,
             character_class=character_class_str,
-            character_race=character.character_race if character else None,
+            character_race=(
+                character.species_code.replace("_", " ").title()
+                if character and character.species_code else None
+            ),
             joined_at=joined_user.joined_at
         ))
 

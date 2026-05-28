@@ -1,6 +1,8 @@
 # Copyright (C) 2025 Matthew Davey
 # SPDX-License-Identifier: GPL-3.0-or-later
 
+from contextlib import asynccontextmanager
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.exceptions import RequestValidationError
@@ -9,6 +11,7 @@ import logging.config
 from config.settings import Settings
 from shared.dependencies.db import configure_mappers
 from shared.error_handlers import validation_exception_handler
+from shared.rulesets.registry import RulesetRegistry
 
 # Initialize Sentry for monitoring and security alerts
 from config.sentry_config import init_sentry
@@ -18,6 +21,7 @@ init_sentry()
 from modules.user.api.endpoints import router as user_router
 from modules.campaign.api.endpoints import router as campaign_router
 from modules.characters.api.endpoints import router as characters_router
+from modules.characters.api.edition_endpoints import router as editions_router
 from modules.session.api.endpoints import router as session_router
 from modules.friendship.api.endpoints import router as friendship_router
 from modules.events.api.notification_endpoints import router as notification_router
@@ -35,11 +39,20 @@ logger = logging.getLogger(__name__)
 # Configure SQLAlchemy mappers early
 configure_mappers()
 
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # Load ruleset reference data from JSON into the in-memory registry.
+    # Boot fails if any seed file is missing or fails validation.
+    RulesetRegistry.initialize()
+    yield
+
+
 # Create FastAPI app
 app = FastAPI(
     title="Rollplay Site API",
     description="Site-wide API for Tabletop Tavern - handles landing page, user management, and core site functionality",
-    version="1.0.0"
+    version="1.0.0",
+    lifespan=lifespan,
 )
 
 # Register custom exception handlers
@@ -58,6 +71,7 @@ app.add_middleware(
 app.include_router(user_router, prefix="/api/users")
 app.include_router(campaign_router, prefix="/api/campaigns")
 app.include_router(characters_router, prefix="/api/characters")
+app.include_router(editions_router, prefix="/api/editions", tags=["editions"])
 app.include_router(session_router, prefix="/api/sessions")
 app.include_router(friendship_router, prefix="/api/friendships")
 app.include_router(notification_router, prefix="/api/notifications")
