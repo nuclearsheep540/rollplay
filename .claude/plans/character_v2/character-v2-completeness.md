@@ -1,6 +1,6 @@
 # Character v2 — Completeness Plan (revised)
 
-> **Reading order:** This plan builds on [character-v2.md](character-v2.md) and depends on two reference companions:
+> **Reading order:** This plan builds on [character-v2.md](../character-v2.md) and depends on two reference companions:
 > - [srd-edge-case-enumeration.md](srd-edge-case-enumeration.md) — exhaustive list of every choice the SRD 5.2.1 demands
 > - [character-v2-current-state-audit.md](character-v2-current-state-audit.md) — what the v2 branch implements today
 >
@@ -19,15 +19,45 @@ The fix is to make both layers smarter, simultaneously — **without introducing
 
 ## 2. Scope (changed from original v2)
 
-In scope now: spellcasting (slots, cantrips, prepared, known), subclasses (one per class in SRD), Eldritch Invocations, Metamagic, Mystic Arcanum, resource pools, sub-flavour storage (Magic Initiate list, Elemental Affinity damage type, etc.), species sub-choices (lineage, ancestry, legacy), Fighting Style, class L1 feature choices (Divine Order, Primal Order, Hunter's Prey, etc.), Weapon Mastery picks, Expertise pickers, starting at levels > 1, equipment package A/B/C, full spell content parsing, multiclass spell slot math.
+In scope now: spellcasting (slots, cantrips, prepared, known), subclasses (one per class in SRD), Eldritch Invocations, Metamagic, Mystic Arcanum, resource pools, sub-flavour storage (Magic Initiate list, Elemental Affinity damage type, etc.), species sub-choices (lineage, ancestry, legacy), Fighting Style, class L1 feature choices (Divine Order, Primal Order, Hunter's Prey, etc.), Weapon Mastery picks, Expertise pickers, starting at levels > 1, **structured inventory and currency** (item catalogue parsed from SRD; quantity-tracked items; coin pool), equipment package A/B/C **as inventory writes at finalize time**, full spell content parsing, multiclass spell slot math.
 
-Still out of scope: homebrew, mid-life edition swap, inventory management beyond starting equipment, magic items, spell effect resolution, combat encounter automation. Migration is not a concern — no production data exists yet.
+Still out of scope: homebrew, mid-life edition swap, **magic items** (deferrable phase once non-magical inventory is solid), spell effect resolution, combat encounter automation. Migration is not a concern — no production data exists yet.
 
 ---
 
-## 3. Pattern catalogue (the contract this plan binds to)
+## 3. The two contracts (prime directive + pattern catalogue)
 
-Every phase below must align with these patterns. **If a proposed change can't be expressed in one of these patterns, the plan is wrong, not the codebase.**
+Every phase below binds to **two** contracts. If a proposed change violates either, the plan is wrong, not the codebase.
+
+### 3.0 Prime directive — facilitate play; don't enforce rules
+
+Rollplay is a virtual tabletop, not an automated DM. The app's job is to **store data, display data, and surface what the player needs to make decisions** — including computed values where the cognitive load of doing it by hand is meaningful (feat prereqs across 17 entries, multiclass spell slot tables, HP retroactive recomputation on CON change). The app does NOT enforce the *consequences* of that data — those are for the table to declare.
+
+Compare to D&D Beyond: the user manually edits everything; the app provides structure and surfaces the rules in context. We are building that kind of facilitation tool, not a rules engine.
+
+Concrete implications:
+
+- ✅ **Compute and display** any derived value that aids a *decision* the player must make (feat eligibility, spell save DC, multiclass spell slots, HP recompute on CON change, AC from the available formulas)
+- ✅ **Store and display** any state that aids *table communication* (conditions, concentration target, ammunition count, "attuned" notes on inventory items)
+- ✅ **Surface eligibility / prereq info inline** when the player is about to make a choice (multiclass primary-ability check, subclass timing, casting-in-armor warning, feat prerequisites)
+- ❌ **Don't enforce mechanical consequences** — no auto-decrementing arrows on attack, no blocking attacks when out of ammo, no auto-applying Blinded's disadvantage to dice, no auto-saving concentration on damage, no hard-blocking actions that violate a soft rule
+- ❌ **Don't gate save operations on rule violations the table can declare** — surface the violation as a warning on the response, let the save proceed
+
+The bar for *computing* anything: is doing this by hand tedious enough to harm the player's experience, OR does the player need the answer to make their next decision? If yes, compute and display. Otherwise, store + display the raw data and trust the table.
+
+The bar for *enforcing* anything: never, unless the rule is a **true data invariant** — UUID uniqueness, foreign-key integrity, ability score range 1-30, HP gain ≥ 1, quantity ≥ 0. Database corruption protection only.
+
+This principle precedes every code-pattern rule in §3.1-§3.13. If a proposed feature can be reframed from "enforce" to "display the relevant data", do that first.
+
+### 3.1 Backend — CQRS-lite
+
+**Commands** live in [api-site/modules/characters/application/commands.py](api-site/modules/characters/application/commands.py). Each command:
+- Is a class with `__init__(self, repository, ...) -> None` injecting its dependencies.
+- Exposes `execute(self, *, ...) -> Aggregate | bool` with keyword-only args.
+- Mutates one aggregate via aggregate methods (never via direct attribute manipulation).
+- Calls `repository.save(aggregate)` once at the end.
+- Raises `ValueError` for invalid state, `PermissionError` for ownership, `KeyError` for missing references — all mapped to HTTP codes by [`_http()`](api-site/modules/characters/api/endpoints.py#L190).
+- Stays sync unless it publishes events (then `async def execute`).
 
 ### 3.1 Backend — CQRS-lite
 
@@ -145,6 +175,8 @@ Per CLAUDE.md: `colorTheme.js` (Tier 1) + `constants.js` (Tier 2). New component
 
 ### 3.13 What this plan will NOT invent
 
+In addition to the prime directive (§3.0 — facilitate, don't enforce; no auto-applying mechanics), the following code-pattern temptations are off the table:
+
 - ❌ A new "ChoiceGate" generic component (the previous draft proposed this — over-engineered). Each step's choice UI lives in that step, following existing tile/inline patterns. If a *render* pattern proves repeatable, refactor *later*, after two concrete steps exist.
 - ❌ A new "rest_state" JSONB column on the character aggregate. The aggregate has typed fields; new per-rest data uses typed fields like the rest of the aggregate.
 - ❌ A new event abstraction for runtime sheet changes. Existing PATCH endpoints already work; api-game pulls snapshots when needed.
@@ -154,6 +186,7 @@ Per CLAUDE.md: `colorTheme.js` (Tier 1) + `constants.js` (Tier 2). New component
 - ❌ Service locators, DI containers, or anything beyond FastAPI `Depends()`.
 - ❌ New WebSocket pipes for character runtime sync.
 - ❌ Pre-stringifying UUIDs in domain code (CLAUDE.md rule).
+- ❌ Mechanical-effect engines for conditions, exhaustion, attunement, encumbrance, ammunition, concentration, equip/unequip, casting-in-armor blocks, or anything else the table can declare verbally (see §3.0).
 
 ---
 
@@ -252,14 +285,7 @@ Each phase below states: (a) what it delivers, (b) which existing files extend, 
 
 #### A.5 — Equipment as structured A/B/C choice
 
-**Problem:** `starting_equipment_text` is free text. Backgrounds have A/B; Fighter has A/B/C.
-
-**Pattern fit:** add typed Pydantic models; same parse-once pattern.
-
-**Extends:**
-- [shared/rulesets/models.py](api-site/shared/rulesets/models.py) — add `EquipmentItem`, `EquipmentPackage`. Replace `starting_equipment_text` with `equipment_packages: list[EquipmentPackage]` on both `BackgroundDefinition` and `ClassDefinition`.
-- [scripts/parse_srd.py](api-site/scripts/parse_srd.py) — tokenise `_Choose A or B:_` clauses, split items.
-- Re-run, validate per-package.
+> **Folded into Phase J.** Equipment packages are no longer a standalone item — see Phase J (inventory & currency), where typed packages, item catalogue, aggregate storage, wizard picker, and runtime panel ship as one cohesive slice. The previous "typed packages on the registry only" framing was insufficient (per discussion: structured choice without storage is meaningless).
 
 #### A.6 — Spellcasting tables per class
 
@@ -484,24 +510,44 @@ These reuse the existing JSONB-on-aggregate pattern from `ability_roll_details` 
 **Extends:**
 - Strategy — `can_add_class(character, class_code) → bool` per [SRD p.24](srd-edge-case-enumeration.md). Uses `ClassDefinition.primary_ability` (which may need to be `AbilityCode | list[AbilityCode]` — schema update in A.2 area).
 
-### Phase D — Validation in commands
+### Phase D — Surface eligibility info; enforce only data invariants
 
-**Goal:** every invariant from the edge case catalogue enforced in commands, raising `ValueError` per the existing pattern.
+**Goal:** per the prime directive (§3.0), the app *displays* eligibility and prereq facts inline with the choice. It *enforces* only true data invariants (database corruption protection). All other rule outcomes are **warnings on the response** that the table resolves. Saves proceed.
 
-#### D.1 — Aggregate invariants in step handlers
+#### D.1 — Data invariants in step handlers
+
+Continues today's validation only where it protects against data corruption. The aggregate constructor / value-object `__post_init__` already enforces these — keep them:
+
+- Ability score range 1-30 ([AbilityScores.__post_init__](api-site/modules/characters/domain/character_aggregate.py#L53))
+- Skill source enum ([SKILL_SOURCES](api-site/modules/characters/domain/character_aggregate.py#L30))
+- Feat source enum ([FEAT_SOURCES](api-site/modules/characters/domain/character_aggregate.py#L31))
+- Class level range 1-20 ([ClassEntry.__post_init__](api-site/modules/characters/domain/character_aggregate.py#L83))
+- HP gain ≥ 1 ([apply_level_gain](api-site/modules/characters/domain/character_aggregate.py#L455))
+- Inventory quantity ≥ 0 (added in Phase J)
+
+**Reframe the following from "enforce/block" to "warn on response, allow save":**
+
+- Duplicate Expertise on same skill → warning, don't block
+- Duplicate non-repeatable feat → warning, don't block
+- Skill granted twice from different sources → already soft-skips at repository layer; keep silent
+- Required class L1 choices not yet made → display "incomplete" badge in the wizard, allow draft to remain in that state
+- Subclass picked at unusual level (e.g. before subclass_level) → warn, don't block
+- Spell prepared count exceeds class limit → warn, don't block
+- Cantrip known count exceeds class limit → warn, don't block
 
 **Extends:**
-- [application/commands.py — UpdateCharacterDraft handlers](api-site/modules/characters/application/commands.py#L99-L260) — extend per-step validation:
-  - `_apply_ability_scores` enforces cap 20 at creation (already does, see [line 211 schema constraint](api-site/modules/characters/api/schemas.py#L211)).
-  - `_apply_class` (new sub-validations): all required L1 class choices made, no Expertise duplicates, Fighting Style picked for Fighter/Paladin/Ranger if at appropriate level.
-  - `_apply_background` (existing) keeps duplicate-skill soft-skip; warn surfaces on the response (new field `warnings: list[str]` on `CharacterResponse`).
-  - `_apply_subclass` (new handler) — validates eligibility via ruleset.
-  - `_apply_spells` (new handler) — validates spells against class's allowed list and level cap.
+- [api/schemas.py — CharacterResponse](api-site/modules/characters/api/schemas.py) — add `warnings: list[str]` field. Endpoints populate this via the response builder; the wizard renders warnings inline near the relevant fields.
+- [api/endpoints.py — _build_derived_stats](api-site/modules/characters/api/endpoints.py#L69) (or a new sibling helper `_build_warnings(character, registry)`) — walks the character's state, returns the list of rule-violation messages.
+- `_apply_*` step handlers remain unchanged except for *removing* validation that should now be a warning.
 
-#### D.2 — Multiclass entry prereq
+#### D.2 — Multiclass primary-ability info
+
+When adding a class, compute whether the prereq (13 in primary of both old + new) is met. **Surface as a warning on the response, never block the save.** Player can proceed if their DM allows variant rules.
 
 **Extends:**
-- New step in `UpdateCharacterDraft`: `add_class` — validates ability prereq via strategy (C.6) before mutating. Mirrors how `_apply_class` works today, but for adding rather than replacing.
+- Strategy (C.6) provides the eligibility check.
+- `UpdateCharacterDraft._apply_add_class` (new handler) does the mutation unconditionally; the warning surfaces via `_build_warnings`.
+- Wizard renders the warning under the class-add UI ("Strength 12 — below 13 required for multiclass into Fighter").
 
 ### Phase E — Wizard restructure (frontend)
 
@@ -634,11 +680,109 @@ Implements the original v2's deferred Phase 5.
 
 **No new WebSocket pipe.** No new shared service. The existing pull-on-demand pattern handles this.
 
+### Phase J — Inventory & currency
+
+**Goal:** the character has a structured inventory of items with quantities + a currency pool, sourced from a parsed SRD item catalogue. The wizard's equipment package picker writes real items into the inventory at finalize time. The runtime sheet lets the player add/remove/change items and currency totals.
+
+**Per §3.0 — facilitate, don't enforce.** No equipped/unequipped flag enforcement, no attunement caps, no encumbrance blocks, no auto-decrement on attacks, no "can't attack without ammo" gating. The player narrates equipping/attuning/using; the `notes` field on each `InventoryItem` is the escape hatch for anything specific they want to record.
+
+#### J.1 — Item catalogue
+
+Extends A.9 (which already covers weapons and armor) to include Adventuring Gear, Tools, and Mounts/Vehicles. One catalogue, multiple item subtypes.
+
+**Extends:**
+- [shared/rulesets/models.py](api-site/shared/rulesets/models.py) — add a common `ItemDefinition` base (code, name, category, cost_cp [in copper for precision], weight_lb, description). Subtypes inherit and add type-specific fields:
+  - `WeaponDefinition` (category, range_type, damage, properties, mastery_property) — from A.9
+  - `ArmorDefinition` (armor_type, base_ac, dex_cap, strength_req, stealth_disadvantage) — from A.9
+  - `GearDefinition` (just the base shape — torches, rope, rations, potions of healing, ammunition, etc.)
+  - `ToolDefinition` (artisan's tools variants, musical instruments, gaming sets, kits)
+  - `MountDefinition` (speed, carrying capacity)
+- [scripts/parse_srd.py](api-site/scripts/parse_srd.py) — extend the Equipment-section parser (p.89-103) to cover Adventuring Gear (p.94), Tools (p.93), Mounts/Vehicles (p.100). Per [SRD §15 of the enumeration](srd-edge-case-enumeration.md), weapon mastery properties are already in scope under A.9.
+- New file: [seed_data/srd_5_2_1/items.json](api-site/modules/characters/seed_data/srd_5_2_1/items.json) — single flat catalogue, items discriminated by `category`. Validated by parametrized tests.
+- [registry.py](api-site/shared/rulesets/registry.py) — register file loader; expose `list_items(edition_code, category=None)`, `get_item(edition_code, item_code)`.
+- [api/edition_endpoints.py](api-site/modules/characters/api/edition_endpoints.py) — `GET /api/editions/{edition_code}/items` (optional `?category=` filter).
+- [hooks/useReferenceData.js](rollplay/app/(authenticated)/character/hooks/useReferenceData.js) — `useEditionItems(editionCode, category?)`.
+- [tests/seed_data/test_srd_5_2_1.py](api-site/modules/characters/tests/seed_data/test_srd_5_2_1.py) — items file validation + uniqueness of `code`.
+
+#### J.2 — Currency
+
+SRD Coin Values table (p.89) lists 5 coin types: CP, SP, EP, GP, PP, with CP-based conversion ratios.
+
+**Extends:**
+- New file: [seed_data/srd_5_2_1/currency.json](api-site/modules/characters/seed_data/srd_5_2_1/currency.json) — small file listing the 5 coin codes and their CP values (CP=1, SP=10, EP=50, GP=100, PP=1000).
+- [shared/rulesets/models.py](api-site/shared/rulesets/models.py) — add `CurrencyDefinition` (code, name, cp_value).
+- [registry.py](api-site/shared/rulesets/registry.py) — `list_currency(edition_code)`.
+- [api/edition_endpoints.py](api-site/modules/characters/api/edition_endpoints.py) — `GET /api/editions/{edition_code}/currency` (small, cached forever).
+- [domain/character_aggregate.py](api-site/modules/characters/domain/character_aggregate.py) — add `currency: dict[str, int]` field (key = coin code, value = quantity). Methods: `add_currency(coin_code, amount)`, `set_currency(coin_code, amount)`. **No enforcement** — negative balance allowed; player narrates "I owe 5 GP". (Data invariant: amount must be `int`, not negative arithmetic blocks.)
+- [model/character_model.py](api-site/modules/characters/model/character_model.py) — add `currency: JSONB` column (single column, not a join table — currency is always a small fixed set of 5 keys).
+- Repository: load/save the JSONB.
+- [api/schemas.py](api-site/modules/characters/api/schemas.py) — `CharacterResponse.currency: Dict[str, int]`. `RuntimePatchRequest.currency: Optional[Dict[str, int]] = None`.
+
+#### J.3 — Inventory on the aggregate
+
+**Pattern fit:** mirrors B.1 / B.2 exactly — typed frozen value object, new ORM join table, repository extension via `selectinload` + translation + delete-and-rewrite.
+
+**Extends:**
+- [domain/character_aggregate.py](api-site/modules/characters/domain/character_aggregate.py):
+  ```python
+  @dataclass(frozen=True)
+  class InventoryItem:
+      item_code: str        # references the catalogue (J.1)
+      quantity: int = 1     # ≥ 0 (data invariant; allows "0 — depleted" without removing the row)
+      notes: str = ""       # free-text escape hatch — attuned, equipped, custom magic effect, anything
+
+      def __post_init__(self):
+          if self.quantity < 0:
+              raise ValueError(f"quantity must be ≥ 0 (got {self.quantity})")
+  ```
+  Add `inventory: list[InventoryItem]` field. Methods: `add_to_inventory(item_code, quantity=1, notes="")`, `remove_from_inventory(item_code)`, `set_item_quantity(item_code, quantity)`, `set_item_notes(item_code, notes)`. **No mechanic enforcement** — methods just mutate state.
+- New file: [model/character_inventory_model.py](api-site/modules/characters/model/character_inventory_model.py) — table `character_inventory` (id, character_id, item_code, quantity, notes; FK to characters with `ondelete=CASCADE`; unique constraint on `(character_id, item_code)`).
+- [repositories/character_repository.py](api-site/modules/characters/repositories/character_repository.py) — add `inventory_entries` to `selectinload`, translation block in `_model_to_aggregate`, delete-and-rewrite block in `save`, builder in `_write_all_children`.
+- [alembic/env.py](api-site/alembic/env.py) — import the new model. Generate migration via `alembic revision --autogenerate`.
+- [api/schemas.py](api-site/modules/characters/api/schemas.py) — `InventoryItemDTO`; expose on `CharacterResponse.inventory: list[InventoryItemDTO]`.
+
+#### J.4 — Wizard equipment picker writes inventory at finalize
+
+Backgrounds offer A/B packages, classes offer A/B (or A/B/C for Fighter). Player picks per source. At finalize time, the chosen packages' items are expanded via the registry into `InventoryItem` rows + `currency` entries.
+
+**Extends:**
+- [domain/character_aggregate.py](api-site/modules/characters/domain/character_aggregate.py) — add `background_equipment_choice: Optional[str]` (e.g. "A") and `class_equipment_choices: dict[str, str]` (class_code → "A" | "B" | "C") fields. These are the *picks*, stored separately from the resulting inventory so the player can see what they chose later (provenance).
+- [model/character_model.py](api-site/modules/characters/model/character_model.py) — add the two new columns (one nullable string, one JSONB).
+- [shared/rulesets/models.py](api-site/shared/rulesets/models.py) — `EquipmentPackage` (label "A"/"B"/"C", `items: list[EquipmentPackageItem]`, `coins: dict[str, int]`); add `equipment_packages: list[EquipmentPackage]` to both `BackgroundDefinition` and `ClassDefinition`. Parser populates from `_Choose A or B:_` clauses.
+- [components/wizard/BackgroundStep.js](rollplay/app/(authenticated)/character/components/wizard/BackgroundStep.js) — equipment package picker UI (A/B tiles showing the package's items + coins from the registry). Inline below the existing ability-bonus picker.
+- [components/wizard/ClassStep.js](rollplay/app/(authenticated)/character/components/wizard/ClassStep.js) — per-class package picker (A/B/C for Fighter; A/B for others).
+- [application/commands.py — FinalizeCharacterDraft](api-site/modules/characters/application/commands.py#L267) — extend `execute` to read `background_equipment_choice` + `class_equipment_choices`, look up each package via the registry, expand the items into the aggregate's `inventory` (additive — accumulating across all picks), and merge the package coins into `currency`. Duplicates resolve via `set_item_quantity` (sum). The pick fields remain on the aggregate as audit/provenance.
+- New step name in [api/schemas.py — StepName](api-site/modules/characters/api/schemas.py#L234): `"equipment"` (or fold into `background` / `class` steps — implementer's call based on UX flow).
+
+#### J.5 — Runtime inventory & currency panel
+
+Player can add, remove, change quantity, edit notes on any item; can adjust currency totals up/down. All via the existing runtime PATCH endpoint.
+
+**Extends:**
+- [components/CharacterSheet.js](rollplay/app/game/components/CharacterSheet.js) — new "Inventory" section grouped by category (Weapons / Armor / Gear / Tools / Mounts) with quantity steppers (+/−), notes inline editor, and an "Add item" combobox sourced from `useEditionItems`. Currency totals shown as 5 steppers (CP/SP/EP/GP/PP) at the top of the section.
+- [api/schemas.py — RuntimePatchRequest](api-site/modules/characters/api/schemas.py#L256) — add `inventory: Optional[list[InventoryItemDTO]] = None` (full replacement on PATCH for simplicity, matching the existing pattern for list-style updates) and `currency: Optional[Dict[str, int]] = None`.
+- [application/commands.py — UpdateRuntimeState](api-site/modules/characters/application/commands.py#L374) — extend the field dispatch to handle these two.
+
+**Per §3.0 — out-of-band notes** (NOT modelled; the table handles):
+- Equipping / unequipping — player narrates, optionally writes in `notes` ("equipped")
+- Attunement & the cap of 3 — player narrates, optionally writes in `notes` ("attuned")
+- Encumbrance / carrying capacity — player narrates
+- Ammunition consumption on attack — player decrements `quantity` manually after the fight (half-recovered rule per SRD p.89 — player applies)
+- Selling items at half-cost — player removes the item and adjusts `currency` manually
+- Crafting / brewing potions / scribing scrolls — player narrates and updates inventory manually
+
+#### J.6 — Magic items (DEFERRED to a follow-up phase)
+
+Magic items (SRD p.209-253) are out of scope for this completeness plan. When added:
+- New seed file `magic_items.json`; extends `ItemDefinition` with `rarity`, `requires_attunement: bool`, `class_restriction: Optional[str]`, `cursed: bool` — purely descriptive metadata, NOT enforced.
+- The `InventoryItem` value object needs no change — `item_code` resolves to either a regular or magic item via the registry.
+- Per §3.0, the attunement cap of 3 is NOT enforced. The `notes` field is enough.
+
 ---
 
 ## 6. Per-class playbook (cross-reference)
 
-Same as the previous draft — use [§6 in the previous draft](#) as the per-class completeness checklist. Reproduced here for convenience:
+Use this as the per-class completeness checklist — every row must be fully implemented for the class to count as "done."
 
 | Class | Subclass | L1 sub-choices | Spellcasting | Per-rest state | Resource pools | ASI tiers |
 |-------|----------|----------------|--------------|----------------|----------------|-----------|
@@ -661,6 +805,7 @@ Same as the previous draft — use [§6 in the previous draft](#) as the per-cla
 
 Every PR opened against this plan must satisfy this checklist (paste into the PR description):
 
+- [ ] **Prime directive (§3.0).** This PR adds no mechanical enforcement of consequences the table can declare verbally. Any rule outcome is surfaced as info/warning on the response; saves proceed. Only true data invariants (UUID uniqueness, ability range 1-30, HP ≥ 1, quantity ≥ 0, FK integrity) raise/block.
 - [ ] **CQRS.** New writes are new step handlers on `UpdateCharacterDraft` / new branches in `LevelUpCharacter`, or a new top-level command class only if a distinct lifecycle is involved. New reads are new query classes in `queries.py` only if reused outside the single endpoint.
 - [ ] **Aggregate.** New state is typed fields + frozen value objects + methods on `CharacterAggregate`. Methods call `self._touch()`. No ORM imports.
 - [ ] **Repository.** New join tables added to `_query().options(selectinload(...))`, `_model_to_aggregate`, the delete-and-rewrite block in `save`, and `_write_all_children`. No new mapper file.
@@ -684,21 +829,22 @@ Each PR is sized to be reviewable on its own and to ship value incrementally.
 
 | PR | Phases | Scope | Approx size |
 |----|--------|-------|-------------|
-| **PR 1** | A.1 | Fix feat prereq parsing + add validation tests + use in `preview_level_up` filter. Small, immediate UX win. | S |
-| **PR 2** | A.5 + E.4 | Equipment as A/B/C structured choice, with picker UI in BackgroundStep. | S |
-| **PR 3** | A.2 + A.3 + A.4 | Subclasses + class L1 choice metadata + species sub-choices in registry. Pure data — no UI yet. | M |
-| **PR 4** | B.1 + B.5 + Phase D partial + E.3 + E.5 | Subclass tracking on aggregate + sub-flavour storage + species sub-choices in wizard + class L1 pickers in ClassStep. | M |
-| **PR 5** | A.6 + A.10 | Spellcasting tables + spell content. **Large; standalone PR.** | XL |
-| **PR 6** | A.7 + A.8 | Invocations + Metamagic catalogues. | S |
-| **PR 7** | B.2 + B.4 + C.2 + C.6 + E.6 + F.1 (spell parts) | Spell selections on aggregate, multiclass spell slots in strategy, SpellsStep in wizard, spell pickers in LevelUpModal. | L |
-| **PR 8** | A.9 + B.3 + C.4 (resource pools + AC parts) + G.1 | Weapon catalogue + resource pools on aggregate + AC method enumeration + runtime sheet resource/slot UI. | M |
-| **PR 9** | B.6 + C.3 + C.5 + Phase D rest | HP recompute on CON change + subclass eligibility + remaining validation tightening. | S |
-| **PR 10** | E.1 + E.2 | Starting level + class distribution + AdvancementStep. | M |
-| **PR 11** | F.1 (rest) + F.2 | LevelUpModal expansion (subclass step, feature steps, feat description+filter). | M |
-| **PR 12** | G.2 + G.3 + Phase H | Per-rest swap UI + conditions/exhaustion + DM party view. | M |
-| **PR 13** | Phase I | api-game snapshot sync extension. | S |
+| **PR 1** | A.1 + Phase D framing | Fix feat prereq parsing + add `warnings: list[str]` to `CharacterResponse` + `_build_warnings` helper + use prereq data to populate `qualifying_feats` filter on `preview_level_up`. Small, immediate UX win, plus lays the warning rail Phase D depends on. | S |
+| **PR 2** | A.2 + A.3 + A.4 | Subclasses + class L1 choice metadata + species sub-choices in registry. Pure data — no UI yet. | M |
+| **PR 3** | B.1 + B.5 + E.3 + E.5 | Subclass tracking on aggregate + sub-flavour storage + species sub-choices in wizard + class L1 pickers in ClassStep. | M |
+| **PR 4** | A.6 + A.10 | Spellcasting tables + spell content. **Large; standalone PR.** | XL |
+| **PR 5** | A.7 + A.8 | Invocations + Metamagic catalogues. | S |
+| **PR 6** | B.2 + B.4 + C.2 + C.6 + E.6 + F.1 (spell parts) | Spell selections on aggregate, multiclass spell slots in strategy, SpellsStep in wizard, spell pickers in LevelUpModal. | L |
+| **PR 7** | A.9 + B.3 + C.4 (resource pools + AC parts) + G.1 | Weapon/armor catalogue + resource pools on aggregate + AC method enumeration + runtime sheet resource/slot UI. | M |
+| **PR 8** | B.6 + C.3 + C.5 + Phase D rest | HP recompute on CON change + subclass eligibility + remaining warning surfacing. | S |
+| **PR 9** | E.1 + E.2 | Starting level + class distribution + AdvancementStep. | M |
+| **PR 10** | F.1 (rest) + F.2 | LevelUpModal expansion (subclass step, feature steps, feat description + filter). | M |
+| **PR 11** | G.2 + G.3 + Phase H | Per-rest swap UI + conditions/exhaustion (typed enum + display, not enforce) + DM party view. | M |
+| **PR 12** | Phase I | api-game snapshot sync extension. | S |
+| **PR 13** | J.1 + J.2 | Item catalogue (weapons/armor extended to gear/tools/mounts) + currency catalogue + edition endpoints + reference hooks. Pure data + hooks. | M |
+| **PR 14** | J.3 + J.4 + J.5 | Inventory aggregate fields + ORM table + repository extension + wizard equipment picker (background + class) + finalize-time expansion to inventory/currency + runtime inventory & currency panel. | M |
 
-Total: ~13 PRs. Quick wins (PR 1, PR 2, PR 6) ship immediately. Phase A.10 (spells) is the elephant — recommend running it in a long-lived branch with mid-flight reviews on the parser before integrating.
+Total: ~14 PRs. Quick wins (PR 1, PR 5) ship immediately. PR 4 (spells) is the elephant — recommend running it in a long-lived branch with mid-flight reviews on the parser before integrating. Phase J (PRs 13-14) is independent of spells/subclasses and can be sequenced earlier if equipment UX matters more than spellcasting UX in the near term.
 
 ---
 
@@ -707,16 +853,18 @@ Total: ~13 PRs. Quick wins (PR 1, PR 2, PR 6) ship immediately. Phase A.10 (spel
 The character v2 system is complete when:
 
 1. Every choice in [srd-edge-case-enumeration.md §16/§18](srd-edge-case-enumeration.md) can be made via the UI; the wizard/level-up modal never silently advances past a choice the SRD demands.
-2. The parser's parametrized tests cover prerequisites, sub-choices, spellcasting tables, invocations, metamagic, weapons, spells — and pass against the committed JSON.
+2. The parser's parametrized tests cover prerequisites, sub-choices, spellcasting tables, invocations, metamagic, weapons, armor, items, currency, spells — and pass against the committed JSON.
 3. A character can be created at any starting level 1-20 without manual intervention; the wizard walks every level's choices.
 4. A multi-class character can be created and levelled without any single-class assumption tripping up the flow.
 5. A spellcaster has all their spells, slots, cantrips, always-prepared rendered correctly and editable per the rules.
 6. All resource pools appear on the runtime sheet with correct max values and recovery on rest.
 7. All per-rest mutable choices appear on the runtime sheet and can be swapped at the right cadence.
-8. The DM can view a read-only party panel showing every party member's sheet.
-9. **Every PR has the §7 pattern compliance checklist ticked.**
+8. **The character has a structured inventory (item rows + quantity + notes) and currency pool, populated from chosen starting equipment packages at finalize, editable on the runtime sheet.**
+9. The DM can view a read-only party panel showing every party member's sheet.
+10. **No PR has introduced enforcement of a rule outcome that the table can declare verbally** (§3.0 / §7 first checklist item) — only data invariants block saves.
+11. **Every PR has the §7 pattern compliance checklist ticked.**
 
-When all nine are true, the system is RAW-faithful for the SRD's content, ready for use at table, and architecturally consistent with the rest of the codebase.
+When all eleven are true, the system is SRD-faithful, ready for use at table, architecturally consistent with the rest of the codebase, and behaves as a facilitation tool rather than a rules engine.
 
 ---
 
