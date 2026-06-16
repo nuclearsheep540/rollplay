@@ -3,6 +3,8 @@
 
 """Runtime + level-up endpoint tests."""
 
+import json
+from pathlib import Path
 from uuid import uuid4
 
 import pytest
@@ -145,6 +147,34 @@ class TestLevelUpPreview:
         hp_opts = body["hp_options"]["barbarian"]
         # Barbarian d12, CON 15 → +2: average=(12/2+1)+2=9, max=14
         assert hp_opts == {"average": 9, "max_roll": 14}
+
+    def test_preview_splits_feats_without_hiding_any(self, client, auth_as, owner):
+        """Two-bucket feat contract (core/product-principles.md §3.0): every candidate
+        feat appears in exactly one of qualifying_feats / other_feats — nothing is hidden."""
+        char = _finalize_a_character(client, auth_as, owner)
+        body = client.get(f"/api/characters/{char['id']}/level-up").json()
+
+        qualifying = body["qualifying_feats"]
+        other = body["other_feats"]
+        assert isinstance(qualifying, list) and isinstance(other, list)
+
+        feats_json = json.loads(
+            (Path(__file__).resolve().parents[2] / "seed_data" / "srd_5_2_1" / "feats.json")
+            .read_text(encoding="utf-8")
+        )
+        candidates = {
+            f["code"]
+            for f in feats_json["feats"]
+            if f["category"] in {"general", "fighting_style", "epic_boon"}
+        }
+
+        # The two buckets together cover the full candidate set — no feat is hidden.
+        assert set(qualifying) | set(other) == candidates
+        # ...and they don't overlap.
+        assert set(qualifying).isdisjoint(other)
+        # A level-1 character can't meet the Epic Boon (level 19) prereqs, so the "other"
+        # bucket must be populated — proving ineligible feats are surfaced, not dropped.
+        assert other, "expected ineligible feats (e.g. Epic Boons) to surface in other_feats"
 
 
 class TestLevelUpApply:

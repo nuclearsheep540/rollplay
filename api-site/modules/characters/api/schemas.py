@@ -280,7 +280,10 @@ class LevelUpPreview(BaseModel):
     available_classes: List[str]  # which classes the player can put the level into
     is_asi_level: Dict[str, bool]  # class_code → whether *this* class's next level is an ASI level
     hp_options: Dict[str, Dict[str, int]]  # class_code → {average, max_roll}
-    qualifying_feats: List[str]  # feat codes the character qualifies for at next level
+    qualifying_feats: List[str]  # feat codes whose prerequisites the character meets
+    # Remaining feats (prereqs not met or not yet verifiable). Surfaced, never hidden —
+    # the modal shows these behind a "show anyway" affordance (core/product-principles.md §3.0).
+    other_feats: List[str] = []
 
 
 class AsiChoice(BaseModel):

@@ -140,6 +140,22 @@ def _heading_text(token: dict) -> str:
     return _strip(_text(token))
 
 
+def _emphasis_only_text(token: dict) -> Optional[str]:
+    """Return the inner text of a paragraph that is a single italic run, else None.
+
+    mistune renders ``_..._`` as an emphasis node, so the surrounding underscores never
+    survive into the flattened text — detect the node, not the characters. Used to pick out
+    a feat's category subheader (``_General Feat (Prerequisite: Level 4+)_``) from its body
+    paragraphs (``_Initiative Proficiency._ When you roll…``), which are emphasis + text.
+    """
+    if token.get("type") != "paragraph":
+        return None
+    children = [c for c in token.get("children", []) if c.get("type") != "softbreak"]
+    if len(children) == 1 and children[0].get("type") == "emphasis":
+        return _text(children[0]).strip() or None
+    return None
+
+
 # --------------------------------------------------------------------------- #
 # HTML table helpers (used wherever the SRD embeds raw <table> blocks)
 # --------------------------------------------------------------------------- #
@@ -364,6 +380,7 @@ _PREREQ_ABILITY_ANY_RE = re.compile(
     re.IGNORECASE,
 )
 _PREREQ_SPELLCASTING_RE = re.compile(r"Spellcasting\s+(?:or\s+Pact\s+Magic\s+)?[Ff]eature", re.IGNORECASE)
+_PREREQ_FIGHTING_STYLE_RE = re.compile(r"Fighting\s+Style\s+Feature", re.IGNORECASE)
 
 
 def _parse_prereq_line(line: str) -> list[dict]:
@@ -396,6 +413,8 @@ def _parse_prereq_line(line: str) -> list[dict]:
             "value": int(m.group(2)),
             "abilities": [to_ability(m.group(1))],
         })
+    if _PREREQ_FIGHTING_STYLE_RE.search(line):
+        out.append({"type": "class_feature", "feature": "fighting_style"})
     if _PREREQ_SPELLCASTING_RE.search(line):
         out.append({"type": "spellcasting"})
     return out
@@ -424,12 +443,14 @@ def parse_feats() -> list[dict]:
                 nxt = tokens[j]
                 if _heading_level(nxt) and _heading_level(nxt) <= 4:
                     break
-                txt = _text(nxt).strip()
-                if not subheader and txt.startswith("_") and txt.rstrip("_").endswith(""):
-                    # First italic line is the subheader
-                    subheader = txt.strip("_").strip()
+                emphasis = _emphasis_only_text(nxt)
+                if not subheader and emphasis is not None:
+                    # First standalone italic paragraph is the category subheader,
+                    # e.g. "_General Feat (Prerequisite: Level 4+)_".
+                    subheader = emphasis
                     j += 1
                     continue
+                txt = _text(nxt).strip()
                 if txt:
                     desc_parts.append(txt)
                 j += 1
@@ -437,7 +458,11 @@ def parse_feats() -> list[dict]:
             repeatable = False
             if "Prerequisite:" in subheader:
                 prereq_chunk = subheader.split("Prerequisite:", 1)[1].rstrip(")").strip()
-            if "Repeatable" in subheader:
+            if "Repeatable" in subheader or any(
+                p.lstrip().startswith("Repeatable.") for p in desc_parts
+            ):
+                # The "Repeatable" clause is its own `_Repeatable._ …` paragraph, not the
+                # category subheader — check the body too.
                 repeatable = True
             prereqs = _parse_prereq_line(prereq_chunk)
             description = "\n\n".join(desc_parts).strip() or subheader or feat_name
@@ -556,18 +581,39 @@ _ITALIC_HEADER_RE = re.compile(r"_([^_]+)\._\s*(.*)", re.DOTALL)
 
 
 def _extract_italic_paragraph_traits(tokens: list[dict]) -> list[dict]:
-    """Find paragraphs that start with `_Trait Name._ ...` and return them as traits."""
+    """Find paragraphs that start with `_Trait Name._ ...` and return them as traits.
+
+    A trait's text can span multiple paragraphs (e.g. a usage/recharge clause in a follow-up
+    paragraph). Plain-prose paragraphs after a trait are appended to that trait until the next
+    labelled trait. Standalone bold/italic paragraphs (table captions like **Draconic Ancestors**)
+    and non-paragraph blocks (tables) are not folded into the prose.
+    """
     traits: list[dict] = []
+    cur: Optional[dict] = None
+
+    def _flush() -> None:
+        nonlocal cur
+        if cur and cur["name"]:
+            desc = "\n\n".join(p for p in cur["parts"] if p).strip()
+            if desc:
+                traits.append({"name": cur["name"], "description": desc})
+        cur = None
+
     for tok in tokens:
         if tok.get("type") != "paragraph":
             continue
+        children = [c for c in tok.get("children", []) if c.get("type") != "softbreak"]
         rendered = _render_inline(tok.get("children", [])).strip()
         m = _ITALIC_HEADER_RE.match(rendered)
         if m:
-            name = _strip(m.group(1))
-            desc = _strip(m.group(2))
-            if name and desc:
-                traits.append({"name": name, "description": desc})
+            _flush()
+            cur = {"name": _strip(m.group(1)), "parts": [_strip(m.group(2))]}
+        elif cur is not None and rendered:
+            # Skip standalone bold/italic captions; keep genuine prose continuations.
+            is_caption = len(children) == 1 and children[0].get("type") in {"strong", "emphasis"}
+            if not is_caption:
+                cur["parts"].append(rendered)
+    _flush()
     return traits
 
 
@@ -593,11 +639,14 @@ def parse_species() -> list[dict]:
             continue  # Not a species block
         creature_type = labels.get("Creature Type", "")
         size_text = labels.get("Size", "").lower()
+        # SRD lists the primary size first (e.g. "Medium … or Small"); pick the earliest-mentioned
+        # so a two-size species (Human, Tiefling) records its primary size, not the alternative.
         size = None
+        best_pos = None
         for key, val in _SIZE_MAP.items():
-            if key in size_text:
-                size = val
-                break
+            pos = size_text.find(key)
+            if pos != -1 and (best_pos is None or pos < best_pos):
+                best_pos, size = pos, val
         if not size:
             raise ValueError(f"Species {name!r}: could not derive size from {labels.get('Size')!r}")
         speed_text = labels.get("Speed", "")
@@ -781,6 +830,95 @@ def _scope_to_features(tokens: list[dict], section_start: int, section_end: int)
     return section_end
 
 
+def _parse_subclass(section_tokens: list[dict], class_name: str) -> Optional[dict]:
+    """Parse the single SRD subclass within a class section.
+
+    Each class section contains one ``### <Class> Subclass: <Name>`` H3 followed by
+    ``#### Level N: <Feature>`` H4 blocks, terminating at the next heading of level ≤ 3
+    (next subclass / spell list / class). Returns a dict ready for SubclassDefinition
+    validation, or None if the section has no subclass.
+    """
+    start_idx: Optional[int] = None
+    subclass_name: Optional[str] = None
+    for idx, tok in enumerate(section_tokens):
+        if _heading_level(tok) == 3 and "Subclass:" in _heading_text(tok):
+            subclass_name = _heading_text(tok).split("Subclass:", 1)[1].strip()
+            start_idx = idx + 1
+            break
+    if start_idx is None or not subclass_name:
+        return None
+
+    features: list[dict] = []
+    cur_level: Optional[int] = None
+    cur_name: Optional[str] = None
+    cur_parts: list[str] = []
+    h4_level_re = re.compile(r"Level\s+(\d+):\s*(.+)", re.IGNORECASE)
+
+    def _flush():
+        nonlocal cur_level, cur_name, cur_parts
+        if cur_name is not None and cur_level is not None:
+            desc = "\n\n".join(p for p in cur_parts if p).strip() or cur_name
+            features.append({"name": cur_name, "level": cur_level, "description": desc})
+        cur_level, cur_name, cur_parts = None, None, []
+
+    for tok in section_tokens[start_idx:]:
+        lvl = _heading_level(tok)
+        if lvl is not None and lvl <= 3:
+            break
+        if lvl == 4:
+            _flush()
+            m = h4_level_re.match(_heading_text(tok))
+            if m:
+                cur_level = int(m.group(1))
+                cur_name = _strip(m.group(2))
+                cur_parts = []
+        elif cur_name is not None:
+            ttype = tok.get("type")
+            if ttype in {"block_html", "html_block"}:
+                continue  # spell tables etc. — captured structurally in a later PR, not as prose
+            if ttype == "paragraph":
+                txt = _render_inline(tok.get("children", [])).strip()
+            elif ttype == "list":
+                txt = "\n".join("- " + _text(li).strip() for li in tok.get("children", []))
+            else:
+                txt = _text(tok).strip()
+            if txt:
+                cur_parts.append(txt)
+    _flush()
+
+    if not features:
+        raise RuntimeError(f"Class {class_name}: subclass {subclass_name!r} has no Level-N features")
+
+    return {
+        "code": to_code(subclass_name),
+        "name": subclass_name,
+        "subclass_level": min(f["level"] for f in features),
+        "features": features,
+        "always_prepared_spells_by_level": {},
+    }
+
+
+_BARE_ARMOR = {"light", "medium", "heavy"}
+
+
+def _split_proficiency_list(text: str, *, armor: bool = False) -> list[str]:
+    """Split a core-table proficiency cell into items.
+
+    Handles "Light and Medium armor and Shields" and Oxford-comma forms like
+    "Light, Medium, and Heavy armor" — strips a stray leading 'and', and (for armor)
+    expands a bare category ("Light") to its full form ("Light armor").
+    """
+    out: list[str] = []
+    for part in re.split(r"\s*,\s*|\s+and\s+", text.rstrip(".")):
+        part = re.sub(r"^and\s+", "", part.strip())
+        if not part:
+            continue
+        if armor and part.lower() in _BARE_ARMOR:
+            part = f"{part} armor"
+        out.append(part)
+    return out
+
+
 def parse_one_class(
     class_name: str,
     tokens: list[dict],
@@ -797,15 +935,16 @@ def parse_one_class(
         raise RuntimeError(f"Class {class_name}: core traits table not found")
     core = _parse_kv_table(core_table_soup)
 
-    primary = to_ability(core["Primary Ability"].split(" ")[0])
+    primary = to_abilities(core["Primary Ability"])  # may be one or two (e.g. "Strength or Dexterity")
     hit_die_m = _HIT_DIE_RE.search(core["Hit Point Die"])
     if not hit_die_m:
         raise ValueError(f"Class {class_name}: hit die not parseable from {core['Hit Point Die']!r}")
     hit_die = int(hit_die_m.group(1))
     saving_throws = to_abilities(core["Saving Throw Proficiencies"])
     skill_count, skill_codes = _class_skill_list(core["Skill Proficiencies"], all_skill_codes)
-    armor = [a.strip() for a in re.split(r",\s*|\s+and\s+", core.get("Armor Training", "").rstrip(".")) if a.strip()]
-    weapons = [w.strip() for w in re.split(r",\s*|\s+and\s+", core.get("Weapon Proficiencies", "").rstrip(".")) if w.strip()]
+    armor = _split_proficiency_list(core.get("Armor Training", ""), armor=True)
+    weapons = _split_proficiency_list(core.get("Weapon Proficiencies", ""))
+    tools = _strip(core.get("Tool Proficiencies", ""))
 
     # Find the second HTML table (the class features progression table).
     # Strategy: find the index where the core table sits, then look for the next table after it.
@@ -908,7 +1047,7 @@ def parse_one_class(
             if "Subclass" in fname or fname.lower() in {"subclass feature"}:
                 features.append({
                     "name": fname,
-                    "description": "Subclass feature gained at this level (subclasses are not yet supported).",
+                    "description": "Subclass feature gained at this level; see the class's subclasses for details.",
                 })
                 continue
             if fname == "Ability Score Improvement":
@@ -950,6 +1089,9 @@ def parse_one_class(
             f"Class {class_name}: only {len(asi_levels)} ASI levels detected — expected at least 4"
         )
 
+    # Subclass lives after the feature scope, within the full section.
+    subclass = _parse_subclass(tokens[start:end], class_name)
+
     return {
         "code": to_code(class_name),
         "name": class_name,
@@ -959,10 +1101,13 @@ def parse_one_class(
         "skill_choices": {"count": skill_count, "from": skill_codes},
         "armor_training": armor,
         "weapon_proficiencies": weapons,
+        "tool_proficiencies": tools,
         "starting_equipment_text": _strip(core.get("Starting Equipment", "")),
         "asi_levels": sorted(set(asi_levels)),
         "features_by_level": dict(sorted(features_by_level.items(), key=lambda kv: int(kv[0]))),
         "multiclass_text": multiclass_text,
+        "subclass_level": subclass["subclass_level"] if subclass else None,
+        "subclasses": [subclass] if subclass else [],
     }
 
 

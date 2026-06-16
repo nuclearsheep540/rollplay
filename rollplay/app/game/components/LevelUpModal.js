@@ -326,6 +326,13 @@ export default function LevelUpModal({ character, open, onClose, onComplete }) {
                     {(data.qualifying_feats ?? []).map((code) => (
                       <option key={code} value={code}>{titleize(code)}</option>
                     ))}
+                    {(data.other_feats ?? []).length > 0 && (
+                      <optgroup label="Prerequisites not met (allowed anyway)">
+                        {(data.other_feats ?? []).map((code) => (
+                          <option key={code} value={code}>{titleize(code)}</option>
+                        ))}
+                      </optgroup>
+                    )}
                   </select>
                 )}
               </div>

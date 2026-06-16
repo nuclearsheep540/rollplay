@@ -33,7 +33,7 @@ def test_initialize_loads_srd_edition():
 def test_get_class_returns_typed_definition():
     reg = RulesetRegistry.initialize()
     barb = reg.get_class("srd_5_2_1", "barbarian")
-    assert barb.primary_ability == "strength"
+    assert barb.primary_ability == ["strength"]
     assert barb.hit_die == 12
     assert barb.asi_levels == [4, 8, 12, 16]
     assert "20" in barb.features_by_level

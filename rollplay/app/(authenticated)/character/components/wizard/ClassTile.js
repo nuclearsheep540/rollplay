@@ -25,7 +25,7 @@ function ClassInfoBody({ classDef }) {
       </div>
       <div>
         <div className="text-xs uppercase" style={{ color: THEME.textSecondary }}>Primary ability</div>
-        <div className="capitalize">{classDef.primary_ability}</div>
+        <div className="capitalize">{(classDef.primary_ability || []).join(' / ')}</div>
       </div>
       <div>
         <div className="text-xs uppercase" style={{ color: THEME.textSecondary }}>Saves</div>
@@ -113,7 +113,7 @@ export default function ClassTile({
   // Composed summary chip — base info always, plus the selected-state
   // breadcrumbs (level + Primary tag) when this tile represents an
   // already-picked class.
-  const baseSummary = `d${classDef.hit_die} · ${classDef.primary_ability}`
+  const baseSummary = `d${classDef.hit_die} · ${(classDef.primary_ability || []).join('/')}`
   const summary =
     mode === 'selected' && pick
       ? `${baseSummary} · Level ${pick.level}${isPrimary ? ' · Primary' : ''}`

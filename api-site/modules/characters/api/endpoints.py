@@ -448,13 +448,17 @@ async def preview_level_up(
         )
         hp_options[entry.class_code] = ruleset.level_up_hp_options(character, entry.class_code)
 
-    # Feats the character qualifies for — Phase 2 returns the full list of
-    # General / Fighting Style / Epic Boon feats from the registry and lets the
-    # frontend display them. Strict prereq filtering is a Phase 4 polish.
-    qualifying_feats = [
-        f.code for f in registry.list_feats(character.edition_code)
-        if f.category in {"general", "fighting_style", "epic_boon"}
-    ]
+    # Feats split into two buckets for point-of-choice guidance — NOT a hard filter.
+    # `qualifying_feats` are those whose prerequisites the character meets; `other_feats`
+    # are the rest. Both are returned so the UI can surface everything (guide, don't hide —
+    # core/product-principles.md §3.0); the modal shows `other_feats` behind a "show anyway".
+    qualifying_feats: list[str] = []
+    other_feats: list[str] = []
+    for feat in registry.list_feats(character.edition_code):
+        if feat.category not in {"general", "fighting_style", "epic_boon"}:
+            continue
+        bucket = qualifying_feats if ruleset.is_feat_available(character, feat) else other_feats
+        bucket.append(feat.code)
 
     return LevelUpPreview(
         current_level=character.level,
@@ -463,6 +467,7 @@ async def preview_level_up(
         is_asi_level=is_asi_level,
         hp_options=hp_options,
         qualifying_feats=qualifying_feats,
+        other_feats=other_feats,
     )
 
 

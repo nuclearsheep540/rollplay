@@ -40,10 +40,11 @@ class SkillDefinition(BaseModel):
 
 
 class FeatPrerequisite(BaseModel):
-    type: Literal["level", "ability", "ability_any", "class", "spellcasting"]
+    type: Literal["level", "ability", "ability_any", "class", "class_feature", "spellcasting"]
     value: Optional[int] = None
     abilities: Optional[list[AbilityCode]] = None
     class_code: Optional[str] = Field(default=None, pattern=CodePattern)
+    feature: Optional[str] = Field(default=None, pattern=CodePattern)  # for type="class_feature", e.g. "fighting_style"
 
 
 class FeatDefinition(BaseModel):
@@ -106,19 +107,38 @@ class SkillChoices(BaseModel):
     source: list[str] = Field(alias="from")
 
 
+class SubclassFeature(BaseModel):
+    name: str
+    level: int = Field(ge=1, le=20)
+    description: str = Field(min_length=1)
+
+
+class SubclassDefinition(BaseModel):
+    code: str = Field(pattern=CodePattern)
+    name: str
+    subclass_level: int = Field(ge=1, le=20)  # level at which this subclass's features begin
+    features: list[SubclassFeature]
+    # Spell codes the subclass always has prepared, keyed by class level. Populated once the
+    # spell catalogue lands (later PR); the feature descriptions carry the prose until then.
+    always_prepared_spells_by_level: dict[str, list[str]] = {}
+
+
 class ClassDefinition(BaseModel):
     code: str = Field(pattern=CodePattern)
     name: str
-    primary_ability: AbilityCode
+    primary_ability: list[AbilityCode] = Field(min_length=1)  # some classes list two (e.g. "Strength or Dexterity")
     hit_die: Literal[6, 8, 10, 12]
     saving_throw_proficiencies: list[AbilityCode] = Field(min_length=2, max_length=2)
     skill_choices: SkillChoices
     armor_training: list[str]
     weapon_proficiencies: list[str]
+    tool_proficiencies: str = ""  # raw core-table text (e.g. "Choose 3 Musical Instruments", "Herbalism Kit")
     starting_equipment_text: str
     asi_levels: list[int] = Field(min_length=4)
     features_by_level: dict[str, ClassLevel]
     multiclass_text: Optional[str] = None
+    subclass_level: Optional[int] = None  # character level at which a subclass is chosen (3 in SRD 2024)
+    subclasses: list[SubclassDefinition] = []
 
 
 class _EditionFile(BaseModel):

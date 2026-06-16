@@ -372,7 +372,7 @@ All give `+1 to one ability, max 30`. Pick the boon at L19 via class's Epic Boon
 
 ### SRD's stance on duplicate skill grants
 
-The SRD does **not** explicitly say what happens if the same skill is granted by both background and class. By RAW and convention (carry-over from PHB), the player typically picks a different skill (often from any list) as a substitute, but this is a GM call. **Surface this as a soft-warning UX**, not a hard block.
+The SRD does **not** explicitly say what happens if the same skill is granted by both background and class. By RAW and convention (carry-over from PHB), the player typically picks a different skill (often from any list) as a substitute, but this is a GM call. **Surface this inline as point-of-choice guidance** (offer a substitute pick) — not a hard block, and not a submit-time warning.
 
 ### Languages (p.20)
 

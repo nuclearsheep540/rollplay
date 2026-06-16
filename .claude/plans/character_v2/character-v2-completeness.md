@@ -31,21 +31,29 @@ Every phase below binds to **two** contracts. If a proposed change violates eith
 
 ### 3.0 Prime directive — facilitate play; don't enforce rules
 
+> **Governed by [core/product-principles.md](core/product-principles.md)** — the product-wide source of truth. This section is its character-creation application. Where the two differ, the principles doc wins.
+
 Rollplay is a virtual tabletop, not an automated DM. The app's job is to **store data, display data, and surface what the player needs to make decisions** — including computed values where the cognitive load of doing it by hand is meaningful (feat prereqs across 17 entries, multiclass spell slot tables, HP retroactive recomputation on CON change). The app does NOT enforce the *consequences* of that data — those are for the table to declare.
 
-Compare to D&D Beyond: the user manually edits everything; the app provides structure and surfaces the rules in context. We are building that kind of facilitation tool, not a rules engine.
+Compare to D&D Beyond: the user manually edits everything; the app provides structure and surfaces the rules in context. We are building that kind of facilitation tool, not a rules engine. There is **no "homebrew mode"** — every configuration is just a configuration; an Orc Warrior with 0 STR is allowed and never branded homebrew. Inform on every point; gate on none (except data integrity).
+
+**Three axes — never conflate them. This principle governs only the second:**
+
+1. **Completeness** — *is this a valid entity at all?* A character needs a name, class, species. Requiring these (to *finalize* a draft) is correct and is NOT what this principle relaxes — a missing required field is incomplete data, not "facilitation." Drafts may sit incomplete (show an "incomplete" affordance); finalization requires completeness; never gate per-keystroke/draft-save.
+2. **Canon-correctness** — *is this complete configuration "by the book"?* Sub-optimal spreads, off-meta pairings, multiclass without the ability prereq. **The only axis the prime directive governs.** Never gate, hide, disallow, or caution-at-submit. Guide proactively toward canon at the point of choice.
+3. **Data invariants** — *would this corrupt the database?* UUID uniqueness, FK integrity, ability 1-30, HP gain ≥ 1, quantity ≥ 0. Always hard-blocked.
 
 Concrete implications:
 
 - ✅ **Compute and display** any derived value that aids a *decision* the player must make (feat eligibility, spell save DC, multiclass spell slots, HP recompute on CON change, AC from the available formulas)
 - ✅ **Store and display** any state that aids *table communication* (conditions, concentration target, ammunition count, "attuned" notes on inventory items)
-- ✅ **Surface eligibility / prereq info inline** when the player is about to make a choice (multiclass primary-ability check, subclass timing, casting-in-armor warning, feat prerequisites)
+- ✅ **Guide proactively at the point of choice** — sensible defaults, "recommended" labels, surfacing what the player *qualifies for*, an unobtrusive inline hint while they choose (multiclass primary-ability, subclass timing, casting-in-armor, feat prerequisites). Guidance lives in the *journey*, not at the gate.
 - ❌ **Don't enforce mechanical consequences** — no auto-decrementing arrows on attack, no blocking attacks when out of ammo, no auto-applying Blinded's disadvantage to dice, no auto-saving concentration on damage, no hard-blocking actions that violate a soft rule
-- ❌ **Don't gate save operations on rule violations the table can declare** — surface the violation as a warning on the response, let the save proceed
+- ❌ **Don't gate saves on canon-correctness, and don't caution at submit** — no warning banner or violations list attached to the response saying "you did this wrong." Canon help is proactive (above), never a reactive caution. Saves proceed regardless.
 
 The bar for *computing* anything: is doing this by hand tedious enough to harm the player's experience, OR does the player need the answer to make their next decision? If yes, compute and display. Otherwise, store + display the raw data and trust the table.
 
-The bar for *enforcing* anything: never, unless the rule is a **true data invariant** — UUID uniqueness, foreign-key integrity, ability score range 1-30, HP gain ≥ 1, quantity ≥ 0. Database corruption protection only.
+The bar for *enforcing* anything: never, unless the rule is a **true data invariant** (axis 3) — UUID uniqueness, foreign-key integrity, ability score range 1-30, HP gain ≥ 1, quantity ≥ 0. Database corruption protection only. Completeness (axis 1) is required only at finalize.
 
 This principle precedes every code-pattern rule in §3.1-§3.13. If a proposed feature can be reframed from "enforce" to "display the relevant data", do that first.
 
@@ -512,7 +520,7 @@ These reuse the existing JSONB-on-aggregate pattern from `ability_roll_details` 
 
 ### Phase D — Surface eligibility info; enforce only data invariants
 
-**Goal:** per the prime directive (§3.0), the app *displays* eligibility and prereq facts inline with the choice. It *enforces* only true data invariants (database corruption protection). All other rule outcomes are **warnings on the response** that the table resolves. Saves proceed.
+**Goal:** per the prime directive (§3.0) and [core/product-principles.md](core/product-principles.md), the app *displays* eligibility and prereq facts **proactively, at the point of choice**. It *enforces* only true data invariants (database corruption protection) and *requires* only completeness fields at finalize. Canon-correctness is never gated and never cautioned at submit — guidance lives in the journey, not on the save response.
 
 #### D.1 — Data invariants in step handlers
 
@@ -525,29 +533,33 @@ Continues today's validation only where it protects against data corruption. The
 - HP gain ≥ 1 ([apply_level_gain](api-site/modules/characters/domain/character_aggregate.py#L455))
 - Inventory quantity ≥ 0 (added in Phase J)
 
-**Reframe the following from "enforce/block" to "warn on response, allow save":**
+**Completeness (axis 1) — require only at finalize, never per-save:**
 
-- Duplicate Expertise on same skill → warning, don't block
-- Duplicate non-repeatable feat → warning, don't block
+- Required identity fields (name, species, class) and required class L1 choices not yet made → show an "incomplete" affordance in the wizard, let the draft remain in that state, block only *finalization* until complete.
+
+**Canon-correctness (axis 2) — guide proactively at the point of choice; never block, never caution at submit:**
+
+- Duplicate Expertise on same skill → the picker shows it's already taken; don't block, don't flag on save
+- Duplicate non-repeatable feat → shown as already-taken / filtered from the eligible list; don't block
 - Skill granted twice from different sources → already soft-skips at repository layer; keep silent
-- Required class L1 choices not yet made → display "incomplete" badge in the wizard, allow draft to remain in that state
-- Subclass picked at unusual level (e.g. before subclass_level) → warn, don't block
-- Spell prepared count exceeds class limit → warn, don't block
-- Cantrip known count exceeds class limit → warn, don't block
+- Subclass picked at unusual level → the picker indicates the canonical level inline; don't block, don't caution
+- Spell prepared / cantrip known count over the class limit → show the limit and running count inline as the player picks; don't block, don't flag on save
+
+**Mechanism — guidance, not a violations rail.** Eligibility/guidance is delivered through the data the UI *already* consumes at the point of choice — registry reference data + `DerivedStats` + `LevelUpPreview` (e.g. `qualifying_feats`, `can_add_class`, `can_pick_subclass`) — **not** a `warnings: list[str]` of rule-violation messages bolted onto `CharacterResponse`. The wizard renders these as inline hints/recommendations next to the relevant control. (Earlier drafts proposed a `warnings` / `_build_warnings` rail; it is **retired** in favour of point-of-choice guidance per the principles doc.)
 
 **Extends:**
-- [api/schemas.py — CharacterResponse](api-site/modules/characters/api/schemas.py) — add `warnings: list[str]` field. Endpoints populate this via the response builder; the wizard renders warnings inline near the relevant fields.
-- [api/endpoints.py — _build_derived_stats](api-site/modules/characters/api/endpoints.py#L69) (or a new sibling helper `_build_warnings(character, registry)`) — walks the character's state, returns the list of rule-violation messages.
-- `_apply_*` step handlers remain unchanged except for *removing* validation that should now be a warning.
+- [shared/rulesets/strategy.py](api-site/shared/rulesets/strategy.py) / [dnd_2024.py](api-site/shared/rulesets/dnd_2024.py) — eligibility checks (`is_feat_available`, `can_add_class`, `can_pick_subclass`) from Phase C, surfaced through `DerivedStats` / `LevelUpPreview`.
+- [api/endpoints.py — _build_derived_stats](api-site/modules/characters/api/endpoints.py#L69) — populate eligibility fields on the preview/derived responses (e.g. the filtered `qualifying_feats`).
+- `_apply_*` step handlers: *remove* validation that should now be silent or point-of-choice guidance; keep only the data invariants above.
 
 #### D.2 — Multiclass primary-ability info
 
-When adding a class, compute whether the prereq (13 in primary of both old + new) is met. **Surface as a warning on the response, never block the save.** Player can proceed if their DM allows variant rules.
+When adding a class, compute whether the prereq (13 in primary of both old + new) is met. **Surface as a proactive inline hint while choosing, never block the save, never caution at submit.** The player proceeds freely if their table allows it.
 
 **Extends:**
-- Strategy (C.6) provides the eligibility check.
-- `UpdateCharacterDraft._apply_add_class` (new handler) does the mutation unconditionally; the warning surfaces via `_build_warnings`.
-- Wizard renders the warning under the class-add UI ("Strength 12 — below 13 required for multiclass into Fighter").
+- Strategy (C.6) provides the eligibility check (`can_add_class`).
+- `UpdateCharacterDraft._apply_add_class` (new handler) does the mutation unconditionally.
+- Wizard renders an inline hint under the class-add UI while the player chooses ("D&D suggests Strength 13+ to multiclass into Fighter") — informational, not a warning.
 
 ### Phase E — Wizard restructure (frontend)
 
@@ -805,7 +817,7 @@ Use this as the per-class completeness checklist — every row must be fully imp
 
 Every PR opened against this plan must satisfy this checklist (paste into the PR description):
 
-- [ ] **Prime directive (§3.0).** This PR adds no mechanical enforcement of consequences the table can declare verbally. Any rule outcome is surfaced as info/warning on the response; saves proceed. Only true data invariants (UUID uniqueness, ability range 1-30, HP ≥ 1, quantity ≥ 0, FK integrity) raise/block.
+- [ ] **Prime directive (§3.0 / [core/product-principles.md](core/product-principles.md)).** This PR adds no mechanical enforcement of consequences the table can declare verbally, and no submit-time caution on canon-correctness. Canon guidance is surfaced *proactively at the point of choice* (not as a warning/violation on the save response); saves proceed. Only true data invariants (UUID uniqueness, ability range 1-30, HP ≥ 1, quantity ≥ 0, FK integrity) raise/block; completeness (name/class/species) is required only at finalize.
 - [ ] **CQRS.** New writes are new step handlers on `UpdateCharacterDraft` / new branches in `LevelUpCharacter`, or a new top-level command class only if a distinct lifecycle is involved. New reads are new query classes in `queries.py` only if reused outside the single endpoint.
 - [ ] **Aggregate.** New state is typed fields + frozen value objects + methods on `CharacterAggregate`. Methods call `self._touch()`. No ORM imports.
 - [ ] **Repository.** New join tables added to `_query().options(selectinload(...))`, `_model_to_aggregate`, the delete-and-rewrite block in `save`, and `_write_all_children`. No new mapper file.
@@ -829,22 +841,38 @@ Each PR is sized to be reviewable on its own and to ship value incrementally.
 
 | PR | Phases | Scope | Approx size |
 |----|--------|-------|-------------|
-| **PR 1** | A.1 + Phase D framing | Fix feat prereq parsing + add `warnings: list[str]` to `CharacterResponse` + `_build_warnings` helper + use prereq data to populate `qualifying_feats` filter on `preview_level_up`. Small, immediate UX win, plus lays the warning rail Phase D depends on. | S |
+| **PR 1** | A.1 + Phase D framing | Fix feat prereq parsing + use the prereq data to populate the `qualifying_feats` eligibility filter on `preview_level_up` (point-of-choice discoverability). Establishes Phase D's "guide proactively, don't caution at submit" framing — **no `warnings` rail** (retired; see §D.1). Small, immediate UX win. | S |
 | **PR 2** | A.2 + A.3 + A.4 | Subclasses + class L1 choice metadata + species sub-choices in registry. Pure data — no UI yet. | M |
 | **PR 3** | B.1 + B.5 + E.3 + E.5 | Subclass tracking on aggregate + sub-flavour storage + species sub-choices in wizard + class L1 pickers in ClassStep. | M |
+| | | **⏹ TEST GATE M1 — Martial L1 (hard gate).** Create a Fighter/Barbarian/Rogue end-to-end: species sub-choices, class L1 picks (fighting style, weapon mastery, expertise), feat filter. Run the test recipe below. **This proves the whole pipeline; stop and assess before continuing.** | |
 | **PR 4** | A.6 + A.10 | Spellcasting tables + spell content. **Large; standalone PR.** | XL |
 | **PR 5** | A.7 + A.8 | Invocations + Metamagic catalogues. | S |
 | **PR 6** | B.2 + B.4 + C.2 + C.6 + E.6 + F.1 (spell parts) | Spell selections on aggregate, multiclass spell slots in strategy, SpellsStep in wizard, spell pickers in LevelUpModal. | L |
+| | | **⏹ TEST GATE M2 — Caster L1 (highest risk).** Create a Wizard/Cleric/Warlock: cantrips, prepared/known spells, slots, invocations/metamagic. Spell parsing (PR 4) is the elephant — test thoroughly. | |
 | **PR 7** | A.9 + B.3 + C.4 (resource pools + AC parts) + G.1 | Weapon/armor catalogue + resource pools on aggregate + AC method enumeration + runtime sheet resource/slot UI. | M |
-| **PR 8** | B.6 + C.3 + C.5 + Phase D rest | HP recompute on CON change + subclass eligibility + remaining warning surfacing. | S |
+| **PR 8** | B.6 + C.3 + C.5 + Phase D rest | HP recompute on CON change + subclass eligibility + remaining point-of-choice guidance surfacing. | S |
+| | | **⏹ TEST GATE M3 — Runtime sheet.** Take a character into a live game session: edit HP/slots/resource pools/conditions; confirm derived stats + HP-on-CON recompute. | |
 | **PR 9** | E.1 + E.2 | Starting level + class distribution + AdvancementStep. | M |
 | **PR 10** | F.1 (rest) + F.2 | LevelUpModal expansion (subclass step, feature steps, feat description + filter). | M |
+| | | **⏹ TEST GATE M4 — Higher level + level-up.** Create *at level 5* walking every advancement card; level an existing character through a subclass milestone. Most complex flow. | |
 | **PR 11** | G.2 + G.3 + Phase H | Per-rest swap UI + conditions/exhaustion (typed enum + display, not enforce) + DM party view. | M |
 | **PR 12** | Phase I | api-game snapshot sync extension. | S |
+| | | **⏹ TEST GATE M5 — Multiplayer + DM.** DM party view; per-rest swaps; changes reflected in the live api-game session. | |
 | **PR 13** | J.1 + J.2 | Item catalogue (weapons/armor extended to gear/tools/mounts) + currency catalogue + edition endpoints + reference hooks. Pure data + hooks. | M |
 | **PR 14** | J.3 + J.4 + J.5 | Inventory aggregate fields + ORM table + repository extension + wizard equipment picker (background + class) + finalize-time expansion to inventory/currency + runtime inventory & currency panel. | M |
+| | | **⏹ TEST GATE M6 — Inventory.** Equipment package at finalize → real inventory rows; runtime add/remove/quantity/currency edits. | |
 
 Total: ~14 PRs. Quick wins (PR 1, PR 5) ship immediately. PR 4 (spells) is the elephant — recommend running it in a long-lived branch with mid-flight reviews on the parser before integrating. Phase J (PRs 13-14) is independent of spells/subclasses and can be sequenced earlier if equipment UX matters more than spellcasting UX in the near term.
+
+### Test gates — the recipe to run at each ⏹
+
+The pure-data PRs (2, 4, 5, 13) are gated by the parametrized parser tests (acceptance #2), not manual play — green tests + a JSON / edition-endpoint spot-check is enough. The six ⏹ gates above are where a data layer meets its UI and a full journey becomes playable. At each one, run the same three checks (they catch most bugs because every PR reuses the same patterns):
+
+1. **Round-trip persistence** — create → save draft → reload mid-wizard (resume) → finalize → reload the sheet. Highest-value check: every feature adds a join table using the repository's *delete-all-children-then-rewrite* sync, the riskiest mechanical spot; a round-trip flushes out silent data loss.
+2. **Derived-stat spot checks** — hand-verify one skill modifier, the proficiency bonus, a spell save DC / slot count. Confirms the strategy math.
+3. **One deliberately off-canon choice** — e.g. a 0-STR Orc Warrior, or multiclass without the ability prereq. Confirm it's **allowed with an inline hint, never blocked** (validates §3.0 at every layer).
+
+**M1 (after PR 3) is a hard gate**: it's the smallest slice exercising the entire architecture (parser → registry → aggregate → repository → wizard → sheet) on a class with no spell complications. If it round-trips cleanly, the later milestones are the same proven pattern with more data.
 
 ---
 
@@ -861,7 +889,7 @@ The character v2 system is complete when:
 7. All per-rest mutable choices appear on the runtime sheet and can be swapped at the right cadence.
 8. **The character has a structured inventory (item rows + quantity + notes) and currency pool, populated from chosen starting equipment packages at finalize, editable on the runtime sheet.**
 9. The DM can view a read-only party panel showing every party member's sheet.
-10. **No PR has introduced enforcement of a rule outcome that the table can declare verbally** (§3.0 / §7 first checklist item) — only data invariants block saves.
+10. **No PR has introduced enforcement of a rule outcome that the table can declare verbally, nor a submit-time caution on canon-correctness** (§3.0 / §7 first checklist item) — only data invariants block saves; completeness is required only at finalize; canon guidance is proactive, at the point of choice.
 11. **Every PR has the §7 pattern compliance checklist ticked.**
 
 When all eleven are true, the system is SRD-faithful, ready for use at table, architecturally consistent with the rest of the codebase, and behaves as a facilitation tool rather than a rules engine.

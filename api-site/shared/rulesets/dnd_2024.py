@@ -19,6 +19,7 @@ from shared.rulesets.strategy import RulesetStrategy
 
 if TYPE_CHECKING:
     from modules.characters.domain.character_aggregate import CharacterAggregate
+    from shared.rulesets.models import FeatDefinition
     from shared.rulesets.registry import RulesetRegistry
 
 
@@ -145,3 +146,25 @@ class Dnd2024Ruleset(RulesetStrategy):
 
     def compute_initiative(self, character: "CharacterAggregate") -> int:
         return _ability_modifier(character.final_ability_score("dexterity"))
+
+    def is_feat_available(self, character: "CharacterAggregate", feat: "FeatDefinition") -> bool:
+        # A non-repeatable feat already taken is no longer available.
+        if not feat.repeatable and any(f.feat_code == feat.code for f in character.feats):
+            return False
+        for prereq in feat.prerequisites:
+            if prereq.type == "level":
+                if character.level < (prereq.value or 0):
+                    return False
+            elif prereq.type == "ability" and prereq.abilities:
+                if character.final_ability_score(prereq.abilities[0]) < (prereq.value or 0):
+                    return False
+            elif prereq.type == "ability_any" and prereq.abilities:
+                threshold = prereq.value or 0
+                if not any(
+                    character.final_ability_score(a) >= threshold for a in prereq.abilities
+                ):
+                    return False
+            # Anything else — "spellcasting" / "class" / "class_feature", or an ability
+            # prereq with no abilities listed — can't be verified yet, so we leave the feat
+            # available: we guide, we never hide (core/product-principles.md §3.0).
+        return True

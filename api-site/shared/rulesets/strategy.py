@@ -20,6 +20,7 @@ from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from modules.characters.domain.character_aggregate import CharacterAggregate
+    from shared.rulesets.models import FeatDefinition
 
 
 class RulesetStrategy(ABC):
@@ -67,3 +68,13 @@ class RulesetStrategy(ABC):
     @abstractmethod
     def compute_initiative(self, character: "CharacterAggregate") -> int:
         """Initiative modifier (DEX mod by default; feats can override)."""
+
+    @abstractmethod
+    def is_feat_available(self, character: "CharacterAggregate", feat: "FeatDefinition") -> bool:
+        """Whether the character meets a feat's prerequisites.
+
+        Used for point-of-choice *guidance*, never to hide or block a choice
+        (see core/product-principles.md §3.0). Prerequisites we cannot yet
+        evaluate — e.g. ``spellcasting`` or ``class_feature``, whose backing data
+        lands in later PRs — default to available; we err toward showing.
+        """

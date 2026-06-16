@@ -134,6 +134,71 @@ def test_every_class_has_at_least_four_asi_levels():
         )
 
 
+def test_every_class_has_one_subclass_with_features():
+    for cls in _entries("classes.json", "classes"):
+        assert cls["subclass_level"] is not None, f"Class '{cls['code']}' missing subclass_level"
+        subs = cls["subclasses"]
+        assert len(subs) >= 1, f"Class '{cls['code']}' has no subclass parsed"
+        for sub in subs:
+            assert sub["features"], f"Subclass '{sub['code']}' of '{cls['code']}' has no features"
+            assert all(1 <= f["level"] <= 20 for f in sub["features"])
+            assert sub["subclass_level"] == min(f["level"] for f in sub["features"])
+
+
+def test_known_subclass_shape():
+    classes = {c["code"]: c for c in _entries("classes.json", "classes")}
+    berserker = classes["barbarian"]["subclasses"][0]
+    assert berserker["code"] == "path_of_the_berserker"
+    assert berserker["subclass_level"] == 3
+    feature_levels = {f["name"]: f["level"] for f in berserker["features"]}
+    assert feature_levels.get("Frenzy") == 3
+
+
+def test_every_feat_with_prerequisite_subheader_is_parsed():
+    """Regression guard for the dropped-prerequisites bug.
+
+    The parser once detected a feat's italic category subheader by a literal leading
+    underscore, but mistune renders ``_..._`` as an emphasis node and strips the
+    underscores — so the subheader (and every ``(Prerequisite: …)`` in it) was silently
+    dropped, leaving ``prerequisites: []`` on every feat. Count the subheaders in the
+    vendored source that declare a prerequisite and assert the committed JSON has exactly
+    that many feats with non-empty prerequisites.
+    """
+    feats_md = (
+        Path(__file__).resolve().parents[4] / "vendor" / "srd_5_2_1" / "feats.md"
+    ).read_text(encoding="utf-8")
+    declared = feats_md.count("(Prerequisite:")
+    parsed = sum(1 for f in _entries("feats.json", "feats") if f["prerequisites"])
+    assert declared > 0, "Expected at least one feat with a prerequisite in feats.md"
+    assert parsed == declared, (
+        f"{declared} feats declare a prerequisite in feats.md but {parsed} have non-empty "
+        "prerequisites in feats.json — the parser likely dropped some."
+    )
+
+
+def test_known_feat_prerequisites():
+    """Lock the exact prerequisite shapes for a representative feat per type."""
+    by_code = {f["code"]: f for f in _entries("feats.json", "feats")}
+
+    # General feat with a level gate + multi-ability 'or' requirement.
+    grappler = by_code["grappler"]["prerequisites"]
+    assert {"type": "level", "value": 4} in grappler
+    assert {
+        "type": "ability_any",
+        "value": 13,
+        "abilities": ["strength", "dexterity"],
+    } in grappler
+
+    # Fighting Style feats require the Fighting Style class feature.
+    for code in ("archery", "defense", "great_weapon_fighting", "two_weapon_fighting"):
+        assert {"type": "class_feature", "feature": "fighting_style"} in (
+            by_code[code]["prerequisites"]
+        ), f"{code} should require the fighting_style class feature"
+
+    # Epic Boon feats require level 19.
+    assert {"type": "level", "value": 19} in by_code["boon_of_combat_prowess"]["prerequisites"]
+
+
 def test_no_duplicate_codes_within_each_file():
     for filename, key in (
         ("skills.json", "skills"),
