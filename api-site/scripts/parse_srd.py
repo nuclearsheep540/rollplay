@@ -941,6 +941,56 @@ def _split_proficiency_list(text: str, *, armor: bool = False) -> list[str]:
     return out
 
 
+_SPELL_SLOT_COL_RE = re.compile(r"Spell Slots per Spell Level (\d+)")
+
+
+def _extract_spellcasting(features_by_level: dict) -> Optional[dict]:
+    """Lift the spell columns out of each level's ``class_specific`` into a typed
+    spellcasting structure (and remove them from class_specific). Returns None for
+    non-casters. Regular casters fill ``spell_slots_by_level``; Warlock's Pact Magic
+    ("Spell Slots" + "Slot Level") fills ``pact_slots_by_level``.
+    """
+    cantrips: dict[str, int] = {}
+    prepared: dict[str, int] = {}
+    slots: dict[str, dict[str, int]] = {}
+    pact: dict[str, dict] = {}
+    is_caster = False
+    for lvl, data in features_by_level.items():
+        cs = data["class_specific"]
+        if isinstance(cs.get("Cantrips"), int):
+            cantrips[lvl] = cs["Cantrips"]
+            is_caster = True
+        cs.pop("Cantrips", None)
+        if isinstance(cs.get("Prepared Spells"), int):
+            prepared[lvl] = cs["Prepared Spells"]
+            is_caster = True
+        cs.pop("Prepared Spells", None)
+        level_slots: dict[str, int] = {}
+        for key in list(cs.keys()):
+            m = _SPELL_SLOT_COL_RE.fullmatch(key)
+            if m:
+                val = cs.pop(key)
+                if isinstance(val, int) and val > 0:
+                    level_slots[m.group(1)] = val
+        if level_slots:
+            slots[lvl] = dict(sorted(level_slots.items(), key=lambda kv: int(kv[0])))
+            is_caster = True
+        # Warlock Pact Magic: a flat "Spell Slots" count at a single "Slot Level".
+        pact_count = cs.pop("Spell Slots", None)
+        pact_level = cs.pop("Slot Level", None)
+        if isinstance(pact_count, int) and pact_count > 0 and isinstance(pact_level, int):
+            pact[lvl] = {"count": pact_count, "slot_level": pact_level}
+            is_caster = True
+    if not is_caster:
+        return None
+    return {
+        "cantrips_known_by_level": cantrips,
+        "prepared_spells_by_level": prepared,
+        "spell_slots_by_level": slots,
+        "pact_slots_by_level": pact,
+    }
+
+
 def parse_one_class(
     class_name: str,
     tokens: list[dict],
@@ -1113,6 +1163,7 @@ def parse_one_class(
 
     # Subclass lives after the feature scope, within the full section.
     subclass = _parse_subclass(tokens[start:end], class_name)
+    spellcasting = _extract_spellcasting(features_by_level)
 
     return {
         "code": to_code(class_name),
@@ -1130,6 +1181,7 @@ def parse_one_class(
         "multiclass_text": multiclass_text,
         "subclass_level": subclass["subclass_level"] if subclass else None,
         "subclasses": [subclass] if subclass else [],
+        "spellcasting": spellcasting,
     }
 
 

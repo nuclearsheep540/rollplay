@@ -384,6 +384,7 @@
           "survival"
         ]
       },
+      "spellcasting": null,
       "starting_equipment_text": "Choose A or B: (A) Greataxe, 4 Handaxes, Explorer's Pack, and 15 GP; or (B) 75 GP",
       "subclass_level": 3,
       "subclasses": [
@@ -436,18 +437,7 @@
       "features_by_level": {
         "1": {
           "class_specific": {
-            "Bardic Die": "D6",
-            "Cantrips": 2,
-            "Prepared Spells": 4,
-            "Spell Slots per Spell Level 1": 2,
-            "Spell Slots per Spell Level 2": "—",
-            "Spell Slots per Spell Level 3": "—",
-            "Spell Slots per Spell Level 4": "—",
-            "Spell Slots per Spell Level 5": "—",
-            "Spell Slots per Spell Level 6": "—",
-            "Spell Slots per Spell Level 7": "—",
-            "Spell Slots per Spell Level 8": "—",
-            "Spell Slots per Spell Level 9": "—"
+            "Bardic Die": "D6"
           },
           "features": [
             {
@@ -463,18 +453,7 @@
         },
         "10": {
           "class_specific": {
-            "Bardic Die": "D10",
-            "Cantrips": 4,
-            "Prepared Spells": 15,
-            "Spell Slots per Spell Level 1": 4,
-            "Spell Slots per Spell Level 2": 3,
-            "Spell Slots per Spell Level 3": 3,
-            "Spell Slots per Spell Level 4": 3,
-            "Spell Slots per Spell Level 5": 2,
-            "Spell Slots per Spell Level 6": "—",
-            "Spell Slots per Spell Level 7": "—",
-            "Spell Slots per Spell Level 8": "—",
-            "Spell Slots per Spell Level 9": "—"
+            "Bardic Die": "D10"
           },
           "features": [
             {
@@ -486,36 +465,14 @@
         },
         "11": {
           "class_specific": {
-            "Bardic Die": "D10",
-            "Cantrips": 4,
-            "Prepared Spells": 16,
-            "Spell Slots per Spell Level 1": 4,
-            "Spell Slots per Spell Level 2": 3,
-            "Spell Slots per Spell Level 3": 3,
-            "Spell Slots per Spell Level 4": 3,
-            "Spell Slots per Spell Level 5": 2,
-            "Spell Slots per Spell Level 6": 1,
-            "Spell Slots per Spell Level 7": "—",
-            "Spell Slots per Spell Level 8": "—",
-            "Spell Slots per Spell Level 9": "—"
+            "Bardic Die": "D10"
           },
           "features": [],
           "proficiency_bonus": 4
         },
         "12": {
           "class_specific": {
-            "Bardic Die": "D10",
-            "Cantrips": 4,
-            "Prepared Spells": 16,
-            "Spell Slots per Spell Level 1": 4,
-            "Spell Slots per Spell Level 2": 3,
-            "Spell Slots per Spell Level 3": 3,
-            "Spell Slots per Spell Level 4": 3,
-            "Spell Slots per Spell Level 5": 2,
-            "Spell Slots per Spell Level 6": 1,
-            "Spell Slots per Spell Level 7": "—",
-            "Spell Slots per Spell Level 8": "—",
-            "Spell Slots per Spell Level 9": "—"
+            "Bardic Die": "D10"
           },
           "features": [
             {
@@ -527,36 +484,14 @@
         },
         "13": {
           "class_specific": {
-            "Bardic Die": "D10",
-            "Cantrips": 4,
-            "Prepared Spells": 17,
-            "Spell Slots per Spell Level 1": 4,
-            "Spell Slots per Spell Level 2": 3,
-            "Spell Slots per Spell Level 3": 3,
-            "Spell Slots per Spell Level 4": 3,
-            "Spell Slots per Spell Level 5": 2,
-            "Spell Slots per Spell Level 6": 1,
-            "Spell Slots per Spell Level 7": 1,
-            "Spell Slots per Spell Level 8": "—",
-            "Spell Slots per Spell Level 9": "—"
+            "Bardic Die": "D10"
           },
           "features": [],
           "proficiency_bonus": 5
         },
         "14": {
           "class_specific": {
-            "Bardic Die": "D10",
-            "Cantrips": 4,
-            "Prepared Spells": 17,
-            "Spell Slots per Spell Level 1": 4,
-            "Spell Slots per Spell Level 2": 3,
-            "Spell Slots per Spell Level 3": 3,
-            "Spell Slots per Spell Level 4": 3,
-            "Spell Slots per Spell Level 5": 2,
-            "Spell Slots per Spell Level 6": 1,
-            "Spell Slots per Spell Level 7": 1,
-            "Spell Slots per Spell Level 8": "—",
-            "Spell Slots per Spell Level 9": "—"
+            "Bardic Die": "D10"
           },
           "features": [
             {
@@ -568,36 +503,14 @@
         },
         "15": {
           "class_specific": {
-            "Bardic Die": "D12",
-            "Cantrips": 4,
-            "Prepared Spells": 18,
-            "Spell Slots per Spell Level 1": 4,
-            "Spell Slots per Spell Level 2": 3,
-            "Spell Slots per Spell Level 3": 3,
-            "Spell Slots per Spell Level 4": 3,
-            "Spell Slots per Spell Level 5": 2,
-            "Spell Slots per Spell Level 6": 1,
-            "Spell Slots per Spell Level 7": 1,
-            "Spell Slots per Spell Level 8": 1,
-            "Spell Slots per Spell Level 9": "—"
+            "Bardic Die": "D12"
           },
           "features": [],
           "proficiency_bonus": 5
         },
         "16": {
           "class_specific": {
-            "Bardic Die": "D12",
-            "Cantrips": 4,
-            "Prepared Spells": 18,
-            "Spell Slots per Spell Level 1": 4,
-            "Spell Slots per Spell Level 2": 3,
-            "Spell Slots per Spell Level 3": 3,
-            "Spell Slots per Spell Level 4": 3,
-            "Spell Slots per Spell Level 5": 2,
-            "Spell Slots per Spell Level 6": 1,
-            "Spell Slots per Spell Level 7": 1,
-            "Spell Slots per Spell Level 8": 1,
-            "Spell Slots per Spell Level 9": "—"
+            "Bardic Die": "D12"
           },
           "features": [
             {
@@ -609,36 +522,14 @@
         },
         "17": {
           "class_specific": {
-            "Bardic Die": "D12",
-            "Cantrips": 4,
-            "Prepared Spells": 19,
-            "Spell Slots per Spell Level 1": 4,
-            "Spell Slots per Spell Level 2": 3,
-            "Spell Slots per Spell Level 3": 3,
-            "Spell Slots per Spell Level 4": 3,
-            "Spell Slots per Spell Level 5": 2,
-            "Spell Slots per Spell Level 6": 1,
-            "Spell Slots per Spell Level 7": 1,
-            "Spell Slots per Spell Level 8": 1,
-            "Spell Slots per Spell Level 9": 1
+            "Bardic Die": "D12"
           },
           "features": [],
           "proficiency_bonus": 6
         },
         "18": {
           "class_specific": {
-            "Bardic Die": "D12",
-            "Cantrips": 4,
-            "Prepared Spells": 20,
-            "Spell Slots per Spell Level 1": 4,
-            "Spell Slots per Spell Level 2": 3,
-            "Spell Slots per Spell Level 3": 3,
-            "Spell Slots per Spell Level 4": 3,
-            "Spell Slots per Spell Level 5": 3,
-            "Spell Slots per Spell Level 6": 1,
-            "Spell Slots per Spell Level 7": 1,
-            "Spell Slots per Spell Level 8": 1,
-            "Spell Slots per Spell Level 9": 1
+            "Bardic Die": "D12"
           },
           "features": [
             {
@@ -650,18 +541,7 @@
         },
         "19": {
           "class_specific": {
-            "Bardic Die": "D12",
-            "Cantrips": 4,
-            "Prepared Spells": 21,
-            "Spell Slots per Spell Level 1": 4,
-            "Spell Slots per Spell Level 2": 3,
-            "Spell Slots per Spell Level 3": 3,
-            "Spell Slots per Spell Level 4": 3,
-            "Spell Slots per Spell Level 5": 3,
-            "Spell Slots per Spell Level 6": 2,
-            "Spell Slots per Spell Level 7": 1,
-            "Spell Slots per Spell Level 8": 1,
-            "Spell Slots per Spell Level 9": 1
+            "Bardic Die": "D12"
           },
           "features": [
             {
@@ -673,18 +553,7 @@
         },
         "2": {
           "class_specific": {
-            "Bardic Die": "D6",
-            "Cantrips": 2,
-            "Prepared Spells": 5,
-            "Spell Slots per Spell Level 1": 3,
-            "Spell Slots per Spell Level 2": "—",
-            "Spell Slots per Spell Level 3": "—",
-            "Spell Slots per Spell Level 4": "—",
-            "Spell Slots per Spell Level 5": "—",
-            "Spell Slots per Spell Level 6": "—",
-            "Spell Slots per Spell Level 7": "—",
-            "Spell Slots per Spell Level 8": "—",
-            "Spell Slots per Spell Level 9": "—"
+            "Bardic Die": "D6"
           },
           "features": [
             {
@@ -782,18 +651,7 @@
         },
         "20": {
           "class_specific": {
-            "Bardic Die": "D12",
-            "Cantrips": 4,
-            "Prepared Spells": 22,
-            "Spell Slots per Spell Level 1": 4,
-            "Spell Slots per Spell Level 2": 3,
-            "Spell Slots per Spell Level 3": 3,
-            "Spell Slots per Spell Level 4": 3,
-            "Spell Slots per Spell Level 5": 3,
-            "Spell Slots per Spell Level 6": 2,
-            "Spell Slots per Spell Level 7": 2,
-            "Spell Slots per Spell Level 8": 1,
-            "Spell Slots per Spell Level 9": 1
+            "Bardic Die": "D12"
           },
           "features": [
             {
@@ -805,18 +663,7 @@
         },
         "3": {
           "class_specific": {
-            "Bardic Die": "D6",
-            "Cantrips": 2,
-            "Prepared Spells": 6,
-            "Spell Slots per Spell Level 1": 4,
-            "Spell Slots per Spell Level 2": 2,
-            "Spell Slots per Spell Level 3": "—",
-            "Spell Slots per Spell Level 4": "—",
-            "Spell Slots per Spell Level 5": "—",
-            "Spell Slots per Spell Level 6": "—",
-            "Spell Slots per Spell Level 7": "—",
-            "Spell Slots per Spell Level 8": "—",
-            "Spell Slots per Spell Level 9": "—"
+            "Bardic Die": "D6"
           },
           "features": [
             {
@@ -828,18 +675,7 @@
         },
         "4": {
           "class_specific": {
-            "Bardic Die": "D6",
-            "Cantrips": 3,
-            "Prepared Spells": 7,
-            "Spell Slots per Spell Level 1": 4,
-            "Spell Slots per Spell Level 2": 3,
-            "Spell Slots per Spell Level 3": "—",
-            "Spell Slots per Spell Level 4": "—",
-            "Spell Slots per Spell Level 5": "—",
-            "Spell Slots per Spell Level 6": "—",
-            "Spell Slots per Spell Level 7": "—",
-            "Spell Slots per Spell Level 8": "—",
-            "Spell Slots per Spell Level 9": "—"
+            "Bardic Die": "D6"
           },
           "features": [
             {
@@ -851,18 +687,7 @@
         },
         "5": {
           "class_specific": {
-            "Bardic Die": "D8",
-            "Cantrips": 3,
-            "Prepared Spells": 9,
-            "Spell Slots per Spell Level 1": 4,
-            "Spell Slots per Spell Level 2": 3,
-            "Spell Slots per Spell Level 3": 2,
-            "Spell Slots per Spell Level 4": "—",
-            "Spell Slots per Spell Level 5": "—",
-            "Spell Slots per Spell Level 6": "—",
-            "Spell Slots per Spell Level 7": "—",
-            "Spell Slots per Spell Level 8": "—",
-            "Spell Slots per Spell Level 9": "—"
+            "Bardic Die": "D8"
           },
           "features": [
             {
@@ -874,18 +699,7 @@
         },
         "6": {
           "class_specific": {
-            "Bardic Die": "D8",
-            "Cantrips": 3,
-            "Prepared Spells": 10,
-            "Spell Slots per Spell Level 1": 4,
-            "Spell Slots per Spell Level 2": 3,
-            "Spell Slots per Spell Level 3": 3,
-            "Spell Slots per Spell Level 4": "—",
-            "Spell Slots per Spell Level 5": "—",
-            "Spell Slots per Spell Level 6": "—",
-            "Spell Slots per Spell Level 7": "—",
-            "Spell Slots per Spell Level 8": "—",
-            "Spell Slots per Spell Level 9": "—"
+            "Bardic Die": "D8"
           },
           "features": [
             {
@@ -897,18 +711,7 @@
         },
         "7": {
           "class_specific": {
-            "Bardic Die": "D8",
-            "Cantrips": 3,
-            "Prepared Spells": 11,
-            "Spell Slots per Spell Level 1": 4,
-            "Spell Slots per Spell Level 2": 3,
-            "Spell Slots per Spell Level 3": 3,
-            "Spell Slots per Spell Level 4": 1,
-            "Spell Slots per Spell Level 5": "—",
-            "Spell Slots per Spell Level 6": "—",
-            "Spell Slots per Spell Level 7": "—",
-            "Spell Slots per Spell Level 8": "—",
-            "Spell Slots per Spell Level 9": "—"
+            "Bardic Die": "D8"
           },
           "features": [
             {
@@ -920,18 +723,7 @@
         },
         "8": {
           "class_specific": {
-            "Bardic Die": "D8",
-            "Cantrips": 3,
-            "Prepared Spells": 12,
-            "Spell Slots per Spell Level 1": 4,
-            "Spell Slots per Spell Level 2": 3,
-            "Spell Slots per Spell Level 3": 3,
-            "Spell Slots per Spell Level 4": 2,
-            "Spell Slots per Spell Level 5": "—",
-            "Spell Slots per Spell Level 6": "—",
-            "Spell Slots per Spell Level 7": "—",
-            "Spell Slots per Spell Level 8": "—",
-            "Spell Slots per Spell Level 9": "—"
+            "Bardic Die": "D8"
           },
           "features": [
             {
@@ -943,18 +735,7 @@
         },
         "9": {
           "class_specific": {
-            "Bardic Die": "D8",
-            "Cantrips": 3,
-            "Prepared Spells": 14,
-            "Spell Slots per Spell Level 1": 4,
-            "Spell Slots per Spell Level 2": 3,
-            "Spell Slots per Spell Level 3": 3,
-            "Spell Slots per Spell Level 4": 3,
-            "Spell Slots per Spell Level 5": 1,
-            "Spell Slots per Spell Level 6": "—",
-            "Spell Slots per Spell Level 7": "—",
-            "Spell Slots per Spell Level 8": "—",
-            "Spell Slots per Spell Level 9": "—"
+            "Bardic Die": "D8"
           },
           "features": [
             {
@@ -1079,6 +860,203 @@
           "stealth",
           "survival"
         ]
+      },
+      "spellcasting": {
+        "cantrips_known_by_level": {
+          "1": 2,
+          "10": 4,
+          "11": 4,
+          "12": 4,
+          "13": 4,
+          "14": 4,
+          "15": 4,
+          "16": 4,
+          "17": 4,
+          "18": 4,
+          "19": 4,
+          "2": 2,
+          "20": 4,
+          "3": 2,
+          "4": 3,
+          "5": 3,
+          "6": 3,
+          "7": 3,
+          "8": 3,
+          "9": 3
+        },
+        "pact_slots_by_level": {},
+        "prepared_spells_by_level": {
+          "1": 4,
+          "10": 15,
+          "11": 16,
+          "12": 16,
+          "13": 17,
+          "14": 17,
+          "15": 18,
+          "16": 18,
+          "17": 19,
+          "18": 20,
+          "19": 21,
+          "2": 5,
+          "20": 22,
+          "3": 6,
+          "4": 7,
+          "5": 9,
+          "6": 10,
+          "7": 11,
+          "8": 12,
+          "9": 14
+        },
+        "spell_slots_by_level": {
+          "1": {
+            "1": 2
+          },
+          "10": {
+            "1": 4,
+            "2": 3,
+            "3": 3,
+            "4": 3,
+            "5": 2
+          },
+          "11": {
+            "1": 4,
+            "2": 3,
+            "3": 3,
+            "4": 3,
+            "5": 2,
+            "6": 1
+          },
+          "12": {
+            "1": 4,
+            "2": 3,
+            "3": 3,
+            "4": 3,
+            "5": 2,
+            "6": 1
+          },
+          "13": {
+            "1": 4,
+            "2": 3,
+            "3": 3,
+            "4": 3,
+            "5": 2,
+            "6": 1,
+            "7": 1
+          },
+          "14": {
+            "1": 4,
+            "2": 3,
+            "3": 3,
+            "4": 3,
+            "5": 2,
+            "6": 1,
+            "7": 1
+          },
+          "15": {
+            "1": 4,
+            "2": 3,
+            "3": 3,
+            "4": 3,
+            "5": 2,
+            "6": 1,
+            "7": 1,
+            "8": 1
+          },
+          "16": {
+            "1": 4,
+            "2": 3,
+            "3": 3,
+            "4": 3,
+            "5": 2,
+            "6": 1,
+            "7": 1,
+            "8": 1
+          },
+          "17": {
+            "1": 4,
+            "2": 3,
+            "3": 3,
+            "4": 3,
+            "5": 2,
+            "6": 1,
+            "7": 1,
+            "8": 1,
+            "9": 1
+          },
+          "18": {
+            "1": 4,
+            "2": 3,
+            "3": 3,
+            "4": 3,
+            "5": 3,
+            "6": 1,
+            "7": 1,
+            "8": 1,
+            "9": 1
+          },
+          "19": {
+            "1": 4,
+            "2": 3,
+            "3": 3,
+            "4": 3,
+            "5": 3,
+            "6": 2,
+            "7": 1,
+            "8": 1,
+            "9": 1
+          },
+          "2": {
+            "1": 3
+          },
+          "20": {
+            "1": 4,
+            "2": 3,
+            "3": 3,
+            "4": 3,
+            "5": 3,
+            "6": 2,
+            "7": 2,
+            "8": 1,
+            "9": 1
+          },
+          "3": {
+            "1": 4,
+            "2": 2
+          },
+          "4": {
+            "1": 4,
+            "2": 3
+          },
+          "5": {
+            "1": 4,
+            "2": 3,
+            "3": 2
+          },
+          "6": {
+            "1": 4,
+            "2": 3,
+            "3": 3
+          },
+          "7": {
+            "1": 4,
+            "2": 3,
+            "3": 3,
+            "4": 1
+          },
+          "8": {
+            "1": 4,
+            "2": 3,
+            "3": 3,
+            "4": 2
+          },
+          "9": {
+            "1": 4,
+            "2": 3,
+            "3": 3,
+            "4": 3,
+            "5": 1
+          }
+        }
       },
       "starting_equipment_text": "Choose A or B: (A) Leather Armor, 2 Daggers, Musical Instrument of your choice, Entertainer's Pack, and 19 GP; or (B) 90 GP",
       "subclass_level": 3,
@@ -1215,18 +1193,7 @@
       "features_by_level": {
         "1": {
           "class_specific": {
-            "Cantrips": 3,
-            "Channel Divinity": "—",
-            "Prepared Spells": 4,
-            "Spell Slots per Spell Level 1": 2,
-            "Spell Slots per Spell Level 2": "—",
-            "Spell Slots per Spell Level 3": "—",
-            "Spell Slots per Spell Level 4": "—",
-            "Spell Slots per Spell Level 5": "—",
-            "Spell Slots per Spell Level 6": "—",
-            "Spell Slots per Spell Level 7": "—",
-            "Spell Slots per Spell Level 8": "—",
-            "Spell Slots per Spell Level 9": "—"
+            "Channel Divinity": "—"
           },
           "features": [
             {
@@ -1262,18 +1229,7 @@
         },
         "10": {
           "class_specific": {
-            "Cantrips": 5,
-            "Channel Divinity": 3,
-            "Prepared Spells": 15,
-            "Spell Slots per Spell Level 1": 4,
-            "Spell Slots per Spell Level 2": 3,
-            "Spell Slots per Spell Level 3": 3,
-            "Spell Slots per Spell Level 4": 3,
-            "Spell Slots per Spell Level 5": 2,
-            "Spell Slots per Spell Level 6": "—",
-            "Spell Slots per Spell Level 7": "—",
-            "Spell Slots per Spell Level 8": "—",
-            "Spell Slots per Spell Level 9": "—"
+            "Channel Divinity": 3
           },
           "features": [
             {
@@ -1285,36 +1241,14 @@
         },
         "11": {
           "class_specific": {
-            "Cantrips": 5,
-            "Channel Divinity": 3,
-            "Prepared Spells": 16,
-            "Spell Slots per Spell Level 1": 4,
-            "Spell Slots per Spell Level 2": 3,
-            "Spell Slots per Spell Level 3": 3,
-            "Spell Slots per Spell Level 4": 3,
-            "Spell Slots per Spell Level 5": 2,
-            "Spell Slots per Spell Level 6": 1,
-            "Spell Slots per Spell Level 7": "—",
-            "Spell Slots per Spell Level 8": "—",
-            "Spell Slots per Spell Level 9": "—"
+            "Channel Divinity": 3
           },
           "features": [],
           "proficiency_bonus": 4
         },
         "12": {
           "class_specific": {
-            "Cantrips": 5,
-            "Channel Divinity": 3,
-            "Prepared Spells": 16,
-            "Spell Slots per Spell Level 1": 4,
-            "Spell Slots per Spell Level 2": 3,
-            "Spell Slots per Spell Level 3": 3,
-            "Spell Slots per Spell Level 4": 3,
-            "Spell Slots per Spell Level 5": 2,
-            "Spell Slots per Spell Level 6": 1,
-            "Spell Slots per Spell Level 7": "—",
-            "Spell Slots per Spell Level 8": "—",
-            "Spell Slots per Spell Level 9": "—"
+            "Channel Divinity": 3
           },
           "features": [
             {
@@ -1326,36 +1260,14 @@
         },
         "13": {
           "class_specific": {
-            "Cantrips": 5,
-            "Channel Divinity": 3,
-            "Prepared Spells": 17,
-            "Spell Slots per Spell Level 1": 4,
-            "Spell Slots per Spell Level 2": 3,
-            "Spell Slots per Spell Level 3": 3,
-            "Spell Slots per Spell Level 4": 3,
-            "Spell Slots per Spell Level 5": 2,
-            "Spell Slots per Spell Level 6": 1,
-            "Spell Slots per Spell Level 7": 1,
-            "Spell Slots per Spell Level 8": "—",
-            "Spell Slots per Spell Level 9": "—"
+            "Channel Divinity": 3
           },
           "features": [],
           "proficiency_bonus": 5
         },
         "14": {
           "class_specific": {
-            "Cantrips": 5,
-            "Channel Divinity": 3,
-            "Prepared Spells": 17,
-            "Spell Slots per Spell Level 1": 4,
-            "Spell Slots per Spell Level 2": 3,
-            "Spell Slots per Spell Level 3": 3,
-            "Spell Slots per Spell Level 4": 3,
-            "Spell Slots per Spell Level 5": 2,
-            "Spell Slots per Spell Level 6": 1,
-            "Spell Slots per Spell Level 7": 1,
-            "Spell Slots per Spell Level 8": "—",
-            "Spell Slots per Spell Level 9": "—"
+            "Channel Divinity": 3
           },
           "features": [
             {
@@ -1367,36 +1279,14 @@
         },
         "15": {
           "class_specific": {
-            "Cantrips": 5,
-            "Channel Divinity": 3,
-            "Prepared Spells": 18,
-            "Spell Slots per Spell Level 1": 4,
-            "Spell Slots per Spell Level 2": 3,
-            "Spell Slots per Spell Level 3": 3,
-            "Spell Slots per Spell Level 4": 3,
-            "Spell Slots per Spell Level 5": 2,
-            "Spell Slots per Spell Level 6": 1,
-            "Spell Slots per Spell Level 7": 1,
-            "Spell Slots per Spell Level 8": 1,
-            "Spell Slots per Spell Level 9": "—"
+            "Channel Divinity": 3
           },
           "features": [],
           "proficiency_bonus": 5
         },
         "16": {
           "class_specific": {
-            "Cantrips": 5,
-            "Channel Divinity": 3,
-            "Prepared Spells": 18,
-            "Spell Slots per Spell Level 1": 4,
-            "Spell Slots per Spell Level 2": 3,
-            "Spell Slots per Spell Level 3": 3,
-            "Spell Slots per Spell Level 4": 3,
-            "Spell Slots per Spell Level 5": 2,
-            "Spell Slots per Spell Level 6": 1,
-            "Spell Slots per Spell Level 7": 1,
-            "Spell Slots per Spell Level 8": 1,
-            "Spell Slots per Spell Level 9": "—"
+            "Channel Divinity": 3
           },
           "features": [
             {
@@ -1408,18 +1298,7 @@
         },
         "17": {
           "class_specific": {
-            "Cantrips": 5,
-            "Channel Divinity": 3,
-            "Prepared Spells": 19,
-            "Spell Slots per Spell Level 1": 4,
-            "Spell Slots per Spell Level 2": 3,
-            "Spell Slots per Spell Level 3": 3,
-            "Spell Slots per Spell Level 4": 3,
-            "Spell Slots per Spell Level 5": 2,
-            "Spell Slots per Spell Level 6": 1,
-            "Spell Slots per Spell Level 7": 1,
-            "Spell Slots per Spell Level 8": 1,
-            "Spell Slots per Spell Level 9": 1
+            "Channel Divinity": 3
           },
           "features": [
             {
@@ -1431,36 +1310,14 @@
         },
         "18": {
           "class_specific": {
-            "Cantrips": 5,
-            "Channel Divinity": 4,
-            "Prepared Spells": 20,
-            "Spell Slots per Spell Level 1": 4,
-            "Spell Slots per Spell Level 2": 3,
-            "Spell Slots per Spell Level 3": 3,
-            "Spell Slots per Spell Level 4": 3,
-            "Spell Slots per Spell Level 5": 3,
-            "Spell Slots per Spell Level 6": 1,
-            "Spell Slots per Spell Level 7": 1,
-            "Spell Slots per Spell Level 8": 1,
-            "Spell Slots per Spell Level 9": 1
+            "Channel Divinity": 4
           },
           "features": [],
           "proficiency_bonus": 6
         },
         "19": {
           "class_specific": {
-            "Cantrips": 5,
-            "Channel Divinity": 4,
-            "Prepared Spells": 21,
-            "Spell Slots per Spell Level 1": 4,
-            "Spell Slots per Spell Level 2": 3,
-            "Spell Slots per Spell Level 3": 3,
-            "Spell Slots per Spell Level 4": 3,
-            "Spell Slots per Spell Level 5": 3,
-            "Spell Slots per Spell Level 6": 2,
-            "Spell Slots per Spell Level 7": 1,
-            "Spell Slots per Spell Level 8": 1,
-            "Spell Slots per Spell Level 9": 1
+            "Channel Divinity": 4
           },
           "features": [
             {
@@ -1472,18 +1329,7 @@
         },
         "2": {
           "class_specific": {
-            "Cantrips": 3,
-            "Channel Divinity": 2,
-            "Prepared Spells": 5,
-            "Spell Slots per Spell Level 1": 3,
-            "Spell Slots per Spell Level 2": "—",
-            "Spell Slots per Spell Level 3": "—",
-            "Spell Slots per Spell Level 4": "—",
-            "Spell Slots per Spell Level 5": "—",
-            "Spell Slots per Spell Level 6": "—",
-            "Spell Slots per Spell Level 7": "—",
-            "Spell Slots per Spell Level 8": "—",
-            "Spell Slots per Spell Level 9": "—"
+            "Channel Divinity": 2
           },
           "features": [
             {
@@ -1495,18 +1341,7 @@
         },
         "20": {
           "class_specific": {
-            "Cantrips": 5,
-            "Channel Divinity": 4,
-            "Prepared Spells": 22,
-            "Spell Slots per Spell Level 1": 4,
-            "Spell Slots per Spell Level 2": 3,
-            "Spell Slots per Spell Level 3": 3,
-            "Spell Slots per Spell Level 4": 3,
-            "Spell Slots per Spell Level 5": 3,
-            "Spell Slots per Spell Level 6": 2,
-            "Spell Slots per Spell Level 7": 2,
-            "Spell Slots per Spell Level 8": 1,
-            "Spell Slots per Spell Level 9": 1
+            "Channel Divinity": 4
           },
           "features": [
             {
@@ -1518,18 +1353,7 @@
         },
         "3": {
           "class_specific": {
-            "Cantrips": 3,
-            "Channel Divinity": 2,
-            "Prepared Spells": 6,
-            "Spell Slots per Spell Level 1": 4,
-            "Spell Slots per Spell Level 2": 2,
-            "Spell Slots per Spell Level 3": "—",
-            "Spell Slots per Spell Level 4": "—",
-            "Spell Slots per Spell Level 5": "—",
-            "Spell Slots per Spell Level 6": "—",
-            "Spell Slots per Spell Level 7": "—",
-            "Spell Slots per Spell Level 8": "—",
-            "Spell Slots per Spell Level 9": "—"
+            "Channel Divinity": 2
           },
           "features": [
             {
@@ -1541,18 +1365,7 @@
         },
         "4": {
           "class_specific": {
-            "Cantrips": 4,
-            "Channel Divinity": 2,
-            "Prepared Spells": 7,
-            "Spell Slots per Spell Level 1": 4,
-            "Spell Slots per Spell Level 2": 3,
-            "Spell Slots per Spell Level 3": "—",
-            "Spell Slots per Spell Level 4": "—",
-            "Spell Slots per Spell Level 5": "—",
-            "Spell Slots per Spell Level 6": "—",
-            "Spell Slots per Spell Level 7": "—",
-            "Spell Slots per Spell Level 8": "—",
-            "Spell Slots per Spell Level 9": "—"
+            "Channel Divinity": 2
           },
           "features": [
             {
@@ -1564,18 +1377,7 @@
         },
         "5": {
           "class_specific": {
-            "Cantrips": 4,
-            "Channel Divinity": 2,
-            "Prepared Spells": 9,
-            "Spell Slots per Spell Level 1": 4,
-            "Spell Slots per Spell Level 2": 3,
-            "Spell Slots per Spell Level 3": 2,
-            "Spell Slots per Spell Level 4": "—",
-            "Spell Slots per Spell Level 5": "—",
-            "Spell Slots per Spell Level 6": "—",
-            "Spell Slots per Spell Level 7": "—",
-            "Spell Slots per Spell Level 8": "—",
-            "Spell Slots per Spell Level 9": "—"
+            "Channel Divinity": 2
           },
           "features": [
             {
@@ -1587,18 +1389,7 @@
         },
         "6": {
           "class_specific": {
-            "Cantrips": 4,
-            "Channel Divinity": 3,
-            "Prepared Spells": 10,
-            "Spell Slots per Spell Level 1": 4,
-            "Spell Slots per Spell Level 2": 3,
-            "Spell Slots per Spell Level 3": 3,
-            "Spell Slots per Spell Level 4": "—",
-            "Spell Slots per Spell Level 5": "—",
-            "Spell Slots per Spell Level 6": "—",
-            "Spell Slots per Spell Level 7": "—",
-            "Spell Slots per Spell Level 8": "—",
-            "Spell Slots per Spell Level 9": "—"
+            "Channel Divinity": 3
           },
           "features": [
             {
@@ -1610,18 +1401,7 @@
         },
         "7": {
           "class_specific": {
-            "Cantrips": 4,
-            "Channel Divinity": 3,
-            "Prepared Spells": 11,
-            "Spell Slots per Spell Level 1": 4,
-            "Spell Slots per Spell Level 2": 3,
-            "Spell Slots per Spell Level 3": 3,
-            "Spell Slots per Spell Level 4": 1,
-            "Spell Slots per Spell Level 5": "—",
-            "Spell Slots per Spell Level 6": "—",
-            "Spell Slots per Spell Level 7": "—",
-            "Spell Slots per Spell Level 8": "—",
-            "Spell Slots per Spell Level 9": "—"
+            "Channel Divinity": 3
           },
           "features": [
             {
@@ -1653,18 +1433,7 @@
         },
         "8": {
           "class_specific": {
-            "Cantrips": 4,
-            "Channel Divinity": 3,
-            "Prepared Spells": 12,
-            "Spell Slots per Spell Level 1": 4,
-            "Spell Slots per Spell Level 2": 3,
-            "Spell Slots per Spell Level 3": 3,
-            "Spell Slots per Spell Level 4": 2,
-            "Spell Slots per Spell Level 5": "—",
-            "Spell Slots per Spell Level 6": "—",
-            "Spell Slots per Spell Level 7": "—",
-            "Spell Slots per Spell Level 8": "—",
-            "Spell Slots per Spell Level 9": "—"
+            "Channel Divinity": 3
           },
           "features": [
             {
@@ -1676,18 +1445,7 @@
         },
         "9": {
           "class_specific": {
-            "Cantrips": 4,
-            "Channel Divinity": 3,
-            "Prepared Spells": 14,
-            "Spell Slots per Spell Level 1": 4,
-            "Spell Slots per Spell Level 2": 3,
-            "Spell Slots per Spell Level 3": 3,
-            "Spell Slots per Spell Level 4": 3,
-            "Spell Slots per Spell Level 5": 1,
-            "Spell Slots per Spell Level 6": "—",
-            "Spell Slots per Spell Level 7": "—",
-            "Spell Slots per Spell Level 8": "—",
-            "Spell Slots per Spell Level 9": "—"
+            "Channel Divinity": 3
           },
           "features": [],
           "proficiency_bonus": 4
@@ -1712,6 +1470,203 @@
           "persuasion",
           "religion"
         ]
+      },
+      "spellcasting": {
+        "cantrips_known_by_level": {
+          "1": 3,
+          "10": 5,
+          "11": 5,
+          "12": 5,
+          "13": 5,
+          "14": 5,
+          "15": 5,
+          "16": 5,
+          "17": 5,
+          "18": 5,
+          "19": 5,
+          "2": 3,
+          "20": 5,
+          "3": 3,
+          "4": 4,
+          "5": 4,
+          "6": 4,
+          "7": 4,
+          "8": 4,
+          "9": 4
+        },
+        "pact_slots_by_level": {},
+        "prepared_spells_by_level": {
+          "1": 4,
+          "10": 15,
+          "11": 16,
+          "12": 16,
+          "13": 17,
+          "14": 17,
+          "15": 18,
+          "16": 18,
+          "17": 19,
+          "18": 20,
+          "19": 21,
+          "2": 5,
+          "20": 22,
+          "3": 6,
+          "4": 7,
+          "5": 9,
+          "6": 10,
+          "7": 11,
+          "8": 12,
+          "9": 14
+        },
+        "spell_slots_by_level": {
+          "1": {
+            "1": 2
+          },
+          "10": {
+            "1": 4,
+            "2": 3,
+            "3": 3,
+            "4": 3,
+            "5": 2
+          },
+          "11": {
+            "1": 4,
+            "2": 3,
+            "3": 3,
+            "4": 3,
+            "5": 2,
+            "6": 1
+          },
+          "12": {
+            "1": 4,
+            "2": 3,
+            "3": 3,
+            "4": 3,
+            "5": 2,
+            "6": 1
+          },
+          "13": {
+            "1": 4,
+            "2": 3,
+            "3": 3,
+            "4": 3,
+            "5": 2,
+            "6": 1,
+            "7": 1
+          },
+          "14": {
+            "1": 4,
+            "2": 3,
+            "3": 3,
+            "4": 3,
+            "5": 2,
+            "6": 1,
+            "7": 1
+          },
+          "15": {
+            "1": 4,
+            "2": 3,
+            "3": 3,
+            "4": 3,
+            "5": 2,
+            "6": 1,
+            "7": 1,
+            "8": 1
+          },
+          "16": {
+            "1": 4,
+            "2": 3,
+            "3": 3,
+            "4": 3,
+            "5": 2,
+            "6": 1,
+            "7": 1,
+            "8": 1
+          },
+          "17": {
+            "1": 4,
+            "2": 3,
+            "3": 3,
+            "4": 3,
+            "5": 2,
+            "6": 1,
+            "7": 1,
+            "8": 1,
+            "9": 1
+          },
+          "18": {
+            "1": 4,
+            "2": 3,
+            "3": 3,
+            "4": 3,
+            "5": 3,
+            "6": 1,
+            "7": 1,
+            "8": 1,
+            "9": 1
+          },
+          "19": {
+            "1": 4,
+            "2": 3,
+            "3": 3,
+            "4": 3,
+            "5": 3,
+            "6": 2,
+            "7": 1,
+            "8": 1,
+            "9": 1
+          },
+          "2": {
+            "1": 3
+          },
+          "20": {
+            "1": 4,
+            "2": 3,
+            "3": 3,
+            "4": 3,
+            "5": 3,
+            "6": 2,
+            "7": 2,
+            "8": 1,
+            "9": 1
+          },
+          "3": {
+            "1": 4,
+            "2": 2
+          },
+          "4": {
+            "1": 4,
+            "2": 3
+          },
+          "5": {
+            "1": 4,
+            "2": 3,
+            "3": 2
+          },
+          "6": {
+            "1": 4,
+            "2": 3,
+            "3": 3
+          },
+          "7": {
+            "1": 4,
+            "2": 3,
+            "3": 3,
+            "4": 1
+          },
+          "8": {
+            "1": 4,
+            "2": 3,
+            "3": 3,
+            "4": 2
+          },
+          "9": {
+            "1": 4,
+            "2": 3,
+            "3": 3,
+            "4": 3,
+            "5": 1
+          }
+        }
       },
       "starting_equipment_text": "Choose A or B: (A) Chain Shirt, Shield, Mace, Holy Symbol, Priest's Pack, and 7 GP; or (B) 110 GP",
       "subclass_level": 3,
@@ -1770,17 +1725,6 @@
       "features_by_level": {
         "1": {
           "class_specific": {
-            "Cantrips": 2,
-            "Prepared Spells": 4,
-            "Spell Slots per Spell Level 1": 2,
-            "Spell Slots per Spell Level 2": "—",
-            "Spell Slots per Spell Level 3": "—",
-            "Spell Slots per Spell Level 4": "—",
-            "Spell Slots per Spell Level 5": "—",
-            "Spell Slots per Spell Level 6": "—",
-            "Spell Slots per Spell Level 7": "—",
-            "Spell Slots per Spell Level 8": "—",
-            "Spell Slots per Spell Level 9": "—",
             "Wild Shape": "—"
           },
           "features": [
@@ -1821,17 +1765,6 @@
         },
         "10": {
           "class_specific": {
-            "Cantrips": 4,
-            "Prepared Spells": 15,
-            "Spell Slots per Spell Level 1": 4,
-            "Spell Slots per Spell Level 2": 3,
-            "Spell Slots per Spell Level 3": 3,
-            "Spell Slots per Spell Level 4": 3,
-            "Spell Slots per Spell Level 5": 2,
-            "Spell Slots per Spell Level 6": "—",
-            "Spell Slots per Spell Level 7": "—",
-            "Spell Slots per Spell Level 8": "—",
-            "Spell Slots per Spell Level 9": "—",
             "Wild Shape": 3
           },
           "features": [
@@ -1844,17 +1777,6 @@
         },
         "11": {
           "class_specific": {
-            "Cantrips": 4,
-            "Prepared Spells": 16,
-            "Spell Slots per Spell Level 1": 4,
-            "Spell Slots per Spell Level 2": 3,
-            "Spell Slots per Spell Level 3": 3,
-            "Spell Slots per Spell Level 4": 3,
-            "Spell Slots per Spell Level 5": 2,
-            "Spell Slots per Spell Level 6": 1,
-            "Spell Slots per Spell Level 7": "—",
-            "Spell Slots per Spell Level 8": "—",
-            "Spell Slots per Spell Level 9": "—",
             "Wild Shape": 3
           },
           "features": [],
@@ -1862,17 +1784,6 @@
         },
         "12": {
           "class_specific": {
-            "Cantrips": 4,
-            "Prepared Spells": 16,
-            "Spell Slots per Spell Level 1": 4,
-            "Spell Slots per Spell Level 2": 3,
-            "Spell Slots per Spell Level 3": 3,
-            "Spell Slots per Spell Level 4": 3,
-            "Spell Slots per Spell Level 5": 2,
-            "Spell Slots per Spell Level 6": 1,
-            "Spell Slots per Spell Level 7": "—",
-            "Spell Slots per Spell Level 8": "—",
-            "Spell Slots per Spell Level 9": "—",
             "Wild Shape": 3
           },
           "features": [
@@ -1885,17 +1796,6 @@
         },
         "13": {
           "class_specific": {
-            "Cantrips": 4,
-            "Prepared Spells": 17,
-            "Spell Slots per Spell Level 1": 4,
-            "Spell Slots per Spell Level 2": 3,
-            "Spell Slots per Spell Level 3": 3,
-            "Spell Slots per Spell Level 4": 3,
-            "Spell Slots per Spell Level 5": 2,
-            "Spell Slots per Spell Level 6": 1,
-            "Spell Slots per Spell Level 7": 1,
-            "Spell Slots per Spell Level 8": "—",
-            "Spell Slots per Spell Level 9": "—",
             "Wild Shape": 3
           },
           "features": [],
@@ -1903,17 +1803,6 @@
         },
         "14": {
           "class_specific": {
-            "Cantrips": 4,
-            "Prepared Spells": 17,
-            "Spell Slots per Spell Level 1": 4,
-            "Spell Slots per Spell Level 2": 3,
-            "Spell Slots per Spell Level 3": 3,
-            "Spell Slots per Spell Level 4": 3,
-            "Spell Slots per Spell Level 5": 2,
-            "Spell Slots per Spell Level 6": 1,
-            "Spell Slots per Spell Level 7": 1,
-            "Spell Slots per Spell Level 8": "—",
-            "Spell Slots per Spell Level 9": "—",
             "Wild Shape": 3
           },
           "features": [
@@ -1926,17 +1815,6 @@
         },
         "15": {
           "class_specific": {
-            "Cantrips": 4,
-            "Prepared Spells": 18,
-            "Spell Slots per Spell Level 1": 4,
-            "Spell Slots per Spell Level 2": 3,
-            "Spell Slots per Spell Level 3": 3,
-            "Spell Slots per Spell Level 4": 3,
-            "Spell Slots per Spell Level 5": 2,
-            "Spell Slots per Spell Level 6": 1,
-            "Spell Slots per Spell Level 7": 1,
-            "Spell Slots per Spell Level 8": 1,
-            "Spell Slots per Spell Level 9": "—",
             "Wild Shape": 3
           },
           "features": [
@@ -1949,17 +1827,6 @@
         },
         "16": {
           "class_specific": {
-            "Cantrips": 4,
-            "Prepared Spells": 18,
-            "Spell Slots per Spell Level 1": 4,
-            "Spell Slots per Spell Level 2": 3,
-            "Spell Slots per Spell Level 3": 3,
-            "Spell Slots per Spell Level 4": 3,
-            "Spell Slots per Spell Level 5": 2,
-            "Spell Slots per Spell Level 6": 1,
-            "Spell Slots per Spell Level 7": 1,
-            "Spell Slots per Spell Level 8": 1,
-            "Spell Slots per Spell Level 9": "—",
             "Wild Shape": 3
           },
           "features": [
@@ -1972,17 +1839,6 @@
         },
         "17": {
           "class_specific": {
-            "Cantrips": 4,
-            "Prepared Spells": 19,
-            "Spell Slots per Spell Level 1": 4,
-            "Spell Slots per Spell Level 2": 3,
-            "Spell Slots per Spell Level 3": 3,
-            "Spell Slots per Spell Level 4": 3,
-            "Spell Slots per Spell Level 5": 2,
-            "Spell Slots per Spell Level 6": 1,
-            "Spell Slots per Spell Level 7": 1,
-            "Spell Slots per Spell Level 8": 1,
-            "Spell Slots per Spell Level 9": 1,
             "Wild Shape": 4
           },
           "features": [],
@@ -1990,17 +1846,6 @@
         },
         "18": {
           "class_specific": {
-            "Cantrips": 4,
-            "Prepared Spells": 20,
-            "Spell Slots per Spell Level 1": 4,
-            "Spell Slots per Spell Level 2": 3,
-            "Spell Slots per Spell Level 3": 3,
-            "Spell Slots per Spell Level 4": 3,
-            "Spell Slots per Spell Level 5": 3,
-            "Spell Slots per Spell Level 6": 1,
-            "Spell Slots per Spell Level 7": 1,
-            "Spell Slots per Spell Level 8": 1,
-            "Spell Slots per Spell Level 9": 1,
             "Wild Shape": 4
           },
           "features": [
@@ -2013,17 +1858,6 @@
         },
         "19": {
           "class_specific": {
-            "Cantrips": 4,
-            "Prepared Spells": 21,
-            "Spell Slots per Spell Level 1": 4,
-            "Spell Slots per Spell Level 2": 3,
-            "Spell Slots per Spell Level 3": 3,
-            "Spell Slots per Spell Level 4": 3,
-            "Spell Slots per Spell Level 5": 3,
-            "Spell Slots per Spell Level 6": 2,
-            "Spell Slots per Spell Level 7": 1,
-            "Spell Slots per Spell Level 8": 1,
-            "Spell Slots per Spell Level 9": 1,
             "Wild Shape": 4
           },
           "features": [
@@ -2036,17 +1870,6 @@
         },
         "2": {
           "class_specific": {
-            "Cantrips": 2,
-            "Prepared Spells": 5,
-            "Spell Slots per Spell Level 1": 3,
-            "Spell Slots per Spell Level 2": "—",
-            "Spell Slots per Spell Level 3": "—",
-            "Spell Slots per Spell Level 4": "—",
-            "Spell Slots per Spell Level 5": "—",
-            "Spell Slots per Spell Level 6": "—",
-            "Spell Slots per Spell Level 7": "—",
-            "Spell Slots per Spell Level 8": "—",
-            "Spell Slots per Spell Level 9": "—",
             "Wild Shape": 2
           },
           "features": [
@@ -2063,17 +1886,6 @@
         },
         "20": {
           "class_specific": {
-            "Cantrips": 4,
-            "Prepared Spells": 22,
-            "Spell Slots per Spell Level 1": 4,
-            "Spell Slots per Spell Level 2": 3,
-            "Spell Slots per Spell Level 3": 3,
-            "Spell Slots per Spell Level 4": 3,
-            "Spell Slots per Spell Level 5": 3,
-            "Spell Slots per Spell Level 6": 2,
-            "Spell Slots per Spell Level 7": 2,
-            "Spell Slots per Spell Level 8": 1,
-            "Spell Slots per Spell Level 9": 1,
             "Wild Shape": 4
           },
           "features": [
@@ -2086,17 +1898,6 @@
         },
         "3": {
           "class_specific": {
-            "Cantrips": 2,
-            "Prepared Spells": 6,
-            "Spell Slots per Spell Level 1": 4,
-            "Spell Slots per Spell Level 2": 2,
-            "Spell Slots per Spell Level 3": "—",
-            "Spell Slots per Spell Level 4": "—",
-            "Spell Slots per Spell Level 5": "—",
-            "Spell Slots per Spell Level 6": "—",
-            "Spell Slots per Spell Level 7": "—",
-            "Spell Slots per Spell Level 8": "—",
-            "Spell Slots per Spell Level 9": "—",
             "Wild Shape": 2
           },
           "features": [
@@ -2109,17 +1910,6 @@
         },
         "4": {
           "class_specific": {
-            "Cantrips": 3,
-            "Prepared Spells": 7,
-            "Spell Slots per Spell Level 1": 4,
-            "Spell Slots per Spell Level 2": 3,
-            "Spell Slots per Spell Level 3": "—",
-            "Spell Slots per Spell Level 4": "—",
-            "Spell Slots per Spell Level 5": "—",
-            "Spell Slots per Spell Level 6": "—",
-            "Spell Slots per Spell Level 7": "—",
-            "Spell Slots per Spell Level 8": "—",
-            "Spell Slots per Spell Level 9": "—",
             "Wild Shape": 2
           },
           "features": [
@@ -2132,17 +1922,6 @@
         },
         "5": {
           "class_specific": {
-            "Cantrips": 3,
-            "Prepared Spells": 9,
-            "Spell Slots per Spell Level 1": 4,
-            "Spell Slots per Spell Level 2": 3,
-            "Spell Slots per Spell Level 3": 2,
-            "Spell Slots per Spell Level 4": "—",
-            "Spell Slots per Spell Level 5": "—",
-            "Spell Slots per Spell Level 6": "—",
-            "Spell Slots per Spell Level 7": "—",
-            "Spell Slots per Spell Level 8": "—",
-            "Spell Slots per Spell Level 9": "—",
             "Wild Shape": 2
           },
           "features": [
@@ -2155,17 +1934,6 @@
         },
         "6": {
           "class_specific": {
-            "Cantrips": 3,
-            "Prepared Spells": 10,
-            "Spell Slots per Spell Level 1": 4,
-            "Spell Slots per Spell Level 2": 3,
-            "Spell Slots per Spell Level 3": 3,
-            "Spell Slots per Spell Level 4": "—",
-            "Spell Slots per Spell Level 5": "—",
-            "Spell Slots per Spell Level 6": "—",
-            "Spell Slots per Spell Level 7": "—",
-            "Spell Slots per Spell Level 8": "—",
-            "Spell Slots per Spell Level 9": "—",
             "Wild Shape": 3
           },
           "features": [
@@ -2178,17 +1946,6 @@
         },
         "7": {
           "class_specific": {
-            "Cantrips": 3,
-            "Prepared Spells": 11,
-            "Spell Slots per Spell Level 1": 4,
-            "Spell Slots per Spell Level 2": 3,
-            "Spell Slots per Spell Level 3": 3,
-            "Spell Slots per Spell Level 4": 1,
-            "Spell Slots per Spell Level 5": "—",
-            "Spell Slots per Spell Level 6": "—",
-            "Spell Slots per Spell Level 7": "—",
-            "Spell Slots per Spell Level 8": "—",
-            "Spell Slots per Spell Level 9": "—",
             "Wild Shape": 3
           },
           "features": [
@@ -2221,17 +1978,6 @@
         },
         "8": {
           "class_specific": {
-            "Cantrips": 3,
-            "Prepared Spells": 12,
-            "Spell Slots per Spell Level 1": 4,
-            "Spell Slots per Spell Level 2": 3,
-            "Spell Slots per Spell Level 3": 3,
-            "Spell Slots per Spell Level 4": 2,
-            "Spell Slots per Spell Level 5": "—",
-            "Spell Slots per Spell Level 6": "—",
-            "Spell Slots per Spell Level 7": "—",
-            "Spell Slots per Spell Level 8": "—",
-            "Spell Slots per Spell Level 9": "—",
             "Wild Shape": 3
           },
           "features": [
@@ -2244,17 +1990,6 @@
         },
         "9": {
           "class_specific": {
-            "Cantrips": 3,
-            "Prepared Spells": 14,
-            "Spell Slots per Spell Level 1": 4,
-            "Spell Slots per Spell Level 2": 3,
-            "Spell Slots per Spell Level 3": 3,
-            "Spell Slots per Spell Level 4": 3,
-            "Spell Slots per Spell Level 5": 1,
-            "Spell Slots per Spell Level 6": "—",
-            "Spell Slots per Spell Level 7": "—",
-            "Spell Slots per Spell Level 8": "—",
-            "Spell Slots per Spell Level 9": "—",
             "Wild Shape": 3
           },
           "features": [],
@@ -2283,6 +2018,203 @@
           "religion",
           "survival"
         ]
+      },
+      "spellcasting": {
+        "cantrips_known_by_level": {
+          "1": 2,
+          "10": 4,
+          "11": 4,
+          "12": 4,
+          "13": 4,
+          "14": 4,
+          "15": 4,
+          "16": 4,
+          "17": 4,
+          "18": 4,
+          "19": 4,
+          "2": 2,
+          "20": 4,
+          "3": 2,
+          "4": 3,
+          "5": 3,
+          "6": 3,
+          "7": 3,
+          "8": 3,
+          "9": 3
+        },
+        "pact_slots_by_level": {},
+        "prepared_spells_by_level": {
+          "1": 4,
+          "10": 15,
+          "11": 16,
+          "12": 16,
+          "13": 17,
+          "14": 17,
+          "15": 18,
+          "16": 18,
+          "17": 19,
+          "18": 20,
+          "19": 21,
+          "2": 5,
+          "20": 22,
+          "3": 6,
+          "4": 7,
+          "5": 9,
+          "6": 10,
+          "7": 11,
+          "8": 12,
+          "9": 14
+        },
+        "spell_slots_by_level": {
+          "1": {
+            "1": 2
+          },
+          "10": {
+            "1": 4,
+            "2": 3,
+            "3": 3,
+            "4": 3,
+            "5": 2
+          },
+          "11": {
+            "1": 4,
+            "2": 3,
+            "3": 3,
+            "4": 3,
+            "5": 2,
+            "6": 1
+          },
+          "12": {
+            "1": 4,
+            "2": 3,
+            "3": 3,
+            "4": 3,
+            "5": 2,
+            "6": 1
+          },
+          "13": {
+            "1": 4,
+            "2": 3,
+            "3": 3,
+            "4": 3,
+            "5": 2,
+            "6": 1,
+            "7": 1
+          },
+          "14": {
+            "1": 4,
+            "2": 3,
+            "3": 3,
+            "4": 3,
+            "5": 2,
+            "6": 1,
+            "7": 1
+          },
+          "15": {
+            "1": 4,
+            "2": 3,
+            "3": 3,
+            "4": 3,
+            "5": 2,
+            "6": 1,
+            "7": 1,
+            "8": 1
+          },
+          "16": {
+            "1": 4,
+            "2": 3,
+            "3": 3,
+            "4": 3,
+            "5": 2,
+            "6": 1,
+            "7": 1,
+            "8": 1
+          },
+          "17": {
+            "1": 4,
+            "2": 3,
+            "3": 3,
+            "4": 3,
+            "5": 2,
+            "6": 1,
+            "7": 1,
+            "8": 1,
+            "9": 1
+          },
+          "18": {
+            "1": 4,
+            "2": 3,
+            "3": 3,
+            "4": 3,
+            "5": 3,
+            "6": 1,
+            "7": 1,
+            "8": 1,
+            "9": 1
+          },
+          "19": {
+            "1": 4,
+            "2": 3,
+            "3": 3,
+            "4": 3,
+            "5": 3,
+            "6": 2,
+            "7": 1,
+            "8": 1,
+            "9": 1
+          },
+          "2": {
+            "1": 3
+          },
+          "20": {
+            "1": 4,
+            "2": 3,
+            "3": 3,
+            "4": 3,
+            "5": 3,
+            "6": 2,
+            "7": 2,
+            "8": 1,
+            "9": 1
+          },
+          "3": {
+            "1": 4,
+            "2": 2
+          },
+          "4": {
+            "1": 4,
+            "2": 3
+          },
+          "5": {
+            "1": 4,
+            "2": 3,
+            "3": 2
+          },
+          "6": {
+            "1": 4,
+            "2": 3,
+            "3": 3
+          },
+          "7": {
+            "1": 4,
+            "2": 3,
+            "3": 3,
+            "4": 1
+          },
+          "8": {
+            "1": 4,
+            "2": 3,
+            "3": 3,
+            "4": 2
+          },
+          "9": {
+            "1": 4,
+            "2": 3,
+            "3": 3,
+            "4": 3,
+            "5": 1
+          }
+        }
       },
       "starting_equipment_text": "Choose A or B: (A) Leather Armor, Shield, Sickle, Druidic Focus (Quarterstaff), Explorer's Pack, Herbalism Kit, and 9 GP; or (B) 50 GP",
       "subclass_level": 3,
@@ -2678,6 +2610,7 @@
           "survival"
         ]
       },
+      "spellcasting": null,
       "starting_equipment_text": "Choose A, B, or C: (A) Chain Mail, Greatsword, Flail, 8 Javelins, Dungeoneer's Pack, and 4 GP; (B) Studded Leather Armor, Scimitar, Shortsword, Longbow, 20 Arrows, Quiver, Dungeoneer's Pack, and 11 GP; or (C) 155 GP",
       "subclass_level": 3,
       "subclasses": [
@@ -3085,6 +3018,7 @@
           "stealth"
         ]
       },
+      "spellcasting": null,
       "starting_equipment_text": "Choose A or B: (A) Spear, 5 Daggers, Artisan's Tools or Musical Instrument chosen for the tool proficiency above, Explorer's Pack, and 11 GP; or (B) 50 GP",
       "subclass_level": 3,
       "subclasses": [
@@ -3140,13 +3074,7 @@
       "features_by_level": {
         "1": {
           "class_specific": {
-            "Channel Divinity": "—",
-            "Prepared Spells": 2,
-            "Spell Slots per Spell Level 1": 2,
-            "Spell Slots per Spell Level 2": "—",
-            "Spell Slots per Spell Level 3": "—",
-            "Spell Slots per Spell Level 4": "—",
-            "Spell Slots per Spell Level 5": "—"
+            "Channel Divinity": "—"
           },
           "features": [
             {
@@ -3175,13 +3103,7 @@
         },
         "10": {
           "class_specific": {
-            "Channel Divinity": 2,
-            "Prepared Spells": 9,
-            "Spell Slots per Spell Level 1": 4,
-            "Spell Slots per Spell Level 2": 3,
-            "Spell Slots per Spell Level 3": 2,
-            "Spell Slots per Spell Level 4": "—",
-            "Spell Slots per Spell Level 5": "—"
+            "Channel Divinity": 2
           },
           "features": [
             {
@@ -3193,13 +3115,7 @@
         },
         "11": {
           "class_specific": {
-            "Channel Divinity": 3,
-            "Prepared Spells": 10,
-            "Spell Slots per Spell Level 1": 4,
-            "Spell Slots per Spell Level 2": 3,
-            "Spell Slots per Spell Level 3": 3,
-            "Spell Slots per Spell Level 4": "—",
-            "Spell Slots per Spell Level 5": "—"
+            "Channel Divinity": 3
           },
           "features": [
             {
@@ -3211,13 +3127,7 @@
         },
         "12": {
           "class_specific": {
-            "Channel Divinity": 3,
-            "Prepared Spells": 10,
-            "Spell Slots per Spell Level 1": 4,
-            "Spell Slots per Spell Level 2": 3,
-            "Spell Slots per Spell Level 3": 3,
-            "Spell Slots per Spell Level 4": "—",
-            "Spell Slots per Spell Level 5": "—"
+            "Channel Divinity": 3
           },
           "features": [
             {
@@ -3229,26 +3139,14 @@
         },
         "13": {
           "class_specific": {
-            "Channel Divinity": 3,
-            "Prepared Spells": 11,
-            "Spell Slots per Spell Level 1": 4,
-            "Spell Slots per Spell Level 2": 3,
-            "Spell Slots per Spell Level 3": 3,
-            "Spell Slots per Spell Level 4": 1,
-            "Spell Slots per Spell Level 5": "—"
+            "Channel Divinity": 3
           },
           "features": [],
           "proficiency_bonus": 5
         },
         "14": {
           "class_specific": {
-            "Channel Divinity": 3,
-            "Prepared Spells": 11,
-            "Spell Slots per Spell Level 1": 4,
-            "Spell Slots per Spell Level 2": 3,
-            "Spell Slots per Spell Level 3": 3,
-            "Spell Slots per Spell Level 4": 1,
-            "Spell Slots per Spell Level 5": "—"
+            "Channel Divinity": 3
           },
           "features": [
             {
@@ -3260,13 +3158,7 @@
         },
         "15": {
           "class_specific": {
-            "Channel Divinity": 3,
-            "Prepared Spells": 12,
-            "Spell Slots per Spell Level 1": 4,
-            "Spell Slots per Spell Level 2": 3,
-            "Spell Slots per Spell Level 3": 3,
-            "Spell Slots per Spell Level 4": 2,
-            "Spell Slots per Spell Level 5": "—"
+            "Channel Divinity": 3
           },
           "features": [
             {
@@ -3278,13 +3170,7 @@
         },
         "16": {
           "class_specific": {
-            "Channel Divinity": 3,
-            "Prepared Spells": 12,
-            "Spell Slots per Spell Level 1": 4,
-            "Spell Slots per Spell Level 2": 3,
-            "Spell Slots per Spell Level 3": 3,
-            "Spell Slots per Spell Level 4": 2,
-            "Spell Slots per Spell Level 5": "—"
+            "Channel Divinity": 3
           },
           "features": [
             {
@@ -3296,26 +3182,14 @@
         },
         "17": {
           "class_specific": {
-            "Channel Divinity": 3,
-            "Prepared Spells": 14,
-            "Spell Slots per Spell Level 1": 4,
-            "Spell Slots per Spell Level 2": 3,
-            "Spell Slots per Spell Level 3": 3,
-            "Spell Slots per Spell Level 4": 3,
-            "Spell Slots per Spell Level 5": 1
+            "Channel Divinity": 3
           },
           "features": [],
           "proficiency_bonus": 6
         },
         "18": {
           "class_specific": {
-            "Channel Divinity": 3,
-            "Prepared Spells": 14,
-            "Spell Slots per Spell Level 1": 4,
-            "Spell Slots per Spell Level 2": 3,
-            "Spell Slots per Spell Level 3": 3,
-            "Spell Slots per Spell Level 4": 3,
-            "Spell Slots per Spell Level 5": 1
+            "Channel Divinity": 3
           },
           "features": [
             {
@@ -3327,13 +3201,7 @@
         },
         "19": {
           "class_specific": {
-            "Channel Divinity": 3,
-            "Prepared Spells": 15,
-            "Spell Slots per Spell Level 1": 4,
-            "Spell Slots per Spell Level 2": 3,
-            "Spell Slots per Spell Level 3": 3,
-            "Spell Slots per Spell Level 4": 3,
-            "Spell Slots per Spell Level 5": 2
+            "Channel Divinity": 3
           },
           "features": [
             {
@@ -3345,13 +3213,7 @@
         },
         "2": {
           "class_specific": {
-            "Channel Divinity": "—",
-            "Prepared Spells": 3,
-            "Spell Slots per Spell Level 1": 2,
-            "Spell Slots per Spell Level 2": "—",
-            "Spell Slots per Spell Level 3": "—",
-            "Spell Slots per Spell Level 4": "—",
-            "Spell Slots per Spell Level 5": "—"
+            "Channel Divinity": "—"
           },
           "features": [
             {
@@ -3379,13 +3241,7 @@
         },
         "20": {
           "class_specific": {
-            "Channel Divinity": 3,
-            "Prepared Spells": 15,
-            "Spell Slots per Spell Level 1": 4,
-            "Spell Slots per Spell Level 2": 3,
-            "Spell Slots per Spell Level 3": 3,
-            "Spell Slots per Spell Level 4": 3,
-            "Spell Slots per Spell Level 5": 2
+            "Channel Divinity": 3
           },
           "features": [
             {
@@ -3397,13 +3253,7 @@
         },
         "3": {
           "class_specific": {
-            "Channel Divinity": 2,
-            "Prepared Spells": 4,
-            "Spell Slots per Spell Level 1": 3,
-            "Spell Slots per Spell Level 2": "—",
-            "Spell Slots per Spell Level 3": "—",
-            "Spell Slots per Spell Level 4": "—",
-            "Spell Slots per Spell Level 5": "—"
+            "Channel Divinity": 2
           },
           "features": [
             {
@@ -3419,13 +3269,7 @@
         },
         "4": {
           "class_specific": {
-            "Channel Divinity": 2,
-            "Prepared Spells": 5,
-            "Spell Slots per Spell Level 1": 3,
-            "Spell Slots per Spell Level 2": "—",
-            "Spell Slots per Spell Level 3": "—",
-            "Spell Slots per Spell Level 4": "—",
-            "Spell Slots per Spell Level 5": "—"
+            "Channel Divinity": 2
           },
           "features": [
             {
@@ -3437,13 +3281,7 @@
         },
         "5": {
           "class_specific": {
-            "Channel Divinity": 2,
-            "Prepared Spells": 6,
-            "Spell Slots per Spell Level 1": 4,
-            "Spell Slots per Spell Level 2": 2,
-            "Spell Slots per Spell Level 3": "—",
-            "Spell Slots per Spell Level 4": "—",
-            "Spell Slots per Spell Level 5": "—"
+            "Channel Divinity": 2
           },
           "features": [
             {
@@ -3459,13 +3297,7 @@
         },
         "6": {
           "class_specific": {
-            "Channel Divinity": 2,
-            "Prepared Spells": 6,
-            "Spell Slots per Spell Level 1": 4,
-            "Spell Slots per Spell Level 2": 2,
-            "Spell Slots per Spell Level 3": "—",
-            "Spell Slots per Spell Level 4": "—",
-            "Spell Slots per Spell Level 5": "—"
+            "Channel Divinity": 2
           },
           "features": [
             {
@@ -3477,13 +3309,7 @@
         },
         "7": {
           "class_specific": {
-            "Channel Divinity": 2,
-            "Prepared Spells": 7,
-            "Spell Slots per Spell Level 1": 4,
-            "Spell Slots per Spell Level 2": 3,
-            "Spell Slots per Spell Level 3": "—",
-            "Spell Slots per Spell Level 4": "—",
-            "Spell Slots per Spell Level 5": "—"
+            "Channel Divinity": 2
           },
           "features": [
             {
@@ -3495,13 +3321,7 @@
         },
         "8": {
           "class_specific": {
-            "Channel Divinity": 2,
-            "Prepared Spells": 7,
-            "Spell Slots per Spell Level 1": 4,
-            "Spell Slots per Spell Level 2": 3,
-            "Spell Slots per Spell Level 3": "—",
-            "Spell Slots per Spell Level 4": "—",
-            "Spell Slots per Spell Level 5": "—"
+            "Channel Divinity": 2
           },
           "features": [
             {
@@ -3513,13 +3333,7 @@
         },
         "9": {
           "class_specific": {
-            "Channel Divinity": 2,
-            "Prepared Spells": 9,
-            "Spell Slots per Spell Level 1": 4,
-            "Spell Slots per Spell Level 2": 3,
-            "Spell Slots per Spell Level 3": 2,
-            "Spell Slots per Spell Level 4": "—",
-            "Spell Slots per Spell Level 5": "—"
+            "Channel Divinity": 2
           },
           "features": [
             {
@@ -3551,6 +3365,134 @@
           "persuasion",
           "religion"
         ]
+      },
+      "spellcasting": {
+        "cantrips_known_by_level": {},
+        "pact_slots_by_level": {},
+        "prepared_spells_by_level": {
+          "1": 2,
+          "10": 9,
+          "11": 10,
+          "12": 10,
+          "13": 11,
+          "14": 11,
+          "15": 12,
+          "16": 12,
+          "17": 14,
+          "18": 14,
+          "19": 15,
+          "2": 3,
+          "20": 15,
+          "3": 4,
+          "4": 5,
+          "5": 6,
+          "6": 6,
+          "7": 7,
+          "8": 7,
+          "9": 9
+        },
+        "spell_slots_by_level": {
+          "1": {
+            "1": 2
+          },
+          "10": {
+            "1": 4,
+            "2": 3,
+            "3": 2
+          },
+          "11": {
+            "1": 4,
+            "2": 3,
+            "3": 3
+          },
+          "12": {
+            "1": 4,
+            "2": 3,
+            "3": 3
+          },
+          "13": {
+            "1": 4,
+            "2": 3,
+            "3": 3,
+            "4": 1
+          },
+          "14": {
+            "1": 4,
+            "2": 3,
+            "3": 3,
+            "4": 1
+          },
+          "15": {
+            "1": 4,
+            "2": 3,
+            "3": 3,
+            "4": 2
+          },
+          "16": {
+            "1": 4,
+            "2": 3,
+            "3": 3,
+            "4": 2
+          },
+          "17": {
+            "1": 4,
+            "2": 3,
+            "3": 3,
+            "4": 3,
+            "5": 1
+          },
+          "18": {
+            "1": 4,
+            "2": 3,
+            "3": 3,
+            "4": 3,
+            "5": 1
+          },
+          "19": {
+            "1": 4,
+            "2": 3,
+            "3": 3,
+            "4": 3,
+            "5": 2
+          },
+          "2": {
+            "1": 2
+          },
+          "20": {
+            "1": 4,
+            "2": 3,
+            "3": 3,
+            "4": 3,
+            "5": 2
+          },
+          "3": {
+            "1": 3
+          },
+          "4": {
+            "1": 3
+          },
+          "5": {
+            "1": 4,
+            "2": 2
+          },
+          "6": {
+            "1": 4,
+            "2": 2
+          },
+          "7": {
+            "1": 4,
+            "2": 3
+          },
+          "8": {
+            "1": 4,
+            "2": 3
+          },
+          "9": {
+            "1": 4,
+            "2": 3,
+            "3": 2
+          }
+        }
       },
       "starting_equipment_text": "Choose A or B: (A) Chain Mail, Shield, Longsword, 6 Javelins, Holy Symbol, Priest's Pack, and 9 GP; or (B) 150 GP",
       "subclass_level": 3,
@@ -3611,13 +3553,7 @@
       "features_by_level": {
         "1": {
           "class_specific": {
-            "Favored Enemy": 2,
-            "Prepared Spells": 2,
-            "Spell Slots per Spell Level 1": 2,
-            "Spell Slots per Spell Level 2": "—",
-            "Spell Slots per Spell Level 3": "—",
-            "Spell Slots per Spell Level 4": "—",
-            "Spell Slots per Spell Level 5": "—"
+            "Favored Enemy": 2
           },
           "features": [
             {
@@ -3646,13 +3582,7 @@
         },
         "10": {
           "class_specific": {
-            "Favored Enemy": 4,
-            "Prepared Spells": 9,
-            "Spell Slots per Spell Level 1": 4,
-            "Spell Slots per Spell Level 2": 3,
-            "Spell Slots per Spell Level 3": 2,
-            "Spell Slots per Spell Level 4": "—",
-            "Spell Slots per Spell Level 5": "—"
+            "Favored Enemy": 4
           },
           "features": [
             {
@@ -3664,13 +3594,7 @@
         },
         "11": {
           "class_specific": {
-            "Favored Enemy": 4,
-            "Prepared Spells": 10,
-            "Spell Slots per Spell Level 1": 4,
-            "Spell Slots per Spell Level 2": 3,
-            "Spell Slots per Spell Level 3": 3,
-            "Spell Slots per Spell Level 4": "—",
-            "Spell Slots per Spell Level 5": "—"
+            "Favored Enemy": 4
           },
           "features": [
             {
@@ -3682,13 +3606,7 @@
         },
         "12": {
           "class_specific": {
-            "Favored Enemy": 4,
-            "Prepared Spells": 10,
-            "Spell Slots per Spell Level 1": 4,
-            "Spell Slots per Spell Level 2": 3,
-            "Spell Slots per Spell Level 3": 3,
-            "Spell Slots per Spell Level 4": "—",
-            "Spell Slots per Spell Level 5": "—"
+            "Favored Enemy": 4
           },
           "features": [
             {
@@ -3700,13 +3618,7 @@
         },
         "13": {
           "class_specific": {
-            "Favored Enemy": 5,
-            "Prepared Spells": 11,
-            "Spell Slots per Spell Level 1": 4,
-            "Spell Slots per Spell Level 2": 3,
-            "Spell Slots per Spell Level 3": 3,
-            "Spell Slots per Spell Level 4": 1,
-            "Spell Slots per Spell Level 5": "—"
+            "Favored Enemy": 5
           },
           "features": [
             {
@@ -3718,13 +3630,7 @@
         },
         "14": {
           "class_specific": {
-            "Favored Enemy": 5,
-            "Prepared Spells": 11,
-            "Spell Slots per Spell Level 1": 4,
-            "Spell Slots per Spell Level 2": 3,
-            "Spell Slots per Spell Level 3": 3,
-            "Spell Slots per Spell Level 4": 1,
-            "Spell Slots per Spell Level 5": "—"
+            "Favored Enemy": 5
           },
           "features": [
             {
@@ -3736,13 +3642,7 @@
         },
         "15": {
           "class_specific": {
-            "Favored Enemy": 5,
-            "Prepared Spells": 12,
-            "Spell Slots per Spell Level 1": 4,
-            "Spell Slots per Spell Level 2": 3,
-            "Spell Slots per Spell Level 3": 3,
-            "Spell Slots per Spell Level 4": 2,
-            "Spell Slots per Spell Level 5": "—"
+            "Favored Enemy": 5
           },
           "features": [
             {
@@ -3754,13 +3654,7 @@
         },
         "16": {
           "class_specific": {
-            "Favored Enemy": 5,
-            "Prepared Spells": 12,
-            "Spell Slots per Spell Level 1": 4,
-            "Spell Slots per Spell Level 2": 3,
-            "Spell Slots per Spell Level 3": 3,
-            "Spell Slots per Spell Level 4": 2,
-            "Spell Slots per Spell Level 5": "—"
+            "Favored Enemy": 5
           },
           "features": [
             {
@@ -3772,13 +3666,7 @@
         },
         "17": {
           "class_specific": {
-            "Favored Enemy": 6,
-            "Prepared Spells": 14,
-            "Spell Slots per Spell Level 1": 4,
-            "Spell Slots per Spell Level 2": 3,
-            "Spell Slots per Spell Level 3": 3,
-            "Spell Slots per Spell Level 4": 3,
-            "Spell Slots per Spell Level 5": 1
+            "Favored Enemy": 6
           },
           "features": [
             {
@@ -3790,13 +3678,7 @@
         },
         "18": {
           "class_specific": {
-            "Favored Enemy": 6,
-            "Prepared Spells": 14,
-            "Spell Slots per Spell Level 1": 4,
-            "Spell Slots per Spell Level 2": 3,
-            "Spell Slots per Spell Level 3": 3,
-            "Spell Slots per Spell Level 4": 3,
-            "Spell Slots per Spell Level 5": 1
+            "Favored Enemy": 6
           },
           "features": [
             {
@@ -3808,13 +3690,7 @@
         },
         "19": {
           "class_specific": {
-            "Favored Enemy": 6,
-            "Prepared Spells": 15,
-            "Spell Slots per Spell Level 1": 4,
-            "Spell Slots per Spell Level 2": 3,
-            "Spell Slots per Spell Level 3": 3,
-            "Spell Slots per Spell Level 4": 3,
-            "Spell Slots per Spell Level 5": 2
+            "Favored Enemy": 6
           },
           "features": [
             {
@@ -3826,13 +3702,7 @@
         },
         "2": {
           "class_specific": {
-            "Favored Enemy": 2,
-            "Prepared Spells": 3,
-            "Spell Slots per Spell Level 1": 2,
-            "Spell Slots per Spell Level 2": "—",
-            "Spell Slots per Spell Level 3": "—",
-            "Spell Slots per Spell Level 4": "—",
-            "Spell Slots per Spell Level 5": "—"
+            "Favored Enemy": 2
           },
           "features": [
             {
@@ -3868,13 +3738,7 @@
         },
         "20": {
           "class_specific": {
-            "Favored Enemy": 6,
-            "Prepared Spells": 15,
-            "Spell Slots per Spell Level 1": 4,
-            "Spell Slots per Spell Level 2": 3,
-            "Spell Slots per Spell Level 3": 3,
-            "Spell Slots per Spell Level 4": 3,
-            "Spell Slots per Spell Level 5": 2
+            "Favored Enemy": 6
           },
           "features": [
             {
@@ -3886,13 +3750,7 @@
         },
         "3": {
           "class_specific": {
-            "Favored Enemy": 2,
-            "Prepared Spells": 4,
-            "Spell Slots per Spell Level 1": 3,
-            "Spell Slots per Spell Level 2": "—",
-            "Spell Slots per Spell Level 3": "—",
-            "Spell Slots per Spell Level 4": "—",
-            "Spell Slots per Spell Level 5": "—"
+            "Favored Enemy": 2
           },
           "features": [
             {
@@ -3904,13 +3762,7 @@
         },
         "4": {
           "class_specific": {
-            "Favored Enemy": 2,
-            "Prepared Spells": 5,
-            "Spell Slots per Spell Level 1": 3,
-            "Spell Slots per Spell Level 2": "—",
-            "Spell Slots per Spell Level 3": "—",
-            "Spell Slots per Spell Level 4": "—",
-            "Spell Slots per Spell Level 5": "—"
+            "Favored Enemy": 2
           },
           "features": [
             {
@@ -3922,13 +3774,7 @@
         },
         "5": {
           "class_specific": {
-            "Favored Enemy": 3,
-            "Prepared Spells": 6,
-            "Spell Slots per Spell Level 1": 4,
-            "Spell Slots per Spell Level 2": 2,
-            "Spell Slots per Spell Level 3": "—",
-            "Spell Slots per Spell Level 4": "—",
-            "Spell Slots per Spell Level 5": "—"
+            "Favored Enemy": 3
           },
           "features": [
             {
@@ -3940,13 +3786,7 @@
         },
         "6": {
           "class_specific": {
-            "Favored Enemy": 3,
-            "Prepared Spells": 6,
-            "Spell Slots per Spell Level 1": 4,
-            "Spell Slots per Spell Level 2": 2,
-            "Spell Slots per Spell Level 3": "—",
-            "Spell Slots per Spell Level 4": "—",
-            "Spell Slots per Spell Level 5": "—"
+            "Favored Enemy": 3
           },
           "features": [
             {
@@ -3958,13 +3798,7 @@
         },
         "7": {
           "class_specific": {
-            "Favored Enemy": 3,
-            "Prepared Spells": 7,
-            "Spell Slots per Spell Level 1": 4,
-            "Spell Slots per Spell Level 2": 3,
-            "Spell Slots per Spell Level 3": "—",
-            "Spell Slots per Spell Level 4": "—",
-            "Spell Slots per Spell Level 5": "—"
+            "Favored Enemy": 3
           },
           "features": [
             {
@@ -3976,13 +3810,7 @@
         },
         "8": {
           "class_specific": {
-            "Favored Enemy": 3,
-            "Prepared Spells": 7,
-            "Spell Slots per Spell Level 1": 4,
-            "Spell Slots per Spell Level 2": 3,
-            "Spell Slots per Spell Level 3": "—",
-            "Spell Slots per Spell Level 4": "—",
-            "Spell Slots per Spell Level 5": "—"
+            "Favored Enemy": 3
           },
           "features": [
             {
@@ -3994,13 +3822,7 @@
         },
         "9": {
           "class_specific": {
-            "Favored Enemy": 4,
-            "Prepared Spells": 9,
-            "Spell Slots per Spell Level 1": 4,
-            "Spell Slots per Spell Level 2": 3,
-            "Spell Slots per Spell Level 3": 2,
-            "Spell Slots per Spell Level 4": "—",
-            "Spell Slots per Spell Level 5": "—"
+            "Favored Enemy": 4
           },
           "features": [
             {
@@ -4042,6 +3864,134 @@
           "stealth",
           "survival"
         ]
+      },
+      "spellcasting": {
+        "cantrips_known_by_level": {},
+        "pact_slots_by_level": {},
+        "prepared_spells_by_level": {
+          "1": 2,
+          "10": 9,
+          "11": 10,
+          "12": 10,
+          "13": 11,
+          "14": 11,
+          "15": 12,
+          "16": 12,
+          "17": 14,
+          "18": 14,
+          "19": 15,
+          "2": 3,
+          "20": 15,
+          "3": 4,
+          "4": 5,
+          "5": 6,
+          "6": 6,
+          "7": 7,
+          "8": 7,
+          "9": 9
+        },
+        "spell_slots_by_level": {
+          "1": {
+            "1": 2
+          },
+          "10": {
+            "1": 4,
+            "2": 3,
+            "3": 2
+          },
+          "11": {
+            "1": 4,
+            "2": 3,
+            "3": 3
+          },
+          "12": {
+            "1": 4,
+            "2": 3,
+            "3": 3
+          },
+          "13": {
+            "1": 4,
+            "2": 3,
+            "3": 3,
+            "4": 1
+          },
+          "14": {
+            "1": 4,
+            "2": 3,
+            "3": 3,
+            "4": 1
+          },
+          "15": {
+            "1": 4,
+            "2": 3,
+            "3": 3,
+            "4": 2
+          },
+          "16": {
+            "1": 4,
+            "2": 3,
+            "3": 3,
+            "4": 2
+          },
+          "17": {
+            "1": 4,
+            "2": 3,
+            "3": 3,
+            "4": 3,
+            "5": 1
+          },
+          "18": {
+            "1": 4,
+            "2": 3,
+            "3": 3,
+            "4": 3,
+            "5": 1
+          },
+          "19": {
+            "1": 4,
+            "2": 3,
+            "3": 3,
+            "4": 3,
+            "5": 2
+          },
+          "2": {
+            "1": 2
+          },
+          "20": {
+            "1": 4,
+            "2": 3,
+            "3": 3,
+            "4": 3,
+            "5": 2
+          },
+          "3": {
+            "1": 3
+          },
+          "4": {
+            "1": 3
+          },
+          "5": {
+            "1": 4,
+            "2": 2
+          },
+          "6": {
+            "1": 4,
+            "2": 2
+          },
+          "7": {
+            "1": 4,
+            "2": 3
+          },
+          "8": {
+            "1": 4,
+            "2": 3
+          },
+          "9": {
+            "1": 4,
+            "2": 3,
+            "3": 2
+          }
+        }
       },
       "starting_equipment_text": "Choose A or B: (A) Studded Leather Armor, Scimitar, Shortsword, Longbow, 20 Arrows, Quiver, Druidic Focus (sprig of mistletoe), Explorer's Pack, and 7 GP; or (B) 150 GP",
       "subclass_level": 3,
@@ -4548,6 +4498,7 @@
           "stealth"
         ]
       },
+      "spellcasting": null,
       "starting_equipment_text": "Choose A or B: (A) Leather Armor, 2 Daggers, Shortsword, Shortbow, 20 Arrows, Quiver, Thieves' Tools, Burglar's Pack, and 8 GP; or (B) 100 GP",
       "subclass_level": 3,
       "subclasses": [
@@ -4605,18 +4556,7 @@
       "features_by_level": {
         "1": {
           "class_specific": {
-            "Cantrips": 4,
-            "Prepared Spells": 2,
-            "Sorcery Points": "—",
-            "Spell Slots per Spell Level 1": 2,
-            "Spell Slots per Spell Level 2": "—",
-            "Spell Slots per Spell Level 3": "—",
-            "Spell Slots per Spell Level 4": "—",
-            "Spell Slots per Spell Level 5": "—",
-            "Spell Slots per Spell Level 6": "—",
-            "Spell Slots per Spell Level 7": "—",
-            "Spell Slots per Spell Level 8": "—",
-            "Spell Slots per Spell Level 9": "—"
+            "Sorcery Points": "—"
           },
           "features": [
             {
@@ -4632,18 +4572,7 @@
         },
         "10": {
           "class_specific": {
-            "Cantrips": 6,
-            "Prepared Spells": 15,
-            "Sorcery Points": 10,
-            "Spell Slots per Spell Level 1": 4,
-            "Spell Slots per Spell Level 2": 3,
-            "Spell Slots per Spell Level 3": 3,
-            "Spell Slots per Spell Level 4": 3,
-            "Spell Slots per Spell Level 5": 2,
-            "Spell Slots per Spell Level 6": "—",
-            "Spell Slots per Spell Level 7": "—",
-            "Spell Slots per Spell Level 8": "—",
-            "Spell Slots per Spell Level 9": "—"
+            "Sorcery Points": 10
           },
           "features": [
             {
@@ -4655,36 +4584,14 @@
         },
         "11": {
           "class_specific": {
-            "Cantrips": 6,
-            "Prepared Spells": 16,
-            "Sorcery Points": 11,
-            "Spell Slots per Spell Level 1": 4,
-            "Spell Slots per Spell Level 2": 3,
-            "Spell Slots per Spell Level 3": 3,
-            "Spell Slots per Spell Level 4": 3,
-            "Spell Slots per Spell Level 5": 2,
-            "Spell Slots per Spell Level 6": 1,
-            "Spell Slots per Spell Level 7": "—",
-            "Spell Slots per Spell Level 8": "—",
-            "Spell Slots per Spell Level 9": "—"
+            "Sorcery Points": 11
           },
           "features": [],
           "proficiency_bonus": 4
         },
         "12": {
           "class_specific": {
-            "Cantrips": 6,
-            "Prepared Spells": 16,
-            "Sorcery Points": 12,
-            "Spell Slots per Spell Level 1": 4,
-            "Spell Slots per Spell Level 2": 3,
-            "Spell Slots per Spell Level 3": 3,
-            "Spell Slots per Spell Level 4": 3,
-            "Spell Slots per Spell Level 5": 2,
-            "Spell Slots per Spell Level 6": 1,
-            "Spell Slots per Spell Level 7": "—",
-            "Spell Slots per Spell Level 8": "—",
-            "Spell Slots per Spell Level 9": "—"
+            "Sorcery Points": 12
           },
           "features": [
             {
@@ -4696,36 +4603,14 @@
         },
         "13": {
           "class_specific": {
-            "Cantrips": 6,
-            "Prepared Spells": 17,
-            "Sorcery Points": 13,
-            "Spell Slots per Spell Level 1": 4,
-            "Spell Slots per Spell Level 2": 3,
-            "Spell Slots per Spell Level 3": 3,
-            "Spell Slots per Spell Level 4": 3,
-            "Spell Slots per Spell Level 5": 2,
-            "Spell Slots per Spell Level 6": 1,
-            "Spell Slots per Spell Level 7": 1,
-            "Spell Slots per Spell Level 8": "—",
-            "Spell Slots per Spell Level 9": "—"
+            "Sorcery Points": 13
           },
           "features": [],
           "proficiency_bonus": 5
         },
         "14": {
           "class_specific": {
-            "Cantrips": 6,
-            "Prepared Spells": 17,
-            "Sorcery Points": 14,
-            "Spell Slots per Spell Level 1": 4,
-            "Spell Slots per Spell Level 2": 3,
-            "Spell Slots per Spell Level 3": 3,
-            "Spell Slots per Spell Level 4": 3,
-            "Spell Slots per Spell Level 5": 2,
-            "Spell Slots per Spell Level 6": 1,
-            "Spell Slots per Spell Level 7": 1,
-            "Spell Slots per Spell Level 8": "—",
-            "Spell Slots per Spell Level 9": "—"
+            "Sorcery Points": 14
           },
           "features": [
             {
@@ -4737,36 +4622,14 @@
         },
         "15": {
           "class_specific": {
-            "Cantrips": 6,
-            "Prepared Spells": 18,
-            "Sorcery Points": 15,
-            "Spell Slots per Spell Level 1": 4,
-            "Spell Slots per Spell Level 2": 3,
-            "Spell Slots per Spell Level 3": 3,
-            "Spell Slots per Spell Level 4": 3,
-            "Spell Slots per Spell Level 5": 2,
-            "Spell Slots per Spell Level 6": 1,
-            "Spell Slots per Spell Level 7": 1,
-            "Spell Slots per Spell Level 8": 1,
-            "Spell Slots per Spell Level 9": "—"
+            "Sorcery Points": 15
           },
           "features": [],
           "proficiency_bonus": 5
         },
         "16": {
           "class_specific": {
-            "Cantrips": 6,
-            "Prepared Spells": 18,
-            "Sorcery Points": 16,
-            "Spell Slots per Spell Level 1": 4,
-            "Spell Slots per Spell Level 2": 3,
-            "Spell Slots per Spell Level 3": 3,
-            "Spell Slots per Spell Level 4": 3,
-            "Spell Slots per Spell Level 5": 2,
-            "Spell Slots per Spell Level 6": 1,
-            "Spell Slots per Spell Level 7": 1,
-            "Spell Slots per Spell Level 8": 1,
-            "Spell Slots per Spell Level 9": "—"
+            "Sorcery Points": 16
           },
           "features": [
             {
@@ -4778,18 +4641,7 @@
         },
         "17": {
           "class_specific": {
-            "Cantrips": 6,
-            "Prepared Spells": 19,
-            "Sorcery Points": 17,
-            "Spell Slots per Spell Level 1": 4,
-            "Spell Slots per Spell Level 2": 3,
-            "Spell Slots per Spell Level 3": 3,
-            "Spell Slots per Spell Level 4": 3,
-            "Spell Slots per Spell Level 5": 2,
-            "Spell Slots per Spell Level 6": 1,
-            "Spell Slots per Spell Level 7": 1,
-            "Spell Slots per Spell Level 8": 1,
-            "Spell Slots per Spell Level 9": 1
+            "Sorcery Points": 17
           },
           "features": [
             {
@@ -4801,18 +4653,7 @@
         },
         "18": {
           "class_specific": {
-            "Cantrips": 6,
-            "Prepared Spells": 20,
-            "Sorcery Points": 18,
-            "Spell Slots per Spell Level 1": 4,
-            "Spell Slots per Spell Level 2": 3,
-            "Spell Slots per Spell Level 3": 3,
-            "Spell Slots per Spell Level 4": 3,
-            "Spell Slots per Spell Level 5": 3,
-            "Spell Slots per Spell Level 6": 1,
-            "Spell Slots per Spell Level 7": 1,
-            "Spell Slots per Spell Level 8": 1,
-            "Spell Slots per Spell Level 9": 1
+            "Sorcery Points": 18
           },
           "features": [
             {
@@ -4824,18 +4665,7 @@
         },
         "19": {
           "class_specific": {
-            "Cantrips": 6,
-            "Prepared Spells": 21,
-            "Sorcery Points": 19,
-            "Spell Slots per Spell Level 1": 4,
-            "Spell Slots per Spell Level 2": 3,
-            "Spell Slots per Spell Level 3": 3,
-            "Spell Slots per Spell Level 4": 3,
-            "Spell Slots per Spell Level 5": 3,
-            "Spell Slots per Spell Level 6": 2,
-            "Spell Slots per Spell Level 7": 1,
-            "Spell Slots per Spell Level 8": 1,
-            "Spell Slots per Spell Level 9": 1
+            "Sorcery Points": 19
           },
           "features": [
             {
@@ -4847,18 +4677,7 @@
         },
         "2": {
           "class_specific": {
-            "Cantrips": 4,
-            "Prepared Spells": 4,
-            "Sorcery Points": 2,
-            "Spell Slots per Spell Level 1": 3,
-            "Spell Slots per Spell Level 2": "—",
-            "Spell Slots per Spell Level 3": "—",
-            "Spell Slots per Spell Level 4": "—",
-            "Spell Slots per Spell Level 5": "—",
-            "Spell Slots per Spell Level 6": "—",
-            "Spell Slots per Spell Level 7": "—",
-            "Spell Slots per Spell Level 8": "—",
-            "Spell Slots per Spell Level 9": "—"
+            "Sorcery Points": 2
           },
           "features": [
             {
@@ -4874,18 +4693,7 @@
         },
         "20": {
           "class_specific": {
-            "Cantrips": 6,
-            "Prepared Spells": 22,
-            "Sorcery Points": 20,
-            "Spell Slots per Spell Level 1": 4,
-            "Spell Slots per Spell Level 2": 3,
-            "Spell Slots per Spell Level 3": 3,
-            "Spell Slots per Spell Level 4": 3,
-            "Spell Slots per Spell Level 5": 3,
-            "Spell Slots per Spell Level 6": 2,
-            "Spell Slots per Spell Level 7": 2,
-            "Spell Slots per Spell Level 8": 1,
-            "Spell Slots per Spell Level 9": 1
+            "Sorcery Points": 20
           },
           "features": [
             {
@@ -4897,18 +4705,7 @@
         },
         "3": {
           "class_specific": {
-            "Cantrips": 4,
-            "Prepared Spells": 6,
-            "Sorcery Points": 3,
-            "Spell Slots per Spell Level 1": 4,
-            "Spell Slots per Spell Level 2": 2,
-            "Spell Slots per Spell Level 3": "—",
-            "Spell Slots per Spell Level 4": "—",
-            "Spell Slots per Spell Level 5": "—",
-            "Spell Slots per Spell Level 6": "—",
-            "Spell Slots per Spell Level 7": "—",
-            "Spell Slots per Spell Level 8": "—",
-            "Spell Slots per Spell Level 9": "—"
+            "Sorcery Points": 3
           },
           "features": [
             {
@@ -4920,18 +4717,7 @@
         },
         "4": {
           "class_specific": {
-            "Cantrips": 5,
-            "Prepared Spells": 7,
-            "Sorcery Points": 4,
-            "Spell Slots per Spell Level 1": 4,
-            "Spell Slots per Spell Level 2": 3,
-            "Spell Slots per Spell Level 3": "—",
-            "Spell Slots per Spell Level 4": "—",
-            "Spell Slots per Spell Level 5": "—",
-            "Spell Slots per Spell Level 6": "—",
-            "Spell Slots per Spell Level 7": "—",
-            "Spell Slots per Spell Level 8": "—",
-            "Spell Slots per Spell Level 9": "—"
+            "Sorcery Points": 4
           },
           "features": [
             {
@@ -4943,18 +4729,7 @@
         },
         "5": {
           "class_specific": {
-            "Cantrips": 5,
-            "Prepared Spells": 9,
-            "Sorcery Points": 5,
-            "Spell Slots per Spell Level 1": 4,
-            "Spell Slots per Spell Level 2": 3,
-            "Spell Slots per Spell Level 3": 2,
-            "Spell Slots per Spell Level 4": "—",
-            "Spell Slots per Spell Level 5": "—",
-            "Spell Slots per Spell Level 6": "—",
-            "Spell Slots per Spell Level 7": "—",
-            "Spell Slots per Spell Level 8": "—",
-            "Spell Slots per Spell Level 9": "—"
+            "Sorcery Points": 5
           },
           "features": [
             {
@@ -4966,18 +4741,7 @@
         },
         "6": {
           "class_specific": {
-            "Cantrips": 5,
-            "Prepared Spells": 10,
-            "Sorcery Points": 6,
-            "Spell Slots per Spell Level 1": 4,
-            "Spell Slots per Spell Level 2": 3,
-            "Spell Slots per Spell Level 3": 3,
-            "Spell Slots per Spell Level 4": "—",
-            "Spell Slots per Spell Level 5": "—",
-            "Spell Slots per Spell Level 6": "—",
-            "Spell Slots per Spell Level 7": "—",
-            "Spell Slots per Spell Level 8": "—",
-            "Spell Slots per Spell Level 9": "—"
+            "Sorcery Points": 6
           },
           "features": [
             {
@@ -4989,18 +4753,7 @@
         },
         "7": {
           "class_specific": {
-            "Cantrips": 5,
-            "Prepared Spells": 11,
-            "Sorcery Points": 7,
-            "Spell Slots per Spell Level 1": 4,
-            "Spell Slots per Spell Level 2": 3,
-            "Spell Slots per Spell Level 3": 3,
-            "Spell Slots per Spell Level 4": 1,
-            "Spell Slots per Spell Level 5": "—",
-            "Spell Slots per Spell Level 6": "—",
-            "Spell Slots per Spell Level 7": "—",
-            "Spell Slots per Spell Level 8": "—",
-            "Spell Slots per Spell Level 9": "—"
+            "Sorcery Points": 7
           },
           "features": [
             {
@@ -5012,18 +4765,7 @@
         },
         "8": {
           "class_specific": {
-            "Cantrips": 5,
-            "Prepared Spells": 12,
-            "Sorcery Points": 8,
-            "Spell Slots per Spell Level 1": 4,
-            "Spell Slots per Spell Level 2": 3,
-            "Spell Slots per Spell Level 3": 3,
-            "Spell Slots per Spell Level 4": 2,
-            "Spell Slots per Spell Level 5": "—",
-            "Spell Slots per Spell Level 6": "—",
-            "Spell Slots per Spell Level 7": "—",
-            "Spell Slots per Spell Level 8": "—",
-            "Spell Slots per Spell Level 9": "—"
+            "Sorcery Points": 8
           },
           "features": [
             {
@@ -5035,18 +4777,7 @@
         },
         "9": {
           "class_specific": {
-            "Cantrips": 5,
-            "Prepared Spells": 14,
-            "Sorcery Points": 9,
-            "Spell Slots per Spell Level 1": 4,
-            "Spell Slots per Spell Level 2": 3,
-            "Spell Slots per Spell Level 3": 3,
-            "Spell Slots per Spell Level 4": 3,
-            "Spell Slots per Spell Level 5": 1,
-            "Spell Slots per Spell Level 6": "—",
-            "Spell Slots per Spell Level 7": "—",
-            "Spell Slots per Spell Level 8": "—",
-            "Spell Slots per Spell Level 9": "—"
+            "Sorcery Points": 9
           },
           "features": [],
           "proficiency_bonus": 4
@@ -5072,6 +4803,203 @@
           "persuasion",
           "religion"
         ]
+      },
+      "spellcasting": {
+        "cantrips_known_by_level": {
+          "1": 4,
+          "10": 6,
+          "11": 6,
+          "12": 6,
+          "13": 6,
+          "14": 6,
+          "15": 6,
+          "16": 6,
+          "17": 6,
+          "18": 6,
+          "19": 6,
+          "2": 4,
+          "20": 6,
+          "3": 4,
+          "4": 5,
+          "5": 5,
+          "6": 5,
+          "7": 5,
+          "8": 5,
+          "9": 5
+        },
+        "pact_slots_by_level": {},
+        "prepared_spells_by_level": {
+          "1": 2,
+          "10": 15,
+          "11": 16,
+          "12": 16,
+          "13": 17,
+          "14": 17,
+          "15": 18,
+          "16": 18,
+          "17": 19,
+          "18": 20,
+          "19": 21,
+          "2": 4,
+          "20": 22,
+          "3": 6,
+          "4": 7,
+          "5": 9,
+          "6": 10,
+          "7": 11,
+          "8": 12,
+          "9": 14
+        },
+        "spell_slots_by_level": {
+          "1": {
+            "1": 2
+          },
+          "10": {
+            "1": 4,
+            "2": 3,
+            "3": 3,
+            "4": 3,
+            "5": 2
+          },
+          "11": {
+            "1": 4,
+            "2": 3,
+            "3": 3,
+            "4": 3,
+            "5": 2,
+            "6": 1
+          },
+          "12": {
+            "1": 4,
+            "2": 3,
+            "3": 3,
+            "4": 3,
+            "5": 2,
+            "6": 1
+          },
+          "13": {
+            "1": 4,
+            "2": 3,
+            "3": 3,
+            "4": 3,
+            "5": 2,
+            "6": 1,
+            "7": 1
+          },
+          "14": {
+            "1": 4,
+            "2": 3,
+            "3": 3,
+            "4": 3,
+            "5": 2,
+            "6": 1,
+            "7": 1
+          },
+          "15": {
+            "1": 4,
+            "2": 3,
+            "3": 3,
+            "4": 3,
+            "5": 2,
+            "6": 1,
+            "7": 1,
+            "8": 1
+          },
+          "16": {
+            "1": 4,
+            "2": 3,
+            "3": 3,
+            "4": 3,
+            "5": 2,
+            "6": 1,
+            "7": 1,
+            "8": 1
+          },
+          "17": {
+            "1": 4,
+            "2": 3,
+            "3": 3,
+            "4": 3,
+            "5": 2,
+            "6": 1,
+            "7": 1,
+            "8": 1,
+            "9": 1
+          },
+          "18": {
+            "1": 4,
+            "2": 3,
+            "3": 3,
+            "4": 3,
+            "5": 3,
+            "6": 1,
+            "7": 1,
+            "8": 1,
+            "9": 1
+          },
+          "19": {
+            "1": 4,
+            "2": 3,
+            "3": 3,
+            "4": 3,
+            "5": 3,
+            "6": 2,
+            "7": 1,
+            "8": 1,
+            "9": 1
+          },
+          "2": {
+            "1": 3
+          },
+          "20": {
+            "1": 4,
+            "2": 3,
+            "3": 3,
+            "4": 3,
+            "5": 3,
+            "6": 2,
+            "7": 2,
+            "8": 1,
+            "9": 1
+          },
+          "3": {
+            "1": 4,
+            "2": 2
+          },
+          "4": {
+            "1": 4,
+            "2": 3
+          },
+          "5": {
+            "1": 4,
+            "2": 3,
+            "3": 2
+          },
+          "6": {
+            "1": 4,
+            "2": 3,
+            "3": 3
+          },
+          "7": {
+            "1": 4,
+            "2": 3,
+            "3": 3,
+            "4": 1
+          },
+          "8": {
+            "1": 4,
+            "2": 3,
+            "3": 3,
+            "4": 2
+          },
+          "9": {
+            "1": 4,
+            "2": 3,
+            "3": 3,
+            "4": 3,
+            "5": 1
+          }
+        }
       },
       "starting_equipment_text": "Choose A or B: (A) Spear, 2 Daggers, Arcane Focus (crystal), Dungeoneer's Pack, and 28 GP; or (B) 50 GP",
       "subclass_level": 3,
@@ -5159,11 +5087,7 @@
       "features_by_level": {
         "1": {
           "class_specific": {
-            "Cantrips": 2,
-            "Eldritch Invocations": 1,
-            "Prepared Spells": 2,
-            "Slot Level": 1,
-            "Spell Slots": 1
+            "Eldritch Invocations": 1
           },
           "features": [
             {
@@ -5179,11 +5103,7 @@
         },
         "10": {
           "class_specific": {
-            "Cantrips": 4,
-            "Eldritch Invocations": 7,
-            "Prepared Spells": 10,
-            "Slot Level": 5,
-            "Spell Slots": 2
+            "Eldritch Invocations": 7
           },
           "features": [
             {
@@ -5195,11 +5115,7 @@
         },
         "11": {
           "class_specific": {
-            "Cantrips": 4,
-            "Eldritch Invocations": 7,
-            "Prepared Spells": 11,
-            "Slot Level": 5,
-            "Spell Slots": 3
+            "Eldritch Invocations": 7
           },
           "features": [
             {
@@ -5211,11 +5127,7 @@
         },
         "12": {
           "class_specific": {
-            "Cantrips": 4,
-            "Eldritch Invocations": 8,
-            "Prepared Spells": 11,
-            "Slot Level": 5,
-            "Spell Slots": 3
+            "Eldritch Invocations": 8
           },
           "features": [
             {
@@ -5227,11 +5139,7 @@
         },
         "13": {
           "class_specific": {
-            "Cantrips": 4,
-            "Eldritch Invocations": 8,
-            "Prepared Spells": 12,
-            "Slot Level": 5,
-            "Spell Slots": 3
+            "Eldritch Invocations": 8
           },
           "features": [
             {
@@ -5243,11 +5151,7 @@
         },
         "14": {
           "class_specific": {
-            "Cantrips": 4,
-            "Eldritch Invocations": 8,
-            "Prepared Spells": 12,
-            "Slot Level": 5,
-            "Spell Slots": 3
+            "Eldritch Invocations": 8
           },
           "features": [
             {
@@ -5259,11 +5163,7 @@
         },
         "15": {
           "class_specific": {
-            "Cantrips": 4,
-            "Eldritch Invocations": 9,
-            "Prepared Spells": 13,
-            "Slot Level": 5,
-            "Spell Slots": 3
+            "Eldritch Invocations": 9
           },
           "features": [
             {
@@ -5275,11 +5175,7 @@
         },
         "16": {
           "class_specific": {
-            "Cantrips": 4,
-            "Eldritch Invocations": 9,
-            "Prepared Spells": 13,
-            "Slot Level": 5,
-            "Spell Slots": 3
+            "Eldritch Invocations": 9
           },
           "features": [
             {
@@ -5291,11 +5187,7 @@
         },
         "17": {
           "class_specific": {
-            "Cantrips": 4,
-            "Eldritch Invocations": 9,
-            "Prepared Spells": 14,
-            "Slot Level": 5,
-            "Spell Slots": 4
+            "Eldritch Invocations": 9
           },
           "features": [
             {
@@ -5307,22 +5199,14 @@
         },
         "18": {
           "class_specific": {
-            "Cantrips": 4,
-            "Eldritch Invocations": 10,
-            "Prepared Spells": 14,
-            "Slot Level": 5,
-            "Spell Slots": 4
+            "Eldritch Invocations": 10
           },
           "features": [],
           "proficiency_bonus": 6
         },
         "19": {
           "class_specific": {
-            "Cantrips": 4,
-            "Eldritch Invocations": 10,
-            "Prepared Spells": 15,
-            "Slot Level": 5,
-            "Spell Slots": 4
+            "Eldritch Invocations": 10
           },
           "features": [
             {
@@ -5334,11 +5218,7 @@
         },
         "2": {
           "class_specific": {
-            "Cantrips": 2,
-            "Eldritch Invocations": 3,
-            "Prepared Spells": 3,
-            "Slot Level": 1,
-            "Spell Slots": 2
+            "Eldritch Invocations": 3
           },
           "features": [
             {
@@ -5350,11 +5230,7 @@
         },
         "20": {
           "class_specific": {
-            "Cantrips": 4,
-            "Eldritch Invocations": 10,
-            "Prepared Spells": 15,
-            "Slot Level": 5,
-            "Spell Slots": 4
+            "Eldritch Invocations": 10
           },
           "features": [
             {
@@ -5366,11 +5242,7 @@
         },
         "3": {
           "class_specific": {
-            "Cantrips": 2,
-            "Eldritch Invocations": 3,
-            "Prepared Spells": 4,
-            "Slot Level": 2,
-            "Spell Slots": 2
+            "Eldritch Invocations": 3
           },
           "features": [
             {
@@ -5382,11 +5254,7 @@
         },
         "4": {
           "class_specific": {
-            "Cantrips": 3,
-            "Eldritch Invocations": 3,
-            "Prepared Spells": 5,
-            "Slot Level": 2,
-            "Spell Slots": 2
+            "Eldritch Invocations": 3
           },
           "features": [
             {
@@ -5398,22 +5266,14 @@
         },
         "5": {
           "class_specific": {
-            "Cantrips": 3,
-            "Eldritch Invocations": 5,
-            "Prepared Spells": 6,
-            "Slot Level": 3,
-            "Spell Slots": 2
+            "Eldritch Invocations": 5
           },
           "features": [],
           "proficiency_bonus": 3
         },
         "6": {
           "class_specific": {
-            "Cantrips": 3,
-            "Eldritch Invocations": 5,
-            "Prepared Spells": 7,
-            "Slot Level": 3,
-            "Spell Slots": 2
+            "Eldritch Invocations": 5
           },
           "features": [
             {
@@ -5425,22 +5285,14 @@
         },
         "7": {
           "class_specific": {
-            "Cantrips": 3,
-            "Eldritch Invocations": 6,
-            "Prepared Spells": 8,
-            "Slot Level": 4,
-            "Spell Slots": 2
+            "Eldritch Invocations": 6
           },
           "features": [],
           "proficiency_bonus": 3
         },
         "8": {
           "class_specific": {
-            "Cantrips": 3,
-            "Eldritch Invocations": 6,
-            "Prepared Spells": 9,
-            "Slot Level": 4,
-            "Spell Slots": 2
+            "Eldritch Invocations": 6
           },
           "features": [
             {
@@ -5452,11 +5304,7 @@
         },
         "9": {
           "class_specific": {
-            "Cantrips": 3,
-            "Eldritch Invocations": 7,
-            "Prepared Spells": 10,
-            "Slot Level": 5,
-            "Spell Slots": 2
+            "Eldritch Invocations": 7
           },
           "features": [
             {
@@ -5488,6 +5336,135 @@
           "nature",
           "religion"
         ]
+      },
+      "spellcasting": {
+        "cantrips_known_by_level": {
+          "1": 2,
+          "10": 4,
+          "11": 4,
+          "12": 4,
+          "13": 4,
+          "14": 4,
+          "15": 4,
+          "16": 4,
+          "17": 4,
+          "18": 4,
+          "19": 4,
+          "2": 2,
+          "20": 4,
+          "3": 2,
+          "4": 3,
+          "5": 3,
+          "6": 3,
+          "7": 3,
+          "8": 3,
+          "9": 3
+        },
+        "pact_slots_by_level": {
+          "1": {
+            "count": 1,
+            "slot_level": 1
+          },
+          "10": {
+            "count": 2,
+            "slot_level": 5
+          },
+          "11": {
+            "count": 3,
+            "slot_level": 5
+          },
+          "12": {
+            "count": 3,
+            "slot_level": 5
+          },
+          "13": {
+            "count": 3,
+            "slot_level": 5
+          },
+          "14": {
+            "count": 3,
+            "slot_level": 5
+          },
+          "15": {
+            "count": 3,
+            "slot_level": 5
+          },
+          "16": {
+            "count": 3,
+            "slot_level": 5
+          },
+          "17": {
+            "count": 4,
+            "slot_level": 5
+          },
+          "18": {
+            "count": 4,
+            "slot_level": 5
+          },
+          "19": {
+            "count": 4,
+            "slot_level": 5
+          },
+          "2": {
+            "count": 2,
+            "slot_level": 1
+          },
+          "20": {
+            "count": 4,
+            "slot_level": 5
+          },
+          "3": {
+            "count": 2,
+            "slot_level": 2
+          },
+          "4": {
+            "count": 2,
+            "slot_level": 2
+          },
+          "5": {
+            "count": 2,
+            "slot_level": 3
+          },
+          "6": {
+            "count": 2,
+            "slot_level": 3
+          },
+          "7": {
+            "count": 2,
+            "slot_level": 4
+          },
+          "8": {
+            "count": 2,
+            "slot_level": 4
+          },
+          "9": {
+            "count": 2,
+            "slot_level": 5
+          }
+        },
+        "prepared_spells_by_level": {
+          "1": 2,
+          "10": 10,
+          "11": 11,
+          "12": 11,
+          "13": 12,
+          "14": 12,
+          "15": 13,
+          "16": 13,
+          "17": 14,
+          "18": 14,
+          "19": 15,
+          "2": 3,
+          "20": 15,
+          "3": 4,
+          "4": 5,
+          "5": 6,
+          "6": 7,
+          "7": 8,
+          "8": 9,
+          "9": 10
+        },
+        "spell_slots_by_level": {}
       },
       "starting_equipment_text": "Choose A or B: (A) Leather Armor, Sickle, 2 Daggers, Arcane Focus (orb), Book (occult lore), Scholar's Pack, and 15 GP; or (B) 100 GP",
       "subclass_level": 3,
@@ -5602,19 +5579,7 @@
       "code": "wizard",
       "features_by_level": {
         "1": {
-          "class_specific": {
-            "Cantrips": 3,
-            "Prepared Spells": 4,
-            "Spell Slots per Spell Level 1": 2,
-            "Spell Slots per Spell Level 2": "—",
-            "Spell Slots per Spell Level 3": "—",
-            "Spell Slots per Spell Level 4": "—",
-            "Spell Slots per Spell Level 5": "—",
-            "Spell Slots per Spell Level 6": "—",
-            "Spell Slots per Spell Level 7": "—",
-            "Spell Slots per Spell Level 8": "—",
-            "Spell Slots per Spell Level 9": "—"
-          },
+          "class_specific": {},
           "features": [
             {
               "description": "As a student of arcane magic, you have learned to cast spells. See \"Spells\" for the rules on spellcasting. The information below details how you use those rules with Wizard spells, which appear in the Wizard spell list later in the class's description.\n\n_Cantrips._ You know three Wizard cantrips of your choice. _Light_, _Mage Hand_, and _Ray of Frost_ are recommended. Whenever you finish a Long Rest, you can replace one of your cantrips from this feature with another Wizard cantrip of your choice.\n\nWhen you reach Wizard levels 4 and 10, you learn another Wizard cantrip of your choice, as shown in the Cantrips column of the Wizard Features table.\n\n_Spellbook._ Your wizardly apprenticeship culminated in the creation of a unique book: your spellbook. It is a Tiny object that weighs 3 pounds, contains 100 pages, and can be read only by you or someone casting _Identify_. You determine the book's appearance and materials, such as a gilt-edged tome or a collection of vellum bound with twine.\n\nThe book contains the level 1+ spells you know. It starts with six level 1 Wizard spells of your choice. _Detect Magic_, _Feather Fall_, _Mage Armor_, _Magic Missile_, _Sleep_, and _Thunderwave_ are recommended.\n\nWhenever you gain a Wizard level after 1, add two Wizard spells of your choice to your spellbook. Each of these spells must be of a level for which you have spell slots, as shown in the Wizard Features table. The spells are the culmination of arcane research you do regularly.\n\n_Spell Slots._ The Wizard Features table shows how many spell slots you have to cast your level 1+ spells. You regain all expended slots when you finish a Long Rest.\n\n_Prepared Spells of Level 1+._ You prepare the list of level 1+ spells that are available for you to cast with this feature. To do so, choose four spells from your spellbook. The chosen spells must be of a level for which you have spell slots.\n\nThe number of spells on your list increases as you gain Wizard levels, as shown in the Prepared Spells column of the Wizard Features table. Whenever that number increases, choose additional Wizard spells until the number of spells on your list matches the number in the table. The chosen spells must be of a level for which you have spell slots. For example, if you're a level 3 Wizard, your list of prepared spells can include six spells of levels 1 and 2 in any combination, chosen from your spellbook.\n\nIf another Wizard feature gives you spells that you always have prepared, those spells don't count against the number of spells you can prepare with this feature, but those spells otherwise count as Wizard spells for you.\n\n_Changing Your Prepared Spells._ Whenever you finish a Long Rest, you can change your list of prepared spells, replacing any of the spells there with spells from your spellbook.\n\n_Spellcasting Ability._ Intelligence is your spellcasting ability for your Wizard spells.\n\n_Spellcasting Focus._ You can use an Arcane Focus or your spellbook as a Spellcasting Focus for your Wizard spells.",
@@ -5632,19 +5597,7 @@
           "proficiency_bonus": 2
         },
         "10": {
-          "class_specific": {
-            "Cantrips": 5,
-            "Prepared Spells": 15,
-            "Spell Slots per Spell Level 1": 4,
-            "Spell Slots per Spell Level 2": 3,
-            "Spell Slots per Spell Level 3": 3,
-            "Spell Slots per Spell Level 4": 3,
-            "Spell Slots per Spell Level 5": 2,
-            "Spell Slots per Spell Level 6": "—",
-            "Spell Slots per Spell Level 7": "—",
-            "Spell Slots per Spell Level 8": "—",
-            "Spell Slots per Spell Level 9": "—"
-          },
+          "class_specific": {},
           "features": [
             {
               "description": "Subclass feature gained at this level; see the class's subclasses for details.",
@@ -5654,36 +5607,12 @@
           "proficiency_bonus": 4
         },
         "11": {
-          "class_specific": {
-            "Cantrips": 5,
-            "Prepared Spells": 16,
-            "Spell Slots per Spell Level 1": 4,
-            "Spell Slots per Spell Level 2": 3,
-            "Spell Slots per Spell Level 3": 3,
-            "Spell Slots per Spell Level 4": 3,
-            "Spell Slots per Spell Level 5": 2,
-            "Spell Slots per Spell Level 6": 1,
-            "Spell Slots per Spell Level 7": "—",
-            "Spell Slots per Spell Level 8": "—",
-            "Spell Slots per Spell Level 9": "—"
-          },
+          "class_specific": {},
           "features": [],
           "proficiency_bonus": 4
         },
         "12": {
-          "class_specific": {
-            "Cantrips": 5,
-            "Prepared Spells": 16,
-            "Spell Slots per Spell Level 1": 4,
-            "Spell Slots per Spell Level 2": 3,
-            "Spell Slots per Spell Level 3": 3,
-            "Spell Slots per Spell Level 4": 3,
-            "Spell Slots per Spell Level 5": 2,
-            "Spell Slots per Spell Level 6": 1,
-            "Spell Slots per Spell Level 7": "—",
-            "Spell Slots per Spell Level 8": "—",
-            "Spell Slots per Spell Level 9": "—"
-          },
+          "class_specific": {},
           "features": [
             {
               "description": "You gain the Ability Score Improvement feat (see \"Feats\") or another feat of your choice for which you qualify. You gain this feature again at Wizard levels 8, 12, and 16.",
@@ -5693,36 +5622,12 @@
           "proficiency_bonus": 4
         },
         "13": {
-          "class_specific": {
-            "Cantrips": 5,
-            "Prepared Spells": 17,
-            "Spell Slots per Spell Level 1": 4,
-            "Spell Slots per Spell Level 2": 3,
-            "Spell Slots per Spell Level 3": 3,
-            "Spell Slots per Spell Level 4": 3,
-            "Spell Slots per Spell Level 5": 2,
-            "Spell Slots per Spell Level 6": 1,
-            "Spell Slots per Spell Level 7": 1,
-            "Spell Slots per Spell Level 8": "—",
-            "Spell Slots per Spell Level 9": "—"
-          },
+          "class_specific": {},
           "features": [],
           "proficiency_bonus": 5
         },
         "14": {
-          "class_specific": {
-            "Cantrips": 5,
-            "Prepared Spells": 18,
-            "Spell Slots per Spell Level 1": 4,
-            "Spell Slots per Spell Level 2": 3,
-            "Spell Slots per Spell Level 3": 3,
-            "Spell Slots per Spell Level 4": 3,
-            "Spell Slots per Spell Level 5": 2,
-            "Spell Slots per Spell Level 6": 1,
-            "Spell Slots per Spell Level 7": 1,
-            "Spell Slots per Spell Level 8": "—",
-            "Spell Slots per Spell Level 9": "—"
-          },
+          "class_specific": {},
           "features": [
             {
               "description": "Subclass feature gained at this level; see the class's subclasses for details.",
@@ -5732,36 +5637,12 @@
           "proficiency_bonus": 5
         },
         "15": {
-          "class_specific": {
-            "Cantrips": 5,
-            "Prepared Spells": 19,
-            "Spell Slots per Spell Level 1": 4,
-            "Spell Slots per Spell Level 2": 3,
-            "Spell Slots per Spell Level 3": 3,
-            "Spell Slots per Spell Level 4": 3,
-            "Spell Slots per Spell Level 5": 2,
-            "Spell Slots per Spell Level 6": 1,
-            "Spell Slots per Spell Level 7": 1,
-            "Spell Slots per Spell Level 8": 1,
-            "Spell Slots per Spell Level 9": "—"
-          },
+          "class_specific": {},
           "features": [],
           "proficiency_bonus": 5
         },
         "16": {
-          "class_specific": {
-            "Cantrips": 5,
-            "Prepared Spells": 21,
-            "Spell Slots per Spell Level 1": 4,
-            "Spell Slots per Spell Level 2": 3,
-            "Spell Slots per Spell Level 3": 3,
-            "Spell Slots per Spell Level 4": 3,
-            "Spell Slots per Spell Level 5": 2,
-            "Spell Slots per Spell Level 6": 1,
-            "Spell Slots per Spell Level 7": 1,
-            "Spell Slots per Spell Level 8": 1,
-            "Spell Slots per Spell Level 9": "—"
-          },
+          "class_specific": {},
           "features": [
             {
               "description": "You gain the Ability Score Improvement feat (see \"Feats\") or another feat of your choice for which you qualify. You gain this feature again at Wizard levels 8, 12, and 16.",
@@ -5771,36 +5652,12 @@
           "proficiency_bonus": 5
         },
         "17": {
-          "class_specific": {
-            "Cantrips": 5,
-            "Prepared Spells": 22,
-            "Spell Slots per Spell Level 1": 4,
-            "Spell Slots per Spell Level 2": 3,
-            "Spell Slots per Spell Level 3": 3,
-            "Spell Slots per Spell Level 4": 3,
-            "Spell Slots per Spell Level 5": 2,
-            "Spell Slots per Spell Level 6": 1,
-            "Spell Slots per Spell Level 7": 1,
-            "Spell Slots per Spell Level 8": 1,
-            "Spell Slots per Spell Level 9": 1
-          },
+          "class_specific": {},
           "features": [],
           "proficiency_bonus": 6
         },
         "18": {
-          "class_specific": {
-            "Cantrips": 5,
-            "Prepared Spells": 23,
-            "Spell Slots per Spell Level 1": 4,
-            "Spell Slots per Spell Level 2": 3,
-            "Spell Slots per Spell Level 3": 3,
-            "Spell Slots per Spell Level 4": 3,
-            "Spell Slots per Spell Level 5": 3,
-            "Spell Slots per Spell Level 6": 1,
-            "Spell Slots per Spell Level 7": 1,
-            "Spell Slots per Spell Level 8": 1,
-            "Spell Slots per Spell Level 9": 1
-          },
+          "class_specific": {},
           "features": [
             {
               "description": "You have achieved such mastery over certain spells that you can cast them at will. Choose a level 1 and a level 2 spell in your spellbook that have a casting time of an action. You always have those spells prepared, and you can cast them at their lowest level without expending a spell slot. To cast either spell at a higher level, you must expend a spell slot.\n\nWhenever you finish a Long Rest, you can study your spellbook and replace one of those spells with an eligible spell of the same level from the book.",
@@ -5810,19 +5667,7 @@
           "proficiency_bonus": 6
         },
         "19": {
-          "class_specific": {
-            "Cantrips": 5,
-            "Prepared Spells": 24,
-            "Spell Slots per Spell Level 1": 4,
-            "Spell Slots per Spell Level 2": 3,
-            "Spell Slots per Spell Level 3": 3,
-            "Spell Slots per Spell Level 4": 3,
-            "Spell Slots per Spell Level 5": 3,
-            "Spell Slots per Spell Level 6": 2,
-            "Spell Slots per Spell Level 7": 1,
-            "Spell Slots per Spell Level 8": 1,
-            "Spell Slots per Spell Level 9": 1
-          },
+          "class_specific": {},
           "features": [
             {
               "description": "You gain an Epic Boon feat (see \"Feats\") or another feat of your choice for which you qualify. Boon of Spell Recall is recommended.",
@@ -5832,19 +5677,7 @@
           "proficiency_bonus": 6
         },
         "2": {
-          "class_specific": {
-            "Cantrips": 3,
-            "Prepared Spells": 5,
-            "Spell Slots per Spell Level 1": 3,
-            "Spell Slots per Spell Level 2": "—",
-            "Spell Slots per Spell Level 3": "—",
-            "Spell Slots per Spell Level 4": "—",
-            "Spell Slots per Spell Level 5": "—",
-            "Spell Slots per Spell Level 6": "—",
-            "Spell Slots per Spell Level 7": "—",
-            "Spell Slots per Spell Level 8": "—",
-            "Spell Slots per Spell Level 9": "—"
-          },
+          "class_specific": {},
           "features": [
             {
               "choices": [
@@ -5888,19 +5721,7 @@
           "proficiency_bonus": 2
         },
         "20": {
-          "class_specific": {
-            "Cantrips": 5,
-            "Prepared Spells": 25,
-            "Spell Slots per Spell Level 1": 4,
-            "Spell Slots per Spell Level 2": 3,
-            "Spell Slots per Spell Level 3": 3,
-            "Spell Slots per Spell Level 4": 3,
-            "Spell Slots per Spell Level 5": 3,
-            "Spell Slots per Spell Level 6": 2,
-            "Spell Slots per Spell Level 7": 2,
-            "Spell Slots per Spell Level 8": 1,
-            "Spell Slots per Spell Level 9": 1
-          },
+          "class_specific": {},
           "features": [
             {
               "description": "Choose two level 3 spells in your spellbook as your signature spells. You always have these spells prepared, and you can cast each of them once at level 3 without expending a spell slot. When you do so, you can't cast them in this way again until you finish a Short or Long Rest. To cast either spell at a higher level, you must expend a spell slot.",
@@ -5910,19 +5731,7 @@
           "proficiency_bonus": 6
         },
         "3": {
-          "class_specific": {
-            "Cantrips": 3,
-            "Prepared Spells": 6,
-            "Spell Slots per Spell Level 1": 4,
-            "Spell Slots per Spell Level 2": 2,
-            "Spell Slots per Spell Level 3": "—",
-            "Spell Slots per Spell Level 4": "—",
-            "Spell Slots per Spell Level 5": "—",
-            "Spell Slots per Spell Level 6": "—",
-            "Spell Slots per Spell Level 7": "—",
-            "Spell Slots per Spell Level 8": "—",
-            "Spell Slots per Spell Level 9": "—"
-          },
+          "class_specific": {},
           "features": [
             {
               "description": "Subclass feature gained at this level; see the class's subclasses for details.",
@@ -5932,19 +5741,7 @@
           "proficiency_bonus": 2
         },
         "4": {
-          "class_specific": {
-            "Cantrips": 4,
-            "Prepared Spells": 7,
-            "Spell Slots per Spell Level 1": 4,
-            "Spell Slots per Spell Level 2": 3,
-            "Spell Slots per Spell Level 3": "—",
-            "Spell Slots per Spell Level 4": "—",
-            "Spell Slots per Spell Level 5": "—",
-            "Spell Slots per Spell Level 6": "—",
-            "Spell Slots per Spell Level 7": "—",
-            "Spell Slots per Spell Level 8": "—",
-            "Spell Slots per Spell Level 9": "—"
-          },
+          "class_specific": {},
           "features": [
             {
               "description": "You gain the Ability Score Improvement feat (see \"Feats\") or another feat of your choice for which you qualify. You gain this feature again at Wizard levels 8, 12, and 16.",
@@ -5954,19 +5751,7 @@
           "proficiency_bonus": 2
         },
         "5": {
-          "class_specific": {
-            "Cantrips": 4,
-            "Prepared Spells": 9,
-            "Spell Slots per Spell Level 1": 4,
-            "Spell Slots per Spell Level 2": 3,
-            "Spell Slots per Spell Level 3": 2,
-            "Spell Slots per Spell Level 4": "—",
-            "Spell Slots per Spell Level 5": "—",
-            "Spell Slots per Spell Level 6": "—",
-            "Spell Slots per Spell Level 7": "—",
-            "Spell Slots per Spell Level 8": "—",
-            "Spell Slots per Spell Level 9": "—"
-          },
+          "class_specific": {},
           "features": [
             {
               "description": "Whenever you finish a Short Rest, you can study your spellbook and replace one of the level 1+ Wizard spells you have prepared for your Spellcasting feature with another level 1+ spell from the book.",
@@ -5976,19 +5761,7 @@
           "proficiency_bonus": 3
         },
         "6": {
-          "class_specific": {
-            "Cantrips": 4,
-            "Prepared Spells": 10,
-            "Spell Slots per Spell Level 1": 4,
-            "Spell Slots per Spell Level 2": 3,
-            "Spell Slots per Spell Level 3": 3,
-            "Spell Slots per Spell Level 4": "—",
-            "Spell Slots per Spell Level 5": "—",
-            "Spell Slots per Spell Level 6": "—",
-            "Spell Slots per Spell Level 7": "—",
-            "Spell Slots per Spell Level 8": "—",
-            "Spell Slots per Spell Level 9": "—"
-          },
+          "class_specific": {},
           "features": [
             {
               "description": "Subclass feature gained at this level; see the class's subclasses for details.",
@@ -5998,36 +5771,12 @@
           "proficiency_bonus": 3
         },
         "7": {
-          "class_specific": {
-            "Cantrips": 4,
-            "Prepared Spells": 11,
-            "Spell Slots per Spell Level 1": 4,
-            "Spell Slots per Spell Level 2": 3,
-            "Spell Slots per Spell Level 3": 3,
-            "Spell Slots per Spell Level 4": 1,
-            "Spell Slots per Spell Level 5": "—",
-            "Spell Slots per Spell Level 6": "—",
-            "Spell Slots per Spell Level 7": "—",
-            "Spell Slots per Spell Level 8": "—",
-            "Spell Slots per Spell Level 9": "—"
-          },
+          "class_specific": {},
           "features": [],
           "proficiency_bonus": 3
         },
         "8": {
-          "class_specific": {
-            "Cantrips": 4,
-            "Prepared Spells": 12,
-            "Spell Slots per Spell Level 1": 4,
-            "Spell Slots per Spell Level 2": 3,
-            "Spell Slots per Spell Level 3": 3,
-            "Spell Slots per Spell Level 4": 2,
-            "Spell Slots per Spell Level 5": "—",
-            "Spell Slots per Spell Level 6": "—",
-            "Spell Slots per Spell Level 7": "—",
-            "Spell Slots per Spell Level 8": "—",
-            "Spell Slots per Spell Level 9": "—"
-          },
+          "class_specific": {},
           "features": [
             {
               "description": "You gain the Ability Score Improvement feat (see \"Feats\") or another feat of your choice for which you qualify. You gain this feature again at Wizard levels 8, 12, and 16.",
@@ -6037,19 +5786,7 @@
           "proficiency_bonus": 3
         },
         "9": {
-          "class_specific": {
-            "Cantrips": 4,
-            "Prepared Spells": 14,
-            "Spell Slots per Spell Level 1": 4,
-            "Spell Slots per Spell Level 2": 3,
-            "Spell Slots per Spell Level 3": 3,
-            "Spell Slots per Spell Level 4": 3,
-            "Spell Slots per Spell Level 5": 1,
-            "Spell Slots per Spell Level 6": "—",
-            "Spell Slots per Spell Level 7": "—",
-            "Spell Slots per Spell Level 8": "—",
-            "Spell Slots per Spell Level 9": "—"
-          },
+          "class_specific": {},
           "features": [],
           "proficiency_bonus": 4
         }
@@ -6075,6 +5812,203 @@
           "nature",
           "religion"
         ]
+      },
+      "spellcasting": {
+        "cantrips_known_by_level": {
+          "1": 3,
+          "10": 5,
+          "11": 5,
+          "12": 5,
+          "13": 5,
+          "14": 5,
+          "15": 5,
+          "16": 5,
+          "17": 5,
+          "18": 5,
+          "19": 5,
+          "2": 3,
+          "20": 5,
+          "3": 3,
+          "4": 4,
+          "5": 4,
+          "6": 4,
+          "7": 4,
+          "8": 4,
+          "9": 4
+        },
+        "pact_slots_by_level": {},
+        "prepared_spells_by_level": {
+          "1": 4,
+          "10": 15,
+          "11": 16,
+          "12": 16,
+          "13": 17,
+          "14": 18,
+          "15": 19,
+          "16": 21,
+          "17": 22,
+          "18": 23,
+          "19": 24,
+          "2": 5,
+          "20": 25,
+          "3": 6,
+          "4": 7,
+          "5": 9,
+          "6": 10,
+          "7": 11,
+          "8": 12,
+          "9": 14
+        },
+        "spell_slots_by_level": {
+          "1": {
+            "1": 2
+          },
+          "10": {
+            "1": 4,
+            "2": 3,
+            "3": 3,
+            "4": 3,
+            "5": 2
+          },
+          "11": {
+            "1": 4,
+            "2": 3,
+            "3": 3,
+            "4": 3,
+            "5": 2,
+            "6": 1
+          },
+          "12": {
+            "1": 4,
+            "2": 3,
+            "3": 3,
+            "4": 3,
+            "5": 2,
+            "6": 1
+          },
+          "13": {
+            "1": 4,
+            "2": 3,
+            "3": 3,
+            "4": 3,
+            "5": 2,
+            "6": 1,
+            "7": 1
+          },
+          "14": {
+            "1": 4,
+            "2": 3,
+            "3": 3,
+            "4": 3,
+            "5": 2,
+            "6": 1,
+            "7": 1
+          },
+          "15": {
+            "1": 4,
+            "2": 3,
+            "3": 3,
+            "4": 3,
+            "5": 2,
+            "6": 1,
+            "7": 1,
+            "8": 1
+          },
+          "16": {
+            "1": 4,
+            "2": 3,
+            "3": 3,
+            "4": 3,
+            "5": 2,
+            "6": 1,
+            "7": 1,
+            "8": 1
+          },
+          "17": {
+            "1": 4,
+            "2": 3,
+            "3": 3,
+            "4": 3,
+            "5": 2,
+            "6": 1,
+            "7": 1,
+            "8": 1,
+            "9": 1
+          },
+          "18": {
+            "1": 4,
+            "2": 3,
+            "3": 3,
+            "4": 3,
+            "5": 3,
+            "6": 1,
+            "7": 1,
+            "8": 1,
+            "9": 1
+          },
+          "19": {
+            "1": 4,
+            "2": 3,
+            "3": 3,
+            "4": 3,
+            "5": 3,
+            "6": 2,
+            "7": 1,
+            "8": 1,
+            "9": 1
+          },
+          "2": {
+            "1": 3
+          },
+          "20": {
+            "1": 4,
+            "2": 3,
+            "3": 3,
+            "4": 3,
+            "5": 3,
+            "6": 2,
+            "7": 2,
+            "8": 1,
+            "9": 1
+          },
+          "3": {
+            "1": 4,
+            "2": 2
+          },
+          "4": {
+            "1": 4,
+            "2": 3
+          },
+          "5": {
+            "1": 4,
+            "2": 3,
+            "3": 2
+          },
+          "6": {
+            "1": 4,
+            "2": 3,
+            "3": 3
+          },
+          "7": {
+            "1": 4,
+            "2": 3,
+            "3": 3,
+            "4": 1
+          },
+          "8": {
+            "1": 4,
+            "2": 3,
+            "3": 3,
+            "4": 2
+          },
+          "9": {
+            "1": 4,
+            "2": 3,
+            "3": 3,
+            "4": 3,
+            "5": 1
+          }
+        }
       },
       "starting_equipment_text": "Choose A or B: (A) 2 Daggers, Arcane Focus (Quarterstaff), Robe, Spellbook, Scholar's Pack, and 5 GP; or (B) 55 GP",
       "subclass_level": 3,

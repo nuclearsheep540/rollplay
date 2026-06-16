@@ -201,6 +201,41 @@ def test_authored_species_subchoices_merged():
     assert species["dwarf"]["sub_choices"] == []
 
 
+def test_spellcasting_progression_extracted():
+    """A.6: spell columns lifted from class_specific into a typed spellcasting structure."""
+    classes = {c["code"]: c for c in _entries("classes.json", "classes")}
+    casters = {"bard", "cleric", "druid", "paladin", "ranger", "sorcerer", "warlock", "wizard"}
+
+    for code, c in classes.items():
+        if code in casters:
+            assert c["spellcasting"] is not None, f"{code} should have spellcasting"
+        else:
+            assert c["spellcasting"] is None, f"{code} should not have spellcasting"
+
+    # Spell columns must no longer linger in class_specific (moved, not duplicated).
+    for c in classes.values():
+        for lvl in c["features_by_level"].values():
+            for key in lvl["class_specific"]:
+                assert "Spell Slots" not in key, key
+                assert key not in {"Cantrips", "Prepared Spells", "Slot Level"}, key
+
+    # Full caster: Wizard reaches 9th-level slots at L20 and has cantrips.
+    wiz = classes["wizard"]["spellcasting"]
+    assert wiz["spell_slots_by_level"]["20"].get("9") == 1
+    assert wiz["cantrips_known_by_level"]["1"] == 3
+    assert not wiz["pact_slots_by_level"]
+
+    # Pact caster: Warlock uses pact_slots (not regular slots).
+    war = classes["warlock"]["spellcasting"]
+    assert war["pact_slots_by_level"]["5"] == {"count": 2, "slot_level": 3}
+    assert not war["spell_slots_by_level"]
+
+    # Half caster: Paladin has slots only up to 5th and no cantrips.
+    pal = classes["paladin"]["spellcasting"]
+    assert pal["spell_slots_by_level"]["2"] == {"1": 2}
+    assert not pal["cantrips_known_by_level"]
+
+
 def test_every_feat_with_prerequisite_subheader_is_parsed():
     """Regression guard for the dropped-prerequisites bug.
 

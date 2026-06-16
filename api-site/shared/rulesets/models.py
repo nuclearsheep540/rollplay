@@ -147,6 +147,26 @@ class SubclassDefinition(BaseModel):
     always_prepared_spells_by_level: dict[str, list[str]] = {}
 
 
+class PactSlot(BaseModel):
+    count: int = Field(ge=0)             # number of Pact Magic slots
+    slot_level: int = Field(ge=1, le=9)  # spell level those slots are cast at
+
+
+class SpellcasterProgression(BaseModel):
+    """Per-character-level spell progression, lifted from the class table (A.6).
+
+    All dicts are keyed by character level ("1".."20"); a level absent from a dict means
+    none at that level. Regular casters populate ``spell_slots_by_level``; Warlock uses
+    ``pact_slots_by_level`` instead. Paladin/Ranger have no cantrips, so
+    ``cantrips_known_by_level`` is empty for them.
+    """
+
+    cantrips_known_by_level: dict[str, int] = {}
+    prepared_spells_by_level: dict[str, int] = {}
+    spell_slots_by_level: dict[str, dict[str, int]] = {}  # char level -> {spell level -> slots}
+    pact_slots_by_level: dict[str, PactSlot] = {}         # Warlock only
+
+
 class ClassDefinition(BaseModel):
     code: str = Field(pattern=CodePattern)
     name: str
@@ -163,6 +183,7 @@ class ClassDefinition(BaseModel):
     multiclass_text: Optional[str] = None
     subclass_level: Optional[int] = None  # character level at which a subclass is chosen (3 in SRD 2024)
     subclasses: list[SubclassDefinition] = []
+    spellcasting: Optional[SpellcasterProgression] = None  # None for non-casters; lifted from the class table
 
 
 class _EditionFile(BaseModel):
