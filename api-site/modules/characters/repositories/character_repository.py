@@ -97,7 +97,10 @@ class CharacterRepository:
         class_entries = sorted(
             (
                 ClassEntry(
-                    class_code=e.class_code, level=e.level, is_primary=bool(e.is_primary)
+                    class_code=e.class_code,
+                    level=e.level,
+                    is_primary=bool(e.is_primary),
+                    sub_choices=e.sub_choices or {},
                 )
                 for e in model.class_entries or []
             ),
@@ -131,6 +134,7 @@ class CharacterRepository:
             active_campaign=model.active_in_campaign_id,
             character_name=model.character_name,
             species_code=model.species_code,
+            species_sub_choices=model.species_sub_choices or {},
             background_code=model.background_code,
             class_entries=class_entries,
             ability_scores=ability_scores,
@@ -242,6 +246,7 @@ class CharacterRepository:
                 avatar_asset_id=aggregate.avatar_asset_id,
                 ability_score_method=aggregate.ability_score_method,
                 ability_roll_details=aggregate.ability_roll_details,
+                species_sub_choices=dict(aggregate.species_sub_choices),
                 created_at=aggregate.created_at,
                 updated_at=aggregate.updated_at,
                 is_deleted=aggregate.is_deleted,
@@ -281,6 +286,7 @@ class CharacterRepository:
             model.avatar_asset_id = aggregate.avatar_asset_id
             model.ability_score_method = aggregate.ability_score_method
             model.ability_roll_details = aggregate.ability_roll_details
+            model.species_sub_choices = dict(aggregate.species_sub_choices)
             model.updated_at = aggregate.updated_at
             model.is_deleted = aggregate.is_deleted
             # Replace-style sync for all join tables — these are small and
@@ -314,6 +320,7 @@ class CharacterRepository:
                 class_code=entry.class_code,
                 level=entry.level,
                 is_primary=entry.is_primary,
+                sub_choices=dict(entry.sub_choices),
             ))
         scores = aggregate.ability_scores.to_dict()
         bonuses = aggregate.origin_ability_bonuses or {}

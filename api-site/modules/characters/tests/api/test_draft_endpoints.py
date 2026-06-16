@@ -29,6 +29,36 @@ def _create_draft(client, auth_as, owner):
     return response.json()
 
 
+def test_sub_choice_picks_round_trip(client, auth_as, owner):
+    """A.3/A.4 picks persist through the draft round-trip (save → reload)."""
+    draft = _create_draft(client, auth_as, owner)
+    cid = draft["id"]
+    # Species sub-choices (Human size + skillful skill pick).
+    client.patch(f"/api/characters/draft/{cid}", json={
+        "step": "identity",
+        "identity": {
+            "species_code": "human",
+            "sub_choices": {"size": ["medium"], "skillful": ["arcana"]},
+        },
+    })
+    # Class L1 sub-choices (Barbarian Weapon Mastery picks — stored faithfully).
+    client.patch(f"/api/characters/draft/{cid}", json={
+        "step": "class",
+        "class": {
+            "classes": [{
+                "class_code": "barbarian", "level": 1, "is_primary": True,
+                "chosen_skills": ["athletics", "perception"],
+                "sub_choices": {"barbarian_weapon_mastery": ["greataxe", "handaxe"]},
+            }],
+        },
+    })
+    body = client.get(f"/api/characters/{cid}").json()
+    assert body["species_sub_choices"] == {"size": ["medium"], "skillful": ["arcana"]}
+    entry = body["class_entries"][0]
+    assert entry["class_code"] == "barbarian"
+    assert entry["sub_choices"] == {"barbarian_weapon_mastery": ["greataxe", "handaxe"]}
+
+
 class TestCreateDraft:
     def test_create_draft_returns_draft_response(self, client, auth_as, owner):
         body = _create_draft(client, auth_as, owner)

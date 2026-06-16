@@ -127,6 +127,9 @@ class UpdateCharacterDraft:
         character.apply_species_traits(
             speed=species.speed, size=species.size, languages=languages
         )
+        # Store sub-choice picks (lineage/ancestry/size) faithfully — the UI offers
+        # only valid options; per §3.0 we don't hard-block here.
+        character.species_sub_choices = dict(payload.get("sub_choices", {}))
 
     # ------------------------------------------------------------ class
 
@@ -148,6 +151,7 @@ class UpdateCharacterDraft:
                 class_code=class_def.code,
                 level=int(pick["level"]),
                 is_primary=bool(pick.get("is_primary", i == 0)),
+                sub_choices=dict(pick.get("sub_choices", {})),
             ))
             total_level += int(pick["level"])
             # Skill picks — must be drawn from class's offered list and count must match.

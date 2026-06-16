@@ -71,6 +71,7 @@ class Character(Base):
     # re-roll (which would change the values).
     ability_score_method = Column(String(20), nullable=True)
     ability_roll_details = Column(JSONB, nullable=True)
+    species_sub_choices = Column(JSONB, nullable=False, server_default="{}")  # lineage/ancestry/size picks
 
     # FK to the MediaAsset (asset_type='image') used as this character's
     # avatar. NULL ⇒ frontend renders /heroes.png default. SET NULL on the

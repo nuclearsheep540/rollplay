@@ -135,12 +135,14 @@ def _to_character_response(
         active_campaign=character.active_campaign,
         character_name=character.character_name,
         species_code=character.species_code,
+        species_sub_choices=character.species_sub_choices,
         background_code=character.background_code,
         class_entries=[
             {
                 "class_code": e.class_code,
                 "level": e.level,
                 "is_primary": e.is_primary,
+                "sub_choices": e.sub_choices,
             }
             for e in character.class_entries
         ],

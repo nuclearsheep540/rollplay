@@ -45,6 +45,7 @@ class ClassEntryDTO(BaseModel):
     class_code: str = Field(pattern=CodePattern)
     level: int = Field(ge=1, le=20)
     is_primary: bool = False
+    sub_choices: Dict[str, List[str]] = {}  # L1 feature-choice picks: {choice_code: [picked_codes]}
 
 
 class SkillProficiencyDTO(BaseModel):
@@ -96,6 +97,7 @@ class CharacterResponse(BaseModel):
 
     character_name: str
     species_code: str
+    species_sub_choices: Dict[str, List[str]] = {}  # lineage/ancestry/size picks
     background_code: str
 
     class_entries: List[ClassEntryDTO]
@@ -173,6 +175,7 @@ class IdentityStepPayload(BaseModel):
     species_code: str = Field(pattern=CodePattern)
     name: Optional[str] = Field(default=None, min_length=1, max_length=50)
     chosen_languages: List[str] = Field(default_factory=list)
+    sub_choices: Dict[str, List[str]] = Field(default_factory=dict)  # lineage/ancestry/size picks
 
 
 class ClassPick(BaseModel):
@@ -180,6 +183,7 @@ class ClassPick(BaseModel):
     level: int = Field(ge=1, le=20)
     is_primary: bool = False
     chosen_skills: List[str] = Field(default_factory=list)
+    sub_choices: Dict[str, List[str]] = Field(default_factory=dict)  # L1 feature-choice picks
 
 
 class ClassStepPayload(BaseModel):

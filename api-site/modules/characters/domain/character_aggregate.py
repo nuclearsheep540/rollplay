@@ -79,6 +79,7 @@ class ClassEntry:
     class_code: str
     level: int
     is_primary: bool = False
+    sub_choices: dict = field(default_factory=dict)  # L1 feature-choice picks: {choice_code: [picked_codes]}
 
     def __post_init__(self):
         if not 1 <= self.level <= 20:
@@ -200,6 +201,9 @@ class CharacterAggregate:
     # 4d6 breakdown instead of forcing a re-roll on refresh.
     ability_score_method: Optional[str] = None
     ability_roll_details: Optional[dict] = None
+
+    # Species sub-choice picks (lineage/ancestry/legacy/size): {choice_code: [picked_codes]}
+    species_sub_choices: dict = field(default_factory=dict)
 
     # -------------------------------------------------------------- factory
 
