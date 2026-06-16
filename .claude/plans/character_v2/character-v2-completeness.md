@@ -655,6 +655,7 @@ For multi-class spellcasters, the step paginates per spellcasting class.
 
 **Extends:**
 - [components/CharacterSheet.js](rollplay/app/game/components/CharacterSheet.js) — new sections for spell slots, pact slots, resource pools, prepared spells, invocations. All read from `CharacterResponse.derived` and `CharacterResponse.resource_usage` / `spell_slot_uses` / etc.
+- **Deferred from PR 3 — render the player's PICKS here, in this one pass (don't do it piecemeal):** both read-only sheets — the in-game one above AND the wizard's `app/(authenticated)/character/components/CharacterSheet.js` (used by ReviewStep) — currently show feats + languages but NOT `species_sub_choices` or `class_entries[].sub_choices`. Add a "Choices" display that resolves choice codes → names via `useEditionClasses`/`useEditionSpecies` (so it reads "Fighting Style: Defense", not "fighting_style: defense"), alongside the spell/resource sections. See session-handover deferral #7.
 - [api/schemas.py — RuntimePatchRequest](api-site/modules/characters/api/schemas.py#L256) — extend to accept partial updates of resource_usage and spell_slot_uses.
 - [application/commands.py — UpdateRuntimeState](api-site/modules/characters/application/commands.py#L374) — extend the per-field handler dispatch (already pattern-matches updates dict; one new field per resource type).
 
