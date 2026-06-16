@@ -89,9 +89,29 @@ class BackgroundDefinition(BaseModel):
     equipment_text: str
 
 
+class ClassFeatureChoiceOption(BaseModel):
+    code: str = Field(pattern=CodePattern)
+    name: str
+    description: str = ""
+
+
+class ClassFeatureChoice(BaseModel):
+    code: str = Field(pattern=CodePattern)
+    name: str
+    type: Literal[
+        "single_pick", "feat_pick", "skill_proficiency", "weapon_mastery",
+        "metamagic", "invocation", "spell_pick", "language", "tool_proficiency",
+    ]
+    count: int = 1
+    source: Optional[list[str]] = None  # allowed code list when applicable (skills/spells/etc.)
+    options: list[ClassFeatureChoiceOption] = []
+    swappable_on: Optional[Literal["long_rest", "short_or_long_rest", "level_up"]] = None
+
+
 class ClassFeature(BaseModel):
     name: str
     description: str = Field(min_length=1)
+    choices: list[ClassFeatureChoice] = []  # authored choice metadata, merged in at build time
 
 
 class ClassLevel(BaseModel):

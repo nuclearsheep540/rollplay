@@ -30,6 +30,15 @@
               "name": "Unarmored Defense"
             },
             {
+              "choices": [
+                {
+                  "code": "barbarian_weapon_mastery",
+                  "count": 2,
+                  "name": "Weapon Mastery",
+                  "swappable_on": "long_rest",
+                  "type": "weapon_mastery"
+                }
+              ],
               "description": "Your training with weapons allows you to use the mastery properties of two kinds of Simple or Martial Melee weapons of your choice, such as Greataxes and Handaxes. Whenever you finish a Long Rest, you can practice weapon drills and change one of those weapon choices.\n\nWhen you reach certain Barbarian levels, you gain the ability to use the mastery properties of more kinds of weapons, as shown in the Weapon Mastery column of the Barbarian Features table.",
               "name": "Weapon Mastery"
             }
@@ -220,6 +229,41 @@
               "name": "Barbarian Subclass"
             },
             {
+              "choices": [
+                {
+                  "code": "barbarian_primal_knowledge",
+                  "count": 1,
+                  "name": "Primal Knowledge Skill",
+                  "options": [
+                    {
+                      "code": "animal_handling",
+                      "name": "Animal Handling"
+                    },
+                    {
+                      "code": "athletics",
+                      "name": "Athletics"
+                    },
+                    {
+                      "code": "intimidation",
+                      "name": "Intimidation"
+                    },
+                    {
+                      "code": "nature",
+                      "name": "Nature"
+                    },
+                    {
+                      "code": "perception",
+                      "name": "Perception"
+                    },
+                    {
+                      "code": "survival",
+                      "name": "Survival"
+                    }
+                  ],
+                  "swappable_on": "long_rest",
+                  "type": "skill_proficiency"
+                }
+              ],
               "description": "You gain proficiency in another skill of your choice from the skill list available to Barbarians at level 1.\n\nIn addition, while your Rage is active, you can channel primal power when you attempt certain tasks; whenever you make an ability check using one of the following skills, you can make it as a Strength check even if it normally uses a different ability: Acrobatics, Intimidation, Perception, Stealth, or Survival. When you use this ability, your Strength represents primal power coursing through you, honing your agility, bearing, and senses.",
               "name": "Primal Knowledge"
             }
@@ -644,6 +688,88 @@
           },
           "features": [
             {
+              "choices": [
+                {
+                  "code": "expertise_level_2",
+                  "count": 2,
+                  "name": "Expertise",
+                  "options": [
+                    {
+                      "code": "acrobatics",
+                      "name": "Acrobatics"
+                    },
+                    {
+                      "code": "animal_handling",
+                      "name": "Animal Handling"
+                    },
+                    {
+                      "code": "arcana",
+                      "name": "Arcana"
+                    },
+                    {
+                      "code": "athletics",
+                      "name": "Athletics"
+                    },
+                    {
+                      "code": "deception",
+                      "name": "Deception"
+                    },
+                    {
+                      "code": "history",
+                      "name": "History"
+                    },
+                    {
+                      "code": "insight",
+                      "name": "Insight"
+                    },
+                    {
+                      "code": "intimidation",
+                      "name": "Intimidation"
+                    },
+                    {
+                      "code": "investigation",
+                      "name": "Investigation"
+                    },
+                    {
+                      "code": "medicine",
+                      "name": "Medicine"
+                    },
+                    {
+                      "code": "nature",
+                      "name": "Nature"
+                    },
+                    {
+                      "code": "perception",
+                      "name": "Perception"
+                    },
+                    {
+                      "code": "performance",
+                      "name": "Performance"
+                    },
+                    {
+                      "code": "persuasion",
+                      "name": "Persuasion"
+                    },
+                    {
+                      "code": "religion",
+                      "name": "Religion"
+                    },
+                    {
+                      "code": "sleight_of_hand",
+                      "name": "Sleight of Hand"
+                    },
+                    {
+                      "code": "stealth",
+                      "name": "Stealth"
+                    },
+                    {
+                      "code": "survival",
+                      "name": "Survival"
+                    }
+                  ],
+                  "type": "skill_proficiency"
+                }
+              ],
               "description": "You gain Expertise (see \"Rules Glossary\") in two of your skill proficiencies of your choice. Performance and Persuasion are recommended if you have proficiency in them.\n\nAt Bard level 9, you gain Expertise in two more of your skill proficiencies of your choice.",
               "name": "Expertise"
             },
@@ -832,6 +958,88 @@
           },
           "features": [
             {
+              "choices": [
+                {
+                  "code": "expertise_level_9",
+                  "count": 2,
+                  "name": "Expertise",
+                  "options": [
+                    {
+                      "code": "acrobatics",
+                      "name": "Acrobatics"
+                    },
+                    {
+                      "code": "animal_handling",
+                      "name": "Animal Handling"
+                    },
+                    {
+                      "code": "arcana",
+                      "name": "Arcana"
+                    },
+                    {
+                      "code": "athletics",
+                      "name": "Athletics"
+                    },
+                    {
+                      "code": "deception",
+                      "name": "Deception"
+                    },
+                    {
+                      "code": "history",
+                      "name": "History"
+                    },
+                    {
+                      "code": "insight",
+                      "name": "Insight"
+                    },
+                    {
+                      "code": "intimidation",
+                      "name": "Intimidation"
+                    },
+                    {
+                      "code": "investigation",
+                      "name": "Investigation"
+                    },
+                    {
+                      "code": "medicine",
+                      "name": "Medicine"
+                    },
+                    {
+                      "code": "nature",
+                      "name": "Nature"
+                    },
+                    {
+                      "code": "perception",
+                      "name": "Perception"
+                    },
+                    {
+                      "code": "performance",
+                      "name": "Performance"
+                    },
+                    {
+                      "code": "persuasion",
+                      "name": "Persuasion"
+                    },
+                    {
+                      "code": "religion",
+                      "name": "Religion"
+                    },
+                    {
+                      "code": "sleight_of_hand",
+                      "name": "Sleight of Hand"
+                    },
+                    {
+                      "code": "stealth",
+                      "name": "Stealth"
+                    },
+                    {
+                      "code": "survival",
+                      "name": "Survival"
+                    }
+                  ],
+                  "type": "skill_proficiency"
+                }
+              ],
               "description": "You gain Expertise (see \"Rules Glossary\") in two of your skill proficiencies of your choice. Performance and Persuasion are recommended if you have proficiency in them.\n\nAt Bard level 9, you gain Expertise in two more of your skill proficiencies of your choice.",
               "name": "Expertise"
             }
@@ -880,6 +1088,88 @@
           "code": "college_of_lore",
           "features": [
             {
+              "choices": [
+                {
+                  "code": "bonus_proficiencies",
+                  "count": 3,
+                  "name": "Bonus Proficiencies",
+                  "options": [
+                    {
+                      "code": "acrobatics",
+                      "name": "Acrobatics"
+                    },
+                    {
+                      "code": "animal_handling",
+                      "name": "Animal Handling"
+                    },
+                    {
+                      "code": "arcana",
+                      "name": "Arcana"
+                    },
+                    {
+                      "code": "athletics",
+                      "name": "Athletics"
+                    },
+                    {
+                      "code": "deception",
+                      "name": "Deception"
+                    },
+                    {
+                      "code": "history",
+                      "name": "History"
+                    },
+                    {
+                      "code": "insight",
+                      "name": "Insight"
+                    },
+                    {
+                      "code": "intimidation",
+                      "name": "Intimidation"
+                    },
+                    {
+                      "code": "investigation",
+                      "name": "Investigation"
+                    },
+                    {
+                      "code": "medicine",
+                      "name": "Medicine"
+                    },
+                    {
+                      "code": "nature",
+                      "name": "Nature"
+                    },
+                    {
+                      "code": "perception",
+                      "name": "Perception"
+                    },
+                    {
+                      "code": "performance",
+                      "name": "Performance"
+                    },
+                    {
+                      "code": "persuasion",
+                      "name": "Persuasion"
+                    },
+                    {
+                      "code": "religion",
+                      "name": "Religion"
+                    },
+                    {
+                      "code": "sleight_of_hand",
+                      "name": "Sleight of Hand"
+                    },
+                    {
+                      "code": "stealth",
+                      "name": "Stealth"
+                    },
+                    {
+                      "code": "survival",
+                      "name": "Survival"
+                    }
+                  ],
+                  "type": "skill_proficiency"
+                }
+              ],
               "description": "You gain proficiency with three skills of your choice.",
               "level": 3,
               "name": "Bonus Proficiencies"
@@ -944,6 +1234,26 @@
               "name": "Spellcasting"
             },
             {
+              "choices": [
+                {
+                  "code": "divine_order",
+                  "count": 1,
+                  "name": "Divine Order",
+                  "options": [
+                    {
+                      "code": "protector",
+                      "description": "Trained for battle, you gain proficiency with Martial weapons and training with Heavy armor.",
+                      "name": "Protector"
+                    },
+                    {
+                      "code": "thaumaturge",
+                      "description": "You know one extra cantrip from the Cleric spell list, and you gain a bonus to Intelligence (Arcana or Religion) checks equal to your Wisdom modifier (minimum of +1).",
+                      "name": "Thaumaturge"
+                    }
+                  ],
+                  "type": "single_pick"
+                }
+              ],
               "description": "You have dedicated yourself to one of the following sacred roles of your choice.\n\n_Protector._ Trained for battle, you gain proficiency with Martial weapons and training with Heavy armor.\n\n_Thaumaturge._ You know one extra cantrip from the Cleric spell list. In addition, your mystical connection to the divine gives you a bonus to your Intelligence (Arcana or Religion) checks. The bonus equals your Wisdom modifier (minimum of +1).",
               "name": "Divine Order"
             }
@@ -1315,6 +1625,26 @@
           },
           "features": [
             {
+              "choices": [
+                {
+                  "code": "blessed_strikes",
+                  "count": 1,
+                  "name": "Blessed Strikes",
+                  "options": [
+                    {
+                      "code": "divine_strike",
+                      "description": "Once on each of your turns when you hit a creature with an attack roll using a weapon, you can cause the target to take an extra 1d8 Necrotic or Radiant damage (your choice).",
+                      "name": "Divine Strike"
+                    },
+                    {
+                      "code": "potent_spellcasting",
+                      "description": "Add your Wisdom modifier to the damage you deal with any Cleric cantrip.",
+                      "name": "Potent Spellcasting"
+                    }
+                  ],
+                  "type": "single_pick"
+                }
+              ],
               "description": "Divine power infuses you in battle. You gain one of the following options of your choice (if you get either option from a Cleric subclass in an older book, use only the option you choose for this feature).\n\n_Divine Strike._ Once on each of your turns when you hit a creature with an attack roll using a weapon, you can cause the target to take an extra 1d8 Necrotic or Radiant damage (your choice).\n\n_Potent Spellcasting._ Add your Wisdom modifier to the damage you deal with any Cleric cantrip.",
               "name": "Blessed Strikes"
             }
@@ -1463,6 +1793,26 @@
               "name": "Druidic"
             },
             {
+              "choices": [
+                {
+                  "code": "primal_order",
+                  "count": 1,
+                  "name": "Primal Order",
+                  "options": [
+                    {
+                      "code": "magician",
+                      "description": "You know one extra cantrip from the Druid spell list. In addition, your mystical connection to nature gives you a bonus to your Intelligence (Arcana or Nature) checks. The bonus equals your Wisdom modifier (minimum bonus of +1).",
+                      "name": "Magician"
+                    },
+                    {
+                      "code": "warden",
+                      "description": "Trained for battle, you gain proficiency with Martial weapons and training with Medium armor.",
+                      "name": "Warden"
+                    }
+                  ],
+                  "type": "single_pick"
+                }
+              ],
               "description": "You have dedicated yourself to one of the following sacred roles of your choice.\n\n_Magician._ You know one extra cantrip from the Druid spell list. In addition, your mystical connection to nature gives you a bonus to your Intelligence (Arcana or Nature) checks. The bonus equals your Wisdom modifier (minimum bonus of +1).\n\n_Warden._ Trained for battle, you gain proficiency with Martial weapons and training with Medium armor.",
               "name": "Primal Order"
             }
@@ -1843,6 +2193,26 @@
           },
           "features": [
             {
+              "choices": [
+                {
+                  "code": "elemental_fury",
+                  "count": 1,
+                  "name": "Elemental Fury",
+                  "options": [
+                    {
+                      "code": "potent_spellcasting",
+                      "description": "Add your Wisdom modifier to the damage you deal with any Druid cantrip.",
+                      "name": "Potent Spellcasting"
+                    },
+                    {
+                      "code": "primal_strike",
+                      "description": "Once on each of your turns when you hit a creature with an attack roll using a weapon or a Beast form's attack in Wild Shape, you can cause the target to take an extra 1d8 Cold, Fire, Lightning, or Thunder damage (choose when you hit).",
+                      "name": "Primal Strike"
+                    }
+                  ],
+                  "type": "single_pick"
+                }
+              ],
               "description": "The might of the elements flows through you. You gain one of the following options of your choice.\n\n_Potent Spellcasting._ Add your Wisdom modifier to the damage you deal with any Druid cantrip.\n\n_Primal Strike._ Once on each of your turns when you hit a creature with an attack roll using a weapon or a Beast form's attack in Wild Shape, you can cause the target to take an extra 1d8 Cold, Fire, Lightning, or Thunder damage (choose when you hit).",
               "name": "Elemental Fury"
             }
@@ -1980,6 +2350,18 @@
           },
           "features": [
             {
+              "choices": [
+                {
+                  "code": "fighting_style",
+                  "count": 1,
+                  "name": "Fighting Style",
+                  "source": [
+                    "fighting_style"
+                  ],
+                  "swappable_on": "level_up",
+                  "type": "feat_pick"
+                }
+              ],
               "description": "You have honed your martial prowess and gain a Fighting Style feat of your choice (see \"Feats\"). Defense is recommended.\n\nWhenever you gain a Fighter level, you can replace the feat you chose with a different Fighting Style feat.",
               "name": "Fighting Style"
             },
@@ -1988,6 +2370,15 @@
               "name": "Second Wind"
             },
             {
+              "choices": [
+                {
+                  "code": "weapon_mastery_fighter_level_1",
+                  "count": 3,
+                  "name": "Weapon Mastery",
+                  "swappable_on": "long_rest",
+                  "type": "weapon_mastery"
+                }
+              ],
               "description": "Your training with weapons allows you to use the mastery properties of three kinds of Simple or Martial weapons of your choice. Whenever you finish a Long Rest, you can practice weapon drills and change one of those weapon choices.\n\nWhen you reach certain Fighter levels, you gain the ability to use the mastery properties of more kinds of weapons, as shown in the Weapon Mastery column of the Fighter Features table.",
               "name": "Weapon Mastery"
             }
@@ -2305,6 +2696,18 @@
               "name": "Remarkable Athlete"
             },
             {
+              "choices": [
+                {
+                  "code": "additional_fighting_style",
+                  "count": 1,
+                  "name": "Additional Fighting Style",
+                  "source": [
+                    "fighting_style"
+                  ],
+                  "swappable_on": "level_up",
+                  "type": "feat_pick"
+                }
+              ],
               "description": "You gain another Fighting Style feat of your choice.",
               "level": 7,
               "name": "Additional Fighting Style"
@@ -2755,6 +3158,15 @@
               "name": "Spellcasting"
             },
             {
+              "choices": [
+                {
+                  "code": "paladin_weapon_mastery",
+                  "count": 2,
+                  "name": "Weapon Mastery",
+                  "swappable_on": "long_rest",
+                  "type": "weapon_mastery"
+                }
+              ],
               "description": "Your training with weapons allows you to use the mastery properties of two kinds of weapons of your choice with which you have proficiency, such as Longswords and Javelins.\n\nWhenever you finish a Long Rest, you can change the kinds of weapons you chose. For example, you could switch to using the mastery properties of Halberds and Flails.",
               "name": "Weapon Mastery"
             }
@@ -2943,6 +3355,18 @@
           },
           "features": [
             {
+              "choices": [
+                {
+                  "code": "fighting_style",
+                  "count": 1,
+                  "name": "Fighting Style",
+                  "source": [
+                    "fighting_style"
+                  ],
+                  "swappable_on": "level_up",
+                  "type": "feat_pick"
+                }
+              ],
               "description": "You gain a Fighting Style feat of your choice (see \"Feats\" for feats). Instead of choosing one of those feats, you can choose the option below.\n\n**Blessed Warrior.** You learn two Cleric cantrips of your choice (see the Cleric class's section for a list of Cleric spells). _Guidance_ and _Sacred Flame_ are recommended. The chosen cantrips count as Paladin spells for you, and Charisma is your spellcasting ability for them. Whenever you gain a Paladin level, you can replace one of these cantrips with another Cleric cantrip.",
               "name": "Fighting Style"
             },
@@ -3205,6 +3629,15 @@
               "name": "Favored Enemy"
             },
             {
+              "choices": [
+                {
+                  "code": "weapon_mastery_ranger",
+                  "count": 2,
+                  "name": "Weapon Mastery",
+                  "swappable_on": "long_rest",
+                  "type": "weapon_mastery"
+                }
+              ],
               "description": "Your training with weapons allows you to use the mastery properties of two kinds of weapons of your\nchoice with which you have proficiency, such as Longbows and Shortswords.\n\nWhenever you finish a Long Rest, you can change the kinds of weapons you chose. For example, you could switch to using the mastery properties of Scimitars and Longswords.",
               "name": "Weapon Mastery"
             }
@@ -3403,10 +3836,30 @@
           },
           "features": [
             {
+              "choices": [
+                {
+                  "code": "deft_explorer_expertise",
+                  "count": 1,
+                  "name": "Expertise",
+                  "type": "skill_proficiency"
+                }
+              ],
               "description": "Thanks to your travels, you gain the following benefits.\n\n_Expertise._ Choose one of your skill proficiencies with which you lack Expertise. You gain Expertise in that skill.\n\n_Languages._ You know two languages of your choice from the language tables in \"Character Creation.\"",
               "name": "Deft Explorer"
             },
             {
+              "choices": [
+                {
+                  "code": "fighting_style_ranger",
+                  "count": 1,
+                  "name": "Fighting Style",
+                  "source": [
+                    "fighting_style"
+                  ],
+                  "swappable_on": "level_up",
+                  "type": "feat_pick"
+                }
+              ],
               "description": "You gain a Fighting Style feat of your choice (see \"Feats\"). Instead of choosing one of those feats, you can choose the option below.\n\n_Druidic Warrior._ You learn two Druid cantrips of your choice (see the Druid class's section for a list of Druid spells). _Guidance_ and _Starry Wisp_ are recommended. The chosen cantrips count as Ranger spells for you, and Wisdom is your spellcasting ability for them. Whenever you gain a Ranger level, you can replace one of these cantrips with another Druid cantrip.",
               "name": "Fighting Style"
             }
@@ -3551,6 +4004,14 @@
           },
           "features": [
             {
+              "choices": [
+                {
+                  "code": "expertise_ranger",
+                  "count": 2,
+                  "name": "Expertise",
+                  "type": "skill_proficiency"
+                }
+              ],
               "description": "Choose two of your skill proficiencies with which you lack Expertise. You gain Expertise in those skills.",
               "name": "Expertise"
             }
@@ -3595,11 +4056,53 @@
               "name": "Hunter's Lore"
             },
             {
+              "choices": [
+                {
+                  "code": "hunters_prey",
+                  "count": 1,
+                  "name": "Hunter's Prey",
+                  "options": [
+                    {
+                      "code": "colossus_slayer",
+                      "description": "Your tenacity can wear down even the most resilient foes. When you hit a creature with a weapon, the weapon deals an extra 1d8 damage to the target if it's missing any of its Hit Points. You can deal this extra damage only once per turn.",
+                      "name": "Colossus Slayer"
+                    },
+                    {
+                      "code": "horde_breaker",
+                      "description": "Once on each of your turns when you make an attack with a weapon, you can make another attack with the same weapon against a different creature that is within 5 feet of the original target, that is within the weapon's range, and that you haven't attacked this turn.",
+                      "name": "Horde Breaker"
+                    }
+                  ],
+                  "swappable_on": "short_or_long_rest",
+                  "type": "single_pick"
+                }
+              ],
               "description": "You gain one of the following feature options of your choice. Whenever you finish a Short or Long Rest, you can replace the chosen option with the other one.\n\n_Colossus Slayer._ Your tenacity can wear down even the most resilient foes. When you hit a creature with a weapon, the weapon deals an extra 1d8 damage to the target if it's missing any of its Hit Points. You can deal this extra damage only once per turn.\n\n_Horde Breaker._ Once on each of your turns when you make an attack with a weapon, you can make another attack with the same weapon against a different creature that is within 5 feet of the original target, that is within the weapon's range, and that you haven't attacked this turn.",
               "level": 3,
               "name": "Hunter's Prey"
             },
             {
+              "choices": [
+                {
+                  "code": "defensive_tactics",
+                  "count": 1,
+                  "name": "Defensive Tactics",
+                  "options": [
+                    {
+                      "code": "escape_the_horde",
+                      "description": "Opportunity Attacks have Disadvantage against you.",
+                      "name": "Escape the Horde"
+                    },
+                    {
+                      "code": "multiattack_defense",
+                      "description": "When a creature hits you with an attack roll, that creature has Disadvantage on all other attack rolls against you this turn.",
+                      "name": "Multiattack Defense"
+                    }
+                  ],
+                  "swappable_on": "short_or_long_rest",
+                  "type": "single_pick"
+                }
+              ],
               "description": "You gain one of the following feature options of your choice. Whenever you finish a Short or Long Rest, you can replace the chosen option with the other one.\n\n_Escape the Horde._ Opportunity Attacks have Disadvantage against you.\n\n_Multiattack Defense._ When a creature hits you with an attack roll, that creature has Disadvantage on all other attack rolls against you this turn.",
               "level": 7,
               "name": "Defensive Tactics"
@@ -3644,6 +4147,56 @@
           },
           "features": [
             {
+              "choices": [
+                {
+                  "code": "expertise_skill_choice_1",
+                  "count": 2,
+                  "name": "Expertise (2 Skills)",
+                  "options": [
+                    {
+                      "code": "acrobatics",
+                      "name": "Acrobatics"
+                    },
+                    {
+                      "code": "athletics",
+                      "name": "Athletics"
+                    },
+                    {
+                      "code": "deception",
+                      "name": "Deception"
+                    },
+                    {
+                      "code": "insight",
+                      "name": "Insight"
+                    },
+                    {
+                      "code": "intimidation",
+                      "name": "Intimidation"
+                    },
+                    {
+                      "code": "investigation",
+                      "name": "Investigation"
+                    },
+                    {
+                      "code": "perception",
+                      "name": "Perception"
+                    },
+                    {
+                      "code": "persuasion",
+                      "name": "Persuasion"
+                    },
+                    {
+                      "code": "sleight_of_hand",
+                      "name": "Sleight of Hand"
+                    },
+                    {
+                      "code": "stealth",
+                      "name": "Stealth"
+                    }
+                  ],
+                  "type": "skill_proficiency"
+                }
+              ],
               "description": "You gain Expertise in two of your skill proficiencies of your choice. Sleight of Hand and Stealth are recommended if you have proficiency in them.\n\nAt Rogue level 6, you gain Expertise in two more of your skill proficiencies of your choice.",
               "name": "Expertise"
             },
@@ -3652,10 +4205,27 @@
               "name": "Sneak Attack"
             },
             {
+              "choices": [
+                {
+                  "code": "thieves_cant_language_choice",
+                  "count": 1,
+                  "name": "Language Choice",
+                  "type": "language"
+                }
+              ],
               "description": "You picked up various languages in the communities where you plied your roguish talents. You know Thieves' Cant and one other language of your choice, which you choose from the language tables in \"Character Creation.\"",
               "name": "Thieves' Cant"
             },
             {
+              "choices": [
+                {
+                  "code": "weapon_mastery_choice_1",
+                  "count": 2,
+                  "name": "Weapon Mastery (2 Weapons)",
+                  "swappable_on": "long_rest",
+                  "type": "weapon_mastery"
+                }
+              ],
               "description": "Your training with weapons allows you to use the mastery properties of two kinds of weapons of your choice with which you have proficiency, such as Daggers and Shortbows.\n\nWhenever you finish a Long Rest, you can change the kinds of weapons you chose. For example, you could switch to using the mastery properties of Scimitars and Shortswords.",
               "name": "Weapon Mastery"
             }
@@ -3856,6 +4426,56 @@
           },
           "features": [
             {
+              "choices": [
+                {
+                  "code": "expertise_skill_choice_2",
+                  "count": 2,
+                  "name": "Expertise (2 More Skills)",
+                  "options": [
+                    {
+                      "code": "acrobatics",
+                      "name": "Acrobatics"
+                    },
+                    {
+                      "code": "athletics",
+                      "name": "Athletics"
+                    },
+                    {
+                      "code": "deception",
+                      "name": "Deception"
+                    },
+                    {
+                      "code": "insight",
+                      "name": "Insight"
+                    },
+                    {
+                      "code": "intimidation",
+                      "name": "Intimidation"
+                    },
+                    {
+                      "code": "investigation",
+                      "name": "Investigation"
+                    },
+                    {
+                      "code": "perception",
+                      "name": "Perception"
+                    },
+                    {
+                      "code": "persuasion",
+                      "name": "Persuasion"
+                    },
+                    {
+                      "code": "sleight_of_hand",
+                      "name": "Sleight of Hand"
+                    },
+                    {
+                      "code": "stealth",
+                      "name": "Stealth"
+                    }
+                  ],
+                  "type": "skill_proficiency"
+                }
+              ],
               "description": "You gain Expertise in two of your skill proficiencies of your choice. Sleight of Hand and Stealth are recommended if you have proficiency in them.\n\nAt Rogue level 6, you gain Expertise in two more of your skill proficiencies of your choice.",
               "name": "Expertise"
             }
@@ -4471,6 +5091,36 @@
               "name": "Draconic Spells"
             },
             {
+              "choices": [
+                {
+                  "code": "elemental_affinity",
+                  "count": 1,
+                  "name": "Elemental Affinity",
+                  "options": [
+                    {
+                      "code": "acid",
+                      "name": "Acid"
+                    },
+                    {
+                      "code": "cold",
+                      "name": "Cold"
+                    },
+                    {
+                      "code": "fire",
+                      "name": "Fire"
+                    },
+                    {
+                      "code": "lightning",
+                      "name": "Lightning"
+                    },
+                    {
+                      "code": "poison",
+                      "name": "Poison"
+                    }
+                  ],
+                  "type": "single_pick"
+                }
+              ],
               "description": "Your draconic magic has an affinity with a damage type associated with dragons. Choose one of those types: Acid, Cold, Fire, Lightning, or Poison.\n\nYou have Resistance to that damage type, and when you cast a spell that deals damage of that type, you can add your Charisma modifier to one damage roll of that spell.",
               "level": 6,
               "name": "Elemental Affinity"
@@ -4862,6 +5512,64 @@
               "name": "Dark One's Own Luck"
             },
             {
+              "choices": [
+                {
+                  "code": "fiendish_resilience_damage_type",
+                  "count": 1,
+                  "name": "Damage Type for Resistance",
+                  "options": [
+                    {
+                      "code": "acid",
+                      "name": "Acid"
+                    },
+                    {
+                      "code": "cold",
+                      "name": "Cold"
+                    },
+                    {
+                      "code": "fire",
+                      "name": "Fire"
+                    },
+                    {
+                      "code": "lightning",
+                      "name": "Lightning"
+                    },
+                    {
+                      "code": "necrotic",
+                      "name": "Necrotic"
+                    },
+                    {
+                      "code": "poison",
+                      "name": "Poison"
+                    },
+                    {
+                      "code": "psychic",
+                      "name": "Psychic"
+                    },
+                    {
+                      "code": "radiant",
+                      "name": "Radiant"
+                    },
+                    {
+                      "code": "thunder",
+                      "name": "Thunder"
+                    },
+                    {
+                      "code": "bludgeoning",
+                      "name": "Bludgeoning"
+                    },
+                    {
+                      "code": "piercing",
+                      "name": "Piercing"
+                    },
+                    {
+                      "code": "slashing",
+                      "name": "Slashing"
+                    }
+                  ],
+                  "type": "single_pick"
+                }
+              ],
               "description": "Choose one damage type, other than Force, whenever you finish a Short or Long Rest. You have Resistance to that damage type until you choose a different one with this feature.",
               "level": 10,
               "name": "Fiendish Resilience"
@@ -5139,6 +5847,40 @@
           },
           "features": [
             {
+              "choices": [
+                {
+                  "code": "scholar",
+                  "count": 1,
+                  "name": "Scholar",
+                  "options": [
+                    {
+                      "code": "arcana",
+                      "name": "Arcana"
+                    },
+                    {
+                      "code": "history",
+                      "name": "History"
+                    },
+                    {
+                      "code": "investigation",
+                      "name": "Investigation"
+                    },
+                    {
+                      "code": "medicine",
+                      "name": "Medicine"
+                    },
+                    {
+                      "code": "nature",
+                      "name": "Nature"
+                    },
+                    {
+                      "code": "religion",
+                      "name": "Religion"
+                    }
+                  ],
+                  "type": "skill_proficiency"
+                }
+              ],
               "description": "While studying magic, you also specialized in another field of study. Choose one of the following skills in which you have proficiency: Arcana, History, Investigation, Medicine, Nature, or Religion. You have Expertise in the chosen skill.",
               "name": "Scholar"
             }

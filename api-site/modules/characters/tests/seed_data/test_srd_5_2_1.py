@@ -154,6 +154,31 @@ def test_known_subclass_shape():
     assert feature_levels.get("Frenzy") == 3
 
 
+def test_authored_class_feature_choices_merged():
+    """A.3: authored choice metadata is folded onto the right features in classes.json."""
+    classes = {c["code"]: c for c in _entries("classes.json", "classes")}
+
+    def choices_for(code, level, feature):
+        for f in classes[code]["features_by_level"][str(level)]["features"]:
+            if f["name"] == feature:
+                return f.get("choices", [])
+        return []
+
+    # Cleric Divine Order — single_pick of Protector / Thaumaturge.
+    divine_order = choices_for("cleric", 1, "Divine Order")
+    assert divine_order and divine_order[0]["type"] == "single_pick"
+    assert {"protector", "thaumaturge"} <= {o["code"] for o in divine_order[0]["options"]}
+
+    # Fighter Fighting Style — feat_pick resolving from the fighting_style feat category.
+    fighting_style = choices_for("fighter", 1, "Fighting Style")
+    assert fighting_style and fighting_style[0]["type"] == "feat_pick"
+    assert fighting_style[0]["source"] == ["fighting_style"]
+
+    # Paladin Weapon Mastery — the choice the author pass missed and direct inspection caught.
+    paladin_wm = choices_for("paladin", 1, "Weapon Mastery")
+    assert paladin_wm and paladin_wm[0]["type"] == "weapon_mastery" and paladin_wm[0]["count"] == 2
+
+
 def test_every_feat_with_prerequisite_subheader_is_parsed():
     """Regression guard for the dropped-prerequisites bug.
 

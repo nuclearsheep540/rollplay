@@ -1111,6 +1111,49 @@ def parse_one_class(
     }
 
 
+def _merge_authored_choices(classes: list[dict]) -> None:
+    """Fold hand-authored choice metadata onto parsed features (A.3).
+
+    Choices are authored by comprehension (the SRD choice prose isn't reliably
+    machine-parseable) and verified against source; this is a MECHANICAL merge that only
+    attaches each authored `choice` to the matching feature by (level, feature name) — class
+    features via class_choices, subclass features via subclass_choices — so classes.json stays
+    the single loaded source of truth. A reference to a non-existent feature aborts the build.
+    """
+    path = Path(__file__).resolve().parent / "authored" / EDITION_CODE / "class_choices.json"
+    if not path.exists():
+        return
+    authored = json.loads(path.read_text(encoding="utf-8"))
+    by_code = {c["code"]: c for c in classes}
+
+    def _attach(features: list[dict], fname: str, choice: dict, where: str) -> None:
+        match = next((f for f in features if f["name"] == fname), None)
+        if match is None:
+            raise SystemExit(f"class_choices.json: {where} has no feature {fname!r}")
+        match.setdefault("choices", []).append(choice)
+
+    for class_code, entries in authored.get("class_choices", {}).items():
+        cls = by_code.get(class_code)
+        if not cls:
+            raise SystemExit(f"class_choices.json references unknown class {class_code!r}")
+        for entry in entries:
+            level = str(entry["level"])
+            features = cls["features_by_level"].get(level, {}).get("features", [])
+            _attach(features, entry["feature"], entry["choice"], f"{class_code} L{level}")
+
+    for class_code, subclasses in authored.get("subclass_choices", {}).items():
+        cls = by_code.get(class_code)
+        if not cls:
+            raise SystemExit(f"class_choices.json references unknown class {class_code!r}")
+        sub_by_code = {s["code"]: s for s in cls.get("subclasses", [])}
+        for subclass_code, entries in subclasses.items():
+            sub = sub_by_code.get(subclass_code)
+            if not sub:
+                raise SystemExit(f"class_choices.json: {class_code} has no subclass {subclass_code!r}")
+            for entry in entries:
+                _attach(sub["features"], entry["feature"], entry["choice"], f"{class_code}/{subclass_code}")
+
+
 def parse_classes(only: Optional[str] = None, all_skill_codes: Optional[list[str]] = None) -> list[dict]:
     tokens = _tokens("classes.md")
     sections = _split_classes(tokens)
@@ -1242,6 +1285,7 @@ def main(argv: Iterable[str] | None = None) -> int:
 
     print("Parsing classes…")
     classes = parse_classes(all_skill_codes=[s["code"] for s in skills])
+    _merge_authored_choices(classes)
     print(f"  {len(classes)} classes")
 
     print("Cross-file validation…")
