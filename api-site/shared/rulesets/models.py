@@ -33,6 +33,27 @@ CodePattern = r"^[a-z0-9_]+$"
 CURRENT_SCHEMA_VERSION = 1
 
 
+class ClassFeatureChoiceOption(BaseModel):
+    code: str = Field(pattern=CodePattern)
+    name: str
+    description: str = ""
+
+
+class ClassFeatureChoice(BaseModel):
+    """A player choice attached to a class/subclass feature OR a species trait (reused for both)."""
+
+    code: str = Field(pattern=CodePattern)
+    name: str
+    type: Literal[
+        "single_pick", "feat_pick", "skill_proficiency", "weapon_mastery",
+        "metamagic", "invocation", "spell_pick", "language", "tool_proficiency",
+    ]
+    count: int = 1
+    source: Optional[list[str]] = None  # allowed code list when applicable (skills/spells/etc.)
+    options: list[ClassFeatureChoiceOption] = []
+    swappable_on: Optional[Literal["long_rest", "short_or_long_rest", "level_up"]] = None
+
+
 class SkillDefinition(BaseModel):
     code: str = Field(pattern=CodePattern)
     name: str
@@ -77,6 +98,8 @@ class SpeciesDefinition(BaseModel):
     default_languages: list[str]
     language_choices: Optional[LanguageChoices] = None
     traits: list[SpeciesTrait]
+    sub_choices: list[ClassFeatureChoice] = []  # lineage/ancestry/legacy/size picks (A.4); reuses the choice shape
+    leveled_grants_by_sub_choice: dict[str, dict[str, list[str]]] = {}  # option code -> character level -> spell codes
 
 
 class BackgroundDefinition(BaseModel):
@@ -87,25 +110,6 @@ class BackgroundDefinition(BaseModel):
     skill_proficiencies: list[str] = Field(min_length=2, max_length=2)
     tool_proficiency: str
     equipment_text: str
-
-
-class ClassFeatureChoiceOption(BaseModel):
-    code: str = Field(pattern=CodePattern)
-    name: str
-    description: str = ""
-
-
-class ClassFeatureChoice(BaseModel):
-    code: str = Field(pattern=CodePattern)
-    name: str
-    type: Literal[
-        "single_pick", "feat_pick", "skill_proficiency", "weapon_mastery",
-        "metamagic", "invocation", "spell_pick", "language", "tool_proficiency",
-    ]
-    count: int = 1
-    source: Optional[list[str]] = None  # allowed code list when applicable (skills/spells/etc.)
-    options: list[ClassFeatureChoiceOption] = []
-    swappable_on: Optional[Literal["long_rest", "short_or_long_rest", "level_up"]] = None
 
 
 class ClassFeature(BaseModel):

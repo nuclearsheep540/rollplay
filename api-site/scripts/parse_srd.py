@@ -621,6 +621,26 @@ _SIZE_MAP = {"small": "Small", "medium": "Medium", "large": "Large"}
 _SPEED_RE = re.compile(r"(\d+)\s*(?:feet|ft)", re.IGNORECASE)
 
 
+def _merge_species_subchoices(species: list[dict]) -> None:
+    """Fold hand-authored species sub-choices + leveled grants onto parsed species (A.4).
+
+    Same mechanical-merge model as _merge_authored_choices: the data is authored by
+    comprehension and verified against source, attached here by species code so species.json
+    stays the single loaded source of truth. An unknown species code aborts the build.
+    """
+    path = Path(__file__).resolve().parent / "authored" / EDITION_CODE / "species_subchoices.json"
+    if not path.exists():
+        return
+    authored = json.loads(path.read_text(encoding="utf-8"))
+    by_code = {s["code"]: s for s in species}
+    for code, entry in authored.get("species_sub_choices", {}).items():
+        sp = by_code.get(code)
+        if not sp:
+            raise SystemExit(f"species_subchoices.json references unknown species {code!r}")
+        sp["sub_choices"] = entry.get("sub_choices", [])
+        sp["leveled_grants_by_sub_choice"] = entry.get("leveled_grants_by_sub_choice", {})
+
+
 def parse_species() -> list[dict]:
     tokens = _tokens("character-origins.md")
     section = _split_section_by_heading(tokens, "character_species")
@@ -668,6 +688,8 @@ def parse_species() -> list[dict]:
             "default_languages": default_languages,
             "language_choices": language_choices,
             "traits": traits,
+            "sub_choices": [],  # populated by _merge_species_subchoices (A.4)
+            "leveled_grants_by_sub_choice": {},
         })
     species.sort(key=lambda s: s["code"])
     if not species:
@@ -1277,6 +1299,7 @@ def main(argv: Iterable[str] | None = None) -> int:
 
     print("Parsing species…")
     species = parse_species()
+    _merge_species_subchoices(species)
     print(f"  {len(species)} species")
 
     print("Parsing backgrounds…")

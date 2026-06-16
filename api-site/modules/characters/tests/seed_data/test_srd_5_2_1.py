@@ -179,6 +179,28 @@ def test_authored_class_feature_choices_merged():
     assert paladin_wm and paladin_wm[0]["type"] == "weapon_mastery" and paladin_wm[0]["count"] == 2
 
 
+def test_authored_species_subchoices_merged():
+    """A.4: authored species sub-choices + leveled grants merged into species.json."""
+    species = {s["code"]: s for s in _entries("species.json", "species")}
+    # Uniform shape — every species carries the fields.
+    assert all("sub_choices" in s and "leveled_grants_by_sub_choice" in s for s in species.values())
+
+    # Dragonborn Draconic Ancestry — single_pick over the dragon ancestors.
+    draconic = species["dragonborn"]["sub_choices"]
+    assert draconic and draconic[0]["type"] == "single_pick" and len(draconic[0]["options"]) >= 10
+
+    # Elf High Elf lineage grants a spell at levels 1, 3 and 5.
+    high_elf = species["elf"]["leveled_grants_by_sub_choice"].get("high_elf", {})
+    assert {"1", "3", "5"} <= set(high_elf)
+
+    # Human offers the Medium/Small size pick plus Skillful + Versatile.
+    human_codes = {c["code"] for c in species["human"]["sub_choices"]}
+    assert {"size", "skillful", "versatile"} <= human_codes
+
+    # Fixed-trait species correctly carry no sub-choices.
+    assert species["dwarf"]["sub_choices"] == []
+
+
 def test_every_feat_with_prerequisite_subheader_is_parsed():
     """Regression guard for the dropped-prerequisites bug.
 

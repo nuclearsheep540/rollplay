@@ -2,11 +2,29 @@
 
 A pickup note for whoever (Claude or human) walks into this plan cold. Captures decisions, where we left off, and a few useful breadcrumbs that aren't in the plan files themselves.
 
-## Where we are
+## Where we are (updated — PR 1 + PR 2 done)
 
-- The plan bundle is **finalised and ready to execute**. Nothing in it is in-flight.
-- Last edit: revised `character-v2-completeness.md` to bake in the "facilitate, don't enforce" prime directive (§3.0) and added Phase J (inventory + currency) as a cohesive slice that includes equipment package picking.
-- **Next action: PR 1.** Fix the feat prerequisite parser (Phase A.1) and use the prereq data to populate the `qualifying_feats` eligibility filter on `preview_level_up` (point-of-choice guidance). The `warnings: list[str]` rail is **retired** — see §D.1 / `../core/product-principles.md`.
+**Done & committed:**
+- **PR 1** (commit `53e096f`): feat-prereq parser fix + `class_feature` prereq variant + `is_feat_available()` strategy method + two-bucket level-up preview (`qualifying_feats` + `other_feats`). The `warnings: list[str]` rail was **retired** in favour of point-of-choice guidance (see §D.1 / `../core/product-principles.md`).
+- **Data verification** (commit `53e096f`): the committed seed JSON had never been content-verified. Ran **2 full verification passes + an exhaustive per-class grid pass**; found and fixed ~16 silent, shape-valid-but-wrong-content bugs (3 repeatable feats, Human/Tiefling size, `primary_ability` truncation → now `list[AbilityCode]`, armor "Light"→"Light armor" incl. stray "and" on Fighter/Paladin, missing `tool_proficiencies`, truncated Orc/Dwarf traits). Lesson recorded: each pass reduces the miss rate but never proves zero — **direct inspection complements agentic passes** (it caught Paladin Weapon Mastery + Fighter/Paladin armor that the agents missed).
+- **A.2 subclasses** (commit `53e096f`): parsed deterministically (uniform `### <Class> Subclass: <Name>` H3); all 12 classes.
+- **A.3 class feature choices** (commit `231f2df`): authored + verified, merged into `classes.json`.
+- **A.4 species sub-choices** (UNCOMMITTED — current working tree): authored + verified, merged into `species.json`.
+
+**Methodology shift (now the standing approach — see memory `feedback_reference_data_author_verify.md`):** the parser is kept ONLY for tabular/structural data; **prose-semantic data (choices, sub-choices) is authored as JSON + verified against source**, NOT regex-parsed. Authored files live at `api-site/scripts/authored/srd_5_2_1/{class_choices,species_subchoices}.json` and are mechanically merged into `classes.json`/`species.json` by `parse_srd.py` (`_merge_authored_choices`, `_merge_species_subchoices`) — those two committed JSON files stay the **single loaded source of truth**. Pydantic validates *shape*, never *content*, so always verify against source.
+
+### Deferrals & cross-PR dependencies discovered during PR 1–2 (DO NOT lose)
+
+1. **Spell-code cross-ref → PR 4 (A.10 spells):** `species.leveled_grants_by_sub_choice` (Elf/Tiefling/Gnome) and `SubclassDefinition.always_prepared_spells_by_level` hold faithful spell *codes* that are **not yet validated**. When `spells.json` lands, add a registry cross-ref that every such code resolves (mirror the existing feat/skill cross-ref check).
+2. **Subclass always-prepared spells → PR 4/6:** the `always_prepared_spells_by_level` field exists but is **empty**. Populate when spells land: Cleric Life Domain / Paladin Oath of Devotion are flat tables; **Druid Circle of the Land is choice-dependent (4 land sub-tables)** → irregular, needs special handling.
+3. **Catalogue-dependent class choices NOT yet in `class_choices.json`** — add when their catalogues exist: Sorcerer **Metamagic** + Warlock **Invocations**/**Pact Boon** → PR 5 (A.7/A.8); Warlock **Mystic Arcanum**, Wizard spellbook, Bard **Magical Discoveries**, all spell picks → PR 4/6.
+4. **`primary_ability` is now `list[AbilityCode]`** (pulled forward from C.6). C.6 multiclass-prereq logic can use it — BUT the or/and semantics ("Strength **or** Dexterity" vs "Dexterity **and** Wisdom") is NOT captured (flat list); C.6 must account for that if the prereq math needs it.
+5. **`tool_proficiencies` is raw text** ("Choose 3 Musical Instruments"). The *choice* (Bard 3 instruments / Monk 1 tool) is unstructured — model a structured tool picker later if needed (depends on a tools/instruments catalogue, ~Phase J).
+6. **Species size pick → PR 3 (E.3):** Human/Tiefling now carry a `size` sub_choice (Medium/Small) but the species `size` field still holds the default (Medium). The wizard must let the player pick and apply the chosen size (override the default).
+
+**Excluded by design (per §3.0 — NOT deferrals; do not re-add as choices):** per-use/per-attack combat mechanics — Monk Open Hand Technique, Channel Divinity effect selection, Rogue Cunning Strike, Druid Wild Shape forms. These are runtime tactical decisions the table handles.
+
+**Next action: PR 3** — B.1 subclass tracking on the aggregate + B.5 sub-flavour storage + E.3 species sub-choices in wizard + E.5 class L1 pickers. This consumes the PR 2 data and reaches the **M1 test gate** (create a martial character end-to-end).
 
 ## How to read the bundle
 
