@@ -853,6 +853,63 @@ def _scope_to_features(tokens: list[dict], section_start: int, section_end: int)
     return section_end
 
 
+def _strong_only_text(token: dict) -> Optional[str]:
+    """Inner text of a paragraph that is a single bold run (a spell-table caption), else None."""
+    if token.get("type") != "paragraph":
+        return None
+    children = [c for c in token.get("children", []) if c.get("type") != "softbreak"]
+    if len(children) == 1 and children[0].get("type") == "strong":
+        return _text(children[0]).strip()
+    return None
+
+
+def _parse_level_spell_table(soup: BeautifulSoup) -> dict[str, list[str]]:
+    """Parse a 2-column ``<Level | Spells>`` HTML table into ``{level: [spell_code, …]}``."""
+    out: dict[str, list[str]] = {}
+    body = soup.find("tbody") or soup
+    for tr in body.find_all("tr"):
+        cells = tr.find_all("td")
+        if len(cells) < 2:
+            continue
+        lvl = cells[0].get_text(strip=True)
+        if not lvl.isdigit():
+            continue
+        spells = [to_code(s.strip()) for s in cells[1].get_text().split(",") if s.strip()]
+        if spells:
+            out[lvl] = spells
+    return out
+
+
+def _parse_subclass_spells(tokens: list[dict]) -> tuple[dict, dict]:
+    """Parse a subclass's spell table(s) from its section tokens (deferral #2).
+
+    Returns ``(always_prepared_spells_by_level, leveled_grants_by_sub_choice)``. Flat subclasses
+    (Cleric/Paladin/Sorcerer/Warlock) have one ``Level | Spells`` table → always_prepared. Druid
+    Circle of the Land has four ``**<Land>**`` tables → leveled_grants keyed by land code.
+    """
+    always_prepared: dict[str, list[str]] = {}
+    leveled_grants: dict[str, dict[str, list[str]]] = {}
+    caption = ""
+    for tok in tokens:
+        lvl = _heading_level(tok)
+        if lvl is not None and lvl <= 3:
+            break  # end of this subclass's section
+        cap = _strong_only_text(tok)
+        if cap is not None:
+            caption = cap
+            continue
+        if tok.get("type") in {"block_html", "html_block"} and "<table" in tok.get("raw", "").lower():
+            rows = _parse_level_spell_table(BeautifulSoup(tok["raw"], "html.parser"))
+            if not rows:
+                continue
+            if caption.lower().endswith("land"):
+                land = to_code(re.sub(r"\s*Land$", "", caption, flags=re.IGNORECASE))
+                leveled_grants[land] = rows
+            else:
+                always_prepared.update(rows)
+    return always_prepared, leveled_grants
+
+
 def _parse_subclass(section_tokens: list[dict], class_name: str) -> Optional[dict]:
     """Parse the single SRD subclass within a class section.
 
@@ -912,12 +969,14 @@ def _parse_subclass(section_tokens: list[dict], class_name: str) -> Optional[dic
     if not features:
         raise RuntimeError(f"Class {class_name}: subclass {subclass_name!r} has no Level-N features")
 
+    always_prepared, leveled_grants = _parse_subclass_spells(section_tokens[start_idx:])
     return {
         "code": to_code(subclass_name),
         "name": subclass_name,
         "subclass_level": min(f["level"] for f in features),
         "features": features,
-        "always_prepared_spells_by_level": {},
+        "always_prepared_spells_by_level": always_prepared,
+        "leveled_grants_by_sub_choice": leveled_grants,
     }
 
 

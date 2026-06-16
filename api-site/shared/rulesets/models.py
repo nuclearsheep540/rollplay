@@ -157,9 +157,11 @@ class SubclassDefinition(BaseModel):
     name: str
     subclass_level: int = Field(ge=1, le=20)  # level at which this subclass's features begin
     features: list[SubclassFeature]
-    # Spell codes the subclass always has prepared, keyed by class level. Populated once the
-    # spell catalogue lands (later PR); the feature descriptions carry the prose until then.
+    # Spell codes the subclass always has prepared, keyed by class level (Cleric/Paladin/
+    # Sorcerer/Warlock domain/oath/patron spells).
     always_prepared_spells_by_level: dict[str, list[str]] = {}
+    # Choice-dependent always-prepared spells (Druid Circle of the Land): land code -> level -> codes.
+    leveled_grants_by_sub_choice: dict[str, dict[str, list[str]]] = {}
 
 
 class PactSlot(BaseModel):

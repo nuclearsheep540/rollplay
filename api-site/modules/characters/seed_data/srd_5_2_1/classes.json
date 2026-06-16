@@ -413,6 +413,7 @@
               "name": "Intimidating Presence"
             }
           ],
+          "leveled_grants_by_sub_choice": {},
           "name": "Path of the Berserker",
           "subclass_level": 3
         }
@@ -1168,6 +1169,7 @@
               "name": "Peerless Skill"
             }
           ],
+          "leveled_grants_by_sub_choice": {},
           "name": "College of Lore",
           "subclass_level": 3
         }
@@ -1672,7 +1674,26 @@
       "subclass_level": 3,
       "subclasses": [
         {
-          "always_prepared_spells_by_level": {},
+          "always_prepared_spells_by_level": {
+            "3": [
+              "aid",
+              "bless",
+              "cure_wounds",
+              "lesser_restoration"
+            ],
+            "5": [
+              "mass_healing_word",
+              "revivify"
+            ],
+            "7": [
+              "aura_of_life",
+              "death_ward"
+            ],
+            "9": [
+              "greater_restoration",
+              "mass_cure_wounds"
+            ]
+          },
           "code": "life_domain",
           "features": [
             {
@@ -1701,6 +1722,7 @@
               "name": "Supreme Healing"
             }
           ],
+          "leveled_grants_by_sub_choice": {},
           "name": "Life Domain",
           "subclass_level": 3
         }
@@ -2249,6 +2271,72 @@
               "name": "Nature's Sanctuary"
             }
           ],
+          "leveled_grants_by_sub_choice": {
+            "arid": {
+              "3": [
+                "blur",
+                "burning_hands",
+                "fire_bolt"
+              ],
+              "5": [
+                "fireball"
+              ],
+              "7": [
+                "blight"
+              ],
+              "9": [
+                "wall_of_stone"
+              ]
+            },
+            "polar": {
+              "3": [
+                "fog_cloud",
+                "hold_person",
+                "ray_of_frost"
+              ],
+              "5": [
+                "sleet_storm"
+              ],
+              "7": [
+                "ice_storm"
+              ],
+              "9": [
+                "cone_of_cold"
+              ]
+            },
+            "temperate": {
+              "3": [
+                "misty_step",
+                "shocking_grasp",
+                "sleep"
+              ],
+              "5": [
+                "lightning_bolt"
+              ],
+              "7": [
+                "freedom_of_movement"
+              ],
+              "9": [
+                "tree_stride"
+              ]
+            },
+            "tropical": {
+              "3": [
+                "acid_splash",
+                "ray_of_sickness",
+                "web"
+              ],
+              "5": [
+                "stinking_cloud"
+              ],
+              "7": [
+                "polymorph"
+              ],
+              "9": [
+                "insect_plague"
+              ]
+            }
+          },
           "name": "Circle of the Land",
           "subclass_level": 3
         }
@@ -2661,6 +2749,7 @@
               "name": "Survivor"
             }
           ],
+          "leveled_grants_by_sub_choice": {},
           "name": "Champion",
           "subclass_level": 3
         }
@@ -3047,6 +3136,7 @@
               "name": "Quivering Palm"
             }
           ],
+          "leveled_grants_by_sub_choice": {},
           "name": "Warrior of the Open Hand",
           "subclass_level": 3
         }
@@ -3498,7 +3588,28 @@
       "subclass_level": 3,
       "subclasses": [
         {
-          "always_prepared_spells_by_level": {},
+          "always_prepared_spells_by_level": {
+            "13": [
+              "freedom_of_movement",
+              "guardian_of_faith"
+            ],
+            "17": [
+              "commune",
+              "flame_strike"
+            ],
+            "3": [
+              "protection_from_evil_and_good",
+              "shield_of_faith"
+            ],
+            "5": [
+              "aid",
+              "zone_of_truth"
+            ],
+            "9": [
+              "beacon_of_hope",
+              "dispel_magic"
+            ]
+          },
           "code": "oath_of_devotion",
           "features": [
             {
@@ -3527,6 +3638,7 @@
               "name": "Holy Nimbus"
             }
           ],
+          "leveled_grants_by_sub_choice": {},
           "name": "Oath of Devotion",
           "subclass_level": 3
         }
@@ -4068,6 +4180,7 @@
               "name": "Superior Hunter's Defense"
             }
           ],
+          "leveled_grants_by_sub_choice": {},
           "name": "Hunter",
           "subclass_level": 3
         }
@@ -4532,6 +4645,7 @@
               "name": "Thief's Reflexes"
             }
           ],
+          "leveled_grants_by_sub_choice": {},
           "name": "Thief",
           "subclass_level": 3
         }
@@ -5005,7 +5119,26 @@
       "subclass_level": 3,
       "subclasses": [
         {
-          "always_prepared_spells_by_level": {},
+          "always_prepared_spells_by_level": {
+            "3": [
+              "alter_self",
+              "chromatic_orb",
+              "command",
+              "dragon_s_breath"
+            ],
+            "5": [
+              "fear",
+              "fly"
+            ],
+            "7": [
+              "arcane_eye",
+              "charm_monster"
+            ],
+            "9": [
+              "legend_lore",
+              "summon_dragon"
+            ]
+          },
           "code": "draconic_sorcery",
           "features": [
             {
@@ -5064,6 +5197,7 @@
               "name": "Dragon Companion"
             }
           ],
+          "leveled_grants_by_sub_choice": {},
           "name": "Draconic Sorcery",
           "subclass_level": 3
         }
@@ -5470,7 +5604,26 @@
       "subclass_level": 3,
       "subclasses": [
         {
-          "always_prepared_spells_by_level": {},
+          "always_prepared_spells_by_level": {
+            "3": [
+              "burning_hands",
+              "command",
+              "scorching_ray",
+              "suggestion"
+            ],
+            "5": [
+              "fireball",
+              "stinking_cloud"
+            ],
+            "7": [
+              "fire_shield",
+              "wall_of_fire"
+            ],
+            "9": [
+              "geas",
+              "insect_plague"
+            ]
+          },
           "code": "fiend_patron",
           "features": [
             {
@@ -5557,6 +5710,7 @@
               "name": "Hurl Through Hell"
             }
           ],
+          "leveled_grants_by_sub_choice": {},
           "name": "Fiend Patron",
           "subclass_level": 3
         }
@@ -6043,6 +6197,7 @@
               "name": "Overchannel"
             }
           ],
+          "leveled_grants_by_sub_choice": {},
           "name": "Evoker",
           "subclass_level": 3
         }

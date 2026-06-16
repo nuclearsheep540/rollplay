@@ -162,6 +162,54 @@ def test_known_subclass_shape():
     assert feature_levels.get("Frenzy") == 3
 
 
+def test_subclass_spell_tables_parsed():
+    """Deferral #2: domain/oath/patron spell tables → always_prepared_spells_by_level;
+    Druid Circle of the Land's four land tables → leveled_grants_by_sub_choice."""
+    classes = {c["code"]: c for c in _entries("classes.json", "classes")}
+
+    def subclass(class_code):
+        return classes[class_code]["subclasses"][0]
+
+    # Cleric Life Domain — flat table, faithful level→spell mapping.
+    cleric_ap = subclass("cleric")["always_prepared_spells_by_level"]
+    assert cleric_ap["3"] == ["aid", "bless", "cure_wounds", "lesser_restoration"]
+    assert cleric_ap["9"] == ["greater_restoration", "mass_cure_wounds"]
+
+    # The other three flat casters all populate their always-prepared table.
+    for code, level3_first in (
+        ("paladin", "protection_from_evil_and_good"),
+        ("sorcerer", "alter_self"),
+        ("warlock", "burning_hands"),
+    ):
+        ap = subclass(code)["always_prepared_spells_by_level"]
+        assert ap and ap["3"][0] == level3_first
+
+    # Druid Circle of the Land — land-dependent, four sub-tables, NOT flat always-prepared.
+    druid = subclass("druid")
+    assert not druid["always_prepared_spells_by_level"]
+    lands = druid["leveled_grants_by_sub_choice"]
+    assert set(lands) == {"arid", "polar", "temperate", "tropical"}
+    assert lands["arid"]["5"] == ["fireball"]
+
+
+def test_subclass_spell_codes_resolve():
+    """Deferral #2 cross-ref guard: every subclass-granted spell code resolves to a real spell."""
+    spell_codes = {s["code"] for s in _entries("spells.json", "spells")}
+    for c in _entries("classes.json", "classes"):
+        for sub in c["subclasses"]:
+            for level, codes in sub["always_prepared_spells_by_level"].items():
+                for code in codes:
+                    assert code in spell_codes, (
+                        f"Subclass '{sub['code']}' L{level} always-prepares unknown spell '{code}'"
+                    )
+            for opt, by_level in sub["leveled_grants_by_sub_choice"].items():
+                for level, codes in by_level.items():
+                    for code in codes:
+                        assert code in spell_codes, (
+                            f"Subclass '{sub['code']}' option '{opt}' L{level} grants unknown spell '{code}'"
+                        )
+
+
 def test_authored_class_feature_choices_merged():
     """A.3: authored choice metadata is folded onto the right features in classes.json."""
     classes = {c["code"]: c for c in _entries("classes.json", "classes")}

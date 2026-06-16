@@ -188,6 +188,25 @@ class RulesetRegistry:
                                 f"[{edition_code}] species '{sp.code}' lineage '{opt}' "
                                 f"grants unknown spell '{code}'"
                             )
+        # Subclass always-prepared spells (deferral #2): domain/oath/patron spell codes and
+        # Druid Circle of the Land per-land codes must resolve too.
+        for cls_def in classes.values():
+            for sub in cls_def.subclasses:
+                for codes in sub.always_prepared_spells_by_level.values():
+                    for code in codes:
+                        if code not in spells:
+                            raise RuntimeError(
+                                f"[{edition_code}] subclass '{sub.code}' always-prepares "
+                                f"unknown spell '{code}'"
+                            )
+                for land, by_level in sub.leveled_grants_by_sub_choice.items():
+                    for codes in by_level.values():
+                        for code in codes:
+                            if code not in spells:
+                                raise RuntimeError(
+                                    f"[{edition_code}] subclass '{sub.code}' option '{land}' "
+                                    f"grants unknown spell '{code}'"
+                                )
 
         if edition_code not in _STRATEGY_FACTORIES:
             raise RuntimeError(
