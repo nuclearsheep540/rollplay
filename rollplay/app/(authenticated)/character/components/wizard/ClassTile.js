@@ -8,6 +8,7 @@
 import { THEME, COLORS } from '@/app/styles/colorTheme'
 
 import ExpandableTile from './ExpandableTile'
+import FeatureChoicePicker from './FeatureChoicePicker'
 
 /**
  * One class tile, wrapping ``ExpandableTile`` with class-specific info +
@@ -104,6 +105,7 @@ export default function ClassTile({
   pick,
   isPrimary = false,
   skillsByCode,
+  editionCode,
   onExpand,
   onCollapse,
   onSelect,
@@ -113,11 +115,18 @@ export default function ClassTile({
   // Composed summary chip — base info always, plus the selected-state
   // breadcrumbs (level + Primary tag) when this tile represents an
   // already-picked class.
-  const baseSummary = `d${classDef.hit_die} · ${(classDef.primary_ability || []).join('/')}`
+  const baseSummary = `d${classDef.hit_die} · ${(classDef.primary_ability || []).join(' / ')}`
   const summary =
     mode === 'selected' && pick
       ? `${baseSummary} · Level ${pick.level}${isPrimary ? ' · Primary' : ''}`
       : baseSummary
+
+  // Level-1 feature choices (Fighting Style, Weapon Mastery, …) merged onto the
+  // class's features by the registry. Only the primary class grants them here
+  // (matches the skill-pick rule; multiclass entries grant a limited subset).
+  const l1Choices = (classDef.features_by_level?.['1']?.features ?? []).flatMap(
+    (f) => f.choices ?? [],
+  )
 
   return (
     <ExpandableTile
@@ -165,6 +174,28 @@ export default function ClassTile({
               skillsByCode={skillsByCode}
               onChange={(next) => onChange?.({ ...pick, chosen_skills: next })}
             />
+          )}
+
+          {isPrimary && l1Choices.length > 0 && (
+            <div className="space-y-3 pt-2 border-t" style={{ borderColor: THEME.borderSubtle }}>
+              <div className="text-xs uppercase" style={{ color: THEME.textSecondary }}>
+                Level 1 choices
+              </div>
+              {l1Choices.map((choice) => (
+                <FeatureChoicePicker
+                  key={choice.code}
+                  choice={choice}
+                  editionCode={editionCode}
+                  value={(pick.sub_choices || {})[choice.code] ?? []}
+                  onChange={(next) =>
+                    onChange?.({
+                      ...pick,
+                      sub_choices: { ...(pick.sub_choices || {}), [choice.code]: next },
+                    })
+                  }
+                />
+              ))}
+            </div>
           )}
 
           {!isPrimary && classDef.skill_choices?.count > 0 && (

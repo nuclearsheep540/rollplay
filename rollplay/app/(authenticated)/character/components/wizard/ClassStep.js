@@ -29,6 +29,7 @@ function buildInitial(draft) {
       idx === 0
         ? (draft.skills || []).filter((s) => s.source === 'CLASS').map((s) => s.skill_code)
         : [],
+    sub_choices: e.sub_choices || {},
   }))
 }
 
@@ -80,6 +81,7 @@ export default function ClassStep({ draft, onSave, onBack, onNext }) {
         level: 1,
         is_primary: isPrimary,
         chosen_skills: [],
+        sub_choices: {},
       },
     ])
     setPickerOpen(false)
@@ -130,7 +132,15 @@ export default function ClassStep({ draft, onSave, onBack, onNext }) {
     }
     setSaving(true)
     try {
-      await onSave({ classes: picks })
+      const cleanedPicks = picks.map((p) => ({
+        ...p,
+        sub_choices: Object.fromEntries(
+          Object.entries(p.sub_choices || {})
+            .map(([k, v]) => [k, (v || []).filter((x) => x && String(x).trim())])
+            .filter(([, v]) => v.length > 0),
+        ),
+      }))
+      await onSave({ classes: cleanedPicks })
       onNext()
     } catch (err) {
       setError(err.message)
@@ -174,6 +184,7 @@ export default function ClassStep({ draft, onSave, onBack, onNext }) {
                 pick={pick}
                 isPrimary={pick.is_primary}
                 skillsByCode={skillsByCode}
+                editionCode={draft.edition_code}
                 onChange={(next) => handleChangePick(pick.class_code, next)}
                 onRemove={() => handleRemovePick(pick.class_code)}
               />

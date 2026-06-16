@@ -21,6 +21,7 @@ export default function SpeciesStep({ draft, onSave, onBack, onNext }) {
   // resume on the correct selection.
   const [speciesCode, setSpeciesCode] = useState(draft.species_code || null)
   const [extraLanguages, setExtraLanguages] = useState([])
+  const [subChoices, setSubChoices] = useState(() => draft.species_sub_choices || {})
 
   // Picker visibility — open when no species is selected, hidden once one is
   // picked. The selected tile remains expanded above; player can hit ✕ to
@@ -50,8 +51,14 @@ export default function SpeciesStep({ draft, onSave, onBack, onNext }) {
     })
   }
 
+  const handleSubChoiceChange = (choiceCode, picked) => {
+    setSubChoices((prev) => ({ ...prev, [choiceCode]: picked }))
+  }
+
   const handleSelectSpecies = (code) => {
     setSpeciesCode(code)
+    // Keep the draft's picks when re-selecting the same species; reset otherwise.
+    setSubChoices(code === draft.species_code ? (draft.species_sub_choices || {}) : {})
     setPickerOpen(false)
     setExpandedInPicker(null)
   }
@@ -59,6 +66,7 @@ export default function SpeciesStep({ draft, onSave, onBack, onNext }) {
   const handleClearSpecies = () => {
     setSpeciesCode(null)
     setExtraLanguages([])
+    setSubChoices({})
     setPickerOpen(true)
   }
 
@@ -78,9 +86,15 @@ export default function SpeciesStep({ draft, onSave, onBack, onNext }) {
       // Name now lives in the persistent header (rename step), so this
       // payload is species + languages only. Wire contract stays
       // step='identity' since the backend handler key is unchanged.
+      const cleanedSubChoices = Object.fromEntries(
+        Object.entries(subChoices)
+          .map(([k, v]) => [k, (v || []).filter((x) => x && String(x).trim())])
+          .filter(([, v]) => v.length > 0),
+      )
       await onSave({
         species_code: speciesCode,
         chosen_languages: validExtras,
+        sub_choices: cleanedSubChoices,
       })
       onNext()
     } catch (err) {
@@ -114,6 +128,9 @@ export default function SpeciesStep({ draft, onSave, onBack, onNext }) {
           mode="selected"
           extraLanguages={extraLanguages}
           onExtraLanguageChange={handleExtraLanguageChange}
+          editionCode={draft.edition_code}
+          subChoices={subChoices}
+          onSubChoiceChange={handleSubChoiceChange}
           onRemove={handleClearSpecies}
         />
       )}

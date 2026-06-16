@@ -344,7 +344,16 @@ class CharacterRepository:
                 character_id=model.id,
                 ability_id=ability_id,
             ))
+        # Dedupe by skill_code: the (character_id, skill_code) unique constraint allows
+        # one row per skill, so a skill granted by more than one source (e.g. BACKGROUND
+        # + CLASS both give Athletics) collapses to a single row — soft-skip the duplicate
+        # and keep silent (per plan §D.1). Prefer an expertise grant if the sources differ.
+        deduped_skills: Dict[str, object] = {}
         for skill in aggregate.skills:
+            existing = deduped_skills.get(skill.skill_code)
+            if existing is None or (skill.expertise and not existing.expertise):
+                deduped_skills[skill.skill_code] = skill
+        for skill in deduped_skills.values():
             self.db.add(CharacterSkillProficiency(
                 character_id=model.id,
                 skill_code=skill.skill_code,

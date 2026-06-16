@@ -38,7 +38,7 @@ def test_sub_choice_picks_round_trip(client, auth_as, owner):
         "step": "identity",
         "identity": {
             "species_code": "human",
-            "sub_choices": {"size": ["medium"], "skillful": ["arcana"]},
+            "sub_choices": {"size": ["small"], "skillful": ["arcana"]},
         },
     })
     # Class L1 sub-choices (Barbarian Weapon Mastery picks — stored faithfully).
@@ -53,10 +53,45 @@ def test_sub_choice_picks_round_trip(client, auth_as, owner):
         },
     })
     body = client.get(f"/api/characters/{cid}").json()
-    assert body["species_sub_choices"] == {"size": ["medium"], "skillful": ["arcana"]}
+    assert body["species_sub_choices"] == {"size": ["small"], "skillful": ["arcana"]}
+    assert body["size"] == "Small"  # chosen size override applied (deferral #6 resolved)
     entry = body["class_entries"][0]
     assert entry["class_code"] == "barbarian"
     assert entry["sub_choices"] == {"barbarian_weapon_mastery": ["greataxe", "handaxe"]}
+
+
+def test_skill_granted_by_background_and_class_dedupes(client, auth_as, owner):
+    """A skill granted by BOTH background and class collapses to one row.
+
+    Regression: Soldier grants Athletics and Barbarian can pick Athletics. Saving the
+    class step *after* the background step used to violate the (character_id, skill_code)
+    unique constraint; the repository now soft-skips the duplicate (plan §D.1).
+    """
+    draft = _create_draft(client, auth_as, owner)
+    cid = draft["id"]
+    # Background first → BACKGROUND athletics.
+    r1 = client.patch(f"/api/characters/draft/{cid}", json={
+        "step": "background",
+        "background": {
+            "background_code": "soldier",
+            "ability_increases": [
+                {"ability": "strength", "increase": 2},
+                {"ability": "constitution", "increase": 1},
+            ],
+        },
+    })
+    assert r1.status_code == 200, r1.text
+    # Then the class picks Athletics too → CLASS athletics (the order that used to 500).
+    r2 = client.patch(f"/api/characters/draft/{cid}", json={
+        "step": "class",
+        "class": {"classes": [{
+            "class_code": "barbarian", "level": 1, "is_primary": True,
+            "chosen_skills": ["athletics", "perception"],
+        }]},
+    })
+    assert r2.status_code == 200, r2.text
+    athletics = [s for s in r2.json()["skills"] if s["skill_code"] == "athletics"]
+    assert len(athletics) == 1, f"expected one athletics row, got {athletics}"
 
 
 class TestCreateDraft:

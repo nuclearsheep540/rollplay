@@ -123,13 +123,17 @@ class UpdateCharacterDraft:
         character.species_code = species.code
         chosen = list(payload.get("chosen_languages", []))
         languages = list(species.default_languages) + chosen
-        # Speed/size/languages flow straight from species definition.
-        character.apply_species_traits(
-            speed=species.speed, size=species.size, languages=languages
-        )
-        # Store sub-choice picks (lineage/ancestry/size) faithfully — the UI offers
-        # only valid options; per §3.0 we don't hard-block here.
-        character.species_sub_choices = dict(payload.get("sub_choices", {}))
+        sub_choices = dict(payload.get("sub_choices", {}))
+        # Size defaults to the species' size, but Human/Tiefling offer a Medium/Small
+        # pick via the `size` sub-choice (A.4) — apply it when present.
+        size = species.size
+        size_pick = sub_choices.get("size")
+        if size_pick:
+            size = size_pick[0].capitalize()
+        character.apply_species_traits(speed=species.speed, size=size, languages=languages)
+        # Store sub-choice picks faithfully — the UI offers only valid options; per §3.0
+        # we don't hard-block here.
+        character.species_sub_choices = sub_choices
 
     # ------------------------------------------------------------ class
 
@@ -178,9 +182,13 @@ class UpdateCharacterDraft:
             raise ValueError(f"Total class levels {total_level} exceeds 20")
         character.class_entries = new_entries
         character.level = total_level
-        # Replace any existing CLASS-source skills with the new picks; keep
-        # skills from other sources untouched.
+        # Replace any existing CLASS-source skills with the new picks; keep skills from
+        # other sources untouched. Drop a class pick that duplicates a skill already granted
+        # by another source (e.g. a Soldier background also gives Athletics) — one row per
+        # skill, soft-skipped silently (plan §D.1).
         non_class_skills = [s for s in character.skills if s.source != "CLASS"]
+        existing_codes = {s.skill_code for s in non_class_skills}
+        new_skills = [s for s in new_skills if s.skill_code not in existing_codes]
         character.skills = non_class_skills + new_skills
         character.set_save_proficiencies(save_codes)
 
