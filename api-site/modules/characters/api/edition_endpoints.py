@@ -23,6 +23,7 @@ from shared.rulesets.models import (
     FeatDefinition,
     SkillDefinition,
     SpeciesDefinition,
+    SpellDefinition,
 )
 from shared.rulesets.registry import RulesetRegistry
 
@@ -94,3 +95,14 @@ async def list_skills(
 ):
     _ensure_known(registry, edition_code)
     return registry.list_skills(edition_code)
+
+
+@router.get("/{edition_code}/spells", response_model=List[SpellDefinition])
+async def list_spells(
+    edition_code: str,
+    class_code: Optional[str] = Query(default=None, pattern=r"^[a-z0-9_]+$"),
+    level: Optional[int] = Query(default=None, ge=0, le=9),
+    registry: RulesetRegistry = Depends(get_ruleset_registry),
+):
+    _ensure_known(registry, edition_code)
+    return registry.list_spells(edition_code, class_code=class_code, level=level)

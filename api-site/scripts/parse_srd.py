@@ -47,6 +47,7 @@ from shared.rulesets.models import (  # noqa: E402
     ClassFeature,
     ClassLevel,
     ClassesFile,
+    SpellsFile,
     CURRENT_SCHEMA_VERSION,
     FeatDefinition,
     FeatPrerequisite,
@@ -1242,6 +1243,93 @@ def parse_classes(only: Optional[str] = None, all_skill_codes: Optional[list[str
     return classes
 
 
+_SPELL_META_RE = re.compile(r"^_(?:Level (\d+) )?([A-Za-z]+)(?: Cantrip)? \(([^)]+)\)_$")
+_SPELL_FIELD_RE = re.compile(r"^\*\*(Casting Time|Range|Components?|Duration):\*\*\s*(.+)$")
+
+
+def parse_spells() -> list[dict]:
+    """Parse the SRD spell catalogue (line-based — the stat blocks are line-oriented).
+
+    Each spell is an H4 under '## Spell Descriptions' whose first non-blank line is the
+    italic header ``_Level N School (Classes)_`` (or ``_School Cantrip (Classes)_``). H4
+    entries without that header (creature stat blocks like 'Animated Object', 'Actions')
+    are skipped. Handles the surveyed edge cases: singular ``**Component:**``, blank lines
+    between fields, ritual via 'or Ritual' in Casting Time, concentration via Duration.
+    """
+    lines = _read("spells.md").splitlines()
+    start = next(
+        (i for i, ln in enumerate(lines) if ln.strip().lower() == "## spell descriptions"),
+        None,
+    )
+    if start is None:
+        raise RuntimeError("spells.md: '## Spell Descriptions' section not found")
+
+    blocks: list[list[str]] = []
+    cur: Optional[list[str]] = None
+    for ln in lines[start + 1:]:
+        if ln.startswith("#### "):
+            if cur is not None:
+                blocks.append(cur)
+            cur = [ln]
+        elif cur is not None:
+            cur.append(ln)
+    if cur is not None:
+        blocks.append(cur)
+
+    spells: list[dict] = []
+    for block in blocks:
+        name = block[0][len("#### "):].strip()
+        # The first non-blank line must be the spell header; otherwise it's not a spell.
+        meta = None
+        meta_idx = 0
+        for i in range(1, len(block)):
+            if not block[i].strip():
+                continue
+            meta = _SPELL_META_RE.match(block[i].strip())
+            meta_idx = i
+            break
+        if meta is None:
+            continue
+        level = int(meta.group(1)) if meta.group(1) else 0
+        classes = [to_code(c.strip()) for c in meta.group(3).split(",") if c.strip()]
+
+        fields: dict[str, str] = {}
+        desc_lines: list[str] = []
+        in_desc = False
+        for ln in block[meta_idx + 1:]:
+            if not in_desc:
+                fm = _SPELL_FIELD_RE.match(ln.strip())
+                if fm:
+                    label = "Components" if fm.group(1).startswith("Component") else fm.group(1)
+                    fields[label] = fm.group(2).strip()
+                    continue
+                if not ln.strip():
+                    continue  # skip blanks between the header/fields and the description
+                in_desc = True
+            desc_lines.append(ln)
+
+        casting_time = fields.get("Casting Time", "")
+        duration = fields.get("Duration", "")
+        spells.append({
+            "code": to_code(name),
+            "name": name,
+            "level": level,
+            "school": meta.group(2),
+            "classes": classes,
+            "casting_time": casting_time,
+            "range": fields.get("Range", ""),
+            "components": fields.get("Components", ""),
+            "duration": duration,
+            "ritual": "ritual" in casting_time.lower(),
+            "concentration": "concentration" in duration.lower(),
+            "description": "\n".join(desc_lines).strip() or name,
+        })
+    if not spells:
+        raise RuntimeError("No spells parsed from spells.md")
+    spells.sort(key=lambda s: s["code"])
+    return spells
+
+
 # --------------------------------------------------------------------------- #
 # Validation pass — cross-file integrity
 # --------------------------------------------------------------------------- #
@@ -1363,6 +1451,10 @@ def main(argv: Iterable[str] | None = None) -> int:
     _merge_authored_choices(classes)
     print(f"  {len(classes)} classes")
 
+    print("Parsing spells…")
+    spells = parse_spells()
+    print(f"  {len(spells)} spells")
+
     print("Cross-file validation…")
     cross_validate(skills, feats, species, backgrounds, classes)
 
@@ -1372,12 +1464,14 @@ def main(argv: Iterable[str] | None = None) -> int:
     species_payload = _wrap("species", species)
     backgrounds_payload = _wrap("backgrounds", backgrounds)
     classes_payload = _wrap("classes", classes)
+    spells_payload = _wrap("spells", spells)
 
     _validate_pydantic(SkillsFile, skills_payload, "skills.json")
     _validate_pydantic(FeatsFile, feats_payload, "feats.json")
     _validate_pydantic(SpeciesFile, species_payload, "species.json")
     _validate_pydantic(BackgroundsFile, backgrounds_payload, "backgrounds.json")
     _validate_pydantic(ClassesFile, classes_payload, "classes.json")
+    _validate_pydantic(SpellsFile, spells_payload, "spells.json")
 
     paths = [
         _write("skills.json", skills_payload),
@@ -1385,6 +1479,7 @@ def main(argv: Iterable[str] | None = None) -> int:
         _write("species.json", species_payload),
         _write("backgrounds.json", backgrounds_payload),
         _write("classes.json", classes_payload),
+        _write("spells.json", spells_payload),
     ]
     for path in paths:
         print(f"Wrote {path.relative_to(_API_SITE_DIR)}")

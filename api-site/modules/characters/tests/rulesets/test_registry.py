@@ -70,7 +70,7 @@ def test_initialize_fails_on_schema_version_mismatch(tmp_path):
     edition_dir = tmp_path / "srd_5_2_1"
     edition_dir.mkdir()
     src = Path("modules/characters/seed_data/srd_5_2_1")
-    for fname in ("skills.json", "feats.json", "species.json", "backgrounds.json", "classes.json"):
+    for fname in ("skills.json", "feats.json", "species.json", "backgrounds.json", "classes.json", "spells.json"):
         data = json.loads((src / fname).read_text())
         if fname == "classes.json":
             data["schema_version"] = 999  # poison
@@ -85,7 +85,7 @@ def test_initialize_fails_on_dangling_cross_ref(tmp_path):
     edition_dir = tmp_path / "srd_5_2_1"
     edition_dir.mkdir()
     src = Path("modules/characters/seed_data/srd_5_2_1")
-    for fname in ("skills.json", "feats.json", "species.json", "backgrounds.json", "classes.json"):
+    for fname in ("skills.json", "feats.json", "species.json", "backgrounds.json", "classes.json", "spells.json"):
         data = json.loads((src / fname).read_text())
         if fname == "backgrounds.json":
             data["backgrounds"][0]["origin_feat_code"] = "no_such_feat"

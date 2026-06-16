@@ -77,6 +77,21 @@ class FeatDefinition(BaseModel):
     description: str = Field(min_length=1)
 
 
+class SpellDefinition(BaseModel):
+    code: str = Field(pattern=CodePattern)
+    name: str
+    level: int = Field(ge=0, le=9)  # 0 = cantrip
+    school: str
+    classes: list[str]  # class codes whose spell list this spell is on (inline in the SRD header)
+    casting_time: str
+    range: str
+    components: str  # raw "V, S, M (…)" — material/cost kept verbatim
+    duration: str
+    ritual: bool = False
+    concentration: bool = False
+    description: str = Field(min_length=1)  # verbatim prose (incl. upcast clause, subsections)
+
+
 class SpeciesTrait(BaseModel):
     name: str
     description: str = Field(min_length=1)
@@ -209,3 +224,7 @@ class BackgroundsFile(_EditionFile):
 
 class ClassesFile(_EditionFile):
     classes: list[ClassDefinition]
+
+
+class SpellsFile(_EditionFile):
+    spells: list[SpellDefinition]

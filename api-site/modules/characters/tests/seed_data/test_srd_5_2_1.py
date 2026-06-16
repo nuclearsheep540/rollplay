@@ -24,6 +24,8 @@ from shared.rulesets.models import (
     SkillsFile,
     SpeciesDefinition,
     SpeciesFile,
+    SpellDefinition,
+    SpellsFile,
 )
 
 
@@ -63,6 +65,11 @@ def test_class_model(entry):
     ClassDefinition.model_validate(entry)
 
 
+@pytest.mark.parametrize("entry", _entries("spells.json", "spells"), ids=lambda e: e["code"])
+def test_spell_model(entry):
+    SpellDefinition.model_validate(entry)
+
+
 # --- Wrapper file validation ----------------------------------------------- #
 
 
@@ -74,6 +81,7 @@ def test_class_model(entry):
         ("species.json", SpeciesFile),
         ("backgrounds.json", BackgroundsFile),
         ("classes.json", ClassesFile),
+        ("spells.json", SpellsFile),
     ],
 )
 def test_file_wrapper_validates(filename, model):
@@ -234,6 +242,34 @@ def test_spellcasting_progression_extracted():
     pal = classes["paladin"]["spellcasting"]
     assert pal["spell_slots_by_level"]["2"] == {"1": 2}
     assert not pal["cantrips_known_by_level"]
+
+
+def test_known_spell_shape():
+    spells = {s["code"]: s for s in _entries("spells.json", "spells")}
+    splash = spells["acid_splash"]
+    assert splash["level"] == 0 and splash["school"] == "Evocation"
+    assert set(splash["classes"]) >= {"sorcerer", "wizard"}
+    assert spells["alarm"]["ritual"] is True  # casting time "1 minute or Ritual"
+
+
+def test_spell_classes_and_leveled_grants_resolve():
+    """Deferral #1 guard: no dangling spell refs.
+
+    Every spell's inline class list resolves to a real class, and every species
+    leveled-grant spell code (Elf/Tiefling/Gnome lineages) resolves to a real spell.
+    """
+    class_codes = {c["code"] for c in _entries("classes.json", "classes")}
+    spell_codes = {s["code"] for s in _entries("spells.json", "spells")}
+    for s in _entries("spells.json", "spells"):
+        for cc in s["classes"]:
+            assert cc in class_codes, f"Spell '{s['code']}' references unknown class '{cc}'"
+    for sp in _entries("species.json", "species"):
+        for opt, by_level in sp.get("leveled_grants_by_sub_choice", {}).items():
+            for level, codes in by_level.items():
+                for code in codes:
+                    assert code in spell_codes, (
+                        f"Species '{sp['code']}' lineage '{opt}' L{level} grants unknown spell '{code}'"
+                    )
 
 
 def test_every_feat_with_prerequisite_subheader_is_parsed():

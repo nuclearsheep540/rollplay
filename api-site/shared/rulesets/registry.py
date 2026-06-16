@@ -33,6 +33,8 @@ from shared.rulesets.models import (
     SkillsFile,
     SpeciesDefinition,
     SpeciesFile,
+    SpellDefinition,
+    SpellsFile,
 )
 from shared.rulesets.strategy import RulesetStrategy
 
@@ -65,7 +67,8 @@ class _EditionRulesetData:
         species: dict[str, SpeciesDefinition],
         backgrounds: dict[str, BackgroundDefinition],
         classes: dict[str, ClassDefinition],
-        strategy: RulesetStrategy,
+        spells: dict[str, SpellDefinition],
+        strategy: Optional[RulesetStrategy],  # filled lazily on first get_ruleset()
     ):
         self.edition_code = edition_code
         self.skills = skills
@@ -73,6 +76,7 @@ class _EditionRulesetData:
         self.species = species
         self.backgrounds = backgrounds
         self.classes = classes
+        self.spells = spells
         self.strategy = strategy
 
 
@@ -137,12 +141,14 @@ class RulesetRegistry:
         species_file = _load("species.json", SpeciesFile)
         backgrounds_file = _load("backgrounds.json", BackgroundsFile)
         classes_file = _load("classes.json", ClassesFile)
+        spells_file = _load("spells.json", SpellsFile)
 
         skills = {s.code: s for s in skills_file.skills}
         feats = {f.code: f for f in feats_file.feats}
         species = {s.code: s for s in species_file.species}
         backgrounds = {b.code: b for b in backgrounds_file.backgrounds}
         classes = {c.code: c for c in classes_file.classes}
+        spells = {s.code: s for s in spells_file.spells}
 
         # Cross-ref integrity. These also run in the parser, but a hand-edited
         # JSON could slip through, so re-check at boot.
@@ -165,6 +171,23 @@ class RulesetRegistry:
                         f"[{edition_code}] class '{cls_def.code}' references "
                         f"unknown skill '{sc}' in skill_choices.from"
                     )
+        # Spell cross-refs (deferral #1): a spell's inline class list and any species
+        # leveled-grant spell code must resolve, or the app must not boot.
+        for spell in spells.values():
+            for cc in spell.classes:
+                if cc not in classes:
+                    raise RuntimeError(
+                        f"[{edition_code}] spell '{spell.code}' references unknown class '{cc}'"
+                    )
+        for sp in species.values():
+            for opt, by_level in sp.leveled_grants_by_sub_choice.items():
+                for codes in by_level.values():
+                    for code in codes:
+                        if code not in spells:
+                            raise RuntimeError(
+                                f"[{edition_code}] species '{sp.code}' lineage '{opt}' "
+                                f"grants unknown spell '{code}'"
+                            )
 
         if edition_code not in _STRATEGY_FACTORIES:
             raise RuntimeError(
@@ -178,6 +201,7 @@ class RulesetRegistry:
             species=species,
             backgrounds=backgrounds,
             classes=classes,
+            spells=spells,
             strategy=None,  # filled below once we have the registry instance
         )
         return registry_data
@@ -260,6 +284,25 @@ class RulesetRegistry:
 
     def list_skills(self, edition_code: str) -> list[SkillDefinition]:
         return sorted(self._ed(edition_code).skills.values(), key=lambda s: s.code)
+
+    def get_spell(self, edition_code: str, spell_code: str) -> SpellDefinition:
+        ed = self._ed(edition_code)
+        if spell_code not in ed.spells:
+            raise KeyError(f"Unknown spell '{spell_code}' in edition '{edition_code}'")
+        return ed.spells[spell_code]
+
+    def list_spells(
+        self,
+        edition_code: str,
+        class_code: Optional[str] = None,
+        level: Optional[int] = None,
+    ) -> list[SpellDefinition]:
+        spells = sorted(self._ed(edition_code).spells.values(), key=lambda s: (s.level, s.code))
+        if class_code is not None:
+            spells = [s for s in spells if class_code in s.classes]
+        if level is not None:
+            spells = [s for s in spells if s.level == level]
+        return spells
 
     def get_ruleset(self, edition_code: str) -> RulesetStrategy:
         ed = self._ed(edition_code)
