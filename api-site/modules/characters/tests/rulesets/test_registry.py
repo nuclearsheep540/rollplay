@@ -30,6 +30,14 @@ def test_initialize_loads_srd_edition():
     assert len(reg.list_feats("srd_5_2_1", category="origin")) == 4
 
 
+def test_initialize_loads_catalogues():
+    reg = RulesetRegistry.initialize()
+    assert len(reg.list_invocations("srd_5_2_1")) == 28
+    assert len(reg.list_metamagic("srd_5_2_1")) == 10
+    assert reg.get_invocation("srd_5_2_1", "pact_of_the_blade").name == "Pact of the Blade"
+    assert reg.get_metamagic("srd_5_2_1", "twinned_spell").sorcery_point_cost == 1
+
+
 def test_get_class_returns_typed_definition():
     reg = RulesetRegistry.initialize()
     barb = reg.get_class("srd_5_2_1", "barbarian")
@@ -70,7 +78,7 @@ def test_initialize_fails_on_schema_version_mismatch(tmp_path):
     edition_dir = tmp_path / "srd_5_2_1"
     edition_dir.mkdir()
     src = Path("modules/characters/seed_data/srd_5_2_1")
-    for fname in ("skills.json", "feats.json", "species.json", "backgrounds.json", "classes.json", "spells.json"):
+    for fname in ("skills.json", "feats.json", "species.json", "backgrounds.json", "classes.json", "spells.json", "invocations.json", "metamagic.json"):
         data = json.loads((src / fname).read_text())
         if fname == "classes.json":
             data["schema_version"] = 999  # poison
@@ -85,7 +93,7 @@ def test_initialize_fails_on_dangling_cross_ref(tmp_path):
     edition_dir = tmp_path / "srd_5_2_1"
     edition_dir.mkdir()
     src = Path("modules/characters/seed_data/srd_5_2_1")
-    for fname in ("skills.json", "feats.json", "species.json", "backgrounds.json", "classes.json", "spells.json"):
+    for fname in ("skills.json", "feats.json", "species.json", "backgrounds.json", "classes.json", "spells.json", "invocations.json", "metamagic.json"):
         data = json.loads((src / fname).read_text())
         if fname == "backgrounds.json":
             data["backgrounds"][0]["origin_feat_code"] = "no_such_feat"

@@ -61,11 +61,13 @@ class SkillDefinition(BaseModel):
 
 
 class FeatPrerequisite(BaseModel):
-    type: Literal["level", "ability", "ability_any", "class", "class_feature", "spellcasting"]
+    type: Literal["level", "ability", "ability_any", "class", "class_feature", "spellcasting", "invocation"]
     value: Optional[int] = None
     abilities: Optional[list[AbilityCode]] = None
     class_code: Optional[str] = Field(default=None, pattern=CodePattern)
-    feature: Optional[str] = Field(default=None, pattern=CodePattern)  # for type="class_feature", e.g. "fighting_style"
+    # for type="class_feature" the named feature (e.g. "fighting_style"); for type="invocation"
+    # the referenced invocation code (e.g. "pact_of_the_blade").
+    feature: Optional[str] = Field(default=None, pattern=CodePattern)
 
 
 class FeatDefinition(BaseModel):
@@ -90,6 +92,28 @@ class SpellDefinition(BaseModel):
     ritual: bool = False
     concentration: bool = False
     description: str = Field(min_length=1)  # verbatim prose (incl. upcast clause, subsections)
+
+
+class InvocationDefinition(BaseModel):
+    """A Warlock Eldritch Invocation (A.7). Mirrors FeatDefinition; the messy prose prereq
+    (e.g. "a Warlock Cantrip That Deals Damage") is kept verbatim in ``prerequisite_text`` for
+    display, with only the machine-checkable parts (level, required invocation) structured."""
+
+    code: str = Field(pattern=CodePattern)
+    name: str
+    prerequisite_text: str = ""  # verbatim prereq prose, "" when the invocation has no prerequisite
+    prerequisites: list[FeatPrerequisite] = []  # structured subset: level + invocation refs
+    repeatable: bool = False
+    description: str = Field(min_length=1)
+
+
+class MetamagicDefinition(BaseModel):
+    """A Sorcerer Metamagic option (A.8)."""
+
+    code: str = Field(pattern=CodePattern)
+    name: str
+    sorcery_point_cost: int = Field(ge=0)
+    description: str = Field(min_length=1)
 
 
 class SpeciesTrait(BaseModel):
@@ -230,3 +254,11 @@ class ClassesFile(_EditionFile):
 
 class SpellsFile(_EditionFile):
     spells: list[SpellDefinition]
+
+
+class InvocationsFile(_EditionFile):
+    invocations: list[InvocationDefinition]
+
+
+class MetamagicFile(_EditionFile):
+    metamagic: list[MetamagicDefinition]

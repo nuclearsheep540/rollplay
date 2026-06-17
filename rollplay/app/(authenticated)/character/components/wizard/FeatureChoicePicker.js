@@ -7,7 +7,7 @@
 
 import { THEME } from '@/app/styles/colorTheme'
 
-import { useEditionFeats } from '../../hooks/useReferenceData'
+import { useEditionFeats, useEditionInvocations, useEditionMetamagic } from '../../hooks/useReferenceData'
 
 /**
  * Inline picker for one ClassFeatureChoice / SpeciesSubChoice (they share the
@@ -17,6 +17,8 @@ import { useEditionFeats } from '../../hooks/useReferenceData'
  *   single_pick      → radio over inline options (pick 1)
  *   feat_pick        → radio over feats in the `source` category (e.g. fighting_style)
  *   skill_proficiency→ checklist over inline options (pick `count`)
+ *   invocation       → checklist over the invocations catalogue (prereqs shown as guidance)
+ *   metamagic        → checklist over the metamagic catalogue (sorcery-point cost shown)
  *   weapon_mastery / language / tool_proficiency → free-text slots (no catalogue yet)
  *
  * Surfaces options, never hides — and never blocks (facilitate, don't enforce).
@@ -24,9 +26,12 @@ import { useEditionFeats } from '../../hooks/useReferenceData'
 export default function FeatureChoicePicker({ choice, editionCode, value = [], onChange }) {
   const { type, count = 1, options = [], source = null, name, code } = choice
 
-  // feat_pick resolves its options from a feat category ("fighting_style", "origin", …).
+  // feat_pick resolves its options from a feat category ("fighting_style", "origin", …);
+  // invocation / metamagic resolve from their own catalogue endpoints.
   const featCategory = type === 'feat_pick' ? source?.[0] ?? null : null
   const { data: feats } = useEditionFeats(featCategory ? editionCode : null, featCategory)
+  const { data: invocations } = useEditionInvocations(type === 'invocation' ? editionCode : null)
+  const { data: metamagic } = useEditionMetamagic(type === 'metamagic' ? editionCode : null)
 
   const Label = (
     <div className="text-xs uppercase mb-1" style={{ color: THEME.textSecondary }}>
@@ -100,6 +105,56 @@ export default function FeatureChoicePicker({ choice, editionCode, value = [], o
             )
           })}
         </div>
+      </div>
+    )
+  }
+
+  // invocation / metamagic — catalogue-backed checklist (pick up to `count`). Prereqs and
+  // sorcery-point costs are shown as guidance only; selection is never blocked (facilitate,
+  // don't enforce). The full B.4 picker (Mystic Arcanum, prereq filtering, swap-on-level) is later.
+  if (type === 'invocation' || type === 'metamagic') {
+    const catalogue = type === 'invocation' ? invocations : metamagic
+    const toggle = (optCode) => {
+      if (value.includes(optCode)) onChange(value.filter((c) => c !== optCode))
+      else if (value.length < count) onChange([...value, optCode])
+    }
+    return (
+      <div className="space-y-1">
+        {Label}
+        {!catalogue ? (
+          <div className="text-sm italic" style={{ color: THEME.textSecondary }}>
+            Loading options…
+          </div>
+        ) : (
+          <div className="space-y-1 max-h-72 overflow-y-auto pr-1">
+            {catalogue.map((o) => {
+              const checked = value.includes(o.code)
+              const disabled = !checked && value.length >= count
+              const meta =
+                type === 'invocation'
+                  ? o.prerequisite_text
+                  : `${o.sorcery_point_cost} Sorcery Point${o.sorcery_point_cost === 1 ? '' : 's'}`
+              return (
+                <label
+                  key={o.code}
+                  className={`flex items-start gap-2 text-sm ${disabled ? 'opacity-40' : 'cursor-pointer'}`}
+                >
+                  <input
+                    type="checkbox"
+                    checked={checked}
+                    disabled={disabled}
+                    onChange={() => toggle(o.code)}
+                    className="mt-1"
+                  />
+                  <span style={{ color: THEME.textOnDark }}>
+                    <span className="font-medium">{o.name}</span>
+                    {meta ? <span style={{ color: THEME.textSecondary }}> — {meta}</span> : null}
+                  </span>
+                </label>
+              )
+            })}
+          </div>
+        )}
       </div>
     )
   }

@@ -543,6 +543,32 @@
         }
       }
     ],
+    "sorcerer": [
+      {
+        "level": 2,
+        "feature": "Metamagic",
+        "choice": {
+          "code": "metamagic",
+          "name": "Metamagic",
+          "type": "metamagic",
+          "count": 2,
+          "swappable_on": "level_up"
+        }
+      }
+    ],
+    "warlock": [
+      {
+        "level": 1,
+        "feature": "Eldritch Invocations",
+        "choice": {
+          "code": "eldritch_invocations",
+          "name": "Eldritch Invocations",
+          "type": "invocation",
+          "count": 1,
+          "swappable_on": "level_up"
+        }
+      }
+    ],
     "wizard": [
       {
         "level": 2,

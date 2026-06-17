@@ -21,6 +21,8 @@ from shared.rulesets.models import (
     BackgroundDefinition,
     ClassDefinition,
     FeatDefinition,
+    InvocationDefinition,
+    MetamagicDefinition,
     SkillDefinition,
     SpeciesDefinition,
     SpellDefinition,
@@ -106,3 +108,21 @@ async def list_spells(
 ):
     _ensure_known(registry, edition_code)
     return registry.list_spells(edition_code, class_code=class_code, level=level)
+
+
+@router.get("/{edition_code}/invocations", response_model=List[InvocationDefinition])
+async def list_invocations(
+    edition_code: str,
+    registry: RulesetRegistry = Depends(get_ruleset_registry),
+):
+    _ensure_known(registry, edition_code)
+    return registry.list_invocations(edition_code)
+
+
+@router.get("/{edition_code}/metamagic", response_model=List[MetamagicDefinition])
+async def list_metamagic(
+    edition_code: str,
+    registry: RulesetRegistry = Depends(get_ruleset_registry),
+):
+    _ensure_known(registry, edition_code)
+    return registry.list_metamagic(edition_code)

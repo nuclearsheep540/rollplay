@@ -29,6 +29,10 @@ from shared.rulesets.models import (
     CURRENT_SCHEMA_VERSION,
     FeatDefinition,
     FeatsFile,
+    InvocationDefinition,
+    InvocationsFile,
+    MetamagicDefinition,
+    MetamagicFile,
     SkillDefinition,
     SkillsFile,
     SpeciesDefinition,
@@ -68,6 +72,8 @@ class _EditionRulesetData:
         backgrounds: dict[str, BackgroundDefinition],
         classes: dict[str, ClassDefinition],
         spells: dict[str, SpellDefinition],
+        invocations: dict[str, InvocationDefinition],
+        metamagic: dict[str, MetamagicDefinition],
         strategy: Optional[RulesetStrategy],  # filled lazily on first get_ruleset()
     ):
         self.edition_code = edition_code
@@ -77,6 +83,8 @@ class _EditionRulesetData:
         self.backgrounds = backgrounds
         self.classes = classes
         self.spells = spells
+        self.invocations = invocations
+        self.metamagic = metamagic
         self.strategy = strategy
 
 
@@ -142,6 +150,8 @@ class RulesetRegistry:
         backgrounds_file = _load("backgrounds.json", BackgroundsFile)
         classes_file = _load("classes.json", ClassesFile)
         spells_file = _load("spells.json", SpellsFile)
+        invocations_file = _load("invocations.json", InvocationsFile)
+        metamagic_file = _load("metamagic.json", MetamagicFile)
 
         skills = {s.code: s for s in skills_file.skills}
         feats = {f.code: f for f in feats_file.feats}
@@ -149,6 +159,8 @@ class RulesetRegistry:
         backgrounds = {b.code: b for b in backgrounds_file.backgrounds}
         classes = {c.code: c for c in classes_file.classes}
         spells = {s.code: s for s in spells_file.spells}
+        invocations = {i.code: i for i in invocations_file.invocations}
+        metamagic = {m.code: m for m in metamagic_file.metamagic}
 
         # Cross-ref integrity. These also run in the parser, but a hand-edited
         # JSON could slip through, so re-check at boot.
@@ -207,6 +219,15 @@ class RulesetRegistry:
                                     f"[{edition_code}] subclass '{sub.code}' option '{land}' "
                                     f"grants unknown spell '{code}'"
                                 )
+        # Invocation prerequisites that reference another invocation (e.g. "Pact of the Blade
+        # Invocation") must resolve to a real invocation code.
+        for inv in invocations.values():
+            for prereq in inv.prerequisites:
+                if prereq.type == "invocation" and prereq.feature not in invocations:
+                    raise RuntimeError(
+                        f"[{edition_code}] invocation '{inv.code}' requires unknown "
+                        f"invocation '{prereq.feature}'"
+                    )
 
         if edition_code not in _STRATEGY_FACTORIES:
             raise RuntimeError(
@@ -221,6 +242,8 @@ class RulesetRegistry:
             backgrounds=backgrounds,
             classes=classes,
             spells=spells,
+            invocations=invocations,
+            metamagic=metamagic,
             strategy=None,  # filled below once we have the registry instance
         )
         return registry_data
@@ -322,6 +345,24 @@ class RulesetRegistry:
         if level is not None:
             spells = [s for s in spells if s.level == level]
         return spells
+
+    def get_invocation(self, edition_code: str, code: str) -> InvocationDefinition:
+        ed = self._ed(edition_code)
+        if code not in ed.invocations:
+            raise KeyError(f"Unknown invocation '{code}' in edition '{edition_code}'")
+        return ed.invocations[code]
+
+    def list_invocations(self, edition_code: str) -> list[InvocationDefinition]:
+        return sorted(self._ed(edition_code).invocations.values(), key=lambda i: i.code)
+
+    def get_metamagic(self, edition_code: str, code: str) -> MetamagicDefinition:
+        ed = self._ed(edition_code)
+        if code not in ed.metamagic:
+            raise KeyError(f"Unknown metamagic '{code}' in edition '{edition_code}'")
+        return ed.metamagic[code]
+
+    def list_metamagic(self, edition_code: str) -> list[MetamagicDefinition]:
+        return sorted(self._ed(edition_code).metamagic.values(), key=lambda m: m.code)
 
     def get_ruleset(self, edition_code: str) -> RulesetStrategy:
         ed = self._ed(edition_code)

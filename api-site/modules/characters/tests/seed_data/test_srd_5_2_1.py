@@ -20,6 +20,10 @@ from shared.rulesets.models import (
     ClassesFile,
     FeatDefinition,
     FeatsFile,
+    InvocationDefinition,
+    InvocationsFile,
+    MetamagicDefinition,
+    MetamagicFile,
     SkillDefinition,
     SkillsFile,
     SpeciesDefinition,
@@ -70,6 +74,16 @@ def test_spell_model(entry):
     SpellDefinition.model_validate(entry)
 
 
+@pytest.mark.parametrize("entry", _entries("invocations.json", "invocations"), ids=lambda e: e["code"])
+def test_invocation_model(entry):
+    InvocationDefinition.model_validate(entry)
+
+
+@pytest.mark.parametrize("entry", _entries("metamagic.json", "metamagic"), ids=lambda e: e["code"])
+def test_metamagic_model(entry):
+    MetamagicDefinition.model_validate(entry)
+
+
 # --- Wrapper file validation ----------------------------------------------- #
 
 
@@ -82,6 +96,8 @@ def test_spell_model(entry):
         ("backgrounds.json", BackgroundsFile),
         ("classes.json", ClassesFile),
         ("spells.json", SpellsFile),
+        ("invocations.json", InvocationsFile),
+        ("metamagic.json", MetamagicFile),
     ],
 )
 def test_file_wrapper_validates(filename, model):
@@ -372,9 +388,68 @@ def test_no_duplicate_codes_within_each_file():
         ("species.json", "species"),
         ("backgrounds.json", "backgrounds"),
         ("classes.json", "classes"),
+        ("invocations.json", "invocations"),
+        ("metamagic.json", "metamagic"),
     ):
         codes = [e["code"] for e in _entries(filename, key)]
         assert len(codes) == len(set(codes)), (
             f"Duplicate codes in {filename}: "
             f"{sorted(c for c in codes if codes.count(c) > 1)}"
         )
+
+
+# --- A.7 / A.8 catalogues -------------------------------------------------- #
+
+
+def test_invocation_catalogue_shape():
+    """A.7: the full SRD invocation set, with the known repeatable + no-prereq entries."""
+    inv = {i["code"]: i for i in _entries("invocations.json", "invocations")}
+    assert len(inv) == 28
+    # The four repeatable invocations.
+    assert {c for c, i in inv.items() if i["repeatable"]} == {
+        "agonizing_blast", "eldritch_spear", "lessons_of_the_first_ones", "repelling_blast",
+    }
+    # The five with no prerequisite (incl. the three pacts).
+    assert {c for c, i in inv.items() if not i["prerequisite_text"]} == {
+        "armor_of_shadows", "eldritch_mind", "pact_of_the_blade", "pact_of_the_chain", "pact_of_the_tome",
+    }
+    # Spot-check a structured level + invocation cross-ref prerequisite.
+    eldritch_smite = inv["eldritch_smite"]["prerequisites"]
+    assert {"type": "level", "value": 5} in eldritch_smite
+    assert {"type": "invocation", "feature": "pact_of_the_blade"} in eldritch_smite
+
+
+def test_invocation_cross_refs_resolve():
+    """Every invocation prereq that references another invocation resolves to a real one."""
+    inv = {i["code"]: i for i in _entries("invocations.json", "invocations")}
+    for code, i in inv.items():
+        for p in i["prerequisites"]:
+            if p["type"] == "invocation":
+                assert p["feature"] in inv, f"{code} requires unknown invocation '{p['feature']}'"
+
+
+def test_metamagic_catalogue_shape():
+    """A.8: all ten Metamagic options; Heightened/Quickened cost 2 Sorcery Points, rest cost 1."""
+    mm = {m["code"]: m for m in _entries("metamagic.json", "metamagic")}
+    assert len(mm) == 10
+    assert {c for c, m in mm.items() if m["sorcery_point_cost"] == 2} == {
+        "heightened_spell", "quickened_spell",
+    }
+    assert all(m["sorcery_point_cost"] in (1, 2) for m in mm.values())
+
+
+def test_invocation_and_metamagic_choices_wired():
+    """PR 5 wiring: Warlock L1 gains 1 invocation; Sorcerer L2 gains 2 Metamagic options."""
+    classes = {c["code"]: c for c in _entries("classes.json", "classes")}
+
+    def choice(class_code, level, feature):
+        for f in classes[class_code]["features_by_level"][str(level)]["features"]:
+            if f["name"] == feature:
+                return f.get("choices", [])
+        return []
+
+    warlock = choice("warlock", 1, "Eldritch Invocations")
+    assert warlock and warlock[0]["type"] == "invocation" and warlock[0]["count"] == 1
+
+    sorcerer = choice("sorcerer", 2, "Metamagic")
+    assert sorcerer and sorcerer[0]["type"] == "metamagic" and sorcerer[0]["count"] == 2

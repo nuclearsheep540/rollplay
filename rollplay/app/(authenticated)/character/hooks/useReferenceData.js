@@ -79,3 +79,21 @@ export function useEditionSkills(editionCode) {
     enabled: Boolean(editionCode),
   })
 }
+
+export function useEditionInvocations(editionCode) {
+  return useQuery({
+    queryKey: ['editions', editionCode, 'invocations'],
+    queryFn: () => getJson(`/api/editions/${editionCode}/invocations`),
+    staleTime: ONE_HOUR,
+    enabled: Boolean(editionCode),
+  })
+}
+
+export function useEditionMetamagic(editionCode) {
+  return useQuery({
+    queryKey: ['editions', editionCode, 'metamagic'],
+    queryFn: () => getJson(`/api/editions/${editionCode}/metamagic`),
+    staleTime: ONE_HOUR,
+    enabled: Boolean(editionCode),
+  })
+}
