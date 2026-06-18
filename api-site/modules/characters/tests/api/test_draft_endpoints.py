@@ -60,6 +60,105 @@ def test_sub_choice_picks_round_trip(client, auth_as, owner):
     assert entry["sub_choices"] == {"barbarian_weapon_mastery": ["greataxe", "handaxe"]}
 
 
+def test_spell_selection_round_trip(client, auth_as, owner):
+    """PR 6 (B.2/C.2): a Wizard's cantrip + level-1 picks persist and derive slots/DC."""
+    draft = _create_draft(client, auth_as, owner)
+    cid = draft["id"]
+    # Wizard primary class.
+    client.patch(f"/api/characters/draft/{cid}", json={
+        "step": "class",
+        "class": {
+            "classes": [{
+                "class_code": "wizard", "level": 1, "is_primary": True,
+                "chosen_skills": ["arcana", "investigation"],
+            }],
+        },
+    })
+    # Bump Intelligence so the derived save DC is non-trivial (16 → +3 mod).
+    client.patch(f"/api/characters/draft/{cid}", json={
+        "step": "ability_scores",
+        "ability_scores": {
+            "strength": 8, "dexterity": 14, "constitution": 12,
+            "intelligence": 16, "wisdom": 10, "charisma": 10,
+        },
+    })
+    # Spell step: a cantrip + a level-1 spell, attributed to the wizard.
+    resp = client.patch(f"/api/characters/draft/{cid}", json={
+        "step": "spells",
+        "spells": {"selections": [
+            {"class_code": "wizard", "spell_codes": ["fire_bolt", "magic_missile"]},
+        ]},
+    })
+    assert resp.status_code == 200, resp.text
+
+    body = client.get(f"/api/characters/{cid}").json()
+    spells = {s["spell_code"]: s for s in body["spells"]}
+    assert set(spells) == {"fire_bolt", "magic_missile"}
+    # Cantrip vs leveled classification + provenance.
+    assert spells["fire_bolt"]["spell_level"] == 0
+    assert spells["fire_bolt"]["source"] == "class_known"
+    assert spells["magic_missile"]["spell_level"] == 1
+    assert spells["magic_missile"]["source"] == "class_prepared"
+    assert spells["magic_missile"]["granted_by"] == "wizard"
+    assert spells["magic_missile"]["casting_ability"] == "intelligence"
+    # Derived spellcasting: Wizard L1 → 2 first-level slots; DC 8+2+3=13, attack +5.
+    derived = body["derived"]
+    assert derived["spell_slots"] == {"1": 2}
+    assert derived["spell_save_dc_by_ability"]["intelligence"] == 13
+    assert derived["spell_attack_bonus_by_ability"]["intelligence"] == 5
+    assert derived["pact_slots"] is None
+    # creation_step advanced to spells so the wizard resumes correctly.
+    assert body["creation_step"] == "spells"
+
+
+def test_spell_selection_replaces_on_resave(client, auth_as, owner):
+    """Re-saving the spell step replaces class picks (no stale accumulation)."""
+    draft = _create_draft(client, auth_as, owner)
+    cid = draft["id"]
+    client.patch(f"/api/characters/draft/{cid}", json={
+        "step": "class",
+        "class": {"classes": [{
+            "class_code": "wizard", "level": 1, "is_primary": True,
+            "chosen_skills": ["arcana", "investigation"],
+        }]},
+    })
+    client.patch(f"/api/characters/draft/{cid}", json={
+        "step": "spells",
+        "spells": {"selections": [{"class_code": "wizard", "spell_codes": ["fire_bolt", "shield"]}]},
+    })
+    client.patch(f"/api/characters/draft/{cid}", json={
+        "step": "spells",
+        "spells": {"selections": [{"class_code": "wizard", "spell_codes": ["mage_hand"]}]},
+    })
+    body = client.get(f"/api/characters/{cid}").json()
+    assert {s["spell_code"] for s in body["spells"]} == {"mage_hand"}
+
+
+def test_spell_step_invalid_class_preserves_existing(client, auth_as, owner):
+    """validate-before-mutate: a bad class_code 400s and does NOT clear existing spells."""
+    draft = _create_draft(client, auth_as, owner)
+    cid = draft["id"]
+    client.patch(f"/api/characters/draft/{cid}", json={
+        "step": "class",
+        "class": {"classes": [{
+            "class_code": "wizard", "level": 1, "is_primary": True,
+            "chosen_skills": ["arcana", "investigation"],
+        }]},
+    })
+    client.patch(f"/api/characters/draft/{cid}", json={
+        "step": "spells",
+        "spells": {"selections": [{"class_code": "wizard", "spell_codes": ["fire_bolt"]}]},
+    })
+    # Barbarian isn't on the character → rejected, and the prior pick must survive.
+    bad = client.patch(f"/api/characters/draft/{cid}", json={
+        "step": "spells",
+        "spells": {"selections": [{"class_code": "barbarian", "spell_codes": ["mage_hand"]}]},
+    })
+    assert bad.status_code == 400, bad.text
+    body = client.get(f"/api/characters/{cid}").json()
+    assert {s["spell_code"] for s in body["spells"]} == {"fire_bolt"}
+
+
 def test_skill_granted_by_background_and_class_dedupes(client, auth_as, owner):
     """A skill granted by BOTH background and class collapses to one row.
 

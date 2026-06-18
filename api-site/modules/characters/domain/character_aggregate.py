@@ -29,6 +29,10 @@ ABILITY_CODES: tuple[str, ...] = (
 
 SKILL_SOURCES: frozenset[str] = frozenset({"CLASS", "BACKGROUND", "FEAT", "SPECIES"})
 FEAT_SOURCES: frozenset[str] = frozenset({"BACKGROUND_ORIGIN", "ASI", "OTHER"})
+SPELL_SOURCES: frozenset[str] = frozenset({
+    "class_known", "class_prepared", "spellbook", "always_prepared",
+    "mystic_arcanum", "magic_initiate", "species", "magical_secrets",
+})
 
 
 # --------------------------------------------------------------------------- #
@@ -123,6 +127,33 @@ class FeatAcquisition:
             raise ValueError(f"FeatAcquisition.level must be 1..20 (got {self.level})")
 
 
+@dataclass(frozen=True)
+class SpellSelection:
+    """A spell the character knows / has prepared, with its provenance.
+
+    ``spell_level`` is 0 for cantrips, 1..9 for leveled spells. ``source`` (one of
+    SPELL_SOURCES) says *how* the character has it — class_known / class_prepared /
+    always_prepared / species / …; ``granted_by`` records the originating class / feat /
+    species code so a multi-class caster can attribute each spell. ``casting_ability`` is
+    the ability code used for this spell's save DC / attack (the granting class's
+    spellcasting ability); ``None`` when not yet resolved.
+    """
+    spell_code: str
+    spell_level: int
+    source: str
+    granted_by: str = ""
+    casting_ability: Optional[str] = None
+
+    def __post_init__(self):
+        if self.source not in SPELL_SOURCES:
+            raise ValueError(
+                f"SpellSelection.source must be one of {sorted(SPELL_SOURCES)} "
+                f"(got {self.source!r})"
+            )
+        if not 0 <= self.spell_level <= 9:
+            raise ValueError(f"SpellSelection.spell_level must be 0..9 (got {self.spell_level})")
+
+
 # --------------------------------------------------------------------------- #
 # Aggregate
 # --------------------------------------------------------------------------- #
@@ -204,6 +235,9 @@ class CharacterAggregate:
 
     # Species sub-choice picks (lineage/ancestry/legacy/size): {choice_code: [picked_codes]}
     species_sub_choices: dict = field(default_factory=dict)
+
+    # Spells known / prepared (cantrips are spell_level 0). Replace-written per save.
+    spells: list[SpellSelection] = field(default_factory=list)
 
     # -------------------------------------------------------------- factory
 
@@ -543,6 +577,48 @@ class CharacterAggregate:
         before = len(self.skills)
         self.skills = [s for s in self.skills if s.skill_code != skill_code]
         if len(self.skills) != before:
+            self._touch()
+
+    # -------------------------------------------------------------- spells
+
+    def learn_spell(
+        self,
+        spell_code: str,
+        spell_level: int,
+        source: str,
+        *,
+        granted_by: str = "",
+        casting_ability: Optional[str] = None,
+    ) -> None:
+        """Add a spell selection, de-duplicating on (spell_code, source, granted_by)."""
+        if any(
+            s.spell_code == spell_code and s.source == source and s.granted_by == granted_by
+            for s in self.spells
+        ):
+            return
+        self.spells.append(
+            SpellSelection(spell_code, spell_level, source, granted_by, casting_ability)
+        )
+        self._touch()
+
+    def forget_spell(self, spell_code: str, *, source: Optional[str] = None) -> None:
+        """Remove spell selections matching ``spell_code`` (optionally scoped to one source)."""
+        before = len(self.spells)
+        self.spells = [
+            s for s in self.spells
+            if not (s.spell_code == spell_code and (source is None or s.source == source))
+        ]
+        if len(self.spells) != before:
+            self._touch()
+
+    def clear_spells(self, *, sources: Optional[set[str]] = None) -> None:
+        """Drop all spells, or only those whose source is in ``sources`` (replace-on-save)."""
+        before = len(self.spells)
+        if sources is None:
+            self.spells = []
+        else:
+            self.spells = [s for s in self.spells if s.source not in sources]
+        if len(self.spells) != before:
             self._touch()
 
     def set_save_proficiencies(self, ability_codes: Iterable[str]) -> None:

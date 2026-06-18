@@ -23,6 +23,7 @@ from modules.characters.domain.character_aggregate import (
     ClassEntry,
     FeatAcquisition,
     SkillProficiency,
+    SpellSelection,
 )
 from modules.characters.model.character_ability_model import CharacterAbilityScore
 from modules.characters.model.character_choices_log_model import CharacterChoiceLog
@@ -31,6 +32,7 @@ from modules.characters.model.character_feat_model import CharacterFeatAcquisiti
 from modules.characters.model.character_model import Character as CharacterModel
 from modules.characters.model.character_save_model import CharacterSaveProficiency
 from modules.characters.model.character_skill_model import CharacterSkillProficiency
+from modules.characters.model.character_spell_model import CharacterSpell
 from modules.characters.model.dnd_ability_model import DndAbility
 
 
@@ -66,6 +68,7 @@ class CharacterRepository:
                 selectinload(CharacterModel.save_proficiency_entries),
                 selectinload(CharacterModel.skill_entries),
                 selectinload(CharacterModel.feat_entries),
+                selectinload(CharacterModel.spell_entries),
                 selectinload(CharacterModel.choice_log_entries),
             )
         )
@@ -125,6 +128,17 @@ class CharacterRepository:
             for e in model.feat_entries or []
         ]
 
+        spells = [
+            SpellSelection(
+                spell_code=e.spell_code,
+                spell_level=int(e.spell_level),
+                source=e.source,
+                granted_by=e.granted_by or "",
+                casting_ability=e.casting_ability,
+            )
+            for e in model.spell_entries or []
+        ]
+
         edition_code = model.edition.code if model.edition is not None else ""
         return CharacterAggregate(
             id=model.id,
@@ -142,6 +156,7 @@ class CharacterRepository:
             save_proficiencies=save_codes,
             skills=skills,
             feats=feats,
+            spells=spells,
             level=model.level,
             xp=model.xp,
             hp_max=model.hp_max,
@@ -301,6 +316,8 @@ class CharacterRepository:
                 self.db.delete(entry)
             for entry in list(model.feat_entries):
                 self.db.delete(entry)
+            for entry in list(model.spell_entries):
+                self.db.delete(entry)
             self.db.flush()
             self._write_all_children(model, aggregate, ability_lookup)
 
@@ -366,6 +383,17 @@ class CharacterRepository:
                 feat_code=feat.feat_code,
                 acquired_at_level=feat.level,
                 source=feat.source,
+            ))
+        # Spells are replace-written; the aggregate (learn_spell) already dedupes, so no
+        # constraint-driven collapse is needed here (unlike skills).
+        for spell in aggregate.spells:
+            self.db.add(CharacterSpell(
+                character_id=model.id,
+                spell_code=spell.spell_code,
+                spell_level=spell.spell_level,
+                source=spell.source,
+                granted_by=spell.granted_by or "",
+                casting_ability=spell.casting_ability,
             ))
 
     def delete(self, character_id: UUID) -> bool:

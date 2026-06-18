@@ -60,6 +60,14 @@ class FeatAcquisitionDTO(BaseModel):
     source: Literal["BACKGROUND_ORIGIN", "ASI", "OTHER"]
 
 
+class SpellSelectionDTO(BaseModel):
+    spell_code: str = Field(pattern=CodePattern)
+    spell_level: int = Field(ge=0, le=9)  # 0 = cantrip
+    source: str  # one of SPELL_SOURCES (class_known / class_prepared / always_prepared / …)
+    granted_by: str = ""
+    casting_ability: Optional[AbilityCode] = None
+
+
 class DerivedSkillModifier(BaseModel):
     skill_code: str
     ability: AbilityCode
@@ -74,6 +82,11 @@ class DerivedSaveModifier(BaseModel):
     modifier: int
 
 
+class PactSlotDTO(BaseModel):
+    count: int
+    slot_level: int
+
+
 class DerivedStats(BaseModel):
     """Ruleset-computed values surfaced alongside the stored character state."""
 
@@ -84,6 +97,12 @@ class DerivedStats(BaseModel):
     next_level_xp: Optional[int] = None
     pending_level_up: bool
     pending_asi_count: int
+    # Spellcasting (empty / null for non-casters). spell_slots is {spell_level: count};
+    # the DC/attack maps are keyed by the casting ability so the UI can render per-class.
+    spell_slots: Dict[int, int] = {}
+    pact_slots: Optional[PactSlotDTO] = None
+    spell_save_dc_by_ability: Dict[AbilityCode, int] = {}
+    spell_attack_bonus_by_ability: Dict[AbilityCode, int] = {}
 
 
 class CharacterResponse(BaseModel):
@@ -110,6 +129,7 @@ class CharacterResponse(BaseModel):
     save_proficiencies: List[AbilityCode]
     skills: List[SkillProficiencyDTO]
     feats: List[FeatAcquisitionDTO]
+    spells: List[SpellSelectionDTO] = []
 
     level: int
     xp: int
@@ -235,8 +255,23 @@ class RenameStepPayload(BaseModel):
     name: str = Field(min_length=1, max_length=50)
 
 
+class ClassSpellSelection(BaseModel):
+    """The cantrip + leveled-spell codes a player picked for one spellcasting class.
+
+    Codes are flat (cantrips and leveled spells together); the backend resolves each spell's
+    level + source via the registry, so the client doesn't have to. Counts are NOT enforced
+    here — the wizard shows the class limits as guidance (facilitate, don't enforce).
+    """
+    class_code: str = Field(pattern=CodePattern)
+    spell_codes: List[str] = Field(default_factory=list)
+
+
+class SpellsStepPayload(BaseModel):
+    selections: List[ClassSpellSelection] = Field(default_factory=list)
+
+
 StepName = Literal[
-    "identity", "class", "background", "ability_scores", "hp_ac", "rename"
+    "identity", "class", "background", "ability_scores", "hp_ac", "spells", "rename"
 ]
 
 
@@ -247,6 +282,7 @@ class UpdateDraftRequest(BaseModel):
     background: Optional[BackgroundStepPayload] = None
     ability_scores: Optional[AbilityScoresStepPayload] = None
     hp_ac: Optional[HpAcStepPayload] = None
+    spells: Optional[SpellsStepPayload] = None
     rename: Optional[RenameStepPayload] = None
 
     model_config = ConfigDict(populate_by_name=True)

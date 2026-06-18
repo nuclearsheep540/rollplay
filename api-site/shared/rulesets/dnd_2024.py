@@ -12,15 +12,30 @@ that owns this strategy.
 from __future__ import annotations
 
 import math
-from typing import TYPE_CHECKING
+from typing import Optional, TYPE_CHECKING
 
 from shared.rulesets.strategy import RulesetStrategy
 
 
 if TYPE_CHECKING:
     from modules.characters.domain.character_aggregate import CharacterAggregate
-    from shared.rulesets.models import FeatDefinition
+    from shared.rulesets.models import FeatDefinition, PactSlot
     from shared.rulesets.registry import RulesetRegistry
+
+
+# Spellcasting ability per class (SRD 2024). NOT derivable from primary_ability:
+# Paladin lists Strength first but casts on Charisma; Ranger lists Dexterity but casts on
+# Wisdom. Non-casters are absent (spellcasting_ability returns None for them).
+_SPELLCASTING_ABILITY: dict[str, str] = {
+    "bard": "charisma",
+    "cleric": "wisdom",
+    "druid": "wisdom",
+    "paladin": "charisma",
+    "ranger": "wisdom",
+    "sorcerer": "charisma",
+    "warlock": "charisma",
+    "wizard": "intelligence",
+}
 
 
 # XP thresholds — index = character level, value = total XP required to reach it.
@@ -168,3 +183,44 @@ class Dnd2024Ruleset(RulesetStrategy):
             # prereq with no abilities listed — can't be verified yet, so we leave the feat
             # available: we guide, we never hide (core/product-principles.md §3.0).
         return True
+
+    # ------------------------------------------------------------------ spellcasting
+
+    def spellcasting_ability(self, class_code: str) -> Optional[str]:
+        return _SPELLCASTING_ABILITY.get(class_code)
+
+    def compute_spell_slots(self, character: "CharacterAggregate") -> dict[int, int]:
+        """Leveled slots for the primary spellcasting class, indexed by that class's level.
+
+        Single-class only for now (at level 1 every character is single-class); multiclass
+        combined-caster-level math lands with the level-up / starting-level-> 1 work.
+        """
+        primary = character.get_primary_class()
+        if primary is None:
+            return {}
+        cls = self._registry.get_class(self.edition_code, primary.class_code)
+        if cls.spellcasting is None:
+            return {}
+        by_level = cls.spellcasting.spell_slots_by_level.get(str(primary.level), {})
+        return {int(lvl): int(count) for lvl, count in by_level.items()}
+
+    def compute_pact_slots(self, character: "CharacterAggregate") -> Optional["PactSlot"]:
+        primary = character.get_primary_class()
+        if primary is None:
+            return None
+        cls = self._registry.get_class(self.edition_code, primary.class_code)
+        if cls.spellcasting is None:
+            return None
+        return cls.spellcasting.pact_slots_by_level.get(str(primary.level))
+
+    def compute_spell_save_dc(self, character: "CharacterAggregate", ability_code: str) -> int:
+        return (
+            8
+            + self.proficiency_bonus(character.level)
+            + _ability_modifier(character.final_ability_score(ability_code))
+        )
+
+    def compute_spell_attack_bonus(self, character: "CharacterAggregate", ability_code: str) -> int:
+        return self.proficiency_bonus(character.level) + _ability_modifier(
+            character.final_ability_score(ability_code)
+        )

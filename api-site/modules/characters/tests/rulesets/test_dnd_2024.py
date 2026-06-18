@@ -206,3 +206,40 @@ class TestInitiative:
     def test_initiative_is_dex_modifier(self, ruleset):
         ch = _make_character(ability_scores=AbilityScores(10, 18, 10, 10, 10, 10))
         assert ruleset.compute_initiative(ch) == 4
+
+
+class TestSpellcasting:
+    def test_casting_ability_includes_halfcaster_fix(self, ruleset):
+        assert ruleset.spellcasting_ability("wizard") == "intelligence"
+        assert ruleset.spellcasting_ability("cleric") == "wisdom"
+        # Half-casters cast on a mental stat, NOT their primary_ability[0].
+        assert ruleset.spellcasting_ability("paladin") == "charisma"
+        assert ruleset.spellcasting_ability("ranger") == "wisdom"
+        # Non-casters have no spellcasting ability.
+        assert ruleset.spellcasting_ability("fighter") is None
+
+    def test_wizard_l1_has_two_first_level_slots(self, ruleset):
+        ch = _make_character(class_entries=[ClassEntry("wizard", 1, True)], level=1)
+        assert ruleset.compute_spell_slots(ch) == {1: 2}
+        assert ruleset.compute_pact_slots(ch) is None
+
+    def test_warlock_uses_pact_slots_not_spell_slots(self, ruleset):
+        ch = _make_character(class_entries=[ClassEntry("warlock", 1, True)], level=1)
+        assert ruleset.compute_spell_slots(ch) == {}
+        pact = ruleset.compute_pact_slots(ch)
+        assert pact is not None and pact.count == 1 and pact.slot_level == 1
+
+    def test_noncaster_has_no_slots(self, ruleset):
+        ch = _make_character(class_entries=[ClassEntry("fighter", 1, True)], level=1)
+        assert ruleset.compute_spell_slots(ch) == {}
+        assert ruleset.compute_pact_slots(ch) is None
+
+    def test_spell_save_dc_and_attack(self, ruleset):
+        ch = _make_character(
+            class_entries=[ClassEntry("wizard", 1, True)],
+            level=1,
+            ability_scores=AbilityScores(8, 14, 12, 16, 10, 10),
+        )
+        # DC = 8 + prof(2) + INT mod(+3) = 13; attack = 2 + 3 = 5.
+        assert ruleset.compute_spell_save_dc(ch, "intelligence") == 13
+        assert ruleset.compute_spell_attack_bonus(ch, "intelligence") == 5

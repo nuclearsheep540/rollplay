@@ -98,6 +98,14 @@ def _build_derived_stats(
         next_xp = ruleset.xp_for_level(character.level + 1) if character.level < 20 else None
     except ValueError:
         next_xp = None
+    # Spellcasting — empty/null for non-casters. DC/attack are keyed by the casting ability
+    # of each spellcasting class the character has (one entry at L1; more once multi-class).
+    pact = ruleset.compute_pact_slots(character)
+    casting_abilities = {
+        ab
+        for ab in (ruleset.spellcasting_ability(e.class_code) for e in character.class_entries)
+        if ab is not None
+    }
     return DerivedStats(
         proficiency_bonus=ruleset.proficiency_bonus(character.level),
         initiative=ruleset.compute_initiative(character),
@@ -106,6 +114,16 @@ def _build_derived_stats(
         next_level_xp=next_xp,
         pending_level_up=character.can_level_up(ruleset),
         pending_asi_count=ruleset.pending_asi_count(character),
+        spell_slots=ruleset.compute_spell_slots(character),
+        pact_slots=(
+            {"count": pact.count, "slot_level": pact.slot_level} if pact is not None else None
+        ),
+        spell_save_dc_by_ability={
+            ab: ruleset.compute_spell_save_dc(character, ab) for ab in casting_abilities
+        },
+        spell_attack_bonus_by_ability={
+            ab: ruleset.compute_spell_attack_bonus(character, ab) for ab in casting_abilities
+        },
     )
 
 
@@ -162,6 +180,16 @@ def _to_character_response(
         feats=[
             {"feat_code": f.feat_code, "level": f.level, "source": f.source}
             for f in character.feats
+        ],
+        spells=[
+            {
+                "spell_code": s.spell_code,
+                "spell_level": s.spell_level,
+                "source": s.source,
+                "granted_by": s.granted_by,
+                "casting_ability": s.casting_ability,
+            }
+            for s in character.spells
         ],
         level=character.level,
         xp=character.xp,
@@ -274,6 +302,7 @@ async def update_draft(
         "background": request.background,
         "ability_scores": request.ability_scores,
         "hp_ac": request.hp_ac,
+        "spells": request.spells,
         "rename": request.rename,
     }
     payload_model = payload_map.get(request.step)

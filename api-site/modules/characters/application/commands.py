@@ -102,6 +102,7 @@ class UpdateCharacterDraft:
             "background": self._apply_background,
             "ability_scores": self._apply_ability_scores,
             "hp_ac": self._apply_hp_ac,
+            "spells": self._apply_spells,
             "rename": self._apply_rename,
         }.get(step)
         if handler is None:
@@ -262,6 +263,41 @@ class UpdateCharacterDraft:
         character.hp_max = int(payload["hp_max"])
         character.hp_current = character.hp_max
         character.ac = int(payload["ac"])
+
+    # ------------------------------------------------------------ spells
+
+    def _apply_spells(self, character, edition_code, payload):
+        """Replace the character's class-sourced spell picks with the player's selections.
+
+        Per class the payload carries a flat list of spell codes (cantrips + leveled); we
+        resolve each spell's level via the registry, classify cantrips as ``class_known`` and
+        leveled spells as ``class_prepared``, and attribute them to the class + its casting
+        ability. Counts are NOT enforced — the wizard surfaces class limits as guidance
+        (facilitate, don't enforce). Always-prepared (subclass) and species-granted spells are
+        owned by other steps; this one manages only the class picks.
+        """
+        ruleset = self.registry.get_ruleset(edition_code)
+        character_classes = {e.class_code for e in character.class_entries}
+        # Resolve + validate ALL picks before mutating, so an unknown class/spell code can't
+        # leave the character with class spells cleared-but-not-replaced (validate-before-mutate).
+        resolved = []  # (spell_code, level, source, class_code, casting_ability)
+        for sel in payload.get("selections", []):
+            class_code = sel["class_code"]
+            if class_code not in character_classes:
+                raise ValueError(
+                    f"Spell selection references class '{class_code}' not on this character"
+                )
+            casting_ability = ruleset.spellcasting_ability(class_code)
+            for spell_code in sel.get("spell_codes", []):
+                spell = self.registry.get_spell(edition_code, spell_code)  # raises on unknown code
+                source = "class_known" if spell.level == 0 else "class_prepared"
+                resolved.append((spell.code, spell.level, source, class_code, casting_ability))
+        # All inputs valid — now replace the class-sourced spells (other sources untouched).
+        character.clear_spells(sources={"class_known", "class_prepared"})
+        for spell_code, level, source, class_code, casting_ability in resolved:
+            character.learn_spell(
+                spell_code, level, source, granted_by=class_code, casting_ability=casting_ability,
+            )
 
     # ------------------------------------------------------------ rename
 

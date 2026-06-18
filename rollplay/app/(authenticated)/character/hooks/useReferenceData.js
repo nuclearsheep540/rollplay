@@ -97,3 +97,18 @@ export function useEditionMetamagic(editionCode) {
     enabled: Boolean(editionCode),
   })
 }
+
+export function useEditionSpells(editionCode, classCode = null, level = null) {
+  return useQuery({
+    queryKey: ['editions', editionCode, 'spells', classCode ?? 'all', level ?? 'all'],
+    queryFn: () => {
+      const params = new URLSearchParams()
+      if (classCode) params.set('class_code', classCode)
+      if (level !== null && level !== undefined) params.set('level', String(level))
+      const qs = params.toString()
+      return getJson(`/api/editions/${editionCode}/spells${qs ? `?${qs}` : ''}`)
+    },
+    staleTime: ONE_HOUR,
+    enabled: Boolean(editionCode),
+  })
+}
