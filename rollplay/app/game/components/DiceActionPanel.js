@@ -12,8 +12,9 @@ export default function DiceActionPanel({
   onEndTurn,
   uiScale = 'medium',
   // UPDATED PROPS for multiple prompts
-  activePrompts = [],        // Array of active prompts
-  isDicePromptActive = false // Is any prompt currently active
+  activePrompts = [],         // Array of active prompts
+  isDicePromptActive = false, // Is any prompt currently active
+  isDM = false                // DM can always roll — no combat/turn guards (facilitate, don't enforce)
 }) {
   const [isDiceModalOpen, setIsDiceModalOpen] = useState(false);
   const [selectedDice, setSelectedDice] = useState('D20'); // Keep for backwards compatibility
@@ -58,14 +59,14 @@ export default function DiceActionPanel({
   const myPrompts = activePrompts.filter(prompt => prompt.player === thisUserId);
   const isPromptedToRoll = myPrompts.length > 0;
   
-  // Show panel if: prompted to roll OR (in combat)
-  const shouldShowDicePanel = isPromptedToRoll || combatActive;
-  
-  // Panel is active if: it's your turn OR you're prompted to roll
-  const isPanelActive = isMyTurn || isPromptedToRoll;
-  
-  // Button is enabled if: it's your turn OR you're prompted to roll
-  const isButtonEnabled = isMyTurn || isPromptedToRoll;
+  // Show panel if: prompted to roll OR in combat OR you're the DM (the DM can always roll).
+  const shouldShowDicePanel = isPromptedToRoll || combatActive || isDM;
+
+  // Panel is active if: it's your turn OR you're prompted to roll OR you're the DM.
+  const isPanelActive = isMyTurn || isPromptedToRoll || isDM;
+
+  // Button is enabled if: it's your turn OR you're prompted to roll OR you're the DM.
+  const isButtonEnabled = isMyTurn || isPromptedToRoll || isDM;
   
   // Handle dice roll click
   const handleRollDiceClick = () => {

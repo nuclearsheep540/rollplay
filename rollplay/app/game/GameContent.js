@@ -2291,6 +2291,7 @@ export default function GameContent() {
             uiScale={uiScale}
             activePrompts={activePrompts}
             isDicePromptActive={isDicePromptActive}
+            isDM={isDM}
           />
         );
       })()}
