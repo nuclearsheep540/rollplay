@@ -162,7 +162,10 @@ export default function DiceActionPanel({
 
   return (
     <>
-      <div 
+      {/* Hide the floating panel/prompt while the roll modal is open — both exist to start a
+          roll, so they're redundant on screen at once; the modal is where you actually roll. */}
+      {!isDiceModalOpen && (
+      <div
         className={`dice-action-panel transition-[transform,opacity] duration-300 fixed bottom-[calc(24px*var(--ui-scale))] left-1/2 z-[100] ${
           isPanelActive
             ? 'active-turn transform -translate-x-1/2 scale-100'
@@ -250,6 +253,7 @@ export default function DiceActionPanel({
           </div>
         </div>
       </div>
+      )}
 
       {/* Dice Roll Modal - Enhanced for prompts */}
       <Modal
