@@ -127,6 +127,12 @@ class Character(Base):
         cascade="all, delete-orphan",
         passive_deletes=True,
     )
+    resource_entries = relationship(
+        "CharacterResource",
+        back_populates="character",
+        cascade="all, delete-orphan",
+        passive_deletes=True,
+    )
     choice_log_entries = relationship(
         "CharacterChoiceLog",
         back_populates="character",

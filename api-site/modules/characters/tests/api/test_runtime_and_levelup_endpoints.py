@@ -119,6 +119,27 @@ class TestRuntimeUpdate:
         )
         assert response.json()["inspiration"] is True
 
+    def test_resource_pool_derived_and_spent_round_trip(self, client, auth_as, owner):
+        """PR 7 (B.3/C.4): Barbarian rage pool derives full, then a spent count round-trips."""
+        char = _finalize_a_character(client, auth_as, owner)  # Barbarian L1 → rage pool (max 2)
+        cid = char["id"]
+        pools = {p["pool_code"]: p for p in char["derived"]["resource_pools"]}
+        assert pools["rage"]["max_value"] == 2
+        assert pools["rage"]["current_value"] == 0  # full at creation (nothing spent)
+        assert pools["rage"]["recharge"] == "long_rest"
+        # Barbarian also exposes the Unarmored Defense AC method.
+        ac_codes = {m["code"] for m in char["derived"]["ac_methods"]}
+        assert {"unarmored", "barbarian_unarmored_defense"} <= ac_codes
+        # Spend one rage through the runtime PATCH; it persists + the derived pool reflects it.
+        resp = client.patch(f"/api/characters/{cid}/runtime", json={
+            "resource_usage": [{"pool_code": "rage", "current_value": 1}],
+        })
+        assert resp.status_code == 200, resp.text
+        body = client.get(f"/api/characters/{cid}").json()
+        assert {r["pool_code"]: r["current_value"] for r in body["resource_usage"]} == {"rage": 1}
+        rage = next(p for p in body["derived"]["resource_pools"] if p["pool_code"] == "rage")
+        assert rage["max_value"] == 2 and rage["current_value"] == 1
+
     def test_empty_body_rejected(self, client, auth_as, owner):
         char = _finalize_a_character(client, auth_as, owner)
         response = client.patch(f"/api/characters/{char['id']}/runtime", json={})

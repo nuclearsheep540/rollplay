@@ -475,6 +475,11 @@ class UpdateRuntimeState:
                 character.mark_dead()
         if "ac" in updates and updates["ac"] is not None:
             character.ac = int(updates["ac"])
+        if "resource_usage" in updates and updates["resource_usage"] is not None:
+            # Whole-list replacement so the sheet can edit spent counts atomically.
+            character.resource_usage = []
+            for item in updates["resource_usage"]:
+                character.set_resource_usage(item["pool_code"], int(item["current_value"]))
 
         self.repository.save(character)
         return character

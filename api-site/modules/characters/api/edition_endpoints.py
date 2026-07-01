@@ -18,6 +18,7 @@ from modules.characters.dependencies.providers import (
 )
 from modules.characters.repositories.edition_repository import EditionRepository
 from shared.rulesets.models import (
+    ArmorDefinition,
     BackgroundDefinition,
     ClassDefinition,
     FeatDefinition,
@@ -26,6 +27,7 @@ from shared.rulesets.models import (
     SkillDefinition,
     SpeciesDefinition,
     SpellDefinition,
+    WeaponDefinition,
 )
 from shared.rulesets.registry import RulesetRegistry
 
@@ -126,3 +128,26 @@ async def list_metamagic(
 ):
     _ensure_known(registry, edition_code)
     return registry.list_metamagic(edition_code)
+
+
+@router.get("/{edition_code}/weapons", response_model=List[WeaponDefinition])
+async def list_weapons(
+    edition_code: str,
+    category: Optional[str] = Query(
+        default=None,
+        pattern="^(simple_melee|simple_ranged|martial_melee|martial_ranged)$",
+    ),
+    registry: RulesetRegistry = Depends(get_ruleset_registry),
+):
+    _ensure_known(registry, edition_code)
+    return registry.list_weapons(edition_code, category=category)
+
+
+@router.get("/{edition_code}/armor", response_model=List[ArmorDefinition])
+async def list_armor(
+    edition_code: str,
+    category: Optional[str] = Query(default=None, pattern="^(light|medium|heavy|shield)$"),
+    registry: RulesetRegistry = Depends(get_ruleset_registry),
+):
+    _ensure_known(registry, edition_code)
+    return registry.list_armor(edition_code, category=category)

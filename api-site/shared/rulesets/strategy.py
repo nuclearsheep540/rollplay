@@ -105,3 +105,21 @@ class RulesetStrategy(ABC):
     @abstractmethod
     def compute_spell_attack_bonus(self, character: "CharacterAggregate", ability_code: str) -> int:
         """Spell attack bonus = proficiency bonus + the given ability's modifier."""
+
+    # ------------------------------------------------------------------ resources / AC
+
+    @abstractmethod
+    def compute_resource_pools(self, character: "CharacterAggregate") -> dict[str, int]:
+        """Map of ``pool_code -> max uses`` for the character's classes (rage, sorcery points,
+        channel divinity, …). Empty for classes with no pools."""
+
+    @abstractmethod
+    def resource_recharge(self, pool_code: str) -> str:
+        """When a pool refills — ``"short_rest"`` or ``"long_rest"``."""
+
+    @abstractmethod
+    def list_ac_methods(self, character: "CharacterAggregate") -> list[dict]:
+        """AC computation options available to the character, each ``{code, label, ac}``.
+
+        Unarmored variants only until equipped armor (Phase J) adds armor-based methods.
+        """

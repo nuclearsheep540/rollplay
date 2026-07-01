@@ -22,6 +22,7 @@ from modules.characters.domain.character_aggregate import (
     CharacterAggregate,
     ClassEntry,
     FeatAcquisition,
+    ResourceUsage,
     SkillProficiency,
     SpellSelection,
 )
@@ -31,6 +32,7 @@ from modules.characters.model.character_class_model import CharacterClassEntry
 from modules.characters.model.character_feat_model import CharacterFeatAcquisition
 from modules.characters.model.character_model import Character as CharacterModel
 from modules.characters.model.character_save_model import CharacterSaveProficiency
+from modules.characters.model.character_resource_model import CharacterResource
 from modules.characters.model.character_skill_model import CharacterSkillProficiency
 from modules.characters.model.character_spell_model import CharacterSpell
 from modules.characters.model.dnd_ability_model import DndAbility
@@ -69,6 +71,7 @@ class CharacterRepository:
                 selectinload(CharacterModel.skill_entries),
                 selectinload(CharacterModel.feat_entries),
                 selectinload(CharacterModel.spell_entries),
+                selectinload(CharacterModel.resource_entries),
                 selectinload(CharacterModel.choice_log_entries),
             )
         )
@@ -139,6 +142,11 @@ class CharacterRepository:
             for e in model.spell_entries or []
         ]
 
+        resource_usage = [
+            ResourceUsage(pool_code=e.pool_code, current_value=int(e.current_value))
+            for e in model.resource_entries or []
+        ]
+
         edition_code = model.edition.code if model.edition is not None else ""
         return CharacterAggregate(
             id=model.id,
@@ -157,6 +165,7 @@ class CharacterRepository:
             skills=skills,
             feats=feats,
             spells=spells,
+            resource_usage=resource_usage,
             level=model.level,
             xp=model.xp,
             hp_max=model.hp_max,
@@ -318,6 +327,8 @@ class CharacterRepository:
                 self.db.delete(entry)
             for entry in list(model.spell_entries):
                 self.db.delete(entry)
+            for entry in list(model.resource_entries):
+                self.db.delete(entry)
             self.db.flush()
             self._write_all_children(model, aggregate, ability_lookup)
 
@@ -394,6 +405,12 @@ class CharacterRepository:
                 source=spell.source,
                 granted_by=spell.granted_by or "",
                 casting_ability=spell.casting_ability,
+            ))
+        for resource in aggregate.resource_usage:
+            self.db.add(CharacterResource(
+                character_id=model.id,
+                pool_code=resource.pool_code,
+                current_value=resource.current_value,
             ))
 
     def delete(self, character_id: UUID) -> bool:

@@ -36,6 +36,12 @@ def test_initialize_loads_catalogues():
     assert len(reg.list_metamagic("srd_5_2_1")) == 10
     assert reg.get_invocation("srd_5_2_1", "pact_of_the_blade").name == "Pact of the Blade"
     assert reg.get_metamagic("srd_5_2_1", "twinned_spell").sorcery_point_cost == 1
+    # A.9 weapons + armor, with category filtering.
+    assert len(reg.list_weapons("srd_5_2_1")) == 38
+    assert len(reg.list_weapons("srd_5_2_1", category="martial_melee")) == 18
+    assert len(reg.list_armor("srd_5_2_1")) == 13
+    assert reg.get_armor("srd_5_2_1", "plate_armor").base_ac == 18
+    assert reg.get_weapon("srd_5_2_1", "dagger").mastery == "Nick"
 
 
 def test_get_class_returns_typed_definition():
@@ -78,7 +84,7 @@ def test_initialize_fails_on_schema_version_mismatch(tmp_path):
     edition_dir = tmp_path / "srd_5_2_1"
     edition_dir.mkdir()
     src = Path("modules/characters/seed_data/srd_5_2_1")
-    for fname in ("skills.json", "feats.json", "species.json", "backgrounds.json", "classes.json", "spells.json", "invocations.json", "metamagic.json"):
+    for fname in ("skills.json", "feats.json", "species.json", "backgrounds.json", "classes.json", "spells.json", "invocations.json", "metamagic.json", "weapons.json", "armor.json"):
         data = json.loads((src / fname).read_text())
         if fname == "classes.json":
             data["schema_version"] = 999  # poison
@@ -93,7 +99,7 @@ def test_initialize_fails_on_dangling_cross_ref(tmp_path):
     edition_dir = tmp_path / "srd_5_2_1"
     edition_dir.mkdir()
     src = Path("modules/characters/seed_data/srd_5_2_1")
-    for fname in ("skills.json", "feats.json", "species.json", "backgrounds.json", "classes.json", "spells.json", "invocations.json", "metamagic.json"):
+    for fname in ("skills.json", "feats.json", "species.json", "backgrounds.json", "classes.json", "spells.json", "invocations.json", "metamagic.json", "weapons.json", "armor.json"):
         data = json.loads((src / fname).read_text())
         if fname == "backgrounds.json":
             data["backgrounds"][0]["origin_feat_code"] = "no_such_feat"

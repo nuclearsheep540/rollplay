@@ -68,6 +68,12 @@ class SpellSelectionDTO(BaseModel):
     casting_ability: Optional[AbilityCode] = None
 
 
+class ResourceUsageDTO(BaseModel):
+    """Raw stored resource state — uses consumed (0/absent = full). Max is in DerivedStats."""
+    pool_code: str
+    current_value: int = Field(ge=0)
+
+
 class DerivedSkillModifier(BaseModel):
     skill_code: str
     ability: AbilityCode
@@ -87,6 +93,20 @@ class PactSlotDTO(BaseModel):
     slot_level: int
 
 
+class ResourcePoolDTO(BaseModel):
+    """A class resource pool, joining the ruleset max with the stored spent count (G.1)."""
+    pool_code: str
+    max_value: int
+    current_value: int  # uses spent (remaining = max_value - current_value)
+    recharge: str       # "short_rest" | "long_rest"
+
+
+class ACMethodDTO(BaseModel):
+    code: str
+    label: str
+    ac: int
+
+
 class DerivedStats(BaseModel):
     """Ruleset-computed values surfaced alongside the stored character state."""
 
@@ -103,6 +123,9 @@ class DerivedStats(BaseModel):
     pact_slots: Optional[PactSlotDTO] = None
     spell_save_dc_by_ability: Dict[AbilityCode, int] = {}
     spell_attack_bonus_by_ability: Dict[AbilityCode, int] = {}
+    # Resource pools (max joined with stored spent) + AC computation options.
+    resource_pools: List[ResourcePoolDTO] = []
+    ac_methods: List[ACMethodDTO] = []
 
 
 class CharacterResponse(BaseModel):
@@ -130,6 +153,7 @@ class CharacterResponse(BaseModel):
     skills: List[SkillProficiencyDTO]
     feats: List[FeatAcquisitionDTO]
     spells: List[SpellSelectionDTO] = []
+    resource_usage: List[ResourceUsageDTO] = []
 
     level: int
     xp: int
@@ -305,6 +329,8 @@ class RuntimePatchRequest(BaseModel):
     death_save_failures: Optional[int] = Field(default=None, ge=0, le=3)
     is_alive: Optional[bool] = None
     ac: Optional[int] = Field(default=None, ge=1, le=50)
+    # Whole-list replacement of resource-pool spent counts (rage, sorcery points, …).
+    resource_usage: Optional[List[ResourceUsageDTO]] = None
 
 
 # --------------------------------------------------------------------------- #

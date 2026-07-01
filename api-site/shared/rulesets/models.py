@@ -116,6 +116,40 @@ class MetamagicDefinition(BaseModel):
     description: str = Field(min_length=1)
 
 
+class WeaponDefinition(BaseModel):
+    """A weapon from the SRD equipment table (A.9). Parsed; tabular grid."""
+
+    code: str = Field(pattern=CodePattern)
+    name: str
+    category: Literal["simple_melee", "simple_ranged", "martial_melee", "martial_ranged"]
+    damage: str           # e.g. "1d4 Bludgeoning"
+    properties: list[str] = []  # ["Finesse", "Light", "Thrown (Range 20/60)"]
+    mastery: str = ""     # the weapon's Mastery property (e.g. "Nick"); "" if none
+    weight: str = ""      # raw, e.g. "2 lb."
+    cost: str = ""        # raw, e.g. "1 SP"
+
+
+class ArmorDefinition(BaseModel):
+    """A piece of armor / a shield from the SRD equipment table (A.9).
+
+    ``base_ac`` + ``dex_cap`` are the structured AC inputs for the C.4 AC math:
+    light → ``dex_cap=None`` (unlimited), medium → ``dex_cap=2``, heavy/shield → ``dex_cap=0``.
+    A shield's ``base_ac`` is its +2 bonus (added on top of worn armor). ``armor_class_text``
+    keeps the verbatim cell for display.
+    """
+
+    code: str = Field(pattern=CodePattern)
+    name: str
+    category: Literal["light", "medium", "heavy", "shield"]
+    base_ac: int
+    dex_cap: Optional[int] = None  # None = unlimited; 0 = no Dex; N = capped at N
+    strength_requirement: Optional[int] = None
+    stealth_disadvantage: bool = False
+    weight: str = ""
+    cost: str = ""
+    armor_class_text: str  # verbatim AC cell, e.g. "14 + Dex modifier (max 2)" or "+2"
+
+
 class SpeciesTrait(BaseModel):
     name: str
     description: str = Field(min_length=1)
@@ -262,3 +296,11 @@ class InvocationsFile(_EditionFile):
 
 class MetamagicFile(_EditionFile):
     metamagic: list[MetamagicDefinition]
+
+
+class WeaponsFile(_EditionFile):
+    weapons: list[WeaponDefinition]
+
+
+class ArmorFile(_EditionFile):
+    armor: list[ArmorDefinition]

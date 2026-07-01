@@ -154,6 +154,25 @@ class SpellSelection:
             raise ValueError(f"SpellSelection.spell_level must be 0..9 (got {self.spell_level})")
 
 
+@dataclass(frozen=True)
+class ResourceUsage:
+    """A class resource pool's *spent* count (rage, sorcery points, channel divinity, …).
+
+    ``current_value`` is uses **consumed** (0 = full); the pool's MAX comes from the ruleset
+    and is joined in at read time. Storing spent (not remaining) keeps a fresh character's
+    pools implicitly full with no rows, and needs no ruleset to initialise. The aggregate is
+    edition-agnostic, so ``pool_code`` is a free code — the strategy owns the set of real pools.
+    """
+    pool_code: str
+    current_value: int  # uses consumed
+
+    def __post_init__(self):
+        if self.current_value < 0:
+            raise ValueError(
+                f"ResourceUsage.current_value must be >= 0 (got {self.current_value})"
+            )
+
+
 # --------------------------------------------------------------------------- #
 # Aggregate
 # --------------------------------------------------------------------------- #
@@ -238,6 +257,9 @@ class CharacterAggregate:
 
     # Spells known / prepared (cantrips are spell_level 0). Replace-written per save.
     spells: list[SpellSelection] = field(default_factory=list)
+
+    # Class resource pools — spent counts only (absent pool ⇒ full). Max comes from the ruleset.
+    resource_usage: list[ResourceUsage] = field(default_factory=list)
 
     # -------------------------------------------------------------- factory
 
@@ -620,6 +642,27 @@ class CharacterAggregate:
             self.spells = [s for s in self.spells if s.source not in sources]
         if len(self.spells) != before:
             self._touch()
+
+    # -------------------------------------------------------------- resource pools
+
+    def set_resource_usage(self, pool_code: str, current_value: int) -> None:
+        """Set a pool's spent count. 0 drops the row (full pools are stored implicitly)."""
+        self.resource_usage = [r for r in self.resource_usage if r.pool_code != pool_code]
+        if current_value > 0:
+            self.resource_usage.append(ResourceUsage(pool_code, current_value))
+        self._touch()
+
+    def consume_resource(self, pool_code: str, amount: int = 1) -> None:
+        existing = next((r for r in self.resource_usage if r.pool_code == pool_code), None)
+        self.set_resource_usage(pool_code, (existing.current_value if existing else 0) + amount)
+
+    def restore_resource(self, pool_code: str, amount: Optional[int] = None) -> None:
+        """Restore a pool: ``amount=None`` refills fully, else returns ``amount`` uses."""
+        existing = next((r for r in self.resource_usage if r.pool_code == pool_code), None)
+        if existing is None:
+            return
+        new_spent = 0 if amount is None else max(0, existing.current_value - amount)
+        self.set_resource_usage(pool_code, new_spent)
 
     def set_save_proficiencies(self, ability_codes: Iterable[str]) -> None:
         codes = frozenset(ability_codes)

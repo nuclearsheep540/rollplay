@@ -595,11 +595,147 @@ export default function CharacterSheet({
         </Section>
       )}
 
+      <ResourcePools derived={derived} onPatch={onPatch} disabled={!isOwner} />
+      <SpellcastingSection character={character} />
+      <ChoicesSection character={character} />
+
       {character.languages?.length > 0 && (
         <Section title="Languages">
           <p className="text-sm text-slate-300">{character.languages.join(', ')}</p>
         </Section>
       )}
     </div>
+  )
+}
+
+// --- PR 7 (G.1) / deferral #7 sections (runtime sheet styling) --- //
+
+/** Resource pools with live spend / restore (whole-list PATCH of spent counts). */
+function ResourcePools({ derived, onPatch, disabled }) {
+  const pools = derived?.resource_pools || []
+  if (pools.length === 0) return null
+  const setSpent = (poolCode, spent) => {
+    const next = pools
+      .map((p) => ({
+        pool_code: p.pool_code,
+        current_value: p.pool_code === poolCode ? Math.max(0, spent) : p.current_value,
+      }))
+      .filter((r) => r.current_value > 0)
+    onPatch({ resource_usage: next })
+  }
+  return (
+    <Section title="Resources">
+      <div className="space-y-2">
+        {pools.map((p) => {
+          const remaining = p.max_value - p.current_value
+          return (
+            <div key={p.pool_code} className="flex items-center justify-between text-sm">
+              <span>
+                {titleize(p.pool_code)}
+                <span className="ml-1 text-[10px] text-slate-500">
+                  {p.recharge.replace(/_/g, ' ')}
+                </span>
+              </span>
+              <div className="flex items-center gap-2">
+                <ResourceButton
+                  label="−"
+                  disabled={disabled || remaining <= 0}
+                  onClick={() => setSpent(p.pool_code, p.current_value + 1)}
+                />
+                <span className="w-12 text-center font-bold tabular-nums">
+                  {remaining}/{p.max_value}
+                </span>
+                <ResourceButton
+                  label="+"
+                  disabled={disabled || p.current_value <= 0}
+                  onClick={() => setSpent(p.pool_code, p.current_value - 1)}
+                />
+              </div>
+            </div>
+          )
+        })}
+      </div>
+    </Section>
+  )
+}
+
+function ResourceButton({ label, disabled, onClick }) {
+  return (
+    <button
+      type="button"
+      disabled={disabled}
+      onClick={onClick}
+      className="w-7 h-7 rounded border border-slate-700 bg-slate-800/60 font-bold hover:border-slate-500 disabled:opacity-30 disabled:hover:border-slate-700 disabled:cursor-default"
+    >
+      {label}
+    </button>
+  )
+}
+
+/** Spells (cantrips + leveled), slots, pact slots, save DC / attack — casters only. */
+function SpellcastingSection({ character }) {
+  const d = character.derived || {}
+  const spells = character.spells || []
+  const slots = d.spell_slots || {}
+  const hasSlots = Object.keys(slots).length > 0
+  if (spells.length === 0 && !hasSlots && !d.pact_slots) return null
+  const cantrips = spells.filter((s) => s.spell_level === 0)
+  const leveled = spells.filter((s) => s.spell_level > 0)
+  return (
+    <Section title="Spellcasting">
+      {cantrips.length > 0 && (
+        <p className="text-sm">
+          <span className="text-[10px] uppercase text-slate-500 mr-2">Cantrips</span>
+          {cantrips.map((s) => titleize(s.spell_code)).join(', ')}
+        </p>
+      )}
+      {leveled.length > 0 && (
+        <p className="text-sm">
+          <span className="text-[10px] uppercase text-slate-500 mr-2">Prepared / known</span>
+          {leveled.map((s) => titleize(s.spell_code)).join(', ')}
+        </p>
+      )}
+      {hasSlots && (
+        <p className="text-sm flex flex-wrap gap-x-3">
+          <span className="text-[10px] uppercase text-slate-500">Slots</span>
+          {Object.entries(slots).map(([lvl, n]) => (
+            <span key={lvl}>L{lvl}: {n}</span>
+          ))}
+        </p>
+      )}
+      {d.pact_slots && (
+        <p className="text-sm">
+          <span className="text-[10px] uppercase text-slate-500 mr-2">Pact Magic</span>
+          {d.pact_slots.count} × L{d.pact_slots.slot_level}
+        </p>
+      )}
+      {Object.entries(d.spell_save_dc_by_ability || {}).map(([ability, dc]) => (
+        <p key={ability} className="text-sm">
+          <span className="text-[10px] uppercase text-slate-500 mr-2">{ability.slice(0, 3)}</span>
+          Save DC {dc} · Attack {modSign(d.spell_attack_bonus_by_ability?.[ability] ?? 0)}
+        </p>
+      ))}
+    </Section>
+  )
+}
+
+/** Species + class feature picks, code→label via titleize. */
+function ChoicesSection({ character }) {
+  const rows = [
+    ...Object.entries(character.species_sub_choices || {}),
+    ...(character.class_entries || []).flatMap((e) => Object.entries(e.sub_choices || {})),
+  ].filter(([, picks]) => Array.isArray(picks) && picks.length > 0)
+  if (rows.length === 0) return null
+  return (
+    <Section title="Choices">
+      <ul className="space-y-1 text-sm">
+        {rows.map(([code, picks]) => (
+          <li key={code} className="flex justify-between gap-3">
+            <span className="text-slate-400">{titleize(code)}</span>
+            <span className="text-right">{picks.map(titleize).join(', ')}</span>
+          </li>
+        ))}
+      </ul>
+    </Section>
   )
 }

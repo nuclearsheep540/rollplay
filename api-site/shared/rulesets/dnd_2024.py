@@ -38,6 +38,34 @@ _SPELLCASTING_ABILITY: dict[str, str] = {
 }
 
 
+# Resource pools whose MAX is a numeric column in the class progression table (class_specific).
+# Map class_code -> {table column name: pool_code}. A "—" cell means the pool isn't available
+# at that level yet (skipped). Formula-based pools (bardic inspiration, lay on hands) are handled
+# directly in compute_resource_pools. Rarer pools (action surge count, indomitable, hunter's mark
+# free casts) are not yet wired — they land when their UI needs them.
+_RESOURCE_COLUMNS: dict[str, dict[str, str]] = {
+    "barbarian": {"Rages": "rage"},
+    "sorcerer": {"Sorcery Points": "sorcery_points"},
+    "cleric": {"Channel Divinity": "channel_divinity"},
+    "paladin": {"Channel Divinity": "channel_divinity"},
+    "fighter": {"Second Wind": "second_wind"},
+    "monk": {"Focus Points": "monk_focus"},
+    "druid": {"Wild Shape": "wild_shape"},
+}
+
+# When each pool refills. Single cadence per pool (the shorter one where the SRD allows either).
+_RESOURCE_RECHARGE: dict[str, str] = {
+    "rage": "long_rest",
+    "sorcery_points": "long_rest",
+    "channel_divinity": "short_rest",
+    "second_wind": "short_rest",
+    "monk_focus": "short_rest",
+    "wild_shape": "short_rest",
+    "bardic_inspiration": "short_rest",
+    "lay_on_hands_hp": "long_rest",
+}
+
+
 # XP thresholds — index = character level, value = total XP required to reach it.
 # Source: SRD 5.2.1 "Beyond Level 1" experience-points table.
 _XP_THRESHOLDS: list[int] = [
@@ -224,3 +252,53 @@ class Dnd2024Ruleset(RulesetStrategy):
         return self.proficiency_bonus(character.level) + _ability_modifier(
             character.final_ability_score(ability_code)
         )
+
+    # ------------------------------------------------------------------ resources / AC
+
+    def compute_resource_pools(self, character: "CharacterAggregate") -> dict[str, int]:
+        pools: dict[str, int] = {}
+        for entry in character.class_entries:
+            col_map = _RESOURCE_COLUMNS.get(entry.class_code)
+            if not col_map:
+                continue
+            cls = self._registry.get_class(self.edition_code, entry.class_code)
+            level_data = cls.features_by_level.get(str(entry.level))
+            if level_data is None:
+                continue
+            for column, pool_code in col_map.items():
+                value = level_data.class_specific.get(column)
+                if isinstance(value, int) and value > 0:  # "—"/0 ⇒ not available yet
+                    # Accumulate across classes so a shared multiclass pool (Cleric + Paladin
+                    # Channel Divinity) combines rather than the last class overwriting it.
+                    pools[pool_code] = pools.get(pool_code, 0) + value
+        # Formula pools.
+        if any(e.class_code == "bard" for e in character.class_entries):
+            cha_mod = _ability_modifier(character.final_ability_score("charisma"))
+            pools["bardic_inspiration"] = max(1, cha_mod)
+        paladin = next((e for e in character.class_entries if e.class_code == "paladin"), None)
+        if paladin is not None:
+            pools["lay_on_hands_hp"] = 5 * paladin.level
+        return pools
+
+    def resource_recharge(self, pool_code: str) -> str:
+        return _RESOURCE_RECHARGE.get(pool_code, "long_rest")
+
+    def list_ac_methods(self, character: "CharacterAggregate") -> list[dict]:
+        dex = _ability_modifier(character.final_ability_score("dexterity"))
+        methods = [{"code": "unarmored", "label": "Unarmored", "ac": 10 + dex}]
+        classes = {e.class_code for e in character.class_entries}
+        if "barbarian" in classes:
+            con = _ability_modifier(character.final_ability_score("constitution"))
+            methods.append({
+                "code": "barbarian_unarmored_defense",
+                "label": "Unarmored Defense (Barbarian)",
+                "ac": 10 + dex + con,
+            })
+        if "monk" in classes:
+            wis = _ability_modifier(character.final_ability_score("wisdom"))
+            methods.append({
+                "code": "monk_unarmored_defense",
+                "label": "Unarmored Defense (Monk)",
+                "ac": 10 + dex + wis,
+            })
+        return methods

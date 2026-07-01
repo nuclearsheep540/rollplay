@@ -41,6 +41,7 @@ if str(_API_SITE_DIR) not in sys.path:
     sys.path.insert(0, str(_API_SITE_DIR))
 
 from shared.rulesets.models import (  # noqa: E402
+    ArmorFile,
     BackgroundDefinition,
     BackgroundsFile,
     ClassDefinition,
@@ -48,6 +49,7 @@ from shared.rulesets.models import (  # noqa: E402
     ClassLevel,
     ClassesFile,
     SpellsFile,
+    WeaponsFile,
     CURRENT_SCHEMA_VERSION,
     FeatDefinition,
     FeatPrerequisite,
@@ -1390,6 +1392,121 @@ def parse_spells() -> list[dict]:
 
 
 # --------------------------------------------------------------------------- #
+# Equipment — weapons + armor (tabular HTML grids in equipment.md)
+# --------------------------------------------------------------------------- #
+
+
+_WEAPON_CATEGORY = {
+    "simple melee weapons": "simple_melee",
+    "simple ranged weapons": "simple_ranged",
+    "martial melee weapons": "martial_melee",
+    "martial ranged weapons": "martial_ranged",
+}
+
+_ARMOR_AC_RE = re.compile(r"^(\d+)\s*\+\s*Dex modifier(?:\s*\(max\s*(\d+)\))?$", re.IGNORECASE)
+
+
+def _find_table_by_headers(soup: BeautifulSoup, required: set[str]):
+    """Return the first <table> whose <thead> contains all ``required`` column headers."""
+    for table in soup.find_all("table"):
+        thead = table.find("thead")
+        if thead is None:
+            continue
+        heads = {th.get_text(strip=True) for th in thead.find_all("th")}
+        if required <= heads:
+            return table
+    return None
+
+
+def parse_weapons() -> list[dict]:
+    """Parse the SRD weapon table (Name/Damage/Properties/Mastery/Weight/Cost)."""
+    soup = BeautifulSoup(_read("equipment.md"), "html.parser")
+    table = _find_table_by_headers(soup, {"Name", "Damage", "Properties", "Mastery"})
+    if table is None:
+        raise RuntimeError("Weapon table not found in equipment.md")
+    weapons: list[dict] = []
+    category: Optional[str] = None
+    for tr in table.find("tbody").find_all("tr"):
+        header = tr.find("th")
+        if header is not None:  # category section row, e.g. "Simple Melee Weapons"
+            category = _WEAPON_CATEGORY.get(header.get_text(strip=True).lower())
+            continue
+        cells = [td.get_text(strip=True) for td in tr.find_all("td")]
+        if len(cells) < 6 or category is None:
+            continue
+        name, damage, props, mastery, weight, cost = cells[:6]
+        properties = [] if props in ("", "—") else [p.strip() for p in props.split(",") if p.strip()]
+        weapons.append({
+            "code": to_code(name),
+            "name": name,
+            "category": category,
+            "damage": damage,
+            "properties": properties,
+            "mastery": "" if mastery in ("", "—") else mastery,
+            "weight": weight,
+            "cost": cost,
+        })
+    if not weapons:
+        raise RuntimeError("No weapons parsed from equipment.md")
+    weapons.sort(key=lambda w: w["code"])
+    return weapons
+
+
+def _parse_armor_ac(ac_text: str) -> tuple[int, Optional[int]]:
+    """Split an AC cell into (base_ac, dex_cap). dex_cap None=unlimited, 0=no Dex."""
+    t = ac_text.strip()
+    m = _ARMOR_AC_RE.match(t)
+    if m:
+        return int(m.group(1)), (int(m.group(2)) if m.group(2) else None)
+    if t.startswith("+"):           # shield bonus, e.g. "+2"
+        return int(t[1:]), 0
+    if t.isdigit():                 # heavy armor flat AC, no Dex
+        return int(t), 0
+    raise RuntimeError(f"Unparseable armor AC cell: {ac_text!r}")
+
+
+def parse_armor() -> list[dict]:
+    """Parse the SRD armor table (Armor/AC/Strength/Stealth/Weight/Cost), incl. shields."""
+    soup = BeautifulSoup(_read("equipment.md"), "html.parser")
+    table = _find_table_by_headers(soup, {"Armor", "Armor Class (AC)", "Stealth"})
+    if table is None:
+        raise RuntimeError("Armor table not found in equipment.md")
+    armor: list[dict] = []
+    category: Optional[str] = None
+    for tr in table.find("tbody").find_all("tr"):
+        header = tr.find("th")
+        if header is not None:  # category section row, e.g. "Light Armor (…)"
+            first = header.get_text(strip=True).split()[0].lower()
+            category = first if first in {"light", "medium", "heavy", "shield"} else None
+            continue
+        cells = [td.get_text(strip=True) for td in tr.find_all("td")]
+        if len(cells) < 6 or category is None:
+            continue
+        name, ac_text, strength, stealth, weight, cost = cells[:6]
+        base_ac, dex_cap = _parse_armor_ac(ac_text)
+        str_req = None
+        if strength not in ("", "—"):
+            mm = re.search(r"(\d+)", strength)  # "Str 13" -> 13
+            str_req = int(mm.group(1)) if mm else None
+        armor.append({
+            "code": to_code(name),
+            "name": name,
+            "category": category,
+            "base_ac": base_ac,
+            "dex_cap": dex_cap,
+            "strength_requirement": str_req,
+            "stealth_disadvantage": stealth.strip().lower() == "disadvantage",
+            "weight": weight,
+            "cost": cost,
+            "armor_class_text": ac_text,
+        })
+    if not armor:
+        raise RuntimeError("No armor parsed from equipment.md")
+    armor.sort(key=lambda a: a["code"])
+    return armor
+
+
+# --------------------------------------------------------------------------- #
 # Validation pass — cross-file integrity
 # --------------------------------------------------------------------------- #
 
@@ -1514,6 +1631,11 @@ def main(argv: Iterable[str] | None = None) -> int:
     spells = parse_spells()
     print(f"  {len(spells)} spells")
 
+    print("Parsing equipment…")
+    weapons = parse_weapons()
+    armor = parse_armor()
+    print(f"  {len(weapons)} weapons, {len(armor)} armor")
+
     print("Cross-file validation…")
     cross_validate(skills, feats, species, backgrounds, classes)
 
@@ -1524,6 +1646,8 @@ def main(argv: Iterable[str] | None = None) -> int:
     backgrounds_payload = _wrap("backgrounds", backgrounds)
     classes_payload = _wrap("classes", classes)
     spells_payload = _wrap("spells", spells)
+    weapons_payload = _wrap("weapons", weapons)
+    armor_payload = _wrap("armor", armor)
 
     _validate_pydantic(SkillsFile, skills_payload, "skills.json")
     _validate_pydantic(FeatsFile, feats_payload, "feats.json")
@@ -1531,6 +1655,8 @@ def main(argv: Iterable[str] | None = None) -> int:
     _validate_pydantic(BackgroundsFile, backgrounds_payload, "backgrounds.json")
     _validate_pydantic(ClassesFile, classes_payload, "classes.json")
     _validate_pydantic(SpellsFile, spells_payload, "spells.json")
+    _validate_pydantic(WeaponsFile, weapons_payload, "weapons.json")
+    _validate_pydantic(ArmorFile, armor_payload, "armor.json")
 
     paths = [
         _write("skills.json", skills_payload),
@@ -1539,6 +1665,8 @@ def main(argv: Iterable[str] | None = None) -> int:
         _write("backgrounds.json", backgrounds_payload),
         _write("classes.json", classes_payload),
         _write("spells.json", spells_payload),
+        _write("weapons.json", weapons_payload),
+        _write("armor.json", armor_payload),
     ]
     for path in paths:
         print(f"Wrote {path.relative_to(_API_SITE_DIR)}")

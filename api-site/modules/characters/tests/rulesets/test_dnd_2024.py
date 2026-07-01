@@ -243,3 +243,58 @@ class TestSpellcasting:
         # DC = 8 + prof(2) + INT mod(+3) = 13; attack = 2 + 3 = 5.
         assert ruleset.compute_spell_save_dc(ch, "intelligence") == 13
         assert ruleset.compute_spell_attack_bonus(ch, "intelligence") == 5
+
+
+class TestResourcePools:
+    def test_barbarian_rage_scales_with_level(self, ruleset):
+        assert ruleset.compute_resource_pools(
+            _make_character(class_entries=[ClassEntry("barbarian", 1, True)], level=1)
+        ) == {"rage": 2}
+        assert ruleset.compute_resource_pools(
+            _make_character(class_entries=[ClassEntry("barbarian", 5, True)], level=5)
+        ) == {"rage": 3}
+
+    def test_formula_pools(self, ruleset):
+        # Bardic Inspiration = Cha modifier; Paladin Lay on Hands = 5 × level.
+        bard = _make_character(
+            class_entries=[ClassEntry("bard", 1, True)],
+            ability_scores=AbilityScores(8, 14, 12, 10, 10, 16),
+        )
+        assert ruleset.compute_resource_pools(bard)["bardic_inspiration"] == 3
+        pal = _make_character(class_entries=[ClassEntry("paladin", 3, True)], level=3)
+        pools = ruleset.compute_resource_pools(pal)
+        assert pools["lay_on_hands_hp"] == 15 and pools["channel_divinity"] == 2
+
+    def test_noncaster_resourceless_class_has_no_pools(self, ruleset):
+        assert ruleset.compute_resource_pools(
+            _make_character(class_entries=[ClassEntry("wizard", 1, True)], level=1)
+        ) == {}
+
+    def test_multiclass_shared_pool_combines_not_overwrites(self, ruleset):
+        """A Cleric/Paladin multiclass combines Channel Divinity instead of last-class-wins."""
+        ch = _make_character(
+            class_entries=[ClassEntry("cleric", 3, True), ClassEntry("paladin", 5, False)],
+            level=8,
+        )
+        # Cleric 3 → 2 + Paladin 5 → 2 = 4 (not silently overwritten to 2).
+        assert ruleset.compute_resource_pools(ch)["channel_divinity"] == 4
+
+    def test_recharge_cadence(self, ruleset):
+        assert ruleset.resource_recharge("rage") == "long_rest"
+        assert ruleset.resource_recharge("second_wind") == "short_rest"
+
+
+class TestACMethods:
+    def test_unarmored_default(self, ruleset):
+        ch = _make_character(ability_scores=AbilityScores(10, 16, 10, 10, 10, 10))
+        methods = {m["code"]: m["ac"] for m in ruleset.list_ac_methods(ch)}
+        assert methods == {"unarmored": 13}  # 10 + Dex(+3)
+
+    def test_barbarian_unarmored_defense(self, ruleset):
+        ch = _make_character(
+            class_entries=[ClassEntry("barbarian", 1, True)],
+            ability_scores=AbilityScores(15, 14, 16, 8, 10, 10),
+        )
+        methods = {m["code"]: m["ac"] for m in ruleset.list_ac_methods(ch)}
+        assert methods["unarmored"] == 12  # 10 + Dex(+2)
+        assert methods["barbarian_unarmored_defense"] == 15  # 10 + Dex(+2) + Con(+3)

@@ -27,6 +27,8 @@ from shared.rulesets.models import (
     ClassDefinition,
     ClassesFile,
     CURRENT_SCHEMA_VERSION,
+    ArmorDefinition,
+    ArmorFile,
     FeatDefinition,
     FeatsFile,
     InvocationDefinition,
@@ -35,6 +37,8 @@ from shared.rulesets.models import (
     MetamagicFile,
     SkillDefinition,
     SkillsFile,
+    WeaponDefinition,
+    WeaponsFile,
     SpeciesDefinition,
     SpeciesFile,
     SpellDefinition,
@@ -74,6 +78,8 @@ class _EditionRulesetData:
         spells: dict[str, SpellDefinition],
         invocations: dict[str, InvocationDefinition],
         metamagic: dict[str, MetamagicDefinition],
+        weapons: dict[str, WeaponDefinition],
+        armor: dict[str, ArmorDefinition],
         strategy: Optional[RulesetStrategy],  # filled lazily on first get_ruleset()
     ):
         self.edition_code = edition_code
@@ -85,6 +91,8 @@ class _EditionRulesetData:
         self.spells = spells
         self.invocations = invocations
         self.metamagic = metamagic
+        self.weapons = weapons
+        self.armor = armor
         self.strategy = strategy
 
 
@@ -152,6 +160,8 @@ class RulesetRegistry:
         spells_file = _load("spells.json", SpellsFile)
         invocations_file = _load("invocations.json", InvocationsFile)
         metamagic_file = _load("metamagic.json", MetamagicFile)
+        weapons_file = _load("weapons.json", WeaponsFile)
+        armor_file = _load("armor.json", ArmorFile)
 
         skills = {s.code: s for s in skills_file.skills}
         feats = {f.code: f for f in feats_file.feats}
@@ -161,6 +171,8 @@ class RulesetRegistry:
         spells = {s.code: s for s in spells_file.spells}
         invocations = {i.code: i for i in invocations_file.invocations}
         metamagic = {m.code: m for m in metamagic_file.metamagic}
+        weapons = {w.code: w for w in weapons_file.weapons}
+        armor = {a.code: a for a in armor_file.armor}
 
         # Cross-ref integrity. These also run in the parser, but a hand-edited
         # JSON could slip through, so re-check at boot.
@@ -244,6 +256,8 @@ class RulesetRegistry:
             spells=spells,
             invocations=invocations,
             metamagic=metamagic,
+            weapons=weapons,
+            armor=armor,
             strategy=None,  # filled below once we have the registry instance
         )
         return registry_data
@@ -363,6 +377,34 @@ class RulesetRegistry:
 
     def list_metamagic(self, edition_code: str) -> list[MetamagicDefinition]:
         return sorted(self._ed(edition_code).metamagic.values(), key=lambda m: m.code)
+
+    def get_weapon(self, edition_code: str, code: str) -> WeaponDefinition:
+        ed = self._ed(edition_code)
+        if code not in ed.weapons:
+            raise KeyError(f"Unknown weapon '{code}' in edition '{edition_code}'")
+        return ed.weapons[code]
+
+    def list_weapons(
+        self, edition_code: str, category: Optional[str] = None
+    ) -> list[WeaponDefinition]:
+        weapons = sorted(self._ed(edition_code).weapons.values(), key=lambda w: w.code)
+        if category is not None:
+            weapons = [w for w in weapons if w.category == category]
+        return weapons
+
+    def get_armor(self, edition_code: str, code: str) -> ArmorDefinition:
+        ed = self._ed(edition_code)
+        if code not in ed.armor:
+            raise KeyError(f"Unknown armor '{code}' in edition '{edition_code}'")
+        return ed.armor[code]
+
+    def list_armor(
+        self, edition_code: str, category: Optional[str] = None
+    ) -> list[ArmorDefinition]:
+        armor = sorted(self._ed(edition_code).armor.values(), key=lambda a: a.code)
+        if category is not None:
+            armor = [a for a in armor if a.category == category]
+        return armor
 
     def get_ruleset(self, edition_code: str) -> RulesetStrategy:
         ed = self._ed(edition_code)

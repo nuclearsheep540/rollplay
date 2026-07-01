@@ -106,6 +106,17 @@ def _build_derived_stats(
         for ab in (ruleset.spellcasting_ability(e.class_code) for e in character.class_entries)
         if ab is not None
     }
+    # Resource pools — join the ruleset max with the stored spent count + recharge cadence.
+    spent_by_pool = {r.pool_code: r.current_value for r in character.resource_usage}
+    resource_pools = [
+        {
+            "pool_code": pool_code,
+            "max_value": max_value,
+            "current_value": spent_by_pool.get(pool_code, 0),
+            "recharge": ruleset.resource_recharge(pool_code),
+        }
+        for pool_code, max_value in sorted(ruleset.compute_resource_pools(character).items())
+    ]
     return DerivedStats(
         proficiency_bonus=ruleset.proficiency_bonus(character.level),
         initiative=ruleset.compute_initiative(character),
@@ -124,6 +135,8 @@ def _build_derived_stats(
         spell_attack_bonus_by_ability={
             ab: ruleset.compute_spell_attack_bonus(character, ab) for ab in casting_abilities
         },
+        resource_pools=resource_pools,
+        ac_methods=ruleset.list_ac_methods(character),
     )
 
 
@@ -190,6 +203,10 @@ def _to_character_response(
                 "casting_ability": s.casting_ability,
             }
             for s in character.spells
+        ],
+        resource_usage=[
+            {"pool_code": r.pool_code, "current_value": r.current_value}
+            for r in character.resource_usage
         ],
         level=character.level,
         xp=character.xp,

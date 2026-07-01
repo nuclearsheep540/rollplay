@@ -18,6 +18,8 @@ from shared.rulesets.models import (
     BackgroundsFile,
     ClassDefinition,
     ClassesFile,
+    ArmorDefinition,
+    ArmorFile,
     FeatDefinition,
     FeatsFile,
     InvocationDefinition,
@@ -26,6 +28,8 @@ from shared.rulesets.models import (
     MetamagicFile,
     SkillDefinition,
     SkillsFile,
+    WeaponDefinition,
+    WeaponsFile,
     SpeciesDefinition,
     SpeciesFile,
     SpellDefinition,
@@ -84,6 +88,16 @@ def test_metamagic_model(entry):
     MetamagicDefinition.model_validate(entry)
 
 
+@pytest.mark.parametrize("entry", _entries("weapons.json", "weapons"), ids=lambda e: e["code"])
+def test_weapon_model(entry):
+    WeaponDefinition.model_validate(entry)
+
+
+@pytest.mark.parametrize("entry", _entries("armor.json", "armor"), ids=lambda e: e["code"])
+def test_armor_model(entry):
+    ArmorDefinition.model_validate(entry)
+
+
 # --- Wrapper file validation ----------------------------------------------- #
 
 
@@ -98,6 +112,8 @@ def test_metamagic_model(entry):
         ("spells.json", SpellsFile),
         ("invocations.json", InvocationsFile),
         ("metamagic.json", MetamagicFile),
+        ("weapons.json", WeaponsFile),
+        ("armor.json", ArmorFile),
     ],
 )
 def test_file_wrapper_validates(filename, model):
@@ -390,12 +406,46 @@ def test_no_duplicate_codes_within_each_file():
         ("classes.json", "classes"),
         ("invocations.json", "invocations"),
         ("metamagic.json", "metamagic"),
+        ("weapons.json", "weapons"),
+        ("armor.json", "armor"),
     ):
         codes = [e["code"] for e in _entries(filename, key)]
         assert len(codes) == len(set(codes)), (
             f"Duplicate codes in {filename}: "
             f"{sorted(c for c in codes if codes.count(c) > 1)}"
         )
+
+
+# --- A.9 weapons / armor -------------------------------------------------- #
+
+
+def test_weapon_catalogue_shape():
+    """All SRD weapons across the four categories, with a faithful spot-check."""
+    weapons = {w["code"]: w for w in _entries("weapons.json", "weapons")}
+    assert len(weapons) == 38
+    cats = {}
+    for w in weapons.values():
+        cats[w["category"]] = cats.get(w["category"], 0) + 1
+    assert cats == {"simple_melee": 10, "simple_ranged": 4, "martial_melee": 18, "martial_ranged": 6}
+    dagger = weapons["dagger"]
+    assert dagger["damage"] == "1d4 Piercing"
+    assert dagger["mastery"] == "Nick"
+    assert {"Finesse", "Light"} <= set(dagger["properties"])
+
+
+def test_armor_catalogue_shape():
+    """All SRD armor + shield, with the structured AC fields the C.4 math needs."""
+    armor = {a["code"]: a for a in _entries("armor.json", "armor")}
+    assert len(armor) == 13
+    # Light = unlimited Dex (cap None); medium caps at 2; heavy/shield take no Dex (cap 0).
+    assert armor["leather_armor"]["dex_cap"] is None and armor["leather_armor"]["base_ac"] == 11
+    assert armor["breastplate"]["dex_cap"] == 2 and armor["breastplate"]["category"] == "medium"
+    plate = armor["plate_armor"]
+    assert plate["base_ac"] == 18 and plate["dex_cap"] == 0
+    assert plate["strength_requirement"] == 15 and plate["stealth_disadvantage"] is True
+    # Shield is a +2 bonus, not a base AC.
+    shield = next(a for a in armor.values() if a["category"] == "shield")
+    assert shield["base_ac"] == 2 and shield["dex_cap"] == 0
 
 
 # --- A.7 / A.8 catalogues -------------------------------------------------- #
