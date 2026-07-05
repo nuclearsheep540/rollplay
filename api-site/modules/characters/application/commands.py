@@ -579,7 +579,7 @@ class LevelUpCharacter:
                 raise ValueError("ASI level requires asi_choice or feat_choice")
             if asi_choice:
                 increases = {k: int(v) for k, v in asi_choice["increases"].items()}
-                character.apply_asi(increases)
+                character.apply_asi(increases, ruleset=ruleset)
                 self.repository.append_choice_log(
                     character_id=character.id,
                     level=character.level,

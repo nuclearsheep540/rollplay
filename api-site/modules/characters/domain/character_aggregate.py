@@ -549,13 +549,18 @@ class CharacterAggregate:
         self.level += 1
         self._touch()
 
-    def apply_asi(self, increases: dict[str, int]) -> None:
+    def apply_asi(self, increases: dict[str, int], *, ruleset=None) -> None:
         """Apply an Ability Score Improvement: ``{"strength": 2}`` or ``{"str": 1, "con": 1}``.
 
         Sum of values must equal 2 (the standard 5e ASI grant). Per-ability
         increments are capped so a single ASI can't push past 20 (Primal
         Champion uses a different path).
+
+        When ``ruleset`` is passed and CON's modifier changes (B.6), max HP is adjusted
+        retroactively by the modifier delta × level. We apply the *delta* rather than a full
+        ``compute_hp_max`` so a player's rolled/entered HP baseline is preserved, not clobbered.
         """
+        old_con_score = self.final_ability_score("constitution")
         total = sum(increases.values())
         if total != 2:
             raise ValueError(f"ASI must distribute exactly 2 points (got {total})")
@@ -574,6 +579,14 @@ class CharacterAggregate:
                 )
             new[ability] += delta
         self.ability_scores = AbilityScores.from_dict(new)
+        if ruleset is not None:
+            mod_delta = ruleset.ability_modifier(
+                self.final_ability_score("constitution")
+            ) - ruleset.ability_modifier(old_con_score)
+            hp_delta = mod_delta * self.level
+            if hp_delta:
+                self.hp_max = max(1, self.hp_max + hp_delta)
+                self.hp_current = max(1, min(self.hp_max, self.hp_current + hp_delta))
         self._touch()
 
     def take_feat(self, feat_code: str, *, source: str, at_level: Optional[int] = None) -> None:

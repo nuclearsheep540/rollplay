@@ -279,6 +279,68 @@ class TestResourcePools:
         # Cleric 3 → 2 + Paladin 5 → 2 = 4 (not silently overwritten to 2).
         assert ruleset.compute_resource_pools(ch)["channel_divinity"] == 4
 
+
+class TestHpMax:
+    def test_l1_gets_max_die_plus_con(self, ruleset):
+        ch = _make_character(
+            class_entries=[ClassEntry("barbarian", 1, True)], level=1,
+            ability_scores=AbilityScores(15, 13, 15, 8, 12, 10),  # CON 15 → +2
+        )
+        assert ruleset.compute_hp_max(ch) == 14  # d12 max(12) + 2
+
+    def test_later_levels_use_average(self, ruleset):
+        ch = _make_character(
+            class_entries=[ClassEntry("barbarian", 5, True)], level=5,
+            ability_scores=AbilityScores(15, 13, 15, 8, 12, 10),
+        )
+        # 12 (L1 max) + 4×7 (avg d12) + 5×2 (CON) = 50
+        assert ruleset.compute_hp_max(ch) == 50
+
+    def test_multiclass_first_level_of_starting_class_gets_max_die(self, ruleset):
+        # Fighter 1 (primary, d10 max) / Wizard 1 (d6 avg 4); CON 14 → +2 per level.
+        ch = _make_character(
+            class_entries=[ClassEntry("fighter", 1, True), ClassEntry("wizard", 1, False)],
+            level=2, ability_scores=AbilityScores(15, 13, 14, 13, 10, 10),
+        )
+        assert ruleset.compute_hp_max(ch) == 10 + 4 + 2 * 2  # 18
+
+
+class TestConChangeHp:
+    def test_asi_raising_con_modifier_bumps_hp_per_level(self, ruleset):
+        ch = _make_character(
+            class_entries=[ClassEntry("barbarian", 5, True)], level=5,
+            ability_scores=AbilityScores(15, 13, 14, 8, 12, 10),  # CON 14 → +2
+        )
+        ch.hp_max, ch.hp_current = 44, 44
+        ch.apply_asi({"constitution": 2}, ruleset=ruleset)  # CON 14→16, +1 mod → +5 HP
+        assert ch.hp_max == 49 and ch.hp_current == 49
+
+    def test_asi_without_con_change_leaves_hp(self, ruleset):
+        ch = _make_character(
+            class_entries=[ClassEntry("barbarian", 5, True)], level=5,
+            ability_scores=AbilityScores(15, 13, 14, 8, 12, 10),
+        )
+        ch.hp_max = 44
+        ch.apply_asi({"strength": 2}, ruleset=ruleset)
+        assert ch.hp_max == 44
+
+
+class TestEligibility:
+    def test_subclass_becomes_available_at_subclass_level(self, ruleset):
+        below = _make_character(class_entries=[ClassEntry("barbarian", 1, True)], level=1)
+        at = _make_character(class_entries=[ClassEntry("barbarian", 3, True)], level=3)
+        assert ruleset.can_pick_subclass(below, "barbarian") is False
+        assert ruleset.can_pick_subclass(at, "barbarian") is True
+
+    def test_multiclass_prereq_checks_both_classes(self, ruleset):
+        # Barbarian (STR) with STR 15 but INT 8 can't multiclass into Wizard (INT); can into Fighter.
+        ch = _make_character(
+            class_entries=[ClassEntry("barbarian", 1, True)], level=1,
+            ability_scores=AbilityScores(15, 13, 14, 8, 12, 10),
+        )
+        assert ruleset.can_add_class(ch, "wizard") is False
+        assert ruleset.can_add_class(ch, "fighter") is True
+
     def test_recharge_cadence(self, ruleset):
         assert ruleset.resource_recharge("rage") == "long_rest"
         assert ruleset.resource_recharge("second_wind") == "short_rest"

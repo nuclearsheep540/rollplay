@@ -136,6 +136,9 @@ class Dnd2024Ruleset(RulesetStrategy):
             raise ValueError(f"Level must be 1..20, got {level}")
         return _PROFICIENCY_BONUS[level - 1]
 
+    def ability_modifier(self, score: int) -> int:
+        return _ability_modifier(score)
+
     # ------------------------------------------------------------------ class lookups
 
     def asi_levels_for_class(self, class_code: str) -> list[int]:
@@ -302,3 +305,46 @@ class Dnd2024Ruleset(RulesetStrategy):
                 "ac": 10 + dex + wis,
             })
         return methods
+
+    # ------------------------------------------------------------------ HP / eligibility
+
+    def compute_hp_max(self, character: "CharacterAggregate") -> int:
+        primary = character.get_primary_class()
+        if primary is None:
+            return max(1, character.hp_max)
+        con_mod = _ability_modifier(character.final_ability_score("constitution"))
+        total = 0
+        first_level_used = False
+        for entry in character.class_entries:
+            die = self.hit_die_for_class(entry.class_code)
+            average = (die // 2) + 1
+            for _ in range(entry.level):
+                # Only the very first level of the starting (primary) class gets the max die.
+                if entry.class_code == primary.class_code and not first_level_used:
+                    total += die
+                    first_level_used = True
+                else:
+                    total += average
+        total += con_mod * character.level
+        return max(1, total)
+
+    def can_pick_subclass(self, character: "CharacterAggregate", class_code: str) -> bool:
+        cls = self._registry.get_class(self.edition_code, class_code)
+        if cls.subclass_level is None:
+            return False
+        entry = next((e for e in character.class_entries if e.class_code == class_code), None)
+        return entry is not None and entry.level >= cls.subclass_level
+
+    def can_add_class(self, character: "CharacterAggregate", class_code: str) -> bool:
+        def meets(cls_def) -> bool:
+            # "any" (not "all") of the primary abilities — captures the SRD "X or Y" classes
+            # permissively; this is a hint, never a gate.
+            return any(character.final_ability_score(a) >= 13 for a in cls_def.primary_ability)
+
+        new_cls = self._registry.get_class(self.edition_code, class_code)
+        if not meets(new_cls):
+            return False
+        return all(
+            meets(self._registry.get_class(self.edition_code, e.class_code))
+            for e in character.class_entries
+        )

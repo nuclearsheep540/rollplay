@@ -126,6 +126,9 @@ class DerivedStats(BaseModel):
     # Resource pools (max joined with stored spent) + AC computation options.
     resource_pools: List[ResourcePoolDTO] = []
     ac_methods: List[ACMethodDTO] = []
+    # Rules-suggested max HP (C.3) — informational; the stored hp_max may differ if the player
+    # rolled or entered their own. Lets the sheet flag a divergence without clobbering it.
+    computed_hp_max: int = 0
 
 
 class CharacterResponse(BaseModel):
@@ -350,6 +353,10 @@ class LevelUpPreview(BaseModel):
     # Remaining feats (prereqs not met or not yet verifiable). Surfaced, never hidden —
     # the modal shows these behind a "show anyway" affordance (core/product-principles.md §3.0).
     other_feats: List[str] = []
+    # Point-of-choice guidance (Phase D), never gates: classes whose level has reached their
+    # subclass level, and whether each not-yet-taken class meets the multiclass ability prereq.
+    subclass_eligible: List[str] = []
+    multiclass_options: Dict[str, bool] = {}
 
 
 class AsiChoice(BaseModel):

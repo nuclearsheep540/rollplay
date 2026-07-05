@@ -137,6 +137,7 @@ def _build_derived_stats(
         },
         resource_pools=resource_pools,
         ac_methods=ruleset.list_ac_methods(character),
+        computed_hp_max=ruleset.compute_hp_max(character),
     )
 
 
@@ -508,6 +509,18 @@ async def preview_level_up(
         bucket = qualifying_feats if ruleset.is_feat_available(character, feat) else other_feats
         bucket.append(feat.code)
 
+    # Point-of-choice guidance (Phase D) — surfaced, never gated.
+    subclass_eligible = [
+        e.class_code for e in character.class_entries
+        if ruleset.can_pick_subclass(character, e.class_code)
+    ]
+    taken = set(available_classes)
+    multiclass_options = {
+        c.code: ruleset.can_add_class(character, c.code)
+        for c in registry.list_classes(character.edition_code)
+        if c.code not in taken
+    }
+
     return LevelUpPreview(
         current_level=character.level,
         target_level=min(character.level + 1, 20),
@@ -516,6 +529,8 @@ async def preview_level_up(
         hp_options=hp_options,
         qualifying_feats=qualifying_feats,
         other_feats=other_feats,
+        subclass_eligible=subclass_eligible,
+        multiclass_options=multiclass_options,
     )
 
 

@@ -42,6 +42,10 @@ class RulesetStrategy(ABC):
         """Proficiency bonus at a given character level (level 1 → +2, level 20 → +6)."""
 
     @abstractmethod
+    def ability_modifier(self, score: int) -> int:
+        """Ability modifier for a score (``floor((score - 10) / 2)``)."""
+
+    @abstractmethod
     def asi_levels_for_class(self, class_code: str) -> list[int]:
         """Per-class ASI levels (e.g. Fighter → [4, 6, 8, 12, 14, 16])."""
 
@@ -123,3 +127,19 @@ class RulesetStrategy(ABC):
 
         Unarmored variants only until equipped armor (Phase J) adds armor-based methods.
         """
+
+    # ------------------------------------------------------------------ HP / eligibility
+
+    @abstractmethod
+    def compute_hp_max(self, character: "CharacterAggregate") -> int:
+        """Rules-suggested max HP: max hit die at the starting class's first level, average die
+        each level after, + CON modifier per level."""
+
+    @abstractmethod
+    def can_pick_subclass(self, character: "CharacterAggregate", class_code: str) -> bool:
+        """Whether the character's level in ``class_code`` has reached its subclass level."""
+
+    @abstractmethod
+    def can_add_class(self, character: "CharacterAggregate", class_code: str) -> bool:
+        """Multiclass ability prereq (SRD): 13+ in a primary ability of the new class and of each
+        existing class. Guidance only — never blocks (core/product-principles.md §3.0)."""

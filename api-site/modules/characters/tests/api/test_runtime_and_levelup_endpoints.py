@@ -169,6 +169,23 @@ class TestLevelUpPreview:
         # Barbarian d12, CON 15 → +2: average=(12/2+1)+2=9, max=14
         assert hp_opts == {"average": 9, "max_roll": 14}
 
+    def test_preview_surfaces_subclass_and_multiclass_guidance(self, client, auth_as, owner):
+        """Phase D: eligibility surfaced, never gated. Barbarian L1 → no subclass yet;
+        multiclass options list every other class with its ability-prereq guidance flag."""
+        char = _finalize_a_character(client, auth_as, owner)  # Barbarian L1, STR 15 primary
+        body = client.get(f"/api/characters/{char['id']}/level-up").json()
+        # Subclass unlocks at level 3, so an L1 barbarian is not yet eligible.
+        assert body["subclass_eligible"] == []
+        mc = body["multiclass_options"]
+        assert "barbarian" not in mc  # already taken
+        assert "fighter" in mc and "wizard" in mc
+        assert mc["fighter"] is True   # STR 15 meets Fighter's prereq
+        assert mc["wizard"] is False   # INT 8 fails Wizard's prereq
+
+    def test_derived_exposes_computed_hp_max(self, client, auth_as, owner):
+        char = _finalize_a_character(client, auth_as, owner)  # Barbarian L1, CON 15 (+2)
+        assert char["derived"]["computed_hp_max"] == 14  # d12 max(12) + 2
+
     def test_preview_splits_feats_without_hiding_any(self, client, auth_as, owner):
         """Two-bucket feat contract (core/product-principles.md §3.0): every candidate
         feat appears in exactly one of qualifying_feats / other_feats — nothing is hidden."""
