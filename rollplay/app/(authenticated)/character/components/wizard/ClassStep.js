@@ -193,6 +193,19 @@ export default function ClassStep({ draft, onSave, onBack, onNext }) {
         </div>
       )}
 
+      {/* Point-of-choice guidance (facilitate, don't enforce): inform the player of the
+          canonical multiclass rule without blocking their homebrew combination. */}
+      {picks.length > 1 && (
+        <div
+          className="rounded-sm border px-3 py-2 text-xs"
+          style={{ borderColor: THEME.borderSubtle, color: THEME.textSecondary }}
+        >
+          <span style={{ color: THEME.textOnDark }}>Multiclassing</span> — in standard D&D you begin
+          with one class and add another only at level-up (level 2+), needing 13+ in each class's key
+          ability. You can combine classes freely here; your table decides what's allowed.
+        </div>
+      )}
+
       {/* Picker — appears when no class is selected, or when the player
           clicks "+ Add another class". Lists every class not already picked
           as a collapsed tile; one can be expanded at a time. */}
