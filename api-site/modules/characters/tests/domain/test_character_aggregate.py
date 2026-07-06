@@ -190,21 +190,6 @@ class TestXpAndLeveling:
         assert c.hp_max == 36
         assert c.hp_current == 26
 
-    def test_apply_level_gain_preserves_choice_records(self):
-        # Regression: skills are a projection of ClassEntry.chosen_skills, so a level bump must
-        # NOT drop chosen_skills / sub_choices (else L1 skills silently vanish on level-up).
-        c = _make(
-            level=2,
-            class_entries=[ClassEntry("barbarian", 2, True,
-                                      {"barbarian_weapon_mastery": ["greataxe"]},
-                                      ["athletics", "perception"])],
-        )
-        c.apply_level_gain(class_code="barbarian", hp_gained=7)
-        entry = c.class_entries[0]
-        assert entry.level == 3
-        assert entry.chosen_skills == ["athletics", "perception"]
-        assert entry.sub_choices == {"barbarian_weapon_mastery": ["greataxe"]}
-
     def test_apply_level_gain_caps_at_level_20(self):
         c = _make(level=20)
         with pytest.raises(ValueError, match="max level"):
@@ -223,43 +208,10 @@ class TestXpAndLeveling:
         rogue = next(e for e in c.class_entries if e.class_code == "rogue")
         assert rogue.level == 1
 
-    def test_add_class_demotion_preserves_choice_records(self):
-        # Demoting a primary when multiclassing must keep its chosen_skills / sub_choices.
-        c = _make(level=3, class_entries=[
-            ClassEntry("fighter", 3, True, {"fighter_fighting_style": ["defense"]}, ["athletics", "intimidation"]),
-        ])
-        c.add_class("rogue", is_primary=True)
-        fighter = next(e for e in c.class_entries if e.class_code == "fighter")
-        assert fighter.is_primary is False
-        assert fighter.chosen_skills == ["athletics", "intimidation"]
-        assert fighter.sub_choices == {"fighter_fighting_style": ["defense"]}
-
     def test_add_class_blocks_duplicate(self):
         c = _make()
         with pytest.raises(ValueError, match="already has"):
             c.add_class("fighter")
-
-
-class TestSubclass:
-    def test_pick_subclass_records_choice(self):
-        c = _make(level=3, class_entries=[ClassEntry("barbarian", 3, True)])
-        c.pick_subclass("barbarian", "path_of_the_berserker", at_level=3)
-        assert len(c.subclasses) == 1
-        entry = c.subclasses[0]
-        assert entry.class_code == "barbarian"
-        assert entry.subclass_code == "path_of_the_berserker"
-        assert entry.chosen_at_level == 3
-
-    def test_pick_subclass_replaces_on_repick(self):
-        c = _make(level=3, class_entries=[ClassEntry("cleric", 3, True)])
-        c.pick_subclass("cleric", "life_domain")
-        c.pick_subclass("cleric", "life_domain", at_level=3)  # re-pick same class → one row
-        assert len(c.subclasses) == 1
-
-    def test_pick_subclass_requires_the_class(self):
-        c = _make(class_entries=[ClassEntry("fighter", 1, True)])
-        with pytest.raises(ValueError, match="no class"):
-            c.pick_subclass("wizard", "evoker")
 
 
 class TestAsi:
@@ -336,48 +288,3 @@ class TestLockingAndDeletion:
         c.lock_to_campaign(uuid4())
         with pytest.raises(ValueError, match="already locked"):
             c.lock_to_campaign(uuid4())
-
-
-class TestCurrencyAndInventoryReplace:
-    """Whole-map / whole-list replace used by the runtime PATCH (J.2/J.3)."""
-
-    OLD = datetime(2000, 1, 1)
-
-    def test_replace_currency_drops_absent_coins(self):
-        c = _make(currency={"gp": 3, "sp": 10})
-        c.replace_currency({"gp": 5})
-        assert c.currency == {"gp": 5}  # sp dropped by whole-map replace
-
-    def test_replace_currency_refreshes_timestamp(self):
-        c = _make(currency={"gp": 3})
-        c.updated_at = self.OLD
-        c.replace_currency({"gp": 5})
-        assert c.updated_at > self.OLD
-
-    def test_replace_currency_empty_map_refreshes_timestamp(self):
-        c = _make(currency={"gp": 3})
-        c.updated_at = self.OLD
-        c.replace_currency({})  # clearing all coins must still touch
-        assert c.currency == {}
-        assert c.updated_at > self.OLD
-
-    def test_replace_inventory_drops_absent_items(self):
-        c = _make()
-        c.replace_inventory([{"item_code": "rope", "quantity": 2}])
-        c.replace_inventory([{"item_code": "torch", "quantity": 5}])
-        assert [i.item_code for i in c.inventory] == ["torch"]
-        assert c.inventory[0].quantity == 5
-
-    def test_replace_inventory_defaults_quantity_and_notes(self):
-        c = _make()
-        c.replace_inventory([{"item_code": "rope"}])
-        assert c.inventory[0].quantity == 1
-        assert c.inventory[0].notes == ""
-
-    def test_replace_inventory_empty_list_refreshes_timestamp(self):
-        c = _make()
-        c.replace_inventory([{"item_code": "rope"}])
-        c.updated_at = self.OLD
-        c.replace_inventory([])  # clearing inventory must still touch
-        assert c.inventory == []
-        assert c.updated_at > self.OLD

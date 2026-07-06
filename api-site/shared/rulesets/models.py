@@ -33,27 +33,6 @@ CodePattern = r"^[a-z0-9_]+$"
 CURRENT_SCHEMA_VERSION = 1
 
 
-class ClassFeatureChoiceOption(BaseModel):
-    code: str = Field(pattern=CodePattern)
-    name: str
-    description: str = ""
-
-
-class ClassFeatureChoice(BaseModel):
-    """A player choice attached to a class/subclass feature OR a species trait (reused for both)."""
-
-    code: str = Field(pattern=CodePattern)
-    name: str
-    type: Literal[
-        "single_pick", "feat_pick", "skill_proficiency", "weapon_mastery",
-        "metamagic", "invocation", "spell_pick", "language", "tool_proficiency",
-    ]
-    count: int = 1
-    source: Optional[list[str]] = None  # allowed code list when applicable (skills/spells/etc.)
-    options: list[ClassFeatureChoiceOption] = []
-    swappable_on: Optional[Literal["long_rest", "short_or_long_rest", "level_up"]] = None
-
-
 class SkillDefinition(BaseModel):
     code: str = Field(pattern=CodePattern)
     name: str
@@ -61,13 +40,10 @@ class SkillDefinition(BaseModel):
 
 
 class FeatPrerequisite(BaseModel):
-    type: Literal["level", "ability", "ability_any", "class", "class_feature", "spellcasting", "invocation"]
+    type: Literal["level", "ability", "ability_any", "class", "spellcasting"]
     value: Optional[int] = None
     abilities: Optional[list[AbilityCode]] = None
     class_code: Optional[str] = Field(default=None, pattern=CodePattern)
-    # for type="class_feature" the named feature (e.g. "fighting_style"); for type="invocation"
-    # the referenced invocation code (e.g. "pact_of_the_blade").
-    feature: Optional[str] = Field(default=None, pattern=CodePattern)
 
 
 class FeatDefinition(BaseModel):
@@ -77,77 +53,6 @@ class FeatDefinition(BaseModel):
     prerequisites: list[FeatPrerequisite] = []
     repeatable: bool = False
     description: str = Field(min_length=1)
-
-
-class SpellDefinition(BaseModel):
-    code: str = Field(pattern=CodePattern)
-    name: str
-    level: int = Field(ge=0, le=9)  # 0 = cantrip
-    school: str
-    classes: list[str]  # class codes whose spell list this spell is on (inline in the SRD header)
-    casting_time: str
-    range: str
-    components: str  # raw "V, S, M (…)" — material/cost kept verbatim
-    duration: str
-    ritual: bool = False
-    concentration: bool = False
-    description: str = Field(min_length=1)  # verbatim prose (incl. upcast clause, subsections)
-
-
-class InvocationDefinition(BaseModel):
-    """A Warlock Eldritch Invocation (A.7). Mirrors FeatDefinition; the messy prose prereq
-    (e.g. "a Warlock Cantrip That Deals Damage") is kept verbatim in ``prerequisite_text`` for
-    display, with only the machine-checkable parts (level, required invocation) structured."""
-
-    code: str = Field(pattern=CodePattern)
-    name: str
-    prerequisite_text: str = ""  # verbatim prereq prose, "" when the invocation has no prerequisite
-    prerequisites: list[FeatPrerequisite] = []  # structured subset: level + invocation refs
-    repeatable: bool = False
-    description: str = Field(min_length=1)
-
-
-class MetamagicDefinition(BaseModel):
-    """A Sorcerer Metamagic option (A.8)."""
-
-    code: str = Field(pattern=CodePattern)
-    name: str
-    sorcery_point_cost: int = Field(ge=0)
-    description: str = Field(min_length=1)
-
-
-class WeaponDefinition(BaseModel):
-    """A weapon from the SRD equipment table (A.9). Parsed; tabular grid."""
-
-    code: str = Field(pattern=CodePattern)
-    name: str
-    category: Literal["simple_melee", "simple_ranged", "martial_melee", "martial_ranged"]
-    damage: str           # e.g. "1d4 Bludgeoning"
-    properties: list[str] = []  # ["Finesse", "Light", "Thrown (Range 20/60)"]
-    mastery: str = ""     # the weapon's Mastery property (e.g. "Nick"); "" if none
-    weight: str = ""      # raw, e.g. "2 lb."
-    cost: str = ""        # raw, e.g. "1 SP"
-
-
-class ArmorDefinition(BaseModel):
-    """A piece of armor / a shield from the SRD equipment table (A.9).
-
-    ``base_ac`` + ``dex_cap`` are the structured AC inputs for the C.4 AC math:
-    light → ``dex_cap=None`` (unlimited), medium → ``dex_cap=2``, heavy/shield → ``dex_cap=0``.
-    A shield's ``base_ac`` is its +2 bonus (added on top of worn armor). ``armor_class_text``
-    keeps the verbatim cell for display.
-    """
-
-    code: str = Field(pattern=CodePattern)
-    name: str
-    category: Literal["light", "medium", "heavy", "shield"]
-    base_ac: int
-    dex_cap: Optional[int] = None  # None = unlimited; 0 = no Dex; N = capped at N
-    strength_requirement: Optional[int] = None
-    stealth_disadvantage: bool = False
-    weight: str = ""
-    cost: str = ""
-    armor_class_text: str  # verbatim AC cell, e.g. "14 + Dex modifier (max 2)" or "+2"
 
 
 class SpeciesTrait(BaseModel):
@@ -171,8 +76,6 @@ class SpeciesDefinition(BaseModel):
     default_languages: list[str]
     language_choices: Optional[LanguageChoices] = None
     traits: list[SpeciesTrait]
-    sub_choices: list[ClassFeatureChoice] = []  # lineage/ancestry/legacy/size picks (A.4); reuses the choice shape
-    leveled_grants_by_sub_choice: dict[str, dict[str, list[str]]] = {}  # option code -> character level -> spell codes
 
 
 class BackgroundDefinition(BaseModel):
@@ -188,7 +91,6 @@ class BackgroundDefinition(BaseModel):
 class ClassFeature(BaseModel):
     name: str
     description: str = Field(min_length=1)
-    choices: list[ClassFeatureChoice] = []  # authored choice metadata, merged in at build time
 
 
 class ClassLevel(BaseModel):
@@ -204,61 +106,19 @@ class SkillChoices(BaseModel):
     source: list[str] = Field(alias="from")
 
 
-class SubclassFeature(BaseModel):
-    name: str
-    level: int = Field(ge=1, le=20)
-    description: str = Field(min_length=1)
-
-
-class SubclassDefinition(BaseModel):
-    code: str = Field(pattern=CodePattern)
-    name: str
-    subclass_level: int = Field(ge=1, le=20)  # level at which this subclass's features begin
-    features: list[SubclassFeature]
-    # Spell codes the subclass always has prepared, keyed by class level (Cleric/Paladin/
-    # Sorcerer/Warlock domain/oath/patron spells).
-    always_prepared_spells_by_level: dict[str, list[str]] = {}
-    # Choice-dependent always-prepared spells (Druid Circle of the Land): land code -> level -> codes.
-    leveled_grants_by_sub_choice: dict[str, dict[str, list[str]]] = {}
-
-
-class PactSlot(BaseModel):
-    count: int = Field(ge=0)             # number of Pact Magic slots
-    slot_level: int = Field(ge=1, le=9)  # spell level those slots are cast at
-
-
-class SpellcasterProgression(BaseModel):
-    """Per-character-level spell progression, lifted from the class table (A.6).
-
-    All dicts are keyed by character level ("1".."20"); a level absent from a dict means
-    none at that level. Regular casters populate ``spell_slots_by_level``; Warlock uses
-    ``pact_slots_by_level`` instead. Paladin/Ranger have no cantrips, so
-    ``cantrips_known_by_level`` is empty for them.
-    """
-
-    cantrips_known_by_level: dict[str, int] = {}
-    prepared_spells_by_level: dict[str, int] = {}
-    spell_slots_by_level: dict[str, dict[str, int]] = {}  # char level -> {spell level -> slots}
-    pact_slots_by_level: dict[str, PactSlot] = {}         # Warlock only
-
-
 class ClassDefinition(BaseModel):
     code: str = Field(pattern=CodePattern)
     name: str
-    primary_ability: list[AbilityCode] = Field(min_length=1)  # some classes list two (e.g. "Strength or Dexterity")
+    primary_ability: AbilityCode
     hit_die: Literal[6, 8, 10, 12]
     saving_throw_proficiencies: list[AbilityCode] = Field(min_length=2, max_length=2)
     skill_choices: SkillChoices
     armor_training: list[str]
     weapon_proficiencies: list[str]
-    tool_proficiencies: str = ""  # raw core-table text (e.g. "Choose 3 Musical Instruments", "Herbalism Kit")
     starting_equipment_text: str
     asi_levels: list[int] = Field(min_length=4)
     features_by_level: dict[str, ClassLevel]
     multiclass_text: Optional[str] = None
-    subclass_level: Optional[int] = None  # character level at which a subclass is chosen (3 in SRD 2024)
-    subclasses: list[SubclassDefinition] = []
-    spellcasting: Optional[SpellcasterProgression] = None  # None for non-casters; lifted from the class table
 
 
 class _EditionFile(BaseModel):
@@ -284,51 +144,3 @@ class BackgroundsFile(_EditionFile):
 
 class ClassesFile(_EditionFile):
     classes: list[ClassDefinition]
-
-
-class SpellsFile(_EditionFile):
-    spells: list[SpellDefinition]
-
-
-class InvocationsFile(_EditionFile):
-    invocations: list[InvocationDefinition]
-
-
-class MetamagicFile(_EditionFile):
-    metamagic: list[MetamagicDefinition]
-
-
-class WeaponsFile(_EditionFile):
-    weapons: list[WeaponDefinition]
-
-
-class ArmorFile(_EditionFile):
-    armor: list[ArmorDefinition]
-
-
-class ItemDefinition(BaseModel):
-    """A non-weapon/armor item — adventuring gear, tools, mounts (J.1). Flat catalogue
-    discriminated by ``category``. ``cost_cp`` is in copper (0 = varies/unpriced)."""
-
-    code: str = Field(pattern=CodePattern)
-    name: str
-    category: Literal["gear", "tool", "mount"]
-    cost_cp: int = 0
-    weight_lb: float = 0.0
-    description: str = ""
-
-
-class ItemsFile(_EditionFile):
-    items: list[ItemDefinition]
-
-
-class CurrencyDefinition(BaseModel):
-    """A coin type and its value in copper pieces (J.2)."""
-
-    code: str = Field(pattern=CodePattern)
-    name: str
-    cp_value: int = Field(ge=1)
-
-
-class CurrencyFile(_EditionFile):
-    currency: list[CurrencyDefinition]

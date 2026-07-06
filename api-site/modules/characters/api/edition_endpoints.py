@@ -18,20 +18,12 @@ from modules.characters.dependencies.providers import (
 )
 from modules.characters.repositories.edition_repository import EditionRepository
 from shared.rulesets.models import (
-    ArmorDefinition,
     BackgroundDefinition,
     ClassDefinition,
-    CurrencyDefinition,
     FeatDefinition,
-    InvocationDefinition,
-    ItemDefinition,
-    MetamagicDefinition,
     SkillDefinition,
     SpeciesDefinition,
-    SpellDefinition,
-    WeaponDefinition,
 )
-from shared.rulesets.conditions import CONDITIONS
 from shared.rulesets.registry import RulesetRegistry
 
 
@@ -102,84 +94,3 @@ async def list_skills(
 ):
     _ensure_known(registry, edition_code)
     return registry.list_skills(edition_code)
-
-
-@router.get("/{edition_code}/spells", response_model=List[SpellDefinition])
-async def list_spells(
-    edition_code: str,
-    class_code: Optional[str] = Query(default=None, pattern=r"^[a-z0-9_]+$"),
-    level: Optional[int] = Query(default=None, ge=0, le=9),
-    registry: RulesetRegistry = Depends(get_ruleset_registry),
-):
-    _ensure_known(registry, edition_code)
-    return registry.list_spells(edition_code, class_code=class_code, level=level)
-
-
-@router.get("/{edition_code}/invocations", response_model=List[InvocationDefinition])
-async def list_invocations(
-    edition_code: str,
-    registry: RulesetRegistry = Depends(get_ruleset_registry),
-):
-    _ensure_known(registry, edition_code)
-    return registry.list_invocations(edition_code)
-
-
-@router.get("/{edition_code}/metamagic", response_model=List[MetamagicDefinition])
-async def list_metamagic(
-    edition_code: str,
-    registry: RulesetRegistry = Depends(get_ruleset_registry),
-):
-    _ensure_known(registry, edition_code)
-    return registry.list_metamagic(edition_code)
-
-
-@router.get("/{edition_code}/weapons", response_model=List[WeaponDefinition])
-async def list_weapons(
-    edition_code: str,
-    category: Optional[str] = Query(
-        default=None,
-        pattern="^(simple_melee|simple_ranged|martial_melee|martial_ranged)$",
-    ),
-    registry: RulesetRegistry = Depends(get_ruleset_registry),
-):
-    _ensure_known(registry, edition_code)
-    return registry.list_weapons(edition_code, category=category)
-
-
-@router.get("/{edition_code}/armor", response_model=List[ArmorDefinition])
-async def list_armor(
-    edition_code: str,
-    category: Optional[str] = Query(default=None, pattern="^(light|medium|heavy|shield)$"),
-    registry: RulesetRegistry = Depends(get_ruleset_registry),
-):
-    _ensure_known(registry, edition_code)
-    return registry.list_armor(edition_code, category=category)
-
-
-@router.get("/{edition_code}/items", response_model=List[ItemDefinition])
-async def list_items(
-    edition_code: str,
-    category: Optional[str] = Query(default=None, pattern="^(gear|tool|mount)$"),
-    registry: RulesetRegistry = Depends(get_ruleset_registry),
-):
-    _ensure_known(registry, edition_code)
-    return registry.list_items(edition_code, category=category)
-
-
-@router.get("/{edition_code}/currency", response_model=List[CurrencyDefinition])
-async def list_currency(
-    edition_code: str,
-    registry: RulesetRegistry = Depends(get_ruleset_registry),
-):
-    _ensure_known(registry, edition_code)
-    return registry.list_currency(edition_code)
-
-
-@router.get("/{edition_code}/conditions")
-async def list_conditions(
-    edition_code: str,
-    registry: RulesetRegistry = Depends(get_ruleset_registry),
-):
-    """SRD conditions (code → name + description) for the runtime sheet's typed badges (G.3)."""
-    _ensure_known(registry, edition_code)
-    return CONDITIONS

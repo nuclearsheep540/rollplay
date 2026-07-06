@@ -2,10 +2,8 @@
 
 import { useEffect, useRef } from 'react'
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
-import { faCrown, faDiceD20 } from '@fortawesome/free-solid-svg-icons'
-// `onRollClick` (optional): opens the shared roll modal for an UNPROMPTED roll (RP / fun). Provided
-// by GameContent only for seated players + the DM. When omitted, no button renders (e.g. spectators).
-export default function AdventureLog({ rollLog, playerSeatMap, displayNameMap = {}, characterNameMap = {}, onRollClick }) {
+import { faCrown } from '@fortawesome/free-solid-svg-icons'
+export default function AdventureLog({ rollLog, playerSeatMap, displayNameMap = {}, characterNameMap = {} }) {
   const logRef = useRef(null);
 
   // Auto-scroll to top to show newest messages (with flex-col-reverse)
@@ -144,19 +142,6 @@ export default function AdventureLog({ rollLog, playerSeatMap, displayNameMap = 
 
   return (
     <div className="adventure-log-section w-full">
-      {onRollClick && (
-        <div className="sticky top-0 z-10 flex justify-end pb-[calc(6px*var(--ui-scale))]">
-          <button
-            type="button"
-            onClick={onRollClick}
-            title="Roll dice — an unprompted roll, no need to be prompted"
-            className="flex items-center gap-2 rounded-lg px-[calc(12px*var(--ui-scale))] py-[calc(6px*var(--ui-scale))] text-[calc(13px*var(--ui-scale))] font-semibold bg-emerald-500/15 border border-emerald-500/40 text-emerald-200 hover:bg-emerald-500/25 backdrop-blur-sm transition-colors"
-          >
-            <FontAwesomeIcon icon={faDiceD20} />
-            Roll dice
-          </button>
-        </div>
-      )}
       <div className="log-entries flex flex-col-reverse" ref={logRef}>
         {messageGroups.map((group, groupIndex) => {
           if (group.type === "party-member") {

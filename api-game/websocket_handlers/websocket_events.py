@@ -14,7 +14,6 @@ from models.log_type import LogType
 from mapservice import MapService, MapSettings
 from imageservice import ImageService, ImageSettings
 from gameservice import GameService
-from site_client import fetch_character_summary
 from shared_contracts.image import ImageConfig
 from shared_contracts.map import MapConfig
 from shared_contracts.audio import AudioChannelState, AudioTrackConfig, AudioEffects
@@ -184,19 +183,6 @@ class WebsocketEvent():
         for uid in manager.room_users.get(client_id, {}):
             is_in_party = uid in seat_layout
             manager.update_party_status(client_id, uid, is_in_party)
-
-        # Phase I: pull this player's latest character snapshot from api-site so runtime changes
-        # (level-up, HP, AC) flow into player_metadata on the next seat interaction. Best-effort.
-        try:
-            metadata = WebsocketEvent._get_player_metadata(client_id) or {}
-            character_id = (metadata.get(user_id) or {}).get("character_id")
-            if character_id:
-                summary = await fetch_character_summary(character_id)
-                if summary:
-                    summary["user_id"] = user_id
-                    GameService.update_player_character(client_id, summary)
-        except Exception as e:
-            print(f"⚠️ Character snapshot refresh failed for {user_id}: {e}")
 
         broadcast_message = {
             "event_type": "seat_change",

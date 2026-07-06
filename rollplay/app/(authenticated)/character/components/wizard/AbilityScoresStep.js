@@ -15,17 +15,7 @@ import {
   calculatePointsSpent,
   getDefaultPointBuyScores,
 } from '../../utils/pointBuyCalculations'
-import { rollAbilityScoresDetailed, rollDie } from '../../utils/diceRolling'
-import {
-  abilityMod,
-  acMethods as computeAcMethods,
-  averageHp,
-  gainedLevelDice,
-  hpFromRolls,
-  level1MaxDie,
-  rollAllLevels,
-} from '../../utils/hpAcCalculations'
-import { useEditionClasses } from '../../hooks/useReferenceData'
+import { rollAbilityScoresDetailed } from '../../utils/diceRolling'
 
 import StepFooter from './StepFooter'
 
@@ -102,59 +92,10 @@ export default function AbilityScoresStep({ draft, onSave, onSaveHpAc, onBack, o
   // for brand-new drafts (no method stored yet).
   const [mode, setMode] = useState(draft.ability_score_method || 'point_buy')
   const [scores, setScores] = useState(initial)
+  const [hpMax, setHpMax] = useState(draft.hp_max > 1 ? draft.hp_max : 10)
+  const [ac, setAc] = useState(draft.ac > 1 ? draft.ac : 10)
   const [error, setError] = useState(null)
   const [saving, setSaving] = useState(false)
-
-  // Class defs give us the hit dice for HP; class_entries give the levels + which class is primary.
-  const { data: classes } = useEditionClasses(draft.edition_code)
-  const classByCode = useMemo(() => {
-    const m = new Map()
-    for (const c of classes ?? []) m.set(c.code, c)
-    return m
-  }, [classes])
-  const classEntries = useMemo(() => draft.class_entries ?? [], [draft.class_entries])
-
-  // Live ability modifiers (base score + background bonus) — HP/AC react as the player edits here.
-  const finalScore = (code) => (scores[code] ?? 10) + (originBonuses[code] ?? 0)
-  const conMod = abilityMod(finalScore('constitution'))
-  const dexMod = abilityMod(finalScore('dexterity'))
-  const wisMod = abilityMod(finalScore('wisdom'))
-
-  // HP: average (SRD fixed value, the default) / roll all at once / roll each level / manual override.
-  const hpSlots = useMemo(() => gainedLevelDice(classEntries, classByCode), [classEntries, classByCode])
-  const avgHp = averageHp(classEntries, classByCode, conMod)
-  const [hpMode, setHpMode] = useState(() =>
-    draft.hp_max > 1 && draft.hp_max !== averageHp(classEntries, classByCode, conMod) ? 'manual' : 'average',
-  )
-  const [hpRolls, setHpRolls] = useState({})          // { slotIndex: rolledValue }
-  const [hpManual, setHpManual] = useState(draft.hp_max > 1 ? draft.hp_max : avgHp)
-  const rolledHp = hpFromRolls(classEntries, classByCode, conMod, hpRolls)
-  const effectiveHp =
-    hpMode === 'average' ? avgHp : hpMode === 'manual' ? hpManual : rolledHp
-
-  // AC: derived unarmored readout (best method) / manual override for features we don't model yet.
-  const acOptions = useMemo(
-    () => computeAcMethods(classEntries, dexMod, conMod, wisMod),
-    [classEntries, dexMod, conMod, wisMod],
-  )
-  const bestAc = acOptions[0]?.ac ?? 10 + dexMod
-  const [acMode, setAcMode] = useState(() =>
-    draft.ac > 1 && draft.ac !== (computeAcMethods(classEntries, dexMod, conMod, wisMod)[0]?.ac ?? 10 + dexMod)
-      ? 'manual'
-      : 'derived',
-  )
-  const [acManual, setAcManual] = useState(draft.ac > 1 ? draft.ac : bestAc)
-  const effectiveAc = acMode === 'derived' ? bestAc : acManual
-
-  const level1Die = level1MaxDie(classEntries, classByCode)
-  const isMulticlass = classEntries.length > 1
-
-  const rollAllHp = () => setHpRolls(rollAllLevels(hpSlots))
-  const rollOneHp = (slot) => setHpRolls((curr) => ({ ...curr, [slot.index]: rollDie(slot.die) }))
-  const switchHpMode = (next) => {
-    if (next === 'manual' && hpMode !== 'manual') setHpManual(effectiveHp)  // seed manual from current
-    setHpMode(next)
-  }
 
   // For the "Roll 4d6 drop lowest" mode: per-ability roll details so the cell
   // can show the underlying dice + which die was dropped. This cache survives
@@ -269,7 +210,7 @@ export default function AbilityScoresStep({ draft, onSave, onSaveHpAc, onBack, o
         method: mode,
         roll_details: mode === 'rolled' ? rollDetails : null,
       })
-      await onSaveHpAc({ hp_max: effectiveHp, ac: effectiveAc })
+      await onSaveHpAc({ hp_max: hpMax, ac })
       onNext()
     } catch (err) {
       setError(err.message)
@@ -443,158 +384,39 @@ export default function AbilityScoresStep({ draft, onSave, onSaveHpAc, onBack, o
         })}
       </div>
 
-      {/* Hit points — SRD: maximum hit die at level 1, then roll OR take the fixed average each
-          level after, plus CON. Manual override kept for facilitation (custom/homebrew HP). */}
-      <div className="space-y-2 pt-2 border-t" style={{ borderColor: THEME.borderSubtle }}>
-        <div className="flex items-center justify-between">
-          <label className="text-xs uppercase" style={{ color: THEME.textSecondary }}>Hit points</label>
-          <div className="text-2xl font-bold" style={{ color: THEME.textOnDark }}>
-            {effectiveHp} <span className="text-sm font-normal" style={{ color: THEME.textSecondary }}>HP</span>
-          </div>
-        </div>
-        <div className="flex gap-2 flex-wrap">
-          {[
-            { id: 'average', label: 'Average' },
-            { id: 'roll_all', label: 'Roll all levels' },
-            { id: 'roll_each', label: 'Roll each level' },
-            { id: 'manual', label: 'Manual' },
-          ].map((m) => (
-            <button
-              key={m.id}
-              type="button"
-              onClick={() => switchHpMode(m.id)}
-              className="px-3 py-1.5 border rounded-sm text-sm"
-              style={{
-                borderColor: hpMode === m.id ? COLORS.silver : THEME.borderDefault,
-                backgroundColor: hpMode === m.id ? `${COLORS.silver}1A` : 'transparent',
-                color: THEME.textOnDark,
-              }}
-            >
-              {m.label}
-            </button>
-          ))}
-        </div>
-
-        {hpMode === 'average' && (
-          <p className="text-xs" style={{ color: THEME.textSecondary }}>
-            Maximum hit die (d{level1Die}) at level 1, the fixed average each level after, plus your
-            CON modifier ({conMod >= 0 ? '+' : ''}{conMod}) per level.
-          </p>
-        )}
-
-        {(hpMode === 'roll_all' || hpMode === 'roll_each') && hpSlots.length === 0 && (
-          <p className="text-xs" style={{ color: THEME.textSecondary }}>
-            At level 1 there&apos;s nothing to roll — HP is the maximum hit die (d{level1Die}) + CON.
-          </p>
-        )}
-
-        {hpMode === 'roll_all' && hpSlots.length > 0 && (
-          <div className="rounded-sm border p-3 flex items-center justify-between" style={{ borderColor: THEME.borderSubtle }}>
-            <p className="text-xs" style={{ color: THEME.textSecondary }}>
-              Rolls a die for each level above 1 ({hpSlots.length} {hpSlots.length === 1 ? 'die' : 'dice'}) and adds
-              CON, on top of your maximum level-1 HP.
-              {Object.keys(hpRolls).length > 0 && ` Rolled: ${hpSlots.map((s) => hpRolls[s.index] ?? '·').join(', ')}.`}
-            </p>
-            <button
-              type="button"
-              onClick={rollAllHp}
-              className="ml-3 px-3 py-1 rounded-sm text-sm font-semibold whitespace-nowrap"
-              style={{ backgroundColor: COLORS.silver, color: COLORS.onyx }}
-            >
-              {Object.keys(hpRolls).length ? 'Re-roll all' : 'Roll HP →'}
-            </button>
-          </div>
-        )}
-
-        {hpMode === 'roll_each' && hpSlots.length > 0 && (
-          <div className="space-y-1">
-            <div className="text-[11px]" style={{ color: THEME.textSecondary }}>
-              Level 1: maximum d{level1Die} (fixed)
-            </div>
-            {hpSlots.map((slot) => (
-              <div
-                key={slot.index}
-                className="flex items-center justify-between border rounded-sm px-3 py-1.5"
-                style={{ borderColor: THEME.borderSubtle }}
-              >
-                <span className="text-sm" style={{ color: THEME.textOnDark }}>
-                  {isMulticlass ? `${slot.className} — d${slot.die}` : `Level ${slot.index + 2} — d${slot.die}`}
-                </span>
-                <div className="flex items-center gap-3">
-                  <span className="text-sm" style={{ color: THEME.textSecondary }}>
-                    {hpRolls[slot.index] != null ? `rolled ${hpRolls[slot.index]}` : '—'}
-                  </span>
-                  <button
-                    type="button"
-                    onClick={() => rollOneHp(slot)}
-                    className="px-2 py-0.5 rounded-sm text-xs border"
-                    style={{ borderColor: THEME.borderDefault, color: THEME.textOnDark }}
-                  >
-                    {hpRolls[slot.index] != null ? 'Re-roll' : `Roll d${slot.die}`}
-                  </button>
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
-
-        {hpMode === 'manual' && (
+      <div className="grid grid-cols-2 gap-4 pt-2">
+        <div>
+          <label className="block text-xs uppercase mb-1" style={{ color: THEME.textSecondary }}>Max HP</label>
           <input
             type="number"
             min={1}
             max={999}
-            value={hpManual}
-            onChange={(e) => setHpManual(Math.max(1, Math.min(999, Number(e.target.value) || 1)))}
+            value={hpMax}
+            onChange={(e) => setHpMax(Math.max(1, Math.min(999, Number(e.target.value) || 1)))}
             className="w-full px-3 py-2 border rounded-sm"
-            style={{ backgroundColor: THEME.bgSecondary, borderColor: THEME.borderDefault, color: THEME.textOnDark }}
+            style={{
+              backgroundColor: THEME.bgSecondary,
+              borderColor: THEME.borderDefault,
+              color: THEME.textOnDark,
+            }}
           />
-        )}
-      </div>
-
-      {/* Armor class — the character's UNARMOURED AC, derived from DEX (+ Barbarian/Monk Unarmoured
-          Defense). Armour is a runtime equipment concern and layers on later. Manual override for
-          unmodelled unarmoured-AC features (e.g. natural armour, Draconic Resilience). */}
-      <div className="space-y-2 pt-2 border-t" style={{ borderColor: THEME.borderSubtle }}>
-        <div className="flex items-center justify-between">
-          <label className="text-xs uppercase" style={{ color: THEME.textSecondary }}>Armor class</label>
-          <div className="text-2xl font-bold" style={{ color: THEME.textOnDark }}>{effectiveAc}</div>
         </div>
-        <div className="flex gap-2">
-          {[{ id: 'derived', label: 'Derived' }, { id: 'manual', label: 'Manual' }].map((m) => (
-            <button
-              key={m.id}
-              type="button"
-              onClick={() => setAcMode(m.id)}
-              className="px-3 py-1.5 border rounded-sm text-sm"
-              style={{
-                borderColor: acMode === m.id ? COLORS.silver : THEME.borderDefault,
-                backgroundColor: acMode === m.id ? `${COLORS.silver}1A` : 'transparent',
-                color: THEME.textOnDark,
-              }}
-            >
-              {m.label}
-            </button>
-          ))}
-        </div>
-        {acMode === 'derived' ? (
-          <p className="text-xs" style={{ color: THEME.textSecondary }}>
-            {acOptions[0]?.label ?? 'Unarmored'} — your AC before armour; equipping armour adjusts it
-            later from your inventory.
-            {acOptions.length > 1
-              ? ` Also available: ${acOptions.slice(1).map((o) => `${o.label} (${o.ac})`).join(', ')}.`
-              : ''}
-          </p>
-        ) : (
+        <div>
+          <label className="block text-xs uppercase mb-1" style={{ color: THEME.textSecondary }}>Armor class</label>
           <input
             type="number"
             min={1}
             max={50}
-            value={acManual}
-            onChange={(e) => setAcManual(Math.max(1, Math.min(50, Number(e.target.value) || 1)))}
+            value={ac}
+            onChange={(e) => setAc(Math.max(1, Math.min(50, Number(e.target.value) || 1)))}
             className="w-full px-3 py-2 border rounded-sm"
-            style={{ backgroundColor: THEME.bgSecondary, borderColor: THEME.borderDefault, color: THEME.textOnDark }}
+            style={{
+              backgroundColor: THEME.bgSecondary,
+              borderColor: THEME.borderDefault,
+              color: THEME.textOnDark,
+            }}
           />
-        )}
+        </div>
       </div>
 
       {error && (
