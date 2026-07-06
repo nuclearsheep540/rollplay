@@ -1,0 +1,491 @@
+{
+  "edition": "srd_5_2_1",
+  "schema_version": 1,
+  "weapons": [
+    {
+      "category": "martial_melee",
+      "code": "battleaxe",
+      "cost": "10 GP",
+      "damage": "1d8 Slashing",
+      "mastery": "Topple",
+      "name": "Battleaxe",
+      "properties": [
+        "Versatile (1d10)"
+      ],
+      "weight": "4 lb."
+    },
+    {
+      "category": "martial_ranged",
+      "code": "blowgun",
+      "cost": "10 GP",
+      "damage": "1 Piercing",
+      "mastery": "Vex",
+      "name": "Blowgun",
+      "properties": [
+        "Ammunition (Range 25/100; Needle)",
+        "Loading"
+      ],
+      "weight": "1 lb."
+    },
+    {
+      "category": "simple_melee",
+      "code": "club",
+      "cost": "1 SP",
+      "damage": "1d4 Bludgeoning",
+      "mastery": "Slow",
+      "name": "Club",
+      "properties": [
+        "Light"
+      ],
+      "weight": "2 lb."
+    },
+    {
+      "category": "simple_melee",
+      "code": "dagger",
+      "cost": "2 GP",
+      "damage": "1d4 Piercing",
+      "mastery": "Nick",
+      "name": "Dagger",
+      "properties": [
+        "Finesse",
+        "Light",
+        "Thrown (Range 20/60)"
+      ],
+      "weight": "1 lb."
+    },
+    {
+      "category": "simple_ranged",
+      "code": "dart",
+      "cost": "5 CP",
+      "damage": "1d4 Piercing",
+      "mastery": "Vex",
+      "name": "Dart",
+      "properties": [
+        "Finesse",
+        "Thrown (Range 20/60)"
+      ],
+      "weight": "1/4 lb."
+    },
+    {
+      "category": "martial_melee",
+      "code": "flail",
+      "cost": "10 GP",
+      "damage": "1d8 Bludgeoning",
+      "mastery": "Sap",
+      "name": "Flail",
+      "properties": [],
+      "weight": "2 lb."
+    },
+    {
+      "category": "martial_melee",
+      "code": "glaive",
+      "cost": "20 GP",
+      "damage": "1d10 Slashing",
+      "mastery": "Graze",
+      "name": "Glaive",
+      "properties": [
+        "Heavy",
+        "Reach",
+        "Two-Handed"
+      ],
+      "weight": "6 lb."
+    },
+    {
+      "category": "martial_melee",
+      "code": "greataxe",
+      "cost": "30 GP",
+      "damage": "1d12 Slashing",
+      "mastery": "Cleave",
+      "name": "Greataxe",
+      "properties": [
+        "Heavy",
+        "Two-Handed"
+      ],
+      "weight": "7 lb."
+    },
+    {
+      "category": "simple_melee",
+      "code": "greatclub",
+      "cost": "2 SP",
+      "damage": "1d8 Bludgeoning",
+      "mastery": "Push",
+      "name": "Greatclub",
+      "properties": [
+        "Two-Handed"
+      ],
+      "weight": "10 lb."
+    },
+    {
+      "category": "martial_melee",
+      "code": "greatsword",
+      "cost": "50 GP",
+      "damage": "2d6 Slashing",
+      "mastery": "Graze",
+      "name": "Greatsword",
+      "properties": [
+        "Heavy",
+        "Two-Handed"
+      ],
+      "weight": "6 lb."
+    },
+    {
+      "category": "martial_melee",
+      "code": "halberd",
+      "cost": "20 GP",
+      "damage": "1d10 Slashing",
+      "mastery": "Cleave",
+      "name": "Halberd",
+      "properties": [
+        "Heavy",
+        "Reach",
+        "Two-Handed"
+      ],
+      "weight": "6 lb."
+    },
+    {
+      "category": "martial_ranged",
+      "code": "hand_crossbow",
+      "cost": "75 GP",
+      "damage": "1d6 Piercing",
+      "mastery": "Vex",
+      "name": "Hand Crossbow",
+      "properties": [
+        "Ammunition (Range 30/120; Bolt)",
+        "Light",
+        "Loading"
+      ],
+      "weight": "3 lb."
+    },
+    {
+      "category": "simple_melee",
+      "code": "handaxe",
+      "cost": "5 GP",
+      "damage": "1d6 Slashing",
+      "mastery": "Vex",
+      "name": "Handaxe",
+      "properties": [
+        "Light",
+        "Thrown (Range 20/60)"
+      ],
+      "weight": "2 lb."
+    },
+    {
+      "category": "martial_ranged",
+      "code": "heavy_crossbow",
+      "cost": "50 GP",
+      "damage": "1d10 Piercing",
+      "mastery": "Push",
+      "name": "Heavy Crossbow",
+      "properties": [
+        "Ammunition (Range 100/400; Bolt)",
+        "Heavy",
+        "Loading",
+        "Two-Handed"
+      ],
+      "weight": "18 lb."
+    },
+    {
+      "category": "simple_melee",
+      "code": "javelin",
+      "cost": "5 SP",
+      "damage": "1d6 Piercing",
+      "mastery": "Slow",
+      "name": "Javelin",
+      "properties": [
+        "Thrown (Range 30/120)"
+      ],
+      "weight": "2 lb."
+    },
+    {
+      "category": "martial_melee",
+      "code": "lance",
+      "cost": "10 GP",
+      "damage": "1d10 Piercing",
+      "mastery": "Topple",
+      "name": "Lance",
+      "properties": [
+        "Heavy",
+        "Reach",
+        "Two-Handed (unless mounted)"
+      ],
+      "weight": "6 lb."
+    },
+    {
+      "category": "simple_ranged",
+      "code": "light_crossbow",
+      "cost": "25 GP",
+      "damage": "1d8 Piercing",
+      "mastery": "Slow",
+      "name": "Light Crossbow",
+      "properties": [
+        "Ammunition (Range 80/320; Bolt)",
+        "Loading",
+        "Two-Handed"
+      ],
+      "weight": "5 lb."
+    },
+    {
+      "category": "simple_melee",
+      "code": "light_hammer",
+      "cost": "2 GP",
+      "damage": "1d4 Bludgeoning",
+      "mastery": "Nick",
+      "name": "Light Hammer",
+      "properties": [
+        "Light",
+        "Thrown (Range 20/60)"
+      ],
+      "weight": "2 lb."
+    },
+    {
+      "category": "martial_ranged",
+      "code": "longbow",
+      "cost": "50 GP",
+      "damage": "1d8 Piercing",
+      "mastery": "Slow",
+      "name": "Longbow",
+      "properties": [
+        "Ammunition (Range 150/600; Arrow)",
+        "Heavy",
+        "Two-Handed"
+      ],
+      "weight": "2 lb."
+    },
+    {
+      "category": "martial_melee",
+      "code": "longsword",
+      "cost": "15 GP",
+      "damage": "1d8 Slashing",
+      "mastery": "Sap",
+      "name": "Longsword",
+      "properties": [
+        "Versatile (1d10)"
+      ],
+      "weight": "3 lb."
+    },
+    {
+      "category": "simple_melee",
+      "code": "mace",
+      "cost": "5 GP",
+      "damage": "1d6 Bludgeoning",
+      "mastery": "Sap",
+      "name": "Mace",
+      "properties": [],
+      "weight": "4 lb."
+    },
+    {
+      "category": "martial_melee",
+      "code": "maul",
+      "cost": "10 GP",
+      "damage": "2d6 Bludgeoning",
+      "mastery": "Topple",
+      "name": "Maul",
+      "properties": [
+        "Heavy",
+        "Two-Handed"
+      ],
+      "weight": "10 lb."
+    },
+    {
+      "category": "martial_melee",
+      "code": "morningstar",
+      "cost": "15 GP",
+      "damage": "1d8 Piercing",
+      "mastery": "Sap",
+      "name": "Morningstar",
+      "properties": [],
+      "weight": "4 lb."
+    },
+    {
+      "category": "martial_ranged",
+      "code": "musket",
+      "cost": "500 GP",
+      "damage": "1d12 Piercing",
+      "mastery": "Slow",
+      "name": "Musket",
+      "properties": [
+        "Ammunition (Range 40/120; Bullet)",
+        "Loading",
+        "Two-Handed"
+      ],
+      "weight": "10 lb."
+    },
+    {
+      "category": "martial_melee",
+      "code": "pike",
+      "cost": "5 GP",
+      "damage": "1d10 Piercing",
+      "mastery": "Push",
+      "name": "Pike",
+      "properties": [
+        "Heavy",
+        "Reach",
+        "Two-Handed"
+      ],
+      "weight": "18 lb."
+    },
+    {
+      "category": "martial_ranged",
+      "code": "pistol",
+      "cost": "250 GP",
+      "damage": "1d10 Piercing",
+      "mastery": "Vex",
+      "name": "Pistol",
+      "properties": [
+        "Ammunition (Range 30/90; Bullet)",
+        "Loading"
+      ],
+      "weight": "3 lb."
+    },
+    {
+      "category": "simple_melee",
+      "code": "quarterstaff",
+      "cost": "2 SP",
+      "damage": "1d6 Bludgeoning",
+      "mastery": "Topple",
+      "name": "Quarterstaff",
+      "properties": [
+        "Versatile (1d8)"
+      ],
+      "weight": "4 lb."
+    },
+    {
+      "category": "martial_melee",
+      "code": "rapier",
+      "cost": "25 GP",
+      "damage": "1d8 Piercing",
+      "mastery": "Vex",
+      "name": "Rapier",
+      "properties": [
+        "Finesse"
+      ],
+      "weight": "2 lb."
+    },
+    {
+      "category": "martial_melee",
+      "code": "scimitar",
+      "cost": "25 GP",
+      "damage": "1d6 Slashing",
+      "mastery": "Nick",
+      "name": "Scimitar",
+      "properties": [
+        "Finesse",
+        "Light"
+      ],
+      "weight": "3 lb."
+    },
+    {
+      "category": "simple_ranged",
+      "code": "shortbow",
+      "cost": "25 GP",
+      "damage": "1d6 Piercing",
+      "mastery": "Vex",
+      "name": "Shortbow",
+      "properties": [
+        "Ammunition (Range 80/320; Arrow)",
+        "Two-Handed"
+      ],
+      "weight": "2 lb."
+    },
+    {
+      "category": "martial_melee",
+      "code": "shortsword",
+      "cost": "10 GP",
+      "damage": "1d6 Piercing",
+      "mastery": "Vex",
+      "name": "Shortsword",
+      "properties": [
+        "Finesse",
+        "Light"
+      ],
+      "weight": "2 lb."
+    },
+    {
+      "category": "simple_melee",
+      "code": "sickle",
+      "cost": "1 GP",
+      "damage": "1d4 Slashing",
+      "mastery": "Nick",
+      "name": "Sickle",
+      "properties": [
+        "Light"
+      ],
+      "weight": "2 lb."
+    },
+    {
+      "category": "simple_ranged",
+      "code": "sling",
+      "cost": "1 SP",
+      "damage": "1d4 Bludgeoning",
+      "mastery": "Slow",
+      "name": "Sling",
+      "properties": [
+        "Ammunition (Range 30/120; Bullet)"
+      ],
+      "weight": "—"
+    },
+    {
+      "category": "simple_melee",
+      "code": "spear",
+      "cost": "1 GP",
+      "damage": "1d6 Piercing",
+      "mastery": "Sap",
+      "name": "Spear",
+      "properties": [
+        "Thrown (Range 20/60)",
+        "Versatile (1d8)"
+      ],
+      "weight": "3 lb."
+    },
+    {
+      "category": "martial_melee",
+      "code": "trident",
+      "cost": "5 GP",
+      "damage": "1d8 Piercing",
+      "mastery": "Topple",
+      "name": "Trident",
+      "properties": [
+        "Thrown (Range 20/60)",
+        "Versatile (1d10)"
+      ],
+      "weight": "4 lb."
+    },
+    {
+      "category": "martial_melee",
+      "code": "war_pick",
+      "cost": "5 GP",
+      "damage": "1d8 Piercing",
+      "mastery": "Sap",
+      "name": "War Pick",
+      "properties": [
+        "Versatile (1d10)"
+      ],
+      "weight": "2 lb."
+    },
+    {
+      "category": "martial_melee",
+      "code": "warhammer",
+      "cost": "15 GP",
+      "damage": "1d8 Bludgeoning",
+      "mastery": "Push",
+      "name": "Warhammer",
+      "properties": [
+        "Versatile (1d10)"
+      ],
+      "weight": "5 lb."
+    },
+    {
+      "category": "martial_melee",
+      "code": "whip",
+      "cost": "2 GP",
+      "damage": "1d4 Slashing",
+      "mastery": "Slow",
+      "name": "Whip",
+      "properties": [
+        "Finesse",
+        "Reach"
+      ],
+      "weight": "3 lb."
+    }
+  ]
+}

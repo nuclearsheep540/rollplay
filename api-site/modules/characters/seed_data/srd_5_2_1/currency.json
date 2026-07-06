@@ -1,0 +1,31 @@
+{
+  "currency": [
+    {
+      "code": "cp",
+      "cp_value": 1,
+      "name": "Copper Piece"
+    },
+    {
+      "code": "sp",
+      "cp_value": 10,
+      "name": "Silver Piece"
+    },
+    {
+      "code": "ep",
+      "cp_value": 50,
+      "name": "Electrum Piece"
+    },
+    {
+      "code": "gp",
+      "cp_value": 100,
+      "name": "Gold Piece"
+    },
+    {
+      "code": "pp",
+      "cp_value": 1000,
+      "name": "Platinum Piece"
+    }
+  ],
+  "edition": "srd_5_2_1",
+  "schema_version": 1
+}

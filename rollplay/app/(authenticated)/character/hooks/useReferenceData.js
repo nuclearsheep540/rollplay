@@ -79,3 +79,57 @@ export function useEditionSkills(editionCode) {
     enabled: Boolean(editionCode),
   })
 }
+
+export function useEditionInvocations(editionCode) {
+  return useQuery({
+    queryKey: ['editions', editionCode, 'invocations'],
+    queryFn: () => getJson(`/api/editions/${editionCode}/invocations`),
+    staleTime: ONE_HOUR,
+    enabled: Boolean(editionCode),
+  })
+}
+
+export function useEditionMetamagic(editionCode) {
+  return useQuery({
+    queryKey: ['editions', editionCode, 'metamagic'],
+    queryFn: () => getJson(`/api/editions/${editionCode}/metamagic`),
+    staleTime: ONE_HOUR,
+    enabled: Boolean(editionCode),
+  })
+}
+
+export function useEditionItems(editionCode, category = null) {
+  return useQuery({
+    queryKey: ['editions', editionCode, 'items', category ?? 'all'],
+    queryFn: () => {
+      const qs = category ? `?category=${encodeURIComponent(category)}` : ''
+      return getJson(`/api/editions/${editionCode}/items${qs}`)
+    },
+    staleTime: ONE_HOUR,
+    enabled: Boolean(editionCode),
+  })
+}
+
+export function useEditionCurrency(editionCode) {
+  return useQuery({
+    queryKey: ['editions', editionCode, 'currency'],
+    queryFn: () => getJson(`/api/editions/${editionCode}/currency`),
+    staleTime: ONE_HOUR,
+    enabled: Boolean(editionCode),
+  })
+}
+
+export function useEditionSpells(editionCode, classCode = null, level = null) {
+  return useQuery({
+    queryKey: ['editions', editionCode, 'spells', classCode ?? 'all', level ?? 'all'],
+    queryFn: () => {
+      const params = new URLSearchParams()
+      if (classCode) params.set('class_code', classCode)
+      if (level !== null && level !== undefined) params.set('level', String(level))
+      const qs = params.toString()
+      return getJson(`/api/editions/${editionCode}/spells${qs ? `?${qs}` : ''}`)
+    },
+    staleTime: ONE_HOUR,
+    enabled: Boolean(editionCode),
+  })
+}

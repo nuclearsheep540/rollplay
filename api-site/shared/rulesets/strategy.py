@@ -15,11 +15,12 @@ without spinning up a Character.
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from typing import TYPE_CHECKING
+from typing import Optional, TYPE_CHECKING
 
 
 if TYPE_CHECKING:
     from modules.characters.domain.character_aggregate import CharacterAggregate
+    from shared.rulesets.models import FeatDefinition, PactSlot
 
 
 class RulesetStrategy(ABC):
@@ -39,6 +40,10 @@ class RulesetStrategy(ABC):
     @abstractmethod
     def proficiency_bonus(self, level: int) -> int:
         """Proficiency bonus at a given character level (level 1 → +2, level 20 → +6)."""
+
+    @abstractmethod
+    def ability_modifier(self, score: int) -> int:
+        """Ability modifier for a score (``floor((score - 10) / 2)``)."""
 
     @abstractmethod
     def asi_levels_for_class(self, class_code: str) -> list[int]:
@@ -67,3 +72,74 @@ class RulesetStrategy(ABC):
     @abstractmethod
     def compute_initiative(self, character: "CharacterAggregate") -> int:
         """Initiative modifier (DEX mod by default; feats can override)."""
+
+    @abstractmethod
+    def is_feat_available(self, character: "CharacterAggregate", feat: "FeatDefinition") -> bool:
+        """Whether the character meets a feat's prerequisites.
+
+        Used for point-of-choice *guidance*, never to hide or block a choice
+        (see core/product-principles.md §3.0). Prerequisites we cannot yet
+        evaluate — e.g. ``spellcasting`` or ``class_feature``, whose backing data
+        lands in later PRs — default to available; we err toward showing.
+        """
+
+    # ------------------------------------------------------------------ spellcasting
+
+    @abstractmethod
+    def spellcasting_ability(self, class_code: str) -> Optional[str]:
+        """The ability code a class casts with (Int/Wis/Cha), or None for non-casters.
+
+        Not derivable from ``primary_ability`` — half-casters (Paladin/Ranger) list a
+        physical ability first but cast on a mental one.
+        """
+
+    @abstractmethod
+    def compute_spell_slots(self, character: "CharacterAggregate") -> dict[int, int]:
+        """Leveled spell slots ``{spell_level: count}`` for the character's primary
+        spellcasting class. Empty for non-casters and for pure pact (Warlock) casters."""
+
+    @abstractmethod
+    def compute_pact_slots(self, character: "CharacterAggregate") -> Optional["PactSlot"]:
+        """Warlock Pact Magic slots (count + slot level), or ``None``."""
+
+    @abstractmethod
+    def compute_spell_save_dc(self, character: "CharacterAggregate", ability_code: str) -> int:
+        """Spell save DC = 8 + proficiency bonus + the given ability's modifier."""
+
+    @abstractmethod
+    def compute_spell_attack_bonus(self, character: "CharacterAggregate", ability_code: str) -> int:
+        """Spell attack bonus = proficiency bonus + the given ability's modifier."""
+
+    # ------------------------------------------------------------------ resources / AC
+
+    @abstractmethod
+    def compute_resource_pools(self, character: "CharacterAggregate") -> dict[str, int]:
+        """Map of ``pool_code -> max uses`` for the character's classes (rage, sorcery points,
+        channel divinity, …). Empty for classes with no pools."""
+
+    @abstractmethod
+    def resource_recharge(self, pool_code: str) -> str:
+        """When a pool refills — ``"short_rest"`` or ``"long_rest"``."""
+
+    @abstractmethod
+    def list_ac_methods(self, character: "CharacterAggregate") -> list[dict]:
+        """AC computation options available to the character, each ``{code, label, ac}``.
+
+        Unarmored variants only until equipped armor (Phase J) adds armor-based methods.
+        """
+
+    # ------------------------------------------------------------------ HP / eligibility
+
+    @abstractmethod
+    def compute_hp_max(self, character: "CharacterAggregate") -> int:
+        """Rules-suggested max HP: max hit die at the starting class's first level, average die
+        each level after, + CON modifier per level."""
+
+    @abstractmethod
+    def can_pick_subclass(self, character: "CharacterAggregate", class_code: str) -> bool:
+        """Whether the character's level in ``class_code`` has reached its subclass level."""
+
+    @abstractmethod
+    def can_add_class(self, character: "CharacterAggregate", class_code: str) -> bool:
+        """Multiclass ability prereq (SRD): 13+ in a primary ability of the new class and of each
+        existing class. Guidance only — never blocks (core/product-principles.md §3.0)."""

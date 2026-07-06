@@ -8,6 +8,7 @@
 import { THEME } from '@/app/styles/colorTheme'
 
 import ExpandableTile from './ExpandableTile'
+import FeatureChoicePicker from './FeatureChoicePicker'
 
 /**
  * One species tile, wrapping ``ExpandableTile`` with species info +
@@ -86,6 +87,10 @@ export default function SpeciesTile({
   mode,
   extraLanguages = [],
   onExtraLanguageChange,
+  editionCode,
+  subChoices = {},
+  onSubChoiceChange,
+  alreadyOwnedSkills = [],
   onExpand,
   onCollapse,
   onSelect,
@@ -116,6 +121,22 @@ export default function SpeciesTile({
             languages={extraLanguages}
             onChange={onExtraLanguageChange}
           />
+        </div>
+      )}
+
+      {mode === 'selected' && (species.sub_choices?.length ?? 0) > 0 && (
+        <div className="pt-2 border-t space-y-3" style={{ borderColor: THEME.borderSubtle }}>
+          {species.sub_choices.map((choice) => (
+            <FeatureChoicePicker
+              key={choice.code}
+              choice={choice}
+              editionCode={editionCode}
+              value={subChoices[choice.code] ?? []}
+              onChange={(next) => onSubChoiceChange?.(choice.code, next)}
+              alreadyOwnedSkills={alreadyOwnedSkills}
+              contextLabel={`${species.name} trait`}
+            />
+          ))}
         </div>
       )}
     </ExpandableTile>

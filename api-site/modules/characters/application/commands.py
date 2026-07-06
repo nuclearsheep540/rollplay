@@ -27,6 +27,66 @@ from shared.rulesets.registry import RulesetRegistry
 
 
 # --------------------------------------------------------------------------- #
+# Skill projection
+# --------------------------------------------------------------------------- #
+
+
+def rebuild_character_skills(character: CharacterAggregate, registry: RulesetRegistry) -> None:
+    """Recompute ``character.skills`` as the deduped union of EVERY skill-granting choice the
+    character has made — the single source of truth for "what skills does this character have".
+
+    Sources, in precedence order (first writer of a code wins; a duplicate collapses, because
+    D&D proficiency is binary — there is no stacked/"level 2" skill):
+      • each class's level-1 picks          → ClassEntry.chosen_skills            (source=CLASS)
+      • each class's feature skill choices  → ClassEntry.sub_choices (skill_proficiency type)
+      • species skill sub-choices           → species_sub_choices (skill_proficiency type) (SPECIES)
+      • the background's fixed grants        → background_code → background.skill_proficiencies (BACKGROUND)
+
+    Called once at the end of every draft-step save and level-up, so the projection is always a
+    pure function of the stored choices — nothing writes ``character.skills`` directly.
+    """
+    edition = character.edition_code
+    result: dict[str, SkillProficiency] = {}
+
+    def add(code: str, source: str) -> None:
+        if code and code not in result:
+            result[code] = SkillProficiency(skill_code=code, source=source)
+
+    for entry in character.class_entries:
+        for code in entry.chosen_skills:
+            add(code, "CLASS")
+        cls_def = registry.get_class(edition, entry.class_code)
+        class_skill_choices = {
+            choice.code
+            for level in cls_def.features_by_level.values()
+            for feature in level.features
+            for choice in feature.choices
+            if choice.type == "skill_proficiency"
+        }
+        for choice_code, picks in entry.sub_choices.items():
+            if choice_code in class_skill_choices:
+                for code in picks:
+                    add(code, "CLASS")
+
+    if character.species_code:
+        species_def = registry.get_species(edition, character.species_code)
+        species_skill_choices = {
+            choice.code for choice in species_def.sub_choices if choice.type == "skill_proficiency"
+        }
+        for choice_code, picks in character.species_sub_choices.items():
+            if choice_code in species_skill_choices:
+                for code in picks:
+                    add(code, "SPECIES")
+
+    if character.background_code:
+        bg = registry.get_background(edition, character.background_code)
+        for code in bg.skill_proficiencies:
+            add(code, "BACKGROUND")
+
+    character.skills = list(result.values())
+
+
+# --------------------------------------------------------------------------- #
 # Draft lifecycle
 # --------------------------------------------------------------------------- #
 
@@ -102,11 +162,16 @@ class UpdateCharacterDraft:
             "background": self._apply_background,
             "ability_scores": self._apply_ability_scores,
             "hp_ac": self._apply_hp_ac,
+            "spells": self._apply_spells,
+            "advancement": self._apply_advancement,
             "rename": self._apply_rename,
         }.get(step)
         if handler is None:
             raise ValueError(f"Unknown draft step '{step}'")
         handler(character, edition_code, payload)
+        # Skills are a projection of the choice records — recompute the union after every step so
+        # character.skills always reflects the latest class/species/background/feature choices.
+        rebuild_character_skills(character, self.registry)
         # ``rename`` is orthogonal to wizard progress — the user can rename
         # at any point without resetting the resumed-step pointer.
         if step != "rename":
@@ -123,10 +188,17 @@ class UpdateCharacterDraft:
         character.species_code = species.code
         chosen = list(payload.get("chosen_languages", []))
         languages = list(species.default_languages) + chosen
-        # Speed/size/languages flow straight from species definition.
-        character.apply_species_traits(
-            speed=species.speed, size=species.size, languages=languages
-        )
+        sub_choices = dict(payload.get("sub_choices", {}))
+        # Size defaults to the species' size, but Human/Tiefling offer a Medium/Small
+        # pick via the `size` sub-choice (A.4) — apply it when present.
+        size = species.size
+        size_pick = sub_choices.get("size")
+        if size_pick:
+            size = size_pick[0].capitalize()
+        character.apply_species_traits(speed=species.speed, size=size, languages=languages)
+        # Store sub-choice picks faithfully — the UI offers only valid options; per §3.0
+        # we don't hard-block here.
+        character.species_sub_choices = sub_choices
 
     # ------------------------------------------------------------ class
 
@@ -135,7 +207,6 @@ class UpdateCharacterDraft:
         if not picks:
             raise ValueError("class step needs at least one class")
         new_entries: List[ClassEntry] = []
-        new_skills: List[SkillProficiency] = []
         save_codes: set = set()
         total_level = 0
         seen: set = set()
@@ -144,12 +215,6 @@ class UpdateCharacterDraft:
             if class_def.code in seen:
                 raise ValueError(f"Duplicate class '{class_def.code}'")
             seen.add(class_def.code)
-            new_entries.append(ClassEntry(
-                class_code=class_def.code,
-                level=int(pick["level"]),
-                is_primary=bool(pick.get("is_primary", i == 0)),
-            ))
-            total_level += int(pick["level"])
             # Skill picks — must be drawn from class's offered list and count must match.
             chosen_skills = list(pick.get("chosen_skills", []))
             allowed = set(class_def.skill_choices.source)
@@ -165,8 +230,14 @@ class UpdateCharacterDraft:
                     f"Class '{class_def.code}' requires choosing "
                     f"{class_def.skill_choices.count} skills, got {len(chosen_skills)}"
                 )
-            for sc in chosen_skills:
-                new_skills.append(SkillProficiency(skill_code=sc, source="CLASS"))
+            new_entries.append(ClassEntry(
+                class_code=class_def.code,
+                level=int(pick["level"]),
+                is_primary=bool(pick.get("is_primary", i == 0)),
+                sub_choices=dict(pick.get("sub_choices", {})),
+                chosen_skills=chosen_skills,  # the class's own skill picks live on the entry
+            ))
+            total_level += int(pick["level"])
             # Save proficiencies — only the primary class grants them (5.5e rule).
             if i == 0:
                 save_codes.update(class_def.saving_throw_proficiencies)
@@ -174,11 +245,8 @@ class UpdateCharacterDraft:
             raise ValueError(f"Total class levels {total_level} exceeds 20")
         character.class_entries = new_entries
         character.level = total_level
-        # Replace any existing CLASS-source skills with the new picks; keep
-        # skills from other sources untouched.
-        non_class_skills = [s for s in character.skills if s.source != "CLASS"]
-        character.skills = non_class_skills + new_skills
         character.set_save_proficiencies(save_codes)
+        # character.skills is rebuilt from all choice records by the caller (rebuild_character_skills).
 
     # ------------------------------------------------------------ background
 
@@ -207,19 +275,8 @@ class UpdateCharacterDraft:
             ab: int(delta) for ab, delta in increases.items()
         }
 
-        # Replace BACKGROUND-source skills with the background's two grants.
-        # If the player already has a class/feat/species proficiency in one of
-        # the background's skills, skip the duplicate — the unique constraint
-        # would reject it and 5.5e expects the player to swap to a different
-        # skill in the UI before this row is written.
-        non_bg = [s for s in character.skills if s.source != "BACKGROUND"]
-        already_proficient = {s.skill_code for s in non_bg}
-        bg_skills = [
-            SkillProficiency(skill_code=sc, source="BACKGROUND")
-            for sc in bg.skill_proficiencies
-            if sc not in already_proficient
-        ]
-        character.skills = non_bg + bg_skills
+        # Background skills are deterministic from background_code; rebuild_character_skills
+        # (called by the caller) folds bg.skill_proficiencies into the union and dedups.
 
         # Replace BACKGROUND_ORIGIN feats with the background's origin feat.
         character.feats = [f for f in character.feats if f.source != "BACKGROUND_ORIGIN"]
@@ -250,6 +307,104 @@ class UpdateCharacterDraft:
         character.hp_max = int(payload["hp_max"])
         character.hp_current = character.hp_max
         character.ac = int(payload["ac"])
+
+    # ------------------------------------------------------------ spells
+
+    def _apply_spells(self, character, edition_code, payload):
+        """Replace the character's class-sourced spell picks with the player's selections.
+
+        Per class the payload carries a flat list of spell codes (cantrips + leveled); we
+        resolve each spell's level via the registry, classify cantrips as ``class_known`` and
+        leveled spells as ``class_prepared``, and attribute them to the class + its casting
+        ability. Counts are NOT enforced — the wizard surfaces class limits as guidance
+        (facilitate, don't enforce). Always-prepared (subclass) and species-granted spells are
+        owned by other steps; this one manages only the class picks.
+        """
+        ruleset = self.registry.get_ruleset(edition_code)
+        character_classes = {e.class_code for e in character.class_entries}
+        # Resolve + validate ALL picks before mutating, so an unknown class/spell code can't
+        # leave the character with class spells cleared-but-not-replaced (validate-before-mutate).
+        resolved = []  # (spell_code, level, source, class_code, casting_ability)
+        for sel in payload.get("selections", []):
+            class_code = sel["class_code"]
+            if class_code not in character_classes:
+                raise ValueError(
+                    f"Spell selection references class '{class_code}' not on this character"
+                )
+            casting_ability = ruleset.spellcasting_ability(class_code)
+            for spell_code in sel.get("spell_codes", []):
+                spell = self.registry.get_spell(edition_code, spell_code)  # raises on unknown code
+                source = "class_known" if spell.level == 0 else "class_prepared"
+                resolved.append((spell.code, spell.level, source, class_code, casting_ability))
+        # All inputs valid — now replace the class-sourced spells (other sources untouched).
+        character.clear_spells(sources={"class_known", "class_prepared"})
+        for spell_code, level, source, class_code, casting_ability in resolved:
+            character.learn_spell(
+                spell_code, level, source, granted_by=class_code, casting_ability=casting_ability,
+            )
+
+    # ------------------------------------------------------------ advancement (E.2)
+
+    def _apply_advancement(self, character, edition_code, payload):
+        """Per-level choices for a character created above level 1: subclasses (+ their always-
+        prepared spells), feats taken in place of an ASI, and L2+ feature choices. L1 feature
+        choices stay on the class step; ability bumps are entered directly on the ability step
+        (no cumulative ASI math here). Replace-on-save throughout; validate before mutating.
+        """
+        ruleset = self.registry.get_ruleset(edition_code)
+        char_classes = {e.class_code: e for e in character.class_entries}
+
+        # Validate everything first (validate-before-mutate).
+        resolved_subs = []  # (class_code, SubclassDefinition, entry)
+        for pick in payload.get("subclasses", []):
+            entry = char_classes.get(pick["class_code"])
+            if entry is None:
+                raise ValueError(
+                    f"Subclass pick references class '{pick['class_code']}' not on this character"
+                )
+            cls_def = self.registry.get_class(edition_code, pick["class_code"])
+            sub = next((s for s in cls_def.subclasses if s.code == pick["subclass_code"]), None)
+            if sub is None:
+                raise ValueError(
+                    f"Class '{pick['class_code']}' has no subclass '{pick['subclass_code']}'"
+                )
+            resolved_subs.append((pick["class_code"], sub, entry))
+        for fc in payload.get("feats", []):
+            self.registry.get_feat(edition_code, fc["feat_code"])
+
+        # Subclasses (replace) + their always-prepared spells (replace that spell source).
+        character.subclasses = []
+        character.clear_spells(sources={"always_prepared"})
+        for class_code, sub, entry in resolved_subs:
+            character.pick_subclass(class_code, sub.code)
+            casting_ability = ruleset.spellcasting_ability(class_code)
+            for lvl_str, codes in sub.always_prepared_spells_by_level.items():
+                if int(lvl_str) <= entry.level:
+                    for code in codes:
+                        spell = self.registry.get_spell(edition_code, code)
+                        character.learn_spell(
+                            spell.code, spell.level, "always_prepared",
+                            granted_by=class_code, casting_ability=casting_ability,
+                        )
+
+        # Feats taken in place of an ASI (replace ASI-source feats).
+        character.feats = [f for f in character.feats if f.source != "ASI"]
+        for fc in payload.get("feats", []):
+            character.take_feat(fc["feat_code"], source="ASI", at_level=int(fc["level"]))
+
+        # L2+ feature choices → merge onto the class entry's sub_choices (preserving L1 picks and
+        # each entry's chosen_skills). skill_proficiency-type choices (e.g. Primal Knowledge) are
+        # materialised into character.skills by rebuild_character_skills — no special-casing here.
+        fc_by_class = payload.get("feature_choices", {})
+        if fc_by_class:
+            character.class_entries = [
+                ClassEntry(
+                    e.class_code, e.level, e.is_primary,
+                    {**e.sub_choices, **{k: list(v) for k, v in fc_by_class[e.class_code].items()}},
+                    e.chosen_skills,
+                ) if e.class_code in fc_by_class else e
+                for e in character.class_entries
+            ]
 
     # ------------------------------------------------------------ rename
 
@@ -427,6 +582,19 @@ class UpdateRuntimeState:
                 character.mark_dead()
         if "ac" in updates and updates["ac"] is not None:
             character.ac = int(updates["ac"])
+        if "exhaustion_level" in updates and updates["exhaustion_level"] is not None:
+            character.set_exhaustion(int(updates["exhaustion_level"]))
+        if "resource_usage" in updates and updates["resource_usage"] is not None:
+            # Whole-list replacement so the sheet can edit spent counts atomically.
+            character.resource_usage = []
+            for item in updates["resource_usage"]:
+                character.set_resource_usage(item["pool_code"], int(item["current_value"]))
+        if "currency" in updates and updates["currency"] is not None:
+            # Whole-map replacement (J.2). No enforcement — any int, including negative.
+            character.replace_currency(updates["currency"])
+        if "inventory" in updates and updates["inventory"] is not None:
+            # Whole-list replacement (J.3).
+            character.replace_inventory(updates["inventory"])
 
         self.repository.save(character)
         return character
@@ -455,6 +623,7 @@ class LevelUpCharacter:
         asi_choice: Optional[Dict[str, Any]] = None,
         feat_choice: Optional[Dict[str, Any]] = None,
         skill_choices: Optional[List[str]] = None,
+        subclass_choice: Optional[Dict[str, Any]] = None,
     ) -> CharacterAggregate:
         character = self.repository.get_by_id(character_id)
         if character is None:
@@ -526,7 +695,7 @@ class LevelUpCharacter:
                 raise ValueError("ASI level requires asi_choice or feat_choice")
             if asi_choice:
                 increases = {k: int(v) for k, v in asi_choice["increases"].items()}
-                character.apply_asi(increases)
+                character.apply_asi(increases, ruleset=ruleset)
                 self.repository.append_choice_log(
                     character_id=character.id,
                     level=character.level,
@@ -547,10 +716,17 @@ class LevelUpCharacter:
                     created_at=datetime.utcnow(),
                 )
 
-        # Skill picks granted at this level (rare — class-feature-driven, e.g. Barbarian's Primal Knowledge at L3)
+        # Skill picks granted at this level (rare — class-feature-driven, e.g. Barbarian's Primal
+        # Knowledge at L3). Recorded on the leveled class entry's chosen_skills so the skill
+        # projection folds them into the union; a duplicate collapses (no stacked proficiency).
         if skill_choices:
-            for sc in skill_choices:
-                character.add_skill_proficiency(sc, source="CLASS")
+            character.class_entries = [
+                ClassEntry(
+                    e.class_code, e.level, e.is_primary, e.sub_choices,
+                    list(dict.fromkeys([*e.chosen_skills, *skill_choices])),
+                ) if e.class_code == class_code else e
+                for e in character.class_entries
+            ]
             self.repository.append_choice_log(
                 character_id=character.id,
                 level=character.level,
@@ -559,5 +735,38 @@ class LevelUpCharacter:
                 created_at=datetime.utcnow(),
             )
 
+        # Subclass unlocked at this level (F.1) — records the pick + grants its always-prepared
+        # spells up to the new class level. Guidance about the canonical level is on the client.
+        if subclass_choice:
+            sc_class = subclass_choice["class_code"]
+            sc_entry = next((e for e in character.class_entries if e.class_code == sc_class), None)
+            if sc_entry is None:
+                raise ValueError(f"Subclass pick references class '{sc_class}' not on this character")
+            sc_def = self.registry.get_class(edition_code, sc_class)
+            sub = next((s for s in sc_def.subclasses if s.code == subclass_choice["subclass_code"]), None)
+            if sub is None:
+                raise ValueError(
+                    f"Class '{sc_class}' has no subclass '{subclass_choice['subclass_code']}'"
+                )
+            character.pick_subclass(sc_class, sub.code)
+            casting_ability = ruleset.spellcasting_ability(sc_class)
+            for lvl_str, codes in sub.always_prepared_spells_by_level.items():
+                if int(lvl_str) <= sc_entry.level:
+                    for code in codes:
+                        spell = self.registry.get_spell(edition_code, code)
+                        character.learn_spell(
+                            spell.code, spell.level, "always_prepared",
+                            granted_by=sc_class, casting_ability=casting_ability,
+                        )
+            self.repository.append_choice_log(
+                character_id=character.id,
+                level=character.level,
+                choice_type="SUBCLASS",
+                choice_data={"class_code": sc_class, "subclass_code": sub.code},
+                created_at=datetime.utcnow(),
+            )
+
+        # Reproject skills from the (possibly updated) choice records before persisting.
+        rebuild_character_skills(character, self.registry)
         self.repository.save(character)
         return character

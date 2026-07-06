@@ -302,6 +302,9 @@ export default function GameContent() {
 
   // Level-up modal open state — triggered from the XP CTA inside CharacterSheet.
   const [levelUpModalOpen, setLevelUpModalOpen] = useState(false);
+  // Roll-modal open-state lives here (not in DiceActionPanel) so both the floating prompt and the
+  // logs-drawer "Roll dice" button open the same modal.
+  const [isDiceModalOpen, setIsDiceModalOpen] = useState(false);
 
   // Hero image via AssetDownloadManager — cache hit if user came from dashboard
   const heroAsset = campaignMeta?.heroImageAsset;
@@ -2067,6 +2070,13 @@ export default function GameContent() {
             playerSeatMap={playerSeatMap}
             displayNameMap={displayNameMap}
             characterNameMap={characterNameMap}
+            // Unprompted roll trigger for RP / fun — opens the SAME roll modal as the floating
+            // prompt. Available to seated players + the DM (same audience as the dice panel).
+            onRollClick={
+              (gameSeats.some(seat => seat.userId === thisUserId) || isDM)
+                ? () => setIsDiceModalOpen(true)
+                : undefined
+            }
           />
         )}
       </Drawer>}
@@ -2291,6 +2301,8 @@ export default function GameContent() {
             uiScale={uiScale}
             activePrompts={activePrompts}
             isDicePromptActive={isDicePromptActive}
+            isDiceModalOpen={isDiceModalOpen}
+            setIsDiceModalOpen={setIsDiceModalOpen}
           />
         );
       })()}

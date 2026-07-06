@@ -149,6 +149,10 @@ export default function CharacterSheet({ character }) {
         </Section>
       )}
 
+      <ChoicesSection character={c} />
+      <SpellcastingSection character={c} />
+      <ResourcesSection pools={d.resource_pools} />
+
       {c.languages.length > 0 && (
         <Section title="Languages">
           <p className="text-sm" style={{ color: THEME.textOnDark }}>
@@ -185,5 +189,104 @@ function Stat({ label, value }) {
       <div className="text-xs uppercase" style={{ color: THEME.textSecondary }}>{label}</div>
       <div className="text-lg font-bold" style={{ color: THEME.textOnDark }}>{value}</div>
     </div>
+  )
+}
+
+// --- PR 7 (G.1) / deferral #7 sections — all derived from the response body --- //
+
+/** Species + class feature picks, code→label via titleize (e.g. "Fighting Style: Defense"). */
+function ChoicesSection({ character }) {
+  const rows = [
+    ...Object.entries(character.species_sub_choices || {}),
+    ...(character.class_entries || []).flatMap((e) => Object.entries(e.sub_choices || {})),
+  ].filter(([, picks]) => Array.isArray(picks) && picks.length > 0)
+  if (rows.length === 0) return null
+  return (
+    <Section title="Choices">
+      <ul className="text-sm space-y-1">
+        {rows.map(([code, picks]) => (
+          <li key={code} className="flex justify-between gap-3" style={{ color: THEME.textOnDark }}>
+            <span style={{ color: THEME.textSecondary }}>{titleize(code)}</span>
+            <span className="text-right">{picks.map(titleize).join(', ')}</span>
+          </li>
+        ))}
+      </ul>
+    </Section>
+  )
+}
+
+/** Spells (cantrips + leveled), spell slots, pact slots, save DC / attack — for casters. */
+function SpellcastingSection({ character }) {
+  const c = character
+  const d = c.derived || {}
+  const spells = c.spells || []
+  const slots = d.spell_slots || {}
+  const hasSlots = Object.keys(slots).length > 0
+  if (spells.length === 0 && !hasSlots && !d.pact_slots) return null
+  const cantrips = spells.filter((s) => s.spell_level === 0)
+  const leveled = spells.filter((s) => s.spell_level > 0)
+  const dcs = Object.entries(d.spell_save_dc_by_ability || {})
+  return (
+    <Section title="Spellcasting">
+      {cantrips.length > 0 && (
+        <SpellLine label="Cantrips" names={cantrips.map((s) => titleize(s.spell_code))} />
+      )}
+      {leveled.length > 0 && (
+        <SpellLine label="Prepared / known" names={leveled.map((s) => titleize(s.spell_code))} />
+      )}
+      {hasSlots && (
+        <div className="text-sm flex flex-wrap gap-x-3" style={{ color: THEME.textOnDark }}>
+          <span className="text-xs uppercase" style={{ color: THEME.textSecondary }}>Slots</span>
+          {Object.entries(slots).map(([lvl, n]) => (
+            <span key={lvl}>L{lvl}: {n}</span>
+          ))}
+        </div>
+      )}
+      {d.pact_slots && (
+        <div className="text-sm" style={{ color: THEME.textOnDark }}>
+          <span className="text-xs uppercase mr-2" style={{ color: THEME.textSecondary }}>Pact Magic</span>
+          {d.pact_slots.count} × L{d.pact_slots.slot_level}
+        </div>
+      )}
+      {dcs.map(([ability, dc]) => (
+        <div key={ability} className="text-sm" style={{ color: THEME.textOnDark }}>
+          <span className="text-xs uppercase mr-2" style={{ color: THEME.textSecondary }}>
+            {ability.slice(0, 3)}
+          </span>
+          Save DC {dc} · Attack {modSign(d.spell_attack_bonus_by_ability?.[ability] ?? 0)}
+        </div>
+      ))}
+    </Section>
+  )
+}
+
+function SpellLine({ label, names }) {
+  return (
+    <div className="text-sm">
+      <span className="text-xs uppercase mr-2" style={{ color: THEME.textSecondary }}>{label}</span>
+      <span style={{ color: THEME.textOnDark }}>{names.join(', ')}</span>
+    </div>
+  )
+}
+
+/** Resource pools — remaining/max + recharge cadence. */
+function ResourcesSection({ pools }) {
+  if (!pools || pools.length === 0) return null
+  return (
+    <Section title="Resources">
+      <ul className="text-sm space-y-1">
+        {pools.map((p) => (
+          <li key={p.pool_code} className="flex justify-between gap-3" style={{ color: THEME.textOnDark }}>
+            <span style={{ color: THEME.textSecondary }}>{titleize(p.pool_code)}</span>
+            <span>
+              {p.max_value - p.current_value}/{p.max_value}
+              <span className="ml-2 text-xs" style={{ color: THEME.textSecondary }}>
+                {p.recharge.replace(/_/g, ' ')}
+              </span>
+            </span>
+          </li>
+        ))}
+      </ul>
+    </Section>
   )
 }
