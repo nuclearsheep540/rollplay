@@ -14,4 +14,5 @@ httpx==0.27.0 # Async HTTP client for api-game calls
 pytest==8.0.0 # Testing framework
 sentry-sdk[fastapi]==1.45.1
 boto3~=1.35.0  # AWS S3 SDK for asset storage
+cryptography~=43.0  # RSA signing for CloudFront signed URLs
 mailtrap==2.4.0

@@ -1,8 +1,9 @@
 # Copyright (C) 2025 Matthew Davey
 # SPDX-License-Identifier: GPL-3.0-or-later
 
+import os
 from enum import Enum
-from typing import ClassVar
+from typing import ClassVar, Optional
 
 from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -58,6 +59,18 @@ class Settings(BaseSettings):
     AWS_REGION: str = Field(default="eu-west-1", description="AWS region for S3 bucket")
     S3_BUCKET_NAME: str = Field(..., description="S3 bucket name for asset storage")
     PRESIGNED_URL_EXPIRY: int = Field(default=3600, description="Presigned URL expiry in seconds")
+
+    # CloudFront signed-URL delivery (optional — when unset, downloads fall back to presigned S3)
+    AWS_CFD_S3_URL: Optional[str] = Field(default=None, description="CloudFront distribution domain, no scheme (e.g. d123.cloudfront.net)")
+    CFD_PEM_FILENAME: Optional[str] = Field(default=None, description="Filename of the CloudFront signing private key, mounted at ~/.ssh/<file>")
+    CFD_KEY_PAIR_ID: Optional[str] = Field(default=None, description="CloudFront public key ID (the K… value) used as Key-Pair-Id in signed URLs")
+
+    @property
+    def cfd_private_key_path(self) -> Optional[str]:
+        """Absolute path to the mounted CloudFront signing key, or None if not configured."""
+        if not self.CFD_PEM_FILENAME:
+            return None
+        return os.path.expanduser(f"~/.ssh/{self.CFD_PEM_FILENAME}")
 
     @property
     def database_url(self) -> str:
