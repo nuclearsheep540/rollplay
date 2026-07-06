@@ -14,9 +14,13 @@ export default function DiceActionPanel({
   // UPDATED PROPS for multiple prompts
   activePrompts = [],         // Array of active prompts
   isDicePromptActive = false, // Is any prompt currently active
-  isDM = false                // DM can always roll — no combat/turn guards (facilitate, don't enforce)
+  // The roll modal's open-state is lifted to GameContent so a SECOND trigger (the logs-drawer
+  // "Roll dice" button) can open the exact same modal. This panel owns the floating PROMPT surface;
+  // the modal is shared. The DM's unprompted "roll anytime" now lives in the logs button, so the
+  // floating prompt no longer has a DM always-on override — it's back to prompted/combat only.
+  isDiceModalOpen = false,
+  setIsDiceModalOpen = () => {},
 }) {
-  const [isDiceModalOpen, setIsDiceModalOpen] = useState(false);
   const [selectedDice, setSelectedDice] = useState('D20'); // Keep for backwards compatibility
   const [rollBonus, setRollBonus] = useState('');
   
@@ -59,14 +63,15 @@ export default function DiceActionPanel({
   const myPrompts = activePrompts.filter(prompt => prompt.player === thisUserId);
   const isPromptedToRoll = myPrompts.length > 0;
   
-  // Show panel if: prompted to roll OR in combat OR you're the DM (the DM can always roll).
-  const shouldShowDicePanel = isPromptedToRoll || combatActive || isDM;
+  // The floating prompt shows only when there's something to prompt: an active roll request OR
+  // combat. Unprompted "roll anytime" is served by the logs-drawer button, not this panel.
+  const shouldShowDicePanel = isPromptedToRoll || combatActive;
 
-  // Panel is active if: it's your turn OR you're prompted to roll OR you're the DM.
-  const isPanelActive = isMyTurn || isPromptedToRoll || isDM;
+  // Panel is active (highlighted) on your turn or when you're prompted.
+  const isPanelActive = isMyTurn || isPromptedToRoll;
 
-  // Button is enabled if: it's your turn OR you're prompted to roll OR you're the DM.
-  const isButtonEnabled = isMyTurn || isPromptedToRoll || isDM;
+  // Button is enabled on your turn or when you're prompted.
+  const isButtonEnabled = isMyTurn || isPromptedToRoll;
   
   // Handle dice roll click
   const handleRollDiceClick = () => {
@@ -155,16 +160,13 @@ export default function DiceActionPanel({
     }
   };
 
-  // Don't render if player shouldn't see dice panel
-  if (!shouldShowDicePanel) {
-    return null;
-  }
-
+  // NOTE: we no longer early-return when the floating prompt is hidden — the roll modal must stay
+  // mounted so it can be opened from the logs-drawer button even when there's no prompt/combat.
   return (
     <>
-      {/* Hide the floating panel/prompt while the roll modal is open — both exist to start a
-          roll, so they're redundant on screen at once; the modal is where you actually roll. */}
-      {!isDiceModalOpen && (
+      {/* Floating prompt: shown only when prompted/in combat, and hidden while the modal is open
+          (both start a roll — redundant on screen at once; the modal is where you actually roll). */}
+      {shouldShowDicePanel && !isDiceModalOpen && (
       <div
         className={`dice-action-panel transition-[transform,opacity] duration-300 fixed bottom-[calc(24px*var(--ui-scale))] left-1/2 z-[100] ${
           isPanelActive

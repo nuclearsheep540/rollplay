@@ -13,6 +13,31 @@ import { useEditionFeats } from '../../hooks/useReferenceData'
 import FeatureChoicePicker from './FeatureChoicePicker'
 import StepFooter from './StepFooter'
 
+const titleizeWords = (s) =>
+  (s || '').split(/[_\s]+/).filter(Boolean).map((w) => w.charAt(0).toUpperCase() + w.slice(1)).join(' ')
+
+// Human-readable text for a single structured feat prerequisite (from FeatPrerequisite).
+function formatPrereq(p) {
+  switch (p.type) {
+    case 'level': return `Level ${p.value}+`
+    case 'ability': return `${(p.abilities || []).map(titleizeWords).join(' and ')} ${p.value}+`
+    case 'ability_any': return `${(p.abilities || []).map(titleizeWords).join(' or ')} ${p.value}+`
+    case 'class': return `${titleizeWords(p.class_code)} class`
+    case 'class_feature': return `${titleizeWords(p.feature)} feature`
+    case 'spellcasting': return 'Spellcasting feature'
+    case 'invocation': return `${titleizeWords(p.feature)} invocation`
+    default: return p.type
+  }
+}
+
+// "Level 4+, Strength or Dexterity 13+" — or null when a feat has no prerequisites. Point-of-choice
+// guidance (§3.0): the requirement is shown so the player can allocate ability scores accordingly on
+// the later step, but nothing is gated (scores aren't even chosen yet at this step).
+function formatPrerequisites(prereqs) {
+  if (!prereqs || prereqs.length === 0) return null
+  return prereqs.map(formatPrereq).join(', ')
+}
+
 /**
  * Advancement step (E.2) — only shown for characters created above level 1. Walks each class's
  * levels and collects the choices they unlock: subclass (at its subclass level), a feat in place
@@ -151,6 +176,11 @@ function ClassAdvancement({
   }, [classDef, entry.level])
   // Feats are only needed if this class has ASI levels reached.
   const { data: generalFeats } = useEditionFeats(asiLevels.length ? editionCode : null, 'general')
+  const featByCode = useMemo(() => {
+    const m = new Map()
+    for (const f of generalFeats ?? []) m.set(f.code, f)
+    return m
+  }, [generalFeats])
 
   if (!classDef) return null
 
@@ -182,28 +212,48 @@ function ClassAdvancement({
         </div>
       )}
 
-      {asiLevels.map((lvl) => (
-        <div key={lvl} className="space-y-1">
-          <div className="text-xs uppercase" style={{ color: THEME.textSecondary }}>
-            Level {lvl} — Ability Score Improvement or feat
+      {asiLevels.map((lvl) => {
+        const selected = featByCode.get(feats[String(lvl)])
+        const prereqText = selected ? formatPrerequisites(selected.prerequisites) : null
+        return (
+          <div key={lvl} className="space-y-1">
+            <div className="text-xs uppercase" style={{ color: THEME.textSecondary }}>
+              Level {lvl} — Ability Score Improvement or feat
+            </div>
+            <select
+              value={feats[String(lvl)] ?? ''}
+              onChange={(e) => onFeat(lvl, e.target.value)}
+              className="w-full px-3 py-2 border rounded-sm text-sm"
+              style={{ backgroundColor: THEME.bgSecondary, borderColor: THEME.borderDefault, color: THEME.textOnDark }}
+            >
+              <option value="">Select one…</option>
+              {(generalFeats ?? []).map((f) => (
+                <option key={f.code} value={f.code}>{f.name}</option>
+              ))}
+            </select>
+            {selected ? (
+              <div className="text-xs space-y-1" style={{ color: THEME.textSecondary }}>
+                {prereqText && (
+                  <div>
+                    <span style={{ color: THEME.textOnDark }}>Prerequisite:</span> {prereqText}
+                  </div>
+                )}
+                {selected.description && (
+                  <p className="whitespace-pre-line">{selected.description}</p>
+                )}
+                {selected.code === 'ability_score_improvement' && (
+                  <p>Set the boosts on the Ability Scores step.</p>
+                )}
+              </div>
+            ) : (
+              <p className="text-xs" style={{ color: THEME.textSecondary }}>
+                Ability Score Improvement is a feat here — pick it to take the ASI, then set the
+                boosts on the Ability Scores step.
+              </p>
+            )}
           </div>
-          <select
-            value={feats[String(lvl)] ?? ''}
-            onChange={(e) => onFeat(lvl, e.target.value)}
-            className="w-full px-3 py-2 border rounded-sm text-sm"
-            style={{ backgroundColor: THEME.bgSecondary, borderColor: THEME.borderDefault, color: THEME.textOnDark }}
-          >
-            <option value="">Select one…</option>
-            {(generalFeats ?? []).map((f) => (
-              <option key={f.code} value={f.code}>{f.name}</option>
-            ))}
-          </select>
-          <p className="text-xs" style={{ color: THEME.textSecondary }}>
-            Ability Score Improvement is a feat here — pick it to take the ASI, then set the boosts
-            on the Ability Scores step.
-          </p>
-        </div>
-      ))}
+        )
+      })}
 
       {featureChoiceList.map((choice) => {
         // Grey skills already selected elsewhere: everything selected minus THIS choice's own
