@@ -52,10 +52,14 @@ class S3Service:
         self.cf_signer: Optional[CloudFrontSigner] = self._build_cloudfront_signer()
 
     def _build_cloudfront_signer(self) -> Optional[CloudFrontSigner]:
-        """Build a CloudFrontSigner if fully configured and the key loads, else None."""
+        """Build a CloudFrontSigner. CloudFront delivery is mandatory: if this returns
+        None, generate_download_url raises rather than serving media another way."""
         key_path = self.settings.cfd_private_key_path
         if not (self.cf_domain and self.cf_key_pair_id and key_path):
-            logger.info("CloudFront signing not configured; downloads will use presigned S3 URLs.")
+            logger.error(
+                "CloudFront signing is not configured (need AWS_CFD_S3_URL, CFD_KEY_PAIR_ID, "
+                "CFD_PEM_FILENAME) — media downloads will fail until this is fixed."
+            )
             return None
         try:
             with open(key_path, "rb") as key_file:
@@ -69,7 +73,9 @@ class S3Service:
             logger.info(f"CloudFront signing enabled via {self.cf_domain} (key {self.cf_key_pair_id}).")
             return signer
         except Exception as e:
-            logger.warning(f"CloudFront key at {key_path} unavailable ({e}); falling back to presigned S3 URLs.")
+            logger.error(
+                f"CloudFront key at {key_path} could not be loaded ({e}) — media downloads will fail."
+            )
             return None
 
     def generate_upload_url(
@@ -119,36 +125,27 @@ class S3Service:
             expiry: Optional custom expiry in seconds (defaults to settings value)
 
         Returns:
-            A time-limited download URL — CloudFront-signed if configured,
-            otherwise a presigned S3 URL.
+            A time-limited CloudFront signed URL.
+
+        Raises:
+            RuntimeError: If CloudFront signing is unavailable (misconfigured or the
+                signing key failed to load). Media is served exclusively via CloudFront
+                — there is no S3 fallback.
         """
+        if not self.cf_signer:
+            raise RuntimeError(
+                f"CloudFront signing unavailable — cannot generate download URL for '{key}'. "
+                "Check AWS_CFD_S3_URL, CFD_KEY_PAIR_ID, and the key mounted at ~/.ssh/<CFD_PEM_FILENAME>."
+            )
+
         ttl = expiry or self.expiry
-
-        # Preferred path: CloudFront signed URL (private bucket via OAC).
-        if self.cf_signer:
-            expires_at = datetime.now(timezone.utc) + timedelta(seconds=ttl)
-            signed_url = self.cf_signer.generate_presigned_url(
-                f"https://{self.cf_domain}/{key}",
-                date_less_than=expires_at,
-            )
-            logger.info(f"Generated CloudFront signed URL for key: {key}")
-            return signed_url
-
-        # Fallback: presigned S3 GET (works while the bucket still allows IAM GETs).
-        try:
-            url = self.client.generate_presigned_url(
-                'get_object',
-                Params={
-                    'Bucket': self.bucket_name,
-                    'Key': key,
-                },
-                ExpiresIn=ttl
-            )
-            logger.info(f"Generated presigned S3 download URL for key: {key}")
-            return url
-        except ClientError as e:
-            logger.error(f"Failed to generate download URL: {e}")
-            raise
+        expires_at = datetime.now(timezone.utc) + timedelta(seconds=ttl)
+        signed_url = self.cf_signer.generate_presigned_url(
+            f"https://{self.cf_domain}/{key}",
+            date_less_than=expires_at,
+        )
+        logger.info(f"Generated CloudFront signed URL for key: {key}")
+        return signed_url
 
     def delete_object(self, key: str) -> None:
         """
