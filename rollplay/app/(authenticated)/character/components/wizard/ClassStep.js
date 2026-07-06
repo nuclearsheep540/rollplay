@@ -14,10 +14,9 @@ import ClassTile from './ClassTile'
 import StepFooter from './StepFooter'
 
 /**
- * Build the wizard's local state from the draft's existing class entries.
- * Skill picks come down on the draft.skills list with source='CLASS' but
- * aren't keyed by class, so we attribute them all to the primary class
- * (matches the backend's 5.5e rule — only the primary class grants picks).
+ * Build the wizard's local state from the draft's existing class entries. Each entry now carries
+ * its own ``chosen_skills`` (the authoritative record for that class's L1 skill picks), so we
+ * hydrate straight from it — character.skills is a derived projection and no longer the source.
  */
 function buildInitial(draft) {
   if (!draft.class_entries?.length) return []
@@ -25,15 +24,12 @@ function buildInitial(draft) {
     class_code: e.class_code,
     level: e.level,
     is_primary: e.is_primary || idx === 0,
-    chosen_skills:
-      idx === 0
-        ? (draft.skills || []).filter((s) => s.source === 'CLASS').map((s) => s.skill_code)
-        : [],
+    chosen_skills: e.chosen_skills || [],
     sub_choices: e.sub_choices || {},
   }))
 }
 
-export default function ClassStep({ draft, onSave, onBack, onNext }) {
+export default function ClassStep({ draft, startingLevel = 1, onSave, onBack, onNext }) {
   const { data: classes, isLoading: classesLoading } = useEditionClasses(draft.edition_code)
   const { data: skills } = useEditionSkills(draft.edition_code)
 
@@ -64,6 +60,14 @@ export default function ClassStep({ draft, onSave, onBack, onNext }) {
     return map
   }, [skills])
 
+  // Skills the character already has from a choice OTHER than the class's own L1 picks (species,
+  // background, or a class feature). The class skill checklist greys these so the same proficiency
+  // can't be taken twice. Source-agnostic: full selected set (draft.skills) minus all chosen_skills.
+  const ownedElsewhere = useMemo(() => {
+    const ownClassSkills = new Set((draft.class_entries || []).flatMap((e) => e.chosen_skills || []))
+    return (draft.skills || []).map((s) => s.skill_code).filter((code) => !ownClassSkills.has(code))
+  }, [draft.skills, draft.class_entries])
+
   const totalLevel = picks.reduce((sum, p) => sum + (p.level || 0), 0)
 
   const pickedCodes = useMemo(() => new Set(picks.map((p) => p.class_code)), [picks])
@@ -78,7 +82,9 @@ export default function ClassStep({ draft, onSave, onBack, onNext }) {
       ...curr,
       {
         class_code: classCode,
-        level: 1,
+        // Prefill the first class to the chosen starting level (single-class default);
+        // additional classes start at 1 and the player redistributes.
+        level: isPrimary ? Math.max(1, startingLevel) : 1,
         is_primary: isPrimary,
         chosen_skills: [],
         sub_choices: {},
@@ -185,11 +191,20 @@ export default function ClassStep({ draft, onSave, onBack, onNext }) {
                 isPrimary={pick.is_primary}
                 skillsByCode={skillsByCode}
                 editionCode={draft.edition_code}
+                alreadyOwnedSkills={ownedElsewhere}
                 onChange={(next) => handleChangePick(pick.class_code, next)}
                 onRemove={() => handleRemovePick(pick.class_code)}
               />
             )
           })}
+        </div>
+      )}
+
+      {totalLevel > 1 && (
+        <div className="text-xs" style={{ color: THEME.textSecondary }}>
+          Total level: <span style={{ color: THEME.textOnDark }}>{totalLevel}</span>
+          {startingLevel > 1 ? ` — targeting level ${startingLevel}` : ''}
+          {' '}· you&apos;ll make each level&apos;s choices on the Advancement step.
         </div>
       )}
 

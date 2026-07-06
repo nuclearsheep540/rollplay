@@ -90,6 +90,7 @@ export default function SpeciesTile({
   editionCode,
   subChoices = {},
   onSubChoiceChange,
+  alreadyOwnedSkills = [],
   onExpand,
   onCollapse,
   onSelect,
@@ -132,6 +133,8 @@ export default function SpeciesTile({
               editionCode={editionCode}
               value={subChoices[choice.code] ?? []}
               onChange={(next) => onSubChoiceChange?.(choice.code, next)}
+              alreadyOwnedSkills={alreadyOwnedSkills}
+              contextLabel={`${species.name} trait`}
             />
           ))}
         </div>

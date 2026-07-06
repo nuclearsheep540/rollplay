@@ -54,6 +54,8 @@ from modules.characters.repositories.edition_repository import EditionRepository
 from modules.library.dependencies.providers import get_media_asset_repository
 from modules.library.repositories.asset_repository import MediaAssetRepository
 from shared.dependencies.auth import get_current_user_id
+from modules.campaign.dependencies.providers import campaign_repository
+from modules.campaign.repositories.campaign_repository import CampaignRepository
 from shared.rulesets.registry import RulesetRegistry
 from shared.services.s3_service import S3Service, get_s3_service
 
@@ -175,8 +177,17 @@ def _to_character_response(
                 "level": e.level,
                 "is_primary": e.is_primary,
                 "sub_choices": e.sub_choices,
+                "chosen_skills": e.chosen_skills,
             }
             for e in character.class_entries
+        ],
+        subclasses=[
+            {
+                "class_code": s.class_code,
+                "subclass_code": s.subclass_code,
+                "chosen_at_level": s.chosen_at_level,
+            }
+            for s in character.subclasses
         ],
         # API exposes FINAL scores (base + origin bonus). Wizard subtracts
         # origin_ability_bonuses when it needs the editable base.
@@ -209,6 +220,11 @@ def _to_character_response(
             {"pool_code": r.pool_code, "current_value": r.current_value}
             for r in character.resource_usage
         ],
+        currency=dict(character.currency or {}),
+        inventory=[
+            {"item_code": i.item_code, "quantity": i.quantity, "notes": i.notes}
+            for i in character.inventory
+        ],
         level=character.level,
         xp=character.xp,
         hp_max=character.hp_max,
@@ -219,6 +235,7 @@ def _to_character_response(
         death_save_failures=character.death_save_failures,
         inspiration=character.inspiration,
         status_effects=list(character.status_effects),
+        exhaustion_level=character.exhaustion_level,
         is_alive=character.is_alive,
         speed=character.speed,
         size=character.size,
@@ -257,6 +274,52 @@ async def list_my_characters(
     """Every character (draft or finalised) owned by the current user."""
     characters = GetCharactersByUser(character_repo).execute(user_id)
     return [_to_character_response(c, registry, s3_service) for c in characters]
+
+
+@router.get("/party/{campaign_id}", response_model=List[CharacterResponse])
+async def get_campaign_party(
+    campaign_id: UUID,
+    user_id: UUID = Depends(get_current_user_id),
+    character_repo: CharacterRepository = Depends(get_character_repository),
+    campaign_repo: CampaignRepository = Depends(campaign_repository),
+    registry: RulesetRegistry = Depends(get_ruleset_registry),
+    s3_service: S3Service = Depends(get_s3_service),
+):
+    """DM party view (Phase H) — every character active in the campaign. Read-only. Visible to
+    the campaign's DM or any of its members."""
+    campaign = campaign_repo.get_by_id(campaign_id)
+    if campaign is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Campaign not found")
+    if not (campaign.is_dm(user_id) or campaign.is_member(user_id)):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Only the campaign's DM or a party member can view the party",
+        )
+    characters = character_repo.get_by_active_campaign(campaign_id)
+    return [_to_character_response(c, registry, s3_service) for c in characters]
+
+
+@router.get("/{character_id}/summary")
+async def character_summary(
+    character_id: UUID,
+    character_repo: CharacterRepository = Depends(get_character_repository),
+):
+    """Docker-internal snapshot for api-game's player_metadata sync (Phase I). No auth — returns
+    only the low-sensitivity fields already broadcast to session peers; follows the same
+    no-auth internal-call precedent as POST /api/campaigns/set-role."""
+    character = character_repo.get_by_id(character_id)
+    if character is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Character not found")
+    return {
+        "character_id": str(character.id),
+        "character_name": character.character_name,
+        "character_class": [e.class_code for e in character.class_entries],
+        "character_race": character.species_code,
+        "level": character.level,
+        "hp_current": character.hp_current,
+        "hp_max": character.hp_max,
+        "ac": character.ac,
+    }
 
 
 @router.get("/{character_id}", response_model=CharacterResponse)
@@ -321,6 +384,7 @@ async def update_draft(
         "ability_scores": request.ability_scores,
         "hp_ac": request.hp_ac,
         "spells": request.spells,
+        "advancement": request.advancement,
         "rename": request.rename,
     }
     payload_model = payload_map.get(request.step)
@@ -503,11 +567,13 @@ async def preview_level_up(
     # core/product-principles.md §3.0); the modal shows `other_feats` behind a "show anyway".
     qualifying_feats: list[str] = []
     other_feats: list[str] = []
+    feat_details: dict[str, str] = {}
     for feat in registry.list_feats(character.edition_code):
         if feat.category not in {"general", "fighting_style", "epic_boon"}:
             continue
         bucket = qualifying_feats if ruleset.is_feat_available(character, feat) else other_feats
         bucket.append(feat.code)
+        feat_details[feat.code] = feat.description
 
     # Point-of-choice guidance (Phase D) — surfaced, never gated.
     subclass_eligible = [
@@ -521,6 +587,19 @@ async def preview_level_up(
         if c.code not in taken
     }
 
+    # F.1: a subclass is pending for a class whose NEXT level reaches its subclass level and that
+    # has no subclass chosen yet. Offer that class's subclass options.
+    has_subclass = {s.class_code for s in character.subclasses}
+    subclass_pending: dict[str, list[str]] = {}
+    for e in character.class_entries:
+        cls = registry.get_class(character.edition_code, e.class_code)
+        if (
+            cls.subclass_level is not None
+            and e.level + 1 >= cls.subclass_level
+            and e.class_code not in has_subclass
+        ):
+            subclass_pending[e.class_code] = [s.code for s in cls.subclasses]
+
     return LevelUpPreview(
         current_level=character.level,
         target_level=min(character.level + 1, 20),
@@ -531,6 +610,8 @@ async def preview_level_up(
         other_feats=other_feats,
         subclass_eligible=subclass_eligible,
         multiclass_options=multiclass_options,
+        subclass_pending=subclass_pending,
+        feat_details=feat_details,
     )
 
 
@@ -554,6 +635,7 @@ async def apply_level_up(
             asi_choice=request.asi_choice.model_dump() if request.asi_choice else None,
             feat_choice=request.feat_choice.model_dump() if request.feat_choice else None,
             skill_choices=request.skill_choices,
+            subclass_choice=request.subclass_choice.model_dump() if request.subclass_choice else None,
         )
         return _to_character_response(character, registry, s3_service)
     except (ValueError, KeyError, PermissionError) as exc:

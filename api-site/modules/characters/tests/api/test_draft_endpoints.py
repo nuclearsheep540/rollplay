@@ -134,6 +134,237 @@ def test_spell_selection_replaces_on_resave(client, auth_as, owner):
     assert {s["spell_code"] for s in body["spells"]} == {"mage_hand"}
 
 
+def test_advancement_subclass_round_trip(client, auth_as, owner):
+    """PR 9 (B.1/E.2): a level-3 Barbarian picks a subclass; it persists on the character."""
+    draft = _create_draft(client, auth_as, owner)
+    cid = draft["id"]
+    client.patch(f"/api/characters/draft/{cid}", json={
+        "step": "class",
+        "class": {"classes": [{
+            "class_code": "barbarian", "level": 3, "is_primary": True,
+            "chosen_skills": ["athletics", "perception"],
+        }]},
+    })
+    resp = client.patch(f"/api/characters/draft/{cid}", json={
+        "step": "advancement",
+        "advancement": {"subclasses": [
+            {"class_code": "barbarian", "subclass_code": "path_of_the_berserker"},
+        ]},
+    })
+    assert resp.status_code == 200, resp.text
+    body = client.get(f"/api/characters/{cid}").json()
+    subs = {s["class_code"]: s for s in body["subclasses"]}
+    assert subs["barbarian"]["subclass_code"] == "path_of_the_berserker"
+    assert subs["barbarian"]["chosen_at_level"] == 3
+
+
+def test_advancement_subclass_grants_always_prepared_spells(client, auth_as, owner):
+    """A Cleric's Life Domain subclass auto-grants its always-prepared spells up to class level."""
+    draft = _create_draft(client, auth_as, owner)
+    cid = draft["id"]
+    client.patch(f"/api/characters/draft/{cid}", json={
+        "step": "class",
+        "class": {"classes": [{
+            "class_code": "cleric", "level": 3, "is_primary": True,
+            "chosen_skills": ["insight", "religion"],
+        }]},
+    })
+    client.patch(f"/api/characters/draft/{cid}", json={
+        "step": "advancement",
+        "advancement": {"subclasses": [
+            {"class_code": "cleric", "subclass_code": "life_domain"},
+        ]},
+    })
+    body = client.get(f"/api/characters/{cid}").json()
+    always = {s["spell_code"] for s in body["spells"] if s["source"] == "always_prepared"}
+    # Life Domain grants Aid/Bless/Cure Wounds/Lesser Restoration at level 3.
+    assert {"aid", "bless", "cure_wounds", "lesser_restoration"} <= always
+    # Higher-level Life Domain spells (L5+) are NOT granted to a level-3 cleric.
+    assert "mass_healing_word" not in always
+
+
+def test_advancement_multiclass_subclasses_round_trip(client, auth_as, owner):
+    """A Cleric 3 / Barbarian 3 multiclass picks a subclass for each — both persist independently."""
+    draft = _create_draft(client, auth_as, owner)
+    cid = draft["id"]
+    client.patch(f"/api/characters/draft/{cid}", json={
+        "step": "class",
+        "class": {"classes": [
+            {"class_code": "cleric", "level": 3, "is_primary": True,
+             "chosen_skills": ["insight", "religion"]},
+            {"class_code": "barbarian", "level": 3, "is_primary": False},
+        ]},
+    })
+    resp = client.patch(f"/api/characters/draft/{cid}", json={
+        "step": "advancement",
+        "advancement": {"subclasses": [
+            {"class_code": "cleric", "subclass_code": "life_domain"},
+            {"class_code": "barbarian", "subclass_code": "path_of_the_berserker"},
+        ]},
+    })
+    assert resp.status_code == 200, resp.text
+    body = client.get(f"/api/characters/{cid}").json()
+    subs = {s["class_code"]: s["subclass_code"] for s in body["subclasses"]}
+    assert subs == {"cleric": "life_domain", "barbarian": "path_of_the_berserker"}
+    # Only the cleric's subclass grants always-prepared spells (barbarian has none).
+    granted = {s["spell_code"] for s in body["spells"] if s["source"] == "always_prepared"}
+    assert {"aid", "bless"} <= granted
+
+
+def test_advancement_bad_subclass_rejected(client, auth_as, owner):
+    draft = _create_draft(client, auth_as, owner)
+    cid = draft["id"]
+    client.patch(f"/api/characters/draft/{cid}", json={
+        "step": "class",
+        "class": {"classes": [{
+            "class_code": "barbarian", "level": 3, "is_primary": True,
+            "chosen_skills": ["athletics", "perception"],
+        }]},
+    })
+    bad = client.patch(f"/api/characters/draft/{cid}", json={
+        "step": "advancement",
+        "advancement": {"subclasses": [
+            {"class_code": "barbarian", "subclass_code": "life_domain"},  # not a barbarian subclass
+        ]},
+    })
+    assert bad.status_code == 400, bad.text
+
+
+def _barbarian_l3(client, auth_as, owner):
+    """Helper: a level-3 Barbarian draft with Athletics + Perception picked at level 1."""
+    draft = _create_draft(client, auth_as, owner)
+    cid = draft["id"]
+    client.patch(f"/api/characters/draft/{cid}", json={
+        "step": "class",
+        "class": {"classes": [{
+            "class_code": "barbarian", "level": 3, "is_primary": True,
+            "chosen_skills": ["athletics", "perception"],
+        }]},
+    })
+    return cid
+
+
+def test_advancement_skill_feature_choice_grants_real_proficiency(client, auth_as, owner):
+    """A skill_proficiency feature choice (Barbarian Primal Knowledge at L3) is stored on the
+    class entry's sub_choices (the authoritative record) AND projected into character.skills by
+    rebuild_character_skills, so it counts on the sheet — not an inert sub_choice (the bug)."""
+    cid = _barbarian_l3(client, auth_as, owner)
+    resp = client.patch(f"/api/characters/draft/{cid}", json={
+        "step": "advancement",
+        "advancement": {"feature_choices": {
+            "barbarian": {"barbarian_primal_knowledge": ["intimidation"]},
+        }},
+    })
+    assert resp.status_code == 200, resp.text
+    body = client.get(f"/api/characters/{cid}").json()
+    skills = {s["skill_code"]: s for s in body["skills"]}
+    assert "intimidation" in skills
+    assert skills["intimidation"]["source"] == "CLASS"
+    # The choice is recorded on sub_choices (the source of truth) …
+    entry = next(e for e in body["class_entries"] if e["class_code"] == "barbarian")
+    assert entry["sub_choices"].get("barbarian_primal_knowledge") == ["intimidation"]
+    # … and projected into the derived sheet as a real proficiency.
+    derived = {s["skill_code"]: s for s in body["derived"]["skills"]}
+    assert derived["intimidation"]["proficient"] is True
+
+
+def test_advancement_skill_feature_choice_dedupes_against_l1(client, auth_as, owner):
+    """Picking a skill you already have from level 1 is a no-op — no second/"level 2" row. D&D
+    has no stacked proficiency; the wizard greys the option, this is the server-side guard."""
+    cid = _barbarian_l3(client, auth_as, owner)
+    client.patch(f"/api/characters/draft/{cid}", json={
+        "step": "advancement",
+        "advancement": {"feature_choices": {
+            "barbarian": {"barbarian_primal_knowledge": ["athletics"]},  # already have it from L1
+        }},
+    })
+    body = client.get(f"/api/characters/{cid}").json()
+    athletics_rows = [s for s in body["skills"] if s["skill_code"] == "athletics"]
+    assert len(athletics_rows) == 1                     # one row, not two (the union dedups)
+    assert athletics_rows[0]["expertise"] is False      # not upgraded/stacked
+    derived = {s["skill_code"]: s for s in body["derived"]["skills"]}
+    assert derived["athletics"]["expertise"] is False   # single proficiency, bonus not doubled
+
+
+def test_advancement_skill_feature_choice_replaces_on_resave(client, auth_as, owner):
+    """Changing the Primal Knowledge pick and re-saving reprojects skills: the new pick is present,
+    the old one gone (the choice record replaced it), and the L1 picks are untouched."""
+    cid = _barbarian_l3(client, auth_as, owner)
+    client.patch(f"/api/characters/draft/{cid}", json={
+        "step": "advancement",
+        "advancement": {"feature_choices": {"barbarian": {"barbarian_primal_knowledge": ["intimidation"]}}},
+    })
+    client.patch(f"/api/characters/draft/{cid}", json={
+        "step": "advancement",
+        "advancement": {"feature_choices": {"barbarian": {"barbarian_primal_knowledge": ["nature"]}}},
+    })
+    body = client.get(f"/api/characters/{cid}").json()
+    codes = {s["skill_code"] for s in body["skills"]}
+    assert "nature" in codes                            # new pick present
+    assert "intimidation" not in codes                  # old pick replaced, not accumulated
+    assert {"athletics", "perception"} <= codes         # L1 picks untouched
+    # The authoritative record on the entry reflects the latest pick.
+    entry = next(e for e in body["class_entries"] if e["class_code"] == "barbarian")
+    assert entry["sub_choices"].get("barbarian_primal_knowledge") == ["nature"]
+
+
+def test_species_skillful_skill_is_materialised(client, auth_as, owner):
+    """A species skill sub-choice (Human 'Skillful') is projected into character.skills as a real
+    SPECIES proficiency — previously it sat inertly in species_sub_choices and never counted."""
+    draft = _create_draft(client, auth_as, owner)
+    cid = draft["id"]
+    client.patch(f"/api/characters/draft/{cid}", json={
+        "step": "identity",
+        "identity": {"species_code": "human", "sub_choices": {"skillful": ["athletics"]}},
+    })
+    body = client.get(f"/api/characters/{cid}").json()
+    skills = {s["skill_code"]: s for s in body["skills"]}
+    assert "athletics" in skills
+    assert skills["athletics"]["source"] == "SPECIES"
+    derived = {s["skill_code"]: s for s in body["derived"]["skills"]}
+    assert derived["athletics"]["proficient"] is True
+
+
+def test_species_and_class_skill_overlap_dedupes(client, auth_as, owner):
+    """The reported bug: Athletics chosen via species (Skillful) AND via the Fighter list collapses
+    to a single proficiency in the union — one source of truth, no duplicate, no stacked skill."""
+    draft = _create_draft(client, auth_as, owner)
+    cid = draft["id"]
+    client.patch(f"/api/characters/draft/{cid}", json={
+        "step": "identity",
+        "identity": {"species_code": "human", "sub_choices": {"skillful": ["athletics"]}},
+    })
+    client.patch(f"/api/characters/draft/{cid}", json={
+        "step": "class",
+        "class": {"classes": [{
+            "class_code": "fighter", "level": 1, "is_primary": True,
+            "chosen_skills": ["athletics", "perception"],
+        }]},
+    })
+    body = client.get(f"/api/characters/{cid}").json()
+    athletics_rows = [s for s in body["skills"] if s["skill_code"] == "athletics"]
+    assert len(athletics_rows) == 1  # one proficiency, though two choices granted it
+
+
+def test_class_chosen_skills_round_trip_on_entry(client, auth_as, owner):
+    """L1 class skill picks live on the class entry's chosen_skills (the authoritative record) and
+    are projected into character.skills."""
+    draft = _create_draft(client, auth_as, owner)
+    cid = draft["id"]
+    client.patch(f"/api/characters/draft/{cid}", json={
+        "step": "class",
+        "class": {"classes": [{
+            "class_code": "fighter", "level": 1, "is_primary": True,
+            "chosen_skills": ["athletics", "perception"],
+        }]},
+    })
+    body = client.get(f"/api/characters/{cid}").json()
+    entry = next(e for e in body["class_entries"] if e["class_code"] == "fighter")
+    assert set(entry["chosen_skills"]) == {"athletics", "perception"}
+    class_skill_codes = {s["skill_code"] for s in body["skills"] if s["source"] == "CLASS"}
+    assert {"athletics", "perception"} <= class_skill_codes
+
+
 def test_spell_step_invalid_class_preserves_existing(client, auth_as, owner):
     """validate-before-mutate: a bad class_code 400s and does NOT clear existing spells."""
     draft = _create_draft(client, auth_as, owner)

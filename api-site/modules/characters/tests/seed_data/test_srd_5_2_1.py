@@ -20,8 +20,12 @@ from shared.rulesets.models import (
     ClassesFile,
     ArmorDefinition,
     ArmorFile,
+    CurrencyDefinition,
+    CurrencyFile,
     FeatDefinition,
     FeatsFile,
+    ItemDefinition,
+    ItemsFile,
     InvocationDefinition,
     InvocationsFile,
     MetamagicDefinition,
@@ -98,6 +102,27 @@ def test_armor_model(entry):
     ArmorDefinition.model_validate(entry)
 
 
+@pytest.mark.parametrize("entry", _entries("items.json", "items"), ids=lambda e: e["code"])
+def test_item_model(entry):
+    ItemDefinition.model_validate(entry)
+
+
+@pytest.mark.parametrize("entry", _entries("currency.json", "currency"), ids=lambda e: e["code"])
+def test_currency_model(entry):
+    CurrencyDefinition.model_validate(entry)
+
+
+def test_item_and_currency_catalogue_shape():
+    items = {i["code"]: i for i in _entries("items.json", "items")}
+    cats = {}
+    for i in items.values():
+        cats[i["category"]] = cats.get(i["category"], 0) + 1
+    assert set(cats) == {"gear", "tool", "mount"} and len(items) > 80
+    assert items["acid"]["cost_cp"] == 2500  # 25 GP
+    currency = {c["code"]: c["cp_value"] for c in _entries("currency.json", "currency")}
+    assert currency == {"cp": 1, "sp": 10, "ep": 50, "gp": 100, "pp": 1000}
+
+
 # --- Wrapper file validation ----------------------------------------------- #
 
 
@@ -114,6 +139,8 @@ def test_armor_model(entry):
         ("metamagic.json", MetamagicFile),
         ("weapons.json", WeaponsFile),
         ("armor.json", ArmorFile),
+        ("items.json", ItemsFile),
+        ("currency.json", CurrencyFile),
     ],
 )
 def test_file_wrapper_validates(filename, model):
@@ -408,6 +435,8 @@ def test_no_duplicate_codes_within_each_file():
         ("metamagic.json", "metamagic"),
         ("weapons.json", "weapons"),
         ("armor.json", "armor"),
+        ("items.json", "items"),
+        ("currency.json", "currency"),
     ):
         codes = [e["code"] for e in _entries(filename, key)]
         assert len(codes) == len(set(codes)), (

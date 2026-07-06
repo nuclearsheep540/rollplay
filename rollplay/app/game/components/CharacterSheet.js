@@ -491,6 +491,8 @@ export default function CharacterSheet({
 
       <DeathSaveTracker character={character} onPatch={onPatch} disabled={!isOwner} />
 
+      <ExhaustionTracker character={character} onPatch={onPatch} disabled={!isOwner} />
+
       {error && (
         <div className="rounded border border-rose-700 bg-rose-900/30 text-rose-200 text-xs px-2 py-1">
           {error}
@@ -598,6 +600,7 @@ export default function CharacterSheet({
       <ResourcePools derived={derived} onPatch={onPatch} disabled={!isOwner} />
       <SpellcastingSection character={character} />
       <ChoicesSection character={character} />
+      <CurrencyInventoryPanel character={character} onPatch={onPatch} disabled={!isOwner} />
 
       {character.languages?.length > 0 && (
         <Section title="Languages">
@@ -654,6 +657,123 @@ function ResourcePools({ derived, onPatch, disabled }) {
             </div>
           )
         })}
+      </div>
+    </Section>
+  )
+}
+
+const COIN_LABELS = [['pp', 'PP'], ['gp', 'GP'], ['ep', 'EP'], ['sp', 'SP'], ['cp', 'CP']]
+
+/** Currency editor + inventory (J.2/J.3). Whole-map / whole-list PATCH; no enforcement. */
+function CurrencyInventoryPanel({ character, onPatch, disabled }) {
+  const currency = character.currency || {}
+  const inventory = character.inventory || []
+  const [newItem, setNewItem] = useState('')
+
+  const setCoin = (code, val) => {
+    const n = parseInt(val, 10)
+    onPatch({ currency: { ...currency, [code]: Number.isNaN(n) ? 0 : n } })
+  }
+  const setQty = (itemCode, qty) =>
+    onPatch({
+      inventory: inventory.map((i) =>
+        i.item_code === itemCode ? { ...i, quantity: Math.max(0, qty) } : i,
+      ),
+    })
+  const removeItem = (itemCode) =>
+    onPatch({ inventory: inventory.filter((i) => i.item_code !== itemCode) })
+  const addItem = () => {
+    const name = newItem.trim()
+    const code = name.toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_|_$/g, '')
+    if (!code || inventory.some((i) => i.item_code === code)) {
+      setNewItem('')
+      return
+    }
+    onPatch({ inventory: [...inventory, { item_code: code, quantity: 1, notes: '' }] })
+    setNewItem('')
+  }
+
+  return (
+    <>
+      <Section title="Currency">
+        <div className="grid grid-cols-5 gap-1">
+          {COIN_LABELS.map(([code, label]) => (
+            <div key={code} className="text-center">
+              <div className="text-[10px] uppercase text-slate-500">{label}</div>
+              <input
+                type="number"
+                disabled={disabled}
+                value={currency[code] ?? 0}
+                onChange={(e) => setCoin(code, e.target.value)}
+                className="w-full bg-slate-900 border border-slate-700 rounded px-1 py-1 text-center text-sm disabled:opacity-50"
+              />
+            </div>
+          ))}
+        </div>
+      </Section>
+
+      <Section title="Inventory">
+        <div className="space-y-1">
+          {inventory.length === 0 && <p className="text-xs text-slate-500">No items.</p>}
+          {inventory.map((i) => (
+            <div key={i.item_code} className="flex items-center gap-2 text-sm">
+              <span className="flex-1">
+                {titleize(i.item_code)}
+                {i.notes ? <span className="text-xs text-slate-500"> — {i.notes}</span> : null}
+              </span>
+              <ResourceButton label="−" disabled={disabled || i.quantity <= 0} onClick={() => setQty(i.item_code, i.quantity - 1)} />
+              <span className="w-6 text-center tabular-nums">{i.quantity}</span>
+              <ResourceButton label="+" disabled={disabled} onClick={() => setQty(i.item_code, i.quantity + 1)} />
+              {!disabled && (
+                <button
+                  type="button"
+                  onClick={() => removeItem(i.item_code)}
+                  className="text-xs text-slate-500 hover:text-rose-400 px-1"
+                >
+                  ✕
+                </button>
+              )}
+            </div>
+          ))}
+          {!disabled && (
+            <div className="flex gap-2 pt-1">
+              <input
+                value={newItem}
+                onChange={(e) => setNewItem(e.target.value)}
+                onKeyDown={(e) => e.key === 'Enter' && addItem()}
+                placeholder="Add item…"
+                className="flex-1 bg-slate-900 border border-slate-700 rounded px-2 py-1 text-sm"
+              />
+              <button
+                type="button"
+                onClick={addItem}
+                className="px-2 py-1 rounded border border-slate-700 text-sm hover:border-slate-500"
+              >
+                Add
+              </button>
+            </div>
+          )}
+        </div>
+      </Section>
+    </>
+  )
+}
+
+/** Exhaustion level 0–6 with a live stepper (G.3). Each level: −2 to D20 Tests, −5 ft Speed. */
+function ExhaustionTracker({ character, onPatch, disabled }) {
+  const level = character.exhaustion_level ?? 0
+  const set = (n) => onPatch({ exhaustion_level: Math.max(0, Math.min(6, n)) })
+  return (
+    <Section title="Exhaustion">
+      <div className="flex items-center justify-between text-sm">
+        <span className="text-slate-400">
+          {level === 0 ? 'None' : `Level ${level} · −${level * 2} to D20 tests, −${level * 5} ft speed`}
+        </span>
+        <div className="flex items-center gap-2">
+          <ResourceButton label="−" disabled={disabled || level <= 0} onClick={() => set(level - 1)} />
+          <span className="w-8 text-center font-bold tabular-nums">{level}/6</span>
+          <ResourceButton label="+" disabled={disabled || level >= 6} onClick={() => set(level + 1)} />
+        </div>
       </div>
     </Section>
   )

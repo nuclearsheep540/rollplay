@@ -84,6 +84,7 @@ class ClassEntry:
     level: int
     is_primary: bool = False
     sub_choices: dict = field(default_factory=dict)  # L1 feature-choice picks: {choice_code: [picked_codes]}
+    chosen_skills: list = field(default_factory=list)  # the class's level-1 skill proficiency picks
 
     def __post_init__(self):
         if not 1 <= self.level <= 20:
@@ -91,12 +92,30 @@ class ClassEntry:
 
 
 @dataclass(frozen=True)
+class SubclassEntry:
+    """The subclass a character has chosen for one of their classes (B.1).
+
+    One per class. ``chosen_at_level`` is the character level at which it was picked (audit).
+    """
+    class_code: str
+    subclass_code: str
+    chosen_at_level: int
+
+    def __post_init__(self):
+        if not 1 <= self.chosen_at_level <= 20:
+            raise ValueError(
+                f"SubclassEntry.chosen_at_level must be 1..20 (got {self.chosen_at_level})"
+            )
+
+
+@dataclass(frozen=True)
 class SkillProficiency:
     """A skill proficiency the character has gained.
 
-    ``source`` says where it came from (CLASS / BACKGROUND / FEAT / SPECIES) —
-    used by the level-up wizard to undo grants and by the registry-validated
-    invariants below.
+    ``source`` says what *category* of thing granted it (CLASS / BACKGROUND / FEAT / SPECIES).
+    ``character.skills`` is a materialised projection — ``rebuild_character_skills`` recomputes it
+    as the deduped union of the character's choice records (L1 class picks, feature/species skill
+    sub-choices, background grants), so a proficiency here is never authored directly, only derived.
     """
     skill_code: str
     source: str
@@ -171,6 +190,20 @@ class ResourceUsage:
             raise ValueError(
                 f"ResourceUsage.current_value must be >= 0 (got {self.current_value})"
             )
+
+
+@dataclass(frozen=True)
+class InventoryItem:
+    """One line of a character's inventory (J.3). ``item_code`` references the item catalogue
+    (J.1); ``notes`` is a free-text escape hatch (attuned, equipped, custom effect — anything).
+    No enforcement: quantity 0 is allowed (depleted-but-kept)."""
+    item_code: str
+    quantity: int = 1
+    notes: str = ""
+
+    def __post_init__(self):
+        if self.quantity < 0:
+            raise ValueError(f"InventoryItem.quantity must be >= 0 (got {self.quantity})")
 
 
 # --------------------------------------------------------------------------- #
@@ -260,6 +293,17 @@ class CharacterAggregate:
 
     # Class resource pools — spent counts only (absent pool ⇒ full). Max comes from the ruleset.
     resource_usage: list[ResourceUsage] = field(default_factory=list)
+
+    # Chosen subclasses (one per class; B.1). Picked at/after each class's subclass level.
+    subclasses: list[SubclassEntry] = field(default_factory=list)
+
+    # Exhaustion level 0–6 (G.3). Conditions themselves live in ``status_effects``.
+    exhaustion_level: int = 0
+
+    # Currency (coin_code -> quantity) + inventory (J.2/J.3). No enforcement — negative coin
+    # balances and quantity-0 rows are allowed; the player narrates the rest.
+    currency: dict[str, int] = field(default_factory=dict)
+    inventory: list[InventoryItem] = field(default_factory=list)
 
     # -------------------------------------------------------------- factory
 
@@ -481,6 +525,46 @@ class CharacterAggregate:
             self.status_effects.append(status)
             self._touch()
 
+    def set_exhaustion(self, level: int) -> None:
+        """Set exhaustion level, clamped 0–6 (data invariant; the −2/−5-per-level effects are
+        the table's to apply)."""
+        self.exhaustion_level = max(0, min(6, int(level)))
+        self._touch()
+
+    # -------------------------------------------------------------- currency / inventory
+
+    def set_currency(self, coin_code: str, amount: int) -> None:
+        self.currency = {**self.currency, coin_code: int(amount)}
+        self._touch()
+
+    def replace_currency(self, coins: dict) -> None:
+        """Whole-map replace (runtime PATCH). Coins absent from the new map are dropped."""
+        self.currency = {str(k): int(v) for k, v in coins.items()}
+        self._touch()
+
+    def add_currency(self, coin_code: str, amount: int) -> None:
+        self.set_currency(coin_code, self.currency.get(coin_code, 0) + int(amount))
+
+    def set_inventory_item(self, item_code: str, quantity: int, notes: str = "") -> None:
+        """Upsert one inventory line (replaces any existing row for that item_code)."""
+        self.inventory = [i for i in self.inventory if i.item_code != item_code]
+        self.inventory.append(InventoryItem(item_code, int(quantity), notes))
+        self._touch()
+
+    def replace_inventory(self, items: list) -> None:
+        """Whole-list replace (runtime PATCH). Items absent from the new list are dropped."""
+        self.inventory = [
+            InventoryItem(str(i["item_code"]), int(i.get("quantity", 1)), i.get("notes", "") or "")
+            for i in items
+        ]
+        self._touch()
+
+    def remove_inventory_item(self, item_code: str) -> None:
+        before = len(self.inventory)
+        self.inventory = [i for i in self.inventory if i.item_code != item_code]
+        if len(self.inventory) != before:
+            self._touch()
+
     def remove_status(self, status: str) -> None:
         try:
             self.status_effects.remove(status)
@@ -527,6 +611,8 @@ class CharacterAggregate:
             class_code=entry.class_code,
             level=entry.level + 1,
             is_primary=entry.is_primary,
+            sub_choices=entry.sub_choices,      # preserve feature-choice picks across the level bump
+            chosen_skills=entry.chosen_skills,  # …and the L1 skill picks (source of the skills projection)
         )
         self.level += 1
         self.hp_max += hp_gained
@@ -542,11 +628,30 @@ class CharacterAggregate:
         if self.level >= 20:
             raise ValueError("Already at max level")
         if is_primary:
+            # Demote existing primaries — preserve each entry's choice records (sub_choices +
+            # chosen_skills), or the demotion would silently wipe their picks.
             self.class_entries = [
-                ClassEntry(e.class_code, e.level, False) for e in self.class_entries
+                ClassEntry(e.class_code, e.level, False, e.sub_choices, e.chosen_skills)
+                for e in self.class_entries
             ]
         self.class_entries.append(ClassEntry(class_code, 1, is_primary))
         self.level += 1
+        self._touch()
+
+    def pick_subclass(
+        self, class_code: str, subclass_code: str, *, at_level: Optional[int] = None
+    ) -> None:
+        """Record the subclass choice for a class (one per class; replaces on re-pick).
+
+        Canon-correctness (is the class at its subclass level yet?) is guidance surfaced
+        elsewhere — this method records the pick, it does not gate it (§3.0).
+        """
+        if not any(e.class_code == class_code for e in self.class_entries):
+            raise ValueError(f"Character has no class '{class_code}' to subclass")
+        self.subclasses = [s for s in self.subclasses if s.class_code != class_code]
+        self.subclasses.append(
+            SubclassEntry(class_code, subclass_code, at_level if at_level is not None else self.level)
+        )
         self._touch()
 
     def apply_asi(self, increases: dict[str, int], *, ruleset=None) -> None:

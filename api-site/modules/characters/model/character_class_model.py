@@ -33,6 +33,7 @@ class CharacterClassEntry(Base):
     level = Column(Integer, nullable=False)
     is_primary = Column(Boolean, nullable=False, default=False, server_default="false")
     sub_choices = Column(JSONB, nullable=False, server_default="{}")  # L1 feature-choice picks
+    chosen_skills = Column(JSONB, nullable=False, server_default="[]")  # the class's level-1 skill picks
 
     character = relationship("Character", back_populates="class_entries")
 

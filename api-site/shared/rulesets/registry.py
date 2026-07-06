@@ -29,8 +29,12 @@ from shared.rulesets.models import (
     CURRENT_SCHEMA_VERSION,
     ArmorDefinition,
     ArmorFile,
+    CurrencyDefinition,
+    CurrencyFile,
     FeatDefinition,
     FeatsFile,
+    ItemDefinition,
+    ItemsFile,
     InvocationDefinition,
     InvocationsFile,
     MetamagicDefinition,
@@ -80,6 +84,8 @@ class _EditionRulesetData:
         metamagic: dict[str, MetamagicDefinition],
         weapons: dict[str, WeaponDefinition],
         armor: dict[str, ArmorDefinition],
+        items: dict[str, ItemDefinition],
+        currency: dict[str, CurrencyDefinition],
         strategy: Optional[RulesetStrategy],  # filled lazily on first get_ruleset()
     ):
         self.edition_code = edition_code
@@ -93,6 +99,8 @@ class _EditionRulesetData:
         self.metamagic = metamagic
         self.weapons = weapons
         self.armor = armor
+        self.items = items
+        self.currency = currency
         self.strategy = strategy
 
 
@@ -162,6 +170,8 @@ class RulesetRegistry:
         metamagic_file = _load("metamagic.json", MetamagicFile)
         weapons_file = _load("weapons.json", WeaponsFile)
         armor_file = _load("armor.json", ArmorFile)
+        items_file = _load("items.json", ItemsFile)
+        currency_file = _load("currency.json", CurrencyFile)
 
         skills = {s.code: s for s in skills_file.skills}
         feats = {f.code: f for f in feats_file.feats}
@@ -173,6 +183,8 @@ class RulesetRegistry:
         metamagic = {m.code: m for m in metamagic_file.metamagic}
         weapons = {w.code: w for w in weapons_file.weapons}
         armor = {a.code: a for a in armor_file.armor}
+        items = {i.code: i for i in items_file.items}
+        currency = {c.code: c for c in currency_file.currency}
 
         # Cross-ref integrity. These also run in the parser, but a hand-edited
         # JSON could slip through, so re-check at boot.
@@ -258,6 +270,8 @@ class RulesetRegistry:
             metamagic=metamagic,
             weapons=weapons,
             armor=armor,
+            items=items,
+            currency=currency,
             strategy=None,  # filled below once we have the registry instance
         )
         return registry_data
@@ -405,6 +419,23 @@ class RulesetRegistry:
         if category is not None:
             armor = [a for a in armor if a.category == category]
         return armor
+
+    def get_item(self, edition_code: str, code: str) -> ItemDefinition:
+        ed = self._ed(edition_code)
+        if code not in ed.items:
+            raise KeyError(f"Unknown item '{code}' in edition '{edition_code}'")
+        return ed.items[code]
+
+    def list_items(
+        self, edition_code: str, category: Optional[str] = None
+    ) -> list[ItemDefinition]:
+        items = sorted(self._ed(edition_code).items.values(), key=lambda i: (i.category, i.code))
+        if category is not None:
+            items = [i for i in items if i.category == category]
+        return items
+
+    def list_currency(self, edition_code: str) -> list[CurrencyDefinition]:
+        return sorted(self._ed(edition_code).currency.values(), key=lambda c: c.cp_value)
 
     def get_ruleset(self, edition_code: str) -> RulesetStrategy:
         ed = self._ed(edition_code)

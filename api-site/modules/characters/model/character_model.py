@@ -54,6 +54,8 @@ class Character(Base):
     death_save_failures = Column(SmallInteger, nullable=False, default=0, server_default="0")
     inspiration = Column(Boolean, nullable=False, default=False, server_default="false")
     status_effects = Column(ARRAY(String), nullable=False, server_default="{}")
+    exhaustion_level = Column(SmallInteger, nullable=False, default=0, server_default="0")
+    currency = Column(JSONB, nullable=False, server_default="{}")  # coin_code -> quantity (J.2)
     is_alive = Column(Boolean, nullable=False, default=True, server_default="true")
 
     speed = Column(Integer, nullable=False)
@@ -129,6 +131,18 @@ class Character(Base):
     )
     resource_entries = relationship(
         "CharacterResource",
+        back_populates="character",
+        cascade="all, delete-orphan",
+        passive_deletes=True,
+    )
+    subclass_entries = relationship(
+        "CharacterSubclass",
+        back_populates="character",
+        cascade="all, delete-orphan",
+        passive_deletes=True,
+    )
+    inventory_entries = relationship(
+        "CharacterInventoryItem",
         back_populates="character",
         cascade="all, delete-orphan",
         passive_deletes=True,

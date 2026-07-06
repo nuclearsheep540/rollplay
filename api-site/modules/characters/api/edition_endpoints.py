@@ -21,14 +21,17 @@ from shared.rulesets.models import (
     ArmorDefinition,
     BackgroundDefinition,
     ClassDefinition,
+    CurrencyDefinition,
     FeatDefinition,
     InvocationDefinition,
+    ItemDefinition,
     MetamagicDefinition,
     SkillDefinition,
     SpeciesDefinition,
     SpellDefinition,
     WeaponDefinition,
 )
+from shared.rulesets.conditions import CONDITIONS
 from shared.rulesets.registry import RulesetRegistry
 
 
@@ -151,3 +154,32 @@ async def list_armor(
 ):
     _ensure_known(registry, edition_code)
     return registry.list_armor(edition_code, category=category)
+
+
+@router.get("/{edition_code}/items", response_model=List[ItemDefinition])
+async def list_items(
+    edition_code: str,
+    category: Optional[str] = Query(default=None, pattern="^(gear|tool|mount)$"),
+    registry: RulesetRegistry = Depends(get_ruleset_registry),
+):
+    _ensure_known(registry, edition_code)
+    return registry.list_items(edition_code, category=category)
+
+
+@router.get("/{edition_code}/currency", response_model=List[CurrencyDefinition])
+async def list_currency(
+    edition_code: str,
+    registry: RulesetRegistry = Depends(get_ruleset_registry),
+):
+    _ensure_known(registry, edition_code)
+    return registry.list_currency(edition_code)
+
+
+@router.get("/{edition_code}/conditions")
+async def list_conditions(
+    edition_code: str,
+    registry: RulesetRegistry = Depends(get_ruleset_registry),
+):
+    """SRD conditions (code → name + description) for the runtime sheet's typed badges (G.3)."""
+    _ensure_known(registry, edition_code)
+    return CONDITIONS

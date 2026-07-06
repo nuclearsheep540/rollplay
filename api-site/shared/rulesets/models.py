@@ -304,3 +304,31 @@ class WeaponsFile(_EditionFile):
 
 class ArmorFile(_EditionFile):
     armor: list[ArmorDefinition]
+
+
+class ItemDefinition(BaseModel):
+    """A non-weapon/armor item — adventuring gear, tools, mounts (J.1). Flat catalogue
+    discriminated by ``category``. ``cost_cp`` is in copper (0 = varies/unpriced)."""
+
+    code: str = Field(pattern=CodePattern)
+    name: str
+    category: Literal["gear", "tool", "mount"]
+    cost_cp: int = 0
+    weight_lb: float = 0.0
+    description: str = ""
+
+
+class ItemsFile(_EditionFile):
+    items: list[ItemDefinition]
+
+
+class CurrencyDefinition(BaseModel):
+    """A coin type and its value in copper pieces (J.2)."""
+
+    code: str = Field(pattern=CodePattern)
+    name: str
+    cp_value: int = Field(ge=1)
+
+
+class CurrencyFile(_EditionFile):
+    currency: list[CurrencyDefinition]

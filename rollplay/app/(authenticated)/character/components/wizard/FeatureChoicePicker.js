@@ -22,8 +22,18 @@ import { useEditionFeats, useEditionInvocations, useEditionMetamagic } from '../
  *   weapon_mastery / language / tool_proficiency → free-text slots (no catalogue yet)
  *
  * Surfaces options, never hides — and never blocks (facilitate, don't enforce).
+ *
+ * `alreadyOwnedSkills` (skill_proficiency only): codes the character already has from ANOTHER
+ * choice (e.g. Athletics from the class list, when picking a species skill). Source-agnostic — the
+ * parent passes "everything selected elsewhere". Those options render ticked-but-greyed with an
+ * "already have" note and can't be re-picked (D&D has no stacked/"level 2" proficiency). Hint, not rail.
+ *
+ * `contextLabel`: prefixes the heading with where this choice comes from, so a species trait reads
+ * "Human trait: Skillful" and a class feature reads "Barbarian feature: Primal Knowledge".
  */
-export default function FeatureChoicePicker({ choice, editionCode, value = [], onChange }) {
+export default function FeatureChoicePicker({
+  choice, editionCode, value = [], onChange, alreadyOwnedSkills = [], contextLabel = '',
+}) {
   const { type, count = 1, options = [], source = null, name, code } = choice
 
   // feat_pick resolves its options from a feat category ("fighting_style", "origin", …);
@@ -35,7 +45,7 @@ export default function FeatureChoicePicker({ choice, editionCode, value = [], o
 
   const Label = (
     <div className="text-xs uppercase mb-1" style={{ color: THEME.textSecondary }}>
-      {name}
+      {contextLabel ? `${contextLabel}: ` : ''}{name}
       {count > 1 ? ` — choose ${count}` : ''}
       {count > 1 ? <span className="ml-2 normal-case">({value.length}/{count})</span> : null}
     </div>
@@ -78,7 +88,9 @@ export default function FeatureChoicePicker({ choice, editionCode, value = [], o
   }
 
   if (type === 'skill_proficiency') {
+    const owned = new Set(alreadyOwnedSkills)
     const toggle = (optCode) => {
+      if (owned.has(optCode)) return  // already proficient — a duplicate pick is wasted (no stacking)
       if (value.includes(optCode)) onChange(value.filter((c) => c !== optCode))
       else if (value.length < count) onChange([...value, optCode])
     }
@@ -87,20 +99,29 @@ export default function FeatureChoicePicker({ choice, editionCode, value = [], o
         {Label}
         <div className="grid grid-cols-2 sm:grid-cols-3 gap-1">
           {options.map((o) => {
-            const checked = value.includes(o.code)
-            const disabled = !checked && value.length >= count
+            const alreadyHave = owned.has(o.code)
+            const checked = !alreadyHave && value.includes(o.code)
+            const disabled = alreadyHave || (!checked && value.length >= count)
             return (
               <label
                 key={o.code}
+                title={alreadyHave ? 'Already proficient — from your other skills' : undefined}
                 className={`flex items-center gap-2 text-sm ${disabled ? 'opacity-40' : 'cursor-pointer'}`}
               >
                 <input
                   type="checkbox"
-                  checked={checked}
+                  checked={checked || alreadyHave}
                   disabled={disabled}
                   onChange={() => toggle(o.code)}
                 />
-                <span style={{ color: THEME.textOnDark }}>{o.name}</span>
+                <span style={{ color: THEME.textOnDark }}>
+                  {o.name}
+                  {alreadyHave ? (
+                    <span className="ml-1 text-xs italic" style={{ color: THEME.textSecondary }}>
+                      — already have
+                    </span>
+                  ) : null}
+                </span>
               </label>
             )
           })}

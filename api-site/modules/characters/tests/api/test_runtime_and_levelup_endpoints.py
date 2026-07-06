@@ -140,6 +140,51 @@ class TestRuntimeUpdate:
         rage = next(p for p in body["derived"]["resource_pools"] if p["pool_code"] == "rage")
         assert rage["max_value"] == 2 and rage["current_value"] == 1
 
+    def test_exhaustion_round_trip_and_clamped(self, client, auth_as, owner):
+        """PR 11 (G.3): exhaustion level persists via the runtime PATCH and is clamped 0–6."""
+        char = _finalize_a_character(client, auth_as, owner)
+        cid = char["id"]
+        assert char["exhaustion_level"] == 0
+        r = client.patch(f"/api/characters/{cid}/runtime", json={"exhaustion_level": 3})
+        assert r.status_code == 200 and r.json()["exhaustion_level"] == 3
+        # Out-of-range is rejected by the schema (le=6).
+        assert client.patch(f"/api/characters/{cid}/runtime", json={"exhaustion_level": 9}).status_code == 422
+        assert client.get(f"/api/characters/{cid}").json()["exhaustion_level"] == 3
+
+    def test_inventory_and_currency_round_trip(self, client, auth_as, owner):
+        """PR 14 (J.2/J.3): currency + inventory persist via the runtime PATCH (no enforcement)."""
+        char = _finalize_a_character(client, auth_as, owner)
+        cid = char["id"]
+        assert char["currency"] == {} and char["inventory"] == []
+        r = client.patch(f"/api/characters/{cid}/runtime", json={
+            "currency": {"gp": 15, "sp": 4, "cp": -3},  # negative allowed (owes coin)
+            "inventory": [
+                {"item_code": "rope_hempen", "quantity": 1, "notes": "50 ft coil"},
+                {"item_code": "torch", "quantity": 10, "notes": ""},
+            ],
+        })
+        assert r.status_code == 200, r.text
+        body = client.get(f"/api/characters/{cid}").json()
+        assert body["currency"] == {"gp": 15, "sp": 4, "cp": -3}
+        inv = {i["item_code"]: i for i in body["inventory"]}
+        assert inv["torch"]["quantity"] == 10
+        assert inv["rope_hempen"]["notes"] == "50 ft coil"
+
+    def test_character_summary_snapshot(self, client, auth_as, owner):
+        """PR 12 (Phase I): the Docker-internal summary returns the api-game snapshot fields."""
+        char = _finalize_a_character(client, auth_as, owner)  # Barbarian L1
+        body = client.get(f"/api/characters/{char['id']}/summary").json()
+        assert body["character_name"] == char["character_name"]
+        assert body["character_class"] == ["barbarian"]
+        assert body["character_race"] == "human"
+        assert body["level"] == 1 and body["hp_max"] == char["hp_max"] and "ac" in body
+
+    def test_conditions_reference_endpoint(self, client, auth_as, owner):
+        auth_as(owner.id)
+        body = client.get("/api/editions/srd_5_2_1/conditions").json()
+        assert "prone" in body and "exhaustion" in body
+        assert body["prone"]["name"] == "Prone" and body["prone"]["description"]
+
     def test_empty_body_rejected(self, client, auth_as, owner):
         char = _finalize_a_character(client, auth_as, owner)
         response = client.patch(f"/api/characters/{char['id']}/runtime", json={})
@@ -213,6 +258,34 @@ class TestLevelUpPreview:
         # A level-1 character can't meet the Epic Boon (level 19) prereqs, so the "other"
         # bucket must be populated — proving ineligible feats are surfaced, not dropped.
         assert other, "expected ineligible feats (e.g. Epic Boons) to surface in other_feats"
+
+
+class TestLevelUpSubclass:
+    def test_level_up_to_subclass_level_offers_and_records_subclass(self, client, auth_as, owner):
+        """PR 10 (F.1): leveling a Barbarian to 3 surfaces the subclass choice + records it."""
+        char = _finalize_a_character(client, auth_as, owner)  # Barbarian L1
+        cid = char["id"]
+        client.patch(f"/api/characters/{cid}/runtime", json={"xp": 900})  # eligible through level 3
+        # Level 1 → 2: no subclass yet (barbarian subclass unlocks at 3).
+        r2 = client.post(f"/api/characters/{cid}/level-up",
+                         json={"class_code": "barbarian", "hp_choice": "average"})
+        assert r2.status_code == 200, r2.text
+        # Preview at level 2 now flags the pending subclass + carries feat descriptions (F.2).
+        prev = client.get(f"/api/characters/{cid}/level-up").json()
+        assert "path_of_the_berserker" in prev["subclass_pending"].get("barbarian", [])
+        assert prev["feat_details"]  # non-empty feat description map
+        # Level 2 → 3 with the subclass choice.
+        r3 = client.post(f"/api/characters/{cid}/level-up", json={
+            "class_code": "barbarian", "hp_choice": "average",
+            "subclass_choice": {"class_code": "barbarian", "subclass_code": "path_of_the_berserker"},
+        })
+        assert r3.status_code == 200, r3.text
+        body = client.get(f"/api/characters/{cid}").json()
+        assert {s["class_code"]: s["subclass_code"] for s in body["subclasses"]} == {
+            "barbarian": "path_of_the_berserker",
+        }
+        # And the subclass no longer shows as pending.
+        assert "barbarian" not in client.get(f"/api/characters/{cid}/level-up").json()["subclass_pending"]
 
 
 class TestLevelUpApply:

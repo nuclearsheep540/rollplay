@@ -44,12 +44,14 @@ function ClassInfoBody({ classDef }) {
   )
 }
 
-function SkillChecklist({ classDef, chosenSkills, skillsByCode, onChange }) {
+function SkillChecklist({ classDef, chosenSkills, skillsByCode, alreadyOwnedSkills = [], onChange }) {
   const offered = classDef.skill_choices?.from ?? []
   const allowed = classDef.skill_choices?.count ?? 0
   const limitReached = chosenSkills.length >= allowed
+  const owned = new Set(alreadyOwnedSkills)  // skills already gained from species/background/features
 
   const toggle = (code) => {
+    if (owned.has(code)) return  // already proficient from another choice — a duplicate is wasted
     if (chosenSkills.includes(code)) {
       onChange(chosenSkills.filter((c) => c !== code))
     } else if (!limitReached) {
@@ -62,7 +64,7 @@ function SkillChecklist({ classDef, chosenSkills, skillsByCode, onChange }) {
   return (
     <div>
       <div className="text-xs uppercase mb-2" style={{ color: THEME.textSecondary }}>
-        Skill proficiencies — choose {allowed}
+        {classDef.name}: skill proficiencies — choose {allowed}
         <span className="ml-2 normal-case" style={{ opacity: 0.7 }}>
           ({chosenSkills.length}/{allowed} picked)
         </span>
@@ -70,12 +72,14 @@ function SkillChecklist({ classDef, chosenSkills, skillsByCode, onChange }) {
       <div className="grid grid-cols-2 sm:grid-cols-3 gap-1">
         {offered.map((skillCode) => {
           const skill = skillsByCode?.get(skillCode)
-          const checked = chosenSkills.includes(skillCode)
-          const disabled = limitReached && !checked
           if (!skill) return null
+          const alreadyHave = owned.has(skillCode)
+          const checked = !alreadyHave && chosenSkills.includes(skillCode)
+          const disabled = alreadyHave || (limitReached && !checked)
           return (
             <label
               key={skillCode}
+              title={alreadyHave ? 'Already proficient — from your other choices' : undefined}
               className="flex items-center gap-2 px-2 py-1 rounded-sm text-sm"
               style={{
                 backgroundColor: checked ? `${COLORS.silver}1A` : 'transparent',
@@ -86,11 +90,12 @@ function SkillChecklist({ classDef, chosenSkills, skillsByCode, onChange }) {
             >
               <input
                 type="checkbox"
-                checked={checked}
+                checked={checked || alreadyHave}
                 disabled={disabled}
                 onChange={() => toggle(skillCode)}
               />
               {skill.name}
+              {alreadyHave ? <span className="text-xs italic ml-1">— already have</span> : null}
             </label>
           )
         })}
@@ -106,6 +111,7 @@ export default function ClassTile({
   isPrimary = false,
   skillsByCode,
   editionCode,
+  alreadyOwnedSkills = [],
   onExpand,
   onCollapse,
   onSelect,
@@ -172,6 +178,7 @@ export default function ClassTile({
               classDef={classDef}
               chosenSkills={pick.chosen_skills || []}
               skillsByCode={skillsByCode}
+              alreadyOwnedSkills={alreadyOwnedSkills}
               onChange={(next) => onChange?.({ ...pick, chosen_skills: next })}
             />
           )}
@@ -187,6 +194,8 @@ export default function ClassTile({
                   choice={choice}
                   editionCode={editionCode}
                   value={(pick.sub_choices || {})[choice.code] ?? []}
+                  alreadyOwnedSkills={alreadyOwnedSkills}
+                  contextLabel={`${classDef.name} feature`}
                   onChange={(next) =>
                     onChange?.({
                       ...pick,

@@ -43,6 +43,16 @@ export default function SpeciesStep({ draft, onSave, onBack, onNext }) {
 
   const languageChoiceCount = species?.language_choices?.count ?? 0
 
+  // Skills the character already has from a choice OTHER than this species' own sub-choices, so a
+  // species skill pick (Skillful) greys anything already taken via class/background. Source-agnostic:
+  // the full selected set (draft.skills) minus this species' own saved sub-choice picks.
+  const ownedElsewhere = useMemo(() => {
+    const ownSpeciesPicks = new Set(Object.values(draft.species_sub_choices || {}).flat())
+    return (draft.skills || [])
+      .map((s) => s.skill_code)
+      .filter((code) => !ownSpeciesPicks.has(code))
+  }, [draft.skills, draft.species_sub_choices])
+
   const handleExtraLanguageChange = (idx, value) => {
     setExtraLanguages((prev) => {
       const next = [...prev]
@@ -131,6 +141,7 @@ export default function SpeciesStep({ draft, onSave, onBack, onNext }) {
           editionCode={draft.edition_code}
           subChoices={subChoices}
           onSubChoiceChange={handleSubChoiceChange}
+          alreadyOwnedSkills={ownedElsewhere}
           onRemove={handleClearSpecies}
         />
       )}

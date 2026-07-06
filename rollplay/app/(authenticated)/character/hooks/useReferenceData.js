@@ -98,6 +98,27 @@ export function useEditionMetamagic(editionCode) {
   })
 }
 
+export function useEditionItems(editionCode, category = null) {
+  return useQuery({
+    queryKey: ['editions', editionCode, 'items', category ?? 'all'],
+    queryFn: () => {
+      const qs = category ? `?category=${encodeURIComponent(category)}` : ''
+      return getJson(`/api/editions/${editionCode}/items${qs}`)
+    },
+    staleTime: ONE_HOUR,
+    enabled: Boolean(editionCode),
+  })
+}
+
+export function useEditionCurrency(editionCode) {
+  return useQuery({
+    queryKey: ['editions', editionCode, 'currency'],
+    queryFn: () => getJson(`/api/editions/${editionCode}/currency`),
+    staleTime: ONE_HOUR,
+    enabled: Boolean(editionCode),
+  })
+}
+
 export function useEditionSpells(editionCode, classCode = null, level = null) {
   return useQuery({
     queryKey: ['editions', editionCode, 'spells', classCode ?? 'all', level ?? 'all'],

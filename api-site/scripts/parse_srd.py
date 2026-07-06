@@ -48,6 +48,8 @@ from shared.rulesets.models import (  # noqa: E402
     ClassFeature,
     ClassLevel,
     ClassesFile,
+    CurrencyFile,
+    ItemsFile,
     SpellsFile,
     WeaponsFile,
     CURRENT_SCHEMA_VERSION,
@@ -1507,6 +1509,88 @@ def parse_armor() -> list[dict]:
 
 
 # --------------------------------------------------------------------------- #
+# Items (gear / tools / mounts) + currency — J.1 / J.2
+# --------------------------------------------------------------------------- #
+
+
+_COIN_CP = {"CP": 1, "SP": 10, "EP": 50, "GP": 100, "PP": 1000}
+_COST_RE = re.compile(r"(\d[\d,]*)\s*(CP|SP|EP|GP|PP)", re.IGNORECASE)
+_TOOL_RE = re.compile(r"^\*\*(.+?)\s*\((\d[\d,]*)\s*(CP|SP|EP|GP|PP)\)\*\*")
+
+
+def _cost_to_cp(text: str) -> int:
+    m = _COST_RE.search(text or "")
+    return int(m.group(1).replace(",", "")) * _COIN_CP[m.group(2).upper()] if m else 0
+
+
+def _weight_lb(text: str) -> float:
+    m = re.search(r"([\d.]+)\s*lb", text or "")
+    return float(m.group(1)) if m else 0.0
+
+
+def parse_items() -> list[dict]:
+    """Parse gear + mounts (HTML tables) and tools (bold ``**Name (Cost)**`` entries)."""
+    text = _read("equipment.md")
+    soup = BeautifulSoup(text, "html.parser")
+    items: list[dict] = []
+    seen: set[str] = set()
+
+    def add(name: str, category: str, cost_cp: int, weight: float = 0.0) -> None:
+        code = to_code(name)
+        if not code or code in seen:
+            return
+        seen.add(code)
+        items.append({
+            "code": code, "name": name, "category": category,
+            "cost_cp": cost_cp, "weight_lb": weight, "description": "",
+        })
+
+    gear = _find_table_by_headers(soup, {"Item", "Weight", "Cost"})
+    if gear and gear.find("tbody"):
+        for tr in gear.find("tbody").find_all("tr"):
+            c = [td.get_text(strip=True) for td in tr.find_all("td")]
+            if len(c) >= 3:
+                add(c[0], "gear", _cost_to_cp(c[2]), _weight_lb(c[1]))
+
+    mounts = _find_table_by_headers(soup, {"Item", "Carrying Capacity", "Cost"})
+    if mounts and mounts.find("tbody"):
+        for tr in mounts.find("tbody").find_all("tr"):
+            c = [td.get_text(strip=True) for td in tr.find_all("td")]
+            if len(c) >= 3:
+                add(c[0], "mount", _cost_to_cp(c[2]))
+
+    in_tools = False
+    for line in text.splitlines():
+        s = line.rstrip()
+        if s == "## Tools":
+            in_tools = True
+            continue
+        if in_tools and s.startswith("## "):
+            in_tools = False
+        if in_tools:
+            m = _TOOL_RE.match(s.strip())
+            if m:
+                add(m.group(1).strip(), "tool",
+                    int(m.group(2).replace(",", "")) * _COIN_CP[m.group(3).upper()])
+
+    if not items:
+        raise RuntimeError("No items parsed from equipment.md")
+    items.sort(key=lambda i: (i["category"], i["code"]))
+    return items
+
+
+def parse_currency() -> list[dict]:
+    """The five SRD coins + their copper value (fixed set; not derived from prose)."""
+    return [
+        {"code": "cp", "name": "Copper Piece", "cp_value": 1},
+        {"code": "sp", "name": "Silver Piece", "cp_value": 10},
+        {"code": "ep", "name": "Electrum Piece", "cp_value": 50},
+        {"code": "gp", "name": "Gold Piece", "cp_value": 100},
+        {"code": "pp", "name": "Platinum Piece", "cp_value": 1000},
+    ]
+
+
+# --------------------------------------------------------------------------- #
 # Validation pass — cross-file integrity
 # --------------------------------------------------------------------------- #
 
@@ -1634,7 +1718,9 @@ def main(argv: Iterable[str] | None = None) -> int:
     print("Parsing equipment…")
     weapons = parse_weapons()
     armor = parse_armor()
-    print(f"  {len(weapons)} weapons, {len(armor)} armor")
+    items = parse_items()
+    currency = parse_currency()
+    print(f"  {len(weapons)} weapons, {len(armor)} armor, {len(items)} items, {len(currency)} currency")
 
     print("Cross-file validation…")
     cross_validate(skills, feats, species, backgrounds, classes)
@@ -1648,6 +1734,8 @@ def main(argv: Iterable[str] | None = None) -> int:
     spells_payload = _wrap("spells", spells)
     weapons_payload = _wrap("weapons", weapons)
     armor_payload = _wrap("armor", armor)
+    items_payload = _wrap("items", items)
+    currency_payload = _wrap("currency", currency)
 
     _validate_pydantic(SkillsFile, skills_payload, "skills.json")
     _validate_pydantic(FeatsFile, feats_payload, "feats.json")
@@ -1657,6 +1745,8 @@ def main(argv: Iterable[str] | None = None) -> int:
     _validate_pydantic(SpellsFile, spells_payload, "spells.json")
     _validate_pydantic(WeaponsFile, weapons_payload, "weapons.json")
     _validate_pydantic(ArmorFile, armor_payload, "armor.json")
+    _validate_pydantic(ItemsFile, items_payload, "items.json")
+    _validate_pydantic(CurrencyFile, currency_payload, "currency.json")
 
     paths = [
         _write("skills.json", skills_payload),
@@ -1667,6 +1757,8 @@ def main(argv: Iterable[str] | None = None) -> int:
         _write("spells.json", spells_payload),
         _write("weapons.json", weapons_payload),
         _write("armor.json", armor_payload),
+        _write("items.json", items_payload),
+        _write("currency.json", currency_payload),
     ]
     for path in paths:
         print(f"Wrote {path.relative_to(_API_SITE_DIR)}")

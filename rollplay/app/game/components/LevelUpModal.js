@@ -126,6 +126,7 @@ export default function LevelUpModal({ character, open, onClose, onComplete }) {
   const [asiPick, setAsiPick] = useState({ mode: '2_into_one', primary: 'strength', secondary: 'dexterity', increases: { strength: 2 } })
   const [featCode, setFeatCode] = useState('')
   const [usingFeat, setUsingFeat] = useState(false)
+  const [subclassCode, setSubclassCode] = useState('')
   const [error, setError] = useState(null)
 
   // Default the class pick to the first available; only matters for multi-class.
@@ -145,6 +146,7 @@ export default function LevelUpModal({ character, open, onClose, onComplete }) {
       setAsiPick({ mode: '2_into_one', primary: 'strength', secondary: 'dexterity', increases: { strength: 2 } })
       setFeatCode('')
       setUsingFeat(false)
+      setSubclassCode('')
       setError(null)
     }
   }, [open])
@@ -152,17 +154,20 @@ export default function LevelUpModal({ character, open, onClose, onComplete }) {
   const data = preview.data
   const isAsiLevel = data?.is_asi_level?.[classCode] === true
   const multiClass = (data?.available_classes?.length ?? 0) > 1
+  const subclassOptions = data?.subclass_pending?.[classCode] ?? []
+  const needsSubclass = subclassOptions.length > 0
 
-  // Build the step list dynamically. Classes step only appears for multi-class
-  // characters; ASI step only appears when this level is an ASI level.
+  // Build the step list dynamically. Class step only for multi-class; Subclass step when the
+  // gained level unlocks one; ASI step only on an ASI level.
   const steps = useMemo(() => {
     const list = []
     if (multiClass) list.push('class')
+    if (needsSubclass) list.push('subclass')
     list.push('hp')
     if (isAsiLevel) list.push('asi')
     list.push('confirm')
     return list
-  }, [multiClass, isAsiLevel])
+  }, [multiClass, needsSubclass, isAsiLevel])
 
   const totalSteps = steps.length
   const currentStep = steps[stepIdx] ?? 'hp'
@@ -194,6 +199,13 @@ export default function LevelUpModal({ character, open, onClose, onComplete }) {
       } else {
         payload.asi_choice = { increases: asiPick.increases }
       }
+    }
+    if (needsSubclass) {
+      if (!subclassCode) {
+        setError('Pick a subclass.')
+        return
+      }
+      payload.subclass_choice = { class_code: classCode, subclass_code: subclassCode }
     }
     try {
       const fresh = await apply.mutateAsync(payload)
@@ -244,6 +256,31 @@ export default function LevelUpModal({ character, open, onClose, onComplete }) {
                       {data.is_asi_level?.[code] && (
                         <span className="ml-2 text-xs text-amber-400">ASI</span>
                       )}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {currentStep === 'subclass' && (
+              <div>
+                <StepHeader stepNumber={stepIdx + 1} totalSteps={totalSteps} title="Subclass" />
+                <p className="text-xs text-slate-400 mb-2">
+                  {titleize(classCode)} reaches its subclass level — choose your path.
+                </p>
+                <div className="space-y-1">
+                  {subclassOptions.map((code) => (
+                    <button
+                      key={code}
+                      type="button"
+                      onClick={() => setSubclassCode(code)}
+                      className={`w-full text-left px-3 py-2 rounded border ${
+                        subclassCode === code
+                          ? 'border-amber-500 bg-amber-500/10 text-amber-200'
+                          : 'border-slate-700 text-slate-300 hover:border-slate-500'
+                      }`}
+                    >
+                      {titleize(code)}
                     </button>
                   ))}
                 </div>
@@ -317,23 +354,30 @@ export default function LevelUpModal({ character, open, onClose, onComplete }) {
                   <AsiPicker value={asiPick} onChange={setAsiPick} />
                 )}
                 {usingFeat && (
-                  <select
-                    value={featCode}
-                    onChange={(e) => setFeatCode(e.target.value)}
-                    className="w-full bg-slate-900 border border-slate-700 rounded px-2 py-1 text-slate-100"
-                  >
-                    <option value="">Choose a feat…</option>
-                    {(data.qualifying_feats ?? []).map((code) => (
-                      <option key={code} value={code}>{titleize(code)}</option>
-                    ))}
-                    {(data.other_feats ?? []).length > 0 && (
-                      <optgroup label="Prerequisites not met (allowed anyway)">
-                        {(data.other_feats ?? []).map((code) => (
-                          <option key={code} value={code}>{titleize(code)}</option>
-                        ))}
-                      </optgroup>
-                    )}
-                  </select>
+                  <div className="space-y-2">
+                    <select
+                      value={featCode}
+                      onChange={(e) => setFeatCode(e.target.value)}
+                      className="w-full bg-slate-900 border border-slate-700 rounded px-2 py-1 text-slate-100"
+                    >
+                      <option value="">Choose a feat…</option>
+                      {(data.qualifying_feats ?? []).map((code) => (
+                        <option key={code} value={code}>{titleize(code)}</option>
+                      ))}
+                      {(data.other_feats ?? []).length > 0 && (
+                        <optgroup label="Prerequisites not met (allowed anyway)">
+                          {(data.other_feats ?? []).map((code) => (
+                            <option key={code} value={code}>{titleize(code)}</option>
+                          ))}
+                        </optgroup>
+                      )}
+                    </select>
+                    {featCode && data.feat_details?.[featCode] ? (
+                      <p className="text-xs text-slate-400 whitespace-pre-line">
+                        {data.feat_details[featCode]}
+                      </p>
+                    ) : null}
+                  </div>
                 )}
               </div>
             )}
@@ -343,6 +387,9 @@ export default function LevelUpModal({ character, open, onClose, onComplete }) {
                 <StepHeader stepNumber={stepIdx + 1} totalSteps={totalSteps} title="Review" />
                 <ul className="text-sm space-y-1 text-slate-200">
                   <li>Class: <strong>{titleize(classCode)}</strong></li>
+                  {needsSubclass && (
+                    <li>Subclass: <strong>{subclassCode ? titleize(subclassCode) : '—'}</strong></li>
+                  )}
                   <li>HP: <strong>{hpChoice}{hpChoice === 'roll' ? ` (rolled ${rollValue})` : ''}</strong></li>
                   {isAsiLevel && !usingFeat && (
                     <li>ASI: <strong>{Object.entries(asiPick.increases).map(([k, v]) => `+${v} ${ABILITY_LABELS[k]}`).join(', ')}</strong></li>

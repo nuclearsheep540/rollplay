@@ -22,6 +22,8 @@ import CharacterAvatarPickerModal from './CharacterAvatarPickerModal'
 import WizardChrome from './wizard/WizardChrome'
 import SpeciesStep from './wizard/SpeciesStep'
 import ClassStep from './wizard/ClassStep'
+import StartingLevelStep from './wizard/StartingLevelStep'
+import AdvancementStep from './wizard/AdvancementStep'
 import SpellsStep from './wizard/SpellsStep'
 import BackgroundStep from './wizard/BackgroundStep'
 import AbilityScoresStep from './wizard/AbilityScoresStep'
@@ -39,17 +41,29 @@ const BASE_STEPS = [
   { id: 'review', label: 'Review' },
 ]
 
-// The Spells step only exists for characters with a spellcasting class — it's
-// spliced in right after Class. Derived from the draft so the step strip and
-// navigation stay in sync with the chosen classes.
+// Conditional steps, derived from the draft so the strip + navigation stay in sync:
+//  - Starting level: always, right after Species.
+//  - Advancement (per-level choices): only when the character's total class level > 1, after Class.
+//  - Spells: only for casters, after Advancement (so subclass always-prepared is known) or Class.
 function buildSteps(draft, classByCode) {
+  const steps = [...BASE_STEPS]
+  const speciesIdx = steps.findIndex((s) => s.id === 'species')
+  steps.splice(speciesIdx + 1, 0, { id: 'starting_level', label: 'Level' })
+
+  const totalLevel = (draft?.class_entries ?? []).reduce((sum, e) => sum + (e.level || 0), 0)
+  if (totalLevel > 1) {
+    const classIdx = steps.findIndex((s) => s.id === 'class')
+    steps.splice(classIdx + 1, 0, { id: 'advancement', label: 'Advancement' })
+  }
+
   const isCaster = (draft?.class_entries ?? []).some(
     (e) => classByCode.get(e.class_code)?.spellcasting,
   )
-  if (!isCaster) return BASE_STEPS
-  const steps = [...BASE_STEPS]
-  const classIdx = steps.findIndex((s) => s.id === 'class')
-  steps.splice(classIdx + 1, 0, { id: 'spells', label: 'Spells' })
+  if (isCaster) {
+    const advIdx = steps.findIndex((s) => s.id === 'advancement')
+    const anchorIdx = advIdx >= 0 ? advIdx : steps.findIndex((s) => s.id === 'class')
+    steps.splice(anchorIdx + 1, 0, { id: 'spells', label: 'Spells' })
+  }
   return steps
 }
 
@@ -117,6 +131,9 @@ export default function CharacterWizard() {
   // (loading an already-finalised character via ?id=…) leave this false,
   // so the wizard renders normally for editing.
   const [justFinalised, setJustFinalised] = useState(false)
+  // Local target for the starting-level step (E.1). Not persisted — the class step distributes
+  // real levels; the wizard shows Advancement once the total class level exceeds 1.
+  const [startingLevel, setStartingLevel] = useState(1)
 
   // Class defs power the conditional Spells step (which classes are casters).
   const { data: classDefs } = useEditionClasses(draft?.edition_code)
@@ -382,10 +399,30 @@ export default function CharacterWizard() {
         />
       )}
 
+      {currentStep === 'starting_level' && draft && (
+        <StartingLevelStep
+          startingLevel={startingLevel}
+          setStartingLevel={setStartingLevel}
+          onBack={handleBack}
+          onNext={handleNext}
+        />
+      )}
+
       {currentStep === 'class' && draft && (
         <ClassStep
           draft={draft}
+          startingLevel={startingLevel}
           onSave={(payload) => persistStep('class', payload)}
+          onBack={handleBack}
+          onNext={handleNext}
+        />
+      )}
+
+      {currentStep === 'advancement' && draft && (
+        <AdvancementStep
+          draft={draft}
+          classDefs={classDefs ?? []}
+          onSave={(payload) => persistStep('advancement', payload)}
           onBack={handleBack}
           onNext={handleNext}
         />

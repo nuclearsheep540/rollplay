@@ -31,6 +31,8 @@ try:
     from modules.characters.model.character_feat_model import CharacterFeatAcquisition
     from modules.characters.model.character_spell_model import CharacterSpell
     from modules.characters.model.character_resource_model import CharacterResource
+    from modules.characters.model.character_subclass_model import CharacterSubclass
+    from modules.characters.model.character_inventory_model import CharacterInventoryItem
     from modules.characters.model.character_choices_log_model import CharacterChoiceLog
     from modules.campaign.model.campaign_model import Campaign
     from modules.campaign.model.campaign_member_model import CampaignMember
