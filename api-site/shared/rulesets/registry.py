@@ -27,12 +27,26 @@ from shared.rulesets.models import (
     ClassDefinition,
     ClassesFile,
     CURRENT_SCHEMA_VERSION,
+    ArmorDefinition,
+    ArmorFile,
+    CurrencyDefinition,
+    CurrencyFile,
     FeatDefinition,
     FeatsFile,
+    ItemDefinition,
+    ItemsFile,
+    InvocationDefinition,
+    InvocationsFile,
+    MetamagicDefinition,
+    MetamagicFile,
     SkillDefinition,
     SkillsFile,
+    WeaponDefinition,
+    WeaponsFile,
     SpeciesDefinition,
     SpeciesFile,
+    SpellDefinition,
+    SpellsFile,
 )
 from shared.rulesets.strategy import RulesetStrategy
 
@@ -65,7 +79,14 @@ class _EditionRulesetData:
         species: dict[str, SpeciesDefinition],
         backgrounds: dict[str, BackgroundDefinition],
         classes: dict[str, ClassDefinition],
-        strategy: RulesetStrategy,
+        spells: dict[str, SpellDefinition],
+        invocations: dict[str, InvocationDefinition],
+        metamagic: dict[str, MetamagicDefinition],
+        weapons: dict[str, WeaponDefinition],
+        armor: dict[str, ArmorDefinition],
+        items: dict[str, ItemDefinition],
+        currency: dict[str, CurrencyDefinition],
+        strategy: Optional[RulesetStrategy],  # filled lazily on first get_ruleset()
     ):
         self.edition_code = edition_code
         self.skills = skills
@@ -73,6 +94,13 @@ class _EditionRulesetData:
         self.species = species
         self.backgrounds = backgrounds
         self.classes = classes
+        self.spells = spells
+        self.invocations = invocations
+        self.metamagic = metamagic
+        self.weapons = weapons
+        self.armor = armor
+        self.items = items
+        self.currency = currency
         self.strategy = strategy
 
 
@@ -137,12 +165,26 @@ class RulesetRegistry:
         species_file = _load("species.json", SpeciesFile)
         backgrounds_file = _load("backgrounds.json", BackgroundsFile)
         classes_file = _load("classes.json", ClassesFile)
+        spells_file = _load("spells.json", SpellsFile)
+        invocations_file = _load("invocations.json", InvocationsFile)
+        metamagic_file = _load("metamagic.json", MetamagicFile)
+        weapons_file = _load("weapons.json", WeaponsFile)
+        armor_file = _load("armor.json", ArmorFile)
+        items_file = _load("items.json", ItemsFile)
+        currency_file = _load("currency.json", CurrencyFile)
 
         skills = {s.code: s for s in skills_file.skills}
         feats = {f.code: f for f in feats_file.feats}
         species = {s.code: s for s in species_file.species}
         backgrounds = {b.code: b for b in backgrounds_file.backgrounds}
         classes = {c.code: c for c in classes_file.classes}
+        spells = {s.code: s for s in spells_file.spells}
+        invocations = {i.code: i for i in invocations_file.invocations}
+        metamagic = {m.code: m for m in metamagic_file.metamagic}
+        weapons = {w.code: w for w in weapons_file.weapons}
+        armor = {a.code: a for a in armor_file.armor}
+        items = {i.code: i for i in items_file.items}
+        currency = {c.code: c for c in currency_file.currency}
 
         # Cross-ref integrity. These also run in the parser, but a hand-edited
         # JSON could slip through, so re-check at boot.
@@ -165,6 +207,51 @@ class RulesetRegistry:
                         f"[{edition_code}] class '{cls_def.code}' references "
                         f"unknown skill '{sc}' in skill_choices.from"
                     )
+        # Spell cross-refs (deferral #1): a spell's inline class list and any species
+        # leveled-grant spell code must resolve, or the app must not boot.
+        for spell in spells.values():
+            for cc in spell.classes:
+                if cc not in classes:
+                    raise RuntimeError(
+                        f"[{edition_code}] spell '{spell.code}' references unknown class '{cc}'"
+                    )
+        for sp in species.values():
+            for opt, by_level in sp.leveled_grants_by_sub_choice.items():
+                for codes in by_level.values():
+                    for code in codes:
+                        if code not in spells:
+                            raise RuntimeError(
+                                f"[{edition_code}] species '{sp.code}' lineage '{opt}' "
+                                f"grants unknown spell '{code}'"
+                            )
+        # Subclass always-prepared spells (deferral #2): domain/oath/patron spell codes and
+        # Druid Circle of the Land per-land codes must resolve too.
+        for cls_def in classes.values():
+            for sub in cls_def.subclasses:
+                for codes in sub.always_prepared_spells_by_level.values():
+                    for code in codes:
+                        if code not in spells:
+                            raise RuntimeError(
+                                f"[{edition_code}] subclass '{sub.code}' always-prepares "
+                                f"unknown spell '{code}'"
+                            )
+                for land, by_level in sub.leveled_grants_by_sub_choice.items():
+                    for codes in by_level.values():
+                        for code in codes:
+                            if code not in spells:
+                                raise RuntimeError(
+                                    f"[{edition_code}] subclass '{sub.code}' option '{land}' "
+                                    f"grants unknown spell '{code}'"
+                                )
+        # Invocation prerequisites that reference another invocation (e.g. "Pact of the Blade
+        # Invocation") must resolve to a real invocation code.
+        for inv in invocations.values():
+            for prereq in inv.prerequisites:
+                if prereq.type == "invocation" and prereq.feature not in invocations:
+                    raise RuntimeError(
+                        f"[{edition_code}] invocation '{inv.code}' requires unknown "
+                        f"invocation '{prereq.feature}'"
+                    )
 
         if edition_code not in _STRATEGY_FACTORIES:
             raise RuntimeError(
@@ -178,6 +265,13 @@ class RulesetRegistry:
             species=species,
             backgrounds=backgrounds,
             classes=classes,
+            spells=spells,
+            invocations=invocations,
+            metamagic=metamagic,
+            weapons=weapons,
+            armor=armor,
+            items=items,
+            currency=currency,
             strategy=None,  # filled below once we have the registry instance
         )
         return registry_data
@@ -260,6 +354,88 @@ class RulesetRegistry:
 
     def list_skills(self, edition_code: str) -> list[SkillDefinition]:
         return sorted(self._ed(edition_code).skills.values(), key=lambda s: s.code)
+
+    def get_spell(self, edition_code: str, spell_code: str) -> SpellDefinition:
+        ed = self._ed(edition_code)
+        if spell_code not in ed.spells:
+            raise KeyError(f"Unknown spell '{spell_code}' in edition '{edition_code}'")
+        return ed.spells[spell_code]
+
+    def list_spells(
+        self,
+        edition_code: str,
+        class_code: Optional[str] = None,
+        level: Optional[int] = None,
+    ) -> list[SpellDefinition]:
+        spells = sorted(self._ed(edition_code).spells.values(), key=lambda s: (s.level, s.code))
+        if class_code is not None:
+            spells = [s for s in spells if class_code in s.classes]
+        if level is not None:
+            spells = [s for s in spells if s.level == level]
+        return spells
+
+    def get_invocation(self, edition_code: str, code: str) -> InvocationDefinition:
+        ed = self._ed(edition_code)
+        if code not in ed.invocations:
+            raise KeyError(f"Unknown invocation '{code}' in edition '{edition_code}'")
+        return ed.invocations[code]
+
+    def list_invocations(self, edition_code: str) -> list[InvocationDefinition]:
+        return sorted(self._ed(edition_code).invocations.values(), key=lambda i: i.code)
+
+    def get_metamagic(self, edition_code: str, code: str) -> MetamagicDefinition:
+        ed = self._ed(edition_code)
+        if code not in ed.metamagic:
+            raise KeyError(f"Unknown metamagic '{code}' in edition '{edition_code}'")
+        return ed.metamagic[code]
+
+    def list_metamagic(self, edition_code: str) -> list[MetamagicDefinition]:
+        return sorted(self._ed(edition_code).metamagic.values(), key=lambda m: m.code)
+
+    def get_weapon(self, edition_code: str, code: str) -> WeaponDefinition:
+        ed = self._ed(edition_code)
+        if code not in ed.weapons:
+            raise KeyError(f"Unknown weapon '{code}' in edition '{edition_code}'")
+        return ed.weapons[code]
+
+    def list_weapons(
+        self, edition_code: str, category: Optional[str] = None
+    ) -> list[WeaponDefinition]:
+        weapons = sorted(self._ed(edition_code).weapons.values(), key=lambda w: w.code)
+        if category is not None:
+            weapons = [w for w in weapons if w.category == category]
+        return weapons
+
+    def get_armor(self, edition_code: str, code: str) -> ArmorDefinition:
+        ed = self._ed(edition_code)
+        if code not in ed.armor:
+            raise KeyError(f"Unknown armor '{code}' in edition '{edition_code}'")
+        return ed.armor[code]
+
+    def list_armor(
+        self, edition_code: str, category: Optional[str] = None
+    ) -> list[ArmorDefinition]:
+        armor = sorted(self._ed(edition_code).armor.values(), key=lambda a: a.code)
+        if category is not None:
+            armor = [a for a in armor if a.category == category]
+        return armor
+
+    def get_item(self, edition_code: str, code: str) -> ItemDefinition:
+        ed = self._ed(edition_code)
+        if code not in ed.items:
+            raise KeyError(f"Unknown item '{code}' in edition '{edition_code}'")
+        return ed.items[code]
+
+    def list_items(
+        self, edition_code: str, category: Optional[str] = None
+    ) -> list[ItemDefinition]:
+        items = sorted(self._ed(edition_code).items.values(), key=lambda i: (i.category, i.code))
+        if category is not None:
+            items = [i for i in items if i.category == category]
+        return items
+
+    def list_currency(self, edition_code: str) -> list[CurrencyDefinition]:
+        return sorted(self._ed(edition_code).currency.values(), key=lambda c: c.cp_value)
 
     def get_ruleset(self, edition_code: str) -> RulesetStrategy:
         ed = self._ed(edition_code)

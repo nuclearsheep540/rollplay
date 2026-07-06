@@ -1,0 +1,869 @@
+{
+  "_comment": "Hand/LLM-authored class feature-choice metadata (A.3), comprehension-extracted from the vendored SRD and verified against source (author->verify workflow). The build (parse_srd.py _merge_authored_choices) folds each `choice` onto the matching feature in classes.json by (level, feature); classes.json stays the single loaded source of truth. Entries must reference a real parsed feature or the build aborts.",
+  "schema_version": 1,
+  "edition": "srd_5_2_1",
+  "class_choices": {
+    "barbarian": [
+      {
+        "level": 1,
+        "feature": "Weapon Mastery",
+        "choice": {
+          "type": "weapon_mastery",
+          "code": "barbarian_weapon_mastery",
+          "name": "Weapon Mastery",
+          "count": 2,
+          "swappable_on": "long_rest"
+        }
+      },
+      {
+        "level": 3,
+        "feature": "Primal Knowledge",
+        "choice": {
+          "type": "skill_proficiency",
+          "code": "barbarian_primal_knowledge",
+          "name": "Primal Knowledge Skill",
+          "count": 1,
+          "swappable_on": "long_rest",
+          "options": [
+            {
+              "code": "animal_handling",
+              "name": "Animal Handling"
+            },
+            {
+              "code": "athletics",
+              "name": "Athletics"
+            },
+            {
+              "code": "intimidation",
+              "name": "Intimidation"
+            },
+            {
+              "code": "nature",
+              "name": "Nature"
+            },
+            {
+              "code": "perception",
+              "name": "Perception"
+            },
+            {
+              "code": "survival",
+              "name": "Survival"
+            }
+          ]
+        }
+      }
+    ],
+    "bard": [
+      {
+        "level": 2,
+        "feature": "Expertise",
+        "choice": {
+          "code": "expertise_level_2",
+          "name": "Expertise",
+          "type": "skill_proficiency",
+          "count": 2,
+          "options": [
+            {
+              "code": "acrobatics",
+              "name": "Acrobatics"
+            },
+            {
+              "code": "animal_handling",
+              "name": "Animal Handling"
+            },
+            {
+              "code": "arcana",
+              "name": "Arcana"
+            },
+            {
+              "code": "athletics",
+              "name": "Athletics"
+            },
+            {
+              "code": "deception",
+              "name": "Deception"
+            },
+            {
+              "code": "history",
+              "name": "History"
+            },
+            {
+              "code": "insight",
+              "name": "Insight"
+            },
+            {
+              "code": "intimidation",
+              "name": "Intimidation"
+            },
+            {
+              "code": "investigation",
+              "name": "Investigation"
+            },
+            {
+              "code": "medicine",
+              "name": "Medicine"
+            },
+            {
+              "code": "nature",
+              "name": "Nature"
+            },
+            {
+              "code": "perception",
+              "name": "Perception"
+            },
+            {
+              "code": "performance",
+              "name": "Performance"
+            },
+            {
+              "code": "persuasion",
+              "name": "Persuasion"
+            },
+            {
+              "code": "religion",
+              "name": "Religion"
+            },
+            {
+              "code": "sleight_of_hand",
+              "name": "Sleight of Hand"
+            },
+            {
+              "code": "stealth",
+              "name": "Stealth"
+            },
+            {
+              "code": "survival",
+              "name": "Survival"
+            }
+          ]
+        }
+      },
+      {
+        "level": 9,
+        "feature": "Expertise",
+        "choice": {
+          "code": "expertise_level_9",
+          "name": "Expertise",
+          "type": "skill_proficiency",
+          "count": 2,
+          "options": [
+            {
+              "code": "acrobatics",
+              "name": "Acrobatics"
+            },
+            {
+              "code": "animal_handling",
+              "name": "Animal Handling"
+            },
+            {
+              "code": "arcana",
+              "name": "Arcana"
+            },
+            {
+              "code": "athletics",
+              "name": "Athletics"
+            },
+            {
+              "code": "deception",
+              "name": "Deception"
+            },
+            {
+              "code": "history",
+              "name": "History"
+            },
+            {
+              "code": "insight",
+              "name": "Insight"
+            },
+            {
+              "code": "intimidation",
+              "name": "Intimidation"
+            },
+            {
+              "code": "investigation",
+              "name": "Investigation"
+            },
+            {
+              "code": "medicine",
+              "name": "Medicine"
+            },
+            {
+              "code": "nature",
+              "name": "Nature"
+            },
+            {
+              "code": "perception",
+              "name": "Perception"
+            },
+            {
+              "code": "performance",
+              "name": "Performance"
+            },
+            {
+              "code": "persuasion",
+              "name": "Persuasion"
+            },
+            {
+              "code": "religion",
+              "name": "Religion"
+            },
+            {
+              "code": "sleight_of_hand",
+              "name": "Sleight of Hand"
+            },
+            {
+              "code": "stealth",
+              "name": "Stealth"
+            },
+            {
+              "code": "survival",
+              "name": "Survival"
+            }
+          ]
+        }
+      }
+    ],
+    "cleric": [
+      {
+        "level": 1,
+        "feature": "Divine Order",
+        "choice": {
+          "code": "divine_order",
+          "name": "Divine Order",
+          "type": "single_pick",
+          "count": 1,
+          "options": [
+            {
+              "code": "protector",
+              "name": "Protector",
+              "description": "Trained for battle, you gain proficiency with Martial weapons and training with Heavy armor."
+            },
+            {
+              "code": "thaumaturge",
+              "name": "Thaumaturge",
+              "description": "You know one extra cantrip from the Cleric spell list, and you gain a bonus to Intelligence (Arcana or Religion) checks equal to your Wisdom modifier (minimum of +1)."
+            }
+          ]
+        }
+      },
+      {
+        "level": 7,
+        "feature": "Blessed Strikes",
+        "choice": {
+          "code": "blessed_strikes",
+          "name": "Blessed Strikes",
+          "type": "single_pick",
+          "count": 1,
+          "options": [
+            {
+              "code": "divine_strike",
+              "name": "Divine Strike",
+              "description": "Once on each of your turns when you hit a creature with an attack roll using a weapon, you can cause the target to take an extra 1d8 Necrotic or Radiant damage (your choice)."
+            },
+            {
+              "code": "potent_spellcasting",
+              "name": "Potent Spellcasting",
+              "description": "Add your Wisdom modifier to the damage you deal with any Cleric cantrip."
+            }
+          ]
+        }
+      }
+    ],
+    "druid": [
+      {
+        "level": 1,
+        "feature": "Primal Order",
+        "choice": {
+          "type": "single_pick",
+          "name": "Primal Order",
+          "code": "primal_order",
+          "count": 1,
+          "options": [
+            {
+              "code": "magician",
+              "name": "Magician",
+              "description": "You know one extra cantrip from the Druid spell list. In addition, your mystical connection to nature gives you a bonus to your Intelligence (Arcana or Nature) checks. The bonus equals your Wisdom modifier (minimum bonus of +1)."
+            },
+            {
+              "code": "warden",
+              "name": "Warden",
+              "description": "Trained for battle, you gain proficiency with Martial weapons and training with Medium armor."
+            }
+          ]
+        }
+      },
+      {
+        "level": 7,
+        "feature": "Elemental Fury",
+        "choice": {
+          "type": "single_pick",
+          "name": "Elemental Fury",
+          "code": "elemental_fury",
+          "count": 1,
+          "options": [
+            {
+              "code": "potent_spellcasting",
+              "name": "Potent Spellcasting",
+              "description": "Add your Wisdom modifier to the damage you deal with any Druid cantrip."
+            },
+            {
+              "code": "primal_strike",
+              "name": "Primal Strike",
+              "description": "Once on each of your turns when you hit a creature with an attack roll using a weapon or a Beast form's attack in Wild Shape, you can cause the target to take an extra 1d8 Cold, Fire, Lightning, or Thunder damage (choose when you hit)."
+            }
+          ]
+        }
+      }
+    ],
+    "fighter": [
+      {
+        "level": 1,
+        "feature": "Fighting Style",
+        "choice": {
+          "code": "fighting_style",
+          "name": "Fighting Style",
+          "type": "feat_pick",
+          "count": 1,
+          "source": [
+            "fighting_style"
+          ],
+          "swappable_on": "level_up"
+        }
+      },
+      {
+        "level": 1,
+        "feature": "Weapon Mastery",
+        "choice": {
+          "code": "weapon_mastery_fighter_level_1",
+          "name": "Weapon Mastery",
+          "type": "weapon_mastery",
+          "count": 3,
+          "swappable_on": "long_rest"
+        }
+      }
+    ],
+    "paladin": [
+      {
+        "level": 1,
+        "feature": "Weapon Mastery",
+        "choice": {
+          "type": "weapon_mastery",
+          "code": "paladin_weapon_mastery",
+          "name": "Weapon Mastery",
+          "count": 2,
+          "swappable_on": "long_rest"
+        }
+      },
+      {
+        "level": 2,
+        "feature": "Fighting Style",
+        "choice": {
+          "code": "fighting_style",
+          "name": "Fighting Style",
+          "type": "feat_pick",
+          "count": 1,
+          "source": [
+            "fighting_style"
+          ],
+          "swappable_on": "level_up"
+        }
+      }
+    ],
+    "ranger": [
+      {
+        "level": 1,
+        "feature": "Weapon Mastery",
+        "choice": {
+          "code": "weapon_mastery_ranger",
+          "name": "Weapon Mastery",
+          "type": "weapon_mastery",
+          "count": 2,
+          "swappable_on": "long_rest"
+        }
+      },
+      {
+        "level": 2,
+        "feature": "Deft Explorer",
+        "choice": {
+          "code": "deft_explorer_expertise",
+          "name": "Expertise",
+          "type": "skill_proficiency",
+          "count": 1
+        }
+      },
+      {
+        "level": 2,
+        "feature": "Fighting Style",
+        "choice": {
+          "code": "fighting_style_ranger",
+          "name": "Fighting Style",
+          "type": "feat_pick",
+          "count": 1,
+          "source": [
+            "fighting_style"
+          ],
+          "swappable_on": "level_up"
+        }
+      },
+      {
+        "level": 9,
+        "feature": "Expertise",
+        "choice": {
+          "code": "expertise_ranger",
+          "name": "Expertise",
+          "type": "skill_proficiency",
+          "count": 2
+        }
+      }
+    ],
+    "rogue": [
+      {
+        "level": 1,
+        "feature": "Expertise",
+        "choice": {
+          "code": "expertise_skill_choice_1",
+          "name": "Expertise (2 Skills)",
+          "type": "skill_proficiency",
+          "count": 2,
+          "options": [
+            {
+              "code": "acrobatics",
+              "name": "Acrobatics"
+            },
+            {
+              "code": "athletics",
+              "name": "Athletics"
+            },
+            {
+              "code": "deception",
+              "name": "Deception"
+            },
+            {
+              "code": "insight",
+              "name": "Insight"
+            },
+            {
+              "code": "intimidation",
+              "name": "Intimidation"
+            },
+            {
+              "code": "investigation",
+              "name": "Investigation"
+            },
+            {
+              "code": "perception",
+              "name": "Perception"
+            },
+            {
+              "code": "persuasion",
+              "name": "Persuasion"
+            },
+            {
+              "code": "sleight_of_hand",
+              "name": "Sleight of Hand"
+            },
+            {
+              "code": "stealth",
+              "name": "Stealth"
+            }
+          ]
+        }
+      },
+      {
+        "level": 1,
+        "feature": "Thieves' Cant",
+        "choice": {
+          "code": "thieves_cant_language_choice",
+          "name": "Language Choice",
+          "type": "language",
+          "count": 1
+        }
+      },
+      {
+        "level": 1,
+        "feature": "Weapon Mastery",
+        "choice": {
+          "code": "weapon_mastery_choice_1",
+          "name": "Weapon Mastery (2 Weapons)",
+          "type": "weapon_mastery",
+          "count": 2,
+          "swappable_on": "long_rest"
+        }
+      },
+      {
+        "level": 6,
+        "feature": "Expertise",
+        "choice": {
+          "code": "expertise_skill_choice_2",
+          "name": "Expertise (2 More Skills)",
+          "type": "skill_proficiency",
+          "count": 2,
+          "options": [
+            {
+              "code": "acrobatics",
+              "name": "Acrobatics"
+            },
+            {
+              "code": "athletics",
+              "name": "Athletics"
+            },
+            {
+              "code": "deception",
+              "name": "Deception"
+            },
+            {
+              "code": "insight",
+              "name": "Insight"
+            },
+            {
+              "code": "intimidation",
+              "name": "Intimidation"
+            },
+            {
+              "code": "investigation",
+              "name": "Investigation"
+            },
+            {
+              "code": "perception",
+              "name": "Perception"
+            },
+            {
+              "code": "persuasion",
+              "name": "Persuasion"
+            },
+            {
+              "code": "sleight_of_hand",
+              "name": "Sleight of Hand"
+            },
+            {
+              "code": "stealth",
+              "name": "Stealth"
+            }
+          ]
+        }
+      }
+    ],
+    "sorcerer": [
+      {
+        "level": 2,
+        "feature": "Metamagic",
+        "choice": {
+          "code": "metamagic",
+          "name": "Metamagic",
+          "type": "metamagic",
+          "count": 2,
+          "swappable_on": "level_up"
+        }
+      }
+    ],
+    "warlock": [
+      {
+        "level": 1,
+        "feature": "Eldritch Invocations",
+        "choice": {
+          "code": "eldritch_invocations",
+          "name": "Eldritch Invocations",
+          "type": "invocation",
+          "count": 1,
+          "swappable_on": "level_up"
+        }
+      }
+    ],
+    "wizard": [
+      {
+        "level": 2,
+        "feature": "Scholar",
+        "choice": {
+          "type": "skill_proficiency",
+          "name": "Scholar",
+          "code": "scholar",
+          "count": 1,
+          "options": [
+            {
+              "code": "arcana",
+              "name": "Arcana"
+            },
+            {
+              "code": "history",
+              "name": "History"
+            },
+            {
+              "code": "investigation",
+              "name": "Investigation"
+            },
+            {
+              "code": "medicine",
+              "name": "Medicine"
+            },
+            {
+              "code": "nature",
+              "name": "Nature"
+            },
+            {
+              "code": "religion",
+              "name": "Religion"
+            }
+          ]
+        }
+      }
+    ]
+  },
+  "subclass_choices": {
+    "bard": {
+      "college_of_lore": [
+        {
+          "level": 3,
+          "feature": "Bonus Proficiencies",
+          "choice": {
+            "code": "bonus_proficiencies",
+            "name": "Bonus Proficiencies",
+            "type": "skill_proficiency",
+            "count": 3,
+            "options": [
+              {
+                "code": "acrobatics",
+                "name": "Acrobatics"
+              },
+              {
+                "code": "animal_handling",
+                "name": "Animal Handling"
+              },
+              {
+                "code": "arcana",
+                "name": "Arcana"
+              },
+              {
+                "code": "athletics",
+                "name": "Athletics"
+              },
+              {
+                "code": "deception",
+                "name": "Deception"
+              },
+              {
+                "code": "history",
+                "name": "History"
+              },
+              {
+                "code": "insight",
+                "name": "Insight"
+              },
+              {
+                "code": "intimidation",
+                "name": "Intimidation"
+              },
+              {
+                "code": "investigation",
+                "name": "Investigation"
+              },
+              {
+                "code": "medicine",
+                "name": "Medicine"
+              },
+              {
+                "code": "nature",
+                "name": "Nature"
+              },
+              {
+                "code": "perception",
+                "name": "Perception"
+              },
+              {
+                "code": "performance",
+                "name": "Performance"
+              },
+              {
+                "code": "persuasion",
+                "name": "Persuasion"
+              },
+              {
+                "code": "religion",
+                "name": "Religion"
+              },
+              {
+                "code": "sleight_of_hand",
+                "name": "Sleight of Hand"
+              },
+              {
+                "code": "stealth",
+                "name": "Stealth"
+              },
+              {
+                "code": "survival",
+                "name": "Survival"
+              }
+            ]
+          }
+        }
+      ]
+    },
+    "fighter": {
+      "champion": [
+        {
+          "level": 7,
+          "feature": "Additional Fighting Style",
+          "choice": {
+            "code": "additional_fighting_style",
+            "name": "Additional Fighting Style",
+            "type": "feat_pick",
+            "count": 1,
+            "source": [
+              "fighting_style"
+            ],
+            "swappable_on": "level_up"
+          }
+        }
+      ]
+    },
+    "ranger": {
+      "hunter": [
+        {
+          "level": 3,
+          "feature": "Hunter's Prey",
+          "choice": {
+            "code": "hunters_prey",
+            "name": "Hunter's Prey",
+            "type": "single_pick",
+            "count": 1,
+            "swappable_on": "short_or_long_rest",
+            "options": [
+              {
+                "code": "colossus_slayer",
+                "name": "Colossus Slayer",
+                "description": "Your tenacity can wear down even the most resilient foes. When you hit a creature with a weapon, the weapon deals an extra 1d8 damage to the target if it's missing any of its Hit Points. You can deal this extra damage only once per turn."
+              },
+              {
+                "code": "horde_breaker",
+                "name": "Horde Breaker",
+                "description": "Once on each of your turns when you make an attack with a weapon, you can make another attack with the same weapon against a different creature that is within 5 feet of the original target, that is within the weapon's range, and that you haven't attacked this turn."
+              }
+            ]
+          }
+        },
+        {
+          "level": 7,
+          "feature": "Defensive Tactics",
+          "choice": {
+            "code": "defensive_tactics",
+            "name": "Defensive Tactics",
+            "type": "single_pick",
+            "count": 1,
+            "swappable_on": "short_or_long_rest",
+            "options": [
+              {
+                "code": "escape_the_horde",
+                "name": "Escape the Horde",
+                "description": "Opportunity Attacks have Disadvantage against you."
+              },
+              {
+                "code": "multiattack_defense",
+                "name": "Multiattack Defense",
+                "description": "When a creature hits you with an attack roll, that creature has Disadvantage on all other attack rolls against you this turn."
+              }
+            ]
+          }
+        }
+      ]
+    },
+    "sorcerer": {
+      "draconic_sorcery": [
+        {
+          "level": 6,
+          "feature": "Elemental Affinity",
+          "choice": {
+            "code": "elemental_affinity",
+            "name": "Elemental Affinity",
+            "type": "single_pick",
+            "count": 1,
+            "options": [
+              {
+                "code": "acid",
+                "name": "Acid"
+              },
+              {
+                "code": "cold",
+                "name": "Cold"
+              },
+              {
+                "code": "fire",
+                "name": "Fire"
+              },
+              {
+                "code": "lightning",
+                "name": "Lightning"
+              },
+              {
+                "code": "poison",
+                "name": "Poison"
+              }
+            ]
+          }
+        }
+      ]
+    },
+    "warlock": {
+      "fiend_patron": [
+        {
+          "level": 10,
+          "feature": "Fiendish Resilience",
+          "choice": {
+            "code": "fiendish_resilience_damage_type",
+            "name": "Damage Type for Resistance",
+            "type": "single_pick",
+            "count": 1,
+            "options": [
+              {
+                "code": "acid",
+                "name": "Acid"
+              },
+              {
+                "code": "cold",
+                "name": "Cold"
+              },
+              {
+                "code": "fire",
+                "name": "Fire"
+              },
+              {
+                "code": "lightning",
+                "name": "Lightning"
+              },
+              {
+                "code": "necrotic",
+                "name": "Necrotic"
+              },
+              {
+                "code": "poison",
+                "name": "Poison"
+              },
+              {
+                "code": "psychic",
+                "name": "Psychic"
+              },
+              {
+                "code": "radiant",
+                "name": "Radiant"
+              },
+              {
+                "code": "thunder",
+                "name": "Thunder"
+              },
+              {
+                "code": "bludgeoning",
+                "name": "Bludgeoning"
+              },
+              {
+                "code": "piercing",
+                "name": "Piercing"
+              },
+              {
+                "code": "slashing",
+                "name": "Slashing"
+              }
+            ]
+          }
+        }
+      ]
+    }
+  }
+}

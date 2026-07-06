@@ -45,6 +45,14 @@ class ClassEntryDTO(BaseModel):
     class_code: str = Field(pattern=CodePattern)
     level: int = Field(ge=1, le=20)
     is_primary: bool = False
+    sub_choices: Dict[str, List[str]] = {}  # L1 feature-choice picks: {choice_code: [picked_codes]}
+    chosen_skills: List[str] = []  # the class's level-1 skill proficiency picks
+
+
+class SubclassEntryDTO(BaseModel):
+    class_code: str = Field(pattern=CodePattern)
+    subclass_code: str = Field(pattern=CodePattern)
+    chosen_at_level: int = Field(ge=1, le=20)
 
 
 class SkillProficiencyDTO(BaseModel):
@@ -57,6 +65,26 @@ class FeatAcquisitionDTO(BaseModel):
     feat_code: str = Field(pattern=CodePattern)
     level: int = Field(ge=1, le=20)
     source: Literal["BACKGROUND_ORIGIN", "ASI", "OTHER"]
+
+
+class SpellSelectionDTO(BaseModel):
+    spell_code: str = Field(pattern=CodePattern)
+    spell_level: int = Field(ge=0, le=9)  # 0 = cantrip
+    source: str  # one of SPELL_SOURCES (class_known / class_prepared / always_prepared / …)
+    granted_by: str = ""
+    casting_ability: Optional[AbilityCode] = None
+
+
+class ResourceUsageDTO(BaseModel):
+    """Raw stored resource state — uses consumed (0/absent = full). Max is in DerivedStats."""
+    pool_code: str
+    current_value: int = Field(ge=0)
+
+
+class InventoryItemDTO(BaseModel):
+    item_code: str = Field(pattern=CodePattern)
+    quantity: int = Field(default=1, ge=0)
+    notes: str = ""
 
 
 class DerivedSkillModifier(BaseModel):
@@ -73,6 +101,25 @@ class DerivedSaveModifier(BaseModel):
     modifier: int
 
 
+class PactSlotDTO(BaseModel):
+    count: int
+    slot_level: int
+
+
+class ResourcePoolDTO(BaseModel):
+    """A class resource pool, joining the ruleset max with the stored spent count (G.1)."""
+    pool_code: str
+    max_value: int
+    current_value: int  # uses spent (remaining = max_value - current_value)
+    recharge: str       # "short_rest" | "long_rest"
+
+
+class ACMethodDTO(BaseModel):
+    code: str
+    label: str
+    ac: int
+
+
 class DerivedStats(BaseModel):
     """Ruleset-computed values surfaced alongside the stored character state."""
 
@@ -83,6 +130,18 @@ class DerivedStats(BaseModel):
     next_level_xp: Optional[int] = None
     pending_level_up: bool
     pending_asi_count: int
+    # Spellcasting (empty / null for non-casters). spell_slots is {spell_level: count};
+    # the DC/attack maps are keyed by the casting ability so the UI can render per-class.
+    spell_slots: Dict[int, int] = {}
+    pact_slots: Optional[PactSlotDTO] = None
+    spell_save_dc_by_ability: Dict[AbilityCode, int] = {}
+    spell_attack_bonus_by_ability: Dict[AbilityCode, int] = {}
+    # Resource pools (max joined with stored spent) + AC computation options.
+    resource_pools: List[ResourcePoolDTO] = []
+    ac_methods: List[ACMethodDTO] = []
+    # Rules-suggested max HP (C.3) — informational; the stored hp_max may differ if the player
+    # rolled or entered their own. Lets the sheet flag a divergence without clobbering it.
+    computed_hp_max: int = 0
 
 
 class CharacterResponse(BaseModel):
@@ -96,9 +155,11 @@ class CharacterResponse(BaseModel):
 
     character_name: str
     species_code: str
+    species_sub_choices: Dict[str, List[str]] = {}  # lineage/ancestry/size picks
     background_code: str
 
     class_entries: List[ClassEntryDTO]
+    subclasses: List[SubclassEntryDTO] = []
     # ``ability_scores`` is the FINAL value per ability (base + origin bonus
     # baked in). Runtime callers use this directly for modifier math.
     # ``origin_ability_bonuses`` is the bonus dict so the wizard can subtract
@@ -108,6 +169,10 @@ class CharacterResponse(BaseModel):
     save_proficiencies: List[AbilityCode]
     skills: List[SkillProficiencyDTO]
     feats: List[FeatAcquisitionDTO]
+    spells: List[SpellSelectionDTO] = []
+    resource_usage: List[ResourceUsageDTO] = []
+    currency: Dict[str, int] = {}
+    inventory: List[InventoryItemDTO] = []
 
     level: int
     xp: int
@@ -120,6 +185,7 @@ class CharacterResponse(BaseModel):
     death_save_failures: int
     inspiration: bool
     status_effects: List[str]
+    exhaustion_level: int = 0
     is_alive: bool
 
     speed: int
@@ -173,6 +239,7 @@ class IdentityStepPayload(BaseModel):
     species_code: str = Field(pattern=CodePattern)
     name: Optional[str] = Field(default=None, min_length=1, max_length=50)
     chosen_languages: List[str] = Field(default_factory=list)
+    sub_choices: Dict[str, List[str]] = Field(default_factory=dict)  # lineage/ancestry/size picks
 
 
 class ClassPick(BaseModel):
@@ -180,6 +247,7 @@ class ClassPick(BaseModel):
     level: int = Field(ge=1, le=20)
     is_primary: bool = False
     chosen_skills: List[str] = Field(default_factory=list)
+    sub_choices: Dict[str, List[str]] = Field(default_factory=dict)  # L1 feature-choice picks
 
 
 class ClassStepPayload(BaseModel):
@@ -231,8 +299,41 @@ class RenameStepPayload(BaseModel):
     name: str = Field(min_length=1, max_length=50)
 
 
+class ClassSpellSelection(BaseModel):
+    """The cantrip + leveled-spell codes a player picked for one spellcasting class.
+
+    Codes are flat (cantrips and leveled spells together); the backend resolves each spell's
+    level + source via the registry, so the client doesn't have to. Counts are NOT enforced
+    here — the wizard shows the class limits as guidance (facilitate, don't enforce).
+    """
+    class_code: str = Field(pattern=CodePattern)
+    spell_codes: List[str] = Field(default_factory=list)
+
+
+class SpellsStepPayload(BaseModel):
+    selections: List[ClassSpellSelection] = Field(default_factory=list)
+
+
+class SubclassPick(BaseModel):
+    class_code: str = Field(pattern=CodePattern)
+    subclass_code: str = Field(pattern=CodePattern)
+
+
+class AdvancementFeatPick(BaseModel):
+    level: int = Field(ge=1, le=20)
+    feat_code: str = Field(pattern=CodePattern)
+
+
+class AdvancementStepPayload(BaseModel):
+    """Per-level choices for a character created above level 1 (E.2). L1 feature choices still
+    flow through the class step; this carries subclasses, ASI-level feats, and L2+ feature picks."""
+    subclasses: List[SubclassPick] = Field(default_factory=list)
+    feats: List[AdvancementFeatPick] = Field(default_factory=list)  # feats taken in place of an ASI
+    feature_choices: Dict[str, Dict[str, List[str]]] = Field(default_factory=dict)  # class_code → {choice_code: picks}
+
+
 StepName = Literal[
-    "identity", "class", "background", "ability_scores", "hp_ac", "rename"
+    "identity", "class", "background", "ability_scores", "hp_ac", "spells", "advancement", "rename"
 ]
 
 
@@ -243,6 +344,8 @@ class UpdateDraftRequest(BaseModel):
     background: Optional[BackgroundStepPayload] = None
     ability_scores: Optional[AbilityScoresStepPayload] = None
     hp_ac: Optional[HpAcStepPayload] = None
+    spells: Optional[SpellsStepPayload] = None
+    advancement: Optional[AdvancementStepPayload] = None
     rename: Optional[RenameStepPayload] = None
 
     model_config = ConfigDict(populate_by_name=True)
@@ -265,6 +368,12 @@ class RuntimePatchRequest(BaseModel):
     death_save_failures: Optional[int] = Field(default=None, ge=0, le=3)
     is_alive: Optional[bool] = None
     ac: Optional[int] = Field(default=None, ge=1, le=50)
+    exhaustion_level: Optional[int] = Field(default=None, ge=0, le=6)
+    # Whole-list replacement of resource-pool spent counts (rage, sorcery points, …).
+    resource_usage: Optional[List[ResourceUsageDTO]] = None
+    # Whole-map / whole-list replacement of currency + inventory (J.2/J.3).
+    currency: Optional[Dict[str, int]] = None
+    inventory: Optional[List[InventoryItemDTO]] = None
 
 
 # --------------------------------------------------------------------------- #
@@ -280,7 +389,18 @@ class LevelUpPreview(BaseModel):
     available_classes: List[str]  # which classes the player can put the level into
     is_asi_level: Dict[str, bool]  # class_code → whether *this* class's next level is an ASI level
     hp_options: Dict[str, Dict[str, int]]  # class_code → {average, max_roll}
-    qualifying_feats: List[str]  # feat codes the character qualifies for at next level
+    qualifying_feats: List[str]  # feat codes whose prerequisites the character meets
+    # Remaining feats (prereqs not met or not yet verifiable). Surfaced, never hidden —
+    # the modal shows these behind a "show anyway" affordance (core/product-principles.md §3.0).
+    other_feats: List[str] = []
+    # Point-of-choice guidance (Phase D), never gates: classes whose level has reached their
+    # subclass level, and whether each not-yet-taken class meets the multiclass ability prereq.
+    subclass_eligible: List[str] = []
+    multiclass_options: Dict[str, bool] = {}
+    # F.1: for classes whose NEXT level unlocks a subclass and none is chosen yet, the subclass
+    # option codes to offer. F.2: description text for the offered feats (for the modal).
+    subclass_pending: Dict[str, List[str]] = {}
+    feat_details: Dict[str, str] = {}
 
 
 class AsiChoice(BaseModel):
@@ -298,3 +418,4 @@ class LevelUpRequest(BaseModel):
     asi_choice: Optional[AsiChoice] = None
     feat_choice: Optional[FeatChoice] = None
     skill_choices: List[str] = Field(default_factory=list)
+    subclass_choice: Optional[SubclassPick] = None  # F.1: subclass unlocked at this level
