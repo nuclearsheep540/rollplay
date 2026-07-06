@@ -22,11 +22,7 @@ from modules.characters.domain.character_aggregate import (
     CharacterAggregate,
     ClassEntry,
     FeatAcquisition,
-    InventoryItem,
-    ResourceUsage,
     SkillProficiency,
-    SpellSelection,
-    SubclassEntry,
 )
 from modules.characters.model.character_ability_model import CharacterAbilityScore
 from modules.characters.model.character_choices_log_model import CharacterChoiceLog
@@ -34,11 +30,7 @@ from modules.characters.model.character_class_model import CharacterClassEntry
 from modules.characters.model.character_feat_model import CharacterFeatAcquisition
 from modules.characters.model.character_model import Character as CharacterModel
 from modules.characters.model.character_save_model import CharacterSaveProficiency
-from modules.characters.model.character_resource_model import CharacterResource
 from modules.characters.model.character_skill_model import CharacterSkillProficiency
-from modules.characters.model.character_inventory_model import CharacterInventoryItem
-from modules.characters.model.character_subclass_model import CharacterSubclass
-from modules.characters.model.character_spell_model import CharacterSpell
 from modules.characters.model.dnd_ability_model import DndAbility
 
 
@@ -74,10 +66,6 @@ class CharacterRepository:
                 selectinload(CharacterModel.save_proficiency_entries),
                 selectinload(CharacterModel.skill_entries),
                 selectinload(CharacterModel.feat_entries),
-                selectinload(CharacterModel.spell_entries),
-                selectinload(CharacterModel.resource_entries),
-                selectinload(CharacterModel.subclass_entries),
-                selectinload(CharacterModel.inventory_entries),
                 selectinload(CharacterModel.choice_log_entries),
             )
         )
@@ -109,11 +97,7 @@ class CharacterRepository:
         class_entries = sorted(
             (
                 ClassEntry(
-                    class_code=e.class_code,
-                    level=e.level,
-                    is_primary=bool(e.is_primary),
-                    sub_choices=e.sub_choices or {},
-                    chosen_skills=list(e.chosen_skills or []),
+                    class_code=e.class_code, level=e.level, is_primary=bool(e.is_primary)
                 )
                 for e in model.class_entries or []
             ),
@@ -138,40 +122,6 @@ class CharacterRepository:
             for e in model.feat_entries or []
         ]
 
-        spells = [
-            SpellSelection(
-                spell_code=e.spell_code,
-                spell_level=int(e.spell_level),
-                source=e.source,
-                granted_by=e.granted_by or "",
-                casting_ability=e.casting_ability,
-            )
-            for e in model.spell_entries or []
-        ]
-
-        resource_usage = [
-            ResourceUsage(pool_code=e.pool_code, current_value=int(e.current_value))
-            for e in model.resource_entries or []
-        ]
-
-        subclasses = [
-            SubclassEntry(
-                class_code=e.class_code,
-                subclass_code=e.subclass_code,
-                chosen_at_level=int(e.chosen_at_level),
-            )
-            for e in model.subclass_entries or []
-        ]
-
-        inventory = [
-            InventoryItem(
-                item_code=e.item_code,
-                quantity=int(e.quantity),
-                notes=e.notes or "",
-            )
-            for e in model.inventory_entries or []
-        ]
-
         edition_code = model.edition.code if model.edition is not None else ""
         return CharacterAggregate(
             id=model.id,
@@ -181,7 +131,6 @@ class CharacterRepository:
             active_campaign=model.active_in_campaign_id,
             character_name=model.character_name,
             species_code=model.species_code,
-            species_sub_choices=model.species_sub_choices or {},
             background_code=model.background_code,
             class_entries=class_entries,
             ability_scores=ability_scores,
@@ -189,11 +138,6 @@ class CharacterRepository:
             save_proficiencies=save_codes,
             skills=skills,
             feats=feats,
-            spells=spells,
-            resource_usage=resource_usage,
-            subclasses=subclasses,
-            inventory=inventory,
-            currency=dict(model.currency or {}),
             level=model.level,
             xp=model.xp,
             hp_max=model.hp_max,
@@ -204,7 +148,6 @@ class CharacterRepository:
             death_save_failures=model.death_save_failures,
             inspiration=bool(model.inspiration),
             status_effects=list(model.status_effects or []),
-            exhaustion_level=int(model.exhaustion_level or 0),
             is_alive=bool(model.is_alive),
             speed=model.speed,
             size=model.size,
@@ -290,8 +233,6 @@ class CharacterRepository:
                 death_save_failures=aggregate.death_save_failures,
                 inspiration=aggregate.inspiration,
                 status_effects=list(aggregate.status_effects),
-                exhaustion_level=aggregate.exhaustion_level,
-                currency=dict(aggregate.currency or {}),
                 is_alive=aggregate.is_alive,
                 speed=aggregate.speed,
                 size=aggregate.size,
@@ -301,7 +242,6 @@ class CharacterRepository:
                 avatar_asset_id=aggregate.avatar_asset_id,
                 ability_score_method=aggregate.ability_score_method,
                 ability_roll_details=aggregate.ability_roll_details,
-                species_sub_choices=dict(aggregate.species_sub_choices),
                 created_at=aggregate.created_at,
                 updated_at=aggregate.updated_at,
                 is_deleted=aggregate.is_deleted,
@@ -332,8 +272,6 @@ class CharacterRepository:
             model.death_save_failures = aggregate.death_save_failures
             model.inspiration = aggregate.inspiration
             model.status_effects = list(aggregate.status_effects)
-            model.exhaustion_level = aggregate.exhaustion_level
-            model.currency = dict(aggregate.currency or {})
             model.is_alive = aggregate.is_alive
             model.speed = aggregate.speed
             model.size = aggregate.size
@@ -343,7 +281,6 @@ class CharacterRepository:
             model.avatar_asset_id = aggregate.avatar_asset_id
             model.ability_score_method = aggregate.ability_score_method
             model.ability_roll_details = aggregate.ability_roll_details
-            model.species_sub_choices = dict(aggregate.species_sub_choices)
             model.updated_at = aggregate.updated_at
             model.is_deleted = aggregate.is_deleted
             # Replace-style sync for all join tables — these are small and
@@ -357,14 +294,6 @@ class CharacterRepository:
             for entry in list(model.skill_entries):
                 self.db.delete(entry)
             for entry in list(model.feat_entries):
-                self.db.delete(entry)
-            for entry in list(model.spell_entries):
-                self.db.delete(entry)
-            for entry in list(model.resource_entries):
-                self.db.delete(entry)
-            for entry in list(model.subclass_entries):
-                self.db.delete(entry)
-            for entry in list(model.inventory_entries):
                 self.db.delete(entry)
             self.db.flush()
             self._write_all_children(model, aggregate, ability_lookup)
@@ -385,8 +314,6 @@ class CharacterRepository:
                 class_code=entry.class_code,
                 level=entry.level,
                 is_primary=entry.is_primary,
-                sub_choices=dict(entry.sub_choices),
-                chosen_skills=list(entry.chosen_skills),
             ))
         scores = aggregate.ability_scores.to_dict()
         bonuses = aggregate.origin_ability_bonuses or {}
@@ -410,16 +337,7 @@ class CharacterRepository:
                 character_id=model.id,
                 ability_id=ability_id,
             ))
-        # Dedupe by skill_code: the (character_id, skill_code) unique constraint allows
-        # one row per skill, so a skill granted by more than one source (e.g. BACKGROUND
-        # + CLASS both give Athletics) collapses to a single row — soft-skip the duplicate
-        # and keep silent (per plan §D.1). Prefer an expertise grant if the sources differ.
-        deduped_skills: Dict[str, object] = {}
         for skill in aggregate.skills:
-            existing = deduped_skills.get(skill.skill_code)
-            if existing is None or (skill.expertise and not existing.expertise):
-                deduped_skills[skill.skill_code] = skill
-        for skill in deduped_skills.values():
             self.db.add(CharacterSkillProficiency(
                 character_id=model.id,
                 skill_code=skill.skill_code,
@@ -432,37 +350,6 @@ class CharacterRepository:
                 feat_code=feat.feat_code,
                 acquired_at_level=feat.level,
                 source=feat.source,
-            ))
-        # Spells are replace-written; the aggregate (learn_spell) already dedupes, so no
-        # constraint-driven collapse is needed here (unlike skills).
-        for spell in aggregate.spells:
-            self.db.add(CharacterSpell(
-                character_id=model.id,
-                spell_code=spell.spell_code,
-                spell_level=spell.spell_level,
-                source=spell.source,
-                granted_by=spell.granted_by or "",
-                casting_ability=spell.casting_ability,
-            ))
-        for resource in aggregate.resource_usage:
-            self.db.add(CharacterResource(
-                character_id=model.id,
-                pool_code=resource.pool_code,
-                current_value=resource.current_value,
-            ))
-        for sub in aggregate.subclasses:
-            self.db.add(CharacterSubclass(
-                character_id=model.id,
-                class_code=sub.class_code,
-                subclass_code=sub.subclass_code,
-                chosen_at_level=sub.chosen_at_level,
-            ))
-        for item in aggregate.inventory:
-            self.db.add(CharacterInventoryItem(
-                character_id=model.id,
-                item_code=item.item_code,
-                quantity=item.quantity,
-                notes=item.notes or "",
             ))
 
     def delete(self, character_id: UUID) -> bool:

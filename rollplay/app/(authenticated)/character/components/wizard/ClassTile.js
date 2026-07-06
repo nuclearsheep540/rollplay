@@ -8,7 +8,6 @@
 import { THEME, COLORS } from '@/app/styles/colorTheme'
 
 import ExpandableTile from './ExpandableTile'
-import FeatureChoicePicker from './FeatureChoicePicker'
 
 /**
  * One class tile, wrapping ``ExpandableTile`` with class-specific info +
@@ -26,7 +25,7 @@ function ClassInfoBody({ classDef }) {
       </div>
       <div>
         <div className="text-xs uppercase" style={{ color: THEME.textSecondary }}>Primary ability</div>
-        <div className="capitalize">{(classDef.primary_ability || []).join(' / ')}</div>
+        <div className="capitalize">{classDef.primary_ability}</div>
       </div>
       <div>
         <div className="text-xs uppercase" style={{ color: THEME.textSecondary }}>Saves</div>
@@ -44,14 +43,12 @@ function ClassInfoBody({ classDef }) {
   )
 }
 
-function SkillChecklist({ classDef, chosenSkills, skillsByCode, alreadyOwnedSkills = [], onChange }) {
+function SkillChecklist({ classDef, chosenSkills, skillsByCode, onChange }) {
   const offered = classDef.skill_choices?.from ?? []
   const allowed = classDef.skill_choices?.count ?? 0
   const limitReached = chosenSkills.length >= allowed
-  const owned = new Set(alreadyOwnedSkills)  // skills already gained from species/background/features
 
   const toggle = (code) => {
-    if (owned.has(code)) return  // already proficient from another choice — a duplicate is wasted
     if (chosenSkills.includes(code)) {
       onChange(chosenSkills.filter((c) => c !== code))
     } else if (!limitReached) {
@@ -64,7 +61,7 @@ function SkillChecklist({ classDef, chosenSkills, skillsByCode, alreadyOwnedSkil
   return (
     <div>
       <div className="text-xs uppercase mb-2" style={{ color: THEME.textSecondary }}>
-        {classDef.name}: skill proficiencies — choose {allowed}
+        Skill proficiencies — choose {allowed}
         <span className="ml-2 normal-case" style={{ opacity: 0.7 }}>
           ({chosenSkills.length}/{allowed} picked)
         </span>
@@ -72,14 +69,12 @@ function SkillChecklist({ classDef, chosenSkills, skillsByCode, alreadyOwnedSkil
       <div className="grid grid-cols-2 sm:grid-cols-3 gap-1">
         {offered.map((skillCode) => {
           const skill = skillsByCode?.get(skillCode)
+          const checked = chosenSkills.includes(skillCode)
+          const disabled = limitReached && !checked
           if (!skill) return null
-          const alreadyHave = owned.has(skillCode)
-          const checked = !alreadyHave && chosenSkills.includes(skillCode)
-          const disabled = alreadyHave || (limitReached && !checked)
           return (
             <label
               key={skillCode}
-              title={alreadyHave ? 'Already proficient — from your other choices' : undefined}
               className="flex items-center gap-2 px-2 py-1 rounded-sm text-sm"
               style={{
                 backgroundColor: checked ? `${COLORS.silver}1A` : 'transparent',
@@ -90,12 +85,11 @@ function SkillChecklist({ classDef, chosenSkills, skillsByCode, alreadyOwnedSkil
             >
               <input
                 type="checkbox"
-                checked={checked || alreadyHave}
+                checked={checked}
                 disabled={disabled}
                 onChange={() => toggle(skillCode)}
               />
               {skill.name}
-              {alreadyHave ? <span className="text-xs italic ml-1">— already have</span> : null}
             </label>
           )
         })}
@@ -110,8 +104,6 @@ export default function ClassTile({
   pick,
   isPrimary = false,
   skillsByCode,
-  editionCode,
-  alreadyOwnedSkills = [],
   onExpand,
   onCollapse,
   onSelect,
@@ -121,18 +113,11 @@ export default function ClassTile({
   // Composed summary chip — base info always, plus the selected-state
   // breadcrumbs (level + Primary tag) when this tile represents an
   // already-picked class.
-  const baseSummary = `d${classDef.hit_die} · ${(classDef.primary_ability || []).join(' / ')}`
+  const baseSummary = `d${classDef.hit_die} · ${classDef.primary_ability}`
   const summary =
     mode === 'selected' && pick
       ? `${baseSummary} · Level ${pick.level}${isPrimary ? ' · Primary' : ''}`
       : baseSummary
-
-  // Level-1 feature choices (Fighting Style, Weapon Mastery, …) merged onto the
-  // class's features by the registry. Only the primary class grants them here
-  // (matches the skill-pick rule; multiclass entries grant a limited subset).
-  const l1Choices = (classDef.features_by_level?.['1']?.features ?? []).flatMap(
-    (f) => f.choices ?? [],
-  )
 
   return (
     <ExpandableTile
@@ -178,33 +163,8 @@ export default function ClassTile({
               classDef={classDef}
               chosenSkills={pick.chosen_skills || []}
               skillsByCode={skillsByCode}
-              alreadyOwnedSkills={alreadyOwnedSkills}
               onChange={(next) => onChange?.({ ...pick, chosen_skills: next })}
             />
-          )}
-
-          {isPrimary && l1Choices.length > 0 && (
-            <div className="space-y-3 pt-2 border-t" style={{ borderColor: THEME.borderSubtle }}>
-              <div className="text-xs uppercase" style={{ color: THEME.textSecondary }}>
-                Level 1 choices
-              </div>
-              {l1Choices.map((choice) => (
-                <FeatureChoicePicker
-                  key={choice.code}
-                  choice={choice}
-                  editionCode={editionCode}
-                  value={(pick.sub_choices || {})[choice.code] ?? []}
-                  alreadyOwnedSkills={alreadyOwnedSkills}
-                  contextLabel={`${classDef.name} feature`}
-                  onChange={(next) =>
-                    onChange?.({
-                      ...pick,
-                      sub_choices: { ...(pick.sub_choices || {}), [choice.code]: next },
-                    })
-                  }
-                />
-              ))}
-            </div>
           )}
 
           {!isPrimary && classDef.skill_choices?.count > 0 && (

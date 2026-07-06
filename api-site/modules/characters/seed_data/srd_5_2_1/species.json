@@ -9,77 +9,16 @@
         "Common"
       ],
       "language_choices": null,
-      "leveled_grants_by_sub_choice": {},
       "name": "Dragonborn",
       "size": "Medium",
       "speed": 30,
-      "sub_choices": [
-        {
-          "code": "draconic_ancestry",
-          "count": 1,
-          "name": "Draconic Ancestry",
-          "options": [
-            {
-              "code": "black_dragon",
-              "description": "Acid",
-              "name": "Black"
-            },
-            {
-              "code": "blue_dragon",
-              "description": "Lightning",
-              "name": "Blue"
-            },
-            {
-              "code": "brass_dragon",
-              "description": "Fire",
-              "name": "Brass"
-            },
-            {
-              "code": "bronze_dragon",
-              "description": "Lightning",
-              "name": "Bronze"
-            },
-            {
-              "code": "copper_dragon",
-              "description": "Acid",
-              "name": "Copper"
-            },
-            {
-              "code": "gold_dragon",
-              "description": "Fire",
-              "name": "Gold"
-            },
-            {
-              "code": "green_dragon",
-              "description": "Poison",
-              "name": "Green"
-            },
-            {
-              "code": "red_dragon",
-              "description": "Fire",
-              "name": "Red"
-            },
-            {
-              "code": "silver_dragon",
-              "description": "Cold",
-              "name": "Silver"
-            },
-            {
-              "code": "white_dragon",
-              "description": "Cold",
-              "name": "White"
-            }
-          ],
-          "type": "single_pick"
-        }
-      ],
       "traits": [
         {
           "description": "Your lineage stems from a dragon progenitor. Choose the kind of dragon from the Draconic Ancestors table. Your choice affects your Breath Weapon and Damage Resistance traits as well as your appearance.",
           "name": "Draconic Ancestry"
         },
         {
-          "description": "When you take the Attack action on your turn, you can replace one of your attacks with an exhalation of magical energy in either a 15-foot Cone or a 30-foot Line that is 5 feet wide (choose the shape each time). Each creature in that area must make a Dexterity saving throw (DC 8 plus your Constitution modifier and Proficiency Bonus). On a failed save, a creature takes 1d10 damage of the type determined by your Draconic Ancestry trait. On a successful save, a creature takes half as much damage. This damage increases by 1d10 when you reach character levels 5 (2d10), 11 (3d10), and 17 (4d10).\n\nYou can use this Breath Weapon a number of times equal to your Proficiency Bonus, and you regain all expended uses when you finish a Long Rest.",
+          "description": "When you take the Attack action on your turn, you can replace one of your attacks with an exhalation of magical energy in either a 15-foot Cone or a 30-foot Line that is 5 feet wide (choose the shape each time). Each creature in that area must make a Dexterity saving throw (DC 8 plus your Constitution modifier and Proficiency Bonus). On a failed save, a creature takes 1d10 damage of the type determined by your Draconic Ancestry trait. On a successful save, a creature takes half as much damage. This damage increases by 1d10 when you reach character levels 5 (2d10), 11 (3d10), and 17 (4d10).",
           "name": "Breath Weapon"
         },
         {
@@ -103,11 +42,9 @@
         "Common"
       ],
       "language_choices": null,
-      "leveled_grants_by_sub_choice": {},
       "name": "Dwarf",
       "size": "Medium",
       "speed": 30,
-      "sub_choices": [],
       "traits": [
         {
           "description": "You have Darkvision with a range of 120 feet.",
@@ -122,7 +59,7 @@
           "name": "Dwarven Toughness"
         },
         {
-          "description": "As a Bonus Action, you gain Tremorsense with a range of 60 feet for 10 minutes. You must be on a stone surface or touching a stone surface to use this Tremorsense. The stone can be natural or worked.\n\nYou can use this Bonus Action a number of times equal to your Proficiency Bonus, and you regain all expended uses when you finish a Long Rest.",
+          "description": "As a Bonus Action, you gain Tremorsense with a range of 60 feet for 10 minutes. You must be on a stone surface or touching a stone surface to use this Tremorsense. The stone can be natural or worked.",
           "name": "Stonecunning"
         }
       ]
@@ -134,76 +71,16 @@
         "Common"
       ],
       "language_choices": null,
-      "leveled_grants_by_sub_choice": {
-        "drow": {
-          "1": [
-            "dancing_lights"
-          ],
-          "3": [
-            "faerie_fire"
-          ],
-          "5": [
-            "darkness"
-          ]
-        },
-        "high_elf": {
-          "1": [
-            "prestidigitation"
-          ],
-          "3": [
-            "detect_magic"
-          ],
-          "5": [
-            "misty_step"
-          ]
-        },
-        "wood_elf": {
-          "1": [
-            "druidcraft"
-          ],
-          "3": [
-            "longstrider"
-          ],
-          "5": [
-            "pass_without_trace"
-          ]
-        }
-      },
       "name": "Elf",
       "size": "Medium",
       "speed": 30,
-      "sub_choices": [
-        {
-          "code": "elven_lineage",
-          "count": 1,
-          "name": "Elven Lineage",
-          "options": [
-            {
-              "code": "drow",
-              "description": "The range of your Darkvision increases to 120 feet. You also know the Dancing Lights cantrip.",
-              "name": "Drow"
-            },
-            {
-              "code": "high_elf",
-              "description": "You know the Prestidigitation cantrip. Whenever you finish a Long Rest, you can replace that cantrip with a different cantrip from the Wizard spell list.",
-              "name": "High Elf"
-            },
-            {
-              "code": "wood_elf",
-              "description": "Your Speed increases to 35 feet. You also know the Druidcraft cantrip.",
-              "name": "Wood Elf"
-            }
-          ],
-          "type": "single_pick"
-        }
-      ],
       "traits": [
         {
           "description": "You have Darkvision with a range of 60 feet.",
           "name": "Darkvision"
         },
         {
-          "description": "You are part of a lineage that grants you supernatural abilities. Choose a lineage from the Elven Lineages table. You gain the level 1 benefit of that lineage.\n\nWhen you reach character levels 3 and 5, you learn a higher-level spell, as shown on the table. You always have that spell prepared. You can cast it once without a spell slot, and you regain the ability to cast it in that way when you finish a Long Rest. You can also cast the spell using any spell slots you have of the appropriate level.\n\nIntelligence, Wisdom, or Charisma is your spellcasting ability for the spells you cast with this trait (choose the ability when you select the lineage).",
+          "description": "You are part of a lineage that grants you supernatural abilities. Choose a lineage from the Elven Lineages table. You gain the level 1 benefit of that lineage.",
           "name": "Elven Lineage"
         },
         {
@@ -227,43 +104,9 @@
         "Common"
       ],
       "language_choices": null,
-      "leveled_grants_by_sub_choice": {
-        "forest_gnome": {
-          "1": [
-            "minor_illusion",
-            "speak_with_animals"
-          ]
-        },
-        "rock_gnome": {
-          "1": [
-            "mending",
-            "prestidigitation"
-          ]
-        }
-      },
       "name": "Gnome",
       "size": "Small",
       "speed": 30,
-      "sub_choices": [
-        {
-          "code": "gnomish_lineage",
-          "count": 1,
-          "name": "Gnomish Lineage",
-          "options": [
-            {
-              "code": "forest_gnome",
-              "description": "You know the Minor Illusion cantrip. You also always have the Speak with Animals spell prepared. You can cast it without a spell slot a number of times equal to your Proficiency Bonus, and you regain all expended uses when you finish a Long Rest. You can also use any spell slots you have to cast the spell.",
-              "name": "Forest Gnome"
-            },
-            {
-              "code": "rock_gnome",
-              "description": "You know the Mending and Prestidigitation cantrips. In addition, you can spend 10 minutes casting Prestidigitation to create a Tiny clockwork device (AC 5, 1 HP), such as a toy, fire starter, or music box. When you create the device, you determine its function by choosing one effect from Prestidigitation; the device produces that effect whenever you or another creature takes a Bonus Action to activate it with a touch. If the chosen effect has options within it, you choose one of those options for the device when you create it. For example, if you choose the spell's ignite-extinguish effect, you determine whether the device ignites or extinguishes fire; the device doesn't do both. You can have three such devices in existence at a time, and each falls apart 8 hours after its creation or when you dismantle it with a touch as a Utilize action.",
-              "name": "Rock Gnome"
-            }
-          ],
-          "type": "single_pick"
-        }
-      ],
       "traits": [
         {
           "description": "You have Darkvision with a range of 60 feet.",
@@ -274,7 +117,7 @@
           "name": "Gnomish Cunning"
         },
         {
-          "description": "You are part of a lineage that grants you supernatural abilities. Choose one of the following options; whichever one you choose, Intelligence, Wisdom, or Charisma is your spellcasting ability for the spells you cast with this trait (choose the ability when you select the lineage):\n\n**Forest Gnome.** You know the _Minor Illusion_ cantrip. You also always have the _Speak with Animals_ spell prepared. You can cast it without a spell slot a number of times equal to your Proficiency Bonus, and you regain all expended uses when you finish a Long Rest. You can also use any spell slots you have to cast the spell.\n\n**Rock Gnome.** You know the _Mending_ and _Prestidigitation_ cantrips. In addition, you can spend 10 minutes casting _Prestidigitation_ to create a Tiny clockwork device (AC 5, 1 HP), such as a toy, fire starter, or music box. When you create the device, you determine its function by choosing one effect from _Prestidigitation_; the device produces that effect whenever you or another creature takes a Bonus Action to activate it with a touch. If the chosen effect has options within it, you choose one of those options for the device when you create it. For example, if you choose the spell's ignite-extinguish effect, you determine whether the device ignites or extinguishes fire; the device doesn't do both. You can have three such devices in existence at a time, and each falls apart 8 hours after its creation or when you dismantle it with a touch as a Utilize action.",
+          "description": "You are part of a lineage that grants you supernatural abilities. Choose one of the following options; whichever one you choose, Intelligence, Wisdom, or Charisma is your spellcasting ability for the spells you cast with this trait (choose the ability when you select the lineage):",
           "name": "Gnomish Lineage"
         }
       ]
@@ -286,53 +129,12 @@
         "Common"
       ],
       "language_choices": null,
-      "leveled_grants_by_sub_choice": {},
       "name": "Goliath",
       "size": "Medium",
       "speed": 35,
-      "sub_choices": [
-        {
-          "code": "giant_ancestry",
-          "count": 1,
-          "name": "Giant Ancestry",
-          "options": [
-            {
-              "code": "clouds_jaunt",
-              "description": "As a Bonus Action, you magically teleport up to 30 feet to an unoccupied space you can see.",
-              "name": "Cloud's Jaunt (Cloud Giant)"
-            },
-            {
-              "code": "fires_burn",
-              "description": "When you hit a target with an attack roll and deal damage to it, you can also deal 1d10 Fire damage to that target.",
-              "name": "Fire's Burn (Fire Giant)"
-            },
-            {
-              "code": "frosts_chill",
-              "description": "When you hit a target with an attack roll and deal damage to it, you can also deal 1d6 Cold damage to that target and reduce its Speed by 10 feet until the start of your next turn.",
-              "name": "Frost's Chill (Frost Giant)"
-            },
-            {
-              "code": "hills_tumble",
-              "description": "When you hit a Large or smaller creature with an attack roll and deal damage to it, you can give that target the Prone condition.",
-              "name": "Hill's Tumble (Hill Giant)"
-            },
-            {
-              "code": "stones_endurance",
-              "description": "When you take damage, you can take a Reaction to roll 1d12. Add your Constitution modifier to the number rolled and reduce the damage by that total.",
-              "name": "Stone's Endurance (Stone Giant)"
-            },
-            {
-              "code": "storms_thunder",
-              "description": "When you take damage from a creature within 60 feet of you, you can take a Reaction to deal 1d8 Thunder damage to that creature.",
-              "name": "Storm's Thunder (Storm Giant)"
-            }
-          ],
-          "type": "single_pick"
-        }
-      ],
       "traits": [
         {
-          "description": "You are descended from Giants. Choose one of the following benefits—a supernatural boon from your ancestry; you can use the chosen benefit a number of times equal to your Proficiency Bonus, and you regain all expended uses when you finish a Long Rest:\n\n**Cloud's Jaunt (Cloud Giant).** As a Bonus Action, you magically teleport up to 30 feet to an unoccupied space you can see.\n\n**Fire's Burn (Fire Giant).** When you hit a target with an attack roll and deal damage to it, you can also deal 1d10 Fire damage to that target.\n\n**Frost's Chill (Frost Giant).** When you hit a target with an attack roll and deal damage to it, you can also deal 1d6 Cold damage to that target and reduce its Speed by 10 feet until the start of your next turn.\n\n**Hill's Tumble (Hill Giant).** When you hit a Large or smaller creature with an attack roll and deal damage to it, you can give that target the Prone condition.\n\n**Stone's Endurance (Stone Giant).** When you take damage, you can take a Reaction to roll 1d12. Add your Constitution modifier to the number rolled and reduce the damage by that total.\n\n**Storm's Thunder (Storm Giant).** When you take damage from a creature within 60 feet of you, you can take a Reaction to deal 1d8 Thunder damage to that creature.",
+          "description": "You are descended from Giants. Choose one of the following benefits—a supernatural boon from your ancestry; you can use the chosen benefit a number of times equal to your Proficiency Bonus, and you regain all expended uses when you finish a Long Rest:",
           "name": "Giant Ancestry"
         },
         {
@@ -352,11 +154,9 @@
         "Common"
       ],
       "language_choices": null,
-      "leveled_grants_by_sub_choice": {},
       "name": "Halfling",
       "size": "Small",
       "speed": 30,
-      "sub_choices": [],
       "traits": [
         {
           "description": "You have Advantage on saving throws you make to avoid or end the Frightened condition.",
@@ -383,117 +183,9 @@
         "Common"
       ],
       "language_choices": null,
-      "leveled_grants_by_sub_choice": {},
       "name": "Human",
-      "size": "Medium",
+      "size": "Small",
       "speed": 30,
-      "sub_choices": [
-        {
-          "code": "size",
-          "count": 1,
-          "name": "Size",
-          "options": [
-            {
-              "code": "medium",
-              "name": "Medium"
-            },
-            {
-              "code": "small",
-              "name": "Small"
-            }
-          ],
-          "type": "single_pick"
-        },
-        {
-          "code": "skillful",
-          "count": 1,
-          "name": "Skillful",
-          "options": [
-            {
-              "code": "acrobatics",
-              "name": "Acrobatics"
-            },
-            {
-              "code": "animal_handling",
-              "name": "Animal Handling"
-            },
-            {
-              "code": "arcana",
-              "name": "Arcana"
-            },
-            {
-              "code": "athletics",
-              "name": "Athletics"
-            },
-            {
-              "code": "deception",
-              "name": "Deception"
-            },
-            {
-              "code": "history",
-              "name": "History"
-            },
-            {
-              "code": "insight",
-              "name": "Insight"
-            },
-            {
-              "code": "intimidation",
-              "name": "Intimidation"
-            },
-            {
-              "code": "investigation",
-              "name": "Investigation"
-            },
-            {
-              "code": "medicine",
-              "name": "Medicine"
-            },
-            {
-              "code": "nature",
-              "name": "Nature"
-            },
-            {
-              "code": "perception",
-              "name": "Perception"
-            },
-            {
-              "code": "performance",
-              "name": "Performance"
-            },
-            {
-              "code": "persuasion",
-              "name": "Persuasion"
-            },
-            {
-              "code": "religion",
-              "name": "Religion"
-            },
-            {
-              "code": "sleight_of_hand",
-              "name": "Sleight of Hand"
-            },
-            {
-              "code": "stealth",
-              "name": "Stealth"
-            },
-            {
-              "code": "survival",
-              "name": "Survival"
-            }
-          ],
-          "type": "skill_proficiency"
-        },
-        {
-          "code": "versatile",
-          "count": 1,
-          "name": "Versatile",
-          "source": [
-            "origin"
-          ],
-          "type": "feat_pick"
-        }
-      ],
       "traits": [
         {
           "description": "You gain Heroic Inspiration whenever you finish a Long Rest.",
@@ -516,14 +208,12 @@
         "Common"
       ],
       "language_choices": null,
-      "leveled_grants_by_sub_choice": {},
       "name": "Orc",
       "size": "Medium",
       "speed": 30,
-      "sub_choices": [],
       "traits": [
         {
-          "description": "You can take the Dash action as a Bonus Action. When you do so, you gain a number of Temporary Hit Points equal to your Proficiency Bonus.\n\nYou can use this trait a number of times equal to your Proficiency Bonus, and you regain all expended uses when you finish a Short or Long Rest.",
+          "description": "You can take the Dash action as a Bonus Action. When you do so, you gain a number of Temporary Hit Points equal to your Proficiency Bonus.",
           "name": "Adrenaline Rush"
         },
         {
@@ -543,89 +233,16 @@
         "Common"
       ],
       "language_choices": null,
-      "leveled_grants_by_sub_choice": {
-        "abyssal": {
-          "1": [
-            "poison_spray"
-          ],
-          "3": [
-            "ray_of_sickness"
-          ],
-          "5": [
-            "hold_person"
-          ]
-        },
-        "chthonic": {
-          "1": [
-            "chill_touch"
-          ],
-          "3": [
-            "false_life"
-          ],
-          "5": [
-            "ray_of_enfeeblement"
-          ]
-        },
-        "infernal": {
-          "1": [
-            "fire_bolt"
-          ],
-          "3": [
-            "hellish_rebuke"
-          ],
-          "5": [
-            "darkness"
-          ]
-        }
-      },
       "name": "Tiefling",
-      "size": "Medium",
+      "size": "Small",
       "speed": 30,
-      "sub_choices": [
-        {
-          "code": "fiendish_legacy",
-          "count": 1,
-          "name": "Fiendish Legacy",
-          "options": [
-            {
-              "code": "abyssal",
-              "name": "Abyssal"
-            },
-            {
-              "code": "chthonic",
-              "name": "Chthonic"
-            },
-            {
-              "code": "infernal",
-              "name": "Infernal"
-            }
-          ],
-          "type": "single_pick"
-        },
-        {
-          "code": "size",
-          "count": 1,
-          "name": "Size",
-          "options": [
-            {
-              "code": "medium",
-              "name": "Medium"
-            },
-            {
-              "code": "small",
-              "name": "Small"
-            }
-          ],
-          "type": "single_pick"
-        }
-      ],
       "traits": [
         {
           "description": "You have Darkvision with a range of 60 feet.",
           "name": "Darkvision"
         },
         {
-          "description": "You are the recipient of a legacy that grants you supernatural abilities. Choose a legacy from the Fiendish Legacies table. You gain the level 1 benefit of the chosen legacy.\n\nWhen you reach character levels 3 and 5, you learn a higher-level spell, as shown on the table. You always have that spell prepared. You can cast it once without a spell slot, and you regain the ability to cast it in that way when you finish a Long Rest. You can also cast the spell using any spell slots you have of the appropriate level.\n\nIntelligence, Wisdom, or Charisma is your spellcasting ability for the spells you cast with this trait (choose the ability when you select the legacy).",
+          "description": "You are the recipient of a legacy that grants you supernatural abilities. Choose a legacy from the Fiendish Legacies table. You gain the level 1 benefit of the chosen legacy.",
           "name": "Fiendish Legacy"
         },
         {

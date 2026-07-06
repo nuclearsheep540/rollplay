@@ -41,17 +41,12 @@ if str(_API_SITE_DIR) not in sys.path:
     sys.path.insert(0, str(_API_SITE_DIR))
 
 from shared.rulesets.models import (  # noqa: E402
-    ArmorFile,
     BackgroundDefinition,
     BackgroundsFile,
     ClassDefinition,
     ClassFeature,
     ClassLevel,
     ClassesFile,
-    CurrencyFile,
-    ItemsFile,
-    SpellsFile,
-    WeaponsFile,
     CURRENT_SCHEMA_VERSION,
     FeatDefinition,
     FeatPrerequisite,
@@ -143,22 +138,6 @@ def _heading_level(token: dict) -> Optional[int]:
 
 def _heading_text(token: dict) -> str:
     return _strip(_text(token))
-
-
-def _emphasis_only_text(token: dict) -> Optional[str]:
-    """Return the inner text of a paragraph that is a single italic run, else None.
-
-    mistune renders ``_..._`` as an emphasis node, so the surrounding underscores never
-    survive into the flattened text — detect the node, not the characters. Used to pick out
-    a feat's category subheader (``_General Feat (Prerequisite: Level 4+)_``) from its body
-    paragraphs (``_Initiative Proficiency._ When you roll…``), which are emphasis + text.
-    """
-    if token.get("type") != "paragraph":
-        return None
-    children = [c for c in token.get("children", []) if c.get("type") != "softbreak"]
-    if len(children) == 1 and children[0].get("type") == "emphasis":
-        return _text(children[0]).strip() or None
-    return None
 
 
 # --------------------------------------------------------------------------- #
@@ -385,7 +364,6 @@ _PREREQ_ABILITY_ANY_RE = re.compile(
     re.IGNORECASE,
 )
 _PREREQ_SPELLCASTING_RE = re.compile(r"Spellcasting\s+(?:or\s+Pact\s+Magic\s+)?[Ff]eature", re.IGNORECASE)
-_PREREQ_FIGHTING_STYLE_RE = re.compile(r"Fighting\s+Style\s+Feature", re.IGNORECASE)
 
 
 def _parse_prereq_line(line: str) -> list[dict]:
@@ -418,8 +396,6 @@ def _parse_prereq_line(line: str) -> list[dict]:
             "value": int(m.group(2)),
             "abilities": [to_ability(m.group(1))],
         })
-    if _PREREQ_FIGHTING_STYLE_RE.search(line):
-        out.append({"type": "class_feature", "feature": "fighting_style"})
     if _PREREQ_SPELLCASTING_RE.search(line):
         out.append({"type": "spellcasting"})
     return out
@@ -448,14 +424,12 @@ def parse_feats() -> list[dict]:
                 nxt = tokens[j]
                 if _heading_level(nxt) and _heading_level(nxt) <= 4:
                     break
-                emphasis = _emphasis_only_text(nxt)
-                if not subheader and emphasis is not None:
-                    # First standalone italic paragraph is the category subheader,
-                    # e.g. "_General Feat (Prerequisite: Level 4+)_".
-                    subheader = emphasis
+                txt = _text(nxt).strip()
+                if not subheader and txt.startswith("_") and txt.rstrip("_").endswith(""):
+                    # First italic line is the subheader
+                    subheader = txt.strip("_").strip()
                     j += 1
                     continue
-                txt = _text(nxt).strip()
                 if txt:
                     desc_parts.append(txt)
                 j += 1
@@ -463,11 +437,7 @@ def parse_feats() -> list[dict]:
             repeatable = False
             if "Prerequisite:" in subheader:
                 prereq_chunk = subheader.split("Prerequisite:", 1)[1].rstrip(")").strip()
-            if "Repeatable" in subheader or any(
-                p.lstrip().startswith("Repeatable.") for p in desc_parts
-            ):
-                # The "Repeatable" clause is its own `_Repeatable._ …` paragraph, not the
-                # category subheader — check the body too.
+            if "Repeatable" in subheader:
                 repeatable = True
             prereqs = _parse_prereq_line(prereq_chunk)
             description = "\n\n".join(desc_parts).strip() or subheader or feat_name
@@ -586,64 +556,23 @@ _ITALIC_HEADER_RE = re.compile(r"_([^_]+)\._\s*(.*)", re.DOTALL)
 
 
 def _extract_italic_paragraph_traits(tokens: list[dict]) -> list[dict]:
-    """Find paragraphs that start with `_Trait Name._ ...` and return them as traits.
-
-    A trait's text can span multiple paragraphs (e.g. a usage/recharge clause in a follow-up
-    paragraph). Plain-prose paragraphs after a trait are appended to that trait until the next
-    labelled trait. Standalone bold/italic paragraphs (table captions like **Draconic Ancestors**)
-    and non-paragraph blocks (tables) are not folded into the prose.
-    """
+    """Find paragraphs that start with `_Trait Name._ ...` and return them as traits."""
     traits: list[dict] = []
-    cur: Optional[dict] = None
-
-    def _flush() -> None:
-        nonlocal cur
-        if cur and cur["name"]:
-            desc = "\n\n".join(p for p in cur["parts"] if p).strip()
-            if desc:
-                traits.append({"name": cur["name"], "description": desc})
-        cur = None
-
     for tok in tokens:
         if tok.get("type") != "paragraph":
             continue
-        children = [c for c in tok.get("children", []) if c.get("type") != "softbreak"]
         rendered = _render_inline(tok.get("children", [])).strip()
         m = _ITALIC_HEADER_RE.match(rendered)
         if m:
-            _flush()
-            cur = {"name": _strip(m.group(1)), "parts": [_strip(m.group(2))]}
-        elif cur is not None and rendered:
-            # Skip standalone bold/italic captions; keep genuine prose continuations.
-            is_caption = len(children) == 1 and children[0].get("type") in {"strong", "emphasis"}
-            if not is_caption:
-                cur["parts"].append(rendered)
-    _flush()
+            name = _strip(m.group(1))
+            desc = _strip(m.group(2))
+            if name and desc:
+                traits.append({"name": name, "description": desc})
     return traits
 
 
 _SIZE_MAP = {"small": "Small", "medium": "Medium", "large": "Large"}
 _SPEED_RE = re.compile(r"(\d+)\s*(?:feet|ft)", re.IGNORECASE)
-
-
-def _merge_species_subchoices(species: list[dict]) -> None:
-    """Fold hand-authored species sub-choices + leveled grants onto parsed species (A.4).
-
-    Same mechanical-merge model as _merge_authored_choices: the data is authored by
-    comprehension and verified against source, attached here by species code so species.json
-    stays the single loaded source of truth. An unknown species code aborts the build.
-    """
-    path = Path(__file__).resolve().parent / "authored" / EDITION_CODE / "species_subchoices.json"
-    if not path.exists():
-        return
-    authored = json.loads(path.read_text(encoding="utf-8"))
-    by_code = {s["code"]: s for s in species}
-    for code, entry in authored.get("species_sub_choices", {}).items():
-        sp = by_code.get(code)
-        if not sp:
-            raise SystemExit(f"species_subchoices.json references unknown species {code!r}")
-        sp["sub_choices"] = entry.get("sub_choices", [])
-        sp["leveled_grants_by_sub_choice"] = entry.get("leveled_grants_by_sub_choice", {})
 
 
 def parse_species() -> list[dict]:
@@ -664,14 +593,11 @@ def parse_species() -> list[dict]:
             continue  # Not a species block
         creature_type = labels.get("Creature Type", "")
         size_text = labels.get("Size", "").lower()
-        # SRD lists the primary size first (e.g. "Medium … or Small"); pick the earliest-mentioned
-        # so a two-size species (Human, Tiefling) records its primary size, not the alternative.
         size = None
-        best_pos = None
         for key, val in _SIZE_MAP.items():
-            pos = size_text.find(key)
-            if pos != -1 and (best_pos is None or pos < best_pos):
-                best_pos, size = pos, val
+            if key in size_text:
+                size = val
+                break
         if not size:
             raise ValueError(f"Species {name!r}: could not derive size from {labels.get('Size')!r}")
         speed_text = labels.get("Speed", "")
@@ -693,8 +619,6 @@ def parse_species() -> list[dict]:
             "default_languages": default_languages,
             "language_choices": language_choices,
             "traits": traits,
-            "sub_choices": [],  # populated by _merge_species_subchoices (A.4)
-            "leveled_grants_by_sub_choice": {},
         })
     species.sort(key=lambda s: s["code"])
     if not species:
@@ -857,204 +781,6 @@ def _scope_to_features(tokens: list[dict], section_start: int, section_end: int)
     return section_end
 
 
-def _strong_only_text(token: dict) -> Optional[str]:
-    """Inner text of a paragraph that is a single bold run (a spell-table caption), else None."""
-    if token.get("type") != "paragraph":
-        return None
-    children = [c for c in token.get("children", []) if c.get("type") != "softbreak"]
-    if len(children) == 1 and children[0].get("type") == "strong":
-        return _text(children[0]).strip()
-    return None
-
-
-def _parse_level_spell_table(soup: BeautifulSoup) -> dict[str, list[str]]:
-    """Parse a 2-column ``<Level | Spells>`` HTML table into ``{level: [spell_code, …]}``."""
-    out: dict[str, list[str]] = {}
-    body = soup.find("tbody") or soup
-    for tr in body.find_all("tr"):
-        cells = tr.find_all("td")
-        if len(cells) < 2:
-            continue
-        lvl = cells[0].get_text(strip=True)
-        if not lvl.isdigit():
-            continue
-        spells = [to_code(s.strip()) for s in cells[1].get_text().split(",") if s.strip()]
-        if spells:
-            out[lvl] = spells
-    return out
-
-
-def _parse_subclass_spells(tokens: list[dict]) -> tuple[dict, dict]:
-    """Parse a subclass's spell table(s) from its section tokens (deferral #2).
-
-    Returns ``(always_prepared_spells_by_level, leveled_grants_by_sub_choice)``. Flat subclasses
-    (Cleric/Paladin/Sorcerer/Warlock) have one ``Level | Spells`` table → always_prepared. Druid
-    Circle of the Land has four ``**<Land>**`` tables → leveled_grants keyed by land code.
-    """
-    always_prepared: dict[str, list[str]] = {}
-    leveled_grants: dict[str, dict[str, list[str]]] = {}
-    caption = ""
-    for tok in tokens:
-        lvl = _heading_level(tok)
-        if lvl is not None and lvl <= 3:
-            break  # end of this subclass's section
-        cap = _strong_only_text(tok)
-        if cap is not None:
-            caption = cap
-            continue
-        if tok.get("type") in {"block_html", "html_block"} and "<table" in tok.get("raw", "").lower():
-            rows = _parse_level_spell_table(BeautifulSoup(tok["raw"], "html.parser"))
-            if not rows:
-                continue
-            if caption.lower().endswith("land"):
-                land = to_code(re.sub(r"\s*Land$", "", caption, flags=re.IGNORECASE))
-                leveled_grants[land] = rows
-            else:
-                always_prepared.update(rows)
-    return always_prepared, leveled_grants
-
-
-def _parse_subclass(section_tokens: list[dict], class_name: str) -> Optional[dict]:
-    """Parse the single SRD subclass within a class section.
-
-    Each class section contains one ``### <Class> Subclass: <Name>`` H3 followed by
-    ``#### Level N: <Feature>`` H4 blocks, terminating at the next heading of level ≤ 3
-    (next subclass / spell list / class). Returns a dict ready for SubclassDefinition
-    validation, or None if the section has no subclass.
-    """
-    start_idx: Optional[int] = None
-    subclass_name: Optional[str] = None
-    for idx, tok in enumerate(section_tokens):
-        if _heading_level(tok) == 3 and "Subclass:" in _heading_text(tok):
-            subclass_name = _heading_text(tok).split("Subclass:", 1)[1].strip()
-            start_idx = idx + 1
-            break
-    if start_idx is None or not subclass_name:
-        return None
-
-    features: list[dict] = []
-    cur_level: Optional[int] = None
-    cur_name: Optional[str] = None
-    cur_parts: list[str] = []
-    h4_level_re = re.compile(r"Level\s+(\d+):\s*(.+)", re.IGNORECASE)
-
-    def _flush():
-        nonlocal cur_level, cur_name, cur_parts
-        if cur_name is not None and cur_level is not None:
-            desc = "\n\n".join(p for p in cur_parts if p).strip() or cur_name
-            features.append({"name": cur_name, "level": cur_level, "description": desc})
-        cur_level, cur_name, cur_parts = None, None, []
-
-    for tok in section_tokens[start_idx:]:
-        lvl = _heading_level(tok)
-        if lvl is not None and lvl <= 3:
-            break
-        if lvl == 4:
-            _flush()
-            m = h4_level_re.match(_heading_text(tok))
-            if m:
-                cur_level = int(m.group(1))
-                cur_name = _strip(m.group(2))
-                cur_parts = []
-        elif cur_name is not None:
-            ttype = tok.get("type")
-            if ttype in {"block_html", "html_block"}:
-                continue  # spell tables etc. — captured structurally in a later PR, not as prose
-            if ttype == "paragraph":
-                txt = _render_inline(tok.get("children", [])).strip()
-            elif ttype == "list":
-                txt = "\n".join("- " + _text(li).strip() for li in tok.get("children", []))
-            else:
-                txt = _text(tok).strip()
-            if txt:
-                cur_parts.append(txt)
-    _flush()
-
-    if not features:
-        raise RuntimeError(f"Class {class_name}: subclass {subclass_name!r} has no Level-N features")
-
-    always_prepared, leveled_grants = _parse_subclass_spells(section_tokens[start_idx:])
-    return {
-        "code": to_code(subclass_name),
-        "name": subclass_name,
-        "subclass_level": min(f["level"] for f in features),
-        "features": features,
-        "always_prepared_spells_by_level": always_prepared,
-        "leveled_grants_by_sub_choice": leveled_grants,
-    }
-
-
-_BARE_ARMOR = {"light", "medium", "heavy"}
-
-
-def _split_proficiency_list(text: str, *, armor: bool = False) -> list[str]:
-    """Split a core-table proficiency cell into items.
-
-    Handles "Light and Medium armor and Shields" and Oxford-comma forms like
-    "Light, Medium, and Heavy armor" — strips a stray leading 'and', and (for armor)
-    expands a bare category ("Light") to its full form ("Light armor").
-    """
-    out: list[str] = []
-    for part in re.split(r"\s*,\s*|\s+and\s+", text.rstrip(".")):
-        part = re.sub(r"^and\s+", "", part.strip())
-        if not part:
-            continue
-        if armor and part.lower() in _BARE_ARMOR:
-            part = f"{part} armor"
-        out.append(part)
-    return out
-
-
-_SPELL_SLOT_COL_RE = re.compile(r"Spell Slots per Spell Level (\d+)")
-
-
-def _extract_spellcasting(features_by_level: dict) -> Optional[dict]:
-    """Lift the spell columns out of each level's ``class_specific`` into a typed
-    spellcasting structure (and remove them from class_specific). Returns None for
-    non-casters. Regular casters fill ``spell_slots_by_level``; Warlock's Pact Magic
-    ("Spell Slots" + "Slot Level") fills ``pact_slots_by_level``.
-    """
-    cantrips: dict[str, int] = {}
-    prepared: dict[str, int] = {}
-    slots: dict[str, dict[str, int]] = {}
-    pact: dict[str, dict] = {}
-    is_caster = False
-    for lvl, data in features_by_level.items():
-        cs = data["class_specific"]
-        if isinstance(cs.get("Cantrips"), int):
-            cantrips[lvl] = cs["Cantrips"]
-            is_caster = True
-        cs.pop("Cantrips", None)
-        if isinstance(cs.get("Prepared Spells"), int):
-            prepared[lvl] = cs["Prepared Spells"]
-            is_caster = True
-        cs.pop("Prepared Spells", None)
-        level_slots: dict[str, int] = {}
-        for key in list(cs.keys()):
-            m = _SPELL_SLOT_COL_RE.fullmatch(key)
-            if m:
-                val = cs.pop(key)
-                if isinstance(val, int) and val > 0:
-                    level_slots[m.group(1)] = val
-        if level_slots:
-            slots[lvl] = dict(sorted(level_slots.items(), key=lambda kv: int(kv[0])))
-            is_caster = True
-        # Warlock Pact Magic: a flat "Spell Slots" count at a single "Slot Level".
-        pact_count = cs.pop("Spell Slots", None)
-        pact_level = cs.pop("Slot Level", None)
-        if isinstance(pact_count, int) and pact_count > 0 and isinstance(pact_level, int):
-            pact[lvl] = {"count": pact_count, "slot_level": pact_level}
-            is_caster = True
-    if not is_caster:
-        return None
-    return {
-        "cantrips_known_by_level": cantrips,
-        "prepared_spells_by_level": prepared,
-        "spell_slots_by_level": slots,
-        "pact_slots_by_level": pact,
-    }
-
-
 def parse_one_class(
     class_name: str,
     tokens: list[dict],
@@ -1071,16 +797,15 @@ def parse_one_class(
         raise RuntimeError(f"Class {class_name}: core traits table not found")
     core = _parse_kv_table(core_table_soup)
 
-    primary = to_abilities(core["Primary Ability"])  # may be one or two (e.g. "Strength or Dexterity")
+    primary = to_ability(core["Primary Ability"].split(" ")[0])
     hit_die_m = _HIT_DIE_RE.search(core["Hit Point Die"])
     if not hit_die_m:
         raise ValueError(f"Class {class_name}: hit die not parseable from {core['Hit Point Die']!r}")
     hit_die = int(hit_die_m.group(1))
     saving_throws = to_abilities(core["Saving Throw Proficiencies"])
     skill_count, skill_codes = _class_skill_list(core["Skill Proficiencies"], all_skill_codes)
-    armor = _split_proficiency_list(core.get("Armor Training", ""), armor=True)
-    weapons = _split_proficiency_list(core.get("Weapon Proficiencies", ""))
-    tools = _strip(core.get("Tool Proficiencies", ""))
+    armor = [a.strip() for a in re.split(r",\s*|\s+and\s+", core.get("Armor Training", "").rstrip(".")) if a.strip()]
+    weapons = [w.strip() for w in re.split(r",\s*|\s+and\s+", core.get("Weapon Proficiencies", "").rstrip(".")) if w.strip()]
 
     # Find the second HTML table (the class features progression table).
     # Strategy: find the index where the core table sits, then look for the next table after it.
@@ -1183,7 +908,7 @@ def parse_one_class(
             if "Subclass" in fname or fname.lower() in {"subclass feature"}:
                 features.append({
                     "name": fname,
-                    "description": "Subclass feature gained at this level; see the class's subclasses for details.",
+                    "description": "Subclass feature gained at this level (subclasses are not yet supported).",
                 })
                 continue
             if fname == "Ability Score Improvement":
@@ -1225,10 +950,6 @@ def parse_one_class(
             f"Class {class_name}: only {len(asi_levels)} ASI levels detected — expected at least 4"
         )
 
-    # Subclass lives after the feature scope, within the full section.
-    subclass = _parse_subclass(tokens[start:end], class_name)
-    spellcasting = _extract_spellcasting(features_by_level)
-
     return {
         "code": to_code(class_name),
         "name": class_name,
@@ -1238,58 +959,11 @@ def parse_one_class(
         "skill_choices": {"count": skill_count, "from": skill_codes},
         "armor_training": armor,
         "weapon_proficiencies": weapons,
-        "tool_proficiencies": tools,
         "starting_equipment_text": _strip(core.get("Starting Equipment", "")),
         "asi_levels": sorted(set(asi_levels)),
         "features_by_level": dict(sorted(features_by_level.items(), key=lambda kv: int(kv[0]))),
         "multiclass_text": multiclass_text,
-        "subclass_level": subclass["subclass_level"] if subclass else None,
-        "subclasses": [subclass] if subclass else [],
-        "spellcasting": spellcasting,
     }
-
-
-def _merge_authored_choices(classes: list[dict]) -> None:
-    """Fold hand-authored choice metadata onto parsed features (A.3).
-
-    Choices are authored by comprehension (the SRD choice prose isn't reliably
-    machine-parseable) and verified against source; this is a MECHANICAL merge that only
-    attaches each authored `choice` to the matching feature by (level, feature name) — class
-    features via class_choices, subclass features via subclass_choices — so classes.json stays
-    the single loaded source of truth. A reference to a non-existent feature aborts the build.
-    """
-    path = Path(__file__).resolve().parent / "authored" / EDITION_CODE / "class_choices.json"
-    if not path.exists():
-        return
-    authored = json.loads(path.read_text(encoding="utf-8"))
-    by_code = {c["code"]: c for c in classes}
-
-    def _attach(features: list[dict], fname: str, choice: dict, where: str) -> None:
-        match = next((f for f in features if f["name"] == fname), None)
-        if match is None:
-            raise SystemExit(f"class_choices.json: {where} has no feature {fname!r}")
-        match.setdefault("choices", []).append(choice)
-
-    for class_code, entries in authored.get("class_choices", {}).items():
-        cls = by_code.get(class_code)
-        if not cls:
-            raise SystemExit(f"class_choices.json references unknown class {class_code!r}")
-        for entry in entries:
-            level = str(entry["level"])
-            features = cls["features_by_level"].get(level, {}).get("features", [])
-            _attach(features, entry["feature"], entry["choice"], f"{class_code} L{level}")
-
-    for class_code, subclasses in authored.get("subclass_choices", {}).items():
-        cls = by_code.get(class_code)
-        if not cls:
-            raise SystemExit(f"class_choices.json references unknown class {class_code!r}")
-        sub_by_code = {s["code"]: s for s in cls.get("subclasses", [])}
-        for subclass_code, entries in subclasses.items():
-            sub = sub_by_code.get(subclass_code)
-            if not sub:
-                raise SystemExit(f"class_choices.json: {class_code} has no subclass {subclass_code!r}")
-            for entry in entries:
-                _attach(sub["features"], entry["feature"], entry["choice"], f"{class_code}/{subclass_code}")
 
 
 def parse_classes(only: Optional[str] = None, all_skill_codes: Optional[list[str]] = None) -> list[dict]:
@@ -1304,290 +978,6 @@ def parse_classes(only: Optional[str] = None, all_skill_codes: Optional[list[str
         classes.append(parse_one_class(sec.name, tokens, sec.start, sec.end, all_skill_codes))
     classes.sort(key=lambda c: c["code"])
     return classes
-
-
-_SPELL_META_RE = re.compile(r"^_(?:Level (\d+) )?([A-Za-z]+)(?: Cantrip)? \(([^)]+)\)_$")
-_SPELL_FIELD_RE = re.compile(r"^\*\*(Casting Time|Range|Components?|Duration):\*\*\s*(.+)$")
-
-
-def parse_spells() -> list[dict]:
-    """Parse the SRD spell catalogue (line-based — the stat blocks are line-oriented).
-
-    Each spell is an H4 under '## Spell Descriptions' whose first non-blank line is the
-    italic header ``_Level N School (Classes)_`` (or ``_School Cantrip (Classes)_``). H4
-    entries without that header (creature stat blocks like 'Animated Object', 'Actions')
-    are skipped. Handles the surveyed edge cases: singular ``**Component:**``, blank lines
-    between fields, ritual via 'or Ritual' in Casting Time, concentration via Duration.
-    """
-    lines = _read("spells.md").splitlines()
-    start = next(
-        (i for i, ln in enumerate(lines) if ln.strip().lower() == "## spell descriptions"),
-        None,
-    )
-    if start is None:
-        raise RuntimeError("spells.md: '## Spell Descriptions' section not found")
-
-    blocks: list[list[str]] = []
-    cur: Optional[list[str]] = None
-    for ln in lines[start + 1:]:
-        if ln.startswith("#### "):
-            if cur is not None:
-                blocks.append(cur)
-            cur = [ln]
-        elif cur is not None:
-            cur.append(ln)
-    if cur is not None:
-        blocks.append(cur)
-
-    spells: list[dict] = []
-    for block in blocks:
-        name = block[0][len("#### "):].strip()
-        # The first non-blank line must be the spell header; otherwise it's not a spell.
-        meta = None
-        meta_idx = 0
-        for i in range(1, len(block)):
-            if not block[i].strip():
-                continue
-            meta = _SPELL_META_RE.match(block[i].strip())
-            meta_idx = i
-            break
-        if meta is None:
-            continue
-        level = int(meta.group(1)) if meta.group(1) else 0
-        classes = [to_code(c.strip()) for c in meta.group(3).split(",") if c.strip()]
-
-        fields: dict[str, str] = {}
-        desc_lines: list[str] = []
-        in_desc = False
-        for ln in block[meta_idx + 1:]:
-            if not in_desc:
-                fm = _SPELL_FIELD_RE.match(ln.strip())
-                if fm:
-                    label = "Components" if fm.group(1).startswith("Component") else fm.group(1)
-                    fields[label] = fm.group(2).strip()
-                    continue
-                if not ln.strip():
-                    continue  # skip blanks between the header/fields and the description
-                in_desc = True
-            desc_lines.append(ln)
-
-        casting_time = fields.get("Casting Time", "")
-        duration = fields.get("Duration", "")
-        spells.append({
-            "code": to_code(name),
-            "name": name,
-            "level": level,
-            "school": meta.group(2),
-            "classes": classes,
-            "casting_time": casting_time,
-            "range": fields.get("Range", ""),
-            "components": fields.get("Components", ""),
-            "duration": duration,
-            "ritual": "ritual" in casting_time.lower(),
-            "concentration": "concentration" in duration.lower(),
-            "description": "\n".join(desc_lines).strip() or name,
-        })
-    if not spells:
-        raise RuntimeError("No spells parsed from spells.md")
-    spells.sort(key=lambda s: s["code"])
-    return spells
-
-
-# --------------------------------------------------------------------------- #
-# Equipment — weapons + armor (tabular HTML grids in equipment.md)
-# --------------------------------------------------------------------------- #
-
-
-_WEAPON_CATEGORY = {
-    "simple melee weapons": "simple_melee",
-    "simple ranged weapons": "simple_ranged",
-    "martial melee weapons": "martial_melee",
-    "martial ranged weapons": "martial_ranged",
-}
-
-_ARMOR_AC_RE = re.compile(r"^(\d+)\s*\+\s*Dex modifier(?:\s*\(max\s*(\d+)\))?$", re.IGNORECASE)
-
-
-def _find_table_by_headers(soup: BeautifulSoup, required: set[str]):
-    """Return the first <table> whose <thead> contains all ``required`` column headers."""
-    for table in soup.find_all("table"):
-        thead = table.find("thead")
-        if thead is None:
-            continue
-        heads = {th.get_text(strip=True) for th in thead.find_all("th")}
-        if required <= heads:
-            return table
-    return None
-
-
-def parse_weapons() -> list[dict]:
-    """Parse the SRD weapon table (Name/Damage/Properties/Mastery/Weight/Cost)."""
-    soup = BeautifulSoup(_read("equipment.md"), "html.parser")
-    table = _find_table_by_headers(soup, {"Name", "Damage", "Properties", "Mastery"})
-    if table is None:
-        raise RuntimeError("Weapon table not found in equipment.md")
-    weapons: list[dict] = []
-    category: Optional[str] = None
-    for tr in table.find("tbody").find_all("tr"):
-        header = tr.find("th")
-        if header is not None:  # category section row, e.g. "Simple Melee Weapons"
-            category = _WEAPON_CATEGORY.get(header.get_text(strip=True).lower())
-            continue
-        cells = [td.get_text(strip=True) for td in tr.find_all("td")]
-        if len(cells) < 6 or category is None:
-            continue
-        name, damage, props, mastery, weight, cost = cells[:6]
-        properties = [] if props in ("", "—") else [p.strip() for p in props.split(",") if p.strip()]
-        weapons.append({
-            "code": to_code(name),
-            "name": name,
-            "category": category,
-            "damage": damage,
-            "properties": properties,
-            "mastery": "" if mastery in ("", "—") else mastery,
-            "weight": weight,
-            "cost": cost,
-        })
-    if not weapons:
-        raise RuntimeError("No weapons parsed from equipment.md")
-    weapons.sort(key=lambda w: w["code"])
-    return weapons
-
-
-def _parse_armor_ac(ac_text: str) -> tuple[int, Optional[int]]:
-    """Split an AC cell into (base_ac, dex_cap). dex_cap None=unlimited, 0=no Dex."""
-    t = ac_text.strip()
-    m = _ARMOR_AC_RE.match(t)
-    if m:
-        return int(m.group(1)), (int(m.group(2)) if m.group(2) else None)
-    if t.startswith("+"):           # shield bonus, e.g. "+2"
-        return int(t[1:]), 0
-    if t.isdigit():                 # heavy armor flat AC, no Dex
-        return int(t), 0
-    raise RuntimeError(f"Unparseable armor AC cell: {ac_text!r}")
-
-
-def parse_armor() -> list[dict]:
-    """Parse the SRD armor table (Armor/AC/Strength/Stealth/Weight/Cost), incl. shields."""
-    soup = BeautifulSoup(_read("equipment.md"), "html.parser")
-    table = _find_table_by_headers(soup, {"Armor", "Armor Class (AC)", "Stealth"})
-    if table is None:
-        raise RuntimeError("Armor table not found in equipment.md")
-    armor: list[dict] = []
-    category: Optional[str] = None
-    for tr in table.find("tbody").find_all("tr"):
-        header = tr.find("th")
-        if header is not None:  # category section row, e.g. "Light Armor (…)"
-            first = header.get_text(strip=True).split()[0].lower()
-            category = first if first in {"light", "medium", "heavy", "shield"} else None
-            continue
-        cells = [td.get_text(strip=True) for td in tr.find_all("td")]
-        if len(cells) < 6 or category is None:
-            continue
-        name, ac_text, strength, stealth, weight, cost = cells[:6]
-        base_ac, dex_cap = _parse_armor_ac(ac_text)
-        str_req = None
-        if strength not in ("", "—"):
-            mm = re.search(r"(\d+)", strength)  # "Str 13" -> 13
-            str_req = int(mm.group(1)) if mm else None
-        armor.append({
-            "code": to_code(name),
-            "name": name,
-            "category": category,
-            "base_ac": base_ac,
-            "dex_cap": dex_cap,
-            "strength_requirement": str_req,
-            "stealth_disadvantage": stealth.strip().lower() == "disadvantage",
-            "weight": weight,
-            "cost": cost,
-            "armor_class_text": ac_text,
-        })
-    if not armor:
-        raise RuntimeError("No armor parsed from equipment.md")
-    armor.sort(key=lambda a: a["code"])
-    return armor
-
-
-# --------------------------------------------------------------------------- #
-# Items (gear / tools / mounts) + currency — J.1 / J.2
-# --------------------------------------------------------------------------- #
-
-
-_COIN_CP = {"CP": 1, "SP": 10, "EP": 50, "GP": 100, "PP": 1000}
-_COST_RE = re.compile(r"(\d[\d,]*)\s*(CP|SP|EP|GP|PP)", re.IGNORECASE)
-_TOOL_RE = re.compile(r"^\*\*(.+?)\s*\((\d[\d,]*)\s*(CP|SP|EP|GP|PP)\)\*\*")
-
-
-def _cost_to_cp(text: str) -> int:
-    m = _COST_RE.search(text or "")
-    return int(m.group(1).replace(",", "")) * _COIN_CP[m.group(2).upper()] if m else 0
-
-
-def _weight_lb(text: str) -> float:
-    m = re.search(r"([\d.]+)\s*lb", text or "")
-    return float(m.group(1)) if m else 0.0
-
-
-def parse_items() -> list[dict]:
-    """Parse gear + mounts (HTML tables) and tools (bold ``**Name (Cost)**`` entries)."""
-    text = _read("equipment.md")
-    soup = BeautifulSoup(text, "html.parser")
-    items: list[dict] = []
-    seen: set[str] = set()
-
-    def add(name: str, category: str, cost_cp: int, weight: float = 0.0) -> None:
-        code = to_code(name)
-        if not code or code in seen:
-            return
-        seen.add(code)
-        items.append({
-            "code": code, "name": name, "category": category,
-            "cost_cp": cost_cp, "weight_lb": weight, "description": "",
-        })
-
-    gear = _find_table_by_headers(soup, {"Item", "Weight", "Cost"})
-    if gear and gear.find("tbody"):
-        for tr in gear.find("tbody").find_all("tr"):
-            c = [td.get_text(strip=True) for td in tr.find_all("td")]
-            if len(c) >= 3:
-                add(c[0], "gear", _cost_to_cp(c[2]), _weight_lb(c[1]))
-
-    mounts = _find_table_by_headers(soup, {"Item", "Carrying Capacity", "Cost"})
-    if mounts and mounts.find("tbody"):
-        for tr in mounts.find("tbody").find_all("tr"):
-            c = [td.get_text(strip=True) for td in tr.find_all("td")]
-            if len(c) >= 3:
-                add(c[0], "mount", _cost_to_cp(c[2]))
-
-    in_tools = False
-    for line in text.splitlines():
-        s = line.rstrip()
-        if s == "## Tools":
-            in_tools = True
-            continue
-        if in_tools and s.startswith("## "):
-            in_tools = False
-        if in_tools:
-            m = _TOOL_RE.match(s.strip())
-            if m:
-                add(m.group(1).strip(), "tool",
-                    int(m.group(2).replace(",", "")) * _COIN_CP[m.group(3).upper()])
-
-    if not items:
-        raise RuntimeError("No items parsed from equipment.md")
-    items.sort(key=lambda i: (i["category"], i["code"]))
-    return items
-
-
-def parse_currency() -> list[dict]:
-    """The five SRD coins + their copper value (fixed set; not derived from prose)."""
-    return [
-        {"code": "cp", "name": "Copper Piece", "cp_value": 1},
-        {"code": "sp", "name": "Silver Piece", "cp_value": 10},
-        {"code": "ep", "name": "Electrum Piece", "cp_value": 50},
-        {"code": "gp", "name": "Gold Piece", "cp_value": 100},
-        {"code": "pp", "name": "Platinum Piece", "cp_value": 1000},
-    ]
 
 
 # --------------------------------------------------------------------------- #
@@ -1699,7 +1089,6 @@ def main(argv: Iterable[str] | None = None) -> int:
 
     print("Parsing species…")
     species = parse_species()
-    _merge_species_subchoices(species)
     print(f"  {len(species)} species")
 
     print("Parsing backgrounds…")
@@ -1708,19 +1097,7 @@ def main(argv: Iterable[str] | None = None) -> int:
 
     print("Parsing classes…")
     classes = parse_classes(all_skill_codes=[s["code"] for s in skills])
-    _merge_authored_choices(classes)
     print(f"  {len(classes)} classes")
-
-    print("Parsing spells…")
-    spells = parse_spells()
-    print(f"  {len(spells)} spells")
-
-    print("Parsing equipment…")
-    weapons = parse_weapons()
-    armor = parse_armor()
-    items = parse_items()
-    currency = parse_currency()
-    print(f"  {len(weapons)} weapons, {len(armor)} armor, {len(items)} items, {len(currency)} currency")
 
     print("Cross-file validation…")
     cross_validate(skills, feats, species, backgrounds, classes)
@@ -1731,22 +1108,12 @@ def main(argv: Iterable[str] | None = None) -> int:
     species_payload = _wrap("species", species)
     backgrounds_payload = _wrap("backgrounds", backgrounds)
     classes_payload = _wrap("classes", classes)
-    spells_payload = _wrap("spells", spells)
-    weapons_payload = _wrap("weapons", weapons)
-    armor_payload = _wrap("armor", armor)
-    items_payload = _wrap("items", items)
-    currency_payload = _wrap("currency", currency)
 
     _validate_pydantic(SkillsFile, skills_payload, "skills.json")
     _validate_pydantic(FeatsFile, feats_payload, "feats.json")
     _validate_pydantic(SpeciesFile, species_payload, "species.json")
     _validate_pydantic(BackgroundsFile, backgrounds_payload, "backgrounds.json")
     _validate_pydantic(ClassesFile, classes_payload, "classes.json")
-    _validate_pydantic(SpellsFile, spells_payload, "spells.json")
-    _validate_pydantic(WeaponsFile, weapons_payload, "weapons.json")
-    _validate_pydantic(ArmorFile, armor_payload, "armor.json")
-    _validate_pydantic(ItemsFile, items_payload, "items.json")
-    _validate_pydantic(CurrencyFile, currency_payload, "currency.json")
 
     paths = [
         _write("skills.json", skills_payload),
@@ -1754,11 +1121,6 @@ def main(argv: Iterable[str] | None = None) -> int:
         _write("species.json", species_payload),
         _write("backgrounds.json", backgrounds_payload),
         _write("classes.json", classes_payload),
-        _write("spells.json", spells_payload),
-        _write("weapons.json", weapons_payload),
-        _write("armor.json", armor_payload),
-        _write("items.json", items_payload),
-        _write("currency.json", currency_payload),
     ]
     for path in paths:
         print(f"Wrote {path.relative_to(_API_SITE_DIR)}")
