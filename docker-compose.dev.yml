@@ -48,6 +48,8 @@ services:
         volumes:
             - ./api-site:/api
             - ./rollplay-shared-contracts:/rollplay-shared-contracts
+            # CloudFront signing key, read-only single file. Host ${HOME}/.ssh (per-box home) -> container /root/.ssh (container runs as root).
+            - ${HOME}/.ssh/${CFD_PEM_FILENAME}:/root/.ssh/${CFD_PEM_FILENAME}:ro
         depends_on:
             postgres:
                 condition: service_healthy

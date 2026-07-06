@@ -3,11 +3,15 @@
 
 import logging
 import uuid
+from datetime import datetime, timedelta, timezone
 from typing import Optional
 
 import boto3
 from botocore.config import Config
 from botocore.exceptions import ClientError
+from botocore.signers import CloudFrontSigner
+from cryptography.hazmat.primitives import hashes, serialization
+from cryptography.hazmat.primitives.asymmetric import padding
 
 from config.settings import Settings
 
@@ -29,7 +33,8 @@ class S3Service:
         self.bucket_name = settings.S3_BUCKET_NAME
         self.expiry = settings.PRESIGNED_URL_EXPIRY
 
-        # Configure boto3 client with regional endpoint for proper CORS support
+        # Configure boto3 client with regional endpoint for proper CORS support.
+        # Always built — needed for uploads and admin ops regardless of CloudFront.
         self.client = boto3.client(
             's3',
             region_name=settings.AWS_REGION,
@@ -38,6 +43,40 @@ class S3Service:
             aws_secret_access_key=settings.AWS_SECRET_ACCESS_KEY,
             config=Config(signature_version='s3v4')
         )
+
+        # Optionally build a CloudFront signer for private CDN delivery. When any
+        # part is missing/unloadable (e.g. dev without the mounted key), downloads
+        # transparently fall back to presigned S3 URLs.
+        self.cf_domain = settings.AWS_CFD_S3_URL
+        self.cf_key_pair_id = settings.CFD_KEY_PAIR_ID
+        self.cf_signer: Optional[CloudFrontSigner] = self._build_cloudfront_signer()
+
+    def _build_cloudfront_signer(self) -> Optional[CloudFrontSigner]:
+        """Build a CloudFrontSigner. CloudFront delivery is mandatory: if this returns
+        None, generate_download_url raises rather than serving media another way."""
+        key_path = self.settings.cfd_private_key_path
+        if not (self.cf_domain and self.cf_key_pair_id and key_path):
+            logger.error(
+                "CloudFront signing is not configured (need AWS_CFD_S3_URL, CFD_KEY_PAIR_ID, "
+                "CFD_PEM_FILENAME) — media downloads will fail until this is fixed."
+            )
+            return None
+        try:
+            with open(key_path, "rb") as key_file:
+                private_key = serialization.load_pem_private_key(key_file.read(), password=None)
+
+            def rsa_signer(message: bytes) -> bytes:
+                # CloudFront requires RSA-SHA1 (PKCS#1 v1.5) over the policy.
+                return private_key.sign(message, padding.PKCS1v15(), hashes.SHA1())
+
+            signer = CloudFrontSigner(self.cf_key_pair_id, rsa_signer)
+            logger.info(f"CloudFront signing enabled via {self.cf_domain} (key {self.cf_key_pair_id}).")
+            return signer
+        except Exception as e:
+            logger.error(
+                f"CloudFront key at {key_path} could not be loaded ({e}) — media downloads will fail."
+            )
+            return None
 
     def generate_upload_url(
         self,
@@ -86,22 +125,27 @@ class S3Service:
             expiry: Optional custom expiry in seconds (defaults to settings value)
 
         Returns:
-            Presigned GET URL for download
+            A time-limited CloudFront signed URL.
+
+        Raises:
+            RuntimeError: If CloudFront signing is unavailable (misconfigured or the
+                signing key failed to load). Media is served exclusively via CloudFront
+                — there is no S3 fallback.
         """
-        try:
-            url = self.client.generate_presigned_url(
-                'get_object',
-                Params={
-                    'Bucket': self.bucket_name,
-                    'Key': key,
-                },
-                ExpiresIn=expiry or self.expiry
+        if not self.cf_signer:
+            raise RuntimeError(
+                f"CloudFront signing unavailable — cannot generate download URL for '{key}'. "
+                "Check AWS_CFD_S3_URL, CFD_KEY_PAIR_ID, and the key mounted at ~/.ssh/<CFD_PEM_FILENAME>."
             )
-            logger.info(f"Generated download URL for key: {key}")
-            return url
-        except ClientError as e:
-            logger.error(f"Failed to generate download URL: {e}")
-            raise
+
+        ttl = expiry or self.expiry
+        expires_at = datetime.now(timezone.utc) + timedelta(seconds=ttl)
+        signed_url = self.cf_signer.generate_presigned_url(
+            f"https://{self.cf_domain}/{key}",
+            date_less_than=expires_at,
+        )
+        logger.info(f"Generated CloudFront signed URL for key: {key}")
+        return signed_url
 
     def delete_object(self, key: str) -> None:
         """
