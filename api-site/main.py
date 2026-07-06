@@ -28,6 +28,9 @@ from modules.events.api.notification_endpoints import router as notification_rou
 from modules.library.api.endpoints import router as library_router
 from modules.stream.api.endpoints import router as stream_router
 
+# Import integration routers (external-service ACLs, not core aggregates)
+from integrations.spotify.endpoints import router as spotify_router
+
 # Import WebSocket endpoint
 from modules.events.api.websocket_endpoint import websocket_events_endpoint
 
@@ -77,6 +80,7 @@ app.include_router(friendship_router, prefix="/api/friendships")
 app.include_router(notification_router, prefix="/api/notifications")
 app.include_router(library_router, prefix="/api/library", tags=["library"])
 app.include_router(stream_router, prefix="/api/stream", tags=["stream"])
+app.include_router(spotify_router, prefix="/api/spotify", tags=["spotify"])
 
 # Register WebSocket endpoint
 app.add_websocket_route("/ws/events", websocket_events_endpoint)
