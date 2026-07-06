@@ -571,7 +571,13 @@ async def preview_level_up(
     for feat in registry.list_feats(character.edition_code):
         if feat.category not in {"general", "fighting_style", "epic_boon"}:
             continue
-        bucket = qualifying_feats if ruleset.is_feat_available(character, feat) else other_feats
+        # Bucket against the level the character is levelling INTO, not their current level, so a
+        # feat gated at that next level (e.g. Ability Score Improvement at 4) reads as qualifying.
+        bucket = (
+            qualifying_feats
+            if ruleset.is_feat_available(character, feat, at_level=character.level + 1)
+            else other_feats
+        )
         bucket.append(feat.code)
         feat_details[feat.code] = feat.description
 

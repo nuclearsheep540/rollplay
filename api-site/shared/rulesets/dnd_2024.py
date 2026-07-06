@@ -193,13 +193,19 @@ class Dnd2024Ruleset(RulesetStrategy):
     def compute_initiative(self, character: "CharacterAggregate") -> int:
         return _ability_modifier(character.final_ability_score("dexterity"))
 
-    def is_feat_available(self, character: "CharacterAggregate", feat: "FeatDefinition") -> bool:
+    def is_feat_available(
+        self, character: "CharacterAggregate", feat: "FeatDefinition", *, at_level: int = None
+    ) -> bool:
+        """``at_level`` overrides the level a LEVEL prereq is checked against — pass the *target*
+        level in the level-up preview so a feat gated at the level you're about to reach (ASI at 4,
+        Epic Boons at 19) is bucketed as qualifying, not 'prerequisites not met'."""
+        level = at_level if at_level is not None else character.level
         # A non-repeatable feat already taken is no longer available.
         if not feat.repeatable and any(f.feat_code == feat.code for f in character.feats):
             return False
         for prereq in feat.prerequisites:
             if prereq.type == "level":
-                if character.level < (prereq.value or 0):
+                if level < (prereq.value or 0):
                     return False
             elif prereq.type == "ability" and prereq.abilities:
                 if character.final_ability_score(prereq.abilities[0]) < (prereq.value or 0):
@@ -223,11 +229,15 @@ class Dnd2024Ruleset(RulesetStrategy):
     def compute_spell_slots(self, character: "CharacterAggregate") -> dict[int, int]:
         """Leveled slots for the primary spellcasting class, indexed by that class's level.
 
-        Single-class only for now (at level 1 every character is single-class); multiclass
-        combined-caster-level math lands with the level-up / starting-level-> 1 work.
+        Single-class only. Multiclass combined-caster-level math isn't implemented, so for a
+        multiclass character we return {} ("unknown") rather than the primary class's slots — those
+        would be WRONG for a multiclass caster, whose slots come from the shared multiclass table
+        keyed by combined caster level, not any one class's level.
         """
         primary = character.get_primary_class()
         if primary is None:
+            return {}
+        if len(character.class_entries) > 1:
             return {}
         cls = self._registry.get_class(self.edition_code, primary.class_code)
         if cls.spellcasting is None:
