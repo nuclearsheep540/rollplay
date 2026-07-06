@@ -193,11 +193,15 @@ function ClassAdvancement({
             className="w-full px-3 py-2 border rounded-sm text-sm"
             style={{ backgroundColor: THEME.bgSecondary, borderColor: THEME.borderDefault, color: THEME.textOnDark }}
           >
-            <option value="">Ability Score Improvement (set boosts on Ability Scores)</option>
+            <option value="">Select one…</option>
             {(generalFeats ?? []).map((f) => (
               <option key={f.code} value={f.code}>{f.name}</option>
             ))}
           </select>
+          <p className="text-xs" style={{ color: THEME.textSecondary }}>
+            Ability Score Improvement is a feat here — pick it to take the ASI, then set the boosts
+            on the Ability Scores step.
+          </p>
         </div>
       ))}
 

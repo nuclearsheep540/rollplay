@@ -33,6 +33,10 @@ const ABILITY_LABELS = {
   charisma: 'CHA',
 }
 
+// 2024 models the Ability Score Improvement AS a (repeatable) feat, so at an ASI level it's just
+// one option in the feat list. Selecting it reveals the +2/+1 picker; every other feat doesn't.
+const ASI_FEAT_CODE = 'ability_score_improvement'
+
 const titleize = (code) =>
   (code ?? '').replace(/_/g, ' ').replace(/\b\w/g, (l) => l.toUpperCase())
 
@@ -124,8 +128,7 @@ export default function LevelUpModal({ character, open, onClose, onComplete }) {
   const [hpChoice, setHpChoice] = useState('average')
   const [rollValue, setRollValue] = useState('')
   const [asiPick, setAsiPick] = useState({ mode: '2_into_one', primary: 'strength', secondary: 'dexterity', increases: { strength: 2 } })
-  const [featCode, setFeatCode] = useState('')
-  const [usingFeat, setUsingFeat] = useState(false)
+  const [featCode, setFeatCode] = useState('')  // '' = unpicked; ASI_FEAT_CODE = take the ASI
   const [subclassCode, setSubclassCode] = useState('')
   const [error, setError] = useState(null)
 
@@ -145,7 +148,6 @@ export default function LevelUpModal({ character, open, onClose, onComplete }) {
       setRollValue('')
       setAsiPick({ mode: '2_into_one', primary: 'strength', secondary: 'dexterity', increases: { strength: 2 } })
       setFeatCode('')
-      setUsingFeat(false)
       setSubclassCode('')
       setError(null)
     }
@@ -190,14 +192,15 @@ export default function LevelUpModal({ character, open, onClose, onComplete }) {
       payload.roll_value = n
     }
     if (isAsiLevel) {
-      if (usingFeat) {
-        if (!featCode) {
-          setError('Pick a feat or switch to ASI.')
-          return
-        }
-        payload.feat_choice = { feat_code: featCode }
-      } else {
+      if (!featCode) {
+        setError('Choose Ability Score Improvement or a feat.')
+        return
+      }
+      // Taking the ASI feat means applying the +2/+1; any other feat is a plain feat choice.
+      if (featCode === ASI_FEAT_CODE) {
         payload.asi_choice = { increases: asiPick.increases }
+      } else {
+        payload.feat_choice = { feat_code: featCode }
       }
     }
     if (needsSubclass) {
@@ -326,59 +329,33 @@ export default function LevelUpModal({ character, open, onClose, onComplete }) {
             {currentStep === 'asi' && (
               <div className="space-y-3">
                 <StepHeader stepNumber={stepIdx + 1} totalSteps={totalSteps} title="Ability Score Improvement or Feat" />
-                <div className="flex gap-2">
-                  <button
-                    type="button"
-                    onClick={() => setUsingFeat(false)}
-                    className={`px-3 py-1.5 rounded border text-sm ${
-                      !usingFeat
-                        ? 'border-amber-500 bg-amber-500/10 text-amber-200'
-                        : 'border-slate-700 text-slate-300 hover:border-slate-500'
-                    }`}
-                  >
-                    ASI
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setUsingFeat(true)}
-                    className={`px-3 py-1.5 rounded border text-sm ${
-                      usingFeat
-                        ? 'border-amber-500 bg-amber-500/10 text-amber-200'
-                        : 'border-slate-700 text-slate-300 hover:border-slate-500'
-                    }`}
-                  >
-                    Feat
-                  </button>
-                </div>
-                {!usingFeat && (
-                  <AsiPicker value={asiPick} onChange={setAsiPick} />
-                )}
-                {usingFeat && (
-                  <div className="space-y-2">
-                    <select
-                      value={featCode}
-                      onChange={(e) => setFeatCode(e.target.value)}
-                      className="w-full bg-slate-900 border border-slate-700 rounded px-2 py-1 text-slate-100"
-                    >
-                      <option value="">Choose a feat…</option>
-                      {(data.qualifying_feats ?? []).map((code) => (
+                {/* ASI is a feat in 2024 — one feat picker; picking Ability Score Improvement reveals
+                    the +2/+1 inputs, any other feat just records the feat. */}
+                <select
+                  value={featCode}
+                  onChange={(e) => setFeatCode(e.target.value)}
+                  className="w-full bg-slate-900 border border-slate-700 rounded px-2 py-1 text-slate-100"
+                >
+                  <option value="">Select one…</option>
+                  {(data.qualifying_feats ?? []).map((code) => (
+                    <option key={code} value={code}>{titleize(code)}</option>
+                  ))}
+                  {(data.other_feats ?? []).length > 0 && (
+                    <optgroup label="Prerequisites not met (allowed anyway)">
+                      {(data.other_feats ?? []).map((code) => (
                         <option key={code} value={code}>{titleize(code)}</option>
                       ))}
-                      {(data.other_feats ?? []).length > 0 && (
-                        <optgroup label="Prerequisites not met (allowed anyway)">
-                          {(data.other_feats ?? []).map((code) => (
-                            <option key={code} value={code}>{titleize(code)}</option>
-                          ))}
-                        </optgroup>
-                      )}
-                    </select>
-                    {featCode && data.feat_details?.[featCode] ? (
-                      <p className="text-xs text-slate-400 whitespace-pre-line">
-                        {data.feat_details[featCode]}
-                      </p>
-                    ) : null}
-                  </div>
+                    </optgroup>
+                  )}
+                </select>
+                {featCode === ASI_FEAT_CODE && (
+                  <AsiPicker value={asiPick} onChange={setAsiPick} />
                 )}
+                {featCode && featCode !== ASI_FEAT_CODE && data.feat_details?.[featCode] ? (
+                  <p className="text-xs text-slate-400 whitespace-pre-line">
+                    {data.feat_details[featCode]}
+                  </p>
+                ) : null}
               </div>
             )}
 
@@ -391,10 +368,10 @@ export default function LevelUpModal({ character, open, onClose, onComplete }) {
                     <li>Subclass: <strong>{subclassCode ? titleize(subclassCode) : '—'}</strong></li>
                   )}
                   <li>HP: <strong>{hpChoice}{hpChoice === 'roll' ? ` (rolled ${rollValue})` : ''}</strong></li>
-                  {isAsiLevel && !usingFeat && (
+                  {isAsiLevel && featCode === ASI_FEAT_CODE && (
                     <li>ASI: <strong>{Object.entries(asiPick.increases).map(([k, v]) => `+${v} ${ABILITY_LABELS[k]}`).join(', ')}</strong></li>
                   )}
-                  {isAsiLevel && usingFeat && (
+                  {isAsiLevel && featCode && featCode !== ASI_FEAT_CODE && (
                     <li>Feat: <strong>{titleize(featCode)}</strong></li>
                   )}
                 </ul>
