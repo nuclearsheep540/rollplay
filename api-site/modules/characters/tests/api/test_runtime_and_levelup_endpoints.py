@@ -171,9 +171,10 @@ class TestRuntimeUpdate:
         assert inv["rope_hempen"]["notes"] == "50 ft coil"
 
     def test_character_summary_snapshot(self, client, auth_as, owner):
-        """PR 12 (Phase I): the Docker-internal summary returns the api-game snapshot fields."""
+        """PR 12 (Phase I): the internal summary returns the api-game snapshot fields. Under the
+        /internal path (nginx 404s it externally; reachable only over the private network)."""
         char = _finalize_a_character(client, auth_as, owner)  # Barbarian L1
-        body = client.get(f"/api/characters/{char['id']}/summary").json()
+        body = client.get(f"/api/characters/internal/{char['id']}/summary").json()
         assert body["character_name"] == char["character_name"]
         assert body["character_class"] == ["barbarian"]
         assert body["character_race"] == "human"

@@ -659,8 +659,10 @@ async def release_character_from_campaign(
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
 
 
-# Internal service-to-service endpoints (Docker network only, no JWT)
-@router.post("/set-role", response_model=CampaignSetRoleResponse)
+# Internal service-to-service endpoint. Under the /internal path (mirrors /api/users/internal/*),
+# which nginx returns 404 for — reached by api-game over the private network. No JWT: isolation is
+# the boundary.
+@router.post("/internal/set-role", response_model=CampaignSetRoleResponse)
 async def set_campaign_role(
     request: CampaignSetRoleRequest,
     campaign_repo: CampaignRepository = Depends(campaign_repository),
@@ -670,8 +672,8 @@ async def set_campaign_role(
     """
     Set a campaign member's role. Called by api-game during live sessions.
 
-    Not exposed via NGINX — only accessible within Docker network (http://api-site:8082).
-    All domain rules are enforced here (DM auth, membership, character conflicts).
+    Under /internal so nginx returns 404 for external callers — reachable only within the private
+    network (http://api-site:8082). All domain rules are enforced here (DM auth, membership, conflicts).
     """
     try:
         command = SetMemberRole(campaign_repo, character_repo, event_manager)

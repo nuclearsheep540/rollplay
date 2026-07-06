@@ -299,14 +299,15 @@ async def get_campaign_party(
     return [_to_character_response(c, registry, s3_service) for c in characters]
 
 
-@router.get("/{character_id}/summary")
+@router.get("/internal/{character_id}/summary")
 async def character_summary(
     character_id: UUID,
     character_repo: CharacterRepository = Depends(get_character_repository),
 ):
-    """Docker-internal snapshot for api-game's player_metadata sync (Phase I). No auth — returns
-    only the low-sensitivity fields already broadcast to session peers; follows the same
-    no-auth internal-call precedent as POST /api/campaigns/set-role."""
+    """Service-to-service snapshot for api-game's player_metadata sync (Phase I). Under the
+    /internal path (mirrors /api/users/internal/*), which nginx returns 404 for — so it's reachable
+    only over the private network (Docker/VPC); that isolation is the auth boundary. Returns only
+    low-sensitivity fields already broadcast to session peers."""
     character = character_repo.get_by_id(character_id)
     if character is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Character not found")

@@ -33,7 +33,7 @@ async def request_role_change(
     try:
         async with httpx.AsyncClient(timeout=10.0) as client:
             response = await client.post(
-                f"{API_SITE_URL}/api/campaigns/set-role",
+                f"{API_SITE_URL}/api/campaigns/internal/set-role",
                 json={
                     "campaign_id": campaign_id,
                     "requesting_user_id": requesting_user_id,
@@ -76,7 +76,7 @@ async def fetch_character_summary(character_id: str):
     try:
         async with httpx.AsyncClient(timeout=5.0) as client:
             response = await client.get(
-                f"{API_SITE_URL}/api/characters/{character_id}/summary"
+                f"{API_SITE_URL}/api/characters/internal/{character_id}/summary"
             )
             if response.status_code == 200:
                 return response.json()
