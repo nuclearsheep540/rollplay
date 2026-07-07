@@ -88,12 +88,18 @@ export default function SpotifyBgmPanel({ spotify }) {
 
   // Live playhead — poll the SDK's real position (getCurrentState is a local call).
   const [live, setLive] = useState({ position: 0, duration: 0, paused: true })
+  const [repeatMode, setRepeatMode] = useState(0) // 0 off · 1 playlist · 2 track
+  const repeatSettleRef = useRef(0) // ignore polled repeat until this ts, so an optimistic click doesn't flicker
   useEffect(() => {
     if (status !== 'ready') return
     let active = true
     const poll = async () => {
       const st = await getCurrentState?.()
-      if (active && st) setLive({ position: st.position, duration: st.duration, paused: st.paused, repeat_mode: st.repeat_mode })
+      if (!active || !st) return
+      setLive({ position: st.position, duration: st.duration, paused: st.paused })
+      // Only trust the polled repeat once our optimistic change has had time to apply,
+      // otherwise the poll briefly reads the old value and the icon flickers back.
+      if (Date.now() > repeatSettleRef.current) setRepeatMode(st.repeat_mode || 0)
     }
     poll()
     const id = setInterval(poll, 1000)
@@ -199,12 +205,11 @@ export default function SpotifyBgmPanel({ spotify }) {
   const duration = live.duration || ps?.duration || 0
   const isPlaying = !live.paused
   const position = seeking ? seekValue : live.position
-  const repeatMode = live.repeat_mode || 0 // 0 off · 1 context (playlist) · 2 track
   const cycleRepeat = () => {
-    const modes = ['off', 'context', 'track']
     const next = (repeatMode + 1) % 3
-    spotify.setRepeat?.(modes[next])
-    setLive((l) => ({ ...l, repeat_mode: next })) // optimistic — poll confirms
+    setRepeatMode(next)                          // optimistic + authoritative for the DM
+    repeatSettleRef.current = Date.now() + 2500  // hold off the poll while Spotify applies it
+    spotify.setRepeat?.(['off', 'context', 'track'][next])
   }
 
   const capsule = (active) => (active
@@ -246,8 +251,9 @@ export default function SpotifyBgmPanel({ spotify }) {
             <span className="text-[10px] tabular-nums" style={{ color: THEME.textSecondary }}>{fmt(duration)}</span>
           </div>
 
-          {/* Transport */}
-          <div className="flex items-center justify-center gap-4 mt-2">
+          {/* Transport — prev/play/next stay centered; repeat is absolutely positioned on the
+              right so it doesn't shift the centre. */}
+          <div className="relative flex items-center justify-center gap-4 mt-2">
             <button onClick={() => spotify.previous?.()} title="Previous" className="text-lg hover:opacity-80" style={{ color: THEME.textOnDark }}>⏮</button>
             <button
               onClick={() => spotify.togglePlay?.()}
@@ -260,17 +266,16 @@ export default function SpotifyBgmPanel({ spotify }) {
             <button
               onClick={cycleRepeat}
               title={['Repeat: off', 'Repeat: playlist', 'Repeat: track'][repeatMode]}
-              className="text-sm hover:opacity-80"
+              className="absolute right-1 top-1/2 -translate-y-1/2 hover:opacity-80"
               style={{ color: repeatMode === 0 ? THEME.textSecondary : SPOTIFY_GREEN, opacity: repeatMode === 0 ? 0.5 : 1 }}
             >
-              {repeatMode === 2 ? (
-                <span className="relative inline-flex items-center justify-center">
-                  <FontAwesomeIcon icon={faArrowRotateRight} />
+              {/* One fixed, centred box for both glyphs so track (with the "1") and playlist align */}
+              <span className="relative inline-flex items-center justify-center" style={{ width: '1.15em', height: '1.15em' }}>
+                <FontAwesomeIcon icon={repeatMode === 2 ? faArrowRotateRight : faArrowsRotate} fixedWidth />
+                {repeatMode === 2 && (
                   <span className="absolute font-bold" style={{ fontSize: '0.5em', lineHeight: 1 }}>1</span>
-                </span>
-              ) : (
-                <FontAwesomeIcon icon={faArrowsRotate} />
-              )}
+                )}
+              </span>
             </button>
           </div>
         </div>
