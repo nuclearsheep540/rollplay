@@ -110,6 +110,14 @@ class SpotifyClient:
             params={"limit": limit, "offset": offset},
         )
 
+    async def get_playlist_tracks(self, access_token: str, playlist_id: str, limit: int = 50, offset: int = 0) -> dict:
+        """Page through a playlist's tracks (GET /v1/playlists/{id}/tracks)."""
+        return await self._api_get(
+            access_token,
+            f"/playlists/{playlist_id}/tracks",
+            params={"limit": limit, "offset": offset},
+        )
+
     async def _api_get(self, access_token: str, path: str, params: Optional[dict] = None) -> dict:
         """GET a Spotify Web API path with a Bearer token."""
         async with httpx.AsyncClient(timeout=10.0) as client:

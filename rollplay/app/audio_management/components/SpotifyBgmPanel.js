@@ -3,16 +3,46 @@
 
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef, useCallback, memo } from 'react'
 import { authFetch } from '@/app/shared/utils/authFetch'
 import { THEME } from '@/app/styles/colorTheme'
 
 const SPOTIFY_GREEN = '#1DB954'
+const PAGE = 50
 
 function fmt(ms) {
   if (!ms || ms < 0) return '0:00'
   const s = Math.floor(ms / 1000)
   return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`
+}
+
+// Module-scope (stable) so it isn't torn down + rebuilt on the panel's 1s position
+// poll — otherwise a click landing across a re-render gets dropped.
+const TrackRow = memo(function TrackRow({ t, onClick }) {
+  return (
+    <button onClick={onClick} className="flex items-center gap-2 p-2 rounded-sm text-left hover:opacity-80 border" style={{ borderColor: THEME.borderSubtle, backgroundColor: THEME.bgSecondary }}>
+      {t.art_url
+        // eslint-disable-next-line @next/next/no-img-element
+        ? <img src={t.art_url} alt="" className="w-9 h-9 rounded object-cover flex-shrink-0" />
+        : <div className="w-9 h-9 rounded flex-shrink-0" style={{ backgroundColor: `${SPOTIFY_GREEN}33` }} />}
+      <div className="flex-1 min-w-0">
+        <p className="text-sm truncate" style={{ color: THEME.textOnDark }}>{t.name}</p>
+        <p className="text-xs truncate" style={{ color: THEME.textSecondary }}>{t.artist}</p>
+      </div>
+    </button>
+  )
+})
+
+function SkeletonRow() {
+  return (
+    <div className="flex items-center gap-2 p-2 rounded-sm border animate-pulse" style={{ borderColor: THEME.borderSubtle, backgroundColor: THEME.bgSecondary }}>
+      <div className="w-9 h-9 rounded flex-shrink-0" style={{ backgroundColor: THEME.borderDefault }} />
+      <div className="flex-1 flex flex-col gap-1.5">
+        <div className="h-3 rounded" style={{ width: '70%', backgroundColor: THEME.borderDefault }} />
+        <div className="h-2 rounded" style={{ width: '45%', backgroundColor: THEME.borderDefault }} />
+      </div>
+    </div>
+  )
 }
 
 /**
@@ -26,7 +56,9 @@ function fmt(ms) {
  */
 export default function SpotifyBgmPanel({ spotify }) {
   const { status, playbackState } = spotify || {}
-  const [tab, setTab] = useState('search') // 'search' | 'playlists'
+  const getCurrentState = spotify?.getCurrentState
+
+  const [tab, setTab] = useState('search') // 'search' | 'playlists' | 'selected'
   const [query, setQuery] = useState('')
   const [results, setResults] = useState([])
   const [searching, setSearching] = useState(false)
@@ -34,9 +66,30 @@ export default function SpotifyBgmPanel({ spotify }) {
   const [loadingPlaylists, setLoadingPlaylists] = useState(false)
   const [error, setError] = useState(null)
 
+  // Drill-in: the opened playlist + its (lazily-paged) tracks
+  const [selectedPlaylist, setSelectedPlaylist] = useState(null) // { id, name, uri }
+  const [tracks, setTracks] = useState([])
+  const [tracksTotal, setTracksTotal] = useState(0)
+  const [tracksLoading, setTracksLoading] = useState(false)
+  const loadingRef = useRef(false)
+
   // Seek-bar drag state
   const [seeking, setSeeking] = useState(false)
   const [seekValue, setSeekValue] = useState(0)
+
+  // Live playhead — poll the SDK's real position (getCurrentState is a local call).
+  const [live, setLive] = useState({ position: 0, duration: 0, paused: true })
+  useEffect(() => {
+    if (status !== 'ready') return
+    let active = true
+    const poll = async () => {
+      const st = await getCurrentState?.()
+      if (active && st) setLive({ position: st.position, duration: st.duration, paused: st.paused })
+    }
+    poll()
+    const id = setInterval(poll, 1000)
+    return () => { active = false; clearInterval(id) }
+  }, [status, getCurrentState])
 
   // Lazy-load the DM's playlists the first time the tab is opened.
   useEffect(() => {
@@ -58,6 +111,49 @@ export default function SpotifyBgmPanel({ spotify }) {
     })()
     return () => { cancelled = true }
   }, [tab]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  const loadTracks = useCallback(async (playlistId, offset, reset = false) => {
+    if (loadingRef.current) return
+    loadingRef.current = true
+    setTracksLoading(true)
+    setError(null)
+    try {
+      const res = await authFetch(`/api/spotify/playlists/${playlistId}/tracks?limit=${PAGE}&offset=${offset}`, { credentials: 'include' })
+      if (!res.ok) { setError('Could not load playlist tracks'); return }
+      const data = await res.json()
+      setTracks((prev) => (reset ? (data.tracks || []) : [...prev, ...(data.tracks || [])]))
+      setTracksTotal(data.total || 0)
+    } catch {
+      setError('Could not load playlist tracks')
+    } finally {
+      loadingRef.current = false
+      setTracksLoading(false)
+    }
+  }, [])
+
+  const openPlaylist = (p) => {
+    setSelectedPlaylist({ id: p.id, name: p.name, uri: p.uri })
+    setTracks([])
+    setTracksTotal(0)
+    setTab('selected')
+    loadTracks(p.id, 0, true)
+  }
+
+  const closeSelected = () => {
+    setSelectedPlaylist(null)
+    setTracks([])
+    setTracksTotal(0)
+    setTab('playlists')
+  }
+
+  // Lazy-load next page when scrolled within ~3 rows (~140px) of the bottom.
+  const onTracksScroll = (e) => {
+    if (loadingRef.current || !selectedPlaylist || tracks.length >= tracksTotal) return
+    const el = e.currentTarget
+    if (el.scrollHeight - el.scrollTop - el.clientHeight < 140) {
+      loadTracks(selectedPlaylist.id, tracks.length)
+    }
+  }
 
   const runSearch = async () => {
     const q = query.trim()
@@ -91,25 +187,13 @@ export default function SpotifyBgmPanel({ spotify }) {
   }
 
   const ps = playbackState
-
-  // Poll the SDK's real position for a live playhead. getCurrentState() is a local
-  // call (no network), so a 1s poll is cheap and reflects true playback position.
-  const [live, setLive] = useState({ position: 0, duration: 0, paused: true })
-  useEffect(() => {
-    if (status !== 'ready') return
-    let active = true
-    const poll = async () => {
-      const st = await spotify.getCurrentState?.()
-      if (active && st) setLive({ position: st.position, duration: st.duration, paused: st.paused })
-    }
-    poll()
-    const id = setInterval(poll, 1000)
-    return () => { active = false; clearInterval(id) }
-  }, [status, spotify?.getCurrentState]) // eslint-disable-line react-hooks/exhaustive-deps
-
   const duration = live.duration || ps?.duration || 0
   const isPlaying = !live.paused
   const position = seeking ? seekValue : live.position
+
+  const capsule = (active) => (active
+    ? { backgroundColor: SPOTIFY_GREEN, color: '#000' }
+    : { backgroundColor: THEME.bgSecondary, color: THEME.textSecondary, border: `1px solid ${THEME.borderDefault}` })
 
   return (
     <div className="flex flex-col gap-3">
@@ -140,7 +224,7 @@ export default function SpotifyBgmPanel({ spotify }) {
               onChange={(e) => { setSeeking(true); setSeekValue(Number(e.target.value)) }}
               onMouseUp={() => { spotify.seek?.(seekValue); setSeeking(false) }}
               onTouchEnd={() => { spotify.seek?.(seekValue); setSeeking(false) }}
-              className="flex-1 h-1 accent-[color:var(--spotify-green,#1DB954)]"
+              className="flex-1 h-1"
               style={{ accentColor: SPOTIFY_GREEN }}
             />
             <span className="text-[10px] tabular-nums" style={{ color: THEME.textSecondary }}>{fmt(duration)}</span>
@@ -162,19 +246,15 @@ export default function SpotifyBgmPanel({ spotify }) {
       )}
 
       {/* Source tabs */}
-      <div className="flex gap-2 text-sm">
-        {['search', 'playlists'].map((t) => (
-          <button
-            key={t}
-            onClick={() => setTab(t)}
-            className="px-3 py-1 rounded-full font-medium capitalize"
-            style={tab === t
-              ? { backgroundColor: SPOTIFY_GREEN, color: '#000' }
-              : { backgroundColor: THEME.bgSecondary, color: THEME.textSecondary, border: `1px solid ${THEME.borderDefault}` }}
-          >
-            {t === 'playlists' ? 'Your Playlists' : 'Search'}
-          </button>
-        ))}
+      <div className="flex gap-2 text-sm items-center">
+        <button onClick={() => setTab('search')} className="px-3 py-1 rounded-full font-medium" style={capsule(tab === 'search')}>Search</button>
+        <button onClick={() => setTab('playlists')} className="px-3 py-1 rounded-full font-medium" style={capsule(tab === 'playlists')}>Your Playlists</button>
+        {selectedPlaylist && (
+          <div className="flex items-center rounded-full overflow-hidden" style={capsule(tab === 'selected')}>
+            <button onClick={() => setTab('selected')} className="pl-3 pr-2 py-1 font-medium truncate max-w-[130px]" title={selectedPlaylist.name}>♪ {selectedPlaylist.name}</button>
+            <button onClick={closeSelected} title="Close playlist" className="px-2 py-1 opacity-70 hover:opacity-100">✕</button>
+          </div>
+        )}
       </div>
 
       {error && <p className="text-xs" style={{ color: '#fca5a5' }}>{error}</p>}
@@ -198,30 +278,19 @@ export default function SpotifyBgmPanel({ spotify }) {
           </div>
           {results.length > 0 && (
             <div className="max-h-56 overflow-y-auto flex flex-col gap-1">
-              {results.map((t) => (
-                <button key={t.uri} onClick={() => spotify.playTrack?.(t.uri)} className="flex items-center gap-2 p-2 rounded-sm text-left hover:opacity-80 border" style={{ borderColor: THEME.borderSubtle, backgroundColor: THEME.bgSecondary }}>
-                  {t.art_url
-                    // eslint-disable-next-line @next/next/no-img-element
-                    ? <img src={t.art_url} alt="" className="w-9 h-9 rounded object-cover" />
-                    : <div className="w-9 h-9 rounded" style={{ backgroundColor: `${SPOTIFY_GREEN}33` }} />}
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm truncate" style={{ color: THEME.textOnDark }}>{t.name}</p>
-                    <p className="text-xs truncate" style={{ color: THEME.textSecondary }}>{t.artist}</p>
-                  </div>
-                </button>
-              ))}
+              {results.map((t) => <TrackRow key={t.uri} t={t} onClick={() => spotify.playTrack?.(t.uri)} />)}
             </div>
           )}
         </>
       )}
 
-      {/* Playlists */}
+      {/* Your Playlists — click to open (drill in), not play */}
       {tab === 'playlists' && (
         <div className="max-h-56 overflow-y-auto flex flex-col gap-1">
           {loadingPlaylists && <p className="text-xs" style={{ color: THEME.textSecondary }}>Loading playlists…</p>}
           {!loadingPlaylists && playlists.length === 0 && !error && <p className="text-xs" style={{ color: THEME.textSecondary }}>No playlists found.</p>}
           {playlists.map((p) => (
-            <button key={p.id} onClick={() => spotify.playContext?.(p.uri)} className="flex items-center gap-2 p-2 rounded-sm text-left hover:opacity-80 border" style={{ borderColor: THEME.borderSubtle, backgroundColor: THEME.bgSecondary }}>
+            <button key={p.id} onClick={() => openPlaylist(p)} className="flex items-center gap-2 p-2 rounded-sm text-left hover:opacity-80 border" style={{ borderColor: THEME.borderSubtle, backgroundColor: THEME.bgSecondary }}>
               {p.image_url
                 // eslint-disable-next-line @next/next/no-img-element
                 ? <img src={p.image_url} alt="" className="w-9 h-9 rounded object-cover" />
@@ -230,8 +299,23 @@ export default function SpotifyBgmPanel({ spotify }) {
                 <p className="text-sm truncate" style={{ color: THEME.textOnDark }}>{p.name}</p>
                 <p className="text-xs truncate" style={{ color: THEME.textSecondary }}>{p.track_count != null ? `${p.track_count} tracks` : ''}</p>
               </div>
+              <span style={{ color: THEME.textSecondary }}>›</span>
             </button>
           ))}
+        </div>
+      )}
+
+      {/* Selected playlist — pick a starting track; playback continues through the playlist.
+          Fixed height + skeleton on first load so nothing below jumps while fetching. */}
+      {tab === 'selected' && selectedPlaylist && (
+        <div className="h-56 overflow-y-auto flex flex-col gap-1" onScroll={onTracksScroll}>
+          {tracks.length === 0 && tracksLoading
+            ? Array.from({ length: 6 }).map((_, i) => <SkeletonRow key={i} />)
+            : tracks.map((t, i) => (
+                <TrackRow key={`${t.uri}-${i}`} t={t} onClick={() => spotify.playContext?.(selectedPlaylist.uri, t.uri)} />
+              ))}
+          {tracksLoading && tracks.length > 0 && <p className="text-xs text-center py-1" style={{ color: THEME.textSecondary }}>Loading…</p>}
+          {!tracksLoading && tracks.length === 0 && <p className="text-xs" style={{ color: THEME.textSecondary }}>No tracks.</p>}
         </div>
       )}
     </div>

@@ -57,3 +57,11 @@ class SpotifyPlaylist(BaseModel):
 
 class SpotifyPlaylistsResponse(BaseModel):
     playlists: List[SpotifyPlaylist] = []
+
+
+class SpotifyPlaylistTracksResponse(BaseModel):
+    """A page of a playlist's tracks, with total for lazy-load paging."""
+    tracks: List[SpotifyTrack] = []
+    total: int = 0
+    offset: int = 0
+    limit: int = 50

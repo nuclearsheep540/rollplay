@@ -31,6 +31,7 @@ from integrations.spotify.repository import SpotifyAccountRepository
 from integrations.spotify.schemas import (
     SpotifyPlaylist,
     SpotifyPlaylistsResponse,
+    SpotifyPlaylistTracksResponse,
     SpotifyProfile,
     SpotifyProfileResponse,
     SpotifySearchResponse,
@@ -287,6 +288,37 @@ async def playlists(
 
     items = data.get("items") or []
     return SpotifyPlaylistsResponse(playlists=[_map_playlist(p) for p in items if p])
+
+
+@router.get("/playlists/{playlist_id}/tracks", response_model=SpotifyPlaylistTracksResponse)
+async def playlist_tracks(
+    playlist_id: str,
+    limit: int = Query(default=50, ge=1, le=100),
+    offset: int = Query(default=0, ge=0),
+    user_id: UUID = Depends(get_current_user_id),
+    repo: SpotifyAccountRepository = Depends(spotify_account_repository),
+):
+    """A page of a playlist's tracks (for the drill-in track picker, lazy-loaded)."""
+    access_token = await _connected_token(user_id, repo)
+    client = get_spotify_client()
+    try:
+        data = await client.get_playlist_tracks(access_token, playlist_id, limit=limit, offset=offset)
+    except httpx.HTTPStatusError as e:
+        logger.warning("Spotify playlist tracks fetch failed for user %s: %s", user_id, e)
+        raise HTTPException(status_code=502, detail="Could not load playlist tracks")
+
+    # Playlist items wrap the track; skip removed/local items and non-track entries (e.g. episodes).
+    tracks = []
+    for item in (data.get("items") or []):
+        t = (item or {}).get("track")
+        if t and t.get("type") == "track" and t.get("uri"):
+            tracks.append(_map_track(t))
+    return SpotifyPlaylistTracksResponse(
+        tracks=tracks,
+        total=data.get("total", 0),
+        offset=offset,
+        limit=limit,
+    )
 
 
 def _map_track(item: dict) -> SpotifyTrack:
