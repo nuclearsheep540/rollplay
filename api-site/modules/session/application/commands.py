@@ -522,6 +522,7 @@ class StartSession:
                     for asset in campaign_assets
                 ] if self.asset_repo else [],
                 audio_config=audio_config_for_game,
+                spotify_state=session.spotify_config or {},
                 map_config=map_config_for_game,
                 image_config=image_config_for_game,
                 active_display=ActiveDisplayType(session.active_display) if session.active_display else None,
@@ -591,6 +592,7 @@ class _ExtractedGameState:
     """State extracted from MongoDB during session ETL (hot → cold)"""
     max_players: int
     audio_config: dict
+    spotify_config: dict
     map_config: dict
     image_config: dict
     active_display: Optional[str]
@@ -739,9 +741,14 @@ async def _extract_and_sync_game_state(
         active_display = final_state.active_display.value if final_state.active_display else None
         logger.info(f"Extracted active_display: {active_display}")
 
+        # Extract Spotify BGM block (opaque blob — track/context/level; no asset backing to sync)
+        spotify_config = final_state.spotify_state or {}
+        logger.info(f"Extracted spotify config: {'has track' if spotify_config.get('track_uri') else 'empty'}")
+
         return _ExtractedGameState(
             max_players=max_players,
             audio_config=audio_config,
+            spotify_config=spotify_config,
             map_config=map_config,
             image_config=image_config,
             active_display=active_display,
@@ -839,6 +846,7 @@ class PauseSession:
 
             session.max_players = extracted.max_players
             session.audio_config = extracted.audio_config
+            session.spotify_config = extracted.spotify_config
             session.map_config = extracted.map_config
             session.image_config = extracted.image_config
             session.active_display = extracted.active_display
@@ -973,6 +981,7 @@ class FinishSession:
 
             session.max_players = extracted.max_players
             session.audio_config = extracted.audio_config
+            session.spotify_config = extracted.spotify_config
             session.map_config = extracted.map_config
             session.image_config = extracted.image_config
             session.active_display = extracted.active_display

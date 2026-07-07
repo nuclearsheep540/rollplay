@@ -290,6 +290,23 @@ async def playlists(
     return SpotifyPlaylistsResponse(playlists=[_map_playlist(p) for p in items if p])
 
 
+@router.get("/playlists/{playlist_id}", response_model=SpotifyPlaylist)
+async def playlist_meta(
+    playlist_id: str,
+    user_id: UUID = Depends(get_current_user_id),
+    repo: SpotifyAccountRepository = Depends(spotify_account_repository),
+):
+    """A single playlist's metadata — used to resolve a playing context_uri to a name on reload."""
+    access_token = await _connected_token(user_id, repo)
+    client = get_spotify_client()
+    try:
+        data = await client.get_playlist(access_token, playlist_id)
+    except httpx.HTTPStatusError as e:
+        logger.warning("Spotify playlist meta fetch failed for user %s: %s", user_id, e)
+        raise HTTPException(status_code=502, detail="Could not load playlist")
+    return _map_playlist(data)
+
+
 @router.get("/playlists/{playlist_id}/tracks", response_model=SpotifyPlaylistTracksResponse)
 async def playlist_tracks(
     playlist_id: str,

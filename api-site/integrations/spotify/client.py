@@ -110,6 +110,14 @@ class SpotifyClient:
             params={"limit": limit, "offset": offset},
         )
 
+    async def get_playlist(self, access_token: str, playlist_id: str) -> dict:
+        """Fetch a single playlist's metadata (name/images/total) — used to resolve a context_uri."""
+        return await self._api_get(
+            access_token,
+            f"/playlists/{playlist_id}",
+            params={"fields": "id,uri,name,images,tracks(total)"},
+        )
+
     async def get_playlist_tracks(self, access_token: str, playlist_id: str, limit: int = 50, offset: int = 0) -> dict:
         """Page through a playlist's tracks (GET /v1/playlists/{id}/tracks).
 

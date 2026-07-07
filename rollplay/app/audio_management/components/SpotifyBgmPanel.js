@@ -146,6 +146,27 @@ export default function SpotifyBgmPanel({ spotify }) {
     }
   }, [])
 
+  // On reload, reflect the currently-playing playlist (from the persisted snapshot's
+  // context_uri) in the drill-in tab, so the UI feels like it persisted.
+  const contextUri = spotify?.nowPlaying?.context_uri
+  useEffect(() => {
+    if (!contextUri || !contextUri.startsWith('spotify:playlist:') || selectedPlaylist) return
+    const id = contextUri.split(':')[2]
+    let cancelled = false
+    ;(async () => {
+      try {
+        const res = await authFetch(`/api/spotify/playlists/${id}`, { credentials: 'include' })
+        if (!res.ok || cancelled) return
+        const p = await res.json()
+        if (cancelled) return
+        setSelectedPlaylist({ id: p.id, name: p.name, uri: p.uri })
+        setTracks([]); setTracksTotal(0); setTab('selected')
+        loadTracks(p.id, 0, true)
+      } catch { /* ignore */ }
+    })()
+    return () => { cancelled = true }
+  }, [contextUri]) // eslint-disable-line react-hooks/exhaustive-deps
+
   const openPlaylist = (p) => {
     setSelectedPlaylist({ id: p.id, name: p.name, uri: p.uri })
     setTracks([])
@@ -212,72 +233,97 @@ export default function SpotifyBgmPanel({ spotify }) {
     spotify.setRepeat?.(['off', 'context', 'track'][next])
   }
 
+  // Now-playing source: live SDK state when the device is active, else the persisted snapshot
+  // (after a reload, when the old device disconnected and playback stopped).
+  const snap = spotify?.nowPlaying
+  const hasLive = !!ps?.trackName
+  const npName = hasLive ? ps.trackName : snap?.track_meta?.name
+  const npArtist = hasLive ? ps.artist : snap?.track_meta?.artist
+  const npArt = hasLive ? ps.artUrl : snap?.track_meta?.art_url
+  const hasNowPlaying = !!npName
+  const playingFrom = (snap?.context_uri && selectedPlaylist?.uri === snap.context_uri) ? selectedPlaylist.name : null
+
   const capsule = (active) => (active
     ? { backgroundColor: SPOTIFY_GREEN, color: '#000' }
     : { backgroundColor: THEME.bgSecondary, color: THEME.textSecondary, border: `1px solid ${THEME.borderDefault}` })
 
   return (
     <div className="flex flex-col gap-3">
-      {/* Now playing + transport */}
-      {ps?.trackName && (
+      {/* Now playing + transport. Falls back to the persisted snapshot after a reload; when the
+          SDK is dark it shows a Resume button that replays from the anchored position. */}
+      {hasNowPlaying && (
         <div className="p-3 rounded-sm border" style={{ borderColor: THEME.borderSubtle, backgroundColor: THEME.bgSecondary }}>
           <div className="flex items-center gap-3">
-            {ps.artUrl ? (
+            {npArt ? (
               // eslint-disable-next-line @next/next/no-img-element
-              <img src={ps.artUrl} alt="" className="w-12 h-12 rounded object-cover" />
+              <img src={npArt} alt="" className="w-12 h-12 rounded object-cover" />
             ) : (
               <div className="w-12 h-12 rounded" style={{ backgroundColor: `${SPOTIFY_GREEN}33` }} />
             )}
             <div className="flex-1 min-w-0">
-              <p className="text-sm font-semibold truncate" style={{ color: THEME.textOnDark }}>{ps.trackName}</p>
-              <p className="text-xs truncate" style={{ color: THEME.textSecondary }}>{ps.artist}</p>
+              <p className="text-sm font-semibold truncate" style={{ color: THEME.textOnDark }}>{npName}</p>
+              <p className="text-xs truncate" style={{ color: THEME.textSecondary }}>{npArtist}</p>
+              {playingFrom && <p className="text-[10px] truncate mt-0.5" style={{ color: THEME.textSecondary }}>Playing from {playingFrom}</p>}
             </div>
           </div>
 
-          {/* Seek bar */}
-          <div className="flex items-center gap-2 mt-3">
-            <span className="text-[10px] tabular-nums" style={{ color: THEME.textSecondary }}>{fmt(position)}</span>
-            <input
-              type="range"
-              min={0}
-              max={duration || 1}
-              value={position}
-              onChange={(e) => { setSeeking(true); setSeekValue(Number(e.target.value)) }}
-              onMouseUp={(e) => { spotify.seek?.(Number(e.currentTarget.value)); setSeeking(false) }}
-              onTouchEnd={(e) => { spotify.seek?.(Number(e.currentTarget.value)); setSeeking(false) }}
-              className="flex-1 h-1"
-              style={{ accentColor: SPOTIFY_GREEN }}
-            />
-            <span className="text-[10px] tabular-nums" style={{ color: THEME.textSecondary }}>{fmt(duration)}</span>
-          </div>
+          {hasLive ? (
+            <>
+              {/* Seek bar */}
+              <div className="flex items-center gap-2 mt-3">
+                <span className="text-[10px] tabular-nums" style={{ color: THEME.textSecondary }}>{fmt(position)}</span>
+                <input
+                  type="range"
+                  min={0}
+                  max={duration || 1}
+                  value={position}
+                  onChange={(e) => { setSeeking(true); setSeekValue(Number(e.target.value)) }}
+                  onMouseUp={(e) => { spotify.seek?.(Number(e.currentTarget.value)); setSeeking(false) }}
+                  onTouchEnd={(e) => { spotify.seek?.(Number(e.currentTarget.value)); setSeeking(false) }}
+                  className="flex-1 h-1"
+                  style={{ accentColor: SPOTIFY_GREEN }}
+                />
+                <span className="text-[10px] tabular-nums" style={{ color: THEME.textSecondary }}>{fmt(duration)}</span>
+              </div>
 
-          {/* Transport — prev/play/next stay centered; repeat is absolutely positioned on the
-              right so it doesn't shift the centre. */}
-          <div className="relative flex items-center justify-center gap-4 mt-2">
-            <button onClick={() => spotify.previous?.()} title="Previous" className="text-lg hover:opacity-80" style={{ color: THEME.textOnDark }}>⏮</button>
-            <button
-              onClick={() => spotify.togglePlay?.()}
-              className="w-9 h-9 rounded-full flex items-center justify-center text-sm font-bold"
-              style={{ backgroundColor: SPOTIFY_GREEN, color: '#000' }}
-            >
-              {isPlaying ? '❚❚' : '▶'}
-            </button>
-            <button onClick={() => spotify.next?.()} title="Next" className="text-lg hover:opacity-80" style={{ color: THEME.textOnDark }}>⏭</button>
-            <button
-              onClick={cycleRepeat}
-              title={['Repeat: off', 'Repeat: playlist', 'Repeat: track'][repeatMode]}
-              className="absolute right-1 top-1/2 -translate-y-1/2 hover:opacity-80"
-              style={{ color: repeatMode === 0 ? THEME.textSecondary : SPOTIFY_GREEN, opacity: repeatMode === 0 ? 0.5 : 1 }}
-            >
-              {/* One fixed, centred box for both glyphs so track (with the "1") and playlist align */}
-              <span className="relative inline-flex items-center justify-center" style={{ width: '1.15em', height: '1.15em' }}>
-                <FontAwesomeIcon icon={repeatMode === 2 ? faArrowRotateRight : faArrowsRotate} fixedWidth />
-                {repeatMode === 2 && (
-                  <span className="absolute font-bold" style={{ fontSize: '0.5em', lineHeight: 1 }}>1</span>
-                )}
-              </span>
-            </button>
-          </div>
+              {/* Transport — prev/play/next stay centered; repeat is absolutely positioned right. */}
+              <div className="relative flex items-center justify-center gap-4 mt-2">
+                <button onClick={() => spotify.previous?.()} title="Previous" className="text-lg hover:opacity-80" style={{ color: THEME.textOnDark }}>⏮</button>
+                <button
+                  onClick={() => spotify.togglePlay?.()}
+                  className="w-9 h-9 rounded-full flex items-center justify-center text-sm font-bold"
+                  style={{ backgroundColor: SPOTIFY_GREEN, color: '#000' }}
+                >
+                  {isPlaying ? '❚❚' : '▶'}
+                </button>
+                <button onClick={() => spotify.next?.()} title="Next" className="text-lg hover:opacity-80" style={{ color: THEME.textOnDark }}>⏭</button>
+                <button
+                  onClick={cycleRepeat}
+                  title={['Repeat: off', 'Repeat: playlist', 'Repeat: track'][repeatMode]}
+                  className="absolute right-1 top-1/2 -translate-y-1/2 hover:opacity-80"
+                  style={{ color: repeatMode === 0 ? THEME.textSecondary : SPOTIFY_GREEN, opacity: repeatMode === 0 ? 0.5 : 1 }}
+                >
+                  <span className="relative inline-flex items-center justify-center" style={{ width: '1.15em', height: '1.15em' }}>
+                    <FontAwesomeIcon icon={repeatMode === 2 ? faArrowRotateRight : faArrowsRotate} fixedWidth />
+                    {repeatMode === 2 && (
+                      <span className="absolute font-bold" style={{ fontSize: '0.5em', lineHeight: 1 }}>1</span>
+                    )}
+                  </span>
+                </button>
+              </div>
+            </>
+          ) : (
+            /* Dark after a reload — one gesture-triggered Resume that rejoins at the anchor. */
+            <div className="flex justify-center mt-3">
+              <button
+                onClick={() => spotify.resumeFromSnapshot?.(snap)}
+                className="px-4 py-1.5 rounded-full text-sm font-semibold hover:opacity-90"
+                style={{ backgroundColor: SPOTIFY_GREEN, color: '#000' }}
+              >
+                ▶ Resume where you left off
+              </button>
+            </div>
+          )}
         </div>
       )}
 
