@@ -913,7 +913,7 @@ class WebsocketEvent():
         action = event_data.get("action")
         triggered_by = event_data.get("triggered_by", user_id)
 
-        if action not in ("select", "play", "pause", "stop"):
+        if action not in ("sync", "select", "play", "pause", "stop"):
             return WebsocketEventResult.error(f"Invalid spotify action: {action}")
 
         # DM-only: the Spotify bed is authoritative for the whole table.
@@ -923,7 +923,35 @@ class WebsocketEvent():
         current = GameService.get_spotify_state(client_id) or {}
         now = time.time()
 
-        if action == "select":
+        if action == "sync":
+            # Leader model: the DM's client reports its live SDK state (track, playing,
+            # position, playlist context) and the server anchors it. This is what drives
+            # continuous playlists, next/prev and seek — the DM's Spotify is the source of
+            # truth, we just mirror it to everyone.
+            track_uri = event_data.get("track_uri")
+            if not track_uri:
+                snapshot = {
+                    "track_uri": None, "track_meta": {},
+                    "context_uri": event_data.get("context_uri"),
+                    "playback_state": "stopped", "started_at": None,
+                    "paused_elapsed": None, "is_looping": False,
+                    "updated_by": triggered_by,
+                }
+            else:
+                is_playing = bool(event_data.get("is_playing"))
+                pos_sec = (event_data.get("position_ms") or 0) / 1000.0
+                snapshot = {
+                    "context_uri": event_data.get("context_uri"),
+                    "track_uri": track_uri,
+                    "track_meta": event_data.get("track_meta", {}),
+                    "playback_state": "playing" if is_playing else "paused",
+                    "started_at": (now - pos_sec) if is_playing else None,
+                    "paused_elapsed": None if is_playing else pos_sec,
+                    "is_looping": False,
+                    "updated_by": triggered_by,
+                }
+
+        elif action == "select":
             track_uri = event_data.get("track_uri")
             if not track_uri:
                 return WebsocketEventResult.error("spotify select requires track_uri")

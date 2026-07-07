@@ -3,63 +3,78 @@
 
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { authFetch } from '@/app/shared/utils/authFetch'
 import { THEME } from '@/app/styles/colorTheme'
 
 const SPOTIFY_GREEN = '#1DB954'
 
+function fmt(ms) {
+  if (!ms || ms < 0) return '0:00'
+  const s = Math.floor(ms / 1000)
+  return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`
+}
+
 /**
- * DM-only Spotify BGM control surface, rendered inside the audio tab.
+ * DM-only Spotify BGM control surface (rendered in the audio tab).
  *
- * Control is server-authoritative: buttons call sendSpotifyControl(...) which
- * goes over the WS; the server re-broadcasts `spotify_state` to everyone (incl.
- * this client), and the SDK reacts. So the UI reflects `spotify.nowPlaying`
- * (the last applied snapshot), not optimistic local state.
+ * The DM's client is the leader: these controls drive its own SDK via the hook
+ * (playTrack / playContext / next / previous / seek / togglePlay), and the hook
+ * reports the resulting state up so the server broadcasts it to everyone.
  *
- * @param {(action: string, payload?: object) => void} sendSpotifyControl
- * @param {{status: string, profile: object|null, nowPlaying: object|null}} spotify
+ * @param {object} spotify  the useSpotifyPlayback() return (status, playbackState, controls…)
  */
-export default function SpotifyBgmPanel({ sendSpotifyControl, spotify }) {
-  const { status, nowPlaying } = spotify || {}
+export default function SpotifyBgmPanel({ spotify }) {
+  const { status, playbackState } = spotify || {}
+  const [tab, setTab] = useState('search') // 'search' | 'playlists'
   const [query, setQuery] = useState('')
   const [results, setResults] = useState([])
   const [searching, setSearching] = useState(false)
+  const [playlists, setPlaylists] = useState([])
+  const [loadingPlaylists, setLoadingPlaylists] = useState(false)
   const [error, setError] = useState(null)
+
+  // Seek-bar drag state
+  const [seeking, setSeeking] = useState(false)
+  const [seekValue, setSeekValue] = useState(0)
+
+  // Lazy-load the DM's playlists the first time the tab is opened.
+  useEffect(() => {
+    if (tab !== 'playlists' || playlists.length || loadingPlaylists) return
+    let cancelled = false
+    ;(async () => {
+      setLoadingPlaylists(true)
+      setError(null)
+      try {
+        const res = await authFetch('/api/spotify/playlists?limit=50', { credentials: 'include' })
+        if (!res.ok) { setError(res.status === 403 ? 'Reconnect Spotify to grant playlist access' : 'Could not load playlists'); return }
+        const data = await res.json()
+        if (!cancelled) setPlaylists(data.playlists || [])
+      } catch {
+        if (!cancelled) setError('Could not load playlists')
+      } finally {
+        if (!cancelled) setLoadingPlaylists(false)
+      }
+    })()
+    return () => { cancelled = true }
+  }, [tab]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const runSearch = async () => {
     const q = query.trim()
     if (!q) return
-    setSearching(true)
-    setError(null)
+    setSearching(true); setError(null)
     try {
       const res = await authFetch(`/api/spotify/search?q=${encodeURIComponent(q)}&limit=15`, { credentials: 'include' })
       if (!res.ok) { setError('Search failed'); setResults([]); return }
       const data = await res.json()
       setResults(data.tracks || [])
     } catch {
-      setError('Search failed')
-      setResults([])
+      setError('Search failed'); setResults([])
     } finally {
       setSearching(false)
     }
   }
 
-  // Every control click also activates the SDK's audio element (browser autoplay
-  // unlock) — playback itself fires later via the WS round-trip, off-gesture.
-  const control = (action, payload) => {
-    spotify?.activate?.()
-    sendSpotifyControl?.(action, payload)
-  }
-
-  const selectTrack = (t) => {
-    control('select', {
-      track_uri: t.uri,
-      track_meta: { name: t.name, artist: t.artist, art_url: t.art_url, duration_ms: t.duration_ms },
-    })
-  }
-
-  // --- Gating: only a connected Premium account can drive playback ---
   if (status !== 'ready') {
     const message = {
       idle: 'Starting Spotify…',
@@ -75,77 +90,129 @@ export default function SpotifyBgmPanel({ sendSpotifyControl, spotify }) {
     )
   }
 
-  const meta = nowPlaying?.track_meta
-  const state = nowPlaying?.playback_state
+  const ps = playbackState
+  const duration = ps?.duration || 0
+  const position = seeking ? seekValue : (ps?.position || 0)
+  const isPlaying = ps && !ps.paused
 
   return (
     <div className="flex flex-col gap-3">
-      {/* Now playing */}
-      {meta && (
-        <div className="flex items-center gap-3 p-2 rounded-sm border" style={{ borderColor: THEME.borderSubtle, backgroundColor: THEME.bgSecondary }}>
-          {meta.art_url ? (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img src={meta.art_url} alt="" className="w-12 h-12 rounded object-cover" />
-          ) : (
-            <div className="w-12 h-12 rounded" style={{ backgroundColor: `${SPOTIFY_GREEN}33` }} />
-          )}
-          <div className="flex-1 min-w-0">
-            <p className="text-sm font-semibold truncate" style={{ color: THEME.textOnDark }}>{meta.name}</p>
-            <p className="text-xs truncate" style={{ color: THEME.textSecondary }}>{meta.artist}</p>
-          </div>
-          <div className="flex items-center gap-2">
-            {state === 'playing' ? (
-              <button onClick={() => control('pause')} className="px-3 py-1 rounded-full text-sm font-semibold" style={{ backgroundColor: SPOTIFY_GREEN, color: '#000' }}>Pause</button>
+      {/* Now playing + transport */}
+      {ps?.trackName && (
+        <div className="p-3 rounded-sm border" style={{ borderColor: THEME.borderSubtle, backgroundColor: THEME.bgSecondary }}>
+          <div className="flex items-center gap-3">
+            {ps.artUrl ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={ps.artUrl} alt="" className="w-12 h-12 rounded object-cover" />
             ) : (
-              <button onClick={() => control('play')} className="px-3 py-1 rounded-full text-sm font-semibold" style={{ backgroundColor: SPOTIFY_GREEN, color: '#000' }}>Play</button>
+              <div className="w-12 h-12 rounded" style={{ backgroundColor: `${SPOTIFY_GREEN}33` }} />
             )}
-            <button onClick={() => control('stop')} className="px-3 py-1 rounded-full text-sm font-medium border" style={{ borderColor: THEME.borderDefault, color: THEME.textSecondary }}>Stop</button>
+            <div className="flex-1 min-w-0">
+              <p className="text-sm font-semibold truncate" style={{ color: THEME.textOnDark }}>{ps.trackName}</p>
+              <p className="text-xs truncate" style={{ color: THEME.textSecondary }}>{ps.artist}</p>
+            </div>
+          </div>
+
+          {/* Seek bar */}
+          <div className="flex items-center gap-2 mt-3">
+            <span className="text-[10px] tabular-nums" style={{ color: THEME.textSecondary }}>{fmt(position)}</span>
+            <input
+              type="range"
+              min={0}
+              max={duration || 1}
+              value={position}
+              onChange={(e) => { setSeeking(true); setSeekValue(Number(e.target.value)) }}
+              onMouseUp={() => { spotify.seek?.(seekValue); setSeeking(false) }}
+              onTouchEnd={() => { spotify.seek?.(seekValue); setSeeking(false) }}
+              className="flex-1 h-1 accent-[color:var(--spotify-green,#1DB954)]"
+              style={{ accentColor: SPOTIFY_GREEN }}
+            />
+            <span className="text-[10px] tabular-nums" style={{ color: THEME.textSecondary }}>{fmt(duration)}</span>
+          </div>
+
+          {/* Transport */}
+          <div className="flex items-center justify-center gap-4 mt-2">
+            <button onClick={() => spotify.previous?.()} title="Previous" className="text-lg hover:opacity-80" style={{ color: THEME.textOnDark }}>⏮</button>
+            <button
+              onClick={() => spotify.togglePlay?.()}
+              className="w-9 h-9 rounded-full flex items-center justify-center text-sm font-bold"
+              style={{ backgroundColor: SPOTIFY_GREEN, color: '#000' }}
+            >
+              {isPlaying ? '❚❚' : '▶'}
+            </button>
+            <button onClick={() => spotify.next?.()} title="Next" className="text-lg hover:opacity-80" style={{ color: THEME.textOnDark }}>⏭</button>
           </div>
         </div>
       )}
 
-      {/* Search */}
-      <div className="flex gap-2">
-        <input
-          type="text"
-          value={query}
-          onChange={(e) => setQuery(e.target.value)}
-          onKeyDown={(e) => { if (e.key === 'Enter') runSearch() }}
-          placeholder="Search Spotify for a track…"
-          className="flex-1 px-3 py-2 rounded-sm border text-sm focus:outline-none"
-          style={{ backgroundColor: THEME.bgSecondary, borderColor: THEME.borderDefault, color: THEME.textOnDark }}
-        />
-        <button
-          onClick={runSearch}
-          disabled={searching || !query.trim()}
-          className="px-4 py-2 rounded-sm text-sm font-semibold disabled:opacity-50"
-          style={{ backgroundColor: SPOTIFY_GREEN, color: '#000' }}
-        >
-          {searching ? '…' : 'Search'}
-        </button>
+      {/* Source tabs */}
+      <div className="flex gap-2 text-sm">
+        {['search', 'playlists'].map((t) => (
+          <button
+            key={t}
+            onClick={() => setTab(t)}
+            className="px-3 py-1 rounded-full font-medium capitalize"
+            style={tab === t
+              ? { backgroundColor: SPOTIFY_GREEN, color: '#000' }
+              : { backgroundColor: THEME.bgSecondary, color: THEME.textSecondary, border: `1px solid ${THEME.borderDefault}` }}
+          >
+            {t === 'playlists' ? 'Your Playlists' : 'Search'}
+          </button>
+        ))}
       </div>
 
       {error && <p className="text-xs" style={{ color: '#fca5a5' }}>{error}</p>}
 
-      {/* Results */}
-      {results.length > 0 && (
-        <div className="max-h-64 overflow-y-auto flex flex-col gap-1">
-          {results.map((t) => (
-            <button
-              key={t.uri}
-              onClick={() => selectTrack(t)}
-              className="flex items-center gap-2 p-2 rounded-sm text-left hover:opacity-80 transition-opacity border"
-              style={{ borderColor: THEME.borderSubtle, backgroundColor: THEME.bgSecondary }}
-            >
-              {t.art_url ? (
+      {/* Search */}
+      {tab === 'search' && (
+        <>
+          <div className="flex gap-2">
+            <input
+              type="text"
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              onKeyDown={(e) => { if (e.key === 'Enter') runSearch() }}
+              placeholder="Search Spotify for a track…"
+              className="flex-1 px-3 py-2 rounded-sm border text-sm focus:outline-none"
+              style={{ backgroundColor: THEME.bgSecondary, borderColor: THEME.borderDefault, color: THEME.textOnDark }}
+            />
+            <button onClick={runSearch} disabled={searching || !query.trim()} className="px-4 py-2 rounded-sm text-sm font-semibold disabled:opacity-50" style={{ backgroundColor: SPOTIFY_GREEN, color: '#000' }}>
+              {searching ? '…' : 'Search'}
+            </button>
+          </div>
+          {results.length > 0 && (
+            <div className="max-h-56 overflow-y-auto flex flex-col gap-1">
+              {results.map((t) => (
+                <button key={t.uri} onClick={() => spotify.playTrack?.(t.uri)} className="flex items-center gap-2 p-2 rounded-sm text-left hover:opacity-80 border" style={{ borderColor: THEME.borderSubtle, backgroundColor: THEME.bgSecondary }}>
+                  {t.art_url
+                    // eslint-disable-next-line @next/next/no-img-element
+                    ? <img src={t.art_url} alt="" className="w-9 h-9 rounded object-cover" />
+                    : <div className="w-9 h-9 rounded" style={{ backgroundColor: `${SPOTIFY_GREEN}33` }} />}
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm truncate" style={{ color: THEME.textOnDark }}>{t.name}</p>
+                    <p className="text-xs truncate" style={{ color: THEME.textSecondary }}>{t.artist}</p>
+                  </div>
+                </button>
+              ))}
+            </div>
+          )}
+        </>
+      )}
+
+      {/* Playlists */}
+      {tab === 'playlists' && (
+        <div className="max-h-56 overflow-y-auto flex flex-col gap-1">
+          {loadingPlaylists && <p className="text-xs" style={{ color: THEME.textSecondary }}>Loading playlists…</p>}
+          {!loadingPlaylists && playlists.length === 0 && !error && <p className="text-xs" style={{ color: THEME.textSecondary }}>No playlists found.</p>}
+          {playlists.map((p) => (
+            <button key={p.id} onClick={() => spotify.playContext?.(p.uri)} className="flex items-center gap-2 p-2 rounded-sm text-left hover:opacity-80 border" style={{ borderColor: THEME.borderSubtle, backgroundColor: THEME.bgSecondary }}>
+              {p.image_url
                 // eslint-disable-next-line @next/next/no-img-element
-                <img src={t.art_url} alt="" className="w-9 h-9 rounded object-cover" />
-              ) : (
-                <div className="w-9 h-9 rounded" style={{ backgroundColor: `${SPOTIFY_GREEN}33` }} />
-              )}
+                ? <img src={p.image_url} alt="" className="w-9 h-9 rounded object-cover" />
+                : <div className="w-9 h-9 rounded" style={{ backgroundColor: `${SPOTIFY_GREEN}33` }} />}
               <div className="flex-1 min-w-0">
-                <p className="text-sm truncate" style={{ color: THEME.textOnDark }}>{t.name}</p>
-                <p className="text-xs truncate" style={{ color: THEME.textSecondary }}>{t.artist}</p>
+                <p className="text-sm truncate" style={{ color: THEME.textOnDark }}>{p.name}</p>
+                <p className="text-xs truncate" style={{ color: THEME.textSecondary }}>{p.track_count != null ? `${p.track_count} tracks` : ''}</p>
               </div>
             </button>
           ))}

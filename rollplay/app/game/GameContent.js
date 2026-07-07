@@ -1053,10 +1053,20 @@ export default function GameContent() {
     flushStateBatch,
   } = useUnifiedAudio();
 
-  // Spotify BGM playback (Web Playback SDK). Mirrors the effective master level
-  // (masterVolume * broadcastMasterVolume). Only initialises for a connected
-  // Premium account; everyone else falls back to the S3 mixer.
-  const spotify = useSpotifyPlayback({ enabled: true, masterVolume, broadcastMasterVolume });
+  // Spotify BGM playback (Web Playback SDK). The DM is the "leader": drives playback
+  // and reports its live state up (→ WS 'sync' → server anchors → broadcast); everyone
+  // else follows the broadcast. Mirrors the effective master level (master * broadcast).
+  const sendSpotifyControlRef = useRef(null);
+  const handleSpotifyLeaderState = useCallback((payload) => {
+    sendSpotifyControlRef.current?.('sync', payload);
+  }, []);
+  const spotify = useSpotifyPlayback({
+    enabled: true,
+    isLeader: !!isDM,
+    onLeaderState: handleSpotifyLeaderState,
+    masterVolume,
+    broadcastMasterVolume,
+  });
 
   // Gate preload — aggregates readiness from REST, WebSocket, and asset downloads
   const gatePreload = useGatePreload({ campaignMeta, initialDataLoaded, wsInitialStateReceived, isAudioUnlocked, activeMap, activeImage, rawAudioState, audioSyncComplete });
@@ -1199,6 +1209,8 @@ export default function GameContent() {
 
   // Sync ref so handleRoleChange can call sendSeatChange without circular dep
   sendSeatChangeRef.current = sendSeatChange;
+  // Sync ref so the Spotify leader can report state without a circular dep
+  sendSpotifyControlRef.current = sendSpotifyControl;
 
   // Mixer drawer transport handlers — send via WebSocket batch
   const handleMixerPlay = useCallback((trackId) => {
@@ -2200,7 +2212,6 @@ export default function GameContent() {
                   onToggle={() => {}}
                   remoteTrackStates={remoteTrackStates}
                   sendRemoteAudioBatch={sendRemoteAudioBatch}
-                  sendSpotifyControl={sendSpotifyControl}
                   spotify={spotify}
                   unlockAudio={unlockAudio}
                   isAudioUnlocked={isAudioUnlocked}

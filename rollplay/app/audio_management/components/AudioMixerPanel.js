@@ -75,7 +75,6 @@ export default function AudioMixerPanel({
   onToggle,
   remoteTrackStates = {},
   sendRemoteAudioBatch,
-  sendSpotifyControl = null,
   spotify = null,
   unlockAudio = null,
   isAudioUnlocked = false,
@@ -828,7 +827,7 @@ export default function AudioMixerPanel({
 
           {/* Spotify BGM — DM-controlled, synced to all clients; coexists with the S3 mixer */}
           <div className="text-white font-bold mt-6">Spotify BGM</div>
-          <SpotifyBgmPanel sendSpotifyControl={sendSpotifyControl} spotify={spotify} />
+          <SpotifyBgmPanel spotify={spotify} />
 
           {/* SFX Soundboard */}
           <div className="text-white font-bold mt-6">Sound Effects</div>
