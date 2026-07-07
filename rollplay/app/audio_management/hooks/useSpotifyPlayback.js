@@ -159,6 +159,9 @@ export function useSpotifyPlayback({
   const previous = useCallback(async () => { await playerRef.current?.previousTrack().catch(() => {}); setTimeout(() => reportState(true), 350); }, [reportState]);
   const seek = useCallback(async (positionMs) => { await playerRef.current?.seek(Math.max(0, Math.floor(positionMs))).catch(() => {}); setTimeout(() => reportState(true), 250); }, [reportState]);
 
+  // The SDK's live playback state (local, no network) — poll this for a real playhead.
+  const getCurrentState = useCallback(() => playerRef.current?.getCurrentState?.() ?? Promise.resolve(null), []);
+
   // Follower: reconcile the SDK to a broadcast anchor snapshot.
   const applyToSDK = useCallback((snap) => {
     const player = playerRef.current;
@@ -289,6 +292,7 @@ export function useSpotifyPlayback({
     playbackState,
     applySpotifySnapshot,
     activate,
+    getCurrentState,
     // leader controls
     playTrack,
     playContext,

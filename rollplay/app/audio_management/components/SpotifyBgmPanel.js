@@ -91,9 +91,25 @@ export default function SpotifyBgmPanel({ spotify }) {
   }
 
   const ps = playbackState
-  const duration = ps?.duration || 0
-  const position = seeking ? seekValue : (ps?.position || 0)
-  const isPlaying = ps && !ps.paused
+
+  // Poll the SDK's real position for a live playhead. getCurrentState() is a local
+  // call (no network), so a 1s poll is cheap and reflects true playback position.
+  const [live, setLive] = useState({ position: 0, duration: 0, paused: true })
+  useEffect(() => {
+    if (status !== 'ready') return
+    let active = true
+    const poll = async () => {
+      const st = await spotify.getCurrentState?.()
+      if (active && st) setLive({ position: st.position, duration: st.duration, paused: st.paused })
+    }
+    poll()
+    const id = setInterval(poll, 1000)
+    return () => { active = false; clearInterval(id) }
+  }, [status, spotify?.getCurrentState]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  const duration = live.duration || ps?.duration || 0
+  const isPlaying = !live.paused
+  const position = seeking ? seekValue : live.position
 
   return (
     <div className="flex flex-col gap-3">
