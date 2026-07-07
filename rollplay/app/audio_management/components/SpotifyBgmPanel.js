@@ -243,8 +243,8 @@ export default function SpotifyBgmPanel({ spotify }) {
               max={duration || 1}
               value={position}
               onChange={(e) => { setSeeking(true); setSeekValue(Number(e.target.value)) }}
-              onMouseUp={() => { spotify.seek?.(seekValue); setSeeking(false) }}
-              onTouchEnd={() => { spotify.seek?.(seekValue); setSeeking(false) }}
+              onMouseUp={(e) => { spotify.seek?.(Number(e.currentTarget.value)); setSeeking(false) }}
+              onTouchEnd={(e) => { spotify.seek?.(Number(e.currentTarget.value)); setSeeking(false) }}
               className="flex-1 h-1"
               style={{ accentColor: SPOTIFY_GREEN }}
             />

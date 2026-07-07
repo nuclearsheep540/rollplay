@@ -20,10 +20,13 @@ export const handleSpotifyState = (data, handlers) => {
   }
 };
 
-export const createSpotifySendFunctions = (webSocket, isConnected, playerName) => {
+export const createSpotifySendFunctions = (webSocket, isConnected, userId) => {
   /**
-   * @param {'select'|'play'|'pause'|'stop'} action
-   * @param {object} payload  e.g. { track_uri, track_meta: { name, artist, art_url, duration_ms } }
+   * @param {'sync'|'select'|'play'|'pause'|'stop'|'channel_volume'} action
+   * @param {object} payload  shape varies by action, e.g.
+   *   sync           → { track_uri, track_meta, is_playing, position_ms, context_uri }
+   *   select         → { track_uri, track_meta }
+   *   channel_volume → { level }
    */
   const sendSpotifyControl = (action, payload = {}) => {
     if (!webSocket || !isConnected) {
@@ -32,7 +35,7 @@ export const createSpotifySendFunctions = (webSocket, isConnected, playerName) =
     }
     webSocket.send(JSON.stringify({
       event_type: 'spotify_control',
-      data: { action, triggered_by: playerName, ...payload },
+      data: { action, triggered_by: userId, ...payload },
     }));
   };
 

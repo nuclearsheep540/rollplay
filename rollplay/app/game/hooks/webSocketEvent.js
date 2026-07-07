@@ -48,8 +48,10 @@ export const handleInitialState = (data, handlers) => {
     handlers.setPlayerMetadata(metadata);
   }
 
-  // Late-join: drive the Spotify BGM bed from the snapshot carried in initial_state.
-  if (data.spotify && data.spotify.track_uri && handlers.applySpotifySnapshot) {
+  // Late-join / reconnect: hand the snapshot to the client whenever one exists, even an
+  // empty/stopped block — applySpotifySnapshot clears/pauses stale state accordingly (e.g.
+  // if the DM stopped Spotify while this client was disconnected).
+  if (data.spotify && handlers.applySpotifySnapshot) {
     handlers.applySpotifySnapshot(data.spotify);
   }
 
