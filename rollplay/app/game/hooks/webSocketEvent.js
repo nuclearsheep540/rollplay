@@ -17,6 +17,7 @@ import {
   handleRemoteAudioBatch,
   createAudioSendFunctions
 } from '../../audio_management/hooks/webSocketAudioEvents';
+import { createSpotifySendFunctions } from '../../audio_management/hooks/webSocketSpotifyEvents';
 
 // =====================================
 // GAME EVENT HANDLERS
@@ -45,6 +46,13 @@ export const handleInitialState = (data, handlers) => {
 
   if (handlers.setPlayerMetadata) {
     handlers.setPlayerMetadata(metadata);
+  }
+
+  // Late-join / reconnect: hand the snapshot to the client whenever one exists, even an
+  // empty/stopped block — applySpotifySnapshot clears/pauses stale state accordingly (e.g.
+  // if the DM stopped Spotify while this client was disconnected).
+  if (data.spotify && handlers.applySpotifySnapshot) {
+    handlers.applySpotifySnapshot(data.spotify);
   }
 
   // Set DM object {user_id, player_name, campaign_role}
@@ -680,6 +688,9 @@ export const createSendFunctions = (webSocket, isConnected, roomId, userId) => {
   const audioSendFunctions = createAudioSendFunctions(webSocket, isConnected, userId);
   const { sendRemoteAudioPlay, sendRemoteAudioResume, sendRemoteAudioBatch } = audioSendFunctions;
 
+  // Spotify BGM control send function
+  const { sendSpotifyControl } = createSpotifySendFunctions(webSocket, isConnected, userId);
+
   return {
     sendSeatChange,
     sendSeatCountChange,
@@ -694,7 +705,8 @@ export const createSendFunctions = (webSocket, isConnected, roomId, userId) => {
     sendColorChange,
     sendRemoteAudioPlay,
     sendRemoteAudioResume,
-    sendRemoteAudioBatch
+    sendRemoteAudioBatch,
+    sendSpotifyControl
   };
 };
 

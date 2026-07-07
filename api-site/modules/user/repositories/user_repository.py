@@ -452,6 +452,13 @@ class UserRepository:
                 {"user_id": user_id}
             )
 
+            # 11. Spotify account link (integration; explicit since soft-delete
+            #     leaves the user row in place so the FK CASCADE won't fire)
+            self.db.execute(
+                text("DELETE FROM spotify_accounts WHERE user_id = :user_id"),
+                {"user_id": user_id}
+            )
+
             # Finally, mark user as soft-deleted
             model.is_deleted = True
             model.deleted_at = datetime.now(timezone.utc)

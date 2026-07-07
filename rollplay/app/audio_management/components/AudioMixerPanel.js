@@ -8,6 +8,7 @@
 import React, { useState, useEffect, useCallback, useMemo, useRef, memo } from 'react';
 import AudioTrackSelector from './AudioTrackSelector';
 import SfxSoundboard from './SfxSoundboard';
+import SpotifyBgmPanel from './SpotifyBgmPanel';
 import { PlaybackState, ChannelType, DEFAULT_EFFECTS, BGM_CHANNELS } from '../types';
 import { useListPresets } from '@/app/workshop/hooks/usePresets';
 import { useAssets } from '@/app/asset_library/hooks/useAssets';
@@ -74,6 +75,7 @@ export default function AudioMixerPanel({
   onToggle,
   remoteTrackStates = {},
   sendRemoteAudioBatch,
+  spotify = null,
   unlockAudio = null,
   isAudioUnlocked = false,
   clearPendingOperation = null,
@@ -595,7 +597,7 @@ export default function AudioMixerPanel({
           {/* DJ Cue System - Show when multiple BGM channels are available */}
           {bgmChannels.length > 1 && (
             <div className={DM_CHILD}>
-              <div className="text-white font-bold mb-3">🎧 Channel Cue</div>
+              <div className="text-white font-bold mb-3">Channel Cue</div>
               {/* DJ Cue System Layout matching cue2.png exactly */}
               <div className="mb-4">
                 {/* Header Row */}
@@ -822,6 +824,10 @@ export default function AudioMixerPanel({
           )}
 
           {/* BGM channel strips moved to bottom mixer drawer */}
+
+          {/* Spotify BGM — DM-controlled, synced to all clients; coexists with the S3 mixer */}
+          <div className="text-white font-bold mt-6">Spotify BGM</div>
+          <SpotifyBgmPanel spotify={spotify} />
 
           {/* SFX Soundboard */}
           <div className="text-white font-bold mt-6">Sound Effects</div>

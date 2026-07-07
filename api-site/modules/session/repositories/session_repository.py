@@ -71,6 +71,7 @@ class SessionRepository:
             model.stopped_at = aggregate.stopped_at
             model.max_players = aggregate.max_players
             model.audio_config = aggregate.audio_config
+            model.spotify_config = aggregate.spotify_config
             model.map_config = aggregate.map_config
             model.image_config = aggregate.image_config
             model.active_display = aggregate.active_display
@@ -92,6 +93,7 @@ class SessionRepository:
                 stopped_at=aggregate.stopped_at,
                 max_players=aggregate.max_players,
                 audio_config=aggregate.audio_config,
+                spotify_config=aggregate.spotify_config,
                 map_config=aggregate.map_config,
                 image_config=aggregate.image_config,
                 active_display=aggregate.active_display
@@ -189,6 +191,7 @@ class SessionRepository:
             joined_users=joined_user_ids,
             max_players=model.max_players,
             audio_config=model.audio_config,
+            spotify_config=model.spotify_config,
             map_config=model.map_config,
             image_config=model.image_config,
             active_display=model.active_display

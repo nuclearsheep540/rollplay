@@ -58,6 +58,7 @@ class Session(Base):
     active_game_id = Column(String(100))  # MongoDB active_session objectID (when game is running)
     max_players = Column(Integer, default=8, nullable=False)  # Seat count in active game (1-8)
     audio_config = Column(JSONB, nullable=True, server_default='{}')  # Persisted audio channel config from ETL
+    spotify_config = Column(JSONB, nullable=True, server_default='{}')  # Persisted DM Spotify BGM block from ETL (track/context/level)
     map_config = Column(JSONB, nullable=True, server_default='{}')  # Persisted active map config from ETL (just asset_id)
     image_config = Column(JSONB, nullable=True, server_default='{}')  # Persisted active image config from ETL
     active_display = Column(String(10), nullable=True)  # Which display was active: "map", "image", or null

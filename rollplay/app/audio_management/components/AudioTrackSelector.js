@@ -46,7 +46,6 @@ export default function AudioTrackSelector({
   return (
     <div className="mb-2">
       <div className="mt-2 space-y-1">
-          <p className="text-xs text-gray-500 uppercase tracking-wider mb-1">Music</p>
           {CHANNELS.map((channel) => {
             const trackState = remoteTrackStates[channel.id];
             const filename = trackState?.filename;

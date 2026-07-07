@@ -65,6 +65,12 @@ class Settings(BaseSettings):
     CFD_PEM_FILENAME: Optional[str] = Field(default=None, description="Filename of the CloudFront signing private key, mounted at ~/.ssh/<file>")
     CFD_KEY_PAIR_ID: Optional[str] = Field(default=None, description="CloudFront public key ID (the K… value) used as Key-Pair-Id in signed URLs")
 
+    # Spotify integration (OAuth Authorization Code flow). Optional so the app boots
+    # without them; the Spotify client 503-guards when any are unset.
+    SPOTIFY_CLIENT_ID: Optional[str] = Field(default=None, description="Spotify app client ID")
+    SPOTIFY_CLIENT_SECRET: Optional[str] = Field(default=None, description="Spotify app client secret")
+    SPOTIFY_REDIRECT_URI: Optional[str] = Field(default=None, description="Registered Spotify redirect URI — must match the dashboard exactly")
+
     @property
     def cfd_private_key_path(self) -> Optional[str]:
         """Absolute path to the mounted CloudFront signing key, or None if not configured."""

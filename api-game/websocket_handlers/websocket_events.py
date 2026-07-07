@@ -900,6 +900,123 @@ class WebsocketEvent():
         return WebsocketEventResult(broadcast_message=audio_resume_message)
 
     @staticmethod
+    async def spotify_control(websocket, data, event_data, user_id, client_id, manager):
+        """DM-only control of the synced Spotify BGM bed.
+
+        Mirrors the remote-audio anchor model: `started_at` is a server epoch-seconds
+        anchor for position 0 of the current track; `paused_elapsed` freezes the
+        playhead while paused. Every client — including a late-joiner reading the
+        snapshot from initial_state — computes `position = now - started_at` to drive
+        its own Spotify SDK player. v1: a single track that loops.
+        """
+        event_data = event_data or {}
+        action = event_data.get("action")
+        triggered_by = event_data.get("triggered_by", user_id)
+
+        if action not in ("sync", "select", "play", "pause", "stop", "channel_volume"):
+            return WebsocketEventResult.error(f"Invalid spotify action: {action}")
+
+        # DM-only: the Spotify bed is authoritative for the whole table.
+        if not GameService.is_dm(client_id, user_id):
+            return WebsocketEventResult.error("Only the DM can control Spotify playback")
+
+        current = GameService.get_spotify_state(client_id) or {}
+        now = time.time()
+
+        if action == "sync":
+            # Leader model: the DM's client reports its live SDK state (track, playing,
+            # position, playlist context) and the server anchors it. This is what drives
+            # continuous playlists, next/prev and seek — the DM's Spotify is the source of
+            # truth, we just mirror it to everyone.
+            track_uri = event_data.get("track_uri")
+            if not track_uri:
+                snapshot = {
+                    "track_uri": None, "track_meta": {},
+                    "context_uri": event_data.get("context_uri"),
+                    "playback_state": "stopped", "started_at": None,
+                    "paused_elapsed": None, "is_looping": False,
+                    "channel_level": current.get("channel_level", 1.0),
+                    "updated_by": triggered_by,
+                }
+            else:
+                is_playing = bool(event_data.get("is_playing"))
+                pos_sec = (event_data.get("position_ms") or 0) / 1000.0
+                snapshot = {
+                    "context_uri": event_data.get("context_uri"),
+                    "track_uri": track_uri,
+                    "track_meta": event_data.get("track_meta", {}),
+                    "playback_state": "playing" if is_playing else "paused",
+                    "started_at": (now - pos_sec) if is_playing else None,
+                    "paused_elapsed": None if is_playing else pos_sec,
+                    "is_looping": False,
+                    "channel_level": current.get("channel_level", 1.0),
+                    "updated_by": triggered_by,
+                }
+
+        elif action == "select":
+            track_uri = event_data.get("track_uri")
+            if not track_uri:
+                return WebsocketEventResult.error("spotify select requires track_uri")
+            snapshot = {
+                "track_uri": track_uri,
+                "track_meta": event_data.get("track_meta", {}),
+                "playback_state": "playing",
+                "started_at": now,
+                "paused_elapsed": None,
+                "is_looping": True,  # v1: single track loops
+                "channel_level": current.get("channel_level", 1.0),
+                "updated_by": triggered_by,
+            }
+
+        elif action == "play":
+            if not current.get("track_uri"):
+                return WebsocketEventResult.error("No Spotify track selected")
+            paused_elapsed = current.get("paused_elapsed") or 0
+            snapshot = {
+                **current,
+                "playback_state": "playing",
+                "started_at": now - paused_elapsed,
+                "paused_elapsed": None,
+                "updated_by": triggered_by,
+            }
+
+        elif action == "pause":
+            started_at = current.get("started_at")
+            paused_elapsed = (now - started_at) if started_at else (current.get("paused_elapsed") or 0)
+            snapshot = {
+                **current,
+                "playback_state": "paused",
+                "paused_elapsed": paused_elapsed,
+                "updated_by": triggered_by,
+            }
+
+        elif action == "stop":
+            snapshot = {
+                **current,
+                "playback_state": "stopped",
+                "started_at": None,
+                "paused_elapsed": None,
+                "updated_by": triggered_by,
+            }
+
+        else:  # channel_volume — mixer level for the Spotify bed; leaves playback untouched
+            level_raw = event_data.get("level")
+            if level_raw is None:
+                return WebsocketEventResult.error("channel_volume requires a numeric level")
+            try:
+                level = max(0.0, min(1.0, float(level_raw)))
+            except (TypeError, ValueError):
+                return WebsocketEventResult.error("channel_volume requires a numeric level")
+            snapshot = {**current, "channel_level": level, "updated_by": triggered_by}
+
+        GameService.update_spotify_state(client_id, snapshot)
+        logger.info(f"🎵 Spotify {action} by {triggered_by} in room {client_id}")
+
+        return WebsocketEventResult(
+            broadcast_message={"event_type": "spotify_state", "data": snapshot}
+        )
+
+    @staticmethod
     async def remote_audio_batch(websocket, data, event_data, user_id, client_id, manager):
         """Handle batch audio operations - execute multiple track operations in a single message"""
         operations = event_data.get("operations")  # Array of {trackId, operation, ...params}

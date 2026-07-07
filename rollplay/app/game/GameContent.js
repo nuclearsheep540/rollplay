@@ -30,6 +30,7 @@ import { useMyCharacterForCampaign } from './hooks/useCharacterRuntime';
 import Modal from '@/app/shared/components/Modal';
 import { useWebSocket } from './hooks/useWebSocket';
 import { useUnifiedAudio } from '../audio_management';
+import { useSpotifyPlayback } from '../audio_management/hooks/useSpotifyPlayback';
 import { MapDisplay, useMapWebSocket, ImageDisplay, useImageWebSocket, useGridConfig } from '../map_management';
 import { useFogRegions, registerFogHandlers, createFogSendFunctions } from '../fog_management';
 import MapOverlayPanel from './components/MapOverlayPanel';
@@ -1052,6 +1053,26 @@ export default function GameContent() {
     flushStateBatch,
   } = useUnifiedAudio();
 
+  // Spotify BGM playback (Web Playback SDK). The DM is the "leader": drives playback
+  // and reports its live state up (→ WS 'sync' → server anchors → broadcast); everyone
+  // else follows the broadcast. Mirrors the effective master level (master * broadcast).
+  const sendSpotifyControlRef = useRef(null);
+  const handleSpotifyLeaderState = useCallback((payload) => {
+    sendSpotifyControlRef.current?.('sync', payload);
+  }, []);
+  // Spotify mixer channel level — DM-controlled + synced to all (like the master strip),
+  // an independent multiplier on top of the local + broadcast masters.
+  const [spotifyChannelLevel, setSpotifyChannelLevel] = useState(1);
+  const spotify = useSpotifyPlayback({
+    enabled: true,
+    isLeader: !!isDM,
+    onLeaderState: handleSpotifyLeaderState,
+    onChannelLevel: setSpotifyChannelLevel,
+    channelLevel: spotifyChannelLevel,
+    masterVolume,
+    broadcastMasterVolume,
+  });
+
   // Gate preload — aggregates readiness from REST, WebSocket, and asset downloads
   const gatePreload = useGatePreload({ campaignMeta, initialDataLoaded, wsInitialStateReceived, isAudioUnlocked, activeMap, activeImage, rawAudioState, audioSyncComplete });
 
@@ -1140,6 +1161,9 @@ export default function GameContent() {
     // Broadcast master volume (for master_volume batch operations from DM)
     setBroadcastMasterVolume,
 
+    // Spotify BGM (apply DM-broadcast anchor snapshots to this client's SDK)
+    applySpotifySnapshot: spotify.applySpotifySnapshot,
+
     // SFX Soundboard (for batch operations from other clients)
     playSfxSlot,
     stopSfxSlot,
@@ -1164,7 +1188,8 @@ export default function GameContent() {
     playSfxSlot, stopSfxSlot, setSfxSlotVolume, loadSfxSlot, clearSfxSlot, sfxSlots,
     audioBuffersRef, audioContextRef,
     setChannelMuted, setChannelSoloed, setBroadcastMasterVolume,
-    startStateBatch, flushStateBatch
+    startStateBatch, flushStateBatch,
+    spotify.applySpotifySnapshot
   ]);
 
   // Initialize WebSocket hook with game context (after audio functions are available)
@@ -1183,11 +1208,14 @@ export default function GameContent() {
     sendInitiativePromptAll,
     sendColorChange,
     sendRemoteAudioBatch,
+    sendSpotifyControl,
     registerHandler
   } = useWebSocket(roomId, thisUserId, gameContext);
 
   // Sync ref so handleRoleChange can call sendSeatChange without circular dep
   sendSeatChangeRef.current = sendSeatChange;
+  // Sync ref so the Spotify leader can report state without a circular dep
+  sendSpotifyControlRef.current = sendSpotifyControl;
 
   // Mixer drawer transport handlers — send via WebSocket batch
   const handleMixerPlay = useCallback((trackId) => {
@@ -2189,6 +2217,7 @@ export default function GameContent() {
                   onToggle={() => {}}
                   remoteTrackStates={remoteTrackStates}
                   sendRemoteAudioBatch={sendRemoteAudioBatch}
+                  spotify={spotify}
                   unlockAudio={unlockAudio}
                   isAudioUnlocked={isAudioUnlocked}
                   clearPendingOperation={setClearPendingOperationFn}
@@ -2343,6 +2372,10 @@ export default function GameContent() {
           onMasterVolumeCommit={(volume) => sendRemoteAudioBatch?.([{
             trackId: 'master', operation: 'master_volume', volume,
           }])}
+          spotifyEnabled={spotify?.status === 'ready'}
+          spotifyLevel={spotifyChannelLevel}
+          onSpotifyLevelChange={setSpotifyChannelLevel}
+          onSpotifyLevelCommit={(level) => { setSpotifyChannelLevel(level); sendSpotifyControl?.('channel_volume', { level }); }}
         />
       )}
 

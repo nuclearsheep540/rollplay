@@ -35,6 +35,7 @@ class GameSettings(BaseModel):
     player_metadata: dict = {}  # user_id -> character metadata hydrated during cold -> hot ETL
     audio_state: dict = {}  # Per-channel audio state for late-joiner sync
     audio_track_config: dict = {}  # Per-track config stash (survives channel swaps within a session)
+    spotify: dict = {}  # DM-controlled Spotify BGM anchor snapshot for late-joiner sync
 
 class GameService:
     "Creating and joining active game lobbies"
@@ -430,6 +431,27 @@ class GameService:
         room = collection.find_one(GameService.room_filter(room_id), {"audio_state": 1})
 
         return room.get("audio_state", {}) if room else {}
+
+    @staticmethod
+    def update_spotify_state(room_id: str, spotify_state: dict):
+        """Replace the DM-controlled Spotify BGM anchor snapshot for late-joiner sync."""
+        collection = GameService._get_active_session()
+
+        filter_criteria = GameService.room_filter(room_id)
+
+        collection.update_one(
+            filter_criteria,
+            {"$set": {"spotify": spotify_state}}
+        )
+
+    @staticmethod
+    def get_spotify_state(room_id: str) -> dict:
+        """Get the current Spotify BGM anchor snapshot from the active session."""
+        collection = GameService._get_active_session()
+
+        room = collection.find_one(GameService.room_filter(room_id), {"spotify": 1})
+
+        return room.get("spotify", {}) if room else {}
 
     @staticmethod
     def save_track_config(room_id: str, asset_id: str, config: dict):

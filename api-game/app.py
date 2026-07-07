@@ -513,6 +513,14 @@ async def create_session(request: SessionStartPayload):
                     entry.update(session_user.character.model_dump())
                 player_metadata[session_user.user_id] = entry
 
+        # Restore the DM's Spotify BGM block from the previous session. The live anchor
+        # (started_at) is stale after a pause, so present it as paused/resumable — the DM
+        # continues via the "Resume where you left off" gesture (autoplay needs a user click).
+        spotify_restore = dict(request.spotify_state or {})
+        if spotify_restore.get("track_uri"):
+            spotify_restore["playback_state"] = "paused"
+            spotify_restore["is_playing"] = False
+
         # Create minimal session
         settings = GameSettings(
             max_players=request.max_players,
@@ -524,7 +532,8 @@ async def create_session(request: SessionStartPayload):
             campaign_id=request.campaign_id,
             player_metadata=player_metadata,
             audio_state={k: v.model_dump() for k, v in request.audio_config.items()} if request.audio_config else {},
-            audio_track_config={k: v.model_dump() for k, v in request.audio_track_config.items()} if request.audio_track_config else {}
+            audio_track_config={k: v.model_dump() for k, v in request.audio_track_config.items()} if request.audio_track_config else {},
+            spotify=spotify_restore
         )
 
         # Use session_id as MongoDB _id (back-reference to PostgreSQL session)
@@ -660,6 +669,8 @@ async def end_session(request: SessionEndRequest, validate_only: bool = False):
         # not an AudioChannelState) before passing to the typed contract
         raw_audio_state = dict(room.get("audio_state", {}))
         broadcast_master_volume = raw_audio_state.pop("__master_volume", None)
+        # Spotify BGM block (track/context/channel level) — cold-stored for cross-session restore
+        spotify_state = room.get("spotify", {}) or {}
         final_state = SessionEndFinalState(
             players=players,
             session_stats=SessionStats(
@@ -670,6 +681,7 @@ async def end_session(request: SessionEndRequest, validate_only: bool = False):
             audio_state=raw_audio_state,
             audio_track_config=room.get("audio_track_config", {}),
             broadcast_master_volume=broadcast_master_volume,
+            spotify_state=spotify_state,
             map_state=map_state,
             image_state=image_state,
             active_display=active_display,

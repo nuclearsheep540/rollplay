@@ -33,6 +33,7 @@ import {
   handleRemoteAudioResume,
   handleRemoteAudioBatch
 } from '../../audio_management';
+import { handleSpotifyState } from '../../audio_management/hooks/webSocketSpotifyEvents';
 
 export const useWebSocket = (roomId, thisUserId, gameContext) => {
   const [webSocket, setWebSocket] = useState(null);
@@ -175,6 +176,9 @@ export const useWebSocket = (roomId, thisUserId, gameContext) => {
           case 'remote_audio_batch':
             handleRemoteAudioBatch(data, handlers);
             break;
+          case 'spotify_state':
+            handleSpotifyState(data, handlers);
+            break;
           case 'error':
             console.error('WebSocket error received:', data);
             break;
@@ -214,6 +218,7 @@ export const useWebSocket = (roomId, thisUserId, gameContext) => {
         sendClearAllMessages: noop, sendDicePrompt: noop, sendDicePromptClear: noop,
         sendInitiativePromptAll: noop, sendColorChange: noop,
         sendRemoteAudioPlay: noop, sendRemoteAudioResume: noop, sendRemoteAudioBatch: noop,
+        sendSpotifyControl: noop,
       };
 
   return {
