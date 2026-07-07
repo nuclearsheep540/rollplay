@@ -164,6 +164,20 @@ export function useSpotifyPlayback({
   const previous = useCallback(async () => { await playerRef.current?.previousTrack().catch(() => {}); setTimeout(() => reportState(true), 350); }, [reportState]);
   const seek = useCallback(async (positionMs) => { await playerRef.current?.seek(Math.max(0, Math.floor(positionMs))).catch(() => {}); setTimeout(() => reportState(true), 250); }, [reportState]);
 
+  // Repeat mode via the Web API (the SDK has no method for it). state: 'off'|'context'|'track'.
+  const setRepeat = useCallback(async (mode) => {
+    const deviceId = deviceIdRef.current;
+    if (!deviceId) return;
+    try {
+      const token = await fetchAccessToken();
+      await fetch(`https://api.spotify.com/v1/me/player/repeat?state=${mode}&device_id=${deviceId}`, {
+        method: 'PUT', headers: { Authorization: `Bearer ${token}` },
+      });
+    } catch (e) {
+      console.error('Spotify repeat failed:', e);
+    }
+  }, []);
+
   // The SDK's live playback state (local, no network) — poll this for a real playhead.
   const getCurrentState = useCallback(() => playerRef.current?.getCurrentState?.() ?? Promise.resolve(null), []);
 
@@ -311,6 +325,7 @@ export function useSpotifyPlayback({
     next,
     previous,
     seek,
+    setRepeat,
   };
 }
 

@@ -41,6 +41,7 @@ class SpotifyTrack(BaseModel):
     album: Optional[str] = None
     art_url: Optional[str] = None
     duration_ms: Optional[int] = None
+    is_playable: bool = True  # false when region-blocked/unlicensed (playlist tracks only)
 
 
 class SpotifySearchResponse(BaseModel):

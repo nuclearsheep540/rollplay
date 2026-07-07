@@ -111,11 +111,15 @@ class SpotifyClient:
         )
 
     async def get_playlist_tracks(self, access_token: str, playlist_id: str, limit: int = 50, offset: int = 0) -> dict:
-        """Page through a playlist's tracks (GET /v1/playlists/{id}/tracks)."""
+        """Page through a playlist's tracks (GET /v1/playlists/{id}/tracks).
+
+        `market=from_token` applies track relinking for the user's country, which makes
+        Spotify include `is_playable` per track (false for region-blocked/unlicensed ones).
+        """
         return await self._api_get(
             access_token,
             f"/playlists/{playlist_id}/tracks",
-            params={"limit": limit, "offset": offset},
+            params={"limit": limit, "offset": offset, "market": "from_token"},
         )
 
     async def _api_get(self, access_token: str, path: str, params: Optional[dict] = None) -> dict:

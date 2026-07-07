@@ -332,6 +332,8 @@ def _map_track(item: dict) -> SpotifyTrack:
         album=album.get("name"),
         art_url=images[0]["url"] if images else None,
         duration_ms=item.get("duration_ms"),
+        # Present only when the request used a market (playlist tracks); default playable.
+        is_playable=item.get("is_playable", True),
     )
 
 

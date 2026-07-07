@@ -4,6 +4,8 @@
 'use client'
 
 import { useState, useEffect, useRef, useCallback, memo } from 'react'
+import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
+import { faArrowsRotate, faArrowRotateRight } from '@fortawesome/free-solid-svg-icons'
 import { authFetch } from '@/app/shared/utils/authFetch'
 import { THEME } from '@/app/styles/colorTheme'
 
@@ -19,15 +21,22 @@ function fmt(ms) {
 // Module-scope (stable) so it isn't torn down + rebuilt on the panel's 1s position
 // poll — otherwise a click landing across a re-render gets dropped.
 const TrackRow = memo(function TrackRow({ t, onClick }) {
+  const disabled = t.is_playable === false // region-blocked/unlicensed (playlist tracks)
   return (
-    <button onClick={onClick} className="flex items-center gap-2 p-2 rounded-sm text-left hover:opacity-80 border" style={{ borderColor: THEME.borderSubtle, backgroundColor: THEME.bgSecondary }}>
+    <button
+      onClick={disabled ? undefined : onClick}
+      disabled={disabled}
+      title={disabled ? 'Unavailable in your region' : t.name}
+      className={`flex items-center gap-2 p-2 rounded-sm text-left border ${disabled ? 'cursor-not-allowed' : 'hover:opacity-80'}`}
+      style={{ borderColor: THEME.borderSubtle, backgroundColor: THEME.bgSecondary, opacity: disabled ? 0.4 : 1 }}
+    >
       {t.art_url
         // eslint-disable-next-line @next/next/no-img-element
         ? <img src={t.art_url} alt="" className="w-9 h-9 rounded object-cover flex-shrink-0" />
         : <div className="w-9 h-9 rounded flex-shrink-0" style={{ backgroundColor: `${SPOTIFY_GREEN}33` }} />}
       <div className="flex-1 min-w-0">
         <p className="text-sm truncate" style={{ color: THEME.textOnDark }}>{t.name}</p>
-        <p className="text-xs truncate" style={{ color: THEME.textSecondary }}>{t.artist}</p>
+        <p className="text-xs truncate" style={{ color: THEME.textSecondary }}>{disabled ? 'Unavailable in your region' : t.artist}</p>
       </div>
     </button>
   )
@@ -84,7 +93,7 @@ export default function SpotifyBgmPanel({ spotify }) {
     let active = true
     const poll = async () => {
       const st = await getCurrentState?.()
-      if (active && st) setLive({ position: st.position, duration: st.duration, paused: st.paused })
+      if (active && st) setLive({ position: st.position, duration: st.duration, paused: st.paused, repeat_mode: st.repeat_mode })
     }
     poll()
     const id = setInterval(poll, 1000)
@@ -190,6 +199,13 @@ export default function SpotifyBgmPanel({ spotify }) {
   const duration = live.duration || ps?.duration || 0
   const isPlaying = !live.paused
   const position = seeking ? seekValue : live.position
+  const repeatMode = live.repeat_mode || 0 // 0 off · 1 context (playlist) · 2 track
+  const cycleRepeat = () => {
+    const modes = ['off', 'context', 'track']
+    const next = (repeatMode + 1) % 3
+    spotify.setRepeat?.(modes[next])
+    setLive((l) => ({ ...l, repeat_mode: next })) // optimistic — poll confirms
+  }
 
   const capsule = (active) => (active
     ? { backgroundColor: SPOTIFY_GREEN, color: '#000' }
@@ -241,6 +257,21 @@ export default function SpotifyBgmPanel({ spotify }) {
               {isPlaying ? '❚❚' : '▶'}
             </button>
             <button onClick={() => spotify.next?.()} title="Next" className="text-lg hover:opacity-80" style={{ color: THEME.textOnDark }}>⏭</button>
+            <button
+              onClick={cycleRepeat}
+              title={['Repeat: off', 'Repeat: playlist', 'Repeat: track'][repeatMode]}
+              className="text-sm hover:opacity-80"
+              style={{ color: repeatMode === 0 ? THEME.textSecondary : SPOTIFY_GREEN, opacity: repeatMode === 0 ? 0.5 : 1 }}
+            >
+              {repeatMode === 2 ? (
+                <span className="relative inline-flex items-center justify-center">
+                  <FontAwesomeIcon icon={faArrowRotateRight} />
+                  <span className="absolute font-bold" style={{ fontSize: '0.5em', lineHeight: 1 }}>1</span>
+                </span>
+              ) : (
+                <FontAwesomeIcon icon={faArrowsRotate} />
+              )}
+            </button>
           </div>
         </div>
       )}
