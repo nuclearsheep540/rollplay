@@ -59,6 +59,8 @@ export function useSpotifyPlayback({
   enabled = true,
   isLeader = false,
   onLeaderState = null,
+  onChannelLevel = null,
+  channelLevel = 1,
   masterVolume = 1,
   broadcastMasterVolume = 1,
 } = {}) {
@@ -73,13 +75,16 @@ export function useSpotifyPlayback({
   const readyRef = useRef(false);
   const currentTrackRef = useRef(null);
   const pendingSnapshotRef = useRef(null);
-  const volumeRef = useRef(clamp01((masterVolume ?? 1) * (broadcastMasterVolume ?? 1)));
+  const volumeRef = useRef(clamp01((masterVolume ?? 1) * (broadcastMasterVolume ?? 1) * (channelLevel ?? 1)));
   const isLeaderRef = useRef(isLeader);
   const onLeaderStateRef = useRef(onLeaderState);
+  const onChannelLevelRef = useRef(onChannelLevel);
   const lastReportKeyRef = useRef(null);
+  const lastPlaybackSigRef = useRef(null);
 
   useEffect(() => { isLeaderRef.current = isLeader; }, [isLeader]);
   useEffect(() => { onLeaderStateRef.current = onLeaderState; }, [onLeaderState]);
+  useEffect(() => { onChannelLevelRef.current = onChannelLevel; }, [onChannelLevel]);
 
   // --- Leader: read the SDK's live state and push it up (deduped by track+play-state) ---
   const reportState = useCallback(async (force = false) => {
@@ -184,9 +189,15 @@ export function useSpotifyPlayback({
   // Called for every `spotify_state` broadcast + the initial_state snapshot.
   const applySpotifySnapshot = useCallback((snap) => {
     setNowPlaying(snap || null);
+    // Mixer channel level is synced to everyone (DM included — harmless echo).
+    if (snap && snap.channel_level != null) onChannelLevelRef.current?.(snap.channel_level);
     // The leader is the source of truth — don't re-apply its own broadcast to its SDK.
     if (isLeaderRef.current) return;
-    if (!snap || !snap.track_uri) { playerRef.current?.pause?.().catch(() => {}); return; }
+    if (!snap || !snap.track_uri) { playerRef.current?.pause?.().catch(() => {}); lastPlaybackSigRef.current = null; return; }
+    // Skip re-applying playback when only the channel volume changed (avoids an audible re-seek).
+    const sig = `${snap.track_uri}|${snap.playback_state}|${snap.started_at}|${snap.paused_elapsed}`;
+    if (sig === lastPlaybackSigRef.current) return;
+    lastPlaybackSigRef.current = sig;
     if (readyRef.current) applyToSDK(snap);
     else pendingSnapshotRef.current = snap; // catch up on 'ready'
   }, [applyToSDK]);
@@ -278,12 +289,12 @@ export function useSpotifyPlayback({
     };
   }, [shouldInit]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // 3) Mirror master volume (masterVolume * broadcastMasterVolume) onto the SDK.
+  // 3) Effective SDK volume = local master × broadcast master × Spotify channel level.
   useEffect(() => {
-    const v = clamp01((masterVolume ?? 1) * (broadcastMasterVolume ?? 1));
+    const v = clamp01((masterVolume ?? 1) * (broadcastMasterVolume ?? 1) * (channelLevel ?? 1));
     volumeRef.current = v;
     if (readyRef.current) playerRef.current?.setVolume(v).catch(() => {});
-  }, [masterVolume, broadcastMasterVolume]);
+  }, [masterVolume, broadcastMasterVolume, channelLevel]);
 
   return {
     status,

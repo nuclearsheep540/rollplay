@@ -1060,10 +1060,15 @@ export default function GameContent() {
   const handleSpotifyLeaderState = useCallback((payload) => {
     sendSpotifyControlRef.current?.('sync', payload);
   }, []);
+  // Spotify mixer channel level — DM-controlled + synced to all (like the master strip),
+  // an independent multiplier on top of the local + broadcast masters.
+  const [spotifyChannelLevel, setSpotifyChannelLevel] = useState(1);
   const spotify = useSpotifyPlayback({
     enabled: true,
     isLeader: !!isDM,
     onLeaderState: handleSpotifyLeaderState,
+    onChannelLevel: setSpotifyChannelLevel,
+    channelLevel: spotifyChannelLevel,
     masterVolume,
     broadcastMasterVolume,
   });
@@ -2367,6 +2372,10 @@ export default function GameContent() {
           onMasterVolumeCommit={(volume) => sendRemoteAudioBatch?.([{
             trackId: 'master', operation: 'master_volume', volume,
           }])}
+          spotifyEnabled={spotify?.status === 'ready'}
+          spotifyLevel={spotifyChannelLevel}
+          onSpotifyLevelChange={setSpotifyChannelLevel}
+          onSpotifyLevelCommit={(level) => { setSpotifyChannelLevel(level); sendSpotifyControl?.('channel_volume', { level }); }}
         />
       )}
 

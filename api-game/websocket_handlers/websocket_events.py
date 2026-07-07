@@ -913,7 +913,7 @@ class WebsocketEvent():
         action = event_data.get("action")
         triggered_by = event_data.get("triggered_by", user_id)
 
-        if action not in ("sync", "select", "play", "pause", "stop"):
+        if action not in ("sync", "select", "play", "pause", "stop", "channel_volume"):
             return WebsocketEventResult.error(f"Invalid spotify action: {action}")
 
         # DM-only: the Spotify bed is authoritative for the whole table.
@@ -935,6 +935,7 @@ class WebsocketEvent():
                     "context_uri": event_data.get("context_uri"),
                     "playback_state": "stopped", "started_at": None,
                     "paused_elapsed": None, "is_looping": False,
+                    "channel_level": current.get("channel_level", 1.0),
                     "updated_by": triggered_by,
                 }
             else:
@@ -948,6 +949,7 @@ class WebsocketEvent():
                     "started_at": (now - pos_sec) if is_playing else None,
                     "paused_elapsed": None if is_playing else pos_sec,
                     "is_looping": False,
+                    "channel_level": current.get("channel_level", 1.0),
                     "updated_by": triggered_by,
                 }
 
@@ -962,6 +964,7 @@ class WebsocketEvent():
                 "started_at": now,
                 "paused_elapsed": None,
                 "is_looping": True,  # v1: single track loops
+                "channel_level": current.get("channel_level", 1.0),
                 "updated_by": triggered_by,
             }
 
@@ -987,7 +990,7 @@ class WebsocketEvent():
                 "updated_by": triggered_by,
             }
 
-        else:  # stop
+        elif action == "stop":
             snapshot = {
                 **current,
                 "playback_state": "stopped",
@@ -995,6 +998,16 @@ class WebsocketEvent():
                 "paused_elapsed": None,
                 "updated_by": triggered_by,
             }
+
+        else:  # channel_volume — mixer level for the Spotify bed; leaves playback untouched
+            level_raw = event_data.get("level")
+            if level_raw is None:
+                return WebsocketEventResult.error("channel_volume requires a numeric level")
+            try:
+                level = max(0.0, min(1.0, float(level_raw)))
+            except (TypeError, ValueError):
+                return WebsocketEventResult.error("channel_volume requires a numeric level")
+            snapshot = {**current, "channel_level": level, "updated_by": triggered_by}
 
         GameService.update_spotify_state(client_id, snapshot)
         logger.info(f"🎵 Spotify {action} by {triggered_by} in room {client_id}")

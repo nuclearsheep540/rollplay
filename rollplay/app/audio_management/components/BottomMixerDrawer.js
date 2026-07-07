@@ -48,6 +48,11 @@ export function MixerStrips({
   masterVolume = 1.0,
   onMasterVolumeChange,
   onMasterVolumeCommit,
+  // Spotify BGM channel (only shown when the SDK is ready) — synced level for the Spotify bed
+  spotifyEnabled = false,
+  spotifyLevel = 1.0,
+  onSpotifyLevelChange,
+  onSpotifyLevelCommit,
   // Per-channel download state — assetId currently downloading, or undefined.
   // When set, the channel strip renders a byte-level progress overlay that
   // subscribes to AssetDownloadManager for updates.
@@ -260,6 +265,30 @@ export function MixerStrips({
 
       {/* Separator before master */}
       <div className="mixer-separator" />
+
+      {/* Spotify BGM channel — sits left of MASTER; synced level for the Spotify bed */}
+      {spotifyEnabled && (
+        <div className="flex flex-col h-full flex-shrink-0">
+          <div className="text-center text-xs font-bold py-0.5 rounded-t tracking-wider" style={{ backgroundColor: '#1DB954', color: '#000' }}>
+            SPOTIFY
+          </div>
+          <div className="h-4" />
+          <div className="flex flex-1 min-h-0">
+            <VerticalChannelStrip
+              stripType="master"
+              label="SPFY"
+              isOpen={isOpen}
+              trackId="spotify"
+              analysers={null}
+              volume={spotifyLevel}
+              onVolumeChange={onSpotifyLevelChange}
+              onVolumeChangeDebounced={(vol) => onSpotifyLevelCommit?.(vol)}
+              isMuted={false}
+              onMuteToggle={() => {}}
+            />
+          </div>
+        </div>
+      )}
 
       {/* Master group wrapper */}
       <div className="flex flex-col h-full flex-shrink-0">
