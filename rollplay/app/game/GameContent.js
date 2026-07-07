@@ -30,6 +30,7 @@ import { useMyCharacterForCampaign } from './hooks/useCharacterRuntime';
 import Modal from '@/app/shared/components/Modal';
 import { useWebSocket } from './hooks/useWebSocket';
 import { useUnifiedAudio } from '../audio_management';
+import { useSpotifyPlayback } from '../audio_management/hooks/useSpotifyPlayback';
 import { MapDisplay, useMapWebSocket, ImageDisplay, useImageWebSocket, useGridConfig } from '../map_management';
 import { useFogRegions, registerFogHandlers, createFogSendFunctions } from '../fog_management';
 import MapOverlayPanel from './components/MapOverlayPanel';
@@ -1052,6 +1053,11 @@ export default function GameContent() {
     flushStateBatch,
   } = useUnifiedAudio();
 
+  // Spotify BGM playback (Web Playback SDK). Mirrors the effective master level
+  // (masterVolume * broadcastMasterVolume). Only initialises for a connected
+  // Premium account; everyone else falls back to the S3 mixer.
+  const spotify = useSpotifyPlayback({ enabled: true, masterVolume, broadcastMasterVolume });
+
   // Gate preload — aggregates readiness from REST, WebSocket, and asset downloads
   const gatePreload = useGatePreload({ campaignMeta, initialDataLoaded, wsInitialStateReceived, isAudioUnlocked, activeMap, activeImage, rawAudioState, audioSyncComplete });
 
@@ -1140,6 +1146,9 @@ export default function GameContent() {
     // Broadcast master volume (for master_volume batch operations from DM)
     setBroadcastMasterVolume,
 
+    // Spotify BGM (apply DM-broadcast anchor snapshots to this client's SDK)
+    applySpotifySnapshot: spotify.applySpotifySnapshot,
+
     // SFX Soundboard (for batch operations from other clients)
     playSfxSlot,
     stopSfxSlot,
@@ -1164,7 +1173,8 @@ export default function GameContent() {
     playSfxSlot, stopSfxSlot, setSfxSlotVolume, loadSfxSlot, clearSfxSlot, sfxSlots,
     audioBuffersRef, audioContextRef,
     setChannelMuted, setChannelSoloed, setBroadcastMasterVolume,
-    startStateBatch, flushStateBatch
+    startStateBatch, flushStateBatch,
+    spotify.applySpotifySnapshot
   ]);
 
   // Initialize WebSocket hook with game context (after audio functions are available)
@@ -1183,6 +1193,7 @@ export default function GameContent() {
     sendInitiativePromptAll,
     sendColorChange,
     sendRemoteAudioBatch,
+    sendSpotifyControl,
     registerHandler
   } = useWebSocket(roomId, thisUserId, gameContext);
 
@@ -2189,6 +2200,8 @@ export default function GameContent() {
                   onToggle={() => {}}
                   remoteTrackStates={remoteTrackStates}
                   sendRemoteAudioBatch={sendRemoteAudioBatch}
+                  sendSpotifyControl={sendSpotifyControl}
+                  spotify={spotify}
                   unlockAudio={unlockAudio}
                   isAudioUnlocked={isAudioUnlocked}
                   clearPendingOperation={setClearPendingOperationFn}

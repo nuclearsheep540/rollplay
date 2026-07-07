@@ -44,7 +44,8 @@ def register_websocket_routes(app: FastAPI):
                         "seat_colors": room.get("seat_colors", {}),
                         "campaign_id": room.get("campaign_id", ""),
                         "player_metadata": room.get("player_metadata", {}),
-                        "audio_state": room.get("audio_state", {})
+                        "audio_state": room.get("audio_state", {}),
+                        "spotify": room.get("spotify", {})
                     }
                 }
                 await websocket.send_json(initial_state)
@@ -271,6 +272,17 @@ def register_websocket_routes(app: FastAPI):
 
                 elif event_type == "remote_audio_batch":
                     result = await WebsocketEvent.remote_audio_batch(
+                        websocket=websocket,
+                        data=data,
+                        event_data=event_data,
+                        user_id=user_id,
+                        client_id=client_id,
+                        manager=manager
+                    )
+                    broadcast_message = result.broadcast_message
+
+                elif event_type == "spotify_control":
+                    result = await WebsocketEvent.spotify_control(
                         websocket=websocket,
                         data=data,
                         event_data=event_data,

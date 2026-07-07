@@ -19,7 +19,7 @@ from typing import Optional
 from uuid import UUID
 
 import httpx
-from fastapi import APIRouter, Depends, Query, Request
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from fastapi.responses import RedirectResponse
 
 from config.settings import Settings, Environment
@@ -28,7 +28,15 @@ from integrations.spotify.client import SpotifyClient, get_spotify_client
 from integrations.spotify.dependencies import spotify_account_repository
 from integrations.spotify.models import SpotifyAccount
 from integrations.spotify.repository import SpotifyAccountRepository
-from integrations.spotify.schemas import SpotifyProfile, SpotifyProfileResponse
+from integrations.spotify.schemas import (
+    SpotifyPlaylist,
+    SpotifyPlaylistsResponse,
+    SpotifyProfile,
+    SpotifyProfileResponse,
+    SpotifySearchResponse,
+    SpotifyTokenResponse,
+    SpotifyTrack,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -190,3 +198,118 @@ async def disconnect(
     """Unlink the user's Spotify account."""
     repo.delete(user_id)
     return SpotifyProfileResponse(connected=False)
+
+
+# --- Phase 2: game-runtime BGM ---
+
+
+async def _connected_token(
+    user_id: UUID,
+    repo: SpotifyAccountRepository,
+) -> str:
+    """Resolve a valid access token for a connected user, or 404 if not connected."""
+    account = repo.get_by_user_id(user_id)
+    if account is None:
+        raise HTTPException(status_code=404, detail="Spotify not connected")
+    client = get_spotify_client()
+    client.require_configured()
+    return await _ensure_access_token(account, repo, client)
+
+
+@router.get("/token", response_model=SpotifyTokenResponse)
+async def token(
+    user_id: UUID = Depends(get_current_user_id),
+    repo: SpotifyAccountRepository = Depends(spotify_account_repository),
+):
+    """Mint a short-lived access token for the Web Playback SDK's getOAuthToken callback."""
+    account = repo.get_by_user_id(user_id)
+    if account is None:
+        raise HTTPException(status_code=404, detail="Spotify not connected")
+    client = get_spotify_client()
+    client.require_configured()
+
+    try:
+        access_token = await _ensure_access_token(account, repo, client)
+    except httpx.HTTPStatusError as e:
+        logger.warning("Spotify token refresh failed for user %s: %s", user_id, e)
+        raise HTTPException(status_code=502, detail="Could not obtain a Spotify token")
+
+    now = datetime.now(timezone.utc)
+    expires_at = account.expires_at
+    if expires_at.tzinfo is None:
+        expires_at = expires_at.replace(tzinfo=timezone.utc)
+    expires_in = max(0, int((expires_at - now).total_seconds()))
+    return SpotifyTokenResponse(access_token=access_token, expires_in=expires_in)
+
+
+@router.get("/search", response_model=SpotifySearchResponse)
+async def search(
+    q: str = Query(..., min_length=1),
+    limit: int = Query(default=20, ge=1, le=50),
+    user_id: UUID = Depends(get_current_user_id),
+    repo: SpotifyAccountRepository = Depends(spotify_account_repository),
+):
+    """Search the Spotify track catalogue for the DM's picker."""
+    access_token = await _connected_token(user_id, repo)
+    client = get_spotify_client()
+    try:
+        data = await client.search(access_token, query=q, types="track", limit=limit)
+    except httpx.HTTPStatusError as e:
+        logger.warning("Spotify search failed for user %s: %s", user_id, e)
+        raise HTTPException(status_code=502, detail="Spotify search failed")
+
+    items = (data.get("tracks") or {}).get("items") or []
+    tracks = [_map_track(item) for item in items if item]
+    return SpotifySearchResponse(tracks=tracks)
+
+
+@router.get("/playlists", response_model=SpotifyPlaylistsResponse)
+async def playlists(
+    limit: int = Query(default=50, ge=1, le=50),
+    offset: int = Query(default=0, ge=0),
+    user_id: UUID = Depends(get_current_user_id),
+    repo: SpotifyAccountRepository = Depends(spotify_account_repository),
+):
+    """List the DM's own playlists for the picker."""
+    access_token = await _connected_token(user_id, repo)
+    client = get_spotify_client()
+    try:
+        data = await client.get_my_playlists(access_token, limit=limit, offset=offset)
+    except httpx.HTTPStatusError as e:
+        # 403 = the stored token lacks playlist-read scope (linked pre-Phase-2). Nudge a reconnect.
+        if e.response is not None and e.response.status_code == 403:
+            raise HTTPException(
+                status_code=403,
+                detail="Spotify playlist access not granted — reconnect Spotify to enable it",
+            )
+        logger.warning("Spotify playlists fetch failed for user %s: %s", user_id, e)
+        raise HTTPException(status_code=502, detail="Could not load Spotify playlists")
+
+    items = data.get("items") or []
+    return SpotifyPlaylistsResponse(playlists=[_map_playlist(p) for p in items if p])
+
+
+def _map_track(item: dict) -> SpotifyTrack:
+    artists = item.get("artists") or []
+    album = item.get("album") or {}
+    images = album.get("images") or []
+    return SpotifyTrack(
+        uri=item.get("uri"),
+        name=item.get("name"),
+        artist=", ".join(a.get("name") for a in artists if a.get("name")) or None,
+        album=album.get("name"),
+        art_url=images[0]["url"] if images else None,
+        duration_ms=item.get("duration_ms"),
+    )
+
+
+def _map_playlist(p: dict) -> SpotifyPlaylist:
+    images = p.get("images") or []
+    tracks = p.get("tracks") or {}
+    return SpotifyPlaylist(
+        id=p.get("id"),
+        uri=p.get("uri"),
+        name=p.get("name"),
+        image_url=images[0]["url"] if images else None,
+        track_count=tracks.get("total"),
+    )
