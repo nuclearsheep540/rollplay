@@ -1359,6 +1359,8 @@ export default function GameContent() {
 
   // Handle "Enter Session" overlay click — unlocks audio + auto-seats player
   const handleEnterSession = async () => {
+    // TEMP instrumentation — gate gesture is the ONE guaranteed user activation.
+    console.log(`🔊[t=${Math.round(performance.now())}][gate] CLICK — isDM=`, isDM, '| spotify.status=', spotify?.status, '| spotify.activate?', typeof spotify?.activate);
     // 1. Fade out the gate overlay (GSAP autoAlpha = GPU-accelerated opacity + visibility)
     if (gateRef.current) {
       gsap.to(gateRef.current, {
@@ -1372,7 +1374,9 @@ export default function GameContent() {
     }
 
     // 2. Unlock audio (drains pending play ops with corrected offsets)
+    console.log(`🔊[t=${Math.round(performance.now())}][gate] → calling unlockAudio() (S3 only — no spotify.activate here)`);
     await unlockAudio();
+    console.log(`🔊[t=${Math.round(performance.now())}][gate] ← unlockAudio() returned`);
 
     if (!roomId || !thisUserId) {
       return;

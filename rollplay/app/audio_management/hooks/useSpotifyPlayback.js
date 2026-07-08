@@ -38,7 +38,7 @@ async function fetchAccessToken() {
 
 // --- TEMPORARY device-race instrumentation. Flip off (or delete) once the first-entry ---
 // --- "Device not found" timing is nailed down. Timestamps are ms since page/module load. ---
-const SPOTIFY_DEBUG = true;
+const SPOTIFY_DEBUG = false;
 const _dbgT0 = (typeof performance !== 'undefined') ? performance.now() : 0;
 function dbg(...args) {
   if (!SPOTIFY_DEBUG) return;

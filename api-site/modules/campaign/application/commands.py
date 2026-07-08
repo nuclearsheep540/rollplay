@@ -279,31 +279,26 @@ class AcceptCampaignInvite:
         player = self.user_repo.get_by_id(player_id)
         player_name = player.screen_name if player else ""
 
-        if self.session_repository:
-            from modules.session.domain.session_aggregate import SessionStatus
-            # Get all sessions for this campaign
-            for session_id in campaign.session_ids:
-                session = self.session_repository.get_by_id(session_id)
-                if session and session.status == SessionStatus.ACTIVE:
-                    # Add player to active session if not already joined
-                    if player_id not in session.joined_users:
-                        session.joined_users.append(player_id)
-                        self.session_repository.save(session)
-                        auto_added_to_session_ids.append(session_id)
-                        logger.info(f"✅ Auto-added late-joining player {player_id} to active session {session_id}")
+        # Auto-add the late-joining player to the campaign's live session, if any.
+        session = self.session_repository.get_active_session_for_campaign(campaign_id) if self.session_repository else None
+        if session:
+            if player_id not in session.joined_users:
+                session.joined_users.append(player_id)
+                self.session_repository.save(session)
+                auto_added_to_session_ids.append(session.id)
+                logger.info(f"✅ Auto-added late-joining player {player_id} to active session {session.id}")
 
-                    # Sync player_name + campaign_role to api-game. The role is
-                    # always SPECTATOR right after accept_invite (character not
-                    # yet selected) — passing it explicitly so MongoDB's
-                    # player_metadata carries it for runtime checks.
-                    if session.active_game_id:
-                        role = campaign.get_role(player_id)
-                        await self._sync_player_to_game(
-                            session.active_game_id,
-                            player_id,
-                            player_name,
-                            role.value if role else "spectator",
-                        )
+            # Sync player_name + campaign_role to api-game. The role is always SPECTATOR right
+            # after accept_invite (character not yet selected) — passing it explicitly so
+            # MongoDB's player_metadata carries it for runtime checks.
+            if session.active_game_id:
+                role = campaign.get_role(player_id)
+                await self._sync_player_to_game(
+                    session.active_game_id,
+                    player_id,
+                    player_name,
+                    role.value if role else "spectator",
+                )
 
         # Broadcast notification event to host
         await self.event_manager.broadcast(
@@ -606,6 +601,17 @@ class SelectCharacterForCampaign:
         if character.active_campaign == campaign_id:
             return character
 
+        # During an active session: ADDING a character (none → one) is allowed and hot-synced into
+        # the live game; SWAPPING an existing one (one → another) is NOT — it would desync the
+        # server-authoritative session. So block only when the user already holds a *different*
+        # character in this campaign.
+        user_has_other_character = any(
+            c.user_id == user_id and c.id != character.id
+            for c in self.character_repo.get_by_active_campaign(campaign_id)
+        )
+        if user_has_other_character and self.session_repo and self.session_repo.get_active_session_for_campaign(campaign_id):
+            raise ValueError("You can't change your character while a session is active")
+
         # Invariant: one active character per (user, campaign). Release any
         # character this user already has locked to this campaign before
         # locking the new one — otherwise the swap leaves two locked rows
@@ -649,14 +655,8 @@ class SelectCharacterForCampaign:
 
     async def _notify_active_session(self, campaign_id: UUID, user_id: UUID, character):
         """If the campaign has a live session, push character change to api-game."""
-        from modules.session.domain.session_aggregate import SessionStatus
-
-        sessions = self.session_repo.get_by_campaign_id(campaign_id)
-        active_session = next(
-            (s for s in sessions if s.status == SessionStatus.ACTIVE and s.active_game_id),
-            None
-        )
-        if not active_session:
+        active_session = self.session_repo.get_active_session_for_campaign(campaign_id)
+        if not active_session or not active_session.active_game_id:
             return
 
         player_name = ""
@@ -731,12 +731,8 @@ class ReleaseCharacterFromCampaign:
             raise ValueError("You are not a member of this campaign")
 
         # Business rule: No active sessions
-        if self.session_repo:
-            from modules.session.domain.session_aggregate import SessionStatus
-            for session_id in campaign.session_ids:
-                session = self.session_repo.get_by_id(session_id)
-                if session and session.status == SessionStatus.ACTIVE:
-                    raise ValueError("Cannot release character while a session is active")
+        if self.session_repo and self.session_repo.get_active_session_for_campaign(campaign_id):
+            raise ValueError("Cannot release character while a session is active")
 
         # Get user's character for this campaign
         character = self.character_repo.get_user_character_for_campaign(user_id, campaign_id)

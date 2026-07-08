@@ -26,7 +26,7 @@ export default function DicePrompt({
   selectedPlayerDisplayName,
   onPromptRoll
 }) {
-  const displayName = selectedPlayerDisplayName || selectedPlayer;
+  const displayName = selectedPlayerDisplayName || 'Unknown Adventurer'; // never the raw user_id (PII)
 
   const handlePromptPlayerForRoll = (userId, rollType) => {
     onPromptRoll(userId, rollType);

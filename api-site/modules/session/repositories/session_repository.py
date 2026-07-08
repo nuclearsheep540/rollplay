@@ -46,6 +46,17 @@ class SessionRepository:
         )
         return [self._model_to_aggregate(model) for model in models]
 
+    def get_active_session_for_campaign(self, campaign_id: UUID) -> Optional[SessionEntity]:
+        """The campaign's live (ACTIVE) session, or None.
+
+        The single source of truth for "does this campaign have an active session" — callers
+        across the campaign module previously hand-rolled this check.
+        """
+        return next(
+            (s for s in self.get_by_campaign_id(campaign_id) if s.status == SessionStatus.ACTIVE),
+            None,
+        )
+
     def get_all(self) -> List[SessionEntity]:
         """Get all sessions (admin use)"""
         models = self.db.query(SessionModel).order_by(SessionModel.created_at.desc()).all()

@@ -2,6 +2,7 @@
 /* SPDX-License-Identifier: GPL-3.0-or-later */
 
 import React, { useState } from 'react';
+import { resolveDisplayName } from '../resolveDisplayName';
 import {
   DM_CHILD,
   DM_CHILD_LAST,
@@ -54,7 +55,7 @@ export default function CombatControlsPanel({
           isOpen={rollPromptModalOpen}
           onClose={() => setRollPromptModalOpen(false)}
           selectedPlayer={selectedPlayerForModal}
-          selectedPlayerDisplayName={characterNameMap[selectedPlayerForModal] || displayNameMap[selectedPlayerForModal] || selectedPlayerForModal}
+          selectedPlayerDisplayName={resolveDisplayName(selectedPlayerForModal, characterNameMap, displayNameMap)}
           onPromptRoll={handlePromptPlayerForRoll}
         />
 
@@ -81,7 +82,7 @@ export default function CombatControlsPanel({
                   <div className="flex items-center justify-between">
                     <div>
                       <div>
-                        {titleCase(characterNameMap[prompt.player] || displayNameMap[prompt.player] || prompt.player)} • {prompt.rollType}
+                        {titleCase(resolveDisplayName(prompt.player, characterNameMap, displayNameMap))} • {prompt.rollType}
                       </div>
                     </div>
                     <button
@@ -157,7 +158,7 @@ export default function CombatControlsPanel({
                       setRollPromptModalOpen(true);
                     }}
                   >
-                    {titleCase(characterNameMap[player.userId] || displayNameMap[player.userId] || "")}
+                    {titleCase(resolveDisplayName(player.userId, characterNameMap, displayNameMap))}
                   </button>
                 ))
               ) : (

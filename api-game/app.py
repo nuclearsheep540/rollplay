@@ -628,9 +628,9 @@ async def end_session(request: SessionEndRequest, validate_only: bool = False):
         players = []
         for idx, seat in enumerate(room.get("seat_layout", [])):
             if seat != "empty":
-                # Look up display name from player_metadata
+                # Look up display name from player_metadata — never fall back to the seat (a UUID = PII)
                 meta = player_metadata.get(seat, {}) if isinstance(player_metadata, dict) else {}
-                display_name = meta.get("player_name", seat)
+                display_name = meta.get("player_name") or "Unknown Adventurer"
                 players.append(PlayerState(
                     user_id=seat,
                     player_name=display_name,
@@ -903,19 +903,23 @@ async def update_seat_layout(room_id: str, request: dict):
         GameService.update_seat_layout(room_id, seat_layout)
         logger.info(f"Successfully saved seat layout to database")
         
-        # Log the change (only if there are actual players)
+        # Log the change (only if there are actual players). Resolve each seat's user_id to a
+        # display name — NEVER bake raw UUIDs into the message (the client renders it verbatim).
         non_empty_seats = [seat for seat in seat_layout if seat != "empty"]
         if non_empty_seats:  # Only log if there are actual players
-            player_list = ", ".join(non_empty_seats)
-            
-            log_message = format_message(MESSAGE_TEMPLATES["party_updated"], players=", ".join(non_empty_seats))
+            def _seat_name(uid):
+                meta = player_metadata.get(uid, {}) if isinstance(player_metadata, dict) else {}
+                return meta.get("character_name") or meta.get("player_name") or "Unknown Adventurer"
+
+            player_list = ", ".join(_seat_name(uid) for uid in non_empty_seats)
+            log_message = format_message(MESSAGE_TEMPLATES["party_updated"], players=player_list)
 
             logger.debug(f"Adding adventure log: {log_message}")
             adventure_log.add_log_entry(
                 room_id=room_id,
                 message=log_message,
                 log_type=LogType.SYSTEM,
-                from_player=updated_by
+                from_player=updated_by  # user_id — the client resolves it to a name (never shows the UUID)
             )
         
         response_data = {

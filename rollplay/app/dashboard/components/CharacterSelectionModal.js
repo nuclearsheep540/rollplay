@@ -13,10 +13,15 @@ import Modal from '@/app/shared/components/Modal'
 import { Button } from './shared/Button'
 import { useSelectCharacter } from '../hooks/mutations/useCharacterMutations'
 
-export default function CharacterSelectionModal({ campaign, characters, onClose, onCharacterSelected, onCreateCharacter = null, currentCharacterId = null }) {
+export default function CharacterSelectionModal({ campaign, characters, onClose, onCharacterSelected, onCreateCharacter = null, currentCharacterId = null, sessionActive = false }) {
   const [selectedCharacterId, setSelectedCharacterId] = useState(null)
   const [error, setError] = useState(null)
   const selectCharacterMutation = useSelectCharacter()
+
+  // During an active session you may ADD a character (none → one) but not SWAP an existing one
+  // (that would desync the live game). The backend enforces the same rule; this just avoids a
+  // doomed attempt. Adding (no current character) stays fully available.
+  const swapBlocked = sessionActive && !!currentCharacterId
 
   // Filter out the currently selected character if swapping, and characters locked to OTHER campaigns
   const availableCharacters = characters.filter(char => {
@@ -81,7 +86,14 @@ export default function CharacterSelectionModal({ campaign, characters, onClose,
             </div>
           )}
 
-          {availableCharacters.length === 0 ? (
+          {swapBlocked ? (
+            <div className="text-center py-8">
+              <p className="mb-2 font-semibold text-content-on-dark">Character locked</p>
+              <p className="text-sm text-content-secondary">
+                You can&apos;t change your character while a session is active. Pause or finish the session first.
+              </p>
+            </div>
+          ) : availableCharacters.length === 0 ? (
             <div className="text-center py-8">
               <p className="mb-4 text-content-on-dark">You don&apos;t have any available characters.</p>
               <p className="text-sm mb-6 text-content-secondary">
@@ -163,7 +175,7 @@ export default function CharacterSelectionModal({ campaign, characters, onClose,
         </div>
 
         {/* Footer */}
-        {availableCharacters.length > 0 && (
+        {!swapBlocked && availableCharacters.length > 0 && (
           <div className="sticky bottom-0 z-10 border-t border-border-subtle px-6 py-4 flex items-center justify-end gap-3 bg-surface-secondary">
             <Button
               variant="ghost"
