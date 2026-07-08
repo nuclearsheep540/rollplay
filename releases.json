@@ -1,5 +1,5 @@
 {
-  "latest": "0.51.0",
+  "latest": "0.52.0",
   "releases": {
     "0.27.1": {
       "date": "2026-03-10",
@@ -594,6 +594,21 @@
         "app": "0.36.0",
         "api_site": "0.31.0",
         "api_game": "0.23.0",
+        "api_auth": "0.3.0",
+        "nginx": "0.9.0",
+        "postgres": "0.1.10",
+        "mongo": "0.4.2",
+        "certbot": "0.1.4"
+      }
+    },
+    "0.52.0": {
+      "date": "2026-07-08",
+      "commit": "24ebc6a",
+      "description": "Fixed joining during session states issues, and added manuall rolling",
+      "services": {
+        "app": "0.37.0",
+        "api_site": "0.32.0",
+        "api_game": "0.24.0",
         "api_auth": "0.3.0",
         "nginx": "0.9.0",
         "postgres": "0.1.10",
