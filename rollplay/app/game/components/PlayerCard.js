@@ -1,5 +1,6 @@
 import { React, useEffect, useState, useRef } from 'react'
 import { getSeatColor } from '../../utils/seatColors'
+import { resolveName } from '../resolveDisplayName'
 import ColorPicker from './ColorPicker'
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
 import { faGamepad } from '@fortawesome/free-solid-svg-icons'
@@ -28,8 +29,9 @@ export default function PlayerCard({
     const isThisPlayerSeat = currentSeat.userId === thisUserId;
 
     // Character payload can arrive in two shapes depending on source;
-    // normalize once so rendering uses a single format.
-    const displayCharacterName = playerData?.character_name || playerData?.name || occupantName;
+    // normalize once so rendering uses a single format. Shares the same
+    // character → screen → neutral-default chain as resolveDisplayName.
+    const displayCharacterName = resolveName(playerData?.character_name || playerData?.name, occupantName);
     const displayCharacterClassRaw = playerData?.character_class || playerData?.class;
     const displayCharacterClass = Array.isArray(displayCharacterClassRaw)
       ? displayCharacterClassRaw.join(' / ')

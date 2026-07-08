@@ -50,12 +50,15 @@ class SessionRepository:
         """The campaign's live (ACTIVE) session, or None.
 
         The single source of truth for "does this campaign have an active session" — callers
-        across the campaign module previously hand-rolled this check.
+        across the campaign module previously hand-rolled this check. Filters in SQL (a campaign
+        has at most one ACTIVE session) rather than loading every session and scanning in Python.
         """
-        return next(
-            (s for s in self.get_by_campaign_id(campaign_id) if s.status == SessionStatus.ACTIVE),
-            None,
+        model = (
+            self.db.query(SessionModel)
+            .filter_by(campaign_id=campaign_id, status=SessionStatus.ACTIVE.value)
+            .first()
         )
+        return self._model_to_aggregate(model) if model else None
 
     def get_all(self) -> List[SessionEntity]:
         """Get all sessions (admin use)"""
