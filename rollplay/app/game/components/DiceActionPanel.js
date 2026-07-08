@@ -649,7 +649,7 @@ export default function DiceActionPanel({
                       : 'bg-slate-500/10 border-slate-500/40 text-slate-500 cursor-not-allowed'
                   }`}
                 >
-                  ✍️ Submit manual roll
+                  Submit manual roll
                   {myPrompts.length > 0 && (
                     <div className="text-xs text-amber-400/80 mt-1">
                       {myPrompts.length === 1 ? `for ${myPrompts[0].rollType}` : `for ${myPrompts.length} prompts`}
