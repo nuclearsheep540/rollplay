@@ -1617,8 +1617,18 @@ export default function GameContent() {
     let totalResult = 0;
     let allRolls = [];
     let notation = [];
-    
-    if (useAdvantage) {
+
+    if (rollData.manual) {
+      // Manual entry: the player typed their real-life dice results — NO rolling. Manual mode is
+      // always a single die type (no second die / advantage), so this mirrors the normal single-die
+      // path but with the supplied numbers, keeping the log message + total byte-identical to a
+      // rolled result. Notation is built below via the normal (non-advantage) path.
+      const results = (rollData.manualResults || [])
+        .map((n) => parseInt(n, 10))
+        .filter((n) => !Number.isNaN(n));
+      allRolls.push(...results);
+      totalResult = results.reduce((sum, n) => sum + n, 0) + bonusValue;
+    } else if (useAdvantage) {
       // Advantage/Disadvantage: roll 2d20, apply modifier to each, take higher/lower
       const diceValue = 20;
       const roll1 = Math.floor(Math.random() * diceValue) + 1;
