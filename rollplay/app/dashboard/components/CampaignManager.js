@@ -31,6 +31,7 @@ import {
   faRightToBracket,
   faUserPlus,
   faUserMinus,
+  faEject,
   faRightFromBracket,
   faUserShield,
   faFolderOpen,
@@ -77,7 +78,7 @@ function formatBytes(bytes) {
  * + border-right separator are tuned specifically to the campaign
  * player-list card.
  */
-function PlayerCardAction({ isDm, canRemove, onRemove }) {
+function PlayerCardAction({ isDm, canRemove, onRemove, canRelease, onRelease, releaseDisabled }) {
   const baseClass = 'relative z-10 flex-shrink-0 w-10 flex items-center justify-center'
   const borderRight = `1px solid ${THEME.borderSubtle}`
 
@@ -115,6 +116,30 @@ function PlayerCardAction({ isDm, canRemove, onRemove }) {
         className={`${baseClass} hover:opacity-80`}
       >
         <FontAwesomeIcon icon={faUserMinus} className="h-3.5 w-3.5" />
+      </button>
+    )
+  }
+
+  // The current user's own card: eject their character from the campaign (release, not delete).
+  // stopPropagation because the card itself is clickable (opens the swap modal). Disabled while a
+  // session is live — the backend enforces the same rule.
+  if (canRelease) {
+    return (
+      <button
+        onClick={(e) => { e.stopPropagation(); if (!releaseDisabled) onRelease?.() }}
+        disabled={releaseDisabled}
+        title={releaseDisabled ? 'Cannot remove your character while a session is active' : 'Remove your character from this campaign'}
+        aria-label="Remove your character from this campaign"
+        style={{
+          color: '#dc2626',
+          backgroundColor: 'rgba(220, 38, 38, 0.1)',
+          borderRight,
+          opacity: releaseDisabled ? 0.4 : 1,
+          cursor: releaseDisabled ? 'not-allowed' : 'pointer',
+        }}
+        className={`${baseClass} ${releaseDisabled ? '' : 'hover:opacity-80'}`}
+      >
+        <FontAwesomeIcon icon={faEject} className="h-3.5 w-3.5" />
       </button>
     )
   }
@@ -1470,7 +1495,7 @@ export default function CampaignManager({ user, onExpandedChange, inviteCampaign
                             </h3>
                             {currentSession ? (
                               <div
-                                className="flex items-center justify-between gap-2 p-3 rounded-sm border relative overflow-hidden"
+                                className="flex items-center justify-between gap-2 py-2 pl-2 pr-3 min-h-[4.5rem] rounded-sm border relative overflow-hidden"
                                 style={{backgroundColor: THEME.bgSecondary, borderColor: THEME.borderSubtle}}
                                 onClick={(e) => e.stopPropagation()}
                               >
@@ -1530,17 +1555,17 @@ export default function CampaignManager({ user, onExpandedChange, inviteCampaign
                                     </span>
                                   </p>
                                 </div>
-                                <div className="flex gap-2 flex-shrink-0">
+                                <div className="flex gap-2 flex-shrink-0 self-stretch">
                                   {currentSession.status === 'active' ? (
                                     <>
-                                      <Button variant="success" size="sm" onClick={() => enterGame(currentSession)}>
+                                      <Button variant="success" size="md" className="flex items-center justify-center min-w-[7rem] !text-lg" onClick={() => enterGame(currentSession)}>
                                         <FontAwesomeIcon icon={faRightToBracket} className="mr-2" />Enter
                                       </Button>
                                       {campaign.host_id === user.id && (
                                         <button
                                           onClick={() => promptPauseSession(currentSession)}
                                           disabled={pauseSessionMutation.isPending && pauseSessionMutation.variables === currentSession.id}
-                                          className="px-3 py-1.5 rounded-sm border transition-all text-sm font-medium flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                                          className="px-4 py-2 rounded-sm border transition-all text-lg font-medium flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
                                           style={{backgroundColor: COLORS.silver, color: THEME.textPrimary, borderColor: COLORS.smoke}}
                                           title="Pause Session"
                                           aria-label="Pause Session"
@@ -1553,7 +1578,8 @@ export default function CampaignManager({ user, onExpandedChange, inviteCampaign
                                     <>
                                       <Button
                                         variant="success"
-                                        size="sm"
+                                        size="md"
+                                        className="flex items-center justify-center min-w-[7rem] !text-lg"
                                         onClick={() => startGame(currentSession.id)}
                                         disabled={(startSessionMutation.isPending && startSessionMutation.variables === currentSession.id) || activeSessions.length > 0 || currentSession.status === 'starting'}
                                       >
@@ -1562,7 +1588,7 @@ export default function CampaignManager({ user, onExpandedChange, inviteCampaign
                                       <button
                                         onClick={() => promptFinishSession(currentSession)}
                                         disabled={(finishSessionMutation.isPending && finishSessionMutation.variables === currentSession.id) || currentSession.status === 'starting'}
-                                        className="px-3 py-1.5 rounded-sm border transition-all text-sm font-medium flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                                        className="px-4 py-2 rounded-sm border transition-all text-lg font-medium flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
                                         style={{backgroundColor: '#991b1b', color: COLORS.smoke, borderColor: '#dc2626'}}
                                         title="Finish Session"
                                         aria-label="Finish Session"
@@ -1710,6 +1736,9 @@ export default function CampaignManager({ user, onExpandedChange, inviteCampaign
                                       isDm={member.is_host}
                                       canRemove={!member.is_host && campaign.host_id === user.id}
                                       onRemove={() => setRemovePlayerTarget({ campaign, member })}
+                                      canRelease={isCurrentUser && !member.is_host && member.campaign_role !== 'mod' && !!member.character_id}
+                                      onRelease={() => handleReleaseCharacter(campaign)}
+                                      releaseDisabled={hasActiveSession(campaign.id)}
                                     />
                                     <div className="relative z-10 flex flex-col gap-0.5 min-w-0 flex-1 justify-center px-3 py-2">
                                       {/* Top line: username + role badges
@@ -2215,6 +2244,7 @@ export default function CampaignManager({ user, onExpandedChange, inviteCampaign
           campaign={characterModalCampaign}
           characters={characters}
           currentCharacterId={characterModalCampaign.members?.find(m => m.user_id === user.id)?.character_id ?? null}
+          sessionActive={hasActiveSession(characterModalCampaign.id)}
           onClose={() => {
             setShowCharacterModal(false)
             setCharacterModalCampaign(null)

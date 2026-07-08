@@ -4,6 +4,7 @@
  */
 
 import React from 'react'
+import { resolveDisplayName } from '../resolveDisplayName'
 
 export default function DMChair({ dungeonMaster, moderators = [], displayNameMap = {} }) {
 
@@ -84,7 +85,7 @@ export default function DMChair({ dungeonMaster, moderators = [], displayNameMap
         >
           <div className="flex items-center justify-between mb-[calc(3px*var(--ui-scale))]">
             <div className="font-semibold text-blue-400 text-[calc(15px*var(--ui-scale))]">
-              {toTitleCase(displayNameMap[modUserId] || modUserId)}
+              {toTitleCase(resolveDisplayName(modUserId, null, displayNameMap))}
             </div>
             <div className="bg-blue-500/20 text-blue-300 px-[calc(5px*var(--ui-scale))] py-[calc(2px*var(--ui-scale))] rounded-full font-semibold uppercase tracking-wider text-[calc(8px*var(--ui-scale))]">
               MOD

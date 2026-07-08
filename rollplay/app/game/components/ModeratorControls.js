@@ -5,6 +5,7 @@
 
 import React, { useState } from 'react';
 import Modal from '@/app/shared/components/Modal';
+import { resolveDisplayName } from '../resolveDisplayName';
 import {
   MODERATOR_HEADER,
   MODERATOR_CHILD,
@@ -192,7 +193,7 @@ export default function ModeratorControls({
               <div className={MODERATOR_CHILD_LAST}>
                 <div>Current Moderators:</div>
                 <div>
-                  {roomModeratorIds.map(modId => displayNameMap[modId] || modId).join(', ')}
+                  {roomModeratorIds.map(modId => resolveDisplayName(modId, null, displayNameMap)).join(', ')}
                 </div>
               </div>
             )}
@@ -244,7 +245,7 @@ export default function ModeratorControls({
                       // For remove_moderator, build user objects from derived moderator IDs
                       filteredUsers = roomModeratorIds.map(modUserId => ({
                           userId: modUserId,
-                          playerName: displayNameMap[modUserId] || modUserId,
+                          playerName: resolveDisplayName(modUserId, null, displayNameMap),
                           seatId: `moderator_${modUserId}`,
                           characterData: null,
                           isInLobby: false

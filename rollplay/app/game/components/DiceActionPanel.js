@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import Modal from '@/app/shared/components/Modal'
 
 export default function DiceActionPanel({
@@ -72,7 +72,106 @@ export default function DiceActionPanel({
 
   // Button is enabled on your turn or when you're prompted.
   const isButtonEnabled = isMyTurn || isPromptedToRoll;
-  
+
+  // ── Manual entry — record real-life dice instead of rolling ─────────────────
+  // Remembered across reloads: the toggle + the manual-mode die & multiplier (kept separate from
+  // the normal-mode selection, which defaults after each roll). D100 isn't supported here.
+  const [manualEntry, setManualEntry] = useState(false);
+  const [manualDice, setManualDice] = useState('D6');
+  const [manualMultiplier, setManualMultiplier] = useState(1);
+  const [manualValues, setManualValues] = useState([]); // per-die entered results (not remembered)
+  const manualInputRefs = useRef([]);
+
+  useEffect(() => {
+    try {
+      const saved = JSON.parse(localStorage.getItem('rollplay.manualDice') || 'null');
+      if (saved && typeof saved === 'object') {
+        if (typeof saved.enabled === 'boolean') setManualEntry(saved.enabled);
+        if (saved.dice) setManualDice(saved.dice);
+        if (saved.multiplier) setManualMultiplier(saved.multiplier);
+      }
+    } catch { /* noop */ }
+  }, []);
+  useEffect(() => {
+    try {
+      localStorage.setItem('rollplay.manualDice', JSON.stringify({ enabled: manualEntry, dice: manualDice, multiplier: manualMultiplier }));
+    } catch { /* noop */ }
+  }, [manualEntry, manualDice, manualMultiplier]);
+
+  // In manual mode the dice grid drives the manual die/multiplier; normal mode drives the standard ones.
+  const activeDice = manualEntry ? manualDice : selectedDice;
+  const activeMultiplier = manualEntry ? manualMultiplier : primaryMultiplier;
+  const setActiveDice = manualEntry ? setManualDice : setSelectedDice;
+  const setActiveMultiplier = manualEntry ? setManualMultiplier : setPrimaryMultiplier;
+
+  // Max digits a single die result can be: d4–d8 → 1, d10–d20 → 2, d100 → 3. Auto-advance fires
+  // at this length (or on Space/Enter early, e.g. a single-digit result on a d20).
+  const manualMaxDigits = String(parseInt(manualDice.substring(1), 10) || 20).length;
+
+  // Keep the box array sized to the multiplier; reset on any die/multiplier change.
+  useEffect(() => {
+    if (manualEntry) setManualValues(Array(manualMultiplier).fill(''));
+  }, [manualEntry, manualDice, manualMultiplier]);
+
+  const toggleManualEntry = () => {
+    if (!manualEntry) {
+      setManualEntry(true);
+    } else {
+      setPrimaryMultiplier(1); // leaving manual → normal multiplier defaults
+      setManualEntry(false);
+    }
+  };
+
+  const handleManualChange = (index, value) => {
+    const sanitized = value.replace(/[^0-9]/g, '').slice(0, manualMaxDigits);
+    setManualValues((prev) => { const next = [...prev]; next[index] = sanitized; return next; });
+    if (sanitized.length >= manualMaxDigits && index < manualMultiplier - 1) {
+      setTimeout(() => manualInputRefs.current[index + 1]?.focus(), 0);
+    }
+  };
+
+  const handleManualKeyDown = (index, e) => {
+    if (e.key === 'Backspace') {
+      e.preventDefault();
+      setManualValues((prev) => {
+        const next = [...prev];
+        if (next[index]) { next[index] = ''; requestAnimationFrame(() => manualInputRefs.current[index]?.focus()); }
+        else if (index > 0) { next[index - 1] = ''; requestAnimationFrame(() => manualInputRefs.current[index - 1]?.focus()); }
+        return next;
+      });
+    } else if ((e.key === ' ' || e.key === 'Enter') && index < manualMultiplier - 1) {
+      e.preventDefault();
+      manualInputRefs.current[index + 1]?.focus();
+    } else if (e.key === 'ArrowLeft' && index > 0) {
+      e.preventDefault(); manualInputRefs.current[index - 1]?.focus();
+    } else if (e.key === 'ArrowRight' && index < manualMultiplier - 1) {
+      e.preventDefault(); manualInputRefs.current[index + 1]?.focus();
+    }
+  };
+
+  const manualComplete = manualValues.length === manualMultiplier && manualValues.every((v) => v !== '');
+
+  const handleManualSubmit = () => {
+    if (!manualComplete) return;
+    const rollType = myPrompts.length > 0 ? myPrompts[0].rollType : null;
+    const rollData = {
+      dice: manualDice,
+      primaryMultiplier: manualMultiplier,
+      secondDice: '',
+      secondMultiplier: 1,
+      bonus: rollBonus,
+      rollFor: rollType || 'Standard Roll',
+      advantageMode: 'normal',
+      manual: true,
+      manualResults: manualValues.map((v) => parseInt(v, 10)),
+    };
+    if (onRollDice) onRollDice(thisUserId, rollData);
+    setIsDiceModalOpen(false);
+    // Remember die + multiplier; clear only the entered values + bonus.
+    setManualValues(Array(manualMultiplier).fill(''));
+    setRollBonus('');
+  };
+
   // Handle dice roll click
   const handleRollDiceClick = () => {
     setIsDiceModalOpen(true);
@@ -314,11 +413,11 @@ export default function DiceActionPanel({
                     <button
                       key={num}
                       className={`px-2 py-1 rounded text-xs border transition-colors ${
-                        primaryMultiplier === num
+                        activeMultiplier === num
                           ? 'bg-emerald-500/30 border-emerald-500/60 text-emerald-200'
                           : 'bg-slate-600/30 border-slate-500 text-slate-300 hover:bg-slate-500/30'
                       }`}
-                      onClick={() => setPrimaryMultiplier(num)}
+                      onClick={() => setActiveMultiplier(num)}
                     >
                       ×{num}
                     </button>
@@ -338,11 +437,11 @@ export default function DiceActionPanel({
                   <button
                     key={dice.name}
                     className={`p-3 rounded-md text-sm cursor-pointer flex flex-col items-center transition-colors border-2 ${
-                      selectedDice === dice.name 
-                        ? 'bg-emerald-500/30 border-emerald-500/60 text-emerald-200' 
+                      activeDice === dice.name
+                        ? 'bg-emerald-500/30 border-emerald-500/60 text-emerald-200'
                         : 'bg-slate-600/30 border-slate-500 text-slate-300 hover:bg-slate-500/30'
                     }`}
-                    onClick={() => setSelectedDice(dice.name)}
+                    onClick={() => setActiveDice(dice.name)}
                   >
                     <div className="text-lg mb-1">
                       {dice.emoji}
@@ -354,21 +453,58 @@ export default function DiceActionPanel({
                 {/* D100 - Spans 2 columns */}
                 <button
                   className={`p-3 rounded-md text-sm cursor-pointer flex flex-col items-center col-span-2 transition-colors border-2 ${
-                    selectedDice === 'D100' 
-                      ? 'bg-emerald-500/30 border-emerald-500/60 text-emerald-200' 
+                    activeDice === 'D100'
+                      ? 'bg-emerald-500/30 border-emerald-500/60 text-emerald-200'
                       : 'bg-slate-600/30 border-slate-500 text-slate-300 hover:bg-slate-500/30'
                   }`}
-                  onClick={() => setSelectedDice('D100')}
+                  onClick={() => setActiveDice('D100')}
                 >
                   <div className="text-lg mb-1">
                     🎯
                   </div>
                   <div className="font-bold text-xs">D100</div>
                 </button>
+
+                {/* Manual entry toggle — its own full-width row within the dice grid. */}
+                <button
+                  onClick={toggleManualEntry}
+                  className={`col-span-4 p-3 rounded-md cursor-pointer flex items-center justify-center transition-colors border-2 ${
+                    manualEntry
+                      ? 'bg-amber-500/25 border-amber-500/60 text-amber-200'
+                      : 'bg-slate-600/30 border-slate-500 text-slate-300 hover:bg-slate-500/30'
+                  }`}
+                >
+                  <span className="font-bold text-sm">{manualEntry ? 'Manual entry: ON' : 'Manual entry'}</span>
+                </button>
               </div>
+
+              {/* Manual entry inputs — OTP-style, one box per die (count = multiplier). */}
+              {manualEntry && (
+                <div className="mt-3 pt-3 border-t border-slate-500">
+                  <div className="text-xs text-slate-400 mb-2 text-center">
+                    Enter your {manualMultiplier}× {manualDice} result{manualMultiplier > 1 ? 's' : ''}
+                  </div>
+                  <div className="flex flex-wrap gap-2 justify-center">
+                    {Array.from({ length: manualMultiplier }).map((_, i) => (
+                      <input
+                        key={i}
+                        ref={(el) => (manualInputRefs.current[i] = el)}
+                        type="text"
+                        inputMode="numeric"
+                        maxLength={manualMaxDigits}
+                        value={manualValues[i] ?? ''}
+                        onChange={(e) => handleManualChange(i, e.target.value)}
+                        onKeyDown={(e) => handleManualKeyDown(i, e)}
+                        className="w-11 h-11 text-center text-xl font-bold font-mono rounded-lg bg-slate-800 border-2 border-slate-500 text-white outline-none transition-colors focus:border-amber-500/80 focus:bg-slate-700"
+                      />
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
 
-            {/* Collapsible Second Dice Section */}
+            {/* Collapsible Second Dice Section — hidden in manual entry. */}
+            {!manualEntry && (
             <div className="mb-3">
               <button
                 onClick={toggleSecondDiceSection}
@@ -447,8 +583,10 @@ export default function DiceActionPanel({
                 </div>
               )}
             </div>
+            )}
 
-            {/* Advantage/Disadvantage Buttons - Universal for D20 rolls */}
+            {/* Advantage/Disadvantage Buttons — hidden in manual entry. */}
+            {!manualEntry && (
             <div className="p-3 rounded-lg mb-4 bg-slate-600/50 border border-slate-500">
               <div className="flex gap-4 justify-center">
                 <button
@@ -473,6 +611,7 @@ export default function DiceActionPanel({
                 </button>
               </div>
             </div>
+            )}
 
             {/* Bonus Input */}
             <div className="p-3 rounded-lg mb-4 bg-slate-600/50 border border-slate-500">
@@ -494,26 +633,45 @@ export default function DiceActionPanel({
             {/* Roll Preview */}
             <div className="mb-3 p-2 bg-slate-700/30 rounded-lg border border-slate-600">
               <div className="text-sm text-slate-300 text-center">
-                <strong>Roll Preview:</strong> {formatDiceNotation(selectedDice, primaryMultiplier, secondDice, secondMultiplier)}{advantageMode !== 'normal' ? ` (${advantageMode})` : ''}{rollBonus ? ` ${rollBonus}` : ''}
+                <strong>Roll Preview:</strong> {formatDiceNotation(activeDice, activeMultiplier, manualEntry ? '' : secondDice, secondMultiplier)}{!manualEntry && advantageMode !== 'normal' ? ` (${advantageMode})` : ''}{rollBonus ? ` ${rollBonus}` : ''}
               </div>
             </div>
 
             {/* Roll Button */}
             <div className="flex gap-4 justify-center">
-              <button
-                onClick={() => handleDiceRoll()}
-                className="bg-emerald-500/20 border-2 border-emerald-500/50 text-emerald-500 rounded-xl px-6 py-3 text-base font-bold cursor-pointer transition-colors duration-200 hover:bg-emerald-500/30 hover:scale-105"
-              >
-                🎲 Roll {formatDiceNotation(selectedDice, primaryMultiplier, secondDice, secondMultiplier)}{rollBonus ? ` ${rollBonus}` : ''}
-                {myPrompts.length > 0 && (
-                  <div className="text-xs text-emerald-400 mt-1">
-                    {myPrompts.length === 1 
-                      ? `for ${myPrompts[0].rollType}` 
-                      : `for ${myPrompts.length} prompts`
-                    }
-                  </div>
-                )}
-              </button>
+              {manualEntry ? (
+                <button
+                  onClick={handleManualSubmit}
+                  disabled={!manualComplete}
+                  className={`rounded-xl px-6 py-3 text-base font-bold transition-colors duration-200 border-2 ${
+                    manualComplete
+                      ? 'bg-amber-500/20 border-amber-500/60 text-amber-300 cursor-pointer hover:bg-amber-500/30 hover:scale-105'
+                      : 'bg-slate-500/10 border-slate-500/40 text-slate-500 cursor-not-allowed'
+                  }`}
+                >
+                  Submit manual roll
+                  {myPrompts.length > 0 && (
+                    <div className="text-xs text-amber-400/80 mt-1">
+                      {myPrompts.length === 1 ? `for ${myPrompts[0].rollType}` : `for ${myPrompts.length} prompts`}
+                    </div>
+                  )}
+                </button>
+              ) : (
+                <button
+                  onClick={() => handleDiceRoll()}
+                  className="bg-emerald-500/20 border-2 border-emerald-500/50 text-emerald-500 rounded-xl px-6 py-3 text-base font-bold cursor-pointer transition-colors duration-200 hover:bg-emerald-500/30 hover:scale-105"
+                >
+                  🎲 Roll {formatDiceNotation(selectedDice, primaryMultiplier, secondDice, secondMultiplier)}{rollBonus ? ` ${rollBonus}` : ''}
+                  {myPrompts.length > 0 && (
+                    <div className="text-xs text-emerald-400 mt-1">
+                      {myPrompts.length === 1
+                        ? `for ${myPrompts[0].rollType}`
+                        : `for ${myPrompts.length} prompts`
+                      }
+                    </div>
+                  )}
+                </button>
+              )}
 
               <button
                 onClick={() => setIsDiceModalOpen(false)}

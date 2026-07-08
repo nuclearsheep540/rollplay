@@ -240,19 +240,26 @@ class StartSession:
         self.s3_service = s3_service
 
     def _build_session_users(self, session: SessionEntity, campaign) -> List[SessionUser]:
-        """Build SessionUser DTOs for ALL joined users. Character data is optional."""
+        """Build SessionUser DTOs from the campaign's CURRENT members.
+
+        The campaign is the source of truth at session start (cold→hot ETL) — NOT the frozen
+        session.joined_users snapshot, which misses anyone who joined while the session was still
+        INACTIVE (and keeps anyone who has since left the campaign). Character data is optional
+        (moderators/spectators have none).
+        """
         session_users = []
 
-        for user_id in session.joined_users:
+        member_ids = campaign.get_all_member_ids() if campaign else list(session.joined_users)
+        for user_id in member_ids:
             user = self.user_repo.get_by_id(user_id)
             if not user:
                 logger.warning(f"Skipping ETL for missing user {user_id}")
                 continue
 
-            player_name = user.screen_name or user.email or ""
-            if not player_name:
-                logger.warning(f"Skipping ETL for user {user_id} with no player_name")
-                continue
+            # Identity is screen_name ONLY — never email or UUID (PII). Empty is acceptable; the
+            # client resolves character_name → screen_name → a neutral default. Do NOT drop the
+            # user for a missing name — that would silently un-enroll them from the game.
+            player_name = user.screen_name or ""
 
             role = campaign.get_role(user_id) if campaign else CampaignRole.SPECTATOR
 
@@ -500,7 +507,7 @@ class StartSession:
             session_users_for_game = self._build_session_users(session, campaign)
             dm_contract = DungeonMaster(
                 user_id=str(campaign.dm_id),
-                player_name=host_user.screen_name or host_user.email or "",
+                player_name=host_user.screen_name or "",  # screen_name only — never email (PII)
             )
 
             payload = SessionStartPayload(
@@ -508,7 +515,9 @@ class StartSession:
                 campaign_id=str(session.campaign_id),
                 dungeon_master=dm_contract,
                 max_players=session.max_players,
-                joined_user_ids=[str(uid) for uid in session.joined_users],
+                # Campaign membership is the source of truth at start — keep this in lock-step with
+                # the session_user DTOs (both from get_all_member_ids), not the frozen joined_users.
+                joined_user_ids=[str(uid) for uid in campaign.get_all_member_ids()],
                 session_users=session_users_for_game,
                 assets=[
                     AssetRef(
@@ -565,7 +574,7 @@ class StartSession:
                     campaign_name=campaign.title,
                     active_game_id=active_game_id,
                     host_id=host_id,
-                    host_screen_name=host_user.screen_name if host_user.screen_name else host_user.email
+                    host_screen_name=host_user.screen_name or "Unknown"  # never email (PII)
                 )
 
                 # Broadcast to each recipient
@@ -875,7 +884,7 @@ class PauseSession:
                 session_name=session.name,
                 campaign_id=session.campaign_id,
                 paused_by_id=host_id,
-                paused_by_screen_name=host_user.screen_name if host_user and host_user.screen_name else (host_user.email if host_user else "Unknown")
+                paused_by_screen_name=(host_user.screen_name if host_user else None) or "Unknown"  # never email (PII)
             )
             for event_config in events:
                 await self.event_manager.broadcast(event_config)

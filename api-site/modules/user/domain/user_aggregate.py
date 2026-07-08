@@ -46,7 +46,7 @@ class UserAggregate:
     """
     id: Optional[UUID]
     email: str
-    screen_name: Optional[str]
+    screen_name: str  # NOT NULL; "" = not-yet-set (the FE name modal prompts on empty)
     created_at: datetime
     last_login: Optional[datetime] = None
     friend_code: Optional[str] = None  # DEPRECATED - use account_name + account_tag
@@ -97,7 +97,7 @@ class UserAggregate:
         return cls(
             id=None,  # Set by repository after persistence
             email=normalized_email,
-            screen_name=None,  # To be set later by user
+            screen_name="",  # Set later by the user via the name modal ("" = unset; column is NOT NULL)
             created_at=utc_now(),
             last_login=utc_now()  # We create accounts on first login, so set last_login to now
         )
@@ -109,7 +109,7 @@ class UserAggregate:
         Resets profile fields so the user goes through onboarding again,
         but preserves the email and ID.
         """
-        self.screen_name = None
+        self.screen_name = ""
         self.account_name = None
         self.account_tag = None
         self.has_received_demo = False

@@ -16,6 +16,16 @@ import { LoopMode } from '../engine/constants';
 const BGM_CHANNEL_IDS = ['audio_channel_A', 'audio_channel_B', 'audio_channel_C', 'audio_channel_D', 'audio_channel_E', 'audio_channel_F'];
 const SFX_SLOT_COUNT = 9;
 
+// ── TEMP audio-unlock instrumentation. Flip off (or delete) once the flakiness is nailed.
+// Absolute performance.now() so these interleave with Spotify's 🎛️ logs on the same page clock.
+const AUDIO_DEBUG = false;
+function adbg(...args) {
+  if (!AUDIO_DEBUG) return;
+  const t = (typeof performance !== 'undefined') ? Math.round(performance.now()) : 0;
+  // eslint-disable-next-line no-console
+  console.log(`🔊[t=${t}]`, ...args);
+}
+
 /**
  * Unified Audio System for Tabletop Tavern
  *
@@ -1005,8 +1015,10 @@ export const useUnifiedAudio = () => {
   // ── Desktop unlock strategy ───────────────────────────────────────────────
   const unlockDesktop = async () => {
     const engine = engineRef.current;
+    adbg('unlockDesktop ENTER — context.state=', engine?.context?.state);
     if (engine?.context?.state === 'suspended') {
       await engine.context.resume();
+      adbg('unlockDesktop: resumed → context.state=', engine?.context?.state);
     }
 
     isAudioUnlockedRef.current = true;
@@ -1014,6 +1026,7 @@ export const useUnifiedAudio = () => {
     reapplyEffects();
     await drainPendingOps();
     await reconcileAudioState();
+    adbg('unlockDesktop COMPLETE ✓');
   };
 
   // ── Mobile unlock strategy ────────────────────────────────────────────────
@@ -1022,6 +1035,7 @@ export const useUnifiedAudio = () => {
   // _unlockMobile path, but we need post-unlock reconciliation here.
   const unlockMobile = async () => {
     const engine = engineRef.current;
+    adbg('unlockMobile ENTER — context.state=', engine?.context?.state, '| channels=', engine?.channels?.size);
 
     // 1. Activate iOS audio session via HTML5 Audio.play() within user gesture
     const silentAudio = new Audio('data:audio/mp3;base64,SUQzBAAAAAAAIlRTU0UAAAAOAAADTGF2ZjYxLjcuMTAwAAAAAAAAAAAAAAD/+0DAAAAAAAAAAAAAAAAAAAAAAABJbmZvAAAADwAAAAUAAAK+AGhoaGhoaGhoaGhoaGhoaGhoaGiOjo6Ojo6Ojo6Ojo6Ojo6Ojo6OjrS0tLS0tLS0tLS0tLS0tLS0tLS02tra2tra2tra2tra2tra2tra2tr//////////////////////////wAAAABMYXZjNjEuMTkAAAAAAAAAAAAAAAAkAwYAAAAAAAACvhC6DYoAAAAAAP/7EMQAA8AAAaQAAAAgAAA0gAAABExBTUUzLjEwMFVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVV//sQxCmDwAABpAAAACAAADSAAAAEVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVX/+xDEUwPAAAGkAAAAIAAANIAAAARVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVf/7EMR8g8AAAaQAAAAgAAA0gAAABFVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVV//sQxKYDwAABpAAAACAAADSAAAAEVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVU=');
@@ -1033,12 +1047,23 @@ export const useUnifiedAudio = () => {
     // 2. Close the eager-init context. AudioBuffers in engine cache survive (raw PCM).
     if (engine.context && engine.context.state !== 'closed') {
       await engine.context.close();
+      adbg('unlockMobile: old context closed');
     }
 
     // 3. Clear stale source refs on all channels
-    for (const channel of engine.channels.values()) {
-      channel._stopSource();
-      channel._stopTimeTracking();
+    adbg('unlockMobile: clearing sources on', engine.channels?.size, 'channels');
+    for (const [chId, channel] of engine.channels.entries()) {
+      const ctorName = channel?.constructor?.name;
+      if (typeof channel?._stopSource !== 'function') {
+        adbg('unlockMobile: ⚠️ channel', chId, 'is', ctorName, '— _stopSource is', typeof channel?._stopSource, '(THIS aborts the unlock)');
+      }
+      try {
+        channel._stopSource();
+        channel._stopTimeTracking();
+      } catch (e) {
+        adbg('unlockMobile: ✗ threw on channel', chId, '(', ctorName, ') —', String(e?.message || e));
+        throw e; // preserve real behavior so we observe the actual abort
+      }
     }
     trackTimersRef.current = {};
     playOperationsRef.current = {};
@@ -1049,6 +1074,7 @@ export const useUnifiedAudio = () => {
     if (engine._options?.latencyHint) contextOptions.latencyHint = engine._options.latencyHint;
 
     engine._ctx = new (window.AudioContext || window.webkitAudioContext)(contextOptions);
+    adbg('unlockMobile: fresh AudioContext created — state=', engine._ctx?.state);
 
     // 5. Rebuild master chain
     if (engine._masterMeter) engine._masterMeter.destroy();
@@ -1070,6 +1096,7 @@ export const useUnifiedAudio = () => {
     if (engine.context?.state === 'suspended') {
       await engine.context.resume();
     }
+    adbg('unlockMobile COMPLETE ✓ — context.state=', engine.context?.state);
 
     // 9. Mark unlocked + finish
     isAudioUnlockedRef.current = true;
@@ -1082,22 +1109,28 @@ export const useUnifiedAudio = () => {
   // ── Unlock orchestrator ───────────────────────────────────────────────────
   const unlockAudio = async () => {
     if (unlockInProgressRef.current) {
+      adbg('unlockAudio: SKIP — already in progress');
       return false;
     }
     unlockInProgressRef.current = true;
     try {
       const engine = engineRef.current;
       const contextState = engine?.context?.state;
+      adbg('unlockAudio ENTER — context.state=', contextState, '| engine?', !!engine, '| channels=', engine?.channels?.size, '| alreadyUnlocked=', isAudioUnlockedRef.current);
 
       if (contextState === 'running') {
+        adbg('unlockAudio → DESKTOP path (resume in place)');
         await unlockDesktop();
       } else {
+        adbg('unlockAudio → MOBILE path (close + recreate)');
         await unlockMobile();
       }
 
+      adbg('unlockAudio DONE ✓ — context.state=', engineRef.current?.context?.state, '| unlocked=', isAudioUnlockedRef.current);
       console.log('Audio system unlocked successfully');
       return true;
     } catch (error) {
+      adbg('unlockAudio FAILED ✗ —', String(error?.message || error));
       console.warn('Audio unlock failed:', error);
       return false;
     } finally {

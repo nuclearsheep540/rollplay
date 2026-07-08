@@ -128,24 +128,29 @@ class WebsocketEvent():
 
     @staticmethod
     def _display_name(room_id: str, user_id: str, player_metadata: Optional[Dict[str, Any]] = None) -> str:
-        """Resolve user_id to display name via player_metadata."""
+        """Resolve user_id to display name via player_metadata.
+
+        NEVER returns a raw user_id (UUID = PII). Falls back to a neutral, non-identifying
+        default when no name is known.
+        """
         if not user_id:
-            return "Unknown"
+            return "Unknown Adventurer"
         if player_metadata is None:
             player_metadata = WebsocketEvent._get_player_metadata(room_id)
         metadata = player_metadata.get(user_id, {}) if isinstance(player_metadata, dict) else {}
-        return metadata.get("player_name") or user_id
+        return metadata.get("player_name") or "Unknown Adventurer"
 
     @staticmethod
     def _character_name_for_prompt(room_id: str, user_id: str, player_metadata: Optional[Dict[str, Any]] = None) -> str:
         if not user_id:
-            return "Unknown"
+            return "Unknown Adventurer"
 
         if player_metadata is None:
             player_metadata = WebsocketEvent._get_player_metadata(room_id)
 
         metadata = player_metadata.get(user_id, {}) if isinstance(player_metadata, dict) else {}
-        return metadata.get("character_name") or metadata.get("player_name") or user_id
+        # Never fall through to user_id (UUID = PII).
+        return metadata.get("character_name") or metadata.get("player_name") or "Unknown Adventurer"
 
     @staticmethod
     async def player_connection(websocket, data, event_data, user_id, client_id, manager):
