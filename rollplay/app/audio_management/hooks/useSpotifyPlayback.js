@@ -9,6 +9,11 @@ import { isIOSNonSafari } from '@/app/shared/utils/platform';
 
 const SDK_SRC = 'https://sdk.scdn.co/spotify-player.js';
 const PLAYER_NAME = 'Tabletop Tavern'; // the SDK device name — used to find our device in Spotify's list
+// Default mixer level for the Spotify bed: -12 dB (linear ≈ 0.251). Display priming only —
+// the authoritative default lives in the SpotifyState contract (rollplay-shared-contracts/
+// shared_contracts/spotify.py) and arrives with the first snapshot; this just matches it for
+// the moments before that broadcast lands. Keep the two values in sync.
+export const SPOTIFY_DEFAULT_LEVEL = 10 ** (-12 / 20);
 // Match useUnifiedAudio's JIT compensation so Spotify aligns with the S3 bed.
 const NETWORK_COMPENSATION = 0.4; // seconds
 
@@ -86,7 +91,7 @@ export function useSpotifyPlayback({
   isLeader = false,
   onLeaderState = null,
   onChannelLevel = null,
-  channelLevel = 1,
+  channelLevel = SPOTIFY_DEFAULT_LEVEL,
   masterVolume = 1,
   broadcastMasterVolume = 1,
 } = {}) {
@@ -107,7 +112,7 @@ export function useSpotifyPlayback({
   const pendingSnapshotRef = useRef(null);
   const nowPlayingRef = useRef(null);       // last snapshot, for blocked-state recovery re-apply
   const applyToSDKRef = useRef(null);       // recoverPlayback → applyToSDK (declared later) bridge
-  const volumeRef = useRef(clamp01((masterVolume ?? 1) * (broadcastMasterVolume ?? 1) * (channelLevel ?? 1)));
+  const volumeRef = useRef(clamp01((masterVolume ?? 1) * (broadcastMasterVolume ?? 1) * (channelLevel ?? SPOTIFY_DEFAULT_LEVEL)));
   const isLeaderRef = useRef(isLeader);
   const onLeaderStateRef = useRef(onLeaderState);
   const onChannelLevelRef = useRef(onChannelLevel);
@@ -524,7 +529,7 @@ export function useSpotifyPlayback({
 
   // 3) Effective SDK volume = local master × broadcast master × Spotify channel level.
   useEffect(() => {
-    const v = clamp01((masterVolume ?? 1) * (broadcastMasterVolume ?? 1) * (channelLevel ?? 1));
+    const v = clamp01((masterVolume ?? 1) * (broadcastMasterVolume ?? 1) * (channelLevel ?? SPOTIFY_DEFAULT_LEVEL));
     volumeRef.current = v;
     if (readyRef.current) playerRef.current?.setVolume(v).catch(() => {});
   }, [masterVolume, broadcastMasterVolume, channelLevel]);

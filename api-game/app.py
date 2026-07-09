@@ -513,10 +513,12 @@ async def create_session(request: SessionStartPayload):
                     entry.update(session_user.character.model_dump())
                 player_metadata[session_user.user_id] = entry
 
-        # Restore the DM's Spotify BGM block from the previous session. The live anchor
+        # Restore the DM's Spotify BGM block from the previous session. The SpotifyState
+        # contract supplies defaults for anything unset (notably channel_level = -12 dB),
+        # so the room document always stores a complete, explicit block. The live anchor
         # (started_at) is stale after a pause, so present it as paused/resumable — the DM
         # continues via the "Resume where you left off" gesture (autoplay needs a user click).
-        spotify_restore = dict(request.spotify_state or {})
+        spotify_restore = request.spotify_state.model_dump()
         if spotify_restore.get("track_uri"):
             spotify_restore["playback_state"] = "paused"
             spotify_restore["is_playing"] = False

@@ -750,8 +750,8 @@ async def _extract_and_sync_game_state(
         active_display = final_state.active_display.value if final_state.active_display else None
         logger.info(f"Extracted active_display: {active_display}")
 
-        # Extract Spotify BGM block (opaque blob — track/context/level; no asset backing to sync)
-        spotify_config = final_state.spotify_state or {}
+        # Extract Spotify BGM block (typed SpotifyState contract; stored as JSONB on the session)
+        spotify_config = final_state.spotify_state.model_dump()
         logger.info(f"Extracted spotify config: {'has track' if spotify_config.get('track_uri') else 'empty'}")
 
         return _ExtractedGameState(

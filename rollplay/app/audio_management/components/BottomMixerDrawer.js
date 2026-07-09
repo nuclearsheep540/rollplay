@@ -50,7 +50,7 @@ export function MixerStrips({
   onMasterVolumeCommit,
   // Spotify BGM channel (only shown when the SDK is ready) — synced level for the Spotify bed
   spotifyEnabled = false,
-  spotifyLevel = 1.0,
+  spotifyLevel,   // always passed by the caller; the default lives in the SpotifyState contract
   onSpotifyLevelChange,
   onSpotifyLevelCommit,
   // Per-channel download state — assetId currently downloading, or undefined.

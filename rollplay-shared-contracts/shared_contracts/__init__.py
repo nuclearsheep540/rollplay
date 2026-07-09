@@ -19,6 +19,7 @@ from .session import (
     SessionStartResponse,
     SessionStats,
 )
+from .spotify import SPOTIFY_DEFAULT_CHANNEL_LEVEL, SpotifyState
 
 __all__ = [
     "ContractModel",
@@ -46,4 +47,6 @@ __all__ = [
     "SessionStartPayload",
     "SessionStartResponse",
     "SessionStats",
+    "SPOTIFY_DEFAULT_CHANNEL_LEVEL",
+    "SpotifyState",
 ]

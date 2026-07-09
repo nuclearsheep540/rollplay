@@ -30,7 +30,7 @@ import { useMyCharacterForCampaign } from './hooks/useCharacterRuntime';
 import Modal from '@/app/shared/components/Modal';
 import { useWebSocket } from './hooks/useWebSocket';
 import { useUnifiedAudio } from '../audio_management';
-import { useSpotifyPlayback } from '../audio_management/hooks/useSpotifyPlayback';
+import { useSpotifyPlayback, SPOTIFY_DEFAULT_LEVEL } from '../audio_management/hooks/useSpotifyPlayback';
 import { MapDisplay, useMapWebSocket, ImageDisplay, useImageWebSocket, useGridConfig } from '../map_management';
 import { useFogRegions, registerFogHandlers, createFogSendFunctions } from '../fog_management';
 import MapOverlayPanel from './components/MapOverlayPanel';
@@ -1061,8 +1061,9 @@ export default function GameContent() {
     sendSpotifyControlRef.current?.('sync', payload);
   }, []);
   // Spotify mixer channel level — DM-controlled + synced to all (like the master strip),
-  // an independent multiplier on top of the local + broadcast masters.
-  const [spotifyChannelLevel, setSpotifyChannelLevel] = useState(1);
+  // an independent multiplier on top of the local + broadcast masters. Defaults to -12 dB
+  // until a synced level arrives (persisted session config or a DM fader move).
+  const [spotifyChannelLevel, setSpotifyChannelLevel] = useState(SPOTIFY_DEFAULT_LEVEL);
   const spotify = useSpotifyPlayback({
     enabled: true,
     isLeader: !!isDM,
@@ -1881,7 +1882,9 @@ export default function GameContent() {
                 aria-label={`Master Volume: ${Math.round(masterVolume * 100)}%`}
                 aria-expanded={showVolumeSlider}
               >
-                <FontAwesomeIcon icon={isAudioUnlocked ? faVolumeHigh : faVolumeXmark} />
+                {/* Icon reflects VOLUME, not engine-unlock state — the old unlock-driven
+                    icon showed the mute X while audio (e.g. Spotify) was audibly playing. */}
+                <FontAwesomeIcon icon={masterVolume === 0 ? faVolumeXmark : faVolumeHigh} />
               </button>
               {showVolumeSlider && (
                 <div style={{
