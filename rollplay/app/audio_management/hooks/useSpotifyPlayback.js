@@ -169,6 +169,15 @@ export function useSpotifyPlayback({
     try {
       const ok = await player.connect();
       dbg('connect ->', ok);
+      if (!ok) {
+        // connect() resolves false instead of throwing (auth/network/token failures) —
+        // release the guard so a later gesture can retry, and surface the failure
+        // instead of sitting on 'connecting' forever.
+        connectStartedRef.current = false;
+        console.error('Spotify connect refused (resolved false)');
+        setStatus('error');
+        return;
+      }
       try { await player.activateElement(); } catch { /* activation retried on next gesture */ }
     } catch (e) {
       connectStartedRef.current = false;

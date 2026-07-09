@@ -22,6 +22,7 @@ from shared_contracts.session import (
     SessionStartResponse,
     SessionStats,
 )
+from shared_contracts.spotify import SPOTIFY_DEFAULT_CHANNEL_LEVEL, SpotifyState
 
 
 # --- ContractModel base class ---
@@ -352,6 +353,87 @@ class TestMotionConstraints:
         assert hh.track_points == 30
 
 
+class TestSpotifyRoundTrip:
+    def test_spotify_state_full_round_trip(self):
+        """The complete shape the api-game snapshot builders write to MongoDB."""
+        state = SpotifyState(
+            track_uri="spotify:track:abc123",
+            track_meta={"name": "Tavern Theme", "artist": "Bard Co", "art_url": None, "duration_ms": 213000},
+            context_uri="spotify:playlist:xyz789",
+            playback_state="playing",
+            started_at=1751970000.5,
+            paused_elapsed=None,
+            is_looping=False,
+            channel_level=0.8,
+            updated_by="user-1",
+        )
+        assert SpotifyState.model_validate(state.model_dump()) == state
+
+    def test_spotify_state_defaults_round_trip(self):
+        state = SpotifyState()
+        assert SpotifyState.model_validate(state.model_dump()) == state
+
+    def test_spotify_state_restore_shape_round_trip(self):
+        """The cold->hot restore path adds is_playing alongside a paused state."""
+        state = SpotifyState(
+            track_uri="spotify:track:abc123",
+            playback_state="paused",
+            paused_elapsed=42.5,
+            is_playing=False,
+            channel_level=0.5,
+        )
+        assert SpotifyState.model_validate(state.model_dump()) == state
+
+    def test_empty_dict_fills_all_defaults(self):
+        """A pre-contract MongoDB document ({} spotify block) normalises cleanly."""
+        state = SpotifyState.model_validate({})
+        assert state.track_uri is None
+        assert state.playback_state == "stopped"
+        assert state.channel_level == SPOTIFY_DEFAULT_CHANNEL_LEVEL
+
+
+class TestSpotifyShapeConformance:
+    def test_spotify_state_has_required_fields(self):
+        required_keys = {
+            "track_uri", "track_meta", "context_uri", "playback_state",
+            "started_at", "paused_elapsed", "is_looping", "is_playing",
+            "channel_level", "updated_by",
+        }
+        assert required_keys.issubset(set(SpotifyState.model_fields.keys()))
+
+    def test_default_channel_level_is_minus_12_db(self):
+        # -12 dB in linear gain; the FE mirrors this in useSpotifyPlayback.js
+        assert SpotifyState().channel_level == pytest.approx(10 ** (-12 / 20))
+        assert SPOTIFY_DEFAULT_CHANNEL_LEVEL == pytest.approx(0.2511886, abs=1e-6)
+
+
+class TestSpotifyConstraints:
+    def test_channel_level_rejects_above_max(self):
+        with pytest.raises(ValidationError):
+            SpotifyState(channel_level=1.1)
+
+    def test_channel_level_rejects_below_min(self):
+        with pytest.raises(ValidationError):
+            SpotifyState(channel_level=-0.1)
+
+    def test_channel_level_accepts_boundary_values(self):
+        assert SpotifyState(channel_level=0.0).channel_level == 0.0
+        assert SpotifyState(channel_level=1.0).channel_level == 1.0
+
+    def test_playback_state_rejects_invalid(self):
+        with pytest.raises(ValidationError):
+            SpotifyState(playback_state="rewinding")  # type: ignore[arg-type]
+
+    def test_playback_state_accepts_all_valid(self):
+        for value in ("stopped", "playing", "paused"):
+            assert SpotifyState(playback_state=value).playback_state == value
+
+    def test_rejects_unknown_fields(self):
+        # extra='forbid': drift between the builders and the contract fails loudly
+        with pytest.raises(ValidationError):
+            SpotifyState(volume=0.5)  # type: ignore[call-arg]
+
+
 class TestSessionRoundTrip:
     def test_session_start_payload_round_trip(self):
         payload = SessionStartPayload(
@@ -387,10 +469,32 @@ class TestSessionRoundTrip:
             ],
             assets=[AssetRef(id="a1", filename="map.png", s3_key="maps/map.png", asset_type="map")],
             audio_config={"channel_0": AudioChannelState(filename="bgm.mp3", volume=0.7)},
+            spotify_state=SpotifyState(track_uri="spotify:track:abc", playback_state="paused", paused_elapsed=12.0),
             map_config=MapConfig(asset_id="m1", filename="dungeon.png", file_path="https://s3.example.com/dungeon.png"),
             active_display=ActiveDisplayType.MAP,
         )
         assert SessionStartPayload.model_validate(payload.model_dump()) == payload
+
+    def test_session_start_payload_coerces_spotify_dict(self):
+        """api-site passes session.spotify_config (a raw JSONB dict) — the contract coerces + defaults it."""
+        payload = SessionStartPayload(
+            session_id="s1",
+            campaign_id="c1",
+            dungeon_master=DungeonMaster(user_id="u-dm", player_name="dm_user"),
+            spotify_state={"track_uri": "spotify:track:abc", "channel_level": 0.9},
+        )
+        assert isinstance(payload.spotify_state, SpotifyState)
+        assert payload.spotify_state.channel_level == 0.9
+        assert payload.spotify_state.playback_state == "stopped"  # contract default fills the gap
+
+    def test_session_start_payload_defaults_spotify_state(self):
+        """A session with no persisted Spotify config starts at the contract defaults (-12 dB)."""
+        payload = SessionStartPayload(
+            session_id="s1",
+            campaign_id="c1",
+            dungeon_master=DungeonMaster(user_id="u-dm", player_name="dm_user"),
+        )
+        assert payload.spotify_state.channel_level == SPOTIFY_DEFAULT_CHANNEL_LEVEL
 
     def test_session_start_payload_minimal_round_trip(self):
         payload = SessionStartPayload(
@@ -405,6 +509,7 @@ class TestSessionRoundTrip:
             players=[PlayerState(user_id="u1", player_name="Alice", seat_position=0, seat_color="#FF6B6B")],
             session_stats=SessionStats(duration_minutes=120, total_logs=47, max_players=5),
             audio_state={"channel_0": AudioChannelState(volume=0.5, playback_state="paused")},
+            spotify_state=SpotifyState(track_uri="spotify:track:abc", playback_state="paused", paused_elapsed=98.4, channel_level=0.3),
             map_state=MapConfig(asset_id="m1", filename="map.png", file_path="https://s3.example.com/map.png"),
             active_display=ActiveDisplayType.IMAGE,
         )
@@ -472,7 +577,7 @@ class TestSessionShapeConformance:
         required_keys = {
             "session_id", "campaign_id", "dungeon_master", "max_players",
             "joined_user_ids", "session_users", "assets", "audio_config", "audio_track_config",
-            "map_config", "image_config", "active_display",
+            "spotify_state", "map_config", "image_config", "active_display",
         }
         assert required_keys.issubset(set(SessionStartPayload.model_fields.keys()))
 
@@ -489,7 +594,7 @@ class TestCharacterShapeConformance:
     def test_session_end_final_state_has_required_fields(self):
         required_keys = {
             "players", "session_stats", "audio_state", "audio_track_config",
-            "map_state", "image_state", "active_display",
+            "spotify_state", "map_state", "image_state", "active_display",
         }
         assert required_keys.issubset(set(SessionEndFinalState.model_fields.keys()))
 
