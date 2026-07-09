@@ -17,7 +17,7 @@ import MapControlsPanel from './components/MapControlsPanel';
 import ImageControlsPanel from './components/ImageControlsPanel';
 import CombatControlsPanel from './components/CombatControlsPanel';
 import ModeratorControls from './components/ModeratorControls';
-import { AudioMixerPanel, BottomMixerDrawer } from '../audio_management/components';
+import { AudioMixerPanel, BottomMixerDrawer, SpotifyUnsupportedNotice } from '../audio_management/components';
 import { PlaybackState } from '../audio_management/types';
 import { COLORS } from '../styles/colorTheme';
 import HorizontalInitiativeTracker from './components/HorizontalInitiativeTracker';
@@ -1359,8 +1359,11 @@ export default function GameContent() {
 
   // Handle "Enter Session" overlay click — unlocks audio + auto-seats player
   const handleEnterSession = async () => {
-    // TEMP instrumentation — gate gesture is the ONE guaranteed user activation.
-    console.log(`🔊[t=${Math.round(performance.now())}][gate] CLICK — isDM=`, isDM, '| spotify.status=', spotify?.status, '| spotify.activate?', typeof spotify?.activate);
+    // 0. Unlock Spotify FIRST, synchronously in the gesture path (before any await):
+    //    activates the SDK's media element and starts connect() — Safari only unblocks
+    //    SDK audio when connect() originates from a user gesture.
+    console.log(`🔊[t=${Math.round(performance.now())}][gate] CLICK — isDM=`, isDM, '| spotify.status=', spotify?.status);
+    spotify?.unlock?.();
     // 1. Fade out the gate overlay (GSAP autoAlpha = GPU-accelerated opacity + visibility)
     if (gateRef.current) {
       gsap.to(gateRef.current, {
@@ -1373,8 +1376,8 @@ export default function GameContent() {
       setGateVisible(false);
     }
 
-    // 2. Unlock audio (drains pending play ops with corrected offsets)
-    console.log(`🔊[t=${Math.round(performance.now())}][gate] → calling unlockAudio() (S3 only — no spotify.activate here)`);
+    // 2. Unlock the S3 Web Audio engine (drains pending play ops with corrected offsets)
+    console.log(`🔊[t=${Math.round(performance.now())}][gate] → calling unlockAudio()`);
     await unlockAudio();
     console.log(`🔊[t=${Math.round(performance.now())}][gate] ← unlockAudio() returned`);
 
@@ -2386,11 +2389,32 @@ export default function GameContent() {
           onMasterVolumeCommit={(volume) => sendRemoteAudioBatch?.([{
             trackId: 'master', operation: 'master_volume', volume,
           }])}
-          spotifyEnabled={spotify?.status === 'ready'}
+          spotifyEnabled={spotify?.status === 'ready' || spotify?.status === 'blocked'}
           spotifyLevel={spotifyChannelLevel}
           onSpotifyLevelChange={setSpotifyChannelLevel}
           onSpotifyLevelCommit={(level) => { setSpotifyChannelLevel(level); sendSpotifyControl?.('channel_volume', { level }); }}
         />
+      )}
+
+      {/* Spotify autoplay-blocked recovery — any interaction also auto-recovers (one-shot
+          pointerdown in the hook); this pill is the visible affordance. Followers have no
+          Spotify controls of their own, so without this a blocked player is unrecoverable. */}
+      {!gateVisible && spotify?.status === 'blocked' && (
+        <button
+          onClick={() => spotify.recoverPlayback?.()}
+          className="fixed bottom-24 left-1/2 -translate-x-1/2 z-[95] px-4 py-2 rounded-full text-sm font-semibold shadow-lg hover:opacity-90"
+          style={{ backgroundColor: '#1DB954', color: '#000' }}
+        >
+          🔊 Tap to enable Spotify audio
+        </button>
+      )}
+
+      {/* Non-Safari iOS + session actively playing Spotify: in-browser Spotify audio is
+          impossible there (no DRM outside Safari) — offer the Safari hand-off. Gates only
+          the Spotify feature; the rest of the session works normally. */}
+      {!gateVisible && spotify?.status === 'unsupported_browser'
+        && spotify?.nowPlaying?.track_uri && spotify?.nowPlaying?.playback_state !== 'stopped' && (
+        <SpotifyUnsupportedNotice />
       )}
 
       {/* Loading Gate Overlay — full-screen themed loading screen */}
