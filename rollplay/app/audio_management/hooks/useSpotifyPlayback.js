@@ -5,9 +5,15 @@
 
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { authFetch } from '@/app/shared/utils/authFetch';
+import { isIOSNonSafari } from '@/app/shared/utils/platform';
 
 const SDK_SRC = 'https://sdk.scdn.co/spotify-player.js';
 const PLAYER_NAME = 'Tabletop Tavern'; // the SDK device name — used to find our device in Spotify's list
+// Default mixer level for the Spotify bed: -12 dB (linear ≈ 0.251). Display priming only —
+// the authoritative default lives in the SpotifyState contract (rollplay-shared-contracts/
+// shared_contracts/spotify.py) and arrives with the first snapshot; this just matches it for
+// the moments before that broadcast lands. Keep the two values in sync.
+export const SPOTIFY_DEFAULT_LEVEL = 10 ** (-12 / 20);
 // Match useUnifiedAudio's JIT compensation so Spotify aligns with the S3 bed.
 const NETWORK_COMPENSATION = 0.4; // seconds
 
@@ -58,7 +64,20 @@ function dbg(...args) {
  *  - FOLLOWER (everyone else): applies the broadcast anchor snapshots to its own SDK,
  *    staying synced to the leader. No controls.
  *
- * status: 'idle' | 'connecting' | 'ready' | 'not_connected' | 'not_premium' | 'error'
+ * status: 'idle' | 'connecting' | 'ready' | 'blocked' | 'unsupported_browser'
+ *       | 'not_connected' | 'not_premium' | 'error'
+ *
+ * 'unsupported_browser': non-Safari iOS browser (Chrome/Firefox/etc. on iPad/iPhone) —
+ * WebKit shells with no FairPlay DRM, so the SDK can never produce audio. We skip SDK
+ * init entirely; snapshots still flow (nowPlaying populates for UI/notices).
+ *
+ * Autoplay/unlock model: the SDK's media element only produces sound if it was activated
+ * from a user gesture (or Chrome's per-origin engagement score happens to waive it).
+ * `unlock()` must be called synchronously from the one guaranteed gesture (the Enter
+ * Session gate click) — it activates the element AND starts `connect()`, because Safari
+ * only honours activation when connect() itself originates from a gesture. If playback is
+ * still blocked (`autoplay_failed`), status becomes 'blocked' and the next pointerdown
+ * anywhere recovers (re-activate + re-apply the last snapshot).
  *
  * @param {object}   opts
  * @param {boolean}  opts.enabled              master switch (e.g. only in an active game)
@@ -72,7 +91,7 @@ export function useSpotifyPlayback({
   isLeader = false,
   onLeaderState = null,
   onChannelLevel = null,
-  channelLevel = 1,
+  channelLevel = SPOTIFY_DEFAULT_LEVEL,
   masterVolume = 1,
   broadcastMasterVolume = 1,
 } = {}) {
@@ -84,12 +103,16 @@ export function useSpotifyPlayback({
 
   const playerRef = useRef(null);
   const creatingRef = useRef(false);        // guards against creating a 2nd player (StrictMode double-invoke)
+  const gestureSeenRef = useRef(false);     // the gate (or another gesture) has fired unlock()
+  const connectStartedRef = useRef(false);  // connect() dispatched — never connect twice per player
   const disconnectTimerRef = useRef(null);  // deferred teardown so StrictMode's transient unmount doesn't kill the device
   const deviceIdRef = useRef(null);
   const readyRef = useRef(false);
   const currentTrackRef = useRef(null);
   const pendingSnapshotRef = useRef(null);
-  const volumeRef = useRef(clamp01((masterVolume ?? 1) * (broadcastMasterVolume ?? 1) * (channelLevel ?? 1)));
+  const nowPlayingRef = useRef(null);       // last snapshot, for blocked-state recovery re-apply
+  const applyToSDKRef = useRef(null);       // recoverPlayback → applyToSDK (declared later) bridge
+  const volumeRef = useRef(clamp01((masterVolume ?? 1) * (broadcastMasterVolume ?? 1) * (channelLevel ?? SPOTIFY_DEFAULT_LEVEL)));
   const isLeaderRef = useRef(isLeader);
   const onLeaderStateRef = useRef(onLeaderState);
   const onChannelLevelRef = useRef(onChannelLevel);
@@ -135,6 +158,62 @@ export function useSpotifyPlayback({
   const activate = useCallback(async () => {
     dbg('activateElement CALLED, player=', !!playerRef.current);
     try { await playerRef.current?.activateElement(); dbg('activateElement OK'); } catch (e) { dbg('activateElement THREW', String(e)); }
+  }, []);
+
+  // Connect exactly once per player instance. Re-activates after connect resolves — the SDK's
+  // media element exists by then, and we're usually still inside the gesture's transient window.
+  const connectNow = useCallback(async () => {
+    const player = playerRef.current;
+    if (!player || connectStartedRef.current) return;
+    connectStartedRef.current = true;
+    try {
+      const ok = await player.connect();
+      dbg('connect ->', ok);
+      if (!ok) {
+        // connect() resolves false instead of throwing (auth/network/token failures) —
+        // release the guard so a later gesture can retry, and surface the failure
+        // instead of sitting on 'connecting' forever.
+        connectStartedRef.current = false;
+        console.error('Spotify connect refused (resolved false)');
+        setStatus('error');
+        return;
+      }
+      try { await player.activateElement(); } catch { /* activation retried on next gesture */ }
+    } catch (e) {
+      connectStartedRef.current = false;
+      console.error('Spotify connect failed:', e);
+    }
+  }, []);
+
+  // The gate-click entry point. Call synchronously inside the gesture handler (before any
+  // await): Safari only unblocks SDK audio when connect() originates from a user gesture, and
+  // activateElement() only counts inside the synchronous event path. Safe to call when the
+  // player doesn't exist yet — the create effect connects on creation once a gesture was seen,
+  // and the 'blocked' recovery path picks up activation on the next interaction if needed.
+  const unlock = useCallback(() => {
+    gestureSeenRef.current = true;
+    const player = playerRef.current;
+    dbg('unlock CALLED, player=', !!player, 'connectStarted=', connectStartedRef.current);
+    if (!player) return;
+    try { player.activateElement()?.catch?.(() => {}); } catch { /* pre-connect activation is best-effort */ }
+    connectNow();
+  }, [connectNow]);
+
+  // Recover from 'blocked' (autoplay_failed) — MUST run from a user gesture. Re-activates the
+  // element, then re-applies the last snapshot (the dedup signature would otherwise swallow it).
+  // Cooldown guard: clicking the recovery pill fires the hook's one-shot pointerdown listener
+  // AND the pill's onClick — absorb the pair into one recovery.
+  const recoveringRef = useRef(false);
+  const recoverPlayback = useCallback(async () => {
+    const player = playerRef.current;
+    if (!player || recoveringRef.current) return;
+    recoveringRef.current = true;
+    setTimeout(() => { recoveringRef.current = false; }, 500);
+    try { await player.activateElement(); } catch { /* noop */ }
+    setStatus(readyRef.current ? 'ready' : 'connecting');
+    if (isLeaderRef.current) { player.resume().catch(() => {}); return; }
+    lastPlaybackSigRef.current = null;
+    if (nowPlayingRef.current) applyToSDKRef.current?.(nowPlayingRef.current);
   }, []);
 
   // On first game entry the device may still be registering (profile fetch → SDK load →
@@ -242,8 +321,10 @@ export function useSpotifyPlayback({
   const previous = useCallback(async () => { await playerRef.current?.previousTrack().catch(() => {}); setTimeout(() => reportState(true), 350); }, [reportState]);
   const seek = useCallback(async (positionMs) => { await playerRef.current?.seek(Math.max(0, Math.floor(positionMs))).catch(() => {}); setTimeout(() => reportState(true), 250); }, [reportState]);
 
-  // Resume playback from a persisted snapshot (e.g. after a page reload) at the anchored
-  // position — rejoins the shared timeline. Must be triggered from a user gesture (autoplay).
+  // "Resume where you left off" — start PLAYING the persisted snapshot at its anchored
+  // position. Must be triggered from a user gesture (autoplay). Restored snapshots are
+  // always frozen as 'paused' by the ETL, so do NOT honor that state here — this gesture
+  // IS the un-pause. (Honoring it caused the old play-then-pause-at-450ms audio blip.)
   const resumeFromSnapshot = useCallback(async (snap) => {
     if (!snap || !snap.track_uri || snap.playback_state === 'stopped') return;
     await activate();
@@ -252,7 +333,6 @@ export function useSpotifyPlayback({
       ? { context_uri: snap.context_uri, offset: { uri: snap.track_uri }, position_ms: Math.max(0, Math.floor(positionMs)) }
       : { uris: [snap.track_uri], position_ms: Math.max(0, Math.floor(positionMs)) };
     await playBody(body);
-    if (snap.playback_state === 'paused') setTimeout(() => playerRef.current?.pause().catch(() => {}), 450);
     currentTrackRef.current = snap.track_uri;
     currentContextRef.current = snap.context_uri || null;
     setTimeout(() => reportState(true), 700);
@@ -302,11 +382,13 @@ export function useSpotifyPlayback({
     if (sameTrack) player.seek(positionMs).then(() => player.resume()).catch(() => {});
     else playTrackAt(snap.track_uri, positionMs);
   }, [playTrackAt]);
+  useEffect(() => { applyToSDKRef.current = applyToSDK; }, [applyToSDK]);
 
   // Called for every `spotify_state` broadcast + the initial_state snapshot.
   const applySpotifySnapshot = useCallback((snap) => {
     dbg('applySnapshot isLeader=', isLeaderRef.current, 'track=', snap?.track_uri?.slice(14, 26), 'state=', snap?.playback_state, 'ready=', readyRef.current);
     setNowPlaying(snap || null);
+    nowPlayingRef.current = snap || null;
     // Remember the playing context across reload/late-join so the leader reports it back
     // (the SDK's own context.uri is unreliable). Restored before the leader's early return.
     if (snap?.context_uri) currentContextRef.current = snap.context_uri;
@@ -326,6 +408,10 @@ export function useSpotifyPlayback({
   // 1) Connection + Premium.
   useEffect(() => {
     if (!enabled) return;
+    // Non-Safari iOS: no DRM, the SDK is a guaranteed silent failure — don't even probe
+    // the profile. (iOS Safari proceeds: FairPlay exists there; treat it as supported
+    // until real-device testing says otherwise.)
+    if (isIOSNonSafari()) { setStatus('unsupported_browser'); return; }
     let cancelled = false;
     (async () => {
       try {
@@ -369,6 +455,7 @@ export function useSpotifyPlayback({
         dbg('player torn down (real unmount)');
         playerRef.current = null;
         creatingRef.current = false;
+        connectStartedRef.current = false;
         readyRef.current = false;
         deviceIdRef.current = null;
         currentTrackRef.current = null;
@@ -412,7 +499,10 @@ export function useSpotifyPlayback({
         player.addListener('authentication_error', ({ message }) => { console.error('Spotify auth error:', message); setStatus('error'); });
         player.addListener('account_error', ({ message }) => { console.error('Spotify account error:', message); setStatus('not_premium'); });
         player.addListener('playback_error', ({ message }) => { console.error('🎵 Spotify playback_error:', message); });
-        player.addListener('autoplay_failed', () => { console.warn('🎵 Spotify autoplay blocked — click a control to activate audio.'); });
+        player.addListener('autoplay_failed', () => {
+          console.warn('🎵 Spotify autoplay blocked — next interaction (or the unlock pill) recovers it.');
+          setStatus('blocked');
+        });
 
         // Live state → seek bar + leader reporting (track changes, natural advances, pause).
         player.addListener('player_state_changed', (st) => {
@@ -430,9 +520,13 @@ export function useSpotifyPlayback({
           if (isLeaderRef.current) reportState(false);
         });
 
-        await player.connect();
         playerRef.current = player;
         creatingRef.current = false;
+        // connect() is gesture-deferred: Safari only unblocks SDK audio when the connect
+        // originates from a user gesture, and Chrome wants playback to start post-gesture
+        // anyway. If the gate was already clicked (unlock() before the player existed —
+        // slow SDK load), connect immediately; the gate click still counts as engagement.
+        if (gestureSeenRef.current) connectNow();
       } catch (e) {
         creatingRef.current = false;
         console.error('Spotify SDK setup failed:', e);
@@ -445,10 +539,19 @@ export function useSpotifyPlayback({
 
   // 3) Effective SDK volume = local master × broadcast master × Spotify channel level.
   useEffect(() => {
-    const v = clamp01((masterVolume ?? 1) * (broadcastMasterVolume ?? 1) * (channelLevel ?? 1));
+    const v = clamp01((masterVolume ?? 1) * (broadcastMasterVolume ?? 1) * (channelLevel ?? SPOTIFY_DEFAULT_LEVEL));
     volumeRef.current = v;
     if (readyRef.current) playerRef.current?.setVolume(v).catch(() => {});
   }, [masterVolume, broadcastMasterVolume, channelLevel]);
+
+  // 4) While blocked, the next pointerdown anywhere recovers — this is what makes
+  //    "interact with the page to unlock" actually true (activation needs a gesture).
+  useEffect(() => {
+    if (status !== 'blocked') return;
+    const onPointerDown = () => { recoverPlayback(); };
+    document.addEventListener('pointerdown', onPointerDown, { once: true, capture: true });
+    return () => document.removeEventListener('pointerdown', onPointerDown, true);
+  }, [status, recoverPlayback]);
 
   return {
     status,
@@ -457,6 +560,8 @@ export function useSpotifyPlayback({
     playbackState,
     applySpotifySnapshot,
     activate,
+    unlock,
+    recoverPlayback,
     getCurrentState,
     // leader controls
     playTrack,

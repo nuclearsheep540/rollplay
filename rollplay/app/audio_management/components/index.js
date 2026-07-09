@@ -13,3 +13,4 @@ export { default as SfxSoundboard } from './SfxSoundboard';
 export { default as ChannelEffects } from './ChannelEffects';
 export { default as BottomMixerDrawer, MixerStrips } from './BottomMixerDrawer';
 export { default as VerticalChannelStrip } from './VerticalChannelStrip';
+export { default as SpotifyUnsupportedNotice } from './SpotifyUnsupportedNotice';

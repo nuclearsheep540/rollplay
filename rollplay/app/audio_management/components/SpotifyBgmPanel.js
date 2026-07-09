@@ -91,7 +91,7 @@ export default function SpotifyBgmPanel({ spotify }) {
   const [repeatMode, setRepeatMode] = useState(0) // 0 off · 1 playlist · 2 track
   const repeatSettleRef = useRef(0) // ignore polled repeat until this ts, so an optimistic click doesn't flicker
   useEffect(() => {
-    if (status !== 'ready') return
+    if (status !== 'ready' && status !== 'blocked') return
     let active = true
     const poll = async () => {
       const st = await getCurrentState?.()
@@ -207,12 +207,15 @@ export default function SpotifyBgmPanel({ spotify }) {
     }
   }
 
-  if (status !== 'ready') {
+  // 'blocked' (autoplay) still renders the full panel — any control click is the
+  // gesture that recovers it, and the hook's pointerdown listener fires first anyway.
+  if (status !== 'ready' && status !== 'blocked') {
     const message = {
       idle: 'Starting Spotify…',
       connecting: 'Connecting to Spotify…',
       not_connected: 'Connect your Spotify account on the Account page to use Spotify BGM.',
       not_premium: 'Spotify Premium is required to play music through the app.',
+      unsupported_browser: 'This browser can’t play Spotify on iPad/iPhone — only Safari supports it. Open the session in Safari to use Spotify BGM.',
       error: 'Spotify could not start. Try reconnecting on the Account page.',
     }[status] || 'Spotify unavailable.'
     return (

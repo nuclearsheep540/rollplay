@@ -12,6 +12,7 @@ from .character import DungeonMaster, PlayerCharacter, SessionUser
 from .display import ActiveDisplayType
 from .image import ImageConfig
 from .map import MapConfig
+from .spotify import SpotifyState
 
 
 class PlayerState(ContractModel):
@@ -39,7 +40,7 @@ class SessionStartPayload(ContractModel):
     assets: List[AssetRef] = []
     audio_config: Dict[str, AudioChannelState] = {}
     audio_track_config: Dict[str, AudioTrackConfig] = {}
-    spotify_state: Dict = {}  # DM's Spotify BGM block (track, context, channel level) — restored on start
+    spotify_state: SpotifyState = SpotifyState()  # DM's Spotify BGM block — restored on start; contract supplies defaults (e.g. -12 dB level)
     map_config: Optional[MapConfig] = None
     image_config: Optional[ImageConfig] = None
     active_display: Optional[ActiveDisplayType] = None
@@ -53,7 +54,7 @@ class SessionEndFinalState(ContractModel):
     audio_state: Dict[str, AudioChannelState] = {}
     audio_track_config: Dict[str, AudioTrackConfig] = {}
     broadcast_master_volume: Optional[float] = None
-    spotify_state: Dict = {}  # DM's Spotify BGM block (track, context, channel level) — cold-stored for cross-session restore
+    spotify_state: SpotifyState = SpotifyState()  # DM's Spotify BGM block — cold-stored for cross-session restore
     map_state: Optional[MapConfig] = None
     image_state: Optional[ImageConfig] = None
     active_display: Optional[ActiveDisplayType] = None

@@ -18,6 +18,7 @@ from site_client import fetch_character_summary
 from shared_contracts.image import ImageConfig
 from shared_contracts.map import MapConfig
 from shared_contracts.audio import AudioChannelState, AudioTrackConfig, AudioEffects
+from shared_contracts.spotify import SpotifyState
 
 
 adventure_log = AdventureLogService()
@@ -925,7 +926,9 @@ class WebsocketEvent():
         if not GameService.is_dm(client_id, user_id):
             return WebsocketEventResult.error("Only the DM can control Spotify playback")
 
-        current = GameService.get_spotify_state(client_id) or {}
+        # Normalise through the contract: fills defaults (e.g. channel_level = -12 dB) for
+        # any document predating a field, and fails loudly on drift instead of guessing.
+        current = SpotifyState(**(GameService.get_spotify_state(client_id) or {})).model_dump()
         now = time.time()
 
         if action == "sync":
@@ -940,7 +943,7 @@ class WebsocketEvent():
                     "context_uri": event_data.get("context_uri"),
                     "playback_state": "stopped", "started_at": None,
                     "paused_elapsed": None, "is_looping": False,
-                    "channel_level": current.get("channel_level", 1.0),
+                    "channel_level": current["channel_level"],
                     "updated_by": triggered_by,
                 }
             else:
@@ -954,7 +957,7 @@ class WebsocketEvent():
                     "started_at": (now - pos_sec) if is_playing else None,
                     "paused_elapsed": None if is_playing else pos_sec,
                     "is_looping": False,
-                    "channel_level": current.get("channel_level", 1.0),
+                    "channel_level": current["channel_level"],
                     "updated_by": triggered_by,
                 }
 
@@ -969,7 +972,7 @@ class WebsocketEvent():
                 "started_at": now,
                 "paused_elapsed": None,
                 "is_looping": True,  # v1: single track loops
-                "channel_level": current.get("channel_level", 1.0),
+                "channel_level": current["channel_level"],
                 "updated_by": triggered_by,
             }
 
