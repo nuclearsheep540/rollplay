@@ -312,8 +312,10 @@ export function useSpotifyPlayback({
   const previous = useCallback(async () => { await playerRef.current?.previousTrack().catch(() => {}); setTimeout(() => reportState(true), 350); }, [reportState]);
   const seek = useCallback(async (positionMs) => { await playerRef.current?.seek(Math.max(0, Math.floor(positionMs))).catch(() => {}); setTimeout(() => reportState(true), 250); }, [reportState]);
 
-  // Resume playback from a persisted snapshot (e.g. after a page reload) at the anchored
-  // position — rejoins the shared timeline. Must be triggered from a user gesture (autoplay).
+  // "Resume where you left off" — start PLAYING the persisted snapshot at its anchored
+  // position. Must be triggered from a user gesture (autoplay). Restored snapshots are
+  // always frozen as 'paused' by the ETL, so do NOT honor that state here — this gesture
+  // IS the un-pause. (Honoring it caused the old play-then-pause-at-450ms audio blip.)
   const resumeFromSnapshot = useCallback(async (snap) => {
     if (!snap || !snap.track_uri || snap.playback_state === 'stopped') return;
     await activate();
@@ -322,7 +324,6 @@ export function useSpotifyPlayback({
       ? { context_uri: snap.context_uri, offset: { uri: snap.track_uri }, position_ms: Math.max(0, Math.floor(positionMs)) }
       : { uris: [snap.track_uri], position_ms: Math.max(0, Math.floor(positionMs)) };
     await playBody(body);
-    if (snap.playback_state === 'paused') setTimeout(() => playerRef.current?.pause().catch(() => {}), 450);
     currentTrackRef.current = snap.track_uri;
     currentContextRef.current = snap.context_uri || null;
     setTimeout(() => reportState(true), 700);

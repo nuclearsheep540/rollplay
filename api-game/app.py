@@ -2,6 +2,7 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 from fastapi import FastAPI, Response, Request, Query
 import logging
+import time
 from typing import Optional
 
 from fastapi import HTTPException
@@ -671,8 +672,24 @@ async def end_session(request: SessionEndRequest, validate_only: bool = False):
         # not an AudioChannelState) before passing to the typed contract
         raw_audio_state = dict(room.get("audio_state", {}))
         broadcast_master_volume = raw_audio_state.pop("__master_volume", None)
-        # Spotify BGM block (track/context/channel level) — cold-stored for cross-session restore
-        spotify_state = room.get("spotify", {}) or {}
+        # Spotify BGM block (track/context/channel level) — cold-stored for cross-session restore.
+        # If the session ends mid-play, freeze the live anchor into paused_elapsed NOW — the
+        # started_at epoch is meaningless after cold storage, and without this a later
+        # "Resume where you left off" starts the track from 0:00.
+        spotify_state = dict(room.get("spotify", {}) or {})
+        if spotify_state.get("playback_state") == "playing" and spotify_state.get("started_at"):
+            elapsed = max(0.0, time.time() - spotify_state["started_at"])
+            duration_ms = (spotify_state.get("track_meta") or {}).get("duration_ms")
+            if spotify_state.get("is_looping") and duration_ms:
+                elapsed = elapsed % (duration_ms / 1000.0)
+            elif duration_ms:
+                elapsed = min(elapsed, duration_ms / 1000.0)
+            spotify_state.update({
+                "playback_state": "paused",
+                "paused_elapsed": elapsed,
+                "started_at": None,
+                "is_playing": False,
+            })
         final_state = SessionEndFinalState(
             players=players,
             session_stats=SessionStats(
