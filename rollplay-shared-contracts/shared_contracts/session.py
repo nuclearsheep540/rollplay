@@ -44,6 +44,9 @@ class SessionStartPayload(ContractModel):
     map_config: Optional[MapConfig] = None
     image_config: Optional[ImageConfig] = None
     active_display: Optional[ActiveDisplayType] = None
+    # ISO-8601 with explicit UTC offset (never naive — JS parses offset-less strings as
+    # local time). Kept a string end-to-end so no hop re-serializes it naively.
+    urls_expire_at: Optional[str] = None
 
 
 class SessionEndFinalState(ContractModel):

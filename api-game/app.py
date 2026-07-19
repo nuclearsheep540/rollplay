@@ -536,7 +536,8 @@ async def create_session(request: SessionStartPayload):
             player_metadata=player_metadata,
             audio_state={k: v.model_dump() for k, v in request.audio_config.items()} if request.audio_config else {},
             audio_track_config={k: v.model_dump() for k, v in request.audio_track_config.items()} if request.audio_track_config else {},
-            spotify=spotify_restore
+            spotify=spotify_restore,
+            urls_expire_at=request.urls_expire_at or ""
         )
 
         # Use session_id as MongoDB _id (back-reference to PostgreSQL session)

@@ -9,6 +9,7 @@ Ubiquitous Language:
 - Game = The live multiplayer experience (handled by api-game service)
 """
 
+from datetime import datetime
 from typing import List, Optional
 from uuid import UUID
 from sqlalchemy.orm import Session as DbSession
@@ -60,6 +61,19 @@ class SessionRepository:
         )
         return self._model_to_aggregate(model) if model else None
 
+    def get_expired_sessions(self, now: datetime) -> List[SessionEntity]:
+        """ACTIVE sessions whose signed-URL lease has lapsed — the cleanup job's work list."""
+        models = (
+            self.db.query(SessionModel)
+            .filter(
+                SessionModel.status == SessionStatus.ACTIVE.value,
+                SessionModel.urls_expire_at.isnot(None),
+                SessionModel.urls_expire_at <= now,
+            )
+            .all()
+        )
+        return [self._model_to_aggregate(model) for model in models]
+
     def get_all(self) -> List[SessionEntity]:
         """Get all sessions (admin use)"""
         models = self.db.query(SessionModel).order_by(SessionModel.created_at.desc()).all()
@@ -83,6 +97,7 @@ class SessionRepository:
             model.active_game_id = aggregate.active_game_id
             model.started_at = aggregate.started_at
             model.stopped_at = aggregate.stopped_at
+            model.urls_expire_at = aggregate.urls_expire_at
             model.max_players = aggregate.max_players
             model.audio_config = aggregate.audio_config
             model.spotify_config = aggregate.spotify_config
@@ -105,6 +120,7 @@ class SessionRepository:
                 created_at=aggregate.created_at,
                 started_at=aggregate.started_at,
                 stopped_at=aggregate.stopped_at,
+                urls_expire_at=aggregate.urls_expire_at,
                 max_players=aggregate.max_players,
                 audio_config=aggregate.audio_config,
                 spotify_config=aggregate.spotify_config,
@@ -201,6 +217,7 @@ class SessionRepository:
             created_at=model.created_at,
             started_at=model.started_at,
             stopped_at=model.stopped_at,
+            urls_expire_at=model.urls_expire_at,
             active_game_id=model.active_game_id,
             joined_users=joined_user_ids,
             max_players=model.max_players,

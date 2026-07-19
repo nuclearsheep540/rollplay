@@ -1,6 +1,7 @@
 # Copyright (C) 2025 Matthew Davey
 # SPDX-License-Identifier: GPL-3.0-or-later
 
+from datetime import datetime, timedelta, timezone
 from typing import Dict, List, Optional
 from dataclasses import dataclass
 from uuid import UUID
@@ -487,10 +488,16 @@ class StartSession:
             campaign_assets = []
             asset_lookup = {}
             url_map = {}
+            urls_expire_at = None
             if self.asset_repo:
                 campaign_assets = self.asset_repo.get_by_campaign_id(session.campaign_id)
 
-                # Generate presigned URLs in parallel (CPU-bound HMAC signing)
+                # Generate presigned URLs in parallel (CPU-bound RSA-SHA1 CloudFront signing)
+                # Lease deadline is stamped HERE, at signing time — the single timestamp the
+                # expiry sweeper and the in-game countdown both reference. Timezone-aware so
+                # its ISO form carries an explicit offset (naive strings parse as local in JS).
+                if self.s3_service:
+                    urls_expire_at = datetime.now(timezone.utc) + timedelta(seconds=self.s3_service.expiry)
                 url_map = await self._generate_presigned_urls_parallel(campaign_assets)
                 logger.info(f"Found {len(campaign_assets)} assets for campaign {session.campaign_id} with {len(url_map)} fresh URLs")
 
@@ -535,6 +542,7 @@ class StartSession:
                 map_config=map_config_for_game,
                 image_config=image_config_for_game,
                 active_display=ActiveDisplayType(session.active_display) if session.active_display else None,
+                urls_expire_at=urls_expire_at.isoformat() if urls_expire_at else None,
             )
 
             # 9. Call api-game (synchronous await)
@@ -555,7 +563,7 @@ class StartSession:
             active_game_id = start_response.session_id
 
             # 11. Mark ACTIVE with the MongoDB game ID
-            session.activate(active_game_id)
+            session.activate(active_game_id, urls_expire_at)
             self.session_repo.save(session)
 
             logger.info(f"Session {session_id} ACTIVE with game {active_game_id}")

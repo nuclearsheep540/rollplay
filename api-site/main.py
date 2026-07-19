@@ -1,6 +1,7 @@
 # Copyright (C) 2025 Matthew Davey
 # SPDX-License-Identifier: GPL-3.0-or-later
 
+import asyncio
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
@@ -34,6 +35,9 @@ from integrations.spotify.endpoints import router as spotify_router
 # Import WebSocket endpoint
 from modules.events.api.websocket_endpoint import websocket_events_endpoint
 
+# Background task: auto-pauses sessions whose signed-URL lease has lapsed
+from modules.session.application.expired_session_cleanup import run_expired_session_cleanup
+
 # Configure logging from settings
 settings = Settings()
 logging.config.dictConfig(settings.LOGGING_CONFIG)
@@ -47,7 +51,16 @@ async def lifespan(app: FastAPI):
     # Load ruleset reference data from JSON into the in-memory registry.
     # Boot fails if any seed file is missing or fails validation.
     RulesetRegistry.initialize()
+
+    # Expired-session cleanup — stateless loop; deadlines live in PostgreSQL,
+    # so restarts lose nothing and the first pass catches anything past due.
+    cleanup_stop = asyncio.Event()
+    cleanup_task = asyncio.create_task(run_expired_session_cleanup(cleanup_stop))
+
     yield
+
+    cleanup_stop.set()
+    await cleanup_task
 
 
 # Create FastAPI app
