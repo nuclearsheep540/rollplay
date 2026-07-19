@@ -492,7 +492,7 @@ class StartSession:
             if self.asset_repo:
                 campaign_assets = self.asset_repo.get_by_campaign_id(session.campaign_id)
 
-                # Generate presigned URLs in parallel (CPU-bound HMAC signing)
+                # Generate presigned URLs in parallel (CPU-bound RSA-SHA1 CloudFront signing)
                 # Lease deadline is stamped HERE, at signing time — the single timestamp the
                 # expiry sweeper and the in-game countdown both reference. Timezone-aware so
                 # its ISO form carries an explicit offset (naive strings parse as local in JS).

@@ -52,11 +52,15 @@ async def _run_cleanup_pass() -> None:
             asset_repository=MediaAssetRepository(db),
         )
         for session in expired:
-            # Each session in its own try/except — one wedged game must not block the
-            # rest, and PauseSession's ACTIVE-only guard makes any double-fire a no-op.
+            # Each session in its own try/except — one wedged game must not block the rest.
+            # PauseSession's ACTIVE-only guard raises ValueError if the session already left
+            # ACTIVE (e.g. the host paused it between our query and this call); that's a benign
+            # race, so log it quietly and reserve the traceback for genuinely unexpected faults.
             try:
                 await pause.execute(session.id, host_id=session.host_id)
                 logger.info(f"Expired-session cleanup: session {session.id} paused")
+            except ValueError as race:
+                logger.info(f"Expired-session cleanup: skipped session {session.id} ({race})")
             except Exception:
                 logger.exception(f"Expired-session cleanup: failed to pause session {session.id}")
     finally:
