@@ -678,6 +678,7 @@ class SelectCharacterForCampaign:
             "hp_current": character.hp_current,
             "hp_max": character.hp_max,
             "ac": character.ac,
+            "color": character.color,
         }
 
         try:

@@ -11,24 +11,12 @@ from datetime import datetime
 logger = logging.getLogger()
 CONFIG = get_settings()
 
-DEFAULT_SEAT_COLORS = [
-    "#3b82f6",  # blue
-    "#ef4444",  # red
-    "#22c55e",  # green
-    "#f97316",  # orange
-    "#a855f7",  # purple
-    "#06b6d4",  # cyan
-    "#ec4899",  # pink
-    "#65a30d",  # lime
-]
-
 class GameSettings(BaseModel):
     "Basic settings for a game lobby"
 
     max_players: int
     seat_layout: list  # user_ids or "empty"
     created_at: datetime
-    seat_colors: dict
     dungeon_master: dict = {}  # {user_id, player_name, campaign_role}
     available_assets: list = []  # Asset refs from campaign library (maps, audio, images)
     campaign_id: str = ""  # PostgreSQL campaign ID for proxying asset requests to api-site
@@ -217,44 +205,24 @@ class GameService:
             return ["empty"] * max_players
 
     @staticmethod
-    def update_seat_colors(room_id: str, seat_colors: dict):
-        """Update seat colors for a room"""
-        collection = GameService._get_active_session()
-        
-        filter_criteria = GameService.room_filter(room_id)
+    def update_player_color(room_id: str, user_id: str, color: str):
+        """Set a player's character color on their player_metadata entry.
 
-        print(f"🎨 Updating seat colors with filter: {filter_criteria}")
-        print(f"🌈 New seat colors: {seat_colors}")
-        
+        Color is character-owned — the seat a player occupies only *displays* it.
+        Cold persistence happens at session end (api-site syncs player colors
+        back onto character rows during the ETL)."""
+        collection = GameService._get_active_session()
+
         result = collection.update_one(
-            filter_criteria,
-            {
-                "$set": {
-                    "seat_colors": seat_colors,
-                }
-            }
+            GameService.room_filter(room_id),
+            {"$set": {f"player_metadata.{user_id}.color": color}}
         )
-        
-        print(f"📊 Update result: matched={result.matched_count}, modified={result.modified_count}")
-        
+
         if result.matched_count == 0:
             print(f"❌ No document found with _id: {room_id}")
             raise Exception(f"Room {room_id} not found")
-        
+
         return str(result)
-
-    @staticmethod
-    def get_seat_colors(room_id: str) -> dict:
-        """Get the current seat colors for a room"""
-        collection = GameService._get_active_session()
-        
-        room = collection.find_one(GameService.room_filter(room_id))
-
-        if room and "seat_colors" in room:
-            return room["seat_colors"]
-        else:
-            max_players = room.get("max_players", 8) if room else 8
-            return {str(i): DEFAULT_SEAT_COLORS[i] if i < len(DEFAULT_SEAT_COLORS) else DEFAULT_SEAT_COLORS[0] for i in range(max_players)}
 
     @staticmethod
     def is_moderator(room_id: str, user_id: str) -> bool:
@@ -382,23 +350,11 @@ class GameService:
 
         # Merge incoming fields into existing entry — a player-only sync
         # (user joins campaign) must not wipe character fields, and a
-        # character sync must not wipe player fields.
+        # character sync must not wipe player fields. Spread rather than
+        # whitelist so new contract fields (e.g. color) can't silently drop.
         existing = player_metadata.get(user_id, {})
-        incoming = {
-            "user_id": user_id,
-            "player_name": character_data.get("player_name"),
-            "campaign_role": character_data.get("campaign_role"),
-            "character_id": character_data.get("character_id"),
-            "character_name": character_data.get("character_name"),
-            "character_class": character_data.get("character_class"),
-            "character_race": character_data.get("character_race"),
-            "level": character_data.get("level"),
-            "hp_current": character_data.get("hp_current"),
-            "hp_max": character_data.get("hp_max"),
-            "ac": character_data.get("ac"),
-        }
-        # Only overwrite with fields that were actually provided
-        merged = {**existing, **{k: v for k, v in incoming.items() if v is not None}}
+        provided = {key: value for key, value in character_data.items() if value is not None}
+        merged = {**existing, **provided, "user_id": user_id}
         player_metadata[user_id] = merged
 
         result = collection.update_one(

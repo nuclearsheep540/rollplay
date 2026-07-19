@@ -12,7 +12,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from sentry_config import init_sentry
 init_sentry()
 
-from gameservice import GameService, GameSettings, DEFAULT_SEAT_COLORS
+from gameservice import GameService, GameSettings
 from adventure_log_service import AdventureLogService
 from mapservice import MapService, MapSettings
 from imageservice import ImageService, ImageSettings
@@ -20,6 +20,7 @@ from message_templates import format_message, MESSAGE_TEMPLATES
 from models.log_type import LogType
 from websocket_handlers.connection_manager import manager as connection_manager
 from shared_contracts.session import (
+    LogEntry,
     SessionStartPayload,
     SessionStartResponse,
     SessionEndFinalState,
@@ -30,7 +31,7 @@ from shared_contracts.session import (
 from shared_contracts.map import MapConfig
 from shared_contracts.image import ImageConfig
 from schemas.session_schemas import SessionEndRequest
-from datetime import datetime
+from datetime import datetime, timezone
 
 logger = logging.getLogger()
 app = FastAPI()
@@ -272,9 +273,9 @@ async def update_seat_count(room_id: str, request: dict):
 def gameservice_get(room_id):
     check_room = GameService.get_room(id=room_id)
     if check_room:
-        # Add current seat layout and seat colors to response
+        # Add current seat layout to response (colors are character-owned and
+        # travel inside player_metadata, not per-seat)
         seat_layout = GameService.get_seat_layout(room_id)
-        seat_colors = GameService.get_seat_colors(room_id)
         # Include active_map and active_image so the client gets asset URLs in the
         # first response, eliminating separate round trips on initial page load.
         # The server component uses these for <link rel="preload"> hints.
@@ -283,7 +284,6 @@ def gameservice_get(room_id):
         return {
             **check_room,
             "current_seat_layout": seat_layout,
-            "seat_colors": seat_colors,
             "active_map": active_map,
             "active_image": active_image,
         }
@@ -494,9 +494,6 @@ async def create_session(request: SessionStartPayload):
                 detail="Game already exists for this session"
             )
 
-        def get_default_color(index):
-            return DEFAULT_SEAT_COLORS[index] if index < len(DEFAULT_SEAT_COLORS) else DEFAULT_SEAT_COLORS[0]
-
         # Convert assets to dict format for MongoDB storage
         available_assets = [asset.model_dump() for asset in request.assets] if request.assets else []
 
@@ -528,7 +525,6 @@ async def create_session(request: SessionStartPayload):
         settings = GameSettings(
             max_players=request.max_players,
             seat_layout=["empty"] * request.max_players,
-            seat_colors={str(i): get_default_color(i) for i in range(request.max_players)},
             created_at=datetime.utcnow(),
             dungeon_master=request.dungeon_master.model_dump(),
             available_assets=available_assets,
@@ -581,6 +577,17 @@ async def create_session(request: SessionStartPayload):
             except Exception as e:
                 logger.warning(f"active_display restoration failed (non-fatal): {e}")
 
+        # Restore adventure log from previous session (timestamps/log_ids preserved)
+        if request.adventure_log:
+            try:
+                restored_count = adventure_log.restore_room_logs(
+                    request.session_id,
+                    [entry.model_dump() for entry in request.adventure_log],
+                )
+                logger.info(f"Restored {restored_count} adventure log entries for session {request.session_id}")
+            except Exception as e:
+                logger.warning(f"Adventure log restoration failed (non-fatal): {e}")
+
         return SessionStartResponse(
             success=True,
             session_id=game_id,  # Return MongoDB document ID as session_id for api-site
@@ -627,19 +634,23 @@ async def end_session(request: SessionEndRequest, validate_only: bool = False):
         if not room:
             raise HTTPException(status_code=404, detail="Game not found for session")
 
-        # Extract player data from seat_layout (seats now contain user_ids)
+        # Extract player data from player_metadata — ALL known players round-trip
+        # (not just the seated ones) so character-owned state (color) syncs cold
+        # for everyone. Seat position is looked up from the layout where present.
         player_metadata = room.get("player_metadata", {})
+        seat_index_by_user = {
+            seat: idx for idx, seat in enumerate(room.get("seat_layout", [])) if seat != "empty"
+        }
         players = []
-        for idx, seat in enumerate(room.get("seat_layout", [])):
-            if seat != "empty":
-                # Look up display name from player_metadata — never fall back to the seat (a UUID = PII)
-                meta = player_metadata.get(seat, {}) if isinstance(player_metadata, dict) else {}
-                display_name = meta.get("player_name") or "Unknown Adventurer"
+        if isinstance(player_metadata, dict):
+            for metadata_user_id, meta in player_metadata.items():
+                # Display name from metadata only — never fall back to the user_id (a UUID = PII)
                 players.append(PlayerState(
-                    user_id=seat,
-                    player_name=display_name,
-                    seat_position=idx,
-                    seat_color=room.get("seat_colors", {}).get(str(idx), "")
+                    user_id=metadata_user_id,
+                    player_name=meta.get("player_name") or "Unknown Adventurer",
+                    seat_position=seat_index_by_user.get(metadata_user_id),
+                    character_id=meta.get("character_id"),
+                    color=meta.get("color"),
                 ))
 
         # Calculate session duration
@@ -653,6 +664,24 @@ async def end_session(request: SessionEndRequest, validate_only: bool = False):
 
         # Get adventure log count
         log_count = adventure_log.get_room_log_count(request.session_id)
+
+        # Full adventure log for cold storage, chronological (oldest first).
+        # Bounded by the service's 200-per-room cap; timestamps go out as
+        # ISO-8601 with explicit UTC offset (stored naive-UTC in Mongo).
+        raw_logs = adventure_log.get_room_logs(request.session_id, limit=200)
+        log_entries = []
+        for log_doc in sorted(raw_logs, key=lambda log_doc: log_doc.get("log_id") or 0):
+            log_timestamp = log_doc.get("timestamp")
+            if isinstance(log_timestamp, datetime):
+                log_timestamp = log_timestamp.replace(tzinfo=timezone.utc).isoformat()
+            log_entries.append(LogEntry(
+                message=log_doc.get("message", ""),
+                type=log_doc.get("type", "system"),
+                timestamp=log_timestamp or "",
+                from_player=log_doc.get("from_player"),
+                log_id=log_doc.get("log_id") or 0,
+                prompt_id=log_doc.get("prompt_id"),
+            ))
 
         # Get active map state for ETL — contract data is nested under map_config
         active_map = map_service.get_active_map(request.session_id)
@@ -705,6 +734,7 @@ async def end_session(request: SessionEndRequest, validate_only: bool = False):
             map_state=map_state,
             image_state=image_state,
             active_display=active_display,
+            adventure_log=log_entries,
         )
 
         # If not validate_only, delete the game (deprecated flow)
@@ -841,10 +871,11 @@ async def update_player_character(room_id: str, character_data: dict):
                 "hp_current": merged.get("hp_current"),
                 "hp_max": merged.get("hp_max"),
                 "ac": merged.get("ac"),
+                "color": merged.get("color"),
             }
         }
 
-        await connection_manager.broadcast_to_room(room_id, change_message)
+        await connection_manager.update_room_data(room_id, change_message)
         logger.info(f"Updated character for {player_name} to {character_name} in room {room_id}")
 
         return {
@@ -996,44 +1027,6 @@ async def clear_system_messages(room_id: str, request: dict):
         
     except Exception as e:
         logger.error(f"Error clearing system messages: {str(e)}")
-        raise HTTPException(status_code=500, detail=str(e))
-
-@app.put("/game/{room_id}/colors")
-async def update_seat_colors(room_id: str, request: dict):
-    """Update seat colors for a game room"""
-    try:
-        check_room = GameService.get_room(id=room_id)
-        if not check_room:
-            raise HTTPException(status_code=404, detail=f"Room {room_id} not found")
-        
-        seat_colors = request.get("seat_colors")
-        updated_by = request.get("updated_by")
-        
-        # Validate seat colors
-        if not isinstance(seat_colors, dict):
-            raise HTTPException(status_code=400, detail="Seat colors must be a dictionary")
-        
-        # Validate color format (basic hex color validation)
-        for seat_index, color in seat_colors.items():
-            if not isinstance(color, str) or not color.startswith('#') or len(color) != 7:
-                raise HTTPException(
-                    status_code=400, 
-                    detail=f"Invalid color format for seat {seat_index}: {color}"
-                )
-        
-        # Update MongoDB record
-        GameService.update_seat_colors(room_id, seat_colors)
-        
-        return {
-            "success": True,
-            "room_id": room_id,
-            "seat_colors": seat_colors,
-            "updated_by": updated_by
-        }
-        
-    except HTTPException:
-        raise  # Re-raise HTTP exceptions
-    except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.delete("/game/{room_id}/logs")

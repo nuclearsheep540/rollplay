@@ -63,6 +63,7 @@ class Session(Base):
     map_config = Column(JSONB, nullable=True, server_default='{}')  # Persisted active map config from ETL (just asset_id)
     image_config = Column(JSONB, nullable=True, server_default='{}')  # Persisted active image config from ETL
     active_display = Column(String(10), nullable=True)  # Which display was active: "map", "image", or null
+    adventure_log = Column(JSONB, nullable=True, server_default='[]')  # Persisted adventure log from ETL (LogEntry-shaped, ≤200 entries)
 
     # Relationships
     campaign = relationship("Campaign", back_populates="sessions")

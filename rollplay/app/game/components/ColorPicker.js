@@ -4,19 +4,24 @@ import { useEffect, useRef, useState } from 'react'
 
 /**
  * ColorPicker Component
- * Handles player seat color changes with Coloris integration
+ * Handles character color changes with Coloris integration
+ * `usedColors` is inform-only: entries ({color, ownerName}) mark colors other
+ * players' characters currently display so a small "in use" hint can render —
+ * every color always remains fully selectable.
  */
 export default function ColorPicker({
   currentColor,
   onColorChange,
   userId,
   playerName,
-  seatIndex,
+  usedColors = [],
   disabled = false
 }) {
   const inputRef = useRef(null);
   const [isChanging, setIsChanging] = useState(false);
   const [cooldownActive, setCooldownActive] = useState(false);
+  // Live picker value while Coloris is open — drives the "in use" hint
+  const [liveColor, setLiveColor] = useState(null);
 
   // Initialize Coloris when component mounts
   useEffect(() => {
@@ -59,12 +64,15 @@ export default function ColorPicker({
         // Debounced color change handler
         const handleColorPick = (event) => {
           const newColor = event.detail.color;
-          
+
+          // Track the live selection so the "in use" hint can react instantly
+          setLiveColor(newColor);
+
           // Clear existing timer
           if (debounceTimer) {
             clearTimeout(debounceTimer);
           }
-          
+
           // Set new timer to delay the color change
           debounceTimer = setTimeout(() => {
             handleColorChange(newColor);
@@ -74,15 +82,18 @@ export default function ColorPicker({
         // Listen for color picker close (final selection)
         const handleColorClose = (event) => {
           const newColor = event.detail.color;
-          
+
           // Clear any pending debounced calls
           if (debounceTimer) {
             clearTimeout(debounceTimer);
             debounceTimer = null;
           }
-          
+
           // Immediately send the final color when picker closes
           handleColorChange(newColor);
+
+          // Picker closed — retire the live "in use" hint
+          setLiveColor(null);
         };
 
         document.addEventListener('coloris:pick', handleColorPick);
@@ -116,12 +127,13 @@ export default function ColorPicker({
     }
 
     console.log(`🎨 Sending color change: ${currentColor} → ${newColor}`);
-    
+
     setIsChanging(true);
     setCooldownActive(true);
 
-    // Call the parent's color change handler with userId as identity
-    onColorChange(userId, seatIndex, newColor);
+    // Call the parent's color change handler with userId as identity —
+    // color is character-owned, so no seat index travels with it
+    onColorChange(userId, newColor);
 
     // Set cooldown for 5 seconds
     setTimeout(() => {
@@ -129,6 +141,13 @@ export default function ColorPicker({
       setIsChanging(false);
     }, 5000);
   };
+
+  // Inform-only annotation: does the live picker value match a color another
+  // player's character already displays? Selection is never blocked on this.
+  const normalizedLiveColor = liveColor ? liveColor.toLowerCase() : null;
+  const liveColorInUse = normalizedLiveColor
+    ? usedColors.find(usage => usage.color && usage.color.toLowerCase() === normalizedLiveColor)
+    : null;
 
   return (
     <div className="color-picker-container relative">
@@ -170,6 +189,17 @@ export default function ColorPicker({
           Cooldown active...
         </div>
       )}
+
+      {/* Inform-only "in use" hint — same tooltip shell as the cooldown notice */}
+      {!cooldownActive && liveColorInUse && (
+        <div className="absolute -top-8 left-0 bg-black/80 text-white text-xs px-2 py-1 rounded whitespace-nowrap pointer-events-none flex items-center gap-1.5">
+          <span
+            className="inline-block w-2 h-2 rounded-full"
+            style={{ backgroundColor: liveColorInUse.color }}
+          />
+          In use by {liveColorInUse.ownerName}
+        </div>
+      )}
     </div>
   );
 }
@@ -180,15 +210,15 @@ export default function ColorPicker({
 export function useColorPicker(sendColorChange) {
   const [colorChangeDisabled, setColorChangeDisabled] = useState(false);
 
-  const handleColorChange = (userId, seatIndex, newColor) => {
+  const handleColorChange = (userId, newColor) => {
     if (colorChangeDisabled) return;
 
     // Disable color changes for 5 seconds
     setColorChangeDisabled(true);
     setTimeout(() => setColorChangeDisabled(false), 5000);
 
-    // Send color change via WebSocket
-    sendColorChange(userId, seatIndex, newColor);
+    // Send color change via WebSocket — character-owned, no seat index
+    sendColorChange(userId, newColor);
   };
 
   return {

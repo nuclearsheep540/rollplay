@@ -30,6 +30,9 @@ class PlayerCharacter(ContractModel):
     hp_current: int
     hp_max: int
     ac: int
+    # Character-owned color (hex). The seat a player occupies *displays* this;
+    # it is never stored per-seat. None = no custom color chosen yet.
+    color: Optional[str] = None
 
 
 class SessionUser(ContractModel):

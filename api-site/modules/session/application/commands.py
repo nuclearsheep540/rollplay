@@ -13,12 +13,13 @@ from concurrent.futures import ThreadPoolExecutor
 from sqlalchemy import update
 
 from shared_contracts.assets import AssetRef
-from shared_contracts.audio import AudioChannelState
+from shared_contracts.audio import AudioChannelState, AudioTrackConfig
 from shared_contracts.character import DungeonMaster, PlayerCharacter, SessionUser
 from shared_contracts.display import ActiveDisplayType
 from shared_contracts.image import ImageConfig
 from shared_contracts.map import MapConfig
 from shared_contracts.session import (
+    LogEntry,
     SessionEndResponse,
     SessionStartPayload,
     SessionStartResponse,
@@ -281,6 +282,7 @@ class StartSession:
                     hp_current=character.hp_current,
                     hp_max=character.hp_max,
                     ac=character.ac,
+                    color=character.color,
                 )
 
             session_users.append(
@@ -355,6 +357,31 @@ class StartSession:
             audio_config[channel_id] = asset.build_channel_state_for_game(url_map.get(asset.s3_key))
         logger.info(f"Restoring audio config: {len(audio_config)} channels from domain aggregates")
         return audio_config
+
+    def _restore_audio_track_config(self, asset_lookup: dict) -> Dict[str, AudioTrackConfig]:
+        """Restore the per-track config stash (cold → hot).
+
+        Closes the ETL asymmetry: pause syncs stash tweaks onto the asset rows
+        (see _extract_and_sync_game_state), but the stash itself was never
+        refilled at start — so a track loaded mid-session after a resume came
+        back without its saved tweaks. Field translation stays owned by the
+        aggregates' build_channel_state_for_game(); this only re-shapes it.
+        """
+        track_config = {}
+        for asset_id_str, asset in asset_lookup.items():
+            if not isinstance(asset, (MusicAsset, SfxAsset)):
+                continue
+            channel_state = asset.build_channel_state_for_game(None)
+            track_config[asset_id_str] = AudioTrackConfig(
+                volume=channel_state.volume,
+                looping=channel_state.looping,
+                effects=channel_state.effects,
+                loop_mode=channel_state.loop_mode,
+                loop_start=channel_state.loop_start,
+                loop_end=channel_state.loop_end,
+            )
+        logger.info(f"Restoring audio track config stash: {len(track_config)} tracks")
+        return track_config
 
     @staticmethod
     def _restore_map_config(
@@ -538,10 +565,12 @@ class StartSession:
                     for asset in campaign_assets
                 ] if self.asset_repo else [],
                 audio_config=audio_config_for_game,
+                audio_track_config=self._restore_audio_track_config(asset_lookup),
                 spotify_state=session.spotify_config or {},
                 map_config=map_config_for_game,
                 image_config=image_config_for_game,
                 active_display=ActiveDisplayType(session.active_display) if session.active_display else None,
+                adventure_log=session.adventure_log or [],
                 urls_expire_at=urls_expire_at.isoformat() if urls_expire_at else None,
             )
 
@@ -613,20 +642,23 @@ class _ExtractedGameState:
     map_config: dict
     image_config: dict
     active_display: Optional[str]
+    adventure_log: list
 
 
 async def _extract_and_sync_game_state(
     session_id: UUID,
     session: SessionEntity,
     asset_repo: MediaAssetRepository,
-    session_repo: SessionRepository
+    session_repo: SessionRepository,
+    character_repo: CharacterRepository = None
 ) -> _ExtractedGameState:
     """
     PHASE 1 of session ETL: fetch final state from MongoDB and sync asset configs to PostgreSQL.
 
     1. Fetches final state from api-game (non-destructive, validate_only=True)
     2. Syncs per-asset volumes/effects back to PostgreSQL asset records
-    3. Extracts thin config references for session cold storage
+    3. Syncs character colors back to PostgreSQL character records
+    4. Extracts thin config references (+ adventure log) for session cold storage
 
     On failure, rolls session back to ACTIVE via abort_stop() and raises ValueError.
     """
@@ -700,6 +732,24 @@ async def _extract_and_sync_game_state(
                     logger.warning(f"Failed to sync audio config for asset {asset_id_str}: {e}")
             logger.info(f"Synced {len(synced_assets)} asset audio configs to PostgreSQL (volume, looping, effects)")
 
+        # Sync character colors back to PostgreSQL (ETL: hot → cold). Color is
+        # character-owned: the hot session carries it on player_metadata and the
+        # character row is its durable home — the seat never stores it.
+        if character_repo:
+            synced_colors = 0
+            for player in final_state.players:
+                if not player.character_id or player.color is None:
+                    continue
+                try:
+                    character = character_repo.get_by_id(UUID(player.character_id))
+                    if character and character.color != player.color:
+                        character.set_color(player.color)
+                        character_repo.save(character)
+                        synced_colors += 1
+                except Exception as e:
+                    logger.warning(f"Failed to sync color for character {player.character_id}: {e}")
+            logger.info(f"Synced {synced_colors} character colors to PostgreSQL")
+
         # Thin JSONB: store only channel → asset_id references (all config synced back to assets above)
         audio_config = {}
         for channel_id, ch in final_state.audio_state.items():
@@ -762,6 +812,10 @@ async def _extract_and_sync_game_state(
         spotify_config = final_state.spotify_state.model_dump()
         logger.info(f"Extracted spotify config: {'has track' if spotify_config.get('track_uri') else 'empty'}")
 
+        # Adventure log travels whole (bounded: api-game caps it at 200 lines/room)
+        adventure_log = [entry.model_dump() for entry in final_state.adventure_log]
+        logger.info(f"Extracted adventure log: {len(adventure_log)} entries")
+
         return _ExtractedGameState(
             max_players=max_players,
             audio_config=audio_config,
@@ -769,6 +823,7 @@ async def _extract_and_sync_game_state(
             map_config=map_config,
             image_config=image_config,
             active_display=active_display,
+            adventure_log=adventure_log,
         )
 
     except Exception as e:
@@ -854,7 +909,7 @@ class PauseSession:
 
         # 3. PHASE 1: Extract and sync game state from MongoDB
         extracted = await _extract_and_sync_game_state(
-            session_id, session, self.asset_repo, self.session_repo
+            session_id, session, self.asset_repo, self.session_repo, self.character_repo
         )
 
         # 4. PHASE 2: Write to PostgreSQL
@@ -867,6 +922,7 @@ class PauseSession:
             session.map_config = extracted.map_config
             session.image_config = extracted.image_config
             session.active_display = extracted.active_display
+            session.adventure_log = extracted.adventure_log
 
             session.deactivate()  # Sets INACTIVE, stopped_at = now, active_game_id = None
             self.session_repo.save(session)
@@ -989,7 +1045,7 @@ class FinishSession:
 
         # 6. PHASE 1: Extract and sync game state from MongoDB
         extracted = await _extract_and_sync_game_state(
-            session_id, session, self.asset_repo, self.session_repo
+            session_id, session, self.asset_repo, self.session_repo, self.character_repo
         )
 
         # 7. PHASE 2: Write to PostgreSQL and mark as FINISHED
@@ -1002,6 +1058,7 @@ class FinishSession:
             session.map_config = extracted.map_config
             session.image_config = extracted.image_config
             session.active_display = extracted.active_display
+            session.adventure_log = extracted.adventure_log
 
             session.mark_finished()  # Sets FINISHED, stopped_at = now, active_game_id = None
             self.session_repo.save(session)

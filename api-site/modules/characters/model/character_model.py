@@ -88,6 +88,11 @@ class Character(Base):
     # Eager-load the avatar asset (joined load — tiny one-row hop).
     avatar_asset = relationship("MediaAsset", foreign_keys=[avatar_asset_id], lazy="joined")
 
+    # Character-owned display color (hex '#rrggbb'). Seats and map tokens
+    # *display* this; color is never stored per-seat. NULL ⇒ frontend falls
+    # back to the seat-index palette.
+    color = Column(String(7), nullable=True)
+
     created_at = Column(DateTime(timezone=True), nullable=False)
     updated_at = Column(DateTime(timezone=True), nullable=False)
     is_deleted = Column(Boolean, nullable=False, default=False, server_default="false")

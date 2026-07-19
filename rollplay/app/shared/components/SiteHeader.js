@@ -19,8 +19,8 @@ import { THEME, COLORS } from '@/app/styles/colorTheme'
  * `showHome` (default `true`) renders the Home link as the first child
  * in the right-side nav. Set to `false` when the consumer wants to
  * render Home in a custom position among its own children (e.g. the
- * dashboard places a notification bell first and a separator before
- * Home).
+ * dashboard places a notification bell before Home and a separator
+ * before Logout).
  */
 export default function SiteHeader({ children, showHome = true }) {
   return (

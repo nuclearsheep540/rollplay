@@ -9,7 +9,7 @@ import { useEffect, useState, useMemo, useCallback, useRef } from 'react'
 import gsap from 'gsap'
 import { authFetch } from '@/app/shared/utils/authFetch'
 import { useSearchParams, useRouter } from "next/navigation";
-import { getSeatColor } from '../utils/seatColors';
+import { getSeatColorHex } from '../utils/seatColors';
 
 import PlayerCard from "./components/PlayerCard";
 import DMChair from "./components/DMChair";
@@ -113,9 +113,6 @@ export default function GameContent() {
       .map(([userId]) => userId);
   }, [playerMetadata]);
 
-  // State for seat colors (loaded from backend)
-  const [seatColors, setSeatColors] = useState({});
-
   // Lobby state for connected users not in party
   const [lobbyUsers, setLobbyUsers] = useState([]);
   
@@ -130,19 +127,48 @@ export default function GameContent() {
   // sweeper auto-pauses the session at this same timestamp
   const [urlsExpireAt, setUrlsExpireAt] = useState(null);
 
+  // Character-owned seat colors: a seat displays its occupant's character
+  // color (playerMetadata[userId].color) when set, else the index-palette
+  // fallback. Empty seats always use the fallback, and a player's color
+  // follows them when they change seats.
+  const seatColorByIndex = useMemo(() => {
+    const colorsBySeatIndex = {};
+    gameSeats.forEach((seat, seatIndex) => {
+      const occupantColor = seat.userId && seat.userId !== "empty"
+        ? playerMetadata[seat.userId]?.color
+        : null;
+      colorsBySeatIndex[seatIndex] = occupantColor || getSeatColorHex(seatIndex);
+    });
+    return colorsBySeatIndex;
+  }, [gameSeats, playerMetadata]);
+
+  // Single write-point for the --seat-color-* CSS custom properties consumed
+  // by PlayerCard and AdventureLog. Initial room load, initial_state,
+  // seat_change, color_change, and player_character_changed all funnel
+  // through gameSeats/playerMetadata state, so this effect covers every
+  // recompute trigger — no scattered setProperty calls elsewhere.
+  useEffect(() => {
+    Object.entries(seatColorByIndex).forEach(([seatIndex, seatColor]) => {
+      document.documentElement.style.setProperty(
+        `--seat-color-${seatIndex}`,
+        seatColor
+      );
+    });
+  }, [seatColorByIndex]);
+
   // Pre-computed user-to-seat mapping for O(1) lookups (keyed by userId)
   const playerSeatMap = useMemo(() => {
     const map = {};
-    gameSeats.forEach((seat, index) => {
+    gameSeats.forEach((seat, seatIndex) => {
       if (seat.userId && seat.userId !== "empty") {
         map[seat.userId] = {
-          seatIndex: index,
-          seatColor: seatColors[index] || getSeatColor(index)
+          seatIndex: seatIndex,
+          seatColor: seatColorByIndex[seatIndex]
         };
       }
     });
     return map;
-  }, [gameSeats, seatColors]);
+  }, [gameSeats, seatColorByIndex]);
 
   // userId → display name map (derived from player_metadata + DM contract)
   const displayNameMap = useMemo(() => {
@@ -167,6 +193,18 @@ export default function GameContent() {
     });
     return map;
   }, [playerMetadata]);
+
+  // Colors other seated players currently display — inform-only hint data for
+  // the color picker ("in use by X"). Selection is never blocked on a clash.
+  const colorsInUseByOthers = useMemo(() => {
+    return gameSeats
+      .filter(seat => seat.userId && seat.userId !== "empty" && seat.userId !== thisUserId)
+      .map(seat => ({
+        color: seatColorByIndex[seat.seatId],
+        ownerName: characterNameMap[seat.userId] || displayNameMap[seat.userId] || seat.playerName || "another player"
+      }))
+      .filter(usage => !!usage.color);
+  }, [gameSeats, seatColorByIndex, characterNameMap, displayNameMap, thisUserId]);
 
   const getCharacterData = useCallback((userId) => {
     if (!userId || userId === "empty") {
@@ -488,22 +526,12 @@ export default function GameContent() {
     // Use actual seat layout from database (contains user_ids)
     const seatLayout = res["current_seat_layout"] || [];
     const maxPlayers = res["max_players"];
-    const backendSeatColors = res["seat_colors"] || {};
-    // player_metadata is already keyed by user_id from api-game
+    // player_metadata is already keyed by user_id from api-game — character
+    // colors ride along as metadata.color; the --seat-color-* CSS vars are
+    // derived centrally from playerMetadata + seat layout
     const backendPlayerMetadata = res["player_metadata"] || {};
 
     setPlayerMetadata(backendPlayerMetadata);
-
-    // Set seat colors from backend
-    setSeatColors(backendSeatColors);
-
-    // Initialize CSS variables for seat colors
-    Object.keys(backendSeatColors).forEach(seatIndex => {
-      document.documentElement.style.setProperty(
-        `--seat-color-${seatIndex}`,
-        backendSeatColors[seatIndex]
-      );
-    });
 
     // Create unified seat structure — userId is identity, playerName is display
     const initialSeats = [];
@@ -520,7 +548,6 @@ export default function GameContent() {
     }
 
     console.log("Loaded seat layout from database:", initialSeats);
-    console.log("Loaded seat colors from database:", backendSeatColors);
     setGameSeats(initialSeats);
 
     // Active map is embedded in the game state response — apply immediately so the
@@ -993,24 +1020,6 @@ export default function GameContent() {
     }
   }, [gameSeats, thisUserId]);
 
-  // Create a setter function for playerSeatMap updates
-  const setPlayerSeatMap = useCallback((updaterFunction) => {
-    // This is a derived state update - we need to update seatColors instead
-    // The updaterFunction expects the current playerSeatMap and returns the new one
-    const currentMap = playerSeatMap;
-    const newMap = updaterFunction(currentMap);
-
-    // Extract seat colors from the updated map
-    const newSeatColors = {};
-    Object.values(newMap).forEach(playerData => {
-      if (playerData.seatIndex !== undefined && playerData.seatColor) {
-        newSeatColors[playerData.seatIndex] = playerData.seatColor;
-      }
-    });
-
-    setSeatColors(newSeatColors);
-  }, [playerSeatMap]);
-
   // Initialize unified audio system (local + remote) FIRST
   const {
     isAudioUnlocked,
@@ -1115,7 +1124,6 @@ export default function GameContent() {
     setRollLog,
     setActivePrompts,
     setIsDicePromptActive,
-    setPlayerSeatMap,
     setLobbyUsers,
     setDisconnectTimeouts,
     setCurrentInitiativePromptId,
@@ -1190,7 +1198,7 @@ export default function GameContent() {
   }), [
     gameSeats, thisUserId, currentUser, lobbyUsers,
     disconnectTimeouts, currentInitiativePromptId, remoteTrackStates,
-    addToLog, getCharacterData, handleRoleChange, setPlayerSeatMap,
+    addToLog, getCharacterData, handleRoleChange,
     playRemoteTrack, resumeRemoteTrack, pauseRemoteTrack, stopRemoteTrack,
     setRemoteTrackVolume, toggleRemoteTrackLooping, loadRemoteAudioBuffer,
     activeFades, cancelFade, syncAudioState, loadAssetIntoChannel, applyChannelEffects,
@@ -1801,15 +1809,15 @@ export default function GameContent() {
     // This is where you'd implement turn progression
   };
 
-  // Handle color changes from PlayerCard — uses userId
-  const handlePlayerColorChange = (userId, seatIndex, newColor) => {
+  // Handle color changes from PlayerCard — color is character-owned, keyed by userId
+  const handlePlayerColorChange = (userId, newColor) => {
     if (!sendColorChange) {
       console.error('sendColorChange function not available');
       return;
     }
 
-    console.log(`🎨 ${userId} changing color (seat ${seatIndex}) to ${newColor}`);
-    sendColorChange(userId, seatIndex, newColor);
+    console.log(`🎨 ${userId} changing character color to ${newColor}`);
+    sendColorChange(userId, newColor);
   };
 
   // MAIN RENDER
@@ -2087,7 +2095,7 @@ export default function GameContent() {
 
             {gameSeats.filter(seat => !isSpectator || canUseModeratorTools || seat.userId !== "empty").map((seat) => {
               const isSitting = seat.userId === thisUserId;
-              const currentColor = seatColors[seat.seatId] || getSeatColor(seat.seatId);
+              const currentColor = seatColorByIndex[seat.seatId] || getSeatColorHex(seat.seatId);
 
               return (
                 <PlayerCard
@@ -2101,6 +2109,7 @@ export default function GameContent() {
                   playerData={seat.characterData}
                   onColorChange={handlePlayerColorChange}
                   currentColor={currentColor}
+                  usedColors={colorsInUseByOthers}
                 />
               );
             })}

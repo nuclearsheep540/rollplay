@@ -34,7 +34,6 @@ export const handleInitialState = (data, handlers) => {
     seat_layout,
     dungeon_master,
     combat_active,
-    seat_colors,
     max_players,
     campaign_id,
     player_metadata,
@@ -68,11 +67,6 @@ export const handleInitialState = (data, handlers) => {
   // Set combat state
   if (handlers.setCombatActive !== undefined) {
     handlers.setCombatActive(combat_active || false);
-  }
-
-  // Set seat colors
-  if (handlers.setSeatColors && seat_colors) {
-    handlers.setSeatColors(seat_colors);
   }
 
   // Convert seat layout (user_id array) to frontend unified structure
@@ -162,6 +156,14 @@ export const handlePlayerCharacterChanged = (data, { setGameSeats, setPlayerMeta
   const incoming = Object.fromEntries(
     Object.entries(data).filter(([, v]) => v !== null && v !== undefined)
   );
+
+  // color is character-owned and may legitimately be null (the swapped-in
+  // character has no custom color) — carry the explicit null through the
+  // filter so a stale color from the previous character gets cleared and the
+  // centralized CSS-var sync falls back to the index palette.
+  if ('color' in data) {
+    incoming.color = data.color;
+  }
 
   if (setPlayerMetadata) {
     setPlayerMetadata(prev => {
@@ -400,28 +402,24 @@ export const handleDicePromptClear = (data, { setActivePrompts, setIsDicePromptA
   }
 };
 
-export const handleColorChange = (data, { gameContext }) => {
+export const handleColorChange = (data, { setPlayerMetadata }) => {
   console.log("received color change:", data);
-  const { player, seat_index, new_color } = data;
+  const { player, new_color } = data;
 
-  // Update CSS variable immediately for visual feedback
-  document.documentElement.style.setProperty(
-    `--seat-color-${seat_index}`,
-    new_color
-  );
-
-  // Update playerSeatMap state if the setter is available (keyed by userId)
-  if (gameContext.setPlayerSeatMap) {
-    gameContext.setPlayerSeatMap(prev => ({
-      ...prev,
+  // Color is character-owned: write it into the player's metadata. GameContent
+  // derives the --seat-color-* CSS variables centrally from playerMetadata +
+  // seat layout, so no direct DOM write happens here.
+  if (setPlayerMetadata) {
+    setPlayerMetadata(previousMetadata => ({
+      ...previousMetadata,
       [player]: {
-        ...prev[player],
-        seatColor: new_color
+        ...(previousMetadata[player] || {}),
+        color: new_color
       }
     }));
   }
 
-  console.log(`🎨 Updated ${player}'s color (seat ${seat_index}) to ${new_color}`);
+  console.log(`🎨 Updated ${player}'s character color to ${new_color}`);
 };
 
 export const handleAdventureLogRemoved = (data, { setRollLog }) => {
@@ -665,19 +663,18 @@ export const createSendFunctions = (webSocket, isConnected, roomId, userId) => {
     }));
   };
 
-  const sendColorChange = (targetUserId, seatIndex, newColor) => {
+  const sendColorChange = (targetUserId, newColor) => {
     if (!webSocket || !isConnected) {
       console.log("❌ Cannot send color change - WebSocket not connected");
       return;
     }
 
-    console.log(`🎨 Sending color change: ${targetUserId} (seat ${seatIndex}) to ${newColor}`);
+    console.log(`🎨 Sending color change: ${targetUserId} to ${newColor}`);
 
     webSocket.send(JSON.stringify({
       "event_type": "color_change",
       "data": {
         "player": targetUserId,
-        "seat_index": seatIndex,
         "new_color": newColor,
         "changed_by": userId
       }
