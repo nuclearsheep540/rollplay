@@ -42,6 +42,7 @@ import { useRenderTracker } from '@/app/shared/utils/renderTracker';
 import { useFullscreen } from './hooks/useFullscreen';
 import MapSafeArea from './components/MapSafeArea';
 import Drawer from './components/Drawer';
+import SessionCountdown from './components/SessionCountdown';
 import GridTuningOverlay from '../map_management/components/GridTuningOverlay';
 import { useAssetProgress, useAssetDownload } from '@/app/shared/providers/AssetDownloadManager';
 import { useGatePreload } from './hooks/useGatePreload';
@@ -124,6 +125,10 @@ export default function GameContent() {
 
   // DM state - object {user_id, player_name, campaign_role} or null
   const [dungeonMaster, setDungeonMaster] = useState(null);
+
+  // Signed-URL lease deadline (ms epoch) — anchors the nav countdown; the api-site
+  // sweeper auto-pauses the session at this same timestamp
+  const [urlsExpireAt, setUrlsExpireAt] = useState(null);
 
   // Pre-computed user-to-seat mapping for O(1) lookups (keyed by userId)
   const playerSeatMap = useMemo(() => {
@@ -476,6 +481,9 @@ export default function GameContent() {
 
     // Set DM from room data (object: {user_id, player_name, campaign_role})
     setDungeonMaster(res["dungeon_master"] || null);
+
+    // Signed-URL lease deadline — ISO-8601 with explicit UTC offset from api-site
+    setUrlsExpireAt(res["urls_expire_at"] ? new Date(res["urls_expire_at"]).getTime() : null);
 
     // Use actual seat layout from database (contains user_ids)
     const seatLayout = res["current_seat_layout"] || [];
@@ -1815,6 +1823,9 @@ export default function GameContent() {
           </div>
 
           <div className="nav-actions">
+            {/* Countdown to signed-URL lease expiry — server auto-pauses at zero */}
+            <SessionCountdown expireAt={urlsExpireAt} />
+
             {/* Asset status — bordered icon toggle + expandable info */}
             <div style={{ display: 'flex', alignItems: 'center', gap: 'calc(6px * var(--ui-scale))' }}>
               <button

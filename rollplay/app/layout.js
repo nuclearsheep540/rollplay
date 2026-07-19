@@ -1,4 +1,4 @@
-import { Inter, New_Rocker, Metamorphous, Ubuntu, Outfit } from 'next/font/google'
+import { Inter, New_Rocker, Metamorphous, Ubuntu, Outfit, Share_Tech_Mono } from 'next/font/google'
 import QueryProvider from './shared/providers/QueryProvider'
 import { AssetDownloadProvider } from './shared/providers/AssetDownloadManager'
 import './globals.css'
@@ -38,6 +38,13 @@ const metamorphous = Metamorphous({
   display: 'swap'
 })
 
+const shareTechMono = Share_Tech_Mono({
+  weight: '400',
+  subsets: ['latin'],
+  variable: '--font-share-tech-mono',
+  display: 'swap'
+})
+
 export const metadata = {
   title: `Rollplay v${process.env.NEXT_PUBLIC_RELEASE || 'dev'}`,
   description: 'Made for my friends',
@@ -54,7 +61,7 @@ export const viewport = {
 
 export default function RootLayout({ children }) {
   return (
-    <html lang="en" className={`${inter.variable} ${newRocker.variable} ${metamorphous.variable} ${ubuntu.variable} ${outfit.variable}`}>
+    <html lang="en" className={`${inter.variable} ${newRocker.variable} ${metamorphous.variable} ${ubuntu.variable} ${outfit.variable} ${shareTechMono.variable}`}>
       <head>
         {/* Preconnect to S3 so the TCP/TLS handshake is ready before the map image URL is known */}
         <link rel="preconnect" href="https://s3.eu-west-1.amazonaws.com" crossOrigin="anonymous" />

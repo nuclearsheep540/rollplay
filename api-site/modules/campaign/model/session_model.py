@@ -55,6 +55,7 @@ class Session(Base):
     created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
     started_at = Column(DateTime(timezone=True))
     stopped_at = Column(DateTime(timezone=True))
+    urls_expire_at = Column(DateTime(timezone=True))  # Signed asset-URL lease deadline; expiry sweeper auto-pauses past-due sessions
     active_game_id = Column(String(100))  # MongoDB active_session objectID (when game is running)
     max_players = Column(Integer, default=8, nullable=False)  # Seat count in active game (1-8)
     audio_config = Column(JSONB, nullable=True, server_default='{}')  # Persisted audio channel config from ETL

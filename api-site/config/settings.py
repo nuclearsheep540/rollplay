@@ -59,6 +59,7 @@ class Settings(BaseSettings):
     AWS_REGION: str = Field(default="eu-west-1", description="AWS region for S3 bucket")
     S3_BUCKET_NAME: str = Field(..., description="S3 bucket name for asset storage")
     PRESIGNED_URL_EXPIRY: int = Field(default=3600, description="Presigned URL expiry in seconds")
+    EXPIRED_SESSION_CLEANUP_INTERVAL: int = Field(default=60, description="Seconds between cleanup passes that auto-pause ACTIVE sessions past their signed-URL lease")
 
     # CloudFront signed-URL delivery (optional — when unset, downloads fall back to presigned S3)
     AWS_CFD_S3_URL: Optional[str] = Field(default=None, description="CloudFront distribution domain, no scheme (e.g. d123.cloudfront.net)")

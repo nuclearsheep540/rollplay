@@ -36,6 +36,7 @@ class GameSettings(BaseModel):
     audio_state: dict = {}  # Per-channel audio state for late-joiner sync
     audio_track_config: dict = {}  # Per-track config stash (survives channel swaps within a session)
     spotify: dict = {}  # DM-controlled Spotify BGM anchor snapshot for late-joiner sync
+    urls_expire_at: str = ""  # ISO-8601 UTC lease deadline for signed asset URLs — countdown display only; api-site enforces
 
 class GameService:
     "Creating and joining active game lobbies"
