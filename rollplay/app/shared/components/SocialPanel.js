@@ -113,7 +113,10 @@ export default function SocialPanel({ user, toasts = [], onDismissToast }) {
     const activeCooldowns = Object.keys(buzzCooldowns)
     if (activeCooldowns.length === 0) return
 
-    const animationFrame = requestAnimationFrame(function animate() {
+    // Track the LATEST scheduled frame so cleanup cancels whichever one is
+    // pending — the loop reschedules recursively, so capturing only the first
+    // id would leave later frames firing setState after unmount.
+    let frameId = requestAnimationFrame(function animate() {
       const now = Date.now()
       const newProgress = {}
       let hasActive = false
@@ -131,14 +134,14 @@ export default function SocialPanel({ user, toasts = [], onDismissToast }) {
       setCooldownProgress(newProgress)
 
       if (hasActive) {
-        requestAnimationFrame(animate)
+        frameId = requestAnimationFrame(animate)
       } else {
         setBuzzCooldowns({})
         setCooldownProgress({})
       }
     })
 
-    return () => cancelAnimationFrame(animationFrame)
+    return () => cancelAnimationFrame(frameId)
   }, [buzzCooldowns])
 
   const handleBuzz = async (friendId) => {
