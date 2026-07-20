@@ -44,7 +44,8 @@ def register_websocket_routes(app: FastAPI):
                         "campaign_id": room.get("campaign_id", ""),
                         "player_metadata": room.get("player_metadata", {}),
                         "audio_state": room.get("audio_state", {}),
-                        "spotify": room.get("spotify", {})
+                        "spotify": room.get("spotify", {}),
+                        "map_token_state": room.get("map_token_state", {})
                     }
                 }
                 await websocket.send_json(initial_state)
@@ -340,6 +341,31 @@ def register_websocket_routes(app: FastAPI):
                         manager=manager
                     )
                     broadcast_message = result.broadcast_message
+
+                elif event_type == "map_token_update":
+                    result = await WebsocketEvent.map_token_update(
+                        websocket=websocket,
+                        data=data,
+                        event_data=event_data,
+                        user_id=user_id,
+                        client_id=client_id,
+                        manager=manager
+                    )
+                    broadcast_message = result.broadcast_message
+
+                elif event_type == "map_token_drag":
+                    result = await WebsocketEvent.map_token_drag(
+                        websocket=websocket,
+                        data=data,
+                        event_data=event_data,
+                        user_id=user_id,
+                        client_id=client_id,
+                        manager=manager
+                    )
+                    if result.broadcast_message:
+                        broadcast_message = result.broadcast_message
+                    else:
+                        continue  # deny answered the sender directly; stale frames drop silently
 
                 elif event_type == "map_request":
                     result = await WebsocketEvent.map_request(

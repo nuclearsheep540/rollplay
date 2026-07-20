@@ -4,9 +4,10 @@ from pydantic import BaseModel
 from pymongo import MongoClient
 from bson.objectid import ObjectId
 from config.settings import get_settings
+from map_token_ops import build_map_token_update, map_token_array_path
 import logging
 import json
-from datetime import datetime
+from datetime import datetime, timezone
 
 logger = logging.getLogger()
 CONFIG = get_settings()
@@ -24,6 +25,7 @@ class GameSettings(BaseModel):
     audio_state: dict = {}  # Per-channel audio state for late-joiner sync
     audio_track_config: dict = {}  # Per-track config stash (survives channel swaps within a session)
     spotify: dict = {}  # DM-controlled Spotify BGM anchor snapshot for late-joiner sync
+    map_token_state: dict = {}  # asset_id -> list[MapToken] — each map keeps its own board (see shared_contracts.map_token)
     urls_expire_at: str = ""  # ISO-8601 UTC lease deadline for signed asset URLs — countdown display only; api-site enforces
 
 class GameService:
@@ -445,6 +447,48 @@ class GameService:
             filter_criteria,
             {"$unset": {f"audio_track_config.{asset_id}": ""}}
         )
+
+    @staticmethod
+    def get_map_tokens(room_id: str, asset_id: str) -> list:
+        """Current token list for one map asset (empty when none placed)."""
+        collection = GameService._get_active_session()
+        array_path = map_token_array_path(asset_id)
+
+        room = collection.find_one(GameService.room_filter(room_id), {array_path: 1})
+        if not room:
+            return []
+        return room.get("map_token_state", {}).get(asset_id, [])
+
+    @staticmethod
+    def apply_map_token_op(room_id: str, asset_id: str, op: str,
+                           token: dict = None, token_id: str = None) -> list:
+        """Apply one committed MapToken op as a single atomic array update and
+        return the map's full token list for the broadcast fragment.
+
+        updated_at is stamped here (server-side, per committed op). Raises
+        ValueError when the op can't apply: unknown room, duplicate place id,
+        or move/configure targeting a token that isn't on the map. remove is
+        idempotent — pulling an absent id is a successful no-op.
+        """
+        collection = GameService._get_active_session()
+
+        updated_at = datetime.now(timezone.utc).isoformat()
+        extra_filter, update_doc = build_map_token_update(
+            asset_id, op, token=token, token_id=token_id, updated_at=updated_at
+        )
+        filter_criteria = {**GameService.room_filter(room_id), **extra_filter}
+
+        result = collection.update_one(filter_criteria, update_doc)
+
+        if result.matched_count == 0:
+            room_exists = collection.count_documents(GameService.room_filter(room_id), limit=1)
+            if not room_exists:
+                raise ValueError(f"Room {room_id} not found")
+            if op == "place":
+                raise ValueError(f"Token {token['id']} already exists on map {asset_id}")
+            raise ValueError(f"Token {token_id} not found on map {asset_id}")
+
+        return GameService.get_map_tokens(room_id, asset_id)
 
     @staticmethod
     def set_active_display(room_id: str, display_type):
