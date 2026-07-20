@@ -190,18 +190,36 @@ export default function SocialPanel({ user, toasts = [], onDismissToast }) {
     markReadMutation.mutate(notification.id)
   }
 
-  const handleFriendRequestAction = async (notification, accept) => {
-    const requesterId = notification.data?.requester_id
+  // When a request is handled in the Requests section, retire its matching
+  // unread notification too — the badge shouldn't keep nagging about a
+  // request that no longer exists. Runs on failure as well (a revoked
+  // request's moment has equally passed).
+  const resolveRequestNotification = (requesterId) => {
+    const matching = notifications.find(
+      notification =>
+        notification.event_type === 'friend_request_received' &&
+        !notification.read &&
+        String(notification.data?.requester_id) === String(requesterId)
+    )
+    if (matching) markReadMutation.mutate(matching.id)
+  }
+
+  const handleAcceptRequest = async (requesterId) => {
     try {
-      if (accept) {
-        await acceptFriendMutation.mutateAsync(requesterId)
-      } else {
-        await declineFriendMutation.mutateAsync(requesterId)
-      }
+      await acceptFriendMutation.mutateAsync(requesterId)
     } catch (error) {
-      console.error('Friend request action failed (marking read):', error.message)
+      console.error('Error accepting friend request:', error.message)
     }
-    markReadMutation.mutate(notification.id)
+    resolveRequestNotification(requesterId)
+  }
+
+  const handleDeclineRequest = async (requesterId) => {
+    try {
+      await declineFriendMutation.mutateAsync(requesterId)
+    } catch (error) {
+      console.error('Error declining friend request:', error.message)
+    }
+    resolveRequestNotification(requesterId)
   }
 
   const handleCopyOwnTag = async () => {
@@ -424,8 +442,8 @@ export default function SocialPanel({ user, toasts = [], onDismissToast }) {
                       <span className="block text-sm text-content-on-dark truncate">{request.requester_screen_name || 'Unknown'}</span>
                       <span className="block text-xs text-content-secondary">sent you a friend request</span>
                     </span>
-                    <Button variant="success" size="xs" onClick={() => acceptFriendMutation.mutate(request.requester_id)}>Accept</Button>
-                    <Button variant="ghost" size="xs" onClick={() => declineFriendMutation.mutate(request.requester_id)}>Decline</Button>
+                    <Button variant="success" size="xs" onClick={() => handleAcceptRequest(request.requester_id)}>Accept</Button>
+                    <Button variant="ghost" size="xs" onClick={() => handleDeclineRequest(request.requester_id)}>Decline</Button>
                   </div>
                 ))}
               </>
@@ -448,8 +466,11 @@ export default function SocialPanel({ user, toasts = [], onDismissToast }) {
               <div className="px-4 pb-4 text-sm text-content-secondary">No notifications</div>
             ) : (
               notifications.map(notification => {
+                // Campaign invites act inline (no state section for them in
+                // the panel); friend-request notifications are deliberately
+                // CTA-free — the DB-backed Requests section above is the one
+                // action surface, and it reflects revocations correctly.
                 const isActionableInvite = notification.event_type === 'campaign_invite_received' && !notification.read
-                const isActionableRequest = notification.event_type === 'friend_request_received' && !notification.read
                 return (
                   <div
                     key={notification.id}
@@ -463,24 +484,12 @@ export default function SocialPanel({ user, toasts = [], onDismissToast }) {
                         <p className="text-sm text-content-on-dark">{formatPanelMessage(notification, user?.id)}</p>
                         <p className="text-xs text-content-secondary mt-1">{formatRelativeTime(notification.created_at)}</p>
                       </button>
-                      {(isActionableInvite || isActionableRequest) && (
+                      {isActionableInvite && (
                         <div className="flex gap-2 px-4 pb-3 pt-1">
-                          <Button
-                            variant="success"
-                            size="xs"
-                            onClick={() => isActionableInvite
-                              ? handleInviteAction(notification, true)
-                              : handleFriendRequestAction(notification, true)}
-                          >
+                          <Button variant="success" size="xs" onClick={() => handleInviteAction(notification, true)}>
                             Accept
                           </Button>
-                          <Button
-                            variant="ghost"
-                            size="xs"
-                            onClick={() => isActionableInvite
-                              ? handleInviteAction(notification, false)
-                              : handleFriendRequestAction(notification, false)}
-                          >
+                          <Button variant="ghost" size="xs" onClick={() => handleInviteAction(notification, false)}>
                             Decline
                           </Button>
                         </div>
